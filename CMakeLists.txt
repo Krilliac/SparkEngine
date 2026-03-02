@@ -52,6 +52,8 @@ option(ENABLE_TERRAIN_SYSTEM "Enable terrain system" ON)
 option(ENABLE_POST_PROCESSING "Enable post-processing effects" ON)
 option(ENABLE_LIGHTING_SYSTEM "Enable advanced lighting" ON)
 option(ENABLE_ADVANCED_INPUT "Enable advanced input features" ON)
+option(ENABLE_VULKAN "Enable Vulkan graphics backend" ON)
+option(ENABLE_OPENGL "Enable OpenGL graphics backend" ON)
 
 # ---------------------------------------------------------------------
 # 4) C++ standard and in-source build guard
@@ -155,6 +157,83 @@ if(TINYOBJLOADER_INCLUDE_DIR)
 else()
     set(TINYOBJ_FOUND FALSE)
     message(WARNING "TinyObjLoader not found")
+endif()
+
+# ---------------------------------------------------------------------
+# 7.5) Graphics API backend detection (Vulkan, OpenGL)
+# ---------------------------------------------------------------------
+
+# --- Vulkan ---
+if(ENABLE_VULKAN)
+    find_package(Vulkan QUIET)
+    if(Vulkan_FOUND)
+        set(SPARK_VULKAN_AVAILABLE TRUE)
+        message(STATUS "Vulkan found: ${Vulkan_LIBRARY}")
+        message(STATUS "Vulkan include: ${Vulkan_INCLUDE_DIR}")
+    else()
+        # Check for Vulkan SDK via environment variable
+        if(DEFINED ENV{VULKAN_SDK})
+            set(Vulkan_INCLUDE_DIR "$ENV{VULKAN_SDK}/Include")
+            if(WIN32)
+                set(Vulkan_LIBRARY "$ENV{VULKAN_SDK}/Lib/vulkan-1.lib")
+            else()
+                set(Vulkan_LIBRARY "$ENV{VULKAN_SDK}/lib/libvulkan.so")
+            endif()
+            if(EXISTS "${Vulkan_INCLUDE_DIR}" AND EXISTS "${Vulkan_LIBRARY}")
+                set(SPARK_VULKAN_AVAILABLE TRUE)
+                message(STATUS "Vulkan SDK found via environment: $ENV{VULKAN_SDK}")
+            else()
+                set(SPARK_VULKAN_AVAILABLE FALSE)
+                message(STATUS "Vulkan SDK path set but libraries not found")
+            endif()
+        else()
+            set(SPARK_VULKAN_AVAILABLE FALSE)
+            message(STATUS "Vulkan not found - Vulkan backend disabled")
+        endif()
+    endif()
+else()
+    set(SPARK_VULKAN_AVAILABLE FALSE)
+    message(STATUS "Vulkan backend disabled by option")
+endif()
+
+# --- OpenGL ---
+if(ENABLE_OPENGL)
+    find_package(OpenGL QUIET)
+    if(OpenGL_FOUND)
+        set(SPARK_OPENGL_AVAILABLE TRUE)
+        message(STATUS "OpenGL found: ${OPENGL_gl_LIBRARY}")
+    else()
+        set(SPARK_OPENGL_AVAILABLE FALSE)
+        message(STATUS "OpenGL not found - OpenGL backend disabled")
+    endif()
+
+    # Look for GLAD loader in ThirdParty
+    find_path(GLAD_INCLUDE_DIR
+        NAMES glad/glad.h
+        PATHS
+            "${CMAKE_SOURCE_DIR}/ThirdParty/glad/include"
+            "${CMAKE_SOURCE_DIR}/ThirdParty/Graphics/glad/include"
+            "${CMAKE_SOURCE_DIR}/ThirdParty/OpenGL/glad/include"
+        DOC "GLAD include directory"
+    )
+    find_path(GLAD_SOURCE_DIR
+        NAMES glad.c
+        PATHS
+            "${CMAKE_SOURCE_DIR}/ThirdParty/glad/src"
+            "${CMAKE_SOURCE_DIR}/ThirdParty/Graphics/glad/src"
+            "${CMAKE_SOURCE_DIR}/ThirdParty/OpenGL/glad/src"
+        DOC "GLAD source directory"
+    )
+    if(GLAD_INCLUDE_DIR AND GLAD_SOURCE_DIR)
+        set(GLAD_FOUND TRUE)
+        message(STATUS "GLAD found at: ${GLAD_INCLUDE_DIR}")
+    else()
+        set(GLAD_FOUND FALSE)
+        message(STATUS "GLAD not found - OpenGL loader unavailable (download GLAD for OpenGL support)")
+    endif()
+else()
+    set(SPARK_OPENGL_AVAILABLE FALSE)
+    message(STATUS "OpenGL backend disabled by option")
 endif()
 
 # ---------------------------------------------------------------------
@@ -267,6 +346,36 @@ foreach(SHADER_FILE ${SHADER_FILES})
     )
 endforeach()
 
+# Copy GLSL shaders to output directory
+if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/GLSL")
+    file(GLOB GLSL_SHADER_FILES "${CMAKE_SOURCE_DIR}/Shaders/GLSL/*.glsl")
+    foreach(SHADER_FILE ${GLSL_SHADER_FILES})
+        get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
+        add_custom_command(TARGET SparkEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders/GLSL"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${SHADER_FILE}
+                "$<TARGET_FILE_DIR:SparkEngine>/Shaders/GLSL/${SHADER_NAME}"
+            COMMENT "Copying GLSL shader ${SHADER_NAME}"
+        )
+    endforeach()
+endif()
+
+# Copy SPIR-V compiled shaders to output directory
+if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/SPIRV")
+    file(GLOB SPIRV_SHADER_FILES "${CMAKE_SOURCE_DIR}/Shaders/SPIRV/*.spv")
+    foreach(SHADER_FILE ${SPIRV_SHADER_FILES})
+        get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
+        add_custom_command(TARGET SparkEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${SHADER_FILE}
+                "$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV/${SHADER_NAME}"
+            COMMENT "Copying SPIR-V shader ${SHADER_NAME}"
+        )
+    endforeach()
+endif()
+
 # Exclude shader files from automatic compilation by setting them as None instead of FxCompile
 file(GLOB_RECURSE ALL_SHADER_FILES "*.hlsl")
 set_source_files_properties(${ALL_SHADER_FILES} PROPERTIES
@@ -308,6 +417,36 @@ target_link_libraries(SparkEngine PRIVATE
 # Add legacy stdio for compatibility
 if(MSVC)
     target_link_libraries(SparkEngine PRIVATE legacy_stdio_definitions)
+endif()
+
+# --- Vulkan backend libraries ---
+if(SPARK_VULKAN_AVAILABLE)
+    target_compile_definitions(SparkEngine PRIVATE SPARK_VULKAN_SUPPORT)
+    if(Vulkan_FOUND)
+        target_link_libraries(SparkEngine PRIVATE Vulkan::Vulkan)
+    else()
+        target_include_directories(SparkEngine PRIVATE ${Vulkan_INCLUDE_DIR})
+        target_link_libraries(SparkEngine PRIVATE ${Vulkan_LIBRARY})
+    endif()
+    message(STATUS "SparkEngine: Vulkan backend ENABLED")
+endif()
+
+# --- OpenGL backend libraries ---
+if(SPARK_OPENGL_AVAILABLE)
+    target_compile_definitions(SparkEngine PRIVATE SPARK_OPENGL_SUPPORT)
+    target_link_libraries(SparkEngine PRIVATE OpenGL::GL)
+
+    if(GLAD_FOUND)
+        # Build GLAD as a static library
+        add_library(glad STATIC "${GLAD_SOURCE_DIR}/glad.c")
+        target_include_directories(glad PUBLIC "${GLAD_INCLUDE_DIR}")
+        if(MSVC)
+            set_property(TARGET glad PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        endif()
+        target_link_libraries(SparkEngine PRIVATE glad)
+    endif()
+
+    message(STATUS "SparkEngine: OpenGL backend ENABLED")
 endif()
 
 # ---------------------------------------------------------------------
@@ -393,6 +532,14 @@ if(ENABLE_ADVANCED_INPUT)
     list(APPEND FEATURE_DEFINITIONS "ADVANCED_INPUT_ENABLED")
 endif()
 
+if(SPARK_VULKAN_AVAILABLE)
+    list(APPEND FEATURE_DEFINITIONS "VULKAN_BACKEND_AVAILABLE")
+endif()
+
+if(SPARK_OPENGL_AVAILABLE)
+    list(APPEND FEATURE_DEFINITIONS "OPENGL_BACKEND_AVAILABLE")
+endif()
+
 # Apply feature definitions to target
 if(FEATURE_DEFINITIONS)
     target_compile_definitions(SparkEngine PRIVATE ${FEATURE_DEFINITIONS})
@@ -426,7 +573,18 @@ if(MSVC)
     source_group("Assets\\\\Config" FILES "*.ini" "*.json" "*.cfg" "*.xml" "*.properties")
 endif()
 
-message(STATUS "SPARKENGINE CONFIGURED SUCCESSFULLY")
-message(STATUS "SparkEngine and SparkConsole will be built to: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-message(STATUS "Networking is ${ENABLE_NETWORKING} (disabled to avoid CURL linking issues)")
-message(STATUS "All hacky configurations have been removed and replaced with proper CMake practices")
+message(STATUS "=== SPARKENGINE CONFIGURED SUCCESSFULLY ===")
+message(STATUS "Output: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+message(STATUS "Graphics Backends:")
+message(STATUS "  DirectX 11 : ENABLED (always on Windows)")
+if(SPARK_VULKAN_AVAILABLE)
+    message(STATUS "  Vulkan     : ENABLED")
+else()
+    message(STATUS "  Vulkan     : DISABLED")
+endif()
+if(SPARK_OPENGL_AVAILABLE)
+    message(STATUS "  OpenGL     : ENABLED")
+else()
+    message(STATUS "  OpenGL     : DISABLED")
+endif()
+message(STATUS "Networking: ${ENABLE_NETWORKING}")
