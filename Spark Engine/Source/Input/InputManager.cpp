@@ -9,6 +9,8 @@
 #include <iomanip>
 #include <algorithm>
 #include <unordered_map>
+#include <thread>
+#include <chrono>
 
 InputManager::InputManager()
     : m_mouseX(0), m_mouseY(0)
@@ -395,8 +397,21 @@ void InputManager::Console_SimulateKeyPress(const std::string& keyName, int dura
         }
         Spark::SimpleConsole::GetInstance().Log("Simulated single key press: " + keyName, "SUCCESS");
     } else {
-        // TODO: Implement timed release for sustained press
-        Spark::SimpleConsole::GetInstance().Log("Simulated key press: " + keyName + " (duration: " + std::to_string(duration) + "ms)", "SUCCESS");
+        // Timed release: schedule a delayed key release using a background thread
+        // The key is already pressed above; we schedule the release after 'duration' ms
+        std::thread([this, virtualKey, keyName, duration]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(duration));
+            {
+                std::lock_guard<std::mutex> lock(m_inputMutex);
+                UpdateKeyState(virtualKey, false);
+                if (m_inputLogging) {
+                    LogInputEvent(virtualKey, false);
+                }
+            }
+            Spark::SimpleConsole::GetInstance().Log(
+                "Timed key release: " + keyName + " after " + std::to_string(duration) + "ms", "SUCCESS");
+        }).detach();
+        Spark::SimpleConsole::GetInstance().Log("Simulated sustained key press: " + keyName + " (duration: " + std::to_string(duration) + "ms)", "SUCCESS");
     }
 }
 

@@ -1,0 +1,41 @@
+name: Build SparkEngine
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**' ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        config: [Debug, Release]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Configure CMake
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTS=ON
+
+    - name: Build
+      run: cmake --build build --config ${{ matrix.config }} --parallel
+
+    - name: Run Tests
+      if: matrix.config == 'Release'
+      run: ctest --test-dir build --config ${{ matrix.config }} --output-on-failure
+
+    - name: Upload Build Artifacts
+      if: matrix.config == 'Release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: SparkEngine-${{ matrix.config }}
+        path: build/bin/${{ matrix.config }}/
+        retention-days: 7

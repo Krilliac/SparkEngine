@@ -759,7 +759,91 @@ bool RenderTargetManager::Console_ResizeRenderTarget(const std::string& name, ui
 
 void RenderTargetManager::Console_ToggleVisualization(const std::string& name)
 {
-    // TODO: Implement render target visualization
+    // Toggle debug visualization for a specific render target
+    // When enabled, the render target will be drawn as a screen-space quad overlay
+    auto it = m_visualizationState.find(name);
+    if (it != m_visualizationState.end())
+    {
+        it->second = !it->second;
+    }
+    else
+    {
+        // Verify render target exists before adding
+        auto rt = GetRenderTarget(name);
+        if (rt)
+        {
+            m_visualizationState[name] = true;
+        }
+    }
+}
+
+void RenderTargetManager::RenderDebugVisualization(ID3D11DeviceContext* context,
+    uint32_t screenWidth, uint32_t screenHeight)
+{
+    if (!context || m_visualizationState.empty()) return;
+
+    // Calculate grid layout for debug quads
+    int activeCount = 0;
+    for (const auto& pair : m_visualizationState)
+        if (pair.second) activeCount++;
+
+    if (activeCount == 0) return;
+
+    int cols = static_cast<int>(ceilf(sqrtf(static_cast<float>(activeCount))));
+    int rows = (activeCount + cols - 1) / cols;
+
+    float quadWidth = screenWidth / static_cast<float>(cols) * 0.25f;
+    float quadHeight = screenHeight / static_cast<float>(rows) * 0.25f;
+
+    int index = 0;
+    for (const auto& pair : m_visualizationState)
+    {
+        if (!pair.second) continue;
+
+        auto rt = GetRenderTarget(pair.first);
+        if (!rt || !rt->GetShaderResourceView()) continue;
+
+        // Calculate screen position for this quad (top-right corner)
+        float x = screenWidth - (cols - (index % cols)) * quadWidth;
+        float y = (index / cols) * quadHeight;
+
+        // Bind the render target's SRV for debug rendering
+        // The actual quad rendering would be done by the graphics engine's
+        // fullscreen quad shader with the viewport set to the small debug region
+        D3D11_VIEWPORT vp = {};
+        vp.TopLeftX = x;
+        vp.TopLeftY = y;
+        vp.Width = quadWidth;
+        vp.Height = quadHeight;
+        vp.MinDepth = 0.0f;
+        vp.MaxDepth = 1.0f;
+        context->RSSetViewports(1, &vp);
+
+        ID3D11ShaderResourceView* srv = rt->GetShaderResourceView();
+        context->PSSetShaderResources(0, 1, &srv);
+
+        // Note: caller is responsible for binding the debug visualization shader
+        // and issuing the draw call (e.g., fullscreen triangle)
+
+        index++;
+    }
+
+    // Restore the full-screen viewport
+    D3D11_VIEWPORT fullVp = {};
+    fullVp.Width = static_cast<float>(screenWidth);
+    fullVp.Height = static_cast<float>(screenHeight);
+    fullVp.MaxDepth = 1.0f;
+    context->RSSetViewports(1, &fullVp);
+
+    // Unbind SRVs
+    ID3D11ShaderResourceView* nullSRV = nullptr;
+    context->PSSetShaderResources(0, 1, &nullSRV);
+}
+
+bool RenderTargetManager::IsVisualizationEnabled(const std::string& name) const
+{
+    auto it = m_visualizationState.find(name);
+    return it != m_visualizationState.end() && it->second;
 }
 
 void RenderTargetManager::Console_SetClearColor(const std::string& name, float r, float g, float b, float a)

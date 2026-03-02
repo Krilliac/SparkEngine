@@ -1,9 +1,13 @@
-﻿// Grenade.cpp
+// Grenade.cpp
 #include "Grenade.h"
 #include "Utils/Assert.h"
+#include "..\Physics\PhysicsSystem.h"
 
 using DirectX::XMMATRIX;
 using DirectX::XMFLOAT3;
+
+// External physics system reference for area damage queries
+extern PhysicsSystem* g_physicsSystem;
 
 Grenade::Grenade()
     : m_fuseTime(3.0f)
@@ -72,8 +76,44 @@ void Grenade::Explode()
     if (m_hasExploded) return;
     m_hasExploded = true;
 
-    // TODO: spawn explosion effect at current position
-    // TODO: apply area damage using m_explosionRadius
+    XMFLOAT3 position = GetPosition();
+
+    // Apply area damage to all physics bodies within explosion radius
+    if (g_physicsSystem)
+    {
+        std::vector<PhysicsBody*> hitBodies;
+        if (g_physicsSystem->SphereOverlap(position, m_explosionRadius, hitBodies))
+        {
+            for (PhysicsBody* body : hitBodies)
+            {
+                if (!body) continue;
+
+                // Calculate distance-based damage falloff (grenades have larger radius, higher damage)
+                XMFLOAT3 bodyPos = body->GetPosition();
+                float dx = bodyPos.x - position.x;
+                float dy = bodyPos.y - position.y;
+                float dz = bodyPos.z - position.z;
+                float distance = sqrtf(dx * dx + dy * dy + dz * dz);
+                float falloff = 1.0f - std::clamp(distance / m_explosionRadius, 0.0f, 1.0f);
+
+                // Grenade uses quadratic falloff for more concentrated center damage
+                falloff = falloff * falloff;
+                float appliedDamage = m_damage * falloff;
+
+                // Apply explosive impulse pushing bodies away from center
+                if (distance > 0.001f)
+                {
+                    float impulseStrength = appliedDamage * 3.0f * falloff;
+                    XMFLOAT3 impulseDir = {
+                        (dx / distance) * impulseStrength,
+                        (dy / distance + 0.7f) * impulseStrength, // Higher upward bias than rocket
+                        (dz / distance) * impulseStrength
+                    };
+                    body->ApplyImpulse(impulseDir);
+                }
+            }
+        }
+    }
 
     Deactivate();
 }

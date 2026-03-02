@@ -341,6 +341,21 @@ public:
      */
     std::string Console_GetMemoryInfo() const;
 
+    /**
+     * @brief Render debug visualization of enabled render targets
+     * Draws enabled render targets as small quads in the top-right corner.
+     * @param context Device context for rendering
+     * @param screenWidth Current screen width
+     * @param screenHeight Current screen height
+     */
+    void RenderDebugVisualization(ID3D11DeviceContext* context,
+        uint32_t screenWidth, uint32_t screenHeight);
+
+    /**
+     * @brief Check if a render target has visualization enabled
+     */
+    bool IsVisualizationEnabled(const std::string& name) const;
+
 private:
     ID3D11Device* m_device;
     ID3D11DeviceContext* m_context;
@@ -352,6 +367,9 @@ private:
     // Metrics
     mutable std::mutex m_metricsMutex;
     RenderTargetMetrics m_metrics;
+
+    // Debug visualization state (name -> enabled)
+    std::unordered_map<std::string, bool> m_visualizationState;
 
     // Helper methods
     void UpdateMetrics();
