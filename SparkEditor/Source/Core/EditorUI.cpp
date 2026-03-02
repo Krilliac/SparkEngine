@@ -16,6 +16,8 @@
 #include "../Panels/InspectorPanel.h"
 #include "../Panels/AssetBrowserPanel.h"
 #include "../Panels/GameViewPanel.h"
+#include "../Panels/WeaponEditorPanel.h"
+#include "../Panels/FPSToolsPanel.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
 #include "EditorApplication.h"
@@ -317,6 +319,26 @@ void EditorUI::CreatePanels() {
         console.LogError("Failed to create Profiler panel: " + std::string(e.what()));
     }
 
+    // Create Weapon Editor Panel
+    try {
+        console.LogInfo("Creating Weapon Editor panel...");
+        auto weaponEditorPanel = std::shared_ptr<WeaponEditorPanel>(new WeaponEditorPanel());
+        m_panels["WeaponEditor"] = weaponEditorPanel;
+        console.LogSuccess("Created Weapon Editor panel");
+    } catch (const std::exception& e) {
+        console.LogError("Failed to create Weapon Editor panel: " + std::string(e.what()));
+    }
+
+    // Create FPS Tools Panel
+    try {
+        console.LogInfo("Creating FPS Tools panel...");
+        auto fpsToolsPanel = std::shared_ptr<FPSToolsPanel>(new FPSToolsPanel());
+        m_panels["FPSTools"] = fpsToolsPanel;
+        console.LogSuccess("Created FPS Tools panel");
+    } catch (const std::exception& e) {
+        console.LogError("Failed to create FPS Tools panel: " + std::string(e.what()));
+    }
+
     // SKIP SimpleBuildSystem in all modes since it's causing the hang
     console.LogWarning("SKIPPING Simple Build System panel (known to cause hangs)");
 
@@ -343,6 +365,12 @@ void EditorUI::CreatePanels() {
     if (m_panels.count("AssetBrowser")) m_panels["AssetBrowser"]->SetIcon(ICON_FA_FOLDER);
     if (m_panels.count("GameView"))    m_panels["GameView"]->SetIcon(ICON_FA_GAMEPAD);
     if (m_panels.count("Profiler"))    m_panels["Profiler"]->SetIcon(ICON_FA_CHART_BAR);
+    if (m_panels.count("WeaponEditor")) m_panels["WeaponEditor"]->SetIcon(ICON_FA_CROSSHAIRS);
+    if (m_panels.count("FPSTools"))    m_panels["FPSTools"]->SetIcon(ICON_FA_ROCKET);
+
+    // Hide new panels by default (accessible via FPS Tools menu)
+    if (m_panels.count("WeaponEditor")) m_panels["WeaponEditor"]->SetVisible(false);
+    if (m_panels.count("FPSTools"))    m_panels["FPSTools"]->SetVisible(false);
 
     console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
 }
@@ -469,6 +497,14 @@ void EditorUI::RenderMainMenuBar() {
                 SetPanelVisible("Profiler", !IsPanelVisible("Profiler"));
             }
             ImGui::Separator();
+            ImGui::TextDisabled("FPS Panels");
+            if (ImGui::MenuItem("Weapon Editor", nullptr, IsPanelVisible("WeaponEditor"))) {
+                SetPanelVisible("WeaponEditor", !IsPanelVisible("WeaponEditor"));
+            }
+            if (ImGui::MenuItem("FPS Tools", nullptr, IsPanelVisible("FPSTools"))) {
+                SetPanelVisible("FPSTools", !IsPanelVisible("FPSTools"));
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) {
                 ResetToDefaultLayout();
                 ShowNotification("Layout reset!", "success");
@@ -481,21 +517,35 @@ void EditorUI::RenderMainMenuBar() {
         }
         
         if (ImGui::BeginMenu("FPS Tools")) {
-            if (ImGui::MenuItem(ICON_FA_CROSSHAIRS " Weapon Editor")) {
-                ShowNotification("Weapon Editor coming soon!", "info");
+            if (ImGui::MenuItem(ICON_FA_CROSSHAIRS " Weapon Editor", nullptr, IsPanelVisible("WeaponEditor"))) {
+                SetPanelVisible("WeaponEditor", !IsPanelVisible("WeaponEditor"));
+                if (IsPanelVisible("WeaponEditor")) {
+                    ShowNotification("Weapon Editor opened!", "success");
+                }
             }
+            if (ImGui::MenuItem(ICON_FA_ROCKET " FPS Tools Panel", nullptr, IsPanelVisible("FPSTools"))) {
+                SetPanelVisible("FPSTools", !IsPanelVisible("FPSTools"));
+                if (IsPanelVisible("FPSTools")) {
+                    ShowNotification("FPS Tools panel opened!", "success");
+                }
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_FLAG " Spawn Points")) {
-                ShowNotification("Spawn Point editor coming soon!", "info");
+                SetPanelVisible("FPSTools", true);
+                ShowNotification("Open FPS Tools panel > Spawns tab", "info");
             }
             if (ImGui::MenuItem(ICON_FA_BULLSEYE " Objectives")) {
-                ShowNotification("Objective editor coming soon!", "info");
+                SetPanelVisible("FPSTools", true);
+                ShowNotification("Open FPS Tools panel > Level tab", "info");
             }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_BOMB " Explosive Volumes")) {
-                ShowNotification("Explosive volumes editor coming soon!", "info");
+                SetPanelVisible("FPSTools", true);
+                ShowNotification("Open FPS Tools panel > Level tab", "info");
             }
             if (ImGui::MenuItem(ICON_FA_SHIELD " Cover Points")) {
-                ShowNotification("Cover point editor coming soon!", "info");
+                SetPanelVisible("FPSTools", true);
+                ShowNotification("Open FPS Tools panel > Level tab", "info");
             }
             ImGui::EndMenu();
         }

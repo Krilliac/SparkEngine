@@ -72,6 +72,11 @@
 #define ICON_FA_TH              "\xef\x80\x8a"  // U+F00A (grid)
 #define ICON_FA_BORDER_ALL      "\xef\xa1\x8c"  // U+F84C
 
+// === FPS HUD ===
+#define ICON_FA_HEART           "\xef\x80\x84"  // U+F004
+#define ICON_FA_HEARTBEAT       "\xef\x88\x9e"  // U+F21E
+#define ICON_FA_SKULL           "\xef\x95\x8c"  // U+F54C
+
 // === Status / Feedback ===
 #define ICON_FA_CHECK           "\xef\x80\x8c"  // U+F00C
 #define ICON_FA_TIMES           "\xef\x80\x8d"  // U+F00D
