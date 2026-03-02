@@ -1,0 +1,44 @@
+# Spark Engine Editor Configuration
+# https://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cpp,h,hpp,c}]
+indent_style = space
+indent_size = 4
+
+[*.{hlsl,glsl,fx}]
+indent_style = space
+indent_size = 4
+
+[*.{json,xml,cfg}]
+indent_style = space
+indent_size = 2
+
+[*.{cmake,txt}]
+indent_style = space
+indent_size = 4
+
+[CMakeLists.txt]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.lua]
+indent_style = space
+indent_size = 4
+
+[Makefile]
+indent_style = tab

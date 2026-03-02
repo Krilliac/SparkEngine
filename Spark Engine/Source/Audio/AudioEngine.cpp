@@ -645,23 +645,95 @@ void AudioEngine::Update3DAudio() {
 
 void AudioEngine::Apply3DAudioToSource(AudioSource* source) {
     if (!source || !source->Voice || !source->Is3D) return;
-    
-    // Calculate distance from listener
+
+    // Calculate relative position from listener to source
     float dx = source->Position.x - m_listenerPosition.x;
     float dy = source->Position.y - m_listenerPosition.y;
     float dz = source->Position.z - m_listenerPosition.z;
     float distance = sqrtf(dx*dx + dy*dy + dz*dz);
-    
+
     // Apply distance attenuation
     float attenuation = 1.0f / (1.0f + distance * m_distanceScale * 0.1f);
     attenuation = std::clamp(attenuation, 0.0f, 1.0f);
-    
+
     // Apply volume with 3D attenuation
     float finalVolume = source->Volume * attenuation;
     source->Voice->SetVolume(finalVolume);
-    
-    // TODO: Apply stereo panning based on relative position
-    // TODO: Apply Doppler effect using m_dopplerScale
+
+    // Stereo panning based on relative position to listener
+    // Calculate the cross product of listener forward and direction to source
+    // to determine left/right placement
+    if (distance > 0.001f)
+    {
+        // Normalize direction to source
+        float invDist = 1.0f / distance;
+        float dirX = dx * invDist;
+        float dirZ = dz * invDist;
+
+        // Cross product of listener forward (XZ plane) with source direction gives left/right
+        // Positive = right, Negative = left
+        float pan = m_listenerForward.x * dirZ - m_listenerForward.z * dirX;
+        pan = std::clamp(pan, -1.0f, 1.0f);
+
+        // Convert pan to left/right channel volumes using equal-power panning
+        // pan: -1 = full left, 0 = center, +1 = full right
+        float angle = (pan + 1.0f) * 0.5f * 3.14159265f * 0.5f;
+        float leftGain = cosf(angle);
+        float rightGain = sinf(angle);
+
+        // Apply stereo output matrix: [leftToLeft, rightToLeft, leftToRight, rightToRight]
+        // For mono source -> stereo output: [left, right]
+        float outputMatrix[2] = { leftGain, rightGain };
+
+        XAUDIO2_VOICE_DETAILS voiceDetails;
+        source->Voice->GetVoiceDetails(&voiceDetails);
+
+        XAUDIO2_VOICE_DETAILS masterDetails;
+        m_masterVoice->GetVoiceDetails(&masterDetails);
+
+        // SetOutputMatrix: srcChannels * dstChannels matrix
+        source->Voice->SetOutputMatrix(
+            m_masterVoice,
+            voiceDetails.InputChannels,
+            masterDetails.InputChannels,
+            outputMatrix);
+    }
+
+    // Doppler effect using relative velocity between source and listener
+    if (m_dopplerScale > 0.0f && distance > 0.001f)
+    {
+        const float speedOfSound = 343.0f; // m/s
+
+        // Calculate relative velocity along the line between source and listener
+        float invDist = 1.0f / distance;
+        float dirToListenerX = -dx * invDist;
+        float dirToListenerY = -dy * invDist;
+        float dirToListenerZ = -dz * invDist;
+
+        // Project source velocity onto direction toward listener
+        float sourceApproachSpeed =
+            source->Velocity.x * dirToListenerX +
+            source->Velocity.y * dirToListenerY +
+            source->Velocity.z * dirToListenerZ;
+
+        // Project listener velocity onto direction toward source
+        float listenerApproachSpeed =
+            m_listenerVelocity.x * (-dirToListenerX) +
+            m_listenerVelocity.y * (-dirToListenerY) +
+            m_listenerVelocity.z * (-dirToListenerZ);
+
+        // Doppler ratio: f' = f * (v + vL) / (v + vS)
+        // where v = speed of sound, vL = listener approach speed, vS = source approach speed
+        float numerator = speedOfSound + listenerApproachSpeed * m_dopplerScale;
+        float denominator = speedOfSound + sourceApproachSpeed * m_dopplerScale;
+
+        // Clamp to prevent extreme pitch shifts or division issues
+        if (denominator > 0.01f)
+        {
+            float dopplerRatio = std::clamp(numerator / denominator, 0.5f, 2.0f);
+            source->Voice->SetFrequencyRatio(source->Pitch * dopplerRatio);
+        }
+    }
 }
 
 HRESULT AudioEngine::CreateSourceVoice(const WAVEFORMATEX& format, IXAudio2SourceVoice** voice)
