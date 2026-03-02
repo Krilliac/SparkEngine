@@ -167,8 +167,19 @@ add_custom_command(TARGET SparkEditor POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEditor>/EditorAssets/Layouts"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEditor>/Projects"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEditor>/Temp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEditor>/EditorAssets/Fonts"
     COMMENT "Creating SparkEditor directory structure"
 )
+
+# Copy fonts to output directory
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Fonts")
+    add_custom_command(TARGET SparkEditor POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/Fonts"
+            "$<TARGET_FILE_DIR:SparkEditor>/EditorAssets/Fonts"
+        COMMENT "Copying editor fonts"
+    )
+endif()
 
 # Dependencies
 if(TARGET SparkEngine)

@@ -96,6 +96,14 @@ private:
     bool m_showGizmos = true;
     int m_renderTextureWidth = 512;
     int m_renderTextureHeight = 512;
+
+    // Render mode
+    enum class RenderMode { Shaded, Wireframe, Unlit, Normals, Depth };
+    RenderMode m_renderMode = RenderMode::Shaded;
+
+    // Gizmo mode
+    enum class GizmoMode { Move, Rotate, Scale };
+    GizmoMode m_gizmoMode = GizmoMode::Move;
 };
 
 } // namespace SparkEditor

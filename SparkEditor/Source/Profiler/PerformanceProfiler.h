@@ -12,6 +12,8 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include <d3d11.h>
+#include <wrl/client.h>
 #include <DirectXMath.h>
 #include <vector>
 #include <memory>
@@ -23,6 +25,7 @@
 #include <atomic>
 #include <queue>
 #include <functional>
+#include <cfloat>
 
 using namespace DirectX;
 

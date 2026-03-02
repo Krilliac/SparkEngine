@@ -28,8 +28,16 @@ bool EditorPanel::BeginPanel()
         flags |= ImGuiWindowFlags_NoCollapse;
     }
 
+    // Compose display title with icon, but use stable ###ID for docking
+    std::string displayTitle;
+    if (m_icon.empty()) {
+        displayTitle = m_title + "###" + m_id;
+    } else {
+        displayTitle = m_icon + "  " + m_title + "###" + m_id;
+    }
+
     bool visible = m_isVisible;
-    bool result = ImGui::Begin(m_title.c_str(), m_isClosable ? &visible : nullptr, flags);
+    bool result = ImGui::Begin(displayTitle.c_str(), m_isClosable ? &visible : nullptr, flags);
     
     if (visible != m_isVisible) {
         SetVisible(visible);

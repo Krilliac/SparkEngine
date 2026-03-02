@@ -6,7 +6,9 @@
  */
 
 #include "SimpleConsolePanel.h"
-#include "../Utils/SparkConsole.h"  // Include SparkConsole for engine-style logging
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorFonts.h"
+#include "../Utils/SparkConsole.h"
 #include <imgui.h>
 #include <iostream>
 #include <sstream>
@@ -105,31 +107,71 @@ void SimpleConsolePanel::Render() {
 
     if (BeginPanel()) {
         // Console toolbar
-        if (ImGui::Button("Clear")) {
+        if (ImGui::Button(ICON_FA_TRASH " Clear")) {
             Clear();
         }
         ImGui::SameLine();
         ImGui::Checkbox("Auto-scroll", &m_scrollToBottom);
-        
+
         ImGui::SameLine();
-        ImGui::Separator();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
         ImGui::SameLine();
-        
+
+        // Log level filter toggle buttons with counts
+        m_infoCount = m_warningCount = m_errorCount = 0;
+        for (const auto& msg : m_messages) {
+            if (msg.level == "INFO" || msg.level == "RESULT" || msg.level == "COMMAND" || msg.level == "TRACE") m_infoCount++;
+            else if (msg.level == "WARNING") m_warningCount++;
+            else if (msg.level == "ERROR" || msg.level == "CRITICAL") m_errorCount++;
+        }
+
+        // Info filter
+        ImVec4 infoBtnColor = m_showInfo ? ImVec4(0.176f, 0.549f, 0.941f, 0.8f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, infoBtnColor);
+        char infoLabel[64]; snprintf(infoLabel, sizeof(infoLabel), ICON_FA_INFO_CIRCLE " %d", m_infoCount);
+        if (ImGui::Button(infoLabel)) m_showInfo = !m_showInfo;
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Info messages");
+
+        ImGui::SameLine();
+
+        // Warning filter
+        ImVec4 warnBtnColor = m_showWarning ? ImVec4(0.961f, 0.651f, 0.137f, 0.8f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, warnBtnColor);
+        char warnLabel[64]; snprintf(warnLabel, sizeof(warnLabel), ICON_FA_EXCLAMATION " %d", m_warningCount);
+        if (ImGui::Button(warnLabel)) m_showWarning = !m_showWarning;
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Warning messages");
+
+        ImGui::SameLine();
+
+        // Error filter
+        ImVec4 errBtnColor = m_showError ? ImVec4(0.898f, 0.224f, 0.208f, 0.8f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, errBtnColor);
+        char errLabel[64]; snprintf(errLabel, sizeof(errLabel), ICON_FA_TIMES " %d", m_errorCount);
+        if (ImGui::Button(errLabel)) m_showError = !m_showError;
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Error messages");
+
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
         // External console controls
         RenderExternalConsoleControls();
-        
+
         ImGui::Separator();
-        
+
         // Auto-connect settings
         RenderAutoConnectSettings();
-        
+
         ImGui::Separator();
-        
+
         // Messages area
         RenderMessages();
-        
+
         ImGui::Separator();
-        
+
         // Command input
         RenderCommandInput();
     }
@@ -456,27 +498,58 @@ void SimpleConsolePanel::Clear() {
 void SimpleConsolePanel::RenderMessages() {
     const float footer_height_to_reserve = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
     ImGui::BeginChild("ScrollingRegion", ImVec2(0, -footer_height_to_reserve), false, ImGuiWindowFlags_HorizontalScrollbar);
-    
+
+    // Use monospace font for log messages
+    ImFont* monoFont = EditorFonts::GetMonospace();
+    if (monoFont) ImGui::PushFont(monoFont);
+
     for (const auto& msg : m_messages) {
-        ImVec4 color = ImVec4(1, 1, 1, 1); // White
-        if (msg.level == "WARNING") color = ImVec4(1, 1, 0, 1); // Yellow
-        else if (msg.level == "ERROR") color = ImVec4(1, 0, 0, 1); // Red
-        else if (msg.level == "SUCCESS") color = ImVec4(0, 1, 0, 1); // Green
-        else if (msg.level == "CRITICAL") color = ImVec4(1, 0.5f, 0, 1); // Orange
-        else if (msg.level == "TRACE") color = ImVec4(0.7f, 0.7f, 1, 1); // Light Blue
-        
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "[%s]", msg.timestamp.c_str());
+        // Apply filter
+        bool isInfo = (msg.level == "INFO" || msg.level == "RESULT" || msg.level == "COMMAND" || msg.level == "TRACE" || msg.level == "SUCCESS");
+        bool isWarning = (msg.level == "WARNING");
+        bool isError = (msg.level == "ERROR" || msg.level == "CRITICAL");
+
+        if (isInfo && !m_showInfo) continue;
+        if (isWarning && !m_showWarning) continue;
+        if (isError && !m_showError) continue;
+
+        // Color by level
+        ImVec4 color(0.88f, 0.89f, 0.92f, 1.0f);  // Default: cool white
+        const char* icon = ICON_FA_INFO_CIRCLE;
+        if (msg.level == "WARNING") {
+            color = ImVec4(0.96f, 0.80f, 0.28f, 1.0f);
+            icon = ICON_FA_EXCLAMATION;
+        } else if (msg.level == "ERROR") {
+            color = ImVec4(0.90f, 0.30f, 0.28f, 1.0f);
+            icon = ICON_FA_TIMES;
+        } else if (msg.level == "CRITICAL") {
+            color = ImVec4(1.0f, 0.45f, 0.0f, 1.0f);
+            icon = ICON_FA_BOMB;
+        } else if (msg.level == "SUCCESS") {
+            color = ImVec4(0.30f, 0.80f, 0.32f, 1.0f);
+            icon = ICON_FA_CHECK;
+        } else if (msg.level == "COMMAND") {
+            color = ImVec4(0.55f, 0.75f, 1.0f, 1.0f);
+            icon = ICON_FA_CHEVRON_RIGHT;
+        } else if (msg.level == "TRACE") {
+            color = ImVec4(0.60f, 0.60f, 0.85f, 1.0f);
+            icon = ICON_FA_BUG;
+        }
+
+        ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.52f, 1.0f), "[%s]", msg.timestamp.c_str());
         ImGui::SameLine();
-        ImGui::TextColored(color, "[%s]", msg.level.c_str());
+        ImGui::TextColored(color, "%s", icon);
         ImGui::SameLine();
-        ImGui::TextWrapped("%s", msg.message.c_str());
+        ImGui::TextColored(color, "%s", msg.message.c_str());
     }
-    
+
+    if (monoFont) ImGui::PopFont();
+
     if (m_scrollToBottom && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
         ImGui::SetScrollHereY(1.0f);
         m_scrollToBottom = false;
     }
-    
+
     ImGui::EndChild();
 }
 

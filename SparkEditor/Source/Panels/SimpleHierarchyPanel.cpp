@@ -6,8 +6,12 @@
  */
 
 #include "SimpleHierarchyPanel.h"
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorFonts.h"
 #include <imgui.h>
 #include <iostream>
+#include <algorithm>
+#include <cctype>
 
 namespace SparkEditor {
 
@@ -38,55 +42,107 @@ void SimpleHierarchyPanel::Render() {
     if (!IsVisible()) return;
 
     if (BeginPanel()) {
-        // Toolbar
-        if (ImGui::Button("Create")) {
+        // Toolbar with icon buttons
+        if (ImGui::Button(ICON_FA_PLUS " Create")) {
             ImGui::OpenPopup("CreateObject");
         }
         ImGui::SameLine();
-        if (ImGui::Button("Delete") && !m_selectedObject.empty()) {
+        if (ImGui::Button(ICON_FA_TRASH " Delete") && !m_selectedObject.empty()) {
             DeleteObject(m_selectedObject);
         }
-        
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_COPY " Duplicate") && !m_selectedObject.empty()) {
+            CreateObject(m_selectedObject);
+        }
+
+        // Search filter bar
+        ImGui::SetNextItemWidth(-1);
+        ImGui::InputTextWithHint("##HierarchySearch", ICON_FA_SEARCH " Search objects...", m_searchFilter, sizeof(m_searchFilter));
+
         ImGui::Separator();
-        
+
         // Object list
-        for (const auto& object : m_sceneObjects) {
-            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-            
+        ImGui::BeginChild("##ObjectList");
+        for (size_t i = 0; i < m_sceneObjects.size(); ++i) {
+            const auto& object = m_sceneObjects[i];
+
+            // Apply search filter
+            if (m_searchFilter[0] != '\0') {
+                std::string lower = object;
+                std::string filter = m_searchFilter;
+                std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+                std::transform(filter.begin(), filter.end(), filter.begin(), ::tolower);
+                if (lower.find(filter) == std::string::npos) continue;
+            }
+
+            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                                       ImGuiTreeNodeFlags_SpanAvailWidth;
+
             if (object == m_selectedObject) {
                 flags |= ImGuiTreeNodeFlags_Selected;
             }
-            
-            // Object icon
-            const char* icon = "??";
-            if (object.find("Camera") != std::string::npos) icon = "??";
-            else if (object.find("Light") != std::string::npos) icon = "??";
-            else if (object.find("Player") != std::string::npos) icon = "??";
-            
-            ImGui::TreeNodeEx(object.c_str(), flags, "%s %s", icon, object.c_str());
-            
+
+            // Object icon based on type (FontAwesome)
+            const char* icon = ICON_FA_CUBE;
+            if (object.find("Camera") != std::string::npos) icon = ICON_FA_CAMERA;
+            else if (object.find("Light") != std::string::npos) icon = ICON_FA_LIGHTBULB;
+            else if (object.find("Player") != std::string::npos) icon = ICON_FA_CROSSHAIRS;
+            else if (object.find("Plane") != std::string::npos || object.find("Ground") != std::string::npos) icon = ICON_FA_VECTOR_SQUARE;
+            else if (object.find("Sphere") != std::string::npos) icon = ICON_FA_CIRCLE;
+
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::TreeNodeEx("##obj", flags, "%s  %s", icon, object.c_str());
+
             if (ImGui::IsItemClicked()) {
                 m_selectedObject = object;
             }
+
+            // Right-click context menu
+            if (ImGui::BeginPopupContextItem("##ObjContext")) {
+                m_selectedObject = object;
+                if (ImGui::MenuItem(ICON_FA_COPY " Duplicate")) {
+                    CreateObject(object);
+                }
+                if (ImGui::MenuItem(ICON_FA_TRASH " Delete")) {
+                    DeleteObject(object);
+                    ImGui::EndPopup();
+                    ImGui::PopID();
+                    break;
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_EYE " Toggle Visibility")) {
+                    // Toggle visibility placeholder
+                }
+                ImGui::EndPopup();
+            }
+            ImGui::PopID();
         }
-        
+        ImGui::EndChild();
+
         // Create object popup
         if (ImGui::BeginPopup("CreateObject")) {
-            if (ImGui::MenuItem("Empty GameObject")) {
+            if (ImGui::MenuItem(ICON_FA_CUBE " Empty GameObject")) {
                 CreateObject("Empty GameObject");
             }
-            if (ImGui::BeginMenu("3D Object")) {
-                if (ImGui::MenuItem("Cube")) CreateObject("Cube");
-                if (ImGui::MenuItem("Sphere")) CreateObject("Sphere");
-                if (ImGui::MenuItem("Plane")) CreateObject("Plane");
+            if (ImGui::BeginMenu(ICON_FA_SHAPES " 3D Object")) {
+                if (ImGui::MenuItem(ICON_FA_CUBE " Cube")) CreateObject("Cube");
+                if (ImGui::MenuItem(ICON_FA_CIRCLE " Sphere")) CreateObject("Sphere");
+                if (ImGui::MenuItem(ICON_FA_VECTOR_SQUARE " Plane")) CreateObject("Plane");
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Light")) {
+            if (ImGui::BeginMenu(ICON_FA_LIGHTBULB " Light")) {
                 if (ImGui::MenuItem("Directional Light")) CreateObject("Directional Light");
                 if (ImGui::MenuItem("Point Light")) CreateObject("Point Light");
+                if (ImGui::MenuItem("Spot Light")) CreateObject("Spot Light");
                 ImGui::EndMenu();
             }
-            if (ImGui::MenuItem("Camera")) CreateObject("Camera");
+            if (ImGui::BeginMenu(ICON_FA_CROSSHAIRS " FPS")) {
+                if (ImGui::MenuItem(ICON_FA_CROSSHAIRS " Player Spawn")) CreateObject("Player Spawn");
+                if (ImGui::MenuItem(ICON_FA_FLAG " Capture Point")) CreateObject("Capture Point");
+                if (ImGui::MenuItem(ICON_FA_SHIELD " Cover Point")) CreateObject("Cover Point");
+                ImGui::EndMenu();
+            }
+            if (ImGui::MenuItem(ICON_FA_CAMERA " Camera")) CreateObject("Camera");
             ImGui::EndPopup();
         }
     }

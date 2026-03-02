@@ -52,6 +52,7 @@ public:
 private:
     std::vector<std::string> m_sceneObjects;
     std::string m_selectedObject;
+    char m_searchFilter[256] = {0};
 };
 
 } // namespace SparkEditor
