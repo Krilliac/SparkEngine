@@ -25,7 +25,7 @@ class Timer;
  * Windows application instance handle used throughout the engine
  * for Win32 API calls and window management.
  */
-extern HINSTANCE hInst;
+extern HINSTANCE g_hInst;
 
 /**
  * @brief Global graphics engine instance

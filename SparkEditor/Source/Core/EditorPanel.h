@@ -250,8 +250,17 @@ protected:
     
     bool m_isModified = false;                          ///< Panel modification state
     bool m_visibleInMenu = true;                        ///< Visibility in view menu
-    
+
+    std::string m_icon;                                 ///< FontAwesome icon for panel header
+
     std::function<void(EditorPanel*)> m_stateChangeCallback; ///< State change callback
+
+public:
+    /** @brief Set icon for the panel title bar */
+    void SetIcon(const std::string& icon) { m_icon = icon; }
+
+    /** @brief Get icon string */
+    const std::string& GetIcon() const { return m_icon; }
 };
 
 } // namespace SparkEditor

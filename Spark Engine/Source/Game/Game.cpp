@@ -177,11 +177,11 @@ void Game::Shutdown()
 --------------------------------------------------------------*/
 void Game::Update(float dt)
 {
-    // **FIXED: Removed all per-frame logging to prevent console spam**
-
     if (m_isPaused) {
         return;
     }
+
+    dt *= m_timeScale;
 
     HandleInput(dt);
     UpdateCamera(dt);
@@ -216,12 +216,14 @@ void Game::Render()
     }
 
     // **CRITICAL: This is the ONLY place BeginFrame/EndFrame should be called**
+    bool frameStarted = false;
     try {
         m_graphics->BeginFrame();
-        
+        frameStarted = true;
+
         // Collect all renderable objects for unified rendering
         std::vector<GameObject*> renderableObjects;
-        
+
         // Add game objects
         for (auto& obj : m_gameObjects) {
             if (obj && obj->IsActive() && obj->IsVisible()) {
@@ -241,51 +243,40 @@ void Game::Render()
         // **UNIFIED RENDERING: Use the complete modern graphics pipeline**
         XMMATRIX view = m_camera->GetViewMatrix();
         XMMATRIX proj = m_camera->GetProjectionMatrix();
-        
+
         // Call the unified RenderScene method
         m_graphics->RenderScene(view, proj, renderableObjects);
-        
+
         // **ENHANCED: Render player weapons in first-person view**
         if (m_player) {
             m_player->Render(view, proj);
         }
-        
+
         if (m_projectilePool) {
             m_projectilePool->Render(view, proj);
         }
-        
+
         // **SOLUTION: Single console rendering location - this is the ONLY place console renders**
         if (g_console.IsVisible()) {
             g_console.Render(m_graphics->GetContext());
         }
-        
-        // **CRITICAL: Always EndFrame, even if errors occurred above**
-        m_graphics->EndFrame();
-        
+
     } catch (const std::exception& e) {
-        // Ensure we always call EndFrame even if rendering fails
-        try {
-            m_graphics->EndFrame();
-        } catch (...) {
-            // If EndFrame also fails, log it but don't throw again
-            LOG_TO_CONSOLE_IMMEDIATE(L"Critical: EndFrame failed during error recovery", L"ERROR");
-        }
-        
-        // Log the original error
         std::string errorMsg = "Rendering error: " + std::string(e.what());
         std::wstring wErrorMsg(errorMsg.begin(), errorMsg.end());
         LOG_TO_CONSOLE_IMMEDIATE(wErrorMsg, L"ERROR");
-        
+
     } catch (...) {
-        // Ensure we always call EndFrame even if rendering fails
+        LOG_TO_CONSOLE_IMMEDIATE(L"Unknown rendering error occurred", L"ERROR");
+    }
+
+    // Always call EndFrame exactly once if BeginFrame succeeded
+    if (frameStarted) {
         try {
             m_graphics->EndFrame();
         } catch (...) {
-            // If EndFrame also fails, log it but don't throw again
             LOG_TO_CONSOLE_IMMEDIATE(L"Critical: EndFrame failed during error recovery", L"ERROR");
         }
-        
-        LOG_TO_CONSOLE_IMMEDIATE(L"Unknown rendering error occurred", L"ERROR");
     }
 }
 
@@ -617,9 +608,9 @@ bool Game::DeleteObject(size_t index)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Deleting object via console integration", L"INFO");
     
-    if (index >= m_gameObjects.size()) {
-        std::wstring errorMsg = L"Invalid object index: " + std::to_wstring(index) + 
-                               L" (max: " + std::to_wstring(m_gameObjects.size() - 1) + L")";
+    if (m_gameObjects.empty() || index >= m_gameObjects.size()) {
+        std::wstring errorMsg = L"Invalid object index: " + std::to_wstring(index) +
+                               L" (total objects: " + std::to_wstring(m_gameObjects.size()) + L")";
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
         return false;
     }

@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <memory>
 #include <DirectXMath.h>
+#include "../Enums/SceneSystemEnums.h"
 
 using namespace DirectX;
 
@@ -199,20 +200,7 @@ struct AudioSource {
     int priority = 128;                         ///< Audio priority (0-255)
 };
 
-/**
- * @brief Component type enumeration
- */
-enum class ComponentType : uint32_t {
-    TRANSFORM = 0,
-    MESH_RENDERER = 1,
-    LIGHT = 2,
-    CAMERA = 3,
-    RIGID_BODY = 4,
-    COLLIDER = 5,
-    AUDIO_SOURCE = 6,
-    SCRIPT = 7,
-    CUSTOM = 1000  // Custom components start at 1000
-};
+// ComponentType is defined in ../Enums/SceneSystemEnums.h to avoid ODR violations
 
 /**
  * @brief Generic component wrapper

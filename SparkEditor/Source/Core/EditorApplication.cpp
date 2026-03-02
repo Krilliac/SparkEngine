@@ -6,8 +6,9 @@
  */
 
 #include "EditorApplication.h"
-#include "EditorUI.h"  
-#include "EditorCrashHandler.h"  
+#include "EditorUI.h"
+#include "EditorFonts.h"
+#include "EditorCrashHandler.h"
 #include "../Utils/SparkConsole.h"
 #include <memory>
 #include <iostream>
@@ -230,11 +231,17 @@ bool EditorApplication::InitializeImGui()
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     
-    // Enable keyboard controls
+    // Enable keyboard controls and docking
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    // Note: Docking features require a newer ImGui version
-    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    // Docking configuration
+    io.ConfigDockingWithShift = false;  // Dock without holding Shift
+    io.ConfigWindowsResizeFromEdges = true;
+
+    // Load custom fonts before backend initialization
+    EditorFonts::LoadFonts(15.0f);
+
     // Setup Platform/Renderer backends
     if (!ImGui_ImplWin32_Init(m_hwnd)) {
         std::cerr << "Failed to initialize ImGui Win32 backend\n";

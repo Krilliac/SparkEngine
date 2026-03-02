@@ -80,8 +80,8 @@ int main(int argc, char* argv[]) {
         config.projectPath = ".";
         config.enableLogging = true;
         config.startMaximized = false; // Don't start maximized in debug mode
-        config.windowWidth = 1200;
-        config.windowHeight = 800;
+        config.windowWidth = 1600;
+        config.windowHeight = 900;
         
         console.LogInfo("Editor configuration prepared");
         

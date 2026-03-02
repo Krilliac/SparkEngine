@@ -38,10 +38,11 @@ enum class LoadingPriority {
  * @brief Streaming methods
  */
 enum class StreamingMethod {
-    DISTANCE_BASED = 0,     ///< Distance-based streaming
-    FRUSTUM_BASED = 1,      ///< View frustum-based streaming
+    DISTANCE_BASED = 0,     ///< Stream based on distance from player
+    TRIGGER_BASED = 1,      ///< Stream when entering trigger volumes
     MANUAL = 2,             ///< Manual streaming control
-    HYBRID = 3              ///< Hybrid approach
+    PRIORITY_BASED = 3,     ///< Stream based on priority and memory budget
+    PREDICTIVE = 4          ///< Predictive streaming based on player movement
 };
 
 /**

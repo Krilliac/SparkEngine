@@ -272,6 +272,8 @@ struct ScriptNode {
      * @param context Execution context
      * @return true if execution succeeded
      */
+    virtual ~ScriptNode() = default;
+
     virtual bool Execute(const std::vector<ScriptValue>& inputs,
                         std::vector<ScriptValue>& outputs,
                         class ScriptExecutionContext* context) = 0;

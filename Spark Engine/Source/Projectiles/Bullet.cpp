@@ -38,6 +38,7 @@ void Bullet::Update(float deltaTime)
 
 void Bullet::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
+    if (!m_active) return;
     ASSERT_MSG(m_mesh != nullptr, "Bullet mesh not initialized");
     Projectile::Render(view, projection);
 }

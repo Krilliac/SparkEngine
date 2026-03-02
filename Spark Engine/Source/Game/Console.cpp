@@ -45,9 +45,10 @@ bool Console::HandleKeyDown(WPARAM key)
         return true;
 
     case VK_RETURN:
-        ASSERT_MSG(!inputLine.empty(), "Executing empty command");
-        ExecuteCommand(inputLine);
-        inputLine.clear();
+        if (!inputLine.empty()) {
+            ExecuteCommand(inputLine);
+            inputLine.clear();
+        }
         return true;
 
     case VK_ESCAPE:

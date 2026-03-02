@@ -42,12 +42,13 @@ void ModelObject::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX&
 
     ASSERT(m_context != nullptr);
 
-    // ? ENHANCED: Calculate world transformation matrix
-    DirectX::XMMATRIX world = DirectX::XMMatrixIdentity();
-    
-    // Apply position (access m_position from GameObject base class)
+    // Build full world matrix with scale, rotation, and translation
     DirectX::XMFLOAT3 pos = GetPosition();
-    world = DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
+    DirectX::XMFLOAT3 rot = GetRotation();
+    DirectX::XMFLOAT3 scl = GetScale();
+    DirectX::XMMATRIX world = DirectX::XMMatrixScaling(scl.x, scl.y, scl.z) *
+                               DirectX::XMMatrixRotationRollPitchYaw(rot.x, rot.y, rot.z) *
+                               DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
     
     // ? ENHANCED: Get graphics engine reference (you may need to adjust this based on how you access it)
     // For now, we'll try to get it from a global or pass it down from the render system

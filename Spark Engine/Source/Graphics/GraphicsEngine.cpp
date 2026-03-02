@@ -94,6 +94,10 @@ using Microsoft::WRL::ComPtr;
 GraphicsEngine::GraphicsEngine()
     : m_windowWidth(1280)
     , m_windowHeight(720)
+    , m_width(1280)
+    , m_height(720)
+    , m_fullscreen(false)
+    , m_hwnd(nullptr)
     , m_textureMemoryUsage(0)
     , m_bufferMemoryUsage(0)
     , m_frameInProgress(false)
@@ -1105,6 +1109,9 @@ void GraphicsEngine::ApplyGraphicsState()
 
 void GraphicsEngine::UpdateMetrics()
 {
+    static int frameCount = 0;
+    frameCount++;
+
     auto now = std::chrono::high_resolution_clock::now();
     static auto lastUpdate = now;
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate);
@@ -1112,8 +1119,6 @@ void GraphicsEngine::UpdateMetrics()
     if (elapsed.count() >= 1000) {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
 
-        static int frameCount = 0;
-        frameCount++;
         m_statistics.fps = static_cast<uint32_t>(frameCount * 1000.0f / elapsed.count());
         frameCount = 0;
         lastUpdate = now;
@@ -1593,7 +1598,9 @@ void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& view, const XMMATRIX& 
     frameConstants.Time = 0.0f; // You could track actual time here
     frameConstants.DeltaTime = 0.016f; // Approximate 60 FPS
     frameConstants.ScreenResolution = XMFLOAT2(static_cast<float>(m_windowWidth), static_cast<float>(m_windowHeight));
-    frameConstants.InvScreenResolution = XMFLOAT2(1.0f / m_windowWidth, 1.0f / m_windowHeight);
+    frameConstants.InvScreenResolution = XMFLOAT2(
+        (m_windowWidth > 0) ? (1.0f / m_windowWidth) : 0.0f,
+        (m_windowHeight > 0) ? (1.0f / m_windowHeight) : 0.0f);
     
     // Set up basic directional lighting
     frameConstants.DirectionalLightDir = XMFLOAT3(0.3f, -0.7f, 0.6f); // Pointing down and slightly forward

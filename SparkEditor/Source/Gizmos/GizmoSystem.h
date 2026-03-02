@@ -84,8 +84,8 @@ struct Ray {
 struct GizmoInteraction {
     bool isActive = false;          ///< Whether interaction is active
     GizmoAxis activeAxis = GizmoAxis::NONE; ///< Currently active axis
-    XMFLOAT3 startPosition;         ///< Starting position of interaction
-    XMFLOAT3 currentDelta;          ///< Current delta from start
+    XMFLOAT3 startPosition = {0, 0, 0}; ///< Starting position of interaction
+    XMFLOAT3 currentDelta = {0, 0, 0};  ///< Current delta from start
     float totalDelta = 0.0f;        ///< Total magnitude of change
     bool isDragging = false;        ///< Whether currently dragging
 };
@@ -406,8 +406,8 @@ private:
     float m_gizmoSize = 1.0f;                   ///< Gizmo size scale
     
     // Interaction state
-    XMFLOAT3 m_lastMouseWorldPos;               ///< Last mouse world position
-    XMFLOAT3 m_interactionStartPos;             ///< Interaction start position
+    XMFLOAT3 m_lastMouseWorldPos = {0, 0, 0};    ///< Last mouse world position
+    XMFLOAT3 m_interactionStartPos = {0, 0, 0}; ///< Interaction start position
     bool m_isDragging = false;                  ///< Currently dragging
     GizmoAxis m_hoveredAxis = GizmoAxis::NONE;  ///< Currently hovered axis
     
@@ -415,7 +415,7 @@ private:
     struct GizmoGeometry {
         Microsoft::WRL::ComPtr<ID3D11Buffer> vertexBuffer;
         Microsoft::WRL::ComPtr<ID3D11Buffer> indexBuffer;
-        UINT indexCount;
+        UINT indexCount = 0;
     };
     
     GizmoGeometry m_arrowGeometry;              ///< Arrow geometry for translation

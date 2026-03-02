@@ -181,7 +181,10 @@ CollisionResult CollisionSystem::RayVsBox(const Ray& ray, const BoundingBox& box
     // Manual component intersection
     float ox = ray.Origin.x, oy = ray.Origin.y, oz = ray.Origin.z;
     float dx = ray.Direction.x, dy = ray.Direction.y, dz = ray.Direction.z;
-    float invX = 1.0f / dx, invY = 1.0f / dy, invZ = 1.0f / dz;
+    constexpr float epsilon = 1e-8f;
+    float invX = (fabsf(dx) > epsilon) ? (1.0f / dx) : ((dx >= 0.0f) ? (1.0f / epsilon) : (-1.0f / epsilon));
+    float invY = (fabsf(dy) > epsilon) ? (1.0f / dy) : ((dy >= 0.0f) ? (1.0f / epsilon) : (-1.0f / epsilon));
+    float invZ = (fabsf(dz) > epsilon) ? (1.0f / dz) : ((dz >= 0.0f) ? (1.0f / epsilon) : (-1.0f / epsilon));
 
     float t1x = (box.Min.x - ox) * invX;
     float t2x = (box.Max.x - ox) * invX;

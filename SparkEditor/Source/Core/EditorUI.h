@@ -169,12 +169,27 @@ private:
     // Additional member variable for selected objects count
     int m_selectedObjectCount = 0;
 
+    // Toolbar state
+    enum class PlayMode { Stopped, Playing, Paused };
+    PlayMode m_playMode = PlayMode::Stopped;
+
+    enum class TransformTool { Move, Rotate, Scale };
+    TransformTool m_currentTool = TransformTool::Move;
+
+    enum class TransformSpace { World, Local };
+    TransformSpace m_transformSpace = TransformSpace::World;
+
+    bool m_snapEnabled = false;
+    float m_snapValue = 1.0f;
+
     // Helper methods
     void RenderMainMenuBar();
+    void RenderToolbar();
     void RenderStatusBar();
     void RenderNotifications();
     void RenderPanels();
     void RenderModalDialogs();
+    void SetupDefaultDockLayout(ImGuiID dockspaceId);
     void UpdateStats(float deltaTime);
     void CreatePanels();
 };

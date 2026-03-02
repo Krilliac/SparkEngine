@@ -94,6 +94,13 @@ private:
     std::vector<std::string> m_commandHistory;
     char m_commandBuffer[512];
     bool m_scrollToBottom = true;
+    bool m_showInfo = true;
+    bool m_showWarning = true;
+    bool m_showError = true;
+    bool m_showSuccess = true;
+    int m_infoCount = 0;
+    int m_warningCount = 0;
+    int m_errorCount = 0;
     bool m_externalConsoleConnected = false;
     bool m_autoConnect = false;  // Default to false for debugger compatibility
     bool m_autoConnectAttempted = false;

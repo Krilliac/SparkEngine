@@ -149,8 +149,8 @@ private:
     void CreateProjectiles();
 
     size_t                          m_poolSize;    ///< Maximum pool size
-    ID3D11Device* m_device;                        ///< DirectX device reference
-    ID3D11DeviceContext* m_context;                ///< DirectX context reference
+    ID3D11Device* m_device{ nullptr };             ///< DirectX device reference
+    ID3D11DeviceContext* m_context{ nullptr };     ///< DirectX context reference
     std::vector<std::unique_ptr<Projectile>> m_projectiles;      ///< All projectile objects
     std::queue<Projectile*>         m_availableProjectiles;      ///< Queue of available projectiles
 };

@@ -6,15 +6,21 @@
  */
 
 #include "EditorUI.h"
-#include "../Utils/SparkConsole.h"  // Use local SparkConsole instead of engine version
+#include "EditorTheme.h"
+#include "EditorFonts.h"
+#include "EditorIcons.h"
+#include "../Utils/SparkConsole.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/SimpleConsolePanel.h"
 #include "../Panels/SimpleHierarchyPanel.h"
 #include "../Panels/InspectorPanel.h"
 #include "../Panels/AssetBrowserPanel.h"
+#include "../Panels/GameViewPanel.h"
+#include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
-#include "EditorApplication.h"  // For EditorConfig definition
+#include "EditorApplication.h"
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <iostream>
 #include <algorithm>
 #include <memory>
@@ -60,7 +66,12 @@ bool EditorUI::Initialize(const EditorConfig& config) {
         console.LogInfo("Creating editor panels...");
         CreatePanels();
         console.LogSuccess("Panels created successfully");
-        
+
+        // Apply the Spark Professional theme
+        console.LogInfo("Applying Spark Professional theme...");
+        ApplyTheme("Spark Professional");
+        console.LogSuccess("Theme applied");
+
         m_isInitialized = true;
         console.LogSuccess("Enhanced EditorUI initialized successfully");
         return true;
@@ -94,18 +105,75 @@ void EditorUI::Update(float deltaTime) {
 
 void EditorUI::Render() {
     if (!m_isInitialized) return;
-    
-    // Render main UI components
+
+    // === Full-screen DockSpace ===
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowViewport(viewport->ID);
+
+    ImGuiWindowFlags dockspaceFlags =
+        ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking |
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("##SparkEditorDockSpace", nullptr, dockspaceFlags);
+    ImGui::PopStyleVar(3);
+
+    ImGuiID dockspaceId = ImGui::GetID("SparkDockSpace");
+    ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+
+    // Set up default layout on first frame
+    if (m_firstFrame) {
+        SetupDefaultDockLayout(dockspaceId);
+        m_firstFrame = false;
+    }
+
+    // Menu bar is rendered inside the dockspace window
     RenderMainMenuBar();
+
+    ImGui::End(); // End dockspace window
+
+    // Render toolbar, panels, status bar, notifications
+    RenderToolbar();
     RenderPanels();
     RenderStatusBar();
     RenderNotifications();
     RenderModalDialogs();
-    
-    // Demo window for testing
+
     if (m_showDemoWindow) {
         ImGui::ShowDemoWindow(&m_showDemoWindow);
     }
+}
+
+void EditorUI::SetupDefaultDockLayout(ImGuiID dockspaceId) {
+    ImGui::DockBuilderRemoveNode(dockspaceId);
+    ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
+    ImGui::DockBuilderSetNodeSize(dockspaceId, ImGui::GetMainViewport()->WorkSize);
+
+    ImGuiID dockMain = dockspaceId;
+    ImGuiID dockLeft, dockRight, dockBottom, dockCenter;
+
+    // Split: left 20% for Hierarchy
+    ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.20f, &dockLeft, &dockMain);
+    // Split: right 25% for Inspector
+    ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.25f, &dockRight, &dockMain);
+    // Split: bottom 28% for Console + Asset Browser (tabbed)
+    ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.28f, &dockBottom, &dockCenter);
+
+    // Dock panels — use ###panel_id to match stable IDs from BeginPanel()
+    ImGui::DockBuilderDockWindow("###simple_hierarchy_panel", dockLeft);
+    ImGui::DockBuilderDockWindow("###inspector_panel", dockRight);
+    ImGui::DockBuilderDockWindow("###scene_view_panel", dockCenter);
+    ImGui::DockBuilderDockWindow("##Toolbar", dockCenter);
+    ImGui::DockBuilderDockWindow("###simple_console_panel", dockBottom);
+    ImGui::DockBuilderDockWindow("###asset_browser_panel", dockBottom);
+
+    ImGui::DockBuilderFinish(dockspaceId);
 }
 
 void EditorUI::Shutdown() {
@@ -229,9 +297,29 @@ void EditorUI::CreatePanels() {
         console.LogError("Failed to create Asset Browser panel: " + std::string(e.what()));
     }
     
+    // Create Game View Panel (FPS player camera)
+    try {
+        console.LogInfo("Creating Game View panel...");
+        auto gameViewPanel = std::shared_ptr<GameViewPanel>(new GameViewPanel());
+        m_panels["GameView"] = gameViewPanel;
+        console.LogSuccess("Created Game View panel");
+    } catch (const std::exception& e) {
+        console.LogError("Failed to create Game View panel: " + std::string(e.what()));
+    }
+
+    // Create Performance Profiler Panel
+    try {
+        console.LogInfo("Creating Performance Profiler panel...");
+        auto profilerPanel = std::shared_ptr<PerformanceProfiler>(new PerformanceProfiler());
+        m_panels["Profiler"] = profilerPanel;
+        console.LogSuccess("Created Performance Profiler panel");
+    } catch (const std::exception& e) {
+        console.LogError("Failed to create Profiler panel: " + std::string(e.what()));
+    }
+
     // SKIP SimpleBuildSystem in all modes since it's causing the hang
     console.LogWarning("SKIPPING Simple Build System panel (known to cause hangs)");
-    
+
     // Initialize all panels
     for (auto& [name, panel] : m_panels) {
         try {
@@ -247,6 +335,15 @@ void EditorUI::CreatePanels() {
         }
     }
     
+    // Assign panel icons (FontAwesome)
+    if (m_panels.count("SceneView"))   m_panels["SceneView"]->SetIcon(ICON_FA_CAMERA);
+    if (m_panels.count("Console"))     m_panels["Console"]->SetIcon(ICON_FA_TERMINAL);
+    if (m_panels.count("Hierarchy"))   m_panels["Hierarchy"]->SetIcon(ICON_FA_SITEMAP);
+    if (m_panels.count("Inspector"))   m_panels["Inspector"]->SetIcon(ICON_FA_SLIDERS);
+    if (m_panels.count("AssetBrowser")) m_panels["AssetBrowser"]->SetIcon(ICON_FA_FOLDER);
+    if (m_panels.count("GameView"))    m_panels["GameView"]->SetIcon(ICON_FA_GAMEPAD);
+    if (m_panels.count("Profiler"))    m_panels["Profiler"]->SetIcon(ICON_FA_CHART_BAR);
+
     console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
 }
 
@@ -365,8 +462,11 @@ void EditorUI::RenderMainMenuBar() {
             if (ImGui::MenuItem("Console", nullptr, IsPanelVisible("Console"))) {
                 SetPanelVisible("Console", !IsPanelVisible("Console"));
             }
-            if (ImGui::MenuItem("Build System", nullptr, IsPanelVisible("BuildSystem"))) {
-                SetPanelVisible("BuildSystem", !IsPanelVisible("BuildSystem"));
+            if (ImGui::MenuItem("Game View", nullptr, IsPanelVisible("GameView"))) {
+                SetPanelVisible("GameView", !IsPanelVisible("GameView"));
+            }
+            if (ImGui::MenuItem("Profiler", nullptr, IsPanelVisible("Profiler"))) {
+                SetPanelVisible("Profiler", !IsPanelVisible("Profiler"));
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) {
@@ -380,84 +480,289 @@ void EditorUI::RenderMainMenuBar() {
             ImGui::EndMenu();
         }
         
+        if (ImGui::BeginMenu("FPS Tools")) {
+            if (ImGui::MenuItem(ICON_FA_CROSSHAIRS " Weapon Editor")) {
+                ShowNotification("Weapon Editor coming soon!", "info");
+            }
+            if (ImGui::MenuItem(ICON_FA_FLAG " Spawn Points")) {
+                ShowNotification("Spawn Point editor coming soon!", "info");
+            }
+            if (ImGui::MenuItem(ICON_FA_BULLSEYE " Objectives")) {
+                ShowNotification("Objective editor coming soon!", "info");
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_BOMB " Explosive Volumes")) {
+                ShowNotification("Explosive volumes editor coming soon!", "info");
+            }
+            if (ImGui::MenuItem(ICON_FA_SHIELD " Cover Points")) {
+                ShowNotification("Cover point editor coming soon!", "info");
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Build")) {
+            if (ImGui::MenuItem(ICON_FA_LIGHTBULB " Build Lighting")) {
+                ShowNotification("Build Lighting started...", "info");
+            }
+            if (ImGui::MenuItem(ICON_FA_MAP " Build NavMesh")) {
+                ShowNotification("Build NavMesh started...", "info");
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_HAMMER " Build All")) {
+                ShowNotification("Build All started...", "info");
+            }
+            if (ImGui::MenuItem(ICON_FA_ROCKET " Deploy")) {
+                ShowNotification("Deploy pipeline coming soon!", "info");
+            }
+            ImGui::EndMenu();
+        }
+
         if (ImGui::BeginMenu("Help")) {
             if (ImGui::MenuItem("Show Demo Window", nullptr, m_showDemoWindow)) {
                 m_showDemoWindow = !m_showDemoWindow;
             }
+            if (ImGui::BeginMenu("Themes")) {
+                auto themes = EditorTheme::GetAvailableThemes();
+                for (const auto& name : themes) {
+                    bool isSelected = (m_currentTheme == name);
+                    if (ImGui::MenuItem(name.c_str(), nullptr, isSelected)) {
+                        ApplyTheme(name);
+                        ShowNotification("Theme: " + name, "success", 2.0f);
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("About")) {
-                ShowNotification("Spark Engine Editor v1.0", "info", 5.0f);
+                ShowNotification(ICON_FA_BOLT " Spark Engine Editor v1.0 — FPS Game Engine", "info", 5.0f);
             }
             if (ImGui::MenuItem("Documentation")) {
                 ShowNotification("Documentation coming soon!", "info");
             }
             ImGui::EndMenu();
         }
-        
+
         ImGui::EndMainMenuBar();
     }
 }
 
-void EditorUI::RenderStatusBar() {
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImVec2 statusBarSize = ImVec2(viewport->Size.x, 20);
-    ImVec2 statusBarPos = ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - statusBarSize.y);
-    
-    ImGui::SetNextWindowPos(statusBarPos);
-    ImGui::SetNextWindowSize(statusBarSize);
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
-                           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | 
-                           ImGuiWindowFlags_NoSavedSettings;
-    
-    if (ImGui::Begin("StatusBar", nullptr, flags)) {
-        ImGui::Text("Engine: %s | FPS: %.1f | Frame: %llu", 
-                   m_engineConnected ? "Connected" : "Disconnected",
-                   m_stats.frameTime > 0 ? 1000.0f / m_stats.frameTime : 0,
-                   m_frameNumber);
-        
-        ImGui::SameLine(ImGui::GetWindowWidth() - 200);
-        ImGui::Text("Objects: %d | Assets: %d", m_sceneObjectCount, m_assetDatabaseSize);
+void EditorUI::RenderToolbar() {
+    ImGuiWindowFlags toolbarFlags =
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+        ImGuiWindowFlags_NoCollapse;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+
+    if (ImGui::Begin("##Toolbar", nullptr, toolbarFlags)) {
+        float btnSize = 28.0f;
+        ImVec2 btnDim(btnSize, btnSize);
+
+        // Accent colors
+        ImVec4 accentBlue(0.176f, 0.549f, 0.941f, 1.0f);   // #2D8CF0
+        ImVec4 accentAmber(0.961f, 0.651f, 0.137f, 1.0f);  // #F5A623
+        ImVec4 playGreen(0.298f, 0.686f, 0.314f, 1.0f);    // #4CAF50
+        ImVec4 stopRed(0.898f, 0.224f, 0.208f, 1.0f);      // #E53935
+
+        // === Transform Tools ===
+        auto ToolButton = [&](const char* icon, TransformTool tool, const char* tooltip) {
+            bool active = (m_currentTool == tool);
+            if (active) ImGui::PushStyleColor(ImGuiCol_Button, accentBlue);
+            if (ImGui::Button(icon, btnDim)) m_currentTool = tool;
+            if (active) ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
+            ImGui::SameLine();
+        };
+
+        ToolButton(ICON_FA_ARROWS_ALT, TransformTool::Move, "Move (W)");
+        ToolButton(ICON_FA_SYNC_ALT, TransformTool::Rotate, "Rotate (E)");
+        ToolButton(ICON_FA_EXPAND, TransformTool::Scale, "Scale (R)");
+
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        // === Space Toggle ===
+        bool isLocal = (m_transformSpace == TransformSpace::Local);
+        if (ImGui::Button(isLocal ? "Local" : "World", ImVec2(50, btnSize))) {
+            m_transformSpace = isLocal ? TransformSpace::World : TransformSpace::Local;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle World/Local space");
+
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        // === Play Controls (centered) ===
+        float windowWidth = ImGui::GetWindowContentRegionMax().x;
+        float playWidth = btnSize * 3 + 8;
+        float cursorX = (windowWidth - playWidth) * 0.5f;
+        if (cursorX > ImGui::GetCursorPosX()) ImGui::SetCursorPosX(cursorX);
+
+        // Play
+        bool isPlaying = (m_playMode == PlayMode::Playing);
+        if (isPlaying) ImGui::PushStyleColor(ImGuiCol_Button, playGreen);
+        if (ImGui::Button(ICON_FA_PLAY, btnDim)) {
+            m_playMode = (m_playMode == PlayMode::Playing) ? PlayMode::Stopped : PlayMode::Playing;
+            ShowNotification(isPlaying ? "Stopped" : "Playing...", isPlaying ? "info" : "success", 2.0f);
+        }
+        if (isPlaying) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Play (F5)");
+        ImGui::SameLine();
+
+        // Pause
+        bool isPaused = (m_playMode == PlayMode::Paused);
+        if (isPaused) ImGui::PushStyleColor(ImGuiCol_Button, accentAmber);
+        if (ImGui::Button(ICON_FA_PAUSE, btnDim)) {
+            if (m_playMode == PlayMode::Playing) m_playMode = PlayMode::Paused;
+            else if (m_playMode == PlayMode::Paused) m_playMode = PlayMode::Playing;
+        }
+        if (isPaused) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Pause");
+        ImGui::SameLine();
+
+        // Stop
+        if (ImGui::Button(ICON_FA_STOP, btnDim)) {
+            if (m_playMode != PlayMode::Stopped) {
+                m_playMode = PlayMode::Stopped;
+                ShowNotification("Stopped", "info", 2.0f);
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stop (Shift+F5)");
+
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        // === Snap Controls (right side) ===
+        ImGui::Checkbox("Snap", &m_snapEnabled);
+        if (m_snapEnabled) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(60);
+            ImGui::DragFloat("##SnapVal", &m_snapValue, 0.1f, 0.1f, 100.0f, "%.1f");
+        }
     }
     ImGui::End();
+    ImGui::PopStyleVar(2);
+}
+
+void EditorUI::RenderStatusBar() {
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    float statusBarHeight = 24.0f;
+    ImVec2 statusBarPos(viewport->WorkPos.x, viewport->WorkPos.y + viewport->WorkSize.y - statusBarHeight);
+    ImVec2 statusBarSize(viewport->WorkSize.x, statusBarHeight);
+
+    ImGui::SetNextWindowPos(statusBarPos);
+    ImGui::SetNextWindowSize(statusBarSize);
+    ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 3));
+    if (ImGui::Begin("##StatusBar", nullptr, flags)) {
+        // Left: engine connection status
+        ImVec4 statusColor = m_engineConnected
+            ? ImVec4(0.3f, 0.8f, 0.3f, 1.0f)
+            : ImVec4(0.8f, 0.3f, 0.3f, 1.0f);
+        ImGui::TextColored(statusColor, ICON_FA_CIRCLE);
+        ImGui::SameLine();
+        ImGui::Text("Engine: %s", m_engineConnected ? "Connected" : "Disconnected");
+
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        // Center: tool + selection
+        const char* toolNames[] = { "Move", "Rotate", "Scale" };
+        ImGui::Text(ICON_FA_ARROWS_ALT " %s | Objects: %d | Selected: %d",
+                    toolNames[(int)m_currentTool], m_sceneObjectCount, m_selectedObjectCount);
+
+        // Right: FPS + frame info
+        float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
+        ImVec4 fpsColor = fps >= 60.0f ? ImVec4(0.3f, 0.8f, 0.3f, 1.0f)
+                        : fps >= 30.0f ? ImVec4(0.9f, 0.9f, 0.3f, 1.0f)
+                        : ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
+
+        float rightOffset = ImGui::GetWindowWidth() - 360;
+        if (rightOffset > ImGui::GetCursorPosX()) {
+            ImGui::SameLine(rightOffset);
+        }
+        ImGui::TextColored(fpsColor, "%.0f FPS", fps);
+        ImGui::SameLine();
+        ImGui::Text("| %.1fms | Assets: %d | Frame: %llu",
+                    m_stats.frameTime, m_assetDatabaseSize, (unsigned long long)m_frameNumber);
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
 }
 
 void EditorUI::RenderNotifications() {
-    const float NOTIFICATION_WIDTH = 300.0f;
-    const float NOTIFICATION_HEIGHT = 60.0f;
-    const float NOTIFICATION_SPACING = 10.0f;
-    
+    const float NOTIFICATION_WIDTH = 320.0f;
+    const float NOTIFICATION_HEIGHT = 52.0f;
+    const float NOTIFICATION_SPACING = 6.0f;
+
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    float yOffset = viewport->Pos.y + 30.0f; // Below menu bar
-    
+    float yOffset = viewport->WorkPos.y + 8.0f;
+
     for (size_t i = 0; i < m_notifications.size(); ++i) {
         const auto& notification = m_notifications[i];
-        
-        ImVec2 notificationPos = ImVec2(
-            viewport->Pos.x + viewport->Size.x - NOTIFICATION_WIDTH - 10.0f,
-            yOffset + i * (NOTIFICATION_HEIGHT + NOTIFICATION_SPACING)
-        );
-        
+
+        // Fade out in last 0.5 seconds
+        float alpha = 1.0f;
+        if (notification.duration > 0.0f && notification.timeLeft < 0.5f) {
+            alpha = std::max(0.0f, notification.timeLeft / 0.5f);
+        }
+
+        ImVec2 notificationPos(
+            viewport->WorkPos.x + viewport->WorkSize.x - NOTIFICATION_WIDTH - 12.0f,
+            yOffset + i * (NOTIFICATION_HEIGHT + NOTIFICATION_SPACING));
+
         ImGui::SetNextWindowPos(notificationPos);
         ImGui::SetNextWindowSize(ImVec2(NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT));
-        
-        std::string windowName = "Notification##" + std::to_string(i);
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
-                               ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar;
-        
+        ImGui::SetNextWindowBgAlpha(0.92f * alpha);
+
+        std::string windowName = "##Notification" + std::to_string(i);
+        ImGuiWindowFlags flags =
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoFocusOnAppearing |
+            ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoSavedSettings;
+
+        // Determine stripe and icon color
+        ImVec4 stripeColor(0.176f, 0.549f, 0.941f, alpha); // blue default
+        const char* icon = ICON_FA_INFO_CIRCLE;
+        if (notification.type == "error") {
+            stripeColor = ImVec4(0.898f, 0.224f, 0.208f, alpha);
+            icon = ICON_FA_TIMES;
+        } else if (notification.type == "warning") {
+            stripeColor = ImVec4(0.961f, 0.651f, 0.137f, alpha);
+            icon = ICON_FA_EXCLAMATION;
+        } else if (notification.type == "success") {
+            stripeColor = ImVec4(0.298f, 0.686f, 0.314f, alpha);
+            icon = ICON_FA_CHECK;
+        }
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
         if (ImGui::Begin(windowName.c_str(), nullptr, flags)) {
-            // Color based on type
-            ImVec4 color = ImVec4(1, 1, 1, 1);
-            if (notification.type == "error") color = ImVec4(1, 0.4f, 0.4f, 1);
-            else if (notification.type == "warning") color = ImVec4(1, 1, 0.4f, 1);
-            else if (notification.type == "success") color = ImVec4(0.4f, 1, 0.4f, 1);
-            
-            ImGui::TextColored(color, "%s", notification.message.c_str());
-            
-            if (notification.duration > 0.0f) {
-                float progress = 1.0f - (notification.timeLeft / notification.duration);
-                ImGui::ProgressBar(progress, ImVec2(-1, 4));
-            }
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImVec2 wp = ImGui::GetWindowPos();
+            ImVec2 ws = ImGui::GetWindowSize();
+
+            // Colored left stripe
+            dl->AddRectFilled(wp, ImVec2(wp.x + 4, wp.y + ws.y),
+                ImGui::ColorConvertFloat4ToU32(stripeColor), 4.0f, ImDrawFlags_RoundCornersLeft);
+
+            // Content with padding past the stripe
+            ImGui::SetCursorPos(ImVec2(12, (NOTIFICATION_HEIGHT - ImGui::GetTextLineHeight()) * 0.5f));
+            ImGui::TextColored(ImVec4(stripeColor.x, stripeColor.y, stripeColor.z, alpha), "%s", icon);
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.88f, 0.89f, 0.92f, alpha));
+            ImGui::TextWrapped("%s", notification.message.c_str());
+            ImGui::PopStyleColor();
         }
         ImGui::End();
+        ImGui::PopStyleVar(2);
     }
 }
 
@@ -602,38 +907,11 @@ void EditorUI::ResetToDefaultLayout() {
 
 void EditorUI::ApplyTheme(const std::string& themeName) {
     m_currentTheme = themeName;
-    
-    // Apply theme to ImGui style
-    ImGuiStyle& style = ImGui::GetStyle();
-    
-    if (themeName == "Dark") {
-        ImGui::StyleColorsDark(&style);
-        
-        // Customize dark theme with available colors
-        style.Colors[ImGuiCol_WindowBg] = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
-        style.Colors[ImGuiCol_Tab] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
-        style.Colors[ImGuiCol_TabActive] = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
-        
-    } else if (themeName == "Light") {
-        ImGui::StyleColorsLight(&style);
-        
-        // Customize light theme with available colors
-        style.Colors[ImGuiCol_WindowBg] = ImVec4(0.95f, 0.95f, 0.95f, 1.0f);
-        
-    } else if (themeName == "Classic") {
-        ImGui::StyleColorsClassic(&style);
-        
-    } else {
-        // Default to dark theme
-        ImGui::StyleColorsDark(&style);
+
+    if (!EditorTheme::ApplyTheme(themeName)) {
+        // Fallback to basic ImGui dark style
+        ImGui::StyleColorsDark();
     }
-    
-    // Apply consistent style settings
-    style.WindowRounding = 5.0f;
-    style.ChildRounding = 5.0f;
-    style.FrameRounding = 3.0f;
-    style.GrabRounding = 3.0f;
-    style.TabRounding = 3.0f;
 }
 
 void EditorUI::ShowNotification(const std::string& message, const std::string& type, float duration) {

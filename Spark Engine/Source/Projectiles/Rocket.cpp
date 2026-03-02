@@ -43,8 +43,15 @@ void Rocket::Update(float deltaTime)
 
 void Rocket::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
+    if (!m_active) return;
     ASSERT_MSG(m_mesh != nullptr, "Rocket mesh not initialized");
     Projectile::Render(view, projection);
+}
+
+void Rocket::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
+{
+    m_hasExploded = false;
+    Projectile::Fire(startPosition, direction, speed);
 }
 
 void Rocket::OnHit(GameObject* target)

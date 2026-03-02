@@ -17,6 +17,7 @@ public:
     HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* context) override;
     void    Update(float deltaTime) override;
     void    Render(const XMMATRIX& view, const XMMATRIX& projection) override;
+    void    Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed) override;
 
     void OnHit(GameObject* target) override;
     void OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal) override;

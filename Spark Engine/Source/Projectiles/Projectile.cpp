@@ -159,9 +159,9 @@ void Projectile::UpdatePhysics(float deltaTime)
     if (m_hasGravity)
         m_velocity.y += -9.8f * m_gravityScale * deltaTime;
 
-    // Simple drag
+    // Frame-rate independent drag
     XMVECTOR v = XMLoadFloat3(&m_velocity);
-    v = XMVectorScale(v, 0.98f);
+    v = XMVectorScale(v, powf(0.98f, deltaTime * 60.0f));
     XMStoreFloat3(&m_velocity, v);
 }
 

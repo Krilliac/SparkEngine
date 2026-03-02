@@ -433,14 +433,22 @@ void LightingSystem::GenerateIBLTextures()
     // For now, just log the operation
     Spark::SimpleConsole::GetInstance().LogInfo("Generating IBL textures");
     
-    HRESULT hr = S_OK;
-    hr = GenerateIrradianceMap(m_environmentLighting.environmentMap.Get());
-    hr = GeneratePrefilterMap(m_environmentLighting.environmentMap.Get());
-    hr = GenerateBRDFLUT();
-    
-    if (SUCCEEDED(hr)) {
-        Spark::SimpleConsole::GetInstance().LogSuccess("IBL textures generated successfully");
+    HRESULT hr = GenerateIrradianceMap(m_environmentLighting.environmentMap.Get());
+    if (FAILED(hr)) {
+        Spark::SimpleConsole::GetInstance().LogError("Failed to generate irradiance map");
+        return;
     }
+    hr = GeneratePrefilterMap(m_environmentLighting.environmentMap.Get());
+    if (FAILED(hr)) {
+        Spark::SimpleConsole::GetInstance().LogError("Failed to generate prefilter map");
+        return;
+    }
+    hr = GenerateBRDFLUT();
+    if (FAILED(hr)) {
+        Spark::SimpleConsole::GetInstance().LogError("Failed to generate BRDF LUT");
+        return;
+    }
+    Spark::SimpleConsole::GetInstance().LogSuccess("IBL textures generated successfully");
 }
 
 // ============================================================================

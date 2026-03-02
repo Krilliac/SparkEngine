@@ -6,6 +6,8 @@
  */
 
 #include "SceneViewPanel.h"
+#include "../Core/EditorIcons.h"
+#include "../Core/EditorFonts.h"
 #include <imgui.h>
 #include <iostream>
 
@@ -103,26 +105,59 @@ void SceneViewPanel::SetDevice(ID3D11Device* device, ID3D11DeviceContext* contex
 }
 
 void SceneViewPanel::RenderToolbar() {
-    if (ImGui::Button("Move")) {
-        // Set move gizmo mode
+    ImVec4 accentBlue(0.176f, 0.549f, 0.941f, 1.0f);
+    float btnSize = 24.0f;
+    ImVec2 btnDim(btnSize, btnSize);
+
+    // Transform tool buttons with icons
+    auto GizmoButton = [&](const char* icon, GizmoMode mode, const char* tooltip) {
+        bool active = (m_gizmoMode == mode);
+        if (active) ImGui::PushStyleColor(ImGuiCol_Button, accentBlue);
+        if (ImGui::Button(icon, btnDim)) m_gizmoMode = mode;
+        if (active) ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
+        ImGui::SameLine();
+    };
+
+    GizmoButton(ICON_FA_ARROWS_ALT, GizmoMode::Move, "Move (W)");
+    GizmoButton(ICON_FA_SYNC_ALT, GizmoMode::Rotate, "Rotate (E)");
+    GizmoButton(ICON_FA_EXPAND, GizmoMode::Scale, "Scale (R)");
+
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+
+    // Render mode dropdown
+    const char* renderModeNames[] = { "Shaded", "Wireframe", "Unlit", "Normals", "Depth" };
+    ImGui::SetNextItemWidth(90);
+    if (ImGui::BeginCombo("##RenderMode", renderModeNames[(int)m_renderMode])) {
+        for (int i = 0; i < 5; i++) {
+            bool selected = ((int)m_renderMode == i);
+            if (ImGui::Selectable(renderModeNames[i], selected))
+                m_renderMode = (RenderMode)i;
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Render Mode");
+
     ImGui::SameLine();
-    if (ImGui::Button("Rotate")) {
-        // Set rotation gizmo mode
-    }
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine();
-    if (ImGui::Button("Scale")) {
-        // Set scale gizmo mode
-    }
-    
+
+    // Toggles
+    ImGui::Checkbox(ICON_FA_GRID " Grid", &m_showGrid);
     ImGui::SameLine();
-    ImGui::Separator();
+    ImGui::Checkbox(ICON_FA_CUBE " Gizmos", &m_showGizmos);
+
     ImGui::SameLine();
-    
-    ImGui::Checkbox("Grid", &m_showGrid);
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine();
-    ImGui::Checkbox("Gizmos", &m_showGizmos);
-    
+
+    // Camera speed
+    ImGui::SetNextItemWidth(80);
+    ImGui::DragFloat("##CamSpeed", &m_cameraSpeed, 0.1f, 0.1f, 50.0f, ICON_FA_CAMERA " %.1f");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Camera Speed");
+
     ImGui::Separator();
 }
 
