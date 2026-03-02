@@ -43,27 +43,33 @@ void Grenade::Update(float deltaTime)
 
     if (!m_active) return;
 
-    // Fuse countdown
-    m_lifeTime += deltaTime;
+    // Use base physics/lifetime/collision (this also increments m_lifeTime)
+    Projectile::Update(deltaTime);
+
+    // Check fuse after base update (m_lifeTime is already incremented by Projectile::Update)
     if (m_lifeTime >= m_fuseTime && !m_hasExploded)
     {
         Explode();
         return;
     }
-
-    // Use base physics/lifetime/collision
-    Projectile::Update(deltaTime);
 }
 
 void Grenade::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
+    if (!m_active) return;
     ASSERT_MSG(m_mesh != nullptr, "Grenade mesh not initialized");
     Projectile::Render(view, projection);
 }
 
+void Grenade::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
+{
+    m_hasExploded = false;
+    Projectile::Fire(startPosition, direction, speed);
+}
+
 void Grenade::Explode()
 {
-    ASSERT_MSG(!m_hasExploded, "Grenade exploded multiple times");
+    if (m_hasExploded) return;
     m_hasExploded = true;
 
     // TODO: spawn explosion effect at current position

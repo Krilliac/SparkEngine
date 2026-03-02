@@ -102,7 +102,8 @@ HRESULT Player::Initialize(ID3D11Device* device,
 
     if (!m_projectilePool)
     {
-        m_projectilePool = new ProjectilePool(50);
+        m_ownedProjectilePool = std::make_unique<ProjectilePool>(50);
+        m_projectilePool = m_ownedProjectilePool.get();
         ASSERT_NOT_NULL(m_projectilePool);
         hr = m_projectilePool->Initialize(device, context);
         LOG_TO_CONSOLE_IMMEDIATE(L"Player projectile pool initialized. HR=0x" + std::to_wstring(hr), L"INFO");
@@ -339,8 +340,9 @@ void Player::OnHit(GameObject* target)
 {
     LOG_TO_CONSOLE(L"Player::OnHit called.", L"OPERATION");
     ASSERT_NOT_NULL(target);
-    TakeDamage(m_currentWeapon.Damage);
-    LOG_TO_CONSOLE(L"Player hit target.", L"INFO");
+    // Player was hit by target - take a default collision damage, not own weapon damage
+    TakeDamage(10.0f);
+    LOG_TO_CONSOLE(L"Player hit by target.", L"INFO");
 }
 
 void Player::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
@@ -348,7 +350,7 @@ void Player::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
     LOG_TO_CONSOLE(L"Player::OnHitWorld called.", L"OPERATION");
     ASSERT_MSG(std::isfinite(hitPoint.x) && std::isfinite(hitPoint.y) && std::isfinite(hitPoint.z),
         "Invalid hitPoint");
-    TakeDamage(m_currentWeapon.Damage);
+    // World collision - no damage from hitting world geometry
     LOG_TO_CONSOLE(L"Player hit world.", L"INFO");
 }
 
@@ -521,7 +523,7 @@ XMFLOAT3 Player::CalculateFireDirection()
 
 void Player::Console_SetHealth(float health)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_health = std::max(0.0f, std::min(m_maxHealth, health));
     if (m_health <= 0.0f) {
         SetActive(false);
@@ -534,7 +536,7 @@ void Player::Console_SetHealth(float health)
 
 void Player::Console_SetArmor(float armor)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_armor = std::max(0.0f, std::min(m_maxArmor, armor));
     NotifyStateChange();
     LOG_TO_CONSOLE_IMMEDIATE(L"Player armor set to " + std::to_wstring(m_armor) + L" via console", L"SUCCESS");
@@ -542,7 +544,7 @@ void Player::Console_SetArmor(float armor)
 
 void Player::Console_SetMaxHealth(float maxHealth)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     if (maxHealth > 0.0f && maxHealth <= 9999.0f) {
         m_maxHealth = maxHealth;
         // Ensure current health doesn't exceed new maximum
@@ -558,7 +560,7 @@ void Player::Console_SetMaxHealth(float maxHealth)
 
 void Player::Console_SetSpeed(float speed)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     if (speed > 0.0f && speed <= 100.0f) {
         m_speed = speed;
         NotifyStateChange();
@@ -570,7 +572,7 @@ void Player::Console_SetSpeed(float speed)
 
 void Player::Console_SetJumpHeight(float height)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     if (height > 0.0f && height <= 50.0f) {
         m_jumpHeight = height;
         NotifyStateChange();
@@ -582,7 +584,7 @@ void Player::Console_SetJumpHeight(float height)
 
 void Player::Console_SetPosition(float x, float y, float z)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     DirectX::XMFLOAT3 newPos = { x, y, z };
     SetPosition(newPos);
     
@@ -601,7 +603,7 @@ void Player::Console_SetPosition(float x, float y, float z)
 
 void Player::Console_SetGodMode(bool enabled)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_godModeEnabled = enabled;
     NotifyStateChange();
     LOG_TO_CONSOLE_IMMEDIATE(L"Player god mode " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console", L"SUCCESS");
@@ -609,7 +611,7 @@ void Player::Console_SetGodMode(bool enabled)
 
 void Player::Console_SetNoclip(bool enabled)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_noclipEnabled = enabled;
     NotifyStateChange();
     LOG_TO_CONSOLE_IMMEDIATE(L"Player noclip " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console", L"SUCCESS");
@@ -617,7 +619,7 @@ void Player::Console_SetNoclip(bool enabled)
 
 void Player::Console_SetInfiniteAmmo(bool enabled)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_infiniteAmmoEnabled = enabled;
     NotifyStateChange();
     LOG_TO_CONSOLE_IMMEDIATE(L"Player infinite ammo " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console", L"SUCCESS");
@@ -625,7 +627,7 @@ void Player::Console_SetInfiniteAmmo(bool enabled)
 
 void Player::Console_GiveAmmo(int amount)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     if (amount > 0 && amount <= 9999) {
         m_currentAmmo = std::min(m_currentWeapon.MagazineSize, m_currentAmmo + amount);
         NotifyStateChange();
@@ -638,7 +640,7 @@ void Player::Console_GiveAmmo(int amount)
 
 void Player::Console_ChangeWeapon(WeaponType weaponType)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     ChangeWeapon(weaponType);
     NotifyStateChange();
     LOG_TO_CONSOLE_IMMEDIATE(L"Player weapon changed via console", L"SUCCESS");
@@ -651,14 +653,14 @@ Player::PlayerState Player::Console_GetState() const
 
 void Player::Console_RegisterStateCallback(std::function<void(const PlayerState&)> callback)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_stateCallback = callback;
     LOG_TO_CONSOLE_IMMEDIATE(L"Player state callback registered", L"INFO");
 }
 
 void Player::Console_ApplyPhysicsSettings(float gravity, float friction)
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     if (gravity >= -100.0f && gravity <= 100.0f) {
         m_gravityForce = gravity;
     }
@@ -679,7 +681,7 @@ void Player::NotifyStateChange()
 
 Player::PlayerState Player::GetStateThreadSafe() const
 {
-    std::lock_guard<std::mutex> lock(m_stateMutex);
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     PlayerState state;
     state.health = m_health;
     state.maxHealth = m_maxHealth;

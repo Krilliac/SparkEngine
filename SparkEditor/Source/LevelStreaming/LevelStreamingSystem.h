@@ -13,6 +13,7 @@
 
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
+#include "../Enums/LevelStreamingEnums.h"
 #include <DirectXMath.h>
 #include <vector>
 #include <memory>
@@ -52,16 +53,8 @@ enum class LODLevel {
     LOD_COUNT = 5
 };
 
-/**
- * @brief Streaming method for levels
- */
-enum class StreamingMethod {
-    DISTANCE_BASED = 0,     ///< Stream based on distance from player
-    TRIGGER_BASED = 1,      ///< Stream when entering trigger volumes
-    MANUAL = 2,             ///< Manual streaming control
-    PRIORITY_BASED = 3,     ///< Stream based on priority and memory budget
-    PREDICTIVE = 4          ///< Predictive streaming based on player movement
-};
+// StreamingMethod is defined in ../Enums/LevelStreamingEnums.h (included via SceneFile.h or directly)
+// Using the canonical definition from LevelStreamingEnums.h
 
 /**
  * @brief World tile information

@@ -7,14 +7,11 @@
 # Set CMake policies for modern behavior
 cmake_policy(SET CMP0091 NEW)  # Enable MSVC_RUNTIME_LIBRARY support
 
-# Set consistent runtime library for all targets
+# Set consistent runtime library for all targets using modern CMake (CMP0091)
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    # Force specific runtime library settings to avoid conflicts
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MDd")
-    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MD")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
+    # Note: With CMP0091 NEW, CMAKE_MSVC_RUNTIME_LIBRARY handles /MD and /MDd
+    # automatically. Do NOT manually add /MD or /MDd flags as they conflict.
 endif()
 
 # ---------------------------------------------------------------------

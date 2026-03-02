@@ -17,6 +17,11 @@ struct TerrainVertex {
 
 class Terrain {
 public:
+    ~Terrain() {
+        if (m_vb) { m_vb->Release(); m_vb = nullptr; }
+        if (m_ib) { m_ib->Release(); m_ib = nullptr; }
+    }
+
     // Load heightmap from 8-bit BMP; build vertex/index buffers
     HRESULT Initialize(ID3D11Device* device,
         ID3D11DeviceContext* ctx,

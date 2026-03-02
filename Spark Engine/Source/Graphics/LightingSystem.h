@@ -207,7 +207,7 @@ struct ShadowMap
     ComPtr<ID3D11Texture2D> texture;                   ///< Shadow map texture
     ComPtr<ID3D11DepthStencilView> dsv;                ///< Depth stencil view
     ComPtr<ID3D11ShaderResourceView> srv;              ///< Shader resource view
-    uint32_t size;                                      ///< Shadow map size
+    uint32_t size = 0;                                    ///< Shadow map size
     XMMATRIX lightMatrix;                              ///< Light projection matrix
     XMMATRIX shadowMatrix;                             ///< Shadow transformation matrix
 };
@@ -237,14 +237,14 @@ public:
      */
     struct LightingMetrics
     {
-        uint32_t activeLights;                         ///< Number of active lights
-        uint32_t shadowCastingLights;                  ///< Number of shadow casting lights
-        uint32_t shadowMapUpdates;                     ///< Shadow map updates per frame
-        float shadowMapMemory;                         ///< Shadow map memory usage (MB)
-        float lightCullingTime;                        ///< Light culling time (ms)
-        float shadowRenderTime;                        ///< Shadow rendering time (ms)
-        uint32_t visibleLights;                        ///< Lights visible to camera
-        uint32_t culledLights;                         ///< Lights culled this frame
+        uint32_t activeLights = 0;                     ///< Number of active lights
+        uint32_t shadowCastingLights = 0;              ///< Number of shadow casting lights
+        uint32_t shadowMapUpdates = 0;                 ///< Shadow map updates per frame
+        float shadowMapMemory = 0.0f;                  ///< Shadow map memory usage (MB)
+        float lightCullingTime = 0.0f;                 ///< Light culling time (ms)
+        float shadowRenderTime = 0.0f;                 ///< Shadow rendering time (ms)
+        uint32_t visibleLights = 0;                    ///< Lights visible to camera
+        uint32_t culledLights = 0;                     ///< Lights culled this frame
     };
 
     LightingSystem();
@@ -367,8 +367,8 @@ public:
     void Console_ReloadIBL();
 
 private:
-    ID3D11Device* m_device;
-    ID3D11DeviceContext* m_context;
+    ID3D11Device* m_device = nullptr;
+    ID3D11DeviceContext* m_context = nullptr;
 
     // Light storage
     std::vector<std::shared_ptr<Light>> m_lights;

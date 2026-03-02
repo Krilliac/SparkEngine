@@ -96,7 +96,7 @@ enum class CodeSigningType {
 /**
  * @brief Compression types for packaging
  */
-enum class CompressionType {
+enum class PackageCompressionType {
     NONE = 0,               ///< No compression
     ZIP = 1,                ///< ZIP compression
     GZIP = 2,               ///< GZIP compression

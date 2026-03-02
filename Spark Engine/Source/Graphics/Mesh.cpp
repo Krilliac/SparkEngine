@@ -486,6 +486,10 @@ HRESULT Mesh::CreateBuffers() {
     ASSERT(m_device);
     ASSERT(!m_vertices.empty() && !m_indices.empty());
 
+    // Release existing buffers before creating new ones to prevent COM leaks
+    if (m_vb) { m_vb->Release(); m_vb = nullptr; }
+    if (m_ib) { m_ib->Release(); m_ib = nullptr; }
+
     // Vertex buffer
     D3D11_BUFFER_DESC vbd{};
     vbd.Usage = D3D11_USAGE_DEFAULT;

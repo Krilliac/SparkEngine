@@ -532,8 +532,8 @@ private:
     ShaderMetrics GetMetricsThreadSafe() const;
 
     // DirectX resources
-    ID3D11Device* m_device;
-    ID3D11DeviceContext* m_context;
+    ID3D11Device* m_device = nullptr;
+    ID3D11DeviceContext* m_context = nullptr;
 
     // Shader resources
     std::unique_ptr<VertexShaderResource> m_vertexShader;
@@ -549,7 +549,7 @@ private:
     // Shader management
     std::unordered_map<std::string, std::unique_ptr<ShaderResource>> m_shaderCache;
     std::vector<std::unique_ptr<ShaderResource>> m_shaderVariants;
-    int m_activeVariant;
+    int m_activeVariant = 0;
 
     // File monitoring for hot reload
     std::vector<std::wstring> m_watchedFiles;
@@ -562,14 +562,14 @@ private:
     
     // Configuration
     ShaderCompilationFlags m_defaultFlags;
-    bool m_hotReloadEnabled;
-    bool m_validationEnabled;
+    bool m_hotReloadEnabled = false;
+    bool m_validationEnabled = false;
     
     // Additional members for implementation
     std::vector<ShaderVariant> m_variants;  ///< Shader variants
     std::string m_filePath;                 ///< Current shader file path
-    FILETIME m_lastModified;                ///< Last modification time
-    ShaderType m_type;                      ///< Current shader type
-    bool m_isCompiled;                      ///< Compilation status
-    ID3D11DeviceChild* m_shader;            ///< Generic shader interface
+    FILETIME m_lastModified = {};            ///< Last modification time
+    ShaderType m_type = ShaderType::VERTEX;  ///< Current shader type
+    bool m_isCompiled = false;              ///< Compilation status
+    ID3D11DeviceChild* m_shader = nullptr;  ///< Generic shader interface
 };

@@ -432,12 +432,13 @@ private:
     
     // Console callback system
     std::function<void(const PlayerState&)> m_stateCallback;
-    mutable std::mutex m_stateMutex;     ///< Thread safety for state access
+    mutable std::recursive_mutex m_stateMutex;     ///< Thread safety for state access
 
     // External references (not owned)
     SparkEngineCamera* m_camera{ nullptr };      ///< Reference to camera system
     InputManager* m_input{ nullptr };            ///< Reference to input manager
     ProjectilePool* m_projectilePool{ nullptr }; ///< Reference to projectile pool
+    std::unique_ptr<ProjectilePool> m_ownedProjectilePool; ///< Owned pool if created by Player
 
     // Collision & animation
     BoundingSphere m_collisionSphere;            ///< Collision bounds for player

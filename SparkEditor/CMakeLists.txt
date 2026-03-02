@@ -19,41 +19,44 @@ find_path(IMGUI_INCLUDE_DIR
 
 if(IMGUI_INCLUDE_DIR)
     message(STATUS "Found Dear ImGui at: ${IMGUI_INCLUDE_DIR}")
-    
-    add_library(imgui STATIC
-        "${IMGUI_INCLUDE_DIR}/imgui.cpp"
-        "${IMGUI_INCLUDE_DIR}/imgui_demo.cpp"
-        "${IMGUI_INCLUDE_DIR}/imgui_draw.cpp"
-        "${IMGUI_INCLUDE_DIR}/imgui_tables.cpp"
-        "${IMGUI_INCLUDE_DIR}/imgui_widgets.cpp"
-        "${IMGUI_INCLUDE_DIR}/backends/imgui_impl_win32.cpp"
-        "${IMGUI_INCLUDE_DIR}/backends/imgui_impl_dx11.cpp"
-    )
-    
-    target_include_directories(imgui PUBLIC 
-        "${IMGUI_INCLUDE_DIR}"
-        "${IMGUI_INCLUDE_DIR}/backends"
-    )
-    
-    target_compile_definitions(imgui PUBLIC
-        IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
-        IMGUI_IMPL_WIN32_DISABLE_LINKING_XINPUT
-    )
-    
-    target_link_libraries(imgui PUBLIC
-        d3d11 dxgi user32 gdi32 shell32 ole32 oleaut32 uuid comdlg32 advapi32
-    )
-    
-    if(MSVC)
-        target_compile_options(imgui PRIVATE /W2)
-        target_compile_definitions(imgui PRIVATE 
-            WIN32_LEAN_AND_MEAN 
-            NOMINMAX
-            _CRT_SECURE_NO_WARNINGS
+
+    # Only create the imgui target if it doesn't already exist (may be defined in ThirdParty)
+    if(NOT TARGET imgui)
+        add_library(imgui STATIC
+            "${IMGUI_INCLUDE_DIR}/imgui.cpp"
+            "${IMGUI_INCLUDE_DIR}/imgui_demo.cpp"
+            "${IMGUI_INCLUDE_DIR}/imgui_draw.cpp"
+            "${IMGUI_INCLUDE_DIR}/imgui_tables.cpp"
+            "${IMGUI_INCLUDE_DIR}/imgui_widgets.cpp"
+            "${IMGUI_INCLUDE_DIR}/backends/imgui_impl_win32.cpp"
+            "${IMGUI_INCLUDE_DIR}/backends/imgui_impl_dx11.cpp"
         )
-        set_property(TARGET imgui PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+
+        target_include_directories(imgui PUBLIC
+            "${IMGUI_INCLUDE_DIR}"
+            "${IMGUI_INCLUDE_DIR}/backends"
+        )
+
+        target_compile_definitions(imgui PUBLIC
+            IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
+            IMGUI_IMPL_WIN32_DISABLE_LINKING_XINPUT
+        )
+
+        target_link_libraries(imgui PUBLIC
+            d3d11 dxgi user32 gdi32 shell32 ole32 oleaut32 uuid comdlg32 advapi32
+        )
+
+        if(MSVC)
+            target_compile_options(imgui PRIVATE /W2)
+            target_compile_definitions(imgui PRIVATE
+                WIN32_LEAN_AND_MEAN
+                NOMINMAX
+                _CRT_SECURE_NO_WARNINGS
+            )
+            set_property(TARGET imgui PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        endif()
     endif()
-    
+
     set(IMGUI_FOUND TRUE)
 else()
     message(FATAL_ERROR "Dear ImGui is required for SparkEditor but was not found!")

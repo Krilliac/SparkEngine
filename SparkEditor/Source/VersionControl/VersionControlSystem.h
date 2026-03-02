@@ -23,35 +23,9 @@
 #include <queue>
 #include <chrono>
 #include <filesystem>
+#include "../Enums/VersionControlEnums.h"
 
 namespace SparkEditor {
-
-/**
- * @brief Version control system types
- */
-enum class VCSType {
-    NONE = 0,               ///< No version control
-    GIT = 1,                ///< Git version control
-    PERFORCE = 2,           ///< Perforce version control
-    SVN = 3,                ///< Subversion version control
-    CUSTOM = 4              ///< Custom version control system
-};
-
-/**
- * @brief File status in version control
- */
-enum class FileStatus {
-    UNTRACKED = 0,          ///< File not tracked by VCS
-    ADDED = 1,              ///< File added to VCS
-    MODIFIED = 2,           ///< File modified since last commit
-    DELETED = 3,            ///< File deleted
-    RENAMED = 4,            ///< File renamed
-    COPIED = 5,             ///< File copied
-    IGNORED = 6,            ///< File ignored by VCS
-    CONFLICTED = 7,         ///< File has merge conflicts
-    LOCKED = 8,             ///< File locked by another user
-    UP_TO_DATE = 9          ///< File up to date
-};
 
 /**
  * @brief Branch information

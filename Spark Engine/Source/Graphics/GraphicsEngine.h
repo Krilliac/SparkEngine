@@ -190,46 +190,46 @@ struct GraphicsSettings
 struct RenderStatistics
 {
     // Performance
-    float frameTime;               ///< Total frame time (ms)
-    float cpuTime;                 ///< CPU time (ms)
-    float gpuTime;                 ///< GPU time (ms)
-    uint32_t fps;                  ///< Frames per second
-    
+    float frameTime = 0.0f;        ///< Total frame time (ms)
+    float cpuTime = 0.0f;          ///< CPU time (ms)
+    float gpuTime = 0.0f;          ///< GPU time (ms)
+    uint32_t fps = 0;              ///< Frames per second
+
     // Rendering
-    uint32_t drawCalls;            ///< Draw calls per frame
-    uint32_t triangles;            ///< Triangles rendered
-    uint32_t vertices;             ///< Vertices processed
-    uint32_t textureBinds;         ///< Texture binds per frame
-    uint32_t materialSwitches;     ///< Material switches per frame
-    
+    uint32_t drawCalls = 0;        ///< Draw calls per frame
+    uint32_t triangles = 0;        ///< Triangles rendered
+    uint32_t vertices = 0;         ///< Vertices processed
+    uint32_t textureBinds = 0;     ///< Texture binds per frame
+    uint32_t materialSwitches = 0; ///< Material switches per frame
+
     // Culling
-    uint32_t totalObjects;         ///< Total objects in scene
-    uint32_t visibleObjects;       ///< Objects after culling
-    uint32_t culledObjects;        ///< Objects culled
-    float cullingTime;             ///< Culling time (ms)
-    
+    uint32_t totalObjects = 0;     ///< Total objects in scene
+    uint32_t visibleObjects = 0;   ///< Objects after culling
+    uint32_t culledObjects = 0;    ///< Objects culled
+    float cullingTime = 0.0f;      ///< Culling time (ms)
+
     // Memory
-    size_t textureMemory;          ///< Texture memory usage (bytes)
-    size_t meshMemory;             ///< Mesh memory usage (bytes)
-    size_t totalGPUMemory;         ///< Total GPU memory usage (bytes)
-    
+    size_t textureMemory = 0;      ///< Texture memory usage (bytes)
+    size_t meshMemory = 0;         ///< Mesh memory usage (bytes)
+    size_t totalGPUMemory = 0;     ///< Total GPU memory usage (bytes)
+
     // Lighting
-    uint32_t activeLights;         ///< Active lights
-    uint32_t shadowUpdates;        ///< Shadow map updates
-    float lightCullingTime;        ///< Light culling time (ms)
-    
+    uint32_t activeLights = 0;     ///< Active lights
+    uint32_t shadowUpdates = 0;    ///< Shadow map updates
+    float lightCullingTime = 0.0f; ///< Light culling time (ms)
+
     // Post-processing
-    float postProcessTime;         ///< Post-processing time (ms)
-    uint32_t postProcessPasses;    ///< Post-processing passes
-    
+    float postProcessTime = 0.0f;  ///< Post-processing time (ms)
+    uint32_t postProcessPasses = 0;///< Post-processing passes
+
     // Legacy compatibility
-    float renderTime;              ///< Legacy render time
-    float presentTime;             ///< Legacy present time
-    size_t bufferMemory;           ///< Legacy buffer memory
-    float gpuUsage;                ///< Legacy GPU usage
-    bool vsyncEnabled;             ///< Legacy VSync state
-    bool wireframeMode;            ///< Legacy wireframe state
-    bool debugMode;                ///< Legacy debug state
+    float renderTime = 0.0f;       ///< Legacy render time
+    float presentTime = 0.0f;      ///< Legacy present time
+    size_t bufferMemory = 0;       ///< Legacy buffer memory
+    float gpuUsage = 0.0f;         ///< Legacy GPU usage
+    bool vsyncEnabled = false;     ///< Legacy VSync state
+    bool wireframeMode = false;    ///< Legacy wireframe state
+    bool debugMode = false;        ///< Legacy debug state
 };
 
 /**

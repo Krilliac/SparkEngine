@@ -27,7 +27,7 @@ enum class AudioFormat {
 /**
  * @brief Audio playback states
  */
-enum class PlaybackState {
+enum class AudioPlaybackState {
     STOPPED = 0,            ///< Audio is stopped
     PLAYING = 1,            ///< Audio is playing
     PAUSED = 2,             ///< Audio is paused
@@ -94,7 +94,7 @@ enum class Audio3DMode {
 /**
  * @brief Audio compression types
  */
-enum class CompressionType {
+enum class AudioCompressionType {
     NONE = 0,               ///< No compression
     LOSSLESS = 1,           ///< Lossless compression
     LOSSY_LOW = 2,          ///< Low quality lossy compression

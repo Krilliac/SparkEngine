@@ -115,12 +115,12 @@ public:
      */
     struct PostProcessMetrics
     {
-        float totalRenderTime;
-        float bloomTime;
-        float toneMappingTime;
-        float colorGradingTime;
-        uint32_t activeEffects;
-        float memoryUsage;
+        float totalRenderTime = 0.0f;
+        float bloomTime = 0.0f;
+        float toneMappingTime = 0.0f;
+        float colorGradingTime = 0.0f;
+        uint32_t activeEffects = 0;
+        float memoryUsage = 0.0f;
     };
 
     PostProcessingSystem();
@@ -148,11 +148,11 @@ public:
     void Console_SetBloomParams(float threshold, float intensity, float radius);
 
 private:
-    ID3D11Device* m_device;
-    ID3D11DeviceContext* m_context;
+    ID3D11Device* m_device = nullptr;
+    ID3D11DeviceContext* m_context = nullptr;
 
     bool m_hdrEnabled = true;
-    uint32_t m_width, m_height;
+    uint32_t m_width = 0, m_height = 0;
 
     BloomSettings m_bloomSettings;
     ToneMappingSettings m_toneMappingSettings;
