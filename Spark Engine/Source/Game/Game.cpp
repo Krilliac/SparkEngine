@@ -8,6 +8,7 @@
 #include "Game.h"
 #include "ClassSystem.h"
 #include "Utils/Assert.h"
+#include "Utils/SparkError.h"
 
 #include "..\Graphics\GraphicsEngine.h"
 #include "..\Graphics\TextureSystem.h"
@@ -302,11 +303,23 @@ void Game::Update(float dt)
         return;
     }
 
+    // Validate delta time to prevent physics explosions from bad frames
+    if (!std::isfinite(dt) || dt < 0.0f) {
+        SPARK_LOG_WARN("Game", "Invalid deltaTime %.6f -- clamping to 0", dt);
+        dt = 0.0f;
+    }
+    if (dt > 0.25f) {
+        SPARK_LOG_WARN("Game", "Large deltaTime %.4fs (>250ms) -- clamping to 250ms to prevent physics instability", dt);
+        dt = 0.25f;
+    }
+
     dt *= m_timeScale;
 
-    HandleInput(dt);
-    UpdateCamera(dt);
-    UpdateGameObjects(dt);
+    SPARK_CATCH_ALL("Game", {
+        HandleInput(dt);
+        UpdateCamera(dt);
+        UpdateGameObjects(dt);
+    });
 
     if (m_classSystem)        m_classSystem->Update(dt);
     if (m_player)             m_player->Update(dt);
@@ -319,7 +332,7 @@ void Game::Update(float dt)
     if (m_damageZoneSystem)   m_damageZoneSystem->Update(dt, m_player.get());
     if (m_respawnSystem)      m_respawnSystem->Update(dt);
 
-    // **UPDATE: Update advanced systems through main GraphicsEngine**
+    // Update advanced systems through main GraphicsEngine
     if (m_graphics) {
         if (auto textureSystem = m_graphics->GetTextureSystem()) {
             textureSystem->Update(dt);
@@ -409,21 +422,16 @@ void Game::Render()
         }
 
     } catch (const std::exception& e) {
-        std::string errorMsg = "Rendering error: " + std::string(e.what());
-        std::wstring wErrorMsg(errorMsg.begin(), errorMsg.end());
-        LOG_TO_CONSOLE_IMMEDIATE(wErrorMsg, L"ERROR");
-
+        SPARK_LOG_ERROR("Render", "Rendering exception: %s", e.what());
     } catch (...) {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Unknown rendering error occurred", L"ERROR");
+        SPARK_LOG_ERROR("Render", "Unknown rendering exception caught");
     }
 
     // Always call EndFrame exactly once if BeginFrame succeeded
     if (frameStarted) {
-        try {
+        SPARK_CATCH_ALL("Render", {
             m_graphics->EndFrame();
-        } catch (...) {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Critical: EndFrame failed during error recovery", L"ERROR");
-        }
+        });
     }
 }
 
@@ -773,12 +781,8 @@ bool Game::SpawnObject(const std::string& type, float x, float y, float z)
 
 bool Game::DeleteObject(size_t index)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Deleting object via console integration", L"INFO");
-    
-    if (m_gameObjects.empty() || index >= m_gameObjects.size()) {
-        std::wstring errorMsg = L"Invalid object index: " + std::to_wstring(index) +
-                               L" (total objects: " + std::to_wstring(m_gameObjects.size()) + L")";
-        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+    if (!SPARK_BOUNDS_CHECK(index, m_gameObjects.size())) {
+        SPARK_LOG_ERROR("Game", "DeleteObject: index %zu out of bounds (size=%zu)", index, m_gameObjects.size());
         return false;
     }
     

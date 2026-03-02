@@ -171,3 +171,30 @@ namespace Assert
 // Range assertion
 #define ASSERT_IN_RANGE(v, min, max) \
     ASSERT_MSG((v) >= (min) && (v) <= (max), #v " out of range [" #min "," #max "]")
+
+// VERIFY: like ASSERT but active in ALL builds (debug and release)
+// Use for conditions that should never fail even in production.
+#define VERIFY(expr) \
+    ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__))
+
+#define VERIFY_MSG(expr, fmt, ...) \
+    ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__))
+
+// VERIFY_HR: HRESULT check active in ALL builds
+#define VERIFY_HR(hrExpr) \
+    do { long _hr = static_cast<long>(hrExpr); \
+         if (FAILED(_hr)) \
+            Assert::FailHResult(#hrExpr, __FILE__, __LINE__, _hr); \
+    } while(0)
+
+// Bounds assertion with value info (shows what index was vs valid range)
+#define ASSERT_BOUNDS(index, size) \
+    ASSERT_MSG(static_cast<long long>(index) >= 0 && static_cast<size_t>(index) < (size), \
+               #index " = %lld out of bounds [0, %llu)", \
+               static_cast<long long>(index), static_cast<unsigned long long>(size))
+
+// Enum range assertion
+#define ASSERT_ENUM_RANGE(val, maxVal) \
+    ASSERT_MSG(static_cast<int>(val) >= 0 && static_cast<int>(val) < static_cast<int>(maxVal), \
+               #val " enum value %d out of valid range [0, %d)", \
+               static_cast<int>(val), static_cast<int>(maxVal))

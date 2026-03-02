@@ -1,5 +1,6 @@
 ﻿#include "Utils/CrashHandler.h"
 #include "Utils/Assert.h"
+#include "Utils/SparkError.h"
 #include "Utils/ConsoleProcessManager.h"
 
 #include <windows.h>
@@ -23,6 +24,8 @@
 #include <VersionHelpers.h>
 #include <TlHelp32.h>
 #include <iostream>
+#include <psapi.h>
+#pragma comment(lib, "psapi.lib")
 
 #pragma comment(lib, "dbghelp.lib")
 #pragma comment(lib, "windowscodecs.lib")
@@ -136,8 +139,17 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg) {
 
     WriteMiniDump(dump, ep);
 
-    // Build log
+    // Build log with enhanced crash context
     std::wstringstream log;
+    log << L"================================================================\n";
+    log << L"           SPARK ENGINE CRASH REPORT\n";
+    log << L"================================================================\n\n";
+
+    // Timestamp
+    log << L"Timestamp  : " << stamp << L"\n";
+    log << L"Process ID : " << GetCurrentProcessId() << L"\n";
+    log << L"Thread ID  : 0x" << std::hex << GetCurrentThreadId() << std::dec << L"\n\n";
+
     if (assertMsg) {
         int len = MultiByteToWideChar(CP_UTF8, 0, assertMsg, -1, nullptr, 0);
         std::wstring wmsg(len, L'\0');
@@ -146,6 +158,60 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg) {
     } else {
         log << L"*** CRASH DETECTED ***\n\n";
     }
+
+    // Decode exception code into human-readable name
+    if (ep->ExceptionRecord) {
+        DWORD code = ep->ExceptionRecord->ExceptionCode;
+        const char* codeName = SparkError::ExceptionCodeToString(code);
+
+        int codeNameLen = MultiByteToWideChar(CP_UTF8, 0, codeName, -1, nullptr, 0);
+        std::wstring wCodeName(codeNameLen, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, codeName, -1, &wCodeName[0], codeNameLen);
+
+        log << L"Exception Code    : 0x" << std::hex << code << std::dec << L"\n";
+        log << L"Exception Name    : " << wCodeName << L"\n";
+        log << L"Exception Address : 0x" << std::hex
+            << reinterpret_cast<uintptr_t>(ep->ExceptionRecord->ExceptionAddress)
+            << std::dec << L"\n";
+        log << L"Exception Flags   : " << ep->ExceptionRecord->ExceptionFlags << L"\n";
+        log << L"Number Parameters : " << ep->ExceptionRecord->NumberParameters << L"\n";
+
+        // For access violations, decode read/write and target address
+        if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
+            ULONG_PTR accessType = ep->ExceptionRecord->ExceptionInformation[0];
+            ULONG_PTR targetAddr = ep->ExceptionRecord->ExceptionInformation[1];
+            const wchar_t* accessStr = (accessType == 0) ? L"READ" :
+                                       (accessType == 1) ? L"WRITE" :
+                                       (accessType == 8) ? L"DEP_VIOLATION" : L"UNKNOWN";
+            log << L"Access Type       : " << accessStr << L"\n";
+            log << L"Target Address    : 0x" << std::hex << targetAddr << std::dec << L"\n";
+        }
+        log << L"\n";
+    }
+
+    // Process memory snapshot
+    PROCESS_MEMORY_COUNTERS_EX pmc = {};
+    pmc.cb = sizeof(pmc);
+    if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc))) {
+        log << L"*** PROCESS MEMORY ***\n";
+        log << L"Working Set       : " << (pmc.WorkingSetSize >> 20) << L" MiB\n";
+        log << L"Peak Working Set  : " << (pmc.PeakWorkingSetSize >> 20) << L" MiB\n";
+        log << L"Private Bytes     : " << (pmc.PrivateUsage >> 20) << L" MiB\n";
+        log << L"Page Faults       : " << pmc.PageFaultCount << L"\n\n";
+    }
+
+    // Module that faulted
+    if (ep->ExceptionRecord && ep->ExceptionRecord->ExceptionAddress) {
+        HMODULE hMod = nullptr;
+        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               (LPCWSTR)ep->ExceptionRecord->ExceptionAddress, &hMod)) {
+            wchar_t modPath[MAX_PATH] = {};
+            GetModuleFileNameW(hMod, modPath, MAX_PATH);
+            log << L"Faulting Module   : " << modPath << L"\n\n";
+        }
+    }
+
     log << SymStackTrace(ep);
     if (g_cfg.captureSystemInfo) log << SystemInfo();
     if (g_cfg.captureAllThreads) log << ThreadStacks();

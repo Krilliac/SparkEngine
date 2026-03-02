@@ -4,6 +4,7 @@
 #include "framework.h"
 #include "SparkEngine.h"
 #include "Utils/Assert.h"             // <-- custom assert
+#include "Utils/SparkError.h"         // <-- enhanced error handling
 
 #include <Windows.h>
 #include <memory>
@@ -433,35 +434,47 @@ void RegisterGameConsoleCommands()
     console.RegisterCommand("game_timescale", [](const std::vector<std::string>& args) -> std::string {
         if (args.empty()) return "Usage: game_timescale <scale>";
         if (!g_game) return "Game not available";
-        
-        float scale = std::stof(args[0]);
-        g_game->SetTimeScale(scale);
-        return "Time scale set to " + std::to_string(scale);
+
+        try {
+            float scale = std::stof(args[0]);
+            g_game->SetTimeScale(scale);
+            return "Time scale set to " + std::to_string(scale);
+        } catch (const std::exception& e) {
+            return std::string("Error: invalid number '") + args[0] + "' -- " + e.what();
+        }
     }, "Set game time scale");
 
     // Player teleport
     console.RegisterCommand("player_tp", [](const std::vector<std::string>& args) -> std::string {
         if (args.size() < 3) return "Usage: player_tp <x> <y> <z>";
         if (!g_game) return "Game not available";
-        
-        float x = std::stof(args[0]);
-        float y = std::stof(args[1]);
-        float z = std::stof(args[2]);
-        g_game->TeleportPlayer(x, y, z);
-        return "Player teleported to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
+
+        try {
+            float x = std::stof(args[0]);
+            float y = std::stof(args[1]);
+            float z = std::stof(args[2]);
+            g_game->TeleportPlayer(x, y, z);
+            return "Player teleported to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
+        } catch (const std::exception& e) {
+            return std::string("Error: invalid coordinate -- ") + e.what();
+        }
     }, "Teleport player to coordinates");
 
     // Spawn object
     console.RegisterCommand("spawn", [](const std::vector<std::string>& args) -> std::string {
         if (args.size() < 4) return "Usage: spawn <type> <x> <y> <z>";
         if (!g_game) return "Game not available";
-        
-        std::string type = args[0];
-        float x = std::stof(args[1]);
-        float y = std::stof(args[2]);
-        float z = std::stof(args[3]);
-        bool success = g_game->SpawnObject(type, x, y, z);
-        return success ? "Object spawned successfully" : "Failed to spawn object";
+
+        try {
+            std::string type = args[0];
+            float x = std::stof(args[1]);
+            float y = std::stof(args[2]);
+            float z = std::stof(args[3]);
+            bool success = g_game->SpawnObject(type, x, y, z);
+            return success ? "Object spawned successfully" : "Failed to spawn object of type '" + type + "'";
+        } catch (const std::exception& e) {
+            return std::string("Error: invalid spawn arguments -- ") + e.what();
+        }
     }, "Spawn an object at coordinates");
 
     // God mode
