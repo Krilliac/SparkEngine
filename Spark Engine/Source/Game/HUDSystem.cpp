@@ -35,6 +35,21 @@ void HUDSystem::Update(float deltaTime) {
     if (m_weaponSwitchTimer > 0.0f) {
         m_weaponSwitchTimer -= deltaTime;
     }
+
+    // Update class change notification
+    if (m_classChangeTimer > 0.0f) {
+        m_classChangeTimer -= deltaTime;
+    }
+
+    // Update ability notification
+    if (m_abilityNotifTimer > 0.0f) {
+        m_abilityNotifTimer -= deltaTime;
+    }
+
+    // Update current class from player
+    if (m_player) {
+        m_currentClass = m_player->GetClass();
+    }
 }
 
 // === Damage Indicators ===
@@ -218,6 +233,32 @@ float HUDSystem::GetWeaponSwitchAlpha() const {
         return m_weaponSwitchTimer / 0.5f;
     }
     return 1.0f;
+}
+
+// === Class System HUD ===
+
+void HUDSystem::ShowClassChange(const std::string& className, SparkEditor::PlayerClass classType) {
+    m_classChangeName = className;
+    m_currentClass = classType;
+    m_classChangeTimer = CLASS_CHANGE_DURATION;
+}
+
+float HUDSystem::GetClassChangeAlpha() const {
+    if (m_classChangeTimer <= 0.0f) return 0.0f;
+    if (m_classChangeTimer > CLASS_CHANGE_DURATION - 0.5f) {
+        // Fade in
+        return (CLASS_CHANGE_DURATION - m_classChangeTimer) / 0.5f;
+    }
+    if (m_classChangeTimer < 0.8f) {
+        // Fade out
+        return m_classChangeTimer / 0.8f;
+    }
+    return 1.0f;
+}
+
+void HUDSystem::ShowAbilityActivation(const std::string& abilityName, bool isPrimary) {
+    m_abilityNotifText = (isPrimary ? "[F] " : "[G] ") + abilityName;
+    m_abilityNotifTimer = ABILITY_NOTIF_DURATION;
 }
 
 } // namespace Spark

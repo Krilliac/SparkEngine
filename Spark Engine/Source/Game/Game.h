@@ -14,6 +14,7 @@
 
 #include "..\Core\framework.h"    // XMFLOAT3, XMMATRIX, HRESULT
 #include "Utils/Assert.h"
+#include "ClassSystem.h"
 #include <memory>
 #include <vector>
 
@@ -31,6 +32,8 @@ class ProjectilePool;
 #include "PlaneObject.h"
 #include "SphereObject.h"
 #include "SceneManager/SceneManager.h"
+
+using SparkEditor::PlayerClass;
 
 /**
  * @brief Main game controller class managing the game loop and scene
@@ -232,6 +235,43 @@ public:
      * @return Pointer to projectile pool object (may be null)
      */
     ProjectilePool* GetProjectilePool() const { return m_projectilePool.get(); }
+
+    /**
+     * @brief Get class system instance
+     * @return Pointer to class system (may be null before init)
+     */
+    Spark::ClassSystem* GetClassSystem() const { return m_classSystem.get(); }
+
+    // ============================================================================
+    // CLASS SYSTEM METHODS
+    // ============================================================================
+
+    /**
+     * @brief Switch the player's class
+     * @param classType The class to switch to
+     */
+    void SetPlayerClass(PlayerClass classType);
+
+    /**
+     * @brief Get current player class
+     * @return Current PlayerClass
+     */
+    PlayerClass GetPlayerClass() const;
+
+    /**
+     * @brief Cycle to next class (for class selection UI)
+     */
+    void CycleNextClass();
+
+    /**
+     * @brief Cycle to previous class
+     */
+    void CyclePrevClass();
+
+    /**
+     * @brief Create the enhanced combat arena level
+     */
+    void CreateCombatArena();
     
     /**
      * @brief Get current scene object count
@@ -339,6 +379,7 @@ private:
     std::unique_ptr<Player>            m_player;        ///< Player controller
     std::unique_ptr<ProjectilePool>    m_projectilePool; ///< Projectile object pool
     std::unique_ptr<SceneManager>      m_sceneManager;  ///< Scene management
+    std::unique_ptr<Spark::ClassSystem> m_classSystem;  ///< Class system for loadouts/abilities
 
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene

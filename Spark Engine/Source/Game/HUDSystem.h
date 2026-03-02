@@ -16,6 +16,7 @@
 #include <deque>
 #include <chrono>
 #include <functional>
+#include "../Enums/GameSystemEnums.h"
 
 // Forward declarations
 class Player;
@@ -105,6 +106,7 @@ struct HUDConfig {
     // Visibility toggles
     bool showHealthBar = true;
     bool showArmorBar = true;
+    bool showShieldBar = true;          ///< Rechargeable shield bar (PS2 style)
     bool showAmmoCounter = true;
     bool showCrosshair = true;
     bool showDamageIndicators = true;
@@ -115,6 +117,13 @@ struct HUDConfig {
     bool showInteractionPrompt = true;
     bool showWeaponInfo = true;
     bool showStaminaBar = true;
+    bool showClassInfo = true;          ///< Class name and icon
+    bool showAbilityBar = true;         ///< Primary/secondary ability cooldowns
+    bool showEnergyBar = true;          ///< Ability energy pool
+    bool showLoadoutSlots = true;       ///< Weapon loadout slots (1-4)
+    bool showOvershield = true;         ///< Heavy Assault overshield indicator
+    bool showJetpackFuel = true;        ///< Light Assault jetpack fuel gauge
+    bool showCloakIndicator = true;     ///< Infiltrator cloak status
 
     // Crosshair settings
     CrosshairStyle crosshairStyle = CrosshairStyle::Dynamic;
@@ -136,8 +145,14 @@ struct HUDConfig {
     // Colors (RGBA 0-255)
     struct { int r=76, g=175, b=80, a=220; } healthColor;
     struct { int r=45, g=140, b=240, a=220; } armorColor;
+    struct { int r=0, g=200, b=255, a=200; } shieldColor;       ///< Shield bar color (cyan)
     struct { int r=255, g=255, b=255, a=200; } crosshairColor;
     struct { int r=229, g=57, b=53, a=180; } damageColor;
+    struct { int r=255, g=200, b=50, a=220; } energyColor;      ///< Ability energy (gold)
+    struct { int r=200, g=100, b=255, a=200; } abilityColor;    ///< Ability cooldown (purple)
+    struct { int r=100, g=200, b=255, a=180; } overshieldColor;  ///< Overshield (light blue)
+    struct { int r=255, g=165, b=0, a=220; } jetpackColor;      ///< Jetpack fuel (orange)
+    struct { int r=150, g=150, b=200, a=150; } cloakColor;      ///< Cloak indicator (faded blue)
 };
 
 /**
@@ -288,6 +303,57 @@ public:
     int GetWeaponSwitchSlot() const { return m_weaponSwitchSlot; }
     float GetWeaponSwitchAlpha() const;
 
+    // === Class System HUD ===
+
+    /**
+     * @brief Show class change notification
+     * @param className Name of the new class
+     * @param classType The class type enum
+     */
+    void ShowClassChange(const std::string& className, SparkEditor::PlayerClass classType);
+
+    /**
+     * @brief Check if class change notification is visible
+     */
+    bool IsClassChangeVisible() const { return m_classChangeTimer > 0.0f; }
+
+    /**
+     * @brief Get class change display name
+     */
+    const std::string& GetClassChangeName() const { return m_classChangeName; }
+
+    /**
+     * @brief Get class change display alpha
+     */
+    float GetClassChangeAlpha() const;
+
+    /**
+     * @brief Show ability activation feedback
+     * @param abilityName Name of the ability
+     * @param isPrimary Whether it's the primary ability
+     */
+    void ShowAbilityActivation(const std::string& abilityName, bool isPrimary);
+
+    /**
+     * @brief Check if ability activation notification is visible
+     */
+    bool IsAbilityNotifVisible() const { return m_abilityNotifTimer > 0.0f; }
+
+    /**
+     * @brief Get ability notification text
+     */
+    const std::string& GetAbilityNotifText() const { return m_abilityNotifText; }
+
+    /**
+     * @brief Get current class type for HUD rendering
+     */
+    SparkEditor::PlayerClass GetCurrentClassType() const { return m_currentClass; }
+
+    /**
+     * @brief Set current class type for HUD rendering
+     */
+    void SetCurrentClass(SparkEditor::PlayerClass classType) { m_currentClass = classType; }
+
 private:
     Player* m_player = nullptr;
     HUDConfig m_config;
@@ -330,6 +396,17 @@ private:
     void UpdateDamageIndicators(float dt);
     void UpdateKillFeed(float dt);
     void UpdateLowHealthEffects(float dt);
+
+    // Class system HUD state
+    SparkEditor::PlayerClass m_currentClass = SparkEditor::PlayerClass::LIGHT_ASSAULT;
+    float m_classChangeTimer = 0.0f;
+    std::string m_classChangeName;
+    static constexpr float CLASS_CHANGE_DURATION = 3.0f;
+
+    // Ability notification
+    float m_abilityNotifTimer = 0.0f;
+    std::string m_abilityNotifText;
+    static constexpr float ABILITY_NOTIF_DURATION = 1.5f;
 };
 
 } // namespace Spark

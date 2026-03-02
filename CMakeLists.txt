@@ -235,6 +235,26 @@ add_custom_command(TARGET SparkEngine POST_BUILD
     COMMENT "Creating asset directory structure"
 )
 
+# Copy model assets to output directory
+if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Models")
+    add_custom_command(TARGET SparkEngine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/Assets/Models"
+            "$<TARGET_FILE_DIR:SparkEngine>/Assets/Models"
+        COMMENT "Copying model assets"
+    )
+endif()
+
+# Copy scene files to output directory
+if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Scenes")
+    add_custom_command(TARGET SparkEngine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/Assets/Scenes"
+            "$<TARGET_FILE_DIR:SparkEngine>/Assets/Scenes"
+        COMMENT "Copying scene assets"
+    )
+endif()
+
 # Copy shaders to output directory instead of compiling them
 file(GLOB_RECURSE SHADER_FILES "Spark Engine/Shaders/HLSL/*.hlsl")
 foreach(SHADER_FILE ${SHADER_FILES})
