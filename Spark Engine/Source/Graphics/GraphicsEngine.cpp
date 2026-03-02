@@ -1,6 +1,7 @@
 ﻿// GraphicsEngine.cpp - COMPLETE IMPLEMENTATION WITH ALL 600+ LINES RESTORED
 #include "GraphicsEngine.h"
 #include "../Utils/Assert.h"
+#include "../Utils/SparkError.h"
 #include "../Utils/SparkConsole.h"
 
 // **CRITICAL FIX: Add missing system includes**
@@ -474,11 +475,16 @@ void GraphicsEngine::EndFrame()
     HRESULT hr = m_swapChain->Present(syncInterval, 0);
 
     if (FAILED(hr)) {
-        std::wstring errorMsg = L"Present failed with HR=0x" + std::to_wstring(hr);
-        LOG_TO_CONSOLE_RATE_LIMITED(errorMsg, L"WARNING");
-        
-        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Device lost detected - may need device reset", L"ERROR");
+        SPARK_LOG_ERROR("Graphics", "SwapChain::Present failed with HR=0x%08lX", static_cast<long>(hr));
+
+        if (hr == DXGI_ERROR_DEVICE_REMOVED) {
+            HRESULT reason = m_device ? m_device->GetDeviceRemovedReason() : E_FAIL;
+            SPARK_LOG_FATAL("Graphics", "GPU DEVICE REMOVED -- Reason HR=0x%08lX. "
+                            "Possible causes: driver crash, GPU hang, TDR timeout, or hardware fault",
+                            static_cast<long>(reason));
+        } else if (hr == DXGI_ERROR_DEVICE_RESET) {
+            SPARK_LOG_FATAL("Graphics", "GPU DEVICE RESET -- The GPU device was reset. "
+                            "This may indicate a driver update or GPU resource exhaustion");
         }
     }
 
@@ -953,6 +959,8 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     ComPtr<ID3D11Device> baseDevice;
     ComPtr<ID3D11DeviceContext> baseContext;
 
+    SPARK_LOG_INFO("Graphics", "Creating D3D11 device (flags=0x%X)...", createDeviceFlags);
+
     HRESULT hr = D3D11CreateDevice(
         nullptr,
         D3D_DRIVER_TYPE_HARDWARE,
@@ -967,9 +975,22 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     );
 
     if (FAILED(hr)) {
-        LOG_TO_CONSOLE_IMMEDIATE(L"D3D11CreateDevice failed", L"ERROR");
+        SPARK_LOG_FATAL("Graphics", "D3D11CreateDevice failed with HR=0x%08lX. "
+                        "Check GPU driver installation and DirectX 11 support.",
+                        static_cast<long>(hr));
         return hr;
     }
+
+    // Log the feature level we got
+    const char* featureLevelStr = "Unknown";
+    switch (featureLevel) {
+        case D3D_FEATURE_LEVEL_11_1: featureLevelStr = "11.1"; break;
+        case D3D_FEATURE_LEVEL_11_0: featureLevelStr = "11.0"; break;
+        case D3D_FEATURE_LEVEL_10_1: featureLevelStr = "10.1"; break;
+        case D3D_FEATURE_LEVEL_10_0: featureLevelStr = "10.0"; break;
+        default: break;
+    }
+    SPARK_LOG_INFO("Graphics", "D3D11 device created -- Feature Level %s", featureLevelStr);
 
     // Query for ID3D11Device1 interface
     hr = baseDevice.As(&m_device);
@@ -2490,10 +2511,14 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
     m_renderTargetView.Reset();
     m_depthStencilView.Reset();
     if (m_swapChain) {
-        m_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+        HRESULT resizeHr = m_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+        if (FAILED(resizeHr)) {
+            SPARK_LOG_ERROR("Graphics", "SwapChain::ResizeBuffers failed HR=0x%08lX for size %ux%u",
+                            static_cast<long>(resizeHr), width, height);
+        }
     }
     else {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Swap chain not available during resize", L"WARNING");
+        SPARK_LOG_WARN("Graphics", "Swap chain not available during resize to %ux%u", width, height);
     }
 
     if (!m_device) {

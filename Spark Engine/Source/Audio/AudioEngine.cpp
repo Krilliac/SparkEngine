@@ -1,6 +1,7 @@
 ﻿// AudioEngine.cpp
 #include "AudioEngine.h"
 #include "Utils/Assert.h"
+#include "Utils/SparkError.h"
 #include "../Utils/SparkConsole.h"
 #include <algorithm>
 #include <iostream>
@@ -49,22 +50,24 @@ AudioEngine::~AudioEngine()
 
 HRESULT AudioEngine::Initialize(size_t maxSources)
 {
-    Spark::SimpleConsole::GetInstance().Log("AudioEngine::Initialize started with console integration.", "INFO");
+    SPARK_LOG_INFO("Audio", "AudioEngine::Initialize -- maxSources=%zu", maxSources);
     ASSERT_MSG(maxSources > 0, "AudioEngine maxSources must be positive");
     m_maxSources = maxSources;
     m_settings.maxSources = static_cast<int>(maxSources);
 
     HRESULT hr = XAudio2Create(&m_xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
-    ASSERT_MSG(SUCCEEDED(hr), "XAudio2Create failed");
     if (FAILED(hr)) {
-        Spark::SimpleConsole::GetInstance().Log("XAudio2Create failed with HR=0x" + std::to_string(hr), "ERROR");
+        SPARK_LOG_FATAL("Audio", "XAudio2Create failed HR=0x%08lX -- "
+                        "Check audio drivers and Windows Audio Service",
+                        static_cast<long>(hr));
         return hr;
     }
 
     hr = m_xAudio2->CreateMasteringVoice(&m_masterVoice);
-    ASSERT_MSG(SUCCEEDED(hr), "CreateMasteringVoice failed");
     if (FAILED(hr)) {
-        Spark::SimpleConsole::GetInstance().Log("CreateMasteringVoice failed with HR=0x" + std::to_string(hr), "ERROR");
+        SPARK_LOG_FATAL("Audio", "CreateMasteringVoice failed HR=0x%08lX -- "
+                        "No audio output device available?",
+                        static_cast<long>(hr));
         return hr;
     }
 
@@ -184,8 +187,14 @@ AudioSource* AudioEngine::PlaySound(const std::string& name,
         if (FAILED(hr)) return nullptr;
     }
 
-    ASSERT_MSG(volume >= 0.0f && volume <= 1.0f, "Volume out of range");
-    ASSERT_MSG(pitch > 0.0f, "Pitch must be positive");
+    if (volume < 0.0f || volume > 1.0f) {
+        SPARK_LOG_WARN("Audio", "PlaySound '%s': volume %.2f clamped to [0,1]", name.c_str(), volume);
+        volume = std::clamp(volume, 0.0f, 1.0f);
+    }
+    if (pitch <= 0.0f) {
+        SPARK_LOG_WARN("Audio", "PlaySound '%s': pitch %.2f invalid, reset to 1.0", name.c_str(), pitch);
+        pitch = 1.0f;
+    }
 
     src->Sound = sound;
     src->Volume = volume * m_sfxVolume * m_masterVolume;

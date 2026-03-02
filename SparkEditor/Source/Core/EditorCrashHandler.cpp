@@ -8,12 +8,19 @@
 #include "EditorCrashHandler.h"
 #include "EditorLogger.h"
 #include <Windows.h>
+#include <dbghelp.h>
+#include <TlHelp32.h>
+#include <VersionHelpers.h>
 #include <iostream>
 #include <fstream>
 #include <filesystem>
 #include <optional>
 #include <thread>
 #include <chrono>
+#include <ctime>
+#include <sstream>
+
+#pragma comment(lib, "dbghelp.lib")
 
 namespace SparkEditor {
 
@@ -286,44 +293,294 @@ LONG WINAPI EditorCrashHandler::ExceptionFilter(EXCEPTION_POINTERS* exceptionPoi
 void EditorCrashHandler::HandleCrashInternal(EXCEPTION_POINTERS* exceptionPointers) {
     std::lock_guard<std::mutex> lock(m_statsMutex);
     m_stats.totalCrashes++;
-    
+
+    CrashInfo info;
+    info.exceptionPointers = exceptionPointers;
+    info.timestamp = std::chrono::system_clock::now();
+    info.processId = GetCurrentProcessId();
+    info.threadId = GetCurrentThreadId();
+    info.editorState = m_currentEditorState;
+
+    // Decode exception type
+    if (exceptionPointers && exceptionPointers->ExceptionRecord) {
+        DWORD code = exceptionPointers->ExceptionRecord->ExceptionCode;
+        switch (code) {
+            case EXCEPTION_ACCESS_VIOLATION:         info.exceptionType = "ACCESS_VIOLATION"; break;
+            case EXCEPTION_STACK_OVERFLOW:           info.exceptionType = "STACK_OVERFLOW"; break;
+            case EXCEPTION_INT_DIVIDE_BY_ZERO:       info.exceptionType = "INT_DIVIDE_BY_ZERO"; break;
+            case EXCEPTION_FLT_DIVIDE_BY_ZERO:       info.exceptionType = "FLT_DIVIDE_BY_ZERO"; break;
+            case EXCEPTION_ILLEGAL_INSTRUCTION:      info.exceptionType = "ILLEGAL_INSTRUCTION"; break;
+            case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:    info.exceptionType = "ARRAY_BOUNDS_EXCEEDED"; break;
+            case STATUS_FATAL_APP_EXIT:              info.exceptionType = "FATAL_APP_EXIT (Assert)"; break;
+            default: {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "EXCEPTION_0x%08lX", static_cast<unsigned long>(code));
+                info.exceptionType = buf;
+            } break;
+        }
+
+        // Categorize for statistics
+        if (code == EXCEPTION_ACCESS_VIOLATION)
+            m_stats.accessViolations++;
+        else if (code == EXCEPTION_STACK_OVERFLOW)
+            m_stats.stackOverflows++;
+        else
+            m_stats.otherExceptions++;
+    }
+
+    // Gather additional context
+    info.stackTrace = GenerateStackTrace(exceptionPointers);
+    info.systemInfo = GetSystemInfo();
+    info.threadInfo = GetThreadInfo();
+
+    // Gather recent operations
+    {
+        std::lock_guard<std::mutex> opsLock(m_operationsMutex);
+        std::string opsStr;
+        for (const auto& op : m_recentOperations) {
+            opsStr += "  - " + op + "\n";
+        }
+        info.lastOperations = opsStr;
+    }
+
+    m_stats.lastCrash = info.timestamp;
+    m_stats.lastCrashType = info.exceptionType;
+
+    // Save crash dump and log
+    if (!m_crashDirectory.empty()) {
+        try {
+            std::filesystem::create_directories(m_crashDirectory);
+
+            auto time_t = std::chrono::system_clock::to_time_t(info.timestamp);
+            char timeBuf[64];
+            strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", std::localtime(&time_t));
+
+            std::string dumpPath = m_crashDirectory + "/editor_crash_" + timeBuf + ".dmp";
+            std::string logPath = m_crashDirectory + "/editor_crash_" + timeBuf + ".log";
+
+            SaveCrashDump(exceptionPointers, dumpPath);
+            SaveCrashLog(info, logPath);
+        } catch (...) {
+            // Don't let file operations crash the crash handler
+        }
+    }
+
+    // Save recovery data
+    try { SaveRecoveryData(); } catch (...) {}
+
     if (m_crashCallback) {
-        CrashInfo info;
-        info.exceptionPointers = exceptionPointers;
-        info.timestamp = std::chrono::system_clock::now();
-        info.editorState = m_currentEditorState;
-        
         m_crashCallback(info);
     }
 }
 
 std::string EditorCrashHandler::GenerateStackTrace(EXCEPTION_POINTERS* exceptionPointers) {
-    // TODO: Implement stack trace generation
-    return "Stack trace not implemented";
+    if (!exceptionPointers || !exceptionPointers->ContextRecord) {
+        return "No exception context available for stack trace\n";
+    }
+
+    std::string result = "=== Stack Trace ===\n";
+
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
+    if (!SymInitialize(GetCurrentProcess(), nullptr, TRUE)) {
+        return result + "Failed to initialize symbol handler\n";
+    }
+
+    CONTEXT& ctx = *exceptionPointers->ContextRecord;
+    STACKFRAME64 frame = {};
+#ifdef _WIN64
+    DWORD machine = IMAGE_FILE_MACHINE_AMD64;
+    frame.AddrPC.Offset = ctx.Rip;
+    frame.AddrFrame.Offset = ctx.Rbp;
+    frame.AddrStack.Offset = ctx.Rsp;
+#else
+    DWORD machine = IMAGE_FILE_MACHINE_I386;
+    frame.AddrPC.Offset = ctx.Eip;
+    frame.AddrFrame.Offset = ctx.Ebp;
+    frame.AddrStack.Offset = ctx.Esp;
+#endif
+    frame.AddrPC.Mode = frame.AddrFrame.Mode = frame.AddrStack.Mode = AddrModeFlat;
+
+    BYTE symBuffer[sizeof(SYMBOL_INFO) + 512] = {};
+    SYMBOL_INFO* sym = reinterpret_cast<SYMBOL_INFO*>(symBuffer);
+    sym->SizeOfStruct = sizeof(SYMBOL_INFO);
+    sym->MaxNameLen = 511;
+
+    for (int i = 0; i < 64; ++i) {
+        if (!StackWalk64(machine, GetCurrentProcess(), GetCurrentThread(),
+                         &frame, &ctx, nullptr,
+                         SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
+            break;
+        }
+        if (frame.AddrPC.Offset == 0) break;
+
+        DWORD64 displacement64 = 0;
+        char line[512];
+
+        if (SymFromAddr(GetCurrentProcess(), frame.AddrPC.Offset, &displacement64, sym)) {
+            // Try to get source file and line
+            IMAGEHLP_LINE64 lineInfo = {};
+            lineInfo.SizeOfStruct = sizeof(lineInfo);
+            DWORD lineDisplacement = 0;
+            if (SymGetLineFromAddr64(GetCurrentProcess(), frame.AddrPC.Offset, &lineDisplacement, &lineInfo)) {
+                snprintf(line, sizeof(line), "  [%2d] %s +0x%llX (%s:%lu)\n",
+                         i, sym->Name, (unsigned long long)displacement64,
+                         lineInfo.FileName, lineInfo.LineNumber);
+            } else {
+                snprintf(line, sizeof(line), "  [%2d] %s +0x%llX\n",
+                         i, sym->Name, (unsigned long long)displacement64);
+            }
+        } else {
+            snprintf(line, sizeof(line), "  [%2d] 0x%016llX\n",
+                     i, (unsigned long long)frame.AddrPC.Offset);
+        }
+        result += line;
+    }
+
+    SymCleanup(GetCurrentProcess());
+    return result;
 }
 
 std::string EditorCrashHandler::GetSystemInfo() {
-    // TODO: Implement system info gathering
-    return "System info not implemented";
+    std::string result = "=== System Info ===\n";
+
+    // OS version
+    if (IsWindows10OrGreater())
+        result += "OS: Windows 10+\n";
+    else if (IsWindows8OrGreater())
+        result += "OS: Windows 8+\n";
+    else
+        result += "OS: Windows (version unknown)\n";
+
+    // CPU info
+    SYSTEM_INFO si;
+    GetNativeSystemInfo(&si);
+    result += "CPU Cores: " + std::to_string(si.dwNumberOfProcessors) + "\n";
+
+    // Memory info
+    MEMORYSTATUSEX ms = {};
+    ms.dwLength = sizeof(ms);
+    if (GlobalMemoryStatusEx(&ms)) {
+        result += "RAM Total: " + std::to_string(ms.ullTotalPhys >> 20) + " MiB\n";
+        result += "RAM Available: " + std::to_string(ms.ullAvailPhys >> 20) + " MiB\n";
+        result += "Memory Load: " + std::to_string(ms.dwMemoryLoad) + "%\n";
+    }
+
+    return result;
 }
 
 std::string EditorCrashHandler::GetThreadInfo() {
-    // TODO: Implement thread info gathering
-    return "Thread info not implemented";
+    std::string result = "=== Thread Info ===\n";
+    result += "Current Thread ID: 0x" +
+              std::to_string(GetCurrentThreadId()) + "\n";
+
+    // Count threads in this process
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snap != INVALID_HANDLE_VALUE) {
+        DWORD pid = GetCurrentProcessId();
+        THREADENTRY32 te = {};
+        te.dwSize = sizeof(te);
+        int threadCount = 0;
+        if (Thread32First(snap, &te)) {
+            do {
+                if (te.th32OwnerProcessID == pid)
+                    threadCount++;
+            } while (Thread32Next(snap, &te));
+        }
+        CloseHandle(snap);
+        result += "Total Threads: " + std::to_string(threadCount) + "\n";
+    }
+
+    return result;
 }
 
 bool EditorCrashHandler::SaveCrashDump(EXCEPTION_POINTERS* exceptionPointers, const std::string& filePath) {
-    // TODO: Implement crash dump saving
-    return false;
+    if (!exceptionPointers) return false;
+
+    // Convert to wide string for Windows API
+    std::wstring wpath(filePath.begin(), filePath.end());
+
+    HANDLE hFile = CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, nullptr,
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        if (m_logger) {
+            m_logger->Log(LogLevel::ERROR_, "CrashHandler", "Failed to create dump file: " + filePath);
+        }
+        return false;
+    }
+
+    MINIDUMP_EXCEPTION_INFORMATION mei = {};
+    mei.ThreadId = GetCurrentThreadId();
+    mei.ExceptionPointers = exceptionPointers;
+    mei.ClientPointers = TRUE;
+
+    BOOL success = MiniDumpWriteDump(
+        GetCurrentProcess(),
+        GetCurrentProcessId(),
+        hFile,
+        static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData),
+        &mei, nullptr, nullptr);
+
+    CloseHandle(hFile);
+
+    if (m_logger) {
+        if (success) {
+            m_logger->Log(LogLevel::INFO, "CrashHandler", "Crash dump saved: " + filePath);
+        } else {
+            m_logger->Log(LogLevel::ERROR_, "CrashHandler", "Failed to write crash dump: " + filePath);
+        }
+    }
+    return success != FALSE;
 }
 
 bool EditorCrashHandler::SaveCrashLog(const CrashInfo& crashInfo, const std::string& filePath) {
-    // TODO: Implement crash log saving
-    return false;
+    std::ofstream file(filePath);
+    if (!file.is_open()) {
+        if (m_logger) {
+            m_logger->Log(LogLevel::ERROR_, "CrashHandler", "Failed to create crash log: " + filePath);
+        }
+        return false;
+    }
+
+    std::string report = GenerateCrashReport(crashInfo);
+
+    file << "================================================================\n";
+    file << "         SPARK EDITOR CRASH LOG\n";
+    file << "================================================================\n\n";
+
+    auto time_t = std::chrono::system_clock::to_time_t(crashInfo.timestamp);
+    char timeBuf[64];
+    strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", std::localtime(&time_t));
+    file << "Timestamp  : " << timeBuf << "\n";
+    file << "Process ID : " << crashInfo.processId << "\n";
+    file << "Thread ID  : " << crashInfo.threadId << "\n\n";
+
+    file << "Exception  : " << crashInfo.exceptionType << "\n";
+    file << "Message    : " << crashInfo.exceptionMessage << "\n";
+    file << "Editor State: " << crashInfo.editorState << "\n\n";
+
+    file << crashInfo.stackTrace << "\n";
+    file << crashInfo.systemInfo << "\n";
+    file << crashInfo.threadInfo << "\n";
+
+    if (!crashInfo.lastOperations.empty()) {
+        file << "=== Recent Operations ===\n";
+        file << crashInfo.lastOperations << "\n";
+    }
+
+    file.close();
+
+    if (m_logger) {
+        m_logger->Log(LogLevel::INFO, "CrashHandler", "Crash log saved: " + filePath);
+    }
+    return true;
 }
 
 void EditorCrashHandler::UpdateStats(const CrashInfo& crashInfo) {
-    // Stats are updated in HandleCrashInternal
+    // Calculate average session time
+    auto now = std::chrono::steady_clock::now();
+    float sessionSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+        now - m_sessionStartTime).count();
+    m_stats.averageSessionTime = sessionSeconds;
 }
 
 } // namespace SparkEditor
