@@ -12,6 +12,7 @@
 #pragma once
 
 #include "GameObject.h"
+#include "ClassSystem.h"
 #include "Utils/Assert.h"
 #include "..\Camera\SparkEngineCamera.h"
 #include "..\Input\InputManager.h"
@@ -271,6 +272,120 @@ public:
     void SetCrouching(bool v) { m_isCrouching = v; }
 
     // ============================================================================
+    // CLASS SYSTEM INTEGRATION
+    // ============================================================================
+
+    /**
+     * @brief Set the player's class and apply class stats/loadout
+     * @param classType The class to switch to
+     * @param classSystem Pointer to the class system for definitions
+     */
+    void SetClass(PlayerClass classType, Spark::ClassSystem* classSystem);
+
+    /**
+     * @brief Get the player's current class type
+     * @return Current PlayerClass
+     */
+    PlayerClass GetClass() const { return m_playerClass; }
+
+    /**
+     * @brief Get the player's current class name
+     * @return String name of current class
+     */
+    const char* GetClassName() const { return Spark::ClassSystem::GetClassName(m_playerClass); }
+
+    /**
+     * @brief Get the rechargeable shield value
+     * @return Current shield points
+     */
+    float GetShield() const { return m_shield; }
+
+    /**
+     * @brief Get maximum shield value
+     * @return Maximum shield points
+     */
+    float GetMaxShield() const { return m_maxShield; }
+
+    /**
+     * @brief Get the ability energy pool
+     * @return Current energy
+     */
+    float GetEnergy() const { return m_energy; }
+
+    /**
+     * @brief Get maximum energy
+     * @return Maximum energy points
+     */
+    float GetMaxEnergy() const { return m_maxEnergy; }
+
+    /**
+     * @brief Activate primary class ability (F key)
+     * @return true if ability activated
+     */
+    bool ActivatePrimaryAbility();
+
+    /**
+     * @brief Activate secondary class ability (G key)
+     * @return true if ability activated
+     */
+    bool ActivateSecondaryAbility();
+
+    /**
+     * @brief Deactivate primary ability manually
+     */
+    void DeactivatePrimaryAbility();
+
+    /**
+     * @brief Check if primary ability is currently active
+     */
+    bool IsPrimaryAbilityActive() const { return m_primaryAbility.isActive; }
+
+    /**
+     * @brief Check if secondary ability is currently active
+     */
+    bool IsSecondaryAbilityActive() const { return m_secondaryAbility.isActive; }
+
+    /**
+     * @brief Get primary ability state for HUD display
+     */
+    const Spark::AbilityState& GetPrimaryAbilityState() const { return m_primaryAbility; }
+
+    /**
+     * @brief Get secondary ability state for HUD display
+     */
+    const Spark::AbilityState& GetSecondaryAbilityState() const { return m_secondaryAbility; }
+
+    /**
+     * @brief Check if a weapon switch is valid for the current class
+     */
+    bool CanEquipWeapon(WeaponType type) const;
+
+    /**
+     * @brief Switch to primary loadout weapon
+     */
+    void EquipPrimary();
+
+    /**
+     * @brief Switch to secondary loadout weapon
+     */
+    void EquipSecondary();
+
+    /**
+     * @brief Switch to sidearm
+     */
+    void EquipSidearm();
+
+    /**
+     * @brief Switch to class tool
+     */
+    void EquipTool();
+
+    /**
+     * @brief Get the active loadout slot index (0=primary, 1=secondary, 2=sidearm, 3=tool)
+     */
+    int GetActiveLoadoutSlot() const { return m_activeLoadoutSlot; }
+
+    // ============================================================================
     // CONSOLE INTEGRATION METHODS - Full Cross-Code Hooking
     // ============================================================================
 
@@ -348,6 +463,7 @@ public:
      */
     struct PlayerState {
         float health, maxHealth, armor, maxArmor, stamina, maxStamina;
+        float shield, maxShield, energy, maxEnergy;
         DirectX::XMFLOAT3 position, velocity;
         WeaponType currentWeapon;
         int currentAmmo, maxAmmo;
@@ -355,6 +471,9 @@ public:
         bool godMode, noclip, infiniteAmmo;
         float fireTimer, reloadTimer;
         float speed, jumpHeight;
+        PlayerClass playerClass;
+        int activeLoadoutSlot;
+        bool primaryAbilityActive, secondaryAbilityActive;
     };
 
     /**
@@ -404,6 +523,34 @@ private:
     float m_armor{ 0 }, m_maxArmor{ 100 };         ///< Current and maximum armor
     float m_stamina{ 100 }, m_maxStamina{ 100 };   ///< Current and maximum stamina
     float m_speed{ 5 }, m_jumpHeight{ 3 };         ///< Movement speed and jump height
+
+    // Class system
+    PlayerClass m_playerClass{ PlayerClass::LIGHT_ASSAULT };  ///< Current class
+    Spark::ClassSystem* m_classSystem{ nullptr };              ///< Reference to class system
+    float m_shield{ 0 }, m_maxShield{ 50 };                   ///< Rechargeable shield
+    float m_shieldRechargeRate{ 10.0f };
+    float m_shieldRechargeDelay{ 6.0f };
+    float m_shieldRechargeTimer{ 0.0f };                      ///< Timer since last damage
+    float m_energy{ 100 }, m_maxEnergy{ 100 };                ///< Ability energy pool
+    float m_energyRegenRate{ 10.0f };                         ///< Energy regen per second
+    Spark::AbilityState m_primaryAbility;
+    Spark::AbilityState m_secondaryAbility;
+    float m_damageResistance{ 0.0f };
+    float m_explosiveResistance{ 0.0f };
+    float m_sprintMultiplier{ 2.0f };
+    float m_crouchMultiplier{ 0.5f };
+    float m_adsSpeedMultiplier{ 0.5f };
+    Spark::ClassLoadout m_loadout;
+    int m_activeLoadoutSlot{ 0 };  ///< 0=primary, 1=secondary, 2=sidearm, 3=tool
+    std::vector<WeaponType> m_allowedWeapons;
+    bool m_jetpackActive{ false };
+    float m_jetpackFuel{ 100.0f };
+    float m_jetpackMaxFuel{ 100.0f };
+    float m_jetpackThrust{ 8.0f };
+    bool m_cloakActive{ false };
+    float m_overshieldHP{ 0.0f };
+    float m_overshieldMaxHP{ 200.0f };
+    bool m_lockedDown{ false };  ///< MAX lockdown state
 
     // Movement
     DirectX::XMFLOAT3 m_velocity{};                ///< Current velocity vector
@@ -495,6 +642,35 @@ private:
      * @param dt Delta time for frame-rate independent audio
      */
     void HandleFootsteps(float dt);
+
+    /**
+     * @brief Update class-specific mechanics (shield, energy, abilities)
+     * @param dt Delta time
+     */
+    void UpdateClassMechanics(float dt);
+
+    /**
+     * @brief Handle jetpack mechanics for Light Assault
+     * @param dt Delta time
+     */
+    void UpdateJetpack(float dt);
+
+    /**
+     * @brief Handle cloak mechanics for Infiltrator
+     * @param dt Delta time
+     */
+    void UpdateCloak(float dt);
+
+    /**
+     * @brief Handle overshield mechanics for Heavy Assault
+     * @param dt Delta time
+     */
+    void UpdateOvershield(float dt);
+
+    /**
+     * @brief Apply class definition stats to player
+     */
+    void ApplyClassStats(const Spark::ClassDefinition& classDef);
 
     /**
      * @brief Get weapon statistics for a specific weapon type

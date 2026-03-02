@@ -370,6 +370,14 @@ FodyWeavers.xsd
 *.iws
 
 ##########################
+# Asset file exceptions
+##########################
+# Allow Wavefront OBJ 3D model files in Assets directory
+# (*.obj is ignored above for compiled object files)
+!Assets/Models/*.obj
+!Assets/**/*.obj
+
+##########################
 # Custom SparkEngine Rules
 ##########################
 

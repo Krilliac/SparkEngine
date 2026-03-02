@@ -125,6 +125,7 @@ void Player::Update(float dt)
     UpdateMovement(dt);
     UpdateCombat(dt);
     UpdatePhysics(dt);
+    UpdateClassMechanics(dt);
     UpdateAnimation(dt);
     UpdateCollision();
     GameObject::Update(dt);
@@ -214,29 +215,65 @@ void Player::RenderWeapon(const XMMATRIX& view, const XMMATRIX& proj)
     }
 }
 
-// Damage & healing
+// Damage & healing - enhanced with class system (shield, resistance, overshield)
 void Player::TakeDamage(float dmg)
 {
     LOG_TO_CONSOLE(L"Player::TakeDamage called. dmg=" + std::to_wstring(dmg), L"OPERATION");
     ASSERT_MSG(dmg >= 0.0f, "Damage must be non-negative");
-    
+
     // Check god mode from console integration
     if (m_godModeEnabled) {
         LOG_TO_CONSOLE(L"Damage blocked by god mode", L"INFO");
         return;
     }
-    
+
     if (!IsAlive()) return;
 
-    float absorbed = std::min(dmg * 0.5f, m_armor);
-    m_armor -= absorbed;
-    m_health = std::max(0.0f, m_health - (dmg - absorbed));
+    // Apply class damage resistance
+    float effectiveDmg = dmg * (1.0f - m_damageResistance);
+
+    // Cloaked infiltrator takes bonus damage (de-cloaks on hit)
+    if (m_cloakActive) {
+        m_cloakActive = false;
+        m_primaryAbility.Deactivate();
+        effectiveDmg *= 1.5f; // 50% bonus damage while cloaked
+    }
+
+    // Overshield absorbs damage first (Heavy Assault)
+    if (m_overshieldHP > 0.0f) {
+        float shieldAbsorbed = std::min(effectiveDmg, m_overshieldHP);
+        m_overshieldHP -= shieldAbsorbed;
+        effectiveDmg -= shieldAbsorbed;
+    }
+
+    // Rechargeable shield absorbs next
+    if (m_shield > 0.0f && effectiveDmg > 0.0f) {
+        float shieldAbsorbed = std::min(effectiveDmg, m_shield);
+        m_shield -= shieldAbsorbed;
+        effectiveDmg -= shieldAbsorbed;
+        m_shieldRechargeTimer = 0.0f; // Reset recharge delay
+    }
+
+    // Armor absorbs 50% of remaining damage
+    if (effectiveDmg > 0.0f) {
+        float armorAbsorbed = std::min(effectiveDmg * 0.5f, m_armor);
+        m_armor -= armorAbsorbed;
+        effectiveDmg -= armorAbsorbed;
+    }
+
+    // Remaining damage hits health
+    m_health = std::max(0.0f, m_health - effectiveDmg);
     if (m_health <= 0.0f) SetActive(false);
-    
+
+    // Reset shield recharge timer on any damage
+    m_shieldRechargeTimer = 0.0f;
+
     // Notify console of state change
     NotifyStateChange();
-    
-    LOG_TO_CONSOLE(L"Player took damage. Health=" + std::to_wstring(m_health) + L" Armor=" + std::to_wstring(m_armor), L"INFO");
+
+    LOG_TO_CONSOLE(L"Player took damage. Health=" + std::to_wstring(m_health) +
+                   L" Shield=" + std::to_wstring(m_shield) +
+                   L" Armor=" + std::to_wstring(m_armor), L"INFO");
 }
 
 void Player::Heal(float amt)
@@ -354,10 +391,9 @@ void Player::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
     LOG_TO_CONSOLE(L"Player hit world.", L"INFO");
 }
 
-// Input handling - **REMOVED PER-FRAME LOGGING**
+// Input handling - enhanced with class abilities and loadout slots
 void Player::HandleInput(float)
 {
-    // **FIXED: No per-frame logging**
     if (!m_input) return;
     if (m_input->WasKeyPressed('R')) StartReload();
     if (m_input->IsMouseButtonDown(0)) Fire();
@@ -366,27 +402,59 @@ void Player::HandleInput(float)
     m_isRunning = m_input->IsKeyDown(VK_LSHIFT);
     m_isCrouching = m_input->IsKeyDown(VK_LCONTROL);
 
-    if (m_input->WasKeyPressed('1')) ChangeWeapon(WeaponType::PISTOL);
-    if (m_input->WasKeyPressed('2')) ChangeWeapon(WeaponType::RIFLE);
-    if (m_input->WasKeyPressed('3')) ChangeWeapon(WeaponType::SHOTGUN);
-    if (m_input->WasKeyPressed('4')) ChangeWeapon(WeaponType::ROCKET_LAUNCHER);
-    if (m_input->WasKeyPressed('5')) ChangeWeapon(WeaponType::GRENADE_LAUNCHER);
+    // Class loadout weapon slots (1-4)
+    if (m_input->WasKeyPressed('1')) EquipPrimary();
+    if (m_input->WasKeyPressed('2')) EquipSecondary();
+    if (m_input->WasKeyPressed('3')) EquipSidearm();
+    if (m_input->WasKeyPressed('4')) EquipTool();
+
+    // Class abilities
+    if (m_input->WasKeyPressed('F')) ActivatePrimaryAbility();
+    if (m_input->WasKeyPressed('G')) ActivateSecondaryAbility();
+
+    // Jetpack hold (Light Assault) - hold Space while in air
+    if (m_playerClass == PlayerClass::LIGHT_ASSAULT && m_primaryAbility.isActive) {
+        m_jetpackActive = m_input->IsKeyDown(VK_SPACE) && m_jetpackFuel > 0.0f;
+    }
+
+    // Toggle cloak off manually
+    if (m_cloakActive && m_input->WasKeyPressed('F')) {
+        m_cloakActive = false;
+        m_primaryAbility.Deactivate();
+    }
 }
 
-// Movement logic - **REMOVED PER-FRAME LOGGING**
+// Movement logic - enhanced with class-specific speed and ability modifiers
 void Player::UpdateMovement(float dt)
 {
-    // **FIXED: No per-frame logging**
     if (!m_camera || !m_input) return;
+
+    // MAX lockdown prevents all movement
+    if (m_lockedDown) return;
+
     float speed = m_speed;
+
     if (m_isRunning && m_stamina > 0.0f)
     {
-        speed *= 2.0f; m_stamina = std::max(0.0f, m_stamina - 30.0f * dt);
+        speed *= m_sprintMultiplier;
+        m_stamina = std::max(0.0f, m_stamina - 30.0f * dt);
     }
     else if (m_isCrouching)
     {
-        speed *= 0.5f;
+        speed *= m_crouchMultiplier;
     }
+
+    // Cloaked infiltrator moves slightly slower
+    if (m_cloakActive) {
+        speed *= 0.75f;
+    }
+
+    // Heavy Assault overshield active = slower
+    if (m_overshieldHP > 0.0f && m_primaryAbility.isActive &&
+        m_playerClass == PlayerClass::HEAVY_ASSAULT) {
+        speed *= 0.8f;
+    }
+
     speed *= dt;
 
     if (m_input->IsKeyDown('W')) m_camera->MoveForward(speed);
@@ -515,6 +583,261 @@ XMFLOAT3 Player::CalculateFireDirection()
         XMStoreFloat3(&f, v);
     }
     return f;
+}
+
+// ============================================================================
+// CLASS SYSTEM IMPLEMENTATIONS
+// ============================================================================
+
+void Player::SetClass(PlayerClass classType, Spark::ClassSystem* classSystem)
+{
+    m_playerClass = classType;
+    m_classSystem = classSystem;
+
+    if (classSystem) {
+        const auto& def = classSystem->GetClassDefinition(classType);
+        ApplyClassStats(def);
+        LOG_TO_CONSOLE_IMMEDIATE(
+            L"Player class set to: " + std::wstring(def.name.begin(), def.name.end()),
+            L"SUCCESS");
+    }
+}
+
+void Player::ApplyClassStats(const Spark::ClassDefinition& classDef)
+{
+    // Apply base stats
+    m_maxHealth = classDef.baseHealth;
+    m_health = m_maxHealth;
+    m_maxArmor = classDef.baseArmor + 100.0f; // Armor is pickup-based, set cap
+    m_armor = classDef.baseArmor;
+    m_maxShield = classDef.baseShield;
+    m_shield = m_maxShield;
+    m_shieldRechargeRate = classDef.shieldRechargeRate;
+    m_shieldRechargeDelay = classDef.shieldRechargeDelay;
+    m_speed = classDef.baseSpeed;
+    m_jumpHeight = classDef.baseJumpHeight;
+    m_maxStamina = classDef.baseStamina;
+    m_stamina = m_maxStamina;
+    m_sprintMultiplier = classDef.sprintMultiplier;
+    m_crouchMultiplier = classDef.crouchMultiplier;
+    m_adsSpeedMultiplier = classDef.adsSpeedMultiplier;
+    m_damageResistance = classDef.damageResistance;
+    m_explosiveResistance = classDef.explosiveResistance;
+
+    // Apply loadout
+    m_loadout = classDef.loadout;
+    m_allowedWeapons = classDef.allowedWeapons;
+
+    // Equip primary weapon
+    m_activeLoadoutSlot = 0;
+    ChangeWeapon(m_loadout.primary.weapon);
+
+    // Setup abilities
+    m_primaryAbility = classDef.primaryAbility;
+    m_primaryAbility.Reset();
+    m_secondaryAbility = classDef.secondaryAbility;
+    m_secondaryAbility.Reset();
+
+    // Reset class-specific state
+    m_jetpackActive = false;
+    m_jetpackFuel = m_jetpackMaxFuel;
+    m_cloakActive = false;
+    m_overshieldHP = 0.0f;
+    m_lockedDown = false;
+    m_energy = m_maxEnergy;
+}
+
+bool Player::ActivatePrimaryAbility()
+{
+    if (m_primaryAbility.Activate(m_energy)) {
+        m_energy -= m_primaryAbility.energyCost;
+
+        // Class-specific activation logic
+        switch (m_primaryAbility.type) {
+        case ClassAbility::JETPACK:
+            m_jetpackActive = true;
+            m_jetpackFuel = m_jetpackMaxFuel;
+            break;
+        case ClassAbility::CLOAK:
+            m_cloakActive = true;
+            break;
+        case ClassAbility::OVERSHIELD:
+            m_overshieldHP = m_overshieldMaxHP;
+            break;
+        case ClassAbility::LOCKDOWN:
+            m_lockedDown = true;
+            break;
+        default:
+            break;
+        }
+
+        LOG_TO_CONSOLE(L"Primary ability activated: " +
+            std::wstring(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type),
+                Spark::ClassSystem::GetAbilityName(m_primaryAbility.type) +
+                strlen(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type))),
+            L"INFO");
+        return true;
+    }
+    return false;
+}
+
+bool Player::ActivateSecondaryAbility()
+{
+    if (m_secondaryAbility.Activate(m_energy)) {
+        m_energy -= m_secondaryAbility.energyCost;
+
+        // Class-specific secondary activation
+        switch (m_secondaryAbility.type) {
+        case ClassAbility::EMERGENCY_REPAIR:
+            // MAX self-repair: restore 50% health
+            Heal(m_maxHealth * 0.5f);
+            break;
+        case ClassAbility::HEAL_AURA:
+            // Medic heal aura: heal self (allies would be handled by game logic)
+            Heal(30.0f);
+            break;
+        default:
+            break;
+        }
+
+        LOG_TO_CONSOLE(L"Secondary ability activated", L"INFO");
+        return true;
+    }
+    return false;
+}
+
+void Player::DeactivatePrimaryAbility()
+{
+    if (m_primaryAbility.isActive) {
+        m_primaryAbility.Deactivate();
+        m_jetpackActive = false;
+        m_cloakActive = false;
+        m_lockedDown = false;
+    }
+}
+
+bool Player::CanEquipWeapon(WeaponType type) const
+{
+    if (m_allowedWeapons.empty()) return true; // No restrictions
+    for (auto w : m_allowedWeapons) {
+        if (w == type) return true;
+    }
+    return false;
+}
+
+void Player::EquipPrimary()
+{
+    m_activeLoadoutSlot = 0;
+    ChangeWeapon(m_loadout.primary.weapon);
+}
+
+void Player::EquipSecondary()
+{
+    m_activeLoadoutSlot = 1;
+    ChangeWeapon(m_loadout.secondary.weapon);
+}
+
+void Player::EquipSidearm()
+{
+    m_activeLoadoutSlot = 2;
+    ChangeWeapon(m_loadout.sidearm.weapon);
+}
+
+void Player::EquipTool()
+{
+    if (m_loadout.tool.weapon != WeaponType::PISTOL || m_activeLoadoutSlot == 3) {
+        m_activeLoadoutSlot = 3;
+        ChangeWeapon(m_loadout.tool.weapon);
+    }
+}
+
+void Player::UpdateClassMechanics(float dt)
+{
+    // Shield recharge (PlanetSide 2 style)
+    m_shieldRechargeTimer += dt;
+    if (m_shieldRechargeTimer >= m_shieldRechargeDelay && m_shield < m_maxShield) {
+        m_shield = std::min(m_maxShield, m_shield + m_shieldRechargeRate * dt);
+    }
+
+    // Energy regeneration
+    m_energy = std::min(m_maxEnergy, m_energy + m_energyRegenRate * dt);
+
+    // Update ability cooldowns
+    m_primaryAbility.Update(dt);
+    m_secondaryAbility.Update(dt);
+
+    // Class-specific passive: Combat Medic health regen
+    if (m_playerClass == PlayerClass::COMBAT_MEDIC && m_health < m_maxHealth) {
+        m_health = std::min(m_maxHealth, m_health + 2.0f * dt);
+    }
+
+    // Class-specific updates
+    switch (m_playerClass) {
+    case PlayerClass::LIGHT_ASSAULT:
+        UpdateJetpack(dt);
+        break;
+    case PlayerClass::INFILTRATOR:
+        UpdateCloak(dt);
+        break;
+    case PlayerClass::HEAVY_ASSAULT:
+        UpdateOvershield(dt);
+        break;
+    case PlayerClass::MAX_SUIT:
+        // Lockdown: deactivate when ability ends
+        if (m_lockedDown && !m_primaryAbility.isActive) {
+            m_lockedDown = false;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+void Player::UpdateJetpack(float dt)
+{
+    if (m_jetpackActive && m_jetpackFuel > 0.0f) {
+        // Apply upward thrust
+        m_velocity.y = m_jetpackThrust;
+        m_isGrounded = false;
+        m_jetpackFuel -= 25.0f * dt; // Fuel consumption
+        if (m_jetpackFuel <= 0.0f) {
+            m_jetpackFuel = 0.0f;
+            m_jetpackActive = false;
+        }
+    } else if (!m_jetpackActive) {
+        // Recharge fuel when not using jetpack
+        m_jetpackFuel = std::min(m_jetpackMaxFuel, m_jetpackFuel + 15.0f * dt);
+    }
+}
+
+void Player::UpdateCloak(float dt)
+{
+    // Firing decloaks the infiltrator
+    if (m_cloakActive && m_isFiring) {
+        m_cloakActive = false;
+        m_primaryAbility.Deactivate();
+    }
+
+    // Cloak deactivates when ability duration runs out
+    if (!m_primaryAbility.isActive && m_cloakActive) {
+        m_cloakActive = false;
+    }
+}
+
+void Player::UpdateOvershield(float dt)
+{
+    // Overshield decays slowly
+    if (m_overshieldHP > 0.0f && m_primaryAbility.isActive) {
+        m_overshieldHP -= 5.0f * dt; // Slow decay
+        if (m_overshieldHP <= 0.0f) {
+            m_overshieldHP = 0.0f;
+        }
+    }
+
+    // Overshield disappears when ability ends
+    if (!m_primaryAbility.isActive) {
+        m_overshieldHP = 0.0f;
+    }
 }
 
 // ============================================================================
@@ -689,6 +1012,10 @@ Player::PlayerState Player::GetStateThreadSafe() const
     state.maxArmor = m_maxArmor;
     state.stamina = m_stamina;
     state.maxStamina = m_maxStamina;
+    state.shield = m_shield;
+    state.maxShield = m_maxShield;
+    state.energy = m_energy;
+    state.maxEnergy = m_maxEnergy;
     state.position = GetPosition();
     state.velocity = m_velocity;
     state.currentWeapon = m_currentWeapon.Type;
@@ -706,5 +1033,9 @@ Player::PlayerState Player::GetStateThreadSafe() const
     state.reloadTimer = m_reloadTimer;
     state.speed = m_speed;
     state.jumpHeight = m_jumpHeight;
+    state.playerClass = m_playerClass;
+    state.activeLoadoutSlot = m_activeLoadoutSlot;
+    state.primaryAbilityActive = m_primaryAbility.isActive;
+    state.secondaryAbilityActive = m_secondaryAbility.isActive;
     return state;
 }
