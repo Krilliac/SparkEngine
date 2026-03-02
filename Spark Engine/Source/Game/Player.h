@@ -13,6 +13,7 @@
 
 #include "GameObject.h"
 #include "ClassSystem.h"
+#include "GravitySystem.h"
 #include "Utils/Assert.h"
 #include "..\Camera\SparkEngineCamera.h"
 #include "..\Input\InputManager.h"
@@ -23,9 +24,12 @@
 #include <mutex>
 #include <functional>
 
-// Forward declarations for console integration
+// Forward declarations
 namespace Spark {
     class SimpleConsole;
+    class Vehicle;
+    class GravitySystem;
+    class InteractionSystem;
 }
 
 /**
@@ -386,6 +390,72 @@ public:
     int GetActiveLoadoutSlot() const { return m_activeLoadoutSlot; }
 
     // ============================================================================
+    // VEHICLE SYSTEM INTEGRATION
+    // ============================================================================
+
+    /**
+     * @brief Enter a vehicle
+     * @param vehicle The vehicle to enter
+     * @param seatIndex Preferred seat (-1 for first available)
+     * @return true if successfully entered
+     */
+    bool EnterVehicle(Spark::Vehicle* vehicle, int seatIndex = -1);
+
+    /**
+     * @brief Exit the current vehicle
+     * @return true if successfully exited
+     */
+    bool ExitVehicle();
+
+    /**
+     * @brief Check if the player is currently in a vehicle
+     */
+    bool IsInVehicle() const { return m_currentVehicle != nullptr; }
+
+    /**
+     * @brief Get the current vehicle (null if not in one)
+     */
+    Spark::Vehicle* GetCurrentVehicle() const { return m_currentVehicle; }
+
+    /**
+     * @brief Get the seat index in the current vehicle
+     */
+    int GetVehicleSeatIndex() const { return m_vehicleSeatIndex; }
+
+    // ============================================================================
+    // GRAVITY ZONE SUPPORT
+    // ============================================================================
+
+    /**
+     * @brief Set the gravity system for zone-based gravity
+     */
+    void SetGravitySystem(Spark::GravitySystem* gravSystem) { m_gravitySystem = gravSystem; }
+
+    /**
+     * @brief Get the current gravity state
+     */
+    const Spark::GravityState& GetGravityState() const { return m_gravityState; }
+
+    /**
+     * @brief Check if player is in a gravity zone
+     */
+    bool IsInGravityZone() const { return m_gravityState.inZone; }
+
+    /**
+     * @brief Set external velocity (used by jump pads, explosions, etc.)
+     */
+    void SetVelocity(const DirectX::XMFLOAT3& vel) { m_velocity = vel; }
+
+    // ============================================================================
+    // INTERACTION SYSTEM
+    // ============================================================================
+
+    /**
+     * @brief Set the interaction system for use-key interactions
+     */
+    void SetInteractionSystem(Spark::InteractionSystem* interactSystem) { m_interactionSystem = interactSystem; }
+
+    // ============================================================================
     // CONSOLE INTEGRATION METHODS - Full Cross-Code Hooking
     // ============================================================================
 
@@ -586,6 +656,17 @@ private:
     InputManager* m_input{ nullptr };            ///< Reference to input manager
     ProjectilePool* m_projectilePool{ nullptr }; ///< Reference to projectile pool
     std::unique_ptr<ProjectilePool> m_ownedProjectilePool; ///< Owned pool if created by Player
+
+    // Vehicle system
+    Spark::Vehicle* m_currentVehicle{ nullptr }; ///< Vehicle currently occupied (not owned)
+    int m_vehicleSeatIndex{ -1 };                ///< Seat index in current vehicle
+
+    // Gravity zone system
+    Spark::GravitySystem* m_gravitySystem{ nullptr }; ///< Gravity system reference (not owned)
+    Spark::GravityState m_gravityState;               ///< Current gravity state with transitions
+
+    // Interaction system
+    Spark::InteractionSystem* m_interactionSystem{ nullptr }; ///< Interaction system (not owned)
 
     // Collision & animation
     BoundingSphere m_collisionSphere;            ///< Collision bounds for player

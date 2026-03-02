@@ -1,4 +1,6 @@
 ﻿#include "Player.h"
+#include "VehicleSystem.h"
+#include "InteractiveObject.h"
 #include "Utils/Assert.h"
 #include "..\Camera\SparkEngineCamera.h"
 #include "..\Input\InputManager.h"
@@ -391,10 +393,60 @@ void Player::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
     LOG_TO_CONSOLE(L"Player hit world.", L"INFO");
 }
 
-// Input handling - enhanced with class abilities and loadout slots
+// Input handling - enhanced with class abilities, loadout slots, vehicles, and interactions
 void Player::HandleInput(float)
 {
     if (!m_input) return;
+
+    // === VEHICLE CONTROLS ===
+    if (m_currentVehicle) {
+        // E to exit vehicle
+        if (m_input->WasKeyPressed('E')) {
+            ExitVehicle();
+            return;
+        }
+
+        // Driver/pilot controls
+        int seatIdx = m_vehicleSeatIndex;
+        auto& seats = m_currentVehicle->GetDefinition().seats;
+        if (seatIdx >= 0 && seatIdx < (int)seats.size()) {
+            auto role = seats[seatIdx].role;
+            if (role == VehicleSeatRole::DRIVER || role == VehicleSeatRole::PILOT) {
+                float throttle = 0.0f;
+                float steering = 0.0f;
+                if (m_input->IsKeyDown('W')) throttle += 1.0f;
+                if (m_input->IsKeyDown('S')) throttle -= 1.0f;
+                if (m_input->IsKeyDown('A')) steering -= 1.0f;
+                if (m_input->IsKeyDown('D')) steering += 1.0f;
+                m_currentVehicle->SetThrottle(throttle);
+                m_currentVehicle->SetSteering(steering);
+                m_currentVehicle->SetBrake(m_input->IsKeyDown(VK_SPACE));
+
+                // Aerial vertical thrust
+                if (m_currentVehicle->IsAerial()) {
+                    float vThrust = 0.0f;
+                    if (m_input->IsKeyDown(VK_SPACE)) vThrust += 1.0f;
+                    if (m_input->IsKeyDown(VK_LCONTROL)) vThrust -= 1.0f;
+                    m_currentVehicle->SetVerticalThrust(vThrust);
+                }
+            }
+            if (role == VehicleSeatRole::GUNNER || role == VehicleSeatRole::DRIVER) {
+                if (m_input->IsMouseButtonDown(0)) {
+                    m_currentVehicle->FireWeapon(seatIdx);
+                }
+            }
+        }
+        return; // Don't process normal inputs while in vehicle
+    }
+
+    // === INTERACTION (E key) ===
+    if (m_input->WasKeyPressed('E')) {
+        if (m_interactionSystem) {
+            m_interactionSystem->TryInteract(this);
+        }
+    }
+
+    // === NORMAL PLAYER CONTROLS ===
     if (m_input->WasKeyPressed('R')) StartReload();
     if (m_input->IsMouseButtonDown(0)) Fire();
     if (m_input->WasKeyPressed(VK_SPACE)) Jump();
@@ -428,6 +480,9 @@ void Player::HandleInput(float)
 void Player::UpdateMovement(float dt)
 {
     if (!m_camera || !m_input) return;
+
+    // Skip player movement when in vehicle (vehicle handles position)
+    if (m_currentVehicle) return;
 
     // MAX lockdown prevents all movement
     if (m_lockedDown) return;
@@ -528,12 +583,31 @@ void Player::UpdateCollision()
     m_collisionSphere.Center = GetPosition();
 }
 
-// Apply gravity - **REMOVED PER-FRAME LOGGING**
+// Apply gravity - enhanced with gravity zone support
 void Player::ApplyGravity(float dt)
 {
-    // **ENHANCED: Use console-controlled gravity force**
-    m_velocity.y += m_gravityForce * dt;
-    if (m_velocity.y < -50.0f) m_velocity.y = -50.0f;
+    // Use gravity zone system if available
+    if (m_gravitySystem) {
+        m_gravityState = m_gravitySystem->UpdateObjectGravity(GetPosition(), m_gravityState, dt);
+        XMFLOAT3 gravity = m_gravityState.currentGravity;
+        m_velocity.x += gravity.x * dt;
+        m_velocity.y += gravity.y * dt;
+        m_velocity.z += gravity.z * dt;
+    } else {
+        // Fallback to console-controlled gravity force
+        m_velocity.y += m_gravityForce * dt;
+    }
+
+    // Terminal velocity clamp
+    float velMag = std::sqrt(m_velocity.x * m_velocity.x +
+                             m_velocity.y * m_velocity.y +
+                             m_velocity.z * m_velocity.z);
+    if (velMag > 50.0f) {
+        float scale = 50.0f / velMag;
+        m_velocity.x *= scale;
+        m_velocity.y *= scale;
+        m_velocity.z *= scale;
+    }
 }
 
 // Ground check - **REMOVED PER-FRAME LOGGING**
@@ -838,6 +912,44 @@ void Player::UpdateOvershield(float dt)
     if (!m_primaryAbility.isActive) {
         m_overshieldHP = 0.0f;
     }
+}
+
+// ============================================================================
+// VEHICLE SYSTEM IMPLEMENTATIONS
+// ============================================================================
+
+bool Player::EnterVehicle(Spark::Vehicle* vehicle, int seatIndex)
+{
+    if (!vehicle || m_currentVehicle) return false; // Already in a vehicle
+
+    if (vehicle->EnterSeat(this, seatIndex)) {
+        m_currentVehicle = vehicle;
+        m_vehicleSeatIndex = vehicle->GetPlayerSeatIndex(this);
+        LOG_TO_CONSOLE_IMMEDIATE(L"Player entered vehicle: " +
+            std::wstring(vehicle->GetVehicleName().begin(), vehicle->GetVehicleName().end()),
+            L"SUCCESS");
+        return true;
+    }
+    return false;
+}
+
+bool Player::ExitVehicle()
+{
+    if (!m_currentVehicle) return false;
+
+    XMFLOAT3 exitPos = m_currentVehicle->GetExitPosition(m_vehicleSeatIndex);
+
+    if (m_currentVehicle->ExitSeat(this)) {
+        SetPosition(exitPos);
+        if (m_camera) m_camera->SetPosition(exitPos);
+        m_velocity = {0, 0, 0};
+
+        LOG_TO_CONSOLE_IMMEDIATE(L"Player exited vehicle", L"SUCCESS");
+        m_currentVehicle = nullptr;
+        m_vehicleSeatIndex = -1;
+        return true;
+    }
+    return false;
 }
 
 // ============================================================================

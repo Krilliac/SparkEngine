@@ -159,10 +159,114 @@ HRESULT Game::Initialize(GraphicsEngine* graphics,
     CreateCombatArena();
     LOG_TO_CONSOLE_IMMEDIATE(L"Game initialization complete - class system & combat arena ready", L"SUCCESS");
 
+    /* Vehicle System -----------------------------------*/
+    m_vehicleSystem = std::make_unique<Spark::VehicleSystem>();
+    m_vehicleSystem->Initialize();
+    LOG_TO_CONSOLE_IMMEDIATE(L"Vehicle system initialized (9 vehicle types)", L"SUCCESS");
+
+    /* Gravity System -----------------------------------*/
+    m_gravitySystem = std::make_unique<Spark::GravitySystem>();
+    m_gravitySystem->Initialize({0, -20.0f, 0});
+    m_player->SetGravitySystem(m_gravitySystem.get());
+
+    // Create sample gravity zones for the arena
+    m_gravitySystem->CreateLowGravityZone("LowG_Platform",
+        {20.0f, 5.0f, 20.0f}, {8.0f, 8.0f, 8.0f}, -5.0f);
+    m_gravitySystem->CreateZeroGravityZone("ZeroG_Corridor",
+        {0.0f, 15.0f, 30.0f}, {5.0f, 5.0f, 15.0f});
+    m_gravitySystem->CreateReverseGravityZone("Reverse_Chamber",
+        {-25.0f, 10.0f, 0.0f}, {6.0f, 10.0f, 6.0f}, 12.0f);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Gravity system initialized with 3 sample zones", L"SUCCESS");
+
+    /* Interaction System --------------------------------*/
+    m_interactionSystem = std::make_unique<Spark::InteractionSystem>();
+    m_interactionSystem->Initialize();
+    m_player->SetInteractionSystem(m_interactionSystem.get());
+
+    auto* dev = m_graphics->GetDevice();
+    auto* ctx = m_graphics->GetContext();
+
+    // Doors
+    auto* door1 = m_interactionSystem->SpawnDoor({10.0f, 1.5f, 0.0f}, {0.2f, 3.0f, 2.0f}, dev, ctx);
+    if (door1) door1->SetSlideDirection({0, 1, 0});
+    m_interactionSystem->SpawnDoor({-10.0f, 1.5f, 5.0f}, {0.2f, 3.0f, 2.0f}, dev, ctx);
+
+    // Class change terminals
+    m_interactionSystem->SpawnClassTerminal({0.0f, 0.5f, -15.0f}, m_classSystem.get(), dev, ctx);
+    m_interactionSystem->SpawnClassTerminal({15.0f, 0.5f, 15.0f}, m_classSystem.get(), dev, ctx);
+
+    // Pickups
+    m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::HEALTH_PICKUP,
+        {5.0f, 0.5f, 10.0f}, 50.0f, dev, ctx);
+    m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::ARMOR_PICKUP,
+        {-5.0f, 0.5f, 10.0f}, 50.0f, dev, ctx);
+    m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::AMMO_PICKUP,
+        {0.0f, 0.5f, 20.0f}, 60.0f, dev, ctx);
+    m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::HEALTH_PICKUP,
+        {-15.0f, 0.5f, -10.0f}, 25.0f, dev, ctx);
+
+    // Jump pads
+    m_interactionSystem->SpawnJumpPad({12.0f, 0.1f, 12.0f}, 18.0f, dev, ctx);
+    m_interactionSystem->SpawnJumpPad({-12.0f, 0.1f, -12.0f}, 15.0f, dev, ctx);
+
+    // Teleporter pair
+    m_interactionSystem->SpawnTeleporterPair(
+        {-20.0f, 0.5f, -20.0f}, {20.0f, 0.5f, 20.0f}, dev, ctx);
+
+    // Elevator
+    m_interactionSystem->SpawnElevator(
+        {-8.0f, 0.0f, 0.0f}, {-8.0f, 12.0f, 0.0f}, dev, ctx);
+
+    // Destructible barrels
+    m_interactionSystem->SpawnDestructible({7.0f, 0.5f, -5.0f}, 50.0f, dev, ctx);
+    m_interactionSystem->SpawnDestructible({8.0f, 0.5f, -5.0f}, 50.0f, dev, ctx);
+    m_interactionSystem->SpawnDestructible({7.5f, 1.3f, -5.0f}, 30.0f, dev, ctx);
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Interaction system initialized with arena objects", L"SUCCESS");
+
+    /* Damage Zone System --------------------------------*/
+    m_damageZoneSystem = std::make_unique<Spark::DamageZoneSystem>();
+    m_damageZoneSystem->Initialize();
+    m_damageZoneSystem->CreateLavaZone("Arena_Lava_Pit",
+        {0.0f, -2.0f, 0.0f}, {3.0f, 2.0f, 3.0f});
+    m_damageZoneSystem->CreateVoidZone("Arena_Boundary",
+        {0.0f, -20.0f, 0.0f}, {100.0f, 5.0f, 100.0f});
+    m_damageZoneSystem->CreateElectricZone("Electric_Trap",
+        {15.0f, 0.5f, -15.0f}, {3.0f, 2.0f, 3.0f});
+    LOG_TO_CONSOLE_IMMEDIATE(L"Damage zone system initialized with hazards", L"SUCCESS");
+
+    /* Respawn System ------------------------------------*/
+    m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
+    m_respawnSystem->Initialize();
+
+    Spark::RespawnPoint spawn1; spawn1.name = "North Spawn";
+    spawn1.position = {0.0f, 2.0f, -20.0f}; spawn1.priority = 1;
+    m_respawnSystem->AddSpawnPoint(spawn1);
+
+    Spark::RespawnPoint spawn2; spawn2.name = "South Spawn";
+    spawn2.position = {0.0f, 2.0f, 20.0f}; spawn2.priority = 1;
+    m_respawnSystem->AddSpawnPoint(spawn2);
+
+    Spark::RespawnPoint spawn3; spawn3.name = "East Spawn";
+    spawn3.position = {20.0f, 2.0f, 0.0f};
+    m_respawnSystem->AddSpawnPoint(spawn3);
+
+    Spark::RespawnPoint spawn4; spawn4.name = "West Spawn";
+    spawn4.position = {-20.0f, 2.0f, 0.0f};
+    m_respawnSystem->AddSpawnPoint(spawn4);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Respawn system initialized with 4 spawn points", L"SUCCESS");
+
+    // Spawn initial vehicles in the arena
+    m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::BUGGY, {25.0f, 0.5f, 0.0f}, dev, ctx);
+    m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::MOTORCYCLE, {-25.0f, 0.5f, 0.0f}, dev, ctx);
+    m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::TANK, {0.0f, 0.5f, 25.0f}, dev, ctx);
+    m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::HELICOPTER, {0.0f, 5.0f, -25.0f}, dev, ctx);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Spawned 4 vehicles in combat arena", L"SUCCESS");
+
     /* Register Advanced Console Commands */
     SparkConsole::RegisterAdvancedCommands(this, m_graphics);
-    
-    LOG_TO_CONSOLE_IMMEDIATE(L"Unified graphics system ready - all advanced features integrated", L"SUCCESS");
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"All systems online - vehicles, gravity zones, interactions, damage zones, respawn", L"SUCCESS");
 
     return S_OK;
 }
@@ -175,14 +279,18 @@ void Game::Shutdown()
     LOG_TO_CONSOLE_IMMEDIATE(L"Game::Shutdown called.", L"INFO");
 
     m_gameObjects.clear();
+    m_vehicleSystem.reset();
+    m_interactionSystem.reset();
+    m_damageZoneSystem.reset();
+    m_respawnSystem.reset();
+    m_gravitySystem.reset();
     m_projectilePool.reset();
     m_player.reset();
     m_classSystem.reset();
-    // **UNIFIED SYSTEM: No separate shader cleanup needed**
     m_camera.reset();
     m_sceneManager.reset();
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Game shutdown complete - unified system cleanup.", L"INFO");
+    LOG_TO_CONSOLE_IMMEDIATE(L"Game shutdown complete - all systems cleaned up.", L"INFO");
 }
 
 /*-------------------------------------------------------------
@@ -200,9 +308,16 @@ void Game::Update(float dt)
     UpdateCamera(dt);
     UpdateGameObjects(dt);
 
-    if (m_classSystem)    m_classSystem->Update(dt);
-    if (m_player)         m_player->Update(dt);
-    if (m_projectilePool) m_projectilePool->Update(dt);
+    if (m_classSystem)        m_classSystem->Update(dt);
+    if (m_player)             m_player->Update(dt);
+    if (m_projectilePool)     m_projectilePool->Update(dt);
+
+    // New systems
+    if (m_vehicleSystem)      m_vehicleSystem->Update(dt);
+    if (m_gravitySystem)      m_gravitySystem->Update(dt);
+    if (m_interactionSystem)  m_interactionSystem->Update(dt, m_player.get());
+    if (m_damageZoneSystem)   m_damageZoneSystem->Update(dt, m_player.get());
+    if (m_respawnSystem)      m_respawnSystem->Update(dt);
 
     // **UPDATE: Update advanced systems through main GraphicsEngine**
     if (m_graphics) {
@@ -248,6 +363,24 @@ void Game::Render()
         // Add scene manager objects
         if (m_sceneManager) {
             for (auto& obj : m_sceneManager->GetObjects()) {
+                if (obj && obj->IsActive() && obj->IsVisible()) {
+                    renderableObjects.push_back(obj.get());
+                }
+            }
+        }
+
+        // Add vehicles
+        if (m_vehicleSystem) {
+            for (auto& vehicle : m_vehicleSystem->GetVehicles()) {
+                if (vehicle && vehicle->IsActive() && vehicle->IsVisible()) {
+                    renderableObjects.push_back(vehicle.get());
+                }
+            }
+        }
+
+        // Add interactive objects
+        if (m_interactionSystem) {
+            for (auto& obj : m_interactionSystem->GetObjects()) {
                 if (obj && obj->IsActive() && obj->IsVisible()) {
                     renderableObjects.push_back(obj.get());
                 }
@@ -359,6 +492,15 @@ void Game::HandleInput(float dt)
     // Cycle classes with [ and ]
     if (m_input->WasKeyPressed(VK_OEM_4)) CyclePrevClass();  // [ key
     if (m_input->WasKeyPressed(VK_OEM_6)) CycleNextClass();  // ] key
+
+    // Vehicle enter/exit with V key
+    if (m_input->WasKeyPressed('V')) {
+        if (m_player && m_player->IsInVehicle()) {
+            PlayerExitVehicle();
+        } else {
+            PlayerEnterNearestVehicle();
+        }
+    }
 }
 
 /*-------------------------------------------------------------
@@ -1248,7 +1390,44 @@ void Game::CreateTestScene(const std::string& sceneType)
         CreateTestObjects();
     }
     
-    std::wstring sceneMsg = L"Test scene created: " + std::wstring(sceneType.begin(), sceneType.end()) + 
+    std::wstring sceneMsg = L"Test scene created: " + std::wstring(sceneType.begin(), sceneType.end()) +
                            L" (Total objects: " + std::to_wstring(m_gameObjects.size()) + L")";
     LOG_TO_CONSOLE_IMMEDIATE(sceneMsg, L"SUCCESS");
+}
+
+/*-------------------------------------------------------------
+  Vehicle System Integration
+--------------------------------------------------------------*/
+Spark::Vehicle* Game::SpawnVehicle(SparkEditor::VehicleType type, float x, float y, float z)
+{
+    if (!m_vehicleSystem || !m_graphics) return nullptr;
+    auto* vehicle = m_vehicleSystem->SpawnVehicle(type, {x, y, z},
+        m_graphics->GetDevice(), m_graphics->GetContext());
+    if (vehicle) {
+        std::wstring msg = L"Vehicle spawned: " +
+            std::wstring(vehicle->GetVehicleName().begin(), vehicle->GetVehicleName().end()) +
+            L" at (" + std::to_wstring(x) + L"," + std::to_wstring(y) + L"," + std::to_wstring(z) + L")";
+        LOG_TO_CONSOLE_IMMEDIATE(msg, L"SUCCESS");
+    }
+    return vehicle;
+}
+
+bool Game::PlayerEnterNearestVehicle()
+{
+    if (!m_player || !m_vehicleSystem) return false;
+    if (m_player->IsInVehicle()) return false;
+
+    auto* vehicle = m_vehicleSystem->FindNearestVehicle(m_player->GetPosition(), 5.0f);
+    if (vehicle) {
+        return m_player->EnterVehicle(vehicle);
+    }
+
+    LOG_TO_CONSOLE(L"No vehicle nearby to enter", L"INFO");
+    return false;
+}
+
+bool Game::PlayerExitVehicle()
+{
+    if (!m_player || !m_player->IsInVehicle()) return false;
+    return m_player->ExitVehicle();
 }
