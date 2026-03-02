@@ -15,6 +15,10 @@
 #include "..\Core\framework.h"    // XMFLOAT3, XMMATRIX, HRESULT
 #include "Utils/Assert.h"
 #include "ClassSystem.h"
+#include "VehicleSystem.h"
+#include "GravitySystem.h"
+#include "InteractiveObject.h"
+#include "GameMechanics.h"
 #include <memory>
 #include <vector>
 
@@ -272,6 +276,50 @@ public:
      * @brief Create the enhanced combat arena level
      */
     void CreateCombatArena();
+
+    // ============================================================================
+    // NEW SYSTEMS - Vehicles, Gravity Zones, Interactions, Game Mechanics
+    // ============================================================================
+
+    /**
+     * @brief Get the vehicle system
+     */
+    Spark::VehicleSystem* GetVehicleSystem() const { return m_vehicleSystem.get(); }
+
+    /**
+     * @brief Get the gravity system
+     */
+    Spark::GravitySystem* GetGravitySystem() const { return m_gravitySystem.get(); }
+
+    /**
+     * @brief Get the interaction system
+     */
+    Spark::InteractionSystem* GetInteractionSystem() const { return m_interactionSystem.get(); }
+
+    /**
+     * @brief Get the damage zone system
+     */
+    Spark::DamageZoneSystem* GetDamageZoneSystem() const { return m_damageZoneSystem.get(); }
+
+    /**
+     * @brief Get the respawn system
+     */
+    Spark::RespawnSystem* GetRespawnSystem() const { return m_respawnSystem.get(); }
+
+    /**
+     * @brief Spawn a vehicle at a position
+     */
+    Spark::Vehicle* SpawnVehicle(SparkEditor::VehicleType type, float x, float y, float z);
+
+    /**
+     * @brief Player enters nearest vehicle
+     */
+    bool PlayerEnterNearestVehicle();
+
+    /**
+     * @brief Player exits current vehicle
+     */
+    bool PlayerExitVehicle();
     
     /**
      * @brief Get current scene object count
@@ -380,6 +428,13 @@ private:
     std::unique_ptr<ProjectilePool>    m_projectilePool; ///< Projectile object pool
     std::unique_ptr<SceneManager>      m_sceneManager;  ///< Scene management
     std::unique_ptr<Spark::ClassSystem> m_classSystem;  ///< Class system for loadouts/abilities
+
+    // New systems - Vehicles, Gravity, Interactions, Game Mechanics
+    std::unique_ptr<Spark::VehicleSystem>     m_vehicleSystem;      ///< Vehicle management
+    std::unique_ptr<Spark::GravitySystem>     m_gravitySystem;      ///< Gravity zone system
+    std::unique_ptr<Spark::InteractionSystem> m_interactionSystem;  ///< Interactive objects
+    std::unique_ptr<Spark::DamageZoneSystem>  m_damageZoneSystem;   ///< Environmental hazards
+    std::unique_ptr<Spark::RespawnSystem>     m_respawnSystem;      ///< Respawn & scoring
 
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene

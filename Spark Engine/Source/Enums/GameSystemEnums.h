@@ -283,6 +283,88 @@ enum class ClassAbility {
 };
 
 /**
+ * @brief Vehicle types
+ *
+ * Ground and aerial vehicle classifications.
+ * Each type has distinct handling, speed, and combat characteristics.
+ */
+enum class VehicleType {
+    // Ground vehicles
+    BUGGY = 0,               ///< Light fast attack vehicle, 2 seats
+    TANK = 1,                ///< Heavy armored vehicle with cannon
+    APC = 2,                 ///< Armored personnel carrier, 6 seats
+    MOTORCYCLE = 3,          ///< Fast single-rider ground vehicle
+    TRUCK = 4,               ///< Heavy transport vehicle
+
+    // Aerial vehicles
+    HELICOPTER = 10,         ///< VTOL rotorcraft with weapons
+    JET = 11,                ///< Fixed-wing high-speed aircraft
+    DROPSHIP = 12,           ///< Large troop transport aircraft
+    DRONE = 13,              ///< Small unmanned aerial vehicle
+
+    COUNT
+};
+
+/**
+ * @brief Vehicle seat roles
+ */
+enum class VehicleSeatRole {
+    DRIVER = 0,              ///< Controls vehicle movement
+    GUNNER = 1,              ///< Controls vehicle weapons
+    PASSENGER = 2,           ///< Rides without control
+    PILOT = 3                ///< Controls aerial vehicle
+};
+
+/**
+ * @brief Interactive object types
+ *
+ * Types of interactive objects in the game world.
+ */
+enum class InteractiveObjectType {
+    DOOR = 0,                ///< Openable/closable door
+    TERMINAL = 1,            ///< Class change terminal
+    SWITCH = 2,              ///< Toggleable switch (lights, traps)
+    ELEVATOR = 3,            ///< Vertical transport platform
+    HEALTH_PICKUP = 10,      ///< Health restoration pickup
+    ARMOR_PICKUP = 11,       ///< Armor restoration pickup
+    AMMO_PICKUP = 12,        ///< Ammunition pickup
+    WEAPON_PICKUP = 13,      ///< Weapon pickup
+    SHIELD_PICKUP = 14,      ///< Shield restoration pickup
+    JUMP_PAD = 20,           ///< Launches player upward
+    TELEPORTER = 21,         ///< Teleports player to destination
+    DESTRUCTIBLE = 30,       ///< Breakable object (barrel, crate)
+    VEHICLE_SPAWN = 40       ///< Vehicle spawn pad
+};
+
+/**
+ * @brief Gravity zone types
+ *
+ * Different gravity behavior zones for advanced level design.
+ */
+enum class GravityZoneType {
+    NORMAL = 0,              ///< Standard downward gravity
+    LOW_GRAVITY = 1,         ///< Reduced gravity (moon-like)
+    ZERO_GRAVITY = 2,        ///< No gravity (space)
+    HIGH_GRAVITY = 3,        ///< Increased gravity
+    REVERSE = 4,             ///< Gravity pushes upward
+    DIRECTIONAL = 5,         ///< Custom direction gravity vector
+    RADIAL = 6               ///< Gravity pulls toward a center point
+};
+
+/**
+ * @brief Damage zone types
+ *
+ * Environmental hazard areas that deal damage over time.
+ */
+enum class DamageZoneType {
+    LAVA = 0,                ///< Fire damage, instant kill at high intensity
+    ACID = 1,                ///< Corrosive damage over time
+    ELECTRIC = 2,            ///< Periodic shock damage
+    RADIATION = 3,           ///< Slow constant damage
+    VOID = 4                 ///< Out-of-bounds instant kill
+};
+
+/**
  * @brief Save file types
  *
  * Different types of save data that can be
