@@ -13,6 +13,12 @@ add_executable(SparkTests
     TestObjectPool.cpp
     TestECSWorld.cpp
     TestGameMode.cpp
+    TestNoiseGenerator.cpp
+    TestSaveSystem.cpp
+    TestAIBehaviorTree.cpp
+    TestSequencer.cpp
+    TestMeshLOD.cpp
+    TestInputSystem.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

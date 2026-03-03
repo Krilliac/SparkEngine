@@ -183,6 +183,47 @@ struct AnimationController {
     bool playing = true;
     bool loop = true;
     std::vector<std::string> availableAnimations;
+    void* animInstanceHandle = nullptr;  ///< Opaque handle to Spark::Animation::AnimationInstance
+};
+
+// ============================================================================
+// New Components - AI
+// ============================================================================
+
+struct AIComponent {
+    enum class State { Idle, Patrolling, Alert, Combat, Fleeing, Dead };
+    State state = State::Idle;
+
+    std::string behaviorTreeName;
+    void* behaviorTreeHandle = nullptr;  ///< Opaque handle to BehaviorTree instance
+
+    EntityID targetEntity = entt::null;
+    DirectX::XMFLOAT3 lastKnownTargetPos{0, 0, 0};
+    float timeSinceLastSeen = 0.0f;
+    float alertTimer = 0.0f;
+
+    std::vector<DirectX::XMFLOAT3> currentPath;
+    size_t currentPathIndex = 0;
+
+    struct Config {
+        float detectionRange = 30.0f;
+        float attackRange = 15.0f;
+        float moveSpeed = 5.0f;
+        float reactionTime = 0.5f;
+        float accuracy = 0.7f;
+    } config;
+};
+
+// ============================================================================
+// New Components - Networking
+// ============================================================================
+
+struct NetworkIdentity {
+    uint32_t networkID = 0;           ///< Unique network entity ID
+    uint32_t ownerClientID = 0;       ///< Client that owns this entity
+    bool isLocalAuthority = false;     ///< Whether this client has authority
+    bool replicateTransform = true;
+    bool replicateHealth = true;
 };
 
 // ============================================================================

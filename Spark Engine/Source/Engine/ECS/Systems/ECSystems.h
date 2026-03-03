@@ -104,6 +104,26 @@ private:
 };
 
 /**
+ * @brief Animation update system - ticks skeletal animation instances
+ */
+class AnimationUpdateSystem : public ISystem
+{
+public:
+    void Update(World& world, float deltaTime) override;
+    const char* GetName() const override { return "AnimationUpdateSystem"; }
+};
+
+/**
+ * @brief AI update system - processes AI agents, perception, behavior trees, movement
+ */
+class AIUpdateSystem : public ISystem
+{
+public:
+    void Update(World& world, float deltaTime) override;
+    const char* GetName() const override { return "AIUpdateSystem"; }
+};
+
+/**
  * @brief System manager - owns and updates all ECS systems in order
  */
 class SystemManager
