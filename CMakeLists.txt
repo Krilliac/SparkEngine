@@ -54,6 +54,15 @@ option(ENABLE_LIGHTING_SYSTEM "Enable advanced lighting" ON)
 option(ENABLE_ADVANCED_INPUT "Enable advanced input features" ON)
 option(ENABLE_VULKAN "Enable Vulkan graphics backend" ON)
 option(ENABLE_OPENGL "Enable OpenGL graphics backend" ON)
+option(ENABLE_AI "Enable AI and navigation systems" ON)
+option(ENABLE_ANIMATION "Enable skeletal animation system" ON)
+option(ENABLE_SAVE_SYSTEM "Enable save/load system" ON)
+option(ENABLE_PROCEDURAL "Enable procedural generation" ON)
+option(ENABLE_CINEMATIC "Enable cinematic sequencer" ON)
+option(ENABLE_DECALS "Enable decal system" ON)
+option(ENABLE_MESH_LOD "Enable mesh LOD system" ON)
+option(ENABLE_DXR "Enable DirectX Raytracing support" OFF)  # Requires D3D12, disabled by default
+option(ENABLE_SDL2 "Enable SDL2 cross-platform input" OFF)  # Requires SDL2 library
 
 # ---------------------------------------------------------------------
 # 4) C++ standard and in-source build guard
@@ -540,6 +549,49 @@ if(SPARK_OPENGL_AVAILABLE)
     list(APPEND FEATURE_DEFINITIONS "OPENGL_BACKEND_AVAILABLE")
 endif()
 
+if(ENABLE_AI)
+    list(APPEND FEATURE_DEFINITIONS "AI_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_ANIMATION)
+    list(APPEND FEATURE_DEFINITIONS "ANIMATION_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_SAVE_SYSTEM)
+    list(APPEND FEATURE_DEFINITIONS "SAVE_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_PROCEDURAL)
+    list(APPEND FEATURE_DEFINITIONS "PROCEDURAL_GENERATION_ENABLED")
+endif()
+
+if(ENABLE_CINEMATIC)
+    list(APPEND FEATURE_DEFINITIONS "CINEMATIC_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_DECALS)
+    list(APPEND FEATURE_DEFINITIONS "DECAL_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_MESH_LOD)
+    list(APPEND FEATURE_DEFINITIONS "MESH_LOD_ENABLED")
+endif()
+
+if(ENABLE_DXR)
+    list(APPEND FEATURE_DEFINITIONS "DXR_ENABLED")
+endif()
+
+if(ENABLE_SDL2)
+    list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
+    find_package(SDL2 QUIET)
+    if(SDL2_FOUND)
+        target_link_libraries(SparkEngine PRIVATE SDL2::SDL2)
+        message(STATUS "SDL2 found and linked")
+    else()
+        message(STATUS "SDL2 not found - SDL2 input backend unavailable")
+    endif()
+endif()
+
 # Apply feature definitions to target
 if(FEATURE_DEFINITIONS)
     target_compile_definitions(SparkEngine PRIVATE ${FEATURE_DEFINITIONS})
@@ -588,3 +640,13 @@ else()
     message(STATUS "  OpenGL     : DISABLED")
 endif()
 message(STATUS "Networking: ${ENABLE_NETWORKING}")
+message(STATUS "New Systems:")
+message(STATUS "  AI/NavMesh     : ${ENABLE_AI}")
+message(STATUS "  Animation      : ${ENABLE_ANIMATION}")
+message(STATUS "  Save System    : ${ENABLE_SAVE_SYSTEM}")
+message(STATUS "  Procedural Gen : ${ENABLE_PROCEDURAL}")
+message(STATUS "  Cinematic      : ${ENABLE_CINEMATIC}")
+message(STATUS "  Decals         : ${ENABLE_DECALS}")
+message(STATUS "  Mesh LOD       : ${ENABLE_MESH_LOD}")
+message(STATUS "  DXR RayTracing : ${ENABLE_DXR}")
+message(STATUS "  SDL2 Input     : ${ENABLE_SDL2}")

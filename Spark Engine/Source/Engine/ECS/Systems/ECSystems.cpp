@@ -114,6 +114,72 @@ void LifecycleSystem::Update(World& world, float deltaTime)
 }
 
 // ============================================================================
+// AnimationUpdateSystem
+// ============================================================================
+
+void AnimationUpdateSystem::Update(World& world, float deltaTime)
+{
+    auto view = world.GetEntitiesWith<Transform, AnimationController>();
+    for (auto entity : view)
+    {
+        auto& anim = view.get<AnimationController>(entity);
+        if (!anim.playing) continue;
+
+        // Advance animation time
+        anim.currentTime += deltaTime * anim.playbackSpeed;
+
+        // If an animation instance handle exists, the AnimationManager
+        // handles evaluation. Otherwise, update time for simple playback.
+        if (anim.animInstanceHandle) {
+            // AnimationManager::GetInstance().Update() handles this externally
+        }
+    }
+}
+
+// ============================================================================
+// AIUpdateSystem
+// ============================================================================
+
+void AIUpdateSystem::Update(World& world, float deltaTime)
+{
+    auto view = world.GetEntitiesWith<Transform, AIComponent>();
+    for (auto entity : view)
+    {
+        auto& transform = view.get<Transform>(entity);
+        auto& ai = view.get<AIComponent>(entity);
+
+        // Skip dead agents
+        auto* health = world.GetComponent<HealthComponent>(entity);
+        if (health && health->isDead) {
+            ai.state = AIComponent::State::Dead;
+            continue;
+        }
+
+        // Path following
+        if (!ai.currentPath.empty() && ai.currentPathIndex < ai.currentPath.size()) {
+            const auto& target = ai.currentPath[ai.currentPathIndex];
+            float dx = target.x - transform.position.x;
+            float dz = target.z - transform.position.z;
+            float distSq = dx * dx + dz * dz;
+
+            if (distSq < 0.25f) {  // Waypoint reached
+                ai.currentPathIndex++;
+                if (ai.currentPathIndex >= ai.currentPath.size()) {
+                    ai.currentPath.clear();
+                    ai.currentPathIndex = 0;
+                }
+            } else {
+                float dist = std::sqrt(distSq);
+                float speed = ai.config.moveSpeed * deltaTime;
+                transform.position.x += (dx / dist) * speed;
+                transform.position.z += (dz / dist) * speed;
+                transform.rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+            }
+        }
+    }
+}
+
+// ============================================================================
 // SystemManager Console Integration
 // ============================================================================
 
