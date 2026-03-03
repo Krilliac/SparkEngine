@@ -10,6 +10,10 @@
 #include <chrono>
 #include <thread>
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 namespace SparkEditor {
 
 EngineInterface::EngineInterface()
@@ -89,7 +93,7 @@ void EngineInterface::Update(float deltaTime)
         m_currentMetrics.gpuTime = 5.0f + (rand() % 8); // 5-12ms
         
         // Simulate memory usage fluctuation
-        m_currentMetrics.memoryUsage += (rand() % 2048 - 1024) * 1024; // ±1MB
+        m_currentMetrics.memoryUsage += (rand() % 2048 - 1024) * 1024; // ï¿½1MB
         if (m_currentMetrics.memoryUsage < 256 * 1024 * 1024) {
             m_currentMetrics.memoryUsage = 256 * 1024 * 1024;
         }
@@ -295,36 +299,218 @@ void EngineInterface::HandleConnectionEvents()
     }
 }
 
+// Helper: write a uint32 in little-endian into a byte buffer
+static void WriteU32(std::vector<uint8_t>& buf, uint32_t value) {
+    buf.push_back(static_cast<uint8_t>(value & 0xFF));
+    buf.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+    buf.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
+    buf.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+}
+
+// Helper: write a uint64 in little-endian into a byte buffer
+static void WriteU64(std::vector<uint8_t>& buf, uint64_t value) {
+    for (int i = 0; i < 8; ++i) {
+        buf.push_back(static_cast<uint8_t>((value >> (i * 8)) & 0xFF));
+    }
+}
+
+// Helper: write a length-prefixed string into a byte buffer
+static void WriteString(std::vector<uint8_t>& buf, const std::string& str) {
+    WriteU32(buf, static_cast<uint32_t>(str.size()));
+    buf.insert(buf.end(), str.begin(), str.end());
+}
+
+// Helper: read a uint32 from a byte buffer at the given offset
+static uint32_t ReadU32(const std::vector<uint8_t>& buf, size_t& offset) {
+    if (offset + 4 > buf.size()) return 0;
+    uint32_t value = 0;
+    for (int i = 0; i < 4; ++i) {
+        value |= static_cast<uint32_t>(buf[offset + i]) << (i * 8);
+    }
+    offset += 4;
+    return value;
+}
+
+// Helper: read a uint64 from a byte buffer at the given offset
+static uint64_t ReadU64(const std::vector<uint8_t>& buf, size_t& offset) {
+    if (offset + 8 > buf.size()) return 0;
+    uint64_t value = 0;
+    for (int i = 0; i < 8; ++i) {
+        value |= static_cast<uint64_t>(buf[offset + i]) << (i * 8);
+    }
+    offset += 8;
+    return value;
+}
+
+// Helper: read a length-prefixed string from a byte buffer
+static std::string ReadString(const std::vector<uint8_t>& buf, size_t& offset) {
+    uint32_t len = ReadU32(buf, offset);
+    if (offset + len > buf.size()) return "";
+    std::string str(buf.begin() + offset, buf.begin() + offset + len);
+    offset += len;
+    return str;
+}
+
 bool EngineInterface::SerializeCommand(const EngineCommand& command, std::vector<uint8_t>& buffer)
 {
-    // TODO: Implement proper binary serialization
+    // Binary message format:
+    //   [4 bytes] magic (0x53504B43 = "SPKC")
+    //   [4 bytes] command type (uint32)
+    //   [8 bytes] command ID (uint64)
+    //   [8 bytes] timestamp (uint64)
+    //   [string]  targetObjectID  (length-prefixed)
+    //   [string]  componentType   (length-prefixed)
+    //   [4 bytes] parameter count
+    //   for each parameter:
+    //     [string] key
+    //     [string] value
+    //   [4 bytes] binary data length
+    //   [N bytes] binary data payload
+
     buffer.clear();
-    buffer.resize(1024); // Placeholder size
+    buffer.reserve(512);
+
+    // Magic header
+    WriteU32(buffer, 0x53504B43);
+
+    WriteU32(buffer, static_cast<uint32_t>(command.type));
+    WriteU64(buffer, command.commandID);
+    WriteU64(buffer, command.timestamp);
+    WriteString(buffer, command.targetObjectID);
+    WriteString(buffer, command.componentType);
+
+    // Parameters
+    WriteU32(buffer, static_cast<uint32_t>(command.parameters.size()));
+    for (const auto& [key, value] : command.parameters) {
+        WriteString(buffer, key);
+        WriteString(buffer, value);
+    }
+
+    // Binary payload
+    WriteU32(buffer, static_cast<uint32_t>(command.binaryData.size()));
+    buffer.insert(buffer.end(), command.binaryData.begin(), command.binaryData.end());
+
     return true;
 }
 
 bool EngineInterface::DeserializeEvent(const std::vector<uint8_t>& buffer, EngineEvent& event)
 {
-    // TODO: Implement proper binary deserialization
+    // Binary message format (mirrors serialization):
+    //   [4 bytes] magic (0x53504B45 = "SPKE")
+    //   [4 bytes] event type (uint32)
+    //   [8 bytes] event ID (uint64)
+    //   [8 bytes] timestamp (uint64)
+    //   [4 bytes] severity (int32)
+    //   [string]  sourceObjectID
+    //   [string]  message
+    //   [4 bytes] data count
+    //   for each data entry:
+    //     [string] key
+    //     [string] value
+    //   [4 bytes] binary data length
+    //   [N bytes] binary data payload
+
+    if (buffer.size() < 4) return false;
+
+    size_t offset = 0;
+    uint32_t magic = ReadU32(buffer, offset);
+    if (magic != 0x53504B45) {
+        std::cout << "DeserializeEvent: invalid magic number\n";
+        return false;
+    }
+
+    event.type = static_cast<EngineEventType>(ReadU32(buffer, offset));
+    event.eventID = ReadU64(buffer, offset);
+    event.timestamp = ReadU64(buffer, offset);
+    event.severity = static_cast<int>(ReadU32(buffer, offset));
+    event.sourceObjectID = ReadString(buffer, offset);
+    event.message = ReadString(buffer, offset);
+
+    uint32_t dataCount = ReadU32(buffer, offset);
+    event.data.clear();
+    for (uint32_t i = 0; i < dataCount; ++i) {
+        std::string key = ReadString(buffer, offset);
+        std::string value = ReadString(buffer, offset);
+        event.data[key] = value;
+    }
+
+    uint32_t binaryLen = ReadU32(buffer, offset);
+    if (offset + binaryLen <= buffer.size()) {
+        event.binaryData.assign(buffer.begin() + offset, buffer.begin() + offset + binaryLen);
+        offset += binaryLen;
+    }
+
     return true;
 }
 
 bool EngineInterface::CreateNamedPipe()
 {
     std::cout << "Creating named pipe: " << m_pipeName << "\n";
-    
-    // TODO: Implement actual named pipe creation using Win32 API
-    // For now, just simulate success
+
+#ifdef _WIN32
+    std::string fullPipeName = "\\\\.\\pipe\\" + m_pipeName;
+
+    HANDLE hPipe = ::CreateNamedPipeA(
+        fullPipeName.c_str(),
+        PIPE_ACCESS_DUPLEX,                          // read/write access
+        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT, // message-type pipe
+        1,                                           // max instances
+        4096,                                        // output buffer size
+        4096,                                        // input buffer size
+        0,                                           // default timeout
+        nullptr                                      // default security
+    );
+
+    if (hPipe == INVALID_HANDLE_VALUE) {
+        std::cerr << "CreateNamedPipe failed with error " << GetLastError() << "\n";
+        return false;
+    }
+
+    m_pipeHandle = static_cast<void*>(hPipe);
+    std::cout << "Named pipe created successfully\n";
     return true;
+#else
+    // Named pipes are a Windows-specific concept; on other platforms a
+    // UNIX domain socket or other IPC mechanism would be used instead.
+    std::cout << "Named pipes are only supported on Windows\n";
+    return false;
+#endif
 }
 
 bool EngineInterface::ConnectToNamedPipe()
 {
     std::cout << "Connecting to named pipe: " << m_pipeName << "\n";
-    
-    // TODO: Implement actual named pipe connection using Win32 API
-    // For now, just simulate success
+
+#ifdef _WIN32
+    if (!m_pipeHandle) {
+        std::cerr << "ConnectToNamedPipe: pipe handle is null, create the pipe first\n";
+        return false;
+    }
+
+    HANDLE hPipe = static_cast<HANDLE>(m_pipeHandle);
+
+    // Wait for a client to connect to the pipe.  ConnectNamedPipe returns
+    // TRUE when a new client connects, or FALSE if the client connected
+    // between CreateNamedPipe and ConnectNamedPipe (in which case
+    // GetLastError() == ERROR_PIPE_CONNECTED and we treat it as success).
+    BOOL connected = ::ConnectNamedPipe(hPipe, nullptr);
+    if (!connected) {
+        DWORD err = GetLastError();
+        if (err == ERROR_PIPE_CONNECTED) {
+            // Client connected between Create and Connect -- that is fine.
+            std::cout << "Client already connected to pipe\n";
+            return true;
+        }
+        std::cerr << "ConnectNamedPipe failed with error " << err << "\n";
+        return false;
+    }
+
+    std::cout << "Client connected to named pipe successfully\n";
     return true;
+#else
+    std::cout << "Named pipes are only supported on Windows\n";
+    return false;
+#endif
 }
 
 uint64_t EngineInterface::GenerateCommandID()

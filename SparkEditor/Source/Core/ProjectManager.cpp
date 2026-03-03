@@ -9,6 +9,9 @@
 #include <iostream>
 #include <filesystem>
 #include <fstream>
+#include <chrono>
+#include <string>
+#include <iterator>
 
 namespace SparkEditor {
 
@@ -117,14 +120,51 @@ void ProjectManager::AddToRecentProjects(const std::string& projectPath)
 bool ProjectManager::LoadProjectSettings(const std::string& projectPath)
 {
     std::string settingsFile = projectPath + "/project.json";
-    
-    // For now, just create a basic project info
-    // TODO: Implement proper JSON loading
-    m_currentProject.name = std::filesystem::path(projectPath).filename().string();
+
+    std::ifstream file(settingsFile);
+    if (!file.is_open()) {
+        // Fall back to defaults when no project.json exists yet
+        std::cerr << "Could not open " << settingsFile << ", using defaults\n";
+        m_currentProject.name = std::filesystem::path(projectPath).filename().string();
+        m_currentProject.path = projectPath;
+        m_currentProject.version = "1.0.0";
+        m_currentProject.description = "Loaded project";
+        return true;
+    }
+
+    // Read the entire file
+    std::string content((std::istreambuf_iterator<char>(file)),
+                         std::istreambuf_iterator<char>());
+    file.close();
+
+    // Simple JSON value extractor for string fields
+    auto extractValue = [&](const std::string& key) -> std::string {
+        std::string search = "\"" + key + "\"";
+        size_t pos = content.find(search);
+        if (pos == std::string::npos) return "";
+        pos = content.find(':', pos);
+        if (pos == std::string::npos) return "";
+        pos = content.find('\"', pos + 1);
+        if (pos == std::string::npos) return "";
+        size_t end = content.find('\"', pos + 1);
+        if (end == std::string::npos) return "";
+        return content.substr(pos + 1, end - pos - 1);
+    };
+
+    std::string name = extractValue("name");
+    std::string version = extractValue("version");
+    std::string description = extractValue("description");
+
+    m_currentProject.name = name.empty()
+        ? std::filesystem::path(projectPath).filename().string()
+        : name;
     m_currentProject.path = projectPath;
-    m_currentProject.version = "1.0.0";
-    m_currentProject.description = "Loaded project";
-    
+    m_currentProject.version = version.empty() ? "1.0.0" : version;
+    m_currentProject.description = description.empty() ? "Loaded project" : description;
+
+    std::cout << "Loaded project settings: " << m_currentProject.name
+              << " v" << m_currentProject.version << "\n";
+
     return true;
 }
 
@@ -139,11 +179,15 @@ bool ProjectManager::SaveProjectSettings()
             return false;
         }
         
-        // Write basic JSON (TODO: Use proper JSON library)
+        // Write project settings as JSON
+        m_currentProject.lastModified = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+
         file << "{\n";
         file << "  \"name\": \"" << m_currentProject.name << "\",\n";
         file << "  \"version\": \"" << m_currentProject.version << "\",\n";
-        file << "  \"description\": \"" << m_currentProject.description << "\"\n";
+        file << "  \"description\": \"" << m_currentProject.description << "\",\n";
+        file << "  \"lastModified\": " << m_currentProject.lastModified << "\n";
         file << "}\n";
         
         file.close();

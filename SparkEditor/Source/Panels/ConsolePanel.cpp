@@ -20,6 +20,11 @@
 
 namespace SparkEditor {
 
+// File-scope state for the export dialog
+static bool s_showExportDialog = false;
+static char s_exportPathBuffer[512] = "console_export.txt";
+static int  s_exportFormatIndex = 0; // 0 = txt, 1 = csv
+
 ConsolePanel::ConsolePanel() : EditorPanel("Engine Console", "EngineConsole") {
     SetTitle("Engine Console");
     m_filter.enableAllCategories = true;
@@ -78,6 +83,34 @@ void ConsolePanel::Render() {
     RenderFilterControls();
     RenderLogDisplay();
     // RenderStats(); // If implemented
+
+    // Export dialog (modal popup for file save)
+    if (s_showExportDialog) {
+        ImGui::OpenPopup("Export Log");
+        s_showExportDialog = false;
+    }
+    if (ImGui::BeginPopupModal("Export Log", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Export console log to file");
+        ImGui::Separator();
+
+        ImGui::InputText("File Path", s_exportPathBuffer, sizeof(s_exportPathBuffer));
+
+        const char* formats[] = { "Text (.txt)", "CSV (.csv)" };
+        ImGui::Combo("Format", &s_exportFormatIndex, formats, IM_ARRAYSIZE(formats));
+
+        ImGui::Separator();
+        if (ImGui::Button("Export", ImVec2(120, 0))) {
+            std::string format = (s_exportFormatIndex == 1) ? "csv" : "txt";
+            ExportLog(std::string(s_exportPathBuffer), format);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
     EndPanel();
 }
 
@@ -321,12 +354,29 @@ void ConsolePanel::RenderContextMenu() {
         }
         
         if (ImGui::MenuItem("Copy All")) {
-            // TODO: Copy all visible entries to clipboard
+            // Build a single string from all visible (filtered) log entries
+            std::string allText;
+            allText.reserve(m_filteredIndices.size() * 128);
+            for (size_t idx : m_filteredIndices) {
+                if (idx >= m_logEntries.size()) continue;
+                const auto& entry = m_logEntries[idx];
+                allText += "[";
+                allText += FormatTimestamp(entry.timestamp);
+                allText += "] ";
+                allText += LogLevelToString(entry.level);
+                allText += " ";
+                allText += LogCategoryToString(entry.category);
+                allText += ": ";
+                allText += entry.message;
+                allText += "\n";
+            }
+            ImGui::SetClipboardText(allText.c_str());
         }
         
         if (ImGui::MenuItem("Export...")) {
-            // TODO: Show export dialog
-            ExportLog("console_export.txt");
+            // Show a simple export dialog via an ImGui popup.
+            // We open a modal that lets the user pick a filename and format.
+            s_showExportDialog = true;
         }
         
         ImGui::Separator();

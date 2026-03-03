@@ -214,7 +214,32 @@ std::optional<RecoveryData> EditorCrashHandler::LoadRecoveryData() {
                     data.lastSavedScene = line.substr(start, end - start);
                 }
             }
-            // TODO: Parse arrays properly for openFiles and recentOperations
+            // Parse JSON arrays for openFiles and recentOperations
+            else if (line.find("\"openFiles\"") != std::string::npos) {
+                // Read array entries until the closing bracket
+                std::string arrayLine;
+                while (std::getline(file, arrayLine)) {
+                    // Check for end of array
+                    if (arrayLine.find(']') != std::string::npos) break;
+                    // Extract the quoted value from lines like:   "some/path"
+                    size_t qStart = arrayLine.find('\"');
+                    if (qStart == std::string::npos) continue;
+                    size_t qEnd = arrayLine.find('\"', qStart + 1);
+                    if (qEnd == std::string::npos) continue;
+                    data.openFiles.push_back(arrayLine.substr(qStart + 1, qEnd - qStart - 1));
+                }
+            }
+            else if (line.find("\"recentOperations\"") != std::string::npos) {
+                std::string arrayLine;
+                while (std::getline(file, arrayLine)) {
+                    if (arrayLine.find(']') != std::string::npos) break;
+                    size_t qStart = arrayLine.find('\"');
+                    if (qStart == std::string::npos) continue;
+                    size_t qEnd = arrayLine.find('\"', qStart + 1);
+                    if (qEnd == std::string::npos) continue;
+                    data.recentOperations.push_back(arrayLine.substr(qStart + 1, qEnd - qStart - 1));
+                }
+            }
         }
         
         file.close();

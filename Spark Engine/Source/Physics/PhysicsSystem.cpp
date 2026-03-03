@@ -1,6 +1,6 @@
 /**
  * @file PhysicsSystem.cpp
- * @brief Implementation of complete physics integration system
+ * @brief Implementation of complete physics integration system using Bullet Physics
  * @author Spark Engine Team
  * @date 2025
  */
@@ -8,6 +8,10 @@
 #include "PhysicsSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
+
+#include <btBulletDynamicsCommon.h>
+#include <BulletCollision/CollisionDispatch/btGhostObject.h>
+
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -16,7 +20,169 @@
 using namespace DirectX;
 
 // ============================================================================
-// PHYSICS BODY IMPLEMENTATION (Stub for now)
+// BULLET CONVERSION HELPERS
+// ============================================================================
+
+btVector3 PhysicsSystem::ToBullet(const XMFLOAT3& vec) const
+{
+    return btVector3(vec.x, vec.y, vec.z);
+}
+
+XMFLOAT3 PhysicsSystem::FromBullet(const btVector3& vec) const
+{
+    return XMFLOAT3(vec.getX(), vec.getY(), vec.getZ());
+}
+
+btQuaternion PhysicsSystem::ToBulletQuaternion(const XMFLOAT3& euler) const
+{
+    btQuaternion quat;
+    quat.setEulerZYX(euler.z, euler.y, euler.x);
+    return quat;
+}
+
+XMFLOAT3 PhysicsSystem::FromBullet(const btQuaternion& quat) const
+{
+    btScalar yaw, pitch, roll;
+    btMatrix3x3(quat).getEulerYPR(yaw, pitch, roll);
+    return XMFLOAT3(roll, yaw, pitch);
+}
+
+// ============================================================================
+// COLLISION SHAPE CREATION
+// ============================================================================
+
+btCollisionShape* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
+{
+    // Check shape cache first
+    size_t hash = HashShape(desc);
+    auto it = m_shapeCache.find(hash);
+    if (it != m_shapeCache.end())
+    {
+        return it->second;
+    }
+
+    btCollisionShape* shape = nullptr;
+
+    switch (desc.type)
+    {
+        case CollisionShapeType::Box:
+            shape = CreateBoxShape(desc.dimensions);
+            break;
+        case CollisionShapeType::Sphere:
+            shape = CreateSphereShape(desc.radius);
+            break;
+        case CollisionShapeType::Capsule:
+            shape = CreateCapsuleShape(desc.radius, desc.height);
+            break;
+        case CollisionShapeType::Cylinder:
+            shape = new btCylinderShape(btVector3(desc.radius, desc.height / 2.0f, desc.radius));
+            break;
+        case CollisionShapeType::Cone:
+            shape = new btConeShape(desc.radius, desc.height);
+            break;
+        case CollisionShapeType::Mesh:
+            shape = CreateMeshShape(desc.vertices, desc.indices);
+            break;
+        case CollisionShapeType::ConvexHull:
+            shape = CreateConvexHullShape(desc.vertices);
+            break;
+        default:
+            // Default to box shape
+            shape = CreateBoxShape(desc.dimensions);
+            break;
+    }
+
+    if (shape)
+    {
+        m_shapeCache[hash] = shape;
+    }
+
+    return shape;
+}
+
+btCollisionShape* PhysicsSystem::CreateBoxShape(const XMFLOAT3& dimensions)
+{
+    return new btBoxShape(btVector3(dimensions.x / 2.0f, dimensions.y / 2.0f, dimensions.z / 2.0f));
+}
+
+btCollisionShape* PhysicsSystem::CreateSphereShape(float radius)
+{
+    return new btSphereShape(radius);
+}
+
+btCollisionShape* PhysicsSystem::CreateCapsuleShape(float radius, float height)
+{
+    return new btCapsuleShape(radius, height);
+}
+
+btCollisionShape* PhysicsSystem::CreateMeshShape(const std::vector<XMFLOAT3>& vertices, const std::vector<uint32_t>& indices)
+{
+    if (vertices.empty() || indices.empty() || indices.size() % 3 != 0)
+    {
+        // Fall back to a unit box if mesh data is invalid
+        return CreateBoxShape({1.0f, 1.0f, 1.0f});
+    }
+
+    btTriangleMesh* triMesh = new btTriangleMesh();
+
+    for (size_t i = 0; i + 2 < indices.size(); i += 3)
+    {
+        const XMFLOAT3& v0 = vertices[indices[i]];
+        const XMFLOAT3& v1 = vertices[indices[i + 1]];
+        const XMFLOAT3& v2 = vertices[indices[i + 2]];
+
+        triMesh->addTriangle(
+            btVector3(v0.x, v0.y, v0.z),
+            btVector3(v1.x, v1.y, v1.z),
+            btVector3(v2.x, v2.y, v2.z)
+        );
+    }
+
+    btBvhTriangleMeshShape* meshShape = new btBvhTriangleMeshShape(triMesh, true);
+    return meshShape;
+}
+
+btCollisionShape* PhysicsSystem::CreateConvexHullShape(const std::vector<XMFLOAT3>& vertices)
+{
+    if (vertices.empty())
+    {
+        return CreateBoxShape({1.0f, 1.0f, 1.0f});
+    }
+
+    btConvexHullShape* convexShape = new btConvexHullShape();
+
+    for (const auto& v : vertices)
+    {
+        convexShape->addPoint(btVector3(v.x, v.y, v.z), false);
+    }
+
+    convexShape->recalcLocalAabb();
+    return convexShape;
+}
+
+size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc)
+{
+    size_t hash = std::hash<int>()(static_cast<int>(desc.type));
+
+    auto hashCombine = [](size_t& seed, size_t value)
+    {
+        seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    };
+
+    hashCombine(hash, std::hash<float>()(desc.dimensions.x));
+    hashCombine(hash, std::hash<float>()(desc.dimensions.y));
+    hashCombine(hash, std::hash<float>()(desc.dimensions.z));
+    hashCombine(hash, std::hash<float>()(desc.radius));
+    hashCombine(hash, std::hash<float>()(desc.height));
+    hashCombine(hash, std::hash<std::string>()(desc.meshPath));
+    hashCombine(hash, std::hash<size_t>()(desc.vertices.size()));
+    hashCombine(hash, std::hash<size_t>()(desc.indices.size()));
+
+    return hash;
+}
+
+// ============================================================================
+// PHYSICS BODY IMPLEMENTATION
 // ============================================================================
 
 PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, btRigidBody* bulletBody)
@@ -26,135 +192,318 @@ PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, btRigidBody* bulletBody)
 
 PhysicsBody::~PhysicsBody()
 {
-    // In a real implementation, this would clean up Bullet Physics resources
+    if (m_bulletBody)
+    {
+        delete m_bulletBody->getMotionState();
+        delete m_bulletBody->getCollisionShape();
+        delete m_bulletBody;
+        m_bulletBody = nullptr;
+    }
 }
 
 XMFLOAT3 PhysicsBody::GetPosition() const
 {
-    // Stub implementation - return stored position
-    return m_desc.position;
+    if (!m_bulletBody) return m_desc.position;
+
+    btTransform transform;
+    if (m_bulletBody->getMotionState())
+    {
+        m_bulletBody->getMotionState()->getWorldTransform(transform);
+    }
+    else
+    {
+        transform = m_bulletBody->getWorldTransform();
+    }
+
+    const btVector3& origin = transform.getOrigin();
+    return XMFLOAT3(origin.getX(), origin.getY(), origin.getZ());
 }
 
 void PhysicsBody::SetPosition(const XMFLOAT3& position)
 {
     m_desc.position = position;
-    // In real implementation, would update Bullet Physics body
+    if (!m_bulletBody) return;
+
+    btTransform transform = m_bulletBody->getWorldTransform();
+    transform.setOrigin(btVector3(position.x, position.y, position.z));
+    m_bulletBody->setWorldTransform(transform);
+
+    if (m_bulletBody->getMotionState())
+    {
+        m_bulletBody->getMotionState()->setWorldTransform(transform);
+    }
+
+    m_bulletBody->activate();
 }
 
 XMFLOAT3 PhysicsBody::GetRotation() const
 {
-    return m_desc.rotation;
+    if (!m_bulletBody) return m_desc.rotation;
+
+    btTransform transform;
+    if (m_bulletBody->getMotionState())
+    {
+        m_bulletBody->getMotionState()->getWorldTransform(transform);
+    }
+    else
+    {
+        transform = m_bulletBody->getWorldTransform();
+    }
+
+    btQuaternion quat = transform.getRotation();
+    btScalar yaw, pitch, roll;
+    btMatrix3x3(quat).getEulerYPR(yaw, pitch, roll);
+    return XMFLOAT3(roll, yaw, pitch);
 }
 
 void PhysicsBody::SetRotation(const XMFLOAT3& rotation)
 {
     m_desc.rotation = rotation;
-    // In real implementation, would update Bullet Physics body
+    if (!m_bulletBody) return;
+
+    btTransform transform = m_bulletBody->getWorldTransform();
+    btQuaternion quat;
+    quat.setEulerZYX(rotation.z, rotation.y, rotation.x);
+    transform.setRotation(quat);
+    m_bulletBody->setWorldTransform(transform);
+
+    if (m_bulletBody->getMotionState())
+    {
+        m_bulletBody->getMotionState()->setWorldTransform(transform);
+    }
+
+    m_bulletBody->activate();
 }
 
 XMMATRIX PhysicsBody::GetTransform() const
 {
-    XMMATRIX translation = XMMatrixTranslation(m_desc.position.x, m_desc.position.y, m_desc.position.z);
-    XMMATRIX rotation = XMMatrixRotationRollPitchYaw(m_desc.rotation.x, m_desc.rotation.y, m_desc.rotation.z);
-    return rotation * translation;
+    if (!m_bulletBody)
+    {
+        XMMATRIX translation = XMMatrixTranslation(m_desc.position.x, m_desc.position.y, m_desc.position.z);
+        XMMATRIX rotation = XMMatrixRotationRollPitchYaw(m_desc.rotation.x, m_desc.rotation.y, m_desc.rotation.z);
+        return rotation * translation;
+    }
+
+    btTransform btTrans;
+    if (m_bulletBody->getMotionState())
+    {
+        m_bulletBody->getMotionState()->getWorldTransform(btTrans);
+    }
+    else
+    {
+        btTrans = m_bulletBody->getWorldTransform();
+    }
+
+    float m[16];
+    btTrans.getOpenGLMatrix(m);
+
+    return XMMATRIX(
+        m[0], m[1], m[2], m[3],
+        m[4], m[5], m[6], m[7],
+        m[8], m[9], m[10], m[11],
+        m[12], m[13], m[14], m[15]
+    );
 }
 
 void PhysicsBody::SetTransform(const XMMATRIX& transform)
 {
     XMVECTOR scale, rotation, translation;
     XMMatrixDecompose(&scale, &rotation, &translation, transform);
-    
+
     XMStoreFloat3(&m_desc.position, translation);
-    
-    // Convert quaternion to Euler angles (simplified)
+
     XMFLOAT4 rotQuat;
     XMStoreFloat4(&rotQuat, rotation);
-    m_desc.rotation = {rotQuat.x, rotQuat.y, rotQuat.z}; // Simplified conversion
+    m_desc.rotation = {rotQuat.x, rotQuat.y, rotQuat.z};
+
+    if (!m_bulletBody) return;
+
+    btTransform btTrans;
+    btTrans.setOrigin(btVector3(m_desc.position.x, m_desc.position.y, m_desc.position.z));
+    btTrans.setRotation(btQuaternion(rotQuat.x, rotQuat.y, rotQuat.z, rotQuat.w));
+    m_bulletBody->setWorldTransform(btTrans);
+
+    if (m_bulletBody->getMotionState())
+    {
+        m_bulletBody->getMotionState()->setWorldTransform(btTrans);
+    }
+
+    m_bulletBody->activate();
 }
 
 XMFLOAT3 PhysicsBody::GetLinearVelocity() const
 {
-    return m_desc.linearVelocity;
+    if (!m_bulletBody) return m_desc.linearVelocity;
+
+    const btVector3& vel = m_bulletBody->getLinearVelocity();
+    return XMFLOAT3(vel.getX(), vel.getY(), vel.getZ());
 }
 
 void PhysicsBody::SetLinearVelocity(const XMFLOAT3& velocity)
 {
     m_desc.linearVelocity = velocity;
+    if (!m_bulletBody) return;
+
+    m_bulletBody->setLinearVelocity(btVector3(velocity.x, velocity.y, velocity.z));
+    m_bulletBody->activate();
 }
 
 XMFLOAT3 PhysicsBody::GetAngularVelocity() const
 {
-    return m_desc.angularVelocity;
+    if (!m_bulletBody) return m_desc.angularVelocity;
+
+    const btVector3& vel = m_bulletBody->getAngularVelocity();
+    return XMFLOAT3(vel.getX(), vel.getY(), vel.getZ());
 }
 
 void PhysicsBody::SetAngularVelocity(const XMFLOAT3& velocity)
 {
     m_desc.angularVelocity = velocity;
+    if (!m_bulletBody) return;
+
+    m_bulletBody->setAngularVelocity(btVector3(velocity.x, velocity.y, velocity.z));
+    m_bulletBody->activate();
 }
 
 void PhysicsBody::ApplyForce(const XMFLOAT3& force, const XMFLOAT3& relativePos)
 {
-    // Stub implementation - in real version would apply to Bullet Physics body
+    if (!m_bulletBody) return;
+
+    m_bulletBody->applyForce(
+        btVector3(force.x, force.y, force.z),
+        btVector3(relativePos.x, relativePos.y, relativePos.z)
+    );
+    m_bulletBody->activate();
 }
 
 void PhysicsBody::ApplyImpulse(const XMFLOAT3& impulse, const XMFLOAT3& relativePos)
 {
-    // Stub implementation - in real version would apply to Bullet Physics body
+    if (!m_bulletBody) return;
+
+    m_bulletBody->applyImpulse(
+        btVector3(impulse.x, impulse.y, impulse.z),
+        btVector3(relativePos.x, relativePos.y, relativePos.z)
+    );
+    m_bulletBody->activate();
 }
 
 void PhysicsBody::ApplyTorque(const XMFLOAT3& torque)
 {
-    // Stub implementation
+    if (!m_bulletBody) return;
+
+    m_bulletBody->applyTorque(btVector3(torque.x, torque.y, torque.z));
+    m_bulletBody->activate();
 }
 
 void PhysicsBody::ApplyTorqueImpulse(const XMFLOAT3& torque)
 {
-    // Stub implementation
+    if (!m_bulletBody) return;
+
+    m_bulletBody->applyTorqueImpulse(btVector3(torque.x, torque.y, torque.z));
+    m_bulletBody->activate();
 }
 
 float PhysicsBody::GetMass() const
 {
-    return m_desc.mass;
+    if (!m_bulletBody) return m_desc.mass;
+
+    btScalar invMass = m_bulletBody->getInvMass();
+    if (invMass == btScalar(0))
+        return 0.0f;
+    return 1.0f / invMass;
 }
 
 void PhysicsBody::SetMass(float mass)
 {
     m_desc.mass = mass;
+    if (!m_bulletBody) return;
+
+    btVector3 localInertia(0, 0, 0);
+    if (mass > 0.0f && m_bulletBody->getCollisionShape())
+    {
+        m_bulletBody->getCollisionShape()->calculateLocalInertia(mass, localInertia);
+    }
+    m_bulletBody->setMassProps(mass, localInertia);
+    m_bulletBody->updateInertiaTensor();
+    m_bulletBody->activate();
 }
 
 void PhysicsBody::SetMaterial(const PhysicsMaterial& material)
 {
     m_desc.material = material;
+    if (!m_bulletBody) return;
+
+    m_bulletBody->setFriction(material.friction);
+    m_bulletBody->setRestitution(material.restitution);
+    m_bulletBody->setDamping(material.linearDamping, material.angularDamping);
 }
 
 void PhysicsBody::SetActive(bool active)
 {
-    // Stub implementation
+    if (!m_bulletBody) return;
+
+    if (active)
+    {
+        m_bulletBody->setActivationState(ACTIVE_TAG);
+    }
+    else
+    {
+        m_bulletBody->setActivationState(WANTS_DEACTIVATION);
+    }
 }
 
 bool PhysicsBody::IsActive() const
 {
-    return true; // Stub implementation
+    if (!m_bulletBody) return false;
+    return m_bulletBody->isActive();
 }
 
 void PhysicsBody::SetKinematic(bool kinematic)
 {
     m_desc.isKinematic = kinematic;
+    if (!m_bulletBody) return;
+
+    if (kinematic)
+    {
+        m_bulletBody->setCollisionFlags(
+            m_bulletBody->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
+        m_bulletBody->setActivationState(DISABLE_DEACTIVATION);
+    }
+    else
+    {
+        m_bulletBody->setCollisionFlags(
+            m_bulletBody->getCollisionFlags() & ~btCollisionObject::CF_KINEMATIC_OBJECT);
+        m_bulletBody->setActivationState(ACTIVE_TAG);
+    }
 }
 
 bool PhysicsBody::IsKinematic() const
 {
-    return m_desc.isKinematic;
+    if (!m_bulletBody) return m_desc.isKinematic;
+    return (m_bulletBody->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT) != 0;
 }
 
 void PhysicsBody::SetTrigger(bool trigger)
 {
     m_desc.isTrigger = trigger;
+    if (!m_bulletBody) return;
+
+    if (trigger)
+    {
+        m_bulletBody->setCollisionFlags(
+            m_bulletBody->getCollisionFlags() | btCollisionObject::CF_NO_CONTACT_RESPONSE);
+    }
+    else
+    {
+        m_bulletBody->setCollisionFlags(
+            m_bulletBody->getCollisionFlags() & ~btCollisionObject::CF_NO_CONTACT_RESPONSE);
+    }
 }
 
 bool PhysicsBody::IsTrigger() const
 {
-    return m_desc.isTrigger;
+    if (!m_bulletBody) return m_desc.isTrigger;
+    return (m_bulletBody->getCollisionFlags() & btCollisionObject::CF_NO_CONTACT_RESPONSE) != 0;
 }
 
 void PhysicsBody::SetCollisionGroup(uint16_t group)
@@ -172,11 +521,12 @@ std::string PhysicsBody::GetInfo() const
     std::stringstream ss;
     ss << "Physics Body: " << m_desc.name << "\n";
     ss << "Type: " << PhysicsBodyTypeToString(m_desc.type) << "\n";
-    ss << "Position: (" << m_desc.position.x << ", " << m_desc.position.y << ", " << m_desc.position.z << ")\n";
-    ss << "Mass: " << m_desc.mass << "\n";
+    auto pos = GetPosition();
+    ss << "Position: (" << pos.x << ", " << pos.y << ", " << pos.z << ")\n";
+    ss << "Mass: " << GetMass() << "\n";
     ss << "Active: " << (IsActive() ? "Yes" : "No") << "\n";
-    ss << "Kinematic: " << (m_desc.isKinematic ? "Yes" : "No") << "\n";
-    ss << "Trigger: " << (m_desc.isTrigger ? "Yes" : "No") << "\n";
+    ss << "Kinematic: " << (IsKinematic() ? "Yes" : "No") << "\n";
+    ss << "Trigger: " << (IsTrigger() ? "Yes" : "No") << "\n";
     return ss.str();
 }
 
@@ -186,8 +536,10 @@ void PhysicsBody::Console_SetProperty(const std::string& property, float value)
         SetMass(value);
     } else if (property == "friction") {
         m_desc.material.friction = value;
+        if (m_bulletBody) m_bulletBody->setFriction(value);
     } else if (property == "restitution") {
         m_desc.material.restitution = value;
+        if (m_bulletBody) m_bulletBody->setRestitution(value);
     }
 }
 
@@ -197,7 +549,7 @@ void PhysicsBody::Console_ApplyForce(float x, float y, float z)
 }
 
 // ============================================================================
-// PHYSICS CONSTRAINT IMPLEMENTATION (Stub)
+// PHYSICS CONSTRAINT IMPLEMENTATION
 // ============================================================================
 
 PhysicsConstraint::PhysicsConstraint(ConstraintType type, btTypedConstraint* bulletConstraint)
@@ -207,27 +559,35 @@ PhysicsConstraint::PhysicsConstraint(ConstraintType type, btTypedConstraint* bul
 
 PhysicsConstraint::~PhysicsConstraint()
 {
-    // In real implementation, would clean up Bullet Physics constraint
+    if (m_bulletConstraint)
+    {
+        delete m_bulletConstraint;
+        m_bulletConstraint = nullptr;
+    }
 }
 
 void PhysicsConstraint::SetEnabled(bool enabled)
 {
-    // Stub implementation
+    if (!m_bulletConstraint) return;
+    m_bulletConstraint->setEnabled(enabled);
 }
 
 bool PhysicsConstraint::IsEnabled() const
 {
-    return true; // Stub
+    if (!m_bulletConstraint) return false;
+    return m_bulletConstraint->isEnabled();
 }
 
 void PhysicsConstraint::SetBreakingThreshold(float threshold)
 {
-    // Stub implementation
+    if (!m_bulletConstraint) return;
+    m_bulletConstraint->setBreakingImpulseThreshold(threshold);
 }
 
 float PhysicsConstraint::GetBreakingThreshold() const
 {
-    return 0.0f; // Stub
+    if (!m_bulletConstraint) return 0.0f;
+    return m_bulletConstraint->getBreakingImpulseThreshold();
 }
 
 // ============================================================================
@@ -258,98 +618,296 @@ HRESULT PhysicsSystem::Initialize()
     m_defaultMaterial.angularDamping = 0.1f;
     m_defaultMaterial.density = 1.0f;
     m_defaultMaterial.name = "Default";
-    
+
     // Initialize metrics
     memset(&m_metrics, 0, sizeof(m_metrics));
-    
-    // Note: In a real implementation, this would initialize Bullet Physics:
-    // m_collisionConfig = new btDefaultCollisionConfiguration();
-    // m_dispatcher = new btCollisionDispatcher(m_collisionConfig);
-    // m_broadphase = new btDbvtBroadphase();
-    // m_solver = new btSequentialImpulseConstraintSolver();
-    // m_dynamicsWorld = new btDiscreteDynamicsWorld(m_dispatcher, m_broadphase, m_solver, m_collisionConfig);
-    // m_dynamicsWorld->setGravity(btVector3(0, -9.8f, 0));
-    
-    Spark::SimpleConsole::GetInstance().LogSuccess("PhysicsSystem initialized successfully (stub implementation)");
+
+    // Initialize Bullet Physics world
+    m_collisionConfig = new btDefaultCollisionConfiguration();
+    m_dispatcher = new btCollisionDispatcher(m_collisionConfig);
+    m_broadphase = new btDbvtBroadphase();
+    m_solver = new btSequentialImpulseConstraintSolver();
+    m_dynamicsWorld = new btDiscreteDynamicsWorld(m_dispatcher, m_broadphase, m_solver, m_collisionConfig);
+    m_dynamicsWorld->setGravity(btVector3(0, -9.8f, 0));
+
+    // Enable ghost object pair callback for overlap tests
+    m_broadphase->getOverlappingPairCache()->setInternalGhostPairCallback(new btGhostPairCallback());
+
+    Spark::SimpleConsole::GetInstance().LogSuccess("PhysicsSystem initialized successfully (Bullet Physics)");
     return S_OK;
 }
 
 void PhysicsSystem::Shutdown()
 {
-    // Clear all bodies and constraints
-    m_bodies.clear();
+    // Remove all constraints from the world first
+    if (m_dynamicsWorld)
+    {
+        for (auto& constraint : m_constraints)
+        {
+            if (constraint && constraint->GetBulletConstraint())
+            {
+                m_dynamicsWorld->removeConstraint(constraint->GetBulletConstraint());
+            }
+        }
+    }
     m_constraints.clear();
+
+    // Remove all bodies from the world
+    if (m_dynamicsWorld)
+    {
+        for (auto& body : m_bodies)
+        {
+            if (body && body->GetBulletBody())
+            {
+                m_dynamicsWorld->removeRigidBody(body->GetBulletBody());
+            }
+        }
+    }
+    m_bodies.clear();
     m_namedBodies.clear();
-    
-    // Note: In real implementation, would clean up Bullet Physics:
-    // delete m_dynamicsWorld;
-    // delete m_solver;
-    // delete m_broadphase;
-    // delete m_dispatcher;
-    // delete m_collisionConfig;
-    
+
+    // Delete cached collision shapes
+    for (auto& pair : m_shapeCache)
+    {
+        delete pair.second;
+    }
+    m_shapeCache.clear();
+
+    // Delete Bullet world components in reverse order
+    delete m_dynamicsWorld;
     m_dynamicsWorld = nullptr;
+
+    delete m_solver;
     m_solver = nullptr;
+
+    delete m_broadphase;
     m_broadphase = nullptr;
+
+    delete m_dispatcher;
     m_dispatcher = nullptr;
+
+    delete m_collisionConfig;
     m_collisionConfig = nullptr;
-    
+
     Spark::SimpleConsole::GetInstance().LogInfo("PhysicsSystem shutdown complete");
 }
 
 void PhysicsSystem::Update(float deltaTime)
 {
-    if (m_paused || deltaTime <= 0.0f) {
+    if (m_paused || deltaTime <= 0.0f)
+    {
         return;
     }
-    
+
     auto startTime = std::chrono::high_resolution_clock::now();
-    
-    // Note: In real implementation, would step Bullet Physics simulation:
-    // if (m_dynamicsWorld) {
-    //     m_dynamicsWorld->stepSimulation(deltaTime, m_maxSubsteps, m_timeStep);
-    // }
-    
-    // Update metrics
+
+    if (m_dynamicsWorld)
+    {
+        m_dynamicsWorld->stepSimulation(deltaTime, m_maxSubsteps, m_timeStep);
+    }
+
+    ProcessCollisions();
+
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-    
+
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
-        m_metrics.simulationTime = duration.count() / 1000.0f; // Convert to milliseconds
-        m_metrics.timeStep = deltaTime;
-        m_metrics.totalRigidBodies = static_cast<uint32_t>(m_bodies.size());
-        m_metrics.activeRigidBodies = static_cast<uint32_t>(m_bodies.size()); // Simplified
-        m_metrics.activeConstraints = static_cast<uint32_t>(m_constraints.size());
+        m_metrics.simulationTime = duration.count() / 1000.0f;
+    }
+
+    UpdateMetrics();
+}
+
+void PhysicsSystem::UpdateMetrics()
+{
+    if (!m_dynamicsWorld) return;
+
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+
+    m_metrics.totalRigidBodies = static_cast<uint32_t>(m_bodies.size());
+    m_metrics.activeConstraints = static_cast<uint32_t>(m_constraints.size());
+    m_metrics.timeStep = m_timeStep;
+    m_metrics.debugDrawEnabled = m_debugDrawEnabled;
+
+    // Count active rigid bodies
+    uint32_t activeCount = 0;
+    for (const auto& body : m_bodies)
+    {
+        if (body && body->IsActive())
+        {
+            activeCount++;
+        }
+    }
+    m_metrics.activeRigidBodies = activeCount;
+
+    // Collision pairs from dispatcher
+    if (m_dispatcher)
+    {
+        m_metrics.collisionPairs = static_cast<uint32_t>(m_dispatcher->getNumManifolds());
+    }
+
+    // Broadphase proxies
+    if (m_broadphase)
+    {
+        m_metrics.broadphaseProxies = static_cast<uint32_t>(
+            m_broadphase->getOverlappingPairCache()->getNumOverlappingPairs());
+    }
+
+    m_metrics.substeps = static_cast<uint32_t>(m_maxSubsteps);
+}
+
+void PhysicsSystem::ProcessCollisions()
+{
+    if (!m_dynamicsWorld || !m_dispatcher) return;
+
+    int numManifolds = m_dispatcher->getNumManifolds();
+    for (int i = 0; i < numManifolds; i++)
+    {
+        btPersistentManifold* manifold = m_dispatcher->getManifoldByIndexInternal(i);
+        if (!manifold) continue;
+
+        const btCollisionObject* objA = manifold->getBody0();
+        const btCollisionObject* objB = manifold->getBody1();
+
+        // Find corresponding PhysicsBody wrappers
+        PhysicsBody* bodyA = nullptr;
+        PhysicsBody* bodyB = nullptr;
+
+        for (const auto& body : m_bodies)
+        {
+            if (body && body->GetBulletBody() == objA) bodyA = body.get();
+            if (body && body->GetBulletBody() == objB) bodyB = body.get();
+            if (bodyA && bodyB) break;
+        }
+
+        // Check for trigger callbacks
+        bool isTrigger = false;
+        if (bodyA && bodyA->IsTrigger()) isTrigger = true;
+        if (bodyB && bodyB->IsTrigger()) isTrigger = true;
+
+        int numContacts = manifold->getNumContacts();
+        if (numContacts > 0 && isTrigger && m_triggerCallback)
+        {
+            m_triggerCallback(bodyA, bodyB, true);
+        }
+
+        // Fire collision callbacks for each contact point
+        if (m_collisionCallback && !isTrigger)
+        {
+            for (int j = 0; j < numContacts; j++)
+            {
+                btManifoldPoint& pt = manifold->getContactPoint(j);
+                if (pt.getDistance() < 0.0f)
+                {
+                    ContactInfo info;
+                    info.bodyA = bodyA;
+                    info.bodyB = bodyB;
+                    info.contactPoint = FromBullet(pt.getPositionWorldOnB());
+                    info.contactNormal = FromBullet(pt.m_normalWorldOnB);
+                    info.penetrationDepth = -pt.getDistance();
+                    info.appliedImpulse = pt.getAppliedImpulse();
+
+                    m_collisionCallback(info);
+                }
+            }
+        }
     }
 }
 
 void PhysicsSystem::SetGravity(const XMFLOAT3& gravity)
 {
-    // Note: In real implementation:
-    // if (m_dynamicsWorld) {
-    //     m_dynamicsWorld->setGravity(ToBullet(gravity));
-    // }
+    if (!m_dynamicsWorld) return;
+    m_dynamicsWorld->setGravity(ToBullet(gravity));
 }
 
 XMFLOAT3 PhysicsSystem::GetGravity() const
 {
-    // Note: In real implementation would get from Bullet Physics world
-    return {0.0f, -9.8f, 0.0f}; // Default gravity
+    if (!m_dynamicsWorld) return {0.0f, -9.8f, 0.0f};
+    return FromBullet(m_dynamicsWorld->getGravity());
 }
 
 std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& desc)
 {
-    // Note: In real implementation, would create Bullet Physics rigid body
-    btRigidBody* bulletBody = nullptr; // Placeholder
-    
+    if (!m_dynamicsWorld) return nullptr;
+
+    // Create collision shape
+    btCollisionShape* shape = CreateCollisionShape(desc.shape);
+    if (!shape) return nullptr;
+
+    // Determine mass (0 for static and kinematic bodies)
+    float mass = desc.mass;
+    if (desc.type == PhysicsBodyType::Static || desc.isKinematic)
+    {
+        mass = 0.0f;
+    }
+
+    // Calculate local inertia
+    btVector3 localInertia(0, 0, 0);
+    if (mass > 0.0f)
+    {
+        shape->calculateLocalInertia(mass, localInertia);
+    }
+
+    // Create initial transform
+    btTransform startTransform;
+    startTransform.setIdentity();
+    startTransform.setOrigin(ToBullet(desc.position));
+    startTransform.setRotation(ToBulletQuaternion(desc.rotation));
+
+    // Create motion state
+    btDefaultMotionState* motionState = new btDefaultMotionState(startTransform);
+
+    // Create rigid body construction info
+    btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, motionState, shape, localInertia);
+    rbInfo.m_friction = desc.material.friction;
+    rbInfo.m_restitution = desc.material.restitution;
+    rbInfo.m_linearDamping = desc.material.linearDamping;
+    rbInfo.m_angularDamping = desc.material.angularDamping;
+
+    // Create the Bullet rigid body
+    btRigidBody* bulletBody = new btRigidBody(rbInfo);
+
+    // Set kinematic flags
+    if (desc.isKinematic)
+    {
+        bulletBody->setCollisionFlags(
+            bulletBody->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
+        bulletBody->setActivationState(DISABLE_DEACTIVATION);
+    }
+
+    // Set trigger flags
+    if (desc.isTrigger)
+    {
+        bulletBody->setCollisionFlags(
+            bulletBody->getCollisionFlags() | btCollisionObject::CF_NO_CONTACT_RESPONSE);
+    }
+
+    // Set initial velocities
+    if (mass > 0.0f)
+    {
+        bulletBody->setLinearVelocity(ToBullet(desc.linearVelocity));
+        bulletBody->setAngularVelocity(ToBullet(desc.angularVelocity));
+    }
+
+    // Add to dynamics world with collision filtering
+    uint16_t group = 1;
+    uint16_t mask = 0xFFFF;
+    m_dynamicsWorld->addRigidBody(bulletBody, group, mask);
+
+    // Create the PhysicsBody wrapper
     auto body = std::make_shared<PhysicsBody>(desc, bulletBody);
+
+    // Store user data pointer on the bullet body for lookup during collision
+    bulletBody->setUserPointer(body.get());
+
     m_bodies.push_back(body);
-    
-    if (!desc.name.empty()) {
+
+    if (!desc.name.empty())
+    {
         m_namedBodies[desc.name] = body;
     }
-    
+
     Spark::SimpleConsole::GetInstance().LogInfo("Created physics body: " + desc.name);
     return body;
 }
@@ -357,41 +915,68 @@ std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& de
 void PhysicsSystem::RemoveBody(std::shared_ptr<PhysicsBody> body)
 {
     if (!body) return;
-    
+
+    // Remove from Bullet world
+    if (m_dynamicsWorld && body->GetBulletBody())
+    {
+        m_dynamicsWorld->removeRigidBody(body->GetBulletBody());
+    }
+
     // Remove from named bodies
     const std::string& name = body->GetName();
-    if (!name.empty()) {
+    if (!name.empty())
+    {
         m_namedBodies.erase(name);
     }
-    
+
     // Remove from bodies list
     auto it = std::find(m_bodies.begin(), m_bodies.end(), body);
-    if (it != m_bodies.end()) {
+    if (it != m_bodies.end())
+    {
         m_bodies.erase(it);
     }
-    
-    // Note: In real implementation, would remove from Bullet Physics world
 }
 
 void PhysicsSystem::RemoveAllBodies()
 {
+    if (m_dynamicsWorld)
+    {
+        for (auto& body : m_bodies)
+        {
+            if (body && body->GetBulletBody())
+            {
+                m_dynamicsWorld->removeRigidBody(body->GetBulletBody());
+            }
+        }
+    }
+
     m_bodies.clear();
     m_namedBodies.clear();
-    
-    // Note: In real implementation, would remove all from Bullet Physics world
 }
+
+// ============================================================================
+// CONSTRAINT CREATION
+// ============================================================================
 
 std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateHingeConstraint(
     std::shared_ptr<PhysicsBody> bodyA, std::shared_ptr<PhysicsBody> bodyB,
     const XMFLOAT3& pivotA, const XMFLOAT3& pivotB,
     const XMFLOAT3& axisA, const XMFLOAT3& axisB)
 {
-    // Note: In real implementation, would create Bullet Physics hinge constraint
-    btTypedConstraint* bulletConstraint = nullptr; // Placeholder
-    
-    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Hinge, bulletConstraint);
+    if (!m_dynamicsWorld || !bodyA || !bodyB) return nullptr;
+    if (!bodyA->GetBulletBody() || !bodyB->GetBulletBody()) return nullptr;
+
+    btHingeConstraint* hingeConstraint = new btHingeConstraint(
+        *bodyA->GetBulletBody(), *bodyB->GetBulletBody(),
+        ToBullet(pivotA), ToBullet(pivotB),
+        ToBullet(axisA), ToBullet(axisB)
+    );
+
+    m_dynamicsWorld->addConstraint(hingeConstraint, true);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Hinge, hingeConstraint);
     m_constraints.push_back(constraint);
-    
+
     return constraint;
 }
 
@@ -399,12 +984,36 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateSliderConstraint(
     std::shared_ptr<PhysicsBody> bodyA, std::shared_ptr<PhysicsBody> bodyB,
     const XMMATRIX& frameA, const XMMATRIX& frameB)
 {
-    // Note: In real implementation, would create Bullet Physics slider constraint
-    btTypedConstraint* bulletConstraint = nullptr; // Placeholder
-    
-    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Slider, bulletConstraint);
+    if (!m_dynamicsWorld || !bodyA || !bodyB) return nullptr;
+    if (!bodyA->GetBulletBody() || !bodyB->GetBulletBody()) return nullptr;
+
+    // Convert XMMATRIX frames to btTransform
+    btTransform btFrameA, btFrameB;
+
+    XMVECTOR scaleA, rotA, transA;
+    XMMatrixDecompose(&scaleA, &rotA, &transA, frameA);
+    XMFLOAT3 posA; XMStoreFloat3(&posA, transA);
+    XMFLOAT4 quatA; XMStoreFloat4(&quatA, rotA);
+    btFrameA.setOrigin(btVector3(posA.x, posA.y, posA.z));
+    btFrameA.setRotation(btQuaternion(quatA.x, quatA.y, quatA.z, quatA.w));
+
+    XMVECTOR scaleB, rotB, transB;
+    XMMatrixDecompose(&scaleB, &rotB, &transB, frameB);
+    XMFLOAT3 posB; XMStoreFloat3(&posB, transB);
+    XMFLOAT4 quatB; XMStoreFloat4(&quatB, rotB);
+    btFrameB.setOrigin(btVector3(posB.x, posB.y, posB.z));
+    btFrameB.setRotation(btQuaternion(quatB.x, quatB.y, quatB.z, quatB.w));
+
+    btSliderConstraint* sliderConstraint = new btSliderConstraint(
+        *bodyA->GetBulletBody(), *bodyB->GetBulletBody(),
+        btFrameA, btFrameB, true
+    );
+
+    m_dynamicsWorld->addConstraint(sliderConstraint, true);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Slider, sliderConstraint);
     m_constraints.push_back(constraint);
-    
+
     return constraint;
 }
 
@@ -412,70 +1021,294 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateFixedConstraint(
     std::shared_ptr<PhysicsBody> bodyA, std::shared_ptr<PhysicsBody> bodyB,
     const XMMATRIX& frameA, const XMMATRIX& frameB)
 {
-    // Note: In real implementation, would create Bullet Physics fixed constraint
-    btTypedConstraint* bulletConstraint = nullptr; // Placeholder
-    
-    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Fixed, bulletConstraint);
+    if (!m_dynamicsWorld || !bodyA || !bodyB) return nullptr;
+    if (!bodyA->GetBulletBody() || !bodyB->GetBulletBody()) return nullptr;
+
+    // Convert XMMATRIX frames to btTransform
+    btTransform btFrameA, btFrameB;
+
+    XMVECTOR scaleA, rotA, transA;
+    XMMatrixDecompose(&scaleA, &rotA, &transA, frameA);
+    XMFLOAT3 posA; XMStoreFloat3(&posA, transA);
+    XMFLOAT4 quatA; XMStoreFloat4(&quatA, rotA);
+    btFrameA.setOrigin(btVector3(posA.x, posA.y, posA.z));
+    btFrameA.setRotation(btQuaternion(quatA.x, quatA.y, quatA.z, quatA.w));
+
+    XMVECTOR scaleB, rotB, transB;
+    XMMatrixDecompose(&scaleB, &rotB, &transB, frameB);
+    XMFLOAT3 posB; XMStoreFloat3(&posB, transB);
+    XMFLOAT4 quatB; XMStoreFloat4(&quatB, rotB);
+    btFrameB.setOrigin(btVector3(posB.x, posB.y, posB.z));
+    btFrameB.setRotation(btQuaternion(quatB.x, quatB.y, quatB.z, quatB.w));
+
+    btFixedConstraint* fixedConstraint = new btFixedConstraint(
+        *bodyA->GetBulletBody(), *bodyB->GetBulletBody(),
+        btFrameA, btFrameB
+    );
+
+    m_dynamicsWorld->addConstraint(fixedConstraint, true);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Fixed, fixedConstraint);
     m_constraints.push_back(constraint);
-    
+
     return constraint;
 }
 
 void PhysicsSystem::RemoveConstraint(std::shared_ptr<PhysicsConstraint> constraint)
 {
     if (!constraint) return;
-    
+
+    if (m_dynamicsWorld && constraint->GetBulletConstraint())
+    {
+        m_dynamicsWorld->removeConstraint(constraint->GetBulletConstraint());
+    }
+
     auto it = std::find(m_constraints.begin(), m_constraints.end(), constraint);
-    if (it != m_constraints.end()) {
+    if (it != m_constraints.end())
+    {
         m_constraints.erase(it);
     }
-    
-    // Note: In real implementation, would remove from Bullet Physics world
 }
+
+// ============================================================================
+// RAYCASTING AND OVERLAP QUERIES
+// ============================================================================
 
 RaycastHit PhysicsSystem::Raycast(const XMFLOAT3& origin, const XMFLOAT3& direction, float maxDistance)
 {
     RaycastHit hit;
     hit.hasHit = false;
-    
-    // Note: In real implementation, would perform Bullet Physics raycast
-    // For now, return no hit
-    
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    m_metrics.raycastCount++;
-    
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.raycastCount++;
+    }
+
+    if (!m_dynamicsWorld) return hit;
+
+    btVector3 from = ToBullet(origin);
+    btVector3 to = from + ToBullet(direction) * maxDistance;
+
+    btCollisionWorld::ClosestRayResultCallback callback(from, to);
+    m_dynamicsWorld->rayTest(from, to, callback);
+
+    if (callback.hasHit())
+    {
+        hit.hasHit = true;
+        hit.point = FromBullet(callback.m_hitPointWorld);
+        hit.normal = FromBullet(callback.m_hitNormalWorld);
+
+        btVector3 diff = callback.m_hitPointWorld - from;
+        hit.distance = diff.length();
+
+        // Find the PhysicsBody wrapper
+        const btCollisionObject* hitObj = callback.m_collisionObject;
+        if (hitObj)
+        {
+            hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
+            if (hit.body)
+            {
+                hit.userData = hit.body->GetUserData();
+            }
+        }
+    }
+
     return hit;
 }
 
 std::vector<RaycastHit> PhysicsSystem::RaycastAll(const XMFLOAT3& origin, const XMFLOAT3& direction, float maxDistance)
 {
     std::vector<RaycastHit> hits;
-    
-    // Note: In real implementation, would perform Bullet Physics raycast all
-    
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    m_metrics.raycastCount++;
-    
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.raycastCount++;
+    }
+
+    if (!m_dynamicsWorld) return hits;
+
+    btVector3 from = ToBullet(origin);
+    btVector3 to = from + ToBullet(direction) * maxDistance;
+
+    btCollisionWorld::AllHitsRayResultCallback callback(from, to);
+    m_dynamicsWorld->rayTest(from, to, callback);
+
+    if (callback.hasHit())
+    {
+        for (int i = 0; i < callback.m_hitPointWorld.size(); i++)
+        {
+            RaycastHit hit;
+            hit.hasHit = true;
+            hit.point = FromBullet(callback.m_hitPointWorld[i]);
+            hit.normal = FromBullet(callback.m_hitNormalWorld[i]);
+
+            btVector3 diff = callback.m_hitPointWorld[i] - from;
+            hit.distance = diff.length();
+
+            const btCollisionObject* hitObj = callback.m_collisionObjects[i];
+            if (hitObj)
+            {
+                hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
+                if (hit.body)
+                {
+                    hit.userData = hit.body->GetUserData();
+                }
+            }
+
+            hits.push_back(hit);
+        }
+    }
+
     return hits;
 }
 
 bool PhysicsSystem::SphereOverlap(const XMFLOAT3& center, float radius, std::vector<PhysicsBody*>& results)
 {
     results.clear();
-    
-    // Note: In real implementation, would perform Bullet Physics sphere overlap test
-    
+
+    if (!m_dynamicsWorld) return false;
+
+    btSphereShape sphereShape(radius);
+    btGhostObject ghostObject;
+    ghostObject.setCollisionShape(&sphereShape);
+
+    btTransform transform;
+    transform.setIdentity();
+    transform.setOrigin(ToBullet(center));
+    ghostObject.setWorldTransform(transform);
+
+    // Use contactTest to find overlapping objects
+    struct ContactCallback : public btCollisionWorld::ContactResultCallback
+    {
+        std::vector<PhysicsBody*>& m_results;
+
+        ContactCallback(std::vector<PhysicsBody*>& results) : m_results(results) {}
+
+        btScalar addSingleResult(btManifoldPoint& cp,
+            const btCollisionObjectWrapper* colObj0Wrap, int partId0, int index0,
+            const btCollisionObjectWrapper* colObj1Wrap, int partId1, int index1) override
+        {
+            const btCollisionObject* obj = colObj1Wrap->getCollisionObject();
+            if (obj)
+            {
+                PhysicsBody* body = static_cast<PhysicsBody*>(obj->getUserPointer());
+                if (body)
+                {
+                    // Avoid duplicates
+                    if (std::find(m_results.begin(), m_results.end(), body) == m_results.end())
+                    {
+                        m_results.push_back(body);
+                    }
+                }
+            }
+            return btScalar(1.0);
+        }
+    };
+
+    ContactCallback callback(results);
+    m_dynamicsWorld->contactTest(&ghostObject, callback);
+
     return !results.empty();
 }
 
 bool PhysicsSystem::BoxOverlap(const XMFLOAT3& center, const XMFLOAT3& halfExtents, std::vector<PhysicsBody*>& results)
 {
     results.clear();
-    
-    // Note: In real implementation, would perform Bullet Physics box overlap test
-    
+
+    if (!m_dynamicsWorld) return false;
+
+    btBoxShape boxShape(ToBullet(halfExtents));
+    btGhostObject ghostObject;
+    ghostObject.setCollisionShape(&boxShape);
+
+    btTransform transform;
+    transform.setIdentity();
+    transform.setOrigin(ToBullet(center));
+    ghostObject.setWorldTransform(transform);
+
+    struct ContactCallback : public btCollisionWorld::ContactResultCallback
+    {
+        std::vector<PhysicsBody*>& m_results;
+
+        ContactCallback(std::vector<PhysicsBody*>& results) : m_results(results) {}
+
+        btScalar addSingleResult(btManifoldPoint& cp,
+            const btCollisionObjectWrapper* colObj0Wrap, int partId0, int index0,
+            const btCollisionObjectWrapper* colObj1Wrap, int partId1, int index1) override
+        {
+            const btCollisionObject* obj = colObj1Wrap->getCollisionObject();
+            if (obj)
+            {
+                PhysicsBody* body = static_cast<PhysicsBody*>(obj->getUserPointer());
+                if (body)
+                {
+                    if (std::find(m_results.begin(), m_results.end(), body) == m_results.end())
+                    {
+                        m_results.push_back(body);
+                    }
+                }
+            }
+            return btScalar(1.0);
+        }
+    };
+
+    ContactCallback callback(results);
+    m_dynamicsWorld->contactTest(&ghostObject, callback);
+
     return !results.empty();
 }
+
+// ============================================================================
+// DEBUG RENDERING
+// ============================================================================
+
+void PhysicsSystem::SetDebugDrawMode(int mode)
+{
+    if (!m_dynamicsWorld) return;
+
+    m_debugDrawEnabled = (mode != 0);
+
+    if (m_dynamicsWorld->getDebugDrawer())
+    {
+        m_dynamicsWorld->getDebugDrawer()->setDebugMode(mode);
+    }
+}
+
+void PhysicsSystem::RenderDebug()
+{
+    if (!m_dynamicsWorld || !m_debugDrawEnabled) return;
+
+    m_dynamicsWorld->debugDrawWorld();
+}
+
+// ============================================================================
+// MATERIAL MANAGEMENT
+// ============================================================================
+
+void PhysicsSystem::RegisterMaterial(const std::string& name, const PhysicsMaterial& material)
+{
+    m_materials[name] = material;
+}
+
+const PhysicsMaterial* PhysicsSystem::GetMaterial(const std::string& name) const
+{
+    auto it = m_materials.find(name);
+    return (it != m_materials.end()) ? &it->second : nullptr;
+}
+
+// ============================================================================
+// METRICS
+// ============================================================================
+
+PhysicsSystem::PhysicsMetrics PhysicsSystem::GetMetrics() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    return m_metrics;
+}
+
+// ============================================================================
+// CONSOLE INTEGRATION METHODS
+// ============================================================================
 
 void PhysicsSystem::Console_EnableDebugDraw(bool enabled)
 {
@@ -495,19 +1328,19 @@ void PhysicsSystem::Console_SetTimeStep(float timeStep)
     Spark::SimpleConsole::GetInstance().LogSuccess("Physics time step set to: " + std::to_string(timeStep));
 }
 
-std::string PhysicsSystem::Console_Raycast(float originX, float originY, float originZ, 
+std::string PhysicsSystem::Console_Raycast(float originX, float originY, float originZ,
                                           float dirX, float dirY, float dirZ, float maxDistance)
 {
     XMFLOAT3 origin = {originX, originY, originZ};
     XMFLOAT3 direction = {dirX, dirY, dirZ};
-    
+
     // Normalize direction
     XMVECTOR dirVector = XMLoadFloat3(&direction);
     dirVector = XMVector3Normalize(dirVector);
     XMStoreFloat3(&direction, dirVector);
-    
+
     RaycastHit hit = Raycast(origin, direction, maxDistance);
-    
+
     std::stringstream ss;
     if (hit.hasHit) {
         ss << "Raycast HIT:\n";
@@ -520,7 +1353,7 @@ std::string PhysicsSystem::Console_Raycast(float originX, float originY, float o
     } else {
         ss << "Raycast MISS - No objects hit";
     }
-    
+
     return ss.str();
 }
 
@@ -530,11 +1363,10 @@ void PhysicsSystem::Console_Reset()
     m_constraints.clear();
     SetGravity({0.0f, -9.8f, 0.0f});
     m_paused = false;
-    
+
     Spark::SimpleConsole::GetInstance().LogSuccess("Physics system reset complete");
 }
 
-// Console integration methods
 PhysicsSystem::PhysicsMetrics PhysicsSystem::Console_GetMetrics() const
 {
     std::lock_guard<std::mutex> lock(m_metricsMutex);
@@ -545,7 +1377,7 @@ std::string PhysicsSystem::Console_ListBodies() const
 {
     std::stringstream ss;
     ss << "=== Physics Bodies (" << m_bodies.size() << ") ===\n";
-    
+
     for (const auto& body : m_bodies) {
         if (body) {
             ss << body->GetName() << " - " << PhysicsBodyTypeToString(body->GetType());
@@ -553,7 +1385,7 @@ std::string PhysicsSystem::Console_ListBodies() const
             ss << " at (" << pos.x << ", " << pos.y << ", " << pos.z << ")\n";
         }
     }
-    
+
     return ss.str();
 }
 
@@ -563,7 +1395,7 @@ std::string PhysicsSystem::Console_GetBodyInfo(const std::string& name) const
     if (it != m_namedBodies.end() && it->second) {
         return it->second->GetInfo();
     }
-    
+
     return "Physics body not found: " + name;
 }
 
@@ -575,7 +1407,7 @@ bool PhysicsSystem::Console_CreateBody(const std::string& name, const std::strin
     desc.type = StringToPhysicsBodyType(type);
     desc.shape.type = CollisionShapeType::Box; // Default to box
     desc.mass = (desc.type == PhysicsBodyType::Static) ? 0.0f : 1.0f;
-    
+
     auto body = CreateBody(desc);
     return body != nullptr;
 }
@@ -587,14 +1419,14 @@ bool PhysicsSystem::Console_RemoveBody(const std::string& name)
         RemoveBody(it->second);
         return true;
     }
-    
+
     return false;
 }
 
 void PhysicsSystem::Console_SetGravity(float x, float y, float z)
 {
     SetGravity({x, y, z});
-    Spark::SimpleConsole::GetInstance().LogSuccess("Gravity set to (" + 
+    Spark::SimpleConsole::GetInstance().LogSuccess("Gravity set to (" +
         std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + ")");
 }
 
@@ -614,7 +1446,7 @@ void PhysicsSystem::Console_ApplyForce(const std::string& name, float x, float y
     auto it = m_namedBodies.find(name);
     if (it != m_namedBodies.end() && it->second) {
         it->second->ApplyForce({x, y, z});
-        Spark::SimpleConsole::GetInstance().LogSuccess("Applied force (" + 
+        Spark::SimpleConsole::GetInstance().LogSuccess("Applied force (" +
             std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + ") to " + name);
     } else {
         Spark::SimpleConsole::GetInstance().LogError("Physics body not found: " + name);
@@ -626,27 +1458,11 @@ void PhysicsSystem::Console_ApplyImpulse(const std::string& name, float x, float
     auto it = m_namedBodies.find(name);
     if (it != m_namedBodies.end() && it->second) {
         it->second->ApplyImpulse({x, y, z});
-        Spark::SimpleConsole::GetInstance().LogSuccess("Applied impulse (" + 
+        Spark::SimpleConsole::GetInstance().LogSuccess("Applied impulse (" +
             std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + ") to " + name);
     } else {
         Spark::SimpleConsole::GetInstance().LogError("Physics body not found: " + name);
     }
-}
-
-void PhysicsSystem::RegisterMaterial(const std::string& name, const PhysicsMaterial& material)
-{
-    m_materials[name] = material;
-}
-
-const PhysicsMaterial* PhysicsSystem::GetMaterial(const std::string& name) const
-{
-    auto it = m_materials.find(name);
-    return (it != m_materials.end()) ? &it->second : nullptr;
-}
-
-void PhysicsSystem::RenderDebug()
-{
-    // Note: In real implementation would render Bullet debug visualization
 }
 
 // ============================================================================

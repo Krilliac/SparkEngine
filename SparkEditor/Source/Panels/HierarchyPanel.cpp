@@ -8,8 +8,15 @@
 #include "HierarchyPanel.h"
 #include <imgui.h>
 #include <iostream>
+#include <cstring>
 
 namespace SparkEditor {
+
+// File-scope state for rename and clipboard operations
+static std::string m_clipboardObject;
+static std::string m_renamingTarget;
+static bool        m_renameRequested = false;
+static char        m_renameInputBuffer[256] = {};
 
 HierarchyPanel::HierarchyPanel() 
     : EditorPanel("Hierarchy", "hierarchy_panel") {
@@ -88,6 +95,46 @@ void HierarchyPanel::Render() {
             if (ImGui::MenuItem("Camera")) CreateNewObject("Camera");
             ImGui::EndPopup();
         }
+
+        // Rename popup
+        if (m_renameRequested) {
+            ImGui::OpenPopup("RenameObject");
+            m_renameRequested = false;
+        }
+
+        if (ImGui::BeginPopup("RenameObject")) {
+            ImGui::Text("Rename: %s", m_renamingTarget.c_str());
+            ImGui::Separator();
+
+            bool confirmed = ImGui::InputText("##RenameInput", m_renameInputBuffer,
+                                              sizeof(m_renameInputBuffer),
+                                              ImGuiInputTextFlags_EnterReturnsTrue);
+            // Auto-focus the input the first time the popup opens
+            if (ImGui::IsWindowAppearing()) {
+                ImGui::SetKeyboardFocusHere(-1);
+            }
+
+            if (confirmed || ImGui::Button("OK")) {
+                std::string newName(m_renameInputBuffer);
+                if (!newName.empty() && newName != m_renamingTarget) {
+                    auto it = std::find(m_sceneObjects.begin(), m_sceneObjects.end(), m_renamingTarget);
+                    if (it != m_sceneObjects.end()) {
+                        *it = newName;
+                        if (m_selectedObject == m_renamingTarget) {
+                            m_selectedObject = newName;
+                        }
+                        std::cout << "Renamed object: " << m_renamingTarget << " -> " << newName << std::endl;
+                    }
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
     }
     EndPanel();
 }
@@ -143,7 +190,9 @@ void HierarchyPanel::RenderContextMenu() {
         ImGui::Separator();
         
         if (ImGui::MenuItem("Rename")) {
-            // TODO: Implement rename
+            m_renamingTarget = m_contextMenuTarget;
+            m_renameRequested = true;
+            snprintf(m_renameInputBuffer, sizeof(m_renameInputBuffer), "%s", m_contextMenuTarget.c_str());
         }
         if (ImGui::MenuItem("Duplicate")) {
             DuplicateObject(m_contextMenuTarget);
@@ -153,10 +202,15 @@ void HierarchyPanel::RenderContextMenu() {
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Copy")) {
-            // TODO: Implement copy
+            m_clipboardObject = m_contextMenuTarget;
+            std::cout << "Copied object to clipboard: " << m_contextMenuTarget << std::endl;
         }
-        if (ImGui::MenuItem("Paste")) {
-            // TODO: Implement paste
+        if (ImGui::MenuItem("Paste", nullptr, false, !m_clipboardObject.empty())) {
+            // Duplicate the previously-copied entity into the scene
+            if (!m_clipboardObject.empty()) {
+                DuplicateObject(m_clipboardObject);
+                std::cout << "Pasted object from clipboard: " << m_clipboardObject << std::endl;
+            }
         }
         
         ImGui::EndPopup();

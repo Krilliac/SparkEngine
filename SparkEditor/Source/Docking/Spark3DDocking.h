@@ -1,6 +1,6 @@
 /**
- * @file Spark3DDocking_stub.h
- * @brief Stub implementation of 3D Docking system to fix build issues
+ * @file Spark3DDocking.h
+ * @brief 3D Docking system (stub — not yet implemented)
  * @author Spark Engine Team
  * @date 2025
  */

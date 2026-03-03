@@ -416,33 +416,133 @@ std::string AssetDatabase::GenerateGUID(const std::string& filePath) const
 
 bool AssetDatabase::LoadAssetMetadata(const std::string& assetPath)
 {
-    std::string metadataPath = m_metadataDirectory + "/" + 
+    std::string metadataPath = m_metadataDirectory + "/" +
                               std::filesystem::path(assetPath).filename().string() + ".meta";
-    
+
     std::ifstream file(metadataPath);
     if (!file.is_open()) {
         return false;
     }
-    
-    // TODO: Implement proper metadata loading (JSON/XML)
-    // For now, just return true to indicate the file exists
+
+    // Simple JSON metadata parser.  Expected format:
+    // {
+    //   "guid": "...",
+    //   "type": "...",
+    //   "version": "1.0",
+    //   "importSettings": { "key": "value", ... }
+    // }
+    std::string content((std::istreambuf_iterator<char>(file)),
+                         std::istreambuf_iterator<char>());
+    file.close();
+
+    // Minimal key-value extractor for flat JSON
+    auto extractValue = [&](const std::string& key) -> std::string {
+        std::string search = "\"" + key + "\"";
+        size_t pos = content.find(search);
+        if (pos == std::string::npos) return "";
+        pos = content.find(':', pos);
+        if (pos == std::string::npos) return "";
+        pos = content.find('\"', pos + 1);
+        if (pos == std::string::npos) return "";
+        size_t end = content.find('\"', pos + 1);
+        if (end == std::string::npos) return "";
+        return content.substr(pos + 1, end - pos - 1);
+    };
+
+    std::string guid = extractValue("guid");
+    std::string type = extractValue("type");
+
+    // Apply loaded metadata to the asset entry
+    auto it = m_assetMap.find(assetPath);
+    if (it != m_assetMap.end()) {
+        AssetInfo& asset = m_assets[it->second];
+        if (!guid.empty()) {
+            // Update GUID map
+            m_guidMap.erase(asset.guid);
+            asset.guid = guid;
+            m_guidMap[guid] = it->second;
+        }
+        if (!type.empty()) {
+            asset.type = type;
+        }
+    }
+
+    // Load import settings if present
+    AssetImportSettings settings;
+    std::string compressionFmt = extractValue("compressionFormat");
+    std::string audioFmt = extractValue("audioFormat");
+    std::string scaleStr = extractValue("scaleFactor");
+
+    if (!compressionFmt.empty()) settings.compressionFormat = compressionFmt;
+    if (!audioFmt.empty()) settings.audioFormat = audioFmt;
+    if (!scaleStr.empty()) {
+        try { settings.scaleFactor = std::stof(scaleStr); } catch (...) {}
+    }
+
+    std::string mipmapsStr = extractValue("generateMipmaps");
+    if (mipmapsStr == "false") settings.generateMipmaps = false;
+
+    std::string importMatStr = extractValue("importMaterials");
+    if (importMatStr == "false") settings.importMaterials = false;
+
+    std::string importAnimStr = extractValue("importAnimations");
+    if (importAnimStr == "false") settings.importAnimations = false;
+
+    m_importSettings[assetPath] = settings;
+
     return true;
 }
 
 bool AssetDatabase::SaveAssetMetadata(const std::string& assetPath)
 {
-    std::string metadataPath = m_metadataDirectory + "/" + 
+    std::string metadataPath = m_metadataDirectory + "/" +
                               std::filesystem::path(assetPath).filename().string() + ".meta";
-    
+
     std::ofstream file(metadataPath);
     if (!file.is_open()) {
         return false;
     }
-    
-    // TODO: Implement proper metadata saving (JSON/XML)
-    file << "# Metadata for " << assetPath << "\n";
-    file << "version: 1.0\n";
-    
+
+    // Look up the asset to write its current state
+    std::string guid;
+    std::string type;
+
+    auto it = m_assetMap.find(assetPath);
+    if (it != m_assetMap.end()) {
+        const AssetInfo& asset = m_assets[it->second];
+        guid = asset.guid;
+        type = asset.type;
+    }
+
+    // Write JSON metadata
+    file << "{\n";
+    file << "  \"version\": \"1.0\",\n";
+    file << "  \"guid\": \"" << guid << "\",\n";
+    file << "  \"type\": \"" << type << "\",\n";
+    file << "  \"path\": \"" << assetPath << "\",\n";
+
+    // Write import settings
+    auto settingsIt = m_importSettings.find(assetPath);
+    if (settingsIt != m_importSettings.end()) {
+        const auto& s = settingsIt->second;
+        file << "  \"importSettings\": {\n";
+        file << "    \"generateMipmaps\": \"" << (s.generateMipmaps ? "true" : "false") << "\",\n";
+        file << "    \"maxTextureSize\": \"" << s.maxTextureSize << "\",\n";
+        file << "    \"compressionFormat\": \"" << s.compressionFormat << "\",\n";
+        file << "    \"importMaterials\": \"" << (s.importMaterials ? "true" : "false") << "\",\n";
+        file << "    \"importAnimations\": \"" << (s.importAnimations ? "true" : "false") << "\",\n";
+        file << "    \"scaleFactor\": \"" << s.scaleFactor << "\",\n";
+        file << "    \"audioFormat\": \"" << s.audioFormat << "\",\n";
+        file << "    \"audioQuality\": \"" << s.audioQuality << "\",\n";
+        file << "    \"mono\": \"" << (s.mono ? "true" : "false") << "\"\n";
+        file << "  }\n";
+    } else {
+        file << "  \"importSettings\": {}\n";
+    }
+
+    file << "}\n";
+    file.close();
+
     return true;
 }
 
@@ -662,8 +762,74 @@ void AssetDatabase::HandleFileSystemChange(const FileSystemChange& change)
             break;
             
         case FileSystemEvent::Renamed:
-            // TODO: Handle file renames
+        {
+            // Handle file renames: the change.path contains the new path.
+            // We need to find the old entry and update it.  If oldPath is
+            // available via change.oldPath, use it; otherwise we attempt to
+            // find the entry whose file no longer exists on disk.
+            std::string newPath = change.path;
+            std::string oldPath;
+
+            // Try to identify the old path by finding an asset whose file
+            // no longer exists on disk.
+            {
+                std::lock_guard<std::mutex> lock(m_assetsMutex);
+                for (const auto& [path, index] : m_assetMap) {
+                    if (!std::filesystem::exists(path) && path != newPath) {
+                        oldPath = path;
+                        break;
+                    }
+                }
+            }
+
+            if (!oldPath.empty()) {
+                std::lock_guard<std::mutex> lock(m_assetsMutex);
+                auto mapIt = m_assetMap.find(oldPath);
+                if (mapIt != m_assetMap.end()) {
+                    size_t idx = mapIt->second;
+                    AssetInfo& asset = m_assets[idx];
+
+                    // Update the asset entry
+                    asset.path = newPath;
+                    asset.name = std::filesystem::path(newPath).filename().string();
+                    asset.type = DetermineAssetType(newPath);
+                    asset.isDirty = true;
+
+                    // Update path map
+                    m_assetMap.erase(mapIt);
+                    m_assetMap[newPath] = idx;
+
+                    // Rename metadata file
+                    std::string oldMetaPath = m_metadataDirectory + "/" +
+                        std::filesystem::path(oldPath).filename().string() + ".meta";
+                    std::string newMetaPath = m_metadataDirectory + "/" +
+                        std::filesystem::path(newPath).filename().string() + ".meta";
+
+                    try {
+                        if (std::filesystem::exists(oldMetaPath)) {
+                            std::filesystem::rename(oldMetaPath, newMetaPath);
+                        }
+                    } catch (const std::exception& e) {
+                        std::cerr << "Failed to rename metadata file: " << e.what() << "\n";
+                    }
+
+                    // Transfer import settings to the new path
+                    auto settingsIt = m_importSettings.find(oldPath);
+                    if (settingsIt != m_importSettings.end()) {
+                        m_importSettings[newPath] = settingsIt->second;
+                        m_importSettings.erase(settingsIt);
+                    }
+
+                    // Save updated metadata
+                    SaveAssetMetadata(newPath);
+                    std::cout << "Renamed asset: " << oldPath << " -> " << newPath << "\n";
+                }
+            } else {
+                // Could not determine old path; treat as a new import
+                ImportAsset(newPath);
+            }
             break;
+        }
     }
 }
 

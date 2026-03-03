@@ -373,9 +373,56 @@ NavMeshManager& NavMeshManager::GetInstance() {
 }
 
 bool NavMeshManager::LoadNavMesh(const std::string& name, const std::string& filepath) {
-    // File loading would deserialize a pre-baked navmesh
-    // For now, create an empty one as a placeholder
-    m_navMeshes[name] = std::make_unique<NavMeshData>();
+    std::ifstream file(filepath, std::ios::binary);
+    if (!file.is_open()) return false;
+
+    // Binary format: magic(4) + version(4) + settings + vertex count + vertices + triangle count + triangles + adjacency
+    char magic[4];
+    file.read(magic, 4);
+    if (std::string(magic, 4) != "SNAV") {
+        // Not a SparkEngine navmesh file — return false
+        return false;
+    }
+
+    uint32_t version;
+    file.read(reinterpret_cast<char*>(&version), 4);
+    if (version > 1) return false;
+
+    auto navMesh = std::make_unique<NavMeshData>();
+
+    // Read settings
+    file.read(reinterpret_cast<char*>(&navMesh->cellSize), sizeof(float));
+    file.read(reinterpret_cast<char*>(&navMesh->agentHeight), sizeof(float));
+    file.read(reinterpret_cast<char*>(&navMesh->agentRadius), sizeof(float));
+    file.read(reinterpret_cast<char*>(&navMesh->boundsMin), sizeof(XMFLOAT3));
+    file.read(reinterpret_cast<char*>(&navMesh->boundsMax), sizeof(XMFLOAT3));
+
+    // Read vertices
+    uint32_t vertexCount;
+    file.read(reinterpret_cast<char*>(&vertexCount), 4);
+    navMesh->vertices.resize(vertexCount);
+    file.read(reinterpret_cast<char*>(navMesh->vertices.data()), vertexCount * sizeof(XMFLOAT3));
+
+    // Read triangles
+    uint32_t triangleCount;
+    file.read(reinterpret_cast<char*>(&triangleCount), 4);
+    navMesh->triangles.resize(triangleCount);
+    for (uint32_t i = 0; i < triangleCount; ++i) {
+        file.read(reinterpret_cast<char*>(&navMesh->triangles[i].indices), sizeof(uint32_t) * 3);
+        file.read(reinterpret_cast<char*>(&navMesh->triangles[i].centroid), sizeof(XMFLOAT3));
+        file.read(reinterpret_cast<char*>(&navMesh->triangles[i].normal), sizeof(XMFLOAT3));
+        file.read(reinterpret_cast<char*>(&navMesh->triangles[i].area), sizeof(float));
+        uint32_t adjCount;
+        file.read(reinterpret_cast<char*>(&adjCount), 4);
+        navMesh->triangles[i].adjacency.resize(adjCount);
+        if (adjCount > 0) {
+            file.read(reinterpret_cast<char*>(navMesh->triangles[i].adjacency.data()), adjCount * sizeof(uint32_t));
+        }
+    }
+
+    if (!file.good()) return false;
+
+    m_navMeshes[name] = std::move(navMesh);
     return true;
 }
 
