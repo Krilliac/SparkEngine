@@ -30,7 +30,8 @@ ConsoleApp::~ConsoleApp() {
 void ConsoleApp::Run() {
     system("cls");
     std::wcout << L"========================================" << std::endl;
-    std::wcout << L"   Spark Engine Console v1.0.0" << std::endl;
+    std::wcout << L"   Spark Engine Console v2.0.0" << std::endl;
+    std::wcout << L"   Tab: Autocomplete | Up/Down: History" << std::endl;
     std::wcout << L"========================================" << std::endl;
     std::wcout << std::endl;
     PrintLog(L"Console application started. Type 'help' for commands or 'exit' to quit.");
@@ -258,8 +259,168 @@ void ConsoleApp::ReadEngineInput() {
 }
 
 void ConsoleApp::ReadUserInput() {
-    // TODO: Advanced input handling with history navigation
-    // This could handle arrow keys for command history
+    // Advanced input handling with history navigation and tab completion
+    std::string input;
+
+    while (m_running) {
+        if (_kbhit()) {
+            char ch = _getch();
+
+            // Handle special keys (arrows etc.)
+            if (ch == 0 || ch == -32) {
+                char scanCode = _getch();
+                switch (scanCode) {
+                case 72: { // Up arrow - previous command
+                    std::string prev = GetPreviousCommand();
+                    if (!prev.empty()) {
+                        ClearInputLine();
+                        input = prev;
+                        UpdateInputLine(input);
+                    }
+                    break;
+                }
+                case 80: { // Down arrow - next command
+                    ClearInputLine();
+                    std::string next = GetNextCommand();
+                    input = next;
+                    UpdateInputLine(input);
+                    break;
+                }
+                default:
+                    break;
+                }
+                continue;
+            }
+
+            // Reset tab state on non-tab
+            if (ch != '\t') {
+                m_tabIndex = -1;
+                m_tabCompletions.clear();
+            }
+
+            if (ch == '\r' || ch == '\n') {
+                HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+                WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
+
+                if (!input.empty()) {
+                    AddToHistory(input);
+                    std::string resolved = ResolveAlias(input);
+                    ExecuteCommand(resolved);
+                    input.clear();
+                }
+            } else if (ch == '\b') {
+                if (!input.empty()) {
+                    input.pop_back();
+                    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+                    WriteConsoleW(hOut, L"\b \b", 3, NULL, NULL);
+                }
+            } else if (ch == '\t') {
+                HandleTabCompletion(input);
+            } else if (ch == 27) { // Escape - clear line
+                ClearInputLine();
+                input.clear();
+            } else if (ch >= 32 && ch <= 126) {
+                input += ch;
+                HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+                wchar_t wch = static_cast<wchar_t>(ch);
+                WriteConsoleW(hOut, &wch, 1, NULL, NULL);
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+std::vector<std::string> ConsoleApp::GetCompletions(const std::string& prefix) {
+    std::vector<std::string> completions;
+
+    // Match registered commands
+    auto commands = m_commandRegistry.GetAllCommands();
+    for (const auto& cmd : commands) {
+        if (cmd.name.size() >= prefix.size() &&
+            cmd.name.substr(0, prefix.size()) == prefix) {
+            completions.push_back(cmd.name);
+        }
+    }
+
+    // Match aliases
+    for (const auto& pair : m_aliases) {
+        if (pair.first.size() >= prefix.size() &&
+            pair.first.substr(0, prefix.size()) == prefix) {
+            completions.push_back(pair.first);
+        }
+    }
+
+    // Match known engine commands
+    static const std::vector<std::string> engineCmds = {
+        "fps", "info", "memory_info", "graphics_info", "engine_status",
+        "render_debug", "shader_debug", "console_status"
+    };
+    for (const auto& cmd : engineCmds) {
+        if (cmd.size() >= prefix.size() && cmd.substr(0, prefix.size()) == prefix) {
+            completions.push_back(cmd);
+        }
+    }
+
+    std::sort(completions.begin(), completions.end());
+    // Remove duplicates
+    completions.erase(std::unique(completions.begin(), completions.end()), completions.end());
+    return completions;
+}
+
+void ConsoleApp::HandleTabCompletion(std::string& input) {
+    if (input.empty()) return;
+
+    if (m_tabIndex == -1) {
+        m_tabPrefix = input;
+        m_tabCompletions = GetCompletions(m_tabPrefix);
+        if (m_tabCompletions.empty()) return;
+        m_tabIndex = 0;
+    } else {
+        m_tabIndex = (m_tabIndex + 1) % static_cast<int>(m_tabCompletions.size());
+    }
+
+    // Show all completions on first tab when multiple matches
+    if (m_tabCompletions.size() > 1 && m_tabIndex == 0) {
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
+        SetConsoleColor(FOREGROUND_BLUE | FOREGROUND_GREEN);
+        for (const auto& comp : m_tabCompletions) {
+            std::wstring wcomp(comp.begin(), comp.end());
+            wcomp += L"  ";
+            WriteConsoleW(hOut, wcomp.c_str(), static_cast<DWORD>(wcomp.length()), NULL, NULL);
+        }
+        WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
+        SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+
+        // Re-display prompt
+        SetConsoleColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
+        WriteConsoleW(hOut, L"> ", 2, NULL, NULL);
+        SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+    }
+
+    // Replace input with completion
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    for (size_t i = 0; i < input.size(); ++i) {
+        WriteConsoleW(hOut, L"\b \b", 3, NULL, NULL);
+    }
+
+    input = m_tabCompletions[m_tabIndex];
+    std::wstring winput(input.begin(), input.end());
+    WriteConsoleW(hOut, winput.c_str(), static_cast<DWORD>(winput.length()), NULL, NULL);
+}
+
+std::string ConsoleApp::ResolveAlias(const std::string& input) {
+    std::istringstream iss(input);
+    std::string firstWord;
+    iss >> firstWord;
+
+    auto it = m_aliases.find(firstWord);
+    if (it != m_aliases.end()) {
+        std::string rest;
+        std::getline(iss, rest);
+        return it->second + rest;
+    }
+    return input;
 }
 
 void ConsoleApp::PrintLog(const std::wstring& msg) {
@@ -606,6 +767,83 @@ void ConsoleApp::RegisterDefaultCommands() {
             std::wcout.flush();
             return "";
         });
+
+    // Alias command
+    m_commandRegistry.RegisterCommand("alias",
+        "Create or list command aliases",
+        "alias [name] [command]",
+        [this](const std::vector<std::string>& args) -> std::string {
+            if (args.empty()) {
+                if (m_aliases.empty()) return "No aliases defined. Usage: alias <name> <command>";
+                std::stringstream ss;
+                ss << "Defined Aliases:\n";
+                for (const auto& pair : m_aliases) {
+                    ss << "  " << pair.first << " -> " << pair.second << "\n";
+                }
+                return ss.str();
+            }
+            if (args.size() < 2) {
+                auto it = m_aliases.find(args[0]);
+                if (it != m_aliases.end()) return "Alias '" + args[0] + "' -> '" + it->second + "'";
+                return "No alias '" + args[0] + "'. Usage: alias <name> <command>";
+            }
+            std::string cmd;
+            for (size_t i = 1; i < args.size(); ++i) {
+                if (i > 1) cmd += " ";
+                cmd += args[i];
+            }
+            m_aliases[args[0]] = cmd;
+            return "Alias set: " + args[0] + " -> " + cmd;
+        });
+
+    // Unalias command
+    m_commandRegistry.RegisterCommand("unalias",
+        "Remove a command alias",
+        "unalias <name|all>",
+        [this](const std::vector<std::string>& args) -> std::string {
+            if (args.empty()) return "Usage: unalias <name|all>";
+            if (args[0] == "all") {
+                size_t count = m_aliases.size();
+                m_aliases.clear();
+                return "Removed " + std::to_string(count) + " aliases";
+            }
+            if (m_aliases.erase(args[0]) > 0) return "Alias removed: " + args[0];
+            return "No alias '" + args[0] + "' found";
+        });
+
+    // Version command
+    m_commandRegistry.RegisterCommand("version",
+        "Show console version",
+        "version",
+        [](const std::vector<std::string>& args) -> std::string {
+            return "Spark Engine Console v2.0.0\n"
+                   "Features: Tab completion, command aliases, history navigation\n"
+                   "Build: Development";
+        });
+
+    // Uptime command
+    m_commandRegistry.RegisterCommand("uptime",
+        "Show how long the console has been running",
+        "uptime",
+        [](const std::vector<std::string>& args) -> std::string {
+            static auto startTime = std::chrono::steady_clock::now();
+            auto now = std::chrono::steady_clock::now();
+            auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
+            int h = static_cast<int>(uptime.count()) / 3600;
+            int m = (static_cast<int>(uptime.count()) % 3600) / 60;
+            int s = static_cast<int>(uptime.count()) % 60;
+            std::stringstream ss;
+            ss << "Console uptime: " << h << "h " << m << "m " << s << "s";
+            return ss.str();
+        });
+
+    // Set default aliases
+    m_aliases["cls"] = "clear";
+    m_aliases["q"] = "exit";
+    m_aliases["h"] = "help";
+    m_aliases["hist"] = "history";
+    m_aliases["tc"] = "test_connection";
+    m_aliases["pt"] = "pipe_test";
 }
 
 void ConsoleApp::AddToHistory(const std::string& cmd) {

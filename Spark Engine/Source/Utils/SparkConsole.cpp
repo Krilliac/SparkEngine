@@ -316,18 +316,21 @@ void SimpleConsole::Update() {
     if (!m_initialized || !m_visible) {
         return;
     }
-    
+
     // Update performance counters every frame
     static auto lastPerfUpdate = std::chrono::high_resolution_clock::now();
     auto now = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastPerfUpdate);
-    
+
     if (elapsed.count() > 100) { // Update every 100ms
         UpdatePerformanceCounters();
         UpdateGameState();
         lastPerfUpdate = now;
     }
-    
+
+    // Update watch variables
+    UpdateWatches();
+
     ProcessInput();
 }
 
@@ -389,9 +392,13 @@ void SimpleConsole::LogTrace(const std::string& message) {
     Log(message, "TRACE");
 }
 
-void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description) {
-    m_commands[name] = {handler, description};
+void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description, const std::string& category) {
+    m_commands[name] = {handler, description, category};
     LogTrace("Command registered: " + name);
+}
+
+void SimpleConsole::LogDebug(const std::string& message) {
+    Log(message, "DEBUG");
 }
 
 bool SimpleConsole::ExecuteCommand(const std::string& commandLine) {
@@ -508,37 +515,320 @@ void SimpleConsole::ProcessInput() {
     if (!_kbhit()) {
         return;
     }
-    
+
     char ch = _getch();
-    
+
+    // Handle special keys (arrows, etc.) - they come as 0 or 0xE0 followed by a scan code
+    if (ch == 0 || ch == -32) {
+        char scanCode = _getch();
+        switch (scanCode) {
+        case 72: // Up arrow
+            NavigateHistoryUp();
+            return;
+        case 80: // Down arrow
+            NavigateHistoryDown();
+            return;
+        case 75: // Left arrow
+            if (m_cursorPosition > 0) {
+                m_cursorPosition--;
+                Print("\b");
+            }
+            return;
+        case 77: // Right arrow
+            if (m_cursorPosition < static_cast<int>(m_currentInput.size())) {
+                Print(std::string(1, m_currentInput[m_cursorPosition]));
+                m_cursorPosition++;
+            }
+            return;
+        case 71: // Home
+            while (m_cursorPosition > 0) {
+                Print("\b");
+                m_cursorPosition--;
+            }
+            return;
+        case 79: // End
+            while (m_cursorPosition < static_cast<int>(m_currentInput.size())) {
+                Print(std::string(1, m_currentInput[m_cursorPosition]));
+                m_cursorPosition++;
+            }
+            return;
+        case 83: // Delete
+            if (m_cursorPosition < static_cast<int>(m_currentInput.size())) {
+                m_currentInput.erase(m_cursorPosition, 1);
+                RedrawInputLine();
+            }
+            return;
+        default:
+            return;
+        }
+    }
+
+    // Reset tab completion state on non-tab input
+    if (ch != '\t') {
+        m_tabIndex = -1;
+        m_tabCompletions.clear();
+    }
+
     if (ch == '\r' || ch == '\n') {
         Print("\n");
-        
+
         if (!m_currentInput.empty()) {
+            // Resolve aliases before execution
+            std::string resolvedCommand = ResolveAliases(m_currentInput);
+
             m_commandHistory.push_back(m_currentInput);
             if (m_commandHistory.size() > 100) {
                 m_commandHistory.pop_front();
             }
             m_historyIndex = static_cast<int>(m_commandHistory.size());
-            
-            ExecuteCommand(m_currentInput);
+
+            ExecuteCommand(resolvedCommand);
             m_currentInput.clear();
+            m_cursorPosition = 0;
         }
-        
+
         DisplayPrompt();
     } else if (ch == '\b') {
-        if (!m_currentInput.empty()) {
-            m_currentInput.pop_back();
-            Print("\b \b");
+        if (m_cursorPosition > 0) {
+            m_currentInput.erase(m_cursorPosition - 1, 1);
+            m_cursorPosition--;
+            RedrawInputLine();
         }
-    } else if (ch == 27) {
+    } else if (ch == '\t') {
+        HandleTabCompletion();
+    } else if (ch == 27) { // Escape - clear line
         for (size_t i = 0; i < m_currentInput.size(); ++i) {
             Print("\b \b");
         }
         m_currentInput.clear();
+        m_cursorPosition = 0;
+    } else if (ch == 21) { // Ctrl+U - clear line before cursor
+        std::string remaining = m_currentInput.substr(m_cursorPosition);
+        for (int i = 0; i < m_cursorPosition; ++i) {
+            Print("\b \b");
+        }
+        m_currentInput = remaining;
+        m_cursorPosition = 0;
+        RedrawInputLine();
+    } else if (ch == 11) { // Ctrl+K - clear line after cursor
+        int charsToDelete = static_cast<int>(m_currentInput.size()) - m_cursorPosition;
+        m_currentInput = m_currentInput.substr(0, m_cursorPosition);
+        for (int i = 0; i < charsToDelete; ++i) {
+            Print(" ");
+        }
+        for (int i = 0; i < charsToDelete; ++i) {
+            Print("\b");
+        }
     } else if (ch >= 32 && ch <= 126) {
-        m_currentInput += ch;
-        Print(std::string(1, ch), Color::White);
+        m_currentInput.insert(m_currentInput.begin() + m_cursorPosition, ch);
+        m_cursorPosition++;
+        if (m_cursorPosition == static_cast<int>(m_currentInput.size())) {
+            Print(std::string(1, ch), Color::White);
+        } else {
+            RedrawInputLine();
+        }
+    }
+}
+
+void SimpleConsole::RedrawInputLine() {
+    // Move cursor to start of input (after prompt)
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(m_consoleOutput, &csbi);
+
+    // Calculate prompt length ("SPARK> " = 7 chars)
+    int promptLen = 7;
+    SHORT lineStart = csbi.dwCursorPosition.Y;
+
+    // Move to start of input area
+    COORD startPos = { static_cast<SHORT>(promptLen), lineStart };
+    SetConsoleCursorPosition(m_consoleOutput, startPos);
+
+    // Write the full input, overwriting old content
+    DWORD written;
+    std::string padded = m_currentInput + std::string(10, ' '); // Pad to clear old chars
+    WriteConsoleA(m_consoleOutput, padded.c_str(), static_cast<DWORD>(padded.length()), &written, NULL);
+
+    // Move cursor to correct position
+    COORD cursorPos = { static_cast<SHORT>(promptLen + m_cursorPosition), lineStart };
+    SetConsoleCursorPosition(m_consoleOutput, cursorPos);
+}
+
+void SimpleConsole::HandleTabCompletion() {
+    if (m_currentInput.empty()) {
+        return;
+    }
+
+    // Build completions list on first tab press
+    if (m_tabIndex == -1) {
+        m_tabPrefix = m_currentInput;
+        m_tabCompletions = GetCompletions(m_tabPrefix);
+
+        if (m_tabCompletions.empty()) {
+            return;
+        }
+        m_tabIndex = 0;
+    } else {
+        m_tabIndex = (m_tabIndex + 1) % static_cast<int>(m_tabCompletions.size());
+    }
+
+    // Show completion count on first tab
+    if (m_tabCompletions.size() > 1 && m_tabIndex == 0) {
+        // If multiple completions, show them all briefly
+        Print("\n", Color::DarkGray);
+        for (const auto& completion : m_tabCompletions) {
+            Print("  " + completion, Color::DarkGray);
+        }
+        Print("\n");
+        DisplayPrompt();
+    }
+
+    // Replace current input with the selected completion
+    // Clear old input visually
+    for (size_t i = 0; i < m_currentInput.size(); ++i) {
+        Print("\b \b");
+    }
+
+    m_currentInput = m_tabCompletions[m_tabIndex];
+    m_cursorPosition = static_cast<int>(m_currentInput.size());
+    Print(m_currentInput, Color::White);
+}
+
+std::vector<std::string> SimpleConsole::GetCompletions(const std::string& prefix) {
+    std::vector<std::string> completions;
+
+    // Match commands
+    for (const auto& pair : m_commands) {
+        if (pair.first.size() >= prefix.size() &&
+            pair.first.substr(0, prefix.size()) == prefix) {
+            completions.push_back(pair.first);
+        }
+    }
+
+    // Match aliases
+    for (const auto& pair : m_aliases) {
+        if (pair.first.size() >= prefix.size() &&
+            pair.first.substr(0, prefix.size()) == prefix) {
+            completions.push_back(pair.first);
+        }
+    }
+
+    std::sort(completions.begin(), completions.end());
+    return completions;
+}
+
+void SimpleConsole::NavigateHistoryUp() {
+    if (m_commandHistory.empty()) {
+        return;
+    }
+
+    if (m_historyIndex > 0) {
+        m_historyIndex--;
+    }
+
+    // Clear current input visually
+    for (size_t i = 0; i < m_currentInput.size(); ++i) {
+        Print("\b \b");
+    }
+
+    m_currentInput = m_commandHistory[m_historyIndex];
+    m_cursorPosition = static_cast<int>(m_currentInput.size());
+    Print(m_currentInput, Color::White);
+}
+
+void SimpleConsole::NavigateHistoryDown() {
+    if (m_commandHistory.empty()) {
+        return;
+    }
+
+    // Clear current input visually
+    for (size_t i = 0; i < m_currentInput.size(); ++i) {
+        Print("\b \b");
+    }
+
+    if (m_historyIndex < static_cast<int>(m_commandHistory.size()) - 1) {
+        m_historyIndex++;
+        m_currentInput = m_commandHistory[m_historyIndex];
+    } else {
+        m_historyIndex = static_cast<int>(m_commandHistory.size());
+        m_currentInput.clear();
+    }
+
+    m_cursorPosition = static_cast<int>(m_currentInput.size());
+    Print(m_currentInput, Color::White);
+}
+
+// Alias system
+void SimpleConsole::SetAlias(const std::string& alias, const std::string& command) {
+    m_aliases[alias] = command;
+}
+
+void SimpleConsole::RemoveAlias(const std::string& alias) {
+    m_aliases.erase(alias);
+}
+
+std::string SimpleConsole::ResolveAliases(const std::string& commandLine) {
+    auto args = ParseCommand(commandLine);
+    if (args.empty()) return commandLine;
+
+    auto it = m_aliases.find(args[0]);
+    if (it != m_aliases.end()) {
+        // Replace the alias with the real command, preserving arguments
+        std::string resolved = it->second;
+        for (size_t i = 1; i < args.size(); ++i) {
+            resolved += " " + args[i];
+        }
+        return resolved;
+    }
+    return commandLine;
+}
+
+// Watch system
+void SimpleConsole::AddWatch(const std::string& name, std::function<std::string()> getter) {
+    // Check if watch already exists
+    for (auto& entry : m_watchEntries) {
+        if (entry.name == name) {
+            entry.getter = getter;
+            entry.active = true;
+            return;
+        }
+    }
+    m_watchEntries.push_back({name, getter, "", true});
+}
+
+void SimpleConsole::RemoveWatch(const std::string& name) {
+    m_watchEntries.erase(
+        std::remove_if(m_watchEntries.begin(), m_watchEntries.end(),
+            [&name](const WatchEntry& e) { return e.name == name; }),
+        m_watchEntries.end());
+}
+
+void SimpleConsole::UpdateWatches() {
+    if (!m_watchActive || m_watchEntries.empty()) return;
+
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastWatchUpdate);
+    if (elapsed.count() < 500) return; // Update every 500ms
+    m_lastWatchUpdate = now;
+
+    bool anyChanged = false;
+    for (auto& entry : m_watchEntries) {
+        if (!entry.active) continue;
+        std::string newValue = entry.getter();
+        if (newValue != entry.lastValue) {
+            entry.lastValue = newValue;
+            anyChanged = true;
+        }
+    }
+
+    if (anyChanged) {
+        // Update console title with watch info
+        std::string title = "Spark Engine - Development Console | ";
+        for (const auto& entry : m_watchEntries) {
+            if (entry.active) {
+                title += entry.name + "=" + entry.lastValue + " | ";
+            }
+        }
+        SetConsoleTitleA(title.c_str());
     }
 }
 
@@ -628,81 +918,188 @@ void SimpleConsole::SetupConsoleHandles() {
 }
 
 void SimpleConsole::RegisterDefaultCommands() {
-    // Enhanced help system
+    // Enhanced help system with category grouping
     RegisterCommand("help", [this](const std::vector<std::string>& args) -> std::string {
         if (args.empty()) {
+            // Group commands by category
+            std::map<std::string, std::vector<std::pair<std::string, std::string>>> categories;
+            for (const auto& pair : m_commands) {
+                categories[pair.second.category].push_back({pair.first, pair.second.description});
+            }
+
             std::stringstream ss;
             ss << "==========================================\n";
             ss << "          COMMAND REFERENCE\n";
             ss << "==========================================\n\n";
-            
-            // Categorize commands
-            ss << "SYSTEM COMMANDS:\n";
-            for (const auto& pair : m_commands) {
-                if (pair.first == "help" || pair.first == "clear" || pair.first == "history" || 
-                    pair.first == "exit" || pair.first == "version" || pair.first == "uptime") {
-                    ss << "  " << std::left << std::setw(20) << pair.first << " - " << pair.second.description << "\n";
+
+            for (auto& cat : categories) {
+                ss << cat.first << ":\n";
+                // Sort commands within category
+                std::sort(cat.second.begin(), cat.second.end());
+                for (const auto& cmd : cat.second) {
+                    ss << "  " << std::left << std::setw(22) << cmd.first << " - " << cmd.second << "\n";
                 }
+                ss << "\n";
             }
-            
-            ss << "\nLIVE INTEGRATION:\n";
-            for (const auto& pair : m_commands) {
-                if (pair.first.find("fps") == 0 || pair.first.find("memory") == 0 || 
-                    pair.first.find("player_") == 0 || pair.first.find("physics_") == 0 ||
-                    pair.first.find("config_") == 0) {
-                    ss << "  " << std::left << std::setw(20) << pair.first << " - " << pair.second.description << "\n";
+
+            // Show aliases
+            if (!m_aliases.empty()) {
+                ss << "ALIASES:\n";
+                for (const auto& alias : m_aliases) {
+                    ss << "  " << std::left << std::setw(22) << alias.first << " -> " << alias.second << "\n";
                 }
+                ss << "\n";
             }
-            
-            ss << "\nType 'help <command>' for detailed information about a specific command.";
+
+            ss << "Type 'help <command>' for detailed info | Tab for autocomplete | Up/Down for history";
+            return ss.str();
+        } else if (args[0] == "categories") {
+            // List just categories and command counts
+            std::map<std::string, int> catCounts;
+            for (const auto& pair : m_commands) {
+                catCounts[pair.second.category]++;
+            }
+            std::stringstream ss;
+            ss << "Command Categories:\n";
+            for (const auto& cat : catCounts) {
+                ss << "  " << std::left << std::setw(20) << cat.first << " (" << cat.second << " commands)\n";
+            }
+            ss << "\nUse 'help <category_name>' to list commands in a category.";
             return ss.str();
         } else {
+            // Check if it's a command name
             auto it = m_commands.find(args[0]);
             if (it != m_commands.end()) {
-                return "Command: " + args[0] + "\nDescription: " + it->second.description;
-            } else {
-                return "Unknown command: " + args[0];
+                std::stringstream ss;
+                ss << "Command: " << args[0] << "\n";
+                ss << "Category: " << it->second.category << "\n";
+                ss << "Description: " << it->second.description;
+                return ss.str();
             }
+
+            // Check if it's a category name (case-insensitive search)
+            std::string searchCat = args[0];
+            std::transform(searchCat.begin(), searchCat.end(), searchCat.begin(), ::tolower);
+            std::stringstream ss;
+            bool found = false;
+            for (const auto& pair : m_commands) {
+                std::string cat = pair.second.category;
+                std::transform(cat.begin(), cat.end(), cat.begin(), ::tolower);
+                if (cat.find(searchCat) != std::string::npos) {
+                    if (!found) {
+                        ss << "Commands matching '" << args[0] << "':\n";
+                        found = true;
+                    }
+                    ss << "  " << std::left << std::setw(22) << pair.first << " - " << pair.second.description << "\n";
+                }
+            }
+            if (found) return ss.str();
+
+            return "Unknown command or category: " + args[0];
         }
-    }, "Display help information for commands");
+    }, "Display help information for commands", "System");
     
     RegisterCommand("clear", [this](const std::vector<std::string>& args) -> std::string {
         Clear();
         return "";
-    }, "Clear the console screen");
-    
+    }, "Clear the console screen", "System");
+
     RegisterCommand("history", [this](const std::vector<std::string>& args) -> std::string {
         std::stringstream ss;
         ss << "Command History (" << m_commandHistory.size() << " entries):\n";
         ss << "==========================================\n";
-        for (size_t i = 0; i < m_commandHistory.size(); ++i) {
+        int start = 0;
+        if (!args.empty()) {
+            try {
+                int count = std::stoi(args[0]);
+                start = std::max(0, static_cast<int>(m_commandHistory.size()) - count);
+            } catch (...) {}
+        }
+        for (size_t i = start; i < m_commandHistory.size(); ++i) {
             ss << std::right << std::setw(3) << (i + 1) << ": " << m_commandHistory[i] << "\n";
         }
         return ss.str();
-    }, "Display command history");
-    
+    }, "Display command history (usage: history [count])", "System");
+
     RegisterCommand("exit", [this](const std::vector<std::string>& args) -> std::string {
         PostQuitMessage(0);
         return "Engine shutdown initiated";
-    }, "Exit the application");
-    
+    }, "Exit the application", "System");
+
+    RegisterCommand("quit", [this](const std::vector<std::string>& args) -> std::string {
+        PostQuitMessage(0);
+        return "Engine shutdown initiated";
+    }, "Exit the application (alias for exit)", "System");
+
     RegisterCommand("version", [](const std::vector<std::string>& args) -> std::string {
-        return "Spark Engine v1.0.0 - Development Build\nConsole System v2.0 - Professional Interface";
-    }, "Display engine version information");
-    
+        return "Spark Engine v1.0.0 - Development Build\nConsole System v3.0 - Professional Interface\n"
+               "Features: Tab completion, history nav, aliases, watches, log filtering";
+    }, "Display engine version information", "System");
+
     RegisterCommand("uptime", [this](const std::vector<std::string>& args) -> std::string {
         static auto startTime = std::chrono::steady_clock::now();
         auto now = std::chrono::steady_clock::now();
         auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
-        
+
         int hours = static_cast<int>(uptime.count()) / 3600;
         int minutes = (static_cast<int>(uptime.count()) % 3600) / 60;
         int seconds = static_cast<int>(uptime.count()) % 60;
-        
+
         std::stringstream ss;
         ss << "Engine uptime: " << hours << "h " << minutes << "m " << seconds << "s";
         return ss.str();
-    }, "Display engine uptime");
+    }, "Display engine uptime", "System");
+
+    RegisterCommand("echo", [](const std::vector<std::string>& args) -> std::string {
+        std::stringstream ss;
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (i > 0) ss << " ";
+            ss << args[i];
+        }
+        return ss.str();
+    }, "Echo text back to console", "System");
+
+    RegisterCommand("exec", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: exec <command1; command2; ...>";
+        // Join all args and split by semicolons to execute multiple commands
+        std::string combined;
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (i > 0) combined += " ";
+            combined += args[i];
+        }
+        std::istringstream iss(combined);
+        std::string cmd;
+        int count = 0;
+        while (std::getline(iss, cmd, ';')) {
+            // Trim
+            cmd.erase(0, cmd.find_first_not_of(" \t"));
+            cmd.erase(cmd.find_last_not_of(" \t") + 1);
+            if (!cmd.empty()) {
+                ExecuteCommand(cmd);
+                count++;
+            }
+        }
+        return "Executed " + std::to_string(count) + " command(s)";
+    }, "Execute multiple semicolon-separated commands", "System");
+
+    RegisterCommand("repeat", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.size() < 2) return "Usage: repeat <count> <command>";
+        try {
+            int count = std::stoi(args[0]);
+            if (count < 1 || count > 100) return "Repeat count must be between 1 and 100";
+            std::string cmd;
+            for (size_t i = 1; i < args.size(); ++i) {
+                if (i > 1) cmd += " ";
+                cmd += args[i];
+            }
+            for (int i = 0; i < count; ++i) {
+                ExecuteCommand(cmd);
+            }
+            return "Repeated '" + cmd + "' " + std::to_string(count) + " times";
+        } catch (...) {
+            return "Invalid count. Must be a number.";
+        }
+    }, "Repeat a command N times (usage: repeat <count> <command>)", "System");
 }
 
 void SimpleConsole::RegisterAdvancedCommands() {
@@ -716,6 +1113,17 @@ void SimpleConsole::RegisterAdvancedCommands() {
     RegisterSystemCommands();
     RegisterGraphicsCommands();
     RegisterAudioCommands();
+    RegisterLogCommands();
+    RegisterWatchCommands();
+    RegisterAliasCommands();
+    RegisterDebugCommands();
+    RegisterFileCommands();
+    RegisterInputCommands();
+    RegisterRenderingCommands();
+    RegisterProfilingCommands();
+    RegisterNetworkingCommands();
+    RegisterTestingCommands();
+    RegisterGameCommands();
 }
 
 void SimpleConsole::RegisterPerformanceCommands() {
@@ -996,7 +1404,7 @@ void SimpleConsole::RegisterPlayerCommands() {
 void SimpleConsole::RegisterPhysicsCommands() {
     RegisterCommand("physics_gravity", [](const std::vector<std::string>& args) -> std::string {
         if (args.empty()) {
-            return "Current gravity: " + std::to_string(g_gameState.gravity) + " units/sec²\n"
+            return "Current gravity: " + std::to_string(g_gameState.gravity) + " units/secï¿½\n"
                    "Usage: physics_gravity <value> (negative for downward)";
         }
         
@@ -1019,7 +1427,7 @@ void SimpleConsole::RegisterPhysicsCommands() {
                 g_configSystem.SaveConfig();
             }
             
-            return "Gravity set to " + std::to_string(g_gameState.gravity) + " units/sec² (applied to game systems)";
+            return "Gravity set to " + std::to_string(g_gameState.gravity) + " units/secï¿½ (applied to game systems)";
         } catch (...) {
             return "Invalid gravity value. Must be a number.";
         }
@@ -1136,7 +1544,7 @@ void SimpleConsole::RegisterPhysicsCommands() {
         }
         
         return "Physics parameters reset to defaults and applied to game systems:\n"
-               "  Gravity: " + std::to_string(g_gameState.gravity) + " units/sec²\n"
+               "  Gravity: " + std::to_string(g_gameState.gravity) + " units/secï¿½\n"
                "  Speed: " + std::to_string(g_gameState.playerSpeed) + " units/sec\n"
                "  Jump Height: " + std::to_string(g_gameState.jumpHeight) + " units\n"
                "  Friction: " + std::to_string(g_gameState.friction);
@@ -1425,15 +1833,15 @@ void SimpleConsole::RegisterCameraCommands() {
                << state.position.y << ", " 
                << state.position.z << ")\n";
             ss << "Rotation:         (" << std::setprecision(1) 
-               << state.rotation.x << "°, " 
-               << state.rotation.y << "°, " 
-               << state.rotation.z << "°)\n";
+               << state.rotation.x << "ï¿½, " 
+               << state.rotation.y << "ï¿½, " 
+               << state.rotation.z << "ï¿½)\n";
             ss << "Forward:          (" << std::setprecision(3) 
                << state.forward.x << ", " 
                << state.forward.y << ", " 
                << state.forward.z << ")\n";
-            ss << "FOV:              " << std::setprecision(1) << state.defaultFov << "° (Normal), " 
-               << state.zoomedFov << "° (Zoomed)\n";
+            ss << "FOV:              " << std::setprecision(1) << state.defaultFov << "ï¿½ (Normal), " 
+               << state.zoomedFov << "ï¿½ (Zoomed)\n";
             ss << "Movement Speed:   " << state.moveSpeed << " units/sec\n";
             ss << "Rotation Speed:   " << state.rotationSpeed << "x\n";
             ss << "Mouse Sensitivity:" << state.mouseSensitivity << "x\n";
@@ -1550,9 +1958,9 @@ void SimpleConsole::RegisterCameraCommands() {
             auto state = g_game->GetCamera()->Console_GetState();
             std::stringstream ss;
             ss << "Current camera rotation: (" << std::fixed << std::setprecision(1) 
-               << state.rotation.x << "°, " 
-               << state.rotation.y << "°, " 
-               << state.rotation.z << "°)\n";
+               << state.rotation.x << "ï¿½, " 
+               << state.rotation.y << "ï¿½, " 
+               << state.rotation.z << "ï¿½)\n";
             ss << "Usage: camera_rotation <pitch> <yaw> <roll> (in degrees)";
             return ss.str();
         }
@@ -1569,7 +1977,7 @@ void SimpleConsole::RegisterCameraCommands() {
             g_game->GetCamera()->Console_SetRotation(pitch, yaw, roll);
             
             std::stringstream ss;
-            ss << "Camera rotation set to (" << pitch << "°, " << yaw << "°, " << roll << "°) via live game integration";
+            ss << "Camera rotation set to (" << pitch << "ï¿½, " << yaw << "ï¿½, " << roll << "ï¿½) via live game integration";
             return ss.str();
         } catch (...) {
             return "Invalid rotation values. All values must be numbers.";
@@ -1901,4 +2309,1106 @@ void SimpleConsole::RegisterAudioCommands() {
         return "Audio System Status:\n  Volume: 100%\n  Playing: 0 sounds\n  Available: Yes";
     });
 }
+
+// ============================================================================
+// LOG COMMANDS - Filtering, searching, and export
+// ============================================================================
+void SimpleConsole::RegisterLogCommands() {
+    RegisterCommand("log_filter", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            if (m_logFilter.empty()) {
+                return "No log filter active. Usage: log_filter <type|clear>\n"
+                       "Types: INFO, WARNING, ERROR, SUCCESS, CRITICAL, DEBUG, TRACE";
+            }
+            return "Current filter: " + m_logFilter + "\nUse 'log_filter clear' to remove";
+        }
+
+        if (args[0] == "clear" || args[0] == "off" || args[0] == "none") {
+            m_logFilter.clear();
+            return "Log filter cleared - showing all messages";
+        }
+
+        std::string filter = args[0];
+        std::transform(filter.begin(), filter.end(), filter.begin(), ::toupper);
+        m_logFilter = filter;
+        return "Log filter set to: " + m_logFilter;
+    }, "Filter log output by type (INFO/WARNING/ERROR/etc.)", "Logging");
+
+    RegisterCommand("log_search", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            return "Usage: log_search <term> [max_results]\n"
+                   "Searches through log history for matching entries";
+        }
+
+        std::string searchTerm = args[0];
+        std::transform(searchTerm.begin(), searchTerm.end(), searchTerm.begin(), ::tolower);
+
+        int maxResults = 20;
+        if (args.size() > 1) {
+            try { maxResults = std::stoi(args[1]); } catch (...) {}
+        }
+
+        auto history = GetLogHistory();
+        std::stringstream ss;
+        int found = 0;
+        ss << "Search results for '" << args[0] << "':\n";
+
+        for (int i = static_cast<int>(history.size()) - 1; i >= 0 && found < maxResults; --i) {
+            std::string lowerMsg = history[i].message;
+            std::transform(lowerMsg.begin(), lowerMsg.end(), lowerMsg.begin(), ::tolower);
+            if (lowerMsg.find(searchTerm) != std::string::npos) {
+                ss << "  [" << history[i].timestamp << "] [" << history[i].type << "] " << history[i].message << "\n";
+                found++;
+            }
+        }
+
+        if (found == 0) {
+            return "No log entries matching '" + args[0] + "'";
+        }
+        ss << "\nFound " << found << " matching entries";
+        return ss.str();
+    }, "Search log history for matching entries", "Logging");
+
+    RegisterCommand("log_export", [this](const std::vector<std::string>& args) -> std::string {
+        std::string filename = args.empty() ? "spark_console_log.txt" : args[0];
+
+        try {
+            std::ofstream file(filename);
+            if (!file.is_open()) {
+                return "Failed to open file: " + filename;
+            }
+
+            file << "Spark Engine Console Log Export\n";
+            file << "==========================================\n";
+
+            auto now = std::chrono::system_clock::now();
+            auto time_t = std::chrono::system_clock::to_time_t(now);
+            file << "Exported: " << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") << "\n";
+            file << "==========================================\n\n";
+
+            auto history = GetLogHistory();
+            for (const auto& entry : history) {
+                file << "[" << entry.timestamp << "] [" << entry.type << "] " << entry.message << "\n";
+            }
+
+            file.close();
+            return "Log exported to: " + filename + " (" + std::to_string(history.size()) + " entries)";
+        } catch (const std::exception& e) {
+            return "Export failed: " + std::string(e.what());
+        }
+    }, "Export log history to file (usage: log_export [filename])", "Logging");
+
+    RegisterCommand("log_clear", [this](const std::vector<std::string>& args) -> std::string {
+        std::lock_guard<std::mutex> lock(m_logMutex);
+        size_t count = m_logHistory.size();
+        m_logHistory.clear();
+        return "Cleared " + std::to_string(count) + " log entries";
+    }, "Clear all log history", "Logging");
+
+    RegisterCommand("log_stats", [this](const std::vector<std::string>& args) -> std::string {
+        auto history = GetLogHistory();
+
+        std::map<std::string, int> typeCounts;
+        for (const auto& entry : history) {
+            typeCounts[entry.type]++;
+        }
+
+        std::stringstream ss;
+        ss << "Log Statistics:\n";
+        ss << "  Total entries: " << history.size() << "\n";
+        for (const auto& pair : typeCounts) {
+            ss << "  " << std::left << std::setw(12) << pair.first << ": " << pair.second << "\n";
+        }
+        return ss.str();
+    }, "Show log entry statistics by type", "Logging");
+
+    RegisterCommand("log_tail", [this](const std::vector<std::string>& args) -> std::string {
+        int count = 10;
+        if (!args.empty()) {
+            try { count = std::stoi(args[0]); } catch (...) {}
+        }
+        count = std::max(1, std::min(count, 100));
+
+        auto history = GetLogHistory();
+        int start = std::max(0, static_cast<int>(history.size()) - count);
+
+        std::stringstream ss;
+        ss << "Last " << count << " log entries:\n";
+        for (int i = start; i < static_cast<int>(history.size()); ++i) {
+            ss << "  [" << history[i].timestamp << "] [" << history[i].type << "] " << history[i].message << "\n";
+        }
+        return ss.str();
+    }, "Show last N log entries (usage: log_tail [count])", "Logging");
+}
+
+// ============================================================================
+// WATCH COMMANDS - Live variable monitoring
+// ============================================================================
+void SimpleConsole::RegisterWatchCommands() {
+    RegisterCommand("watch", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            if (m_watchEntries.empty()) {
+                return "No watch variables set. Usage: watch <variable>\n"
+                       "Available: fps, frametime, position, health, objects, memory, drawcalls";
+            }
+            std::stringstream ss;
+            ss << "Active Watches:\n";
+            for (const auto& entry : m_watchEntries) {
+                ss << "  " << std::left << std::setw(16) << entry.name
+                   << " = " << entry.lastValue
+                   << (entry.active ? "" : " (paused)") << "\n";
+            }
+            return ss.str();
+        }
+
+        std::string varName = args[0];
+
+        // Built-in watch variables
+        if (varName == "fps") {
+            AddWatch("fps", []() { return std::to_string(static_cast<int>(g_perfCounters.currentFPS)); });
+        } else if (varName == "frametime") {
+            AddWatch("frametime", []() {
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << g_perfCounters.frameTime << "ms";
+                return ss.str();
+            });
+        } else if (varName == "position") {
+            AddWatch("position", []() {
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(1)
+                   << g_gameState.playerPosition.x << ","
+                   << g_gameState.playerPosition.y << ","
+                   << g_gameState.playerPosition.z;
+                return ss.str();
+            });
+        } else if (varName == "health") {
+            AddWatch("health", []() {
+                return std::to_string(static_cast<int>(g_gameState.playerHealth)) + "/" +
+                       std::to_string(static_cast<int>(g_gameState.playerMaxHealth));
+            });
+        } else if (varName == "objects") {
+            AddWatch("objects", []() { return std::to_string(g_gameState.activeObjects); });
+        } else if (varName == "memory") {
+            AddWatch("memory", []() {
+                PROCESS_MEMORY_COUNTERS pmc;
+                if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+                    return std::to_string(pmc.WorkingSetSize / 1024 / 1024) + "MB";
+                }
+                return std::string("N/A");
+            });
+        } else if (varName == "drawcalls") {
+            AddWatch("drawcalls", []() { return std::to_string(g_perfCounters.drawCalls); });
+        } else if (varName == "triangles") {
+            AddWatch("triangles", []() { return std::to_string(g_perfCounters.triangles); });
+        } else if (varName == "timescale") {
+            AddWatch("timescale", []() {
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << g_gameState.timeScale << "x";
+                return ss.str();
+            });
+        } else {
+            return "Unknown watch variable: " + varName + "\n"
+                   "Available: fps, frametime, position, health, objects, memory, drawcalls, triangles, timescale";
+        }
+
+        m_watchActive = true;
+        m_lastWatchUpdate = std::chrono::steady_clock::now();
+        return "Watch added: " + varName + " (displayed in title bar)";
+    }, "Add a live watch variable (shown in title bar)", "Watch");
+
+    RegisterCommand("unwatch", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: unwatch <name|all>";
+
+        if (args[0] == "all") {
+            m_watchEntries.clear();
+            m_watchActive = false;
+            SetConsoleTitleA("Spark Engine - Development Console");
+            return "All watches removed";
+        }
+
+        RemoveWatch(args[0]);
+        if (m_watchEntries.empty()) {
+            m_watchActive = false;
+            SetConsoleTitleA("Spark Engine - Development Console");
+        }
+        return "Watch removed: " + args[0];
+    }, "Remove a watch variable (usage: unwatch <name|all>)", "Watch");
+
+    RegisterCommand("watch_pause", [this](const std::vector<std::string>& args) -> std::string {
+        m_watchActive = !m_watchActive;
+        return "Watch updates " + std::string(m_watchActive ? "resumed" : "paused");
+    }, "Pause/resume watch variable updates", "Watch");
+}
+
+// ============================================================================
+// ALIAS COMMANDS - Command shortcut management
+// ============================================================================
+void SimpleConsole::RegisterAliasCommands() {
+    RegisterCommand("alias", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            if (m_aliases.empty()) {
+                return "No aliases defined. Usage: alias <name> <command>";
+            }
+            std::stringstream ss;
+            ss << "Defined Aliases:\n";
+            for (const auto& pair : m_aliases) {
+                ss << "  " << std::left << std::setw(16) << pair.first << " -> " << pair.second << "\n";
+            }
+            return ss.str();
+        }
+
+        if (args.size() < 2) {
+            // Show specific alias
+            auto it = m_aliases.find(args[0]);
+            if (it != m_aliases.end()) {
+                return "Alias '" + args[0] + "' -> '" + it->second + "'";
+            }
+            return "No alias '" + args[0] + "' defined. Usage: alias <name> <command>";
+        }
+
+        // Build the command from remaining args
+        std::string command;
+        for (size_t i = 1; i < args.size(); ++i) {
+            if (i > 1) command += " ";
+            command += args[i];
+        }
+
+        SetAlias(args[0], command);
+        return "Alias set: " + args[0] + " -> " + command;
+    }, "Create or list command aliases (usage: alias [name] [command])", "Aliases");
+
+    RegisterCommand("unalias", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: unalias <name|all>";
+
+        if (args[0] == "all") {
+            size_t count = m_aliases.size();
+            m_aliases.clear();
+            return "Removed " + std::to_string(count) + " aliases";
+        }
+
+        if (m_aliases.find(args[0]) != m_aliases.end()) {
+            RemoveAlias(args[0]);
+            return "Alias removed: " + args[0];
+        }
+        return "No alias '" + args[0] + "' found";
+    }, "Remove a command alias (usage: unalias <name|all>)", "Aliases");
+
+    // Set up some useful default aliases
+    SetAlias("gi", "graphics_info");
+    SetAlias("pi", "player_info");
+    SetAlias("ci", "camera_info");
+    SetAlias("si", "scene_info");
+    SetAlias("es", "engine_status");
+    SetAlias("perf", "fps");
+    SetAlias("mem", "memory");
+    SetAlias("tp", "player_teleport");
+    SetAlias("god", "player_godmode");
+    SetAlias("nc", "player_noclip");
+    SetAlias("spawn", "scene_spawn");
+    SetAlias("del", "scene_delete");
+    SetAlias("ss", "graphics_screenshot");
+    SetAlias("wf", "graphics_wireframe");
+    SetAlias("ts", "engine_timescale");
+}
+
+// ============================================================================
+// DEBUG COMMANDS - Runtime debugging tools
+// ============================================================================
+void SimpleConsole::RegisterDebugCommands() {
+    RegisterCommand("debug_vars", [](const std::vector<std::string>& args) -> std::string {
+        std::stringstream ss;
+        ss << "Debug Variables (Current State):\n";
+        ss << "==========================================\n";
+        ss << "God Mode:        " << (g_gameState.godMode ? "ON" : "OFF") << "\n";
+        ss << "Noclip:          " << (g_gameState.noclip ? "ON" : "OFF") << "\n";
+        ss << "Infinite Ammo:   " << (g_gameState.infiniteAmmo ? "ON" : "OFF") << "\n";
+        ss << "Wireframe:       " << (g_gameState.wireframe ? "ON" : "OFF") << "\n";
+        ss << "Show FPS:        " << (g_gameState.showFPS ? "ON" : "OFF") << "\n";
+        ss << "VSync:           " << (g_gameState.vsync ? "ON" : "OFF") << "\n";
+        ss << "Time Scale:      " << g_gameState.timeScale << "x\n";
+        ss << "Current Scene:   " << g_gameState.currentScene;
+        return ss.str();
+    }, "Display all debug variables and their current state", "Debug");
+
+    RegisterCommand("debug_counters", [](const std::vector<std::string>& args) -> std::string {
+        UpdatePerformanceCounters();
+        UpdateGameState();
+
+        std::stringstream ss;
+        ss << "Performance Counters:\n";
+        ss << "==========================================\n";
+        ss << "Current FPS:     " << std::fixed << std::setprecision(1) << g_perfCounters.currentFPS << "\n";
+        ss << "Average FPS:     " << g_perfCounters.averageFPS << "\n";
+        ss << "Frame Time:      " << std::setprecision(2) << g_perfCounters.frameTime << " ms\n";
+        ss << "CPU Usage:       " << g_perfCounters.cpuUsage << "%\n";
+        ss << "GPU Usage:       " << g_perfCounters.gpuUsage << "%\n";
+        ss << "Draw Calls:      " << g_perfCounters.drawCalls << "\n";
+        ss << "Triangles:       " << g_perfCounters.triangles << "\n";
+        ss << "Vertices:        " << g_perfCounters.vertices << "\n";
+        ss << "Render Time:     " << g_perfCounters.renderTime << " ms\n";
+        ss << "Update Time:     " << g_perfCounters.updateTime << " ms\n";
+        ss << "Texture Memory:  " << (g_perfCounters.textureMemory / 1024 / 1024) << " MB\n";
+        ss << "Buffer Memory:   " << (g_perfCounters.bufferMemory / 1024 / 1024) << " MB";
+        return ss.str();
+    }, "Display all performance counters in detail", "Debug");
+
+    RegisterCommand("debug_toggle", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            return "Usage: debug_toggle <setting>\n"
+                   "Settings: fps, wireframe, vsync, godmode, noclip, infiniteammo";
+        }
+
+        std::string setting = args[0];
+        std::transform(setting.begin(), setting.end(), setting.begin(), ::tolower);
+
+        if (setting == "fps") {
+            g_gameState.showFPS = !g_gameState.showFPS;
+            return "FPS display " + std::string(g_gameState.showFPS ? "enabled" : "disabled");
+        } else if (setting == "wireframe") {
+            g_gameState.wireframe = !g_gameState.wireframe;
+            if (g_graphics) g_graphics->Console_SetWireframeMode(g_gameState.wireframe);
+            return "Wireframe " + std::string(g_gameState.wireframe ? "enabled" : "disabled");
+        } else if (setting == "vsync") {
+            g_gameState.vsync = !g_gameState.vsync;
+            if (g_graphics) g_graphics->Console_SetVSync(g_gameState.vsync);
+            return "VSync " + std::string(g_gameState.vsync ? "enabled" : "disabled");
+        } else if (setting == "godmode") {
+            g_gameState.godMode = !g_gameState.godMode;
+            if (g_game) g_game->ApplyDebugSettings(g_gameState.godMode, g_gameState.noclip, g_gameState.infiniteAmmo);
+            return "God mode " + std::string(g_gameState.godMode ? "enabled" : "disabled");
+        } else if (setting == "noclip") {
+            g_gameState.noclip = !g_gameState.noclip;
+            if (g_game) g_game->ApplyDebugSettings(g_gameState.godMode, g_gameState.noclip, g_gameState.infiniteAmmo);
+            return "Noclip " + std::string(g_gameState.noclip ? "enabled" : "disabled");
+        } else if (setting == "infiniteammo") {
+            g_gameState.infiniteAmmo = !g_gameState.infiniteAmmo;
+            if (g_game) g_game->ApplyDebugSettings(g_gameState.godMode, g_gameState.noclip, g_gameState.infiniteAmmo);
+            return "Infinite ammo " + std::string(g_gameState.infiniteAmmo ? "enabled" : "disabled");
+        }
+
+        return "Unknown setting: " + setting;
+    }, "Toggle a debug setting on/off", "Debug");
+
+    RegisterCommand("debug_crash_test", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty() || args[0] != "confirm") {
+            return "WARNING: This will deliberately crash the engine for testing crash handling.\n"
+                   "Usage: debug_crash_test confirm";
+        }
+        int* nullPtr = nullptr;
+        *nullPtr = 42;
+        return "This should not be reached";
+    }, "Deliberately crash the engine for testing (requires 'confirm')", "Debug");
+
+    RegisterCommand("debug_assert_test", [](const std::vector<std::string>& args) -> std::string {
+        ASSERT_MSG(false, "Test assertion triggered from console command 'debug_assert_test'");
+        return "Assertion was non-fatal or handled";
+    }, "Trigger a test assertion for debugging", "Debug");
+}
+
+// ============================================================================
+// FILE COMMANDS - File system operations
+// ============================================================================
+void SimpleConsole::RegisterFileCommands() {
+    RegisterCommand("file_list", [](const std::vector<std::string>& args) -> std::string {
+        std::string path = args.empty() ? "." : args[0];
+
+        try {
+            if (!std::filesystem::exists(path)) {
+                return "Path does not exist: " + path;
+            }
+
+            std::stringstream ss;
+            ss << "Directory listing: " << std::filesystem::absolute(path).string() << "\n";
+            ss << "==========================================\n";
+
+            int fileCount = 0, dirCount = 0;
+            for (const auto& entry : std::filesystem::directory_iterator(path)) {
+                if (entry.is_directory()) {
+                    ss << "  [DIR]  " << entry.path().filename().string() << "\n";
+                    dirCount++;
+                } else {
+                    auto size = entry.file_size();
+                    std::string sizeStr;
+                    if (size < 1024) sizeStr = std::to_string(size) + " B";
+                    else if (size < 1024 * 1024) sizeStr = std::to_string(size / 1024) + " KB";
+                    else sizeStr = std::to_string(size / 1024 / 1024) + " MB";
+
+                    ss << "  " << std::left << std::setw(8) << sizeStr
+                       << " " << entry.path().filename().string() << "\n";
+                    fileCount++;
+                }
+            }
+            ss << "\n" << dirCount << " directories, " << fileCount << " files";
+            return ss.str();
+        } catch (const std::exception& e) {
+            return "Error listing directory: " + std::string(e.what());
+        }
+    }, "List files in a directory (usage: file_list [path])", "File");
+
+    RegisterCommand("file_info", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: file_info <path>";
+
+        try {
+            std::filesystem::path filePath(args[0]);
+            if (!std::filesystem::exists(filePath)) {
+                return "File does not exist: " + args[0];
+            }
+
+            std::stringstream ss;
+            ss << "File Information:\n";
+            ss << "  Path:     " << std::filesystem::absolute(filePath).string() << "\n";
+            ss << "  Size:     " << std::filesystem::file_size(filePath) << " bytes\n";
+            ss << "  Type:     " << (std::filesystem::is_directory(filePath) ? "Directory" : "File") << "\n";
+            ss << "  Extension:" << filePath.extension().string() << "\n";
+
+            auto ftime = std::filesystem::last_write_time(filePath);
+            auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+            auto time_t = std::chrono::system_clock::to_time_t(sctp);
+            ss << "  Modified: " << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+
+            return ss.str();
+        } catch (const std::exception& e) {
+            return "Error: " + std::string(e.what());
+        }
+    }, "Show detailed file information", "File");
+
+    RegisterCommand("file_read", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: file_read <path> [max_lines]";
+
+        int maxLines = 20;
+        if (args.size() > 1) {
+            try { maxLines = std::stoi(args[1]); } catch (...) {}
+        }
+
+        try {
+            std::ifstream file(args[0]);
+            if (!file.is_open()) return "Cannot open file: " + args[0];
+
+            std::stringstream ss;
+            std::string line;
+            int lineNum = 0;
+            while (std::getline(file, line) && lineNum < maxLines) {
+                ss << std::right << std::setw(4) << (lineNum + 1) << " | " << line << "\n";
+                lineNum++;
+            }
+
+            if (lineNum == maxLines) {
+                ss << "... (showing first " << maxLines << " lines)";
+            }
+            return ss.str();
+        } catch (const std::exception& e) {
+            return "Error reading file: " + std::string(e.what());
+        }
+    }, "Read and display file contents (usage: file_read <path> [max_lines])", "File");
+
+    RegisterCommand("file_cwd", [](const std::vector<std::string>& args) -> std::string {
+        return "Current working directory: " + std::filesystem::current_path().string();
+    }, "Show current working directory", "File");
+
+    RegisterCommand("file_find", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: file_find <pattern> [directory]";
+
+        std::string pattern = args[0];
+        std::string searchDir = args.size() > 1 ? args[1] : ".";
+
+        try {
+            std::stringstream ss;
+            int found = 0;
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(searchDir)) {
+                std::string filename = entry.path().filename().string();
+                std::transform(filename.begin(), filename.end(), filename.begin(), ::tolower);
+                std::string lowerPattern = pattern;
+                std::transform(lowerPattern.begin(), lowerPattern.end(), lowerPattern.begin(), ::tolower);
+
+                if (filename.find(lowerPattern) != std::string::npos) {
+                    ss << "  " << entry.path().string() << "\n";
+                    found++;
+                    if (found >= 50) {
+                        ss << "  ... (limited to 50 results)";
+                        break;
+                    }
+                }
+            }
+
+            if (found == 0) return "No files matching '" + pattern + "' found";
+            return "Found " + std::to_string(found) + " file(s):\n" + ss.str();
+        } catch (const std::exception& e) {
+            return "Search error: " + std::string(e.what());
+        }
+    }, "Find files matching a pattern (usage: file_find <pattern> [directory])", "File");
+}
+
+// ============================================================================
+// INPUT COMMANDS - Input system configuration
+// ============================================================================
+void SimpleConsole::RegisterInputCommands() {
+    RegisterCommand("input_bindings", [](const std::vector<std::string>& args) -> std::string {
+        std::stringstream ss;
+        ss << "Current Input Bindings:\n";
+        ss << "==========================================\n";
+        ss << "  WASD          - Movement\n";
+        ss << "  Mouse         - Look Around\n";
+        ss << "  Space         - Jump\n";
+        ss << "  Shift         - Sprint\n";
+        ss << "  Ctrl          - Crouch\n";
+        ss << "  LMB           - Fire\n";
+        ss << "  RMB           - Aim/Zoom\n";
+        ss << "  R             - Reload\n";
+        ss << "  1-5           - Weapon Select\n";
+        ss << "  E             - Interact\n";
+        ss << "  Tab           - Scoreboard\n";
+        ss << "  ` (Backtick)  - Toggle Console\n";
+        ss << "  F1            - Toggle Dev Console\n";
+        ss << "  Escape        - Pause/Menu";
+
+        if (g_input) {
+            ss << "\n\nInput Manager: ACTIVE";
+        } else {
+            ss << "\n\nInput Manager: NOT AVAILABLE";
+        }
+
+        return ss.str();
+    }, "Show current input key bindings", "Input");
+
+    RegisterCommand("input_sensitivity", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            return "Current mouse sensitivity: " + std::to_string(g_gameState.mouseSensitivity) + "\n"
+                   "Usage: input_sensitivity <value> (0.1-10.0)";
+        }
+
+        try {
+            float sens = std::stof(args[0]);
+            if (sens < 0.1f || sens > 10.0f) return "Sensitivity must be between 0.1 and 10.0";
+            g_gameState.mouseSensitivity = sens;
+            if (g_game && g_game->GetCamera()) {
+                g_game->GetCamera()->Console_SetMouseSensitivity(sens);
+            }
+            return "Mouse sensitivity set to " + std::to_string(sens);
+        } catch (...) {
+            return "Invalid value. Must be a number.";
+        }
+    }, "Get or set mouse sensitivity", "Input");
+
+    RegisterCommand("input_invert_y", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            return "Y-axis inversion: " + std::string(g_gameState.invertY ? "ENABLED" : "DISABLED") +
+                   "\nUsage: input_invert_y <on|off>";
+        }
+        std::string value = args[0];
+        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+        bool enable = (value == "on" || value == "true" || value == "1");
+        g_gameState.invertY = enable;
+        if (g_game && g_game->GetCamera()) {
+            g_game->GetCamera()->Console_SetInvertY(enable);
+        }
+        return "Y-axis inversion " + std::string(enable ? "enabled" : "disabled");
+    }, "Toggle Y-axis inversion for mouse look", "Input");
+}
+
+// ============================================================================
+// RENDERING COMMANDS - Advanced rendering controls
+// ============================================================================
+void SimpleConsole::RegisterRenderingCommands() {
+    RegisterCommand("render_mode", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            return "Usage: render_mode <solid|wireframe|points>\n"
+                   "Current: " + std::string(g_gameState.wireframe ? "wireframe" : "solid");
+        }
+
+        std::string mode = args[0];
+        std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
+
+        if (mode == "solid") {
+            g_gameState.wireframe = false;
+            if (g_graphics) g_graphics->Console_SetWireframeMode(false);
+            return "Render mode: solid";
+        } else if (mode == "wireframe") {
+            g_gameState.wireframe = true;
+            if (g_graphics) g_graphics->Console_SetWireframeMode(true);
+            return "Render mode: wireframe";
+        } else if (mode == "points") {
+            return "Point rendering mode not yet implemented";
+        }
+        return "Unknown render mode: " + mode;
+    }, "Set rendering mode (solid/wireframe/points)", "Rendering");
+
+    RegisterCommand("render_resolution", [](const std::vector<std::string>& args) -> std::string {
+        if (!g_graphics) return "Graphics engine not available";
+
+        if (args.empty()) {
+            return "Current resolution: " + std::to_string(g_graphics->GetWindowWidth()) + "x" +
+                   std::to_string(g_graphics->GetWindowHeight());
+        }
+
+        if (args.size() < 2) return "Usage: render_resolution <width> <height>";
+
+        try {
+            int w = std::stoi(args[0]);
+            int h = std::stoi(args[1]);
+            return "Resolution change to " + std::to_string(w) + "x" + std::to_string(h) +
+                   " requested (requires restart)";
+        } catch (...) {
+            return "Invalid resolution values";
+        }
+    }, "Get or set render resolution", "Rendering");
+
+    RegisterCommand("render_fov", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            return "Current FOV: " + std::to_string(g_gameState.fov) + " degrees\n"
+                   "Usage: render_fov <degrees> (30-170)";
+        }
+        try {
+            float fov = std::stof(args[0]);
+            if (fov < 30.0f || fov > 170.0f) return "FOV must be between 30 and 170";
+            g_gameState.fov = fov;
+            if (g_game && g_game->GetCamera()) {
+                g_game->GetCamera()->Console_SetFOV(fov);
+            }
+            return "FOV set to " + std::to_string(fov) + " degrees";
+        } catch (...) {
+            return "Invalid FOV value";
+        }
+    }, "Get or set field of view (degrees)", "Rendering");
+
+    RegisterCommand("render_showfps", [](const std::vector<std::string>& args) -> std::string {
+        g_gameState.showFPS = !g_gameState.showFPS;
+        return "FPS overlay " + std::string(g_gameState.showFPS ? "enabled" : "disabled");
+    }, "Toggle the FPS overlay display", "Rendering");
+}
+
+// ============================================================================
+// PROFILING COMMANDS - Performance profiling tools
+// ============================================================================
+void SimpleConsole::RegisterProfilingCommands() {
+    RegisterCommand("profile_snapshot", [this](const std::vector<std::string>& args) -> std::string {
+        UpdatePerformanceCounters();
+        UpdateGameState();
+
+        std::stringstream ss;
+        ss << "=== PERFORMANCE SNAPSHOT ===\n";
+
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        ss << "Timestamp: " << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") << "\n\n";
+
+        ss << "Frame Performance:\n";
+        ss << "  FPS:           " << std::fixed << std::setprecision(1) << g_perfCounters.currentFPS << "\n";
+        ss << "  Avg FPS:       " << g_perfCounters.averageFPS << "\n";
+        ss << "  Frame Time:    " << std::setprecision(2) << g_perfCounters.frameTime << " ms\n";
+        ss << "  Render Time:   " << g_perfCounters.renderTime << " ms\n";
+        ss << "  Update Time:   " << g_perfCounters.updateTime << " ms\n\n";
+
+        ss << "Rendering:\n";
+        ss << "  Draw Calls:    " << g_perfCounters.drawCalls << "\n";
+        ss << "  Triangles:     " << g_perfCounters.triangles << "\n";
+        ss << "  Vertices:      " << g_perfCounters.vertices << "\n";
+        ss << "  Objects:       " << g_gameState.activeObjects << " active, "
+           << g_gameState.visibleObjects << " visible\n\n";
+
+        PROCESS_MEMORY_COUNTERS pmc;
+        if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+            ss << "Memory:\n";
+            ss << "  Working Set:   " << (pmc.WorkingSetSize / 1024 / 1024) << " MB\n";
+            ss << "  Peak:          " << (pmc.PeakWorkingSetSize / 1024 / 1024) << " MB\n";
+            ss << "  Page File:     " << (pmc.PagefileUsage / 1024 / 1024) << " MB\n";
+        }
+
+        return ss.str();
+    }, "Take a comprehensive performance snapshot", "Profiling");
+
+    RegisterCommand("profile_export", [this](const std::vector<std::string>& args) -> std::string {
+        std::string filename = args.empty() ? "spark_profile.csv" : args[0];
+
+        try {
+            bool exists = std::filesystem::exists(filename);
+            std::ofstream file(filename, std::ios::app);
+            if (!file.is_open()) return "Cannot open file: " + filename;
+
+            // Write header if new file
+            if (!exists) {
+                file << "Timestamp,FPS,AvgFPS,FrameTime,RenderTime,UpdateTime,"
+                        "DrawCalls,Triangles,Vertices,ActiveObjects,WorkingSetMB\n";
+            }
+
+            UpdatePerformanceCounters();
+
+            PROCESS_MEMORY_COUNTERS pmc;
+            GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
+
+            auto now = std::chrono::system_clock::now();
+            auto time_t = std::chrono::system_clock::to_time_t(now);
+
+            file << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") << ","
+                 << g_perfCounters.currentFPS << ","
+                 << g_perfCounters.averageFPS << ","
+                 << g_perfCounters.frameTime << ","
+                 << g_perfCounters.renderTime << ","
+                 << g_perfCounters.updateTime << ","
+                 << g_perfCounters.drawCalls << ","
+                 << g_perfCounters.triangles << ","
+                 << g_perfCounters.vertices << ","
+                 << g_gameState.activeObjects << ","
+                 << (pmc.WorkingSetSize / 1024 / 1024) << "\n";
+
+            file.close();
+            return "Profile data appended to: " + filename;
+        } catch (const std::exception& e) {
+            return "Export failed: " + std::string(e.what());
+        }
+    }, "Export performance data to CSV (usage: profile_export [filename])", "Profiling");
+
+    RegisterCommand("profile_benchmark", [this](const std::vector<std::string>& args) -> std::string {
+        int duration = 5; // seconds
+        if (!args.empty()) {
+            try { duration = std::stoi(args[0]); } catch (...) {}
+        }
+        duration = std::max(1, std::min(duration, 30));
+
+        LogInfo("Starting " + std::to_string(duration) + "s benchmark...");
+
+        float minFPS = 9999.0f, maxFPS = 0.0f, totalFPS = 0.0f;
+        int samples = 0;
+
+        auto start = std::chrono::steady_clock::now();
+        while (true) {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start).count();
+            if (elapsed >= duration) break;
+
+            UpdatePerformanceCounters();
+            float fps = g_perfCounters.currentFPS;
+            if (fps > 0) {
+                minFPS = std::min(minFPS, fps);
+                maxFPS = std::max(maxFPS, fps);
+                totalFPS += fps;
+                samples++;
+            }
+
+            Sleep(100); // Sample every 100ms
+        }
+
+        float avgFPS = samples > 0 ? totalFPS / samples : 0;
+        std::stringstream ss;
+        ss << "Benchmark Results (" << duration << "s):\n";
+        ss << "==========================================\n";
+        ss << "  Samples:    " << samples << "\n";
+        ss << "  Min FPS:    " << std::fixed << std::setprecision(1) << minFPS << "\n";
+        ss << "  Max FPS:    " << maxFPS << "\n";
+        ss << "  Avg FPS:    " << avgFPS << "\n";
+        ss << "  1% Low:     " << minFPS << "\n";
+        ss << "  Stability:  " << (maxFPS > 0 ? (minFPS / maxFPS * 100.0f) : 0) << "%";
+        return ss.str();
+    }, "Run a performance benchmark (usage: profile_benchmark [seconds])", "Profiling");
+}
+
+// ============================================================================
+// NETWORKING COMMANDS - Network simulation and information
+// ============================================================================
+void SimpleConsole::RegisterNetworkingCommands() {
+    RegisterCommand("net_status", [](const std::vector<std::string>& args) -> std::string {
+        std::stringstream ss;
+        ss << "Network Status:\n";
+        ss << "==========================================\n";
+        ss << "  Mode:          Single Player (Local)\n";
+        ss << "  Protocol:      N/A\n";
+        ss << "  Latency:       0 ms (local)\n";
+        ss << "  Packet Loss:   0%\n";
+        ss << "  Bandwidth:     N/A\n";
+        ss << "\nNetworking subsystem not yet integrated.\n";
+        ss << "Use 'net_simulate' to test with simulated latency.";
+        return ss.str();
+    }, "Show network connection status", "Network");
+
+    RegisterCommand("net_simulate", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            return "Usage: net_simulate <latency_ms> [packet_loss_%]\n"
+                   "Example: net_simulate 100 5  (100ms latency, 5% packet loss)\n"
+                   "Use 'net_simulate off' to disable simulation.";
+        }
+
+        if (args[0] == "off" || args[0] == "0") {
+            return "Network simulation disabled";
+        }
+
+        try {
+            int latency = std::stoi(args[0]);
+            float packetLoss = args.size() > 1 ? std::stof(args[1]) : 0.0f;
+
+            std::stringstream ss;
+            ss << "Network simulation enabled:\n";
+            ss << "  Simulated latency:     " << latency << " ms\n";
+            ss << "  Simulated packet loss: " << std::fixed << std::setprecision(1) << packetLoss << "%\n";
+            ss << "(Note: Actual network simulation requires networking subsystem)";
+            return ss.str();
+        } catch (...) {
+            return "Invalid values. Latency must be integer, packet loss must be float.";
+        }
+    }, "Simulate network conditions (latency, packet loss)", "Network");
+
+    RegisterCommand("net_info", [](const std::vector<std::string>& args) -> std::string {
+        // Get local hostname
+        char hostname[256];
+        DWORD size = sizeof(hostname);
+        GetComputerNameA(hostname, &size);
+
+        std::stringstream ss;
+        ss << "Network Information:\n";
+        ss << "  Hostname:      " << hostname << "\n";
+        ss << "  Network Mode:  Offline/Local\n";
+        ss << "  Console Port:  7777 (default)\n";
+        ss << "  Max Players:   1 (single player)";
+        return ss.str();
+    }, "Show network configuration information", "Network");
+}
+
+// ============================================================================
+// TESTING COMMANDS - System testing and benchmarking
+// ============================================================================
+void SimpleConsole::RegisterTestingCommands() {
+    RegisterCommand("test_commands", [this](const std::vector<std::string>& args) -> std::string {
+        LogInfo("Running command system self-test...");
+
+        int passed = 0, failed = 0;
+
+        // Test echo
+        auto result = m_commands.find("echo");
+        if (result != m_commands.end()) {
+            std::string out = result->second.handler({"hello", "world"});
+            if (out == "hello world") passed++; else failed++;
+        } else failed++;
+
+        // Test version
+        result = m_commands.find("version");
+        if (result != m_commands.end()) {
+            std::string out = result->second.handler({});
+            if (!out.empty()) passed++; else failed++;
+        } else failed++;
+
+        // Test help
+        result = m_commands.find("help");
+        if (result != m_commands.end()) {
+            std::string out = result->second.handler({});
+            if (!out.empty()) passed++; else failed++;
+        } else failed++;
+
+        // Test uptime
+        result = m_commands.find("uptime");
+        if (result != m_commands.end()) {
+            std::string out = result->second.handler({});
+            if (!out.empty()) passed++; else failed++;
+        } else failed++;
+
+        std::stringstream ss;
+        ss << "Command System Test Results:\n";
+        ss << "  Passed: " << passed << "\n";
+        ss << "  Failed: " << failed << "\n";
+        ss << "  Total:  " << (passed + failed) << "\n";
+        ss << "  Status: " << (failed == 0 ? "ALL PASSED" : "SOME FAILURES");
+        return ss.str();
+    }, "Run self-test on command system", "Testing");
+
+    RegisterCommand("test_logging", [this](const std::vector<std::string>& args) -> std::string {
+        LogInfo("Test INFO message");
+        LogWarning("Test WARNING message");
+        LogError("Test ERROR message");
+        LogSuccess("Test SUCCESS message");
+        LogCritical("Test CRITICAL message");
+        LogTrace("Test TRACE message");
+        LogDebug("Test DEBUG message");
+        return "All log levels tested - check output above";
+    }, "Test all logging levels", "Testing");
+
+    RegisterCommand("test_stress", [this](const std::vector<std::string>& args) -> std::string {
+        int count = 100;
+        if (!args.empty()) {
+            try { count = std::stoi(args[0]); } catch (...) {}
+        }
+        count = std::max(1, std::min(count, 1000));
+
+        auto start = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < count; ++i) {
+            Log("Stress test message " + std::to_string(i), "DEBUG");
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+        std::stringstream ss;
+        ss << "Stress Test Results:\n";
+        ss << "  Messages:      " << count << "\n";
+        ss << "  Total Time:    " << elapsed.count() << " us\n";
+        ss << "  Per Message:   " << (elapsed.count() / count) << " us\n";
+        ss << "  Throughput:    " << (count * 1000000.0 / elapsed.count()) << " msg/sec";
+        return ss.str();
+    }, "Stress test the logging system (usage: test_stress [count])", "Testing");
+
+    RegisterCommand("test_memory", [](const std::vector<std::string>& args) -> std::string {
+        // Allocate and free memory to test
+        const size_t testSize = 10 * 1024 * 1024; // 10 MB
+
+        PROCESS_MEMORY_COUNTERS pmcBefore, pmcAfter;
+        GetProcessMemoryInfo(GetCurrentProcess(), &pmcBefore, sizeof(pmcBefore));
+
+        auto start = std::chrono::high_resolution_clock::now();
+        char* testBlock = new(std::nothrow) char[testSize];
+        if (!testBlock) return "Memory allocation failed";
+
+        memset(testBlock, 0, testSize);
+        GetProcessMemoryInfo(GetCurrentProcess(), &pmcAfter, sizeof(pmcAfter));
+
+        auto afterAlloc = std::chrono::high_resolution_clock::now();
+        delete[] testBlock;
+        auto afterFree = std::chrono::high_resolution_clock::now();
+
+        auto allocTime = std::chrono::duration_cast<std::chrono::microseconds>(afterAlloc - start);
+        auto freeTime = std::chrono::duration_cast<std::chrono::microseconds>(afterFree - afterAlloc);
+
+        std::stringstream ss;
+        ss << "Memory Test (10 MB allocation):\n";
+        ss << "  Alloc+Fill:    " << allocTime.count() << " us\n";
+        ss << "  Free:          " << freeTime.count() << " us\n";
+        ss << "  Working Set Before: " << (pmcBefore.WorkingSetSize / 1024 / 1024) << " MB\n";
+        ss << "  Working Set After:  " << (pmcAfter.WorkingSetSize / 1024 / 1024) << " MB\n";
+        ss << "  Delta:         " << ((pmcAfter.WorkingSetSize - pmcBefore.WorkingSetSize) / 1024) << " KB";
+        return ss.str();
+    }, "Run memory allocation/deallocation test", "Testing");
+}
+
+// ============================================================================
+// GAME COMMANDS - Game state management
+// ============================================================================
+void SimpleConsole::RegisterGameCommands() {
+    RegisterCommand("game_reset", [](const std::vector<std::string>& args) -> std::string {
+        if (g_game) {
+            // Reset player
+            if (g_game->GetPlayer()) {
+                g_game->GetPlayer()->Console_SetHealth(g_gameState.playerMaxHealth);
+                g_game->GetPlayer()->Console_SetPosition(0, 5, 0);
+                g_game->GetPlayer()->Console_SetGodMode(false);
+                g_game->GetPlayer()->Console_SetNoclip(false);
+            }
+            // Reset time scale
+            g_game->SetTimeScale(1.0f);
+            g_gameState.timeScale = 1.0f;
+
+            return "Game state reset to defaults";
+        }
+        return "Game system not available";
+    }, "Reset game state to defaults (player, time, etc.)", "Game");
+
+    RegisterCommand("game_save_state", [](const std::vector<std::string>& args) -> std::string {
+        std::string filename = args.empty() ? "spark_save.dat" : args[0];
+        try {
+            std::ofstream file(filename, std::ios::binary);
+            if (!file.is_open()) return "Cannot create save file: " + filename;
+
+            // Save header
+            const char header[] = "SPARK_SAVE_V1";
+            file.write(header, sizeof(header));
+
+            // Save game state
+            file.write(reinterpret_cast<const char*>(&g_gameState), sizeof(g_gameState));
+
+            file.close();
+            return "Game state saved to: " + filename;
+        } catch (const std::exception& e) {
+            return "Save failed: " + std::string(e.what());
+        }
+    }, "Save current game state to file", "Game");
+
+    RegisterCommand("game_load_state", [](const std::vector<std::string>& args) -> std::string {
+        std::string filename = args.empty() ? "spark_save.dat" : args[0];
+        if (!std::filesystem::exists(filename)) return "Save file not found: " + filename;
+
+        try {
+            std::ifstream file(filename, std::ios::binary);
+            if (!file.is_open()) return "Cannot open save file: " + filename;
+
+            // Read and verify header
+            char header[14];
+            file.read(header, sizeof(header));
+            if (std::string(header) != "SPARK_SAVE_V1") {
+                return "Invalid save file format";
+            }
+
+            // Load game state
+            file.read(reinterpret_cast<char*>(&g_gameState), sizeof(g_gameState));
+            file.close();
+
+            // Apply loaded state to game systems
+            if (g_game) {
+                g_game->ApplyPhysicsSettings(g_gameState.gravity, g_gameState.playerSpeed,
+                                             g_gameState.jumpHeight, g_gameState.friction);
+                g_game->SetTimeScale(g_gameState.timeScale);
+                g_game->ApplyDebugSettings(g_gameState.godMode, g_gameState.noclip, g_gameState.infiniteAmmo);
+            }
+
+            return "Game state loaded from: " + filename;
+        } catch (const std::exception& e) {
+            return "Load failed: " + std::string(e.what());
+        }
+    }, "Load game state from file", "Game");
+
+    RegisterCommand("game_time", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            std::stringstream ss;
+            ss << "Game Time Info:\n";
+            ss << "  Time Scale:    " << g_gameState.timeScale << "x\n";
+            ss << "  VSync:         " << (g_gameState.vsync ? "ON" : "OFF") << "\n";
+            ss << "  Target FPS:    " << (g_gameState.vsync ? "60" : "Unlimited") << "\n";
+            ss << "  Paused:        " << (g_game && g_game->IsPaused() ? "YES" : "NO");
+            return ss.str();
+        }
+
+        if (args[0] == "pause") {
+            if (g_game) { g_game->Pause(); return "Game paused"; }
+            return "Game system not available";
+        } else if (args[0] == "resume") {
+            if (g_game) { g_game->Resume(); return "Game resumed"; }
+            return "Game system not available";
+        } else if (args[0] == "slow") {
+            g_gameState.timeScale = 0.25f;
+            if (g_game) g_game->SetTimeScale(0.25f);
+            return "Time scale: 0.25x (slow motion)";
+        } else if (args[0] == "fast") {
+            g_gameState.timeScale = 2.0f;
+            if (g_game) g_game->SetTimeScale(2.0f);
+            return "Time scale: 2.0x (fast forward)";
+        } else if (args[0] == "normal") {
+            g_gameState.timeScale = 1.0f;
+            if (g_game) g_game->SetTimeScale(1.0f);
+            return "Time scale: 1.0x (normal)";
+        }
+
+        try {
+            float scale = std::stof(args[0]);
+            if (scale < 0.01f || scale > 10.0f) return "Time scale must be between 0.01 and 10.0";
+            g_gameState.timeScale = scale;
+            if (g_game) g_game->SetTimeScale(scale);
+            return "Time scale: " + std::to_string(scale) + "x";
+        } catch (...) {
+            return "Usage: game_time [pause|resume|slow|fast|normal|<scale>]";
+        }
+    }, "Control game time (pause/resume/slow/fast/scale)", "Game");
+
+    RegisterCommand("game_objects", [](const std::vector<std::string>& args) -> std::string {
+        UpdateGameState();
+
+        std::stringstream ss;
+        ss << "Game Object Summary:\n";
+        ss << "==========================================\n";
+        ss << "  Active Objects:  " << g_gameState.activeObjects << "\n";
+        ss << "  Visible:         " << g_gameState.visibleObjects << "\n";
+        ss << "  Culled:          " << g_gameState.culledObjects << "\n";
+        ss << "  Draw Calls:      " << g_perfCounters.drawCalls << "\n";
+        ss << "  Triangles:       " << g_perfCounters.triangles;
+
+        if (g_game && g_game->GetSceneManager()) {
+            ss << "\n  Scene Manager:   ACTIVE";
+        }
+
+        return ss.str();
+    }, "Show game object summary and counts", "Game");
+}
+
 } // namespace Spark
