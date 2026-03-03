@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <thread>
+#include <map>
 #include <psapi.h>
 #include <DirectXMath.h>
 
