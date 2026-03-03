@@ -1,143 +1,229 @@
-﻿# Spark Engine
+# Spark Engine
 
-A modular, high-performance C++ game engine for 3D FPS titles and beyond, featuring DirectX 11 rendering, AngelScript scripting, and an integrated editor.
+[![Build SparkEngine](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 
-This Engine is still VERY young, fresh and all the issues are being worked out while slowly providing a fully featured game project/engine. Things may break or not compile/work at all.
+A modular, high-performance C++ game engine built for 3D FPS titles and beyond. Features a DirectX 11 rendering pipeline, Bullet Physics integration, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture powered by EnTT, and an integrated ImGui editor.
 
-## 🌟 Key Features
+> **Early Development** — SparkEngine is under active development. Systems are being built out and stabilized. Expect rough edges.
 
-### 🎨 Rendering & Camera
-- **DirectX 11 Pipeline**: Dynamic lighting, shadows, post-processing, particle effects  
-- **First-Person Camera**: Smooth mouselook, WASD movement, jump, crouch, zoom  
+## Key Features
 
-### 🎮 Gameplay & Input
-- **ECS Architecture**: Clean separation of rendering, physics, audio, scripting, gameplay  
-- **Input Manager**: Keyboard/mouse capture, customizable bindings, console overlay  
+**Rendering** — DirectX 11 with PBR materials, deferred/forward+ pipelines, shadow mapping (PCF/VSM/CSM), SSAO, SSR, volumetric lighting, bloom, tone mapping (Reinhard/ACES/Uncharted 2), FXAA, IBL lighting, and a particle system. Experimental Vulkan and OpenGL backends via an RHI abstraction layer.
 
-### 🛠 Editor & Scripting
-- **Visual Editor** *(optional)*: ImGui-powered scene hierarchy, inspector, asset browser, gizmos  
-- **AngelScript Integration**: Unity-style hot-reload, full debugging, exposed C++ API  
+**Physics** — Full Bullet Physics integration with rigid bodies, collision shapes (box/sphere/capsule/mesh/convex hull), constraints (hinge/slider/fixed), raycasting, overlap tests, and collision callbacks.
 
-### 🩹 Stability & Debug
-- **Crash Handler**: Auto minidumps, symbolized stack traces, screenshot capture, ZIP upload  
-- **Console Overlay**: Real-time command input, logging, test crash trigger  
+**Audio** — XAudio2-based 3D spatial audio with distance attenuation, Doppler effects, and an object pool for efficient source management. Miniaudio as a cross-platform fallback.
 
-### ⚙️ Utilities
-- **Shader System**: HLSL support with auto-recompilation and constant-buffer fixes  
-- **Mesh Generation**: Procedural cube, plane, and sphere primitives  
-- **Cross-Platform Build**: CMake for Windows, Linux, macOS; auto-discovers sources  
+**Gameplay** — ECS architecture (EnTT), FPS player controller, weapon system (bullet/rocket/grenade), class system, vehicle mechanics, gravity system, HUD (crosshairs, health bars, kill feed, minimap, compass), heightmap terrain with LOD, mesh LOD, decal system, and a save/load system.
 
-## 📋 Table of Contents
+**Editor** — Optional ImGui-powered visual editor with scene hierarchy, inspector, asset browser, gizmos (ImGuizmo), node graphs (imnodes), docking, theming, and viewport rendering.
 
-- [Introduction](#spark-engine)  
-- [Quick Start](#quick-start)  
-- [Build & Setup](#build--setup)  
-- [Controls](#controls)  
-- [Architecture Overview](#architecture-overview)  
-- [Directory Layout](#directory-layout)  
-- [Configuration Options](#configuration-options)  
-- [License](#license)  
+**Scripting** — AngelScript with Unity-style hot-reload, full engine API bindings, and debugging support.
 
-## 🔥 Quick Start
+**AI** — NavMesh-based pathfinding with binary `.snav` format loading.
+
+**Tooling** — Crash handler with minidumps and stack traces, debug console overlay with 200+ commands, performance profiler, JSON scene serialization, and a prefab system.
+
+## Quick Start
 
 ```bash
-# Clone repo with submodules
-git clone --recurse-submodules https://github.com/YourOrg/SparkEngine.git
+# Clone with submodules
+git clone --recurse-submodules https://github.com/Krilliac/SparkEngine.git
 cd SparkEngine
 
-# Generate build files
-# Windows (PowerShell)
+# Configure (Windows — Visual Studio 2022)
 .\generate.bat -g "Visual Studio 17 2022" release
 
-# Linux/macOS
+# Configure (Linux/macOS)
 chmod +x generate.sh
 ./generate.sh release -g Ninja
 
-# Build
-# Windows
+# Build (Windows)
 .\build.ps1 -config Release -editor -angelscript
 
-# Linux/macOS
+# Build (Linux/macOS)
 ./build.sh release
 
 # Run
-# Windows
-build/Release/SparkEngine.exe
-
-# Linux/macOS
-build/SparkEngine
+# Windows:  build/bin/SparkEngine.exe
+# Linux:    build/bin/SparkEngine
 ```
 
-## 🎮 Controls
+### Requirements
 
-| Input         | Action                            |
-|---------------|-----------------------------------|
-| W/A/S/D       | Move                              |
-| Mouse         | Look                              |
-| Space         | Jump / Move Up                    |
-| Ctrl          | Crouch / Move Down                |
-| Esc           | Release Mouse / Toggle Menu       |
-| Left Click    | (Re)Capture Mouse                 |
-| ` (Backtick)  | Toggle Debug Console              |
+- **Compiler**: MSVC v143 (Visual Studio 2022), GCC 11+, or Clang 14+ with C++20 support
+- **Build System**: CMake 3.16+
+- **Graphics**: DirectX 11 capable GPU (Windows), Vulkan SDK (optional), OpenGL 4.5 (optional)
+- **Platform**: Windows 10+ (primary), Linux/macOS (experimental)
 
-## 🏗 Architecture Overview
+## Controls
 
-```
-┌─────────────────┬─────────────────┬─────────────────┐
-│  Rendering      │  Physics        │  Audio          │
-├─────────────────┼─────────────────┼─────────────────┤
-│ • GraphicsEngine│ • PhysicsSystem │ • AudioSystem   │
-│ • ShaderManager │ • Collision     │ • Mixer         │
-│ • MeshManager   │ • RigidBodies   │ • Effects       │
-└─────────────────┴─────────────────┴─────────────────┘
+| Input | Action |
+|---|---|
+| W / A / S / D | Move |
+| Mouse | Look |
+| Space | Jump |
+| Ctrl | Crouch |
+| Left Click | Fire / Capture Mouse |
+| Esc | Release Mouse / Menu |
+| ` (Backtick) | Toggle Debug Console |
 
-┌─────────────────┬─────────────────┬─────────────────┐
-│  Scripting      │  Input & UI     │  Core & Utils   │
-├─────────────────┼─────────────────┼─────────────────┤
-│ • AngelScript   │ • InputManager  │ • Engine        │
-│ • ScriptEngine  │ • Console       │ • Timer         │
-│ • Bindings      │ • ImGui Editor  │ • FileSystem    │
-└─────────────────┴─────────────────┴─────────────────┘
-```
-
-## 📂 Directory Layout
+## Architecture
 
 ```
-.
-├── Source/
-│   ├── Core/            # Entry point & framework
-│   ├── Graphics/        # DX11 renderer, shaders
-│   ├── Game/            # Gameplay logic & objects
-│   ├── Camera/          # FPS camera
-│   ├── Input/           # Input handling & console
-│   ├── Utils/           # Timer, logging, file I/O
-│   └── Scripting/       # AngelScript integration
-├── ThirdParty/          # Submodules (EnTT, ImGui, AngelScript…)
-├── Shaders/             # HLSL files
-├── Resources/           # Models, textures, sounds
-├── generate.bat/.sh     # CMake configure-only scripts
-├── build.ps1/.sh        # Full build scripts
-├── CMakeLists.txt       # Cross-platform build config
-└── README.md            # This file
++-------------------+-------------------+-------------------+
+|    Rendering      |     Physics       |      Audio        |
+|                   |                   |                   |
+|  GraphicsEngine   |  PhysicsSystem    |  AudioEngine      |
+|  ShaderManager    |  Bullet3 World    |  XAudio2 / mini   |
+|  PostProcessing   |  Collision        |  3D Spatial       |
+|  PBR Materials    |  Raycasting       |  Object Pool      |
++-------------------+-------------------+-------------------+
+|    Scripting      |    Input & UI     |    Core & ECS     |
+|                   |                   |                   |
+|  AngelScript VM   |  InputManager     |  EnTT ECS         |
+|  Hot Reload       |  Gamepad Support  |  SceneManager     |
+|  Engine Bindings  |  ImGui Editor     |  AssetPipeline    |
++-------------------+-------------------+-------------------+
+|    Gameplay       |    AI & Nav       |    Utilities      |
+|                   |                   |                   |
+|  PlayerController |  NavMesh          |  CrashHandler     |
+|  WeaponSystem     |  Pathfinding      |  Logger (spdlog)  |
+|  VehicleSystem    |  Binary .snav     |  Timer / FileIO   |
++-------------------+-------------------+-------------------+
 ```
 
-## ⚙️ Configuration Options
+## Project Structure
 
-| Option                 | Default | Description                                    |
-|------------------------|---------|------------------------------------------------|
-| ENABLE_EDITOR          | ON      | Include in-engine editor                       |
-| ENABLE_CONSOLE         | ON      | External debug console overlay                 |
-| ENABLE_ANGELSCRIPT     | ON      | AngelScript hot-reload scripting               |
-| ENABLE_VULKAN          | OFF     | Build Vulkan renderer                          |
-| USE_STATIC_RUNTIME     | ON      | Static CRT on MSVC (/MT)                       |
+```
+SparkEngine/
+|-- Spark Engine/
+|   |-- Source/
+|       |-- Audio/           # XAudio2 3D audio engine
+|       |-- Camera/          # First-person camera controller
+|       |-- Console/         # Debug console integration
+|       |-- Core/            # Entry point, engine framework
+|       |-- Engine/          # Core systems (ECS, AI, animation, save, procedural)
+|       |-- Enums/           # Shared enumerations
+|       |-- Game/            # Gameplay logic, HUD, weapons, vehicles
+|       |-- Graphics/        # DX11 renderer, shaders, post-processing, RHI
+|       |-- Input/           # Keyboard, mouse, gamepad input
+|       |-- Physics/         # Bullet Physics integration
+|       |-- Projectiles/     # Weapon projectile system
+|       |-- SceneManager/    # Scene and level management
+|       |-- Utils/           # Logging, timers, file I/O, crash handling
+|-- SparkEditor/
+|   |-- Source/              # ImGui editor (22 subsystems)
+|-- SparkConsole/
+|   |-- src/                 # Debug console application
+|-- ThirdParty/              # Git submodules (see Dependencies)
+|-- Shaders/
+|   |-- HLSL/               # DirectX shaders
+|   |-- GLSL/               # OpenGL shaders
+|   |-- SPIRV/              # Pre-compiled SPIR-V
+|-- Assets/
+|   |-- Models/             # 3D model files
+|   |-- Scenes/             # Level/scene JSON files
+|   |-- Scripts/            # Game scripts
+|-- Tests/                   # Unit tests
+|-- docs/                    # Doxygen docs, roadmap, status reports
+|-- .github/
+|   |-- workflows/          # CI/CD (build + test)
+|   |-- prompts/            # AI assistant prompt library
+|   |-- dependabot.yml      # Automated dependency updates
+|-- CMakeLists.txt           # Cross-platform build configuration
+|-- build.ps1 / build.sh    # Build scripts
+|-- generate.bat / .sh      # CMake configure scripts
+```
 
-Pass these to `generate.bat/.sh` or edit `CMakeLists.txt` directly:
+## Dependencies
+
+All dependencies are managed as git submodules under `ThirdParty/`. Dependabot is configured to propose weekly update PRs.
+
+| Library | Path | Purpose |
+|---|---|---|
+| [Dear ImGui](https://github.com/ocornut/imgui) | `UI/imgui` | Immediate-mode GUI |
+| [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) | `UI/ImGuizmo` | 3D editor gizmos |
+| [imnodes](https://github.com/Nelarius/imnodes) | `UI/imnodes` | Node graph editor |
+| [EnTT](https://github.com/skypjack/entt) | `ECS/entt` | Entity component system |
+| [DirectXTK](https://github.com/Microsoft/DirectXTK) | `Rendering/DirectXTK` | DirectX 11 toolkit |
+| [Bullet Physics](https://github.com/bulletphysics/bullet3) | `Physics/bullet3` | Physics engine |
+| [Assimp](https://github.com/assimp/assimp) | `FileFormats/assimp` | 3D model import |
+| [miniaudio](https://github.com/mackron/miniaudio) | `Audio/miniaudio` | Cross-platform audio |
+| [AngelScript](https://github.com/codecat/angelscript-mirror) | `Scripting/angelscript-mirror` | Scripting language |
+| [curl](https://github.com/curl/curl) | `Networking/curl` | HTTP client (disabled) |
+| [GLM](https://github.com/g-truc/glm) | `Utils/glm` | Math library |
+| [miniz](https://github.com/richgel999/miniz) | `Utils/miniz` | Compression |
+| [RapidJSON](https://github.com/Tencent/rapidjson) | `Utils/rapidjson` | JSON parsing |
+| [spdlog](https://github.com/gabime/spdlog) | `Utils/spdlog` | Structured logging |
+| [stb](https://github.com/nothings/stb) | `Utils/stb` | Image loading and more |
+| [tinyobjloader](https://github.com/tinyobjloader/tinyobjloader) | `Utils/tinyobjloader` | OBJ file loader |
+
+## Build Options
+
+All options are passed to CMake via `-D<OPTION>=ON/OFF` or edited directly in `CMakeLists.txt`.
+
+| Option | Default | Description |
+|---|:---:|---|
+| `ENABLE_EDITOR` | ON | ImGui visual editor |
+| `ENABLE_GRAPHICS` | ON | Graphics rendering system |
+| `ENABLE_PHYSX` | ON | Physics engine (Bullet) |
+| `ENABLE_LUA` | ON | Lua scripting support |
+| `ENABLE_PROFILING` | ON | Performance profiling |
+| `ENABLE_VULKAN` | ON | Vulkan graphics backend |
+| `ENABLE_OPENGL` | ON | OpenGL graphics backend |
+| `ENABLE_AI` | ON | AI and navigation systems |
+| `ENABLE_ANIMATION` | ON | Skeletal animation |
+| `ENABLE_SAVE_SYSTEM` | ON | Save/load system |
+| `ENABLE_TERRAIN_SYSTEM` | ON | Heightmap terrain |
+| `ENABLE_POST_PROCESSING` | ON | Bloom, tone mapping, FXAA |
+| `ENABLE_LIGHTING_SYSTEM` | ON | Advanced lighting / IBL |
+| `ENABLE_ADVANCED_INPUT` | ON | Extended input features |
+| `ENABLE_ASSET_STREAMING` | ON | Runtime asset streaming |
+| `ENABLE_HOT_RELOAD` | ON | Script hot-reload |
+| `ENABLE_COLLABORATIVE` | ON | Collaborative features |
+| `ENABLE_PROCEDURAL` | ON | Procedural generation |
+| `ENABLE_CINEMATIC` | ON | Cinematic sequencer |
+| `ENABLE_DECALS` | ON | Decal system |
+| `ENABLE_MESH_LOD` | ON | Mesh level-of-detail |
+| `ENABLE_NETWORKING` | OFF | Networking (CURL, disabled) |
+| `ENABLE_DXR` | OFF | DirectX Raytracing (needs D3D12) |
+| `ENABLE_SDL2` | OFF | SDL2 cross-platform input |
 
 ```bash
-cmake .. -DENABLE_EDITOR=OFF -DENABLE_ANGELSCRIPT=OFF
+# Example: minimal build without editor or scripting
+cmake -B build -DENABLE_EDITOR=OFF -DENABLE_LUA=OFF
 ```
 
-## 📄 License
+## CI/CD
 
-MIT License.  
-Commercial support & enterprise add-ons available—visit our website for details.
+GitHub Actions runs on every push and PR against `main` and `develop`:
+
+- **Platform**: Windows (MSVC, Visual Studio 2022)
+- **Configurations**: Debug and Release matrix
+- **Steps**: Checkout with submodules, CMake configure, build, test (Release only), artifact upload
+- **Artifacts**: Release builds retained for 7 days
+
+## Documentation
+
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)** — Startup issues, debug commands, common fixes
+- **[Feature Roadmap](docs/FEATURE_ROADMAP.md)** — Planned features across 3 priority tiers
+- **[Project Status](docs/PROJECT_STATUS.md)** — Current system status and recent changes
+- **[API Documentation](docs/README.md)** — Doxygen-based auto-generated API docs
+- **[AI Prompt Library](.github/AI_README.md)** — Prompts for Copilot, GPT, Claude, and others
+
+### Generating API Docs
+
+```bash
+cd docs
+./generate-docs.sh        # One-time generation
+./auto-update.sh monitor  # Continuous monitoring
+```
+
+Requires `doxygen` and `graphviz`.
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.

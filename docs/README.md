@@ -1,234 +1,128 @@
-# SparkEngine Documentation System
+# SparkEngine Documentation
 
-A comprehensive wiki and API documentation system that automatically extracts documentation from header files and creates a beautiful, searchable wiki.
+Auto-generated API documentation and wiki system built on Doxygen. Extracts documentation from C++ header files and produces a searchable, cross-referenced HTML site.
 
-## 🌟 Features
+## Quick Start
 
-- **Automatic Documentation Generation**: Extracts API documentation from C++ header files using Doxygen
-- **Beautiful Wiki Interface**: Clean, modern web interface with responsive design
-- **Auto-Update System**: Monitors source files for changes and regenerates documentation automatically
-- **Module Organization**: Organizes documentation by engine modules (Audio, Graphics, Core, etc.)
-- **Searchable API Reference**: Full-text search across all classes, functions, and documentation
-- **Class Diagrams & Graphs**: Visual representations of class hierarchies and dependencies
-- **Source Code Browser**: Syntax-highlighted source code with cross-references
+```bash
+# Generate docs (requires doxygen and graphviz)
+cd docs
+./generate-docs.sh
 
-## 📁 Generated Documentation Structure
+# View locally
+open wiki/index.html
+# or serve over HTTP:
+cd wiki && python3 -m http.server 8000
+```
+
+### Auto-Update
+
+```bash
+./auto-update.sh monitor   # Watch for changes, regenerate automatically
+./auto-update.sh check     # One-shot: regenerate if sources changed
+./auto-update.sh force     # Force full regeneration
+./auto-update.sh status    # Show last update time and file count
+```
+
+## What Gets Generated
 
 ```
 docs/
-├── Doxyfile                    # Doxygen configuration
-├── generate-docs.sh           # Main documentation generation script
-├── auto-update.sh            # Auto-update monitoring script
-├── README.md                 # This file
-├── output/                   # Doxygen output (HTML, diagrams, etc.)
-│   └── html/                # Generated HTML documentation
-└── wiki/                    # Wiki website
-    ├── index.html           # Main wiki homepage
-    ├── audio.html           # Audio module page
-    ├── graphics.html        # Graphics module page
-    ├── core.html            # Core module page
-    └── output/              # Copy of Doxygen output for wiki
-        └── html/            # Full API documentation
+|-- Doxyfile                # Doxygen configuration
+|-- generate-docs.sh        # Generation script
+|-- auto-update.sh          # Continuous monitoring script
+|-- FEATURE_ROADMAP.md      # Planned features (3 tiers)
+|-- PROJECT_STATUS.md       # Current system status report
+|-- output/
+|   |-- html/              # Full Doxygen HTML output
+|-- wiki/
+    |-- index.html          # Wiki homepage
+    |-- audio.html          # Audio module docs
+    |-- graphics.html       # Graphics module docs
+    |-- core.html           # Core module docs
+    |-- output/html/        # Copy of Doxygen output
 ```
 
-## 🚀 Quick Start
+## Covered Modules
 
-### Generate Documentation
+The documentation system scans these engine modules:
 
-```bash
-# Navigate to docs directory
-cd docs/
+| Module | Description |
+|---|---|
+| Audio | XAudio2 3D audio engine with spatial positioning |
+| Graphics | DirectX 11 pipeline, shaders, post-processing, PBR |
+| Core | Main engine framework, entry point |
+| Input | Keyboard, mouse, gamepad handling |
+| Physics | Bullet Physics integration |
+| Camera | First-person camera with smooth controls |
+| Game | Game objects, weapons, vehicles, HUD |
+| Editor | ImGui visual editor components |
+| Engine | ECS, AI, animation, save system, terrain |
+| Utils | Timers, logging, crash handler, file I/O |
 
-# Generate documentation (one-time)
-./generate-docs.sh
+## Writing Documentation
 
-# View the documentation
-open wiki/index.html
-# or serve with HTTP server:
-cd wiki && python3 -m http.server 8000
-# then visit http://localhost:8000
-```
-
-### Auto-Update System
-
-```bash
-# Start continuous monitoring (runs in background)
-./auto-update.sh monitor
-
-# Check once for changes and update if needed
-./auto-update.sh check
-
-# Force regenerate documentation
-./auto-update.sh force
-
-# Show current status
-./auto-update.sh status
-```
-
-## 📚 Documentation Features
-
-### Main Wiki Homepage
-
-The main wiki homepage (`wiki/index.html`) provides:
-
-- **Beautiful Overview**: Modern design with gradient backgrounds and card-based navigation
-- **Quick Navigation**: Direct links to different sections of documentation
-- **Feature Highlights**: Overview of engine capabilities and modules
-- **Auto-Update Info**: Information about the documentation update system
-
-### API Documentation
-
-The full API documentation includes:
-
-- **Class Reference**: Complete list of all classes with detailed documentation
-- **Module Organization**: Documentation organized by engine modules
-- **Function Documentation**: Detailed parameter and return value information
-- **Source Code**: Syntax-highlighted source code with cross-references
-- **Diagrams**: Class inheritance diagrams and collaboration graphs
-- **Search Function**: Real-time search across all documentation
-
-### Supported Engine Modules
-
-The documentation system automatically extracts and organizes documentation for:
-
-- **Audio System**: XAudio2-based 3D audio engine with console integration
-- **Graphics Engine**: DirectX 11 rendering pipeline with shaders and effects
-- **Core Systems**: Main engine framework and global declarations
-- **Input Management**: Keyboard and mouse input handling
-- **Physics System**: Collision detection and rigid body physics
-- **Camera System**: First-person camera with smooth controls
-- **Game Framework**: Game objects and scene management
-- **Editor Integration**: ImGui-based visual editor components
-- **Utility Systems**: Timers, logging, crash handling, and helper functions
-
-## 🔧 Configuration
-
-### Doxygen Configuration
-
-The `Doxyfile` is configured for optimal documentation generation:
-
-- **Input Sources**: Automatically scans `Spark Engine/Source/` and `SparkEditor/Source/`
-- **Output Format**: HTML with search functionality and responsive design
-- **Documentation Style**: Supports Doxygen-style comments (`/** */`) with `@brief`, `@param`, `@return`
-- **Diagrams**: Generates class diagrams, collaboration graphs, and include dependencies
-- **Source Browser**: Includes source code browser with syntax highlighting
-
-### Auto-Update Configuration
-
-The auto-update system monitors:
-
-- All `.h` and `.hpp` files in `Spark Engine/Source/`
-- All `.h` and `.hpp` files in `SparkEditor/Source/`
-- Checks for changes every 30 seconds when monitoring
-- Uses MD5 checksums to detect file modifications
-- Includes lock file mechanism to prevent concurrent updates
-
-## 📖 Writing Documentation
-
-### Documentation Style
-
-The engine uses Doxygen-style documentation comments:
+Use Doxygen-style comments in header files:
 
 ```cpp
 /**
- * @file AudioEngine.h
- * @brief XAudio2-based audio engine with comprehensive console integration
- * @author Spark Engine Team
- * @date 2025
- * 
- * This class provides a comprehensive audio system built on XAudio2, supporting
- * both 2D and 3D audio playback, sound effect management, volume controls, and
- * an object pool system for efficient audio source management.
- */
-
-/**
- * @brief Main audio engine class with comprehensive console integration
- * 
- * The AudioEngine class manages all audio operations for the Spark Engine using
- * XAudio2 as the underlying audio API. Features include:
- * - XAudio2-based audio playback with hardware acceleration
- * - 2D and 3D spatial audio positioning
- * - Sound effect loading and management
- * 
- * @note The engine uses an object pool to efficiently reuse audio sources
- * @warning Initialize() must be called before any audio operations
+ * @brief Main audio engine with XAudio2 backend
+ *
+ * Manages all audio operations including 2D/3D playback,
+ * sound effect loading, and spatial audio positioning.
+ *
+ * @note Initialize() must be called before any audio operations
  */
 class AudioEngine
 {
 public:
     /**
-     * @brief Initialize the audio engine with XAudio2
-     * 
-     * Sets up the XAudio2 engine, creates the mastering voice, and initializes
-     * the audio source object pool with the specified number of sources.
-     * 
-     * @param maxSources Maximum number of simultaneous audio sources
-     * @return HRESULT indicating success or failure of audio initialization
-     * @note A typical value for maxSources is 32-64 for most games
+     * @brief Initialize the audio engine
+     * @param maxSources Maximum simultaneous audio sources (typical: 32-64)
+     * @return HRESULT indicating success or failure
      */
     HRESULT Initialize(size_t maxSources);
 };
 ```
 
-### Documentation Tags
+Supported tags: `@file`, `@brief`, `@param`, `@return`, `@note`, `@warning`, `@see`, `@example`, `@todo`, `@bug`, `@deprecated`
 
-Supported Doxygen tags:
+## Configuration
 
-- `@file` - File description
-- `@brief` - Brief description
-- `@param` - Parameter description
-- `@return` - Return value description
-- `@note` - Additional notes
-- `@warning` - Warnings and cautions
-- `@see` - Cross-references
-- `@example` - Usage examples
-- `@todo` - Todo items
-- `@bug` - Known bugs
-- `@deprecated` - Deprecated features
+### Doxygen (`Doxyfile`)
 
-## 🛠️ Maintenance
+- **Input**: `Spark Engine/Source/` and `SparkEditor/Source/`
+- **Output**: HTML with search, responsive design, source browser
+- **Diagrams**: Class hierarchies, collaboration graphs, include dependencies (requires GraphViz)
 
-### Updating Documentation
+### Auto-Update (`auto-update.sh`)
 
-The documentation is automatically updated when:
+- Watches `.h` and `.hpp` files in engine and editor source directories
+- Checks every 30 seconds in monitor mode
+- Uses MD5 checksums for change detection
+- Lock file prevents concurrent regeneration
 
-1. **File Changes**: Any header file modification triggers regeneration
-2. **Manual Update**: Running `./generate-docs.sh` manually
-3. **Forced Update**: Using `./auto-update.sh force`
+## Dependencies
 
-### Troubleshooting
+- **Doxygen** 1.9+ — Documentation generator
+- **GraphViz** — Diagram rendering (optional but recommended)
 
-Common issues and solutions:
+```bash
+# Ubuntu/Debian
+sudo apt install doxygen graphviz
 
-1. **Missing Dependencies**:
-   ```bash
-   sudo apt install doxygen graphviz
-   ```
+# macOS
+brew install doxygen graphviz
 
-2. **Permission Issues**:
-   ```bash
-   chmod +x generate-docs.sh auto-update.sh
-   ```
+# Windows (via Chocolatey)
+choco install doxygen.install graphviz
+```
 
-3. **Path Issues**: Ensure scripts are run from the `docs/` directory
+## CMake Integration
 
-4. **Build Errors**: Check that header files are properly formatted with valid C++ syntax
-
-### Performance Considerations
-
-- **Generation Time**: Large codebases may take 1-2 minutes to generate
-- **File Monitoring**: Auto-update checks files every 30 seconds
-- **Memory Usage**: Doxygen may use significant memory for large projects
-- **Diagram Generation**: GraphViz diagrams increase generation time but improve documentation quality
-
-## 🎯 Integration
-
-### Build System Integration
-
-To integrate with the existing build system, add to your `CMakeLists.txt`:
+Add a docs target to your build:
 
 ```cmake
-# Add documentation target
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
     add_custom_target(docs
@@ -240,24 +134,21 @@ if(DOXYGEN_FOUND)
 endif()
 ```
 
-### CI/CD Integration
-
-For GitHub Actions or other CI systems:
+## CI Integration
 
 ```yaml
 - name: Generate Documentation
   run: |
     sudo apt install doxygen graphviz
-    cd docs
-    ./generate-docs.sh
-    
+    cd docs && ./generate-docs.sh
+
 - name: Deploy to GitHub Pages
-  uses: peaceiris/actions-gh-pages@v3
+  uses: peaceiris/actions-gh-pages@v4
   with:
     github_token: ${{ secrets.GITHUB_TOKEN }}
     publish_dir: ./docs/wiki
 ```
 
-## 📄 License
+## License
 
-This documentation system is part of the SparkEngine project and follows the same MIT license.
+Part of the SparkEngine project. MIT License.
