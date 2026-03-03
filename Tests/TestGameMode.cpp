@@ -1,5 +1,6 @@
 // TestGameMode.cpp - Tests for game mode scoring and K/D ratio
 
+#include "TestFramework.h"
 #include <string>
 #include <cmath>
 

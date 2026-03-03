@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file MeshLOD.cpp
  * @brief Mesh LOD implementation — simplification, chain generation, runtime selection
@@ -276,3 +278,5 @@ LODManager::LODStats LODManager::GetStats() const {
 }
 
 } // namespace Spark::Graphics
+
+#endif // SPARK_PLATFORM_WINDOWS

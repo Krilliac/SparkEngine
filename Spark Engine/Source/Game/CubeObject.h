@@ -1,10 +1,13 @@
-﻿#pragma once
+#pragma once
+#include "../Core/Platform.h"
 
 #include "GameObject.h"
 #include "PlaceholderMesh.h"
 #include "Primitives.h"
 #include "Utils/Assert.h"        // custom assert system
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 
 using DirectX::XMFLOAT3;

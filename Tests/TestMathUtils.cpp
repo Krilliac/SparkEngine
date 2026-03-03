@@ -1,5 +1,5 @@
 // TestMathUtils.cpp - Tests for MathUtils functions
-#include "TestMain.cpp" // Include test macros (in real build, this is handled by linking)
+#include "TestFramework.h"
 #include <cmath>
 #include <algorithm>
 

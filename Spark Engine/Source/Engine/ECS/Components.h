@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Components.h
  * @brief ECS components and World class for Spark Engine
  * @author Spark Engine Team
@@ -9,18 +9,34 @@
  */
 
 #pragma once
+#include "../../Core/Platform.h"
 #include <entt/entt.hpp>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>
 #include <functional>
 
 using EntityID = entt::entity;
 
+struct NameComponent {
+    std::string name;
+};
+
 class World {
 public:
-    EntityID CreateEntity(const std::string& name = "");
-    void DestroyEntity(EntityID entity);
+    EntityID CreateEntity(const std::string& name = "") {
+        EntityID entity = m_registry.create();
+        if (!name.empty()) {
+            m_registry.emplace<NameComponent>(entity, NameComponent{name});
+        }
+        return entity;
+    }
+
+    void DestroyEntity(EntityID entity) {
+        m_registry.destroy(entity);
+    }
 
     template<typename T, typename... Args>
     T& AddComponent(EntityID entity, Args&&... args) {
@@ -47,7 +63,12 @@ public:
         return m_registry.view<Components...>();
     }
 
-    size_t GetEntityCount() const { return m_registry.alive(); }
+    size_t GetEntityCount() const {
+        size_t count = 0;
+        for ([[maybe_unused]] auto entity : m_registry.template storage<entt::entity>()->each())
+            ++count;
+        return count;
+    }
     entt::registry& GetRegistry() { return m_registry; }
     const entt::registry& GetRegistry() const { return m_registry; }
 
@@ -58,10 +79,6 @@ private:
 // ============================================================================
 // Core Components (existing)
 // ============================================================================
-
-struct NameComponent {
-    std::string name;
-};
 
 struct Transform {
     DirectX::XMFLOAT3 position{0,0,0};

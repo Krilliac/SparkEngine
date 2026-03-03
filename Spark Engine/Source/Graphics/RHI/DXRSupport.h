@@ -16,8 +16,11 @@
  */
 
 #pragma once
+#include "../../Core/Platform.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -46,6 +49,14 @@ inline RTFeature operator|(RTFeature a, RTFeature b) {
 }
 inline RTFeature operator&(RTFeature a, RTFeature b) {
     return static_cast<RTFeature>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+}
+inline bool operator!(RTFeature a) {
+    return static_cast<uint32_t>(a) == 0;
+}
+
+// Helper to test if a feature flag is set
+inline bool HasFeature(RTFeature flags, RTFeature feature) {
+    return static_cast<uint32_t>(flags & feature) != 0;
 }
 
 // ============================================================================

@@ -1,18 +1,20 @@
 // TestMeshLOD.cpp - Tests for LOD selection and mesh simplification logic
 // Standalone implementations for CI testing
 
+#include "TestFramework.h"
 #include <vector>
 #include <string>
 #include <cmath>
+#include <cstdint>
 #include <algorithm>
 
 namespace TestLOD {
 
 struct LODLevel {
-    float maxDistance;
-    float screenSizeThreshold;
-    uint32_t indexCount;
-    float qualityPercent;
+    float maxDistance = 0.0f;
+    float screenSizeThreshold = 0.0f;
+    uint32_t indexCount = 0;
+    float qualityPercent = 0.0f;
 };
 
 struct LODChain {

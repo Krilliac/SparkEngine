@@ -1,8 +1,12 @@
-﻿// Projectile.cpp
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+// Projectile.cpp
 #include "Projectile.h"
 #include "Utils/Assert.h"
-#include "..\Utils\MathUtils.h"
+#include "../Utils/MathUtils.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 using namespace DirectX;
 
@@ -170,3 +174,4 @@ void Projectile::UpdateBoundingSphere()
     m_boundingSphere.Center = GetPosition();
     // radius remains unchanged
 }
+#endif // SPARK_PLATFORM_WINDOWS

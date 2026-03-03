@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file CollisionSystem.h
  * @brief Comprehensive 3D collision detection and physics system
  * @author Spark Engine Team
@@ -13,8 +13,10 @@
 #pragma once
 
 #include "Utils/Assert.h"
-#include "..\Core\framework.h"
+#include "../Core/framework.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <vector>
 #include <cfloat>
 #include <cmath>

@@ -1,7 +1,10 @@
-﻿#include "SparkEngineCamera.h"
+#include "../Core/Platform.h"
+#include "SparkEngineCamera.h"
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <cmath>
 #include <iostream>
 #include <chrono>

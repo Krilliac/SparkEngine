@@ -1,8 +1,12 @@
-﻿// Terrain.cpp
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+// Terrain.cpp
 #include "Terrain.h"
 #include "Utils/Assert.h"
 #include <fstream>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 using namespace DirectX;
 
@@ -144,3 +148,4 @@ void Terrain::Render(ID3D11DeviceContext* ctx)
         D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ctx->DrawIndexed(m_indexCount, 0, 0);
 }
+#endif // SPARK_PLATFORM_WINDOWS

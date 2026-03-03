@@ -5,8 +5,10 @@
 
 #include "NavMesh.h"
 #include <sstream>
+#include <fstream>
 #include <cmath>
 #include <algorithm>
+#include <random>
 
 namespace Spark::AI {
 

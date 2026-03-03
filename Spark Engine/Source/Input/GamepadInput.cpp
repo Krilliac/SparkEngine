@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // GamepadInput.cpp
 #include "GamepadInput.h"
 #include <sstream>
@@ -362,3 +364,5 @@ std::string GamepadInput::Console_ListBindings() const
     }
     return ss.str();
 }
+
+#endif // SPARK_PLATFORM_WINDOWS

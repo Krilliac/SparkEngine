@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file LightingSystem.cpp
  * @brief Complete lighting system implementation with PBR support
@@ -1066,3 +1068,4 @@ ShadowTechnique StringToShadowTechnique(const std::string& str)
     if (str == "pcss") return ShadowTechnique::PCSS;
     return ShadowTechnique::PCF; // Default
 }
+#endif // SPARK_PLATFORM_WINDOWS

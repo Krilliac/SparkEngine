@@ -1,9 +1,12 @@
-﻿// Primitives.h
+// Primitives.h
 #pragma once
+#include "../Core/Platform.h"
 
 #include "Utils/Assert.h"
-#include "..\Graphics\Mesh.h"    // MeshData
+#include "../Graphics/Mesh.h"    // MeshData
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 using DirectX::XMFLOAT3;
 using DirectX::XMFLOAT2;
 

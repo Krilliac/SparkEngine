@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Console.h
  * @brief Debug console system for runtime commands and logging
  * @author Spark Engine Team
@@ -10,9 +10,12 @@
  */
 
 #pragma once
+#include "../Core/Platform.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>
 #include <functional>
@@ -94,7 +97,12 @@ public:
      * Shows or hides the console interface and manages the mouse cursor
      * visibility accordingly.
      */
-    void Toggle() { visible = !visible; ShowCursor(visible); }
+    void Toggle() {
+        visible = !visible;
+#ifdef SPARK_PLATFORM_WINDOWS
+        ShowCursor(visible);
+#endif
+    }
 
     /**
      * @brief Check if the console is currently visible

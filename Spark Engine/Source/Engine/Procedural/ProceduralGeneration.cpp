@@ -8,6 +8,7 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <queue>
 
 namespace Spark::Procedural {
 

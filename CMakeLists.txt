@@ -1,7 +1,7 @@
-﻿cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.16)
 
 # ================================================================
-# Modern CMake Configuration
+# Modern CMake Configuration - Cross-Platform Build
 # ================================================================
 
 # Set CMake policies for modern behavior
@@ -34,13 +34,12 @@ if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
     set(CMAKE_GENERATOR_PLATFORM "x64")
 endif()
 
-project(SparkEngine)
+project(SparkEngine LANGUAGES CXX C)
 
 # ---------------------------------------------------------------------
 # 3) Custom build options
 # ---------------------------------------------------------------------
 option(ENABLE_PHYSX "Enable PhysX physics engine" ON)
-option(ENABLE_EDITOR "Enable editor features" ON)
 option(ENABLE_LUA "Enable Lua scripting support" ON)
 option(ENABLE_COLLABORATIVE "Enable collaborative features" ON)
 option(ENABLE_GRAPHICS "Enable graphics engine" ON)
@@ -63,12 +62,22 @@ option(ENABLE_DECALS "Enable decal system" ON)
 option(ENABLE_MESH_LOD "Enable mesh LOD system" ON)
 option(ENABLE_DXR "Enable DirectX Raytracing support" OFF)  # Requires D3D12, disabled by default
 option(ENABLE_SDL2 "Enable SDL2 cross-platform input" OFF)  # Requires SDL2 library
+option(BUILD_TESTS "Build test suite" ON)
+
+# Editor only available on Windows (requires Win32 + DX11 ImGui backends)
+if(WIN32)
+    option(ENABLE_EDITOR "Enable editor features" ON)
+else()
+    set(ENABLE_EDITOR OFF)
+    message(STATUS "SparkEditor disabled on non-Windows platform (requires Win32+DX11)")
+endif()
 
 # ---------------------------------------------------------------------
 # 4) C++ standard and in-source build guard
 # ---------------------------------------------------------------------
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "In-source builds are not allowed. Create a separate build directory.")
@@ -90,7 +99,7 @@ foreach(config Debug Release RelWithDebInfo MinSizeRel)
 endforeach()
 
 # ---------------------------------------------------------------------
-# 6) MSVC-specific compiler options
+# 6) Compiler options (platform-specific)
 # ---------------------------------------------------------------------
 if(MSVC)
     add_compile_options(
@@ -102,6 +111,30 @@ if(MSVC)
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(
+        -Wall -Wextra
+        -Wno-unused-parameter
+        -Wno-missing-field-initializers
+        -Wno-sign-compare
+        -Wno-unused-variable
+        -Wno-unused-function
+        -Wno-reorder
+        -Wno-ignored-qualifiers
+    )
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        add_compile_options(
+            -Wno-class-memaccess
+            -Wno-stringop-truncation
+        )
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(
+            -Wno-unused-private-field
+            -Wno-unused-lambda-capture
+            -Wno-microsoft-include
+        )
+    endif()
 endif()
 
 # ---------------------------------------------------------------------
@@ -116,16 +149,16 @@ if(EXISTS "${MINIZ_ROOT}")
         "${MINIZ_ROOT}/*.h"
     )
     list(FILTER MINIZ_SOURCES EXCLUDE REGEX ".*test.*|.*example.*|.*tool.*")
-    
+
     # Create miniz library target
     add_library(miniz STATIC ${MINIZ_SOURCES})
     target_include_directories(miniz PUBLIC "${MINIZ_ROOT}")
-    
+
     # Set consistent runtime library for miniz
     if(MSVC)
         set_property(TARGET miniz PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
-    
+
     set(MINIZ_FOUND TRUE)
     message(STATUS "Found MINIZ at: ${MINIZ_ROOT}")
 else()
@@ -134,9 +167,9 @@ else()
 endif()
 
 # TinyObjLoader - Proper static library implementation
-find_path(TINYOBJLOADER_INCLUDE_DIR 
+find_path(TINYOBJLOADER_INCLUDE_DIR
     NAMES tiny_obj_loader.h
-    PATHS 
+    PATHS
         "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/tinyobjloader"
         "${CMAKE_SOURCE_DIR}/ThirdParty/FileFormats/tinyobjloader"
         "${CMAKE_SOURCE_DIR}/ThirdParty/Graphics/tinyobjloader"
@@ -154,18 +187,75 @@ if(TINYOBJLOADER_INCLUDE_DIR)
     )
     target_include_directories(tinyobjloader PUBLIC ${TINYOBJLOADER_INCLUDE_DIR})
     # Don't add TINYOBJLOADER_IMPLEMENTATION to the interface - it's only in TinyObjImpl.cpp
-    
+
     # Set consistent runtime library for tinyobjloader
     if(MSVC)
         set_property(TARGET tinyobjloader PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
-    
+
     set(TINYOBJ_FOUND TRUE)
     message(STATUS "Found TinyObjLoader at: ${TINYOBJLOADER_INCLUDE_DIR}")
     message(STATUS "TinyObjLoader implementation will be compiled once in TinyObjImpl.cpp")
 else()
     set(TINYOBJ_FOUND FALSE)
-    message(WARNING "TinyObjLoader not found")
+    message(STATUS "TinyObjLoader not found (optional)")
+endif()
+
+# Header-only third-party libraries (cross-platform)
+set(THIRDPARTY_INCLUDE_DIRS "")
+
+# EnTT (ECS)
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include")
+    message(STATUS "Found EnTT")
+endif()
+
+# GLM (math)
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/glm")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/glm")
+    message(STATUS "Found GLM")
+endif()
+
+# RapidJSON
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/rapidjson/include")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/rapidjson/include")
+    message(STATUS "Found RapidJSON")
+endif()
+
+# spdlog
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/spdlog/include")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/spdlog/include")
+    message(STATUS "Found spdlog")
+endif()
+
+# stb
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/stb")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/stb")
+    message(STATUS "Found stb")
+endif()
+
+# miniaudio
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Audio/miniaudio")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Audio/miniaudio")
+    message(STATUS "Found miniaudio")
+endif()
+
+# Bullet Physics
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
+    message(STATUS "Found Bullet Physics")
+endif()
+
+# ImGui
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui")
+    message(STATUS "Found Dear ImGui")
+endif()
+
+# AngelScript
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
+    message(STATUS "Found AngelScript")
 endif()
 
 # ---------------------------------------------------------------------
@@ -248,7 +338,7 @@ endif()
 # ---------------------------------------------------------------------
 # 8) Build SparkConsole FIRST to ensure it's available for SparkEngine
 # ---------------------------------------------------------------------
-if(EXISTS "${CMAKE_SOURCE_DIR}/SparkConsole/CMakeLists.txt")
+if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/SparkConsole/CMakeLists.txt")
     message(STATUS "Building SparkConsole first...")
     add_subdirectory(SparkConsole)
 endif()
@@ -265,8 +355,14 @@ file(GLOB_RECURSE SPARK_ENGINE_SOURCES
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 
-# Create the main executable - WIN32 subsystem since it uses wWinMain
-add_executable(SparkEngine WIN32 ${SPARK_ENGINE_SOURCES})
+# Create the main executable
+# On Windows: WIN32 subsystem (uses wWinMain entry point)
+# On Linux: Standard executable (uses main() entry point)
+if(WIN32)
+    add_executable(SparkEngine WIN32 ${SPARK_ENGINE_SOURCES})
+else()
+    add_executable(SparkEngine ${SPARK_ENGINE_SOURCES})
+endif()
 
 # Link third-party libraries properly
 if(MINIZ_FOUND)
@@ -283,7 +379,7 @@ endif()
 if(TARGET SparkConsole)
     add_dependencies(SparkEngine SparkConsole)
     message(STATUS "SparkEngine will be built after SparkConsole")
-    
+
     # FIXED: Simplified post-build step to copy SparkConsole.exe
     add_custom_command(TARGET SparkEngine POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -300,7 +396,7 @@ endif()
 if(ENABLE_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/SparkEditor/CMakeLists.txt")
     message(STATUS "Adding SparkEditor to build...")
     add_subdirectory(SparkEditor)
-    
+
     # Ensure SparkEditor is built after SparkEngine
     if(TARGET SparkEngine AND TARGET SparkEditor)
         add_dependencies(SparkEditor SparkEngine)
@@ -309,7 +405,7 @@ if(ENABLE_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/SparkEditor/CMakeLists.txt")
 endif()
 
 # ---------------------------------------------------------------------
-# 10) Asset Management - IMPROVED: No automatic shader compilation
+# 10) Asset Management
 # ---------------------------------------------------------------------
 # Create necessary directories
 add_custom_command(TARGET SparkEngine POST_BUILD
@@ -385,43 +481,57 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/SPIRV")
     endforeach()
 endif()
 
-# Exclude shader files from automatic compilation by setting them as None instead of FxCompile
-file(GLOB_RECURSE ALL_SHADER_FILES "*.hlsl")
-set_source_files_properties(${ALL_SHADER_FILES} PROPERTIES
-    VS_TOOL_OVERRIDE "None"
-    VS_DEPLOYMENT_CONTENT 1
-    VS_DEPLOYMENT_LOCATION "Shaders"
-)
+# Exclude shader files from automatic compilation (VS only)
+if(MSVC)
+    file(GLOB_RECURSE ALL_SHADER_FILES "*.hlsl")
+    set_source_files_properties(${ALL_SHADER_FILES} PROPERTIES
+        VS_TOOL_OVERRIDE "None"
+        VS_DEPLOYMENT_CONTENT 1
+        VS_DEPLOYMENT_LOCATION "Shaders"
+    )
+endif()
 
 # ---------------------------------------------------------------------
 # 11) Include directories
 # ---------------------------------------------------------------------
 target_include_directories(SparkEngine PRIVATE
     "Spark Engine/Source"
+    ${THIRDPARTY_INCLUDE_DIRS}
 )
 
 # ---------------------------------------------------------------------
-# 12) System libraries - Properly configured
+# 12) System libraries - Platform-specific
 # ---------------------------------------------------------------------
-target_link_libraries(SparkEngine PRIVATE
-    # DirectX and graphics
-    d3d11 dxgi d3dcompiler dxguid
-    
-    # Windows core libraries
-    kernel32 user32 gdi32 winspool
-    shell32 comdlg32 advapi32
-    ole32 oleaut32 uuid
-    
-    # Multimedia and timing
-    winmm
-    
-    # Networking libraries (only if networking is enabled)
-    $<$<BOOL:${ENABLE_NETWORKING}>:ws2_32>
-    $<$<BOOL:${ENABLE_NETWORKING}>:wsock32>
-    $<$<BOOL:${ENABLE_NETWORKING}>:crypt32>
-    $<$<BOOL:${ENABLE_NETWORKING}>:wldap32>
-    $<$<BOOL:${ENABLE_NETWORKING}>:normaliz>
-)
+if(WIN32)
+    target_link_libraries(SparkEngine PRIVATE
+        # DirectX and graphics
+        d3d11 dxgi d3dcompiler dxguid
+
+        # Windows core libraries
+        kernel32 user32 gdi32 winspool
+        shell32 comdlg32 advapi32
+        ole32 oleaut32 uuid
+
+        # Multimedia and timing
+        winmm
+
+        # Networking libraries (only if networking is enabled)
+        $<$<BOOL:${ENABLE_NETWORKING}>:ws2_32>
+        $<$<BOOL:${ENABLE_NETWORKING}>:wsock32>
+        $<$<BOOL:${ENABLE_NETWORKING}>:crypt32>
+        $<$<BOOL:${ENABLE_NETWORKING}>:wldap32>
+        $<$<BOOL:${ENABLE_NETWORKING}>:normaliz>
+    )
+else()
+    # Linux/macOS system libraries
+    find_package(Threads REQUIRED)
+    target_link_libraries(SparkEngine PRIVATE
+        Threads::Threads
+        ${CMAKE_DL_LIBS}  # libdl for dynamic loading
+    )
+    # Platform define for cross-platform code
+    target_compile_definitions(SparkEngine PRIVATE SPARK_PLATFORM_LINUX)
+endif()
 
 # Add legacy stdio for compatibility
 if(MSVC)
@@ -488,7 +598,7 @@ if(ENABLE_PHYSX)
         target_compile_definitions(SparkEngine PRIVATE PHYSX_AVAILABLE)
         message(STATUS "PhysX headers found")
     else()
-        message(WARNING "PhysX not found")
+        message(STATUS "PhysX not found (optional)")
     endif()
 endif()
 
@@ -600,22 +710,22 @@ endif()
 # ---------------------------------------------------------------------
 # 15) Visual Studio settings
 # ---------------------------------------------------------------------
-foreach(src ${SPARK_ENGINE_SOURCES})
-    get_filename_component(dir "${src}" DIRECTORY)
-    file(RELATIVE_PATH grp "${CMAKE_SOURCE_DIR}/Spark Engine/Source" "${dir}")
-    string(REPLACE "/" "\\\\" grp "${grp}")
-    if(grp STREQUAL "")
-        source_group("Source Files" FILES "${src}")
-    else()
-        source_group("Source Files\\\\${grp}" FILES "${src}")
-    endif()
-endforeach()
-
-# Set working directory and startup project
 if(MSVC)
+    foreach(src ${SPARK_ENGINE_SOURCES})
+        get_filename_component(dir "${src}" DIRECTORY)
+        file(RELATIVE_PATH grp "${CMAKE_SOURCE_DIR}/Spark Engine/Source" "${dir}")
+        string(REPLACE "/" "\\\\" grp "${grp}")
+        if(grp STREQUAL "")
+            source_group("Source Files" FILES "${src}")
+        else()
+            source_group("Source Files\\\\${grp}" FILES "${src}")
+        endif()
+    endforeach()
+
+    # Set working directory and startup project
     set_property(TARGET SparkEngine PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT SparkEngine)
-    
+
     # Organize asset files in Visual Studio
     source_group("Assets\\\\Shaders" FILES "*.hlsl" "*.fx" "*.glsl")
     source_group("Assets\\\\Models" FILES "*.obj" "*.fbx" "*.dae" "*.3ds" "*.ply")
@@ -625,10 +735,26 @@ if(MSVC)
     source_group("Assets\\\\Config" FILES "*.ini" "*.json" "*.cfg" "*.xml" "*.properties")
 endif()
 
+# ---------------------------------------------------------------------
+# 16) Test suite
+# ---------------------------------------------------------------------
+if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
+    message(STATUS "Adding test suite...")
+    add_subdirectory(Tests)
+endif()
+
+# ---------------------------------------------------------------------
+# 17) Build summary
+# ---------------------------------------------------------------------
 message(STATUS "=== SPARKENGINE CONFIGURED SUCCESSFULLY ===")
+message(STATUS "Platform: ${CMAKE_SYSTEM_NAME} (${CMAKE_CXX_COMPILER_ID})")
 message(STATUS "Output: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 message(STATUS "Graphics Backends:")
-message(STATUS "  DirectX 11 : ENABLED (always on Windows)")
+if(WIN32)
+    message(STATUS "  DirectX 11 : ENABLED (Windows)")
+else()
+    message(STATUS "  DirectX 11 : DISABLED (non-Windows)")
+endif()
 if(SPARK_VULKAN_AVAILABLE)
     message(STATUS "  Vulkan     : ENABLED")
 else()
@@ -639,8 +765,10 @@ if(SPARK_OPENGL_AVAILABLE)
 else()
     message(STATUS "  OpenGL     : DISABLED")
 endif()
+message(STATUS "Editor: ${ENABLE_EDITOR}")
+message(STATUS "Tests: ${BUILD_TESTS}")
 message(STATUS "Networking: ${ENABLE_NETWORKING}")
-message(STATUS "New Systems:")
+message(STATUS "Systems:")
 message(STATUS "  AI/NavMesh     : ${ENABLE_AI}")
 message(STATUS "  Animation      : ${ENABLE_ANIMATION}")
 message(STATUS "  Save System    : ${ENABLE_SAVE_SYSTEM}")

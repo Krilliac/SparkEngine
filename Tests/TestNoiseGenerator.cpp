@@ -1,6 +1,7 @@
 // TestNoiseGenerator.cpp - Tests for procedural noise generation
 // Standalone re-implementations for CI testing without DirectXMath
 
+#include "TestFramework.h"
 #include <cmath>
 #include <vector>
 #include <random>

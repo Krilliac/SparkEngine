@@ -1,9 +1,13 @@
-﻿// Mesh.cpp
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+// Mesh.cpp
 #include "Mesh.h"
 #include "Utils/Assert.h"
 //#include "Utils/Debug.h"
 #include <tiny_obj_loader.h>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <fstream>
 #include <filesystem>   // C++17 for path handling
 #include <cmath>
@@ -541,3 +545,4 @@ void Mesh::Render(ID3D11DeviceContext* ctx) {
         std::wcout << L"[DEBUG] Mesh rendered " << renderCallCount << L" times. IndexCount=" << m_indexCount << std::endl;
     }
 }
+#endif // SPARK_PLATFORM_WINDOWS

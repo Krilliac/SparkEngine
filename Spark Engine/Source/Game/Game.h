@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Game.h
  * @brief Main game class managing the core game loop and scene systems
  * @author Spark Engine Team
@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "..\Core\framework.h"    // XMFLOAT3, XMMATRIX, HRESULT
+#include "../Core/framework.h"    // XMFLOAT3, XMMATRIX, HRESULT
 #include "Utils/Assert.h"
 #include "ClassSystem.h"
 #include "VehicleSystem.h"

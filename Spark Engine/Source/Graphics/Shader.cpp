@@ -1,14 +1,20 @@
-﻿// Shader.cpp - Enhanced shader system implementation with AAA features (C++14 compatible)
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+// Shader.cpp - Enhanced shader system implementation with AAA features (C++14 compatible)
 #include "Shader.h"
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 using namespace DirectX;
 
@@ -648,3 +654,4 @@ HRESULT Shader::CreateInputLayout(ID3DBlob* vertexShaderBlob, ID3D11InputLayout*
 
     return hr;
 }
+#endif // SPARK_PLATFORM_WINDOWS

@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file AssetPipeline.cpp
  * @brief Implementation of complete asset pipeline system
@@ -1107,3 +1109,4 @@ std::string LoadingPriorityToString(LoadingPriority priority)
         default: return "Unknown";
     }
 }
+#endif // SPARK_PLATFORM_WINDOWS

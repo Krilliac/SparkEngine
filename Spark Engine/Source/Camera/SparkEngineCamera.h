@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file SparkEngineCamera.h
  * @brief First-person camera system with smooth movement and console integration
  * @author Spark Engine Team
@@ -11,13 +11,16 @@
  */
 
 #pragma once
+#include "../Core/Platform.h"
 
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0A00
 #endif
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <algorithm>           // std::clamp
 #include <functional>          // std::function
 #include <mutex>               // std::mutex

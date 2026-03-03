@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // ParticleSystem.cpp
 #include "ParticleSystem.h"
 #include "Utils/Assert.h"
@@ -644,3 +646,5 @@ void ParticleSystem::Console_SpawnEffect(const std::string& effectType, float x,
     else if (effectType == "trail")
         SpawnTrail(pos);
 }
+
+#endif // SPARK_PLATFORM_WINDOWS

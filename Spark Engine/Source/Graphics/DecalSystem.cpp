@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file DecalSystem.cpp
  * @brief Decal system implementation — spawning, pooling, fading, rendering data
@@ -271,3 +273,5 @@ void DecalSystem::Console_SpawnTestDecal(float x, float y, float z) {
 }
 
 } // namespace Spark::Graphics
+
+#endif // SPARK_PLATFORM_WINDOWS

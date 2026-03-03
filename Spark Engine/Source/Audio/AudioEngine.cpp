@@ -1,4 +1,6 @@
-﻿// AudioEngine.cpp
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+// AudioEngine.cpp
 #include "AudioEngine.h"
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
@@ -777,3 +779,4 @@ AudioEngine::AudioMetrics AudioEngine::GetMetricsThreadSafe() const {
     
     return metrics;
 }
+#endif // SPARK_PLATFORM_WINDOWS

@@ -1,4 +1,6 @@
-﻿// Bullet.cpp
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+// Bullet.cpp
 #include "Bullet.h"
 #include "Utils/Assert.h"
 
@@ -42,3 +44,4 @@ void Bullet::Render(const XMMATRIX& view, const XMMATRIX& projection)
     ASSERT_MSG(m_mesh != nullptr, "Bullet mesh not initialized");
     Projectile::Render(view, projection);
 }
+#endif // SPARK_PLATFORM_WINDOWS

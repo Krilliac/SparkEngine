@@ -1,8 +1,11 @@
-﻿#pragma once
+#pragma once
+#include "../Core/Platform.h"
 
 #include "Utils/Assert.h"
-#include "..\Graphics\Mesh.h"
+#include "../Graphics/Mesh.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <iostream>
 #include <filesystem>
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Shader.h
  * @brief Advanced HLSL shader management with PBR, lighting, and console integration
  * @author Spark Engine Team
@@ -12,9 +12,11 @@
 #pragma once
 
 #include "Utils/Assert.h"
-#include "..\Core\framework.h"
+#include "../Core/framework.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -569,7 +571,7 @@ private:
     std::vector<ShaderVariant> m_variants;  ///< Shader variants
     std::string m_filePath;                 ///< Current shader file path
     FILETIME m_lastModified = {};            ///< Last modification time
-    ShaderType m_type = ShaderType::VERTEX;  ///< Current shader type
+    ShaderType m_type = ShaderType::VERTEX_SHADER;  ///< Current shader type
     bool m_isCompiled = false;              ///< Compilation status
     ID3D11DeviceChild* m_shader = nullptr;  ///< Generic shader interface
 };

@@ -1,8 +1,14 @@
-﻿#include <Windows.h>
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <cstdint>
 #include <cstdarg>
 #include <cstdio>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <chrono>
 
 #include "Game.h"
@@ -10,14 +16,14 @@
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 
-#include "..\Graphics\GraphicsEngine.h"
-#include "..\Graphics\TextureSystem.h"
-#include "..\Graphics\AssetPipeline.h"
-#include "..\Physics\PhysicsSystem.h"
-#include "..\Graphics\MaterialSystem.h"
-#include "..\Input\InputManager.h"
-#include "..\Camera\SparkEngineCamera.h"
-#include "..\Graphics\Shader.h"
+#include "../Graphics/GraphicsEngine.h"
+#include "../Graphics/TextureSystem.h"
+#include "../Graphics/AssetPipeline.h"
+#include "../Physics/PhysicsSystem.h"
+#include "../Graphics/MaterialSystem.h"
+#include "../Input/InputManager.h"
+#include "../Camera/SparkEngineCamera.h"
+#include "../Graphics/Shader.h"
 #include "GameObject.h"
 #include "CubeObject.h"
 #include "PlaneObject.h"
@@ -25,12 +31,12 @@
 #include "WallObject.h"
 #include "ModelObject.h"  // Add ModelObject for .obj file rendering
 #include "Player.h"
-#include "..\Game\Console.h"
-#include "..\Projectiles\ProjectilePool.h"
+#include "../Game/Console.h"
+#include "../Projectiles/ProjectilePool.h"
 #include <iostream>
-#include "..\SceneManager\SceneManager.h"
-#include "..\Utils\SparkConsole.h"
-#include "..\Console\AdvancedConsoleCommands.h"
+#include "../SceneManager/SceneManager.h"
+#include "../Utils/SparkConsole.h"
+#include "../Console/AdvancedConsoleCommands.h"
 
 // Pull in globals defined in SparkEngine.cpp
 extern std::unique_ptr<GraphicsEngine> g_graphics;
@@ -1435,3 +1441,4 @@ bool Game::PlayerExitVehicle()
     if (!m_player || !m_player->IsInVehicle()) return false;
     return m_player->ExitVehicle();
 }
+#endif // SPARK_PLATFORM_WINDOWS

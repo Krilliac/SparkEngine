@@ -19,6 +19,10 @@ add_executable(SparkTests
     TestSequencer.cpp
     TestMeshLOD.cpp
     TestInputSystem.cpp
+    TestAnimationSystem.cpp
+    TestNavMesh.cpp
+    TestSteeringBehaviors.cpp
+    TestPhysicsComponents.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
@@ -31,6 +35,13 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/entt")
     target_include_directories(SparkTests PRIVATE "${CMAKE_SOURCE_DIR}/ThirdParty/entt/single_include")
 elseif(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt")
     target_include_directories(SparkTests PRIVATE "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include")
+endif()
+
+# Cross-platform libraries
+if(NOT WIN32)
+    find_package(Threads REQUIRED)
+    target_link_libraries(SparkTests PRIVATE Threads::Threads)
+    target_compile_definitions(SparkTests PRIVATE SPARK_PLATFORM_LINUX)
 endif()
 
 # Add to CTest

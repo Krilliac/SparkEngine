@@ -1,4 +1,4 @@
-﻿// ObjectPool.h
+// ObjectPool.h
 #pragma once
 
 #include "Utils/Assert.h"

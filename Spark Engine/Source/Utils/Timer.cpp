@@ -1,4 +1,4 @@
-﻿// Timer.cpp
+// Timer.cpp
 #include "Timer.h"
 #include <iostream>
 

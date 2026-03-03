@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Player.h
  * @brief Player character controller with movement, combat, and health systems
  * @author Spark Engine Team
@@ -10,17 +10,20 @@
  */
 
 #pragma once
+#include "../Core/Platform.h"
 
 #include "GameObject.h"
 #include "ClassSystem.h"
 #include "GravitySystem.h"
 #include "Utils/Assert.h"
-#include "..\Camera\SparkEngineCamera.h"
-#include "..\Input\InputManager.h"
-#include "..\Projectiles\WeaponStats.h"    // Defines WeaponType and WeaponStats
-#include "..\Projectiles\ProjectilePool.h"
-#include "..\Utils\MathUtils.h"
+#include "../Camera/SparkEngineCamera.h"
+#include "../Input/InputManager.h"
+#include "../Projectiles/WeaponStats.h"    // Defines WeaponType and WeaponStats
+#include "../Projectiles/ProjectilePool.h"
+#include "../Utils/MathUtils.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <mutex>
 #include <functional>
 

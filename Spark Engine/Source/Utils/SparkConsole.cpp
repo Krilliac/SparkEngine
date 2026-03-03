@@ -1,3 +1,5 @@
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
 #include "SparkConsole.h"
 #include <iostream>
 #include <sstream>
@@ -10,7 +12,9 @@
 #include <thread>
 #include <map>
 #include <psapi.h>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <dbghelp.h>
 
 // Include actual headers for complete type definitions
@@ -4055,3 +4059,137 @@ void SimpleConsole::RegisterHealthCommands() {
 }
 
 } // namespace Spark
+#endif // SPARK_PLATFORM_WINDOWS
+
+// ============================================================================
+// Non-Windows: Minimal stub implementation for cross-platform builds
+// ============================================================================
+#ifndef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+#include "SparkConsole.h"
+#include <iostream>
+#include <chrono>
+#include <ctime>
+
+namespace Spark {
+
+SimpleConsole& SimpleConsole::GetInstance() {
+    static SimpleConsole instance;
+    return instance;
+}
+
+bool SimpleConsole::Initialize() { m_initialized = true; return true; }
+void SimpleConsole::Shutdown() { m_initialized = false; }
+void SimpleConsole::Update() {}
+
+void SimpleConsole::Log(const std::string& message, const std::string& type) {
+    std::lock_guard<std::mutex> lock(m_logMutex);
+    LogEntry entry{message, type, GetTimestamp()};
+    m_logHistory.push_back(entry);
+    if (m_logHistory.size() > 1000) m_logHistory.pop_front();
+    std::cout << "[" << type << "] " << message << std::endl;
+}
+
+void SimpleConsole::LogInfo(const std::string& msg) { Log(msg, "INFO"); }
+void SimpleConsole::LogWarning(const std::string& msg) { Log(msg, "WARNING"); }
+void SimpleConsole::LogError(const std::string& msg) { Log(msg, "ERROR"); }
+void SimpleConsole::LogSuccess(const std::string& msg) { Log(msg, "SUCCESS"); }
+void SimpleConsole::LogCritical(const std::string& msg) { Log(msg, "CRITICAL"); }
+void SimpleConsole::LogTrace(const std::string& msg) { Log(msg, "TRACE"); }
+void SimpleConsole::LogDebug(const std::string& msg) { Log(msg, "DEBUG"); }
+
+void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler,
+                                     const std::string& description, const std::string& category) {
+    m_commands[name] = {handler, description, category};
+}
+
+bool SimpleConsole::ExecuteCommand(const std::string& commandLine) {
+    auto args = ParseCommand(commandLine);
+    if (args.empty()) return false;
+    auto it = m_commands.find(args[0]);
+    if (it == m_commands.end()) return false;
+    std::vector<std::string> cmdArgs(args.begin() + 1, args.end());
+    it->second.handler(cmdArgs);
+    return true;
+}
+
+void SimpleConsole::Show() { m_visible = true; }
+void SimpleConsole::Hide() { m_visible = false; }
+void SimpleConsole::Toggle() { m_visible = !m_visible; }
+void SimpleConsole::Clear() { std::lock_guard<std::mutex> lock(m_logMutex); m_logHistory.clear(); }
+
+std::vector<SimpleConsole::LogEntry> SimpleConsole::GetLogHistory() const {
+    std::lock_guard<std::mutex> lock(m_logMutex);
+    return {m_logHistory.begin(), m_logHistory.end()};
+}
+
+std::vector<std::string> SimpleConsole::GetCommandHistory() const {
+    return {m_commandHistory.begin(), m_commandHistory.end()};
+}
+
+void SimpleConsole::SetAlias(const std::string& alias, const std::string& command) {
+    m_aliases[alias] = command;
+}
+void SimpleConsole::RemoveAlias(const std::string& alias) { m_aliases.erase(alias); }
+
+void SimpleConsole::AddWatch(const std::string& name, std::function<std::string()> getter) {
+    m_watchEntries.push_back({name, getter, "", true});
+}
+void SimpleConsole::RemoveWatch(const std::string& name) {
+    m_watchEntries.erase(
+        std::remove_if(m_watchEntries.begin(), m_watchEntries.end(),
+            [&](const WatchEntry& e) { return e.name == name; }),
+        m_watchEntries.end());
+}
+void SimpleConsole::UpdateWatches() {}
+
+// Private helpers
+void SimpleConsole::SetColor(Color) {}
+void SimpleConsole::Print(const std::string& text, Color) { std::cout << text; }
+void SimpleConsole::PrintLine(const std::string& text, Color) { std::cout << text << "\n"; }
+void SimpleConsole::ProcessInput() {}
+void SimpleConsole::DisplayPrompt() {}
+void SimpleConsole::RedrawConsole() {}
+void SimpleConsole::RedrawInputLine() {}
+
+std::vector<std::string> SimpleConsole::ParseCommand(const std::string& commandLine) {
+    std::vector<std::string> args;
+    std::string current;
+    for (char c : commandLine) {
+        if (c == ' ' && !current.empty()) { args.push_back(current); current.clear(); }
+        else if (c != ' ') current += c;
+    }
+    if (!current.empty()) args.push_back(current);
+    return args;
+}
+
+std::string SimpleConsole::GetTimestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto t = std::chrono::system_clock::to_time_t(now);
+    char buf[64];
+    std::strftime(buf, sizeof(buf), "%H:%M:%S", std::localtime(&t));
+    return buf;
+}
+
+void SimpleConsole::RegisterDefaultCommands() {}
+void SimpleConsole::RegisterAdvancedCommands() {}
+bool SimpleConsole::CreateConsoleWindow() { return true; }
+void SimpleConsole::SetupConsoleHandles() {}
+void SimpleConsole::HandleTabCompletion() {}
+std::vector<std::string> SimpleConsole::GetCompletions(const std::string&) { return {}; }
+void SimpleConsole::NavigateHistoryUp() {}
+void SimpleConsole::NavigateHistoryDown() {}
+std::string SimpleConsole::ResolveAliases(const std::string& cmd) { return cmd; }
+void SimpleConsole::RegisterEngineCommands() {}
+void SimpleConsole::RegisterGraphicsCommands() {}
+void SimpleConsole::RegisterGameCommands() {}
+void SimpleConsole::RegisterPlayerCommands() {}
+void SimpleConsole::RegisterPhysicsCommands() {}
+void SimpleConsole::RegisterCameraCommands() {}
+void SimpleConsole::RegisterSystemCommands() {}
+void SimpleConsole::RegisterDebugCommands() {}
+void SimpleConsole::RegisterFileCommands() {}
+void SimpleConsole::RegisterPerformanceCommands() {}
+
+} // namespace Spark
+#endif // !SPARK_PLATFORM_WINDOWS

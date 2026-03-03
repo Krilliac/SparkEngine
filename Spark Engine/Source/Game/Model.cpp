@@ -1,11 +1,15 @@
-﻿#include "Model.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+#include "Model.h"
 #include "ModelVertex.h"
 #include "Utils/Assert.h"
 #include "../Graphics/GraphicsEngine.h"  // ✅ ADD: For shader access
 #include <tiny_obj_loader.h>
 #include <vector>
 #include <string>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 using namespace DirectX;
 
@@ -147,3 +151,4 @@ Model::~Model()
         m_ib = nullptr;
     }
 }
+#endif // SPARK_PLATFORM_WINDOWS

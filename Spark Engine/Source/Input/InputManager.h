@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file InputManager.h
  * @brief Comprehensive input handling system with console integration
  * @author Spark Engine Team
@@ -13,7 +13,7 @@
 #pragma once
 
 #include "Utils/Assert.h"
-#include "..\Core\framework.h"
+#include "../Core/framework.h"
 #include <unordered_map>
 #include <functional>
 #include <mutex>
