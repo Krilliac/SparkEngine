@@ -1,157 +1,172 @@
-# SparkEngine Startup Troubleshooting Guide
+# SparkEngine Troubleshooting Guide
 
-## Quick Test Steps
+## Quick Verification
 
-### 1. First, test if SparkConsole works standalone:
+### 1. Test SparkConsole standalone
+
 ```batch
 cd build\bin
 SparkConsole.exe
 ```
-- Should show "Spark Engine Console v1.0.0"
-- Try typing: `diag`, `help`, `status`
-- Type `exit` to quit
 
-### 2. Test SparkEngine with debug output:
+Expected: "Spark Engine Console v1.0.0" banner. Try `diag`, `help`, `status`. Type `exit` to quit.
+
+### 2. Test SparkEngine
+
 ```batch
 cd build\bin
 SparkEngine.exe
 ```
 
-## Expected Results
+Expected: DirectX 11 window appears, SparkConsole window opens automatically, console shows initialization messages.
 
-### If Working Correctly:
-1. **SparkEngine window appears** (DirectX 11 window with blue background)
-2. **SparkConsole window appears automatically** 
-3. **Console shows connection messages** like:
+---
+
+## Startup Checklist
+
+When working correctly you should see:
+
+1. SparkEngine window (DirectX 11, blue background)
+2. SparkConsole window (opens automatically)
+3. Console log output:
    ```
    [INFO] SparkConsole system initialized
    [INFO] External console connection established
    [INFO] All engine systems initialized
    ```
-4. **You can type commands** in SparkConsole window:
-   - `help` - Shows available commands
-   - `engine_status` - Shows all engine systems status
-   - `fps` - Shows current frame rate
-   - `graphics_info` - Shows graphics engine info
+4. Console commands respond: `help`, `engine_status`, `fps`, `graphics_info`
 
-### If NOT Working:
+---
 
-#### SparkConsole opens but shows "standalone mode":
-- **Cause**: SparkEngine failed to launch or crashed during startup
-- **Check**: Look in Visual Studio Output window for error messages
-- **Debug**: Run `debug_engine.bat` script for detailed diagnostics
+## Common Issues
 
-#### SparkConsole shows blank black screen:
-- **Cause**: Console input/output redirection failed
-- **Fix**: Close both programs, ensure both .exe files are in same directory
-- **Try**: Run SparkConsole.exe standalone first to test
+### SparkConsole shows "standalone mode"
 
-#### Neither program starts:
-- **Cause**: Missing dependencies or build issues
-- **Fix**: Rebuild project: `cmake --build build --config Debug`
-- **Check**: Ensure both SparkEngine.exe and SparkConsole.exe exist in build\bin\
+**Cause:** SparkEngine failed to launch or crashed during startup.
 
-#### SparkEngine crashes immediately:
-- **Cause**: Graphics initialization failed or missing DirectX
-- **Check**: Visual Studio Output window for assertion failures
-- **Try**: Update graphics drivers, ensure DirectX 11 is available
+- Check Visual Studio Output window for errors
+- Verify both executables are in `build\bin\`
+- Run from Visual Studio with debugger attached
 
-## Debug Commands to Try
+### SparkEngine crashes immediately
 
-Once connected, test these commands in SparkConsole:
+**Cause:** Graphics initialization failure or missing DirectX runtime.
 
-### Basic Commands:
-- `help` - List all commands
-- `engine_status` - Show all systems status
-- `console_status` - Show connection info
-- `diag` - SparkConsole diagnostics
+- Update graphics drivers
+- Verify DirectX 11 support: run `dxdiag`
+- Check Visual Studio Output for assertion failures
+- Try running as administrator
 
-### Engine Information:
-- `fps` - Current frame rate
-- `graphics_info` - Graphics engine status  
-- `memory_info` - System memory usage
+### Neither program starts
 
-### Test Commands (use carefully):
-- `test_assert` - Triggers test assertion
-- `crash_mode on/off` - Toggle crash dump generation
+**Cause:** Missing build output or incomplete build.
 
-## Visual Studio Debug Output
-
-Watch the Output window in Visual Studio for these messages:
-
-### Success Messages:
-```
-ConsoleProcessManager::Initialize starting...
-SparkEngine executable directory: [path]
-SUCCESS: Found SparkConsole.exe at: [path]
-SUCCESS: External console system initialized
-```
-
-### Error Messages:
-```
-WARNING: SparkConsole.exe not found in any location
-ERROR: Failed to launch SparkConsole.exe
-```
-
-## Common Issues and Fixes
-
-### Issue: "SparkConsole.exe not found"
-**Solution**: Ensure both executables are built and in same directory:
 ```batch
 cmake --build build --config Debug
 dir build\bin\*.exe
 ```
 
-### Issue: Graphics initialization failed
-**Solution**: 
-1. Update graphics drivers
-2. Check if DirectX 11 is available
-3. Try running as administrator
+Both `SparkEngine.exe` and `SparkConsole.exe` must exist in `build\bin\`.
 
-### Issue: SparkEngine window appears but is unresponsive
-**Solution**:
-1. Check CPU usage (should be active, not 0%)
-2. Try pressing ~ key to toggle console
-3. Check for assertion failures in debug output
+### Console connects but commands fail
 
-### Issue: Console connects but commands don't work
-**Solution**:
-1. Type `engine_status` to check if systems are initialized
-2. Verify SparkEngine main loop is running
-3. Check Visual Studio debug output for errors
+- Run `engine_status` to check system initialization
+- Verify the main engine loop is running (check CPU usage — should be active, not 0%)
+- Check debug output for errors
+
+### Build fails with submodule errors
+
+```bash
+# Re-initialize and update all submodules
+git submodule sync
+git submodule init
+git submodule update --recursive
+```
+
+### Build fails with runtime library mismatch
+
+SparkEngine uses `/MD` (dynamic CRT). If third-party libraries were built with `/MT` (static CRT), you'll get linker errors. Clean rebuild:
+
+```batch
+rmdir /s /q build
+cmake -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+```
+
+---
+
+## Debug Commands
+
+Once SparkConsole is connected, use these commands:
+
+**System Info:**
+| Command | Description |
+|---|---|
+| `help` | List all available commands |
+| `engine_status` | Show all engine systems status |
+| `console_status` | Show console connection info |
+| `fps` | Current frame rate |
+| `graphics_info` | Graphics engine details |
+| `memory_info` | System memory usage |
+| `diag` | SparkConsole diagnostics |
+
+**Test Commands (use carefully):**
+| Command | Description |
+|---|---|
+| `test_assert` | Trigger a test assertion |
+| `crash_mode on/off` | Toggle crash dump generation |
+
+---
 
 ## Memory Usage Reference
 
-- **SparkEngine running properly**: ~25-30 MB
-- **SparkEngine crashed/failed**: ~10-15 MB  
-- **SparkConsole standalone**: ~5-8 MB
+| State | Expected Memory |
+|---|---|
+| SparkEngine running | ~25-30 MB |
+| SparkEngine crashed/failed startup | ~10-15 MB |
+| SparkConsole standalone | ~5-8 MB |
 
-If SparkEngine shows low memory usage (under 20MB), it likely crashed during initialization.
+If SparkEngine shows under 20 MB, it likely crashed during initialization.
 
-## Files to Check
+---
 
-Ensure these files exist in `build\bin\`:
-- `SparkEngine.exe` - Main engine executable
-- `SparkConsole.exe` - Debug console executable
+## Required Files
+
+Ensure these exist in `build\bin\` after a successful build:
+
+- `SparkEngine.exe` — Main engine executable
+- `SparkConsole.exe` — Debug console executable
+- `Shaders/` — Directory with compiled/copied shader files
+
+---
 
 ## Getting More Debug Info
 
-1. **Enable debug output**: Run from Visual Studio with debugger attached
-2. **Check Windows Event Viewer**: Look for application crashes
-3. **Use debug script**: Run `debug_engine.bat` for automated testing
-4. **Console logs**: SparkConsole saves connection info in its window
+1. **Visual Studio**: Run with debugger attached (F5), check Output window
+2. **Windows Event Viewer**: Look under Application logs for crash entries
+3. **Crash dumps**: Enable with `crash_mode on` in SparkConsole; dumps saved alongside the executable
+4. **Console logs**: SparkConsole displays connection status and command output in real time
 
-## Last Resort Fixes
+---
 
-1. **Clean rebuild**:
+## Last Resort
+
+1. **Clean rebuild:**
    ```batch
-   rmdir /s build
-   cmake -B build
+   rmdir /s /q build
+   cmake -B build -G "Visual Studio 17 2022" -A x64
    cmake --build build --config Debug
    ```
 
-2. **Check antivirus**: Add build directory to antivirus exceptions
+2. **Re-clone submodules:**
+   ```bash
+   git submodule deinit --all -f
+   git submodule init
+   git submodule update --recursive
+   ```
 
-3. **Run as administrator**: Some systems require elevated privileges for pipe communication
+3. **Check antivirus**: Add the `build\` directory to exclusions
 
-4. **Verify dependencies**: Ensure Visual C++ Runtime is installed
+4. **Run as administrator**: Some systems require elevated privileges for named pipe communication
+
+5. **Verify dependencies**: Ensure Visual C++ 2022 Redistributable and DirectX End-User Runtime are installed

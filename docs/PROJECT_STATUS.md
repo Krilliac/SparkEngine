@@ -1,126 +1,118 @@
-# SparkEngine — Project Status Report
+# SparkEngine — Project Status
 
-**Generated:** 2026-03-03
+**Last Updated:** 2026-03-03
 **Codebase:** 172 engine source files, ~80 editor source files, 11 test files, 23 shaders
 
 ---
 
-## SYSTEMS FIXED IN THIS PASS
+## System Status
 
-### Physics System — ACTIVATED (was: entirely stubbed)
-- **File:** `Spark Engine/Source/Physics/PhysicsSystem.cpp`
-- **What was done:** Complete rewrite activating Bullet Physics integration
-- Bullet world initialization (`btDiscreteDynamicsWorld`) now active
-- Real `btRigidBody` creation with collision shapes (box, sphere, capsule, mesh, convex hull)
-- Force/impulse/torque application wired to Bullet API
-- Collision shape caching, contact processing, collision callbacks
-- Constraint creation (hinge, slider, fixed) with real Bullet constraints
-- Raycasting via `ClosestRayResultCallback` and `AllHitsRayResultCallback`
-- Overlap tests (sphere, box) via `btGhostObject` + contact test
-
-### Post-Processing System — IMPLEMENTED (was: 52-line empty shell)
-- **File:** `Spark Engine/Source/Graphics/PostProcessingSystem.cpp`
-- **What was done:** Full 1,495-line implementation with:
-  - **Bloom:** Multi-pass (brightness extract → 5-level downsample → Gaussian blur → upsample composite)
-  - **Tone Mapping:** Reinhard, ACES Filmic, Uncharted 2 operators with configurable exposure
-  - **Color Grading:** Exposure, contrast, saturation, gamma correction
-  - **FXAA 3.11:** Full edge detection + sub-pixel anti-aliasing
-  - All shaders compiled from inline HLSL via D3DCompile
-  - Proper render target ping-pong chain
-
-### IBL Lighting Pipeline — IMPLEMENTED (was: placeholder)
-- **File:** `Spark Engine/Source/Graphics/LightingSystem.cpp`
-- **What was done:**
-  - `GenerateIrradianceMap()` — Creates 32x32 HDR cubemap with sky color approximation
-  - `GeneratePrefilterMap()` — Creates 128x128 5-mip cubemap with roughness-blurred sky
-  - `GenerateBRDFLUT()` — CPU-side importance sampling of GGX (256x256, 1024 samples per texel)
-
-### Asset Pipeline — REAL FILE LOADING (was: hardcoded placeholder data)
-- **File:** `Spark Engine/Source/Graphics/AssetPipeline.cpp`
-- **What was done:**
-  - `MeshAsset::Load()` — OBJ file parser with vertex/normal/UV support + bounding box calculation
-  - `TextureAsset::Load()` — TGA file loader (24/32-bit uncompressed)
-  - `AudioAsset::Load()` — WAV file loader (PCM format, RIFF chunk parsing)
-  - All still fall back to procedural placeholders if file doesn't exist
-
-### Shader Cross-Compilation — BASIC HLSL→GLSL (was: returned empty data)
-- **File:** `Spark Engine/Source/Graphics/RHI/RHIFactory.cpp`
-- **What was done:**
-  - `CrossCompileHLSLtoGLSL()` — Keyword-based HLSL→GLSL 4.50 translation
-  - SPIR-V functions now log clear messages about missing DXC/glslang dependencies
-  - `ReflectSPIRV()` validates SPIR-V magic number before returning
-
-### Input System — GAMEPAD RELEASE EVENTS (was: `break; // TODO`)
-- **Files:** `PlatformInput.cpp`, `PlatformInput.h`
-- **What was done:**
-  - Added `WasGamepadButtonReleased()` method (inverse of Pressed: `!current && prev`)
-  - Wired `ActionTrigger::Released` for gamepad buttons
-
-### NavMesh Loading — BINARY DESERIALIZATION (was: empty placeholder)
-- **File:** `Spark Engine/Source/Engine/AI/NavMesh.cpp`
-- **What was done:** `LoadNavMesh()` now reads binary `.snav` format (vertices, triangles, adjacency)
-
-### Other Fixes
-- Crash handler URL cleared (was sending to `placeholder.com`)
-- MaterialSystem placeholder metric replaced with honest `0.0f`
-- DXR `Initialize()` now correctly reports `m_isAvailable = false` (no D3D12 backend exists)
-- Network manager player name parsing implemented
-- Editor: 8 `.disabled` dead files deleted (4,319 lines removed)
-- Editor: Duplicate stub files removed, @file comments corrected
-- Editor TODOs: Rename, copy, paste entities; clipboard; console export; engine IPC; etc.
+| System | Status | Notes |
+|---|---|---|
+| Graphics / Rendering (D3D11) | **Working** | Full deferred/forward+ pipeline |
+| Post-Processing | **Working** | Bloom (multi-pass), tone mapping (Reinhard/ACES/Uncharted 2), color grading, FXAA 3.11 |
+| Shadow Mapping | **Working** | PCF, VSM, CSM, PCSS |
+| Material System (PBR) | **Working** | Physically-based rendering with metallic/roughness workflow |
+| IBL Lighting | **Working** | Irradiance map, prefiltered environment, BRDF LUT |
+| Physics (Bullet) | **Working** | Rigid bodies, collision shapes, constraints, raycasting, overlap tests |
+| Particle System | **Working** | GPU-accelerated particle effects |
+| Decal System | **Working** | Projected decals for bullet impacts, scorch marks |
+| Mesh LOD | **Working** | Distance-based level-of-detail switching |
+| Audio (XAudio2) | **Working** | 3D spatial audio, distance attenuation, Doppler |
+| ECS (EnTT) | **Working** | Component-based architecture with rich component library |
+| Input Manager | **Working** | Keyboard, mouse, gamepad with release events |
+| Camera System | **Working** | First-person with smooth mouselook |
+| Scene Manager | **Working** | JSON serialization, prefab system |
+| Player Controller | **Working** | FPS movement, jump, crouch, zoom |
+| Weapon System | **Working** | Bullet, rocket, grenade projectiles |
+| Animation System | **Working** | Skeletal animation support |
+| AI / NavMesh | **Working** | Binary `.snav` loading, pathfinding |
+| Save / Load | **Working** | Game state persistence |
+| Asset Pipeline | **Working** | OBJ mesh, TGA texture, WAV audio loading with fallback placeholders |
+| Shader Cross-Compilation | **Partial** | Basic HLSL-to-GLSL translation; SPIR-V needs DXC/glslang |
+| Editor (ImGui) | **Partial** | Dead code removed; docking, theme, asset import still have TODOs |
+| Networking | **Disabled** | CURL dependency issues; needs ENet or GameNetworkingSockets replacement |
+| DXR / Ray Tracing | **Stub** | Requires D3D12 backend which doesn't exist yet |
+| Vulkan Backend | **Untested** | RHI abstraction in place; needs real SPIR-V compilation |
+| OpenGL Backend | **Untested** | Needs GLAD loader + glslang integration |
+| Test Coverage | **Minimal** | 11 test files covering MathUtils, ECS World, ObjectPool, GameMode |
 
 ---
 
-## REMAINING WORK
+## Recent Changes
 
-### Still Needs Implementation
-| System | Status | Notes |
-|--------|--------|-------|
-| Networking | DISABLED | Needs transport layer (ENet/GameNetworkingSockets), CURL should be replaced |
-| DXR/Ray Tracing | STUB | Requires D3D12 backend which doesn't exist yet |
-| Vulkan Backend | UNTESTED | Shader loading now has basic HLSL→GLSL but needs real SPIR-V compilation |
-| OpenGL Backend | UNTESTED | Same — needs glslang integration for SPIR-V |
-| Test Coverage | MINIMAL | 11 test files, many subsystems untested |
+### Systems Activated
 
-### Editor Remaining TODOs
+- **Physics System** — Complete Bullet Physics rewrite: `btDiscreteDynamicsWorld` initialization, `btRigidBody` creation with all collision shape types, force/impulse/torque, constraints, raycasting, overlap tests.
+- **Post-Processing** — Full 1,495-line implementation: multi-pass bloom (brightness extract, 5-level downsample, Gaussian blur, upsample composite), three tone mapping operators, color grading, FXAA 3.11 with inline HLSL compilation.
+- **IBL Lighting** — `GenerateIrradianceMap()` (32x32 HDR cubemap), `GeneratePrefilterMap()` (128x128, 5 mip levels), `GenerateBRDFLUT()` (256x256, 1024 samples/texel).
+- **Asset Pipeline** — Real file loading: OBJ parser (vertex/normal/UV + bounding box), TGA loader (24/32-bit), WAV loader (PCM/RIFF). Falls back to procedural placeholders when files are missing.
+- **Input System** — `WasGamepadButtonReleased()` method added; `ActionTrigger::Released` wired for gamepad buttons.
+- **NavMesh** — Binary `.snav` deserialization (vertices, triangles, adjacency).
+
+### Cleanup
+
+- 8 disabled editor files deleted (4,319 lines removed)
+- Crash handler placeholder URL cleared
+- MaterialSystem placeholder metric replaced
+- DXR `Initialize()` correctly reports unavailable
+- Network manager player name parsing implemented
+- Duplicate editor stubs removed, `@file` comments corrected
+
+### Infrastructure (This Pass)
+
+- All 15 git submodules updated to latest upstream commits
+- AngelScript submodule path mismatch fixed in `.gitmodules`
+- Dependabot configured for weekly GitHub Actions and submodule updates
+- README and documentation overhauled
+
+---
+
+## Dependencies (Current Versions)
+
+All managed as git submodules. Updated to latest upstream as of 2026-03-03.
+
+| Library | Version | Status |
+|---|---|---|
+| Dear ImGui | ~v1.92.6 (HEAD) | Latest |
+| ImGuizmo | HEAD (past 1.83 tag) | Latest |
+| imnodes | v0.5 | Latest |
+| EnTT | ~v3.16.0 (HEAD) | Latest |
+| DirectXTK | ~oct2025 (HEAD) | Latest |
+| Bullet Physics | ~3.25 (HEAD) | Latest |
+| Assimp | ~v6.0.4 (HEAD) | Latest |
+| miniaudio | ~0.11.24 (HEAD) | Latest |
+| curl | ~8.19.0-rc (HEAD) | Latest |
+| GLM | ~1.0.3 (HEAD) | Latest |
+| miniz | ~3.1.1 (HEAD) | Latest |
+| RapidJSON | v1.1.0 (HEAD) | Only release; active master |
+| spdlog | ~v1.17.0 (HEAD) | Latest |
+| stb | HEAD (no tags) | Latest |
+| AngelScript Mirror | HEAD | Archived upstream; official repo moved to [anjo76/angelscript](https://github.com/anjo76/angelscript) |
+
+---
+
+## Known Issues
+
+- **AngelScript submodule** uses the archived `codecat/angelscript-mirror`. The official AngelScript project (v2.38.0) has moved to [anjo76/angelscript](https://github.com/anjo76/angelscript). Migration recommended.
+- **GLAD** (OpenGL loader) is not included as a submodule. OpenGL backend requires manual GLAD download.
+- **Networking** is disabled due to CURL dependency issues on Windows. Replace with ENet or GameNetworkingSockets for UDP-based game networking.
+- **10 large header-only editor systems** need build verification on all platforms.
+
+---
+
+## Remaining Work
+
+### Editor TODOs
+
 - DockingSystem: tab colors, panel refresh/save/reset
 - EditorTheme: live customization UI, JSON export/import
 - EditorUI: recovery dialog, layout import/export
 - AssetBrowserPanel: asset import logic
 
 ### Infrastructure
-- AngelScript submodule path mismatch in `.gitmodules`
-- GLAD (OpenGL loader) not in submodules
-- 10 large header-only editor systems need build verification
 
----
-
-## SUMMARY SCORECARD (Post-Fix)
-
-| System | Status |
-|--------|--------|
-| Graphics/Rendering (D3D11) | WORKING |
-| Post-Processing (Bloom/Tone/FXAA) | **WORKING** (was: empty) |
-| Shadow Mapping (PCF/VSM/CSM) | WORKING |
-| Material System (PBR) | WORKING |
-| IBL Lighting | **WORKING** (was: placeholder) |
-| Physics System (Bullet) | **WORKING** (was: stubbed) |
-| Particle System | WORKING |
-| Decal System | WORKING |
-| Mesh LOD | WORKING |
-| Audio Engine (XAudio2) | WORKING |
-| ECS (EnTT) | WORKING |
-| Input Manager | **WORKING** (was: missing release events) |
-| Camera System | WORKING |
-| Scene Manager | WORKING |
-| Player Controller | WORKING |
-| Weapon System | WORKING |
-| Animation System | WORKING |
-| AI/NavMesh | **WORKING** (was: missing file loading) |
-| Save/Load System | WORKING |
-| Asset Pipeline | **WORKING** (was: placeholder data) |
-| Shader Cross-Compilation | **PARTIAL** (basic HLSL→GLSL, SPIR-V needs DXC) |
-| Editor | **IMPROVED** (dead code removed, TODOs fixed) |
-| Networking | DISABLED |
-| DXR/Ray Tracing | STUB (needs D3D12) |
-| Tests | MINIMAL |
+- Migrate AngelScript submodule to official repo
+- Add GLAD as a submodule for OpenGL support
+- Expand test coverage beyond current 11 test files
+- Add Linux CI job to build workflow
