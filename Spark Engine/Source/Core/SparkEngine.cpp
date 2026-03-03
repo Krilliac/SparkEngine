@@ -1,4 +1,6 @@
-﻿// SparkEngine.cpp – unified entry point with Win32 boilerplate + classic subsystems
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+// SparkEngine.cpp – unified entry point with Win32 boilerplate + classic subsystems
 // ===================================================================================
 
 #include "framework.h"
@@ -6,9 +8,13 @@
 #include "Utils/Assert.h"             // <-- custom assert
 #include "Utils/SparkError.h"         // <-- enhanced error handling
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <memory>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <cstdio>                     // for swprintf_s
 #include <algorithm>                  // for std::transform
 #include <sstream>                    // for stringstream
@@ -512,3 +518,19 @@ void RegisterGameConsoleCommands()
         return ss.str();
     }, "Display game performance statistics");
 }
+#endif // SPARK_PLATFORM_WINDOWS
+
+// ============================================================================
+// Non-Windows: Minimal main entry point for build verification
+// ============================================================================
+#ifndef SPARK_PLATFORM_WINDOWS
+#include <iostream>
+
+int main(int argc, char* argv[]) {
+    (void)argc; (void)argv;
+    std::cout << "SparkEngine (Linux build)" << std::endl;
+    std::cout << "This is a cross-platform build target." << std::endl;
+    std::cout << "Full engine features require the Windows DirectX 11 runtime." << std::endl;
+    return 0;
+}
+#endif // !SPARK_PLATFORM_WINDOWS

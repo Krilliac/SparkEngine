@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // Console.cpp
 #include "Console.h"
 #include "Utils/Assert.h"
@@ -243,3 +245,5 @@ void Console::Render(ID3D11DeviceContext* ctx)
     std::wstring cursor = (cursorBlink < 30) ? L"_" : L"";
     DrawText(L"> " + inputLine + cursor, 10.0f, y, scale, ctx);
 }
+
+#endif // SPARK_PLATFORM_WINDOWS

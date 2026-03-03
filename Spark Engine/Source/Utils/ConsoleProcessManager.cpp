@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include "ConsoleProcessManager.h"
 #include "Assert.h"
 #include <iostream>
@@ -709,3 +711,4 @@ std::vector<std::string> CommandRegistry::ParseArguments(const std::string& comm
 }
 
 } // namespace Spark
+#endif // SPARK_PLATFORM_WINDOWS

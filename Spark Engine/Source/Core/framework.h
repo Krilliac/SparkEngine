@@ -1,15 +1,20 @@
-﻿/**
+/**
  * @file framework.h
  * @brief Core framework header with essential includes and library links
  * @author Spark Engine Team
  * @date 2025
- * 
+ *
  * This header provides the fundamental includes required throughout the engine,
- * including Windows API, DirectX 11, STL containers, and necessary library links.
- * It serves as a precompiled header equivalent for the engine's core dependencies.
+ * including platform-specific headers, math libraries, STL containers, and
+ * necessary library links. It serves as a precompiled header equivalent for
+ * the engine's core dependencies.
  */
 
 #pragma once
+
+#include "Platform.h"
+
+#ifdef SPARK_PLATFORM_WINDOWS
 
 #include "targetver.h"
 //#define WIN32_LEAN_AND_MEAN
@@ -25,7 +30,14 @@
 #include <DirectXMath.h>
 #include <d3dcompiler.h>
 
-// STL includes
+// Link libraries
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "dxgi.lib")
+
+#endif // SPARK_PLATFORM_WINDOWS
+
+// STL includes (cross-platform)
 #include <memory>
 #include <vector>
 #include <string>
@@ -33,10 +45,7 @@
 #include <chrono>
 #include <algorithm>
 #include <queue>
-
-// Link libraries
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "d3dcompiler.lib")
-#pragma comment(lib, "dxgi.lib")
+#include <cstdlib>
+#include <cstring>
 
 using namespace DirectX;

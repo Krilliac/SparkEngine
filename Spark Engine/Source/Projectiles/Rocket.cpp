@@ -1,8 +1,10 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // Rocket.cpp
 #include "Rocket.h"
 #include "Utils/Assert.h"
-#include "..\Utils\MathUtils.h"
-#include "..\Physics\PhysicsSystem.h"
+#include "../Utils/MathUtils.h"
+#include "../Physics/PhysicsSystem.h"
 
 using DirectX::XMFLOAT3;
 using DirectX::XMMATRIX;
@@ -131,3 +133,5 @@ void Rocket::Explode(const XMFLOAT3& position)
     m_trailPositions.clear();
     Deactivate();
 }
+
+#endif // SPARK_PLATFORM_WINDOWS

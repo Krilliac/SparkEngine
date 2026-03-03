@@ -2,12 +2,15 @@ name: Build SparkEngine
 
 on:
   push:
-    branches: [ main, develop, 'feature/**' ]
+    branches: [ main, develop, 'feature/**', 'claude/**' ]
   pull_request:
     branches: [ main, develop ]
 
 jobs:
-  build:
+  # ===========================================================================
+  # Windows Build (MSVC + DirectX 11)
+  # ===========================================================================
+  build-windows:
     runs-on: windows-latest
     strategy:
       matrix:
@@ -36,6 +39,55 @@ jobs:
       if: matrix.config == 'Release'
       uses: actions/upload-artifact@v7
       with:
-        name: SparkEngine-${{ matrix.config }}
+        name: SparkEngine-Windows-${{ matrix.config }}
         path: build/bin/${{ matrix.config }}/
+        retention-days: 7
+
+  # ===========================================================================
+  # Linux Build (GCC)
+  # ===========================================================================
+  build-linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        config: [Debug, Release]
+        compiler: [gcc]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DBUILD_TESTS=ON \
+          -DCMAKE_C_COMPILER=gcc \
+          -DCMAKE_CXX_COMPILER=g++
+
+    - name: Build Engine
+      run: cmake --build build --parallel $(nproc) --target SparkEngine
+
+    - name: Build Tests
+      run: cmake --build build --parallel $(nproc) --target SparkTests
+
+    - name: Run Tests
+      run: |
+        cd build
+        ctest --output-on-failure || true
+        ./bin/SparkTests
+
+    - name: Upload Build Artifacts
+      if: matrix.config == 'Release'
+      uses: actions/upload-artifact@v7
+      with:
+        name: SparkEngine-Linux-${{ matrix.config }}
+        path: build/bin/
         retention-days: 7

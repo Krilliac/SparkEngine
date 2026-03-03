@@ -1,7 +1,10 @@
-﻿// ModelVertex.h
+// ModelVertex.h
 #pragma once
+#include "../Core/Platform.h"
 #include "Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <cmath>               // add this for std::isfinite
 
 struct ModelVertex

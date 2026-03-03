@@ -1,7 +1,9 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // Grenade.cpp
 #include "Grenade.h"
 #include "Utils/Assert.h"
-#include "..\Physics\PhysicsSystem.h"
+#include "../Physics/PhysicsSystem.h"
 
 using DirectX::XMMATRIX;
 using DirectX::XMFLOAT3;
@@ -117,3 +119,5 @@ void Grenade::Explode()
 
     Deactivate();
 }
+
+#endif // SPARK_PLATFORM_WINDOWS

@@ -130,7 +130,7 @@ namespace Assert
 // Assert with formatted message
 #if defined(_DEBUG) || defined(DEBUG)
 #  define ASSERT_MSG(expr, fmt, ...) \
-     ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, __VA_ARGS__))
+     ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__))
 #else
 #  define ASSERT_MSG(expr, fmt, ...) ((void)0)
 #endif
@@ -140,7 +140,7 @@ namespace Assert
 #  define ASSERT_ALWAYS(expr) \
      ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__))
 #  define ASSERT_ALWAYS_MSG(expr, fmt, ...) \
-     ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, __VA_ARGS__))
+     ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__))
 #else
 #  define ASSERT_ALWAYS(expr)       ((void)0)
 #  define ASSERT_ALWAYS_MSG(expr, fmt, ...) ((void)0)
@@ -157,7 +157,7 @@ namespace Assert
 #  define ASSERT_HR_MSG(hrExpr, fmt, ...)                   \
      do { long _hr = static_cast<long>(hrExpr);             \
           if (FAILED(_hr))                                  \
-             Assert::FailHResult(#hrExpr, __FILE__, __LINE__, _hr, fmt, __VA_ARGS__); \
+             Assert::FailHResult(#hrExpr, __FILE__, __LINE__, _hr, fmt, ##__VA_ARGS__); \
      } while(0)
 #else
 #  define ASSERT_HR(hrExpr)       ((void)(hrExpr))

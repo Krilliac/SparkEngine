@@ -1,9 +1,12 @@
-﻿#pragma once
+#pragma once
+#include "../Core/Platform.h"
 
 #include "Game/GameObject.h"
 #include "Game/PlaceholderMesh.h"
 #include "Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 
 class PyramidObject : public GameObject

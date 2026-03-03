@@ -1,3 +1,5 @@
+#include "../../../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // ECSystems.cpp
 #include "ECSystems.h"
 #include "Graphics/GraphicsEngine.h"
@@ -186,13 +188,16 @@ void AIUpdateSystem::Update(World& world, float deltaTime)
 std::string SystemManager::Console_ListSystems() const
 {
     std::ostringstream ss;
-    ss << "=== ECS Systems (" << m_systems.size() << ") ===\n";
+    ss << "=== ECS Systems (" << m_systems.size() << ") ===
+";
     for (const auto& system : m_systems)
     {
         ss << "  " << system->GetName()
-           << " [" << (system->IsEnabled() ? "ENABLED" : "DISABLED") << "]\n";
+           << " [" << (system->IsEnabled() ? "ENABLED" : "DISABLED") << "]
+";
     }
     return ss.str();
 }
 
 } // namespace Spark::ECS
+#endif // SPARK_PLATFORM_WINDOWS

@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include "VehicleSystem.h"
 #include "Player.h"
 #include "../Input/InputManager.h"
@@ -870,3 +872,5 @@ void VehicleSystem::InitDrone()
 }
 
 } // namespace Spark
+
+#endif // SPARK_PLATFORM_WINDOWS

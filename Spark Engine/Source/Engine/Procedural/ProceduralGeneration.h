@@ -12,8 +12,11 @@
  */
 
 #pragma once
+#include "../../Core/Platform.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -195,7 +198,7 @@ struct WFCTile {
 
 struct WFCGrid {
     int width, height;
-    std::vector<std::vector<int>> cells;  ///< Each cell contains possible tile IDs
+    std::vector<std::vector<std::vector<int>>> cells;  ///< [y][x] -> possible tile IDs
 
     bool IsCollapsed() const;
     bool HasContradiction() const;

@@ -3,99 +3,15 @@
  * @brief Lightweight test runner for SparkEngine
  *
  * Simple test framework without external dependencies.
- * Each test file registers tests via the TEST() macro.
+ * Each test file registers tests via the TEST() macro from TestFramework.h.
  */
 
-#include <iostream>
-#include <string>
-#include <vector>
-#include <functional>
-#include <cstdlib>
+#include "TestFramework.h"
 
-// ============================================================================
-// Minimal Test Framework
-// ============================================================================
-
-struct TestCase
-{
-    std::string name;
-    std::string file;
-    int line;
-    std::function<void()> func;
-};
-
-static std::vector<TestCase>& GetTestRegistry()
-{
-    static std::vector<TestCase> tests;
-    return tests;
-}
-
-struct TestRegistrar
-{
-    TestRegistrar(const char* name, const char* file, int line, std::function<void()> func)
-    {
-        GetTestRegistry().push_back({name, file, line, std::move(func)});
-    }
-};
-
-static int g_assertionsPassed = 0;
-static int g_assertionsFailed = 0;
-static std::string g_currentTest;
-
-#define TEST(name) \
-    void test_##name(); \
-    static TestRegistrar registrar_##name(#name, __FILE__, __LINE__, test_##name); \
-    void test_##name()
-
-#define EXPECT_TRUE(expr) \
-    do { \
-        if (expr) { g_assertionsPassed++; } \
-        else { g_assertionsFailed++; \
-            std::cerr << "  FAIL: " << #expr << " was false (" << __FILE__ << ":" << __LINE__ << ")\n"; } \
-    } while(0)
-
-#define EXPECT_FALSE(expr) EXPECT_TRUE(!(expr))
-
-#define EXPECT_EQ(a, b) \
-    do { \
-        auto _a = (a); auto _b = (b); \
-        if (_a == _b) { g_assertionsPassed++; } \
-        else { g_assertionsFailed++; \
-            std::cerr << "  FAIL: " << #a << " == " << #b << " (" << _a << " != " << _b << ") at " << __FILE__ << ":" << __LINE__ << "\n"; } \
-    } while(0)
-
-#define EXPECT_NE(a, b) \
-    do { \
-        auto _a = (a); auto _b = (b); \
-        if (_a != _b) { g_assertionsPassed++; } \
-        else { g_assertionsFailed++; \
-            std::cerr << "  FAIL: " << #a << " != " << #b << " (both " << _a << ") at " << __FILE__ << ":" << __LINE__ << "\n"; } \
-    } while(0)
-
-#define EXPECT_NEAR(a, b, tolerance) \
-    do { \
-        auto _a = (a); auto _b = (b); auto _t = (tolerance); \
-        if (std::abs(_a - _b) <= _t) { g_assertionsPassed++; } \
-        else { g_assertionsFailed++; \
-            std::cerr << "  FAIL: |" << #a << " - " << #b << "| <= " << _t \
-                      << " (" << std::abs(_a - _b) << ") at " << __FILE__ << ":" << __LINE__ << "\n"; } \
-    } while(0)
-
-#define EXPECT_GT(a, b) \
-    do { \
-        auto _a = (a); auto _b = (b); \
-        if (_a > _b) { g_assertionsPassed++; } \
-        else { g_assertionsFailed++; \
-            std::cerr << "  FAIL: " << #a << " > " << #b << " (" << _a << " <= " << _b << ") at " << __FILE__ << ":" << __LINE__ << "\n"; } \
-    } while(0)
-
-#define EXPECT_LT(a, b) \
-    do { \
-        auto _a = (a); auto _b = (b); \
-        if (_a < _b) { g_assertionsPassed++; } \
-        else { g_assertionsFailed++; \
-            std::cerr << "  FAIL: " << #a << " < " << #b << " (" << _a << " >= " << _b << ") at " << __FILE__ << ":" << __LINE__ << "\n"; } \
-    } while(0)
+// Global test state (defined here, declared extern in TestFramework.h)
+int g_assertionsPassed = 0;
+int g_assertionsFailed = 0;
+std::string g_currentTest;
 
 // ============================================================================
 // Main Test Runner
@@ -103,6 +19,9 @@ static std::string g_currentTest;
 
 int main(int argc, char** argv)
 {
+    (void)argc;
+    (void)argv;
+
     auto& tests = GetTestRegistry();
     int passed = 0;
     int failed = 0;

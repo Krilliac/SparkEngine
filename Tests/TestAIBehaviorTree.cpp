@@ -1,6 +1,7 @@
 // TestAIBehaviorTree.cpp - Tests for AI behavior tree logic
 // Standalone implementations for CI testing
 
+#include "TestFramework.h"
 #include <string>
 #include <vector>
 #include <functional>

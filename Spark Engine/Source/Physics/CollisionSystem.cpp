@@ -1,7 +1,11 @@
-﻿// CollisionSystem.cpp
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+// CollisionSystem.cpp
 #include "CollisionSystem.h"
 #include "Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
@@ -366,3 +370,4 @@ XMFLOAT3 CollisionSystem::Vector3Lerp(const XMFLOAT3& a, const XMFLOAT3& b, floa
         a.z + (b.z - a.z) * t
     );
 }
+#endif // SPARK_PLATFORM_WINDOWS

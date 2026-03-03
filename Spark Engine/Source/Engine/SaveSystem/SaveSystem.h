@@ -13,9 +13,12 @@
  */
 
 #pragma once
+#include "../../Core/Platform.h"
 
 #include "../ECS/Components.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>
 #include <unordered_map>

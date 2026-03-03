@@ -13,8 +13,11 @@
  */
 
 #pragma once
+#include "../../Core/Platform.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -278,6 +281,11 @@ public:
     static void SolveLookAtIK(std::vector<XMFLOAT4X4>& localTransforms,
                                const Skeleton& skeleton,
                                const IKChain& chain);
+
+    /// Apply FABRIK (Forward and Backward Reaching IK)
+    static void SolveFABRIK(std::vector<XMFLOAT4X4>& localTransforms,
+                             const Skeleton& skeleton,
+                             const IKChain& chain);
 };
 
 } // namespace Spark::Animation

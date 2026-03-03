@@ -66,22 +66,22 @@ void DXRManager::BuildTLAS(const std::vector<BLASInstance>& instances) {
 }
 
 void DXRManager::TraceReflections(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos) {
-    if (!m_isInitialized || !(m_settings.enabledFeatures & RTFeature::Reflections)) return;
+    if (!m_isInitialized || !(static_cast<uint32_t>(m_settings.enabledFeatures & RTFeature::Reflections) != 0)) return;
     // In full implementation: dispatch DispatchRays for reflection pass
 }
 
 void DXRManager::TraceShadows(const XMFLOAT3& lightDirection) {
-    if (!m_isInitialized || !(m_settings.enabledFeatures & RTFeature::Shadows)) return;
+    if (!m_isInitialized || !(static_cast<uint32_t>(m_settings.enabledFeatures & RTFeature::Shadows) != 0)) return;
     // In full implementation: dispatch shadow rays
 }
 
 void DXRManager::TraceAmbientOcclusion(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos) {
-    if (!m_isInitialized || !(m_settings.enabledFeatures & RTFeature::AmbientOcclusion)) return;
+    if (!m_isInitialized || !(static_cast<uint32_t>(m_settings.enabledFeatures & RTFeature::AmbientOcclusion) != 0)) return;
     // In full implementation: dispatch AO rays
 }
 
 void DXRManager::TraceGlobalIllumination(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos) {
-    if (!m_isInitialized || !(m_settings.enabledFeatures & RTFeature::GlobalIllumination)) return;
+    if (!m_isInitialized || !(static_cast<uint32_t>(m_settings.enabledFeatures & RTFeature::GlobalIllumination) != 0)) return;
     // In full implementation: dispatch GI rays with probe grid
 }
 
@@ -109,10 +109,10 @@ std::string DXRManager::Console_GetStatus() const {
         ss << "TLAS Instances: " << stats.tlasInstanceCount << "\n";
         ss << "AS Memory: " << (stats.accelerationStructureMemory / 1024) << " KB\n";
         ss << "Features:\n";
-        ss << "  Reflections: " << ((m_settings.enabledFeatures & RTFeature::Reflections) ? "ON" : "OFF") << "\n";
-        ss << "  Shadows: " << ((m_settings.enabledFeatures & RTFeature::Shadows) ? "ON" : "OFF") << "\n";
-        ss << "  AO: " << ((m_settings.enabledFeatures & RTFeature::AmbientOcclusion) ? "ON" : "OFF") << "\n";
-        ss << "  GI: " << ((m_settings.enabledFeatures & RTFeature::GlobalIllumination) ? "ON" : "OFF") << "\n";
+        ss << "  Reflections: " << ((static_cast<uint32_t>(m_settings.enabledFeatures & RTFeature::Reflections) != 0) ? "ON" : "OFF") << "\n";
+        ss << "  Shadows: " << ((static_cast<uint32_t>(m_settings.enabledFeatures & RTFeature::Shadows) != 0) ? "ON" : "OFF") << "\n";
+        ss << "  AO: " << ((static_cast<uint32_t>(m_settings.enabledFeatures & RTFeature::AmbientOcclusion) != 0) ? "ON" : "OFF") << "\n";
+        ss << "  GI: " << ((static_cast<uint32_t>(m_settings.enabledFeatures & RTFeature::GlobalIllumination) != 0) ? "ON" : "OFF") << "\n";
     }
     return ss.str();
 }

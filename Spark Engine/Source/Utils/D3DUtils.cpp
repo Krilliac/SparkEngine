@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include "D3DUtils.h"
 #include "../Graphics/GraphicsEngine.h"
 #include <iostream>
@@ -44,3 +46,4 @@ void SetD3DDevice(ID3D11Device* device) {
 void SetD3DContext(ID3D11DeviceContext* context) {
     g_D3DContext = context;
 }
+#endif // SPARK_PLATFORM_WINDOWS

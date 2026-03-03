@@ -1,6 +1,8 @@
 // TestECSWorld.cpp - Tests for the ECS World and Components
 // Note: Requires EnTT header to be available
 
+#include "TestFramework.h"
+
 // Minimal test stubs for when EnTT is not available during CI
 // These test the component data structures independently
 

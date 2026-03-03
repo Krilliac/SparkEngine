@@ -1,4 +1,6 @@
-﻿// ProjectilePool.cpp
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+// ProjectilePool.cpp
 #include "ProjectilePool.h"
 #include "Bullet.h"
 #include "Rocket.h"
@@ -214,3 +216,4 @@ size_t ProjectilePool::GetAvailableCount() const
     LOG_TO_CONSOLE(L"ProjectilePool::GetAvailableCount called.", L"OPERATION");
     return m_availableProjectiles.size();
 }
+#endif // SPARK_PLATFORM_WINDOWS

@@ -1,3 +1,5 @@
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
 /**
  * @file PostProcessingSystem.cpp
  * @brief Full post-processing pipeline: Bloom, Tone Mapping, Color Grading, FXAA
@@ -16,10 +18,12 @@
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <sstream>
 #include <algorithm>
@@ -1493,3 +1497,5 @@ std::string PostProcessingSystem::Console_ListEffects() const
 
     return ss.str();
 }
+
+#endif // SPARK_PLATFORM_WINDOWS

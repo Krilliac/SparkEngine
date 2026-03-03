@@ -1,4 +1,6 @@
-﻿// SphereObject.cpp
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+// SphereObject.cpp
 #include "SphereObject.h"
 #include "Utils/Assert.h"
 
@@ -51,3 +53,4 @@ void SphereObject::CreateMesh()
     ASSERT_MSG(m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
         "Sphere mesh must have vertices and indices after loading/creation");
 }
+#endif // SPARK_PLATFORM_WINDOWS

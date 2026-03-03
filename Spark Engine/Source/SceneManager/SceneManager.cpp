@@ -1,3 +1,5 @@
+#include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include "SceneManager.h"
 #include "Game/GameObject.h"
 #include "Game/CubeObject.h"
@@ -19,6 +21,16 @@
 #include <algorithm>
 
 using DirectX::XMFLOAT3;
+
+// Helper: convert wstring path to string for cross-platform file I/O
+static std::string WideToNarrow(const std::wstring& wide)
+{
+    std::string narrow;
+    narrow.reserve(wide.size());
+    for (wchar_t wc : wide)
+        narrow.push_back(static_cast<char>(wc));
+    return narrow;
+}
 
 // Rate-limited logging macro to prevent console spam
 #define LOG_TO_CONSOLE_RATE_LIMITED(msg, type) \
@@ -214,7 +226,7 @@ bool SceneManager::SavePrefab(int nodeIndex, const std::wstring& filepath) const
 {
     if (nodeIndex < 0 || nodeIndex >= static_cast<int>(m_sceneNodes.size())) return false;
 
-    std::ofstream file(filepath);
+    std::ofstream file(WideToNarrow(filepath));
     if (!file.is_open()) return false;
 
     // Write prefab header
@@ -249,7 +261,7 @@ bool SceneManager::SavePrefab(int nodeIndex, const std::wstring& filepath) const
 
 int SceneManager::LoadPrefab(const std::wstring& filepath, const DirectX::XMFLOAT3& position)
 {
-    std::ifstream file(filepath);
+    std::ifstream file(WideToNarrow(filepath));
     if (!file.is_open()) return -1;
 
     std::string line;
@@ -325,7 +337,7 @@ std::vector<std::string> SceneManager::GetAvailableScenes(const std::wstring& di
 
 bool SceneManager::LoadJSON(const std::wstring& path)
 {
-    std::ifstream file(path);
+    std::ifstream file(WideToNarrow(path));
     if (!file.is_open())
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot open JSON scene: " + path, L"ERROR");
@@ -364,7 +376,7 @@ bool SceneManager::LoadJSON(const std::wstring& path)
 
 bool SceneManager::SaveJSON(const std::wstring& path) const
 {
-    std::ofstream file(path);
+    std::ofstream file(WideToNarrow(path));
     if (!file.is_open())
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot save scene: " + path, L"ERROR");
@@ -451,7 +463,7 @@ bool SceneManager::LoadCustom(const std::wstring& path)
 
     Clear();
 
-    std::wifstream file(path);
+    std::wifstream file(WideToNarrow(path));
     if (!file.is_open())
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Could not open scene file: " + path, L"ERROR");
@@ -586,3 +598,4 @@ bool SceneManager::Console_RenameNode(int index, const std::string& newName)
     m_dirty = true;
     return true;
 }
+#endif // SPARK_PLATFORM_WINDOWS

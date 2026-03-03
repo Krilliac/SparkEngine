@@ -1,4 +1,6 @@
-﻿/**
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+/**
  * @file MaterialSystem.cpp
  * @brief Implementation of advanced material system for AAA-quality rendering
  * @author Spark Engine Team
@@ -2045,3 +2047,4 @@ std::string MaterialSystem::Console_ListMaterialVariants(const std::string& mate
     
     return ss.str();
 }
+#endif // SPARK_PLATFORM_WINDOWS

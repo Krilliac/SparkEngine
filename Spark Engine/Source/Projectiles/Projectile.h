@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Projectile.h
  * @brief Base class for all projectile objects in the game
  * @author Spark Engine Team
@@ -11,9 +11,9 @@
 
 #pragma once
 
-#include "..\Core\framework.h"            // XMFLOAT3, XMMATRIX, HRESULT
-#include "..\Physics\CollisionSystem.h"   // BoundingSphere
-#include "..\Game\GameObject.h"
+#include "../Core/framework.h"            // XMFLOAT3, XMMATRIX, HRESULT
+#include "../Physics/CollisionSystem.h"   // BoundingSphere
+#include "../Game/GameObject.h"
 #include "Utils/Assert.h"
 
 /**

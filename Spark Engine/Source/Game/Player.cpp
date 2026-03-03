@@ -1,17 +1,21 @@
-﻿#include "Player.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+#include "Player.h"
 #include "VehicleSystem.h"
 #include "InteractiveObject.h"
 #include "Utils/Assert.h"
-#include "..\Camera\SparkEngineCamera.h"
-#include "..\Input\InputManager.h"
-#include "..\Projectiles\WeaponStats.h"
-#include "..\Projectiles\ProjectilePool.h"
-#include "..\Utils\MathUtils.h"
-#include "..\Game\Console.h"
+#include "../Camera/SparkEngineCamera.h"
+#include "../Input/InputManager.h"
+#include "../Projectiles/WeaponStats.h"
+#include "../Projectiles/ProjectilePool.h"
+#include "../Utils/MathUtils.h"
+#include "../Game/Console.h"
 #include "../Utils/ConsoleProcessManager.h"
 #include "Model.h"  // Add Model class for weapon rendering
 #include <algorithm>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <cmath>
 #include <iostream>
 
@@ -1151,3 +1155,4 @@ Player::PlayerState Player::GetStateThreadSafe() const
     state.secondaryAbilityActive = m_secondaryAbility.isActive;
     return state;
 }
+#endif // SPARK_PLATFORM_WINDOWS

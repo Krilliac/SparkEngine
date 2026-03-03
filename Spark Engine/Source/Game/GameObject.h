@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file GameObject.h
  * @brief Base class for all interactive objects in the game world
  * @author Spark Engine Team
@@ -12,8 +12,8 @@
 
 #pragma once
 
-#include "..\Core\framework.h"    // XMFLOAT3, XMMATRIX, HRESULT
-#include "..\Graphics\Mesh.h"
+#include "../Core/framework.h"    // XMFLOAT3, XMMATRIX, HRESULT
+#include "../Graphics/Mesh.h"
 #include "Utils/Assert.h"
 #include <memory>
 #include <string>

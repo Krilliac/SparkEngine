@@ -9,11 +9,16 @@
  */
 
 #pragma once
+#include "../Core/Platform.h"
 
 #include "Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <Xinput.h>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <unordered_map>
 #include <functional>

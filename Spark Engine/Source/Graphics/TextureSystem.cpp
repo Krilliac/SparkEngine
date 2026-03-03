@@ -1,3 +1,5 @@
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
 /**
  * @file TextureSystem.cpp
  * @brief Implementation of advanced texture loading and management system
@@ -6,8 +8,10 @@
 #include "TextureSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <dxgi.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <wincodec.h>
 #include <algorithm>
 #include <fstream>
@@ -848,3 +852,4 @@ uint32_t GetFormatBytesPerPixel(TextureFormat format)
             return 4; // Default to 4 bytes per pixel
     }
 }
+#endif // SPARK_PLATFORM_WINDOWS

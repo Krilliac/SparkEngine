@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file ProjectilePool.h
  * @brief Object pool system for efficient projectile management
  * @author Spark Engine Team
@@ -10,10 +10,13 @@
  */
 
 #pragma once
+#include "../Core/Platform.h"
 
 #include "Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <memory>
 #include <queue>
 #include <vector>

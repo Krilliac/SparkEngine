@@ -9,12 +9,15 @@
  */
 
 #pragma once
+#include "../Core/Platform.h"
 
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <functional>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 namespace Spark {
 

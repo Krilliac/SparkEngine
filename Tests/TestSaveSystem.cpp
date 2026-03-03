@@ -1,6 +1,7 @@
 // TestSaveSystem.cpp - Tests for save/load serialization logic
 // Standalone tests for serialization utilities
 
+#include "TestFramework.h"
 #include <string>
 #include <vector>
 #include <cstring>

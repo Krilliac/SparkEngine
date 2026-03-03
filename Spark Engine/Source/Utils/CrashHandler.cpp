@@ -1,14 +1,22 @@
-﻿#include "Utils/CrashHandler.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+#include "Utils/CrashHandler.h"
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 #include "Utils/ConsoleProcessManager.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <dbghelp.h>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <dxgi.h>
 #include <d3d11.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <wincodec.h>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <wrl/client.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 // Only include CURL when networking is enabled
 #ifdef NETWORKING_ENABLED
@@ -22,7 +30,9 @@
 #include <vector>
 #include <mutex>
 #include <VersionHelpers.h>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <TlHelp32.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <iostream>
 #include <psapi.h>
 #pragma comment(lib, "psapi.lib")
@@ -577,3 +587,4 @@ static bool Upload(const std::string& url,
     return (res == CURLE_OK);
 }
 #endif
+#endif // SPARK_PLATFORM_WINDOWS

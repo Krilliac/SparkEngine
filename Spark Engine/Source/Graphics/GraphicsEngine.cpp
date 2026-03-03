@@ -1,4 +1,6 @@
-﻿// GraphicsEngine.cpp - COMPLETE IMPLEMENTATION WITH ALL 600+ LINES RESTORED
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+// GraphicsEngine.cpp - COMPLETE IMPLEMENTATION WITH ALL 600+ LINES RESTORED
 #include "GraphicsEngine.h"
 #include "../Utils/Assert.h"
 #include "../Utils/SparkError.h"
@@ -20,12 +22,14 @@
 #include "../Game/GameObject.h"
 
 // Include Windows headers for DirectX
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <DirectXMath.h>
 #include <wrl.h>
 #include <d3dcompiler.h>  // ✅ ADD: For shader compilation
+#endif // SPARK_PLATFORM_WINDOWS
 
 // **CRITICAL FIX: Add missing standard library includes**
 #include <string>
@@ -2532,3 +2536,4 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
     ApplyGraphicsState();
     ApplyAdvancedGraphicsState();
 }
+#endif // SPARK_PLATFORM_WINDOWS

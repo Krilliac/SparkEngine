@@ -10,12 +10,18 @@
 
 #pragma once
 
+#include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include <DirectXMath.h>
+#endif
 #include <string>
 #include <vector>
 #include <memory>
 #include <functional>
 #include <filesystem>
 #include <unordered_map>
+
+using namespace DirectX;
 
 class GraphicsEngine;
 class InputManager;

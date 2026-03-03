@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file RenderTarget.cpp
  * @brief Implementation of render target wrapper for DirectX 11
@@ -906,3 +908,4 @@ RenderTargetFormat RenderTargetManager::StringToFormat(const std::string& str) c
     if (str == "D32_FLOAT") return RenderTargetFormat::D32_FLOAT;
     return RenderTargetFormat::RGBA8_UNORM; // Default
 }
+#endif // SPARK_PLATFORM_WINDOWS

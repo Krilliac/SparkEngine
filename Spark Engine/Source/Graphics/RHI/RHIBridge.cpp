@@ -146,7 +146,7 @@ bool RHIBridge::Initialize(void* windowHandle, uint32_t width, uint32_t height,
         backend = SelectBestBackend();
 
     // Create the device via factory
-    m_device = RHIFactory::CreateDevice(backend);
+    m_device = CreateDevice(backend);
     if (!m_device)
         return false;
 
@@ -155,7 +155,6 @@ bool RHIBridge::Initialize(void* windowHandle, uint32_t width, uint32_t height,
     deviceDesc.preferredBackend = backend;
     deviceDesc.enableDebugLayer = enableDebug;
     deviceDesc.enableGPUValidation = enableDebug;
-    deviceDesc.windowHandle = windowHandle;
     deviceDesc.applicationName = "SparkEngine";
 
     if (!m_device->Initialize(deviceDesc))
@@ -171,7 +170,7 @@ bool RHIBridge::Initialize(void* windowHandle, uint32_t width, uint32_t height,
     swapDesc.height = height;
     swapDesc.format = PixelFormat::R8G8B8A8_UNORM;
     swapDesc.bufferCount = 2;
-    swapDesc.windowed = true;
+    swapDesc.fullscreen = false;
     swapDesc.vsync = true;
 
     m_swapChain = m_device->CreateSwapChain(swapDesc);

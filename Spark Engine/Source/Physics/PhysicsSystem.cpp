@@ -1,3 +1,5 @@
+#include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file PhysicsSystem.cpp
  * @brief Implementation of complete physics integration system using Bullet Physics
@@ -1540,3 +1542,5 @@ ConstraintType StringToConstraintType(const std::string& str)
     if (str == "Fixed" || str == "fixed") return ConstraintType::Fixed;
     return ConstraintType::Fixed; // Default
 }
+
+#endif // SPARK_PLATFORM_WINDOWS

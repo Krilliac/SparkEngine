@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file SoundEffect.h
  * @brief Sound effect loading and procedural audio generation system
  * @author Spark Engine Team
@@ -11,6 +11,7 @@
  */
 
 #pragma once
+#include "../Core/Platform.h"
 
 //------------------------------------------------------------------------------
 //  SoundEffect ‒ simple WAV loader + in-memory buffer
@@ -18,7 +19,9 @@
 //------------------------------------------------------------------------------
 
 #include "Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <xaudio2.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <vector>
 #include <string>
 #include <memory>

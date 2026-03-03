@@ -1,9 +1,12 @@
-﻿// Rocket.h
+// Rocket.h
 #pragma once
+#include "../Core/Platform.h"
 
 #include "Projectile.h"
 #include "Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <vector>
 
 using DirectX::XMFLOAT3;

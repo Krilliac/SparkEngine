@@ -1,3 +1,5 @@
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file D3D11Device.cpp
  * @brief DirectX 11 RHI backend implementation
@@ -1102,3 +1104,5 @@ DXGI_FORMAT D3D11Device::ConvertVertexFormat(RHIVertexFormat format) const
 }}} // namespace Spark::RHI::D3D11
 
 #endif // _WIN32
+
+#endif // SPARK_PLATFORM_WINDOWS

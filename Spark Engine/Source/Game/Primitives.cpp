@@ -1,7 +1,11 @@
-﻿// Primitives.cpp
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+// Primitives.cpp
 #include "Primitives.h"
 #include "Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <cmath>
 #include <vector>
 
@@ -106,3 +110,4 @@ MeshData Primitives::CreateSphere(float radius, int slices, int stacks)
         "CreateSphere produced empty mesh");
     return m;
 }
+#endif // SPARK_PLATFORM_WINDOWS

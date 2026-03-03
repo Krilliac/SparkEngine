@@ -1,6 +1,9 @@
 #pragma once
+#include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <dxgi.h>
 #include <d3d11.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 // These get set once you create your swap-chain/device/context
 extern IDXGISwapChain* g_MainSwapChain;

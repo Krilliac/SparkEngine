@@ -1,6 +1,7 @@
 // TestInputSystem.cpp - Tests for input system logic (action mapping, axis bindings)
 // Standalone implementations for CI testing
 
+#include "TestFramework.h"
 #include <string>
 #include <vector>
 #include <unordered_map>

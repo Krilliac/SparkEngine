@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file Timer.h
  * @brief High-precision timing system for frame rate and delta time calculation
  * @author Spark Engine Team
@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "..\Core\framework.h"
+#include "../Core/framework.h"
 #include "Utils/Assert.h"
 #include <chrono>
 

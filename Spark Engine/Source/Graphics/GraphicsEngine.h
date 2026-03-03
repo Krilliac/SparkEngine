@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file GraphicsEngine.h
  * @brief Advanced DirectX 11 graphics engine with AAA features and console integration
  * @author Spark Engine Team
@@ -13,13 +13,15 @@
 #pragma once
 
 #include "../Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #include <wrl/client.h>
 #include <d3d11_1.h>
 #include <dxgi1_3.h>
 #include <dxgidebug.h>
 #include <DirectXMath.h>
-#include "..\Core\framework.h"
+#endif // SPARK_PLATFORM_WINDOWS
+#include "../Core/framework.h"
 #include "Shader.h"  // ✅ ADD: Include for PerObjectConstants and PerFrameConstants
 #include <functional>
 #include <mutex>

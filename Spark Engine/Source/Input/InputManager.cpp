@@ -1,8 +1,12 @@
-﻿// InputManager.cpp
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+// InputManager.cpp
 #include "InputManager.h"
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -681,3 +685,4 @@ InputManager::InputMetrics InputManager::GetMetricsThreadSafe() const {
     
     return metrics;
 }
+#endif // SPARK_PLATFORM_WINDOWS

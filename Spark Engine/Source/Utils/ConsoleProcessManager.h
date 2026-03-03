@@ -1,11 +1,14 @@
 #pragma once
+#include "../Core/Platform.h"
 
 #include <string>
 #include <unordered_map>
 #include <functional>
 #include <memory>
 #include <vector>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <atomic>
 #include <mutex>
 #include <queue>

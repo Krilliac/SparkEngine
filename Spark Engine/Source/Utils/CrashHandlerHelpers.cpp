@@ -1,14 +1,22 @@
-﻿// CrashHandlerHelpers.cpp
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "../Core/Platform.h"
+// CrashHandlerHelpers.cpp
 #include "Utils/CrashHandler.h"
 #include "Utils/Assert.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string.h>
 #include <dbghelp.h>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <dxgi.h>
 #include <d3d11.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <wincodec.h>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <wrl/client.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 // Only include CURL when networking is enabled
 #ifdef NETWORKING_ENABLED
@@ -775,3 +783,4 @@ static bool Upload(
     return (res == CURLE_OK);
 }
 #endif // NETWORKING_ENABLED
+#endif // SPARK_PLATFORM_WINDOWS

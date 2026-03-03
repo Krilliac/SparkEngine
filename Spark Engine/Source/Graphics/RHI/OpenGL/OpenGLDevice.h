@@ -9,6 +9,7 @@
  */
 
 #pragma once
+#include "../../../Core/Platform.h"
 
 #include "../RHIDevice.h"
 #include "../RHIResources.h"
@@ -19,7 +20,9 @@
 #include <glad/glad.h>
 
 #ifdef _WIN32
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #elif defined(__linux__)
 #include <GL/glx.h>
 #endif

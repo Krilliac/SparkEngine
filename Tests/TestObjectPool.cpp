@@ -1,6 +1,7 @@
 // TestObjectPool.cpp - Tests for ObjectPool template
 // Tests the pool acquire/release cycle and capacity management
 
+#include "TestFramework.h"
 #include <vector>
 #include <memory>
 

@@ -10,8 +10,11 @@
  */
 
 #pragma once
+#include "../../Core/Platform.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -37,8 +40,10 @@ struct NavTriangle {
     uint32_t indices[3];
     uint32_t neighborTriangles[3];  ///< Adjacent triangle indices (UINT32_MAX = no neighbor)
     XMFLOAT3 centroid;
+    XMFLOAT3 normal;               ///< Triangle surface normal
     float area;
     uint16_t flags;                 ///< Walkability flags (terrain type, cost modifiers)
+    std::vector<uint32_t> adjacency; ///< Dynamic adjacency list for pathfinding
 };
 
 struct NavMeshData {

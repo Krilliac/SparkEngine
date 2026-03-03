@@ -1,4 +1,6 @@
-﻿#include "SoundEffect.h"
+#include "Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "SoundEffect.h"
 #include "Utils/Assert.h"
 #include <fstream>
 #include <cmath>
@@ -294,3 +296,4 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreatePickup()
     }
     return CreateFromSamples(s, SR);
 }
+#endif // SPARK_PLATFORM_WINDOWS

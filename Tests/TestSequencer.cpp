@@ -1,6 +1,7 @@
 // TestSequencer.cpp - Tests for cinematic sequencer / timeline logic
 // Standalone implementations for CI testing
 
+#include "TestFramework.h"
 #include <cmath>
 #include <vector>
 #include <string>

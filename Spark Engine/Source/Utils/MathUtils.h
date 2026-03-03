@@ -1,9 +1,11 @@
-﻿// MathUtils.h
+// MathUtils.h
 #pragma once
 
-#include "..\Core\framework.h"    // XMFLOAT3, XMMATRIX
+#include "../Core/framework.h"    // XMFLOAT3, XMMATRIX
 #include "Utils/Assert.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 class MathUtils
 {

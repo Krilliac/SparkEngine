@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <angelscript.h>
 #include <scriptstdstring/scriptstdstring.h>
 #include <scriptbuilder/scriptbuilder.h>
