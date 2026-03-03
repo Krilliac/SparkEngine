@@ -14,6 +14,13 @@ if(MSVC)
     # automatically. Do NOT manually add /MD or /MDd flags as they conflict.
 endif()
 
+# MSVC toolset selection:
+#   v143 = Visual Studio 2022
+#   v144 = Visual Studio 2026
+# Override at configure time: cmake -DSPARK_MSVC_TOOLSET=v144 ...
+set(SPARK_MSVC_TOOLSET "" CACHE STRING
+    "MSVC toolset version (e.g. v143 for VS 2022, v144 for VS 2026). Empty = auto-detect.")
+
 # ---------------------------------------------------------------------
 # 1) Disable all third-party tests/examples globally
 # ---------------------------------------------------------------------
@@ -28,13 +35,57 @@ set(BUILD_DOCS OFF CACHE BOOL "Disable docs" FORCE)
 # ---------------------------------------------------------------------
 # Platform-specific generator settings (only if not already set)
 if(WIN32 AND NOT CMAKE_GENERATOR_TOOLSET)
-    set(CMAKE_GENERATOR_TOOLSET "v143")
+    if(NOT SPARK_MSVC_TOOLSET STREQUAL "")
+        set(CMAKE_GENERATOR_TOOLSET "${SPARK_MSVC_TOOLSET}")
+    else()
+        # Default to v143 (VS 2022). Use -DSPARK_MSVC_TOOLSET=v144 for VS 2026.
+        set(CMAKE_GENERATOR_TOOLSET "v143")
+    endif()
 endif()
 if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
     set(CMAKE_GENERATOR_PLATFORM "x64")
 endif()
 
 project(SparkEngine LANGUAGES CXX C)
+
+# ---------------------------------------------------------------------
+# 2.5) Compiler identification and version reporting
+# ---------------------------------------------------------------------
+if(MSVC)
+    # Map _MSC_VER ranges to Visual Studio release years
+    if(MSVC_VERSION GREATER_EQUAL 1950)
+        set(SPARK_VS_YEAR "2026+")
+        set(SPARK_VS_TOOLSET "v144+")
+    elseif(MSVC_VERSION GREATER_EQUAL 1940)
+        set(SPARK_VS_YEAR "2026")
+        set(SPARK_VS_TOOLSET "v144")
+    elseif(MSVC_VERSION GREATER_EQUAL 1930)
+        set(SPARK_VS_YEAR "2022")
+        set(SPARK_VS_TOOLSET "v143")
+    elseif(MSVC_VERSION GREATER_EQUAL 1920)
+        set(SPARK_VS_YEAR "2019")
+        set(SPARK_VS_TOOLSET "v142")
+    elseif(MSVC_VERSION GREATER_EQUAL 1910)
+        set(SPARK_VS_YEAR "2017")
+        set(SPARK_VS_TOOLSET "v141")
+    else()
+        set(SPARK_VS_YEAR "2015 or older")
+        set(SPARK_VS_TOOLSET "v14x")
+    endif()
+    message(STATUS "Compiler : MSVC Visual Studio ${SPARK_VS_YEAR} (${SPARK_VS_TOOLSET}, _MSC_VER=${MSVC_VERSION})")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    message(STATUS "Compiler : Apple Clang ${CMAKE_CXX_COMPILER_VERSION}")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+    message(STATUS "Compiler : Intel oneAPI DPC++/C++ (ICPX) ${CMAKE_CXX_COMPILER_VERSION}")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
+    message(STATUS "Compiler : Intel C++ Classic (ICC) ${CMAKE_CXX_COMPILER_VERSION}")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(STATUS "Compiler : LLVM Clang ${CMAKE_CXX_COMPILER_VERSION}")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(STATUS "Compiler : GCC ${CMAKE_CXX_COMPILER_VERSION}")
+else()
+    message(STATUS "Compiler : ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
 
 # ---------------------------------------------------------------------
 # 3) Custom build options
@@ -111,7 +162,30 @@ if(MSVC)
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+
+    # Conformance improvements available in VS 2017+ - enforce __cplusplus macro and
+    # disable non-conforming extensions so code is portable across compilers.
+    if(MSVC_VERSION GREATER_EQUAL 1910)
+        add_compile_options(/Zc:__cplusplus /permissive-)
+    endif()
+
+    # VS 2026 (v144, _MSC_VER >= 1940): enable additional C++23 readiness flags
+    if(MSVC_VERSION GREATER_EQUAL 1940)
+        add_compile_options(
+            /Zc:preprocessor   # Standard-conforming preprocessor (fully enabled in v144)
+            /wd5045            # Spectre mitigation informational warning
+        )
+        add_compile_definitions(SPARK_COMPILER_VS2026)
+    # VS 2022 (v143, _MSC_VER 1930-1939)
+    elseif(MSVC_VERSION GREATER_EQUAL 1930)
+        add_compile_options(/Zc:preprocessor)
+        add_compile_definitions(SPARK_COMPILER_VS2022)
+    # VS 2019 (v142, _MSC_VER 1920-1929)
+    elseif(MSVC_VERSION GREATER_EQUAL 1920)
+        add_compile_definitions(SPARK_COMPILER_VS2019)
+    endif()
+
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
     add_compile_options(
         -Wall -Wextra
         -Wno-unused-parameter
@@ -122,18 +196,26 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -Wno-reorder
         -Wno-ignored-qualifiers
     )
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         add_compile_options(
             -Wno-class-memaccess
             -Wno-stringop-truncation
         )
     endif()
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Clang (LLVM), Apple Clang, and Intel LLVM (ICPX) share Clang-compatible flags
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|IntelLLVM")
         add_compile_options(
             -Wno-unused-private-field
             -Wno-unused-lambda-capture
-            -Wno-microsoft-include
         )
+        # -Wno-microsoft-include only relevant on Windows with LLVM/Clang
+        if(WIN32)
+            add_compile_options(-Wno-microsoft-include)
+        endif()
+    endif()
+    # Intel LLVM (ICPX) extra suppressions
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+        add_compile_options(-Wno-tautological-constant-compare)
     endif()
 endif()
 
@@ -747,7 +829,11 @@ endif()
 # 17) Build summary
 # ---------------------------------------------------------------------
 message(STATUS "=== SPARKENGINE CONFIGURED SUCCESSFULLY ===")
-message(STATUS "Platform: ${CMAKE_SYSTEM_NAME} (${CMAKE_CXX_COMPILER_ID})")
+if(MSVC)
+    message(STATUS "Platform: ${CMAKE_SYSTEM_NAME} (MSVC VS ${SPARK_VS_YEAR} / ${SPARK_VS_TOOLSET})")
+else()
+    message(STATUS "Platform: ${CMAKE_SYSTEM_NAME} (${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})")
+endif()
 message(STATUS "Output: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 message(STATUS "Graphics Backends:")
 if(WIN32)
