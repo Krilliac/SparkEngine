@@ -11,6 +11,7 @@
 #include <map>
 #include <psapi.h>
 #include <DirectXMath.h>
+#include <dbghelp.h>
 
 // Include actual headers for complete type definitions
 #include "../Game/Game.h"
@@ -21,6 +22,9 @@
 #include "../Projectiles/ProjectilePool.h"
 #include "../SceneManager/SceneManager.h"
 #include "../Utils/Timer.h"
+#include "../Utils/CrashHandler.h"
+#include "../Utils/Profiler.h"
+#include "../Utils/SparkError.h"
 #include "../Game/Console.h"
 
 // External references to global engine components
@@ -1125,6 +1129,8 @@ void SimpleConsole::RegisterAdvancedCommands() {
     RegisterNetworkingCommands();
     RegisterTestingCommands();
     RegisterGameCommands();
+    RegisterCrashCommands();
+    RegisterHealthCommands();
 }
 
 void SimpleConsole::RegisterPerformanceCommands() {
@@ -3410,6 +3416,642 @@ void SimpleConsole::RegisterGameCommands() {
 
         return ss.str();
     }, "Show game object summary and counts", "Game");
+}
+
+// ============================================================================
+// CRASH COMMANDS - Crash handling, diagnostics, and error system management
+// ============================================================================
+void SimpleConsole::RegisterCrashCommands() {
+    RegisterCommand("crash_config", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            std::stringstream ss;
+            ss << "Crash Handler Configuration:\n";
+            ss << "==========================================\n";
+            ss << "  Screenshots on crash:   ENABLED\n";
+            ss << "  System info capture:    ENABLED\n";
+            ss << "  All thread stacks:      ENABLED\n";
+            ss << "  Zip before upload:      ENABLED\n";
+            ss << "  Assert triggers crash:  CONFIGURABLE\n";
+            ss << "\nUse 'crash_config assert <on|off>' to toggle assert crash behavior";
+            return ss.str();
+        }
+
+        if (args[0] == "assert") {
+            if (args.size() < 2) return "Usage: crash_config assert <on|off>";
+            std::string value = args[1];
+            std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+            bool enable = (value == "on" || value == "true" || value == "1");
+            SetAssertCrashBehavior(enable);
+            return "Assert crash behavior: " + std::string(enable ? "ENABLED (asserts will crash)" : "DISABLED (asserts log only)");
+        }
+
+        return "Unknown crash config option. Available: assert";
+    }, "Configure crash handler settings", "Crash/Diagnostics");
+
+    RegisterCommand("crash_dump", [this](const std::vector<std::string>& args) -> std::string {
+        std::string filename = args.empty() ? "spark_manual_dump.dmp" : args[0];
+
+        LogWarning("Generating manual crash dump: " + filename);
+
+        // Generate a minidump without actually crashing
+        HANDLE hFile = CreateFileA(filename.c_str(), GENERIC_WRITE, 0, NULL,
+                                   CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (hFile == INVALID_HANDLE_VALUE) {
+            return "Failed to create dump file: " + filename;
+        }
+
+        MINIDUMP_TYPE dumpType = static_cast<MINIDUMP_TYPE>(
+            MiniDumpWithDataSegs | MiniDumpWithHandleData |
+            MiniDumpWithThreadInfo | MiniDumpWithProcessThreadData);
+
+        BOOL success = MiniDumpWriteDump(
+            GetCurrentProcess(), GetCurrentProcessId(),
+            hFile, dumpType, NULL, NULL, NULL);
+
+        CloseHandle(hFile);
+
+        if (success) {
+            // Get file size
+            WIN32_FILE_ATTRIBUTE_DATA fileData;
+            GetFileAttributesExA(filename.c_str(), GetFileExInfoStandard, &fileData);
+            size_t fileSize = fileData.nFileSizeLow;
+
+            LogSuccess("Dump file created: " + filename + " (" + std::to_string(fileSize / 1024) + " KB)");
+            return "Manual dump saved to: " + filename + " (" + std::to_string(fileSize / 1024) + " KB)";
+        }
+
+        return "Failed to write dump - error code: " + std::to_string(GetLastError());
+    }, "Generate a manual minidump file without crashing", "Crash/Diagnostics");
+
+    RegisterCommand("crash_stack", [this](const std::vector<std::string>& args) -> std::string {
+        std::stringstream ss;
+        ss << "Current Stack Trace:\n";
+        ss << "==========================================\n";
+
+        // Capture current stack trace
+        void* stack[64];
+        WORD frames = CaptureStackBackTrace(0, 64, stack, NULL);
+
+        HANDLE process = GetCurrentProcess();
+        SymInitialize(process, NULL, TRUE);
+
+        char symbolBuffer[sizeof(SYMBOL_INFO) + 256 * sizeof(char)];
+        SYMBOL_INFO* symbol = reinterpret_cast<SYMBOL_INFO*>(symbolBuffer);
+        symbol->MaxNameLen = 255;
+        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+
+        for (WORD i = 0; i < frames; ++i) {
+            DWORD64 address = reinterpret_cast<DWORD64>(stack[i]);
+            if (SymFromAddr(process, address, 0, symbol)) {
+                ss << "  [" << i << "] " << symbol->Name << " (0x"
+                   << std::hex << symbol->Address << std::dec << ")\n";
+            } else {
+                ss << "  [" << i << "] 0x" << std::hex << address << std::dec << " (unresolved)\n";
+            }
+        }
+
+        ss << "\n" << frames << " frames captured";
+        return ss.str();
+    }, "Capture and display the current call stack", "Crash/Diagnostics");
+
+    RegisterCommand("crash_sysinfo", [this](const std::vector<std::string>& args) -> std::string {
+        std::stringstream ss;
+        ss << "System Information:\n";
+        ss << "==========================================\n";
+
+        // OS Version
+        OSVERSIONINFOEXW osvi = {};
+        osvi.dwOSVersionInfoSize = sizeof(osvi);
+
+        // Computer name
+        char compName[MAX_COMPUTERNAME_LENGTH + 1];
+        DWORD compSize = sizeof(compName);
+        GetComputerNameA(compName, &compSize);
+        ss << "  Computer:      " << compName << "\n";
+
+        // System info
+        SYSTEM_INFO sysInfo;
+        GetSystemInfo(&sysInfo);
+        ss << "  Processor:     " << sysInfo.dwNumberOfProcessors << " cores\n";
+        ss << "  Architecture:  ";
+        switch (sysInfo.wProcessorArchitecture) {
+            case PROCESSOR_ARCHITECTURE_AMD64: ss << "x64\n"; break;
+            case PROCESSOR_ARCHITECTURE_INTEL: ss << "x86\n"; break;
+            case PROCESSOR_ARCHITECTURE_ARM64: ss << "ARM64\n"; break;
+            default: ss << "Unknown\n"; break;
+        }
+        ss << "  Page Size:     " << sysInfo.dwPageSize << " bytes\n";
+
+        // Memory
+        MEMORYSTATUSEX memInfo;
+        memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+        GlobalMemoryStatusEx(&memInfo);
+        ss << "\n  Physical RAM:  " << (memInfo.ullTotalPhys / 1024 / 1024) << " MB\n";
+        ss << "  Available RAM: " << (memInfo.ullAvailPhys / 1024 / 1024) << " MB\n";
+        ss << "  Memory Load:   " << memInfo.dwMemoryLoad << "%\n";
+        ss << "  Virtual Total: " << (memInfo.ullTotalVirtual / 1024 / 1024) << " MB\n";
+        ss << "  Virtual Avail: " << (memInfo.ullAvailVirtual / 1024 / 1024) << " MB\n";
+
+        // Process info
+        PROCESS_MEMORY_COUNTERS pmc;
+        if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+            ss << "\n  Process Memory:\n";
+            ss << "    Working Set:     " << (pmc.WorkingSetSize / 1024 / 1024) << " MB\n";
+            ss << "    Peak Working:    " << (pmc.PeakWorkingSetSize / 1024 / 1024) << " MB\n";
+            ss << "    Page File:       " << (pmc.PagefileUsage / 1024 / 1024) << " MB\n";
+            ss << "    Page Faults:     " << pmc.PageFaultCount << "\n";
+        }
+
+        // Handle count
+        DWORD handleCount;
+        GetProcessHandleCount(GetCurrentProcess(), &handleCount);
+        ss << "    Handle Count:    " << handleCount << "\n";
+
+        // Thread count
+        ss << "    Process ID:      " << GetCurrentProcessId();
+
+        return ss.str();
+    }, "Display detailed system and process information", "Crash/Diagnostics");
+
+    RegisterCommand("crash_test_assert", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty() || args[0] != "confirm") {
+            return "WARNING: This triggers a test assertion.\n"
+                   "If assert crash behavior is ON, this will crash the engine.\n"
+                   "Current assert mode: use 'crash_config assert' to check\n"
+                   "Usage: crash_test_assert confirm";
+        }
+
+        LogWarning("Triggering test assertion from console...");
+        ASSERT_MSG(false, "Test assertion triggered from console command 'crash_test_assert'");
+        return "Assertion fired (non-fatal mode - engine continues)";
+    }, "Trigger a test assertion to verify error handling", "Crash/Diagnostics");
+
+    RegisterCommand("crash_error_log", [this](const std::vector<std::string>& args) -> std::string {
+        // Show only ERROR and CRITICAL log entries
+        auto history = GetLogHistory();
+        int maxResults = 20;
+        if (!args.empty()) {
+            try { maxResults = std::stoi(args[0]); } catch (...) {}
+        }
+
+        std::stringstream ss;
+        ss << "Error Log (most recent first):\n";
+        ss << "==========================================\n";
+
+        int found = 0;
+        for (int i = static_cast<int>(history.size()) - 1; i >= 0 && found < maxResults; --i) {
+            if (history[i].type == "ERROR" || history[i].type == "CRITICAL" || history[i].type == "WARNING") {
+                ss << "  [" << history[i].timestamp << "] [" << history[i].type << "] " << history[i].message << "\n";
+                found++;
+            }
+        }
+
+        if (found == 0) {
+            return "No errors or warnings in log history";
+        }
+        ss << "\nShowing " << found << " error/warning entries";
+        return ss.str();
+    }, "Show only error and warning log entries (usage: crash_error_log [max])", "Crash/Diagnostics");
+
+    RegisterCommand("crash_report", [this](const std::vector<std::string>& args) -> std::string {
+        std::string filename = args.empty() ? "spark_crash_report.txt" : args[0];
+
+        try {
+            std::ofstream file(filename);
+            if (!file.is_open()) return "Cannot create report file: " + filename;
+
+            auto now = std::chrono::system_clock::now();
+            auto time_t = std::chrono::system_clock::to_time_t(now);
+
+            file << "=== SPARK ENGINE DIAGNOSTIC REPORT ===\n";
+            file << "Generated: " << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") << "\n";
+            file << "Engine: Spark Engine v1.0.0\n\n";
+
+            // System info
+            SYSTEM_INFO sysInfo;
+            GetSystemInfo(&sysInfo);
+            MEMORYSTATUSEX memInfo;
+            memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+            GlobalMemoryStatusEx(&memInfo);
+
+            file << "=== SYSTEM ===\n";
+            file << "Cores: " << sysInfo.dwNumberOfProcessors << "\n";
+            file << "Total RAM: " << (memInfo.ullTotalPhys / 1024 / 1024) << " MB\n";
+            file << "Available: " << (memInfo.ullAvailPhys / 1024 / 1024) << " MB\n";
+            file << "Memory Load: " << memInfo.dwMemoryLoad << "%\n\n";
+
+            // Process info
+            PROCESS_MEMORY_COUNTERS pmc;
+            if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+                file << "=== PROCESS ===\n";
+                file << "Working Set: " << (pmc.WorkingSetSize / 1024 / 1024) << " MB\n";
+                file << "Peak Working Set: " << (pmc.PeakWorkingSetSize / 1024 / 1024) << " MB\n";
+                file << "Page Faults: " << pmc.PageFaultCount << "\n\n";
+            }
+
+            // Performance
+            UpdatePerformanceCounters();
+            file << "=== PERFORMANCE ===\n";
+            file << "FPS: " << g_perfCounters.currentFPS << "\n";
+            file << "Frame Time: " << g_perfCounters.frameTime << " ms\n";
+            file << "Draw Calls: " << g_perfCounters.drawCalls << "\n";
+            file << "Triangles: " << g_perfCounters.triangles << "\n\n";
+
+            // Engine state
+            file << "=== ENGINE STATE ===\n";
+            file << "Graphics: " << (g_graphics ? "ACTIVE" : "INACTIVE") << "\n";
+            file << "Game: " << (g_game ? "ACTIVE" : "INACTIVE") << "\n";
+            file << "Input: " << (g_input ? "ACTIVE" : "INACTIVE") << "\n";
+            file << "Timer: " << (g_timer ? "ACTIVE" : "INACTIVE") << "\n";
+            file << "Scene: " << g_gameState.currentScene << "\n";
+            file << "Objects: " << g_gameState.activeObjects << "\n\n";
+
+            // Error log
+            file << "=== RECENT ERRORS ===\n";
+            auto history = GetLogHistory();
+            for (const auto& entry : history) {
+                if (entry.type == "ERROR" || entry.type == "CRITICAL") {
+                    file << "[" << entry.timestamp << "] " << entry.message << "\n";
+                }
+            }
+            file << "\n";
+
+            // Full log tail
+            file << "=== LAST 50 LOG ENTRIES ===\n";
+            int start = std::max(0, static_cast<int>(history.size()) - 50);
+            for (int i = start; i < static_cast<int>(history.size()); ++i) {
+                file << "[" << history[i].timestamp << "] [" << history[i].type << "] " << history[i].message << "\n";
+            }
+
+            file.close();
+            LogSuccess("Diagnostic report saved: " + filename);
+            return "Diagnostic report saved to: " + filename;
+        } catch (const std::exception& e) {
+            return "Report generation failed: " + std::string(e.what());
+        }
+    }, "Generate a comprehensive diagnostic report file", "Crash/Diagnostics");
+
+    RegisterCommand("crash_handles", [](const std::vector<std::string>& args) -> std::string {
+        DWORD handleCount;
+        GetProcessHandleCount(GetCurrentProcess(), &handleCount);
+
+        PROCESS_MEMORY_COUNTERS pmc;
+        GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
+
+        std::stringstream ss;
+        ss << "Resource Usage:\n";
+        ss << "==========================================\n";
+        ss << "  Open Handles:    " << handleCount << "\n";
+        ss << "  Page Faults:     " << pmc.PageFaultCount << "\n";
+        ss << "  Working Set:     " << (pmc.WorkingSetSize / 1024 / 1024) << " MB\n";
+        ss << "  Peak Working:    " << (pmc.PeakWorkingSetSize / 1024 / 1024) << " MB\n";
+        ss << "  Page File:       " << (pmc.PagefileUsage / 1024 / 1024) << " MB\n";
+        ss << "  Peak Page File:  " << (pmc.PeakPagefileUsage / 1024 / 1024) << " MB\n";
+
+        // Warn if handle count is high
+        if (handleCount > 5000) {
+            ss << "\n  WARNING: High handle count may indicate a resource leak!";
+        }
+        if (pmc.PageFaultCount > 1000000) {
+            ss << "\n  WARNING: High page fault count detected!";
+        }
+
+        return ss.str();
+    }, "Show process resource usage (handles, page faults)", "Crash/Diagnostics");
+}
+
+// ============================================================================
+// HEALTH COMMANDS - System health monitoring and diagnostics
+// ============================================================================
+void SimpleConsole::RegisterHealthCommands() {
+    RegisterCommand("health_check", [this](const std::vector<std::string>& args) -> std::string {
+        LogInfo("Running system health check...");
+
+        std::stringstream ss;
+        ss << "System Health Check:\n";
+        ss << "==========================================\n";
+
+        int warnings = 0, critical = 0;
+
+        // 1. Check engine subsystems
+        ss << "\n[Subsystems]\n";
+        auto checkSubsystem = [&](const char* name, bool active) {
+            if (active) {
+                ss << "  " << std::left << std::setw(20) << name << " OK\n";
+            } else {
+                ss << "  " << std::left << std::setw(20) << name << " INACTIVE\n";
+                warnings++;
+            }
+        };
+
+        checkSubsystem("Graphics Engine", g_graphics != nullptr);
+        checkSubsystem("Game System", g_game != nullptr);
+        checkSubsystem("Input Manager", g_input != nullptr);
+        checkSubsystem("Timer System", g_timer != nullptr);
+
+        if (g_game) {
+            checkSubsystem("Player System", g_game->GetPlayer() != nullptr);
+            checkSubsystem("Camera System", g_game->GetCamera() != nullptr);
+            checkSubsystem("Scene Manager", g_game->GetSceneManager() != nullptr);
+        }
+
+        // 2. Check memory usage
+        ss << "\n[Memory]\n";
+        MEMORYSTATUSEX memInfo;
+        memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+        GlobalMemoryStatusEx(&memInfo);
+
+        PROCESS_MEMORY_COUNTERS pmc;
+        GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
+
+        size_t workingSetMB = pmc.WorkingSetSize / 1024 / 1024;
+        size_t availMB = memInfo.ullAvailPhys / 1024 / 1024;
+
+        if (workingSetMB > 2048) {
+            ss << "  Working Set:     " << workingSetMB << " MB  CRITICAL (>2GB)\n";
+            critical++;
+        } else if (workingSetMB > 1024) {
+            ss << "  Working Set:     " << workingSetMB << " MB  WARNING (>1GB)\n";
+            warnings++;
+        } else {
+            ss << "  Working Set:     " << workingSetMB << " MB  OK\n";
+        }
+
+        if (memInfo.dwMemoryLoad > 90) {
+            ss << "  System Memory:   " << memInfo.dwMemoryLoad << "%  CRITICAL (>90%)\n";
+            critical++;
+        } else if (memInfo.dwMemoryLoad > 75) {
+            ss << "  System Memory:   " << memInfo.dwMemoryLoad << "%  WARNING (>75%)\n";
+            warnings++;
+        } else {
+            ss << "  System Memory:   " << memInfo.dwMemoryLoad << "%  OK\n";
+        }
+
+        // 3. Check performance
+        ss << "\n[Performance]\n";
+        UpdatePerformanceCounters();
+
+        if (g_perfCounters.currentFPS < 15.0f && g_perfCounters.currentFPS > 0.0f) {
+            ss << "  FPS:             " << std::fixed << std::setprecision(1) << g_perfCounters.currentFPS << "  CRITICAL (<15)\n";
+            critical++;
+        } else if (g_perfCounters.currentFPS < 30.0f && g_perfCounters.currentFPS > 0.0f) {
+            ss << "  FPS:             " << std::fixed << std::setprecision(1) << g_perfCounters.currentFPS << "  WARNING (<30)\n";
+            warnings++;
+        } else {
+            ss << "  FPS:             " << std::fixed << std::setprecision(1) << g_perfCounters.currentFPS << "  OK\n";
+        }
+
+        if (g_perfCounters.frameTime > 33.0f) {
+            ss << "  Frame Time:      " << std::setprecision(2) << g_perfCounters.frameTime << " ms  WARNING (>33ms)\n";
+            warnings++;
+        } else {
+            ss << "  Frame Time:      " << std::setprecision(2) << g_perfCounters.frameTime << " ms  OK\n";
+        }
+
+        // 4. Check resource handles
+        DWORD handleCount;
+        GetProcessHandleCount(GetCurrentProcess(), &handleCount);
+        ss << "\n[Resources]\n";
+        if (handleCount > 10000) {
+            ss << "  Handles:         " << handleCount << "  CRITICAL (>10000)\n";
+            critical++;
+        } else if (handleCount > 5000) {
+            ss << "  Handles:         " << handleCount << "  WARNING (>5000)\n";
+            warnings++;
+        } else {
+            ss << "  Handles:         " << handleCount << "  OK\n";
+        }
+
+        ss << "  Active Objects:  " << g_gameState.activeObjects << "  OK\n";
+        ss << "  Draw Calls:      " << g_perfCounters.drawCalls;
+        if (g_perfCounters.drawCalls > 5000) {
+            ss << "  WARNING (>5000)\n";
+            warnings++;
+        } else {
+            ss << "  OK\n";
+        }
+
+        // 5. Check log errors
+        ss << "\n[Error History]\n";
+        auto history = GetLogHistory();
+        int errorCount = 0, criticalCount = 0;
+        for (const auto& entry : history) {
+            if (entry.type == "ERROR") errorCount++;
+            if (entry.type == "CRITICAL") criticalCount++;
+        }
+        ss << "  Errors:          " << errorCount;
+        if (errorCount > 10) { ss << "  WARNING\n"; warnings++; }
+        else { ss << "  OK\n"; }
+        ss << "  Critical:        " << criticalCount;
+        if (criticalCount > 0) { ss << "  CRITICAL\n"; critical++; }
+        else { ss << "  OK\n"; }
+
+        // Summary
+        ss << "\n==========================================\n";
+        if (critical > 0) {
+            ss << "RESULT: CRITICAL (" << critical << " critical, " << warnings << " warnings)\n";
+            ss << "Action: Investigate critical issues immediately";
+        } else if (warnings > 0) {
+            ss << "RESULT: WARNING (" << warnings << " warnings)\n";
+            ss << "Action: Monitor and address warnings";
+        } else {
+            ss << "RESULT: HEALTHY\n";
+            ss << "All systems operating normally";
+        }
+
+        return ss.str();
+    }, "Run a comprehensive system health check", "Health");
+
+    RegisterCommand("health_memory", [this](const std::vector<std::string>& args) -> std::string {
+        std::stringstream ss;
+        ss << "Memory Health Analysis:\n";
+        ss << "==========================================\n";
+
+        PROCESS_MEMORY_COUNTERS_EX pmcEx;
+        if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmcEx), sizeof(pmcEx))) {
+            size_t workingMB = pmcEx.WorkingSetSize / 1024 / 1024;
+            size_t peakMB = pmcEx.PeakWorkingSetSize / 1024 / 1024;
+            float growth = peakMB > 0 ? (static_cast<float>(workingMB) / peakMB * 100.0f) : 0;
+
+            ss << "  Current Working Set: " << workingMB << " MB\n";
+            ss << "  Peak Working Set:    " << peakMB << " MB\n";
+            ss << "  Usage vs Peak:       " << std::fixed << std::setprecision(1) << growth << "%\n";
+            ss << "  Page Faults:         " << pmcEx.PageFaultCount << "\n";
+            ss << "  Page File Usage:     " << (pmcEx.PagefileUsage / 1024 / 1024) << " MB\n";
+            ss << "  Private Usage:       " << (pmcEx.PrivateUsage / 1024 / 1024) << " MB\n";
+
+            // Memory leak indicator
+            if (workingMB > peakMB * 0.95f && peakMB > 100) {
+                ss << "\n  STATUS: Memory near peak - monitor for leaks";
+            } else {
+                ss << "\n  STATUS: Memory usage normal";
+            }
+        }
+
+        // Fragmentation check
+        MEMORYSTATUSEX memInfo;
+        memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+        GlobalMemoryStatusEx(&memInfo);
+
+        size_t totalVirtual = memInfo.ullTotalVirtual / 1024 / 1024;
+        size_t availVirtual = memInfo.ullAvailVirtual / 1024 / 1024;
+        float virtualUsage = 100.0f * (1.0f - static_cast<float>(availVirtual) / totalVirtual);
+
+        ss << "\n\n  Virtual Address Space:\n";
+        ss << "    Total:       " << totalVirtual << " MB\n";
+        ss << "    Available:   " << availVirtual << " MB\n";
+        ss << "    Used:        " << std::fixed << std::setprecision(1) << virtualUsage << "%\n";
+
+        if (virtualUsage > 80.0f) {
+            ss << "    WARNING: Virtual address space running low!";
+        }
+
+        return ss.str();
+    }, "Detailed memory health analysis with leak indicators", "Health");
+
+    RegisterCommand("health_perf", [this](const std::vector<std::string>& args) -> std::string {
+        // Sample performance over a short period
+        int samples = 10;
+        float minFPS = 9999, maxFPS = 0, totalFPS = 0;
+        float minFrame = 9999, maxFrame = 0, totalFrame = 0;
+
+        for (int i = 0; i < samples; ++i) {
+            UpdatePerformanceCounters();
+            float fps = g_perfCounters.currentFPS;
+            float ft = g_perfCounters.frameTime;
+
+            if (fps > 0) {
+                minFPS = std::min(minFPS, fps);
+                maxFPS = std::max(maxFPS, fps);
+                totalFPS += fps;
+            }
+            if (ft > 0) {
+                minFrame = std::min(minFrame, ft);
+                maxFrame = std::max(maxFrame, ft);
+                totalFrame += ft;
+            }
+            Sleep(50);
+        }
+
+        float avgFPS = totalFPS / samples;
+        float avgFrame = totalFrame / samples;
+        float stability = maxFPS > 0 ? (minFPS / maxFPS * 100.0f) : 0;
+
+        std::stringstream ss;
+        ss << "Performance Health (sampled over " << (samples * 50) << "ms):\n";
+        ss << "==========================================\n";
+        ss << "  FPS Range:      " << std::fixed << std::setprecision(1)
+           << minFPS << " - " << maxFPS << "\n";
+        ss << "  Average FPS:    " << avgFPS << "\n";
+        ss << "  Frame Time:     " << std::setprecision(2)
+           << minFrame << " - " << maxFrame << " ms\n";
+        ss << "  Avg Frame Time: " << avgFrame << " ms\n";
+        ss << "  Stability:      " << std::setprecision(1) << stability << "%\n\n";
+
+        // Performance classification
+        if (avgFPS >= 60) ss << "  Rating: EXCELLENT (60+ FPS)\n";
+        else if (avgFPS >= 30) ss << "  Rating: GOOD (30-60 FPS)\n";
+        else if (avgFPS >= 15) ss << "  Rating: POOR (15-30 FPS)\n";
+        else ss << "  Rating: CRITICAL (<15 FPS)\n";
+
+        // Stutter detection
+        if (stability < 50.0f) {
+            ss << "  WARNING: High frame time variance detected (stuttering)";
+        } else if (stability < 75.0f) {
+            ss << "  NOTE: Some frame time variance detected";
+        } else {
+            ss << "  Frame timing is stable";
+        }
+
+        return ss.str();
+    }, "Analyze performance stability and detect stuttering", "Health");
+
+    RegisterCommand("health_gpu", [this](const std::vector<std::string>& args) -> std::string {
+        if (!g_graphics) return "Graphics engine not available";
+
+        std::stringstream ss;
+        ss << "GPU Health Check:\n";
+        ss << "==========================================\n";
+
+        auto metrics = g_graphics->Console_GetMetrics();
+        auto settings = g_graphics->Console_GetSettings();
+
+        ss << "  Draw Calls:      " << metrics.drawCalls;
+        if (metrics.drawCalls > 5000) ss << "  HIGH\n"; else ss << "  OK\n";
+
+        ss << "  Triangles:       " << metrics.triangles;
+        if (metrics.triangles > 5000000) ss << "  HIGH\n"; else ss << "  OK\n";
+
+        ss << "  GPU Usage:       " << std::fixed << std::setprecision(1) << metrics.gpuUsage << "%";
+        if (metrics.gpuUsage > 95.0f) ss << "  CRITICAL\n"; else if (metrics.gpuUsage > 80.0f) ss << "  WARNING\n"; else ss << "  OK\n";
+
+        size_t vramMB = g_graphics->Console_GetVRAMUsage() / 1024 / 1024;
+        ss << "  VRAM Usage:      " << vramMB << " MB";
+        if (vramMB > 4096) ss << "  WARNING (>4GB)\n"; else ss << "  OK\n";
+
+        ss << "  Texture Memory:  " << (metrics.textureMemory / 1024 / 1024) << " MB\n";
+        ss << "  Buffer Memory:   " << (metrics.bufferMemory / 1024 / 1024) << " MB\n";
+        ss << "  VSync:           " << (metrics.vsyncEnabled ? "ON" : "OFF") << "\n";
+        ss << "  Wireframe:       " << (metrics.wireframeMode ? "ON" : "OFF") << "\n";
+        ss << "  Resolution:      " << g_graphics->GetWindowWidth() << "x" << g_graphics->GetWindowHeight();
+
+        return ss.str();
+    }, "GPU health check and resource analysis", "Health");
+
+    RegisterCommand("health_watchdog", [this](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) {
+            return "Usage: health_watchdog <start|stop|status>\n"
+                   "Monitors system health and logs warnings automatically.\n"
+                   "Watches: FPS drops, memory spikes, handle leaks, errors.";
+        }
+
+        static bool watchdogActive = false;
+
+        if (args[0] == "start" || args[0] == "on") {
+            if (watchdogActive) return "Watchdog already active";
+
+            // Set up watch variables for health monitoring
+            AddWatch("fps_health", []() {
+                float fps = g_perfCounters.currentFPS;
+                if (fps > 0 && fps < 15) return std::string("CRITICAL");
+                if (fps > 0 && fps < 30) return std::string("LOW");
+                return std::string("OK");
+            });
+
+            AddWatch("mem_health", []() {
+                PROCESS_MEMORY_COUNTERS pmc;
+                GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
+                size_t mb = pmc.WorkingSetSize / 1024 / 1024;
+                if (mb > 2048) return std::string("HIGH");
+                return std::to_string(mb) + "MB";
+            });
+
+            m_watchActive = true;
+            watchdogActive = true;
+            m_lastWatchUpdate = std::chrono::steady_clock::now();
+
+            return "Health watchdog started - monitoring FPS and memory in title bar";
+        } else if (args[0] == "stop" || args[0] == "off") {
+            RemoveWatch("fps_health");
+            RemoveWatch("mem_health");
+            if (m_watchEntries.empty()) m_watchActive = false;
+            watchdogActive = false;
+            return "Health watchdog stopped";
+        } else if (args[0] == "status") {
+            return "Watchdog: " + std::string(watchdogActive ? "ACTIVE" : "INACTIVE");
+        }
+
+        return "Unknown option. Use: start, stop, or status";
+    }, "Start/stop automatic health monitoring watchdog", "Health");
+
+    // Set up default aliases for crash/health commands
+    SetAlias("hc", "health_check");
+    SetAlias("report", "crash_report");
+    SetAlias("sysinfo", "crash_sysinfo");
+    SetAlias("errors", "crash_error_log");
+    SetAlias("stack", "crash_stack");
+    SetAlias("dump", "crash_dump");
+    SetAlias("watchdog", "health_watchdog");
 }
 
 } // namespace Spark

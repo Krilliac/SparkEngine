@@ -174,6 +174,8 @@ private:
     void RegisterLogCommands();            // Log filtering, search, and export
     void RegisterWatchCommands();          // Watch variable management
     void RegisterAliasCommands();          // Command alias management
+    void RegisterCrashCommands();          // Crash handling and diagnostics
+    void RegisterHealthCommands();         // System health checks and monitoring
 };
 
 } // namespace Spark
