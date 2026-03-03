@@ -13,6 +13,73 @@
 #pragma once
 
 // ============================================================================
+// Compiler Detection
+// Defines SPARK_COMPILER_* macros before any platform-specific includes.
+// ============================================================================
+
+// --- MSVC (Visual Studio) ---
+#if defined(_MSC_VER)
+#  define SPARK_COMPILER_MSVC 1
+#  define SPARK_COMPILER_VERSION _MSC_VER
+   // Visual Studio release year mapping (_MSC_VER ranges):
+   //   VS 2017 (v141) : 1910-1916
+   //   VS 2019 (v142) : 1920-1929
+   //   VS 2022 (v143) : 1930-1939
+   //   VS 2026 (v144) : 1940+
+#  if _MSC_VER >= 1950
+#    define SPARK_COMPILER_MSVC_2026_PLUS 1
+#  elif _MSC_VER >= 1940
+#    define SPARK_COMPILER_MSVC_2026 1
+#  elif _MSC_VER >= 1930
+#    define SPARK_COMPILER_MSVC_2022 1
+#  elif _MSC_VER >= 1920
+#    define SPARK_COMPILER_MSVC_2019 1
+#  elif _MSC_VER >= 1910
+#    define SPARK_COMPILER_MSVC_2017 1
+#  endif
+
+// --- Apple Clang (must be checked before generic Clang) ---
+#elif defined(__clang__) && defined(__apple_build_version__)
+#  define SPARK_COMPILER_APPLE_CLANG 1
+#  define SPARK_COMPILER_CLANG 1
+#  define SPARK_COMPILER_VERSION \
+       (__clang_major__ * 10000 + __clang_minor__ * 100 + __clang_patchlevel__)
+
+// --- Intel oneAPI DPC++/C++ (ICPX) - Clang-compatible ---
+#elif defined(__INTEL_LLVM_COMPILER)
+#  define SPARK_COMPILER_INTEL_LLVM 1
+#  define SPARK_COMPILER_CLANG 1   // ICPX is Clang-compatible
+#  define SPARK_COMPILER_VERSION __INTEL_LLVM_COMPILER
+
+// --- Intel Classic C++ Compiler (ICC) ---
+#elif defined(__INTEL_COMPILER)
+#  define SPARK_COMPILER_INTEL_CLASSIC 1
+#  define SPARK_COMPILER_VERSION __INTEL_COMPILER
+
+// --- Generic LLVM Clang ---
+#elif defined(__clang__)
+#  define SPARK_COMPILER_CLANG 1
+#  define SPARK_COMPILER_VERSION \
+       (__clang_major__ * 10000 + __clang_minor__ * 100 + __clang_patchlevel__)
+
+// --- GCC ---
+#elif defined(__GNUC__)
+#  define SPARK_COMPILER_GCC 1
+#  define SPARK_COMPILER_VERSION \
+       (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
+
+#else
+#  define SPARK_COMPILER_UNKNOWN 1
+#  define SPARK_COMPILER_VERSION 0
+#endif
+
+// Convenience: true if any Clang-family compiler (Clang, Apple Clang, Intel LLVM)
+#if defined(SPARK_COMPILER_CLANG) || defined(SPARK_COMPILER_APPLE_CLANG) || \
+    defined(SPARK_COMPILER_INTEL_LLVM)
+#  define SPARK_COMPILER_CLANG_FAMILY 1
+#endif
+
+// ============================================================================
 // Platform Detection
 // ============================================================================
 

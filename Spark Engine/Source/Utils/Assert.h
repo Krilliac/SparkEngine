@@ -6,9 +6,17 @@
 #include <ctime>
 #include <string>
 
-#ifdef _MSC_VER
+// DEBUG_BREAK: trigger a debugger breakpoint.
+//   - MSVC (all versions, including VS 2026): uses the intrinsic __debugbreak().
+//   - Modern Clang/GCC (incl. Apple Clang, Intel LLVM, GCC 12+): uses the
+//     portable __builtin_debugtrap() when available via __has_builtin.
+//   - Fallback: raise(SIGTRAP) on POSIX systems.
+#if defined(_MSC_VER)
 #  include <intrin.h>
 #  define DEBUG_BREAK() __debugbreak()
+#elif defined(__has_builtin) && __has_builtin(__builtin_debugtrap)
+   // Clang 3.8+, Apple Clang, Intel LLVM (ICPX), GCC 12+
+#  define DEBUG_BREAK() __builtin_debugtrap()
 #else
 #  include <signal.h>
 #  define DEBUG_BREAK() raise(SIGTRAP)

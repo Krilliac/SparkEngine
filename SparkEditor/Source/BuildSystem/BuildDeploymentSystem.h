@@ -285,6 +285,14 @@ struct BuildSystemConfig {
     std::string buildCacheDirectory = "Temp/BuildCache/"; ///< Build cache directory
     
     // Toolchain settings
+    // Supported compiler identifiers:
+    //   "msvc"        - MSVC (auto-detect installed VS version)
+    //   "vs2022"      - Visual Studio 2022 (v143, _MSC_VER 1930-1939)
+    //   "vs2026"      - Visual Studio 2026 (v144, _MSC_VER 1940+)
+    //   "gcc"         - GCC (Linux/macOS)
+    //   "clang"       - LLVM Clang
+    //   "apple-clang" - Apple Clang (macOS)
+    //   "icpx"        - Intel oneAPI DPC++/C++ Compiler (ICPX/IntelLLVM)
     std::string defaultCompiler = "msvc";       ///< Default compiler
     std::string buildToolPath;                  ///< Build tool path
     std::string sdkPath;                        ///< SDK path

@@ -8,9 +8,9 @@ on:
 
 jobs:
   # ===========================================================================
-  # Windows Build (MSVC + DirectX 11)
+  # Windows Build (MSVC VS 2022, v143 toolset + DirectX 11)
   # ===========================================================================
-  build-windows:
+  build-windows-vs2022:
     runs-on: windows-latest
     strategy:
       matrix:
@@ -25,8 +25,8 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
 
-    - name: Configure CMake
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTS=ON
+    - name: Configure CMake (VS 2022 / v143)
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
 
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel
@@ -39,19 +39,56 @@ jobs:
       if: matrix.config == 'Release'
       uses: actions/upload-artifact@v7
       with:
-        name: SparkEngine-Windows-${{ matrix.config }}
+        name: SparkEngine-Windows-VS2022-${{ matrix.config }}
         path: build/bin/${{ matrix.config }}/
         retention-days: 7
 
   # ===========================================================================
-  # Linux Build (GCC)
+  # Windows Build (MSVC VS 2026, v144 toolset + DirectX 11)
+  # Marked continue-on-error until VS 2026 runner images are broadly available.
   # ===========================================================================
-  build-linux:
+  build-windows-vs2026:
+    runs-on: windows-latest
+    continue-on-error: true   # Experimental: VS 2026 may not yet be on all runners
+    strategy:
+      matrix:
+        config: [Debug, Release]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Configure CMake (VS 2026 / v144)
+      run: cmake -B build -G "Visual Studio 19 2026" -A x64 -DSPARK_MSVC_TOOLSET=v144 -DBUILD_TESTS=ON
+
+    - name: Build
+      run: cmake --build build --config ${{ matrix.config }} --parallel
+
+    - name: Run Tests
+      if: matrix.config == 'Release'
+      run: ctest --test-dir build --config ${{ matrix.config }} --output-on-failure
+
+    - name: Upload Build Artifacts
+      if: matrix.config == 'Release'
+      uses: actions/upload-artifact@v7
+      with:
+        name: SparkEngine-Windows-VS2026-${{ matrix.config }}
+        path: build/bin/${{ matrix.config }}/
+        retention-days: 7
+
+  # ===========================================================================
+  # Linux Build - GCC
+  # ===========================================================================
+  build-linux-gcc:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
         config: [Debug, Release]
-        compiler: [gcc]
 
     steps:
     - name: Checkout repository
@@ -88,6 +125,54 @@ jobs:
       if: matrix.config == 'Release'
       uses: actions/upload-artifact@v7
       with:
-        name: SparkEngine-Linux-${{ matrix.config }}
+        name: SparkEngine-Linux-GCC-${{ matrix.config }}
+        path: build/bin/
+        retention-days: 7
+
+  # ===========================================================================
+  # Linux Build - Clang (LLVM)
+  # ===========================================================================
+  build-linux-clang:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        config: [Debug, Release]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang cmake libgl-dev libvulkan-dev
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DBUILD_TESTS=ON \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++
+
+    - name: Build Engine
+      run: cmake --build build --parallel $(nproc) --target SparkEngine
+
+    - name: Build Tests
+      run: cmake --build build --parallel $(nproc) --target SparkTests
+
+    - name: Run Tests
+      run: |
+        cd build
+        ctest --output-on-failure || true
+        ./bin/SparkTests
+
+    - name: Upload Build Artifacts
+      if: matrix.config == 'Release'
+      uses: actions/upload-artifact@v7
+      with:
+        name: SparkEngine-Linux-Clang-${{ matrix.config }}
         path: build/bin/
         retention-days: 7
