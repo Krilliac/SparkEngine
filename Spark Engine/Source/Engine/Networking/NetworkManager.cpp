@@ -415,8 +415,17 @@ void NetworkManager::HandleConnect(const NetworkMessage& msg) {
     info.state = ConnectionState::Connected;
     info.lastHeartbeatTime = m_serverTime;
 
-    NetBuffer buf;
-    buf.ReadBytes(nullptr, 0); // placeholder for parsing playerName
+    // Parse player name from connection request payload
+    if (!msg.payload.empty()) {
+        // Treat payload bytes as a length-prefixed string written by NetBuffer::WriteString
+        NetBuffer buf;
+        buf.WriteBytes(msg.payload.data(), msg.payload.size());
+        // Reset read position by re-creating — WriteBytes appends, ReadString reads from pos 0
+        info.name = buf.ReadString();
+    }
+    if (info.name.empty()) {
+        info.name = "Player_" + std::to_string(newID);
+    }
     m_clients[newID] = info;
 
     NetworkMessage accept;

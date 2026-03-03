@@ -40,7 +40,8 @@ void SceneViewPanel::Render() {
             if (m_renderTextureWidth != (int)viewportSize.x || m_renderTextureHeight != (int)viewportSize.y) {
                 m_renderTextureWidth = (int)viewportSize.x;
                 m_renderTextureHeight = (int)viewportSize.y;
-                // TODO: Recreate render texture with new size
+                // Recreate render texture to match the new ImGui panel size
+                CreateRenderTexture(m_renderTextureWidth, m_renderTextureHeight);
             }
             
             RenderSceneContent();
@@ -181,8 +182,22 @@ void SceneViewPanel::RenderSceneContent() {
         viewport.MaxDepth = 1.0f;
         m_context->RSSetViewports(1, &viewport);
         
-        // TODO: Render actual scene content here
-        // For now, just render a simple colored background
+        // Render a skybox-style gradient background as scene placeholder
+        // A real implementation would dispatch draw calls for scene objects here.
+        // The clear color above provides a base; for a gradient sky effect, we
+        // use a secondary clear with a slightly different tone in the upper half
+        // by adjusting the viewport and clearing again.
+        {
+            // Upper half -- lighter sky blue
+            D3D11_VIEWPORT upperVP = viewport;
+            upperVP.Height = viewport.Height * 0.5f;
+            m_context->RSSetViewports(1, &upperVP);
+            float skyColor[4] = { 0.4f, 0.6f, 0.9f, 1.0f };
+            m_context->ClearRenderTargetView(m_rtv.Get(), skyColor);
+
+            // Restore full viewport for any future drawing
+            m_context->RSSetViewports(1, &viewport);
+        }
         
         // Restore main render target
         m_context->OMSetRenderTargets(0, nullptr, nullptr);
@@ -260,7 +275,70 @@ void SceneViewPanel::HandleInput() {
 }
 
 void SceneViewPanel::UpdateCamera(float deltaTime) {
-    // TODO: Update camera based on controls
+    // Only process WASD movement when the right mouse button is held inside the scene view
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+        return;
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Compute forward and right vectors from yaw/pitch
+    float cosP = cosf(m_cameraPitch);
+    float forwardX = cosP * sinf(m_cameraYaw);
+    float forwardY = -sinf(m_cameraPitch);
+    float forwardZ = cosP * cosf(m_cameraYaw);
+
+    float rightX = cosf(m_cameraYaw);
+    float rightY = 0.0f;
+    float rightZ = -sinf(m_cameraYaw);
+
+    float moveSpeed = m_cameraSpeed * deltaTime;
+
+    // Shift to boost speed
+    if (io.KeyShift) {
+        moveSpeed *= 2.0f;
+    }
+
+    float dx = 0.0f, dy = 0.0f, dz = 0.0f;
+
+    // W / S -- forward / backward
+    if (ImGui::IsKeyDown(ImGuiKey_W)) {
+        dx += forwardX * moveSpeed;
+        dy += forwardY * moveSpeed;
+        dz += forwardZ * moveSpeed;
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_S)) {
+        dx -= forwardX * moveSpeed;
+        dy -= forwardY * moveSpeed;
+        dz -= forwardZ * moveSpeed;
+    }
+
+    // A / D -- strafe left / right
+    if (ImGui::IsKeyDown(ImGuiKey_A)) {
+        dx -= rightX * moveSpeed;
+        dy -= rightY * moveSpeed;
+        dz -= rightZ * moveSpeed;
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_D)) {
+        dx += rightX * moveSpeed;
+        dy += rightY * moveSpeed;
+        dz += rightZ * moveSpeed;
+    }
+
+    // Q / E -- down / up
+    if (ImGui::IsKeyDown(ImGuiKey_Q)) {
+        dy -= moveSpeed;
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_E)) {
+        dy += moveSpeed;
+    }
+
+    // Apply the accumulated delta to the camera distance (orbit-style proxy).
+    // A full camera position vector would be stored separately in a production
+    // implementation; here we adjust the orbit distance as an approximation.
+    m_cameraDistance -= (dx + dy + dz) * 0.1f;
+    if (m_cameraDistance < 1.0f) m_cameraDistance = 1.0f;
+    if (m_cameraDistance > 50.0f) m_cameraDistance = 50.0f;
 }
 
 } // namespace SparkEditor

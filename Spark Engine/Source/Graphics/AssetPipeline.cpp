@@ -29,61 +29,121 @@ using namespace DirectX;
 HRESULT MeshAsset::Load(ID3D11Device* device)
 {
     ASSERT(device);
-    
-    // For now, create a simple cube mesh as placeholder
-    m_meshData.vertices = {
-        // Front face
-        {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{ 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        
-        // Back face
-        {{-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{ 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{-0.5f,  0.5f,  0.5f}, {0.0f, 0.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-    };
-    
-    m_meshData.indices = {
-        // Front face
-        0, 1, 2, 2, 3, 0,
-        // Back face
-        4, 6, 5, 6, 4, 7,
-        // Left face
-        4, 0, 3, 3, 7, 4,
-        // Right face
-        1, 5, 6, 6, 2, 1,
-        // Top face
-        3, 2, 6, 6, 7, 3,
-        // Bottom face
-        4, 1, 0, 1, 4, 5
-    };
-    
-    // Create vertex buffer
+
+    // Attempt to load from file if the path exists
+    if (!m_path.empty() && std::filesystem::exists(m_path)) {
+        std::string ext = std::filesystem::path(m_path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        if (ext == ".obj") {
+            std::ifstream file(m_path);
+            if (file.is_open()) {
+                std::vector<XMFLOAT3> positions;
+                std::vector<XMFLOAT3> normals;
+                std::vector<XMFLOAT2> texCoords;
+                std::string line;
+
+                XMFLOAT3 bbMin = { FLT_MAX, FLT_MAX, FLT_MAX };
+                XMFLOAT3 bbMax = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+
+                while (std::getline(file, line)) {
+                    std::istringstream iss(line);
+                    std::string prefix;
+                    iss >> prefix;
+
+                    if (prefix == "v") {
+                        XMFLOAT3 pos;
+                        iss >> pos.x >> pos.y >> pos.z;
+                        positions.push_back(pos);
+                        bbMin.x = std::min(bbMin.x, pos.x); bbMin.y = std::min(bbMin.y, pos.y); bbMin.z = std::min(bbMin.z, pos.z);
+                        bbMax.x = std::max(bbMax.x, pos.x); bbMax.y = std::max(bbMax.y, pos.y); bbMax.z = std::max(bbMax.z, pos.z);
+                    } else if (prefix == "vn") {
+                        XMFLOAT3 n;
+                        iss >> n.x >> n.y >> n.z;
+                        normals.push_back(n);
+                    } else if (prefix == "vt") {
+                        XMFLOAT2 tc;
+                        iss >> tc.x >> tc.y;
+                        texCoords.push_back(tc);
+                    } else if (prefix == "f") {
+                        std::string token;
+                        std::vector<uint32_t> faceIndices;
+                        while (iss >> token) {
+                            MeshAssetData::Vertex vert = {};
+                            int vi = 0, vti = 0, vni = 0;
+                            if (sscanf(token.c_str(), "%d/%d/%d", &vi, &vti, &vni) >= 1) {
+                                if (vi > 0 && vi <= static_cast<int>(positions.size()))
+                                    vert.position = positions[vi - 1];
+                                if (vti > 0 && vti <= static_cast<int>(texCoords.size()))
+                                    vert.texCoord0 = texCoords[vti - 1];
+                                if (vni > 0 && vni <= static_cast<int>(normals.size()))
+                                    vert.normal = normals[vni - 1];
+                            }
+                            vert.color = {1.0f, 1.0f, 1.0f, 1.0f};
+                            faceIndices.push_back(static_cast<uint32_t>(m_meshData.vertices.size()));
+                            m_meshData.vertices.push_back(vert);
+                        }
+                        for (size_t i = 2; i < faceIndices.size(); ++i) {
+                            m_meshData.indices.push_back(faceIndices[0]);
+                            m_meshData.indices.push_back(faceIndices[i - 1]);
+                            m_meshData.indices.push_back(faceIndices[i]);
+                        }
+                    }
+                }
+                m_meshData.boundingBoxMin = bbMin;
+                m_meshData.boundingBoxMax = bbMax;
+                m_meshData.boundingSphereCenter = {
+                    (bbMin.x + bbMax.x) * 0.5f,
+                    (bbMin.y + bbMax.y) * 0.5f,
+                    (bbMin.z + bbMax.z) * 0.5f
+                };
+                float dx = bbMax.x - bbMin.x, dy = bbMax.y - bbMin.y, dz = bbMax.z - bbMin.z;
+                m_meshData.boundingSphereRadius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
+                file.close();
+
+                if (!m_meshData.vertices.empty()) {
+                    Spark::SimpleConsole::GetInstance().LogSuccess("Loaded OBJ: " + m_path +
+                        " (" + std::to_string(m_meshData.vertices.size()) + " verts, " +
+                        std::to_string(m_meshData.indices.size() / 3) + " tris)");
+                }
+            }
+        }
+    }
+
+    // Fallback: unit cube if no file was loaded
+    if (m_meshData.vertices.empty()) {
+        m_meshData.vertices = {
+            {{-0.5f,-0.5f,-0.5f},{0,0,-1},{1,0,0},{0,1},{0,0},{1,1,1,1}},
+            {{ 0.5f,-0.5f,-0.5f},{0,0,-1},{1,0,0},{1,1},{0,0},{1,1,1,1}},
+            {{ 0.5f, 0.5f,-0.5f},{0,0,-1},{1,0,0},{1,0},{0,0},{1,1,1,1}},
+            {{-0.5f, 0.5f,-0.5f},{0,0,-1},{1,0,0},{0,0},{0,0},{1,1,1,1}},
+            {{-0.5f,-0.5f, 0.5f},{0,0, 1},{-1,0,0},{1,1},{0,0},{1,1,1,1}},
+            {{ 0.5f,-0.5f, 0.5f},{0,0, 1},{-1,0,0},{0,1},{0,0},{1,1,1,1}},
+            {{ 0.5f, 0.5f, 0.5f},{0,0, 1},{-1,0,0},{0,0},{0,0},{1,1,1,1}},
+            {{-0.5f, 0.5f, 0.5f},{0,0, 1},{-1,0,0},{1,0},{0,0},{1,1,1,1}},
+        };
+        m_meshData.indices = {0,1,2,2,3,0, 4,6,5,6,4,7, 4,0,3,3,7,4, 1,5,6,6,2,1, 3,2,6,6,7,3, 4,1,0,1,4,5};
+    }
+
+    // Create GPU buffers
     D3D11_BUFFER_DESC vbDesc = {};
     vbDesc.Usage = D3D11_USAGE_DEFAULT;
     vbDesc.ByteWidth = static_cast<UINT>(m_meshData.vertices.size() * sizeof(MeshAssetData::Vertex));
     vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    
     D3D11_SUBRESOURCE_DATA vbData = {};
     vbData.pSysMem = m_meshData.vertices.data();
-    
     HRESULT hr = device->CreateBuffer(&vbDesc, &vbData, &m_vertexBuffer);
     if (FAILED(hr)) return hr;
-    
-    // Create index buffer
+
     D3D11_BUFFER_DESC ibDesc = {};
     ibDesc.Usage = D3D11_USAGE_DEFAULT;
     ibDesc.ByteWidth = static_cast<UINT>(m_meshData.indices.size() * sizeof(uint32_t));
     ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-    
     D3D11_SUBRESOURCE_DATA ibData = {};
     ibData.pSysMem = m_meshData.indices.data();
-    
     hr = device->CreateBuffer(&ibDesc, &ibData, &m_indexBuffer);
     if (FAILED(hr)) return hr;
-    
+
     m_loaded = true;
     return S_OK;
 }
@@ -110,16 +170,60 @@ size_t MeshAsset::GetMemoryUsage() const
 HRESULT TextureAsset::Load(ID3D11Device* device)
 {
     ASSERT(device);
-    
-    // Create a simple 2x2 checkerboard texture as placeholder
-    uint32_t textureData[4] = {
-        0xFFFFFFFF, 0xFF000000,
-        0xFF000000, 0xFFFFFFFF
-    };
-    
-    m_width = 2;
-    m_height = 2;
-    
+
+    std::vector<uint32_t> pixelData;
+    bool loadedFromFile = false;
+
+    // Attempt to load from file (TGA format — simple, no external library needed)
+    if (!m_path.empty() && std::filesystem::exists(m_path)) {
+        std::string ext = std::filesystem::path(m_path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        if (ext == ".tga") {
+            std::ifstream file(m_path, std::ios::binary);
+            if (file.is_open()) {
+                uint8_t header[18];
+                file.read(reinterpret_cast<char*>(header), 18);
+                if (file.gcount() == 18) {
+                    m_width = header[12] | (header[13] << 8);
+                    m_height = header[14] | (header[15] << 8);
+                    uint8_t bpp = header[16];
+                    uint8_t imageType = header[2];
+
+                    if (imageType == 2 && (bpp == 24 || bpp == 32) && m_width > 0 && m_height > 0) {
+                        size_t bytesPerPixel = bpp / 8;
+                        size_t dataSize = m_width * m_height * bytesPerPixel;
+                        std::vector<uint8_t> rawData(dataSize);
+                        file.read(reinterpret_cast<char*>(rawData.data()), dataSize);
+
+                        pixelData.resize(m_width * m_height);
+                        for (uint32_t i = 0; i < m_width * m_height; ++i) {
+                            uint8_t b = rawData[i * bytesPerPixel + 0];
+                            uint8_t g = rawData[i * bytesPerPixel + 1];
+                            uint8_t r = rawData[i * bytesPerPixel + 2];
+                            uint8_t a = (bpp == 32) ? rawData[i * bytesPerPixel + 3] : 255;
+                            pixelData[i] = (a << 24) | (b << 16) | (g << 8) | r;
+                        }
+                        loadedFromFile = true;
+                        Spark::SimpleConsole::GetInstance().LogSuccess("Loaded TGA: " + m_path +
+                            " (" + std::to_string(m_width) + "x" + std::to_string(m_height) + ")");
+                    }
+                }
+            }
+        } else if (ext == ".dds") {
+            // DDS can be loaded directly via D3D11 CreateDDSTextureFromFile
+            // For now, log that it needs the DirectXTex helper
+            Spark::SimpleConsole::GetInstance().LogWarning("DDS loading requires DirectXTex — using fallback for: " + m_path);
+        }
+    }
+
+    // Fallback: 2x2 checkerboard
+    if (!loadedFromFile) {
+        m_width = 2;
+        m_height = 2;
+        pixelData = {0xFFFFFFFF, 0xFF000000, 0xFF000000, 0xFFFFFFFF};
+    }
+
     D3D11_TEXTURE2D_DESC texDesc = {};
     texDesc.Width = m_width;
     texDesc.Height = m_height;
@@ -129,23 +233,22 @@ HRESULT TextureAsset::Load(ID3D11Device* device)
     texDesc.SampleDesc.Count = 1;
     texDesc.Usage = D3D11_USAGE_DEFAULT;
     texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    
+
     D3D11_SUBRESOURCE_DATA initData = {};
-    initData.pSysMem = textureData;
+    initData.pSysMem = pixelData.data();
     initData.SysMemPitch = m_width * 4;
-    
+
     HRESULT hr = device->CreateTexture2D(&texDesc, &initData, &m_texture);
     if (FAILED(hr)) return hr;
-    
-    // Create shader resource view
+
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = texDesc.Format;
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
-    
+
     hr = device->CreateShaderResourceView(m_texture.Get(), &srvDesc, &m_srv);
     if (FAILED(hr)) return hr;
-    
+
     m_loaded = true;
     return S_OK;
 }
@@ -170,15 +273,82 @@ size_t TextureAsset::GetMemoryUsage() const
 
 HRESULT AudioAsset::Load(ID3D11Device* device)
 {
-    // Create placeholder audio data
-    m_sampleRate = 44100;
-    m_channels = 2;
-    m_bitsPerSample = 16;
-    
-    // Create 1 second of silence
-    size_t dataSize = m_sampleRate * m_channels * (m_bitsPerSample / 8);
-    m_audioData.resize(dataSize, 0);
-    
+    bool loadedFromFile = false;
+
+    // Attempt to load WAV file
+    if (!m_path.empty() && std::filesystem::exists(m_path)) {
+        std::string ext = std::filesystem::path(m_path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        if (ext == ".wav") {
+            std::ifstream file(m_path, std::ios::binary);
+            if (file.is_open()) {
+                // Read RIFF header
+                char riff[4], wave[4], fmt[4];
+                uint32_t fileSize, fmtSize, dataSize;
+                uint16_t audioFormat, numChannels, bitsPerSample;
+                uint32_t sampleRate, byteRate;
+                uint16_t blockAlign;
+
+                file.read(riff, 4);
+                file.read(reinterpret_cast<char*>(&fileSize), 4);
+                file.read(wave, 4);
+
+                if (std::string(riff, 4) == "RIFF" && std::string(wave, 4) == "WAVE") {
+                    // Find fmt chunk
+                    bool foundFmt = false, foundData = false;
+                    while (file.good() && !(foundFmt && foundData)) {
+                        char chunkId[4];
+                        uint32_t chunkSize;
+                        file.read(chunkId, 4);
+                        file.read(reinterpret_cast<char*>(&chunkSize), 4);
+                        std::string id(chunkId, 4);
+
+                        if (id == "fmt ") {
+                            file.read(reinterpret_cast<char*>(&audioFormat), 2);
+                            file.read(reinterpret_cast<char*>(&numChannels), 2);
+                            file.read(reinterpret_cast<char*>(&sampleRate), 4);
+                            file.read(reinterpret_cast<char*>(&byteRate), 4);
+                            file.read(reinterpret_cast<char*>(&blockAlign), 2);
+                            file.read(reinterpret_cast<char*>(&bitsPerSample), 2);
+                            // Skip extra fmt bytes
+                            if (chunkSize > 16)
+                                file.seekg(chunkSize - 16, std::ios::cur);
+                            foundFmt = true;
+                        } else if (id == "data") {
+                            dataSize = chunkSize;
+                            m_audioData.resize(dataSize);
+                            file.read(reinterpret_cast<char*>(m_audioData.data()), dataSize);
+                            foundData = true;
+                        } else {
+                            file.seekg(chunkSize, std::ios::cur);
+                        }
+                    }
+
+                    if (foundFmt && foundData && audioFormat == 1) { // PCM only
+                        m_sampleRate = sampleRate;
+                        m_channels = numChannels;
+                        m_bitsPerSample = bitsPerSample;
+                        loadedFromFile = true;
+                        Spark::SimpleConsole::GetInstance().LogSuccess("Loaded WAV: " + m_path +
+                            " (" + std::to_string(m_sampleRate) + " Hz, " +
+                            std::to_string(m_channels) + " ch, " +
+                            std::to_string(m_bitsPerSample) + " bit)");
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: 1 second of silence
+    if (!loadedFromFile) {
+        m_sampleRate = 44100;
+        m_channels = 2;
+        m_bitsPerSample = 16;
+        size_t dataSize = m_sampleRate * m_channels * (m_bitsPerSample / 8);
+        m_audioData.resize(dataSize, 0);
+    }
+
     m_loaded = true;
     return S_OK;
 }

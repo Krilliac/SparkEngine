@@ -1,6 +1,6 @@
 /**
- * @file SparkFutureIntegration_stub.h
- * @brief Stub implementation of Future Integration system to fix build issues
+ * @file SparkFutureIntegration.h
+ * @brief Future Integration system (stub — not yet implemented)
  * @author Spark Engine Team
  * @date 2025
  */

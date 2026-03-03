@@ -658,6 +658,13 @@ bool PlatformInputManager::WasGamepadButtonPressed(GamepadBtn button, int index)
     return state->buttons[static_cast<size_t>(button)] && !state->prevButtons[static_cast<size_t>(button)];
 }
 
+bool PlatformInputManager::WasGamepadButtonReleased(GamepadBtn button, int index) const {
+    if (!m_backend) return false;
+    auto* state = m_backend->GetGamepadState(index);
+    if (!state || !state->connected) return false;
+    return !state->buttons[static_cast<size_t>(button)] && state->prevButtons[static_cast<size_t>(button)];
+}
+
 void PlatformInputManager::SetVibration(int index, float leftMotor, float rightMotor, float duration) {
     if (m_backend) m_backend->SetVibration(index, leftMotor, rightMotor, duration);
 }
@@ -715,7 +722,7 @@ bool PlatformInputManager::IsActionActive(const std::string& name) const {
         } else {
             switch (binding.trigger) {
                 case ActionTrigger::Pressed: if (WasGamepadButtonPressed(binding.gamepadButton)) return true; break;
-                case ActionTrigger::Released: break; // TODO
+                case ActionTrigger::Released: if (WasGamepadButtonReleased(binding.gamepadButton)) return true; break;
                 case ActionTrigger::Held: if (IsGamepadButtonDown(binding.gamepadButton)) return true; break;
             }
         }

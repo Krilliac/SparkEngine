@@ -63,7 +63,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // 1. Crash handler
     CrashConfig crashCfg{};
     crashCfg.dumpPrefix = L"SparkCrash";
-    crashCfg.uploadURL = "https://crash.placeholder.com/upload";
+    crashCfg.uploadURL = "";  // Crash upload disabled — set a real endpoint before release
     crashCfg.captureScreenshot = true;
     crashCfg.captureSystemInfo = true;
     crashCfg.captureAllThreads = true;

@@ -1736,15 +1736,9 @@ void MaterialSystem::UpdateMetrics()
     // These would be incremented during actual material binding operations
     // m_metrics.materialSwitches and m_metrics.textureBinds are reset in BeginFrame()
     
-    // Load time tracking (simplified - in production you'd track actual times)
-    if (m_materials.size() > 0) {
-        m_metrics.averageLoadTime = 0.5f; // Placeholder - would calculate actual average
-    } else {
-        m_metrics.averageLoadTime = 0.0f;
-    }
-    
-    // Failed loads would be tracked during actual load operations
-    // m_metrics.failedLoads would be incremented when loads fail
+    // Load time tracking — actual per-material timing would require
+    // instrumenting CreateMaterial(). For now, report 0 until that's added.
+    m_metrics.averageLoadTime = 0.0f;
 }
 
 void MaterialSystem::PerformPeriodicMaintenance()

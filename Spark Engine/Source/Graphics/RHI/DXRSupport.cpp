@@ -25,9 +25,11 @@ bool DXRManager::Initialize(void* d3d12Device) {
     // 2. Create DXR state objects (root signatures, shader tables)
     // 3. Compile ray tracing shaders (ray generation, closest hit, miss)
 
-    m_isAvailable = true;  // Placeholder — real check against D3D12_RAYTRACING_TIER
-    m_isInitialized = true;
-    return true;
+    // DXR requires a D3D12 backend which is not yet implemented.
+    // When D3D12 is available, check D3D12_FEATURE_DATA_D3D12_OPTIONS5::RaytracingTier.
+    m_isAvailable = false;
+    m_isInitialized = false;
+    return false;
 }
 
 void DXRManager::Shutdown() {

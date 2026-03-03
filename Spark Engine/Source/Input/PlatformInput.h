@@ -319,6 +319,7 @@ public:
     float GetGamepadAxis(GamepadAxis axis, int index = 0) const;
     bool IsGamepadButtonDown(GamepadBtn button, int index = 0) const;
     bool WasGamepadButtonPressed(GamepadBtn button, int index = 0) const;
+    bool WasGamepadButtonReleased(GamepadBtn button, int index = 0) const;
     void SetVibration(int index, float leftMotor, float rightMotor, float duration = 0.0f);
 
     // ===== Action Mapping =====
