@@ -79,10 +79,10 @@ class Console
 public:
     /**
      * @brief Initialize the console system
-     * 
+     *
      * Sets up the console with the specified screen dimensions for proper
      * positioning and sizing of the console interface.
-     * 
+     *
      * @param screenW Screen width in pixels
      * @param screenH Screen height in pixels
      */
@@ -90,7 +90,7 @@ public:
 
     /**
      * @brief Toggle console visibility
-     * 
+     *
      * Shows or hides the console interface and manages the mouse cursor
      * visibility accordingly.
      */
@@ -104,10 +104,10 @@ public:
 
     /**
      * @brief Handle character input for console text entry
-     * 
+     *
      * Processes WM_CHAR messages to build the current input line.
      * Handles printable characters and adds them to the input buffer.
-     * 
+     *
      * @param c Wide character from WM_CHAR message
      * @return true if character was handled, false otherwise
      */
@@ -115,10 +115,10 @@ public:
 
     /**
      * @brief Handle key down events for console control
-     * 
+     *
      * Processes WM_KEYDOWN messages for special keys like Enter, Backspace,
-     * and other control keys that affect console operation.
-     * 
+     * arrow keys for history, and other control keys.
+     *
      * @param key Virtual key code from WM_KEYDOWN message
      * @return true if key was handled, false otherwise
      */
@@ -126,23 +126,37 @@ public:
 
     /**
      * @brief Add a log message to the console buffer
-     * 
+     *
      * Appends a new message to the console's scrolling text buffer.
      * The message will be visible when the console is open.
-     * 
+     *
      * @param msg Log message to add to the console
      */
     void Log(const std::wstring& msg);
 
     /**
+     * @brief Register a command with the in-game console
+     *
+     * @param name Command name
+     * @param callback Function to call when command is executed
+     */
+    void RegisterCommand(const std::wstring& name,
+                         std::function<void(const std::vector<std::wstring>&)> callback);
+
+    /**
      * @brief Render the console interface
-     * 
+     *
      * Draws the console background, text buffer, and input line to the screen.
      * Only renders if the console is currently visible.
-     * 
+     *
      * @param ctx DirectX device context for rendering operations
      */
     void Render(ID3D11DeviceContext* ctx);
+
+    /**
+     * @brief Get number of registered commands
+     */
+    int GetCommandCount() const { return static_cast<int>(commands.size()); }
 
 private:
     bool                      visible{ false }; ///< Whether console is currently visible
@@ -152,12 +166,19 @@ private:
     std::wstring              inputLine;    ///< Current user input line
     std::vector<ConsoleCommand> commands;   ///< Registered console commands
 
+    // Command history for arrow key navigation
+    std::vector<std::wstring> commandHistory; ///< History of executed commands
+    int historyIndex{ 0 };                    ///< Current position in history
+
+    // Scroll offset for viewing older messages
+    int scrollOffset{ 0 };                    ///< Scroll position in buffer
+
     /**
      * @brief Parse and execute a command line
-     * 
+     *
      * Takes a complete command line, parses it into command name and arguments,
      * and executes the corresponding registered command if found.
-     * 
+     *
      * @param line Complete command line string to execute
      */
     void ExecuteCommand(const std::wstring& line);
