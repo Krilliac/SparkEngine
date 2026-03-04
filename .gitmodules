@@ -43,3 +43,6 @@
 [submodule "ThirdParty/Scripting/angelscript-mirror"]
 	path = ThirdParty/Scripting/angelscript-mirror
 	url = https://github.com/codecat/angelscript-mirror.git
+[submodule "SparkBuild"]
+	path = SparkBuild
+	url = https://github.com/Krilliac/SparkBuild.git
