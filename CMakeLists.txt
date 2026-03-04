@@ -431,12 +431,6 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkShaderCompiler/CMakeLists.txt")
     add_subdirectory(SparkShaderCompiler)
 endif()
 
-# Build SparkBuild GUI tool (Windows only)
-if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/SparkBuild/CMakeLists.txt")
-    message(STATUS "Building SparkBuild GUI tool...")
-    add_subdirectory(SparkBuild)
-endif()
-
 # ---------------------------------------------------------------------
 # 9) SparkEngine source files and executable
 # ---------------------------------------------------------------------
@@ -865,11 +859,6 @@ else()
 endif()
 message(STATUS "Editor: ${ENABLE_EDITOR}")
 message(STATUS "Shader Compiler Tool: ENABLED")
-if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/SparkBuild/CMakeLists.txt")
-    message(STATUS "SparkBuild GUI: ENABLED")
-else()
-    message(STATUS "SparkBuild GUI: DISABLED (Windows only)")
-endif()
 message(STATUS "Tests: ${BUILD_TESTS}")
 message(STATUS "Networking: ${ENABLE_NETWORKING}")
 message(STATUS "Systems:")
