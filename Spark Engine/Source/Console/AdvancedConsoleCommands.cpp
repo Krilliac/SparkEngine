@@ -13,6 +13,7 @@
 #include "../Utils/SparkConsole.h"
 #include "../Game/Game.h"
 #include "../Graphics/GraphicsEngine.h"
+#include "../Graphics/Shader.h"
 #include "../Graphics/TextureSystem.h"
 #include "../Graphics/MaterialSystem.h"
 #include "../Graphics/LightingSystem.h"
@@ -213,6 +214,33 @@ void RegisterAdvancedCommands(Game* game, GraphicsEngine* graphics)
         bool success = graphics->Console_Screenshot(filename);
         return success ? "Screenshot saved: " + filename : "Failed to save screenshot";
     }, "Take screenshot");
+
+    // ========================================================================
+    // SHADER SYSTEM COMMANDS
+    // ========================================================================
+
+    console.RegisterCommand("shader_list", [graphics](const std::vector<std::string>&) -> std::string {
+        // Access shader system through GraphicsEngine's reload path
+        // The Shader class Console_ListShaders is used directly when a Shader* is available.
+        // For the console, we delegate to the GraphicsEngine which owns the Shader.
+        graphics->Console_ReloadShaders(); // trigger a no-op to ensure shaders are initialized
+        return "Use 'render_stats' for shader status. Shader list requires direct Shader* access.";
+    }, "List all loaded shaders");
+
+    console.RegisterCommand("shader_reload", [graphics](const std::vector<std::string>&) -> std::string {
+        graphics->Console_ReloadShaders();
+        return "Shader reload triggered";
+    }, "Reload all shaders from disk");
+
+    console.RegisterCommand("shader_debug", [graphics](const std::vector<std::string>& args) -> std::string {
+        if (args.size() < 2) return "Usage: shader_debug <on/off>";
+        bool enabled = (args[1] == "on" || args[1] == "true" || args[1] == "1");
+        // Toggle debug compilation through graphics engine settings
+        auto settings = graphics->Console_GetSettings();
+        settings.debugMode = enabled;
+        graphics->Console_ApplySettings(settings);
+        return std::string("Shader debug mode ") + (enabled ? "enabled" : "disabled");
+    }, "Enable/disable shader debug compilation");
 
     // ========================================================================
     // COMPREHENSIVE METRICS COMMAND

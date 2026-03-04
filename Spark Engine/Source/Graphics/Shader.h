@@ -482,6 +482,24 @@ public:
     void Console_SetSearchPaths(const std::vector<std::string>& paths);
 
     // ========================================================================
+    // RHI CROSS-PLATFORM COMPILATION
+    // ========================================================================
+
+    /**
+     * @brief Compile a shader through the RHI abstraction layer
+     *
+     * Uses RHIFactory::CompileShader() for cross-platform compilation,
+     * enabling HLSL->SPIR-V and HLSL->GLSL cross-compilation paths.
+     *
+     * @param sourceFile Path to the shader source file
+     * @param type Shader type (vertex, pixel, etc.)
+     * @param targetBackend Target graphics backend (Auto for current platform)
+     * @return true on success
+     */
+    bool CompileWithRHI(const std::string& sourceFile, ShaderType type,
+                        int targetBackend = 0);
+
+    // ========================================================================
     // LEGACY COMPATIBILITY (for existing code)
     // ========================================================================
 

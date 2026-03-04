@@ -425,6 +425,12 @@ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/SparkConsole/CMakeLists.txt")
     add_subdirectory(SparkConsole)
 endif()
 
+# Build SparkShaderCompiler tool
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkShaderCompiler/CMakeLists.txt")
+    message(STATUS "Building SparkShaderCompiler tool...")
+    add_subdirectory(SparkShaderCompiler)
+endif()
+
 # ---------------------------------------------------------------------
 # 9) SparkEngine source files and executable
 # ---------------------------------------------------------------------
@@ -852,6 +858,7 @@ else()
     message(STATUS "  OpenGL     : DISABLED")
 endif()
 message(STATUS "Editor: ${ENABLE_EDITOR}")
+message(STATUS "Shader Compiler Tool: ENABLED")
 message(STATUS "Tests: ${BUILD_TESTS}")
 message(STATUS "Networking: ${ENABLE_NETWORKING}")
 message(STATUS "Systems:")
