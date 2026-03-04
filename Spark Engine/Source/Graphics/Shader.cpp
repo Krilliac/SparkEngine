@@ -8,6 +8,8 @@
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
+#include "RHI/RHIFactory.h"
+#include "RHI/RHITypes.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -654,4 +656,549 @@ HRESULT Shader::CreateInputLayout(ID3DBlob* vertexShaderBlob, ID3D11InputLayout*
 
     return hr;
 }
+
+// ============================================================================
+// SHADER LOADING FROM SOURCE AND FILE
+// ============================================================================
+
+HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type, const ShaderCompilationFlags& flags)
+{
+    ASSERT_MSG(!source.empty(), "LoadShaderFromSource: source is empty");
+    ASSERT_MSG(m_device != nullptr, "LoadShaderFromSource: device is null");
+
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    // Determine shader target
+    std::string target = flags.target;
+    if (target.empty()) {
+        switch (type) {
+            case ShaderType::VERTEX_SHADER:   target = "vs_5_0"; break;
+            case ShaderType::PIXEL_SHADER:    target = "ps_5_0"; break;
+            case ShaderType::GEOMETRY_SHADER: target = "gs_5_0"; break;
+            case ShaderType::HULL_SHADER:     target = "hs_5_0"; break;
+            case ShaderType::DOMAIN_SHADER:   target = "ds_5_0"; break;
+            case ShaderType::COMPUTE_SHADER:  target = "cs_5_0"; break;
+            default:                          target = "vs_5_0"; break;
+        }
+    }
+
+    UINT compileFlags = D3DCOMPILE_ENABLE_STRICTNESS;
+    if (flags.enableDebug) {
+        compileFlags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+    }
+    if (flags.enableOptimization) {
+        compileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+    }
+    if (flags.treatWarningsAsErrors) {
+        compileFlags |= D3DCOMPILE_WARNINGS_ARE_ERRORS;
+    }
+
+    ComPtr<ID3DBlob> shaderBlob;
+    ComPtr<ID3DBlob> errorBlob;
+    HRESULT hr = D3DCompile(
+        source.c_str(),
+        source.size(),
+        nullptr,
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        flags.entryPoint.c_str(),
+        target.c_str(),
+        compileFlags,
+        0,
+        &shaderBlob,
+        &errorBlob
+    );
+
+    if (FAILED(hr)) {
+        if (errorBlob) {
+            std::string errorString(reinterpret_cast<const char*>(errorBlob->GetBufferPointer()));
+            std::wstring wErrorString(errorString.begin(), errorString.end());
+            LOG_TO_CONSOLE_IMMEDIATE(L"Shader source compilation error: " + wErrorString, L"ERROR");
+        }
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return hr;
+    }
+
+    // Create the appropriate shader object
+    switch (type) {
+        case ShaderType::VERTEX_SHADER: {
+            m_vertexShader = std::make_unique<VertexShaderResource>();
+            hr = m_device->CreateVertexShader(
+                shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(),
+                nullptr, m_vertexShader->m_vertexShader.GetAddressOf());
+            if (SUCCEEDED(hr)) {
+                m_vertexShader->m_shaderBlob = shaderBlob;
+                hr = CreateInputLayout(shaderBlob.Get(), m_vertexShader->m_inputLayout.GetAddressOf());
+            }
+            break;
+        }
+        case ShaderType::PIXEL_SHADER: {
+            m_pixelShader = std::make_unique<PixelShaderResource>();
+            hr = m_device->CreatePixelShader(
+                shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(),
+                nullptr, m_pixelShader->m_pixelShader.GetAddressOf());
+            break;
+        }
+        default:
+            LOG_TO_CONSOLE_IMMEDIATE(L"Unsupported shader type for source compilation", L"WARNING");
+            return E_NOTIMPL;
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    float compileTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.compiledShaders++;
+        m_metrics.lastCompileTime = compileTimeMs;
+        m_metrics.totalCompileTime += compileTimeMs;
+    }
+
+    if (SUCCEEDED(hr)) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Shader compiled from source successfully", L"SUCCESS");
+        m_isCompiled = true;
+    }
+
+    return hr;
+}
+
+HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const ShaderCompilationFlags& flags)
+{
+    ASSERT_MSG(!filePath.empty(), "LoadFromFile: filePath is empty");
+
+    // Read the file contents
+    std::ifstream file(filePath);
+    if (!file.is_open()) {
+        // Try search paths
+        for (const auto& searchPath : m_searchPaths) {
+            std::string fullPath = searchPath + filePath;
+            file.open(fullPath);
+            if (file.is_open()) {
+                m_filePath = fullPath;
+                break;
+            }
+        }
+        if (!file.is_open()) {
+            std::wstring wPath(filePath.begin(), filePath.end());
+            LOG_TO_CONSOLE_IMMEDIATE(L"Shader file not found: " + wPath, L"ERROR");
+            return E_FAIL;
+        }
+    } else {
+        m_filePath = filePath;
+    }
+
+    std::string source((std::istreambuf_iterator<char>(file)),
+                        std::istreambuf_iterator<char>());
+    file.close();
+
+    m_type = type;
+
+    // Get file modification time for hot reload
+    std::wstring wFilePath(m_filePath.begin(), m_filePath.end());
+    HANDLE hFile = CreateFileW(wFilePath.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                                nullptr, OPEN_EXISTING, 0, nullptr);
+    if (hFile != INVALID_HANDLE_VALUE) {
+        GetFileTime(hFile, nullptr, nullptr, &m_lastModified);
+        CloseHandle(hFile);
+    }
+
+    // Add to watched files for hot reload
+    m_watchedFiles.push_back(wFilePath);
+
+    return LoadShaderFromSource(source, type, flags);
+}
+
+// ============================================================================
+// SHADER VARIANT MANAGEMENT
+// ============================================================================
+
+int Shader::CreateShaderVariant(const std::string& baseName, const std::vector<std::string>& defines)
+{
+    ShaderVariant variant;
+    variant.id = static_cast<int>(m_variants.size());
+    variant.name = baseName;
+    for (size_t i = 0; i < defines.size(); ++i) {
+        variant.name += "_" + defines[i];
+    }
+    variant.baseName = baseName;
+    variant.defines = defines;
+    variant.isCompiled = false;
+
+    m_variants.push_back(variant);
+
+    std::wstring msg = L"Created shader variant: ";
+    std::string varName = variant.name;
+    msg += std::wstring(varName.begin(), varName.end());
+    LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.activeVariants = static_cast<int>(m_variants.size());
+    }
+
+    return variant.id;
+}
+
+void Shader::SetActiveVariant(int variantId)
+{
+    if (variantId >= 0 && variantId < static_cast<int>(m_variants.size())) {
+        m_activeVariant = variantId;
+        LOG_TO_CONSOLE_IMMEDIATE(L"Active shader variant changed", L"DEBUG");
+    } else {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Invalid shader variant ID", L"WARNING");
+    }
+}
+
+// ============================================================================
+// HOT RELOAD
+// ============================================================================
+
+int Shader::HotReloadShaders()
+{
+    if (!m_hotReloadEnabled) {
+        return 0;
+    }
+
+    int reloadCount = 0;
+
+    for (const auto& watchedFile : m_watchedFiles) {
+        HANDLE hFile = CreateFileW(watchedFile.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                                    nullptr, OPEN_EXISTING, 0, nullptr);
+        if (hFile == INVALID_HANDLE_VALUE) continue;
+
+        FILETIME currentModified;
+        GetFileTime(hFile, nullptr, nullptr, &currentModified);
+        CloseHandle(hFile);
+
+        if (CompareFileTime(&currentModified, &m_lastModified) > 0) {
+            // File has been modified, reload
+            m_lastModified = currentModified;
+
+            std::string narrowPath(watchedFile.begin(), watchedFile.end());
+            HRESULT hr = LoadFromFile(narrowPath, m_type, m_defaultFlags);
+            if (SUCCEEDED(hr)) {
+                reloadCount++;
+                LOG_TO_CONSOLE_IMMEDIATE(L"Hot-reloaded shader: " + watchedFile, L"SUCCESS");
+            } else {
+                LOG_TO_CONSOLE_IMMEDIATE(L"Failed to hot-reload shader: " + watchedFile, L"ERROR");
+            }
+        }
+    }
+
+    if (reloadCount > 0) {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.hotReloadCount += reloadCount;
+        NotifyStateChange();
+    }
+
+    return reloadCount;
+}
+
+void Shader::UpdateFileMonitoring()
+{
+    // Check watched files for changes (called from game loop)
+    if (m_hotReloadEnabled) {
+        HotReloadShaders();
+    }
+}
+
+// ============================================================================
+// STATIC COMPILATION UTILITY (LEGACY)
+// ============================================================================
+
+HRESULT Shader::CompileShaderFromFile(const std::wstring& filename,
+    const std::string& entryPoint,
+    const std::string& shaderModel,
+    ID3DBlob** blobOut)
+{
+    UINT compileFlags = D3DCOMPILE_ENABLE_STRICTNESS;
+#ifdef _DEBUG
+    compileFlags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+
+    ComPtr<ID3DBlob> errorBlob;
+    HRESULT hr = D3DCompileFromFile(
+        filename.c_str(),
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        entryPoint.c_str(),
+        shaderModel.c_str(),
+        compileFlags,
+        0,
+        blobOut,
+        &errorBlob
+    );
+
+    if (FAILED(hr) && errorBlob) {
+        std::string errorString(reinterpret_cast<const char*>(errorBlob->GetBufferPointer()));
+        OutputDebugStringA(errorString.c_str());
+    }
+
+    return hr;
+}
+
+// ============================================================================
+// CONSOLE INTEGRATION METHODS
+// ============================================================================
+
+Shader::ShaderMetrics Shader::Console_GetMetrics() const
+{
+    return GetMetricsThreadSafe();
+}
+
+void Shader::Console_RecompileAll()
+{
+    LOG_TO_CONSOLE_IMMEDIATE(L"Recompiling all shaders...", L"INFO");
+
+    // Reload from watched files
+    for (const auto& watchedFile : m_watchedFiles) {
+        std::string narrowPath(watchedFile.begin(), watchedFile.end());
+        LoadFromFile(narrowPath, m_type, m_defaultFlags);
+    }
+
+    NotifyStateChange();
+    LOG_TO_CONSOLE_IMMEDIATE(L"Shader recompilation complete", L"SUCCESS");
+}
+
+void Shader::Console_SetHotReload(bool enabled)
+{
+    m_hotReloadEnabled = enabled;
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.hotReloadEnabled = enabled;
+    }
+    std::wstring msg = enabled ? L"Hot reload enabled" : L"Hot reload disabled";
+    LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+}
+
+void Shader::Console_SetCompilationFlags(bool enableDebug, bool enableOptimization)
+{
+    m_defaultFlags.enableDebug = enableDebug;
+    m_defaultFlags.enableOptimization = enableOptimization;
+
+    std::wstring msg = L"Compilation flags updated: debug=" +
+        std::to_wstring(enableDebug) + L", optimization=" + std::to_wstring(enableOptimization);
+    LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+}
+
+std::string Shader::Console_ListShaders() const
+{
+    std::stringstream ss;
+    ss << "=== Loaded Shaders ===" << std::endl;
+
+    if (m_vertexShader && m_vertexShader->IsValid()) {
+        ss << "  [VS] Vertex Shader - Active" << std::endl;
+    } else {
+        ss << "  [VS] Vertex Shader - Not loaded" << std::endl;
+    }
+
+    if (m_pixelShader && m_pixelShader->IsValid()) {
+        ss << "  [PS] Pixel Shader - Active" << std::endl;
+    } else {
+        ss << "  [PS] Pixel Shader - Not loaded" << std::endl;
+    }
+
+    // List cached shaders
+    for (const auto& entry : m_shaderCache) {
+        ss << "  [Cache] " << entry.first;
+        ss << (entry.second->IsValid() ? " - Valid" : " - Invalid");
+        ss << std::endl;
+    }
+
+    // List variants
+    for (const auto& variant : m_variants) {
+        ss << "  [Variant] " << variant.name;
+        ss << (variant.isCompiled ? " - Compiled" : " - Not compiled");
+        if (variant.id == m_activeVariant) ss << " (ACTIVE)";
+        ss << std::endl;
+    }
+
+    // Watched files
+    ss << std::endl << "Watched files: " << m_watchedFiles.size() << std::endl;
+    for (const auto& wf : m_watchedFiles) {
+        std::string narrowPath(wf.begin(), wf.end());
+        ss << "  " << narrowPath << std::endl;
+    }
+
+    return ss.str();
+}
+
+std::string Shader::Console_GetShaderInfo(const std::string& shaderName) const
+{
+    std::stringstream ss;
+    ss << "=== Shader Info: " << shaderName << " ===" << std::endl;
+
+    if (shaderName == "vertex" || shaderName == "vs") {
+        ss << "Type: Vertex Shader" << std::endl;
+        ss << "Valid: " << (m_vertexShader && m_vertexShader->IsValid() ? "Yes" : "No") << std::endl;
+    } else if (shaderName == "pixel" || shaderName == "ps") {
+        ss << "Type: Pixel Shader" << std::endl;
+        ss << "Valid: " << (m_pixelShader && m_pixelShader->IsValid() ? "Yes" : "No") << std::endl;
+    } else {
+        // Check cache
+        auto it = m_shaderCache.find(shaderName);
+        if (it != m_shaderCache.end()) {
+            ss << "Found in cache" << std::endl;
+            ss << "Valid: " << (it->second->IsValid() ? "Yes" : "No") << std::endl;
+        } else {
+            ss << "Shader not found" << std::endl;
+        }
+    }
+
+    // General metrics
+    auto metrics = GetMetricsThreadSafe();
+    ss << std::endl << "Compilation Stats:" << std::endl;
+    ss << "  Compiled: " << metrics.compiledShaders << std::endl;
+    ss << "  Failed: " << metrics.failedCompilations << std::endl;
+    ss << "  Last compile time: " << metrics.lastCompileTime << " ms" << std::endl;
+
+    if (!m_filePath.empty()) {
+        ss << "File path: " << m_filePath << std::endl;
+    }
+
+    return ss.str();
+}
+
+void Shader::Console_RegisterStateCallback(std::function<void()> callback)
+{
+    m_stateCallback = callback;
+}
+
+int Shader::Console_ValidateShaders()
+{
+    int errors = 0;
+
+    if (m_vertexShader && !m_vertexShader->IsValid()) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Validation error: Vertex shader invalid", L"ERROR");
+        errors++;
+    }
+
+    if (m_pixelShader && !m_pixelShader->IsValid()) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Validation error: Pixel shader invalid", L"ERROR");
+        errors++;
+    }
+
+    for (const auto& entry : m_shaderCache) {
+        if (!entry.second->IsValid()) {
+            std::wstring name(entry.first.begin(), entry.first.end());
+            LOG_TO_CONSOLE_IMMEDIATE(L"Validation error: Cached shader invalid: " + name, L"ERROR");
+            errors++;
+        }
+    }
+
+    if (errors == 0) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"All shaders validated successfully", L"SUCCESS");
+    } else {
+        std::wstring msg = L"Shader validation found " + std::to_wstring(errors) + L" error(s)";
+        LOG_TO_CONSOLE_IMMEDIATE(msg, L"WARNING");
+    }
+
+    return errors;
+}
+
+void Shader::Console_ClearCache()
+{
+    m_shaderCache.clear();
+    m_shaderVariants.clear();
+    m_variants.clear();
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.activeVariants = 0;
+        m_metrics.shaderMemoryUsage = 0;
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Shader cache cleared", L"INFO");
+}
+
+void Shader::Console_SetSearchPaths(const std::vector<std::string>& paths)
+{
+    m_searchPaths = paths;
+    std::wstring msg = L"Shader search paths updated (" + std::to_wstring(paths.size()) + L" paths)";
+    LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+}
+
+// ============================================================================
+// RHI CROSS-PLATFORM COMPILATION
+// ============================================================================
+
+static Spark::RHI::RHIShaderStage ShaderTypeToRHIStage(ShaderType type)
+{
+    switch (type) {
+        case ShaderType::VERTEX_SHADER:   return Spark::RHI::RHIShaderStage::Vertex;
+        case ShaderType::PIXEL_SHADER:    return Spark::RHI::RHIShaderStage::Pixel;
+        case ShaderType::GEOMETRY_SHADER: return Spark::RHI::RHIShaderStage::Geometry;
+        case ShaderType::HULL_SHADER:     return Spark::RHI::RHIShaderStage::Hull;
+        case ShaderType::DOMAIN_SHADER:   return Spark::RHI::RHIShaderStage::Domain;
+        case ShaderType::COMPUTE_SHADER:  return Spark::RHI::RHIShaderStage::Compute;
+        default:                          return Spark::RHI::RHIShaderStage::Vertex;
+    }
+}
+
+bool Shader::CompileWithRHI(const std::string& sourceFile, ShaderType type, int targetBackend)
+{
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    Spark::RHI::ShaderCompileOptions options;
+    options.stage = ShaderTypeToRHIStage(type);
+    options.sourceFile = sourceFile;
+    options.entryPoint = m_defaultFlags.entryPoint;
+    options.optimizationEnabled = m_defaultFlags.enableOptimization;
+    options.debugInfoEnabled = m_defaultFlags.enableDebug;
+    options.defines = m_defaultFlags.defines;
+    options.includePaths = m_defaultFlags.includePaths;
+    options.targetBackend = static_cast<Spark::RHI::GraphicsBackend>(targetBackend);
+
+    // Auto-detect source language from file extension
+    options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
+
+    Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    float compileTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.lastCompileTime = compileTimeMs;
+        m_metrics.totalCompileTime += compileTimeMs;
+    }
+
+    if (!result.success) {
+        std::wstring wError(result.errorMessage.begin(), result.errorMessage.end());
+        LOG_TO_CONSOLE_IMMEDIATE(L"RHI shader compilation failed: " + wError, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return false;
+    }
+
+    // Save compiled bytecode for later loading
+    std::string outputPath = sourceFile;
+    size_t dotPos = outputPath.find_last_of('.');
+    if (dotPos != std::string::npos) {
+        outputPath = outputPath.substr(0, dotPos);
+    }
+
+    // Determine output extension based on target
+    Spark::RHI::GraphicsBackend backend = static_cast<Spark::RHI::GraphicsBackend>(targetBackend);
+    const char* ext = Spark::RHI::GetShaderExtension(backend);
+    if (backend == Spark::RHI::GraphicsBackend::Vulkan) {
+        outputPath += ".spv";
+    } else {
+        outputPath += ".compiled";
+    }
+
+    Spark::RHI::SaveCompiledShader(outputPath, result.bytecode);
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.compiledShaders++;
+    }
+
+    std::wstring wFile(sourceFile.begin(), sourceFile.end());
+    LOG_TO_CONSOLE_IMMEDIATE(L"RHI shader compiled successfully: " + wFile, L"SUCCESS");
+    return true;
+}
+
 #endif // SPARK_PLATFORM_WINDOWS
