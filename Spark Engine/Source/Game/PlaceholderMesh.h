@@ -1,3 +1,28 @@
+/**
+ * @file PlaceholderMesh.h
+ * @brief Robust mesh loading helper with automatic procedural fallback
+ * @author Spark Engine Team
+ * @date 2025
+ *
+ * Provides the LoadOrPlaceholderMesh() inline utility that attempts to load a
+ * mesh from an OBJ file on disk and, if that fails for any reason, falls back
+ * through a cascade of procedural shape generators (cube -> triangle -> plane)
+ * to guarantee that the caller always ends up with a renderable mesh.
+ *
+ * This helper is used by every primitive game object (CubeObject, PlaneObject,
+ * SphereObject, etc.) during their CreateMesh() override to make initialization
+ * resilient against missing or corrupt asset files.
+ *
+ * The function emits extensive debug logging to @c std::wcerr and the Windows
+ * debug output channel (@c OutputDebugStringW) so that mesh loading issues can
+ * be diagnosed without attaching a debugger.
+ *
+ * @note Only @c .obj files are supported by the underlying tinyobjloader backend.
+ *       Other formats will be logged as unsupported and trigger the fallback path.
+ *
+ * @see Mesh, Primitives, CubeObject, PlaneObject, SphereObject
+ */
+
 #pragma once
 #include "../Core/Platform.h"
 
@@ -9,8 +34,34 @@
 #include <iostream>
 #include <filesystem>
 
-// Attempts to initialize |mesh| with D3D device/context, then load from |path|.
-// On failure, generates a procedural cube placeholder. Includes verbose debug logs.
+/**
+ * @brief Load a mesh from file, or generate a procedural placeholder on failure
+ *
+ * This function follows a multi-step strategy to ensure the given Mesh object
+ * always contains valid, renderable geometry:
+ *
+ * 1. **Initialize** the Mesh with the provided D3D11 device/context.
+ * 2. **Attempt file load** — if @p path is non-empty and the file exists with
+ *    a @c .obj extension, call Mesh::LoadFromFile().
+ * 3. **Fallback cascade** — if file loading fails (or is skipped), try creating
+ *    geometry procedurally in this order:
+ *    - Mesh::CreateCube(1.0f)
+ *    - Mesh::CreateTriangle(1.0f)
+ *    - Mesh::CreatePlane(2.0f, 2.0f)
+ * 4. **Validation** — asserts that the mesh has non-zero vertex and index counts.
+ *
+ * @param mesh    [in,out] Mesh object to populate. Must not already be initialized.
+ * @param device  DirectX 11 device for GPU resource creation
+ * @param context DirectX 11 device context for rendering commands
+ * @param path    File path to attempt loading from. May be empty to skip the
+ *                file-load step and go straight to procedural generation.
+ *
+ * @warning Triggers ASSERT_ALWAYS_MSG if all fallback methods fail, as a mesh
+ *          with zero vertices or indices would cause rendering crashes.
+ *
+ * @note Verbose debug output is written to @c std::wcerr and @c OutputDebugStringW
+ *       at every decision point to aid in diagnosing asset-loading issues.
+ */
 inline void LoadOrPlaceholderMesh(
     Mesh& mesh,
     ID3D11Device* device,
