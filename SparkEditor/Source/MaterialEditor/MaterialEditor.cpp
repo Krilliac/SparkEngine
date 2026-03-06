@@ -4,7 +4,6 @@
  */
 
 #include "MaterialEditor.h"
-#include <wrl/client.h>
 
 namespace SparkEditor {
 
