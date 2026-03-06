@@ -305,3 +305,5 @@ private:
     static constexpr size_t COMMAND_BUFFER_SIZE = 512;
     char m_commandBuffer[COMMAND_BUFFER_SIZE] = {0};
 };
+
+} // namespace SparkEditor
