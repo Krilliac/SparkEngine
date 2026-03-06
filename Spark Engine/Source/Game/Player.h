@@ -18,7 +18,7 @@
 #include "Utils/Assert.h"
 #include "../Camera/SparkEngineCamera.h"
 #include "../Input/InputManager.h"
-#include "Projectiles/WeaponStats.h"
+#include "../Projectiles/WeaponStats.h"
 #include "../Projectiles/ProjectilePool.h"
 #include "../Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS

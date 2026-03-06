@@ -19,7 +19,7 @@
 #include <deque>
 #include <chrono>
 #include <functional>
-#include "Enums/GameSystemEnums.h"
+#include "../Enums/GameSystemEnums.h"
 
 // Forward declarations
 class Player;

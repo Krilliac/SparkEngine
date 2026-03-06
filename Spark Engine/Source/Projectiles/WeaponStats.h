@@ -12,7 +12,7 @@
 #pragma once
 
 #include "../Enums/GameSystemEnums.h"
-#include "../Utils/Assert.h"
+#include "Utils/Assert.h"
 
 /**
  * @brief Weapon statistics and configuration structure

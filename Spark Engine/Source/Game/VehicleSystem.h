@@ -14,8 +14,8 @@
 #include "../Core/Platform.h"
 
 #include "GameObject.h"
-#include "Enums/GameSystemEnums.h"
-#include "Projectiles/WeaponStats.h"
+#include "../Enums/GameSystemEnums.h"
+#include "../Projectiles/WeaponStats.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
