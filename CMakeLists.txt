@@ -298,36 +298,6 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include")
     message(STATUS "Found EnTT")
 endif()
 
-# GLM (math)
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/glm")
-    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/glm")
-    message(STATUS "Found GLM")
-endif()
-
-# RapidJSON
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/rapidjson/include")
-    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/rapidjson/include")
-    message(STATUS "Found RapidJSON")
-endif()
-
-# spdlog
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/spdlog/include")
-    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/spdlog/include")
-    message(STATUS "Found spdlog")
-endif()
-
-# stb
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/stb")
-    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/stb")
-    message(STATUS "Found stb")
-endif()
-
-# miniaudio
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Audio/miniaudio")
-    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Audio/miniaudio")
-    message(STATUS "Found miniaudio")
-endif()
-
 # Bullet Physics
 if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
     list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")

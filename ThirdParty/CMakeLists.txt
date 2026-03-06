@@ -25,12 +25,4 @@ target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
 # AngelScript
 add_subdirectory(Scripting/angelscript/angelscript/projects/cmake)
 
-# Other libraries...
-# GLM - Header only
-add_library(glm INTERFACE)
-target_include_directories(glm INTERFACE Utils/glm)
-
-# spdlog - Header only
-add_library(spdlog INTERFACE)
-target_include_directories(spdlog INTERFACE Utils/spdlog/include)
 
