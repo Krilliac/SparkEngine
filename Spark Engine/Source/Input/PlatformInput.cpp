@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file PlatformInput.cpp
  * @brief Cross-platform input abstraction implementation

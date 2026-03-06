@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file TextureSystem.cpp
  * @brief Implementation of advanced texture loading and management system

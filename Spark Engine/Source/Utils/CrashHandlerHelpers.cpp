@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // CrashHandlerHelpers.cpp
 #include "Utils/CrashHandler.h"
 #include "Utils/Assert.h"

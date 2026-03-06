@@ -17,6 +17,9 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+
+// Global physics system pointer used by projectiles for area damage queries
+PhysicsSystem* g_physicsSystem = nullptr;
 #include <chrono>
 
 using namespace DirectX;
