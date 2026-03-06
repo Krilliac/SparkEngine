@@ -23,6 +23,12 @@ add_executable(SparkTests
     TestNavMesh.cpp
     TestSteeringBehaviors.cpp
     TestPhysicsComponents.cpp
+    TestEventSystem.cpp
+    TestWeatherSystem.cpp
+    TestInventorySystem.cpp
+    TestQuestSystem.cpp
+    TestDayNightCycle.cpp
+    TestPerformanceStats.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

@@ -113,6 +113,12 @@ option(ENABLE_DECALS "Enable decal system" ON)
 option(ENABLE_MESH_LOD "Enable mesh LOD system" ON)
 option(ENABLE_DXR "Enable DirectX Raytracing support" OFF)  # Requires D3D12, disabled by default
 option(ENABLE_SDL2 "Enable SDL2 cross-platform input" OFF)  # Requires SDL2 library
+option(ENABLE_WEATHER "Enable weather system" ON)
+option(ENABLE_INVENTORY "Enable inventory system" ON)
+option(ENABLE_QUEST_SYSTEM "Enable quest/objective system" ON)
+option(ENABLE_EVENT_SYSTEM "Enable publish/subscribe event bus" ON)
+option(ENABLE_DAY_NIGHT "Enable day/night cycle system" ON)
+option(ENABLE_PERF_STATS "Enable performance statistics overlay" ON)
 option(BUILD_TESTS "Build test suite" ON)
 
 # Editor only available on Windows (requires Win32 + DX11 ImGui backends)
@@ -753,6 +759,30 @@ endif()
 
 if(ENABLE_DXR)
     list(APPEND FEATURE_DEFINITIONS "DXR_ENABLED")
+endif()
+
+if(ENABLE_WEATHER)
+    list(APPEND FEATURE_DEFINITIONS "WEATHER_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_INVENTORY)
+    list(APPEND FEATURE_DEFINITIONS "INVENTORY_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_QUEST_SYSTEM)
+    list(APPEND FEATURE_DEFINITIONS "QUEST_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_EVENT_SYSTEM)
+    list(APPEND FEATURE_DEFINITIONS "EVENT_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_DAY_NIGHT)
+    list(APPEND FEATURE_DEFINITIONS "DAY_NIGHT_CYCLE_ENABLED")
+endif()
+
+if(ENABLE_PERF_STATS)
+    list(APPEND FEATURE_DEFINITIONS "PERF_STATS_ENABLED")
 endif()
 
 if(ENABLE_SDL2)
