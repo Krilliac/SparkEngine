@@ -19,8 +19,7 @@
 #include <string>
 
 // Forward‐declare Projectile to avoid include cycles
-namespace Projectiles { class Projectile; }
-using Projectiles::Projectile;
+class Projectile;
 
 /**
  * @brief Base class for all game objects in the world
