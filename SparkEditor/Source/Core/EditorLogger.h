@@ -162,6 +162,12 @@ public:
     EditorLogger();
     ~EditorLogger();
 
+    /**
+     * @brief Get singleton instance
+     * @return Reference to the global EditorLogger instance
+     */
+    static EditorLogger& GetInstance();
+
     bool Initialize(const std::string& logDirectory = "Logs", size_t maxMemoryEntries = 10000);
     void Shutdown();
 

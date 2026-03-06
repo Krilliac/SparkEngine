@@ -298,8 +298,11 @@ void EditorTheme::ApplyToImGui(const EditorThemeData& theme) {
 // Predefined Themes
 // ===================================================================
 
+// Forward declaration
+static EditorThemeData CreateSparkThemeImpl();
+
 void EditorTheme::InitializeDefaultThemes() {
-    RegisterTheme(CreateSparkTheme());
+    RegisterTheme(CreateSparkThemeImpl());
     RegisterTheme(CreateUnityProTheme());
     RegisterTheme(CreateUnrealProTheme());
     RegisterTheme(CreateVSProTheme());
@@ -885,12 +888,6 @@ unsigned int EditorTheme::ColorToImGui(const ThemeColor& color) {
         (int)(color.g * 255.0f),
         (int)(color.b * 255.0f),
         (int)(color.a * 255.0f));
-}
-
-// Bridge function — the header declares CreateSparkTheme as a future addition
-// but it's currently named via the static helper. We add the public wrapper.
-EditorThemeData CreateSparkTheme() {
-    return CreateSparkThemeImpl();
 }
 
 // ===================================================================
