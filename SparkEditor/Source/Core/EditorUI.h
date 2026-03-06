@@ -22,7 +22,6 @@
 #include "EditorLogger.h"
 #include "EditorLayoutManager.h"
 #include "EditorCrashHandler.h"
-#include "../Docking/SparkDockingSystem.h"
 
 namespace SparkEditor {
 
@@ -111,7 +110,6 @@ private:
     // Core systems
     std::unique_ptr<EditorLogger> m_logger;
     std::unique_ptr<EditorLayoutManager> m_layoutManager;
-    std::unique_ptr<SparkDockingSystem> m_dockingSystem;
     EditorCrashHandler* m_crashHandler = nullptr;
 
     // Panel management

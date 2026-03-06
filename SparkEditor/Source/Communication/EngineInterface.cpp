@@ -443,7 +443,7 @@ bool EngineInterface::DeserializeEvent(const std::vector<uint8_t>& buffer, Engin
     return true;
 }
 
-bool EngineInterface::CreateNamedPipe()
+bool EngineInterface::CreateCommPipe()
 {
     std::cout << "Creating named pipe: " << m_pipeName << "\n";
 
@@ -462,7 +462,7 @@ bool EngineInterface::CreateNamedPipe()
     );
 
     if (hPipe == INVALID_HANDLE_VALUE) {
-        std::cerr << "CreateNamedPipe failed with error " << GetLastError() << "\n";
+        std::cerr << "CreateCommPipe failed with error " << GetLastError() << "\n";
         return false;
     }
 
@@ -491,7 +491,7 @@ bool EngineInterface::ConnectToNamedPipe()
 
     // Wait for a client to connect to the pipe.  ConnectNamedPipe returns
     // TRUE when a new client connects, or FALSE if the client connected
-    // between CreateNamedPipe and ConnectNamedPipe (in which case
+    // between CreateCommPipe and ConnectNamedPipe (in which case
     // GetLastError() == ERROR_PIPE_CONNECTED and we treat it as success).
     BOOL connected = ::ConnectNamedPipe(hPipe, nullptr);
     if (!connected) {
