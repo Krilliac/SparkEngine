@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include "../Core/EditorPanel.h"
-#include "../Core/EditorLogger.h"
-#include <imgui.h>  // For ImVec4, ImVec2
+// Standard library headers first (MSVC /Zc:preprocessor compatibility)
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -17,6 +15,14 @@
 #include <mutex>
 #include <atomic>
 #include <functional>
+#include <algorithm>
+
+// Third-party headers
+#include <imgui.h>  // For ImVec4, ImVec2
+
+// Project headers
+#include "../Core/EditorPanel.h"
+#include "../Core/EditorLogger.h"
 
 namespace SparkEditor {
 
@@ -299,3 +305,5 @@ private:
     static constexpr size_t COMMAND_BUFFER_SIZE = 512;
     char m_commandBuffer[COMMAND_BUFFER_SIZE] = {0};
 };
+
+} // namespace SparkEditor

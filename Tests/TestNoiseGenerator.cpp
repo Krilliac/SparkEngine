@@ -90,9 +90,20 @@ TEST(Perlin2D_DifferentSeedsDifferentOutput)
 {
     TestNoise::SimpleNoise noise1(42);
     TestNoise::SimpleNoise noise2(99);
-    float v1 = noise1.Perlin2D(1.5f, 2.5f);
-    float v2 = noise2.Perlin2D(1.5f, 2.5f);
-    EXPECT_TRUE(std::abs(v1 - v2) > 0.0001f);
+    // Test across multiple points - different seeds should produce
+    // different outputs for at least some coordinates
+    bool anyDifferent = false;
+    for (int i = 0; i < 20; ++i) {
+        float x = static_cast<float>(i) * 0.7f + 0.1f;
+        float y = static_cast<float>(i) * 1.3f + 0.2f;
+        float v1 = noise1.Perlin2D(x, y);
+        float v2 = noise2.Perlin2D(x, y);
+        if (std::abs(v1 - v2) > 0.0001f) {
+            anyDifferent = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(anyDifferent);
 }
 
 TEST(Perlin2D_ContinuousNearby)

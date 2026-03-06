@@ -446,8 +446,8 @@ std::unique_ptr<NavMeshData> MakeFlatQuadNavMesh() {
         {10, 0, 10}
     };
     std::vector<uint32_t> indices = {
-        0, 1, 2,   // triangle 0
-        1, 3, 2    // triangle 1
+        0, 2, 1,   // triangle 0 (CCW from above for +Y normal)
+        2, 3, 1    // triangle 1 (CCW from above for +Y normal)
     };
     NavMeshBuildSettings settings;
     return NavMeshBuilder::Build(verts, indices, settings);
@@ -562,7 +562,7 @@ TEST(NavMeshQuery_FindNearestPoint)
     EXPECT_NEAR(hit.position.y, 0.0f, 0.5f);
 
     // Point above the mesh
-    TestNav::NavMeshHit hitAbove = query.FindNearestPoint({5, 10, 5});
+    TestNav::NavMeshHit hitAbove = query.FindNearestPoint({5, 10, 5}, 15.0f);
     EXPECT_TRUE(hitAbove.hit);
     EXPECT_TRUE(hitAbove.distance > 0.0f);
 

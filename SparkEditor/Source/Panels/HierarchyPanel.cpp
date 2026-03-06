@@ -5,12 +5,15 @@
  * @date 2025
  */
 
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <iostream>
+
+#include <imgui.h>
+
 #include "HierarchyPanel.h"
 #include "../Core/EditorIcons.h"
-#include <imgui.h>
-#include <iostream>
-#include <cstring>
-#include <algorithm>
 
 namespace SparkEditor {
 
@@ -313,8 +316,10 @@ bool HierarchyPanel::PassesFilter(const SceneObject* object) const {
     // Case-insensitive name search
     std::string lowerName = object->name;
     std::string lowerFilter = m_searchFilter;
-    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
-    std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(), ::tolower);
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
     return lowerName.find(lowerFilter) != std::string::npos;
 }
