@@ -169,7 +169,7 @@ if(MSVC)
         /wd4267  # size_t conversion warnings
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
-    add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
+    add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS)
 
     # Conformance improvements available in VS 2017+ - enforce __cplusplus macro and
     # disable non-conforming extensions so code is portable across compilers.
