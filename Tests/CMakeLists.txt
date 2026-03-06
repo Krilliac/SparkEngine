@@ -39,6 +39,11 @@ add_executable(SparkTests
     TestUUID.cpp
     TestFileUtils.cpp
     TestConfigParser.cpp
+    TestFrustumCulling.cpp
+    TestCoroutineScheduler.cpp
+    TestTween.cpp
+    TestCommandHistory.cpp
+    TestDebugTools.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
