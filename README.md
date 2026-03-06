@@ -1,12 +1,33 @@
 # Spark Engine
 
 [![Build SparkEngine](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![Release](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![Last Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine)](https://github.com/Krilliac/SparkEngine/commits/master)
 
 A modular, high-performance C++ game engine built for 3D FPS titles and beyond. Features a DirectX 11 rendering pipeline, Bullet Physics integration, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture powered by EnTT, and an integrated ImGui editor.
 
 > **Early Development** — SparkEngine is under active development. Systems are being built out and stabilized. Expect rough edges.
+
+## Downloads
+
+Latest binaries are published automatically on every commit to `master`.
+The commit hash shown on each badge matches the build you are downloading.
+
+[![Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine?label=built%20from&style=flat-square)](https://github.com/Krilliac/SparkEngine/commits/master)
+
+**Windows (VS 2022 · x64)**
+
+[![Windows Release](https://img.shields.io/badge/Windows-Release-0078D4?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Release.zip)
+[![Windows Debug](https://img.shields.io/badge/Windows-Debug-555555?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Debug.zip)
+
+**Linux (GCC · ubuntu-24.04 · x64)**
+
+[![Linux Release](https://img.shields.io/badge/Linux-Release-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Release.tar.gz)
+[![Linux Debug](https://img.shields.io/badge/Linux-Debug-555555?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Debug.tar.gz)
+
+> All downloads are from the [`latest` release](https://github.com/Krilliac/SparkEngine/releases/tag/latest). Each release body includes the exact commit hash and timestamp of the build.
 
 ## Key Features
 
@@ -199,12 +220,18 @@ cmake -B build -DENABLE_EDITOR=OFF -DENABLE_LUA=OFF
 
 ## CI/CD
 
-GitHub Actions runs on every push and PR against `main` and `develop`:
+Two GitHub Actions workflows run automatically:
 
-- **Platform**: Windows (MSVC, Visual Studio 2022)
-- **Configurations**: Debug and Release matrix
-- **Steps**: Checkout with submodules, CMake configure, build, test (Release only), artifact upload
-- **Artifacts**: Release builds retained for 7 days
+**`build.yml`** — runs on every push / PR to `main`, `develop`, and `feature/**`:
+- Platforms: Windows (MSVC VS 2022 + experimental VS 2026), Linux GCC, Linux Clang
+- Configurations: Debug and Release matrix
+- Steps: checkout with submodules, CMake configure, build, test (Release only), artifact upload
+- Artifacts retained for 7 days
+
+**`release.yml`** — runs on every push to `master` / `main`:
+- Builds Windows (VS 2022) and Linux (GCC) in Debug + Release
+- Packages each configuration into a zip / tar.gz archive
+- Creates or updates the rolling [`latest` GitHub Release](https://github.com/Krilliac/SparkEngine/releases/tag/latest) with all four binaries and the exact commit hash
 
 ## Documentation
 
