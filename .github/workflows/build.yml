@@ -44,12 +44,13 @@ jobs:
         retention-days: 7
 
   # ===========================================================================
-  # Windows Build (MSVC VS 2026, v144 toolset + DirectX 11)
-  # Marked continue-on-error until VS 2026 runner images are broadly available.
+  # Windows Build (MSVC VS 2022 generator + v144 toolset for VS 2026)
+  # Uses VS 2022 generator since CMake does not yet have a VS 2026 generator.
+  # Marked continue-on-error until v144 toolset is broadly available on runners.
   # ===========================================================================
   build-windows-vs2026:
     runs-on: windows-latest
-    continue-on-error: true   # Experimental: VS 2026 may not yet be on all runners
+    continue-on-error: true
     strategy:
       matrix:
         config: [Debug, Release]
@@ -63,8 +64,8 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
 
-    - name: Configure CMake (VS 2026 / v144)
-      run: cmake -B build -G "Visual Studio 19 2026" -A x64 -DSPARK_MSVC_TOOLSET=v144 -DBUILD_TESTS=ON
+    - name: Configure CMake (VS 2022 generator / v144 toolset)
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v144 -DSPARK_MSVC_TOOLSET=v144 -DBUILD_TESTS=ON
 
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel
