@@ -44,44 +44,6 @@ jobs:
         retention-days: 7
 
   # ===========================================================================
-  # Windows Build (MSVC VS 2026, v144 toolset + DirectX 11)
-  # Marked continue-on-error until VS 2026 runner images are broadly available.
-  # ===========================================================================
-  build-windows-vs2026:
-    runs-on: windows-latest
-    continue-on-error: true   # Experimental: VS 2026 may not yet be on all runners
-    strategy:
-      matrix:
-        config: [Debug, Release]
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Configure CMake (VS 2026 / v144)
-      run: cmake -B build -G "Visual Studio 19 2026" -A x64 -DSPARK_MSVC_TOOLSET=v144 -DBUILD_TESTS=ON
-
-    - name: Build
-      run: cmake --build build --config ${{ matrix.config }} --parallel
-
-    - name: Run Tests
-      if: matrix.config == 'Release'
-      run: ctest --test-dir build --config ${{ matrix.config }} --output-on-failure
-
-    - name: Upload Build Artifacts
-      if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v4
-      with:
-        name: SparkEngine-Windows-VS2026-${{ matrix.config }}
-        path: build/bin/${{ matrix.config }}/
-        retention-days: 7
-
-  # ===========================================================================
   # Linux Build - GCC
   # ===========================================================================
   build-linux-gcc:
