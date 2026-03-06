@@ -6,6 +6,8 @@
 #include "DXRSupport.h"
 #include <sstream>
 
+using namespace DirectX;
+
 namespace Spark::Graphics {
 
 DXRManager& DXRManager::GetInstance() {
