@@ -17,7 +17,7 @@
 #include "../Graphics/TextureSystem.h"
 #include "../Graphics/MaterialSystem.h"
 #include "../Graphics/LightingSystem.h"
-#include "../Graphics/PostProcessing.h"
+#include "../Graphics/PostProcessingSystem.h"
 #include "../Graphics/AssetPipeline.h"
 #include "../Physics/PhysicsSystem.h"
 #include <sstream>

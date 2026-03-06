@@ -21,8 +21,8 @@
 #pragma once
 #include "../Core/Platform.h"
 
-#include "Game/GameObject.h"
-#include "Game/PlaceholderMesh.h"
+#include "GameObject.h"
+#include "PlaceholderMesh.h"
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -106,5 +106,5 @@ protected:
 
 private:
     float        m_size;                                            ///< Base edge length in world units
-    std::wstring m_modelPath{ L"Assets\\Models\\Pyramid.obj" };    ///< Path to the pyramid OBJ model on disk
+    std::wstring m_modelPath{ L"Assets/Models/Pyramid.obj" };    ///< Path to the pyramid OBJ model on disk
 };

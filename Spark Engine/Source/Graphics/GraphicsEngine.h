@@ -32,6 +32,8 @@
 #include <atomic>  // **CRITICAL FIX: Added for atomic frame state**
 
 using Microsoft::WRL::ComPtr;
+// Note: using-directive here is intentional - GraphicsEngine.h uses DirectX types
+// extensively throughout (XMMATRIX, XMFLOAT3, etc.) and is Windows-only.
 using namespace DirectX;
 
 // Forward declarations for engine systems
@@ -49,18 +51,10 @@ class GameObject;
 class Shader;
 
 /**
- * @brief Rendering pipeline type
- */
-enum class RenderingPipeline
-{
-    Forward,           ///< Forward rendering pipeline
-    Deferred,          ///< Deferred rendering pipeline
-    ForwardPlus,       ///< Forward+ rendering pipeline
-    Clustered          ///< Clustered deferred rendering
-};
-
-/**
- * @brief Render path types for advanced graphics
+ * @brief Render path / pipeline types for advanced graphics
+ *
+ * Unified enum replacing the previous separate RenderingPipeline and RenderPath
+ * enums which had identical values.
  */
 enum class RenderPath
 {
@@ -69,6 +63,9 @@ enum class RenderPath
     ForwardPlus,       ///< Forward+ (tiled forward) rendering
     Clustered          ///< Clustered rendering
 };
+
+/// @brief Legacy alias - use RenderPath directly for new code
+using RenderingPipeline = RenderPath;
 
 /**
  * @brief Rendering quality presets

@@ -171,19 +171,7 @@ public:
     virtual std::string GetDeviceInfo() const = 0;
 };
 
-/**
- * @brief Factory function to create the appropriate RHI device
- */
-std::unique_ptr<IRHIDevice> CreateRHIDevice(GraphicsBackend backend);
-
-/**
- * @brief Query available graphics backends on the current system
- */
-std::vector<GraphicsBackend> GetAvailableBackends();
-
-/**
- * @brief Get a string name for a graphics backend
- */
-const char* GetBackendName(GraphicsBackend backend);
+// Note: Factory functions (CreateRHIDevice, GetAvailableBackends, GetBackendName)
+// are declared in RHIFactory.h to avoid duplicate declarations.
 
 }} // namespace Spark::RHI

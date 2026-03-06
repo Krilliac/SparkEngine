@@ -27,8 +27,8 @@
 #include <memory>
 #include <cstdint>
 
-using namespace DirectX;
-
+// DXR lives in Spark::Graphics (not Spark::RHI) because it requires D3D12
+// and is an optional high-level feature, unlike the backend-agnostic RHI layer.
 namespace Spark::Graphics {
 
 // ============================================================================
@@ -76,7 +76,7 @@ struct BLASDesc {
 
 struct BLASInstance {
     uint32_t blasIndex;
-    XMFLOAT4X4 transform;
+    DirectX::XMFLOAT4X4 transform;
     uint32_t instanceID;
     uint32_t hitGroupIndex;
     uint8_t instanceMask = 0xFF;
@@ -116,7 +116,7 @@ struct RTGISettings {
     int samplesPerPixel = 1;
     float maxDistance = 50.0f;
     bool useProbeGrid = true;         ///< Use irradiance probes for caching
-    XMFLOAT3 probeGridDensity{2.0f, 2.0f, 2.0f};  ///< Probes per meter
+    DirectX::XMFLOAT3 probeGridDensity{2.0f, 2.0f, 2.0f};  ///< Probes per meter
 };
 
 struct DXRSettings {
@@ -152,10 +152,10 @@ public:
     void BuildTLAS(const std::vector<BLASInstance>& instances);
 
     /// Dispatch ray tracing
-    void TraceReflections(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos);
-    void TraceShadows(const XMFLOAT3& lightDirection);
-    void TraceAmbientOcclusion(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos);
-    void TraceGlobalIllumination(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos);
+    void TraceReflections(const DirectX::XMMATRIX& viewProj, const DirectX::XMFLOAT3& cameraPos);
+    void TraceShadows(const DirectX::XMFLOAT3& lightDirection);
+    void TraceAmbientOcclusion(const DirectX::XMMATRIX& viewProj, const DirectX::XMFLOAT3& cameraPos);
+    void TraceGlobalIllumination(const DirectX::XMMATRIX& viewProj, const DirectX::XMFLOAT3& cameraPos);
 
     /// Settings
     void SetSettings(const DXRSettings& settings);

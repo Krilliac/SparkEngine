@@ -22,8 +22,8 @@
 #pragma once
 #include "../Core/Platform.h"
 
-#include "Game/GameObject.h"
-#include "Game/PlaceholderMesh.h"
+#include "GameObject.h"
+#include "PlaceholderMesh.h"
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -110,5 +110,5 @@ protected:
 private:
     float        m_width;                                       ///< Horizontal extent of the wall in world units
     float        m_height;                                      ///< Vertical extent of the wall in world units
-    std::wstring m_modelPath{ L"Assets\\Models\\Wall.obj" };   ///< Path to the wall OBJ model on disk
+    std::wstring m_modelPath{ L"Assets/Models/Wall.obj" };   ///< Path to the wall OBJ model on disk
 };

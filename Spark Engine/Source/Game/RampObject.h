@@ -21,8 +21,8 @@
 #pragma once
 #include "../Core/Platform.h"
 
-#include "Game/GameObject.h"
-#include "Game/PlaceholderMesh.h"
+#include "GameObject.h"
+#include "PlaceholderMesh.h"
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -110,5 +110,5 @@ protected:
 private:
     float        m_length;                                       ///< Horizontal extent of the ramp in world units
     float        m_height;                                       ///< Vertical rise of the ramp in world units
-    std::wstring m_modelPath{ L"Assets\\Models\\Ramp.obj" };    ///< Path to the ramp OBJ model on disk
+    std::wstring m_modelPath{ L"Assets/Models/Ramp.obj" };    ///< Path to the ramp OBJ model on disk
 };

@@ -348,3 +348,106 @@ std::vector<DamageType> EnumUtils<DamageType>::GetAllValues() {
 }
 
 } // namespace SparkEditor
+
+// ============================================================================
+// SparkEngine namespace enum specializations
+// EnumUtils lives in SparkEditor, but we provide specializations for
+// SparkEngine enums so that code including AllEnums.h + EnumUtils.h can use
+// EnumUtils<GraphicsAPI>, EnumUtils<InputAction>, etc.
+// ============================================================================
+
+#include "GraphicsEnums.h"
+#include "InputEnums.h"
+
+namespace SparkEditor {
+
+// --- GraphicsAPI ---
+template<>
+std::string EnumUtils<SparkEngine::GraphicsAPI>::ToString(SparkEngine::GraphicsAPI value) {
+    using SparkEngine::GraphicsAPI;
+    static const std::unordered_map<GraphicsAPI, std::string> names = {
+        { GraphicsAPI::DIRECTX_11, "DirectX 11" },
+        { GraphicsAPI::DIRECTX_12, "DirectX 12" },
+        { GraphicsAPI::OPENGL, "OpenGL" },
+        { GraphicsAPI::VULKAN, "Vulkan" },
+        { GraphicsAPI::METAL, "Metal" }
+    };
+    auto it = names.find(value);
+    return (it != names.end()) ? it->second : "Unknown Graphics API";
+}
+
+template<>
+SparkEngine::GraphicsAPI EnumUtils<SparkEngine::GraphicsAPI>::FromString(const std::string& str) {
+    using SparkEngine::GraphicsAPI;
+    static const std::unordered_map<std::string, GraphicsAPI> nameToType = {
+        { "directx 11", GraphicsAPI::DIRECTX_11 },
+        { "dx11", GraphicsAPI::DIRECTX_11 },
+        { "directx 12", GraphicsAPI::DIRECTX_12 },
+        { "dx12", GraphicsAPI::DIRECTX_12 },
+        { "opengl", GraphicsAPI::OPENGL },
+        { "gl", GraphicsAPI::OPENGL },
+        { "vulkan", GraphicsAPI::VULKAN },
+        { "vk", GraphicsAPI::VULKAN },
+        { "metal", GraphicsAPI::METAL }
+    };
+    std::string lowerStr = str;
+    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    auto it = nameToType.find(lowerStr);
+    return (it != nameToType.end()) ? it->second : GraphicsAPI::DIRECTX_11;
+}
+
+template<>
+std::vector<SparkEngine::GraphicsAPI> EnumUtils<SparkEngine::GraphicsAPI>::GetAllValues() {
+    using SparkEngine::GraphicsAPI;
+    return {
+        GraphicsAPI::DIRECTX_11,
+        GraphicsAPI::DIRECTX_12,
+        GraphicsAPI::OPENGL,
+        GraphicsAPI::VULKAN,
+        GraphicsAPI::METAL
+    };
+}
+
+// --- InputAction ---
+template<>
+std::string EnumUtils<SparkEngine::InputAction>::ToString(SparkEngine::InputAction value) {
+    using SparkEngine::InputAction;
+    static const std::unordered_map<InputAction, std::string> names = {
+        { InputAction::PRESSED, "Pressed" },
+        { InputAction::RELEASED, "Released" },
+        { InputAction::HELD, "Held" },
+        { InputAction::REPEATED, "Repeated" }
+    };
+    auto it = names.find(value);
+    return (it != names.end()) ? it->second : "Unknown Input Action";
+}
+
+template<>
+SparkEngine::InputAction EnumUtils<SparkEngine::InputAction>::FromString(const std::string& str) {
+    using SparkEngine::InputAction;
+    static const std::unordered_map<std::string, InputAction> nameToType = {
+        { "pressed", InputAction::PRESSED },
+        { "released", InputAction::RELEASED },
+        { "held", InputAction::HELD },
+        { "repeated", InputAction::REPEATED }
+    };
+    std::string lowerStr = str;
+    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    auto it = nameToType.find(lowerStr);
+    return (it != nameToType.end()) ? it->second : InputAction::PRESSED;
+}
+
+template<>
+std::vector<SparkEngine::InputAction> EnumUtils<SparkEngine::InputAction>::GetAllValues() {
+    using SparkEngine::InputAction;
+    return {
+        InputAction::PRESSED,
+        InputAction::RELEASED,
+        InputAction::HELD,
+        InputAction::REPEATED
+    };
+}
+
+} // namespace SparkEditor
