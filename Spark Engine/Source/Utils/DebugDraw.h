@@ -34,6 +34,9 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include <DirectXMath.h>
+#endif
 #include <vector>
 #include <string>
 #include <mutex>
