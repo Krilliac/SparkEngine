@@ -34,6 +34,11 @@ add_executable(SparkTests
     TestScreenSpaceEffects.cpp
     TestTemporalEffects.cpp
     TestPostProcessingPipeline.cpp
+    TestStringUtils.cpp
+    TestRingBuffer.cpp
+    TestUUID.cpp
+    TestFileUtils.cpp
+    TestConfigParser.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
