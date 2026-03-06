@@ -46,6 +46,8 @@
 #include <algorithm>
 #include <optional>
 
+#include "StringUtils.h"
+
 namespace Spark {
 
 class ConfigParser {
@@ -160,9 +162,7 @@ public:
     bool GetBool(const std::string& section, const std::string& key, bool defaultValue = false) const {
         std::string val = GetString(section, key, "");
         if (val.empty()) return defaultValue;
-        std::string lower = val;
-        std::transform(lower.begin(), lower.end(), lower.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::string lower = StringUtils::ToLower(val);
         if (lower == "true" || lower == "1" || lower == "yes" || lower == "on") return true;
         if (lower == "false" || lower == "0" || lower == "no" || lower == "off") return false;
         return defaultValue;
@@ -237,10 +237,7 @@ public:
 
 private:
     static std::string Trim(const std::string& str) {
-        size_t start = str.find_first_not_of(" \t\r\n");
-        size_t end = str.find_last_not_of(" \t\r\n");
-        if (start == std::string::npos) return "";
-        return str.substr(start, end - start + 1);
+        return StringUtils::Trim(str);
     }
 
     /// section name -> (key -> value)

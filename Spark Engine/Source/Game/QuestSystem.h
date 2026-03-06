@@ -33,6 +33,8 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "../Engine/Events/EventSystem.h"
+
 namespace Spark {
 
 // =============================================================================
@@ -231,10 +233,13 @@ namespace QuestOps {
      * @param questId        Quest to update
      * @param objectiveIndex Index of the objective within the quest
      * @param increment      How much to increment progress
+     * @param eventBus       Optional EventBus to publish QuestCompletedEvent
+     * @param entityId       Entity ID for the event (only used if eventBus is set)
      * @return               true if the objective was updated
      */
     inline bool UpdateObjective(QuestJournalComponent& journal, const QuestRegistry& registry,
-                                uint32_t questId, int objectiveIndex, int increment = 1) {
+                                uint32_t questId, int objectiveIndex, int increment = 1,
+                                EventBus* eventBus = nullptr, uint32_t entityId = 0) {
         const QuestDef* def = registry.GetQuest(questId);
         if (!def) return false;
 
@@ -263,6 +268,15 @@ namespace QuestOps {
                 if (allDone) {
                     aq.status = QuestStatus::Completed;
                     journal.completedQuestIds.insert(questId);
+
+                    // Publish quest completion event
+                    if (eventBus) {
+                        QuestCompletedEvent evt;
+                        evt.entityId = entityId;
+                        evt.questId = questId;
+                        evt.questName = def->name;
+                        eventBus->Publish(evt);
+                    }
                 }
 
                 return true;

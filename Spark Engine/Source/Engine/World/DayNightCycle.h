@@ -124,10 +124,21 @@ public:
             m_dayCount++;
         }
 
-        // Detect period changes for callbacks
+        // Detect period changes for callbacks and event publishing
         DayPeriod currentPeriod = GetDayPeriod();
-        if (currentPeriod != previousPeriod && m_onPeriodChanged) {
-            m_onPeriodChanged(previousPeriod, currentPeriod);
+        if (currentPeriod != previousPeriod) {
+            if (m_onPeriodChanged) {
+                m_onPeriodChanged(previousPeriod, currentPeriod);
+            }
+
+            // Publish time-of-day change via EventBus
+            if (m_eventBus) {
+                TimeOfDayChangedEvent evt;
+                evt.previousHour = previousHour;
+                evt.currentHour = m_currentHour;
+                evt.dayCount = m_dayCount;
+                m_eventBus->Publish(evt);
+            }
         }
 
         // Recalculate derived values
@@ -243,6 +254,9 @@ public:
         m_onPeriodChanged = std::move(callback);
     }
 
+    /** @brief Set an EventBus for publishing TimeOfDayChangedEvent on period transitions. */
+    void SetEventBus(EventBus* bus) { m_eventBus = bus; }
+
 private:
     void UpdateSunPosition() {
         // Map hour to angle: 0h = -PI/2 (nadir), 6h = 0 (horizon), 12h = PI/2 (zenith), 18h = PI (horizon), 24h = 3PI/2
@@ -354,6 +368,9 @@ private:
 
     // Callback
     std::function<void(DayPeriod, DayPeriod)> m_onPeriodChanged;
+
+    // EventBus for publishing TimeOfDayChangedEvent
+    EventBus* m_eventBus = nullptr;
 };
 
 } // namespace Spark

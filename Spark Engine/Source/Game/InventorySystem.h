@@ -34,6 +34,8 @@
 #include <cstdint>
 #include <random>
 
+#include "../Engine/Events/EventSystem.h"
+
 namespace Spark {
 
 // =============================================================================
@@ -206,10 +208,13 @@ namespace InventoryOps {
      * @param registry  Item registry for looking up item properties
      * @param itemId    Item type ID to add
      * @param count     Number of items to add
+     * @param eventBus  Optional EventBus to publish ItemPickedUpEvent
+     * @param entityId  Entity ID for the event (only used if eventBus is set)
      * @return          Number of items actually added (may be less if full/overweight)
      */
     inline int AddItem(InventoryComponent& inv, const ItemRegistry& registry,
-                       uint32_t itemId, int count = 1) {
+                       uint32_t itemId, int count = 1,
+                       EventBus* eventBus = nullptr, uint32_t entityId = 0) {
         const ItemDef* def = registry.GetItem(itemId);
         if (!def || count <= 0) return 0;
 
@@ -242,7 +247,18 @@ namespace InventoryOps {
             remaining -= stackSize;
         }
 
-        return count - remaining;
+        int added = count - remaining;
+
+        // Publish item picked up event
+        if (added > 0 && eventBus) {
+            ItemPickedUpEvent evt;
+            evt.entityId = entityId;
+            evt.itemDefId = itemId;
+            evt.count = added;
+            eventBus->Publish(evt);
+        }
+
+        return added;
     }
 
     /**

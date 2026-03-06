@@ -36,79 +36,71 @@
 #include <chrono>
 #include <algorithm>
 #include <numeric>
-#include <cstring>
 #include <cstdint>
 #include <sstream>
+
+#include "RingBuffer.h"
 
 namespace Spark {
 
 // =============================================================================
-// Frame Time Ring Buffer
+// Frame Time Ring Buffer (backed by generic RingBuffer)
 // =============================================================================
 
 /**
- * @class FrameTimeHistory
+ * @class FrameTimeRingBuffer
  * @brief Fixed-size ring buffer storing recent frame times for graphing
+ *
+ * Wraps RingBuffer<float, 300> with convenience aggregation methods
+ * (min, max, average) and oldest-first Get() access.
  */
 class FrameTimeRingBuffer {
 public:
-    static constexpr int CAPACITY = 300; ///< ~5 seconds at 60fps
+    static constexpr size_t CAPACITY = 300; ///< ~5 seconds at 60fps
 
     void Push(float frameTimeMs) {
-        m_buffer[m_writeIndex] = frameTimeMs;
-        m_writeIndex = (m_writeIndex + 1) % CAPACITY;
-        if (m_count < CAPACITY) m_count++;
+        m_buffer.Push(frameTimeMs);
     }
 
     /** @brief Get a value by index (0 = oldest) */
     float Get(int index) const {
-        if (index < 0 || index >= m_count) return 0.0f;
-        int actualIndex = (m_writeIndex - m_count + index + CAPACITY) % CAPACITY;
-        return m_buffer[actualIndex];
+        if (index < 0 || index >= static_cast<int>(m_buffer.Size())) return 0.0f;
+        // RingBuffer [0] = newest, so reverse for oldest-first access
+        return m_buffer[m_buffer.Size() - 1 - index];
     }
 
-    int GetCount() const { return m_count; }
+    int GetCount() const { return static_cast<int>(m_buffer.Size()); }
 
     float GetMin() const {
-        if (m_count == 0) return 0.0f;
+        if (m_buffer.IsEmpty()) return 0.0f;
         float minVal = m_buffer[0];
-        for (int i = 1; i < m_count; ++i) {
-            int idx = (m_writeIndex - m_count + i + CAPACITY) % CAPACITY;
-            minVal = std::min(minVal, m_buffer[idx]);
-        }
+        for (float v : m_buffer) minVal = std::min(minVal, v);
         return minVal;
     }
 
     float GetMax() const {
-        if (m_count == 0) return 0.0f;
+        if (m_buffer.IsEmpty()) return 0.0f;
         float maxVal = m_buffer[0];
-        for (int i = 1; i < m_count; ++i) {
-            int idx = (m_writeIndex - m_count + i + CAPACITY) % CAPACITY;
-            maxVal = std::max(maxVal, m_buffer[idx]);
-        }
+        for (float v : m_buffer) maxVal = std::max(maxVal, v);
         return maxVal;
     }
 
     float GetAverage() const {
-        if (m_count == 0) return 0.0f;
+        if (m_buffer.IsEmpty()) return 0.0f;
         float sum = 0.0f;
-        for (int i = 0; i < m_count; ++i) {
-            int idx = (m_writeIndex - m_count + i + CAPACITY) % CAPACITY;
-            sum += m_buffer[idx];
-        }
-        return sum / m_count;
+        for (float v : m_buffer) sum += v;
+        return sum / m_buffer.Size();
     }
 
     void Clear() {
-        m_count = 0;
-        m_writeIndex = 0;
-        std::memset(m_buffer, 0, sizeof(m_buffer));
+        m_buffer.Clear();
     }
 
+    /** @brief Access the underlying ring buffer for iteration */
+    const RingBuffer<float, CAPACITY>& GetBuffer() const { return m_buffer; }
+
 private:
-    float m_buffer[CAPACITY] = {};
-    int m_writeIndex = 0;
-    int m_count = 0;
+    RingBuffer<float, CAPACITY> m_buffer;
 };
 
 // =============================================================================

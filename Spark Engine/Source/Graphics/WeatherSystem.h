@@ -39,6 +39,9 @@ struct XMFLOAT4 { float x, y, z, w; };
 #include <algorithm>
 #include <cmath>
 
+#include "../Engine/Events/EventSystem.h"
+#include "FogSystem.h"
+
 namespace Spark {
 
 // =============================================================================
@@ -268,6 +271,15 @@ public:
                 if (m_onWeatherChanged) {
                     m_onWeatherChanged(m_previousState.type, m_currentState.type);
                 }
+
+                // Publish event via EventBus
+                if (m_eventBus) {
+                    WeatherChangedEvent evt;
+                    evt.previousType = static_cast<int>(m_previousState.type);
+                    evt.newType = static_cast<int>(m_currentState.type);
+                    evt.intensity = m_currentState.intensity;
+                    m_eventBus->Publish(evt);
+                }
             } else {
                 // Smooth interpolation (ease in-out)
                 float t = SmoothStep(m_transitionProgress);
@@ -282,6 +294,23 @@ public:
             m_currentWindGust = gust * m_currentState.windGustiness * m_currentState.windSpeed;
         } else {
             m_currentWindGust = 0.0f;
+        }
+
+        // Sync fog system with current weather fog parameters
+        if (m_fogSystem) {
+            m_fogSystem->SetDensity(m_currentState.fogDensity);
+            m_fogSystem->SetLinearRange(m_currentState.fogStartDistance, m_currentState.fogEndDistance);
+            m_fogSystem->SetColor({
+                m_currentState.fogColor.x, m_currentState.fogColor.y,
+                m_currentState.fogColor.z, m_currentState.fogColor.w
+            });
+            if (m_currentState.fogDensity > 0.0f) {
+                m_fogSystem->SetEnabled(true);
+                if (m_fogSystem->GetMode() == Graphics::FogMode::None)
+                    m_fogSystem->SetMode(Graphics::FogMode::Exponential);
+            } else {
+                m_fogSystem->SetEnabled(false);
+            }
         }
 
         // Update lightning timer for storms
@@ -340,6 +369,12 @@ public:
     void SetOnWeatherChanged(WeatherCallback callback) {
         m_onWeatherChanged = std::move(callback);
     }
+
+    /** @brief Set an EventBus for publishing WeatherChangedEvent. */
+    void SetEventBus(EventBus* bus) { m_eventBus = bus; }
+
+    /** @brief Set a FogSystem to automatically sync fog parameters with weather. */
+    void SetFogSystem(Graphics::FogSystem* fog) { m_fogSystem = fog; }
 
     /** @brief Get a string name for a weather type. */
     static const char* GetWeatherTypeName(WeatherType type) {
@@ -409,6 +444,9 @@ private:
     float m_lightningFlash = 0.0f;
 
     WeatherCallback m_onWeatherChanged;
+
+    EventBus* m_eventBus = nullptr;
+    Graphics::FogSystem* m_fogSystem = nullptr;
 };
 
 } // namespace Spark
