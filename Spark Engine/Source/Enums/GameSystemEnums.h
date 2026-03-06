@@ -366,7 +366,7 @@ enum class DamageZoneType {
     ACID = 1,                ///< Corrosive damage over time
     ELECTRIC = 2,            ///< Periodic shock damage
     RADIATION = 3,           ///< Slow constant damage
-    VOID = 4                 ///< Out-of-bounds instant kill
+    VOID_ZONE = 4            ///< Out-of-bounds instant kill
 };
 
 /**
