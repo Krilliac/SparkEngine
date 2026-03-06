@@ -5,13 +5,15 @@
  * @date 2025
  */
 
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+
+#include <imgui.h>
+
 #include "SimpleHierarchyPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
-#include <imgui.h>
-#include <iostream>
-#include <algorithm>
-#include <cctype>
 
 namespace SparkEditor {
 
@@ -70,8 +72,10 @@ void SimpleHierarchyPanel::Render() {
             if (m_searchFilter[0] != '\0') {
                 std::string lower = object;
                 std::string filter = m_searchFilter;
-                std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-                std::transform(filter.begin(), filter.end(), filter.begin(), ::tolower);
+                std::transform(lower.begin(), lower.end(), lower.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                std::transform(filter.begin(), filter.end(), filter.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                 if (lower.find(filter) == std::string::npos) continue;
             }
 

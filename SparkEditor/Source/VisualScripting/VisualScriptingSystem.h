@@ -11,16 +11,21 @@
 
 #pragma once
 
+// Standard library headers first (MSVC /Zc:preprocessor compatibility)
+#include <functional>
+#include <memory>
+#include <queue>
+#include <string>
+#include <unordered_map>
+#include <variant>
+#include <vector>
+
+// Platform headers
+#include <DirectXMath.h>
+
+// Project headers
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
-#include <DirectXMath.h>
-#include <vector>
-#include <memory>
-#include <unordered_map>
-#include <string>
-#include <functional>
-#include <variant>
-#include <queue>
 
 using namespace DirectX;
 

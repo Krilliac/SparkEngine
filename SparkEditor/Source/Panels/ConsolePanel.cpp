@@ -5,18 +5,23 @@
  * @date 2025
  */
 
-#include "ConsolePanel.h"
-#include "../Core/EditorLogger.h"
-#include <imgui.h>
-#include <string>
-#include <vector>
-#include <sstream>
-#include <iostream>
+// Standard library headers first (MSVC /Zc:preprocessor compatibility)
+#include <algorithm>
+#include <atomic>
+#include <cctype>
 #include <chrono>
 #include <fstream>
-#include <algorithm>
 #include <iomanip>
+#include <iostream>
+#include <mutex>
+#include <sstream>
+#include <string>
 #include <thread>
+#include <vector>
+
+// Project and third-party headers
+#include "ConsolePanel.h"
+#include "../Core/EditorLogger.h"
 
 namespace SparkEditor {
 
@@ -461,8 +466,10 @@ void ConsolePanel::UpdateFilteredEntries() {
         if (!m_filter.searchPattern.empty()) {
             std::string lowerMessage = entry.message;
             std::string lowerPattern = m_filter.searchPattern;
-            std::transform(lowerMessage.begin(), lowerMessage.end(), lowerMessage.begin(), ::tolower);
-            std::transform(lowerPattern.begin(), lowerPattern.end(), lowerPattern.begin(), ::tolower);
+            std::transform(lowerMessage.begin(), lowerMessage.end(), lowerMessage.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            std::transform(lowerPattern.begin(), lowerPattern.end(), lowerPattern.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
             if (lowerMessage.find(lowerPattern) == std::string::npos) continue;
         }

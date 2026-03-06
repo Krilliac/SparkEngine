@@ -5,13 +5,16 @@
  * @date 2025
  */
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <iostream>
+
+#include <imgui.h>
+
 #include "AssetBrowserPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
-#include <imgui.h>
-#include <iostream>
-#include <filesystem>
-#include <algorithm>
 
 namespace SparkEditor {
 
@@ -193,7 +196,8 @@ void AssetBrowserPanel::RenderAssetGrid() {
 
             std::filesystem::path assetPath(asset);
             std::string ext = assetPath.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             std::string filename = assetPath.filename().string();
             const char* fileIcon = GetFileTypeIcon(ext);
             ImU32 iconColor = GetFileTypeColor(ext);

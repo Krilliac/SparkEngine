@@ -5,13 +5,15 @@
  * @date 2025
  */
 
-#include "AssetDatabase.h"
-#include <iostream>
-#include <fstream>
-#include <sstream>
 #include <algorithm>
-#include <random>
+#include <cctype>
+#include <fstream>
 #include <iomanip>
+#include <iostream>
+#include <random>
+#include <sstream>
+
+#include "AssetDatabase.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -261,11 +263,11 @@ std::vector<const AssetInfo*> AssetDatabase::SearchAssets(const std::string& sea
     std::vector<const AssetInfo*> result;
     
     std::string lowerSearchTerm = searchTerm;
-    std::transform(lowerSearchTerm.begin(), lowerSearchTerm.end(), lowerSearchTerm.begin(), ::tolower);
+    std::transform(lowerSearchTerm.begin(), lowerSearchTerm.end(), lowerSearchTerm.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     
     for (const auto& asset : m_assets) {
         std::string lowerName = asset.name;
-        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         
         if (lowerName.find(lowerSearchTerm) != std::string::npos) {
             result.push_back(&asset);
@@ -393,7 +395,7 @@ void AssetDatabase::ScanDirectory(const std::string& directoryPath)
 std::string AssetDatabase::DetermineAssetType(const std::string& filePath) const
 {
     std::string extension = std::filesystem::path(filePath).extension().string();
-    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     
     auto it = s_extensionToType.find(extension);
     if (it != s_extensionToType.end()) {
@@ -836,7 +838,7 @@ void AssetDatabase::HandleFileSystemChange(const FileSystemChange& change)
 bool AssetDatabase::IsAssetFile(const std::string& filePath) const
 {
     std::string extension = std::filesystem::path(filePath).extension().string();
-    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     
     return s_extensionToType.find(extension) != s_extensionToType.end();
 }
