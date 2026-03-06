@@ -7,6 +7,7 @@
 [submodule "ThirdParty/UI/imgui"]
 	path = ThirdParty/UI/imgui
 	url = https://github.com/ocornut/imgui.git
+	branch = docking
 [submodule "ThirdParty/Networking/curl"]
 	path = ThirdParty/Networking/curl
 	url = https://github.com/curl/curl.git
