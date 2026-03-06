@@ -1,6 +1,6 @@
 /**
  * @file PostProcessingSystem.h
- * @brief Basic post-processing system stub for Spark Engine
+ * @brief Post-processing system for Spark Engine (Bloom, Tone Mapping, Color Grading, FXAA)
  * @author Spark Engine Team
  * @date 2025
  */

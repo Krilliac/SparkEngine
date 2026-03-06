@@ -572,6 +572,7 @@ private:
     EditorSceneData m_sceneData;
     EngineProfilingData m_profilingData;
     std::vector<LiveVariable> m_liveVariables;
+    std::vector<EditorAssetData> m_loadedAssets;
     std::vector<std::string> m_consoleHistory;
     uint32_t m_selectedEntityId = 0;
     

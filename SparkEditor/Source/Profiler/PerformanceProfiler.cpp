@@ -304,23 +304,110 @@ bool PerformanceProfiler::ExportProfilingData(const std::string& filePath, const
         if (!file.is_open()) return false;
 
         if (format == "json") {
-            file << "{ \"frames\": " << m_frameHistory.size() << " }\n";
+            file << "{\n  \"profiling_data\": {\n";
+            file << "    \"frame_count\": " << m_frameHistory.size() << ",\n";
+            file << "    \"frames\": [\n";
+            for (size_t i = 0; i < m_frameHistory.size(); ++i) {
+                const auto& frame = m_frameHistory[i];
+                file << "      {\n";
+                file << "        \"frameNumber\": " << frame->frameNumber << ",\n";
+                file << "        \"frameTime\": " << std::fixed << std::setprecision(3) << frame->frameTime << ",\n";
+                file << "        \"fps\": " << frame->fps << ",\n";
+                file << "        \"cpuTime\": " << frame->cpuTime << ",\n";
+                file << "        \"gpuTime\": " << frame->gpuTime << ",\n";
+                file << "        \"drawCalls\": " << frame->drawCalls << ",\n";
+                file << "        \"triangles\": " << frame->triangles << ",\n";
+                file << "        \"systemMemoryUsage\": " << frame->systemMemoryUsage << ",\n";
+                file << "        \"videoMemoryUsage\": " << frame->videoMemoryUsage << "\n";
+                file << "      }" << (i + 1 < m_frameHistory.size() ? "," : "") << "\n";
+            }
+            file << "    ]\n  }\n}\n";
+        } else if (format == "csv") {
+            file << "frameNumber,frameTime,fps,cpuTime,gpuTime,drawCalls,triangles,systemMemory,videoMemory\n";
+            for (const auto& frame : m_frameHistory) {
+                file << frame->frameNumber << ","
+                     << std::fixed << std::setprecision(3) << frame->frameTime << ","
+                     << frame->fps << ","
+                     << frame->cpuTime << ","
+                     << frame->gpuTime << ","
+                     << frame->drawCalls << ","
+                     << frame->triangles << ","
+                     << frame->systemMemoryUsage << ","
+                     << frame->videoMemoryUsage << "\n";
+            }
         } else {
-            file << "Profiling Data Export\n";
-            file << "Frames: " << m_frameHistory.size() << "\n";
+            file << "Spark Engine Profiling Data Export\n";
+            file << "================================\n";
+            file << "Total Frames: " << m_frameHistory.size() << "\n\n";
+            for (const auto& frame : m_frameHistory) {
+                file << "Frame: " << frame->frameNumber
+                     << "  Time: " << std::fixed << std::setprecision(2) << frame->frameTime << "ms"
+                     << "  FPS: " << frame->fps
+                     << "  CPU: " << frame->cpuTime << "ms"
+                     << "  GPU: " << frame->gpuTime << "ms"
+                     << "  Draw Calls: " << frame->drawCalls << "\n";
+            }
         }
 
         file.close();
-        std::cout << "Exported profiling data to: " << filePath << "\n";
+        std::cout << "Exported profiling data to: " << filePath << " (format: " << format << ")\n";
         return true;
     } catch (...) {
         return false;
     }
 }
 
-bool PerformanceProfiler::ImportProfilingData(const std::string& /*filePath*/) {
-    // Stub
-    return false;
+bool PerformanceProfiler::ImportProfilingData(const std::string& filePath) {
+    try {
+        std::ifstream file(filePath);
+        if (!file.is_open()) return false;
+
+        ClearProfilingData();
+        std::string line;
+        std::unique_ptr<FrameProfileData> frame;
+
+        while (std::getline(file, line)) {
+            // Detect frame boundaries
+            if (line.find("\"frameNumber\"") != std::string::npos || line.find("Frame:") != std::string::npos) {
+                if (frame) {
+                    m_frameHistory.push_back(std::move(frame));
+                }
+                frame = std::make_unique<FrameProfileData>();
+            }
+            if (!frame) {
+                frame = std::make_unique<FrameProfileData>();
+            }
+
+            // Parse key-value pairs from JSON or text format
+            auto extractFloat = [&](const std::string& key) -> float {
+                auto pos = line.find(key);
+                if (pos == std::string::npos) return -1.0f;
+                pos += key.length();
+                while (pos < line.size() && !std::isdigit(line[pos]) && line[pos] != '-')
+                    pos++;
+                if (pos >= line.size()) return -1.0f;
+                try { return std::stof(line.substr(pos)); } catch (...) { return -1.0f; }
+            };
+
+            float val;
+            if ((val = extractFloat("frameTime")) >= 0) frame->frameTime = val;
+            if ((val = extractFloat("fps")) >= 0) frame->fps = val;
+            if ((val = extractFloat("cpuTime")) >= 0) frame->cpuTime = val;
+            if ((val = extractFloat("gpuTime")) >= 0) frame->gpuTime = val;
+            if ((val = extractFloat("drawCalls")) >= 0) frame->drawCalls = static_cast<int>(val);
+            if ((val = extractFloat("triangles")) >= 0) frame->triangles = static_cast<int>(val);
+        }
+
+        if (frame) {
+            m_frameHistory.push_back(std::move(frame));
+        }
+
+        file.close();
+        std::cout << "Imported profiling data from: " << filePath << " (" << m_frameHistory.size() << " frames)\n";
+        return !m_frameHistory.empty();
+    } catch (...) {
+        return false;
+    }
 }
 
 void PerformanceProfiler::ClearProfilingData() {
@@ -372,8 +459,77 @@ std::string PerformanceProfiler::CompareSnapshots(uint32_t snapshot1, uint32_t s
     return ss.str();
 }
 
-std::string PerformanceProfiler::GetTrendAnalysis(const std::string& /*metric*/, float /*timespan*/) {
-    return "Trend analysis not yet implemented";
+std::string PerformanceProfiler::GetTrendAnalysis(const std::string& metric, float timespan) {
+    if (m_frameHistory.empty()) {
+        return "No profiling data available for trend analysis.";
+    }
+
+    // Collect metric values over the timespan
+    std::vector<float> values;
+    auto now = std::chrono::steady_clock::now();
+
+    for (const auto& frame : m_frameHistory) {
+        float age = std::chrono::duration<float>(now - frame->timestamp).count();
+        if (age > timespan) continue;
+
+        float val = 0.0f;
+        if (metric == "frameTime") val = frame->frameTime;
+        else if (metric == "fps") val = frame->fps;
+        else if (metric == "cpuTime") val = frame->cpuTime;
+        else if (metric == "gpuTime") val = frame->gpuTime;
+        else if (metric == "drawCalls") val = static_cast<float>(frame->drawCalls);
+        else if (metric == "triangles") val = static_cast<float>(frame->triangles);
+        else val = frame->frameTime; // default to frame time
+
+        values.push_back(val);
+    }
+
+    if (values.empty()) {
+        return "No data points found for metric '" + metric + "' in the specified timespan.";
+    }
+
+    // Calculate statistics
+    float sum = 0.0f, minVal = FLT_MAX, maxVal = -FLT_MAX;
+    for (float v : values) {
+        sum += v;
+        if (v < minVal) minVal = v;
+        if (v > maxVal) maxVal = v;
+    }
+    float avg = sum / static_cast<float>(values.size());
+
+    // Calculate standard deviation
+    float varianceSum = 0.0f;
+    for (float v : values) {
+        float diff = v - avg;
+        varianceSum += diff * diff;
+    }
+    float stddev = std::sqrt(varianceSum / static_cast<float>(values.size()));
+
+    // Determine trend by comparing first half vs second half averages
+    size_t mid = values.size() / 2;
+    float firstHalfAvg = 0.0f, secondHalfAvg = 0.0f;
+    for (size_t i = 0; i < mid; ++i) firstHalfAvg += values[i];
+    for (size_t i = mid; i < values.size(); ++i) secondHalfAvg += values[i];
+    if (mid > 0) firstHalfAvg /= static_cast<float>(mid);
+    if (values.size() - mid > 0) secondHalfAvg /= static_cast<float>(values.size() - mid);
+
+    float changePercent = (firstHalfAvg != 0.0f) ? ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100.0f : 0.0f;
+
+    std::string trend;
+    if (changePercent > 5.0f) trend = "DEGRADING";
+    else if (changePercent < -5.0f) trend = "IMPROVING";
+    else trend = "STABLE";
+
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(2);
+    ss << "Trend Analysis for '" << metric << "' (last " << timespan << "s):\n";
+    ss << "  Samples: " << values.size() << "\n";
+    ss << "  Average: " << avg << "\n";
+    ss << "  Min: " << minVal << "  Max: " << maxVal << "\n";
+    ss << "  Std Dev: " << stddev << "\n";
+    ss << "  Trend: " << trend << " (" << std::showpos << changePercent << "%)\n";
+
+    return ss.str();
 }
 
 // ============================================================================
@@ -525,31 +681,295 @@ void PerformanceProfiler::AnalyzePerformance() {
 }
 
 void PerformanceProfiler::GenerateOptimizationSuggestions() {
-    // Stub - would analyze profiling data and generate suggestions
+    m_optimizationSuggestions.clear();
+
+    if (!m_currentFrame) return;
+
+    float targetFrameTime = 1000.0f / m_config.targetFrameRate;
+
+    // Check frame time budget
+    if (m_currentFrame->frameTime > targetFrameTime * 1.5f) {
+        OptimizationSuggestion suggestion;
+        suggestion.priority = OptimizationSuggestion::CRITICAL;
+        suggestion.title = "Frame time significantly exceeds budget";
+        suggestion.description = "Current frame time (" + std::to_string(static_cast<int>(m_currentFrame->frameTime)) +
+            "ms) is over 150% of target (" + std::to_string(static_cast<int>(targetFrameTime)) + "ms).";
+        suggestion.category = "Performance";
+        suggestion.estimatedGain = ((m_currentFrame->frameTime - targetFrameTime) / m_currentFrame->frameTime) * 100.0f;
+        suggestion.steps = {"Profile CPU and GPU to identify bottleneck", "Reduce scene complexity", "Optimize hot paths"};
+        m_optimizationSuggestions.push_back(suggestion);
+    } else if (m_currentFrame->frameTime > targetFrameTime) {
+        OptimizationSuggestion suggestion;
+        suggestion.priority = OptimizationSuggestion::HIGH;
+        suggestion.title = "Frame time exceeds budget";
+        suggestion.description = "Current frame time exceeds target by " +
+            std::to_string(static_cast<int>(m_currentFrame->frameTime - targetFrameTime)) + "ms.";
+        suggestion.category = "Performance";
+        suggestion.estimatedGain = ((m_currentFrame->frameTime - targetFrameTime) / m_currentFrame->frameTime) * 100.0f;
+        suggestion.steps = {"Identify most expensive operations", "Consider LOD adjustments", "Batch draw calls"};
+        m_optimizationSuggestions.push_back(suggestion);
+    }
+
+    // Check draw calls
+    if (m_currentFrame->drawCalls > 2000) {
+        OptimizationSuggestion suggestion;
+        suggestion.priority = m_currentFrame->drawCalls > 5000 ? OptimizationSuggestion::HIGH : OptimizationSuggestion::MEDIUM;
+        suggestion.title = "High draw call count";
+        suggestion.description = "Draw call count (" + std::to_string(m_currentFrame->drawCalls) +
+            ") is high. Consider batching or instancing.";
+        suggestion.category = "Rendering";
+        suggestion.estimatedGain = 15.0f;
+        suggestion.steps = {"Enable draw call batching", "Use GPU instancing for repeated objects", "Merge static meshes"};
+        m_optimizationSuggestions.push_back(suggestion);
+    }
+
+    // Check memory usage
+    size_t totalMem = m_currentFrame->systemMemoryUsage + m_currentFrame->videoMemoryUsage;
+    if (totalMem > m_config.memoryBudget * 0.9) {
+        OptimizationSuggestion suggestion;
+        suggestion.priority = totalMem > m_config.memoryBudget ? OptimizationSuggestion::CRITICAL : OptimizationSuggestion::HIGH;
+        suggestion.title = "Memory usage approaching budget";
+        float memMB = static_cast<float>(totalMem) / (1024.0f * 1024.0f);
+        float budgetMB = static_cast<float>(m_config.memoryBudget) / (1024.0f * 1024.0f);
+        suggestion.description = "Using " + std::to_string(static_cast<int>(memMB)) +
+            "MB of " + std::to_string(static_cast<int>(budgetMB)) + "MB budget.";
+        suggestion.category = "Memory";
+        suggestion.estimatedGain = 5.0f;
+        suggestion.steps = {"Review texture resolutions", "Unload unused assets", "Use streaming"};
+        m_optimizationSuggestions.push_back(suggestion);
+    }
+
+    // Add bottleneck-driven suggestions
+    for (const auto& bottleneck : m_detectedBottlenecks) {
+        if (bottleneck.severity > m_config.bottleneckThreshold) {
+            OptimizationSuggestion suggestion;
+            suggestion.priority = bottleneck.severity > 0.9f ? OptimizationSuggestion::CRITICAL : OptimizationSuggestion::HIGH;
+            suggestion.title = bottleneck.description;
+            suggestion.description = bottleneck.recommendation;
+            suggestion.category = "Bottleneck";
+            suggestion.estimatedGain = bottleneck.severity * 20.0f;
+            suggestion.steps = bottleneck.optimizationHints;
+            m_optimizationSuggestions.push_back(suggestion);
+        }
+    }
 }
 
 void PerformanceProfiler::DetectCPUBottlenecks() {
-    // Stub
+    if (!m_currentFrame) return;
+
+    // Check if CPU-bound: cpuTime significantly higher than gpuTime
+    if (m_currentFrame->cpuTime > m_config.cpuBudget) {
+        PerformanceBottleneck bottleneck;
+        bottleneck.type = PerformanceBottleneck::CPU_BOUND;
+        bottleneck.description = "CPU bound - CPU time exceeds budget";
+        bottleneck.recommendation = "Optimize game logic, reduce physics complexity, or offload work to GPU.";
+        bottleneck.severity = std::min(1.0f, m_currentFrame->cpuTime / (m_config.cpuBudget * 2.0f));
+        bottleneck.confidence = 0.8f;
+        bottleneck.affectedSystems = {"Game Logic", "Physics", "AI"};
+        bottleneck.optimizationHints = {
+            "Profile CPU samples to find hot functions",
+            "Consider multithreading for expensive operations",
+            "Reduce update frequency for non-critical systems"
+        };
+
+        // Look for expensive CPU samples
+        if (!m_currentFrame->cpuSamples.empty()) {
+            for (const auto& sample : m_currentFrame->cpuSamples) {
+                if (sample->duration > m_config.cpuBudget * 0.5f) {
+                    bottleneck.optimizationHints.push_back(
+                        "Hot function: " + sample->name + " (" + std::to_string(static_cast<int>(sample->duration)) + "ms)");
+                }
+            }
+        }
+
+        m_detectedBottlenecks.push_back(bottleneck);
+    }
 }
 
 void PerformanceProfiler::DetectGPUBottlenecks() {
-    // Stub
+    if (!m_currentFrame) return;
+
+    if (m_currentFrame->gpuTime > m_config.gpuBudget) {
+        PerformanceBottleneck bottleneck;
+        bottleneck.type = PerformanceBottleneck::GPU_BOUND;
+        bottleneck.description = "GPU bound - GPU time exceeds budget";
+        bottleneck.recommendation = "Reduce rendering complexity, optimize shaders, or lower resolution.";
+        bottleneck.severity = std::min(1.0f, m_currentFrame->gpuTime / (m_config.gpuBudget * 2.0f));
+        bottleneck.confidence = 0.8f;
+        bottleneck.affectedSystems = {"Rendering", "Post-Processing", "Shadows"};
+        bottleneck.optimizationHints = {
+            "Reduce shadow map resolution",
+            "Use simpler shaders for distant objects",
+            "Implement occlusion culling",
+            "Reduce post-processing passes"
+        };
+        m_detectedBottlenecks.push_back(bottleneck);
+    }
+
+    // Check for excessive draw calls causing overhead
+    if (m_currentFrame->drawCalls > 3000 && m_currentFrame->gpuTime > m_config.gpuBudget * 0.7f) {
+        PerformanceBottleneck bottleneck;
+        bottleneck.type = PerformanceBottleneck::VERTEX_BOUND;
+        bottleneck.description = "Excessive draw call overhead";
+        bottleneck.recommendation = "Batch draw calls, use instancing, merge static geometry.";
+        bottleneck.severity = std::min(1.0f, static_cast<float>(m_currentFrame->drawCalls) / 5000.0f);
+        bottleneck.confidence = 0.7f;
+        bottleneck.affectedSystems = {"Rendering Pipeline"};
+        bottleneck.optimizationHints = {"Enable hardware instancing", "Merge static meshes", "Use indirect draw calls"};
+        m_detectedBottlenecks.push_back(bottleneck);
+    }
 }
 
 void PerformanceProfiler::DetectMemoryBottlenecks() {
-    // Stub
+    std::lock_guard<std::mutex> lock(m_memoryMutex);
+
+    size_t totalAllocated = 0;
+    int totalAllocations = 0;
+    for (const auto& [category, sample] : m_memoryCategories) {
+        totalAllocated += sample.allocatedBytes;
+        totalAllocations += sample.allocationCount;
+    }
+
+    if (totalAllocated > m_config.memoryBudget * 0.85) {
+        PerformanceBottleneck bottleneck;
+        bottleneck.type = PerformanceBottleneck::MEMORY_BOUND;
+        bottleneck.description = "Memory usage approaching budget limit";
+        float usageMB = static_cast<float>(totalAllocated) / (1024.0f * 1024.0f);
+        float budgetMB = static_cast<float>(m_config.memoryBudget) / (1024.0f * 1024.0f);
+        bottleneck.recommendation = "Current usage: " + std::to_string(static_cast<int>(usageMB)) +
+            "MB / " + std::to_string(static_cast<int>(budgetMB)) + "MB budget.";
+        bottleneck.severity = std::min(1.0f, static_cast<float>(totalAllocated) / static_cast<float>(m_config.memoryBudget));
+        bottleneck.confidence = 0.9f;
+        bottleneck.affectedSystems = {"Memory Management"};
+
+        // Identify largest categories
+        for (const auto& [category, sample] : m_memoryCategories) {
+            float categoryMB = static_cast<float>(sample.allocatedBytes) / (1024.0f * 1024.0f);
+            if (categoryMB > 100.0f) {
+                bottleneck.optimizationHints.push_back(
+                    category + ": " + std::to_string(static_cast<int>(categoryMB)) + "MB");
+            }
+        }
+
+        m_detectedBottlenecks.push_back(bottleneck);
+    }
+
+    // Check for excessive allocation frequency (potential GC pressure / fragmentation)
+    if (totalAllocations > 10000) {
+        PerformanceBottleneck bottleneck;
+        bottleneck.type = PerformanceBottleneck::MEMORY_BOUND;
+        bottleneck.description = "High allocation frequency detected";
+        bottleneck.recommendation = "Use object pools or arena allocators to reduce allocation overhead.";
+        bottleneck.severity = std::min(1.0f, static_cast<float>(totalAllocations) / 50000.0f);
+        bottleneck.confidence = 0.6f;
+        bottleneck.affectedSystems = {"Memory Management", "CPU"};
+        bottleneck.optimizationHints = {"Implement object pooling", "Use stack allocators for temporary data", "Reduce per-frame allocations"};
+        m_detectedBottlenecks.push_back(bottleneck);
+    }
 }
 
 void PerformanceProfiler::ProcessGPUQueries() {
-    // Stub
+    // Process pending GPU timestamp queries and compute durations
+    if (!m_currentFrame) return;
+
+    for (auto& [name, sample] : m_activeGPUSamples) {
+        // In a real implementation, we'd query D3D11 timestamp queries here
+        // For now, add the sample data to the current frame
+        if (sample.endTimestamp > sample.startTimestamp) {
+            sample.duration = static_cast<float>(sample.endTimestamp - sample.startTimestamp) / 1000000.0f; // ns to ms
+        }
+    }
+
+    // Move completed GPU samples to current frame
+    for (const auto& [name, sample] : m_activeGPUSamples) {
+        if (sample.duration > 0.0f) {
+            m_currentFrame->gpuSamples.push_back(sample);
+        }
+    }
+
+    // Calculate total GPU time
+    float totalGpuTime = 0.0f;
+    for (const auto& sample : m_currentFrame->gpuSamples) {
+        totalGpuTime += sample.duration;
+    }
+    m_currentFrame->gpuTime = totalGpuTime;
 }
 
 void PerformanceProfiler::UpdateMemoryTracking() {
-    // Stub
+    std::lock_guard<std::mutex> lock(m_memoryMutex);
+
+    if (!m_currentFrame) return;
+
+    // Update frame memory statistics from categories
+    size_t totalSystem = 0;
+    size_t totalVideo = 0;
+
+    for (auto& [category, sample] : m_memoryCategories) {
+        sample.timestamp = std::chrono::steady_clock::now();
+
+        // Track peak usage
+        if (sample.allocatedBytes > sample.peakBytes) {
+            sample.peakBytes = sample.allocatedBytes;
+        }
+
+        // Categorize memory into system vs video
+        if (category == "Textures" || category == "Shaders" || category == "RenderTargets" || category == "GPU") {
+            totalVideo += sample.allocatedBytes;
+        } else {
+            totalSystem += sample.allocatedBytes;
+        }
+
+        // Add to frame memory samples
+        m_currentFrame->memorySamples.push_back(sample);
+    }
+
+    m_currentFrame->systemMemoryUsage = totalSystem;
+    m_currentFrame->videoMemoryUsage = totalVideo;
+    m_currentFrame->activeObjects = static_cast<int>(m_memoryAllocations.size());
 }
 
 void PerformanceProfiler::CalculateStatistics() {
-    // Stub
+    if (m_frameHistory.empty()) return;
+
+    // Calculate aggregate statistics over recent history
+    int windowSize = std::min(static_cast<int>(m_frameHistory.size()), m_config.analysisWindowSize);
+    int startIdx = static_cast<int>(m_frameHistory.size()) - windowSize;
+
+    float sumFrameTime = 0.0f, sumCpuTime = 0.0f, sumGpuTime = 0.0f;
+    float minFrameTime = FLT_MAX, maxFrameTime = 0.0f;
+    int sumDrawCalls = 0, sumTriangles = 0;
+    std::vector<float> frameTimes;
+
+    for (int i = startIdx; i < static_cast<int>(m_frameHistory.size()); ++i) {
+        const auto& frame = m_frameHistory[i];
+        sumFrameTime += frame->frameTime;
+        sumCpuTime += frame->cpuTime;
+        sumGpuTime += frame->gpuTime;
+        sumDrawCalls += frame->drawCalls;
+        sumTriangles += frame->triangles;
+        if (frame->frameTime < minFrameTime) minFrameTime = frame->frameTime;
+        if (frame->frameTime > maxFrameTime) maxFrameTime = frame->frameTime;
+        frameTimes.push_back(frame->frameTime);
+    }
+
+    float avgFrameTime = sumFrameTime / static_cast<float>(windowSize);
+    float avgFps = (avgFrameTime > 0.0f) ? 1000.0f / avgFrameTime : 0.0f;
+
+    // Calculate percentiles (sort frame times)
+    std::sort(frameTimes.begin(), frameTimes.end());
+    float p50 = frameTimes.empty() ? 0.0f : frameTimes[frameTimes.size() / 2];
+    float p95 = frameTimes.empty() ? 0.0f : frameTimes[static_cast<size_t>(frameTimes.size() * 0.95f)];
+    float p99 = frameTimes.empty() ? 0.0f : frameTimes[static_cast<size_t>(frameTimes.size() * 0.99f)];
+
+    // Update the current frame with calculated statistics
+    if (m_currentFrame) {
+        m_currentFrame->fps = avgFps;
+        m_currentFrame->frameTime = avgFrameTime;
+        m_currentFrame->isPerformanceTarget = (avgFrameTime <= m_currentFrame->targetFrameTime);
+    }
+
+    // Clear and regenerate bottlenecks
+    m_detectedBottlenecks.clear();
 }
 
 void PerformanceProfiler::RenderCPUSampleHierarchy(const CPUProfileSample* sample, int depth) {
