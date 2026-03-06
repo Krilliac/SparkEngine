@@ -345,7 +345,12 @@ uint32_t PerformanceProfiler::TakeSnapshot(const std::string& name) {
     snapshot.name = name;
     snapshot.timestamp = std::chrono::steady_clock::now();
     if (m_currentFrame) {
-        snapshot.frameData = *m_currentFrame;
+        snapshot.frameData.frameNumber = m_currentFrame->frameNumber;
+        snapshot.frameData.frameTime = m_currentFrame->frameTime;
+        snapshot.frameData.fps = m_currentFrame->fps;
+        snapshot.frameData.cpuTime = m_currentFrame->cpuTime;
+        snapshot.frameData.gpuTime = m_currentFrame->gpuTime;
+        snapshot.frameData.drawCalls = m_currentFrame->drawCalls;
     }
     snapshot.counters = m_performanceCounters;
     m_snapshots.push_back(std::move(snapshot));
@@ -503,7 +508,12 @@ void PerformanceProfiler::UpdateFrameData() {
     if (static_cast<int>(m_frameHistory.size()) >= m_config.maxFrameHistory) {
         m_frameHistory.erase(m_frameHistory.begin());
     }
-    m_frameHistory.push_back(std::make_unique<FrameProfileData>(*m_currentFrame));
+    auto historyFrame = std::make_unique<FrameProfileData>();
+    historyFrame->frameNumber = m_currentFrame->frameNumber;
+    historyFrame->timestamp = m_currentFrame->timestamp;
+    historyFrame->frameTime = m_currentFrame->frameTime;
+    historyFrame->fps = m_currentFrame->fps;
+    m_frameHistory.push_back(std::move(historyFrame));
 }
 
 void PerformanceProfiler::AnalyzePerformance() {
