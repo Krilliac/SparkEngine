@@ -41,7 +41,7 @@ class RenderTarget;
 class MaterialSystem;
 class LightManager;
 namespace Spark::Graphics { class PostProcessingPipeline; }
-class TemporalEffects;
+#include "TemporalEffects.h"  // Full definition needed for TAASettings struct
 class TextureSystem;
 class LightingSystem;
 class PostProcessingSystem;
@@ -90,17 +90,7 @@ enum class MSAALevel
     MSAA8x = 8         ///< 8x MSAA
 };
 
-/**
- * @brief Temporal anti-aliasing settings
- */
-struct TAASettings
-{
-    bool enabled = false;           ///< Enable temporal anti-aliasing
-    float jitterScale = 1.0f;       ///< Jitter scale for TAA
-    float historyBlend = 0.9f;      ///< History blending factor
-    float motionBlurScale = 1.0f;   ///< Motion blur intensity
-    bool varianceClipping = true;   ///< Enable variance clipping
-};
+// TAASettings is defined in TemporalEffects.h (included above)
 
 /**
  * @brief Screen-space ambient occlusion settings
