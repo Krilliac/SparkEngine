@@ -90,7 +90,7 @@ public:
      * @param direction Normalized direction vector
      * @param speed Initial speed magnitude
      */
-    void Fire(const DirectX::XMFLOAT3& startPosition,
+    virtual void Fire(const DirectX::XMFLOAT3& startPosition,
         const DirectX::XMFLOAT3& direction,
         float speed);
 

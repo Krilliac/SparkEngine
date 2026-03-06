@@ -77,7 +77,7 @@ void DamageZoneSystem::Update(float deltaTime, Player* player)
                 player->TakeDamage(damage * 0.5f); // Slow constant damage
                 break;
 
-            case DamageZoneType::VOID:
+            case DamageZoneType::VOID_ZONE:
                 player->TakeDamage(99999.0f); // Instant kill
                 break;
             }
@@ -188,7 +188,7 @@ int DamageZoneSystem::CreateVoidZone(const std::string& name, const XMFLOAT3& ce
 {
     DamageZone zone;
     zone.name = name;
-    zone.type = DamageZoneType::VOID;
+    zone.type = DamageZoneType::VOID_ZONE;
     zone.center = center;
     zone.halfExtents = halfExtents;
     zone.instantKill = true;
