@@ -142,8 +142,8 @@ void Terrain::Render(ID3D11DeviceContext* ctx)
     ASSERT(m_indexCount > 0);
 
     UINT stride = sizeof(TerrainVertex), offset = 0;
-    ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
-    ctx->IASetIndexBuffer(m_ib, DXGI_FORMAT_R32_UINT, 0);
+    ctx->IASetVertexBuffers(0, 1, m_vb.GetAddressOf(), &stride, &offset);
+    ctx->IASetIndexBuffer(m_ib.Get(), DXGI_FORMAT_R32_UINT, 0);
     ctx->IASetPrimitiveTopology(
         D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ctx->DrawIndexed(m_indexCount, 0, 0);

@@ -177,7 +177,7 @@ public:
     std::string Console_GetInfo() const;
 
 private:
-    void BuildMesh(const std::vector<uint8_t>& rawHeightData);
+    void BuildMesh(const std::vector<uint8_t>& rawHeightData, UINT w, UINT h, float s);
     void CalculateNormals();
     void CalculateSplatWeights();
     void UpdateVertexBuffer();
