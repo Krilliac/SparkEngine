@@ -6,135 +6,42 @@
  */
 
 #include "HierarchyPanel.h"
+#include "../Core/EditorIcons.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
+#include <algorithm>
 
 namespace SparkEditor {
 
-// File-scope state for rename and clipboard operations
-static std::string m_clipboardObject;
-static std::string m_renamingTarget;
-static bool        m_renameRequested = false;
-static char        m_renameInputBuffer[256] = {};
-
-HierarchyPanel::HierarchyPanel() 
+HierarchyPanel::HierarchyPanel()
     : EditorPanel("Hierarchy", "hierarchy_panel") {
+}
+
+HierarchyPanel::~HierarchyPanel() {
 }
 
 bool HierarchyPanel::Initialize() {
     std::cout << "Initializing Hierarchy panel\n";
-    
-    // Add some test objects for demonstration
-    m_sceneObjects.push_back("Main Camera");
-    m_sceneObjects.push_back("Directional Light");
-    m_sceneObjects.push_back("Player");
-    m_sceneObjects.push_back("Ground");
-    m_sceneObjects.push_back("Environment");
-    
     return true;
 }
 
-void HierarchyPanel::Update(float deltaTime) {
-    // Update hierarchy panel logic
+void HierarchyPanel::Update(float /*deltaTime*/) {
+    if (m_needsSelectionUpdate) {
+        UpdateSelection();
+        m_needsSelectionUpdate = false;
+    }
 }
 
 void HierarchyPanel::Render() {
     if (!IsVisible()) return;
 
     if (BeginPanel()) {
-        // Hierarchy toolbar
-        if (ImGui::Button("Create")) {
-            ImGui::OpenPopup("CreateObject");
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Delete")) {
-            if (!m_selectedObject.empty()) {
-                DeleteObject(m_selectedObject);
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Duplicate")) {
-            if (!m_selectedObject.empty()) {
-                DuplicateObject(m_selectedObject);
-            }
-        }
-        
+        RenderToolbar();
         ImGui::Separator();
-        
-        // Search filter
-        static char searchBuffer[256] = "";
-        ImGui::InputTextWithHint("##Search", "Search objects...", searchBuffer, sizeof(searchBuffer));
-        
+        RenderSearchBar();
         ImGui::Separator();
-        
-        // Object tree
-        RenderObjectTree();
-        
-        // Context menus
-        RenderContextMenu();
-        
-        // Create object popup
-        if (ImGui::BeginPopup("CreateObject")) {
-            if (ImGui::MenuItem("Empty GameObject")) {
-                CreateNewObject("Empty");
-            }
-            if (ImGui::BeginMenu("3D Object")) {
-                if (ImGui::MenuItem("Cube")) CreateNewObject("Cube");
-                if (ImGui::MenuItem("Sphere")) CreateNewObject("Sphere");
-                if (ImGui::MenuItem("Cylinder")) CreateNewObject("Cylinder");
-                if (ImGui::MenuItem("Plane")) CreateNewObject("Plane");
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Light")) {
-                if (ImGui::MenuItem("Directional Light")) CreateNewObject("Directional Light");
-                if (ImGui::MenuItem("Point Light")) CreateNewObject("Point Light");
-                if (ImGui::MenuItem("Spot Light")) CreateNewObject("Spot Light");
-                ImGui::EndMenu();
-            }
-            if (ImGui::MenuItem("Camera")) CreateNewObject("Camera");
-            ImGui::EndPopup();
-        }
-
-        // Rename popup
-        if (m_renameRequested) {
-            ImGui::OpenPopup("RenameObject");
-            m_renameRequested = false;
-        }
-
-        if (ImGui::BeginPopup("RenameObject")) {
-            ImGui::Text("Rename: %s", m_renamingTarget.c_str());
-            ImGui::Separator();
-
-            bool confirmed = ImGui::InputText("##RenameInput", m_renameInputBuffer,
-                                              sizeof(m_renameInputBuffer),
-                                              ImGuiInputTextFlags_EnterReturnsTrue);
-            // Auto-focus the input the first time the popup opens
-            if (ImGui::IsWindowAppearing()) {
-                ImGui::SetKeyboardFocusHere(-1);
-            }
-
-            if (confirmed || ImGui::Button("OK")) {
-                std::string newName(m_renameInputBuffer);
-                if (!newName.empty() && newName != m_renamingTarget) {
-                    auto it = std::find(m_sceneObjects.begin(), m_sceneObjects.end(), m_renamingTarget);
-                    if (it != m_sceneObjects.end()) {
-                        *it = newName;
-                        if (m_selectedObject == m_renamingTarget) {
-                            m_selectedObject = newName;
-                        }
-                        std::cout << "Renamed object: " << m_renamingTarget << " -> " << newName << std::endl;
-                    }
-                }
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel")) {
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
-        }
+        RenderHierarchyTree();
     }
     EndPanel();
 }
@@ -143,106 +50,386 @@ void HierarchyPanel::Shutdown() {
     std::cout << "Shutting down Hierarchy panel\n";
 }
 
-bool HierarchyPanel::HandleEvent(const std::string& eventType, void* eventData) {
+bool HierarchyPanel::HandleEvent(const std::string& /*eventType*/, void* /*eventData*/) {
     return false;
 }
 
-void HierarchyPanel::SetSelectedObject(const std::string& objectId) {
-    m_selectedObject = objectId;
+void HierarchyPanel::SetScene(SceneFile* scene) {
+    m_scene = scene;
+    ClearSelection();
+    m_filterCacheDirty = true;
 }
 
-void HierarchyPanel::RenderObjectTree() {
-    for (const auto& object : m_sceneObjects) {
-        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-        
-        if (object == m_selectedObject) {
-            flags |= ImGuiTreeNodeFlags_Selected;
-        }
-        
-        // Object icon
-        const char* icon = "??"; // Default icon
-        if (object.find("Camera") != std::string::npos) icon = "??";
-        else if (object.find("Light") != std::string::npos) icon = "??";
-        else if (object.find("Player") != std::string::npos) icon = "??";
-        
-        ImGui::TreeNodeEx(object.c_str(), flags, "%s %s", icon, object.c_str());
-        
-        if (ImGui::IsItemClicked()) {
-            SetSelectedObject(object);
-        }
-        
-        // Context menu
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-            m_contextMenuTarget = object;
-            m_showContextMenu = true;
-        }
+void HierarchyPanel::SetSelectedObjects(const std::vector<ObjectID>& objectIDs) {
+    m_selectedObjects = objectIDs;
+    m_selectedSet.clear();
+    for (auto id : objectIDs) {
+        m_selectedSet.insert(id);
     }
+    NotifySelectionChanged();
 }
 
-void HierarchyPanel::RenderContextMenu() {
-    if (m_showContextMenu) {
-        ImGui::OpenPopup("ObjectContextMenu");
-        m_showContextMenu = false;
+void HierarchyPanel::SelectObject(ObjectID objectID, bool addToSelection) {
+    if (!addToSelection) {
+        m_selectedObjects.clear();
+        m_selectedSet.clear();
     }
-    
-    if (ImGui::BeginPopup("ObjectContextMenu")) {
-        ImGui::Text("Object: %s", m_contextMenuTarget.c_str());
-        ImGui::Separator();
-        
-        if (ImGui::MenuItem("Rename")) {
-            m_renamingTarget = m_contextMenuTarget;
-            m_renameRequested = true;
-            snprintf(m_renameInputBuffer, sizeof(m_renameInputBuffer), "%s", m_contextMenuTarget.c_str());
+    if (m_selectedSet.find(objectID) == m_selectedSet.end()) {
+        m_selectedObjects.push_back(objectID);
+        m_selectedSet.insert(objectID);
+    }
+    m_lastClickedObject = objectID;
+    NotifySelectionChanged();
+}
+
+void HierarchyPanel::ClearSelection() {
+    m_selectedObjects.clear();
+    m_selectedSet.clear();
+    m_lastClickedObject = INVALID_OBJECT_ID;
+    NotifySelectionChanged();
+}
+
+bool HierarchyPanel::IsObjectSelected(ObjectID objectID) const {
+    return m_selectedSet.count(objectID) > 0;
+}
+
+void HierarchyPanel::ExpandObject(ObjectID objectID) {
+    m_expandedObjects.insert(objectID);
+}
+
+void HierarchyPanel::CollapseObject(ObjectID objectID) {
+    m_expandedObjects.erase(objectID);
+}
+
+bool HierarchyPanel::IsObjectExpanded(ObjectID objectID) const {
+    return m_expandedObjects.count(objectID) > 0;
+}
+
+void HierarchyPanel::FocusObject(ObjectID objectID) {
+    // Expand all parents up to the root
+    if (!m_scene) return;
+    SceneObject* obj = m_scene->FindObject(objectID);
+    if (!obj) return;
+
+    ObjectID parentID = obj->transform.parentID;
+    while (parentID != INVALID_OBJECT_ID) {
+        ExpandObject(parentID);
+        SceneObject* parent = m_scene->FindObject(parentID);
+        if (!parent) break;
+        parentID = parent->transform.parentID;
+    }
+
+    SelectObject(objectID);
+}
+
+void HierarchyPanel::RegisterSelectionCallback(std::function<void(const std::vector<ObjectID>&)> callback) {
+    m_selectionCallback = std::move(callback);
+}
+
+void HierarchyPanel::RegisterObjectOperationCallback(std::function<void(const std::string&, ObjectID)> callback) {
+    m_objectOperationCallback = std::move(callback);
+}
+
+void HierarchyPanel::SetSearchFilter(const std::string& searchText) {
+    m_searchFilter = searchText;
+    m_filterCacheDirty = true;
+}
+
+// ============================================================================
+// Private Methods
+// ============================================================================
+
+void HierarchyPanel::RenderToolbar() {
+    if (ImGui::Button(ICON_FA_PLUS " Create")) {
+        ImGui::OpenPopup("CreateObject");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_TRASH " Delete")) {
+        for (auto id : m_selectedObjects) {
+            DeleteObject(id);
         }
-        if (ImGui::MenuItem("Duplicate")) {
-            DuplicateObject(m_contextMenuTarget);
+    }
+
+    if (ImGui::BeginPopup("CreateObject")) {
+        if (ImGui::MenuItem(ICON_FA_CUBE " Empty GameObject")) {
+            CreateObject("Empty");
         }
-        if (ImGui::MenuItem("Delete")) {
-            DeleteObject(m_contextMenuTarget);
+        if (ImGui::BeginMenu(ICON_FA_CUBE " 3D Object")) {
+            if (ImGui::MenuItem("Cube")) CreateObject("Cube");
+            if (ImGui::MenuItem("Sphere")) CreateObject("Sphere");
+            if (ImGui::MenuItem("Plane")) CreateObject("Plane");
+            ImGui::EndMenu();
         }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Copy")) {
-            m_clipboardObject = m_contextMenuTarget;
-            std::cout << "Copied object to clipboard: " << m_contextMenuTarget << std::endl;
+        if (ImGui::BeginMenu(ICON_FA_LIGHTBULB " Light")) {
+            if (ImGui::MenuItem("Directional Light")) CreateObject("Directional Light");
+            if (ImGui::MenuItem("Point Light")) CreateObject("Point Light");
+            if (ImGui::MenuItem("Spot Light")) CreateObject("Spot Light");
+            ImGui::EndMenu();
         }
-        if (ImGui::MenuItem("Paste", nullptr, false, !m_clipboardObject.empty())) {
-            // Duplicate the previously-copied entity into the scene
-            if (!m_clipboardObject.empty()) {
-                DuplicateObject(m_clipboardObject);
-                std::cout << "Pasted object from clipboard: " << m_clipboardObject << std::endl;
-            }
+        if (ImGui::MenuItem(ICON_FA_CAMERA " Camera")) {
+            CreateObject("Camera");
         }
-        
         ImGui::EndPopup();
     }
 }
 
-void HierarchyPanel::CreateNewObject(const std::string& type) {
-    std::string newObjectName = type + " " + std::to_string(m_sceneObjects.size() + 1);
-    m_sceneObjects.push_back(newObjectName);
-    SetSelectedObject(newObjectName);
-    std::cout << "Created new object: " << newObjectName << std::endl;
+void HierarchyPanel::RenderSearchBar() {
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::InputTextWithHint("##HierarchySearch", ICON_FA_SEARCH " Search objects...",
+                                  m_searchBuffer, sizeof(m_searchBuffer))) {
+        SetSearchFilter(m_searchBuffer);
+    }
 }
 
-void HierarchyPanel::DeleteObject(const std::string& objectId) {
-    auto it = std::find(m_sceneObjects.begin(), m_sceneObjects.end(), objectId);
-    if (it != m_sceneObjects.end()) {
-        m_sceneObjects.erase(it);
-        if (m_selectedObject == objectId) {
-            m_selectedObject.clear();
+void HierarchyPanel::RenderHierarchyTree() {
+    ImGui::BeginChild("##HierarchyTree");
+
+    if (!m_scene) {
+        ImGui::Text("No scene loaded");
+        ImGui::EndChild();
+        return;
+    }
+
+    // Render root objects
+    auto rootObjects = GetChildObjects(INVALID_OBJECT_ID);
+    for (auto* obj : rootObjects) {
+        if (!m_searchFilter.empty() && !ObjectOrDescendantPassesFilter(obj)) continue;
+        RenderObjectNode(obj, 0);
+    }
+
+    // Empty space context menu
+    if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && !ImGui::IsAnyItemHovered()) {
+        m_showEmptyContextMenu = true;
+    }
+    if (m_showEmptyContextMenu) {
+        ImGui::OpenPopup("EmptyContextMenu");
+        m_showEmptyContextMenu = false;
+    }
+    RenderEmptyContextMenu();
+
+    ImGui::EndChild();
+}
+
+void HierarchyPanel::RenderObjectNode(SceneObject* object, int depth) {
+    if (!object) return;
+    if (!m_showInactiveObjects && !object->active) return;
+
+    auto children = GetChildObjects(object->id);
+    bool hasChildren = !children.empty();
+
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnArrow;
+    if (!hasChildren) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    if (IsObjectSelected(object->id)) flags |= ImGuiTreeNodeFlags_Selected;
+
+    const char* icon = GetObjectIcon(object);
+
+    ImGui::PushID(static_cast<int>(object->id));
+
+    bool nodeOpen;
+    if (m_showObjectIDs) {
+        nodeOpen = ImGui::TreeNodeEx("##node", flags, "%s %s [%llu]", icon, object->name.c_str(), (unsigned long long)object->id);
+    } else {
+        nodeOpen = ImGui::TreeNodeEx("##node", flags, "%s %s", icon, object->name.c_str());
+    }
+
+    // Selection
+    if (ImGui::IsItemClicked()) {
+        bool addToSelection = ImGui::GetIO().KeyCtrl;
+        SelectObject(object->id, addToSelection);
+    }
+
+    // Context menu
+    if (ImGui::BeginPopupContextItem("##ObjContext")) {
+        RenderObjectContextMenu(object);
+        ImGui::EndPopup();
+    }
+
+    // Render children
+    if (nodeOpen && hasChildren) {
+        for (auto* child : children) {
+            RenderObjectNode(child, depth + 1);
         }
-        std::cout << "Deleted object: " << objectId << std::endl;
+        ImGui::TreePop();
+    }
+
+    ImGui::PopID();
+}
+
+void HierarchyPanel::RenderObjectContextMenu(SceneObject* object) {
+    if (!object) return;
+
+    ImGui::Text("%s", object->name.c_str());
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_FA_COPY " Duplicate")) {
+        DuplicateObject(object->id);
+    }
+    if (ImGui::MenuItem(ICON_FA_TRASH " Delete")) {
+        DeleteObject(object->id);
     }
 }
 
-void HierarchyPanel::DuplicateObject(const std::string& objectId) {
-    auto it = std::find(m_sceneObjects.begin(), m_sceneObjects.end(), objectId);
-    if (it != m_sceneObjects.end()) {
-        std::string duplicatedName = objectId + " (Copy)";
-        m_sceneObjects.push_back(duplicatedName);
-        SetSelectedObject(duplicatedName);
-        std::cout << "Duplicated object: " << objectId << " as " << duplicatedName << std::endl;
+void HierarchyPanel::RenderEmptyContextMenu() {
+    if (ImGui::BeginPopup("EmptyContextMenu")) {
+        if (ImGui::MenuItem(ICON_FA_CUBE " Create Empty")) {
+            CreateObject("Empty");
+        }
+        ImGui::EndPopup();
     }
+}
+
+bool HierarchyPanel::HandleObjectDragDrop(SceneObject* /*draggedObject*/, SceneObject* /*targetObject*/) {
+    // Stub for drag and drop
+    return false;
+}
+
+const char* HierarchyPanel::GetObjectIcon(const SceneObject* object) const {
+    if (!object) return ICON_FA_CUBE;
+
+    // Check name for hints
+    if (object->name.find("Camera") != std::string::npos) return ICON_FA_CAMERA;
+    if (object->name.find("Light") != std::string::npos) return ICON_FA_LIGHTBULB;
+    if (object->name.find("Player") != std::string::npos) return ICON_FA_CROSSHAIRS;
+
+    return ICON_FA_CUBE;
+}
+
+std::vector<SceneObject*> HierarchyPanel::GetChildObjects(ObjectID parentID) const {
+    std::vector<SceneObject*> children;
+    if (!m_scene) return children;
+
+    for (auto& obj : m_scene->objects) {
+        if (obj.transform.parentID == parentID) {
+            children.push_back(&obj);
+        }
+    }
+    return children;
+}
+
+bool HierarchyPanel::PassesFilter(const SceneObject* object) const {
+    if (m_searchFilter.empty()) return true;
+    if (!object) return false;
+
+    // Case-insensitive name search
+    std::string lowerName = object->name;
+    std::string lowerFilter = m_searchFilter;
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+    std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(), ::tolower);
+
+    return lowerName.find(lowerFilter) != std::string::npos;
+}
+
+bool HierarchyPanel::ObjectOrDescendantPassesFilter(const SceneObject* object) const {
+    if (PassesFilter(object)) return true;
+
+    auto children = GetChildObjects(object->id);
+    for (auto* child : children) {
+        if (ObjectOrDescendantPassesFilter(child)) return true;
+    }
+    return false;
+}
+
+ObjectID HierarchyPanel::CreateObject(const std::string& name, ObjectID parentID) {
+    if (!m_scene) return INVALID_OBJECT_ID;
+
+    SceneObject obj;
+    obj.id = m_scene->GetNextObjectID();
+    obj.name = name;
+    obj.transform.parentID = parentID;
+    m_scene->objects.push_back(obj);
+
+    SelectObject(obj.id);
+    NotifyObjectOperation("create", obj.id);
+    std::cout << "Created object: " << name << "\n";
+    return obj.id;
+}
+
+ObjectID HierarchyPanel::DuplicateObject(ObjectID objectID) {
+    if (!m_scene) return INVALID_OBJECT_ID;
+
+    SceneObject* original = m_scene->FindObject(objectID);
+    if (!original) return INVALID_OBJECT_ID;
+
+    SceneObject copy = *original;
+    copy.id = m_scene->GetNextObjectID();
+    copy.name = original->name + " (Copy)";
+    m_scene->objects.push_back(copy);
+
+    SelectObject(copy.id);
+    NotifyObjectOperation("duplicate", copy.id);
+    std::cout << "Duplicated object: " << original->name << "\n";
+    return copy.id;
+}
+
+void HierarchyPanel::DeleteObject(ObjectID objectID) {
+    if (!m_scene) return;
+
+    // Remove from selection
+    m_selectedSet.erase(objectID);
+    m_selectedObjects.erase(
+        std::remove(m_selectedObjects.begin(), m_selectedObjects.end(), objectID),
+        m_selectedObjects.end());
+
+    // Remove from scene
+    auto& objs = m_scene->objects;
+    auto it = std::find_if(objs.begin(), objs.end(),
+        [objectID](const SceneObject& o) { return o.id == objectID; });
+    if (it != objs.end()) {
+        std::cout << "Deleted object: " << it->name << "\n";
+        objs.erase(it);
+    }
+
+    NotifyObjectOperation("delete", objectID);
+}
+
+void HierarchyPanel::RenameObject(ObjectID objectID, const std::string& newName) {
+    if (!m_scene) return;
+    SceneObject* obj = m_scene->FindObject(objectID);
+    if (obj) {
+        std::cout << "Renamed object: " << obj->name << " -> " << newName << "\n";
+        obj->name = newName;
+    }
+}
+
+void HierarchyPanel::MoveObject(ObjectID objectID, ObjectID newParentID) {
+    if (!m_scene) return;
+    SceneObject* obj = m_scene->FindObject(objectID);
+    if (obj) {
+        obj->transform.parentID = newParentID;
+    }
+}
+
+void HierarchyPanel::UpdateSelection() {
+    // Verify all selected objects still exist
+    if (!m_scene) {
+        ClearSelection();
+        return;
+    }
+
+    std::vector<ObjectID> validSelection;
+    for (auto id : m_selectedObjects) {
+        if (m_scene->FindObject(id)) {
+            validSelection.push_back(id);
+        }
+    }
+
+    if (validSelection.size() != m_selectedObjects.size()) {
+        SetSelectedObjects(validSelection);
+    }
+}
+
+void HierarchyPanel::NotifySelectionChanged() {
+    if (m_selectionCallback) {
+        m_selectionCallback(m_selectedObjects);
+    }
+}
+
+void HierarchyPanel::NotifyObjectOperation(const std::string& operation, ObjectID objectID) {
+    if (m_objectOperationCallback) {
+        m_objectOperationCallback(operation, objectID);
+    }
+    m_needsSelectionUpdate = true;
+    m_filterCacheDirty = true;
 }
 
 } // namespace SparkEditor

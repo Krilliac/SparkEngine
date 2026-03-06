@@ -124,7 +124,7 @@ void SceneViewPanel::RenderToolbar() {
     GizmoButton(ICON_FA_SYNC_ALT, GizmoMode::Rotate, "Rotate (E)");
     GizmoButton(ICON_FA_EXPAND, GizmoMode::Scale, "Scale (R)");
 
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::Text("|");
     ImGui::SameLine();
 
     // Render mode dropdown
@@ -142,7 +142,7 @@ void SceneViewPanel::RenderToolbar() {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Render Mode");
 
     ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::Text("|");
     ImGui::SameLine();
 
     // Toggles
@@ -151,7 +151,7 @@ void SceneViewPanel::RenderToolbar() {
     ImGui::Checkbox(ICON_FA_CUBE " Gizmos", &m_showGizmos);
 
     ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::Text("|");
     ImGui::SameLine();
 
     // Camera speed

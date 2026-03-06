@@ -628,7 +628,7 @@ void EditorUI::RenderToolbar() {
         ToolButton(ICON_FA_SYNC_ALT, TransformTool::Rotate, "Rotate (E)");
         ToolButton(ICON_FA_EXPAND, TransformTool::Scale, "Scale (R)");
 
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // === Space Toggle ===
@@ -639,7 +639,7 @@ void EditorUI::RenderToolbar() {
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle World/Local space");
 
         ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // === Play Controls (centered) ===
@@ -680,7 +680,7 @@ void EditorUI::RenderToolbar() {
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stop (Shift+F5)");
 
         ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // === Snap Controls (right side) ===
@@ -719,7 +719,7 @@ void EditorUI::RenderStatusBar() {
         ImGui::Text("Engine: %s", m_engineConnected ? "Connected" : "Disconnected");
 
         ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // Center: tool + selection

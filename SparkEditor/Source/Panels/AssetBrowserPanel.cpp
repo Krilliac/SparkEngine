@@ -71,7 +71,7 @@ void AssetBrowserPanel::Render() {
 
         // Breadcrumb navigation
         ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // Build breadcrumb path
