@@ -1094,7 +1094,7 @@ bool EditorUI::ImportLayout(const std::string& filePath) {
 
         // Use layout manager to apply the imported layout
         if (m_layoutManager) {
-            m_layoutManager->SaveLayout(layoutName, "Imported layout");
+            m_layoutManager->SaveCurrentLayout(layoutName, "Imported layout");
             return m_layoutManager->LoadLayout(layoutName);
         }
 
