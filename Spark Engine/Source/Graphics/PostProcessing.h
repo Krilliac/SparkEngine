@@ -7,6 +7,12 @@
  * This class provides a comprehensive post-processing system supporting HDR
  * rendering, bloom effects, tone mapping, color grading, and various visual
  * effects for AAA-quality visuals.
+ *
+ * @warning This header defines 'class PostProcessingSystem' which conflicts
+ * with the canonical definition in PostProcessingSystem.h. Do NOT include
+ * both headers in the same translation unit. Prefer PostProcessingSystem.h
+ * for the actively-maintained version implemented in PostProcessingSystem.cpp.
+ * This header is retained for reference and will be merged in a future refactor.
  */
 
 #pragma once
