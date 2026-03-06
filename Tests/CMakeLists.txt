@@ -29,6 +29,11 @@ add_executable(SparkTests
     TestQuestSystem.cpp
     TestDayNightCycle.cpp
     TestPerformanceStats.cpp
+    TestLightManager.cpp
+    TestFogSystem.cpp
+    TestScreenSpaceEffects.cpp
+    TestTemporalEffects.cpp
+    TestPostProcessingPipeline.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

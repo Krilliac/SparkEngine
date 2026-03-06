@@ -119,6 +119,8 @@ option(ENABLE_QUEST_SYSTEM "Enable quest/objective system" ON)
 option(ENABLE_EVENT_SYSTEM "Enable publish/subscribe event bus" ON)
 option(ENABLE_DAY_NIGHT "Enable day/night cycle system" ON)
 option(ENABLE_PERF_STATS "Enable performance statistics overlay" ON)
+option(ENABLE_FOG_SYSTEM "Enable fog rendering system" ON)
+option(ENABLE_SCREEN_SPACE "Enable screen-space effects (SSAO, SSR)" ON)
 option(BUILD_TESTS "Build test suite" ON)
 
 # Editor only available on Windows (requires Win32 + DX11 ImGui backends)
@@ -783,6 +785,14 @@ endif()
 
 if(ENABLE_PERF_STATS)
     list(APPEND FEATURE_DEFINITIONS "PERF_STATS_ENABLED")
+endif()
+
+if(ENABLE_FOG_SYSTEM)
+    list(APPEND FEATURE_DEFINITIONS "FOG_SYSTEM_ENABLED")
+endif()
+
+if(ENABLE_SCREEN_SPACE)
+    list(APPEND FEATURE_DEFINITIONS "SCREEN_SPACE_EFFECTS_ENABLED")
 endif()
 
 if(ENABLE_SDL2)
