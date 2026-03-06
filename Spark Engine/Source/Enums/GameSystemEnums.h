@@ -6,6 +6,11 @@
  * 
  * This file contains enumerations related to game mechanics, weapon systems,
  * player states, AI behaviors, and other core game functionality.
+ *
+ * @note These enums use namespace SparkEditor (not SparkEngine) because they
+ * are shared between the engine runtime and the editor. Graphics and input
+ * enums in GraphicsEnums.h and InputEnums.h use namespace SparkEngine as they
+ * are engine-internal. See AllEnums.h for the full namespace reference.
  */
 
 #pragma once

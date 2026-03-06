@@ -1,7 +1,7 @@
 #include "Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "ConsoleProcessManager.h"
-#include "Assert.h"
+#include "Utils/Assert.h"
 #include <iostream>
 #include <sstream>
 #include <filesystem>

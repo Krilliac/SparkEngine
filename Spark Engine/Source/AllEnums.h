@@ -21,10 +21,13 @@
 #include "SparkEditor/Source/Enums/LevelStreamingEnums.h"
 #include "SparkEditor/Source/Enums/AudioSystemEnums.h"
 
-// Spark Engine Enums  
+// Spark Engine Enums
 #include "Spark Engine/Source/Enums/GameSystemEnums.h"
 #include "Spark Engine/Source/Enums/GraphicsEnums.h"
 #include "Spark Engine/Source/Enums/InputEnums.h"
+
+// Enum Utilities (validation, string conversion, iteration)
+#include "Spark Engine/Source/Enums/EnumUtils.h"
 
 /**
  * @brief Enum organization reference
@@ -42,9 +45,10 @@
  * - AudioSystemEnums.h: Audio formats, playback, effects
  * 
  * ## Spark Engine Enums
- * - GameSystemEnums.h: Weapon types, player states, game mechanics
- * - GraphicsEnums.h: Graphics API types, buffers, resources
- * - InputEnums.h: Input devices, actions, bindings
+ * - GameSystemEnums.h: Weapon types, player states, game mechanics (namespace SparkEditor)
+ * - GraphicsEnums.h: Graphics API types, buffers, resources (namespace SparkEngine)
+ * - InputEnums.h: Input devices, actions, bindings (namespace SparkEngine)
+ * - EnumUtils.h: Validation, string conversion, iteration utilities (namespace SparkEditor)
  * 
  * ## Usage Guidelines
  * 
