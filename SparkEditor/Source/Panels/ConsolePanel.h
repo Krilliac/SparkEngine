@@ -46,7 +46,7 @@ struct ConsoleHistoryEntry {
  */
 struct ConsoleFilter {
     LogLevel minLevel = LogLevel::TRACE;
-    std::vector<LogCategory> enabledCategories;
+    std::vector<std::string> enabledCategories;
     bool enableAllCategories = true;
     std::string searchPattern;
     bool showTimestamps = true;
@@ -167,7 +167,7 @@ public:
         float averageCommandTime = 0.0f;
         std::chrono::system_clock::time_point lastActivity;
         std::unordered_map<LogLevel, size_t> entriesByLevel;
-        std::unordered_map<LogCategory, size_t> entriesByCategory;
+        std::unordered_map<std::string, size_t> entriesByCategory;
     };
     ConsoleStats GetStats() const;
 
@@ -235,7 +235,7 @@ private:
      * @param category Log category
      * @return Icon string
      */
-    const char* GetCategoryIcon(LogCategory category) const;
+    const char* GetCategoryIcon(const std::string& category) const;
 
     /**
      * @brief Format timestamp
