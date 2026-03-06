@@ -11,8 +11,9 @@
 
 #pragma once
 
+#include "../Core/framework.h"
 #include "../Enums/GameSystemEnums.h"
-#include "Utils/Assert.h"
+#include "../Utils/Assert.h"
 
 /**
  * @brief Weapon statistics and configuration structure
