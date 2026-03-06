@@ -12,7 +12,7 @@
 #pragma once
 #include "../Core/Platform.h"
 
-#include "../Enums/GameSystemEnums.h"
+#include "Enums/GameSystemEnums.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS

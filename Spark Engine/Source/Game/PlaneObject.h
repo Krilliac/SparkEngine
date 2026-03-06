@@ -24,7 +24,7 @@
 
 #include "GameObject.h"
 #include "PlaceholderMesh.h"
-#include "../Projectiles/WeaponStats.h"
+#include "Projectiles/WeaponStats.h"
 #include "Primitives.h"
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
