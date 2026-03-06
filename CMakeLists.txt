@@ -231,7 +231,9 @@ if(EXISTS "${MINIZ_ROOT}")
         "${MINIZ_ROOT}/*.h"
     )
     list(FILTER MINIZ_SOURCES EXCLUDE REGEX ".*test.*|.*example.*|.*tool.*")
+endif()
 
+if(MINIZ_SOURCES)
     # Create miniz library target
     add_library(miniz STATIC ${MINIZ_SOURCES})
     target_include_directories(miniz PUBLIC "${MINIZ_ROOT}")
@@ -245,7 +247,7 @@ if(EXISTS "${MINIZ_ROOT}")
     message(STATUS "Found MINIZ at: ${MINIZ_ROOT}")
 else()
     set(MINIZ_FOUND FALSE)
-    message(STATUS "MINIZ not found")
+    message(STATUS "MINIZ not found (directory empty or missing)")
 endif()
 
 # TinyObjLoader - Proper static library implementation

@@ -44,6 +44,45 @@ jobs:
         retention-days: 7
 
   # ===========================================================================
+  # Windows Build (MSVC VS 2022 generator + v144 toolset for VS 2026)
+  # Uses VS 2022 generator since CMake does not yet have a VS 2026 generator.
+  # Marked continue-on-error until v144 toolset is broadly available on runners.
+  # ===========================================================================
+  build-windows-vs2026:
+    runs-on: windows-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        config: [Debug, Release]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Configure CMake (VS 2022 generator / v144 toolset)
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v144 -DSPARK_MSVC_TOOLSET=v144 -DBUILD_TESTS=ON
+
+    - name: Build
+      run: cmake --build build --config ${{ matrix.config }} --parallel
+
+    - name: Run Tests
+      if: matrix.config == 'Release'
+      run: ctest --test-dir build --config ${{ matrix.config }} --output-on-failure
+
+    - name: Upload Build Artifacts
+      if: matrix.config == 'Release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: SparkEngine-Windows-VS2026-${{ matrix.config }}
+        path: build/bin/${{ matrix.config }}/
+        retention-days: 7
+
+  # ===========================================================================
   # Linux Build - GCC
   # ===========================================================================
   build-linux-gcc:
