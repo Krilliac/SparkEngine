@@ -236,7 +236,11 @@ endif()
 if(MINIZ_SOURCES)
     # Create miniz library target
     add_library(miniz STATIC ${MINIZ_SOURCES})
-    target_include_directories(miniz PUBLIC "${MINIZ_ROOT}")
+    target_include_directories(miniz PUBLIC "${MINIZ_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}")
+
+    # Generate miniz_export.h (required by miniz headers, empty for static builds)
+    include(GenerateExportHeader)
+    generate_export_header(miniz)
 
     # Set consistent runtime library for miniz
     if(MSVC)
