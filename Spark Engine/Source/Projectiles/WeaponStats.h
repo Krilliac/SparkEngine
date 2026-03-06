@@ -3,7 +3,7 @@
  * @brief Weapon configuration and statistics system
  * @author Spark Engine Team
  * @date 2025
- * 
+ *
  * This file defines weapon statistics structures and default configurations
  * for the weapon system. It provides a data-driven approach to weapon balancing
  * and configuration management.
@@ -11,13 +11,12 @@
 
 #pragma once
 
-#include "../Core/framework.h"
 #include "../Enums/GameSystemEnums.h"
-#include "../Utils/Assert.h"
+#include <cassert>
 
 /**
  * @brief Weapon statistics and configuration structure
- * 
+ *
  * Contains all the parameters that define a weapon's behavior including
  * damage, fire rate, ammunition, and ballistic properties.
  */
@@ -47,7 +46,7 @@ struct WeaponStats
 
     /**
      * @brief Parameterized constructor
-     * 
+     *
      * @param type Weapon type
      * @param damage Base damage value
      * @param fireRate Rate of fire in RPM
@@ -66,12 +65,12 @@ struct WeaponStats
         , MuzzleVelocity(velocity)
         , Accuracy(accuracy)
     {
-        ASSERT_MSG(damage >= 0.0f, "Weapon damage must be non-negative");
-        ASSERT_MSG(fireRate >= 0.0f, "Fire rate must be non-negative");
-        ASSERT_MSG(magSize >= 0, "Magazine size must be non-negative");
-        ASSERT_MSG(reloadTime >= 0.0f, "Reload time must be non-negative");
-        ASSERT_MSG(velocity >= 0.0f, "Muzzle velocity must be non-negative");
-        ASSERT_MSG(accuracy >= 0.0f && accuracy <= 1.0f, "Accuracy must be between 0.0 and 1.0");
+        assert(damage >= 0.0f && "Weapon damage must be non-negative");
+        assert(fireRate >= 0.0f && "Fire rate must be non-negative");
+        assert(magSize >= 0 && "Magazine size must be non-negative");
+        assert(reloadTime >= 0.0f && "Reload time must be non-negative");
+        assert(velocity >= 0.0f && "Muzzle velocity must be non-negative");
+        assert(accuracy >= 0.0f && accuracy <= 1.0f && "Accuracy must be between 0.0 and 1.0");
     }
 
     /**
@@ -117,12 +116,12 @@ struct WeaponStats
     }
 };
 
- /**
+/**
  * @brief Get default weapon statistics for a given weapon type
- * 
+ *
  * Provides balanced default configurations for each weapon type.
  * These values can be used as starting points for weapon balancing.
- * 
+ *
  * @param type The weapon type to get defaults for
  * @return WeaponStats structure with default values for the specified type
  */
@@ -130,9 +129,9 @@ WeaponStats GetDefaultWeaponStats(SparkEditor::WeaponType type);
 
 /**
  * @brief Create a weapon stats configuration from parameters
- * 
+ *
  * Helper function to create weapon stats with validation.
- * 
+ *
  * @param type Weapon type
  * @param damage Base damage value
  * @param fireRate Rate of fire in RPM
@@ -147,10 +146,10 @@ WeaponStats CreateWeaponStats(SparkEditor::WeaponType type, float damage, float 
 
 /**
  * @brief Apply weapon modifications to base stats
- * 
+ *
  * Allows for weapon upgrades, attachments, or temporary modifications
  * to be applied to base weapon statistics.
- * 
+ *
  * @param baseStats Base weapon statistics
  * @param damageMultiplier Damage modification factor
  * @param fireRateMultiplier Fire rate modification factor
@@ -166,7 +165,7 @@ WeaponStats ApplyWeaponModifications(const WeaponStats& baseStats,
 
 /**
  * @brief Convert weapon type to string representation
- * 
+ *
  * @param type Weapon type to convert
  * @return String name of the weapon type
  */
@@ -174,7 +173,7 @@ const char* WeaponTypeToString(SparkEditor::WeaponType type);
 
 /**
  * @brief Convert string to weapon type
- * 
+ *
  * @param str String representation of weapon type
  * @return Corresponding weapon type, or WeaponType::PISTOL if not found
  */
