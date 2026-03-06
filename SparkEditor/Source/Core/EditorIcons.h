@@ -116,3 +116,13 @@
 #define ICON_FA_COLUMNS         "\xef\x83\x9b"  // U+F0DB
 #define ICON_FA_WINDOW_MAXIMIZE "\xef\x8b\x90"  // U+F2D0
 #define ICON_FA_COMPRESS        "\xef\x81\xa6"  // U+F066
+
+// === Additional Icons ===
+#define ICON_FA_CODE            "\xef\x84\xa1"  // U+F121
+#define ICON_FA_FONT            "\xef\x80\xb1"  // U+F031
+#define ICON_FA_GRID            "\xef\x80\x8a"  // U+F00A (alias for TH/grid)
+#define ICON_FA_HOME            "\xef\x80\x95"  // U+F015
+#define ICON_FA_MOUSE_POINTER   "\xef\x89\x85"  // U+F245
+#define ICON_FA_PAINT_BRUSH     "\xef\x87\xbc"  // U+F1FC
+#define ICON_FA_SHAPES          "\xef\x98\x9f"  // U+F61F
+#define ICON_FA_VOLUME_UP       "\xef\x80\xa8"  // U+F028

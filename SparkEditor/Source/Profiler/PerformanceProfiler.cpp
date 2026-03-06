@@ -11,101 +11,162 @@
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
 
 namespace SparkEditor {
 
-PerformanceProfiler::PerformanceProfiler() 
+// Global profiler instance
+PerformanceProfiler* g_profiler = nullptr;
+
+// ============================================================================
+// PerformanceCounter Implementation
+// ============================================================================
+
+void PerformanceCounter::AddSample(float value) {
+    currentValue = value;
+    if (value < minValue) minValue = value;
+    if (value > maxValue) maxValue = value;
+
+    history.push_back(value);
+    if (static_cast<int>(history.size()) > historySize) {
+        history.erase(history.begin());
+    }
+
+    // Recalculate average
+    float sum = 0.0f;
+    for (float v : history) sum += v;
+    averageValue = history.empty() ? 0.0f : sum / static_cast<float>(history.size());
+
+    lastUpdate = std::chrono::steady_clock::now();
+}
+
+void PerformanceCounter::Clear() {
+    currentValue = 0.0f;
+    minValue = FLT_MAX;
+    maxValue = -FLT_MAX;
+    averageValue = 0.0f;
+    history.clear();
+}
+
+float PerformanceCounter::GetSmoothedValue(float smoothingFactor) const {
+    if (history.size() < 2) return currentValue;
+    float smoothed = history[0];
+    for (size_t i = 1; i < history.size(); ++i) {
+        smoothed = smoothingFactor * history[i] + (1.0f - smoothingFactor) * smoothed;
+    }
+    return smoothed;
+}
+
+// ============================================================================
+// CPUProfileSample Implementation
+// ============================================================================
+
+float CPUProfileSample::GetSelfTime() const {
+    float childTime = 0.0f;
+    for (const auto& child : children) {
+        childTime += child->GetTotalTime();
+    }
+    return duration - childTime;
+}
+
+float CPUProfileSample::GetTotalTime() const {
+    return duration;
+}
+
+// ============================================================================
+// ProfileScope Implementation
+// ============================================================================
+
+ProfileScope::ProfileScope(const std::string& name, const std::string& /*category*/)
+    : m_name(name), m_startTime(std::chrono::high_resolution_clock::now()), m_ended(false) {
+}
+
+ProfileScope::~ProfileScope() {
+    if (!m_ended) End();
+}
+
+void ProfileScope::End() {
+    m_ended = true;
+}
+
+// ============================================================================
+// PerformanceProfiler Implementation
+// ============================================================================
+
+PerformanceProfiler::PerformanceProfiler()
     : EditorPanel("Performance Profiler", "performance_profiler_panel") {
 }
 
 PerformanceProfiler::~PerformanceProfiler() {
-    // Destructor
 }
 
 bool PerformanceProfiler::Initialize() {
     std::cout << "Initializing Performance Profiler panel\n";
-    
-    // Initialize built-in performance counters
-    InitializeBuiltInCounters();
-    
-    // Start profiling by default
-    m_isProfilerRunning = true;
-    
+    m_isProfiling = true;
     return true;
 }
 
 void PerformanceProfiler::Update(float deltaTime) {
-    if (!m_isProfilerRunning) return;
-    
-    auto now = std::chrono::steady_clock::now();
-    
-    // Update frame time counter
-    auto frameTimeCounter = GetCounter("Frame Time");
-    if (frameTimeCounter) {
-        frameTimeCounter->AddSample(deltaTime * 1000.0f); // Convert to ms
-    }
-    
-    // Update FPS counter
-    auto fpsCounter = GetCounter("FPS");
-    if (fpsCounter && deltaTime > 0.0f) {
-        fpsCounter->AddSample(1.0f / deltaTime);
-    }
-    
-    // Simulate some performance data
-    UpdateSimulatedCounters(deltaTime);
-    
-    // Update profiling session
-    if (m_currentSession.isActive) {
-        m_currentSession.currentTime = std::chrono::duration<float>(now - m_currentSession.startTime).count();
-        
-        if (m_currentSession.duration > 0.0f && m_currentSession.currentTime >= m_currentSession.duration) {
-            StopProfiling();
-        }
-    }
+    if (!m_isProfiling) return;
+
+    // Update frame data
+    UpdateFrameData();
+
+    m_currentFrameNumber++;
 }
 
 void PerformanceProfiler::Render() {
     if (!IsVisible()) return;
 
     if (BeginPanel()) {
-        // Profiler toolbar
-        RenderProfilerToolbar();
-        
+        // Toolbar
+        if (m_isProfiling) {
+            if (ImGui::Button("Stop Profiling")) {
+                StopProfiling();
+            }
+        } else {
+            if (ImGui::Button("Start Profiling")) {
+                StartProfiling();
+            }
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Clear Data")) {
+            ClearProfilingData();
+        }
+
         ImGui::Separator();
-        
+
         // Tab bar for different views
         if (ImGui::BeginTabBar("ProfilerTabs")) {
-            
-            if (ImGui::BeginTabItem("Real-Time")) {
-                RenderRealTimeView();
+            if (m_showOverview && ImGui::BeginTabItem("Overview")) {
+                RenderOverviewPanel();
                 ImGui::EndTabItem();
             }
-            
-            if (ImGui::BeginTabItem("Counters")) {
-                RenderCountersView();
+            if (m_showCPUProfiler && ImGui::BeginTabItem("CPU")) {
+                RenderCPUProfilerPanel();
                 ImGui::EndTabItem();
             }
-            
-            if (ImGui::BeginTabItem("CPU Profiling")) {
-                RenderCPUProfilingView();
+            if (m_showGPUProfiler && ImGui::BeginTabItem("GPU")) {
+                RenderGPUProfilerPanel();
                 ImGui::EndTabItem();
             }
-            
-            if (ImGui::BeginTabItem("Memory")) {
-                RenderMemoryView();
+            if (m_showMemoryProfiler && ImGui::BeginTabItem("Memory")) {
+                RenderMemoryProfilerPanel();
                 ImGui::EndTabItem();
             }
-            
-            if (ImGui::BeginTabItem("GPU")) {
-                RenderGPUView();
+            if (m_showCounters && ImGui::BeginTabItem("Counters")) {
+                RenderPerformanceCountersPanel();
                 ImGui::EndTabItem();
             }
-            
-            if (ImGui::BeginTabItem("Analysis")) {
-                RenderAnalysisView();
+            if (m_showOptimization && ImGui::BeginTabItem("Optimization")) {
+                RenderOptimizationPanel();
                 ImGui::EndTabItem();
             }
-            
+            if (m_showConfiguration && ImGui::BeginTabItem("Configuration")) {
+                RenderConfigurationPanel();
+                ImGui::EndTabItem();
+            }
             ImGui::EndTabBar();
         }
     }
@@ -117,569 +178,388 @@ void PerformanceProfiler::Shutdown() {
     StopProfiling();
 }
 
-bool PerformanceProfiler::HandleEvent(const std::string& eventType, void* eventData) {
+bool PerformanceProfiler::HandleEvent(const std::string& /*eventType*/, void* /*eventData*/) {
     return false;
 }
 
-void PerformanceProfiler::StartProfiling(float duration) {
-    m_currentSession.isActive = true;
-    m_currentSession.startTime = std::chrono::steady_clock::now();
-    m_currentSession.duration = duration;
-    m_currentSession.currentTime = 0.0f;
-    m_currentSession.sampleCount = 0;
-    
-    // Clear CPU profiling data
-    m_cpuSamples.clear();
-    
-    m_isProfilerRunning = true;
-    std::cout << "Started profiling session";
-    if (duration > 0.0f) {
-        std::cout << " for " << duration << " seconds";
-    }
-    std::cout << "\n";
+void PerformanceProfiler::StartProfiling() {
+    m_isProfiling = true;
+    std::cout << "Started profiling session\n";
 }
 
 void PerformanceProfiler::StopProfiling() {
-    m_currentSession.isActive = false;
-    m_isProfilerRunning = false;
-    
-    if (m_currentSession.sampleCount > 0) {
-        std::cout << "Stopped profiling session. Collected " << m_currentSession.sampleCount << " samples\n";
-        GenerateProfilingReport();
+    m_isProfiling = false;
+    std::cout << "Stopped profiling session\n";
+}
+
+uint32_t PerformanceProfiler::BeginCPUSample(const std::string& name, const std::string& category) {
+    if (!m_isProfiling) return 0;
+
+    std::lock_guard<std::mutex> lock(m_cpuSampleMutex);
+
+    auto sample = std::make_unique<CPUProfileSample>();
+    sample->name = name;
+    sample->category = category;
+    sample->startTime = std::chrono::high_resolution_clock::now();
+
+    uint32_t id = m_nextCPUSampleID++;
+    m_cpuSampleMap[id] = sample.get();
+    m_activeCPUSamples.push_back(std::move(sample));
+
+    return id;
+}
+
+void PerformanceProfiler::EndCPUSample(uint32_t sampleID) {
+    if (!m_isProfiling) return;
+
+    std::lock_guard<std::mutex> lock(m_cpuSampleMutex);
+
+    auto it = m_cpuSampleMap.find(sampleID);
+    if (it != m_cpuSampleMap.end()) {
+        auto* sample = it->second;
+        sample->endTime = std::chrono::high_resolution_clock::now();
+        sample->duration = std::chrono::duration<float, std::milli>(
+            sample->endTime - sample->startTime).count();
+        m_cpuSampleMap.erase(it);
     }
 }
 
-void PerformanceProfiler::AddCounter(const PerformanceCounter& counter) {
-    m_counters[counter.name] = counter;
-}
+void PerformanceProfiler::BeginGPUSample(const std::string& name, const std::string& shaderName) {
+    if (!m_isProfiling) return;
 
-void PerformanceProfiler::RemoveCounter(const std::string& name) {
-    m_counters.erase(name);
-}
-
-PerformanceCounter* PerformanceProfiler::GetCounter(const std::string& name) {
-    auto it = m_counters.find(name);
-    return (it != m_counters.end()) ? &it->second : nullptr;
-}
-
-void PerformanceProfiler::BeginCPUSample(const std::string& name, const std::string& category) {
-    if (!m_isProfilerRunning) return;
-    
-    CPUProfileSample sample;
+    GPUProfileSample sample;
     sample.name = name;
-    sample.category = category;
-    sample.startTime = std::chrono::high_resolution_clock::now();
-    sample.isActive = true;
-    
-    m_activeCPUSamples[name] = sample;
+    sample.shaderName = shaderName;
+    m_activeGPUSamples[name] = sample;
 }
 
-void PerformanceProfiler::EndCPUSample(const std::string& name) {
-    if (!m_isProfilerRunning) return;
-    
-    auto it = m_activeCPUSamples.find(name);
-    if (it != m_activeCPUSamples.end()) {
-        auto endTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration<float, std::milli>(endTime - it->second.startTime).count();
-        
-        it->second.endTime = endTime;
-        it->second.duration = duration;
-        it->second.isActive = false;
-        
-        // Add to completed samples
-        m_cpuSamples.push_back(it->second);
-        
-        // Remove from active samples
-        m_activeCPUSamples.erase(it);
-        
-        m_currentSession.sampleCount++;
-        
-        // Update CPU counter
-        auto cpuCounter = GetCounter("CPU Sample: " + name);
-        if (cpuCounter) {
-            cpuCounter->AddSample(duration);
-        }
+void PerformanceProfiler::EndGPUSample(const std::string& name) {
+    if (!m_isProfiling) return;
+    m_activeGPUSamples.erase(name);
+}
+
+void PerformanceProfiler::RecordMemoryAllocation(const std::string& category, size_t bytes, void* pointer) {
+    std::lock_guard<std::mutex> lock(m_memoryMutex);
+
+    if (pointer) {
+        m_memoryAllocations[pointer] = {category, bytes};
+    }
+    m_memoryCategories[category].allocatedBytes += bytes;
+    m_memoryCategories[category].allocationCount++;
+    m_memoryCategories[category].totalAllocatedBytes += bytes;
+}
+
+void PerformanceProfiler::RecordMemoryDeallocation(void* pointer) {
+    std::lock_guard<std::mutex> lock(m_memoryMutex);
+
+    auto it = m_memoryAllocations.find(pointer);
+    if (it != m_memoryAllocations.end()) {
+        auto& [category, bytes] = it->second;
+        m_memoryCategories[category].allocatedBytes -= bytes;
+        m_memoryCategories[category].deallocationCount++;
+        m_memoryAllocations.erase(it);
     }
 }
 
-void PerformanceProfiler::AddMemorySample(const MemoryProfileSample& sample) {
-    if (!m_isProfilerRunning) return;
-    
-    m_memorySamples.push_back(sample);
-    
-    // Update memory counters
-    auto totalMemCounter = GetCounter("Total Memory");
-    if (totalMemCounter) {
-        totalMemCounter->AddSample(static_cast<float>(sample.totalMemory / 1024 / 1024)); // MB
-    }
-    
-    auto usedMemCounter = GetCounter("Used Memory");
-    if (usedMemCounter) {
-        usedMemCounter->AddSample(static_cast<float>(sample.usedMemory / 1024 / 1024)); // MB
+uint32_t PerformanceProfiler::AddPerformanceCounter(const std::string& name, ProfilerSampleType type, const std::string& unit) {
+    PerformanceCounter counter;
+    counter.name = name;
+    counter.type = type;
+    counter.unit = unit;
+    m_performanceCounters.push_back(counter);
+    return m_nextCounterID++;
+}
+
+void PerformanceProfiler::UpdatePerformanceCounter(uint32_t counterID, float value) {
+    if (counterID > 0 && counterID <= m_performanceCounters.size()) {
+        m_performanceCounters[counterID - 1].AddSample(value);
     }
 }
 
-void PerformanceProfiler::AddGPUSample(const GPUProfileSample& sample) {
-    if (!m_isProfilerRunning) return;
-    
-    m_gpuSamples.push_back(sample);
-    
-    // Update GPU counters
-    auto gpuTimeCounter = GetCounter("GPU Frame Time");
-    if (gpuTimeCounter) {
-        gpuTimeCounter->AddSample(sample.frameTime);
-    }
-    
-    auto drawCallsCounter = GetCounter("Draw Calls");
-    if (drawCallsCounter) {
-        drawCallsCounter->AddSample(static_cast<float>(sample.drawCalls));
-    }
+const FrameProfileData* PerformanceProfiler::GetCurrentFrame() const {
+    return m_currentFrame.get();
 }
 
-ProfilingReport PerformanceProfiler::GenerateReport() const {
-    ProfilingReport report;
-    report.sessionDuration = m_currentSession.currentTime;
-    report.totalSamples = m_currentSession.sampleCount;
-    report.timestamp = std::chrono::system_clock::now();
-    
-    // Generate summary statistics for each counter
-    for (const auto& [name, counter] : m_counters) {
-        if (!counter.history.empty()) {
-            CounterSummary summary;
-            summary.counterName = name;
-            summary.sampleCount = counter.history.size();
-            summary.averageValue = counter.averageValue;
-            summary.minValue = counter.minValue;
-            summary.maxValue = counter.maxValue;
-            summary.currentValue = counter.currentValue;
-            
-            report.counterSummaries[name] = summary;
-        }
+const FrameProfileData* PerformanceProfiler::GetFrame(int frameIndex) const {
+    if (frameIndex < 0 || frameIndex >= static_cast<int>(m_frameHistory.size())) {
+        return nullptr;
     }
-    
-    return report;
+    return m_frameHistory[m_frameHistory.size() - 1 - frameIndex].get();
 }
 
-bool PerformanceProfiler::ExportReport(const std::string& filePath, ReportFormat format) const {
-    auto report = GenerateReport();
-    
+bool PerformanceProfiler::ApplyOptimization(int suggestionIndex) {
+    if (suggestionIndex < 0 || suggestionIndex >= static_cast<int>(m_optimizationSuggestions.size())) {
+        return false;
+    }
+    auto& suggestion = m_optimizationSuggestions[suggestionIndex];
+    if (suggestion.isAutomatable && suggestion.automateFunction) {
+        return suggestion.automateFunction();
+    }
+    return false;
+}
+
+bool PerformanceProfiler::ExportProfilingData(const std::string& filePath, const std::string& format) {
     try {
         std::ofstream file(filePath);
-        if (!file.is_open()) {
-            std::cerr << "Failed to open file for export: " << filePath << "\n";
-            return false;
+        if (!file.is_open()) return false;
+
+        if (format == "json") {
+            file << "{ \"frames\": " << m_frameHistory.size() << " }\n";
+        } else {
+            file << "Profiling Data Export\n";
+            file << "Frames: " << m_frameHistory.size() << "\n";
         }
-        
-        switch (format) {
-            case ReportFormat::TEXT:
-                ExportTextReport(file, report);
-                break;
-            case ReportFormat::CSV:
-                ExportCSVReport(file, report);
-                break;
-            case ReportFormat::JSON:
-                ExportJSONReport(file, report);
-                break;
-        }
-        
+
         file.close();
-        std::cout << "Exported profiling report to: " << filePath << "\n";
+        std::cout << "Exported profiling data to: " << filePath << "\n";
         return true;
-    } catch (const std::exception& e) {
-        std::cerr << "Error exporting report: " << e.what() << "\n";
+    } catch (...) {
         return false;
     }
 }
 
-void PerformanceProfiler::ClearData() {
-    // Clear all collected data
-    for (auto& [name, counter] : m_counters) {
-        counter.Clear();
-    }
-    
-    m_cpuSamples.clear();
-    m_memorySamples.clear();
-    m_gpuSamples.clear();
+bool PerformanceProfiler::ImportProfilingData(const std::string& /*filePath*/) {
+    // Stub
+    return false;
+}
+
+void PerformanceProfiler::ClearProfilingData() {
+    m_frameHistory.clear();
+    m_currentFrame.reset();
     m_activeCPUSamples.clear();
-    
-    m_currentSession.sampleCount = 0;
-    
+    m_cpuSampleMap.clear();
+    m_activeGPUSamples.clear();
+    m_performanceCounters.clear();
+    m_detectedBottlenecks.clear();
+    m_optimizationSuggestions.clear();
+    m_snapshots.clear();
     std::cout << "Cleared all profiling data\n";
 }
 
-// Private implementation methods
-
-void PerformanceProfiler::InitializeBuiltInCounters() {
-    // Frame time counter
-    PerformanceCounter frameTime;
-    frameTime.name = "Frame Time";
-    frameTime.type = ProfilerSampleType::CPU_SAMPLE;
-    frameTime.unit = "ms";
-    frameTime.color = XMFLOAT4(1.0f, 0.5f, 0.0f, 1.0f); // Orange
-    AddCounter(frameTime);
-    
-    // FPS counter
-    PerformanceCounter fps;
-    fps.name = "FPS";
-    fps.type = ProfilerSampleType::CPU_SAMPLE;
-    fps.unit = "fps";
-    fps.color = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f); // Green
-    AddCounter(fps);
-    
-    // Memory counters
-    PerformanceCounter totalMem;
-    totalMem.name = "Total Memory";
-    totalMem.type = ProfilerSampleType::MEMORY_SAMPLE;
-    totalMem.unit = "MB";
-    totalMem.color = XMFLOAT4(0.0f, 0.5f, 1.0f, 1.0f); // Blue
-    AddCounter(totalMem);
-    
-    PerformanceCounter usedMem;
-    usedMem.name = "Used Memory";
-    usedMem.type = ProfilerSampleType::MEMORY_SAMPLE;
-    usedMem.unit = "MB";
-    usedMem.color = XMFLOAT4(1.0f, 0.0f, 0.5f, 1.0f); // Pink
-    AddCounter(usedMem);
-    
-    // GPU counters
-    PerformanceCounter gpuTime;
-    gpuTime.name = "GPU Frame Time";
-    gpuTime.type = ProfilerSampleType::GPU_SAMPLE;
-    gpuTime.unit = "ms";
-    gpuTime.color = XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
-    AddCounter(gpuTime);
-    
-    PerformanceCounter drawCalls;
-    drawCalls.name = "Draw Calls";
-    drawCalls.type = ProfilerSampleType::RENDERING_SAMPLE;
-    drawCalls.unit = "calls";
-    drawCalls.color = XMFLOAT4(0.5f, 0.0f, 1.0f, 1.0f); // Purple
-    AddCounter(drawCalls);
+void PerformanceProfiler::SetConfiguration(const ProfilerConfig& config) {
+    m_config = config;
 }
 
-void PerformanceProfiler::UpdateSimulatedCounters(float deltaTime) {
-    // Simulate some realistic performance data for demonstration
-    static float timeAccumulator = 0.0f;
-    timeAccumulator += deltaTime;
-    
-    // Memory usage simulation
-    static size_t baseMemory = 256 * 1024 * 1024; // 256 MB base
-    size_t currentMemory = baseMemory + static_cast<size_t>(50 * 1024 * 1024 * sin(timeAccumulator * 0.5f));
-    
-    MemoryProfileSample memSample;
-    memSample.timestamp = std::chrono::steady_clock::now();
-    memSample.totalMemory = 1024 * 1024 * 1024; // 1 GB total
-    memSample.usedMemory = currentMemory;
-    memSample.availableMemory = memSample.totalMemory - memSample.usedMemory;
-    
-    AddMemorySample(memSample);
-    
-    // GPU simulation
-    GPUProfileSample gpuSample;
-    gpuSample.timestamp = std::chrono::steady_clock::now();
-    gpuSample.frameTime = 16.67f + 2.0f * sin(timeAccumulator * 2.0f); // ~60fps with variation
-    gpuSample.drawCalls = 150 + static_cast<int>(50 * cos(timeAccumulator * 1.5f));
-    gpuSample.triangles = gpuSample.drawCalls * 500; // Estimate
-    gpuSample.memoryUsage = 512 * 1024 * 1024; // 512 MB VRAM
-    
-    AddGPUSample(gpuSample);
+uint32_t PerformanceProfiler::TakeSnapshot(const std::string& name) {
+    PerformanceSnapshot snapshot;
+    snapshot.name = name;
+    snapshot.timestamp = std::chrono::steady_clock::now();
+    if (m_currentFrame) {
+        snapshot.frameData = *m_currentFrame;
+    }
+    snapshot.counters = m_performanceCounters;
+    m_snapshots.push_back(std::move(snapshot));
+    return m_nextSnapshotID++;
 }
 
-void PerformanceProfiler::RenderProfilerToolbar() {
-    if (m_isProfilerRunning) {
-        if (ImGui::Button("Stop Profiling")) {
-            StopProfiling();
+std::string PerformanceProfiler::CompareSnapshots(uint32_t snapshot1, uint32_t snapshot2) {
+    if (snapshot1 == 0 || snapshot2 == 0 ||
+        snapshot1 > m_snapshots.size() || snapshot2 > m_snapshots.size()) {
+        return "Invalid snapshot IDs";
+    }
+
+    const auto& s1 = m_snapshots[snapshot1 - 1];
+    const auto& s2 = m_snapshots[snapshot2 - 1];
+
+    std::stringstream ss;
+    ss << "Comparing: " << s1.name << " vs " << s2.name << "\n";
+    ss << "Frame time: " << s1.frameData.frameTime << " vs " << s2.frameData.frameTime << " ms\n";
+    return ss.str();
+}
+
+std::string PerformanceProfiler::GetTrendAnalysis(const std::string& /*metric*/, float /*timespan*/) {
+    return "Trend analysis not yet implemented";
+}
+
+// ============================================================================
+// Private Methods
+// ============================================================================
+
+void PerformanceProfiler::RenderOverviewPanel() {
+    ImGui::Text("Performance Overview");
+    ImGui::Separator();
+
+    if (m_currentFrame) {
+        ImGui::Text("Frame: %d", m_currentFrame->frameNumber);
+        ImGui::Text("Frame Time: %.2f ms", m_currentFrame->frameTime);
+        ImGui::Text("FPS: %.1f", m_currentFrame->fps);
+        ImGui::Text("Draw Calls: %d", m_currentFrame->drawCalls);
+    } else {
+        ImGui::Text("No profiling data available");
+    }
+}
+
+void PerformanceProfiler::RenderCPUProfilerPanel() {
+    ImGui::Text("CPU Profiler");
+    ImGui::Separator();
+
+    if (m_currentFrame && !m_currentFrame->cpuSamples.empty()) {
+        for (const auto& sample : m_currentFrame->cpuSamples) {
+            RenderCPUSampleHierarchy(sample.get(), 0);
         }
     } else {
-        if (ImGui::Button("Start Profiling")) {
-            StartProfiling(0.0f); // Indefinite duration
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Profile 30s")) {
-            StartProfiling(30.0f);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Profile 60s")) {
-            StartProfiling(60.0f);
-        }
-    }
-    
-    ImGui::SameLine();
-    if (ImGui::Button("Clear Data")) {
-        ClearData();
-    }
-    
-    ImGui::SameLine();
-    if (ImGui::Button("Export Report")) {
-        ExportReport("profiling_report.txt", ReportFormat::TEXT);
-    }
-    
-    // Show session status
-    if (m_currentSession.isActive) {
-        ImGui::SameLine();
-        ImGui::Text("| Running: %.1fs", m_currentSession.currentTime);
-        if (m_currentSession.duration > 0.0f) {
-            ImGui::SameLine();
-            ImGui::Text("/ %.1fs", m_currentSession.duration);
-        }
-        ImGui::SameLine();
-        ImGui::Text("| Samples: %d", m_currentSession.sampleCount);
+        ImGui::Text("No CPU samples available");
     }
 }
 
-void PerformanceProfiler::RenderRealTimeView() {
-    // Show real-time graphs of key performance metrics
-    const float plotHeight = 100.0f;
-    
-    for (auto& [name, counter] : m_counters) {
-        if (!counter.isActive || counter.history.empty()) continue;
-        
-        ImVec4 color = ImVec4(counter.color.x, counter.color.y, counter.color.z, counter.color.w);
-        
-        // Plot the counter history
-        ImGui::Text("%s: %.2f %s", name.c_str(), counter.currentValue, counter.unit.c_str());
-        
-        // Convert history to float array for ImGui
-        std::vector<float> plotData(counter.history.begin(), counter.history.end());
-        
-        ImGui::PlotLines(("##" + name).c_str(), plotData.data(), static_cast<int>(plotData.size()),
-                        0, nullptr, counter.minValue, counter.maxValue, ImVec2(0, plotHeight));
-        
-        // Show statistics
-        ImGui::SameLine();
-        ImGui::BeginGroup();
-        ImGui::Text("Avg: %.2f", counter.averageValue);
-        ImGui::Text("Min: %.2f", counter.minValue);
-        ImGui::Text("Max: %.2f", counter.maxValue);
-        ImGui::EndGroup();
-        
-        ImGui::Separator();
+void PerformanceProfiler::RenderGPUProfilerPanel() {
+    ImGui::Text("GPU Profiler");
+    ImGui::Separator();
+
+    if (m_currentFrame && !m_currentFrame->gpuSamples.empty()) {
+        for (const auto& sample : m_currentFrame->gpuSamples) {
+            ImGui::Text("%s: %.2f ms (%d draw calls)",
+                sample.name.c_str(), sample.duration, sample.drawCalls);
+        }
+    } else {
+        ImGui::Text("No GPU samples available");
     }
 }
 
-void PerformanceProfiler::RenderCountersView() {
-    // Show detailed counter information in table format
-    if (ImGui::BeginTable("CountersTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+void PerformanceProfiler::RenderMemoryProfilerPanel() {
+    ImGui::Text("Memory Profiler");
+    ImGui::Separator();
+
+    std::lock_guard<std::mutex> lock(m_memoryMutex);
+    for (const auto& [category, sample] : m_memoryCategories) {
+        float mb = static_cast<float>(sample.allocatedBytes) / (1024.0f * 1024.0f);
+        ImGui::Text("%s: %.2f MB (%d allocs)", category.c_str(), mb, sample.allocationCount);
+    }
+
+    if (m_memoryCategories.empty()) {
+        ImGui::Text("No memory data available");
+    }
+}
+
+void PerformanceProfiler::RenderPerformanceCountersPanel() {
+    ImGui::Text("Performance Counters");
+    ImGui::Separator();
+
+    if (ImGui::BeginTable("CountersTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Name");
         ImGui::TableSetupColumn("Current");
         ImGui::TableSetupColumn("Average");
-        ImGui::TableSetupColumn("Min");
-        ImGui::TableSetupColumn("Max");
+        ImGui::TableSetupColumn("Min/Max");
         ImGui::TableSetupColumn("Unit");
-        ImGui::TableSetupColumn("Samples");
         ImGui::TableHeadersRow();
-        
-        for (const auto& [name, counter] : m_counters) {
+
+        for (const auto& counter : m_performanceCounters) {
             if (!counter.isActive) continue;
-            
             ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Text("%s", name.c_str());
-            
-            ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%.2f", counter.currentValue);
-            
-            ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%.2f", counter.averageValue);
-            
-            ImGui::TableSetColumnIndex(3);
-            ImGui::Text("%.2f", counter.minValue);
-            
-            ImGui::TableSetColumnIndex(4);
-            ImGui::Text("%.2f", counter.maxValue);
-            
-            ImGui::TableSetColumnIndex(5);
-            ImGui::Text("%s", counter.unit.c_str());
-            
-            ImGui::TableSetColumnIndex(6);
-            ImGui::Text("%zu", counter.history.size());
+            ImGui::TableSetColumnIndex(0); ImGui::Text("%s", counter.name.c_str());
+            ImGui::TableSetColumnIndex(1); ImGui::Text("%.2f", counter.currentValue);
+            ImGui::TableSetColumnIndex(2); ImGui::Text("%.2f", counter.averageValue);
+            ImGui::TableSetColumnIndex(3); ImGui::Text("%.2f / %.2f", counter.minValue, counter.maxValue);
+            ImGui::TableSetColumnIndex(4); ImGui::Text("%s", counter.unit.c_str());
         }
-        
+
         ImGui::EndTable();
     }
 }
 
-void PerformanceProfiler::RenderCPUProfilingView() {
-    ImGui::Text("CPU Profiling Samples: %zu", m_cpuSamples.size());
-    
-    if (ImGui::BeginTable("CPUSamplesTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-        ImGui::TableSetupColumn("Name");
-        ImGui::TableSetupColumn("Category");
-        ImGui::TableSetupColumn("Duration (ms)");
-        ImGui::TableSetupColumn("Status");
-        ImGui::TableHeadersRow();
-        
-        // Show recent samples
-        for (auto it = m_cpuSamples.rbegin(); it != m_cpuSamples.rend() && it < m_cpuSamples.rbegin() + 100; ++it) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Text("%s", it->name.c_str());
-            
-            ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%s", it->category.c_str());
-            
-            ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%.3f", it->duration);
-            
-            ImGui::TableSetColumnIndex(3);
-            ImGui::Text("Completed");
-        }
-        
-        ImGui::EndTable();
-    }
-}
+void PerformanceProfiler::RenderOptimizationPanel() {
+    ImGui::Text("Optimization Suggestions");
+    ImGui::Separator();
 
-void PerformanceProfiler::RenderMemoryView() {
-    if (m_memorySamples.empty()) {
-        ImGui::Text("No memory samples available");
+    if (m_optimizationSuggestions.empty()) {
+        ImGui::Text("No optimization suggestions");
         return;
     }
-    
-    const auto& latestSample = m_memorySamples.back();
-    
-    ImGui::Text("Memory Usage Overview");
-    ImGui::Separator();
-    
-    float usedMB = static_cast<float>(latestSample.usedMemory) / (1024 * 1024);
-    float totalMB = static_cast<float>(latestSample.totalMemory) / (1024 * 1024);
-    float usageRatio = usedMB / totalMB;
-    
-    ImGui::Text("Used: %.1f MB / %.1f MB (%.1f%%)", usedMB, totalMB, usageRatio * 100.0f);
-    ImGui::ProgressBar(usageRatio, ImVec2(0.0f, 0.0f));
-    
-    // Memory history graph
-    if (m_memorySamples.size() > 1) {
-        std::vector<float> memoryHistory;
-        for (const auto& sample : m_memorySamples) {
-            memoryHistory.push_back(static_cast<float>(sample.usedMemory) / (1024 * 1024));
-        }
-        
-        ImGui::PlotLines("Memory Usage (MB)", memoryHistory.data(), static_cast<int>(memoryHistory.size()),
-                        0, nullptr, 0.0f, totalMB, ImVec2(0, 150));
-    }
-}
 
-void PerformanceProfiler::RenderGPUView() {
-    if (m_gpuSamples.empty()) {
-        ImGui::Text("No GPU samples available");
-        return;
-    }
-    
-    const auto& latestSample = m_gpuSamples.back();
-    
-    ImGui::Text("GPU Performance Overview");
-    ImGui::Separator();
-    
-    ImGui::Text("Frame Time: %.2f ms", latestSample.frameTime);
-    ImGui::Text("Draw Calls: %d", latestSample.drawCalls);
-    ImGui::Text("Triangles: %d", latestSample.triangles);
-    ImGui::Text("VRAM Usage: %.1f MB", latestSample.memoryUsage / (1024.0f * 1024.0f));
-    
-    // GPU frame time history
-    if (m_gpuSamples.size() > 1) {
-        std::vector<float> frameTimeHistory;
-        for (const auto& sample : m_gpuSamples) {
-            frameTimeHistory.push_back(sample.frameTime);
+    for (int i = 0; i < static_cast<int>(m_optimizationSuggestions.size()); ++i) {
+        const auto& suggestion = m_optimizationSuggestions[i];
+        ImGui::Text("[%s] %s",
+            suggestion.priority == OptimizationSuggestion::CRITICAL ? "CRITICAL" :
+            suggestion.priority == OptimizationSuggestion::HIGH ? "HIGH" :
+            suggestion.priority == OptimizationSuggestion::MEDIUM ? "MEDIUM" : "LOW",
+            suggestion.title.c_str());
+        ImGui::Text("  %s", suggestion.description.c_str());
+        if (suggestion.isAutomatable && ImGui::Button(("Apply##" + std::to_string(i)).c_str())) {
+            ApplyOptimization(i);
         }
-        
-        ImGui::PlotLines("GPU Frame Time (ms)", frameTimeHistory.data(), static_cast<int>(frameTimeHistory.size()),
-                        0, nullptr, 0.0f, 33.33f, ImVec2(0, 100)); // 0-33ms range (30-inf FPS)
-    }
-}
-
-void PerformanceProfiler::RenderAnalysisView() {
-    ImGui::Text("Performance Analysis");
-    ImGui::Separator();
-    
-    auto report = GenerateReport();
-    
-    ImGui::Text("Session Duration: %.1f seconds", report.sessionDuration);
-    ImGui::Text("Total Samples: %d", report.totalSamples);
-    
-    ImGui::Separator();
-    ImGui::Text("Performance Summary:");
-    
-    for (const auto& [name, summary] : report.counterSummaries) {
-        ImGui::Text("%s:", name.c_str());
-        ImGui::Indent();
-        ImGui::Text("Current: %.2f", summary.currentValue);
-        ImGui::Text("Average: %.2f", summary.averageValue);
-        ImGui::Text("Range: %.2f - %.2f", summary.minValue, summary.maxValue);
-        ImGui::Text("Samples: %d", summary.sampleCount);
-        ImGui::Unindent();
         ImGui::Separator();
     }
 }
 
-void PerformanceProfiler::GenerateProfilingReport() const {
-    auto report = GenerateReport();
-    
-    std::cout << "\n=== Performance Profiling Report ===\n";
-    std::cout << "Session Duration: " << report.sessionDuration << " seconds\n";
-    std::cout << "Total Samples: " << report.totalSamples << "\n";
-    std::cout << "\nCounter Summary:\n";
-    
-    for (const auto& [name, summary] : report.counterSummaries) {
-        std::cout << "  " << name << ": ";
-        std::cout << "Current=" << summary.currentValue;
-        std::cout << ", Avg=" << summary.averageValue;
-        std::cout << ", Range=" << summary.minValue << "-" << summary.maxValue;
-        std::cout << " (" << summary.sampleCount << " samples)\n";
-    }
-    
-    std::cout << "====================================\n\n";
+void PerformanceProfiler::RenderConfigurationPanel() {
+    ImGui::Text("Profiler Configuration");
+    ImGui::Separator();
+
+    ImGui::Checkbox("CPU Profiling", &m_config.enableCPUProfiling);
+    ImGui::Checkbox("GPU Profiling", &m_config.enableGPUProfiling);
+    ImGui::Checkbox("Memory Profiling", &m_config.enableMemoryProfiling);
+    ImGui::Checkbox("Deep Profiling", &m_config.enableDeepProfiling);
+    ImGui::SliderFloat("Target FPS", &m_config.targetFrameRate, 30.0f, 144.0f);
 }
 
-void PerformanceProfiler::ExportTextReport(std::ofstream& file, const ProfilingReport& report) const {
-    file << "Performance Profiling Report\n";
-    file << "============================\n\n";
-    file << "Session Duration: " << report.sessionDuration << " seconds\n";
-    file << "Total Samples: " << report.totalSamples << "\n";
-    file << "Generated: " << std::chrono::duration_cast<std::chrono::seconds>(
-        report.timestamp.time_since_epoch()).count() << "\n\n";
-    
-    file << "Counter Summary:\n";
-    for (const auto& [name, summary] : report.counterSummaries) {
-        file << "  " << name << ":\n";
-        file << "    Current: " << summary.currentValue << "\n";
-        file << "    Average: " << summary.averageValue << "\n";
-        file << "    Minimum: " << summary.minValue << "\n";
-        file << "    Maximum: " << summary.maxValue << "\n";
-        file << "    Samples: " << summary.sampleCount << "\n\n";
+void PerformanceProfiler::UpdateFrameData() {
+    auto frame = std::make_unique<FrameProfileData>();
+    frame->frameNumber = m_currentFrameNumber;
+    frame->timestamp = std::chrono::steady_clock::now();
+
+    m_currentFrame = std::move(frame);
+
+    // Keep history within limits
+    if (static_cast<int>(m_frameHistory.size()) >= m_config.maxFrameHistory) {
+        m_frameHistory.erase(m_frameHistory.begin());
+    }
+    m_frameHistory.push_back(std::make_unique<FrameProfileData>(*m_currentFrame));
+}
+
+void PerformanceProfiler::AnalyzePerformance() {
+    DetectCPUBottlenecks();
+    DetectGPUBottlenecks();
+    DetectMemoryBottlenecks();
+    GenerateOptimizationSuggestions();
+    m_lastAnalysisTime = std::chrono::steady_clock::now();
+}
+
+void PerformanceProfiler::GenerateOptimizationSuggestions() {
+    // Stub - would analyze profiling data and generate suggestions
+}
+
+void PerformanceProfiler::DetectCPUBottlenecks() {
+    // Stub
+}
+
+void PerformanceProfiler::DetectGPUBottlenecks() {
+    // Stub
+}
+
+void PerformanceProfiler::DetectMemoryBottlenecks() {
+    // Stub
+}
+
+void PerformanceProfiler::ProcessGPUQueries() {
+    // Stub
+}
+
+void PerformanceProfiler::UpdateMemoryTracking() {
+    // Stub
+}
+
+void PerformanceProfiler::CalculateStatistics() {
+    // Stub
+}
+
+void PerformanceProfiler::RenderCPUSampleHierarchy(const CPUProfileSample* sample, int depth) {
+    if (!sample) return;
+
+    std::string indent(depth * 2, ' ');
+    ImGui::Text("%s%s: %.3f ms (self: %.3f ms)",
+        indent.c_str(), sample->name.c_str(), sample->GetTotalTime(), sample->GetSelfTime());
+
+    for (const auto& child : sample->children) {
+        RenderCPUSampleHierarchy(child.get(), depth + 1);
     }
 }
 
-void PerformanceProfiler::ExportCSVReport(std::ofstream& file, const ProfilingReport& report) const {
-    file << "Counter,Current,Average,Minimum,Maximum,Samples\n";
-    for (const auto& [name, summary] : report.counterSummaries) {
-        file << name << "," << summary.currentValue << "," << summary.averageValue << ","
-             << summary.minValue << "," << summary.maxValue << "," << summary.sampleCount << "\n";
-    }
-}
+void PerformanceProfiler::RenderPerformanceGraph(const PerformanceCounter& counter, const XMFLOAT2& size) {
+    if (counter.history.empty()) return;
 
-void PerformanceProfiler::ExportJSONReport(std::ofstream& file, const ProfilingReport& report) const {
-    file << "{\n";
-    file << "  \"sessionDuration\": " << report.sessionDuration << ",\n";
-    file << "  \"totalSamples\": " << report.totalSamples << ",\n";
-    file << "  \"timestamp\": " << std::chrono::duration_cast<std::chrono::seconds>(
-        report.timestamp.time_since_epoch()).count() << ",\n";
-    file << "  \"counters\": {\n";
-    
-    bool first = true;
-    for (const auto& [name, summary] : report.counterSummaries) {
-        if (!first) file << ",\n";
-        file << "    \"" << name << "\": {\n";
-        file << "      \"current\": " << summary.currentValue << ",\n";
-        file << "      \"average\": " << summary.averageValue << ",\n";
-        file << "      \"minimum\": " << summary.minValue << ",\n";
-        file << "      \"maximum\": " << summary.maxValue << ",\n";
-        file << "      \"samples\": " << summary.sampleCount << "\n";
-        file << "    }";
-        first = false;
-    }
-    
-    file << "\n  }\n";
-    file << "}\n";
+    std::vector<float> data(counter.history.begin(), counter.history.end());
+    ImGui::PlotLines(("##" + counter.name).c_str(), data.data(), static_cast<int>(data.size()),
+                    0, nullptr, counter.minValue, counter.maxValue, ImVec2(size.x, size.y));
 }
 
 } // namespace SparkEditor
