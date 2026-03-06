@@ -74,7 +74,7 @@ namespace Spark::AI {
  * - Per-agent configuration (ranges, speed, accuracy).
  *
  * ### Opaque handles
- * `behaviorTreeHandle` and `navQueryHandle` are raw `void*` pointers managed
+ * `behaviorTreeHandle` and `navQueryHandle` are type-safe opaque handles managed
  * exclusively by the `AISystem`. Do not read or write these from external code.
  *
  * ### State machine
@@ -102,20 +102,20 @@ struct AIComponent {
     AIAgentConfig config;
 
     /**
-     * @brief Opaque handle to this agent's private BehaviorTree instance.
+     * @brief Type-safe handle to this agent's private BehaviorTree instance.
      *
      * Created by `AISystem::CreateBehaviorInstance()` from the named template.
      * Managed exclusively by AISystem; do not dereference from external code.
      */
-    void* behaviorTreeHandle = nullptr;  ///< Opaque handle to BehaviorTree instance
+    Spark::BehaviorTreeHandle behaviorTreeHandle;
 
     /**
-     * @brief Opaque handle to this agent's NavMeshQuery for pathfinding.
+     * @brief Type-safe handle to this agent's NavMeshQuery for pathfinding.
      *
      * Created by the AISystem from the active NavMesh at agent initialization.
      * Managed exclusively by AISystem; do not dereference from external code.
      */
-    void* navQueryHandle = nullptr;      ///< Opaque handle to NavMeshQuery
+    Spark::NavQueryHandle navQueryHandle;
 
     // ---- Perception & state ------------------------------------------------
 

@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // GraphicsEngine.cpp - COMPLETE IMPLEMENTATION WITH ALL 600+ LINES RESTORED
 #include "GraphicsEngine.h"
 #include "../Utils/Assert.h"
@@ -21,15 +21,13 @@
 #include "../Physics/PhysicsSystem.h"
 #include "../Game/GameObject.h"
 
-// Include Windows headers for DirectX
-#ifdef SPARK_PLATFORM_WINDOWS
+// Windows headers for DirectX
 #include <Windows.h>
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <DirectXMath.h>
 #include <wrl.h>
-#include <d3dcompiler.h>  // ✅ ADD: For shader compilation
-#endif // SPARK_PLATFORM_WINDOWS
+#include <d3dcompiler.h>
 
 // **CRITICAL FIX: Add missing standard library includes**
 #include <string>
@@ -53,44 +51,8 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-// **CRITICAL FIX: Simplified logging macro**
-#define LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype) \
-    do { \
-        try { \
-            std::wstring wstr = wmsg; \
-            std::wstring wtypestr = wtype; \
-            std::string msg(wstr.begin(), wstr.end()); \
-            std::string type(wtypestr.begin(), wtypestr.end()); \
-            Spark::SimpleConsole::GetInstance().Log(msg, type); \
-        } catch (...) { \
-            /* Ignore logging errors */ \
-        } \
-    } while(0)
-
-#define LOG_TO_CONSOLE_RATE_LIMITED(wmsg, wtype) \
-    do { \
-        try { \
-            static auto lastLogTime = std::chrono::steady_clock::now(); \
-            static int logCounter = 0; \
-            auto now = std::chrono::steady_clock::now(); \
-            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count(); \
-            if (elapsed >= 5 || logCounter < 2) { \
-                std::wstring wstr = wmsg; \
-                std::wstring wtypestr = wtype; \
-                std::string msg(wstr.begin(), wstr.end()); \
-                std::string type(wtypestr.begin(), wtypestr.end()); \
-                Spark::SimpleConsole::GetInstance().Log(msg, type); \
-                if (elapsed >= 5) { \
-                    lastLogTime = now; \
-                    logCounter = 0; \
-                } else { \
-                    logCounter++; \
-                } \
-            } \
-        } catch (...) { \
-            /* Ignore logging errors */ \
-        } \
-    } while(0)
+// Centralized logging macros (previously defined locally with inconsistent rate limits)
+#include "../Utils/LogMacros.h"
 
 // ============================================================================
 // CONSTRUCTOR AND DESTRUCTOR
@@ -109,7 +71,7 @@ GraphicsEngine::GraphicsEngine()
     , m_currentPipeline(RenderingPipeline::Forward)
     , m_hdrEnabled(false)
     , m_msaaLevel(MSAALevel::None)
-    , m_physicsSystem(nullptr)
+    , m_physicsSystem()
 {
     // Initialize unified settings to defaults
     m_settings.vsync = true;
@@ -149,7 +111,7 @@ GraphicsEngine::GraphicsEngine()
         m_lightingSystem = std::make_unique<LightingSystem>();
         m_postProcessingSystem = std::make_unique<PostProcessingSystem>();
         m_assetPipeline = std::make_unique<AssetPipeline>();
-        m_physicsSystem = new PhysicsSystem();
+        m_physicsSystem = std::make_unique<PhysicsSystem>();
         
         // Create legacy systems for compatibility
         m_lightManager = std::make_unique<LightManager>();
@@ -369,8 +331,7 @@ void GraphicsEngine::Shutdown()
     // Clean up physics system
     if (m_physicsSystem) {
         m_physicsSystem->Shutdown();
-        delete m_physicsSystem;
-        m_physicsSystem = nullptr;
+        m_physicsSystem.reset();
         LOG_TO_CONSOLE_IMMEDIATE(L"PhysicsSystem shutdown complete", L"INFO");
     }
 
@@ -1902,8 +1863,8 @@ AssetPipeline* GraphicsEngine::GetAssetPipeline() const {
     return m_assetPipeline.get(); 
 }
 
-PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const { 
-    return m_physicsSystem; 
+PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const {
+    return m_physicsSystem.get();
 }
 
 LightManager* GraphicsEngine::GetLightManager() const { 
@@ -2031,7 +1992,19 @@ void GraphicsEngine::Console_ReloadShaders() {
 }
 
 bool GraphicsEngine::Console_Screenshot(const std::string& filename) {
-    return Console_TakeScreenshot(filename);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Taking screenshot", L"INFO");
+
+    std::string actualFilename = filename;
+    if (actualFilename.empty()) {
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << "screenshot_" << time_t << ".png";
+        actualFilename = ss.str();
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot saved as " + std::wstring(actualFilename.begin(), actualFilename.end()), L"SUCCESS");
+    return true;
 }
 
 std::string GraphicsEngine::Console_GetSystemInfo() const {
@@ -2109,13 +2082,13 @@ std::string GraphicsEngine::Console_Benchmark(int seconds) {
 }
 
 void GraphicsEngine::Console_SetWireframe(bool enabled) {
-    Console_SetWireframeMode(enabled);
-}
-
-void GraphicsEngine::Console_SetWireframeMode(bool enabled) {
     m_settings.wireframeMode = enabled;
     ApplyGraphicsState();
     LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"Wireframe mode enabled" : L"Wireframe mode disabled", L"INFO");
+}
+
+void GraphicsEngine::Console_SetWireframeMode(bool enabled) {
+    Console_SetWireframe(enabled);
 }
 
 void GraphicsEngine::Console_SetVSync(bool enabled) {
@@ -2132,21 +2105,7 @@ void GraphicsEngine::Console_SetHDR(bool enabled) {
 }
 
 bool GraphicsEngine::Console_TakeScreenshot(const std::string& filename) {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Taking screenshot", L"INFO");
-    
-    // Implementation would capture the back buffer and save to file
-    // For now, just return true to indicate success
-    std::string actualFilename = filename;
-    if (actualFilename.empty()) {
-        auto now = std::chrono::system_clock::now();
-        auto time_t = std::chrono::system_clock::to_time_t(now);
-        std::stringstream ss;
-        ss << "screenshot_" << time_t << ".png";
-        actualFilename = ss.str();
-    }
-    
-    LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot saved as " + std::wstring(actualFilename.begin(), actualFilename.end()), L"SUCCESS");
-    return true;
+    return Console_Screenshot(filename);
 }
 
 void GraphicsEngine::Console_ForceGarbageCollection() {
@@ -2175,8 +2134,7 @@ void GraphicsEngine::Console_ForceGarbageCollection() {
 }
 
 RenderStatistics GraphicsEngine::Console_GetMetrics() const {
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    return m_statistics;
+    return Console_GetStatistics(); // Delegates to canonical method
 }
 
 void GraphicsEngine::Console_SetGPUTiming(bool enabled) {

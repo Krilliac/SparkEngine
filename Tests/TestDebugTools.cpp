@@ -284,7 +284,7 @@ TEST(DebugDraw_DrawLine)
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(1));
 
     auto& requests = dd.GetRequests();
-    EXPECT_EQ(requests[0].type, Spark::DebugShapeType::Line);
+    EXPECT_EQ(static_cast<int>(requests[0].type), static_cast<int>(Spark::DebugShapeType::Line));
 
     dd.Clear();
 }
@@ -299,7 +299,7 @@ TEST(DebugDraw_DrawSphere)
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(1));
 
     auto& requests = dd.GetRequests();
-    EXPECT_EQ(requests[0].type, Spark::DebugShapeType::Sphere);
+    EXPECT_EQ(static_cast<int>(requests[0].type), static_cast<int>(Spark::DebugShapeType::Sphere));
     EXPECT_NEAR(requests[0].radius, 2.0f, 0.001f);
 
     dd.Clear();
@@ -491,7 +491,7 @@ TEST(FileLogger_InitializeShutdown)
     EXPECT_FALSE(logger.IsInitialized());
 
     logger.SetMinimumLevel(Spark::FileLogLevel::Error);
-    EXPECT_EQ(logger.GetMinimumLevel(), Spark::FileLogLevel::Error);
+    EXPECT_EQ(static_cast<int>(logger.GetMinimumLevel()), static_cast<int>(Spark::FileLogLevel::Error));
 }
 
 // ============================================================================

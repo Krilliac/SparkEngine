@@ -1,14 +1,10 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
-#endif // SPARK_PLATFORM_WINDOWS
 #include <cstdint>
 #include <cstdarg>
 #include <cstdio>
-#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
-#endif // SPARK_PLATFORM_WINDOWS
 #include <chrono>
 
 #include "Game.h"
@@ -42,38 +38,8 @@
 extern std::unique_ptr<GraphicsEngine> g_graphics;
 extern Console                         g_console;
 
-// **SIMPLE: Use SimpleConsole for logging - always works**
-#define LOG_TO_CONSOLE_RATE_LIMITED(wmsg, wtype) \
-    do { \
-        static auto lastLogTime = std::chrono::steady_clock::now(); \
-        static int logCounter = 0; \
-        auto now = std::chrono::steady_clock::now(); \
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count(); \
-        if (elapsed >= 2 || logCounter < 3) { \
-            std::wstring wstrMsg = wmsg; \
-            std::wstring wstrType = wtype; \
-            std::string strMsg(wstrMsg.begin(), wstrMsg.end()); \
-            std::string strType(wstrType.begin(), wstrType.end()); \
-            Spark::SimpleConsole::GetInstance().Log(strMsg, strType); \
-            if (elapsed >= 2) { \
-                lastLogTime = now; \
-                logCounter = 0; \
-            } else { \
-                logCounter++; \
-            } \
-        } \
-    } while(0)
-
-// Use rate-limited logging for most messages, immediate for critical ones
-#define LOG_TO_CONSOLE(wmsg, wtype) LOG_TO_CONSOLE_RATE_LIMITED(wmsg, wtype)
-#define LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype) \
-    do { \
-        std::wstring wstrMsg = wmsg; \
-        std::wstring wstrType = wtype; \
-        std::string strMsg(wstrMsg.begin(), wstrMsg.end()); \
-        std::string strType(wstrType.begin(), wstrType.end()); \
-        Spark::SimpleConsole::GetInstance().Log(strMsg, strType); \
-    } while(0)
+// Centralized logging macros (previously defined locally with inconsistent rate limits)
+#include "../Utils/LogMacros.h"
 
 /*-------------------------------------------------------------
   Ctor / Dtor

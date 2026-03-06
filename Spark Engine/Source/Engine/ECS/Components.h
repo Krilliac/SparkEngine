@@ -45,12 +45,13 @@
  *   hp.health    = 200.0f;
  * @endcode
  *
- * @note Opaque `void*` handles (e.g. `physicsBodyHandle`, `audioSourceHandle`) are set
- *       by the corresponding subsystem and must **not** be written to by user code.
+ * @note Opaque handles (e.g. `physicsBodyHandle`, `audioSourceHandle`) are type-safe
+ *       wrappers (see OpaqueHandle.h) set by subsystems. Do **not** write to them.
  */
 
 #pragma once
 #include "../../Core/Platform.h"
+#include "../../Utils/OpaqueHandle.h"
 #include <entt/entt.hpp>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -381,6 +382,12 @@ struct MeshRenderer {
 
     /** @brief Controls whether the RenderSystem submits this entity for rendering. Default: true. */
     bool visible = true;
+
+    /** @brief World matrix computed by RenderSystem from the entity's Transform. */
+    XMFLOAT4X4 cachedWorldMatrix{};
+
+    /** @brief True when Transform has changed and cachedWorldMatrix needs recomputation. */
+    bool worldMatrixDirty = true;
 };
 
 /**
@@ -563,12 +570,12 @@ struct RigidBodyComponent {
     DirectX::XMFLOAT3 angularVelocity{0, 0, 0};
 
     /**
-     * @brief Opaque handle to the PhysicsBody object managed by the PhysicsSystem.
+     * @brief Type-safe handle to the PhysicsBody object managed by the PhysicsSystem.
      *
      * Set internally when the PhysicsSystem creates the Bullet rigid body. Do not
-     * read or write this pointer from user or script code.
+     * read or write this handle from user or script code.
      */
-    void* physicsBodyHandle = nullptr;
+    Spark::PhysicsHandle physicsBodyHandle;
 };
 
 /**
@@ -692,11 +699,14 @@ struct AudioSourceComponent {
     bool isPlaying = false;
 
     /**
-     * @brief Opaque handle to the runtime AudioSource object in the AudioEngine pool.
+     * @brief Type-safe handle to the runtime AudioSource object in the AudioEngine pool.
      *
      * Managed by the AudioUpdateSystem. Do not read or modify from external code.
      */
-    void* audioSourceHandle = nullptr;
+    Spark::AudioHandle audioSourceHandle;
+
+    /** @brief Previous frame position used to compute velocity for Doppler effects. */
+    XMFLOAT3 previousPosition{0, 0, 0};
 };
 
 // =============================================================================
@@ -847,11 +857,11 @@ struct ParticleEmitterComponent {
     float startSpeed = 1.0f;
 
     /**
-     * @brief Opaque handle to the runtime ParticleEmitter object.
+     * @brief Type-safe handle to the runtime ParticleEmitter object.
      *
      * Set by the ParticleSystem when the effect is instantiated. Do not modify.
      */
-    void* emitterHandle = nullptr;
+    Spark::ParticleHandle emitterHandle;
 };
 
 // =============================================================================
@@ -910,6 +920,12 @@ struct AnimationController {
     /** @brief When true the clip restarts from the beginning when it reaches its end. */
     bool loop = true;
 
+    /** @brief Total duration of the current animation clip in seconds. 0 = unknown/infinite. */
+    float duration = 0.0f;
+
+    /** @brief Normalized playback progress [0, 1]. Computed by AnimationUpdateSystem. */
+    float normalizedTime = 0.0f;
+
     /**
      * @brief All clip names available for this entity's skeleton.
      *
@@ -919,12 +935,12 @@ struct AnimationController {
     std::vector<std::string> availableAnimations;
 
     /**
-     * @brief Opaque handle to the Spark::Animation::AnimationInstance runtime object.
+     * @brief Type-safe handle to the Spark::Animation::AnimationInstance runtime object.
      *
      * Provides access to the full blending and IK API. Managed by the AnimationUpdateSystem.
-     * Do not write to this pointer.
+     * Do not write to this handle.
      */
-    void* animInstanceHandle = nullptr;
+    Spark::AnimationHandle animInstanceHandle;
 };
 
 // =============================================================================
@@ -969,20 +985,20 @@ struct AIComponent {
     std::string behaviorTreeName;
 
     /**
-     * @brief Opaque handle to the agent's private BehaviorTree instance.
+     * @brief Type-safe handle to the agent's private BehaviorTree instance.
      *
      * Created and owned by the AISystem when the behavior is first evaluated.
      * Do not modify from user code.
      */
-    void* behaviorTreeHandle = nullptr;
+    Spark::BehaviorTreeHandle behaviorTreeHandle;
 
     /**
-     * @brief Opaque handle to the NavMeshQuery object used for pathfinding.
+     * @brief Type-safe handle to the NavMeshQuery object used for pathfinding.
      *
      * Created by the AISystem from the active NavMesh at agent initialization.
      * Do not modify from user code.
      */
-    void* navQueryHandle = nullptr;
+    Spark::NavQueryHandle navQueryHandle;
 
     // ---- Perception data ----------------------------------------------------
 
@@ -1175,6 +1191,9 @@ struct HealthComponent {
     /** @brief Set to true automatically when health reaches 0; cleared on Heal(). */
     bool isDead = false;
 
+    /** @brief Guards against the LifecycleSystem firing the death callback more than once. */
+    bool deathProcessed = false;
+
     /**
      * @brief Subtract `amount` hit points, clamping health to zero and flagging death.
      *
@@ -1193,6 +1212,7 @@ struct HealthComponent {
     void Heal(float amount) {
         health = (std::min)(health + amount, maxHealth);
         isDead = false;
+        deathProcessed = false;
     }
 };
 

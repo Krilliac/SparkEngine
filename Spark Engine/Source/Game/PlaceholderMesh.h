@@ -13,10 +13,6 @@
  * SphereObject, etc.) during their CreateMesh() override to make initialization
  * resilient against missing or corrupt asset files.
  *
- * The function emits extensive debug logging to @c std::wcerr and the Windows
- * debug output channel (@c OutputDebugStringW) so that mesh loading issues can
- * be diagnosed without attaching a debugger.
- *
  * @note Only @c .obj files are supported by the underlying tinyobjloader backend.
  *       Other formats will be logged as unsupported and trigger the fallback path.
  *
@@ -27,11 +23,11 @@
 #include "../Core/Platform.h"
 
 #include "Utils/Assert.h"
+#include "Utils/SparkError.h"
 #include "../Graphics/Mesh.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
-#include <iostream>
 #include <filesystem>
 
 /**
@@ -58,9 +54,6 @@
  *
  * @warning Triggers ASSERT_ALWAYS_MSG if all fallback methods fail, as a mesh
  *          with zero vertices or indices would cause rendering crashes.
- *
- * @note Verbose debug output is written to @c std::wcerr and @c OutputDebugStringW
- *       at every decision point to aid in diagnosing asset-loading issues.
  */
 inline void LoadOrPlaceholderMesh(
     Mesh& mesh,
@@ -69,105 +62,66 @@ inline void LoadOrPlaceholderMesh(
     const std::wstring& path)
 {
     // 1) Initialize mesh with device/context
-    std::wcerr << L"[DEBUG] Initializing mesh with D3D device/context..." << std::endl;
     HRESULT hrInit = mesh.Initialize(device, context);
-    std::wcerr << L"[DEBUG] Mesh::Initialize returned HR = 0x"
-        << std::hex << hrInit << std::dec << std::endl;
+    SPARK_LOG_DEBUG("Mesh", "Mesh::Initialize returned HR=0x%08lX", static_cast<long>(hrInit));
     ASSERT_MSG(SUCCEEDED(hrInit), "Mesh::Initialize failed");
 
     // 2) Attempt to load from file
     bool loaded = false;
     if (!path.empty())
     {
-        // Check if file exists first
         bool fileExists = std::filesystem::exists(path);
-        std::wcerr << L"[DEBUG] File \"" << path << L"\" exists: "
-            << (fileExists ? L"YES" : L"NO") << std::endl;
 
         if (fileExists) {
-            // Check file extension - tinyobjloader only supports OBJ files
             std::wstring ext = std::filesystem::path(path).extension().wstring();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
 
-            std::wcerr << L"[DEBUG] File extension: \"" << ext << L"\"" << std::endl;
-
             if (ext == L".obj") {
-                std::wcerr << L"[DEBUG] Attempting mesh.LoadFromFile(\"" << path << L"\")..." << std::endl;
                 loaded = mesh.LoadFromFile(path);
-                std::wcerr << L"[DEBUG] LoadFromFile returned: "
-                    << (loaded ? L"SUCCESS" : L"FAILURE") << std::endl;
+                if (!loaded) {
+                    SPARK_LOG_WARN("Mesh", "LoadFromFile failed, falling back to procedural cube");
+                }
             }
             else {
-                std::wcerr << L"[DEBUG] Unsupported file format: " << ext
-                    << L" (tinyobjloader only supports .obj files)" << std::endl;
-                OutputDebugStringW((L"[Mesh] Unsupported file format: " + ext +
-                    L" - tinyobjloader only supports .obj files. Falling back to cube.\n").c_str());
+                SPARK_LOG_WARN("Mesh", "Unsupported file format (tinyobjloader only supports .obj). Falling back to cube");
             }
         }
-
-        if (!loaded) {
-            OutputDebugStringW((L"[Mesh] Failed to load \"" + path +
-                L"\" – falling back to procedural cube.\n").c_str());
+        else {
+            SPARK_LOG_WARN("Mesh", "Mesh file not found, falling back to procedural cube");
         }
-    }
-    else
-    {
-        std::wcerr << L"[DEBUG] No path provided, skipping LoadFromFile." << std::endl;
     }
 
     // 3) Fallback to procedural shapes if load failed
     if (!loaded)
     {
-        std::wcerr << L"[DEBUG] Creating procedural cube placeholder..." << std::endl;
+        HRESULT hrShape = mesh.CreateCube(1.0f);
 
-        // Try multiple creation methods
-        HRESULT hrShape = E_FAIL;
-
-        // Method 1: Try standard CreateCube
-        hrShape = mesh.CreateCube(1.0f);
-        std::wcerr << L"[DEBUG] CreateCube(1.0f) HR = 0x"
-            << std::hex << hrShape << std::dec << std::endl;
-
-        // Method 2: If that fails, try CreateTriangle
         if (FAILED(hrShape)) {
-            std::wcerr << L"[DEBUG] CreateCube failed, trying CreateTriangle..." << std::endl;
+            SPARK_LOG_WARN("Mesh", "CreateCube failed (HR=0x%08lX), trying CreateTriangle", static_cast<long>(hrShape));
             hrShape = mesh.CreateTriangle(1.0f);
-            std::wcerr << L"[DEBUG] CreateTriangle HR = 0x"
-                << std::hex << hrShape << std::dec << std::endl;
         }
 
-        // Method 3: Try CreatePlane as last resort
         if (FAILED(hrShape)) {
-            std::wcerr << L"[DEBUG] CreateTriangle failed, trying CreatePlane..." << std::endl;
+            SPARK_LOG_WARN("Mesh", "CreateTriangle failed (HR=0x%08lX), trying CreatePlane", static_cast<long>(hrShape));
             hrShape = mesh.CreatePlane(2.0f, 2.0f);
-            std::wcerr << L"[DEBUG] CreatePlane HR = 0x"
-                << std::hex << hrShape << std::dec << std::endl;
         }
 
         if (FAILED(hrShape)) {
-            std::wcerr << L"[ERROR] All fallback mesh creation methods failed!" << std::endl;
-            OutputDebugStringW(L"[Mesh] CRITICAL: All fallback mesh creation methods failed!\n");
+            SPARK_LOG_ERROR("Mesh", "All fallback mesh creation methods failed (HR=0x%08lX)", static_cast<long>(hrShape));
         }
         else {
             mesh.SetPlaceholder(true);
         }
     }
 
-    // 4) Log final mesh counts
+    // 4) Validate final mesh
     UINT vc = mesh.GetVertexCount();
     UINT ic = mesh.GetIndexCount();
-    std::wcerr << L"[DEBUG] Final mesh counts: Vertices=" << vc
-        << L", Indices=" << ic << std::endl;
 
-    // 5) More detailed assertion with helpful message
     if (vc == 0 || ic == 0) {
-        std::wcerr << L"[ERROR] Mesh creation completely failed!" << std::endl;
-        std::wcerr << L"[ERROR] This usually means:" << std::endl;
-        std::wcerr << L"[ERROR]   1. D3D11 device/context is invalid" << std::endl;
-        std::wcerr << L"[ERROR]   2. Buffer creation failed" << std::endl;
-        std::wcerr << L"[ERROR]   3. Mesh creation implementation has bugs" << std::endl;
-
-        OutputDebugStringW(L"[Mesh] CRITICAL ERROR: Mesh ended up with zero vertices or indices!\n");
+        SPARK_LOG_ERROR("Mesh", "Mesh has zero vertices (%u) or indices (%u). "
+            "Possible causes: invalid D3D device/context, buffer creation failure, or mesh creation bug",
+            vc, ic);
     }
 
     ASSERT_ALWAYS_MSG(vc > 0 && ic > 0,

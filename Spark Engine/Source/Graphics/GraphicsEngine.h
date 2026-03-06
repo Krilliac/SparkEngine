@@ -489,9 +489,8 @@ public:
      */
     void Console_SetWireframe(bool enabled);
 
-    /**
-     * @brief Legacy alias for Console_SetWireframe
-     */
+    /** @brief Legacy alias for Console_SetWireframe. @deprecated Use Console_SetWireframe(). */
+    [[deprecated("Use Console_SetWireframe() instead")]]
     void Console_SetWireframeMode(bool enabled);
 
     /**
@@ -524,9 +523,8 @@ public:
      */
     void Console_SetRenderScale(float scale);
     
-    /**
-     * @brief Take screenshot via console
-     */
+    /** @brief Legacy alias for Console_Screenshot. @deprecated Use Console_Screenshot(). */
+    [[deprecated("Use Console_Screenshot() instead")]]
     bool Console_TakeScreenshot(const std::string& filename = "");
     
     /**
@@ -564,14 +562,12 @@ public:
      */
     size_t Console_GetVRAMUsage() const;
     
-    /**
-     * @brief Get current graphics settings
-     */
+    /** @brief Thread-safe copy of settings. @deprecated Use GetGraphicsSettings() for const ref. */
+    [[deprecated("Use GetGraphicsSettings() instead")]]
     GraphicsSettings Console_GetSettings() const;
     
-    /**
-     * @brief Get current render statistics
-     */
+    /** @brief Legacy alias for Console_GetStatistics. @deprecated Use Console_GetStatistics(). */
+    [[deprecated("Use Console_GetStatistics() instead")]]
     RenderStatistics Console_GetMetrics() const;
 
     // ========================================================================
@@ -610,7 +606,7 @@ private:
     std::unique_ptr<PostProcessingSystem> m_postProcessingSystem;
     std::unique_ptr<AssetPipeline> m_assetPipeline;
     // Use forward declaration pattern for PhysicsSystem to avoid incomplete type
-    PhysicsSystem* m_physicsSystem;
+    std::unique_ptr<PhysicsSystem> m_physicsSystem;
 
     // Shader system
     std::unique_ptr<class Shader> m_shader;
