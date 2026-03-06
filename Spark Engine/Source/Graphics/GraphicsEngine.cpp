@@ -113,6 +113,8 @@ GraphicsEngine::GraphicsEngine()
         m_postProcessingSystem = std::make_unique<PostProcessingSystem>();
         m_assetPipeline = std::make_unique<AssetPipeline>();
         m_physicsSystem = std::make_unique<PhysicsSystem>();
+        extern PhysicsSystem* g_physicsSystem;
+        g_physicsSystem = m_physicsSystem.get();
         
         // Create legacy systems for compatibility
         m_lightManager = std::make_unique<LightManager>();
@@ -331,6 +333,8 @@ void GraphicsEngine::Shutdown()
 
     // Clean up physics system
     if (m_physicsSystem) {
+        extern PhysicsSystem* g_physicsSystem;
+        g_physicsSystem = nullptr;
         m_physicsSystem->Shutdown();
         m_physicsSystem.reset();
         LOG_TO_CONSOLE_IMMEDIATE(L"PhysicsSystem shutdown complete", L"INFO");

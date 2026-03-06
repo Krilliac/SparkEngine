@@ -3,6 +3,7 @@
 // SphereObject.cpp
 #include "SphereObject.h"
 #include "Utils/Assert.h"
+#include <iostream>
 
 SphereObject::SphereObject(float radius, int slices, int stacks)
     : m_radius(radius)

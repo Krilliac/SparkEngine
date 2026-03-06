@@ -454,7 +454,6 @@ PickupObject::PickupObject()
 }
 
 PickupObject::PickupObject(InteractiveObjectType pickupType)
-    : m_objectType(InteractiveObjectType::HEALTH_PICKUP)
 {
     m_objectType = pickupType;
     SetName("Pickup");

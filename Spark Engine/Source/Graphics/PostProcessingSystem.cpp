@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file PostProcessingSystem.cpp
  * @brief Full post-processing pipeline: Bloom, Tone Mapping, Color Grading, FXAA

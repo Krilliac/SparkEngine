@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // Terrain.cpp
 #include "Terrain.h"
 #include "Utils/Assert.h"

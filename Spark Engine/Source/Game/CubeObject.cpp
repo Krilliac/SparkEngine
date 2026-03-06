@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include "CubeObject.h"
 #include "Utils/Assert.h"          // custom assert
 #include "PlaceholderMesh.h"       // Add this include for LoadOrPlaceholderMesh

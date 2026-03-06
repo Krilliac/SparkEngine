@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS

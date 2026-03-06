@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // Shader.cpp - Enhanced shader system implementation with AAA features (C++14 compatible)
 #include "Shader.h"
 #include "Utils/Assert.h"

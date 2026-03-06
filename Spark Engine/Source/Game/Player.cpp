@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 #include "Player.h"
 #include "VehicleSystem.h"
 #include "InteractiveObject.h"
