@@ -40,7 +40,7 @@ using namespace DirectX;
 class RenderTarget;
 class MaterialSystem;
 class LightManager;
-class PostProcessingPipeline;
+namespace Spark::Graphics { class PostProcessingPipeline; }
 class TemporalEffects;
 class TextureSystem;
 class LightingSystem;
@@ -613,7 +613,7 @@ private:
 
     // Legacy rendering subsystems
     std::unique_ptr<LightManager> m_lightManager;
-    std::unique_ptr<PostProcessingPipeline> m_postProcessing;
+    std::unique_ptr<Spark::Graphics::PostProcessingPipeline> m_postProcessing;
     std::unique_ptr<TemporalEffects> m_temporalEffects;
 
     // ========================================================================

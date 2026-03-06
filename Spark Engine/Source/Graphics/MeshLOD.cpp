@@ -83,9 +83,10 @@ SimplificationResult MeshSimplifier::Simplify(
     };
 
     // Iterative edge collapse
+    float bestCost = 1e30f;
     while (result.indices.size() > targetIndexCount && result.indices.size() >= 3) {
         // Find cheapest edge
-        float bestCost = 1e30f;
+        bestCost = 1e30f;
         uint32_t bestV0 = 0, bestV1 = 0;
 
         std::set<uint64_t> processedEdges;

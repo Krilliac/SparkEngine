@@ -16,6 +16,7 @@
 #include "TemporalEffects.h"
 #include "LightManager.h"
 #include "PostProcessingPipeline.h"
+using Spark::Graphics::PostProcessingPipeline;
 #include "Shader.h"
 #include "RenderTarget.h"
 #include "../Physics/PhysicsSystem.h"
@@ -96,10 +97,10 @@ GraphicsEngine::GraphicsEngine()
     m_settings.anisotropyLevel = 8;
 
     // Initialize advanced settings
-    m_taaSettings = {};
-    m_ssaoSettings = {};
-    m_ssrSettings = {};
-    m_volumetricSettings = {};
+    m_taaSettings = TAASettings();
+    m_ssaoSettings = SSAOSettings();
+    m_ssrSettings = SSRSettings();
+    m_volumetricSettings = VolumetricSettings();
 
     // Initialize statistics
     m_statistics = {};
