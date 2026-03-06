@@ -1,14 +1,10 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
-#endif // SPARK_PLATFORM_WINDOWS
 #include <cstdint>
 #include <cstdarg>
 #include <cstdio>
-#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
-#endif // SPARK_PLATFORM_WINDOWS
 #include <chrono>
 
 #include "Game.h"

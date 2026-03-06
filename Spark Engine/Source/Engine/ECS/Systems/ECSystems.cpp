@@ -65,7 +65,7 @@ void PhysicsUpdateSystem::Update(World& world, float deltaTime)
 
         if (!rb.physicsBodyHandle) continue;
 
-        auto* physBody = static_cast<PhysicsBody*>(rb.physicsBodyHandle);
+        auto* physBody = rb.physicsBodyHandle.As<PhysicsBody>();
 
         if (rb.type == RigidBodyComponent::Type::Dynamic)
         {
@@ -104,7 +104,7 @@ void AudioUpdateSystem::Update(World& world, float deltaTime)
 
         if (!audio.is3D || !audio.audioSourceHandle) continue;
 
-        auto* source = static_cast<AudioSource*>(audio.audioSourceHandle);
+        auto* source = audio.audioSourceHandle.As<AudioSource>();
 
         // Compute velocity from position delta for Doppler effects
         if (deltaTime > 0.0f) {
@@ -191,7 +191,7 @@ void AIUpdateSystem::Update(World& world, float deltaTime)
 
         // Tick behavior tree if one is assigned
         if (ai.behaviorTreeHandle) {
-            auto* bt = static_cast<Spark::AI::BehaviorTree*>(ai.behaviorTreeHandle);
+            auto* bt = ai.behaviorTreeHandle.As<Spark::AI::BehaviorTree>();
             bt->Tick(deltaTime);
         }
 

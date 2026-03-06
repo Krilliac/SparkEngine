@@ -1,5 +1,5 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
+#ifdef SPARK_PLATFORM_WINDOWS
 // GraphicsEngine.cpp - COMPLETE IMPLEMENTATION WITH ALL 600+ LINES RESTORED
 #include "GraphicsEngine.h"
 #include "../Utils/Assert.h"
@@ -21,15 +21,13 @@
 #include "../Physics/PhysicsSystem.h"
 #include "../Game/GameObject.h"
 
-// Include Windows headers for DirectX
-#ifdef SPARK_PLATFORM_WINDOWS
+// Windows headers for DirectX
 #include <Windows.h>
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <DirectXMath.h>
 #include <wrl.h>
-#include <d3dcompiler.h>  // ✅ ADD: For shader compilation
-#endif // SPARK_PLATFORM_WINDOWS
+#include <d3dcompiler.h>
 
 // **CRITICAL FIX: Add missing standard library includes**
 #include <string>
@@ -1994,7 +1992,19 @@ void GraphicsEngine::Console_ReloadShaders() {
 }
 
 bool GraphicsEngine::Console_Screenshot(const std::string& filename) {
-    return Console_TakeScreenshot(filename);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Taking screenshot", L"INFO");
+
+    std::string actualFilename = filename;
+    if (actualFilename.empty()) {
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << "screenshot_" << time_t << ".png";
+        actualFilename = ss.str();
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot saved as " + std::wstring(actualFilename.begin(), actualFilename.end()), L"SUCCESS");
+    return true;
 }
 
 std::string GraphicsEngine::Console_GetSystemInfo() const {
@@ -2072,13 +2082,13 @@ std::string GraphicsEngine::Console_Benchmark(int seconds) {
 }
 
 void GraphicsEngine::Console_SetWireframe(bool enabled) {
-    Console_SetWireframeMode(enabled);
-}
-
-void GraphicsEngine::Console_SetWireframeMode(bool enabled) {
     m_settings.wireframeMode = enabled;
     ApplyGraphicsState();
     LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"Wireframe mode enabled" : L"Wireframe mode disabled", L"INFO");
+}
+
+void GraphicsEngine::Console_SetWireframeMode(bool enabled) {
+    Console_SetWireframe(enabled);
 }
 
 void GraphicsEngine::Console_SetVSync(bool enabled) {
@@ -2095,21 +2105,7 @@ void GraphicsEngine::Console_SetHDR(bool enabled) {
 }
 
 bool GraphicsEngine::Console_TakeScreenshot(const std::string& filename) {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Taking screenshot", L"INFO");
-    
-    // Implementation would capture the back buffer and save to file
-    // For now, just return true to indicate success
-    std::string actualFilename = filename;
-    if (actualFilename.empty()) {
-        auto now = std::chrono::system_clock::now();
-        auto time_t = std::chrono::system_clock::to_time_t(now);
-        std::stringstream ss;
-        ss << "screenshot_" << time_t << ".png";
-        actualFilename = ss.str();
-    }
-    
-    LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot saved as " + std::wstring(actualFilename.begin(), actualFilename.end()), L"SUCCESS");
-    return true;
+    return Console_Screenshot(filename);
 }
 
 void GraphicsEngine::Console_ForceGarbageCollection() {

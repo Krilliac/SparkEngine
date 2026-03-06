@@ -90,7 +90,7 @@ void AISystem::UpdatePerception(World& world, AIComponent& ai, const Transform& 
 void AISystem::UpdateBehavior(AIComponent& ai, float deltaTime) {
     if (!ai.behaviorTreeHandle) return;
 
-    auto* bt = static_cast<BehaviorTree*>(ai.behaviorTreeHandle);
+    auto* bt = ai.behaviorTreeHandle.As<BehaviorTree>();
     auto& bb = bt->GetBlackboard();
 
     // Push AI state to blackboard

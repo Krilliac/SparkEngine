@@ -489,7 +489,8 @@ public:
      */
     void Console_SetWireframe(bool enabled);
 
-    /** @brief Legacy alias for Console_SetWireframe. @deprecated Use Console_SetWireframe. */
+    /** @brief Legacy alias for Console_SetWireframe. @deprecated Use Console_SetWireframe(). */
+    [[deprecated("Use Console_SetWireframe() instead")]]
     void Console_SetWireframeMode(bool enabled);
 
     /**
@@ -522,7 +523,8 @@ public:
      */
     void Console_SetRenderScale(float scale);
     
-    /** @brief Legacy alias for Console_Screenshot. @deprecated Use Console_Screenshot. */
+    /** @brief Legacy alias for Console_Screenshot. @deprecated Use Console_Screenshot(). */
+    [[deprecated("Use Console_Screenshot() instead")]]
     bool Console_TakeScreenshot(const std::string& filename = "");
     
     /**
@@ -561,9 +563,11 @@ public:
     size_t Console_GetVRAMUsage() const;
     
     /** @brief Thread-safe copy of settings. @deprecated Use GetGraphicsSettings() for const ref. */
+    [[deprecated("Use GetGraphicsSettings() instead")]]
     GraphicsSettings Console_GetSettings() const;
     
-    /** @brief Legacy alias for Console_GetStatistics. @deprecated Use Console_GetStatistics. */
+    /** @brief Legacy alias for Console_GetStatistics. @deprecated Use Console_GetStatistics(). */
+    [[deprecated("Use Console_GetStatistics() instead")]]
     RenderStatistics Console_GetMetrics() const;
 
     // ========================================================================
