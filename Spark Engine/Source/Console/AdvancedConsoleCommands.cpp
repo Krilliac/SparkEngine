@@ -251,19 +251,12 @@ void RegisterAdvancedCommands(Game* game, GraphicsEngine* graphics)
         
         // Graphics metrics
         auto renderStats = graphics->Console_GetStatistics();
-        ss << "=== Unified Rendering System ===
-";
-        ss << "FPS: " << renderStats.fps << "
-";
-        ss << "Frame Time: " << renderStats.frameTime << "ms
-";
-        ss << "Draw Calls: " << renderStats.drawCalls << "
-";
-        ss << "Triangles: " << renderStats.triangles << "
-";
-        ss << "Visible Objects: " << renderStats.visibleObjects << "/" << renderStats.totalObjects << "
-
-";
+        ss << "=== Unified Rendering System ===\n";
+        ss << "FPS: " << renderStats.fps << "\n";
+        ss << "Frame Time: " << renderStats.frameTime << "ms\n";
+        ss << "Draw Calls: " << renderStats.drawCalls << "\n";
+        ss << "Triangles: " << renderStats.triangles << "\n";
+        ss << "Visible Objects: " << renderStats.visibleObjects << "/" << renderStats.totalObjects << "\n";
         
         // System information
         ss << graphics->Console_GetSystemInfo();

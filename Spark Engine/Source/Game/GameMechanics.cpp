@@ -198,8 +198,7 @@ int DamageZoneSystem::CreateVoidZone(const std::string& name, const XMFLOAT3& ce
 std::string DamageZoneSystem::Console_ListZones() const
 {
     std::stringstream ss;
-    ss << "Damage Zones (" << m_zones.size() << "/" << MAX_DAMAGE_ZONES << "):
-";
+    ss << "Damage Zones (" << m_zones.size() << "/" << MAX_DAMAGE_ZONES << "):\n";
 
     const char* typeNames[] = { "Lava", "Acid", "Electric", "Radiation", "Void" };
 
@@ -211,8 +210,7 @@ std::string DamageZoneSystem::Console_ListZones() const
            << " DPS:" << z.damagePerSecond
            << " Center:(" << z.center.x << "," << z.center.y << "," << z.center.z << ")"
            << (z.instantKill ? " [INSTANT KILL]" : "")
-           << "
-";
+           << "\n";
     }
     return ss.str();
 }
@@ -345,40 +343,28 @@ void RespawnSystem::RecordKill(const std::string& killer, const std::string& vic
 std::string RespawnSystem::Console_GetScoreboard() const
 {
     std::stringstream ss;
-    ss << "=== SCOREBOARD ===
-";
-    ss << "Kills: " << m_playerScore.kills << "
-";
-    ss << "Deaths: " << m_playerScore.deaths << "
-";
-    ss << "K/D Ratio: " << m_playerScore.GetKDRatio() << "
-";
-    ss << "Current Streak: " << m_playerScore.currentStreak << "
-";
-    ss << "Longest Streak: " << m_playerScore.longestStreak << "
-";
-    ss << "Score: " << m_playerScore.score << "
-";
-    ss << "Vehicle Kills: " << m_playerScore.vehicleKills << "
-";
-    ss << "Damage Dealt: " << m_playerScore.totalDamageDealt << "
-";
-    ss << "Damage Received: " << m_playerScore.totalDamageReceived << "
-";
+    ss << "=== SCOREBOARD ===\n";
+    ss << "Kills: " << m_playerScore.kills << "\n";
+    ss << "Deaths: " << m_playerScore.deaths << "\n";
+    ss << "K/D Ratio: " << m_playerScore.GetKDRatio() << "\n";
+    ss << "Current Streak: " << m_playerScore.currentStreak << "\n";
+    ss << "Longest Streak: " << m_playerScore.longestStreak << "\n";
+    ss << "Score: " << m_playerScore.score << "\n";
+    ss << "Vehicle Kills: " << m_playerScore.vehicleKills << "\n";
+    ss << "Damage Dealt: " << m_playerScore.totalDamageDealt << "\n";
+    ss << "Damage Received: " << m_playerScore.totalDamageReceived << "\n";
     return ss.str();
 }
 
 std::string RespawnSystem::Console_GetKillHistory() const
 {
     std::stringstream ss;
-    ss << "=== KILL HISTORY (last " << m_killHistory.size() << ") ===
-";
+    ss << "=== KILL HISTORY (last " << m_killHistory.size() << ") ===\n";
     for (const auto& kill : m_killHistory) {
         ss << kill.killerName << " -> " << kill.victimName
            << " [" << kill.weaponName << "]"
            << (kill.headshot ? " HEADSHOT" : "")
-           << "
-";
+           << "\n";
     }
     return ss.str();
 }

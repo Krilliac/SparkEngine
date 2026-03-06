@@ -188,13 +188,11 @@ void AIUpdateSystem::Update(World& world, float deltaTime)
 std::string SystemManager::Console_ListSystems() const
 {
     std::ostringstream ss;
-    ss << "=== ECS Systems (" << m_systems.size() << ") ===
-";
+    ss << "=== ECS Systems (" << m_systems.size() << ") ===\n";
     for (const auto& system : m_systems)
     {
         ss << "  " << system->GetName()
-           << " [" << (system->IsEnabled() ? "ENABLED" : "DISABLED") << "]
-";
+           << " [" << (system->IsEnabled() ? "ENABLED" : "DISABLED") << "]\n";
     }
     return ss.str();
 }

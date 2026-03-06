@@ -1,45 +1,18 @@
 [submodule "ThirdParty/Utils/miniz"]
 	path = ThirdParty/Utils/miniz
 	url = https://github.com/richgel999/miniz.git
-[submodule "ThirdParty/UI/imnodes"]
-	path = ThirdParty/UI/imnodes
-	url = https://github.com/Nelarius/imnodes.git
-[submodule "ThirdParty/Utils/glm"]
-	path = ThirdParty/Utils/glm
-	url = https://github.com/g-truc/glm.git
-[submodule "ThirdParty/Rendering/DirectXTK"]
-	path = ThirdParty/Rendering/DirectXTK
-	url = https://github.com/Microsoft/DirectXTK.git
 [submodule "ThirdParty/Physics/bullet3"]
 	path = ThirdParty/Physics/bullet3
 	url = https://github.com/bulletphysics/bullet3.git
 [submodule "ThirdParty/UI/imgui"]
 	path = ThirdParty/UI/imgui
 	url = https://github.com/ocornut/imgui.git
-[submodule "ThirdParty/FileFormats/assimp"]
-	path = ThirdParty/FileFormats/assimp
-	url = https://github.com/assimp/assimp.git
-[submodule "ThirdParty/Audio/miniaudio"]
-	path = ThirdParty/Audio/miniaudio
-	url = https://github.com/mackron/miniaudio.git
 [submodule "ThirdParty/Networking/curl"]
 	path = ThirdParty/Networking/curl
 	url = https://github.com/curl/curl.git
-[submodule "ThirdParty/Utils/stb"]
-	path = ThirdParty/Utils/stb
-	url = https://github.com/nothings/stb.git
 [submodule "ThirdParty/ECS/entt"]
 	path = ThirdParty/ECS/entt
 	url = https://github.com/skypjack/entt.git
-[submodule "ThirdParty/Utils/rapidjson"]
-	path = ThirdParty/Utils/rapidjson
-	url = https://github.com/Tencent/rapidjson.git
-[submodule "ThirdParty/UI/ImGuizmo"]
-	path = ThirdParty/UI/ImGuizmo
-	url = https://github.com/CedricGuillemet/ImGuizmo.git
-[submodule "ThirdParty/Utils/spdlog"]
-	path = ThirdParty/Utils/spdlog
-	url = https://github.com/gabime/spdlog.git
 [submodule "ThirdParty/Scripting/angelscript-mirror"]
 	path = ThirdParty/Scripting/angelscript-mirror
 	url = https://github.com/codecat/angelscript-mirror.git
