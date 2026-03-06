@@ -25,6 +25,7 @@
 
 using SparkEditor::PlayerClass;
 using SparkEditor::ClassAbility;
+using SparkEditor::WeaponType;
 
 namespace Spark {
 

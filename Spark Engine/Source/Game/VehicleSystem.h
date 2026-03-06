@@ -27,6 +27,7 @@
 using namespace DirectX;
 using SparkEditor::VehicleType;
 using SparkEditor::VehicleSeatRole;
+using SparkEditor::WeaponType;
 
 class Player;
 class InputManager;

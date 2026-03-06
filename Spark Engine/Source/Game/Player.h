@@ -27,6 +27,8 @@
 #include <mutex>
 #include <functional>
 
+using SparkEditor::WeaponType;
+
 // Forward declarations
 namespace Spark {
     class SimpleConsole;

@@ -28,6 +28,7 @@
 using namespace DirectX;
 using SparkEditor::InteractiveObjectType;
 using SparkEditor::PlayerClass;
+using SparkEditor::WeaponType;
 
 class Player;
 
