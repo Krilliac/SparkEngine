@@ -375,7 +375,7 @@ private:
      * @brief Create named pipe for communication
      * @return true if pipe creation succeeded
      */
-    bool CreateNamedPipe();
+    bool CreateCommPipe();
 
     /**
      * @brief Connect to existing named pipe
