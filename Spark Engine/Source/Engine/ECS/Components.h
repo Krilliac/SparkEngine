@@ -381,6 +381,12 @@ struct MeshRenderer {
 
     /** @brief Controls whether the RenderSystem submits this entity for rendering. Default: true. */
     bool visible = true;
+
+    /** @brief World matrix computed by RenderSystem from the entity's Transform. */
+    XMFLOAT4X4 cachedWorldMatrix{};
+
+    /** @brief True when Transform has changed and cachedWorldMatrix needs recomputation. */
+    bool worldMatrixDirty = true;
 };
 
 /**
@@ -697,6 +703,9 @@ struct AudioSourceComponent {
      * Managed by the AudioUpdateSystem. Do not read or modify from external code.
      */
     void* audioSourceHandle = nullptr;
+
+    /** @brief Previous frame position used to compute velocity for Doppler effects. */
+    XMFLOAT3 previousPosition{0, 0, 0};
 };
 
 // =============================================================================
@@ -909,6 +918,12 @@ struct AnimationController {
 
     /** @brief When true the clip restarts from the beginning when it reaches its end. */
     bool loop = true;
+
+    /** @brief Total duration of the current animation clip in seconds. 0 = unknown/infinite. */
+    float duration = 0.0f;
+
+    /** @brief Normalized playback progress [0, 1]. Computed by AnimationUpdateSystem. */
+    float normalizedTime = 0.0f;
 
     /**
      * @brief All clip names available for this entity's skeleton.
@@ -1175,6 +1190,9 @@ struct HealthComponent {
     /** @brief Set to true automatically when health reaches 0; cleared on Heal(). */
     bool isDead = false;
 
+    /** @brief Guards against the LifecycleSystem firing the death callback more than once. */
+    bool deathProcessed = false;
+
     /**
      * @brief Subtract `amount` hit points, clamping health to zero and flagging death.
      *
@@ -1193,6 +1211,7 @@ struct HealthComponent {
     void Heal(float amount) {
         health = (std::min)(health + amount, maxHealth);
         isDead = false;
+        deathProcessed = false;
     }
 };
 

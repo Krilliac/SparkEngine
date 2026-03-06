@@ -53,44 +53,8 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-// **CRITICAL FIX: Simplified logging macro**
-#define LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype) \
-    do { \
-        try { \
-            std::wstring wstr = wmsg; \
-            std::wstring wtypestr = wtype; \
-            std::string msg(wstr.begin(), wstr.end()); \
-            std::string type(wtypestr.begin(), wtypestr.end()); \
-            Spark::SimpleConsole::GetInstance().Log(msg, type); \
-        } catch (...) { \
-            /* Ignore logging errors */ \
-        } \
-    } while(0)
-
-#define LOG_TO_CONSOLE_RATE_LIMITED(wmsg, wtype) \
-    do { \
-        try { \
-            static auto lastLogTime = std::chrono::steady_clock::now(); \
-            static int logCounter = 0; \
-            auto now = std::chrono::steady_clock::now(); \
-            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count(); \
-            if (elapsed >= 5 || logCounter < 2) { \
-                std::wstring wstr = wmsg; \
-                std::wstring wtypestr = wtype; \
-                std::string msg(wstr.begin(), wstr.end()); \
-                std::string type(wtypestr.begin(), wtypestr.end()); \
-                Spark::SimpleConsole::GetInstance().Log(msg, type); \
-                if (elapsed >= 5) { \
-                    lastLogTime = now; \
-                    logCounter = 0; \
-                } else { \
-                    logCounter++; \
-                } \
-            } \
-        } catch (...) { \
-            /* Ignore logging errors */ \
-        } \
-    } while(0)
+// Centralized logging macros (previously defined locally with inconsistent rate limits)
+#include "../Utils/LogMacros.h"
 
 // ============================================================================
 // CONSTRUCTOR AND DESTRUCTOR
@@ -109,7 +73,7 @@ GraphicsEngine::GraphicsEngine()
     , m_currentPipeline(RenderingPipeline::Forward)
     , m_hdrEnabled(false)
     , m_msaaLevel(MSAALevel::None)
-    , m_physicsSystem(nullptr)
+    , m_physicsSystem()
 {
     // Initialize unified settings to defaults
     m_settings.vsync = true;
@@ -149,7 +113,7 @@ GraphicsEngine::GraphicsEngine()
         m_lightingSystem = std::make_unique<LightingSystem>();
         m_postProcessingSystem = std::make_unique<PostProcessingSystem>();
         m_assetPipeline = std::make_unique<AssetPipeline>();
-        m_physicsSystem = new PhysicsSystem();
+        m_physicsSystem = std::make_unique<PhysicsSystem>();
         
         // Create legacy systems for compatibility
         m_lightManager = std::make_unique<LightManager>();
@@ -369,8 +333,7 @@ void GraphicsEngine::Shutdown()
     // Clean up physics system
     if (m_physicsSystem) {
         m_physicsSystem->Shutdown();
-        delete m_physicsSystem;
-        m_physicsSystem = nullptr;
+        m_physicsSystem.reset();
         LOG_TO_CONSOLE_IMMEDIATE(L"PhysicsSystem shutdown complete", L"INFO");
     }
 
@@ -1902,8 +1865,8 @@ AssetPipeline* GraphicsEngine::GetAssetPipeline() const {
     return m_assetPipeline.get(); 
 }
 
-PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const { 
-    return m_physicsSystem; 
+PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const {
+    return m_physicsSystem.get();
 }
 
 LightManager* GraphicsEngine::GetLightManager() const { 
@@ -2175,8 +2138,7 @@ void GraphicsEngine::Console_ForceGarbageCollection() {
 }
 
 RenderStatistics GraphicsEngine::Console_GetMetrics() const {
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    return m_statistics;
+    return Console_GetStatistics(); // Delegates to canonical method
 }
 
 void GraphicsEngine::Console_SetGPUTiming(bool enabled) {

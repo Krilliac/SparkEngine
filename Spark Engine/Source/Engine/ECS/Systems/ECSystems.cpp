@@ -1,11 +1,13 @@
+// ECSystems.cpp
 #include "../../../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-// ECSystems.cpp
 #include "ECSystems.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Physics/PhysicsSystem.h"
 #include "Audio/AudioEngine.h"
+#include "Engine/AI/BehaviorTree.h"
 #include <sstream>
+#include <cmath>
 
 namespace Spark::ECS {
 
@@ -16,6 +18,7 @@ namespace Spark::ECS {
 void RenderSystem::Update(World& world, float deltaTime)
 {
     m_renderedCount = 0;
+    if (!m_graphics) return;
 
     auto view = world.GetEntitiesWith<Transform, MeshRenderer>();
     for (auto entity : view)
@@ -29,9 +32,19 @@ void RenderSystem::Update(World& world, float deltaTime)
         auto* active = world.GetComponent<ActiveComponent>(entity);
         if (active && !active->active) continue;
 
-        // The GraphicsEngine handles actual rendering - we just ensure
-        // transform data is ready. In a full integration, this would
-        // submit draw calls to the graphics engine's render queue.
+        // Build world matrix from Transform components
+        XMMATRIX scaleMtx = XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z);
+        XMMATRIX rotMtx = XMMatrixRotationRollPitchYaw(
+            XMConvertToRadians(transform.rotation.x),
+            XMConvertToRadians(transform.rotation.y),
+            XMConvertToRadians(transform.rotation.z));
+        XMMATRIX transMtx = XMMatrixTranslation(
+            transform.position.x, transform.position.y, transform.position.z);
+
+        XMMATRIX worldMtx = scaleMtx * rotMtx * transMtx;
+        XMStoreFloat4x4(&renderer.cachedWorldMatrix, worldMtx);
+        renderer.worldMatrixDirty = false;
+
         m_renderedCount++;
     }
 }
@@ -91,9 +104,18 @@ void AudioUpdateSystem::Update(World& world, float deltaTime)
 
         if (!audio.is3D || !audio.audioSourceHandle) continue;
 
-        // Update audio source position from entity transform
         auto* source = static_cast<AudioSource*>(audio.audioSourceHandle);
+
+        // Compute velocity from position delta for Doppler effects
+        if (deltaTime > 0.0f) {
+            source->Velocity.x = (transform.position.x - audio.previousPosition.x) / deltaTime;
+            source->Velocity.y = (transform.position.y - audio.previousPosition.y) / deltaTime;
+            source->Velocity.z = (transform.position.z - audio.previousPosition.z) / deltaTime;
+        }
+
+        // Update position and track for next frame's velocity calculation
         source->Position = transform.position;
+        audio.previousPosition = transform.position;
     }
 }
 
@@ -103,13 +125,14 @@ void AudioUpdateSystem::Update(World& world, float deltaTime)
 
 void LifecycleSystem::Update(World& world, float deltaTime)
 {
-    // Process health/death
+    // Process health/death - only fire callback once per death event
     auto healthView = world.GetEntitiesWith<HealthComponent>();
     for (auto entity : healthView)
     {
         auto& health = healthView.get<HealthComponent>(entity);
-        if (health.isDead && m_onDeath)
+        if (health.isDead && !health.deathProcessed && m_onDeath)
         {
+            health.deathProcessed = true;
             m_onDeath(entity);
         }
     }
@@ -130,10 +153,19 @@ void AnimationUpdateSystem::Update(World& world, float deltaTime)
         // Advance animation time
         anim.currentTime += deltaTime * anim.playbackSpeed;
 
-        // If an animation instance handle exists, the AnimationManager
-        // handles evaluation. Otherwise, update time for simple playback.
-        if (anim.animInstanceHandle) {
-            // AnimationManager::GetInstance().Update() handles this externally
+        // Handle animation looping and completion
+        if (anim.duration > 0.0f && anim.currentTime >= anim.duration) {
+            if (anim.loop) {
+                anim.currentTime = std::fmod(anim.currentTime, anim.duration);
+            } else {
+                anim.currentTime = anim.duration;
+                anim.playing = false;
+            }
+        }
+
+        // Compute normalized progress [0,1] for blend weights and gameplay sync
+        if (anim.duration > 0.0f) {
+            anim.normalizedTime = anim.currentTime / anim.duration;
         }
     }
 }
@@ -155,6 +187,20 @@ void AIUpdateSystem::Update(World& world, float deltaTime)
         if (health && health->isDead) {
             ai.state = AIComponent::State::Dead;
             continue;
+        }
+
+        // Tick behavior tree if one is assigned
+        if (ai.behaviorTreeHandle) {
+            auto* bt = static_cast<Spark::AI::BehaviorTree*>(ai.behaviorTreeHandle);
+            bt->Tick(deltaTime);
+        }
+
+        // Update perception timers
+        if (ai.targetEntity != entt::null) {
+            ai.timeSinceLastSeen += deltaTime;
+        }
+        if (ai.state == AIComponent::State::Alert) {
+            ai.alertTimer += deltaTime;
         }
 
         // Path following
