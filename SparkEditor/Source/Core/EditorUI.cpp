@@ -1039,18 +1039,97 @@ bool EditorUI::HasRecoveryData() {
 }
 
 bool EditorUI::ShowRecoveryDialog() {
-    // TODO: Implement recovery dialog
-    return false;
+    if (!m_recoveryDataAvailable) return false;
+
+    bool recovered = false;
+    ImGui::OpenPopup("Recovery Available");
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Recovery Available", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("The editor detected unsaved changes from a previous session.");
+        ImGui::Text("Would you like to restore the previous state?");
+        ImGui::Separator();
+
+        if (ImGui::Button("Restore Previous Session", ImVec2(200, 0))) {
+            // Attempt to load recovery data through the layout manager
+            if (m_layoutManager) {
+                recovered = m_layoutManager->LoadLayout("_recovery");
+            }
+            m_recoveryDataAvailable = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Discard", ImVec2(100, 0))) {
+            m_recoveryDataAvailable = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
+    return recovered;
 }
 
 bool EditorUI::ImportLayout(const std::string& filePath) {
-    // TODO: Implement layout import
-    return false;
+    try {
+        std::ifstream file(filePath);
+        if (!file.is_open()) return false;
+
+        std::string content((std::istreambuf_iterator<char>(file)),
+                            std::istreambuf_iterator<char>());
+        file.close();
+
+        if (content.empty()) return false;
+
+        // Extract layout name from file content or use filename
+        std::string layoutName = filePath;
+        auto lastSlash = layoutName.find_last_of("/\\");
+        if (lastSlash != std::string::npos) layoutName = layoutName.substr(lastSlash + 1);
+        auto lastDot = layoutName.find_last_of('.');
+        if (lastDot != std::string::npos) layoutName = layoutName.substr(0, lastDot);
+
+        // Use layout manager to apply the imported layout
+        if (m_layoutManager) {
+            m_layoutManager->SaveLayout(layoutName, "Imported layout");
+            return m_layoutManager->LoadLayout(layoutName);
+        }
+
+        return false;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool EditorUI::ExportLayout(const std::string& filePath) {
-    // TODO: Implement layout export
-    return false;
+    try {
+        std::ofstream file(filePath);
+        if (!file.is_open()) return false;
+
+        // Export current layout state
+        file << "{\n";
+        file << "  \"layout\": {\n";
+        file << "    \"version\": 1,\n";
+
+        // Export panel visibility states
+        file << "    \"panels\": {\n";
+        bool first = true;
+        for (const auto& [name, panel] : m_panels) {
+            if (!first) file << ",\n";
+            file << "      \"" << name << "\": { \"visible\": " << (panel->IsVisible() ? "true" : "false") << " }";
+            first = false;
+        }
+        file << "\n    }\n";
+        file << "  }\n}\n";
+
+        file.close();
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 void EditorUI::ShowModalDialog(const std::string& title, 

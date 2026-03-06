@@ -11,6 +11,9 @@
 #include <cmath>
 #include <iostream>
 #include <sstream>
+#include <fstream>
+#include <cstdio>
+#include <cstring>
 
 namespace SparkEditor {
 
@@ -891,26 +894,310 @@ unsigned int EditorTheme::ColorToImGui(const ThemeColor& color) {
 }
 
 // ===================================================================
-// ThemeCustomizer stubs
+// ThemeCustomizer implementations
 // ===================================================================
 
 void ThemeCustomizer::ShowThemeEditor() {
-    // TODO: Live theme customization UI
+    if (!ImGui::Begin("Theme Editor", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::End();
+        return;
+    }
+
+    // Get current theme
+    auto currentThemeName = EditorTheme::GetCurrentThemeName();
+    ImGui::Text("Current Theme: %s", currentThemeName.c_str());
+    ImGui::Separator();
+
+    const EditorThemeData* themePtr = EditorTheme::GetTheme(currentThemeName);
+    if (!themePtr) {
+        ImGui::Text("No theme loaded.");
+        ImGui::End();
+        return;
+    }
+
+    // Work on a mutable copy
+    static EditorThemeData editTheme;
+    static bool initialized = false;
+    if (!initialized) {
+        editTheme = *themePtr;
+        initialized = true;
+    }
+
+    EditorThemeData& theme = editTheme;
+    bool changed = false;
+
+    // Theme metadata
+    if (ImGui::CollapsingHeader("Theme Info", ImGuiTreeNodeFlags_DefaultOpen)) {
+        char nameBuf[256];
+        strncpy(nameBuf, theme.name.c_str(), sizeof(nameBuf) - 1);
+        nameBuf[sizeof(nameBuf) - 1] = '\0';
+        if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+            theme.name = nameBuf;
+            changed = true;
+        }
+    }
+
+    // Background colors
+    if (ImGui::CollapsingHeader("Background Colors")) {
+        auto editColor = [&](const char* label, ThemeColor& color) {
+            float c[4] = {color.r, color.g, color.b, color.a};
+            if (ImGui::ColorEdit4(label, c)) {
+                color = ThemeColor(c[0], c[1], c[2], c[3]);
+                changed = true;
+            }
+        };
+        editColor("Background", theme.background);
+        editColor("Background Dark", theme.backgroundDark);
+        editColor("Background Light", theme.backgroundLight);
+        editColor("Background Accent", theme.backgroundAccent);
+        editColor("Background Header", theme.backgroundHeader);
+        editColor("Background Active", theme.backgroundActive);
+        editColor("Background Hover", theme.backgroundHover);
+        editColor("Background Selected", theme.backgroundSelected);
+    }
+
+    // Text colors
+    if (ImGui::CollapsingHeader("Text Colors")) {
+        auto editColor = [&](const char* label, ThemeColor& color) {
+            float c[4] = {color.r, color.g, color.b, color.a};
+            if (ImGui::ColorEdit4(label, c)) {
+                color = ThemeColor(c[0], c[1], c[2], c[3]);
+                changed = true;
+            }
+        };
+        editColor("Text", theme.text);
+        editColor("Text Disabled", theme.textDisabled);
+        editColor("Text Secondary", theme.textSecondary);
+        editColor("Text Accent", theme.textAccent);
+        editColor("Text Warning", theme.textWarning);
+        editColor("Text Error", theme.textError);
+        editColor("Text Success", theme.textSuccess);
+    }
+
+    // UI Element colors
+    if (ImGui::CollapsingHeader("UI Elements")) {
+        auto editColor = [&](const char* label, ThemeColor& color) {
+            float c[4] = {color.r, color.g, color.b, color.a};
+            if (ImGui::ColorEdit4(label, c)) {
+                color = ThemeColor(c[0], c[1], c[2], c[3]);
+                changed = true;
+            }
+        };
+        editColor("Button", theme.button);
+        editColor("Button Hovered", theme.buttonHovered);
+        editColor("Button Active", theme.buttonActive);
+        editColor("Frame", theme.frame);
+        editColor("Frame Hovered", theme.frameHovered);
+        editColor("Frame Active", theme.frameActive);
+        editColor("Border", theme.border);
+        editColor("Border Light", theme.borderLight);
+    }
+
+    ImGui::Separator();
+
+    if (changed) {
+        EditorTheme::ApplyTheme(theme);
+    }
+
+    // Actions
+    if (ImGui::Button("Apply Theme")) {
+        EditorTheme::ApplyTheme(theme);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset to Default")) {
+        EditorTheme::ApplyTheme("SparkDark");
+        const EditorThemeData* resetTheme = EditorTheme::GetTheme("SparkDark");
+        if (resetTheme) editTheme = *resetTheme;
+    }
+
+    ImGui::End();
 }
 
 bool ThemeCustomizer::ExportTheme(const EditorThemeData& theme, const std::string& filepath) {
-    // TODO: JSON export
-    return false;
+    try {
+        std::ofstream file(filepath);
+        if (!file.is_open()) return false;
+
+        auto writeColor = [&](const std::string& name, const ThemeColor& c) {
+            file << "    \"" << name << "\": [" << c.r << ", " << c.g << ", " << c.b << ", " << c.a << "]";
+        };
+
+        file << "{\n";
+        file << "  \"name\": \"" << theme.name << "\",\n";
+        file << "  \"description\": \"" << theme.description << "\",\n";
+        file << "  \"author\": \"" << theme.author << "\",\n";
+        file << "  \"colors\": {\n";
+
+        writeColor("background", theme.background); file << ",\n";
+        writeColor("backgroundDark", theme.backgroundDark); file << ",\n";
+        writeColor("backgroundLight", theme.backgroundLight); file << ",\n";
+        writeColor("backgroundAccent", theme.backgroundAccent); file << ",\n";
+        writeColor("backgroundHeader", theme.backgroundHeader); file << ",\n";
+        writeColor("backgroundActive", theme.backgroundActive); file << ",\n";
+        writeColor("backgroundHover", theme.backgroundHover); file << ",\n";
+        writeColor("backgroundSelected", theme.backgroundSelected); file << ",\n";
+        writeColor("text", theme.text); file << ",\n";
+        writeColor("textDisabled", theme.textDisabled); file << ",\n";
+        writeColor("textSecondary", theme.textSecondary); file << ",\n";
+        writeColor("textAccent", theme.textAccent); file << ",\n";
+        writeColor("textWarning", theme.textWarning); file << ",\n";
+        writeColor("textError", theme.textError); file << ",\n";
+        writeColor("textSuccess", theme.textSuccess); file << ",\n";
+        writeColor("button", theme.button); file << ",\n";
+        writeColor("buttonHovered", theme.buttonHovered); file << ",\n";
+        writeColor("buttonActive", theme.buttonActive); file << ",\n";
+        writeColor("frame", theme.frame); file << ",\n";
+        writeColor("frameHovered", theme.frameHovered); file << ",\n";
+        writeColor("frameActive", theme.frameActive); file << ",\n";
+        writeColor("border", theme.border); file << ",\n";
+        writeColor("borderLight", theme.borderLight); file << ",\n";
+        writeColor("borderAccent", theme.borderAccent); file << ",\n";
+        writeColor("borderSeparator", theme.borderSeparator); file << "\n";
+
+        file << "  }\n}\n";
+        file.close();
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool ThemeCustomizer::ImportTheme(const std::string& filepath, EditorThemeData& outTheme) {
-    // TODO: JSON import
-    return false;
+    try {
+        std::ifstream file(filepath);
+        if (!file.is_open()) return false;
+
+        std::string content((std::istreambuf_iterator<char>(file)),
+                            std::istreambuf_iterator<char>());
+        file.close();
+
+        // Simple JSON-like parser for theme colors
+        auto extractString = [&](const std::string& key) -> std::string {
+            std::string search = "\"" + key + "\": \"";
+            auto pos = content.find(search);
+            if (pos == std::string::npos) return "";
+            pos += search.length();
+            auto end = content.find("\"", pos);
+            if (end == std::string::npos) return "";
+            return content.substr(pos, end - pos);
+        };
+
+        auto extractColor = [&](const std::string& key) -> ThemeColor {
+            std::string search = "\"" + key + "\": [";
+            auto pos = content.find(search);
+            if (pos == std::string::npos) return ThemeColor();
+            pos += search.length();
+            auto end = content.find("]", pos);
+            if (end == std::string::npos) return ThemeColor();
+            std::string vals = content.substr(pos, end - pos);
+            float r = 0, g = 0, b = 0, a = 1;
+            std::sscanf(vals.c_str(), "%f, %f, %f, %f", &r, &g, &b, &a);
+            return ThemeColor(r, g, b, a);
+        };
+
+        outTheme.name = extractString("name");
+        outTheme.description = extractString("description");
+        outTheme.author = extractString("author");
+
+        outTheme.background = extractColor("background");
+        outTheme.backgroundDark = extractColor("backgroundDark");
+        outTheme.backgroundLight = extractColor("backgroundLight");
+        outTheme.backgroundAccent = extractColor("backgroundAccent");
+        outTheme.backgroundHeader = extractColor("backgroundHeader");
+        outTheme.backgroundActive = extractColor("backgroundActive");
+        outTheme.backgroundHover = extractColor("backgroundHover");
+        outTheme.backgroundSelected = extractColor("backgroundSelected");
+        outTheme.text = extractColor("text");
+        outTheme.textDisabled = extractColor("textDisabled");
+        outTheme.textSecondary = extractColor("textSecondary");
+        outTheme.textAccent = extractColor("textAccent");
+        outTheme.textWarning = extractColor("textWarning");
+        outTheme.textError = extractColor("textError");
+        outTheme.textSuccess = extractColor("textSuccess");
+        outTheme.button = extractColor("button");
+        outTheme.buttonHovered = extractColor("buttonHovered");
+        outTheme.buttonActive = extractColor("buttonActive");
+        outTheme.frame = extractColor("frame");
+        outTheme.frameHovered = extractColor("frameHovered");
+        outTheme.frameActive = extractColor("frameActive");
+        outTheme.border = extractColor("border");
+        outTheme.borderLight = extractColor("borderLight");
+        outTheme.borderAccent = extractColor("borderAccent");
+        outTheme.borderSeparator = extractColor("borderSeparator");
+
+        return !outTheme.name.empty();
+    } catch (...) {
+        return false;
+    }
 }
 
 std::vector<EditorThemeData> ThemeCustomizer::GenerateThemeVariations(const EditorThemeData& baseTheme) {
     std::vector<EditorThemeData> variations;
-    // TODO: Generate warm/cool/bright/muted variations
+
+    // Warm variation - shift toward orange/warm tones
+    {
+        EditorThemeData warm = baseTheme;
+        warm.name = baseTheme.name + " (Warm)";
+        warm.description = "Warm variation of " + baseTheme.name;
+        auto warmShift = [](ThemeColor c) {
+            c.r = std::min(1.0f, c.r * 1.1f);
+            c.b = c.b * 0.9f;
+            return c;
+        };
+        warm.background = warmShift(warm.background);
+        warm.backgroundDark = warmShift(warm.backgroundDark);
+        warm.backgroundLight = warmShift(warm.backgroundLight);
+        warm.backgroundAccent = warmShift(warm.backgroundAccent);
+        warm.backgroundHeader = warmShift(warm.backgroundHeader);
+        variations.push_back(warm);
+    }
+
+    // Cool variation - shift toward blue/cool tones
+    {
+        EditorThemeData cool = baseTheme;
+        cool.name = baseTheme.name + " (Cool)";
+        cool.description = "Cool variation of " + baseTheme.name;
+        auto coolShift = [](ThemeColor c) {
+            c.r = c.r * 0.9f;
+            c.b = std::min(1.0f, c.b * 1.1f);
+            return c;
+        };
+        cool.background = coolShift(cool.background);
+        cool.backgroundDark = coolShift(cool.backgroundDark);
+        cool.backgroundLight = coolShift(cool.backgroundLight);
+        cool.backgroundAccent = coolShift(cool.backgroundAccent);
+        cool.backgroundHeader = coolShift(cool.backgroundHeader);
+        variations.push_back(cool);
+    }
+
+    // High contrast variation
+    {
+        EditorThemeData highContrast = baseTheme;
+        highContrast.name = baseTheme.name + " (High Contrast)";
+        highContrast.description = "High contrast variation of " + baseTheme.name;
+        highContrast.background = highContrast.background.Darken(0.3f);
+        highContrast.backgroundDark = highContrast.backgroundDark.Darken(0.3f);
+        highContrast.text = highContrast.text.Lighten(0.3f);
+        highContrast.textSecondary = highContrast.textSecondary.Lighten(0.2f);
+        highContrast.border = highContrast.border.Lighten(0.3f);
+        highContrast.borderLight = highContrast.borderLight.Lighten(0.3f);
+        variations.push_back(highContrast);
+    }
+
+    // Muted variation - desaturate all colors
+    {
+        EditorThemeData muted = baseTheme;
+        muted.name = baseTheme.name + " (Muted)";
+        muted.description = "Muted variation of " + baseTheme.name;
+        muted.backgroundAccent = muted.backgroundAccent.Desaturate(0.4f);
+        muted.textAccent = muted.textAccent.Desaturate(0.3f);
+        muted.button = muted.button.Desaturate(0.3f);
+        muted.buttonHovered = muted.buttonHovered.Desaturate(0.3f);
+        muted.buttonActive = muted.buttonActive.Desaturate(0.3f);
+        muted.borderAccent = muted.borderAccent.Desaturate(0.4f);
+        variations.push_back(muted);
+    }
+
     return variations;
 }
 
