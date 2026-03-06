@@ -14,8 +14,8 @@
 #include "../Core/Platform.h"
 
 #include "GameObject.h"
-#include "Enums/GameSystemEnums.h"
-#include "Projectiles/WeaponStats.h"
+#include "../Enums/GameSystemEnums.h"
+#include "../Projectiles/WeaponStats.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -27,6 +27,7 @@
 using namespace DirectX;
 using SparkEditor::VehicleType;
 using SparkEditor::VehicleSeatRole;
+using SparkEditor::WeaponType;
 
 class Player;
 class InputManager;

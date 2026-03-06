@@ -13,8 +13,8 @@
 #pragma once
 #include "../Core/Platform.h"
 
-#include "Enums/GameSystemEnums.h"
-#include "Projectiles/WeaponStats.h"
+#include "../Enums/GameSystemEnums.h"
+#include "../Projectiles/WeaponStats.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -25,6 +25,7 @@
 
 using SparkEditor::PlayerClass;
 using SparkEditor::ClassAbility;
+using SparkEditor::WeaponType;
 
 namespace Spark {
 

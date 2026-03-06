@@ -384,7 +384,7 @@ struct MeshRenderer {
     bool visible = true;
 
     /** @brief World matrix computed by RenderSystem from the entity's Transform. */
-    XMFLOAT4X4 cachedWorldMatrix{};
+    DirectX::XMFLOAT4X4 cachedWorldMatrix{};
 
     /** @brief True when Transform has changed and cachedWorldMatrix needs recomputation. */
     bool worldMatrixDirty = true;
@@ -706,7 +706,7 @@ struct AudioSourceComponent {
     Spark::AudioHandle audioSourceHandle;
 
     /** @brief Previous frame position used to compute velocity for Doppler effects. */
-    XMFLOAT3 previousPosition{0, 0, 0};
+    DirectX::XMFLOAT3 previousPosition{0, 0, 0};
 };
 
 // =============================================================================

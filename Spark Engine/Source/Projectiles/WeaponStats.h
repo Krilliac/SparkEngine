@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "Enums/GameSystemEnums.h"
+#include "../Enums/GameSystemEnums.h"
 #include "Utils/Assert.h"
 
 /**
