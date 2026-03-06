@@ -47,6 +47,11 @@ enum class ScriptVariableType {
 };
 
 /**
+ * @brief Forward declaration for recursive script value array
+ */
+struct ScriptValueArray;
+
+/**
  * @brief Script variable value container
  */
 using ScriptValue = std::variant<
@@ -58,8 +63,15 @@ using ScriptValue = std::variant<
     XMFLOAT3,
     XMFLOAT4,
     ObjectID,
-    std::vector<ScriptValue>
+    std::shared_ptr<ScriptValueArray>
 >;
+
+/**
+ * @brief Wrapper for recursive script value arrays
+ */
+struct ScriptValueArray {
+    std::vector<ScriptValue> values;
+};
 
 /**
  * @brief Visual script node categories
