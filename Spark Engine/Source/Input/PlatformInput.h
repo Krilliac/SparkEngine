@@ -58,6 +58,7 @@
 #include <vector>
 #include <unordered_map>
 #include <functional>
+#include <memory>
 #include <cstdint>
 #include <array>
 
