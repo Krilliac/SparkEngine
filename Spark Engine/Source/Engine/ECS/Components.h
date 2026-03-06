@@ -1195,3 +1195,85 @@ struct HealthComponent {
         isDead = false;
     }
 };
+
+// =============================================================================
+// Weather Component
+// =============================================================================
+
+/**
+ * @brief Per-scene weather configuration for the weather system.
+ *
+ * Attach to a scene root entity to define the active weather parameters.
+ * The WeatherSystem reads this component to drive precipitation, fog,
+ * and lighting modifications.
+ *
+ * @code
+ *   auto& weather = world.AddComponent<WeatherComponent>(sceneEntity);
+ *   weather.weatherType = 2;    // Rain
+ *   weather.intensity = 0.8f;
+ * @endcode
+ */
+struct WeatherComponent {
+    /** @brief Active weather type (maps to Spark::WeatherType enum values). */
+    int weatherType = 0;               // 0=Clear, 1=Cloudy, 2=Rain, 3=Snow, 4=Fog, 5=Storm
+
+    /** @brief Weather intensity [0, 1]. */
+    float intensity = 0.0f;
+
+    /** @brief Wind direction (normalized). */
+    float windX = 1.0f, windY = 0.0f, windZ = 0.0f;
+
+    /** @brief Wind speed in m/s. */
+    float windSpeed = 0.0f;
+
+    /** @brief Transition time when switching weather types (seconds). */
+    float transitionTime = 3.0f;
+
+    /** @brief Whether the weather system is active for this scene. */
+    bool enabled = true;
+};
+
+// =============================================================================
+// Inventory Component
+// =============================================================================
+
+/**
+ * @brief Lightweight ECS inventory reference for entities with inventories.
+ *
+ * Stores basic inventory metadata as an ECS component. The full inventory
+ * data (slots, items) lives in Spark::InventoryComponent from InventorySystem.h.
+ * This component marks an entity as having an inventory and stores capacity info.
+ *
+ * @code
+ *   auto& inv = world.AddComponent<InventoryTag>(entity);
+ *   inv.maxSlots = 30;
+ *   inv.maxWeight = 150.0f;
+ * @endcode
+ */
+struct InventoryTag {
+    int maxSlots = 20;                 ///< Maximum inventory slots
+    float maxWeight = 100.0f;          ///< Maximum carry weight in kg
+    int currency = 0;                  ///< Currency/gold amount
+    bool hasInventory = true;          ///< Whether inventory is active
+};
+
+// =============================================================================
+// Quest Journal Component
+// =============================================================================
+
+/**
+ * @brief ECS marker for entities that can accept and track quests.
+ *
+ * Stores quest tracking metadata. The full quest journal data lives in
+ * Spark::QuestJournalComponent from QuestSystem.h.
+ *
+ * @code
+ *   auto& qj = world.AddComponent<QuestTrackerTag>(entity);
+ *   qj.activeQuestCount = 3;
+ * @endcode
+ */
+struct QuestTrackerTag {
+    int activeQuestCount = 0;          ///< Number of currently active quests
+    int completedQuestCount = 0;       ///< Total completed quests
+    bool questLogOpen = false;         ///< UI state: quest log visible
+};
