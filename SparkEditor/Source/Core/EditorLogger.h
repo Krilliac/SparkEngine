@@ -35,6 +35,43 @@ enum class LogLevel {
 };
 
 /**
+ * @brief Log categories for classification
+ */
+enum class LogCategory {
+    GENERAL = 0,
+    ASSET,
+    RENDERING,
+    ENGINE,
+    UI,
+    SCRIPTING,
+    PHYSICS,
+    AUDIO,
+    NETWORKING,
+    PROFILING,
+    CRASH
+};
+
+/**
+ * @brief Convert LogCategory to string
+ */
+inline const char* LogCategoryToString(LogCategory category) {
+    switch (category) {
+        case LogCategory::GENERAL:    return "General";
+        case LogCategory::ASSET:      return "Asset";
+        case LogCategory::RENDERING:  return "Rendering";
+        case LogCategory::ENGINE:     return "Engine";
+        case LogCategory::UI:         return "UI";
+        case LogCategory::SCRIPTING:  return "Scripting";
+        case LogCategory::PHYSICS:    return "Physics";
+        case LogCategory::AUDIO:      return "Audio";
+        case LogCategory::NETWORKING: return "Networking";
+        case LogCategory::PROFILING:  return "Profiling";
+        case LogCategory::CRASH:      return "Crash";
+        default:                      return "Unknown";
+    }
+}
+
+/**
  * @brief Log entry structure
  */
 struct LogEntry {
@@ -124,6 +161,12 @@ class EditorLogger {
 public:
     EditorLogger();
     ~EditorLogger();
+
+    /**
+     * @brief Get singleton instance
+     * @return Reference to the global EditorLogger instance
+     */
+    static EditorLogger& GetInstance();
 
     bool Initialize(const std::string& logDirectory = "Logs", size_t maxMemoryEntries = 10000);
     void Shutdown();

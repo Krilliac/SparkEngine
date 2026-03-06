@@ -114,7 +114,7 @@ void SimpleConsolePanel::Render() {
         ImGui::Checkbox("Auto-scroll", &m_scrollToBottom);
 
         ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // Log level filter toggle buttons with counts
@@ -154,7 +154,7 @@ void SimpleConsolePanel::Render() {
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Toggle Error messages");
 
         ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // External console controls

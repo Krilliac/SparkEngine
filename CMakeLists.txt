@@ -169,7 +169,7 @@ if(MSVC)
         /wd4267  # size_t conversion warnings
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
-    add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
+    add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS)
 
     # Conformance improvements available in VS 2017+ - enforce __cplusplus macro and
     # disable non-conforming extensions so code is portable across compilers.
@@ -309,6 +309,8 @@ endif()
 # Bullet Physics
 if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
     list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
+    set(BULLET_PHYSICS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
+    set(BULLET_FOUND TRUE)
     message(STATUS "Found Bullet Physics")
 endif()
 
@@ -451,6 +453,21 @@ endif()
 if(TINYOBJ_FOUND)
     target_link_libraries(SparkEngine PRIVATE tinyobjloader)
     message(STATUS "Linking SparkEngine with TinyObjLoader")
+endif()
+
+# Link Bullet Physics
+if(BULLET_FOUND)
+    # Build Bullet from source via its own CMake
+    set(BUILD_BULLET2_DEMOS OFF CACHE BOOL "" FORCE)
+    set(BUILD_CPU_DEMOS OFF CACHE BOOL "" FORCE)
+    set(BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
+    set(BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(USE_GRAPHICAL_BENCHMARK OFF CACHE BOOL "" FORCE)
+    set(USE_MSVC_RUNTIME_LIBRARY_DLL ON CACHE BOOL "" FORCE)
+    add_subdirectory("${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3" "${CMAKE_BINARY_DIR}/bullet3")
+    target_link_libraries(SparkEngine PRIVATE BulletDynamics BulletCollision LinearMath)
+    message(STATUS "Linking SparkEngine with Bullet Physics")
 endif()
 
 # Ensure SparkEngine depends on SparkConsole

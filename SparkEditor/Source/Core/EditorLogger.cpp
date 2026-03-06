@@ -75,6 +75,12 @@ void MemoryLogTarget::SetMaxEntries(size_t maxEntries) {
     }
 }
 
+// EditorLogger singleton
+EditorLogger& EditorLogger::GetInstance() {
+    static EditorLogger instance;
+    return instance;
+}
+
 // EditorLogger implementation
 EditorLogger::EditorLogger() = default;
 

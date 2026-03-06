@@ -257,6 +257,9 @@ public:
     /**
      * @brief Get display name for a class
      */
+#ifdef GetClassName
+#undef GetClassName
+#endif
     static const char* GetClassName(PlayerClass classType);
 
     /**

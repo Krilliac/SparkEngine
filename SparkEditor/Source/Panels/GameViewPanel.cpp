@@ -189,7 +189,7 @@ void GameViewPanel::RenderToolbar() {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lock Aspect Ratio (16:9)");
 
     ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::Text("|");
     ImGui::SameLine();
 
     ImGui::Checkbox(ICON_FA_CROSSHAIRS " HUD", &m_showHUD);
@@ -201,7 +201,7 @@ void GameViewPanel::RenderToolbar() {
     ImGui::Checkbox(ICON_FA_SHIELD " Score", &m_showScoreboard);
 
     ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::Text("|");
     ImGui::SameLine();
 
     // Simulate actions
@@ -224,7 +224,7 @@ void GameViewPanel::RenderToolbar() {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Simulate hit marker");
 
     ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::Text("|");
     ImGui::SameLine();
 
     if (ImGui::Button(m_maximized ? ICON_FA_COMPRESS : ICON_FA_EXPAND)) {
