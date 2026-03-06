@@ -11,11 +11,8 @@
 
 #pragma once
 
-#include "../Enums/GameSystemEnums.h"
+#include "Enums/GameSystemEnums.h"
 #include "Utils/Assert.h"
-
-// Use the SparkEditor namespace for enum types
-using SparkEditor::WeaponType;
 
 /**
  * @brief Weapon statistics and configuration structure
@@ -25,7 +22,7 @@ using SparkEditor::WeaponType;
  */
 struct WeaponStats
 {
-    WeaponType Type;         ///< Weapon category/type
+    SparkEditor::WeaponType Type;         ///< Weapon category/type
     float      Damage;       ///< Base damage per shot/projectile
     float      FireRate;     ///< Rate of fire in rounds per minute
     int        MagazineSize; ///< Number of rounds per magazine/clip
@@ -37,7 +34,7 @@ struct WeaponStats
      * @brief Default constructor with safe initial values
      */
     WeaponStats()
-        : Type(WeaponType::PISTOL)
+        : Type(SparkEditor::WeaponType::PISTOL)
         , Damage(10.0f)
         , FireRate(600.0f)
         , MagazineSize(15)
@@ -58,7 +55,7 @@ struct WeaponStats
      * @param velocity Muzzle velocity
      * @param accuracy Accuracy factor (0.0-1.0)
      */
-    WeaponStats(WeaponType type, float damage, float fireRate, int magSize, 
+    WeaponStats(SparkEditor::WeaponType type, float damage, float fireRate, int magSize,
                float reloadTime, float velocity, float accuracy)
         : Type(type)
         , Damage(damage)
@@ -128,7 +125,7 @@ struct WeaponStats
  * @param type The weapon type to get defaults for
  * @return WeaponStats structure with default values for the specified type
  */
-WeaponStats GetDefaultWeaponStats(WeaponType type);
+WeaponStats GetDefaultWeaponStats(SparkEditor::WeaponType type);
 
 /**
  * @brief Create a weapon stats configuration from parameters
@@ -144,7 +141,7 @@ WeaponStats GetDefaultWeaponStats(WeaponType type);
  * @param accuracy Accuracy factor (0.0-1.0)
  * @return WeaponStats structure with specified values
  */
-WeaponStats CreateWeaponStats(WeaponType type, float damage, float fireRate, 
+WeaponStats CreateWeaponStats(SparkEditor::WeaponType type, float damage, float fireRate,
                              int magSize, float reloadTime, float velocity, float accuracy);
 
 /**
@@ -172,7 +169,7 @@ WeaponStats ApplyWeaponModifications(const WeaponStats& baseStats,
  * @param type Weapon type to convert
  * @return String name of the weapon type
  */
-const char* WeaponTypeToString(WeaponType type);
+const char* WeaponTypeToString(SparkEditor::WeaponType type);
 
 /**
  * @brief Convert string to weapon type
@@ -180,4 +177,4 @@ const char* WeaponTypeToString(WeaponType type);
  * @param str String representation of weapon type
  * @return Corresponding weapon type, or WeaponType::PISTOL if not found
  */
-WeaponType StringToWeaponType(const char* str);
+SparkEditor::WeaponType StringToWeaponType(const char* str);
