@@ -61,7 +61,29 @@ void AssetBrowserPanel::Render() {
     if (BeginPanel()) {
         // Toolbar with icons
         if (ImGui::Button(ICON_FA_DOWNLOAD " Import")) {
-            // Open file dialog for importing assets
+            ImGui::OpenPopup("ImportAssetPath");
+        }
+        // Simple path input popup for importing an asset
+        if (ImGui::BeginPopup("ImportAssetPath")) {
+            static char importPathBuf[512] = "";
+            ImGui::Text("Enter file path to import:");
+            ImGui::SetNextItemWidth(400);
+            bool enterPressed = ImGui::InputText("##ImportPath", importPathBuf, sizeof(importPathBuf),
+                                                 ImGuiInputTextFlags_EnterReturnsTrue);
+            ImGui::SameLine();
+            if (ImGui::Button("OK") || enterPressed) {
+                if (importPathBuf[0] != '\0') {
+                    ImportAsset(std::string(importPathBuf));
+                    importPathBuf[0] = '\0';
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                importPathBuf[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
         }
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_SYNC_ALT " Refresh")) {
@@ -306,8 +328,45 @@ void AssetBrowserPanel::RefreshAssets() {
 }
 
 void AssetBrowserPanel::ImportAsset(const std::string& filePath) {
-    // TODO: Implement asset import logic
-    std::cout << "Importing asset: " << filePath << std::endl;
+    std::filesystem::path sourcePath(filePath);
+
+    if (!std::filesystem::exists(sourcePath)) {
+        std::cerr << "Import failed: file does not exist: " << filePath << std::endl;
+        return;
+    }
+
+    if (!std::filesystem::is_regular_file(sourcePath)) {
+        std::cerr << "Import failed: not a regular file: " << filePath << std::endl;
+        return;
+    }
+
+    // Determine destination inside the current folder
+    std::filesystem::path destDir(m_currentFolder.empty() ? m_projectPath : m_currentFolder);
+    std::filesystem::path destPath = destDir / sourcePath.filename();
+
+    // Avoid overwriting: append a numeric suffix if a file with the same name exists
+    if (std::filesystem::exists(destPath)) {
+        std::string stem = sourcePath.stem().string();
+        std::string ext = sourcePath.extension().string();
+        int counter = 1;
+        do {
+            destPath = destDir / (stem + "_" + std::to_string(counter) + ext);
+            ++counter;
+        } while (std::filesystem::exists(destPath));
+    }
+
+    try {
+        std::filesystem::copy_file(sourcePath, destPath,
+                                   std::filesystem::copy_options::overwrite_existing);
+        std::cout << "Imported asset: " << sourcePath.filename().string()
+                  << " -> " << destPath.string() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Import failed: " << e.what() << std::endl;
+        return;
+    }
+
+    // Refresh the file list so the newly imported asset appears in the grid
+    RefreshAssets();
 }
 
 } // namespace SparkEditor
