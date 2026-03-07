@@ -15,6 +15,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
+#endif // SPARK_PLATFORM_WINDOWS
 using Microsoft::WRL::ComPtr;
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>

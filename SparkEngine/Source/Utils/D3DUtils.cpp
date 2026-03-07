@@ -1,5 +1,7 @@
 #include "Core/Platform.h"
+
 #ifdef SPARK_PLATFORM_WINDOWS
+
 #include "D3DUtils.h"
 #include "../Graphics/GraphicsEngine.h"
 #include <iostream>
@@ -13,25 +15,25 @@ ID3D11DeviceContext* g_D3DContext = nullptr;
 extern std::unique_ptr<GraphicsEngine> g_graphics;
 
 // Implement the accessors
-IDXGISwapChain* GetMainSwapChain() { 
+IDXGISwapChain* GetMainSwapChain() {
     if (g_graphics) {
         return g_graphics->GetSwapChain();
     }
-    return g_MainSwapChain; 
+    return g_MainSwapChain;
 }
 
-ID3D11Device* GetD3DDevice() { 
+ID3D11Device* GetD3DDevice() {
     if (g_graphics) {
         return g_graphics->GetDevice();
     }
-    return g_D3DDevice; 
+    return g_D3DDevice;
 }
 
-ID3D11DeviceContext* GetD3DContext() { 
+ID3D11DeviceContext* GetD3DContext() {
     if (g_graphics) {
         return g_graphics->GetContext();
     }
-    return g_D3DContext; 
+    return g_D3DContext;
 }
 
 // Functions to set the globals (for backwards compatibility or manual setup)
@@ -46,4 +48,17 @@ void SetD3DDevice(ID3D11Device* device) {
 void SetD3DContext(ID3D11DeviceContext* context) {
     g_D3DContext = context;
 }
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+#include "D3DUtils.h"
+
+// No-op stubs for non-Windows platforms
+IDXGISwapChain* GetMainSwapChain() { return nullptr; }
+ID3D11Device* GetD3DDevice() { return nullptr; }
+ID3D11DeviceContext* GetD3DContext() { return nullptr; }
+void SetMainSwapChain(IDXGISwapChain*) {}
+void SetD3DDevice(ID3D11Device*) {}
+void SetD3DContext(ID3D11DeviceContext*) {}
+
 #endif // SPARK_PLATFORM_WINDOWS

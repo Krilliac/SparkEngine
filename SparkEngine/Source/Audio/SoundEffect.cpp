@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "SoundEffect.h"
 #include "Utils/Assert.h"
 #include <fstream>
@@ -24,7 +23,13 @@ HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
 
     std::wcout << L"[OPERATION] SoundEffect::LoadFromFile called. filename=" << filename << std::endl;
 
+#ifdef SPARK_PLATFORM_WINDOWS
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
+#else
+    // Linux: convert wstring to narrow string for ifstream
+    std::string narrowFilename(filename.begin(), filename.end());
+    std::ifstream file(narrowFilename, std::ios::binary | std::ios::ate);
+#endif
     if (!file.is_open())
         return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
 
@@ -160,7 +165,7 @@ SoundEffectFactory::CreateFromSamples(const std::vector<short>& samples, DWORD S
 }
 
 // ----- basic wave helpers ----------------------------------------------------
-float SoundEffectFactory::SineWave(float t) { return std::sinf(t); }
+float SoundEffectFactory::SineWave(float t) { return std::sin(t); }
 
 float SoundEffectFactory::NoiseWave(float)
 {
@@ -223,7 +228,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateExplosion()
     {
         float t = static_cast<float>(i) / SR;
         float env = std::exp(-t * 3.f);
-        float rumble = std::sinf(2.f * PI * 60.f * t) * 0.5f;
+        float rumble = std::sin(2.f * PI * 60.f * t) * 0.5f;
         float noise = rnd(rng) * 0.35f;
         s[i] = static_cast<short>((rumble + noise) * env * 32767.f);
     }
@@ -241,7 +246,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateFootstep()
     {
         float t = static_cast<float>(i) / SR;
         float env = std::exp(-t * 22.f);
-        float thp = std::sinf(2.f * PI * 110.f * t);
+        float thp = std::sin(2.f * PI * 110.f * t);
         s[i] = static_cast<short>(thp * env * 16383.f);  // half volume
     }
     return CreateFromSamples(s, SR);
@@ -264,12 +269,12 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateReload()
 
         // metallic click at start
         if (t < 0.05f)
-            sample = std::sinf(2.f * PI * 2000.f * t) * std::exp(-t * 60.f);
+            sample = std::sin(2.f * PI * 2000.f * t) * std::exp(-t * 60.f);
         // metallic click at end
         else if (t > 0.28f)
         {
             float tt = t - 0.28f;
-            sample = std::sinf(2.f * PI * 1600.f * tt) * std::exp(-tt * 55.f);
+            sample = std::sin(2.f * PI * 1600.f * tt) * std::exp(-tt * 55.f);
         }
         // add subtle noise
         sample += rnd(rng) * 0.08f * std::exp(-t * 6.f);
@@ -291,9 +296,8 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreatePickup()
         float prog = t / DUR;
         float freq = 440.f + 440.f * prog;   // glide 440->880
         float env = 1.f - prog;             // fade out
-        float samp = std::sinf(2.f * PI * freq * t) * env;
+        float samp = std::sin(2.f * PI * freq * t) * env;
         s[i] = static_cast<short>(samp * 16383.f);
     }
     return CreateFromSamples(s, SR);
 }
-#endif // SPARK_PLATFORM_WINDOWS

@@ -7,8 +7,6 @@
  * @date 2025
  */
 
-#ifdef _WIN32
-
 #include "D3D11Device.h"
 #include <algorithm>
 #include <cassert>
@@ -1103,6 +1101,5 @@ DXGI_FORMAT D3D11Device::ConvertVertexFormat(RHIVertexFormat format) const
 
 }}} // namespace Spark::RHI::D3D11
 
-#endif // _WIN32
-
 #endif // SPARK_PLATFORM_WINDOWS
+

@@ -83,7 +83,7 @@ struct KillRecord {
 /**
  * @brief Player score tracking
  */
-struct PlayerScore {
+struct KillTrackerScore {
     int kills = 0;
     int deaths = 0;
     int assists = 0;
@@ -195,8 +195,8 @@ public:
 
     // === Score Tracking ===
 
-    PlayerScore& GetPlayerScore() { return m_playerScore; }
-    const PlayerScore& GetPlayerScore() const { return m_playerScore; }
+    KillTrackerScore& GetPlayerScore() { return m_playerScore; }
+    const KillTrackerScore& GetPlayerScore() const { return m_playerScore; }
     const std::vector<KillRecord>& GetKillHistory() const { return m_killHistory; }
 
     /**
@@ -217,7 +217,7 @@ private:
     bool m_waitingForRespawn = false;
     Player* m_deadPlayer = nullptr;
 
-    PlayerScore m_playerScore;
+    KillTrackerScore m_playerScore;
     std::vector<KillRecord> m_killHistory;
 
     static constexpr int MAX_SPAWN_POINTS = 32;

@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "InteractiveObject.h"
 #include "Player.h"
 #include "Input/InputManager.h"
@@ -881,4 +880,3 @@ std::string InteractionSystem::Console_ListObjects() const
 
 } // namespace Spark
 
-#endif // SPARK_PLATFORM_WINDOWS

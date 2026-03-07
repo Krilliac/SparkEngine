@@ -1,5 +1,4 @@
 #include "../Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 // MathUtils.cpp
 #include "MathUtils.h"
 #include "Utils/Assert.h"
@@ -329,4 +328,3 @@ float MathUtils::EaseInOutCubic(float t)
         return 1.0f + f * f * f * 0.5f;
     }
 }
-#endif // SPARK_PLATFORM_WINDOWS

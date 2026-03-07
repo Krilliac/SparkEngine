@@ -8,7 +8,9 @@
 #include <mutex>
 #include <deque>
 #include <unordered_map>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 class ConsoleApp {
 public:

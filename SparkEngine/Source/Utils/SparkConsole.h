@@ -106,9 +106,14 @@ public:
     };
 
 private:
+#ifdef SPARK_PLATFORM_WINDOWS
     HWND m_consoleWindow = nullptr;       ///< Handle to the Windows console window
     HANDLE m_consoleOutput = nullptr;     ///< Handle to the console output stream
     HANDLE m_consoleInput = nullptr;      ///< Handle to the console input stream
+#elif defined(SPARK_PLATFORM_LINUX)
+    int m_consoleOutputFd = -1;           ///< File descriptor for console output (STDOUT_FILENO)
+    int m_consoleInputFd = -1;            ///< File descriptor for console input (STDIN_FILENO)
+#endif
 
     std::unordered_map<std::string, CommandInfo> m_commands;   ///< Registry of all available commands
     std::deque<LogEntry> m_logHistory;                         ///< Rolling history of log messages

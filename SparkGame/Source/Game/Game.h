@@ -35,8 +35,8 @@ class Player;
 class ProjectilePool;
 namespace Spark { class EventBus; }
 
-#include "Primitives.h"
-#include "PlaceholderMesh.h"
+#include "Game/Primitives.h"
+#include "Game/PlaceholderMesh.h"
 #include "CubeObject.h"
 #include "PlaneObject.h"
 #include "SphereObject.h"

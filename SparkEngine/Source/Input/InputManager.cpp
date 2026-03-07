@@ -1,12 +1,10 @@
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
-// InputManager.cpp
+#ifdef SPARK_PLATFORM_WINDOWS
+// InputManager.cpp — Win32 implementation
 #include "InputManager.h"
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
-#endif // SPARK_PLATFORM_WINDOWS
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -685,4 +683,78 @@ InputManager::InputMetrics InputManager::GetMetricsThreadSafe() const {
     
     return metrics;
 }
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux no-op stubs — InputManager Win32 backend is Windows-only.
+// Minimal stubs to satisfy linker (unique_ptr destructor, etc.)
+#include "InputManager.h"
+
+InputManager::InputManager()
+    : m_mouseX(0), m_mouseY(0)
+    , m_prevMouseX(0), m_prevMouseY(0)
+    , m_mouseDeltaX(0), m_mouseDeltaY(0)
+    , m_hwnd(nullptr)
+    , m_mouseCaptured(false)
+    , m_mouseSensitivity(1.0f)
+    , m_mouseDeadZone(0.0f)
+    , m_mouseAcceleration(false)
+    , m_invertMouseY(false)
+    , m_rawMouseInput(false)
+    , m_inputLogging(false)
+    , m_keyPressCount(0)
+    , m_mousePressCount(0)
+    , m_totalMouseDistance(0.0f)
+{
+    ZeroMemory(m_mouseButtons, sizeof(m_mouseButtons));
+    ZeroMemory(m_prevMouseButtons, sizeof(m_prevMouseButtons));
+}
+
+InputManager::~InputManager() {}
+void InputManager::Initialize(HWND) {}
+void InputManager::Update() {}
+void InputManager::HandleMessage(UINT, WPARAM, LPARAM) {}
+bool InputManager::IsKeyDown(int) const { return false; }
+bool InputManager::IsKeyUp(int) const { return true; }
+bool InputManager::WasKeyPressed(int) const { return false; }
+bool InputManager::WasKeyReleased(int) const { return false; }
+bool InputManager::IsMouseButtonDown(int) const { return false; }
+bool InputManager::WasMouseButtonPressed(int) const { return false; }
+bool InputManager::WasMouseButtonReleased(int) const { return false; }
+bool InputManager::GetMouseDelta(int& dx, int& dy) const { dx = dy = 0; return false; }
+void InputManager::GetMousePosition(int& x, int& y) const { x = y = 0; }
+void InputManager::CaptureMouse(bool) {}
+
+// Console integration stubs
+void InputManager::Console_SetMouseSensitivity(float) {}
+void InputManager::Console_SetMouseDeadZone(float) {}
+void InputManager::Console_SetMouseAcceleration(bool) {}
+void InputManager::Console_SetInvertMouseY(bool) {}
+void InputManager::Console_SetRawMouseInput(bool) {}
+void InputManager::Console_SetInputLogging(bool) {}
+bool InputManager::Console_BindKey(const std::string&, const std::string&) { return false; }
+void InputManager::Console_UnbindKey(const std::string&) {}
+std::string InputManager::Console_ListKeyBindings() const { return "No key bindings (Linux stub)"; }
+void InputManager::Console_SimulateKeyPress(const std::string&, int) {}
+void InputManager::Console_ClearInputStates() {}
+std::string InputManager::Console_GetRecentEvents(int) const { return "No events (Linux stub)"; }
+bool InputManager::Console_IsActionActive(const std::string&) const { return false; }
+InputManager::InputMetrics InputManager::Console_GetMetrics() const { return {}; }
+InputManager::InputSettings InputManager::Console_GetSettings() const { return {}; }
+void InputManager::Console_ApplySettings(const InputSettings&) {}
+void InputManager::Console_ResetToDefaults() {}
+void InputManager::Console_RegisterStateCallback(std::function<void()>) {}
+void InputManager::Console_RefreshInput() {}
+
+// Private helpers
+void InputManager::UpdateKeyState(int, bool) {}
+void InputManager::UpdateMouseButton(int, bool) {}
+void InputManager::UpdateMousePosition(int, int) {}
+void InputManager::ProcessMouseDelta(int&, int&) const {}
+int InputManager::KeyNameToVirtualKey(const std::string&) const { return 0; }
+std::string InputManager::VirtualKeyToKeyName(int) const { return "Unknown"; }
+void InputManager::LogInputEvent(int, bool) {}
+void InputManager::NotifyStateChange() {}
+InputManager::InputMetrics InputManager::GetMetricsThreadSafe() const { return {}; }
+
 #endif // SPARK_PLATFORM_WINDOWS

@@ -1,6 +1,5 @@
 // ECSystems.cpp
 #include "../../../Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "ECSystems.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Physics/PhysicsSystem.h"
@@ -245,4 +244,3 @@ std::string SystemManager::Console_ListSystems() const
 }
 
 } // namespace Spark::ECS
-#endif // SPARK_PLATFORM_WINDOWS

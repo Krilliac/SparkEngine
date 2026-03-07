@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file AdvancedConsoleCommands.cpp
  * @brief Complete console command integration for all advanced systems
@@ -268,4 +267,3 @@ void RegisterAdvancedCommands(Game* game, GraphicsEngine* graphics)
 }
 
 } // namespace SparkConsole
-#endif // SPARK_PLATFORM_WINDOWS

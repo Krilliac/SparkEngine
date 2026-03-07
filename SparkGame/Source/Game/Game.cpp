@@ -1,8 +1,11 @@
 #include "Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <cstdint>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <chrono>
 
 #include "Game.h"
@@ -1631,4 +1634,3 @@ bool Game::PlayerExitVehicle()
     if (!m_player || !m_player->IsInVehicle()) return false;
     return m_player->ExitVehicle();
 }
-#endif // SPARK_PLATFORM_WINDOWS

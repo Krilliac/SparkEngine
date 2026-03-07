@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "GameMechanics.h"
 #include "Player.h"
 #include "Utils/Assert.h"
@@ -370,4 +369,3 @@ std::string RespawnSystem::Console_GetKillHistory() const
 }
 
 } // namespace Spark
-#endif // SPARK_PLATFORM_WINDOWS

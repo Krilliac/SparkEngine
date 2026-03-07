@@ -5,7 +5,9 @@
 #include <thread>
 #include <chrono>
 #include <algorithm>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <conio.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <iomanip>
 
 ConsoleApp::ConsoleApp() 

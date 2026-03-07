@@ -11,6 +11,8 @@
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
+
 // ============================================================================
 // RENDERTARGET IMPLEMENTATION
 // ============================================================================
@@ -908,4 +910,540 @@ RenderTargetFormat RenderTargetManager::StringToFormat(const std::string& str) c
     if (str == "D32_FLOAT") return RenderTargetFormat::D32_FLOAT;
     return RenderTargetFormat::RGBA8_UNORM; // Default
 }
+
+#endif // inner SPARK_PLATFORM_WINDOWS
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+#include "RenderTarget.h"
+#include <sstream>
+#include <cmath>
+#include <cstring>
+
+// ============================================================================
+// RenderTarget (Linux stub)
+// ============================================================================
+
+RenderTarget::RenderTarget(const RenderTargetDesc& desc) : m_desc(desc) {}
+RenderTarget::~RenderTarget() {}
+
+HRESULT RenderTarget::Create(ID3D11Device* /*device*/)
+{
+    return S_OK;
+}
+
+void RenderTarget::Destroy()
+{
+    // No GPU resources on Linux
+}
+
+HRESULT RenderTarget::Resize(ID3D11Device* device, uint32_t width, uint32_t height)
+{
+    m_desc.width = width;
+    m_desc.height = height;
+    Destroy();
+    return Create(device);
+}
+
+void RenderTarget::Clear(ID3D11DeviceContext* /*context*/)
+{
+    // No-op on Linux
+}
+
+void RenderTarget::GenerateMips(ID3D11DeviceContext* /*context*/)
+{
+    // No-op on Linux
+}
+
+std::string RenderTarget::GetInfo() const
+{
+    std::string info = "RenderTarget: " + m_desc.name + "\n";
+    info += "Size: " + std::to_string(m_desc.width) + "x" + std::to_string(m_desc.height) + "\n";
+    info += "Array Size: " + std::to_string(m_desc.arraySize) + "\n";
+    info += "Mip Levels: " + std::to_string(m_desc.mipLevels) + "\n";
+    info += "Sample Count: " + std::to_string(m_desc.sampleCount) + "\n";
+    info += "Valid: " + std::string(IsValid() ? "Yes" : "No") + "\n";
+    info += "Depth/Stencil: " + std::string(IsDepthStencil() ? "Yes" : "No") + "\n";
+    info += "Multisampled: " + std::string(IsMultisampled() ? "Yes" : "No") + "\n";
+    return info;
+}
+
+bool RenderTarget::SaveToFile(const std::string& /*filename*/) const
+{
+    return false; // No GPU readback on Linux
+}
+
+DXGI_FORMAT RenderTarget::GetDXGIFormat(RenderTargetFormat /*format*/) const { return 0; }
+DXGI_FORMAT RenderTarget::GetTypelessFormat(RenderTargetFormat /*format*/) const { return 0; }
+DXGI_FORMAT RenderTarget::GetSRVFormat(RenderTargetFormat /*format*/) const { return 0; }
+DXGI_FORMAT RenderTarget::GetDSVFormat(RenderTargetFormat /*format*/) const { return 0; }
+
+bool RenderTarget::SaveBMP(const std::string& /*filename*/, unsigned char* /*data*/,
+                           uint32_t /*width*/, uint32_t /*height*/, uint32_t /*pitch*/) const
+{
+    return false;
+}
+
+// ============================================================================
+// MultipleRenderTargets (Linux stub)
+// ============================================================================
+
+MultipleRenderTargets::MultipleRenderTargets(const std::string& name)
+    : m_name(name)
+{
+}
+
+MultipleRenderTargets::~MultipleRenderTargets()
+{
+}
+
+void MultipleRenderTargets::AddRenderTarget(std::shared_ptr<RenderTarget> renderTarget, uint32_t slot)
+{
+    m_renderTargets[slot] = renderTarget;
+}
+
+void MultipleRenderTargets::SetDepthStencil(std::shared_ptr<RenderTarget> depthStencil)
+{
+    m_depthStencil = depthStencil;
+}
+
+HRESULT MultipleRenderTargets::Create(ID3D11Device* device)
+{
+    HRESULT hr = S_OK;
+    for (auto& pair : m_renderTargets) {
+        hr = pair.second->Create(device);
+        if (FAILED(hr)) return hr;
+    }
+    if (m_depthStencil) {
+        hr = m_depthStencil->Create(device);
+    }
+    return hr;
+}
+
+void MultipleRenderTargets::Bind(ID3D11DeviceContext* /*context*/)
+{
+    // No-op on Linux
+}
+
+void MultipleRenderTargets::Unbind(ID3D11DeviceContext* /*context*/)
+{
+    // No-op on Linux
+}
+
+void MultipleRenderTargets::Clear(ID3D11DeviceContext* context)
+{
+    for (auto& pair : m_renderTargets) {
+        pair.second->Clear(context);
+    }
+    if (m_depthStencil) {
+        m_depthStencil->Clear(context);
+    }
+}
+
+HRESULT MultipleRenderTargets::Resize(ID3D11Device* device, uint32_t width, uint32_t height)
+{
+    HRESULT hr = S_OK;
+    for (auto& pair : m_renderTargets) {
+        hr = pair.second->Resize(device, width, height);
+        if (FAILED(hr)) return hr;
+    }
+    if (m_depthStencil) {
+        hr = m_depthStencil->Resize(device, width, height);
+    }
+    return hr;
+}
+
+std::shared_ptr<RenderTarget> MultipleRenderTargets::GetRenderTarget(uint32_t slot) const
+{
+    auto it = m_renderTargets.find(slot);
+    return (it != m_renderTargets.end()) ? it->second : nullptr;
+}
+
+// ============================================================================
+// RenderTargetManager (Linux stub)
+// ============================================================================
+
+RenderTargetManager::RenderTargetManager()
+    : m_device(nullptr), m_context(nullptr)
+{
+    memset(&m_metrics, 0, sizeof(m_metrics));
+}
+
+RenderTargetManager::~RenderTargetManager()
+{
+    Shutdown();
+}
+
+HRESULT RenderTargetManager::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
+{
+    m_device = device;
+    m_context = context;
+    return S_OK;
+}
+
+void RenderTargetManager::Shutdown()
+{
+    m_mrtGroups.clear();
+    m_renderTargets.clear();
+    m_device = nullptr;
+    m_context = nullptr;
+}
+
+std::shared_ptr<RenderTarget> RenderTargetManager::CreateRenderTarget(const RenderTargetDesc& desc)
+{
+    auto renderTarget = std::make_shared<RenderTarget>(desc);
+    renderTarget->Create(m_device);
+    m_renderTargets[desc.name] = renderTarget;
+    UpdateMetrics();
+    return renderTarget;
+}
+
+std::shared_ptr<RenderTarget> RenderTargetManager::GetRenderTarget(const std::string& name) const
+{
+    auto it = m_renderTargets.find(name);
+    return (it != m_renderTargets.end()) ? it->second : nullptr;
+}
+
+void RenderTargetManager::DestroyRenderTarget(const std::string& name)
+{
+    auto it = m_renderTargets.find(name);
+    if (it != m_renderTargets.end()) {
+        it->second->Destroy();
+        m_renderTargets.erase(it);
+        UpdateMetrics();
+    }
+}
+
+std::shared_ptr<MultipleRenderTargets> RenderTargetManager::CreateMRT(const std::string& name)
+{
+    auto mrt = std::make_shared<MultipleRenderTargets>(name);
+    m_mrtGroups[name] = mrt;
+    return mrt;
+}
+
+std::shared_ptr<MultipleRenderTargets> RenderTargetManager::GetMRT(const std::string& name) const
+{
+    auto it = m_mrtGroups.find(name);
+    return (it != m_mrtGroups.end()) ? it->second : nullptr;
+}
+
+void RenderTargetManager::DestroyMRT(const std::string& name)
+{
+    m_mrtGroups.erase(name);
+}
+
+HRESULT RenderTargetManager::CreateGBufferTargets(uint32_t width, uint32_t height, uint32_t sampleCount)
+{
+    RenderTargetDesc albedoDesc;
+    albedoDesc.name = "GBuffer_Albedo";
+    albedoDesc.width = width;
+    albedoDesc.height = height;
+    albedoDesc.format = RenderTargetFormat::RGBA8_SRGB;
+    albedoDesc.sampleCount = sampleCount;
+    albedoDesc.clearColor = {0.0f, 0.0f, 0.0f, 0.0f};
+    CreateRenderTarget(albedoDesc);
+
+    RenderTargetDesc normalDesc;
+    normalDesc.name = "GBuffer_Normal";
+    normalDesc.width = width;
+    normalDesc.height = height;
+    normalDesc.format = RenderTargetFormat::RGBA16_FLOAT;
+    normalDesc.sampleCount = sampleCount;
+    normalDesc.clearColor = {0.5f, 0.5f, 1.0f, 1.0f};
+    CreateRenderTarget(normalDesc);
+
+    RenderTargetDesc motionDesc;
+    motionDesc.name = "GBuffer_Motion";
+    motionDesc.width = width;
+    motionDesc.height = height;
+    motionDesc.format = RenderTargetFormat::RG16_FLOAT;
+    motionDesc.sampleCount = sampleCount;
+    motionDesc.clearColor = {0.0f, 0.0f, 0.0f, 0.0f};
+    CreateRenderTarget(motionDesc);
+
+    RenderTargetDesc depthDesc;
+    depthDesc.name = "GBuffer_Depth";
+    depthDesc.width = width;
+    depthDesc.height = height;
+    depthDesc.format = RenderTargetFormat::D24_UNORM_S8_UINT;
+    depthDesc.usage = RenderTargetUsage::DepthStencil | RenderTargetUsage::ShaderResource;
+    depthDesc.sampleCount = sampleCount;
+    depthDesc.clearDepth = 1.0f;
+    depthDesc.clearStencil = 0;
+    CreateRenderTarget(depthDesc);
+
+    return S_OK;
+}
+
+HRESULT RenderTargetManager::CreateShadowMapTargets(uint32_t resolution)
+{
+    for (int i = 0; i < 4; i++) {
+        RenderTargetDesc shadowDesc;
+        shadowDesc.name = "ShadowMap_Cascade" + std::to_string(i);
+        shadowDesc.width = resolution;
+        shadowDesc.height = resolution;
+        shadowDesc.format = RenderTargetFormat::D32_FLOAT;
+        shadowDesc.usage = RenderTargetUsage::DepthStencil | RenderTargetUsage::ShaderResource;
+        shadowDesc.clearDepth = 1.0f;
+        CreateRenderTarget(shadowDesc);
+    }
+    return S_OK;
+}
+
+HRESULT RenderTargetManager::CreatePostProcessTargets(uint32_t width, uint32_t height)
+{
+    RenderTargetDesc hdrDesc;
+    hdrDesc.name = "PostProcess_HDR";
+    hdrDesc.width = width;
+    hdrDesc.height = height;
+    hdrDesc.format = RenderTargetFormat::RGBA16_FLOAT;
+    hdrDesc.usage = RenderTargetUsage::RenderTarget | RenderTargetUsage::ShaderResource | RenderTargetUsage::GenerateMips;
+    hdrDesc.mipLevels = 0;
+    hdrDesc.clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
+    CreateRenderTarget(hdrDesc);
+
+    for (int i = 0; i < 6; i++) {
+        uint32_t mipWidth = width >> (i + 1);
+        uint32_t mipHeight = height >> (i + 1);
+        RenderTargetDesc bloomDesc;
+        bloomDesc.name = "PostProcess_Bloom" + std::to_string(i);
+        bloomDesc.width = mipWidth;
+        bloomDesc.height = mipHeight;
+        bloomDesc.format = RenderTargetFormat::RGBA16_FLOAT;
+        bloomDesc.clearColor = {0.0f, 0.0f, 0.0f, 0.0f};
+        CreateRenderTarget(bloomDesc);
+    }
+
+    return S_OK;
+}
+
+HRESULT RenderTargetManager::CreateTemporalTargets(uint32_t width, uint32_t height)
+{
+    RenderTargetDesc historyDesc;
+    historyDesc.name = "Temporal_History";
+    historyDesc.width = width;
+    historyDesc.height = height;
+    historyDesc.format = RenderTargetFormat::RGBA16_FLOAT;
+    historyDesc.clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
+    CreateRenderTarget(historyDesc);
+
+    RenderTargetDesc velocityDesc;
+    velocityDesc.name = "Temporal_Velocity";
+    velocityDesc.width = width;
+    velocityDesc.height = height;
+    velocityDesc.format = RenderTargetFormat::RG16_FLOAT;
+    velocityDesc.clearColor = {0.0f, 0.0f, 0.0f, 0.0f};
+    CreateRenderTarget(velocityDesc);
+
+    return S_OK;
+}
+
+void RenderTargetManager::ResizeAllTargets(uint32_t width, uint32_t height)
+{
+    for (auto& pair : m_renderTargets) {
+        pair.second->Resize(m_device, width, height);
+    }
+    UpdateMetrics();
+}
+
+void RenderTargetManager::ClearAllTargets()
+{
+    if (!m_context) return;
+    for (auto& pair : m_renderTargets) {
+        pair.second->Clear(m_context);
+    }
+}
+
+RenderTargetManager::RenderTargetMetrics RenderTargetManager::Console_GetMetrics() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    return m_metrics;
+}
+
+std::string RenderTargetManager::Console_ListRenderTargets() const
+{
+    std::string result = "=== Render Targets ===\n";
+    for (const auto& pair : m_renderTargets) {
+        const auto& desc = pair.second->GetDesc();
+        result += pair.first + " (" + std::to_string(desc.width) + "x" +
+                 std::to_string(desc.height) + ", " + FormatToString(desc.format) + ")\n";
+    }
+    result += "\n=== MRT Groups ===\n";
+    for (const auto& pair : m_mrtGroups) {
+        result += pair.first + " (" + std::to_string(pair.second->GetRenderTargetCount()) + " targets)\n";
+    }
+    return result;
+}
+
+std::string RenderTargetManager::Console_GetRenderTargetInfo(const std::string& name) const
+{
+    auto rt = GetRenderTarget(name);
+    if (rt) return rt->GetInfo();
+    return "Render target '" + name + "' not found";
+}
+
+bool RenderTargetManager::Console_SaveRenderTarget(const std::string& name, const std::string& filename)
+{
+    auto rt = GetRenderTarget(name);
+    if (!rt) return false;
+    std::string actualFilename = filename.empty() ? (name + ".bmp") : filename;
+    return rt->SaveToFile(actualFilename);
+}
+
+bool RenderTargetManager::Console_CreateRenderTarget(const std::string& name, uint32_t width, uint32_t height, const std::string& format)
+{
+    RenderTargetDesc desc;
+    desc.name = name;
+    desc.width = width;
+    desc.height = height;
+    desc.format = StringToFormat(format);
+    auto rt = CreateRenderTarget(desc);
+    return rt != nullptr;
+}
+
+bool RenderTargetManager::Console_ResizeRenderTarget(const std::string& name, uint32_t width, uint32_t height)
+{
+    auto rt = GetRenderTarget(name);
+    if (!rt) return false;
+    return SUCCEEDED(rt->Resize(m_device, width, height));
+}
+
+void RenderTargetManager::Console_ToggleVisualization(const std::string& name)
+{
+    auto it = m_visualizationState.find(name);
+    if (it != m_visualizationState.end()) {
+        it->second = !it->second;
+    } else {
+        auto rt = GetRenderTarget(name);
+        if (rt) {
+            m_visualizationState[name] = true;
+        }
+    }
+}
+
+void RenderTargetManager::Console_SetClearColor(const std::string& name, float r, float g, float b, float a)
+{
+    auto rt = GetRenderTarget(name);
+    if (rt) {
+        auto& desc = const_cast<RenderTargetDesc&>(rt->GetDesc());
+        desc.clearColor = {r, g, b, a};
+    }
+}
+
+void RenderTargetManager::Console_GarbageCollect()
+{
+    for (auto it = m_renderTargets.begin(); it != m_renderTargets.end();) {
+        if (it->second.use_count() == 1) {
+            it->second->Destroy();
+            it = m_renderTargets.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    UpdateMetrics();
+}
+
+int RenderTargetManager::Console_ValidateRenderTargets()
+{
+    int errors = 0;
+    for (const auto& pair : m_renderTargets) {
+        if (!pair.second->IsValid()) {
+            errors++;
+        }
+    }
+    return errors;
+}
+
+std::string RenderTargetManager::Console_GetMemoryInfo() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    std::string result = "=== Render Target Memory Usage ===\n";
+    result += "Total Memory: " + std::to_string(m_metrics.totalMemoryUsage / 1024 / 1024) + " MB\n";
+    result += "Color Targets: " + std::to_string(m_metrics.colorTargetMemory / 1024 / 1024) + " MB\n";
+    result += "Depth Targets: " + std::to_string(m_metrics.depthTargetMemory / 1024 / 1024) + " MB\n";
+    result += "Active Targets: " + std::to_string(m_metrics.activeRenderTargets) + "\n";
+    result += "Total Targets: " + std::to_string(m_metrics.totalRenderTargets) + "\n";
+    return result;
+}
+
+void RenderTargetManager::RenderDebugVisualization(ID3D11DeviceContext* /*context*/,
+    uint32_t /*screenWidth*/, uint32_t /*screenHeight*/)
+{
+    // No-op on Linux
+}
+
+bool RenderTargetManager::IsVisualizationEnabled(const std::string& name) const
+{
+    auto it = m_visualizationState.find(name);
+    return it != m_visualizationState.end() && it->second;
+}
+
+void RenderTargetManager::UpdateMetrics()
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    m_metrics.totalRenderTargets = static_cast<int>(m_renderTargets.size());
+    m_metrics.mrtGroups = static_cast<int>(m_mrtGroups.size());
+    m_metrics.totalMemoryUsage = 0;
+    for (const auto& pair : m_renderTargets) {
+        m_metrics.totalMemoryUsage += CalculateMemoryUsage(pair.second->GetDesc());
+    }
+}
+
+size_t RenderTargetManager::CalculateMemoryUsage(const RenderTargetDesc& desc) const
+{
+    uint32_t formatSize = GetFormatSize(desc.format);
+    return static_cast<size_t>(desc.width) * desc.height * desc.arraySize * formatSize * desc.sampleCount;
+}
+
+uint32_t RenderTargetManager::GetFormatSize(RenderTargetFormat format) const
+{
+    switch (format) {
+        case RenderTargetFormat::RGBA8_UNORM:
+        case RenderTargetFormat::RGBA8_SRGB:
+        case RenderTargetFormat::RGB10A2_UNORM:
+        case RenderTargetFormat::R11G11B10_FLOAT:
+        case RenderTargetFormat::RG16_FLOAT:
+        case RenderTargetFormat::R32_FLOAT:
+        case RenderTargetFormat::D24_UNORM_S8_UINT:
+        case RenderTargetFormat::D32_FLOAT:
+            return 4;
+        case RenderTargetFormat::RGBA16_FLOAT:
+        case RenderTargetFormat::RG32_FLOAT:
+            return 8;
+        case RenderTargetFormat::RGBA32_FLOAT:
+            return 16;
+        case RenderTargetFormat::R16_FLOAT:
+        case RenderTargetFormat::D16_UNORM:
+            return 2;
+        case RenderTargetFormat::R8_UNORM:
+            return 1;
+        default:
+            return 4;
+    }
+}
+
+std::string RenderTargetManager::FormatToString(RenderTargetFormat format) const
+{
+    switch (format) {
+        case RenderTargetFormat::RGBA8_UNORM: return "RGBA8_UNORM";
+        case RenderTargetFormat::RGBA8_SRGB: return "RGBA8_SRGB";
+        case RenderTargetFormat::RGBA16_FLOAT: return "RGBA16_FLOAT";
+        case RenderTargetFormat::RGBA32_FLOAT: return "RGBA32_FLOAT";
+        case RenderTargetFormat::D24_UNORM_S8_UINT: return "D24_UNORM_S8_UINT";
+        case RenderTargetFormat::D32_FLOAT: return "D32_FLOAT";
+        default: return "UNKNOWN";
+    }
+}
+
+RenderTargetFormat RenderTargetManager::StringToFormat(const std::string& str) const
+{
+    if (str == "RGBA8_UNORM") return RenderTargetFormat::RGBA8_UNORM;
+    if (str == "RGBA8_SRGB") return RenderTargetFormat::RGBA8_SRGB;
+    if (str == "RGBA16_FLOAT") return RenderTargetFormat::RGBA16_FLOAT;
+    if (str == "RGBA32_FLOAT") return RenderTargetFormat::RGBA32_FLOAT;
+    if (str == "D24_UNORM_S8_UINT") return RenderTargetFormat::D24_UNORM_S8_UINT;
+    if (str == "D32_FLOAT") return RenderTargetFormat::D32_FLOAT;
+    return RenderTargetFormat::RGBA8_UNORM;
+}
+
 #endif // SPARK_PLATFORM_WINDOWS

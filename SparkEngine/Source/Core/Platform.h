@@ -187,6 +187,73 @@ using WPARAM    = uintptr_t;
 using LPARAM    = intptr_t;
 using LRESULT   = intptr_t;
 
+// --- Win32 virtual key codes ---
+#ifndef VK_BACK
+#define VK_BACK       0x08
+#define VK_TAB        0x09
+#define VK_RETURN     0x0D
+#define VK_SHIFT      0x10
+#define VK_CONTROL    0x11
+#define VK_MENU       0x12  // Alt key
+#define VK_PAUSE      0x13
+#define VK_CAPITAL    0x14
+#define VK_ESCAPE     0x1B
+#define VK_SPACE      0x20
+#define VK_PRIOR      0x21  // Page Up
+#define VK_NEXT       0x22  // Page Down
+#define VK_END        0x23
+#define VK_HOME       0x24
+#define VK_LEFT       0x25
+#define VK_UP         0x26
+#define VK_RIGHT      0x27
+#define VK_DOWN       0x28
+#define VK_DELETE     0x2E
+#define VK_LSHIFT     0xA0
+#define VK_RSHIFT     0xA1
+#define VK_LCONTROL   0xA2
+#define VK_RCONTROL   0xA3
+#define VK_LMENU      0xA4
+#define VK_RMENU      0xA5
+#define VK_OEM_4      0xDB  // [{
+#define VK_OEM_6      0xDD  // ]}
+#define VK_F1         0x70
+#define VK_F2         0x71
+#define VK_F3         0x72
+#define VK_F4         0x73
+#define VK_F5         0x74
+#define VK_F6         0x75
+#define VK_F7         0x76
+#define VK_F8         0x77
+#define VK_F9         0x78
+#define VK_F10        0x79
+#define VK_F11        0x7A
+#define VK_F12        0x7B
+#endif
+
+// --- Win32 window message constants ---
+#ifndef WM_KEYDOWN
+#define WM_KEYDOWN       0x0100
+#define WM_KEYUP         0x0101
+#define WM_CHAR          0x0102
+#define WM_MOUSEMOVE     0x0200
+#define WM_LBUTTONDOWN   0x0201
+#define WM_LBUTTONUP     0x0202
+#define WM_RBUTTONDOWN   0x0204
+#define WM_RBUTTONUP     0x0205
+#define WM_MBUTTONDOWN   0x0207
+#define WM_MBUTTONUP     0x0208
+#define WM_SIZE          0x0005
+#define WM_DESTROY       0x0002
+#define WM_QUIT          0x0012
+#define WM_CLOSE         0x0010
+#endif
+
+// --- Win32 cursor/mouse helpers ---
+#ifndef GET_X_LPARAM
+#define GET_X_LPARAM(lp) ((int)(short)((lp) & 0xFFFF))
+#define GET_Y_LPARAM(lp) ((int)(short)(((lp) >> 16) & 0xFFFF))
+#endif
+
 // --- Calling convention macros (no-ops on non-Windows) ---
 #ifndef APIENTRY
 #define APIENTRY
@@ -283,6 +350,9 @@ inline int MessageBoxA(void*, const char*, const char*, unsigned int) { return 0
 #ifndef HRESULT_FROM_WIN32
 #define HRESULT_FROM_WIN32(x) ((HRESULT)(x) <= 0 ? (HRESULT)(x) : (HRESULT)(((x) & 0x0000FFFF) | 0x80070000))
 #endif
+#ifndef ERROR_SUCCESS
+#define ERROR_SUCCESS 0L
+#endif
 #ifndef ERROR_FILE_NOT_FOUND
 #define ERROR_FILE_NOT_FOUND 2L
 #endif
@@ -305,10 +375,16 @@ struct WAVEFORMATEX {
 };
 
 // --- XAudio2 stubs ---
-struct IXAudio2;
-struct IXAudio2MasteringVoice;
-struct IXAudio2SourceVoice;
-struct IXAudio2SubmixVoice;
+#ifndef XAUDIO2_DEFAULT_PROCESSOR
+#define XAUDIO2_DEFAULT_PROCESSOR 1
+#endif
+#ifndef XAUDIO2_END_OF_STREAM
+#define XAUDIO2_END_OF_STREAM 0x0040
+#endif
+#ifndef XAUDIO2_LOOP_INFINITE
+#define XAUDIO2_LOOP_INFINITE 255
+#endif
+
 struct XAUDIO2_BUFFER {
     uint32_t Flags;
     uint32_t AudioBytes;
@@ -325,6 +401,101 @@ struct XAUDIO2_VOICE_STATE {
     uint32_t BuffersQueued;
     uint64_t SamplesPlayed;
 };
+struct XAUDIO2_VOICE_DETAILS {
+    uint32_t CreationFlags;
+    uint32_t ActiveFlags;
+    uint32_t InputChannels;
+    uint32_t InputSampleRate;
+};
+
+// Stub XAudio2 interfaces with no-op methods so code compiles on Linux
+struct IXAudio2SourceVoice {
+    virtual ~IXAudio2SourceVoice() = default;
+    long SetVolume(float) { return 0; }
+    long SetFrequencyRatio(float) { return 0; }
+    long SubmitSourceBuffer(const XAUDIO2_BUFFER*) { return 0; }
+    long Start(uint32_t = 0, uint32_t = 0) { return 0; }
+    long Stop(uint32_t = 0, uint32_t = 0) { return 0; }
+    long FlushSourceBuffers() { return 0; }
+    void GetState(XAUDIO2_VOICE_STATE* s) { if(s) { s->BuffersQueued = 0; s->SamplesPlayed = 0; s->pCurrentBufferContext = nullptr; } }
+    void GetVoiceDetails(XAUDIO2_VOICE_DETAILS* d) { if(d) { d->InputChannels = 1; d->InputSampleRate = 44100; d->CreationFlags = 0; d->ActiveFlags = 0; } }
+    long SetOutputMatrix(void*, uint32_t, uint32_t, const float*) { return 0; }
+    void DestroyVoice() {}
+    void Release() {}
+};
+
+struct IXAudio2MasteringVoice {
+    virtual ~IXAudio2MasteringVoice() = default;
+    long SetVolume(float) { return 0; }
+    void GetVoiceDetails(XAUDIO2_VOICE_DETAILS* d) { if(d) { d->InputChannels = 2; d->InputSampleRate = 44100; d->CreationFlags = 0; d->ActiveFlags = 0; } }
+    void DestroyVoice() {}
+    void Release() {}
+};
+
+struct IXAudio2SubmixVoice {
+    virtual ~IXAudio2SubmixVoice() = default;
+    void DestroyVoice() {}
+};
+
+struct IXAudio2 {
+    virtual ~IXAudio2() = default;
+    long CreateMasteringVoice(IXAudio2MasteringVoice** pp, uint32_t = 0, uint32_t = 0, uint32_t = 0, void* = nullptr, void* = nullptr) {
+        static IXAudio2MasteringVoice stubMaster;
+        if (pp) *pp = &stubMaster;
+        return 0;
+    }
+    long CreateSourceVoice(IXAudio2SourceVoice** pp, const WAVEFORMATEX* = nullptr, uint32_t = 0, float = 2.0f, void* = nullptr, void* = nullptr, void* = nullptr) {
+        static IXAudio2SourceVoice stubSource;
+        if (pp) *pp = &stubSource;
+        return 0;
+    }
+    void Release() {}
+};
+
+inline long XAudio2Create(IXAudio2** pp, uint32_t = 0, uint32_t = XAUDIO2_DEFAULT_PROCESSOR) {
+    static IXAudio2 stubEngine;
+    if (pp) *pp = &stubEngine;
+    return 0; // S_OK
+}
+
+// --- XInput stubs ---
+struct XINPUT_GAMEPAD {
+    uint16_t wButtons;
+    uint8_t bLeftTrigger;
+    uint8_t bRightTrigger;
+    short sThumbLX;
+    short sThumbLY;
+    short sThumbRX;
+    short sThumbRY;
+};
+struct XINPUT_STATE {
+    uint32_t dwPacketNumber;
+    XINPUT_GAMEPAD Gamepad;
+};
+struct XINPUT_VIBRATION {
+    uint16_t wLeftMotorSpeed;
+    uint16_t wRightMotorSpeed;
+};
+
+#ifndef XINPUT_GAMEPAD_A
+#define XINPUT_GAMEPAD_DPAD_UP          0x0001
+#define XINPUT_GAMEPAD_DPAD_DOWN        0x0002
+#define XINPUT_GAMEPAD_DPAD_LEFT        0x0004
+#define XINPUT_GAMEPAD_DPAD_RIGHT       0x0008
+#define XINPUT_GAMEPAD_START            0x0010
+#define XINPUT_GAMEPAD_BACK             0x0020
+#define XINPUT_GAMEPAD_LEFT_THUMB       0x0040
+#define XINPUT_GAMEPAD_RIGHT_THUMB      0x0080
+#define XINPUT_GAMEPAD_LEFT_SHOULDER    0x0100
+#define XINPUT_GAMEPAD_RIGHT_SHOULDER   0x0200
+#define XINPUT_GAMEPAD_A                0x1000
+#define XINPUT_GAMEPAD_B                0x2000
+#define XINPUT_GAMEPAD_X                0x4000
+#define XINPUT_GAMEPAD_Y                0x8000
+#endif
+
+inline uint32_t XInputGetState(uint32_t, XINPUT_STATE*) { return 1; /* ERROR_DEVICE_NOT_CONNECTED */ }
+inline uint32_t XInputSetState(uint32_t, XINPUT_VIBRATION*) { return 1; }
 
 // --- Win32 process/module stubs ---
 #ifndef PROCESS_QUERY_INFORMATION
@@ -437,13 +608,96 @@ inline XMMATRIX operator*(const XMMATRIX& a, const XMMATRIX& b) {
 }
 
 inline XMMATRIX XMMatrixLookAtLH(XMVECTOR eye, XMVECTOR target, XMVECTOR up) {
-    (void)eye; (void)target; (void)up;
-    return XMMatrixIdentity();
+    XMVECTOR zAxis = XMVector3Normalize(XMVectorSubtract(target, eye));
+    XMVECTOR xAxis = XMVector3Normalize(XMVector3Cross(up, zAxis));
+    XMVECTOR yAxis = XMVector3Cross(zAxis, xAxis);
+    float dx = -(XMVectorGetX(XMVector3Dot(xAxis, eye)));
+    float dy = -(XMVectorGetX(XMVector3Dot(yAxis, eye)));
+    float dz = -(XMVectorGetX(XMVector3Dot(zAxis, eye)));
+    XMMATRIX mat;
+    mat.m[0][0] = xAxis.x; mat.m[0][1] = yAxis.x; mat.m[0][2] = zAxis.x; mat.m[0][3] = 0.0f;
+    mat.m[1][0] = xAxis.y; mat.m[1][1] = yAxis.y; mat.m[1][2] = zAxis.y; mat.m[1][3] = 0.0f;
+    mat.m[2][0] = xAxis.z; mat.m[2][1] = yAxis.z; mat.m[2][2] = zAxis.z; mat.m[2][3] = 0.0f;
+    mat.m[3][0] = dx;       mat.m[3][1] = dy;       mat.m[3][2] = dz;       mat.m[3][3] = 1.0f;
+    return mat;
+}
+
+inline XMMATRIX XMMatrixInverse(XMVECTOR* det, XMMATRIX mat) {
+    const float* m = &mat.m[0][0];
+    float inv[16];
+    inv[0]  =  m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10];
+    inv[4]  = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
+    inv[8]  =  m[4]*m[9]*m[15]  - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
+    inv[12] = -m[4]*m[9]*m[14]  + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9];
+    inv[1]  = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10];
+    inv[5]  =  m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10];
+    inv[9]  = -m[0]*m[9]*m[15]  + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9];
+    inv[13] =  m[0]*m[9]*m[14]  - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9];
+    inv[2]  =  m[1]*m[6]*m[15]  - m[1]*m[7]*m[14]  - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7]  - m[13]*m[3]*m[6];
+    inv[6]  = -m[0]*m[6]*m[15]  + m[0]*m[7]*m[14]  + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7]  + m[12]*m[3]*m[6];
+    inv[10] =  m[0]*m[5]*m[15]  - m[0]*m[7]*m[13]  - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7]  - m[12]*m[3]*m[5];
+    inv[14] = -m[0]*m[5]*m[14]  + m[0]*m[6]*m[13]  + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6]  + m[12]*m[2]*m[5];
+    inv[3]  = -m[1]*m[6]*m[11]  + m[1]*m[7]*m[10]  + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7]   + m[9]*m[3]*m[6];
+    inv[7]  =  m[0]*m[6]*m[11]  - m[0]*m[7]*m[10]  - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7]   - m[8]*m[3]*m[6];
+    inv[11] = -m[0]*m[5]*m[11]  + m[0]*m[7]*m[9]   + m[4]*m[1]*m[11] - m[4]*m[3]*m[9]  - m[8]*m[1]*m[7]   + m[8]*m[3]*m[5];
+    inv[15] =  m[0]*m[5]*m[10]  - m[0]*m[6]*m[9]   - m[4]*m[1]*m[10] + m[4]*m[2]*m[9]  + m[8]*m[1]*m[6]   - m[8]*m[2]*m[5];
+    float d = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12];
+    if (det) { det->x = d; det->y = d; det->z = d; det->w = d; }
+    if (fabsf(d) < 1e-12f) return XMMatrixIdentity();
+    float invDet = 1.0f / d;
+    XMMATRIX result;
+    for (int i = 0; i < 16; i++)
+        (&result.m[0][0])[i] = inv[i] * invDet;
+    return result;
+}
+
+// Non-const overload (called with rvalue)
+inline XMMATRIX XMMatrixTranspose(XMMATRIX m) {
+    XMMATRIX result;
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            result.m[i][j] = m.m[j][i];
+    return result;
 }
 
 inline XMMATRIX XMMatrixPerspectiveFovLH(float fov, float aspect, float nearZ, float farZ) {
-    (void)fov; (void)aspect; (void)nearZ; (void)farZ;
-    return XMMatrixIdentity();
+    float yScale = 1.0f / tanf(fov * 0.5f);
+    float xScale = yScale / aspect;
+    float range = farZ / (farZ - nearZ);
+    XMMATRIX mat;
+    memset(&mat, 0, sizeof(mat));
+    mat.m[0][0] = xScale;
+    mat.m[1][1] = yScale;
+    mat.m[2][2] = range;
+    mat.m[2][3] = 1.0f;
+    mat.m[3][2] = -range * nearZ;
+    return mat;
+}
+
+inline XMMATRIX XMMatrixOrthographicLH(float width, float height, float nearZ, float farZ) {
+    float range = 1.0f / (farZ - nearZ);
+    XMMATRIX mat;
+    memset(&mat, 0, sizeof(mat));
+    mat.m[0][0] = 2.0f / width;
+    mat.m[1][1] = 2.0f / height;
+    mat.m[2][2] = range;
+    mat.m[3][2] = -range * nearZ;
+    mat.m[3][3] = 1.0f;
+    return mat;
+}
+
+inline XMMATRIX XMMatrixOrthographicOffCenterLH(float left, float right, float bottom, float top, float nearZ, float farZ) {
+    float range = 1.0f / (farZ - nearZ);
+    XMMATRIX mat;
+    memset(&mat, 0, sizeof(mat));
+    mat.m[0][0] = 2.0f / (right - left);
+    mat.m[1][1] = 2.0f / (top - bottom);
+    mat.m[2][2] = range;
+    mat.m[3][0] = -(right + left) / (right - left);
+    mat.m[3][1] = -(top + bottom) / (top - bottom);
+    mat.m[3][2] = -range * nearZ;
+    mat.m[3][3] = 1.0f;
+    return mat;
 }
 
 inline XMVECTOR XMVectorSet(float x, float y, float z, float w) {
@@ -464,14 +718,6 @@ inline XMVECTOR XMLoadFloat3(const XMFLOAT3* src) {
 
 inline XMVECTOR XMLoadFloat4(const XMFLOAT4* src) {
     return {src->x, src->y, src->z, src->w};
-}
-
-inline XMMATRIX XMMatrixTranspose(const XMMATRIX& m) {
-    XMMATRIX result;
-    for (int i = 0; i < 4; i++)
-        for (int j = 0; j < 4; j++)
-            result.m[i][j] = m.m[j][i];
-    return result;
 }
 
 inline float XMConvertToRadians(float degrees) {
@@ -733,6 +979,8 @@ public:
     T* operator->() const { return ptr; }
     T& operator*() const { return *ptr; }
     operator bool() const { return ptr != nullptr; }
+    bool operator==(std::nullptr_t) const { return ptr == nullptr; }
+    bool operator!=(std::nullptr_t) const { return ptr != nullptr; }
     void Reset() { ptr = nullptr; }
 };
 }} // namespace Microsoft::WRL

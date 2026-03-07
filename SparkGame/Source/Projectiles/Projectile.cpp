@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 // Projectile.cpp
 #include "Projectile.h"
 #include "Utils/Assert.h"
@@ -174,4 +173,3 @@ void Projectile::UpdateBoundingSphere()
     m_boundingSphere.Center = GetPosition();
     // radius remains unchanged
 }
-#endif // SPARK_PLATFORM_WINDOWS

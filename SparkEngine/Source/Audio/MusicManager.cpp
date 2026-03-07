@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file MusicManager.cpp
  * @brief Music system implementation — crossfading, playlists, dynamic music, reverb
@@ -414,4 +413,3 @@ std::string MusicManager::Console_ListReverbZones() const {
 
 } // namespace Spark::Audio
 
-#endif // SPARK_PLATFORM_WINDOWS

@@ -583,6 +583,7 @@ endif()
 # ---------------------------------------------------------------------
 target_include_directories(SparkEngineLib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkEngine/Source>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkGame/Source>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkSDK/Include>
     $<INSTALL_INTERFACE:include>
 )
@@ -615,6 +616,16 @@ else()
         ${CMAKE_DL_LIBS}
     )
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_PLATFORM_LINUX)
+
+    # X11 for windowing and OpenGL context (GLX)
+    find_package(X11 QUIET)
+    if(X11_FOUND)
+        target_link_libraries(SparkEngineLib PUBLIC ${X11_LIBRARIES})
+        target_include_directories(SparkEngineLib PUBLIC ${X11_INCLUDE_DIR})
+        message(STATUS "X11 found - windowing support enabled")
+    else()
+        message(STATUS "X11 not found - headless mode only")
+    endif()
 endif()
 
 if(MSVC)
@@ -902,12 +913,14 @@ foreach(dir ${THIRDPARTY_INCLUDE_DIRS})
     endif()
 endforeach()
 
-# Export targets
+# Export targets (only when all dependencies are in export sets)
+if(FALSE) # Disabled: third-party targets (Bullet, miniz) lack EXPORT sets
 install(EXPORT SparkEngineTargets
     FILE SparkEngineTargets.cmake
     NAMESPACE Spark::
     DESTINATION lib/cmake/SparkEngine
 )
+endif()
 
 # Package config
 include(CMakePackageConfigHelpers)

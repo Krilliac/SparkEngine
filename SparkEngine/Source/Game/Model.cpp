@@ -1,17 +1,19 @@
 #include "../Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "Model.h"
 #include "ModelVertex.h"
 #include "../Utils/Assert.h"
-#include "../Graphics/GraphicsEngine.h"  // ✅ ADD: For shader access
+#include "../Graphics/GraphicsEngine.h"
 #include <tiny_obj_loader.h>
 #include <vector>
 #include <string>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#include <d3d11.h>
 #endif // SPARK_PLATFORM_WINDOWS
 
 using namespace DirectX;
+
+#ifdef SPARK_PLATFORM_WINDOWS
 
 HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
 {
@@ -151,4 +153,53 @@ Model::~Model()
         m_ib = nullptr;
     }
 }
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// ============================================================================
+// Linux implementation — CPU-side OBJ loading via tinyobjloader
+// GPU buffer creation deferred to RHI layer
+// ============================================================================
+
+HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* /*device*/)
+{
+    if (filename.empty()) return E_FAIL;
+
+    // Convert wstring to string for tinyobjloader
+    std::string fileUtf8(filename.begin(), filename.end());
+
+    tinyobj::attrib_t                attrib;
+    std::vector<tinyobj::shape_t>    shapes;
+    std::vector<tinyobj::material_t> mats;
+    std::string warn, err;
+
+    if (!tinyobj::LoadObj(&attrib, &shapes, &mats, &warn, &err, fileUtf8.c_str()))
+    {
+        fprintf(stderr, "Model::LoadObj error: %s%s\n", warn.c_str(), err.c_str());
+        return E_FAIL;
+    }
+    if (shapes.empty()) return E_FAIL;
+
+    // Count total indices for m_indexCount
+    m_indexCount = 0;
+    for (const auto& shape : shapes)
+        m_indexCount += static_cast<UINT>(shape.mesh.indices.size());
+
+    // No GPU buffers created on Linux - data loaded successfully for CPU-side use
+    return S_OK;
+}
+
+void Model::Render(ID3D11DeviceContext* /*ctx*/, GraphicsEngine* /*graphics*/,
+                   const DirectX::XMMATRIX* /*world*/, const DirectX::XMMATRIX* /*view*/, const DirectX::XMMATRIX* /*proj*/)
+{
+    // No D3D11 rendering on Linux - RHI backend would handle this
+}
+
+Model::~Model()
+{
+    // No D3D11 resources to release on Linux
+    m_vb = nullptr;
+    m_ib = nullptr;
+}
+
 #endif // SPARK_PLATFORM_WINDOWS
