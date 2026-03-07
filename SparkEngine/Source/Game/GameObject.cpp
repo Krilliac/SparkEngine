@@ -11,7 +11,8 @@
 #include "GameObject.h"
 #include "../Utils/MathUtils.h"
 #include "../Utils/Assert.h"
-#include "../Graphics/GraphicsEngine.h"  // ✅ ADD: For shader access
+#include "../Graphics/GraphicsEngine.h"
+#include "../Core/EngineContext.h"
 #include <iostream>
 
 using namespace DirectX;
@@ -98,9 +99,9 @@ void GameObject::Render(const XMMATRIX& view, const XMMATRIX& projection)
     ASSERT_MSG(m_context != nullptr, "GameObject::Render - context is null");
     ASSERT_MSG(m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0, "Mesh has no vertices or indices to render");
     
-    // ✅ ENHANCED: Get graphics engine reference and set up shaders
-    extern std::unique_ptr<GraphicsEngine> g_graphics;
-    GraphicsEngine* graphics = g_graphics.get();
+    // Get graphics engine via EngineContext
+    extern std::unique_ptr<EngineContext> g_engineContext;
+    GraphicsEngine* graphics = g_engineContext ? g_engineContext->GetGraphics() : nullptr;
     
     if (graphics) {
         // Set up basic shaders and constant buffers

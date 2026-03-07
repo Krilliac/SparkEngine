@@ -114,9 +114,8 @@ GraphicsEngine::GraphicsEngine()
         m_lightingSystem = std::make_unique<LightingSystem>();
         m_postProcessingSystem = std::make_unique<PostProcessingSystem>();
         m_assetPipeline = std::make_unique<AssetPipeline>();
-        m_physicsSystem = std::make_unique<PhysicsSystem>();
-        extern PhysicsSystem* g_physicsSystem;
-        g_physicsSystem = m_physicsSystem.get();
+        // PhysicsSystem is now created and owned by SparkEngine.cpp / EngineContext
+        // m_physicsSystem is set via SetPhysicsSystem() after engine init
         
         // Create legacy systems for compatibility
         m_lightManager = std::make_unique<LightManager>();
@@ -141,7 +140,7 @@ GraphicsEngine::~GraphicsEngine()
 // INITIALIZATION AND SHUTDOWN
 // ============================================================================
 
-HRESULT GraphicsEngine::Initialize(HWND hWnd)
+HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::Initialize started with critical fixes.", L"INFO");
     ASSERT(hWnd != nullptr);
@@ -149,11 +148,12 @@ HRESULT GraphicsEngine::Initialize(HWND hWnd)
         LOG_TO_CONSOLE_IMMEDIATE(L"Error: hWnd is null in GraphicsEngine::Initialize", L"ERROR");
         return E_INVALIDARG;
     }
-    
-    RECT rc; 
+
+    HWND hwnd = static_cast<HWND>(hWnd);  // Cast to platform type for Win32 APIs
+    RECT rc;
     // Defensive: Only call GetClientRect if hWnd is valid
-    if (hWnd) {
-        GetClientRect(hWnd, &rc);
+    if (hwnd) {
+        GetClientRect(hwnd, &rc);
     }
     else {
         // Should never reach here due to earlier check, but avoid C6387 warning
@@ -167,7 +167,7 @@ HRESULT GraphicsEngine::Initialize(HWND hWnd)
     LOG_TO_CONSOLE_IMMEDIATE(sizeMsg, L"INFO");
     ASSERT_MSG(m_windowWidth > 0 && m_windowHeight > 0, "Invalid window size");
 
-    HRESULT hr = CreateDeviceAndSwapChain(hWnd);
+    HRESULT hr = CreateDeviceAndSwapChain(hwnd);
     ASSERT_MSG(SUCCEEDED(hr), "CreateDeviceAndSwapChain failed");
     if (FAILED(hr)) {
         std::wstring errorMsg = L"CreateDeviceAndSwapChain failed with HR=0x" + std::to_wstring(hr);
@@ -333,14 +333,8 @@ void GraphicsEngine::Shutdown()
         LOG_TO_CONSOLE_IMMEDIATE(L"AssetPipeline shutdown complete", L"INFO");
     }
 
-    // Clean up physics system
-    if (m_physicsSystem) {
-        extern PhysicsSystem* g_physicsSystem;
-        g_physicsSystem = nullptr;
-        m_physicsSystem->Shutdown();
-        m_physicsSystem.reset();
-        LOG_TO_CONSOLE_IMMEDIATE(L"PhysicsSystem shutdown complete", L"INFO");
-    }
+    // PhysicsSystem lifecycle is now managed by SparkEngine.cpp / EngineContext
+    m_physicsSystem = nullptr;
 
     // Shutdown legacy systems
     if (m_lightManager) {
@@ -1871,7 +1865,7 @@ AssetPipeline* GraphicsEngine::GetAssetPipeline() const {
 }
 
 PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const {
-    return m_physicsSystem.get();
+    return m_physicsSystem;
 }
 
 LightManager* GraphicsEngine::GetLightManager() const { 
@@ -2582,7 +2576,7 @@ GraphicsEngine::~GraphicsEngine()
 // Initialization
 // ============================================================================
 
-HRESULT GraphicsEngine::Initialize(HWND hWnd)
+HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 {
     m_hwnd = hWnd;
 
@@ -2624,7 +2618,8 @@ HRESULT GraphicsEngine::Initialize(HWND hWnd)
     m_lightingSystem = std::make_unique<LightingSystem>();
     m_postProcessingSystem = std::make_unique<PostProcessingSystem>();
     m_assetPipeline = std::make_unique<AssetPipeline>();
-    m_physicsSystem = std::make_unique<PhysicsSystem>();
+    // PhysicsSystem is now created and owned by SparkEngine.cpp / EngineContext
+    // m_physicsSystem is set via SetPhysicsSystem() after engine init
     m_lightManager = std::make_unique<LightManager>();
 
     std::cout << "[GraphicsEngine] Initialized on Linux via RHI ("
@@ -2648,7 +2643,7 @@ void GraphicsEngine::Shutdown()
     m_lightingSystem.reset();
     m_postProcessingSystem.reset();
     m_assetPipeline.reset();
-    m_physicsSystem.reset();
+    m_physicsSystem = nullptr;  // Non-owning, just clear the pointer
     m_lightManager.reset();
     m_postProcessing.reset();
     m_temporalEffects.reset();
@@ -2831,7 +2826,7 @@ MaterialSystem*        GraphicsEngine::GetMaterialSystem()       const { return 
 LightingSystem*        GraphicsEngine::GetLightingSystem()       const { return m_lightingSystem.get(); }
 PostProcessingSystem*  GraphicsEngine::GetPostProcessingSystem() const { return m_postProcessingSystem.get(); }
 AssetPipeline*         GraphicsEngine::GetAssetPipeline()        const { return m_assetPipeline.get(); }
-PhysicsSystem*         GraphicsEngine::GetPhysicsSystem()        const { return m_physicsSystem.get(); }
+PhysicsSystem*         GraphicsEngine::GetPhysicsSystem()        const { return m_physicsSystem; }
 LightManager*          GraphicsEngine::GetLightManager()         const { return m_lightManager.get(); }
 
 // ============================================================================
@@ -3149,7 +3144,7 @@ void GraphicsEngine::Console_ResetDevice()
     auto& rhi = GetRHI();
     if (!rhi.initialized) return;
 
-    HWND savedHwnd = m_hwnd;
+    auto savedHwnd = m_hwnd;
     Shutdown();
     Initialize(savedHwnd);
     std::cout << "[Console] Device reset complete." << std::endl;

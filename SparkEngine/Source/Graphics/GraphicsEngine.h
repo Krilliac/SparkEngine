@@ -251,7 +251,7 @@ public:
      * @param hWnd Handle to the window for rendering
      * @return HRESULT indicating success or failure of initialization
      */
-    HRESULT Initialize(HWND hWnd);
+    HRESULT Initialize(Spark::NativeWindowHandle hWnd);
 
     /**
      * @brief Clean up all DirectX resources
@@ -300,7 +300,13 @@ public:
     LightingSystem* GetLightingSystem() const;
     PostProcessingSystem* GetPostProcessingSystem() const;
     AssetPipeline* GetAssetPipeline() const;
+
+    /** @deprecated Physics is no longer owned by GraphicsEngine. Use EngineContext::GetPhysics(). */
+    [[deprecated("Use EngineContext::GetPhysics() instead")]]
     PhysicsSystem* GetPhysicsSystem() const;
+
+    /** @brief Set non-owning physics pointer (called by engine during init) */
+    void SetPhysicsSystem(PhysicsSystem* physics) { m_physicsSystem = physics; }
 
     // Legacy compatibility accessors
     LightManager* GetLightManager() const;
@@ -424,137 +430,45 @@ public:
 
     // ========================================================================
     // CONSOLE INTEGRATION METHODS
+    // Console commands are registered via GraphicsConsoleCommands.h.
+    // These methods implement the underlying operations.
     // ========================================================================
 
-    /**
-     * @brief Get render statistics for console
-     */
     RenderStatistics Console_GetStatistics() const;
-
-    /**
-     * @brief Set quality preset via console
-     */
     void Console_SetQuality(const std::string& preset);
-
-    /**
-     * @brief Set render path via console
-     */
     void Console_SetRenderPath(const std::string& path);
-
-    /**
-     * @brief Enable/disable feature via console
-     */
     void Console_EnableFeature(const std::string& feature, bool enabled);
-
-    /**
-     * @brief Set graphics setting via console
-     */
     void Console_SetSetting(const std::string& setting, float value);
-
-    /**
-     * @brief Reload all shaders via console
-     */
     void Console_ReloadShaders();
-
-    /**
-     * @brief Take screenshot via console
-     */
     bool Console_Screenshot(const std::string& filename);
-
-    /**
-     * @brief Get system information via console
-     */
     std::string Console_GetSystemInfo() const;
-
-    /**
-     * @brief Benchmark rendering performance via console
-     */
     std::string Console_Benchmark(int seconds = 10);
-
-    /**
-     * @brief Enable/disable wireframe mode via console
-     */
     void Console_SetWireframe(bool enabled);
-
-    /** @brief Legacy alias for Console_SetWireframe. @deprecated Use Console_SetWireframe(). */
-    [[deprecated("Use Console_SetWireframe() instead")]]
-    void Console_SetWireframeMode(bool enabled);
-
-    /**
-     * @brief Enable/disable VSync via console
-     */
     void Console_SetVSync(bool enabled);
-
-    /**
-     * @brief Set rendering pipeline via console
-     */
     void Console_SetRenderingPipeline(RenderingPipeline pipeline);
-    
-    /**
-     * @brief Enable/disable HDR via console
-     */
     void Console_SetHDR(bool enabled);
-    
-    /**
-     * @brief Enable/disable debug mode via console
-     */
     void Console_SetDebugMode(bool enabled);
-    
-    /**
-     * @brief Set clear color via console
-     */
     void Console_SetClearColor(float r, float g, float b, float a);
-    
-    /**
-     * @brief Set render scale via console
-     */
     void Console_SetRenderScale(float scale);
-    
-    /** @brief Legacy alias for Console_Screenshot. @deprecated Use Console_Screenshot(). */
-    [[deprecated("Use Console_Screenshot() instead")]]
-    bool Console_TakeScreenshot(const std::string& filename = "");
-    
-    /**
-     * @brief Reset graphics device via console
-     */
     void Console_ResetDevice();
-    
-    /**
-     * @brief Force garbage collection via console
-     */
     void Console_ForceGarbageCollection();
-    
-    /**
-     * @brief Apply graphics settings via console
-     */
     void Console_ApplySettings(const GraphicsSettings& settings);
-    
-    /**
-     * @brief Reset to default settings via console
-     */
     void Console_ResetToDefaults();
-    
-    /**
-     * @brief Register state change callback
-     */
     void Console_RegisterStateCallback(std::function<void()> callback);
-    
-    /**
-     * @brief Enable/disable GPU timing via console
-     */
     void Console_SetGPUTiming(bool enabled);
-    
-    /**
-     * @brief Get VRAM usage via console
-     */
     size_t Console_GetVRAMUsage() const;
-    
-    /** @brief Thread-safe copy of settings. @deprecated Use GetGraphicsSettings() for const ref. */
-    [[deprecated("Use GetGraphicsSettings() instead")]]
+
+    /** @deprecated Use Console_SetWireframe() */
+    [[deprecated("Use Console_SetWireframe()")]]
+    void Console_SetWireframeMode(bool enabled);
+    /** @deprecated Use Console_Screenshot() */
+    [[deprecated("Use Console_Screenshot()")]]
+    bool Console_TakeScreenshot(const std::string& filename = "");
+    /** @deprecated Use GetGraphicsSettings() */
+    [[deprecated("Use GetGraphicsSettings()")]]
     GraphicsSettings Console_GetSettings() const;
-    
-    /** @brief Legacy alias for Console_GetStatistics. @deprecated Use Console_GetStatistics(). */
-    [[deprecated("Use Console_GetStatistics() instead")]]
+    /** @deprecated Use Console_GetStatistics() */
+    [[deprecated("Use Console_GetStatistics()")]]
     RenderStatistics Console_GetMetrics() const;
 
     // ========================================================================
@@ -592,8 +506,8 @@ private:
     std::unique_ptr<LightingSystem> m_lightingSystem;
     std::unique_ptr<PostProcessingSystem> m_postProcessingSystem;
     std::unique_ptr<AssetPipeline> m_assetPipeline;
-    // Use forward declaration pattern for PhysicsSystem to avoid incomplete type
-    std::unique_ptr<PhysicsSystem> m_physicsSystem;
+    // Non-owning: PhysicsSystem lifetime managed by SparkEngine.cpp / EngineContext
+    PhysicsSystem* m_physicsSystem = nullptr;
 
     // Shader system
     std::unique_ptr<class Shader> m_shader;
@@ -635,7 +549,7 @@ private:
     uint32_t m_width;
     uint32_t m_height;
     bool m_fullscreen;
-    HWND m_hwnd;
+    Spark::NativeWindowHandle m_hwnd;
 
     // Advanced settings
     bool m_hdrEnabled;
