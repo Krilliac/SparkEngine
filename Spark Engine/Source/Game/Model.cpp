@@ -2,7 +2,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Model.h"
 #include "ModelVertex.h"
-#include "Utils/Assert.h"
+#include "../Utils/Assert.h"
 #include "../Graphics/GraphicsEngine.h"  // ✅ ADD: For shader access
 #include <tiny_obj_loader.h>
 #include <vector>

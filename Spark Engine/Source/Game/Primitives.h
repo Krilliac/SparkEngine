@@ -23,7 +23,7 @@
 #pragma once
 #include "../Core/Platform.h"
 
-#include "Utils/Assert.h"
+#include "../Utils/Assert.h"
 #include "../Graphics/Mesh.h"    // MeshData
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>

@@ -6,7 +6,7 @@
  */
 
 #include "EnumUtils.h"
-#include "GameSystemEnums.h"
+#include "Enums/GameSystemEnums.h"
 #include <algorithm>
 #include <unordered_map>
 #include <cctype>

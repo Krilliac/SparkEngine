@@ -14,7 +14,7 @@
 
 #include "../Core/framework.h"    // XMFLOAT3, XMMATRIX, HRESULT
 #include "../Graphics/Mesh.h"
-#include "Utils/Assert.h"
+#include "../Utils/Assert.h"
 #include <memory>
 #include <string>
 

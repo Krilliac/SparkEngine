@@ -11,7 +11,7 @@
 #pragma once
 
 #include "EnumUtils.h"
-#include "GameSystemEnums.h"
+#include "Enums/GameSystemEnums.h"
 #include <vector>
 #include <string>
 #include <functional>
