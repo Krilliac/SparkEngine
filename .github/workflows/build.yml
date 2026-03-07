@@ -68,12 +68,12 @@ jobs:
       id: check-v144
       shell: pwsh
       run: |
-        $toolsetPath = Join-Path $env:ProgramFiles "Microsoft Visual Studio" "2022" "Enterprise" "VC" "Tools" "MSVC"
-        # v144 toolset ships with VS 2026; check if any 14.4x directory exists
-        $found = Get-ChildItem -Path $toolsetPath -Directory -ErrorAction SilentlyContinue |
-                 Where-Object { $_.Name -match '^14\.4' }
-        if ($found) {
+        # v144 platform toolset ships with VS 2026. Check if the toolset props file exists.
+        $propsPath = Join-Path $env:ProgramFiles "Microsoft Visual Studio" "2022" "Enterprise" `
+          "MSBuild" "Microsoft" "VC" "v170" "Platforms" "x64" "PlatformToolsets" "v144"
+        if (Test-Path $propsPath) {
           echo "available=true" >> $env:GITHUB_OUTPUT
+          Write-Host "v144 toolset found"
         } else {
           echo "available=false" >> $env:GITHUB_OUTPUT
           Write-Host "v144 toolset not found — skipping VS 2026 build"
