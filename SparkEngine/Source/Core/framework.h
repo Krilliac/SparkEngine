@@ -19,7 +19,7 @@
 #include "targetver.h"
 //#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <windowsx.h>  // For GET_X_LPARAM and GET_Y_LPARAM macros
+#include <windowsx.h> // For GET_X_LPARAM and GET_Y_LPARAM macros
 #include <stdlib.h>
 #include <malloc.h>
 #include <memory.h>
@@ -35,6 +35,8 @@
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxgi.lib")
 
+using namespace DirectX;
+
 #endif // SPARK_PLATFORM_WINDOWS
 
 // STL includes (cross-platform)
@@ -47,4 +49,3 @@
 #include <queue>
 #include <cstdlib>
 #include <cstring>
-
