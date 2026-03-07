@@ -43,6 +43,9 @@
 #include "Utils/D3DUtils.h"
 #include "Utils/SparkConsole.h"
 #include "EngineSettings.h"
+#include "Engine/SaveSystem/SaveSystem.h"
+#include "Audio/AudioEngine.h"
+#include "Physics/PhysicsSystem.h"
 
 // -----------------------------------------------------------------------------
 // Globals
@@ -60,6 +63,7 @@ std::unique_ptr<Timer>             g_timer;
 std::unique_ptr<Spark::EventBus>   g_eventBus;
 std::unique_ptr<ModuleManager>     g_moduleManager;
 std::unique_ptr<EngineContext>     g_engineContext;
+std::unique_ptr<AudioEngine>       g_audioEngine;
 
 // Win32 forward declarations
 ATOM                MyRegisterClass(HINSTANCE);
@@ -203,11 +207,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         console.LogInfo("or create a spark.modules.json manifest.");
     }
 
-    // 7. Register engine console commands
+    // 7. Initialize additional subsystems
+    Spark::SaveSystem::GetInstance().Initialize("Saves");
+    console.LogInfo("SaveSystem initialized");
+
+    g_audioEngine = std::make_unique<AudioEngine>();
+    if (SUCCEEDED(g_audioEngine->Initialize(32))) {
+        console.LogInfo("AudioEngine initialized (32 sources)");
+    } else {
+        console.LogWarning("AudioEngine initialization failed - audio commands will be unavailable");
+        g_audioEngine.reset();
+    }
+
+    // 8. Register engine console commands
     RegisterEngineConsoleCommands();
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
-    // 8. Message loop + tick
+    // 9. Message loop + tick
     HACCEL accel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SparkEngine));
     MSG msg = {};
     ASSERT(g_timer);
@@ -246,7 +262,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
     }
 
-    // 9. Shutdown
+    // 10. Shutdown
     console.LogInfo("Shutting down...");
 
     if (g_moduleManager)
@@ -256,6 +272,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         g_moduleManager.reset();
     }
 
+    g_audioEngine.reset();
     g_engineContext.reset();
     g_eventBus.reset();
     g_input.reset();
@@ -485,6 +502,253 @@ void RegisterEngineConsoleCommands()
             return "Module '" + name + "' reloaded successfully";
         return "Failed to reload module '" + name + "'";
     }, "Hot-reload a module DLL (usage: module_reload [name])");
+
+    // ---- SaveSystem commands ----
+    console.RegisterCommand("save_list", [](const std::vector<std::string>&) -> std::string {
+        try {
+            return Spark::SaveSystem::GetInstance().Console_ListSaves();
+        } catch (...) {
+            return "SaveSystem not available";
+        }
+    }, "List all save slots", "Save");
+
+    console.RegisterCommand("save_info", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: save_info <slot_name>";
+        try {
+            return Spark::SaveSystem::GetInstance().Console_GetSaveInfo(args[0]);
+        } catch (...) {
+            return "SaveSystem not available";
+        }
+    }, "Show details for a save slot", "Save");
+
+    // ---- PhysicsSystem commands ----
+    console.RegisterCommand("physics_metrics", [](const std::vector<std::string>&) -> std::string {
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        auto m = physics->Console_GetMetrics();
+        std::stringstream ss;
+        ss << "=== Physics Metrics ===\n";
+        ss << "Active Bodies: " << m.activeRigidBodies << "/" << m.totalRigidBodies << "\n";
+        ss << "Constraints: " << m.activeConstraints << "\n";
+        ss << "Collision Pairs: " << m.collisionPairs << "\n";
+        ss << "Sim Time: " << m.simulationTime << "ms\n";
+        ss << "Substeps: " << m.substeps << "\n";
+        return ss.str();
+    }, "Display physics performance metrics", "Physics");
+
+    console.RegisterCommand("physics_list", [](const std::vector<std::string>&) -> std::string {
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        return physics->Console_ListBodies();
+    }, "List all physics bodies", "Physics");
+
+    console.RegisterCommand("physics_body_info", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: physics_body_info <name>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        return physics->Console_GetBodyInfo(args[0]);
+    }, "Get detailed info about a physics body", "Physics");
+
+    console.RegisterCommand("physics_gravity", [](const std::vector<std::string>& args) -> std::string {
+        if (args.size() < 3) return "Usage: physics_gravity <x> <y> <z>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
+        physics->Console_SetGravity(x, y, z);
+        return "Gravity set to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
+    }, "Set world gravity vector", "Physics");
+
+    console.RegisterCommand("physics_create", [](const std::vector<std::string>& args) -> std::string {
+        if (args.size() < 5) return "Usage: physics_create <name> <type> <x> <y> <z>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        float x = std::stof(args[2]), y = std::stof(args[3]), z = std::stof(args[4]);
+        bool ok = physics->Console_CreateBody(args[0], args[1], x, y, z);
+        return ok ? "Body '" + args[0] + "' created" : "Failed to create body (invalid type?)";
+    }, "Create a physics body (type: static/kinematic/dynamic)", "Physics");
+
+    console.RegisterCommand("physics_remove", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: physics_remove <name>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        bool ok = physics->Console_RemoveBody(args[0]);
+        return ok ? "Body '" + args[0] + "' removed" : "Body not found";
+    }, "Remove a physics body", "Physics");
+
+    console.RegisterCommand("physics_set", [](const std::vector<std::string>& args) -> std::string {
+        if (args.size() < 3) return "Usage: physics_set <name> <property> <value>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        physics->Console_SetBodyProperty(args[0], args[1], std::stof(args[2]));
+        return args[1] + " set to " + args[2] + " on '" + args[0] + "'";
+    }, "Set body property (mass/friction/restitution/linearDamping/angularDamping)", "Physics");
+
+    console.RegisterCommand("physics_force", [](const std::vector<std::string>& args) -> std::string {
+        if (args.size() < 4) return "Usage: physics_force <name> <x> <y> <z>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        physics->Console_ApplyForce(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
+        return "Force applied to '" + args[0] + "'";
+    }, "Apply force to a physics body", "Physics");
+
+    console.RegisterCommand("physics_impulse", [](const std::vector<std::string>& args) -> std::string {
+        if (args.size() < 4) return "Usage: physics_impulse <name> <x> <y> <z>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        physics->Console_ApplyImpulse(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
+        return "Impulse applied to '" + args[0] + "'";
+    }, "Apply impulse to a physics body", "Physics");
+
+    console.RegisterCommand("physics_debug", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: physics_debug <on|off>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+        physics->Console_EnableDebugDraw(enable);
+        return enable ? "Physics debug draw enabled" : "Physics debug draw disabled";
+    }, "Toggle physics debug overlay", "Physics");
+
+    console.RegisterCommand("physics_pause", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: physics_pause <on|off>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        bool pause = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+        physics->Console_PausePhysics(pause);
+        return pause ? "Physics simulation paused" : "Physics simulation resumed";
+    }, "Pause/resume physics simulation", "Physics");
+
+    console.RegisterCommand("physics_timestep", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: physics_timestep <seconds>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        float ts = std::stof(args[0]);
+        physics->Console_SetTimeStep(ts);
+        return "Physics timestep set to " + args[0] + "s";
+    }, "Set physics fixed timestep", "Physics");
+
+    console.RegisterCommand("physics_raycast", [](const std::vector<std::string>& args) -> std::string {
+        if (args.size() < 7) return "Usage: physics_raycast <ox> <oy> <oz> <dx> <dy> <dz> <maxDist>";
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        return physics->Console_Raycast(
+            std::stof(args[0]), std::stof(args[1]), std::stof(args[2]),
+            std::stof(args[3]), std::stof(args[4]), std::stof(args[5]),
+            std::stof(args[6]));
+    }, "Perform a physics raycast", "Physics");
+
+    console.RegisterCommand("physics_reset", [](const std::vector<std::string>&) -> std::string {
+        if (!g_graphics) return "Graphics engine not available";
+        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!physics) return "Physics system not available";
+        physics->Console_Reset();
+        return "Physics world reset";
+    }, "Reset physics world to initial state", "Physics");
+
+    // ---- AudioEngine commands ----
+    console.RegisterCommand("audio_master_volume", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: audio_master_volume <0.0-1.0>";
+        if (!g_audioEngine) return "Audio engine not available";
+        g_audioEngine->Console_SetMasterVolume(std::stof(args[0]));
+        return "Master volume set to " + args[0];
+    }, "Set master audio volume", "Audio");
+
+    console.RegisterCommand("audio_sfx_volume", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: audio_sfx_volume <0.0-1.0>";
+        if (!g_audioEngine) return "Audio engine not available";
+        g_audioEngine->Console_SetSFXVolume(std::stof(args[0]));
+        return "SFX volume set to " + args[0];
+    }, "Set SFX volume", "Audio");
+
+    console.RegisterCommand("audio_music_volume", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: audio_music_volume <0.0-1.0>";
+        if (!g_audioEngine) return "Audio engine not available";
+        g_audioEngine->Console_SetMusicVolume(std::stof(args[0]));
+        return "Music volume set to " + args[0];
+    }, "Set music volume", "Audio");
+
+    console.RegisterCommand("audio_3d", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: audio_3d <on|off>";
+        if (!g_audioEngine) return "Audio engine not available";
+        bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+        g_audioEngine->Console_Set3DAudio(enable);
+        return enable ? "3D audio enabled" : "3D audio disabled";
+    }, "Toggle 3D spatial audio", "Audio");
+
+    console.RegisterCommand("audio_play_test", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: audio_play_test <sound_name> [3d]";
+        if (!g_audioEngine) return "Audio engine not available";
+        bool is3D = (args.size() > 1 && (args[1] == "3d" || args[1] == "true"));
+        uint32_t id = g_audioEngine->Console_PlayTestSound(args[0], is3D);
+        return id > 0 ? "Playing sound (ID: " + std::to_string(id) + ")" : "Failed to play sound";
+    }, "Play a test sound", "Audio");
+
+    console.RegisterCommand("audio_stop", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: audio_stop <source_id>";
+        if (!g_audioEngine) return "Audio engine not available";
+        g_audioEngine->Console_StopSound(static_cast<uint32_t>(std::stoul(args[0])));
+        return "Sound stopped";
+    }, "Stop a playing sound by ID", "Audio");
+
+    console.RegisterCommand("audio_stop_all", [](const std::vector<std::string>&) -> std::string {
+        if (!g_audioEngine) return "Audio engine not available";
+        g_audioEngine->Console_StopAllSounds();
+        return "All sounds stopped";
+    }, "Stop all playing sounds", "Audio");
+
+    console.RegisterCommand("audio_list", [](const std::vector<std::string>&) -> std::string {
+        if (!g_audioEngine) return "Audio engine not available";
+        return g_audioEngine->Console_ListSounds();
+    }, "List all loaded sounds", "Audio");
+
+    console.RegisterCommand("audio_metrics", [](const std::vector<std::string>&) -> std::string {
+        if (!g_audioEngine) return "Audio engine not available";
+        auto m = g_audioEngine->Console_GetMetrics();
+        std::stringstream ss;
+        ss << "=== Audio Metrics ===\n";
+        ss << "Active Sources: " << m.activeSources << "/" << m.totalSources << "\n";
+        ss << "Loaded Sounds: " << m.loadedSounds << "\n";
+        ss << "Memory: " << (m.memoryUsage / 1024) << " KB\n";
+        return ss.str();
+    }, "Display audio performance metrics", "Audio");
+
+    console.RegisterCommand("audio_reset", [](const std::vector<std::string>&) -> std::string {
+        if (!g_audioEngine) return "Audio engine not available";
+        g_audioEngine->Console_ResetToDefaults();
+        return "Audio settings reset to defaults";
+    }, "Reset audio settings to defaults", "Audio");
+
+    console.RegisterCommand("audio_listener_pos", [](const std::vector<std::string>& args) -> std::string {
+        if (args.size() < 3) return "Usage: audio_listener_pos <x> <y> <z>";
+        if (!g_audioEngine) return "Audio engine not available";
+        g_audioEngine->Console_SetListenerPosition(std::stof(args[0]), std::stof(args[1]), std::stof(args[2]));
+        return "Listener position set";
+    }, "Set 3D audio listener position", "Audio");
+
+    console.RegisterCommand("audio_doppler", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: audio_doppler <scale>";
+        if (!g_audioEngine) return "Audio engine not available";
+        g_audioEngine->Console_SetDopplerScale(std::stof(args[0]));
+        return "Doppler scale set to " + args[0];
+    }, "Set Doppler effect scale", "Audio");
+
+    console.RegisterCommand("audio_source_info", [](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: audio_source_info <source_id>";
+        if (!g_audioEngine) return "Audio engine not available";
+        return g_audioEngine->Console_GetSourceInfo(static_cast<uint32_t>(std::stoul(args[0])));
+    }, "Get info about an audio source", "Audio");
 }
 
 #endif // SPARK_PLATFORM_WINDOWS
