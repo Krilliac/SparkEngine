@@ -18,6 +18,7 @@
 #include <thread>
 #include <chrono>
 #include <ctime>
+#include <cstdio>
 #include <sstream>
 
 #pragma comment(lib, "dbghelp.lib")

@@ -14,6 +14,7 @@
 #include <sstream>
 #include <chrono>
 #include <iomanip>
+#include <cstdio>
 #include <fstream>
 
 // External function to connect SparkConsole to external console

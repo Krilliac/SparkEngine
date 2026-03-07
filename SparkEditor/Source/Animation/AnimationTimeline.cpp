@@ -9,6 +9,7 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <cstdio>
 #include <cfloat>
 
 namespace SparkEditor {
