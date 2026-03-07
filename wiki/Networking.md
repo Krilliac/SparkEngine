@@ -1,0 +1,89 @@
+# Networking
+
+SparkEngine includes a UDP-based networking system for multiplayer games with entity replication, client-side prediction, and lag compensation.
+
+**Source:** `SparkEngine/Source/Engine/Networking/NetworkManager.h`
+
+> **Note:** Networking is disabled by default (`ENABLE_NETWORKING=OFF`) due to CURL dependency issues. Enable it with `-DENABLE_NETWORKING=ON` during CMake configuration.
+
+## Architecture
+
+The networking system uses a client/server model:
+
+```
+┌──────────┐     UDP      ┌──────────┐
+│  Client  │ ◄──────────► │  Server  │
+│          │              │          │
+│ Predict  │              │ Authority│
+│ Reconcile│              │ Replicate│
+└──────────┘              └──────────┘
+```
+
+- **Server** — Authoritative game state, processes inputs, replicates state
+- **Client** — Predicts locally, reconciles with server corrections
+
+## Message Channels
+
+| Channel | Description |
+|---------|-------------|
+| **Reliable** | Guaranteed delivery, ordered (game events, chat) |
+| **Unreliable** | No delivery guarantee, fastest (position updates) |
+| **Ordered** | Ordered delivery, may drop old packets |
+
+## Entity Replication
+
+Entities with `NetworkIdentity` are automatically replicated:
+
+```cpp
+auto& net = world.AddComponent<NetworkIdentity>(entity);
+net.networkId         = uniqueId;
+net.ownerId           = clientId;
+net.isLocalPlayer     = true;
+net.isServerAuthority = false;
+```
+
+The server sends authoritative state updates for replicated entities. Clients receive and apply these updates, smoothing position with interpolation.
+
+## Client-Side Prediction
+
+For responsive gameplay, clients predict the results of local input immediately without waiting for server confirmation:
+
+1. Client applies input locally
+2. Client sends input to server
+3. Server processes input and sends authoritative result
+4. Client reconciles: if server result differs from prediction, client corrects
+
+## Server Reconciliation
+
+When the server's authoritative state differs from the client's prediction:
+1. Client rewinds to the server's confirmed state
+2. Client re-applies all unconfirmed inputs
+3. Result is smoothly blended to avoid visual snapping
+
+## Lag Compensation
+
+For hit detection in fast-paced FPS gameplay:
+
+- Server maintains a **1-second history** of entity positions (hitbox rewinding)
+- When processing a shot, the server rewinds entities to where they were when the shooter fired
+- This ensures that what players see on-screen matches hit detection regardless of latency
+
+## Network Statistics
+
+The `NetworkManager` tracks real-time statistics:
+
+| Metric | Description |
+|--------|-------------|
+| Ping | Round-trip time (ms) |
+| Jitter | Ping variation (ms) |
+| Packet Loss | Percentage of lost packets |
+| Bandwidth | Bytes sent/received per second |
+
+## Serialization
+
+Network messages use built-in serialization helpers for efficient packing and unpacking of game state data.
+
+## See Also
+
+- [[Entity Component System]] — NetworkIdentity component
+- [[Gameplay Systems]] — Multiplayer game modes
