@@ -1504,9 +1504,56 @@ std::string PostProcessingSystem::Console_ListEffects() const
 
 #else // !SPARK_PLATFORM_WINDOWS
 
-// Linux no-op stub
 #include "PostProcessingSystem.h"
-PostProcessingSystem::PostProcessingSystem() {}
-PostProcessingSystem::~PostProcessingSystem() {}
+#include <sstream>
+
+// ============================================================================
+// PostProcessingSystem (Linux stub)
+// ============================================================================
+
+PostProcessingSystem::PostProcessingSystem()
+    : m_device(nullptr), m_context(nullptr)
+{
+}
+
+PostProcessingSystem::~PostProcessingSystem()
+{
+    Shutdown();
+}
+
+HRESULT PostProcessingSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
+{
+    m_device = device;
+    m_context = context;
+    return S_OK;
+}
+
+void PostProcessingSystem::Shutdown()
+{
+    m_device = nullptr;
+    m_context = nullptr;
+}
+
+void PostProcessingSystem::Update(float /*deltaTime*/)
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::Console_SetExposure(float /*exposure*/)
+{
+    // No-op on Linux - store if needed
+}
+
+std::string PostProcessingSystem::Console_ListEffects() const
+{
+    std::ostringstream ss;
+    ss << "=== Post-Processing Effects (Linux stub) ===\n";
+    ss << "  Bloom: N/A\n";
+    ss << "  Tone Mapping: N/A\n";
+    ss << "  Color Grading: N/A\n";
+    ss << "  FXAA: N/A\n";
+    ss << "Note: Post-processing not available on Linux platform.\n";
+    return ss.str();
+}
 
 #endif // SPARK_PLATFORM_WINDOWS

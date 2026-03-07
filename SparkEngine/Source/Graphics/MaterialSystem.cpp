@@ -2056,9 +2056,462 @@ std::string MaterialSystem::Console_ListMaterialVariants(const std::string& mate
 
 #else // !SPARK_PLATFORM_WINDOWS
 
-// Linux no-op stub
 #include "MaterialSystem.h"
-MaterialSystem::MaterialSystem() {}
-MaterialSystem::~MaterialSystem() {}
+#include <sstream>
+#include <algorithm>
+#include <cstring>
+
+// ============================================================================
+// Material (Linux stub)
+// ============================================================================
+
+Material::Material(const std::string& name)
+    : m_name(name)
+{
+    m_pbrProperties = {};
+    m_advancedProperties = {};
+    m_renderState = {};
+    m_variants = {};
+    m_activeVariant = "";
+}
+
+const MaterialTexture& Material::GetTexture(MaterialTextureType type) const
+{
+    auto it = m_textures.find(type);
+    if (it != m_textures.end()) {
+        return it->second;
+    }
+    static MaterialTexture empty;
+    return empty;
+}
+
+const std::string& Material::GetActiveVariant() const
+{
+    return m_activeVariant;
+}
+
+std::vector<std::string> Material::GetAvailableVariants() const
+{
+    std::vector<std::string> variants;
+    for (const auto& pair : m_variants) {
+        variants.push_back(pair.first);
+    }
+    return variants;
+}
+
+void Material::SetTexture(MaterialTextureType type, const MaterialTexture& texture)
+{
+    m_textures[type] = texture;
+}
+
+bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath, ID3D11Device* /*device*/)
+{
+    MaterialTexture tex;
+    tex.filePath = filePath;
+    tex.enabled = true;
+    m_textures[type] = tex;
+    return true;
+}
+
+void Material::UnloadTexture(MaterialTextureType type)
+{
+    auto it = m_textures.find(type);
+    if (it != m_textures.end()) {
+        it->second.enabled = false;
+    }
+}
+
+bool Material::HasTexture(MaterialTextureType type) const
+{
+    auto it = m_textures.find(type);
+    return it != m_textures.end() && it->second.enabled;
+}
+
+void Material::BindToShader(ID3D11DeviceContext* /*context*/) const
+{
+    // No-op on Linux
+}
+
+void Material::CreateVariant(const std::string& variantName, const std::vector<std::string>& defines)
+{
+    m_variants[variantName] = defines;
+}
+
+void Material::SetActiveVariant(const std::string& variantName)
+{
+    if (m_variants.find(variantName) != m_variants.end()) {
+        m_activeVariant = variantName;
+    }
+}
+
+bool Material::SaveToFile(const std::string& /*filePath*/) const
+{
+    return true;
+}
+
+bool Material::LoadFromFile(const std::string& /*filePath*/, ID3D11Device* /*device*/)
+{
+    return true;
+}
+
+std::string Material::GetDetailedInfo() const
+{
+    std::stringstream ss;
+    ss << "=== Material: " << m_name << " ===\n";
+    ss << "Albedo: (" << m_pbrProperties.albedoColor.x << ", "
+       << m_pbrProperties.albedoColor.y << ", "
+       << m_pbrProperties.albedoColor.z << ")\n";
+    ss << "Metallic: " << m_pbrProperties.metallicFactor << "\n";
+    ss << "Roughness: " << m_pbrProperties.roughnessFactor << "\n";
+    ss << "Textures: " << m_textures.size() << " slots\n";
+    ss << "Variants: " << m_variants.size() << "\n";
+    return ss.str();
+}
+
+void Material::Console_SetProperty(const std::string& property, float value)
+{
+    if (property == "metallic") m_pbrProperties.metallicFactor = value;
+    else if (property == "roughness") m_pbrProperties.roughnessFactor = value;
+    else if (property == "normalscale") m_pbrProperties.normalScale = value;
+    else if (property == "occlusion") m_pbrProperties.occlusionStrength = value;
+    else if (property == "emissive") m_pbrProperties.emissiveFactor = value;
+    else if (property == "alphacutoff") m_pbrProperties.alphaCutoff = value;
+}
+
+void Material::Console_SetColor(const std::string& property, float r, float g, float b)
+{
+    if (property == "albedo") {
+        m_pbrProperties.albedoColor = {r, g, b, m_pbrProperties.albedoColor.w};
+    } else if (property == "emissive") {
+        m_pbrProperties.emissiveColor = {r, g, b};
+    }
+}
+
+void Material::Console_ReloadTextures(ID3D11Device* /*device*/)
+{
+    // No-op on Linux
+}
+
+// ============================================================================
+// MaterialSystem (Linux stub)
+// ============================================================================
+
+MaterialSystem::MaterialSystem()
+    : m_device(nullptr), m_context(nullptr), m_hotReloadEnabled(false)
+{
+    memset(&m_metrics, 0, sizeof(m_metrics));
+}
+
+MaterialSystem::~MaterialSystem()
+{
+    Shutdown();
+}
+
+HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
+{
+    m_device = device;
+    m_context = context;
+    memset(&m_metrics, 0, sizeof(m_metrics));
+
+    m_defaultMaterial = std::make_shared<Material>("__default");
+    m_errorMaterial = std::make_shared<Material>("__error");
+    m_errorMaterial->SetPBRProperties({{1.0f, 0.0f, 1.0f, 1.0f}});
+
+    return S_OK;
+}
+
+void MaterialSystem::Shutdown()
+{
+    m_materials.clear();
+    m_textureCache.clear();
+    m_samplerCache.clear();
+    m_defaultMaterial.reset();
+    m_errorMaterial.reset();
+    m_device = nullptr;
+    m_context = nullptr;
+}
+
+std::shared_ptr<Material> MaterialSystem::CreateMaterial(const std::string& name)
+{
+    auto material = std::make_shared<Material>(name);
+    m_materials[name] = material;
+    return material;
+}
+
+std::shared_ptr<Material> MaterialSystem::LoadMaterial(const std::string& filePath)
+{
+    auto it = m_materials.find(filePath);
+    if (it != m_materials.end()) return it->second;
+
+    auto material = std::make_shared<Material>(filePath);
+    material->LoadFromFile(filePath, m_device);
+    m_materials[filePath] = material;
+    return material;
+}
+
+std::shared_ptr<Material> MaterialSystem::GetMaterial(const std::string& name) const
+{
+    auto it = m_materials.find(name);
+    return (it != m_materials.end()) ? it->second : nullptr;
+}
+
+void MaterialSystem::UnloadMaterial(const std::string& name)
+{
+    m_materials.erase(name);
+}
+
+void MaterialSystem::UnloadAllMaterials()
+{
+    m_materials.clear();
+}
+
+ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTexture(const std::string& /*filePath*/)
+{
+    return nullptr;
+}
+
+void MaterialSystem::UnloadTexture(const std::string& filePath)
+{
+    m_textureCache.erase(filePath);
+}
+
+ComPtr<ID3D11SamplerState> MaterialSystem::GetSampler(const TextureSampling& /*sampling*/)
+{
+    return nullptr;
+}
+
+void MaterialSystem::EnableHotReloading(bool enabled)
+{
+    m_hotReloadEnabled = enabled;
+}
+
+void MaterialSystem::UpdateHotReload()
+{
+    // No-op on Linux
+}
+
+int MaterialSystem::ReloadAllMaterials()
+{
+    return 0;
+}
+
+void MaterialSystem::BeginFrame()
+{
+    // No-op on Linux
+}
+
+void MaterialSystem::EndFrame()
+{
+    // No-op on Linux
+}
+
+MaterialSystem::MaterialMetrics MaterialSystem::Console_GetMetrics() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    MaterialMetrics metrics = m_metrics;
+    metrics.loadedMaterials = static_cast<int>(m_materials.size());
+    metrics.hotReloadEnabled = m_hotReloadEnabled;
+    return metrics;
+}
+
+std::string MaterialSystem::Console_ListMaterials() const
+{
+    std::stringstream ss;
+    ss << "=== Loaded Materials (" << m_materials.size() << ") ===\n";
+    for (const auto& pair : m_materials) {
+        ss << "  " << pair.first << "\n";
+    }
+    return ss.str();
+}
+
+std::string MaterialSystem::Console_GetMaterialInfo(const std::string& materialName) const
+{
+    auto mat = GetMaterial(materialName);
+    if (!mat) return "Material not found: " + materialName;
+    return mat->GetDetailedInfo();
+}
+
+bool MaterialSystem::Console_ReloadMaterial(const std::string& materialName)
+{
+    auto mat = GetMaterial(materialName);
+    if (!mat) return false;
+    return true;
+}
+
+int MaterialSystem::Console_ReloadAllMaterials()
+{
+    return ReloadAllMaterials();
+}
+
+bool MaterialSystem::Console_CreateVariant(const std::string& materialName, const std::string& variantName, const std::vector<std::string>& defines)
+{
+    auto mat = GetMaterial(materialName);
+    if (!mat) return false;
+    mat->CreateVariant(variantName, defines);
+    return true;
+}
+
+void MaterialSystem::Console_SetMaterialProperty(const std::string& materialName, const std::string& property, float value)
+{
+    auto mat = GetMaterial(materialName);
+    if (mat) mat->Console_SetProperty(property, value);
+}
+
+void MaterialSystem::Console_SetMaterialColor(const std::string& materialName, const std::string& property, float r, float g, float b)
+{
+    auto mat = GetMaterial(materialName);
+    if (mat) mat->Console_SetColor(property, r, g, b);
+}
+
+void MaterialSystem::Console_SetHotReload(bool enabled)
+{
+    EnableHotReloading(enabled);
+}
+
+void MaterialSystem::Console_ClearCache()
+{
+    m_textureCache.clear();
+    m_samplerCache.clear();
+}
+
+void MaterialSystem::Console_GarbageCollect()
+{
+    for (auto it = m_materials.begin(); it != m_materials.end();) {
+        if (it->second.use_count() == 1) {
+            it = m_materials.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void MaterialSystem::Console_SetTextureQuality(const std::string& /*quality*/)
+{
+    // No-op on Linux
+}
+
+std::string MaterialSystem::Console_GetTextureMemoryInfo() const
+{
+    std::stringstream ss;
+    ss << "=== Texture Memory (Linux stub) ===\n";
+    ss << "Cached textures: " << m_textureCache.size() << "\n";
+    ss << "Cached samplers: " << m_samplerCache.size() << "\n";
+    return ss.str();
+}
+
+int MaterialSystem::Console_ValidateMaterials()
+{
+    int errors = 0;
+    for (const auto& pair : m_materials) {
+        if (!pair.second) errors++;
+    }
+    return errors;
+}
+
+std::string MaterialSystem::Console_DumpMaterialDetails(const std::string& materialName) const
+{
+    return Console_GetMaterialInfo(materialName);
+}
+
+bool MaterialSystem::Console_ExportMaterial(const std::string& materialName, const std::string& filePath)
+{
+    auto mat = GetMaterial(materialName);
+    if (!mat) return false;
+    return mat->SaveToFile(filePath);
+}
+
+bool MaterialSystem::Console_ImportMaterial(const std::string& filePath)
+{
+    auto mat = LoadMaterial(filePath);
+    return mat != nullptr;
+}
+
+std::string MaterialSystem::Console_ListTextureTypes() const
+{
+    return "Albedo, Normal, Metallic, Roughness, Occlusion, Emissive, Height, "
+           "DetailAlbedo, DetailNormal, Subsurface, Transmission, Clearcoat, "
+           "ClearcoatRoughness, Anisotropy, Custom0, Custom1, Custom2, Custom3";
+}
+
+bool MaterialSystem::Console_LoadTextureToSlot(const std::string& materialName,
+                                               const std::string& textureType,
+                                               const std::string& texturePath)
+{
+    auto mat = GetMaterial(materialName);
+    if (!mat) return false;
+    MaterialTextureType type = StringToTextureType(textureType);
+    return mat->LoadTexture(type, texturePath, m_device);
+}
+
+void MaterialSystem::Console_UnloadTextureFromSlot(const std::string& materialName, const std::string& textureType)
+{
+    auto mat = GetMaterial(materialName);
+    if (mat) {
+        MaterialTextureType type = StringToTextureType(textureType);
+        mat->UnloadTexture(type);
+    }
+}
+
+std::string MaterialSystem::Console_ListMaterialVariants(const std::string& materialName) const
+{
+    auto mat = GetMaterial(materialName);
+    if (!mat) return "Material not found: " + materialName;
+
+    std::stringstream ss;
+    ss << "=== Variants for " << materialName << " ===\n";
+    auto variants = mat->GetAvailableVariants();
+    for (const auto& variant : variants) {
+        ss << "  " << variant;
+        if (variant == mat->GetActiveVariant()) ss << " (ACTIVE)";
+        ss << "\n";
+    }
+    return ss.str();
+}
+
+// Private helpers
+HRESULT MaterialSystem::CreateDefaultMaterials() { return S_OK; }
+HRESULT MaterialSystem::CreateSampler(const TextureSampling& /*sampling*/, ID3D11SamplerState** /*sampler*/) { return S_OK; }
+size_t MaterialSystem::HashSampling(const TextureSampling& /*sampling*/) const { return 0; }
+uint64_t MaterialSystem::GetFileTimestamp(const std::string& /*filePath*/) const { return 0; }
+ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::string& /*filePath*/) { return nullptr; }
+void MaterialSystem::UpdateMetrics() {}
+void MaterialSystem::PerformPeriodicMaintenance() {}
+
+std::string MaterialSystem::TextureTypeToString(MaterialTextureType type) const
+{
+    switch (type) {
+        case MaterialTextureType::Albedo: return "Albedo";
+        case MaterialTextureType::Normal: return "Normal";
+        case MaterialTextureType::Metallic: return "Metallic";
+        case MaterialTextureType::Roughness: return "Roughness";
+        case MaterialTextureType::Occlusion: return "Occlusion";
+        case MaterialTextureType::Emissive: return "Emissive";
+        case MaterialTextureType::Height: return "Height";
+        default: return "Unknown";
+    }
+}
+
+MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) const
+{
+    if (str == "Albedo" || str == "albedo") return MaterialTextureType::Albedo;
+    if (str == "Normal" || str == "normal") return MaterialTextureType::Normal;
+    if (str == "Metallic" || str == "metallic") return MaterialTextureType::Metallic;
+    if (str == "Roughness" || str == "roughness") return MaterialTextureType::Roughness;
+    if (str == "Occlusion" || str == "occlusion") return MaterialTextureType::Occlusion;
+    if (str == "Emissive" || str == "emissive") return MaterialTextureType::Emissive;
+    if (str == "Height" || str == "height") return MaterialTextureType::Height;
+    if (str == "DetailAlbedo" || str == "detailalbedo") return MaterialTextureType::DetailAlbedo;
+    if (str == "DetailNormal" || str == "detailnormal") return MaterialTextureType::DetailNormal;
+    if (str == "Subsurface" || str == "subsurface") return MaterialTextureType::Subsurface;
+    if (str == "Transmission" || str == "transmission") return MaterialTextureType::Transmission;
+    if (str == "Clearcoat" || str == "clearcoat") return MaterialTextureType::Clearcoat;
+    if (str == "ClearcoatRoughness" || str == "clearcoatroughness") return MaterialTextureType::ClearcoatRoughness;
+    if (str == "Anisotropy" || str == "anisotropy") return MaterialTextureType::Anisotropy;
+    if (str == "Custom0" || str == "custom0") return MaterialTextureType::Custom0;
+    if (str == "Custom1" || str == "custom1") return MaterialTextureType::Custom1;
+    if (str == "Custom2" || str == "custom2") return MaterialTextureType::Custom2;
+    if (str == "Custom3" || str == "custom3") return MaterialTextureType::Custom3;
+    return MaterialTextureType::Albedo;
+}
 
 #endif // SPARK_PLATFORM_WINDOWS

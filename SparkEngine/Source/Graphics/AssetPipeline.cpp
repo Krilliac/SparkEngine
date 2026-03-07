@@ -1116,11 +1116,628 @@ std::string LoadingPriorityToString(LoadingPriority priority)
 
 #else // !SPARK_PLATFORM_WINDOWS
 
-// Linux no-op stubs
 #include "AssetPipeline.h"
-AssetPipeline::AssetPipeline() {}
-AssetPipeline::~AssetPipeline() {}
-AssetCache::AssetCache(size_t) {}
-AssetCache::~AssetCache() {}
+#include <sstream>
+#include <algorithm>
+#include <filesystem>
+#include <cstring>
+
+// ============================================================================
+// Asset implementations (Linux stub)
+// ============================================================================
+
+HRESULT MeshAsset::Load(ID3D11Device* /*device*/)
+{
+    m_loaded = true;
+    return S_OK;
+}
+
+void MeshAsset::Unload()
+{
+    m_meshData.vertices.clear();
+    m_meshData.indices.clear();
+    m_loaded = false;
+}
+
+size_t MeshAsset::GetMemoryUsage() const
+{
+    return m_meshData.vertices.size() * sizeof(MeshAssetData::Vertex) +
+           m_meshData.indices.size() * sizeof(uint32_t);
+}
+
+HRESULT TextureAsset::Load(ID3D11Device* /*device*/)
+{
+    m_loaded = true;
+    return S_OK;
+}
+
+void TextureAsset::Unload()
+{
+    m_loaded = false;
+    m_width = 0;
+    m_height = 0;
+}
+
+size_t TextureAsset::GetMemoryUsage() const
+{
+    return static_cast<size_t>(m_width) * m_height * 4;
+}
+
+HRESULT AudioAsset::Load(ID3D11Device* /*device*/)
+{
+    m_loaded = true;
+    return S_OK;
+}
+
+void AudioAsset::Unload()
+{
+    m_audioData.clear();
+    m_loaded = false;
+}
+
+size_t AudioAsset::GetMemoryUsage() const
+{
+    return m_audioData.size();
+}
+
+// ============================================================================
+// AssetCache (Linux stub)
+// ============================================================================
+
+AssetCache::AssetCache(size_t maxMemoryMB)
+    : m_maxMemory(maxMemoryMB * 1024 * 1024)
+{
+}
+
+AssetCache::~AssetCache()
+{
+    Clear();
+}
+
+void AssetCache::SetMaxMemory(size_t maxMemoryMB)
+{
+    m_maxMemory = maxMemoryMB * 1024 * 1024;
+}
+
+size_t AssetCache::GetCurrentMemory() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    size_t total = 0;
+    for (const auto& pair : m_cache) {
+        if (pair.second.asset) {
+            total += pair.second.asset->GetMemoryUsage();
+        }
+    }
+    return total;
+}
+
+void AssetCache::AddAsset(std::shared_ptr<Asset> asset)
+{
+    if (!asset) return;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    CacheEntry entry;
+    entry.asset = asset;
+    entry.lastAccessed = 0;
+    entry.accessCount = 0;
+    m_cache[asset->GetPath()] = entry;
+}
+
+std::shared_ptr<Asset> AssetCache::GetAsset(const std::string& path)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto it = m_cache.find(path);
+    if (it != m_cache.end()) {
+        it->second.accessCount++;
+        m_hits++;
+        return it->second.asset;
+    }
+    m_misses++;
+    return nullptr;
+}
+
+void AssetCache::RemoveAsset(const std::string& path)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_cache.erase(path);
+}
+
+void AssetCache::EvictLRU()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_cache.empty()) return;
+
+    auto oldest = m_cache.begin();
+    for (auto it = m_cache.begin(); it != m_cache.end(); ++it) {
+        if (it->second.accessCount < oldest->second.accessCount) {
+            oldest = it;
+        }
+    }
+    if (oldest != m_cache.end()) {
+        m_cache.erase(oldest);
+    }
+}
+
+void AssetCache::Clear()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_cache.clear();
+}
+
+float AssetCache::GetHitRatio() const
+{
+    uint32_t total = m_hits + m_misses;
+    return total > 0 ? static_cast<float>(m_hits) / total : 0.0f;
+}
+
+// ============================================================================
+// AssetPipeline (Linux stub)
+// ============================================================================
+
+AssetPipeline::AssetPipeline()
+    : m_device(nullptr), m_context(nullptr)
+{
+    m_cache = std::make_unique<AssetCache>(512);
+    memset(&m_metrics, 0, sizeof(m_metrics));
+}
+
+AssetPipeline::~AssetPipeline()
+{
+    Shutdown();
+}
+
+HRESULT AssetPipeline::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
+{
+    m_device = device;
+    m_context = context;
+    memset(&m_metrics, 0, sizeof(m_metrics));
+    return S_OK;
+}
+
+void AssetPipeline::Shutdown()
+{
+    m_shouldStop = true;
+    m_queueCondition.notify_all();
+
+    for (auto& thread : m_loadingThreads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+    m_loadingThreads.clear();
+
+    {
+        std::lock_guard<std::mutex> lock(m_assetsMutex);
+        m_assets.clear();
+    }
+
+    if (m_cache) m_cache->Clear();
+
+    m_device = nullptr;
+    m_context = nullptr;
+}
+
+void AssetPipeline::Update(float /*deltaTime*/)
+{
+    UpdateMetrics();
+    if (m_hotReloadingEnabled) {
+        CheckForChangedAssets();
+    }
+}
+
+std::shared_ptr<Asset> AssetPipeline::LoadAsset(const std::string& path, AssetType type)
+{
+    {
+        std::lock_guard<std::mutex> lock(m_assetsMutex);
+        auto it = m_assets.find(path);
+        if (it != m_assets.end()) return it->second;
+    }
+
+    if (type == AssetType::Unknown) {
+        type = DetectAssetType(path);
+    }
+
+    std::shared_ptr<Asset> asset;
+    switch (type) {
+        case AssetType::Mesh: asset = LoadMesh(path); break;
+        case AssetType::Texture: asset = LoadTexture(path); break;
+        case AssetType::Audio: asset = LoadAudio(path); break;
+        default: break;
+    }
+
+    if (asset) {
+        std::lock_guard<std::mutex> lock(m_assetsMutex);
+        m_assets[path] = asset;
+    }
+
+    return asset;
+}
+
+std::shared_ptr<MeshAsset> AssetPipeline::LoadMesh(const std::string& path)
+{
+    auto mesh = std::make_shared<MeshAsset>(path);
+    mesh->Load(m_device);
+    return mesh;
+}
+
+std::shared_ptr<TextureAsset> AssetPipeline::LoadTexture(const std::string& path)
+{
+    auto texture = std::make_shared<TextureAsset>(path);
+    texture->Load(m_device);
+    return texture;
+}
+
+std::shared_ptr<AudioAsset> AssetPipeline::LoadAudio(const std::string& path)
+{
+    auto audio = std::make_shared<AudioAsset>(path);
+    audio->Load(m_device);
+    return audio;
+}
+
+void AssetPipeline::LoadAssetAsync(const AssetLoadRequest& request)
+{
+    // On Linux, just load synchronously
+    auto asset = LoadAsset(request.assetPath, request.expectedType);
+    if (asset && request.onLoaded) {
+        request.onLoaded(asset);
+    } else if (!asset && request.onError) {
+        request.onError("Failed to load asset: " + request.assetPath);
+    }
+}
+
+void AssetPipeline::LoadMeshAsync(const std::string& path, std::function<void(std::shared_ptr<MeshAsset>)> callback)
+{
+    auto mesh = LoadMesh(path);
+    if (callback) callback(mesh);
+}
+
+void AssetPipeline::LoadTextureAsync(const std::string& path, std::function<void(std::shared_ptr<TextureAsset>)> callback)
+{
+    auto texture = LoadTexture(path);
+    if (callback) callback(texture);
+}
+
+void AssetPipeline::UnloadAsset(const std::string& path)
+{
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+    auto it = m_assets.find(path);
+    if (it != m_assets.end()) {
+        if (it->second) it->second->Unload();
+        m_assets.erase(it);
+    }
+    if (m_cache) m_cache->RemoveAsset(path);
+}
+
+void AssetPipeline::UnloadAllAssets()
+{
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+    for (auto& pair : m_assets) {
+        if (pair.second) pair.second->Unload();
+    }
+    m_assets.clear();
+    if (m_cache) m_cache->Clear();
+}
+
+std::shared_ptr<Asset> AssetPipeline::GetAsset(const std::string& path)
+{
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+    auto it = m_assets.find(path);
+    return (it != m_assets.end()) ? it->second : nullptr;
+}
+
+bool AssetPipeline::IsAssetLoaded(const std::string& path)
+{
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+    auto it = m_assets.find(path);
+    return it != m_assets.end() && it->second && it->second->IsLoaded();
+}
+
+void AssetPipeline::SetCacheSize(size_t maxMemoryMB)
+{
+    if (m_cache) m_cache->SetMaxMemory(maxMemoryMB);
+}
+
+void AssetPipeline::EvictUnusedAssets()
+{
+    if (m_cache) m_cache->EvictLRU();
+}
+
+void AssetPipeline::PreloadAssets(const std::vector<std::string>& paths)
+{
+    for (const auto& path : paths) {
+        LoadAsset(path);
+    }
+}
+
+void AssetPipeline::EnableBackgroundStreaming(bool enabled)
+{
+    m_backgroundStreaming = enabled;
+}
+
+void AssetPipeline::SetStreamingThreadCount(int /*count*/)
+{
+    // No streaming threads on Linux
+}
+
+std::vector<std::string> AssetPipeline::ScanDirectory(const std::string& directory, AssetType type)
+{
+    std::vector<std::string> results;
+    if (!std::filesystem::exists(directory)) return results;
+
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
+        if (entry.is_regular_file()) {
+            if (type == AssetType::Unknown || DetectAssetType(entry.path().string()) == type) {
+                results.push_back(entry.path().string());
+            }
+        }
+    }
+    return results;
+}
+
+AssetType AssetPipeline::DetectAssetType(const std::string& path)
+{
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return DetectAssetTypeFromExtension(ext);
+}
+
+AssetMetadata AssetPipeline::GetAssetMetadata(const std::string& path)
+{
+    AssetMetadata metadata;
+    metadata.filePath = path;
+    metadata.name = std::filesystem::path(path).stem().string();
+    metadata.type = DetectAssetType(path);
+    metadata.state = IsAssetLoaded(path) ? StreamingState::Loaded : StreamingState::Unloaded;
+    if (std::filesystem::exists(path)) {
+        metadata.fileSize = std::filesystem::file_size(path);
+    }
+    return metadata;
+}
+
+void AssetPipeline::RefreshAssetMetadata(const std::string& /*path*/)
+{
+    // No-op on Linux
+}
+
+void AssetPipeline::CheckForChangedAssets()
+{
+    // No-op on Linux
+}
+
+AssetPipeline::AssetMetrics AssetPipeline::GetMetrics() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    return m_metrics;
+}
+
+AssetPipeline::AssetMetrics AssetPipeline::Console_GetMetrics() const
+{
+    return GetMetrics();
+}
+
+std::string AssetPipeline::Console_ListAssets() const
+{
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+    std::stringstream ss;
+    ss << "=== Loaded Assets (" << m_assets.size() << ") ===\n";
+    for (const auto& pair : m_assets) {
+        ss << "  " << pair.first;
+        if (pair.second) {
+            ss << " [" << AssetTypeToString(pair.second->GetType()) << "]";
+            ss << " (" << (pair.second->GetMemoryUsage() / 1024) << " KB)";
+        }
+        ss << "\n";
+    }
+    return ss.str();
+}
+
+std::string AssetPipeline::Console_GetAssetInfo(const std::string& path) const
+{
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+    auto it = m_assets.find(path);
+    if (it == m_assets.end()) return "Asset not found: " + path;
+
+    std::stringstream ss;
+    ss << "=== Asset: " << path << " ===\n";
+    ss << "Type: " << AssetTypeToString(it->second->GetType()) << "\n";
+    ss << "Loaded: " << (it->second->IsLoaded() ? "Yes" : "No") << "\n";
+    ss << "Memory: " << (it->second->GetMemoryUsage() / 1024) << " KB\n";
+    return ss.str();
+}
+
+bool AssetPipeline::Console_LoadAsset(const std::string& path)
+{
+    auto asset = LoadAsset(path);
+    return asset != nullptr;
+}
+
+bool AssetPipeline::Console_UnloadAsset(const std::string& path)
+{
+    UnloadAsset(path);
+    return true;
+}
+
+void AssetPipeline::Console_SetCacheSize(size_t maxMemoryMB)
+{
+    SetCacheSize(maxMemoryMB);
+}
+
+void AssetPipeline::Console_ForceGC()
+{
+    EvictUnusedAssets();
+}
+
+void AssetPipeline::Console_EnableStreaming(bool enabled)
+{
+    EnableBackgroundStreaming(enabled);
+}
+
+void AssetPipeline::Console_SetStreamingThreads(int count)
+{
+    SetStreamingThreadCount(count);
+}
+
+int AssetPipeline::Console_ScanDirectory(const std::string& directory)
+{
+    auto results = ScanDirectory(directory);
+    return static_cast<int>(results.size());
+}
+
+void AssetPipeline::Console_EnableHotReload(bool enabled)
+{
+    EnableHotReloading(enabled);
+}
+
+int AssetPipeline::Console_PreloadDirectory(const std::string& directory)
+{
+    auto paths = ScanDirectory(directory);
+    PreloadAssets(paths);
+    return static_cast<int>(paths.size());
+}
+
+int AssetPipeline::Console_ReloadAllAssets()
+{
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+    int count = 0;
+    for (auto& pair : m_assets) {
+        if (pair.second) {
+            pair.second->Unload();
+            pair.second->Load(m_device);
+            count++;
+        }
+    }
+    return count;
+}
+
+// Private helpers
+void AssetPipeline::LoadingThreadFunction()
+{
+    // No-op on Linux
+}
+
+AssetType AssetPipeline::DetectAssetTypeFromExtension(const std::string& extension)
+{
+    if (extension == ".obj" || extension == ".fbx" || extension == ".gltf" || extension == ".glb")
+        return AssetType::Mesh;
+    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" ||
+        extension == ".bmp" || extension == ".dds" || extension == ".tga" || extension == ".hdr")
+        return AssetType::Texture;
+    if (extension == ".wav" || extension == ".ogg" || extension == ".mp3")
+        return AssetType::Audio;
+    if (extension == ".hlsl" || extension == ".glsl" || extension == ".cso")
+        return AssetType::Shader;
+    if (extension == ".mat")
+        return AssetType::Material;
+    if (extension == ".anim")
+        return AssetType::Animation;
+    return AssetType::Unknown;
+}
+
+std::string AssetPipeline::CalculateChecksum(const std::string& /*filePath*/)
+{
+    return "";
+}
+
+uint64_t AssetPipeline::GetFileTimestamp(const std::string& filePath)
+{
+    if (!std::filesystem::exists(filePath)) return 0;
+    auto ftime = std::filesystem::last_write_time(filePath);
+    return static_cast<uint64_t>(ftime.time_since_epoch().count());
+}
+
+void AssetPipeline::UpdateMetrics()
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    std::lock_guard<std::mutex> assetsLock(m_assetsMutex);
+    m_metrics.totalAssets = static_cast<uint32_t>(m_assets.size());
+    m_metrics.loadedAssets = 0;
+    m_metrics.memoryUsage = 0;
+    for (const auto& pair : m_assets) {
+        if (pair.second && pair.second->IsLoaded()) {
+            m_metrics.loadedAssets++;
+            m_metrics.memoryUsage += pair.second->GetMemoryUsage();
+        }
+    }
+    if (m_cache) {
+        m_metrics.cacheHitRatio = m_cache->GetHitRatio();
+    }
+    m_metrics.backgroundLoading = m_backgroundStreaming;
+    m_metrics.streamingThreads = static_cast<uint32_t>(m_loadingThreads.size());
+}
+
+std::shared_ptr<MeshAsset> AssetPipeline::LoadMeshFromFile(const std::string& path)
+{
+    return LoadMesh(path);
+}
+
+std::shared_ptr<TextureAsset> AssetPipeline::LoadTextureFromFile(const std::string& path)
+{
+    return LoadTexture(path);
+}
+
+std::shared_ptr<AudioAsset> AssetPipeline::LoadAudioFromFile(const std::string& path)
+{
+    return LoadAudio(path);
+}
+
+HRESULT AssetPipeline::LoadOBJ(const std::string& /*path*/, MeshAssetData& /*meshData*/) { return S_OK; }
+HRESULT AssetPipeline::LoadFBX(const std::string& /*path*/, MeshAssetData& /*meshData*/) { return S_OK; }
+HRESULT AssetPipeline::LoadGLTF(const std::string& /*path*/, MeshAssetData& /*meshData*/) { return S_OK; }
+
+// ============================================================================
+// Utility functions
+// ============================================================================
+
+std::string AssetTypeToString(AssetType type)
+{
+    switch (type) {
+        case AssetType::Mesh: return "Mesh";
+        case AssetType::Texture: return "Texture";
+        case AssetType::Material: return "Material";
+        case AssetType::Audio: return "Audio";
+        case AssetType::Animation: return "Animation";
+        case AssetType::Prefab: return "Prefab";
+        case AssetType::Scene: return "Scene";
+        case AssetType::Shader: return "Shader";
+        case AssetType::Font: return "Font";
+        default: return "Unknown";
+    }
+}
+
+AssetType StringToAssetType(const std::string& str)
+{
+    if (str == "Mesh") return AssetType::Mesh;
+    if (str == "Texture") return AssetType::Texture;
+    if (str == "Material") return AssetType::Material;
+    if (str == "Audio") return AssetType::Audio;
+    if (str == "Animation") return AssetType::Animation;
+    if (str == "Prefab") return AssetType::Prefab;
+    if (str == "Scene") return AssetType::Scene;
+    if (str == "Shader") return AssetType::Shader;
+    if (str == "Font") return AssetType::Font;
+    return AssetType::Unknown;
+}
+
+std::string StreamingStateToString(StreamingState state)
+{
+    switch (state) {
+        case StreamingState::Unloaded: return "Unloaded";
+        case StreamingState::Loading: return "Loading";
+        case StreamingState::Loaded: return "Loaded";
+        case StreamingState::Failed: return "Failed";
+        case StreamingState::Evicted: return "Evicted";
+        default: return "Unknown";
+    }
+}
+
+std::string LoadingPriorityToString(LoadingPriority priority)
+{
+    switch (priority) {
+        case LoadingPriority::Low: return "Low";
+        case LoadingPriority::Normal: return "Normal";
+        case LoadingPriority::High: return "High";
+        case LoadingPriority::Critical: return "Critical";
+        default: return "Unknown";
+    }
+}
 
 #endif // SPARK_PLATFORM_WINDOWS

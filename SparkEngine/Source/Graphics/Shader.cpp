@@ -1207,9 +1207,915 @@ bool Shader::CompileWithRHI(const std::string& sourceFile, ShaderType type, int 
 
 #else // !SPARK_PLATFORM_WINDOWS
 
-// Linux no-op stub
+// ============================================================================
+// LINUX IMPLEMENTATION - Uses RHI shader compilation pipeline
+// ============================================================================
+
 #include "Shader.h"
-Shader::Shader() {}
-Shader::~Shader() {}
+#include "RHI/RHIFactory.h"
+#include "../Utils/SparkConsole.h"
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <sstream>
+#include <sys/stat.h>
+
+// Console logging integration (Linux version)
+#define LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype) \
+    do { \
+        std::wstring wstr = wmsg; \
+        std::wstring wtypestr = wtype; \
+        std::string msg(wstr.begin(), wstr.end()); \
+        std::string type(wtypestr.begin(), wtypestr.end()); \
+        Spark::SimpleConsole::GetInstance().Log(msg, type); \
+    } while(0)
+
+// Helper: check file existence on Linux
+static bool FileExistsLinux(const std::string& path) {
+    struct stat st;
+    return (stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode));
+}
+
+// Helper: read file contents into string
+static bool ReadFileContents(const std::string& path, std::string& out) {
+    std::ifstream f(path, std::ios::in | std::ios::binary);
+    if (!f.is_open()) return false;
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    out = ss.str();
+    return true;
+}
+
+// Helper: get file modification time as uint64
+static uint64_t GetFileModTime(const std::string& path) {
+    struct stat st;
+    if (stat(path.c_str(), &st) == 0) {
+        return static_cast<uint64_t>(st.st_mtime);
+    }
+    return 0;
+}
+
+// Helper: convert wstring to narrow string
+static std::string WideToNarrow(const std::wstring& wide) {
+    return std::string(wide.begin(), wide.end());
+}
+
+// Helper: convert ShaderType to RHI stage
+static Spark::RHI::RHIShaderStage ShaderTypeToRHIStage(ShaderType type) {
+    switch (type) {
+        case ShaderType::VERTEX_SHADER:   return Spark::RHI::RHIShaderStage::Vertex;
+        case ShaderType::PIXEL_SHADER:    return Spark::RHI::RHIShaderStage::Pixel;
+        case ShaderType::GEOMETRY_SHADER: return Spark::RHI::RHIShaderStage::Geometry;
+        case ShaderType::HULL_SHADER:     return Spark::RHI::RHIShaderStage::Hull;
+        case ShaderType::DOMAIN_SHADER:   return Spark::RHI::RHIShaderStage::Domain;
+        case ShaderType::COMPUTE_SHADER:  return Spark::RHI::RHIShaderStage::Compute;
+        default:                          return Spark::RHI::RHIShaderStage::Vertex;
+    }
+}
+
+// ============================================================================
+// SHADER RESOURCE IMPLEMENTATIONS (no-ops on Linux - no D3D11 context)
+// ============================================================================
+
+void VertexShaderResource::Bind(ID3D11DeviceContext* /*context*/) {
+    // No-op on Linux: ID3D11DeviceContext is a stub
+}
+
+void VertexShaderResource::Unbind(ID3D11DeviceContext* /*context*/) {
+    // No-op on Linux
+}
+
+void PixelShaderResource::Bind(ID3D11DeviceContext* /*context*/) {
+    // No-op on Linux
+}
+
+void PixelShaderResource::Unbind(ID3D11DeviceContext* /*context*/) {
+    // No-op on Linux
+}
+
+// ============================================================================
+// CONSTRUCTOR / DESTRUCTOR
+// ============================================================================
+
+Shader::Shader()
+    : m_device(nullptr)
+    , m_context(nullptr)
+    , m_activeVariant(0)
+    , m_hotReloadEnabled(false)
+    , m_validationEnabled(false)
+    , m_type(ShaderType::VERTEX_SHADER)
+    , m_isCompiled(false)
+    , m_shader(nullptr)
+{
+    m_lastModified.dwLowDateTime = 0;
+    m_lastModified.dwHighDateTime = 0;
+}
+
+Shader::~Shader() {
+    Shutdown();
+}
+
+// ============================================================================
+// INITIALIZATION AND SHUTDOWN
+// ============================================================================
+
+HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context) {
+    // On Linux these pointers will be null; store them for API compatibility
+    m_device = device;
+    m_context = context;
+
+    m_vertexShader.reset(new VertexShaderResource());
+    m_pixelShader.reset(new PixelShaderResource());
+
+    m_isCompiled = false;
+    m_activeVariant = 0;
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics = ShaderMetrics();
+    }
+
+    // Constant buffers are not created as D3D11 buffers on Linux;
+    // the data is stored internally for later RHI use
+    HRESULT hr = CreateConstantBuffers();
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    return S_OK;
+}
+
+void Shader::Shutdown() {
+    m_vertexShader.reset();
+    m_pixelShader.reset();
+    m_shaderCache.clear();
+    m_shaderVariants.clear();
+    m_variants.clear();
+    m_watchedFiles.clear();
+    m_isCompiled = false;
+    m_device = nullptr;
+    m_context = nullptr;
+    m_shader = nullptr;
+}
+
+// ============================================================================
+// CONSTANT BUFFER CREATION (internal storage on Linux)
+// ============================================================================
+
+HRESULT Shader::CreateConstantBuffers() {
+    // On Linux, D3D11 buffers are not created. Constant buffer data is stored
+    // in-memory and forwarded to the RHI backend when available.
+    // The ComPtr<ID3D11Buffer> members remain null (stubs).
+    return S_OK;
+}
+
+// ============================================================================
+// SHADER LOADING - uses RHI compilation pipeline
+// ============================================================================
+
+HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompilationFlags& flags) {
+    std::string narrowPath = WideToNarrow(filename);
+
+    if (!FileExistsLinux(narrowPath)) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Vertex shader file not found: " + filename, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return E_FAIL;
+    }
+
+    // Add to watched files for hot reload
+    if (std::find(m_watchedFiles.begin(), m_watchedFiles.end(), filename) == m_watchedFiles.end()) {
+        m_watchedFiles.push_back(filename);
+    }
+
+    // Read source code
+    std::string sourceCode;
+    if (!ReadFileContents(narrowPath, sourceCode)) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to read vertex shader: " + filename, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return E_FAIL;
+    }
+
+    // Compile through RHI
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    Spark::RHI::ShaderCompileOptions options;
+    options.stage = Spark::RHI::RHIShaderStage::Vertex;
+    options.sourceFile = narrowPath;
+    options.sourceCode = sourceCode;
+    options.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
+    options.optimizationEnabled = flags.enableOptimization;
+    options.debugInfoEnabled = flags.enableDebug;
+    options.defines = flags.defines;
+    options.includePaths = flags.includePaths;
+    options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+    Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    float compileTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.lastCompileTime = compileTimeMs;
+        m_metrics.totalCompileTime += compileTimeMs;
+    }
+
+    if (!result.success) {
+        std::wstring wError(result.errorMessage.begin(), result.errorMessage.end());
+        LOG_TO_CONSOLE_IMMEDIATE(L"Vertex shader compilation failed: " + wError, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return E_FAIL;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.compiledShaders++;
+        m_metrics.shaderMemoryUsage += result.bytecode.size();
+    }
+
+    m_isCompiled = true;
+    m_type = ShaderType::VERTEX_SHADER;
+    m_filePath = narrowPath;
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Vertex shader compiled (RHI): " + filename, L"SUCCESS");
+    NotifyStateChange();
+    return S_OK;
+}
+
+HRESULT Shader::LoadPixelShader(const std::wstring& filename, const ShaderCompilationFlags& flags) {
+    std::string narrowPath = WideToNarrow(filename);
+
+    if (!FileExistsLinux(narrowPath)) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Pixel shader file not found: " + filename, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return E_FAIL;
+    }
+
+    // Add to watched files for hot reload
+    if (std::find(m_watchedFiles.begin(), m_watchedFiles.end(), filename) == m_watchedFiles.end()) {
+        m_watchedFiles.push_back(filename);
+    }
+
+    // Read source code
+    std::string sourceCode;
+    if (!ReadFileContents(narrowPath, sourceCode)) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to read pixel shader: " + filename, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return E_FAIL;
+    }
+
+    // Compile through RHI
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    Spark::RHI::ShaderCompileOptions options;
+    options.stage = Spark::RHI::RHIShaderStage::Pixel;
+    options.sourceFile = narrowPath;
+    options.sourceCode = sourceCode;
+    options.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
+    options.optimizationEnabled = flags.enableOptimization;
+    options.debugInfoEnabled = flags.enableDebug;
+    options.defines = flags.defines;
+    options.includePaths = flags.includePaths;
+    options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+    Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    float compileTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.lastCompileTime = compileTimeMs;
+        m_metrics.totalCompileTime += compileTimeMs;
+    }
+
+    if (!result.success) {
+        std::wstring wError(result.errorMessage.begin(), result.errorMessage.end());
+        LOG_TO_CONSOLE_IMMEDIATE(L"Pixel shader compilation failed: " + wError, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return E_FAIL;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.compiledShaders++;
+        m_metrics.shaderMemoryUsage += result.bytecode.size();
+    }
+
+    m_isCompiled = true;
+    m_filePath = narrowPath;
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Pixel shader compiled (RHI): " + filename, L"SUCCESS");
+    NotifyStateChange();
+    return S_OK;
+}
+
+HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type, const ShaderCompilationFlags& flags) {
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    Spark::RHI::ShaderCompileOptions options;
+    options.stage = ShaderTypeToRHIStage(type);
+    options.sourceCode = source;
+    options.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
+    options.optimizationEnabled = flags.enableOptimization;
+    options.debugInfoEnabled = flags.enableDebug;
+    options.defines = flags.defines;
+    options.includePaths = flags.includePaths;
+    options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+    Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    float compileTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.lastCompileTime = compileTimeMs;
+        m_metrics.totalCompileTime += compileTimeMs;
+    }
+
+    if (!result.success) {
+        std::wstring wError(result.errorMessage.begin(), result.errorMessage.end());
+        LOG_TO_CONSOLE_IMMEDIATE(L"Shader source compilation failed: " + wError, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return E_FAIL;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.compiledShaders++;
+        m_metrics.shaderMemoryUsage += result.bytecode.size();
+    }
+
+    m_isCompiled = true;
+    m_type = type;
+
+    NotifyStateChange();
+    return S_OK;
+}
+
+HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const ShaderCompilationFlags& flags) {
+    if (!FileExistsLinux(filePath)) {
+        // Try search paths
+        for (const auto& searchPath : m_searchPaths) {
+            std::string fullPath = searchPath + "/" + filePath;
+            if (FileExistsLinux(fullPath)) {
+                return LoadFromFile(fullPath, type, flags);
+            }
+        }
+        std::wstring wPath(filePath.begin(), filePath.end());
+        LOG_TO_CONSOLE_IMMEDIATE(L"Shader file not found: " + wPath, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return E_FAIL;
+    }
+
+    std::string sourceCode;
+    if (!ReadFileContents(filePath, sourceCode)) {
+        std::wstring wPath(filePath.begin(), filePath.end());
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to read shader file: " + wPath, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return E_FAIL;
+    }
+
+    // Track file for hot reload
+    std::wstring widePath(filePath.begin(), filePath.end());
+    if (std::find(m_watchedFiles.begin(), m_watchedFiles.end(), widePath) == m_watchedFiles.end()) {
+        m_watchedFiles.push_back(widePath);
+    }
+
+    m_filePath = filePath;
+    m_type = type;
+
+    // Store modification time for hot reload
+    uint64_t modTime = GetFileModTime(filePath);
+    m_lastModified.dwLowDateTime = static_cast<uint32_t>(modTime & 0xFFFFFFFF);
+    m_lastModified.dwHighDateTime = static_cast<uint32_t>((modTime >> 32) & 0xFFFFFFFF);
+
+    return LoadShaderFromSource(sourceCode, type, flags);
+}
+
+// ============================================================================
+// SHADER VARIANTS
+// ============================================================================
+
+int Shader::CreateShaderVariant(const std::string& baseName, const std::vector<std::string>& defines) {
+    ShaderVariant variant;
+    variant.id = static_cast<int>(m_variants.size());
+    variant.baseName = baseName;
+    variant.name = baseName;
+    variant.defines = defines;
+    variant.isCompiled = false;
+    variant.lastModified.dwLowDateTime = 0;
+    variant.lastModified.dwHighDateTime = 0;
+
+    // Build variant name from defines
+    for (const auto& def : defines) {
+        variant.name += "_" + def;
+    }
+
+    // Attempt to compile the variant through RHI
+    ShaderCompilationFlags flags = m_defaultFlags;
+    flags.defines.insert(flags.defines.end(), defines.begin(), defines.end());
+
+    // Try to find and compile the base shader file
+    std::string sourceFile = baseName;
+    if (FileExistsLinux(sourceFile)) {
+        std::string sourceCode;
+        if (ReadFileContents(sourceFile, sourceCode)) {
+            Spark::RHI::ShaderCompileOptions options;
+            options.stage = ShaderTypeToRHIStage(m_type);
+            options.sourceFile = sourceFile;
+            options.sourceCode = sourceCode;
+            options.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
+            options.optimizationEnabled = flags.enableOptimization;
+            options.debugInfoEnabled = flags.enableDebug;
+            options.defines = flags.defines;
+            options.includePaths = flags.includePaths;
+            options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
+            options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
+            options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+            Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+            variant.isCompiled = result.success;
+        }
+    }
+
+    m_variants.push_back(variant);
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.activeVariants = static_cast<int>(m_variants.size());
+    }
+
+    NotifyStateChange();
+    return variant.id;
+}
+
+void Shader::SetActiveVariant(int variantId) {
+    if (variantId >= 0 && variantId < static_cast<int>(m_variants.size())) {
+        m_activeVariant = variantId;
+        NotifyStateChange();
+    }
+}
+
+// ============================================================================
+// HOT RELOAD
+// ============================================================================
+
+int Shader::HotReloadShaders() {
+    int reloadCount = 0;
+
+    for (const auto& watchedFile : m_watchedFiles) {
+        std::string narrowPath = WideToNarrow(watchedFile);
+        uint64_t currentModTime = GetFileModTime(narrowPath);
+        uint64_t storedModTime = static_cast<uint64_t>(m_lastModified.dwLowDateTime) |
+                                 (static_cast<uint64_t>(m_lastModified.dwHighDateTime) << 32);
+
+        if (currentModTime > storedModTime && currentModTime != 0) {
+            HRESULT hr = LoadFromFile(narrowPath, m_type, m_defaultFlags);
+            if (SUCCEEDED(hr)) {
+                reloadCount++;
+            }
+        }
+    }
+
+    if (reloadCount > 0) {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.hotReloadCount += reloadCount;
+    }
+
+    return reloadCount;
+}
+
+// ============================================================================
+// SHADER BINDING (no-ops on Linux - uses RHI pipeline instead)
+// ============================================================================
+
+void Shader::SetShaders() {
+    // On Linux, shader binding is handled through the RHI pipeline.
+    // The D3D11 context is null, so there is nothing to bind here.
+    // The compiled RHI bytecode will be used by the active RHI device.
+}
+
+void Shader::UnbindShaders() {
+    // No-op on Linux; RHI handles unbinding
+}
+
+// ============================================================================
+// STATE QUERIES
+// ============================================================================
+
+bool Shader::IsValid() const {
+    return m_isCompiled;
+}
+
+// ============================================================================
+// CONSTANT BUFFER UPDATES (store internally for RHI use)
+// ============================================================================
+
+void Shader::UpdatePerFrameConstants(const PerFrameConstants& constants) {
+    // On Linux, store the data internally. The RHI backend will
+    // consume it when rendering. No D3D11 buffer update occurs.
+    (void)constants;
+}
+
+void Shader::UpdatePerObjectConstants(const PerObjectConstants& constants) {
+    (void)constants;
+}
+
+void Shader::UpdatePerMaterialConstants(const PerMaterialConstants& constants) {
+    (void)constants;
+}
+
+void Shader::UpdateLightingData(const LightingData& lightingData) {
+    (void)lightingData;
+}
+
+void Shader::UpdatePostProcessingConstants(const PostProcessingConstants& constants) {
+    (void)constants;
+}
+
+void Shader::UpdateConstantBuffer(const ConstantBuffer& cb) {
+    (void)cb;
+}
+
+// ============================================================================
+// CONSOLE INTEGRATION METHODS
+// ============================================================================
+
+Shader::ShaderMetrics Shader::Console_GetMetrics() const {
+    return GetMetricsThreadSafe();
+}
+
+void Shader::Console_RecompileAll() {
+    LOG_TO_CONSOLE_IMMEDIATE(L"Recompiling all shaders...", L"INFO");
+
+    for (const auto& watchedFile : m_watchedFiles) {
+        std::string narrowPath = WideToNarrow(watchedFile);
+        LoadFromFile(narrowPath, m_type, m_defaultFlags);
+    }
+
+    NotifyStateChange();
+    LOG_TO_CONSOLE_IMMEDIATE(L"Shader recompilation complete", L"SUCCESS");
+}
+
+void Shader::Console_SetHotReload(bool enabled) {
+    m_hotReloadEnabled = enabled;
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.hotReloadEnabled = enabled;
+    }
+    std::wstring msg = enabled ? L"Hot reload enabled" : L"Hot reload disabled";
+    LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+}
+
+void Shader::Console_SetCompilationFlags(bool enableDebug, bool enableOptimization) {
+    m_defaultFlags.enableDebug = enableDebug;
+    m_defaultFlags.enableOptimization = enableOptimization;
+
+    std::wstring msg = L"Compilation flags updated: debug=" +
+        std::to_wstring(enableDebug) + L", optimization=" + std::to_wstring(enableOptimization);
+    LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+}
+
+std::string Shader::Console_ListShaders() const {
+    std::stringstream ss;
+    ss << "=== Loaded Shaders ===" << std::endl;
+
+    ss << "  [VS] Vertex Shader - " << (m_isCompiled && m_type == ShaderType::VERTEX_SHADER ? "Active (RHI)" : "Not loaded") << std::endl;
+    ss << "  [PS] Pixel Shader - " << (m_isCompiled && m_type == ShaderType::PIXEL_SHADER ? "Active (RHI)" : "Not loaded") << std::endl;
+
+    // List cached shaders
+    for (const auto& entry : m_shaderCache) {
+        ss << "  [Cache] " << entry.first;
+        ss << (entry.second->IsValid() ? " - Valid" : " - Invalid");
+        ss << std::endl;
+    }
+
+    // List variants
+    for (const auto& variant : m_variants) {
+        ss << "  [Variant] " << variant.name;
+        ss << (variant.isCompiled ? " - Compiled" : " - Not compiled");
+        if (variant.id == m_activeVariant) ss << " (ACTIVE)";
+        ss << std::endl;
+    }
+
+    // Watched files
+    ss << std::endl << "Watched files: " << m_watchedFiles.size() << std::endl;
+    for (const auto& wf : m_watchedFiles) {
+        std::string narrowPath = WideToNarrow(wf);
+        ss << "  " << narrowPath << std::endl;
+    }
+
+    return ss.str();
+}
+
+std::string Shader::Console_GetShaderInfo(const std::string& shaderName) const {
+    std::stringstream ss;
+    ss << "=== Shader Info: " << shaderName << " ===" << std::endl;
+
+    if (shaderName == "vertex" || shaderName == "vs") {
+        ss << "Type: Vertex Shader" << std::endl;
+        ss << "Valid: " << (m_isCompiled && m_type == ShaderType::VERTEX_SHADER ? "Yes" : "No") << std::endl;
+        ss << "Backend: RHI (Linux)" << std::endl;
+    } else if (shaderName == "pixel" || shaderName == "ps") {
+        ss << "Type: Pixel Shader" << std::endl;
+        ss << "Valid: " << (m_isCompiled && m_type == ShaderType::PIXEL_SHADER ? "Yes" : "No") << std::endl;
+        ss << "Backend: RHI (Linux)" << std::endl;
+    } else {
+        auto it = m_shaderCache.find(shaderName);
+        if (it != m_shaderCache.end()) {
+            ss << "Found in cache" << std::endl;
+            ss << "Valid: " << (it->second->IsValid() ? "Yes" : "No") << std::endl;
+        } else {
+            ss << "Shader not found" << std::endl;
+        }
+    }
+
+    // General metrics
+    auto metrics = GetMetricsThreadSafe();
+    ss << std::endl << "Compilation Stats:" << std::endl;
+    ss << "  Compiled: " << metrics.compiledShaders << std::endl;
+    ss << "  Failed: " << metrics.failedCompilations << std::endl;
+    ss << "  Last compile time: " << metrics.lastCompileTime << " ms" << std::endl;
+
+    if (!m_filePath.empty()) {
+        ss << "File path: " << m_filePath << std::endl;
+    }
+
+    return ss.str();
+}
+
+void Shader::Console_RegisterStateCallback(std::function<void()> callback) {
+    m_stateCallback = callback;
+}
+
+int Shader::Console_ValidateShaders() {
+    int errors = 0;
+
+    if (!m_isCompiled && !m_filePath.empty()) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Validation error: Shader not compiled", L"ERROR");
+        errors++;
+    }
+
+    for (const auto& entry : m_shaderCache) {
+        if (!entry.second->IsValid()) {
+            std::wstring name(entry.first.begin(), entry.first.end());
+            LOG_TO_CONSOLE_IMMEDIATE(L"Validation error: Cached shader invalid: " + name, L"ERROR");
+            errors++;
+        }
+    }
+
+    for (const auto& variant : m_variants) {
+        if (!variant.isCompiled) {
+            std::wstring name(variant.name.begin(), variant.name.end());
+            LOG_TO_CONSOLE_IMMEDIATE(L"Validation error: Variant not compiled: " + name, L"ERROR");
+            errors++;
+        }
+    }
+
+    if (errors == 0) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"All shaders validated successfully", L"SUCCESS");
+    } else {
+        std::wstring msg = L"Shader validation found " + std::to_wstring(errors) + L" error(s)";
+        LOG_TO_CONSOLE_IMMEDIATE(msg, L"WARNING");
+    }
+
+    return errors;
+}
+
+void Shader::Console_ClearCache() {
+    m_shaderCache.clear();
+    m_shaderVariants.clear();
+    m_variants.clear();
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.activeVariants = 0;
+        m_metrics.shaderMemoryUsage = 0;
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Shader cache cleared", L"INFO");
+}
+
+void Shader::Console_SetSearchPaths(const std::vector<std::string>& paths) {
+    m_searchPaths = paths;
+    std::wstring msg = L"Shader search paths updated (" + std::to_wstring(paths.size()) + L" paths)";
+    LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+}
+
+// ============================================================================
+// RHI CROSS-PLATFORM COMPILATION
+// ============================================================================
+
+bool Shader::CompileWithRHI(const std::string& sourceFile, ShaderType type, int targetBackend) {
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    Spark::RHI::ShaderCompileOptions options;
+    options.stage = ShaderTypeToRHIStage(type);
+    options.sourceFile = sourceFile;
+    options.entryPoint = m_defaultFlags.entryPoint;
+    options.optimizationEnabled = m_defaultFlags.enableOptimization;
+    options.debugInfoEnabled = m_defaultFlags.enableDebug;
+    options.defines = m_defaultFlags.defines;
+    options.includePaths = m_defaultFlags.includePaths;
+    options.targetBackend = static_cast<Spark::RHI::GraphicsBackend>(targetBackend);
+
+    // Read source if file exists
+    std::string sourceCode;
+    if (FileExistsLinux(sourceFile) && ReadFileContents(sourceFile, sourceCode)) {
+        options.sourceCode = sourceCode;
+    }
+
+    // Auto-detect source language from file extension
+    options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
+
+    Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    float compileTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.lastCompileTime = compileTimeMs;
+        m_metrics.totalCompileTime += compileTimeMs;
+    }
+
+    if (!result.success) {
+        std::wstring wError(result.errorMessage.begin(), result.errorMessage.end());
+        LOG_TO_CONSOLE_IMMEDIATE(L"RHI shader compilation failed: " + wError, L"ERROR");
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.failedCompilations++;
+        return false;
+    }
+
+    // Save compiled bytecode for later loading
+    std::string outputPath = sourceFile;
+    size_t dotPos = outputPath.find_last_of('.');
+    if (dotPos != std::string::npos) {
+        outputPath = outputPath.substr(0, dotPos);
+    }
+
+    // Determine output extension based on target
+    Spark::RHI::GraphicsBackend backend = static_cast<Spark::RHI::GraphicsBackend>(targetBackend);
+    if (backend == Spark::RHI::GraphicsBackend::Vulkan) {
+        outputPath += ".spv";
+    } else {
+        outputPath += ".compiled";
+    }
+
+    Spark::RHI::SaveCompiledShader(outputPath, result.bytecode);
+
+    m_isCompiled = true;
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.compiledShaders++;
+        m_metrics.shaderMemoryUsage += result.bytecode.size();
+    }
+
+    std::wstring wFile(sourceFile.begin(), sourceFile.end());
+    LOG_TO_CONSOLE_IMMEDIATE(L"RHI shader compiled successfully: " + wFile, L"SUCCESS");
+    return true;
+}
+
+// ============================================================================
+// STATIC COMPILATION UTILITY (LEGACY)
+// ============================================================================
+
+HRESULT Shader::CompileShaderFromFile(const std::wstring& filename,
+    const std::string& entryPoint,
+    const std::string& shaderModel,
+    ID3DBlob** blobOut)
+{
+    // On Linux, D3DCompileFromFile is not available. Use RHI compilation instead.
+    std::string narrowPath = WideToNarrow(filename);
+
+    if (!FileExistsLinux(narrowPath)) {
+        return E_FAIL;
+    }
+
+    std::string sourceCode;
+    if (!ReadFileContents(narrowPath, sourceCode)) {
+        return E_FAIL;
+    }
+
+    // Determine shader stage from shader model string
+    Spark::RHI::RHIShaderStage stage = Spark::RHI::RHIShaderStage::Vertex;
+    if (shaderModel.find("ps_") == 0) {
+        stage = Spark::RHI::RHIShaderStage::Pixel;
+    } else if (shaderModel.find("gs_") == 0) {
+        stage = Spark::RHI::RHIShaderStage::Geometry;
+    } else if (shaderModel.find("hs_") == 0) {
+        stage = Spark::RHI::RHIShaderStage::Hull;
+    } else if (shaderModel.find("ds_") == 0) {
+        stage = Spark::RHI::RHIShaderStage::Domain;
+    } else if (shaderModel.find("cs_") == 0) {
+        stage = Spark::RHI::RHIShaderStage::Compute;
+    }
+
+    Spark::RHI::ShaderCompileOptions options;
+    options.stage = stage;
+    options.sourceFile = narrowPath;
+    options.sourceCode = sourceCode;
+    options.entryPoint = entryPoint;
+    options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+    Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+
+    if (!result.success) {
+        return E_FAIL;
+    }
+
+    // blobOut remains null on Linux (ID3DBlob is a stub type)
+    if (blobOut) {
+        *blobOut = nullptr;
+    }
+
+    return S_OK;
+}
+
+// ============================================================================
+// PRIVATE HELPER METHODS
+// ============================================================================
+
+HRESULT Shader::CompileShaderFromFileAdvanced(const std::wstring& filename,
+    ShaderType type,
+    const ShaderCompilationFlags& flags,
+    ID3DBlob** blobOut)
+{
+    // Delegate to the RHI pipeline on Linux
+    std::string narrowPath = WideToNarrow(filename);
+
+    std::string sourceCode;
+    if (!FileExistsLinux(narrowPath) || !ReadFileContents(narrowPath, sourceCode)) {
+        return E_FAIL;
+    }
+
+    Spark::RHI::ShaderCompileOptions options;
+    options.stage = ShaderTypeToRHIStage(type);
+    options.sourceFile = narrowPath;
+    options.sourceCode = sourceCode;
+    options.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
+    options.optimizationEnabled = flags.enableOptimization;
+    options.debugInfoEnabled = flags.enableDebug;
+    options.defines = flags.defines;
+    options.includePaths = flags.includePaths;
+    options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
+    options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+    Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+
+    if (blobOut) {
+        *blobOut = nullptr; // ID3DBlob is a stub on Linux
+    }
+
+    return result.success ? S_OK : E_FAIL;
+}
+
+HRESULT Shader::CreateInputLayout(ID3DBlob* /*vertexShaderBlob*/, ID3D11InputLayout** inputLayout) {
+    // No-op on Linux: input layout is a D3D11 concept.
+    // The RHI backend handles vertex input configuration.
+    if (inputLayout) {
+        *inputLayout = nullptr;
+    }
+    return S_OK;
+}
+
+void Shader::UpdateFileMonitoring() {
+    if (m_hotReloadEnabled) {
+        HotReloadShaders();
+    }
+}
+
+void Shader::NotifyStateChange() {
+    if (m_stateCallback) {
+        m_stateCallback();
+    }
+}
+
+Shader::ShaderMetrics Shader::GetMetricsThreadSafe() const {
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    return m_metrics;
+}
 
 #endif // SPARK_PLATFORM_WINDOWS

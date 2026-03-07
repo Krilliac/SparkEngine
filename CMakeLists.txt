@@ -616,6 +616,16 @@ else()
         ${CMAKE_DL_LIBS}
     )
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_PLATFORM_LINUX)
+
+    # X11 for windowing and OpenGL context (GLX)
+    find_package(X11 QUIET)
+    if(X11_FOUND)
+        target_link_libraries(SparkEngineLib PUBLIC ${X11_LIBRARIES})
+        target_include_directories(SparkEngineLib PUBLIC ${X11_INCLUDE_DIR})
+        message(STATUS "X11 found - windowing support enabled")
+    else()
+        message(STATUS "X11 not found - headless mode only")
+    endif()
 endif()
 
 if(MSVC)

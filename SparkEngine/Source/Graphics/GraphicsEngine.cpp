@@ -2504,8 +2504,9 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
 
 #else // !SPARK_PLATFORM_WINDOWS
 
-// Linux no-op stubs — GraphicsEngine requires D3D11 (Windows-only).
-// Minimal stubs to satisfy linker (unique_ptr destructor, etc.)
+// ============================================================================
+// Linux implementation — routes rendering through the RHI bridge
+// ============================================================================
 #include "GraphicsEngine.h"
 #include "TextureSystem.h"
 #include "MaterialSystem.h"
@@ -2515,16 +2516,768 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
 #include "LightManager.h"
 #include "PostProcessingPipeline.h"
 #include "RenderTarget.h"
+#include "TemporalEffects.h"
 #include "../Physics/PhysicsSystem.h"
 #include "../Game/GameObject.h"
+#include "RHI/RHI.h"
+#include <iostream>
+#include <sstream>
+#include <chrono>
 
-GraphicsEngine::GraphicsEngine() {}
-GraphicsEngine::~GraphicsEngine() {}
-HRESULT GraphicsEngine::Initialize(HWND) { return E_FAIL; }
-void GraphicsEngine::Shutdown() {}
-HRESULT GraphicsEngine::Resize(uint32_t, uint32_t) { return E_FAIL; }
-void GraphicsEngine::BeginFrame() {}
-void GraphicsEngine::EndFrame() {}
-void GraphicsEngine::RenderScene(const DirectX::XMMATRIX&, const DirectX::XMMATRIX&, const std::vector<GameObject*>&) {}
+// ---------------------------------------------------------------------------
+// Internal detail: a file-local RHI bridge instance shared by all methods.
+// Stored as a local static so that the header (which uses ComPtr<> and D3D11
+// types) does not need to know about it.
+// ---------------------------------------------------------------------------
+namespace {
+
+struct LinuxRHIState
+{
+    Spark::RHI::RHIBridge bridge;
+    bool initialized = false;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    std::chrono::high_resolution_clock::time_point frameStart;
+    uint32_t frameCount = 0;
+    float accumulatedTime = 0.0f;
+    uint32_t measuredFps = 0;
+};
+
+static LinuxRHIState& GetRHI()
+{
+    static LinuxRHIState s;
+    return s;
+}
+
+} // anonymous namespace
+
+// ============================================================================
+// Construction / Destruction
+// ============================================================================
+
+GraphicsEngine::GraphicsEngine()
+    : m_currentPipeline(RenderPath::Forward)
+    , m_settings()
+    , m_statistics()
+    , m_width(0)
+    , m_height(0)
+    , m_fullscreen(false)
+    , m_hwnd(nullptr)
+    , m_hdrEnabled(false)
+    , m_msaaLevel(MSAALevel::None)
+    , m_windowWidth(0)
+    , m_windowHeight(0)
+    , m_frameInProgress(false)
+    , m_textureMemoryUsage(0)
+    , m_bufferMemoryUsage(0)
+{
+}
+
+GraphicsEngine::~GraphicsEngine()
+{
+    Shutdown();
+}
+
+// ============================================================================
+// Initialization
+// ============================================================================
+
+HRESULT GraphicsEngine::Initialize(HWND hWnd)
+{
+    m_hwnd = hWnd;
+
+    // Query initial window dimensions — default to 1280x720 if unknown
+    m_width = 1280;
+    m_height = 720;
+    m_windowWidth = m_width;
+    m_windowHeight = m_height;
+
+    auto& rhi = GetRHI();
+
+    // Select the best available backend (Vulkan preferred, OpenGL fallback)
+    Spark::RHI::GraphicsBackend backend = Spark::RHI::RHIBridge::GetRecommendedBackend();
+
+    bool ok = rhi.bridge.Initialize(
+        static_cast<void*>(hWnd),
+        m_width, m_height,
+        backend,
+#ifndef NDEBUG
+        true   // enable validation in debug builds
+#else
+        false
+#endif
+    );
+
+    if (!ok)
+    {
+        std::cerr << "[GraphicsEngine] RHI bridge initialization failed." << std::endl;
+        return E_FAIL;
+    }
+
+    rhi.initialized = true;
+    rhi.width = m_width;
+    rhi.height = m_height;
+
+    // Create subsystems (basic functionality, no D3D11 dependency)
+    m_textureSystem = std::make_unique<TextureSystem>();
+    m_materialSystem = std::make_unique<MaterialSystem>();
+    m_lightingSystem = std::make_unique<LightingSystem>();
+    m_postProcessingSystem = std::make_unique<PostProcessingSystem>();
+    m_assetPipeline = std::make_unique<AssetPipeline>();
+    m_physicsSystem = std::make_unique<PhysicsSystem>();
+    m_lightManager = std::make_unique<LightManager>();
+
+    std::cout << "[GraphicsEngine] Initialized on Linux via RHI ("
+              << rhi.bridge.GetBackendName() << ")" << std::endl;
+
+    return S_OK;
+}
+
+// ============================================================================
+// Shutdown
+// ============================================================================
+
+void GraphicsEngine::Shutdown()
+{
+    auto& rhi = GetRHI();
+    if (!rhi.initialized) return;
+
+    // Tear down subsystems
+    m_textureSystem.reset();
+    m_materialSystem.reset();
+    m_lightingSystem.reset();
+    m_postProcessingSystem.reset();
+    m_assetPipeline.reset();
+    m_physicsSystem.reset();
+    m_lightManager.reset();
+    m_postProcessing.reset();
+    m_temporalEffects.reset();
+    m_shader.reset();
+
+    rhi.bridge.Shutdown();
+    rhi.initialized = false;
+
+    std::cout << "[GraphicsEngine] Shutdown complete." << std::endl;
+}
+
+// ============================================================================
+// Resize
+// ============================================================================
+
+HRESULT GraphicsEngine::Resize(uint32_t width, uint32_t height)
+{
+    if (width == 0 || height == 0) return E_INVALIDARG;
+
+    auto& rhi = GetRHI();
+    if (!rhi.initialized) return E_FAIL;
+
+    if (!rhi.bridge.Resize(width, height))
+        return E_FAIL;
+
+    m_width = width;
+    m_height = height;
+    m_windowWidth = width;
+    m_windowHeight = height;
+    rhi.width = width;
+    rhi.height = height;
+
+    return S_OK;
+}
+
+void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
+{
+    Resize(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+}
+
+// ============================================================================
+// Frame Management
+// ============================================================================
+
+void GraphicsEngine::BeginFrame()
+{
+    auto& rhi = GetRHI();
+    if (!rhi.initialized) return;
+
+    bool expected = false;
+    if (!m_frameInProgress.compare_exchange_strong(expected, true))
+        return; // frame already in progress
+
+    rhi.frameStart = std::chrono::high_resolution_clock::now();
+
+    rhi.bridge.BeginFrame();
+
+    // Clear the back buffer
+    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
+    if (cmd)
+    {
+        Spark::RHI::IRHITexture* backBuffer = rhi.bridge.GetBackBuffer();
+        Spark::RHI::IRHITexture* depthBuffer = rhi.bridge.GetDepthBuffer();
+
+        if (backBuffer)
+        {
+            cmd->SetRenderTargets(&backBuffer, 1, depthBuffer);
+            cmd->ClearRenderTarget(backBuffer, m_settings.clearColor);
+        }
+        if (depthBuffer)
+        {
+            cmd->ClearDepthStencil(depthBuffer, 1.0f, 0);
+        }
+
+        // Set viewport
+        Spark::RHI::RHIViewport vp;
+        vp.x = 0.0f;
+        vp.y = 0.0f;
+        vp.width = static_cast<float>(m_width);
+        vp.height = static_cast<float>(m_height);
+        vp.minDepth = 0.0f;
+        vp.maxDepth = 1.0f;
+        cmd->SetViewport(vp);
+
+        Spark::RHI::RHIScissorRect sr;
+        sr.left = 0;
+        sr.top = 0;
+        sr.right = static_cast<int32_t>(m_width);
+        sr.bottom = static_cast<int32_t>(m_height);
+        cmd->SetScissorRect(sr);
+    }
+
+    m_statistics.drawCalls = 0;
+    m_statistics.triangles = 0;
+    m_statistics.vertices = 0;
+}
+
+void GraphicsEngine::EndFrame()
+{
+    auto& rhi = GetRHI();
+    if (!rhi.initialized) return;
+    if (!m_frameInProgress.load()) return;
+
+    rhi.bridge.EndFrame();
+    rhi.bridge.Present(m_settings.vsync);
+
+    // Timing
+    auto now = std::chrono::high_resolution_clock::now();
+    float frameDelta = std::chrono::duration<float, std::milli>(now - rhi.frameStart).count();
+    m_statistics.frameTime = frameDelta;
+    m_statistics.cpuTime = frameDelta; // approximate
+
+    // FPS calculation (rolling window)
+    rhi.accumulatedTime += frameDelta;
+    rhi.frameCount++;
+    if (rhi.accumulatedTime >= 1000.0f)
+    {
+        rhi.measuredFps = rhi.frameCount;
+        m_statistics.fps = rhi.measuredFps;
+        rhi.frameCount = 0;
+        rhi.accumulatedTime = 0.0f;
+    }
+
+    // Pull RHI statistics
+    const auto& rhiStats = rhi.bridge.GetFrameStatistics();
+    m_statistics.drawCalls += rhiStats.drawCalls;
+    m_statistics.triangles += rhiStats.trianglesRendered;
+    m_statistics.vertices += rhiStats.verticesProcessed;
+    m_statistics.textureBinds = rhiStats.textureBinds;
+    m_statistics.gpuTime = rhiStats.gpuFrameTime;
+    m_statistics.totalGPUMemory = rhiStats.gpuMemoryUsed;
+
+    m_frameInProgress.store(false);
+}
+
+// ============================================================================
+// RenderScene
+// ============================================================================
+
+void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix,
+                                  const DirectX::XMMATRIX& projMatrix,
+                                  const std::vector<GameObject*>& objects)
+{
+    auto& rhi = GetRHI();
+    if (!rhi.initialized) return;
+
+    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
+    if (!cmd) return;
+
+    cmd->BeginEvent("RenderScene");
+
+    m_statistics.totalObjects = static_cast<uint32_t>(objects.size());
+    uint32_t visibleCount = 0;
+
+    for (auto* obj : objects)
+    {
+        if (!obj) continue;
+        if (!obj->IsActive() || !obj->IsVisible()) continue;
+
+        visibleCount++;
+
+        // Each GameObject knows how to render itself given view/proj matrices
+        obj->Render(viewMatrix, projMatrix);
+
+        m_statistics.drawCalls++;
+    }
+
+    m_statistics.visibleObjects = visibleCount;
+    m_statistics.culledObjects = m_statistics.totalObjects - visibleCount;
+
+    cmd->EndEvent();
+}
+
+// ============================================================================
+// System Accessors
+// ============================================================================
+
+TextureSystem*         GraphicsEngine::GetTextureSystem()        const { return m_textureSystem.get(); }
+MaterialSystem*        GraphicsEngine::GetMaterialSystem()       const { return m_materialSystem.get(); }
+LightingSystem*        GraphicsEngine::GetLightingSystem()       const { return m_lightingSystem.get(); }
+PostProcessingSystem*  GraphicsEngine::GetPostProcessingSystem() const { return m_postProcessingSystem.get(); }
+AssetPipeline*         GraphicsEngine::GetAssetPipeline()        const { return m_assetPipeline.get(); }
+PhysicsSystem*         GraphicsEngine::GetPhysicsSystem()        const { return m_physicsSystem.get(); }
+LightManager*          GraphicsEngine::GetLightManager()         const { return m_lightManager.get(); }
+
+// ============================================================================
+// Rendering Settings
+// ============================================================================
+
+void GraphicsEngine::SetRenderingPipeline(RenderingPipeline pipeline)
+{
+    m_currentPipeline = pipeline;
+    m_settings.renderPath = pipeline;
+}
+
+RenderingPipeline GraphicsEngine::GetRenderingPipeline() const
+{
+    return m_currentPipeline;
+}
+
+void GraphicsEngine::SetGraphicsSettings(const GraphicsSettings& settings)
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    m_settings = settings;
+}
+
+const GraphicsSettings& GraphicsEngine::GetGraphicsSettings() const
+{
+    return m_settings;
+}
+
+void GraphicsEngine::SetQualityPreset(QualityPreset preset)
+{
+    m_settings.qualityPreset = preset;
+    switch (preset)
+    {
+    case QualityPreset::Low:
+        m_settings.maxTextureSize = 512;
+        m_settings.shadowMapSize = 512;
+        m_settings.msaaSamples = 1;
+        m_settings.bloom = false;
+        m_settings.ssao = false;
+        break;
+    case QualityPreset::Medium:
+        m_settings.maxTextureSize = 1024;
+        m_settings.shadowMapSize = 1024;
+        m_settings.msaaSamples = 2;
+        m_settings.bloom = true;
+        m_settings.ssao = false;
+        break;
+    case QualityPreset::High:
+        m_settings.maxTextureSize = 2048;
+        m_settings.shadowMapSize = 2048;
+        m_settings.msaaSamples = 4;
+        m_settings.bloom = true;
+        m_settings.ssao = true;
+        break;
+    case QualityPreset::Ultra:
+        m_settings.maxTextureSize = 4096;
+        m_settings.shadowMapSize = 4096;
+        m_settings.msaaSamples = 8;
+        m_settings.bloom = true;
+        m_settings.ssao = true;
+        m_settings.taa = true;
+        break;
+    case QualityPreset::Custom:
+        break;
+    }
+}
+
+void GraphicsEngine::SetRenderPath(RenderPath path)
+{
+    m_currentPipeline = path;
+    m_settings.renderPath = path;
+}
+
+void GraphicsEngine::SetHDREnabled(bool enabled)
+{
+    m_hdrEnabled = enabled;
+    m_settings.hdr = enabled;
+}
+
+void GraphicsEngine::SetMSAALevel(MSAALevel msaaLevel)
+{
+    m_msaaLevel = msaaLevel;
+    m_settings.msaaSamples = static_cast<uint32_t>(msaaLevel);
+}
+
+void GraphicsEngine::SetTAASettings(const TAASettings& settings)
+{
+    m_taaSettings = settings;
+    m_settings.taa = settings.enabled;
+}
+
+void GraphicsEngine::SetSSAOSettings(const SSAOSettings& settings)
+{
+    m_ssaoSettings = settings;
+    m_settings.ssao = settings.enabled;
+}
+
+void GraphicsEngine::SetSSRSettings(const SSRSettings& settings)
+{
+    m_ssrSettings = settings;
+}
+
+void GraphicsEngine::SetVolumetricSettings(const VolumetricSettings& settings)
+{
+    m_volumetricSettings = settings;
+}
+
+// ============================================================================
+// D3D11 Resource Access — return nullptr on Linux
+// ============================================================================
+
+ID3D11Device*           GraphicsEngine::GetDevice()           const { return nullptr; }
+ID3D11DeviceContext*    GraphicsEngine::GetContext()          const { return nullptr; }
+UINT                    GraphicsEngine::GetWindowWidth()      const { return m_windowWidth; }
+UINT                    GraphicsEngine::GetWindowHeight()     const { return m_windowHeight; }
+IDXGISwapChain*         GraphicsEngine::GetSwapChain()       const { return nullptr; }
+ID3D11RenderTargetView* GraphicsEngine::GetBackBufferRTV()   const { return nullptr; }
+ID3D11DepthStencilView* GraphicsEngine::GetDepthStencilView() const { return nullptr; }
+
+// ============================================================================
+// Statistics
+// ============================================================================
+
+const RenderStatistics& GraphicsEngine::GetStatistics() const
+{
+    return m_statistics;
+}
+
+void GraphicsEngine::ResetStatistics()
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    m_statistics = RenderStatistics{};
+}
+
+HRESULT GraphicsEngine::SaveScreenshot(const std::string& filename)
+{
+    // Screenshots require platform-specific pixel readback; not yet implemented
+    std::cerr << "[GraphicsEngine] SaveScreenshot not implemented on Linux: "
+              << filename << std::endl;
+    return E_NOTIMPL;
+}
+
+// ============================================================================
+// Console Integration Methods
+// ============================================================================
+
+RenderStatistics GraphicsEngine::Console_GetStatistics() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    return m_statistics;
+}
+
+void GraphicsEngine::Console_SetQuality(const std::string& preset)
+{
+    if (preset == "low")         SetQualityPreset(QualityPreset::Low);
+    else if (preset == "medium") SetQualityPreset(QualityPreset::Medium);
+    else if (preset == "high")   SetQualityPreset(QualityPreset::High);
+    else if (preset == "ultra")  SetQualityPreset(QualityPreset::Ultra);
+    else std::cerr << "[Console] Unknown quality preset: " << preset << std::endl;
+}
+
+void GraphicsEngine::Console_SetRenderPath(const std::string& path)
+{
+    if (path == "forward")           SetRenderPath(RenderPath::Forward);
+    else if (path == "deferred")     SetRenderPath(RenderPath::Deferred);
+    else if (path == "forward+")     SetRenderPath(RenderPath::ForwardPlus);
+    else if (path == "forwardplus")  SetRenderPath(RenderPath::ForwardPlus);
+    else if (path == "clustered")    SetRenderPath(RenderPath::Clustered);
+    else std::cerr << "[Console] Unknown render path: " << path << std::endl;
+}
+
+void GraphicsEngine::Console_EnableFeature(const std::string& feature, bool enabled)
+{
+    if (feature == "bloom")            m_settings.bloom = enabled;
+    else if (feature == "ssao")        m_settings.ssao = enabled;
+    else if (feature == "taa")         m_settings.taa = enabled;
+    else if (feature == "motionblur")  m_settings.motionBlur = enabled;
+    else if (feature == "hdr")         SetHDREnabled(enabled);
+    else if (feature == "vsync")       m_settings.vsync = enabled;
+    else if (feature == "shadows")     m_settings.shadows = enabled;
+    else if (feature == "wireframe")   m_settings.wireframeMode = enabled;
+    else std::cerr << "[Console] Unknown feature: " << feature << std::endl;
+}
+
+void GraphicsEngine::Console_SetSetting(const std::string& setting, float value)
+{
+    if (setting == "renderscale")       m_settings.renderScale = value;
+    else if (setting == "shadowmapsize") m_settings.shadowMapSize = static_cast<uint32_t>(value);
+    else if (setting == "anisotropy")   m_settings.anisotropyLevel = static_cast<uint32_t>(value);
+    else if (setting == "maxdrawcalls") m_settings.maxDrawCalls = static_cast<uint32_t>(value);
+    else std::cerr << "[Console] Unknown setting: " << setting << std::endl;
+}
+
+void GraphicsEngine::Console_ReloadShaders()
+{
+    auto& rhi = GetRHI();
+    if (rhi.initialized)
+    {
+        rhi.bridge.GetShaderCache().ReloadAll(rhi.bridge.GetDevice());
+        std::cout << "[Console] Shaders reloaded." << std::endl;
+    }
+}
+
+bool GraphicsEngine::Console_Screenshot(const std::string& filename)
+{
+    return SUCCEEDED(SaveScreenshot(filename.empty() ? "screenshot.png" : filename));
+}
+
+std::string GraphicsEngine::Console_GetSystemInfo() const
+{
+    auto& rhi = GetRHI();
+    std::ostringstream ss;
+    ss << "=== Spark Engine — Linux RHI ===\n";
+    if (rhi.initialized)
+    {
+        ss << "Backend : " << rhi.bridge.GetBackendName() << "\n";
+        ss << "Device  : " << rhi.bridge.GetDeviceInfo() << "\n";
+        const auto& caps = rhi.bridge.GetCapabilities();
+        ss << "VRAM    : " << (caps.dedicatedVideoMemory / (1024 * 1024)) << " MB\n";
+        ss << "Max Tex : " << caps.maxTextureSize << "\n";
+        ss << "MSAA max: " << caps.maxMSAASamples << "x\n";
+    }
+    else
+    {
+        ss << "RHI not initialized.\n";
+    }
+    ss << "Resolution: " << m_width << "x" << m_height << "\n";
+    return ss.str();
+}
+
+std::string GraphicsEngine::Console_Benchmark(int seconds)
+{
+    auto& rhi = GetRHI();
+    if (!rhi.initialized) return "RHI not initialized — cannot benchmark.";
+
+    auto start = std::chrono::high_resolution_clock::now();
+    uint32_t frames = 0;
+    float totalFrameTime = 0.0f;
+
+    while (true)
+    {
+        auto now = std::chrono::high_resolution_clock::now();
+        float elapsed = std::chrono::duration<float>(now - start).count();
+        if (elapsed >= static_cast<float>(seconds)) break;
+
+        BeginFrame();
+        EndFrame();
+        totalFrameTime += m_statistics.frameTime;
+        frames++;
+    }
+
+    float avgFrameTime = (frames > 0) ? (totalFrameTime / frames) : 0.0f;
+    float avgFps = (avgFrameTime > 0.0f) ? (1000.0f / avgFrameTime) : 0.0f;
+
+    std::ostringstream ss;
+    ss << "Benchmark complete: " << frames << " frames in " << seconds << "s\n"
+       << "Average frame time: " << avgFrameTime << " ms\n"
+       << "Average FPS: " << avgFps << "\n";
+    return ss.str();
+}
+
+void GraphicsEngine::Console_SetWireframe(bool enabled)
+{
+    m_settings.wireframeMode = enabled;
+    m_statistics.wireframeMode = enabled;
+}
+
+void GraphicsEngine::Console_SetWireframeMode(bool enabled)
+{
+    Console_SetWireframe(enabled);
+}
+
+void GraphicsEngine::Console_SetVSync(bool enabled)
+{
+    m_settings.vsync = enabled;
+    m_statistics.vsyncEnabled = enabled;
+}
+
+void GraphicsEngine::Console_SetRenderingPipeline(RenderingPipeline pipeline)
+{
+    SetRenderingPipeline(pipeline);
+}
+
+void GraphicsEngine::Console_SetHDR(bool enabled)
+{
+    SetHDREnabled(enabled);
+}
+
+void GraphicsEngine::Console_SetDebugMode(bool enabled)
+{
+    m_settings.debugMode = enabled;
+    m_statistics.debugMode = enabled;
+}
+
+void GraphicsEngine::Console_SetClearColor(float r, float g, float b, float a)
+{
+    m_settings.clearColor[0] = r;
+    m_settings.clearColor[1] = g;
+    m_settings.clearColor[2] = b;
+    m_settings.clearColor[3] = a;
+}
+
+void GraphicsEngine::Console_SetRenderScale(float scale)
+{
+    m_settings.renderScale = (scale > 0.0f) ? scale : 1.0f;
+}
+
+bool GraphicsEngine::Console_TakeScreenshot(const std::string& filename)
+{
+    return Console_Screenshot(filename);
+}
+
+void GraphicsEngine::Console_ResetDevice()
+{
+    auto& rhi = GetRHI();
+    if (!rhi.initialized) return;
+
+    HWND savedHwnd = m_hwnd;
+    Shutdown();
+    Initialize(savedHwnd);
+    std::cout << "[Console] Device reset complete." << std::endl;
+}
+
+void GraphicsEngine::Console_ForceGarbageCollection()
+{
+    // On Linux/RHI there are no deferred COM releases; flush the shader cache
+    auto& rhi = GetRHI();
+    if (rhi.initialized)
+    {
+        rhi.bridge.GetShaderCache().Clear(rhi.bridge.GetDevice());
+    }
+    std::cout << "[Console] Garbage collection complete." << std::endl;
+}
+
+void GraphicsEngine::Console_ApplySettings(const GraphicsSettings& settings)
+{
+    SetGraphicsSettings(settings);
+}
+
+void GraphicsEngine::Console_ResetToDefaults()
+{
+    GraphicsSettings defaults;
+    SetGraphicsSettings(defaults);
+    m_hdrEnabled = defaults.hdr;
+    m_msaaLevel = MSAALevel::None;
+    m_taaSettings = TAASettings{};
+    m_ssaoSettings = SSAOSettings{};
+    m_ssrSettings = SSRSettings{};
+    m_volumetricSettings = VolumetricSettings{};
+    std::cout << "[Console] Settings reset to defaults." << std::endl;
+}
+
+void GraphicsEngine::Console_RegisterStateCallback(std::function<void()> callback)
+{
+    m_stateCallback = std::move(callback);
+}
+
+void GraphicsEngine::Console_SetGPUTiming(bool enabled)
+{
+    m_settings.enableGPUTiming = enabled;
+}
+
+size_t GraphicsEngine::Console_GetVRAMUsage() const
+{
+    auto& rhi = GetRHI();
+    if (!rhi.initialized) return 0;
+    return rhi.bridge.GetFrameStatistics().gpuMemoryUsed;
+}
+
+GraphicsSettings GraphicsEngine::Console_GetSettings() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    return m_settings;
+}
+
+RenderStatistics GraphicsEngine::Console_GetMetrics() const
+{
+    return Console_GetStatistics();
+}
+
+// ============================================================================
+// Basic Shader System
+// ============================================================================
+
+void GraphicsEngine::SetBasicShaders()
+{
+    // On Linux, shader binding is handled through the RHI pipeline state objects.
+    // This is a no-op; shaders are set when pipeline states are created.
+}
+
+void GraphicsEngine::UpdateBasicConstants(const DirectX::XMMATRIX& /*world*/,
+                                           const DirectX::XMMATRIX& /*view*/,
+                                           const DirectX::XMMATRIX& /*proj*/)
+{
+    // Constant buffer updates go through the RHI bridge on Linux.
+    // Individual subsystems using the RHI will update their own constant buffers.
+}
+
+void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& /*view*/,
+                                           const XMMATRIX& /*proj*/,
+                                           const XMFLOAT3& /*cameraPos*/)
+{
+    // Frame constants are managed per-subsystem through the RHI on Linux.
+}
+
+// ============================================================================
+// Private Methods — stubs for methods only used by the Windows pipeline
+// ============================================================================
+
+HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND)             { return E_NOTIMPL; }
+HRESULT GraphicsEngine::CreateDevice(HWND, uint32_t, uint32_t, bool) { return E_NOTIMPL; }
+HRESULT GraphicsEngine::CreateRenderTargetView()                   { return E_NOTIMPL; }
+HRESULT GraphicsEngine::CreateDepthStencilView()                   { return E_NOTIMPL; }
+HRESULT GraphicsEngine::CreateRenderTargets()                      { return E_NOTIMPL; }
+HRESULT GraphicsEngine::CreateAdvancedRenderTargets()              { return E_NOTIMPL; }
+HRESULT GraphicsEngine::CreateRenderStates()                       { return E_NOTIMPL; }
+void    GraphicsEngine::SetViewport()                              {}
+void    GraphicsEngine::UpdateMetrics()                            {}
+void    GraphicsEngine::UpdateAdvancedMetrics()                    {}
+void    GraphicsEngine::ApplyGraphicsState()                       {}
+void    GraphicsEngine::ApplyAdvancedGraphicsState()               {}
+void    GraphicsEngine::ApplyQualityPreset(QualityPreset)          {}
+void    GraphicsEngine::NotifyStateChange()
+{
+    if (m_stateCallback) m_stateCallback();
+}
+
+void GraphicsEngine::SetupDeferredPipeline()     {}
+void GraphicsEngine::SetupForwardPlusPipeline()  {}
+
+void GraphicsEngine::RenderForward(const XMMATRIX&, const XMMATRIX&, const std::vector<GameObject*>&) {}
+void GraphicsEngine::RenderDeferred(const XMMATRIX&, const XMMATRIX&, const std::vector<GameObject*>&) {}
+void GraphicsEngine::RenderForwardPlus(const XMMATRIX&, const XMMATRIX&, const std::vector<GameObject*>&) {}
+void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>&, const XMMATRIX&, const XMMATRIX&) {}
+void GraphicsEngine::LightingPass(const XMMATRIX&, const XMMATRIX&) {}
+void GraphicsEngine::CullObjects(const std::vector<GameObject*>&, const XMMATRIX&, const XMMATRIX&, std::vector<GameObject*>&) {}
+void GraphicsEngine::RenderGeometryPass()     {}
+void GraphicsEngine::RenderLightingPass()     {}
+void GraphicsEngine::RenderPostProcessing()   {}
+void GraphicsEngine::RenderTemporalEffects()  {}
+
+HRESULT GraphicsEngine::InitializeBasicShaders()   { return S_OK; }
+HRESULT GraphicsEngine::CompileShaderFromFile(const std::wstring&, const char*, const char*, ID3DBlob**) { return E_NOTIMPL; }
+HRESULT GraphicsEngine::CreateBasicConstantBuffer() { return S_OK; }
+HRESULT GraphicsEngine::CreateDefaultTexture()      { return S_OK; }
+HRESULT GraphicsEngine::CompileEmbeddedVertexShader(ID3DBlob**) { return E_NOTIMPL; }
+HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob**)  { return E_NOTIMPL; }
 
 #endif // SPARK_PLATFORM_WINDOWS
