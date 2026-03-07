@@ -223,10 +223,12 @@ cmake -B build -DENABLE_EDITOR=OFF -DENABLE_LUA=OFF
 Two GitHub Actions workflows run automatically:
 
 **`build.yml`** — runs on every push / PR to `main`, `develop`, and `feature/**`:
-- Platforms: Windows (MSVC VS 2022 + experimental VS 2026), Linux GCC, Linux Clang
+- Platforms: Windows (MSVC VS 2022 + experimental VS 2026¹), Linux GCC, Linux Clang
 - Configurations: Debug and Release matrix
 - Steps: checkout with submodules, CMake configure, build, test (Release only), artifact upload
 - Artifacts retained for 7 days
+
+> ¹ **VS 2026 (v144 toolset):** The VS 2026 CI job is included for forward compatibility but will be skipped until GitHub Actions runners ship with the v144 platform toolset. It is marked `continue-on-error` and does not gate merges.
 
 **`release.yml`** — runs on every push to `master` / `main`:
 - Builds Windows (VS 2022) and Linux (GCC) in Debug + Release
