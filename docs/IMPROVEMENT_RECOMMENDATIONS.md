@@ -9,18 +9,18 @@
 
 ## High Priority — Immediate Impact
 
-### 1. Add clang-format and clang-tidy
+### 1. Add clang-tidy and enforce clang-format in CI
 
-**Why:** No code formatting or static analysis tooling exists. Inconsistent style across 250+ source files makes contributions harder and bugs easier to miss.
+**Why:** A `.clang-format` config exists but is not enforced — there's no CI check or pre-commit hook to catch style violations. No static analysis tooling (`clang-tidy`) exists at all.
 
-- Add `.clang-format` with the project's existing style conventions
-- Add `.clang-tidy` with checks for common C++ pitfalls (`bugprone-*`, `modernize-*`, `performance-*`)
-- Add a CI step that runs `clang-format --dry-run` to catch style violations
+- Add a `.clang-tidy` config with checks for common C++ pitfalls (`bugprone-*`, `modernize-*`, `performance-*`)
+- Add a CI step that runs `clang-format --dry-run --Werror` to enforce the existing `.clang-format`
+- Optionally add a pre-commit hook for local enforcement
 
 | | |
 |---|---|
 | Complexity | Small |
-| Files | New `.clang-format`, `.clang-tidy`, update `.github/workflows/` |
+| Files | New `.clang-tidy`, update `.github/workflows/build.yml` |
 
 ---
 
@@ -150,19 +150,19 @@
 
 ---
 
-### 10. Add a persistent configuration/settings file system
+### 10. Wire up the existing settings.ini to actually drive engine initialization
 
-**Why:** Engine settings (resolution, vsync, quality presets, keybinds) are currently hardcoded or only changeable via console commands. Users need persistent configuration.
+**Why:** A `settings.ini` exists (`Spark Engine/Resources/Config/settings.ini`) with graphics, audio, controls, and game settings — but the engine ignores it. Window size is hardcoded to 1280x720 in `SparkEngine.cpp`, and settings are only changeable via console commands at runtime.
 
-- JSON or INI config file loaded at startup
-- Settings categories: graphics, audio, input, gameplay
-- Console commands to modify and save settings
-- Auto-save on exit
+- Parse `settings.ini` at startup and apply values (window size, fullscreen, vsync, volumes, mouse sensitivity)
+- Wire console commands (`gfx_vsync`, etc.) to write back to the INI file
+- Auto-save modified settings on shutdown
+- Add quality presets (Low/Medium/High/Ultra) that set multiple values at once
 
 | | |
 |---|---|
 | Complexity | Small–Medium |
-| Files | New `Engine/Config/EngineConfig.h/.cpp`, modifications to subsystem initialization |
+| Files | `Spark Engine/Source/Core/SparkEngine.cpp`, new or existing config parser, `Spark Engine/Resources/Config/settings.ini` |
 
 ---
 
