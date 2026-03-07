@@ -15,7 +15,6 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
-#endif // SPARK_PLATFORM_WINDOWS
 using Microsoft::WRL::ComPtr;
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>
@@ -79,8 +78,10 @@ struct FrameTimingHistory
         {
             if (t > 0.0f)
             {
-                if (t < minTime) minTime = t;
-                if (t > maxTime) maxTime = t;
+                if (t < minTime)
+                    minTime = t;
+                if (t > maxTime)
+                    maxTime = t;
                 sum += t;
                 count++;
             }
@@ -108,11 +109,11 @@ struct GPUTimerQuery
  */
 class ScopedProfileTimer
 {
-public:
+  public:
     ScopedProfileTimer(const std::string& name, ProfileCategory category = ProfileCategory::Custom);
     ~ScopedProfileTimer();
 
-private:
+  private:
     std::string m_name;
     ProfileCategory m_category;
     std::chrono::high_resolution_clock::time_point m_start;
@@ -123,7 +124,7 @@ private:
  */
 class Profiler
 {
-public:
+  public:
     static Profiler& GetInstance()
     {
         static Profiler instance;
@@ -235,7 +236,7 @@ public:
     std::string Console_GetMemoryReport() const;
     void Console_ExportCSV(const std::string& filepath) const;
 
-private:
+  private:
     Profiler() = default;
     Profiler(const Profiler&) = delete;
     Profiler& operator=(const Profiler&) = delete;
@@ -263,7 +264,8 @@ private:
 #endif // SPARK_PLATFORM_WINDOWS
 
     // Memory tracking
-    struct MemoryCategory {
+    struct MemoryCategory
+    {
         size_t currentBytes = 0;
         size_t peakBytes = 0;
         size_t totalAllocations = 0;
@@ -275,22 +277,22 @@ private:
 
 // Convenience macros for profiling
 #ifdef PROFILING_ENABLED
-    #define PROFILE_SCOPE(name)       ScopedProfileTimer _profile_##__LINE__(name)
-    #define PROFILE_SCOPE_CAT(name, cat) ScopedProfileTimer _profile_##__LINE__(name, cat)
-    #define PROFILE_BEGIN(name)       Profiler::GetInstance().BeginSection(name)
-    #define PROFILE_END(name)         Profiler::GetInstance().EndSection(name)
-    #ifdef SPARK_PLATFORM_WINDOWS
-        #define PROFILE_GPU_BEGIN(name)   Profiler::GetInstance().BeginGPUTimer(name)
-        #define PROFILE_GPU_END(name)     Profiler::GetInstance().EndGPUTimer(name)
-    #else
-        #define PROFILE_GPU_BEGIN(name)
-        #define PROFILE_GPU_END(name)
-    #endif
+#define PROFILE_SCOPE(name) ScopedProfileTimer _profile_##__LINE__(name)
+#define PROFILE_SCOPE_CAT(name, cat) ScopedProfileTimer _profile_##__LINE__(name, cat)
+#define PROFILE_BEGIN(name) Profiler::GetInstance().BeginSection(name)
+#define PROFILE_END(name) Profiler::GetInstance().EndSection(name)
+#ifdef SPARK_PLATFORM_WINDOWS
+#define PROFILE_GPU_BEGIN(name) Profiler::GetInstance().BeginGPUTimer(name)
+#define PROFILE_GPU_END(name) Profiler::GetInstance().EndGPUTimer(name)
 #else
-    #define PROFILE_SCOPE(name)
-    #define PROFILE_SCOPE_CAT(name, cat)
-    #define PROFILE_BEGIN(name)
-    #define PROFILE_END(name)
-    #define PROFILE_GPU_BEGIN(name)
-    #define PROFILE_GPU_END(name)
+#define PROFILE_GPU_BEGIN(name)
+#define PROFILE_GPU_END(name)
+#endif
+#else
+#define PROFILE_SCOPE(name)
+#define PROFILE_SCOPE_CAT(name, cat)
+#define PROFILE_BEGIN(name)
+#define PROFILE_END(name)
+#define PROFILE_GPU_BEGIN(name)
+#define PROFILE_GPU_END(name)
 #endif
