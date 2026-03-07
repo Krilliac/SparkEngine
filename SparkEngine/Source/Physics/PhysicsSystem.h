@@ -63,7 +63,6 @@
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
-using namespace DirectX;
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>
