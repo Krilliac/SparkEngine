@@ -68,7 +68,7 @@ size_t GetSubscriberCount() const; // Count subscribers for type T
 
 ## Built-in Event Types
 
-### [[Gameplay Systems|Gameplay]] Events
+### [Gameplay](Gameplay-Systems) Events
 
 ```cpp
 struct EntityDamagedEvent {
@@ -101,7 +101,7 @@ struct PlayerRespawnEvent {
 };
 ```
 
-### [[Day Night Cycle and Weather|World]] Events
+### [World](Day-Night-Cycle-and-Weather) Events
 
 ```cpp
 struct WeatherChangedEvent {
@@ -117,7 +117,7 @@ struct TimeOfDayChangedEvent {
 };
 ```
 
-### [[Physics]] Events
+### [Physics](Physics) Events
 
 ```cpp
 struct CollisionEvent {
@@ -180,10 +180,10 @@ bool OnLoad(Spark::IEngineContext* context) override {
 
 ## See Also
 
-- [[Architecture Overview]] — How subsystems communicate
-- [[Entity Component System]] — Entity lifecycle events
-- [[Day Night Cycle and Weather]] — Weather and time-of-day events
-- [[Physics]] — Collision events
-- [[Gameplay Systems]] — Gameplay events (damage, kills, quests)
-- [[Networking]] — Network event replication
-- [[Audio]] — Audio event triggers
+- [Architecture Overview](Architecture-Overview) — How subsystems communicate
+- [Entity Component System](Entity-Component-System) — Entity lifecycle events
+- [Day Night Cycle and Weather](Day-Night-Cycle-and-Weather) — Weather and time-of-day events
+- [Physics](Physics) — Collision events
+- [Gameplay Systems](Gameplay-Systems) — Gameplay events (damage, kills, quests)
+- [Networking](Networking) — Network event replication
+- [Audio](Audio) — Audio event triggers

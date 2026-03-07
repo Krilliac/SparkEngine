@@ -12,7 +12,7 @@ The terrain system renders large outdoor environments using heightmaps:
 
 - **Quadtree LOD** — Automatic level-of-detail based on camera distance
 - **Texture Splatting** — Multi-texture blending based on height, slope, or paint masks
-- **Heightfield Collision** — [[Physics|Bullet Physics]] `Heightfield` shape for terrain collisions
+- **Heightfield Collision** — [Bullet Physics](Physics) `Heightfield` shape for terrain collisions
 - **Chunk-based** — Terrain is divided into chunks for efficient culling and streaming
 
 ## Noise Functions
@@ -92,9 +92,9 @@ Procedural room and dungeon layout generation using the WFC algorithm:
 
 ## See Also
 
-- [[Physics]] — Heightfield collision shapes
-- [[Rendering and Graphics]] — Terrain rendering and LOD
-- [[Scene Management]] — Procedurally generated scenes
-- [[Asset Pipeline]] — Terrain asset streaming and loading
-- [[Gameplay Systems]] — Procedural content for gameplay
-- [[Event System]] — Terrain generation event hooks
+- [Physics](Physics) — Heightfield collision shapes
+- [Rendering and Graphics](Rendering-and-Graphics) — Terrain rendering and LOD
+- [Scene Management](Scene-Management) — Procedurally generated scenes
+- [Asset Pipeline](Asset-Pipeline) — Terrain asset streaming and loading
+- [Gameplay Systems](Gameplay-Systems) — Procedural content for gameplay
+- [Event System](Event-System) — Terrain generation event hooks

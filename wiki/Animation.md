@@ -104,7 +104,7 @@ Root motion extraction moves the character based on animation data rather than g
 
 ## ECS Integration
 
-Use `AnimationController` on entities (see [[Entity Component System]]):
+Use `AnimationController` on entities (see [Entity Component System](Entity-Component-System)):
 
 ```cpp
 auto& anim = world.AddComponent<AnimationController>(entity);
@@ -119,7 +119,7 @@ The `AnimationUpdateSystem` evaluates state machines and blends poses each frame
 
 ## Asset Import
 
-Models with animations are imported via Assimp (see [[Asset Pipeline]]):
+Models with animations are imported via Assimp (see [Asset Pipeline](Asset-Pipeline)):
 - **FBX** — Industry standard, supports skeletons and animations
 - **glTF** — Modern format with PBR materials and animations
 
@@ -127,11 +127,11 @@ Models with animations are imported via Assimp (see [[Asset Pipeline]]):
 
 ## See Also
 
-- [[Entity Component System]] — AnimationController component
-- [[Asset Pipeline]] — Importing animated models
-- [[SparkEditor]] — Animation timeline editor
-- [[Rendering and Graphics]] — Skinned mesh rendering
-- [[AI and Navigation]] — NPC animation integration
-- [[Physics]] — Root motion and physics interaction
-- [[Gameplay Systems]] — Player and weapon animations
-- [[Cinematic Sequencer]] — Animation in cinematics
+- [Entity Component System](Entity-Component-System) — AnimationController component
+- [Asset Pipeline](Asset-Pipeline) — Importing animated models
+- [SparkEditor](SparkEditor) — Animation timeline editor
+- [Rendering and Graphics](Rendering-and-Graphics) — Skinned mesh rendering
+- [AI and Navigation](AI-and-Navigation) — NPC animation integration
+- [Physics](Physics) — Root motion and physics interaction
+- [Gameplay Systems](Gameplay-Systems) — Player and weapon animations
+- [Cinematic Sequencer](Cinematic-Sequencer) — Animation in cinematics

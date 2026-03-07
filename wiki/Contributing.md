@@ -83,7 +83,7 @@ struct HealthComponent {
 5. Add unit tests in `Tests/`
 6. Document in the wiki
 
-### Adding a New Component (see [[Entity Component System]])
+### Adding a New Component (see [Entity Component System](Entity-Component-System))
 
 1. Define the POD struct in `Components.h`
 2. Add a system function in `ECSystems.h` if needed
@@ -123,8 +123,8 @@ Include:
 
 ## See Also
 
-- [[Architecture Overview]] — Engine design
-- [[Build System and CMake Modules]] — Build configuration
-- [[Testing]] — Adding and running tests
-- [[Getting Started]] — Building and running the project
-- [[Entity Component System]] — Component architecture and ECS patterns
+- [Architecture Overview](Architecture-Overview) — Engine design
+- [Build System and CMake Modules](Build-System-and-CMake-Modules) — Build configuration
+- [Testing](Testing) — Adding and running tests
+- [Getting Started](Getting-Started) — Building and running the project
+- [Entity Component System](Entity-Component-System) — Component architecture and ECS patterns

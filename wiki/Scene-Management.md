@@ -128,7 +128,7 @@ sceneMgr.MarkDirty();          // Mark scene as modified
 bool unsaved = sceneMgr.IsDirty();  // Check for unsaved changes
 ```
 
-The [[SparkEditor|editor]] uses this to prompt "Save changes?" before closing or loading a new scene.
+The [editor](SparkEditor) uses this to prompt "Save changes?" before closing or loading a new scene.
 
 ## Undo/Redo
 
@@ -152,12 +152,12 @@ scene_clear         # Clear the scene
 
 ## See Also
 
-- [[Entity Component System]] — ECS entities created from scene nodes
-- [[SparkEditor]] — Visual scene hierarchy editor
-- [[Asset Pipeline]] — Model and asset loading
-- [[Rendering and Graphics]] — Scene rendering pipeline
-- [[Physics]] — Physics bodies from scene nodes
-- [[Gameplay Systems]] — Gravity and interactive objects
-- [[Save System]] — Saving and restoring scene state
-- [[Event System]] — Scene lifecycle events
-- [[Networking]] — Networked scene synchronization
+- [Entity Component System](Entity-Component-System) — ECS entities created from scene nodes
+- [SparkEditor](SparkEditor) — Visual scene hierarchy editor
+- [Asset Pipeline](Asset-Pipeline) — Model and asset loading
+- [Rendering and Graphics](Rendering-and-Graphics) — Scene rendering pipeline
+- [Physics](Physics) — Physics bodies from scene nodes
+- [Gameplay Systems](Gameplay-Systems) — Gravity and interactive objects
+- [Save System](Save-System) — Saving and restoring scene state
+- [Event System](Event-System) — Scene lifecycle events
+- [Networking](Networking) — Networked scene synchronization

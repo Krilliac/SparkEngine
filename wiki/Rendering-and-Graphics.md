@@ -156,7 +156,7 @@ The Render Hardware Interface provides backend-agnostic graphics:
 
 ## GPU Particle System
 
-`ParticleSystem` provides GPU-accelerated particles controlled via `ParticleEmitterComponent` (see [[Entity Component System]]).
+`ParticleSystem` provides GPU-accelerated particles controlled via `ParticleEmitterComponent` (see [Entity Component System](Entity-Component-System)).
 
 ## Lighting
 
@@ -184,11 +184,11 @@ vsync <on|off>         # Toggle vertical sync
 
 ## See Also
 
-- [[Entity Component System]] — MeshRenderer, LightComponent, and ParticleEmitter components
-- [[Shader Pipeline]] — Shader authoring and compilation
-- [[Asset Pipeline]] — Model and texture loading
-- [[SparkEditor]] — Material editor and visual tools
-- [[Animation]] — Skeletal animation and blending
-- [[Terrain and Procedural Generation]] — Procedural mesh and terrain rendering
-- [[Physics]] — Debug draw overlay for collision shapes
-- [[Day Night Cycle and Weather]] — Dynamic lighting and weather effects
+- [Entity Component System](Entity-Component-System) — MeshRenderer, LightComponent, and ParticleEmitter components
+- [Shader Pipeline](Shader-Pipeline) — Shader authoring and compilation
+- [Asset Pipeline](Asset-Pipeline) — Model and texture loading
+- [SparkEditor](SparkEditor) — Material editor and visual tools
+- [Animation](Animation) — Skeletal animation and blending
+- [Terrain and Procedural Generation](Terrain-and-Procedural-Generation) — Procedural mesh and terrain rendering
+- [Physics](Physics) — Debug draw overlay for collision shapes
+- [Day Night Cycle and Weather](Day-Night-Cycle-and-Weather) — Dynamic lighting and weather effects
