@@ -79,8 +79,11 @@ void ConsolePanel::Update(float /*deltaTime*/) {
         UpdateStats();
         m_lastStatsUpdate = now;
     }
-    if (m_filter.autoScroll && !m_logEntries.empty()) {
-        m_scrollToBottom = true;
+    {
+        std::lock_guard<std::mutex> lock(m_logMutex);
+        if (m_filter.autoScroll && !m_logEntries.empty()) {
+            m_scrollToBottom = true;
+        }
     }
 }
 
@@ -258,6 +261,18 @@ void ConsolePanel::RenderLogDisplay() {
     ImVec2 contentSize = ImGui::GetContentRegionAvail();
     contentSize.y -= 30; // Reserve space for command input
 
+    // Snapshot filtered entries under lock to avoid data races during rendering
+    std::vector<LogEntry> visibleEntries;
+    {
+        std::lock_guard<std::mutex> lock(m_logMutex);
+        visibleEntries.reserve(m_filteredIndices.size());
+        for (size_t idx : m_filteredIndices) {
+            if (idx < m_logEntries.size()) {
+                visibleEntries.push_back(m_logEntries[idx]);
+            }
+        }
+    }
+
     if (ImGui::BeginChild("LogDisplay", contentSize, true, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
         ImVec2 currentSize = ImGui::GetWindowSize();
         if (currentSize.x != m_lastWindowSize.x || currentSize.y != m_lastWindowSize.y) {
@@ -265,16 +280,13 @@ void ConsolePanel::RenderLogDisplay() {
         }
 
         ImGuiListClipper clipper;
-        clipper.Begin(static_cast<int>(m_filteredIndices.size()));
+        clipper.Begin(static_cast<int>(visibleEntries.size()));
 
         while (clipper.Step()) {
             for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
-                if (i < 0 || i >= static_cast<int>(m_filteredIndices.size())) continue;
+                if (i < 0 || i >= static_cast<int>(visibleEntries.size())) continue;
 
-                size_t entryIndex = m_filteredIndices[i];
-                if (entryIndex >= m_logEntries.size()) continue;
-
-                RenderLogEntry(m_logEntries[entryIndex], i);
+                RenderLogEntry(visibleEntries[i], i);
             }
         }
 
@@ -446,13 +458,27 @@ void ConsolePanel::RenderLogEntry(const LogEntry& entry, size_t index) {
 }
 
 void ConsolePanel::UpdateFilteredEntries() {
-    std::lock_guard<std::mutex> lock(m_logMutex);
+    // Copy entries under lock, then filter without holding the lock to avoid
+    // blocking AddLogEntry() callers during expensive string searches.
+    std::vector<LogEntry> entriesCopy;
+    {
+        std::lock_guard<std::mutex> lock(m_logMutex);
+        entriesCopy = m_logEntries;
+    }
 
-    m_filteredIndices.clear();
-    m_filteredIndices.reserve(m_logEntries.size());
+    // Pre-compute lowercase search pattern once outside the loop
+    std::string lowerPattern;
+    if (!m_filter.searchPattern.empty()) {
+        lowerPattern = m_filter.searchPattern;
+        std::transform(lowerPattern.begin(), lowerPattern.end(), lowerPattern.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    }
 
-    for (size_t i = 0; i < m_logEntries.size(); ++i) {
-        const auto& entry = m_logEntries[i];
+    std::vector<size_t> newFilteredIndices;
+    newFilteredIndices.reserve(entriesCopy.size());
+
+    for (size_t i = 0; i < entriesCopy.size(); ++i) {
+        const auto& entry = entriesCopy[i];
 
         if (entry.level < m_filter.minLevel) continue;
 
@@ -463,26 +489,28 @@ void ConsolePanel::UpdateFilteredEntries() {
             if (!categoryEnabled) continue;
         }
 
-        if (!m_filter.searchPattern.empty()) {
+        if (!lowerPattern.empty()) {
             std::string lowerMessage = entry.message;
-            std::string lowerPattern = m_filter.searchPattern;
             std::transform(lowerMessage.begin(), lowerMessage.end(), lowerMessage.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            std::transform(lowerPattern.begin(), lowerPattern.end(), lowerPattern.begin(),
                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
             if (lowerMessage.find(lowerPattern) == std::string::npos) continue;
         }
 
-        m_filteredIndices.push_back(i);
+        newFilteredIndices.push_back(i);
     }
 
-    if (m_filteredIndices.size() > MAX_VISIBLE_ENTRIES) {
-        m_filteredIndices.erase(m_filteredIndices.begin(),
-                               m_filteredIndices.end() - MAX_VISIBLE_ENTRIES);
+    if (newFilteredIndices.size() > MAX_VISIBLE_ENTRIES) {
+        newFilteredIndices.erase(newFilteredIndices.begin(),
+                               newFilteredIndices.end() - MAX_VISIBLE_ENTRIES);
     }
 
-    m_stats.visibleLogEntries = m_filteredIndices.size();
+    // Swap results back under lock
+    {
+        std::lock_guard<std::mutex> lock(m_logMutex);
+        m_filteredIndices = std::move(newFilteredIndices);
+        m_stats.visibleLogEntries = m_filteredIndices.size();
+    }
 }
 
 std::pair<std::string, std::vector<std::string>> ConsolePanel::ParseCommandLine(const std::string& commandLine) {
@@ -626,6 +654,7 @@ std::string ConsolePanel::FormatTimestamp(const std::chrono::system_clock::time_
 }
 
 void ConsolePanel::UpdateStats() {
+    std::lock_guard<std::mutex> lock(m_logMutex);
     m_stats.lastActivity = std::chrono::system_clock::now();
     m_stats.totalLogEntries = m_logEntries.size();
     m_stats.visibleLogEntries = m_filteredIndices.size();
