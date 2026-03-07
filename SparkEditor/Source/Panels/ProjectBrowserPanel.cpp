@@ -182,7 +182,7 @@ void ProjectBrowserPanel::RenderRecentProjects() {
     ImGui::Spacing();
 
     // Project list
-    if (ImGui::BeginChild("RecentProjectsList", ImVec2(0, 0), ImGuiChildFlags_Border)) {
+    if (ImGui::BeginChild("RecentProjectsList", ImVec2(0, 0), ImGuiChildFlags_Borders)) {
         int removeIdx = -1;
 
         for (size_t i = 0; i < recentProjects.size(); ++i) {
@@ -263,7 +263,7 @@ void ProjectBrowserPanel::RenderNewProjectForm() {
     ImGui::Text("Choose a Template:");
     ImGui::Spacing();
 
-    if (ImGui::BeginChild("TemplateSelection", ImVec2(0, 170), ImGuiChildFlags_Border)) {
+    if (ImGui::BeginChild("TemplateSelection", ImVec2(0, 170), ImGuiChildFlags_Borders)) {
         float cardWidth = 140.0f;
         float spacing = 10.0f;
         float totalWidth = ImGui::GetContentRegionAvail().x;
@@ -389,7 +389,7 @@ void ProjectBrowserPanel::RenderTemplateCard(ProjectTemplate tmpl, const char* i
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
     }
 
-    if (ImGui::BeginChild("##card", cardSize, ImGuiChildFlags_Border)) {
+    if (ImGui::BeginChild("##card", cardSize, ImGuiChildFlags_Borders)) {
         // Make the child window clickable
         if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
             m_selectedTemplate = tmpl;
