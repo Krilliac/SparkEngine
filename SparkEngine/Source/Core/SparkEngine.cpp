@@ -42,6 +42,7 @@
 #include "Utils/CrashHandler.h"
 #include "Utils/D3DUtils.h"
 #include "Utils/SparkConsole.h"
+#include "EngineSettings.h"
 
 // -----------------------------------------------------------------------------
 // Globals
@@ -204,6 +205,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // 7. Register engine console commands
     RegisterEngineConsoleCommands();
+    EngineSettings::GetInstance().RegisterConsoleCommands();
 
     // 8. Message loop + tick
     HACCEL accel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SparkEngine));
@@ -292,10 +294,17 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
     ASSERT(hInst != nullptr);
     g_hInst = hInst;
 
+    // Load engine settings from INI (before window creation so we can use the dimensions)
+    auto& settings = EngineSettings::GetInstance();
+    settings.Load();
+
+    int winW = settings.Graphics().windowWidth;
+    int winH = settings.Graphics().windowHeight;
+
     HWND hWnd = CreateWindowW(
         g_szClass, g_szTitle,
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, 0, 1280, 720,
+        CW_USEDEFAULT, 0, winW, winH,
         nullptr, nullptr, hInst, nullptr);
 
     if (!hWnd)
@@ -321,13 +330,24 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
         return FALSE;
     }
 
+    // Apply VSync setting from INI
+    g_graphics->Console_SetVSync(settings.Graphics().vsync);
+
     g_input = std::make_unique<InputManager>();
     ASSERT(g_input);
     g_input->Initialize(hWnd);
 
+    // Apply input settings from INI
+    g_input->Console_SetMouseSensitivity(settings.Controls().mouseSensitivity);
+    g_input->Console_SetInvertMouseY(settings.Controls().invertMouseY);
+    g_input->Console_SetMouseDeadZone(settings.Controls().mouseDeadZone);
+    g_input->Console_SetRawMouseInput(settings.Controls().rawMouseInput);
+    g_input->Console_SetMouseAcceleration(settings.Controls().mouseAcceleration);
+
     auto& console = Spark::SimpleConsole::GetInstance();
     if (console.Initialize()) {
         console.LogSuccess("Spark Engine runtime initialized");
+        console.LogInfo("Settings loaded from " + settings.GetFilePath());
         console.LogInfo("Type 'help' for complete command reference");
     }
 
