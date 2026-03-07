@@ -35,13 +35,26 @@ jobs:
       if: matrix.config == 'Release'
       run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
 
+    - name: Package build output
+      if: matrix.config == 'Release'
+      shell: pwsh
+      run: |
+        $outDir = "dist/SparkEngine-Windows-${{ matrix.config }}"
+        New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+        if (Test-Path "build/bin/${{ matrix.config }}") {
+          Copy-Item "build/bin/${{ matrix.config }}/*" $outDir -Recurse -Force
+        } elseif (Test-Path "build/bin") {
+          Copy-Item "build/bin/*" $outDir -Recurse -Force
+        }
+        Compress-Archive -Path $outDir -DestinationPath "SparkEngine-Windows-${{ matrix.config }}.zip"
+
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
       uses: actions/upload-artifact@v4
       with:
         name: SparkEngine-Windows-VS2022-${{ matrix.config }}
-        path: build/bin/${{ matrix.config }}/
-        retention-days: 7
+        path: SparkEngine-Windows-${{ matrix.config }}.zip
+        retention-days: 14
 
   # ===========================================================================
   # Windows Build (MSVC VS 2022 generator + v144 toolset for VS 2026)
@@ -97,7 +110,7 @@ jobs:
       with:
         name: SparkEngine-Windows-VS2026-${{ matrix.config }}
         path: build/bin/${{ matrix.config }}/
-        retention-days: 7
+        retention-days: 14
 
   # ===========================================================================
   # Linux Build - GCC
@@ -139,13 +152,21 @@ jobs:
         ctest --output-on-failure || true
         ./bin/SparkTests
 
+    - name: Package build output
+      if: matrix.config == 'Release'
+      run: |
+        mkdir -p dist/SparkEngine-Linux-GCC-${{ matrix.config }}
+        cp -r build/bin/* dist/SparkEngine-Linux-GCC-${{ matrix.config }}/
+        tar -czf SparkEngine-Linux-GCC-${{ matrix.config }}.tar.gz \
+          -C dist SparkEngine-Linux-GCC-${{ matrix.config }}
+
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
       uses: actions/upload-artifact@v4
       with:
         name: SparkEngine-Linux-GCC-${{ matrix.config }}
-        path: build/bin/
-        retention-days: 7
+        path: SparkEngine-Linux-GCC-${{ matrix.config }}.tar.gz
+        retention-days: 14
 
   # ===========================================================================
   # Linux Build - Clang (LLVM)
@@ -187,10 +208,18 @@ jobs:
         ctest --output-on-failure || true
         ./bin/SparkTests
 
+    - name: Package build output
+      if: matrix.config == 'Release'
+      run: |
+        mkdir -p dist/SparkEngine-Linux-Clang-${{ matrix.config }}
+        cp -r build/bin/* dist/SparkEngine-Linux-Clang-${{ matrix.config }}/
+        tar -czf SparkEngine-Linux-Clang-${{ matrix.config }}.tar.gz \
+          -C dist SparkEngine-Linux-Clang-${{ matrix.config }}
+
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
       uses: actions/upload-artifact@v4
       with:
         name: SparkEngine-Linux-Clang-${{ matrix.config }}
-        path: build/bin/
-        retention-days: 7
+        path: SparkEngine-Linux-Clang-${{ matrix.config }}.tar.gz
+        retention-days: 14

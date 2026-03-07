@@ -3,15 +3,52 @@ name: Release Builds
 on:
   push:
     branches: [ master, main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g. v1.0.0). Leave empty for rolling "latest" release.'
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   # ===========================================================================
+  # Compute release metadata shared by all jobs
+  # ===========================================================================
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      is_versioned: ${{ steps.meta.outputs.is_versioned }}
+    steps:
+    - name: Compute release metadata
+      id: meta
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.release_tag }}" ]]; then
+          TAG="${{ inputs.release_tag }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "is_versioned=true" >> "$GITHUB_OUTPUT"
+        elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+          TAG="${{ github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "is_versioned=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "tag=latest" >> "$GITHUB_OUTPUT"
+          echo "version=latest" >> "$GITHUB_OUTPUT"
+          echo "is_versioned=false" >> "$GITHUB_OUTPUT"
+        fi
+
+  # ===========================================================================
   # Windows Build — MSVC VS 2022, Debug + Release
   # ===========================================================================
   build-windows:
+    needs: [prepare]
     runs-on: windows-latest
     strategy:
       matrix:
@@ -49,12 +86,13 @@ jobs:
       with:
         name: SparkEngine-Windows-${{ matrix.config }}
         path: SparkEngine-Windows-${{ matrix.config }}.zip
-        retention-days: 1
+        retention-days: 7
 
   # ===========================================================================
   # Linux Build — GCC, Debug + Release
   # ===========================================================================
   build-linux:
+    needs: [prepare]
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -94,13 +132,13 @@ jobs:
       with:
         name: SparkEngine-Linux-${{ matrix.config }}
         path: SparkEngine-Linux-${{ matrix.config }}.tar.gz
-        retention-days: 1
+        retention-days: 7
 
   # ===========================================================================
-  # Publish rolling "latest" GitHub Release
+  # Publish GitHub Release (versioned or rolling "latest")
   # ===========================================================================
   release:
-    needs: [build-windows, build-linux]
+    needs: [prepare, build-windows, build-linux]
     runs-on: ubuntu-latest
 
     steps:
@@ -121,7 +159,36 @@ jobs:
         find release-assets -type f \( -name "*.zip" -o -name "*.tar.gz" \) \
           -exec cp {} . \;
 
-    - name: Create or update "latest" release
+    - name: Create versioned release
+      if: needs.prepare.outputs.is_versioned == 'true'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.prepare.outputs.tag }}
+        name: "SparkEngine ${{ needs.prepare.outputs.version }}"
+        body: |
+          ## SparkEngine ${{ needs.prepare.outputs.version }}
+
+          Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          Built on: ${{ github.run_started_at }}
+
+          ### Downloads
+
+          | Asset | Platform | Config |
+          |---|---|---|
+          | `SparkEngine-Windows-Release.zip` | Windows (VS 2022 x64) | Release |
+          | `SparkEngine-Windows-Debug.zip` | Windows (VS 2022 x64) | Debug |
+          | `SparkEngine-Linux-Release.tar.gz` | Linux (GCC, ubuntu-24.04) | Release |
+          | `SparkEngine-Linux-Debug.tar.gz` | Linux (GCC, ubuntu-24.04) | Debug |
+        prerelease: false
+        make_latest: true
+        files: |
+          SparkEngine-Windows-Release.zip
+          SparkEngine-Windows-Debug.zip
+          SparkEngine-Linux-Release.tar.gz
+          SparkEngine-Linux-Debug.tar.gz
+
+    - name: Create or update "latest" rolling release
+      if: needs.prepare.outputs.is_versioned == 'false'
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
