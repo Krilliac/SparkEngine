@@ -1,47 +1,60 @@
 /**
  * @file SparkGame.h
- * @brief Main game header with global declarations for the game executable
+ * @brief SparkGame module - implements IGameModule for the engine to load
  * @author Spark Engine Team
  * @date 2025
  *
- * This file contains the global variable declarations for the game executable.
- * Engine systems are provided by the SparkEngine static library.
+ * SparkGame is a DLL that the SparkEngine executable loads at runtime.
+ * It implements the IGameModule interface, wrapping the Game class and
+ * all game-specific logic. The engine drives the game loop through this
+ * interface.
  */
 
 #pragma once
-#include "Core/resource.h"
-#include "Core/Platform.h"
+
+#include "Core/IGameModule.h"
+#include "Core/SparkExport.h"
 #include <memory>
 
 // Forward declarations
-class GraphicsEngine;
 class Game;
-class InputManager;
-class Timer;
-
-#ifdef SPARK_PLATFORM_WINDOWS
-/**
- * @brief Global application instance handle (Windows only)
- */
-extern HINSTANCE g_hInst;
-#endif
+class Console;
 
 /**
- * @brief Global graphics engine instance
+ * @brief Game module implementation for SparkGame
+ *
+ * Wraps the existing Game class behind the IGameModule interface so the
+ * engine can load and drive it dynamically.
  */
-extern std::unique_ptr<GraphicsEngine> g_graphics;
+class SparkGameModule : public IGameModule
+{
+public:
+    SparkGameModule();
+    ~SparkGameModule() override;
 
-/**
- * @brief Global game instance
- */
-extern std::unique_ptr<Game> g_game;
+    const char* GetGameName() const override;
+    const char* GetGameVersion() const override;
 
-/**
- * @brief Global input manager instance
- */
-extern std::unique_ptr<InputManager> g_input;
+    bool Initialize(GraphicsEngine* graphics, InputManager* input) override;
+    void Shutdown() override;
+    void Update(float deltaTime) override;
+    void Render() override;
+    void OnResize(int width, int height) override;
+    void Pause() override;
+    void Resume() override;
+    bool IsPaused() const override;
 
-/**
- * @brief Global timer instance
- */
-extern std::unique_ptr<Timer> g_timer;
+private:
+    void RegisterGameConsoleCommands();
+
+    std::unique_ptr<Game> m_game;
+    std::unique_ptr<Console> m_console;
+    bool m_initialized{ false };
+};
+
+// DLL exports - these are what the engine looks for when loading the game DLL
+extern "C"
+{
+    SPARK_GAME_API IGameModule* CreateGameModule();
+    SPARK_GAME_API void DestroyGameModule(IGameModule* module);
+}

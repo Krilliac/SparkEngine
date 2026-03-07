@@ -1,10 +1,82 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(SparkGame LANGUAGES CXX)
+# ================================================================
+# SparkGame - Game Module DLL
+#
+# SparkGame compiles as a shared library (DLL on Windows, .so on Linux)
+# that the SparkEngine executable loads at runtime via GameModuleLoader.
+#
+# This CMakeLists.txt can be used in two ways:
+#   1. As a subdirectory of the main SparkEngine build (typical dev workflow)
+#   2. Standalone: generates its own solution files independently
+#      cmake -B build -DSPARK_ENGINE_DIR=<path-to-engine>
+#
+# Similar to how Unreal Engine game projects generate their own solution
+# files and compile game code into modules that the engine loads.
+# ================================================================
+
+# When built standalone, this is the top-level project
+if(NOT CMAKE_PROJECT_NAME OR CMAKE_PROJECT_NAME STREQUAL "SparkGame")
+    project(SparkGame LANGUAGES CXX)
+    set(SPARK_GAME_STANDALONE TRUE)
+else()
+    set(SPARK_GAME_STANDALONE FALSE)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# ---------------------------------------------------------------------
+# Standalone mode: locate SparkEngine
+# ---------------------------------------------------------------------
+if(SPARK_GAME_STANDALONE)
+    # User must provide the engine path, or we assume it's the parent directory
+    if(NOT SPARK_ENGINE_DIR)
+        set(SPARK_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." CACHE PATH
+            "Path to SparkEngine root directory")
+    endif()
+
+    message(STATUS "SparkGame standalone build - Engine at: ${SPARK_ENGINE_DIR}")
+
+    # Output directories
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+    foreach(config Debug Release RelWithDebInfo MinSizeRel)
+        string(TOUPPER ${config} CONFIG_UPPER)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/bin)
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/bin)
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/lib)
+    endforeach()
+
+    # Compiler settings for standalone
+    if(MSVC)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        add_compile_options(/W3 /MP /bigobj /wd4005 /wd4996 /wd4244 /wd4267)
+        add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options(-Wall -Wextra -Wno-unused-parameter -fPIC)
+    endif()
+
+    # Third-party include directories
+    set(THIRDPARTY_INCLUDE_DIRS "")
+    if(EXISTS "${SPARK_ENGINE_DIR}/ThirdParty/ECS/entt/single_include")
+        list(APPEND THIRDPARTY_INCLUDE_DIRS "${SPARK_ENGINE_DIR}/ThirdParty/ECS/entt/single_include")
+    endif()
+    if(EXISTS "${SPARK_ENGINE_DIR}/ThirdParty/Physics/bullet3/src")
+        list(APPEND THIRDPARTY_INCLUDE_DIRS "${SPARK_ENGINE_DIR}/ThirdParty/Physics/bullet3/src")
+    endif()
+    if(EXISTS "${SPARK_ENGINE_DIR}/ThirdParty/UI/imgui")
+        list(APPEND THIRDPARTY_INCLUDE_DIRS "${SPARK_ENGINE_DIR}/ThirdParty/UI/imgui")
+    endif()
+
+    set(ENGINE_SOURCE_DIR "${SPARK_ENGINE_DIR}/Spark Engine/Source")
+else()
+    # Sub-project mode: engine source dir is relative to root
+    set(ENGINE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/Spark Engine/Source")
+endif()
 
 # ---------------------------------------------------------------------
 # Collect SparkGame source files
@@ -19,27 +91,28 @@ list(FILTER SPARK_GAME_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
 list(FILTER SPARK_GAME_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 
 # ---------------------------------------------------------------------
-# Create the game executable
+# Create the game as a SHARED library (DLL)
 # ---------------------------------------------------------------------
-if(WIN32)
-    add_executable(SparkGame WIN32 ${SPARK_GAME_SOURCES})
-else()
-    add_executable(SparkGame ${SPARK_GAME_SOURCES})
+add_library(SparkGame SHARED ${SPARK_GAME_SOURCES})
+
+# Mark this as a game DLL so SPARK_GAME_API exports symbols
+target_compile_definitions(SparkGame PRIVATE SPARK_GAME_DLL)
+
+# ---------------------------------------------------------------------
+# Link against SparkEngineLib static library (when built as sub-project)
+# SparkEngineLib contains all engine systems; SparkEngine is the exe host.
+# In standalone mode, the game must provide its own engine lib path.
+# ---------------------------------------------------------------------
+if(NOT SPARK_GAME_STANDALONE AND TARGET SparkEngineLib)
+    target_link_libraries(SparkGame PRIVATE SparkEngineLib)
 endif()
 
 # ---------------------------------------------------------------------
-# Link against SparkEngine static library
-# ---------------------------------------------------------------------
-target_link_libraries(SparkGame PRIVATE SparkEngine)
-
-# ---------------------------------------------------------------------
 # Include directories
-# - SparkGame's own source for game-specific headers
-# - SparkEngine source for engine headers (the engine is a library)
 # ---------------------------------------------------------------------
 target_include_directories(SparkGame PRIVATE
     "Source"
-    "${CMAKE_SOURCE_DIR}/Spark Engine/Source"
+    "${ENGINE_SOURCE_DIR}"
     ${THIRDPARTY_INCLUDE_DIRS}
 )
 
@@ -115,77 +188,67 @@ if(FEATURE_DEFINITIONS)
 endif()
 
 # ---------------------------------------------------------------------
-# Asset Management (game-specific assets)
+# Post-build: Copy the game DLL next to the engine executable
+# ---------------------------------------------------------------------
+if(NOT SPARK_GAME_STANDALONE)
+    if(TARGET SparkEngine)
+        add_custom_command(TARGET SparkGame POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SparkGame>
+                $<TARGET_FILE_DIR:SparkEngine>
+            COMMENT "Copying SparkGame DLL to engine output directory"
+            VERBATIM
+        )
+    endif()
+endif()
+
+# ---------------------------------------------------------------------
+# Asset Management
 # ---------------------------------------------------------------------
 add_custom_command(TARGET SparkGame POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Shaders"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Assets"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Models"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Textures"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Audio"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Scripts"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Config"
-    COMMENT "Creating SparkGame asset directory structure"
+    COMMENT "Creating asset directory structure"
 )
 
 # Copy model assets
-if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Models")
+set(ASSET_ROOT "${CMAKE_SOURCE_DIR}")
+if(SPARK_GAME_STANDALONE)
+    set(ASSET_ROOT "${SPARK_ENGINE_DIR}")
+endif()
+
+if(EXISTS "${ASSET_ROOT}/Assets/Models")
     add_custom_command(TARGET SparkGame POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Assets/Models"
+            "${ASSET_ROOT}/Assets/Models"
             "$<TARGET_FILE_DIR:SparkGame>/Assets/Models"
-        COMMENT "Copying model assets to SparkGame"
+        COMMENT "Copying model assets"
     )
 endif()
 
-# Copy scene files
-if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Scenes")
+if(EXISTS "${ASSET_ROOT}/Assets/Scenes")
     add_custom_command(TARGET SparkGame POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Assets/Scenes"
+            "${ASSET_ROOT}/Assets/Scenes"
             "$<TARGET_FILE_DIR:SparkGame>/Assets/Scenes"
-        COMMENT "Copying scene assets to SparkGame"
+        COMMENT "Copying scene assets"
     )
 endif()
 
-# Copy HLSL shaders
-file(GLOB_RECURSE SHADER_FILES "${CMAKE_SOURCE_DIR}/Spark Engine/Shaders/HLSL/*.hlsl")
-foreach(SHADER_FILE ${SHADER_FILES})
-    get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-    add_custom_command(TARGET SparkGame POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${SHADER_FILE}
-            "$<TARGET_FILE_DIR:SparkGame>/Shaders/${SHADER_NAME}"
-        COMMENT "Copying shader ${SHADER_NAME}"
-    )
-endforeach()
-
-# Copy GLSL shaders
-if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/GLSL")
-    file(GLOB GLSL_SHADER_FILES "${CMAKE_SOURCE_DIR}/Shaders/GLSL/*.glsl")
-    foreach(SHADER_FILE ${GLSL_SHADER_FILES})
-        get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-        add_custom_command(TARGET SparkGame POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Shaders/GLSL"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${SHADER_FILE}
-                "$<TARGET_FILE_DIR:SparkGame>/Shaders/GLSL/${SHADER_NAME}"
-            COMMENT "Copying GLSL shader ${SHADER_NAME}"
-        )
-    endforeach()
+# Copy shaders from engine
+set(SHADER_SOURCE_DIR "${ENGINE_SOURCE_DIR}/../Shaders/HLSL")
+if(NOT EXISTS "${SHADER_SOURCE_DIR}")
+    set(SHADER_SOURCE_DIR "${ASSET_ROOT}/Spark Engine/Shaders/HLSL")
 endif()
-
-# Copy SPIR-V shaders
-if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/SPIRV")
-    file(GLOB SPIRV_SHADER_FILES "${CMAKE_SOURCE_DIR}/Shaders/SPIRV/*.spv")
-    foreach(SHADER_FILE ${SPIRV_SHADER_FILES})
+if(EXISTS "${SHADER_SOURCE_DIR}")
+    file(GLOB_RECURSE SHADER_FILES "${SHADER_SOURCE_DIR}/*.hlsl")
+    foreach(SHADER_FILE ${SHADER_FILES})
         get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
         add_custom_command(TARGET SparkGame POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Shaders/SPIRV"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${SHADER_FILE}
-                "$<TARGET_FILE_DIR:SparkGame>/Shaders/SPIRV/${SHADER_NAME}"
-            COMMENT "Copying SPIR-V shader ${SHADER_NAME}"
+                "$<TARGET_FILE_DIR:SparkGame>/Shaders/${SHADER_NAME}"
+            COMMENT "Copying shader ${SHADER_NAME}"
         )
     endforeach()
 endif()
@@ -197,7 +260,7 @@ if(TARGET SparkConsole)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:SparkConsole>
             $<TARGET_FILE_DIR:SparkGame>
-        COMMENT "Copying SparkConsole to SparkGame output directory"
+        COMMENT "Copying SparkConsole to output directory"
         VERBATIM
     )
 endif()
@@ -217,7 +280,11 @@ if(MSVC)
         endif()
     endforeach()
 
-    set_property(TARGET SparkGame PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    if(SPARK_GAME_STANDALONE)
+        set_property(TARGET SparkGame PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${SPARK_ENGINE_DIR}")
+    else()
+        set_property(TARGET SparkGame PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    endif()
 
     # Exclude shader files from compilation
     file(GLOB_RECURSE ALL_SHADER_FILES "*.hlsl")
@@ -228,4 +295,10 @@ if(MSVC)
     endif()
 endif()
 
-message(STATUS "SparkGame configured - links against SparkEngine static library")
+message(STATUS "SparkGame configured as SHARED LIBRARY (game module DLL)")
+if(SPARK_GAME_STANDALONE)
+    message(STATUS "  Mode: Standalone build")
+    message(STATUS "  Engine: ${SPARK_ENGINE_DIR}")
+else()
+    message(STATUS "  Mode: Sub-project of SparkEngine")
+endif()
