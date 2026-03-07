@@ -9,7 +9,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 GENERATE_SCRIPT="$SCRIPT_DIR/generate-docs.sh"
-WATCH_DIRS=("$PROJECT_ROOT/Spark Engine/Source" "$PROJECT_ROOT/SparkEditor/Source")
+WATCH_DIRS=("$PROJECT_ROOT/SparkEngine/Source" "$PROJECT_ROOT/SparkEditor/Source")
 CHECKSUM_FILE="$SCRIPT_DIR/.doc_checksums"
 LOCK_FILE="$SCRIPT_DIR/.update_lock"
 

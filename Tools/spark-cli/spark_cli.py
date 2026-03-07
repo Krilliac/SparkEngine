@@ -37,7 +37,7 @@ def find_engine_root():
     # Walk up from this script's location
     current = Path(__file__).resolve().parent
     while current != current.parent:
-        if (current / "SparkSDK").is_dir() and (current / "Spark Engine").is_dir():
+        if (current / "SparkSDK").is_dir() and (current / "SparkEngine").is_dir():
             return current
         current = current.parent
 

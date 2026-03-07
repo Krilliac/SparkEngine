@@ -36,14 +36,14 @@ Implement 3D audio source pooling with distance attenuation
 ## Agent Mode (Multi-file edits)
 Switch to Agent mode for complex refactoring:
 ```
-Apply #prompt:01_code_refactor_rules to all files in Spark Engine/Source/Editor 
+Apply #prompt:01_code_refactor_rules to all files in SparkEngine/Source/Editor 
 and generate commit-ready changes with descriptive messages
 ```
 
 ## File References
 Use `#file:` to include specific file context:
-- `#file:Spark Engine/Source/Graphics/GraphicsEngine.h`
-- `#folder:Spark Engine/Source/Audio`
+- `#file:SparkEngine/Source/Graphics/GraphicsEngine.h`
+- `#folder:SparkEngine/Source/Audio`
 
 ## Best Practices
 1. Always load project context with `#prompt:00_project_overview` first

@@ -91,7 +91,7 @@ Supported tags: `@file`, `@brief`, `@param`, `@return`, `@note`, `@warning`, `@s
 
 ### Doxygen (`Doxyfile`)
 
-- **Input**: `Spark Engine/Source/` and `SparkEditor/Source/`
+- **Input**: `SparkEngine/Source/` and `SparkEditor/Source/`
 - **Output**: HTML with search, responsive design, source browser
 - **Diagrams**: Class hierarchies, collaboration graphs, include dependencies (requires GraphViz)
 

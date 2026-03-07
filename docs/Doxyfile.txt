@@ -29,7 +29,7 @@ ABBREVIATE_BRIEF       = "The $name class" \
 ALWAYS_DETAILED_SEC    = NO
 INLINE_INHERITED_MEMB  = NO
 FULL_PATH_NAMES        = YES
-STRIP_FROM_PATH        = "../Spark Engine/Source/"
+STRIP_FROM_PATH        = "../SparkEngine/Source/"
 STRIP_FROM_INC_PATH    = 
 SHORT_NAMES            = NO
 JAVADOC_AUTOBRIEF      = YES
@@ -117,7 +117,7 @@ WARN_LOGFILE           =
 #---------------------------------------------------------------------------
 # Configuration options related to the input files
 #---------------------------------------------------------------------------
-INPUT                  = "../Spark Engine/Source" \
+INPUT                  = "../SparkEngine/Source" \
                          "../SparkEditor/Source" \
                          "../README.md"
 INPUT_ENCODING         = UTF-8

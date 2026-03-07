@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../Spark Engine/Source/Utils/ChromeTracing.h"
+#include "../SparkEngine/Source/Utils/ChromeTracing.h"
 #include <thread>
 #include <cstdio>
 

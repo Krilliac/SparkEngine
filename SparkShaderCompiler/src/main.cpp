@@ -35,8 +35,8 @@
 #include <algorithm>
 
 // Include the RHI shader compilation API
-#include "../../Spark Engine/Source/Graphics/RHI/RHIFactory.h"
-#include "../../Spark Engine/Source/Graphics/RHI/RHITypes.h"
+#include "../../SparkEngine/Source/Graphics/RHI/RHIFactory.h"
+#include "../../SparkEngine/Source/Graphics/RHI/RHITypes.h"
 
 // ============================================================================
 // CONFIGURATION

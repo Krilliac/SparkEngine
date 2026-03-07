@@ -72,10 +72,10 @@ if(SPARK_GAME_STANDALONE)
         list(APPEND THIRDPARTY_INCLUDE_DIRS "${SPARK_ENGINE_DIR}/ThirdParty/UI/imgui")
     endif()
 
-    set(ENGINE_SOURCE_DIR "${SPARK_ENGINE_DIR}/Spark Engine/Source")
+    set(ENGINE_SOURCE_DIR "${SPARK_ENGINE_DIR}/SparkEngine/Source")
 else()
     # Sub-project mode: engine source dir is relative to root
-    set(ENGINE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/Spark Engine/Source")
+    set(ENGINE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
 endif()
 
 # ---------------------------------------------------------------------
@@ -246,7 +246,7 @@ endif()
 # Copy shaders from engine
 set(SHADER_SOURCE_DIR "${ENGINE_SOURCE_DIR}/../Shaders/HLSL")
 if(NOT EXISTS "${SHADER_SOURCE_DIR}")
-    set(SHADER_SOURCE_DIR "${ASSET_ROOT}/Spark Engine/Shaders/HLSL")
+    set(SHADER_SOURCE_DIR "${ASSET_ROOT}/SparkEngine/Shaders/HLSL")
 endif()
 if(EXISTS "${SHADER_SOURCE_DIR}")
     file(GLOB_RECURSE SHADER_FILES "${SHADER_SOURCE_DIR}/*.hlsl")

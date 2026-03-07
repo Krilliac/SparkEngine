@@ -279,7 +279,7 @@ if(TINYOBJLOADER_INCLUDE_DIR)
     # Create a proper static library for TinyObjLoader instead of INTERFACE
     # This prevents duplicate symbol issues by having only one implementation
     add_library(tinyobjloader STATIC
-        "Spark Engine/Source/Utils/TinyObjImpl.cpp"
+        "SparkEngine/Source/Utils/TinyObjImpl.cpp"
     )
     target_include_directories(tinyobjloader PUBLIC
         $<BUILD_INTERFACE:${TINYOBJLOADER_INCLUDE_DIR}>
@@ -440,16 +440,16 @@ endif()
 
 file(GLOB_RECURSE SPARK_ENGINE_SOURCES
     CONFIGURE_DEPENDS
-    "Spark Engine/Source/*.cpp"
-    "Spark Engine/Source/*.h"
-    "Spark Engine/Source/*.hpp"
+    "SparkEngine/Source/*.cpp"
+    "SparkEngine/Source/*.h"
+    "SparkEngine/Source/*.hpp"
 )
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 
 # Separate entry point from library sources
 # SparkEngine.cpp contains wWinMain/main - it goes in the exe only
-set(SPARK_ENGINE_ENTRY_POINT "${CMAKE_SOURCE_DIR}/Spark Engine/Source/Core/SparkEngine.cpp")
+set(SPARK_ENGINE_ENTRY_POINT "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngine.cpp")
 set(SPARK_ENGINE_LIB_SOURCES ${SPARK_ENGINE_SOURCES})
 list(REMOVE_ITEM SPARK_ENGINE_LIB_SOURCES "${SPARK_ENGINE_ENTRY_POINT}")
 
@@ -539,7 +539,7 @@ add_custom_command(TARGET SparkEngine POST_BUILD
 )
 
 # Copy HLSL shaders
-file(GLOB_RECURSE ENGINE_SHADER_FILES "${CMAKE_SOURCE_DIR}/Spark Engine/Shaders/HLSL/*.hlsl")
+file(GLOB_RECURSE ENGINE_SHADER_FILES "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/HLSL/*.hlsl")
 foreach(SHADER_FILE ${ENGINE_SHADER_FILES})
     get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
     add_custom_command(TARGET SparkEngine POST_BUILD
@@ -582,7 +582,7 @@ endif()
 # 11.6) Include directories (on SparkEngineLib so game DLL inherits them)
 # ---------------------------------------------------------------------
 target_include_directories(SparkEngineLib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Spark Engine/Source>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkEngine/Source>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkSDK/Include>
     $<INSTALL_INTERFACE:include>
 )
@@ -827,7 +827,7 @@ endif()
 if(MSVC)
     foreach(src ${SPARK_ENGINE_SOURCES})
         get_filename_component(dir "${src}" DIRECTORY)
-        file(RELATIVE_PATH grp "${CMAKE_SOURCE_DIR}/Spark Engine/Source" "${dir}")
+        file(RELATIVE_PATH grp "${CMAKE_SOURCE_DIR}/SparkEngine/Source" "${dir}")
         string(REPLACE "/" "\\\\" grp "${grp}")
         if(grp STREQUAL "")
             source_group("Source Files" FILES "${src}")
@@ -883,7 +883,7 @@ install(DIRECTORY SparkSDK/Include/Spark
 )
 
 # Install the engine's public headers (needed by modules that use engine types directly)
-install(DIRECTORY "Spark Engine/Source/"
+install(DIRECTORY "SparkEngine/Source/"
     DESTINATION include/SparkEngine
     FILES_MATCHING
         PATTERN "*.h"
@@ -935,8 +935,8 @@ if(TARGET SparkGame)
 endif()
 
 # Install shaders
-if(EXISTS "${CMAKE_SOURCE_DIR}/Spark Engine/Shaders")
-    install(DIRECTORY "Spark Engine/Shaders/"
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders")
+    install(DIRECTORY "SparkEngine/Shaders/"
         DESTINATION bin/Shaders
     )
 endif()

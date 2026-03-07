@@ -31,11 +31,6 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
-#else
-struct XMFLOAT2 { float x, y; };
-struct XMFLOAT4X4 {
-    float m[4][4];
-};
 #endif
 
 #include <vector>

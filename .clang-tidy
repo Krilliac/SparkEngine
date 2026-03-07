@@ -23,7 +23,7 @@ Checks: >
 
 WarningsAsErrors: ''
 
-HeaderFilterRegex: '(Spark Engine|SparkEditor|SparkConsole|SparkShaderCompiler)/Source/.*'
+HeaderFilterRegex: '(SparkEngine|SparkEditor|SparkConsole|SparkShaderCompiler)/Source/.*'
 
 CheckOptions:
   - key: modernize-use-auto.MinTypeNameLength
