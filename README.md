@@ -1,4 +1,4 @@
-# Spark Engine
+# Spark Engine — Open-Source C++ Game Engine
 
 [![Build SparkEngine](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
 [![Release](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml)
@@ -6,9 +6,16 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Last Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine)](https://github.com/Krilliac/SparkEngine/commits/master)
 
-A modular, high-performance C++ game engine built for 3D FPS titles and beyond. Features a DirectX 11 rendering pipeline, Bullet Physics integration, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture powered by EnTT, and an integrated ImGui editor.
+**Spark Engine** is a free, open-source 3D game engine written in C++20. It is designed for first-person shooters and other 3D games, with built-in support for DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Cross-platform (Windows and Linux), modular, and MIT-licensed.
 
 > **Early Development** — SparkEngine is under active development. Systems are being built out and stabilized. Expect rough edges.
+
+### Why Spark Engine?
+
+- **Complete game engine** — rendering, physics, audio, AI, animation, networking, scripting, and editor all in one package
+- **Truly open-source** — MIT license, no royalties, no strings attached
+- **Built for learning and modding** — clean C++20 codebase with 30+ toggleable CMake modules
+- **Ready-to-download binaries** — pre-built Windows and Linux binaries on every commit
 
 ## Downloads
 
