@@ -149,7 +149,7 @@ XMFLOAT3 combined = steering.Seek(...) * 1.0f
 
 ## ECS Integration
 
-Use `AIComponent` on entities:
+Use `AIComponent` on entities (see [[Entity Component System]]):
 
 ```cpp
 auto& ai = world.AddComponent<AIComponent>(entity);
@@ -166,7 +166,14 @@ The `AISystem` ticks behavior trees and updates steering for all entities with `
 
 All node classes use value-semantic ownership via `std::unique_ptr`. There are no raw-pointer ownership relationships in the behavior tree API.
 
+---
+
 ## See Also
 
 - [[Entity Component System]] — AIComponent
 - [[Gameplay Systems]] — NPC and combat systems
+- [[Animation]] — NPC animation state machines
+- [[Physics]] — Steering and collision avoidance
+- [[Event System]] — AI-related event publishing
+- [[Terrain and Procedural Generation]] — NavMesh generation on terrain
+- [[Scripting with AngelScript]] — Scripting AI behaviors

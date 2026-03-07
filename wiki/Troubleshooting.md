@@ -4,7 +4,7 @@ Common issues and solutions when building and running SparkEngine.
 
 ## Quick Verification
 
-### Test SparkConsole Standalone
+### Test [[SparkConsole]] Standalone
 
 ```batch
 cd build\bin
@@ -177,8 +177,11 @@ And these directories should be present:
 
 4. Check [GitHub Issues](https://github.com/Krilliac/SparkEngine/issues) for known problems.
 
+---
+
 ## See Also
 
 - [[Getting Started]] — Build instructions
 - [[Build System and CMake Modules]] — Build configuration
 - [[SparkConsole]] — Debug console usage
+- [[Rendering and Graphics]] — Graphics troubleshooting and render pipelines

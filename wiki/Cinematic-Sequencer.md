@@ -11,8 +11,8 @@ SparkEngine includes a timeline-based cinematic sequencer for creating in-game c
 The sequencer provides a non-linear timeline editor for:
 - Camera movements and cuts
 - Entity animations and transformations
-- Audio cue playback
-- Event triggers
+- [[Audio]] cue playback
+- [[Event System|Event triggers]]
 - UI transitions
 
 ## Concepts
@@ -73,16 +73,21 @@ The sequencer can smoothly transition between camera angles or make hard cuts:
 
 Cinematics can be triggered from:
 - Game module code (C++)
-- AngelScript scripts
-- Trigger volumes in scenes
-- Event system callbacks
+- [[Scripting with AngelScript|AngelScript scripts]]
+- Trigger volumes in [[Scene Management|scenes]]
+- [[Event System]] callbacks
 
 ## Editor Support
 
 The SparkEditor includes a visual timeline editor for creating and editing cinematic sequences. See [[SparkEditor]] for details.
+
+---
 
 ## See Also
 
 - [[Animation]] — Animation tracks in sequences
 - [[Audio]] — Audio cue playback
 - [[SparkEditor]] — Timeline editor UI
+- [[Event System]] — Event triggers from sequences
+- [[Scripting with AngelScript]] — Script-driven cinematics
+- [[Scene Management]] — Scene-based cinematic triggers

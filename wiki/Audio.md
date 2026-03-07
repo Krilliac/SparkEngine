@@ -98,7 +98,7 @@ src.minDistance   = 1.0f;
 src.maxDistance   = 50.0f;
 ```
 
-The `AudioUpdateSystem` automatically updates 3D source positions from entity transforms each frame.
+The `AudioUpdateSystem` automatically updates 3D source positions from [[Entity Component System|entity]] transforms each frame.
 
 ## Console Commands
 
@@ -121,7 +121,12 @@ audio_sources        # Show active audio sources
 | Linux | miniaudio | Fallback |
 | macOS | miniaudio | Fallback |
 
+---
+
 ## See Also
 
 - [[Entity Component System]] — AudioSourceComponent
 - [[Asset Pipeline]] — Loading audio assets
+- [[Cinematic Sequencer]] — Audio tracks in cinematics
+- [[Event System]] — Triggering audio from game events
+- [[Day Night Cycle and Weather]] — Ambient audio for weather and time of day

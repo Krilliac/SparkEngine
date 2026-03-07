@@ -68,7 +68,7 @@ size_t GetSubscriberCount() const; // Count subscribers for type T
 
 ## Built-in Event Types
 
-### Gameplay Events
+### [[Gameplay Systems|Gameplay]] Events
 
 ```cpp
 struct EntityDamagedEvent {
@@ -101,7 +101,7 @@ struct PlayerRespawnEvent {
 };
 ```
 
-### World Events
+### [[Day Night Cycle and Weather|World]] Events
 
 ```cpp
 struct WeatherChangedEvent {
@@ -117,7 +117,7 @@ struct TimeOfDayChangedEvent {
 };
 ```
 
-### Physics Events
+### [[Physics]] Events
 
 ```cpp
 struct CollisionEvent {
@@ -176,7 +176,14 @@ bool OnLoad(Spark::IEngineContext* context) override {
 - Subscribers are invoked synchronously — long-running callbacks will block the publisher
 - Consider keeping callbacks lightweight; defer heavy work to the next frame
 
+---
+
 ## See Also
 
 - [[Architecture Overview]] — How subsystems communicate
 - [[Entity Component System]] — Entity lifecycle events
+- [[Day Night Cycle and Weather]] — Weather and time-of-day events
+- [[Physics]] — Collision events
+- [[Gameplay Systems]] — Gameplay events (damage, kills, quests)
+- [[Networking]] — Network event replication
+- [[Audio]] — Audio event triggers

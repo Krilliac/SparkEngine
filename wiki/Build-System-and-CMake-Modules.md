@@ -80,7 +80,7 @@ All flags can be set during CMake configuration with `-D<FLAG>=ON|OFF`:
 |------|---------|-------------|
 | `ENABLE_NETWORKING` | OFF | Networking (CURL dependency issues) |
 | `ENABLE_SDL2` | OFF | SDL2 cross-platform input |
-| `BUILD_TESTS` | ON | Unit test suite |
+| `BUILD_TESTS` | ON | Unit test suite (see [[Testing]]) |
 
 ### MSVC Toolset
 
@@ -117,8 +117,8 @@ cmake --build --preset windows-release
 | `SparkEngineLib` | Static library | Core engine systems |
 | `SparkEngine` | Executable | Runtime host |
 | `SparkGame` | Shared library | Default game module |
-| `SparkEditor` | Executable | Visual editor (Windows) |
-| `SparkConsole` | Executable | Debug console (Windows) |
+| [[SparkEditor]] | Executable | Visual editor (Windows) |
+| [[SparkConsole]] | Executable | Debug console (Windows) |
 | `SparkShaderCompiler` | Executable | Shader compilation tool |
 
 ## Build Output
@@ -187,7 +187,11 @@ Runs on every push to `master`/`main`:
 | Clang | 14+ | Linux |
 | Apple Clang | C++20 capable | macOS |
 
+---
+
 ## See Also
 
 - [[Getting Started]] — Build quickstart
 - [[Testing]] — Running unit tests
+- [[Architecture Overview]] — Engine design and subsystems
+- [[Contributing]] — Contribution workflow and code style

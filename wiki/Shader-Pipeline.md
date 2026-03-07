@@ -1,6 +1,6 @@
 # Shader Pipeline
 
-SparkEngine supports HLSL and GLSL shader authoring with cross-compilation through the RHI pipeline. The `SparkShaderCompiler` tool handles offline compilation.
+SparkEngine supports HLSL and GLSL shader authoring with cross-compilation through the [[Rendering and Graphics|RHI pipeline]]. The `SparkShaderCompiler` tool handles offline compilation.
 
 **Source:** `SparkEngine/Source/Graphics/Shader.h`, `SparkShaderCompiler/src/`
 
@@ -116,9 +116,13 @@ HLSL Source
 
 ## Hot Reloading
 
-During development, shader modifications can be detected and recompiled at runtime (when `ENABLE_HOT_RELOAD=ON`).
+During development, shader modifications can be detected and recompiled at runtime (when `ENABLE_HOT_RELOAD=ON`). See [[Asset Pipeline]] for hot-reload details.
+
+---
 
 ## See Also
 
-- [[Rendering and Graphics]] — Shader usage in the pipeline
+- [[Rendering and Graphics]] — Shader usage in the rendering pipeline
 - [[Asset Pipeline]] — Shader asset management
+- [[Build System and CMake Modules]] — Shader compilation integration
+- [[SparkEditor]] — Shader editing and preview

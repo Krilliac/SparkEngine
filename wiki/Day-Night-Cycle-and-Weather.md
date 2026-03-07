@@ -1,6 +1,6 @@
 # Day/Night Cycle and Weather
 
-SparkEngine includes dynamic time-of-day and weather systems that affect lighting, rendering, and gameplay.
+SparkEngine includes dynamic time-of-day and weather systems that affect lighting, [[Rendering and Graphics|rendering]], and [[Gameplay Systems|gameplay]].
 
 **Source:** `SparkEngine/Source/Engine/World/DayNightCycle.h`, `SparkEngine/Source/Graphics/WeatherSystem.h`
 
@@ -76,7 +76,7 @@ struct WeatherChangedEvent {
 ### Effects on Gameplay
 
 - Reduced visibility in fog, rain, and storms
-- Wet surfaces affect physics friction
+- Wet surfaces affect [[Physics|physics friction]]
 - Wind affects projectile trajectories
 - Lightning provides brief illumination
 
@@ -91,8 +91,13 @@ weather_intensity <val>  # Set weather intensity (0.0-1.0)
 weather_transition <sec> # Set transition duration
 ```
 
+---
+
 ## See Also
 
 - [[Rendering and Graphics]] — Volumetric lighting and fog
 - [[Event System]] — Weather and time-of-day events
 - [[Physics]] — Weather effects on physics
+- [[Audio]] — Weather-driven audio (thunder, rain, wind)
+- [[Gameplay Systems]] — Weather impact on gameplay mechanics
+- [[Terrain and Procedural Generation]] — Terrain interaction with weather

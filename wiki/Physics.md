@@ -145,7 +145,7 @@ col.dimensions = {1.0f, 1.0f, 1.0f};
 col.isTrigger  = false;
 ```
 
-The `PhysicsUpdateSystem` syncs physics body transforms with ECS `Transform` components each frame.
+The `PhysicsUpdateSystem` syncs physics body transforms with [[Entity Component System|ECS]] `Transform` components each frame.
 
 ## Debug Drawing
 
@@ -171,7 +171,13 @@ physics_material <name> # Show material properties
 
 PhysicsSystem is **not thread-safe**. Call all public methods from the main game thread. The physics simulation runs on the calling thread inside `Update()`.
 
+---
+
 ## See Also
 
 - [[Entity Component System]] — RigidBody and Collider components
 - [[Rendering and Graphics]] — Debug draw overlay
+- [[Gameplay Systems]] — Player controller, weapons, and vehicles
+- [[Terrain and Procedural Generation]] — Heightfield collision shapes
+- [[Animation]] — Physics-driven animation and ragdolls
+- [[Day Night Cycle and Weather]] — Environmental physics interactions

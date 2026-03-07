@@ -79,8 +79,8 @@ cmake --build --preset windows-release
 
 Options:
 - `-config Debug|Release` — Build configuration
-- `-editor` — Include the SparkEditor
-- `-console` — Include SparkConsole
+- `-editor` — Include the [[SparkEditor]]
+- `-console` — Include [[SparkConsole]]
 - `-angelscript` — Include AngelScript scripting
 
 ### Linux / macOS
@@ -108,7 +108,7 @@ After a successful build:
 build/
 ├── bin/
 │   ├── SparkEngine.exe      # Main engine executable
-│   ├── SparkConsole.exe     # Debug console (Windows)
+│   ├── SparkConsole.exe     # Debug console (Windows) — see [[SparkConsole]]
 │   └── SparkGame.dll        # Default game module
 ├── lib/                     # Static/shared libraries
 ├── Shaders/                 # Compiled shaders
@@ -126,7 +126,7 @@ SparkEngine.exe
 
 You should see:
 1. A DirectX 11 window with a blue background
-2. SparkConsole opens automatically
+2. [[SparkConsole]] opens automatically
 3. Console shows initialization messages
 
 ### Linux
@@ -150,7 +150,7 @@ cd build/bin
 
 ## Verify Installation
 
-Once the engine is running, open SparkConsole and try:
+Once the engine is running, open [[SparkConsole]] and try:
 
 ```
 help            # List all commands
@@ -175,3 +175,12 @@ See [[Build System and CMake Modules]] for the full list of options.
 - [[Architecture Overview]] — Understand the engine's design
 - [[Creating a Game Module]] — Build your first game
 - [[Troubleshooting]] — If you run into issues
+
+---
+
+## See Also
+
+- [[SparkConsole]] — Debug console for engine interaction
+- [[SparkEditor]] — Visual editor for scenes and materials
+- [[Architecture Overview]] — Understand the engine's design
+- [[Creating a Game Module]] — Build your first game module

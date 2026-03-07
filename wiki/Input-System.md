@@ -1,6 +1,6 @@
 # Input System
 
-The `InputManager` handles keyboard, mouse, and gamepad input with frame-based state tracking, key bindings, and console integration.
+The `InputManager` handles keyboard, mouse, and gamepad input with frame-based state tracking, key bindings, and [[SparkConsole]] integration.
 
 **Source:** `SparkEngine/Source/Input/InputManager.h`, `SparkEngine/Source/Input/GamepadInput.h`
 
@@ -139,7 +139,12 @@ input_log <on|off>   # Toggle input event logging
 input_stats          # Show input statistics
 ```
 
+---
+
 ## See Also
 
 - [[Creating a Game Module]] — Accessing InputManager via IEngineContext
 - [[SparkConsole]] — Input debug commands
+- [[Gameplay Systems]] — Player controller and FPS controls
+- [[Scripting with AngelScript]] — Input API available in scripts
+- [[Event System]] — Input-related event publishing

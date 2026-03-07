@@ -68,16 +68,16 @@ This is cache-friendly because EnTT stores components in Structure-of-Arrays (So
 | `Transform` | `position`, `rotation`, `scale` (XMFLOAT3) | 3D transform |
 | `MeshRenderer` | `meshIndex`, `materialIndex`, `visible`, `castShadows`, `receiveShadows` | Mesh rendering |
 | `Camera` | `fov`, `nearPlane`, `farPlane`, `isActive` | Camera parameters |
-| `Script` | `scriptFile`, `className`, `moduleName` | AngelScript binding |
+| `Script` | `scriptFile`, `className`, `moduleName` | [[Scripting with AngelScript|AngelScript]] binding |
 
-### Physics Components
+### [[Physics]] Components
 
 | Component | Fields | Description |
 |-----------|--------|-------------|
 | `RigidBodyComponent` | `mass`, `type` (Static/Kinematic/Dynamic), `linearDamping`, `angularDamping`, `friction`, `restitution`, `physicsBodyHandle` | Rigid body properties |
 | `ColliderComponent` | `shapeType` (Box/Sphere/Capsule/...), `dimensions`, `offset`, `isTrigger` | Collision shape |
 
-### Audio Components
+### [[Audio]] Components
 
 | Component | Fields | Description |
 |-----------|--------|-------------|
@@ -89,7 +89,7 @@ This is cache-friendly because EnTT stores components in Structure-of-Arrays (So
 |-----------|--------|-------------|
 | `LightComponent` | `type` (Point/Directional/Spot), `color`, `intensity`, `range`, `spotAngle`, `castShadows` | Light source |
 
-### Animation
+### [[Animation]]
 
 | Component | Fields | Description |
 |-----------|--------|-------------|
@@ -101,13 +101,13 @@ This is cache-friendly because EnTT stores components in Structure-of-Arrays (So
 |-----------|--------|-------------|
 | `ParticleEmitterComponent` | `maxParticles`, `emissionRate`, `lifetime`, `startSize`, `endSize`, `startColor`, `endColor`, `velocity`, `gravity` | Particle emitter |
 
-### AI
+### [[AI and Navigation]]
 
 | Component | Fields | Description |
 |-----------|--------|-------------|
 | `AIComponent` | `behaviorTreeName`, `detectionRadius`, `attackRange`, `moveSpeed`, `state` | AI behavior |
 
-### Networking
+### [[Networking]]
 
 | Component | Fields | Description |
 |-----------|--------|-------------|
@@ -128,10 +128,10 @@ Systems in `ECSystems.h` run each frame:
 | System | Description |
 |--------|-------------|
 | `TransformUpdateSystem` | Updates world transforms from local transforms |
-| `PhysicsUpdateSystem` | Syncs physics body transforms with ECS transforms |
-| `AnimationUpdateSystem` | Evaluates animation state machines |
-| `AudioUpdateSystem` | Updates 3D audio source positions |
-| `NetworkUpdateSystem` | Syncs networked entity state |
+| `PhysicsUpdateSystem` | Syncs [[Physics]] body transforms with ECS transforms |
+| `AnimationUpdateSystem` | Evaluates [[Animation]] state machines |
+| `AudioUpdateSystem` | Updates 3D [[Audio]] source positions |
+| `NetworkUpdateSystem` | Syncs [[Networking|networked]] entity state |
 
 ## Performance Tips
 
@@ -144,8 +144,15 @@ Systems in `ECSystems.h` run each frame:
 
 The EnTT registry is **not thread-safe**. All World operations must be performed from the main thread unless external synchronization is provided.
 
+---
+
 ## See Also
 
-- [[Scripting with AngelScript]] — Attach scripts to entities
-- [[Physics]] — Physics components in detail
+- [[Rendering and Graphics]] — MeshRenderer and lighting components
+- [[Audio]] — AudioSourceComponent for spatial audio
+- [[AI and Navigation]] — AIComponent for behavior trees
+- [[Event System]] — Publish/subscribe event bus
+- [[Physics]] — RigidBody and Collider components
 - [[Animation]] — Animation controller component
+- [[Scripting with AngelScript]] — Attach scripts to entities
+- [[Scene Management]] — Scene hierarchy and serialization

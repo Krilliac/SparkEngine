@@ -1,6 +1,6 @@
 # Gameplay Systems
 
-SparkEngine includes a comprehensive set of FPS gameplay systems built on top of the ECS architecture.
+SparkEngine includes a comprehensive set of FPS gameplay systems built on top of the [[Entity Component System]] architecture.
 
 **Source:** `SparkEngine/Source/Game/`
 
@@ -41,7 +41,7 @@ A player class system for multiplayer game modes with configurable:
 
 ## Vehicle System
 
-Physics-driven vehicle mechanics:
+[[Physics]]-driven vehicle mechanics:
 - Enter/exit vehicles
 - Steering and acceleration
 - Suspension and physics simulation
@@ -99,7 +99,7 @@ hp.isDead        = false;
 hp.isInvulnerable = false;
 ```
 
-Damage events are published through the event bus:
+Damage events are published through the [[Event System|event bus]]:
 
 ```cpp
 bus.Publish(EntityDamagedEvent{ entityId, damage, "Weapon" });
@@ -108,7 +108,7 @@ bus.Publish(EntityDamagedEvent{ entityId, damage, "Weapon" });
 ## Gravity System
 
 Configurable gravity for physics-driven gameplay:
-- Per-scene gravity settings (via `SceneMetadata`)
+- Per-scene gravity settings (via `SceneMetadata`, see [[Scene Management]])
 - Gravity zones for localized effects
 
 ## Interactive Objects
@@ -118,9 +118,19 @@ Objects that respond to player interaction:
 - Buttons and switches
 - Pickup items
 
+---
+
 ## See Also
 
 - [[Entity Component System]] — Gameplay components
 - [[Physics]] — Physics-driven gameplay
 - [[Event System]] — Gameplay events
 - [[AI and Navigation]] — NPC behavior
+- [[Networking]] — Multiplayer game modes
+- [[Scene Management]] — Scene gravity and level loading
+- [[Scripting with AngelScript]] — Scripting gameplay logic
+- [[Input System]] — Player input handling
+- [[Audio]] — Gameplay sound effects
+- [[Rendering and Graphics]] — HUD and visual effects
+- [[Animation]] — Player and weapon animations
+- [[Terrain and Procedural Generation]] — Level environments

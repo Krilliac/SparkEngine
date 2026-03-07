@@ -114,15 +114,15 @@ Game modules store the context pointer during `OnLoad()` and use it throughout t
 
 ## ECS Data Flow
 
-SparkEngine uses the **EnTT** library for its Entity Component System. The data flow each frame:
+SparkEngine uses the **EnTT** library for its [[Entity Component System]]. The data flow each frame:
 
-1. **Input** — `InputManager::Update()` captures keyboard/mouse/gamepad state
-2. **Scripts** — `AngelScriptEngine` calls `Update()` on entity scripts
-3. **AI** — `AISystem` ticks behavior trees and updates steering
-4. **Physics** — `PhysicsSystem::Update()` steps the Bullet simulation
-5. **Animation** — `AnimationSystem` evaluates state machines and blends poses
-6. **Audio** — `AudioEngine` updates 3D listener and source positions
-7. **Rendering** — `GraphicsEngine` renders the scene with all post-processing
+1. **Input** — `InputManager::Update()` captures keyboard/mouse/gamepad state (see [[Input System]])
+2. **Scripts** — `AngelScriptEngine` calls `Update()` on entity scripts (see [[Scripting with AngelScript]])
+3. **AI** — `AISystem` ticks behavior trees and updates steering (see [[AI and Navigation]])
+4. **Physics** — `PhysicsSystem::Update()` steps the Bullet simulation (see [[Physics]])
+5. **Animation** — `AnimationSystem` evaluates state machines and blends poses (see [[Animation]])
+6. **Audio** — `AudioEngine` updates 3D listener and source positions (see [[Audio]])
+7. **Rendering** — `GraphicsEngine` renders the scene with all post-processing (see [[Rendering and Graphics]])
 
 Components are pure POD structs (state only, no behavior). Systems query and mutate components each frame.
 
@@ -132,37 +132,37 @@ Components are pure POD structs (state only, no behavior). Systems query and mut
 SparkEngine/
 ├── SparkEngine/              # Main engine executable + core library
 │   └── Source/
-│       ├── Audio/            # XAudio2 3D audio engine
+│       ├── Audio/            # XAudio2 3D audio engine ([[Audio]])
 │       ├── Camera/           # First-person camera controller
 │       ├── Console/          # Debug console integration
 │       ├── Core/             # Entry point, platform, framework
 │       ├── Engine/
-│       │   ├── AI/           # Behavior trees, NavMesh, perception, steering
-│       │   ├── Animation/    # Skeletal animation, IK, state machines
-│       │   ├── Cinematic/    # Cinematic sequencer
+│       │   ├── AI/           # Behavior trees, NavMesh, perception, steering ([[AI and Navigation]])
+│       │   ├── Animation/    # Skeletal animation, IK, state machines ([[Animation]])
+│       │   ├── Cinematic/    # Cinematic sequencer ([[Cinematic Sequencer]])
 │       │   ├── Coroutine/    # Coroutine scheduler
-│       │   ├── ECS/          # EnTT entity-component system
-│       │   ├── Events/       # Publish/subscribe event bus
-│       │   ├── Networking/   # UDP multiplayer, replication
+│       │   ├── ECS/          # EnTT entity-component system ([[Entity Component System]])
+│       │   ├── Events/       # Publish/subscribe event bus ([[Event System]])
+│       │   ├── Networking/   # UDP multiplayer, replication ([[Networking]])
 │       │   ├── Procedural/   # Noise, erosion, mesh generation, WFC
 │       │   ├── SaveSystem/   # Serialization, compression
-│       │   ├── Scripting/    # AngelScript VM, hot-reload
+│       │   ├── Scripting/    # AngelScript VM, hot-reload ([[Scripting with AngelScript]])
 │       │   └── World/        # World management, day/night
 │       ├── Game/             # Player, weapons, vehicles, HUD, terrain
-│       ├── Graphics/         # DX11 renderer, RHI, PBR, post-processing
-│       ├── Input/            # Keyboard, mouse, gamepad
-│       ├── Physics/          # Bullet Physics integration
-│       ├── SceneManager/     # Scene hierarchy, serialization
+│       ├── Graphics/         # DX11 renderer, RHI, PBR, post-processing ([[Rendering and Graphics]])
+│       ├── Input/            # Keyboard, mouse, gamepad ([[Input System]])
+│       ├── Physics/          # Bullet Physics integration ([[Physics]])
+│       ├── SceneManager/     # Scene hierarchy, serialization ([[Scene Management]])
 │       └── Utils/            # Logging, profiler, crash handler, debug
-├── SparkEditor/              # ImGui-based visual editor (Windows only)
+├── SparkEditor/              # ImGui-based visual editor (Windows only) ([[SparkEditor]])
 ├── SparkGame/                # Default game module (DLL)
-├── SparkConsole/             # Standalone debug console
-├── SparkShaderCompiler/      # Offline shader compilation tool
+├── SparkConsole/             # Standalone debug console ([[SparkConsole]])
+├── SparkShaderCompiler/      # Offline shader compilation tool ([[Shader Pipeline]])
 ├── SparkSDK/                 # Public SDK headers for module development
 ├── Templates/                # Game module templates (EmptyProject)
 ├── ThirdParty/               # Git submodules (15 libraries)
 ├── Assets/                   # Models, Scenes, Scripts
-├── Shaders/                  # HLSL, GLSL, Compiled bytecode
+├── Shaders/                  # HLSL, GLSL, Compiled bytecode ([[Shader Pipeline]])
 ├── Tests/                    # 35 unit tests
 ├── Tools/                    # CLI tools (spark-cli)
 ├── docs/                     # Doxygen API docs, roadmap, status
@@ -206,3 +206,25 @@ CMake-based with 30+ toggleable feature flags. See [[Build System and CMake Modu
 | imnodes | Node graph editor |
 | miniz | Compression |
 | tinyobjloader | OBJ file loading |
+
+---
+
+## See Also
+
+- [[Entity Component System]] — ECS architecture using EnTT
+- [[Rendering and Graphics]] — Render pipelines, PBR materials, post-processing
+- [[Physics]] — Bullet Physics integration
+- [[Audio]] — XAudio2 / miniaudio audio engine
+- [[AI and Navigation]] — Behavior trees, NavMesh, perception
+- [[Animation]] — Skeletal animation, IK, state machines
+- [[Networking]] — UDP multiplayer and replication
+- [[Input System]] — Keyboard, mouse, and gamepad input
+- [[Scripting with AngelScript]] — AngelScript VM and hot-reload
+- [[Event System]] — Publish/subscribe event bus
+- [[Scene Management]] — Scene hierarchy and serialization
+- [[Asset Pipeline]] — Model and texture loading
+- [[Shader Pipeline]] — Shader authoring and compilation
+- [[SparkEditor]] — ImGui-based visual editor
+- [[SparkConsole]] — Standalone debug console
+- [[Creating a Game Module]] — Building game modules
+- [[Getting Started]] — Build and run the engine
