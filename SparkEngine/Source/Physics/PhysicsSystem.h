@@ -91,9 +91,9 @@ class btTypedConstraint;
  */
 enum class PhysicsBodyType
 {
-    Static,        ///< Static body (immovable)
-    Kinematic,     ///< Kinematic body (user-controlled movement)
-    Dynamic        ///< Dynamic body (physics-controlled)
+    Static,    ///< Static body (immovable)
+    Kinematic, ///< Kinematic body (user-controlled movement)
+    Dynamic    ///< Dynamic body (physics-controlled)
 };
 
 /**
@@ -101,15 +101,15 @@ enum class PhysicsBodyType
  */
 enum class CollisionShapeType
 {
-    Box,           ///< Box collision shape
-    Sphere,        ///< Sphere collision shape
-    Capsule,       ///< Capsule collision shape
-    Cylinder,      ///< Cylinder collision shape
-    Cone,          ///< Cone collision shape
-    Mesh,          ///< Triangle mesh shape
-    ConvexHull,    ///< Convex hull shape
-    Heightfield,   ///< Heightfield terrain shape
-    Compound       ///< Compound shape (multiple shapes)
+    Box,         ///< Box collision shape
+    Sphere,      ///< Sphere collision shape
+    Capsule,     ///< Capsule collision shape
+    Cylinder,    ///< Cylinder collision shape
+    Cone,        ///< Cone collision shape
+    Mesh,        ///< Triangle mesh shape
+    ConvexHull,  ///< Convex hull shape
+    Heightfield, ///< Heightfield terrain shape
+    Compound     ///< Compound shape (multiple shapes)
 };
 
 /**
@@ -117,12 +117,12 @@ enum class CollisionShapeType
  */
 enum class ConstraintType
 {
-    Point2Point,   ///< Point-to-point constraint
-    Hinge,         ///< Hinge constraint
-    Slider,        ///< Slider constraint
-    ConeTwist,     ///< Cone-twist constraint
-    Generic6DOF,   ///< 6-DOF constraint
-    Fixed          ///< Fixed constraint
+    Point2Point, ///< Point-to-point constraint
+    Hinge,       ///< Hinge constraint
+    Slider,      ///< Slider constraint
+    ConeTwist,   ///< Cone-twist constraint
+    Generic6DOF, ///< 6-DOF constraint
+    Fixed        ///< Fixed constraint
 };
 
 /**
@@ -460,12 +460,12 @@ struct PhysicsBodyDesc
  */
 struct RaycastHit
 {
-    bool hasHit = false;                  ///< Whether ray hit something
-    XMFLOAT3 point = {0, 0, 0};          ///< Hit point in world space
-    XMFLOAT3 normal = {0, 1, 0};         ///< Hit surface normal
-    float distance = 0.0f;               ///< Distance from ray origin
-    class PhysicsBody* body = nullptr;    ///< Hit physics body
-    void* userData = nullptr;             ///< User data from hit body
+    bool hasHit = false;               ///< Whether ray hit something
+    XMFLOAT3 point = {0, 0, 0};        ///< Hit point in world space
+    XMFLOAT3 normal = {0, 1, 0};       ///< Hit surface normal
+    float distance = 0.0f;             ///< Distance from ray origin
+    class PhysicsBody* body = nullptr; ///< Hit physics body
+    void* userData = nullptr;          ///< User data from hit body
 };
 
 /**
@@ -473,12 +473,12 @@ struct RaycastHit
  */
 struct ContactInfo
 {
-    class PhysicsBody* bodyA = nullptr;   ///< First colliding body
-    class PhysicsBody* bodyB = nullptr;   ///< Second colliding body
-    XMFLOAT3 contactPoint = {0, 0, 0};   ///< Contact point
-    XMFLOAT3 contactNormal = {0, 1, 0};  ///< Contact normal
-    float penetrationDepth = 0.0f;       ///< Penetration depth
-    float appliedImpulse = 0.0f;         ///< Applied impulse
+    class PhysicsBody* bodyA = nullptr; ///< First colliding body
+    class PhysicsBody* bodyB = nullptr; ///< Second colliding body
+    XMFLOAT3 contactPoint = {0, 0, 0};  ///< Contact point
+    XMFLOAT3 contactNormal = {0, 1, 0}; ///< Contact normal
+    float penetrationDepth = 0.0f;      ///< Penetration depth
+    float appliedImpulse = 0.0f;        ///< Applied impulse
 };
 
 /**
@@ -512,7 +512,7 @@ struct ContactInfo
  */
 class PhysicsBody
 {
-public:
+  public:
     /**
      * @brief Construct a PhysicsBody wrapping the given Bullet rigid body.
      *
@@ -921,7 +921,7 @@ public:
      */
     void Console_ApplyForce(float x, float y, float z);
 
-private:
+  private:
     /** @brief Descriptor capturing all creation-time parameters for this body. */
     PhysicsBodyDesc m_desc;
 
@@ -948,7 +948,7 @@ private:
  */
 class PhysicsConstraint
 {
-public:
+  public:
     PhysicsConstraint(ConstraintType type, btTypedConstraint* bulletConstraint);
     ~PhysicsConstraint();
 
@@ -960,7 +960,7 @@ public:
 
     btTypedConstraint* GetBulletConstraint() const { return m_bulletConstraint; }
 
-private:
+  private:
     ConstraintType m_type;
     btTypedConstraint* m_bulletConstraint;
 };
@@ -988,23 +988,23 @@ private:
  */
 class PhysicsSystem
 {
-public:
+  public:
     /**
      * @brief Physics system metrics
      */
     struct PhysicsMetrics
     {
-        uint32_t activeRigidBodies;       ///< Number of active rigid bodies
-        uint32_t totalRigidBodies;        ///< Total number of rigid bodies
-        uint32_t activeConstraints;       ///< Number of active constraints
-        uint32_t collisionPairs;          ///< Active collision pairs
-        uint32_t broadphaseProxies;       ///< Broadphase proxy count
-        float simulationTime;             ///< Physics simulation time (ms)
-        float collisionTime;              ///< Collision detection time (ms)
-        uint32_t substeps;                ///< Number of substeps per frame
-        float timeStep;                   ///< Physics time step
-        bool debugDrawEnabled;            ///< Debug drawing enabled
-        uint32_t raycastCount;            ///< Raycasts performed this frame
+        uint32_t activeRigidBodies; ///< Number of active rigid bodies
+        uint32_t totalRigidBodies;  ///< Total number of rigid bodies
+        uint32_t activeConstraints; ///< Number of active constraints
+        uint32_t collisionPairs;    ///< Active collision pairs
+        uint32_t broadphaseProxies; ///< Broadphase proxy count
+        float simulationTime;       ///< Physics simulation time (ms)
+        float collisionTime;        ///< Collision detection time (ms)
+        uint32_t substeps;          ///< Number of substeps per frame
+        float timeStep;             ///< Physics time step
+        bool debugDrawEnabled;      ///< Debug drawing enabled
+        uint32_t raycastCount;      ///< Raycasts performed this frame
     };
 
     PhysicsSystem();
@@ -1159,10 +1159,10 @@ public:
      * @param axisB   Hinge axis in bodyB's local space (normalized).
      * @return        Shared pointer to the new PhysicsConstraint.
      */
-    std::shared_ptr<PhysicsConstraint> CreateHingeConstraint(
-        std::shared_ptr<PhysicsBody> bodyA, std::shared_ptr<PhysicsBody> bodyB,
-        const XMFLOAT3& pivotA, const XMFLOAT3& pivotB,
-        const XMFLOAT3& axisA, const XMFLOAT3& axisB);
+    std::shared_ptr<PhysicsConstraint> CreateHingeConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                             std::shared_ptr<PhysicsBody> bodyB, const XMFLOAT3& pivotA,
+                                                             const XMFLOAT3& pivotB, const XMFLOAT3& axisA,
+                                                             const XMFLOAT3& axisB);
 
     /**
      * @brief Create a slider constraint allowing linear motion along a single axis.
@@ -1176,9 +1176,9 @@ public:
      * @param frameB  Constraint frame in bodyB's local space.
      * @return        Shared pointer to the new PhysicsConstraint.
      */
-    std::shared_ptr<PhysicsConstraint> CreateSliderConstraint(
-        std::shared_ptr<PhysicsBody> bodyA, std::shared_ptr<PhysicsBody> bodyB,
-        const XMMATRIX& frameA, const XMMATRIX& frameB);
+    std::shared_ptr<PhysicsConstraint> CreateSliderConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                              std::shared_ptr<PhysicsBody> bodyB,
+                                                              const XMMATRIX& frameA, const XMMATRIX& frameB);
 
     /**
      * @brief Create a fixed (weld) constraint that locks two bodies together.
@@ -1192,9 +1192,9 @@ public:
      * @param frameB  Attachment frame in bodyB's local space.
      * @return        Shared pointer to the new PhysicsConstraint.
      */
-    std::shared_ptr<PhysicsConstraint> CreateFixedConstraint(
-        std::shared_ptr<PhysicsBody> bodyA, std::shared_ptr<PhysicsBody> bodyB,
-        const XMMATRIX& frameA, const XMMATRIX& frameB);
+    std::shared_ptr<PhysicsConstraint> CreateFixedConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                             std::shared_ptr<PhysicsBody> bodyB, const XMMATRIX& frameA,
+                                                             const XMMATRIX& frameB);
 
     /**
      * @brief Remove a constraint from the dynamics world.
@@ -1287,7 +1287,10 @@ public:
      *
      * @param callback  Trigger event handler. Called from within Update().
      */
-    void SetTriggerCallback(std::function<void(PhysicsBody*, PhysicsBody*, bool)> callback) { m_triggerCallback = callback; }
+    void SetTriggerCallback(std::function<void(PhysicsBody*, PhysicsBody*, bool)> callback)
+    {
+        m_triggerCallback = callback;
+    }
 
     // =========================================================================
     // Debug rendering
@@ -1537,8 +1540,8 @@ public:
      * @param maxDistance  Maximum ray length (metres).
      * @return            Formatted hit-result string, or "No hit" if nothing was intersected.
      */
-    std::string Console_Raycast(float originX, float originY, float originZ,
-                               float dirX, float dirY, float dirZ, float maxDistance);
+    std::string Console_Raycast(float originX, float originY, float originZ, float dirX, float dirY, float dirZ,
+                                float maxDistance);
 
     /**
      * @brief Remove all bodies and reset the physics world to its initial state.
@@ -1548,7 +1551,7 @@ public:
      */
     void Console_Reset();
 
-private:
+  private:
     // =========================================================================
     // Bullet Physics world objects
     // =========================================================================
