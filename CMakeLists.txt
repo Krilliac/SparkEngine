@@ -595,6 +595,24 @@ target_include_directories(SparkEngine PRIVATE
 )
 
 # ---------------------------------------------------------------------
+# 11.5) Precompiled Headers (PCH)
+# ---------------------------------------------------------------------
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
+    target_precompile_headers(SparkEngine PRIVATE
+        <string>
+        <vector>
+        <memory>
+        <unordered_map>
+        <functional>
+        <mutex>
+        <cstdint>
+        <algorithm>
+        <sstream>
+    )
+    message(STATUS "Precompiled headers enabled")
+endif()
+
+# ---------------------------------------------------------------------
 # 12) System libraries - Platform-specific
 # ---------------------------------------------------------------------
 if(WIN32)

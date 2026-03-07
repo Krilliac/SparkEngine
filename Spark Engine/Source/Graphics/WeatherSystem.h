@@ -27,10 +27,6 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
-using namespace DirectX;
-#else
-struct XMFLOAT3 { float x, y, z; };
-struct XMFLOAT4 { float x, y, z, w; };
 #endif
 
 #include <string>

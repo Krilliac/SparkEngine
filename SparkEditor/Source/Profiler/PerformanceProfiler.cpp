@@ -13,6 +13,7 @@
 #include <sstream>
 #include <fstream>
 
+using namespace DirectX;
 namespace SparkEditor {
 
 // Global profiler instance

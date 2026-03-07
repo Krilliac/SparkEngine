@@ -18,7 +18,6 @@
 #include <memory>
 
 using Microsoft::WRL::ComPtr;
-using namespace DirectX;
 
 /**
  * @brief Basic post-processing system

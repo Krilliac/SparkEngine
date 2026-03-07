@@ -8,6 +8,7 @@
 #include <cmath>
 #include <sstream>
 
+using namespace DirectX;
 // Thread-local random engine for particle randomization
 static thread_local std::mt19937 s_rng(std::random_device{}());
 

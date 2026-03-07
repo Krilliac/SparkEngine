@@ -5,6 +5,7 @@
 
 #include "VisualScriptingSystem.h"
 
+using namespace DirectX;
 namespace SparkEditor {
 
 // === ScriptGraph ===

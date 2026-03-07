@@ -24,7 +24,6 @@
 #include <memory>
 #include <cstdint>
 
-using namespace DirectX;
 
 namespace Spark::Graphics {
 

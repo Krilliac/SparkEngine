@@ -26,7 +26,6 @@
 #include <functional>
 #include <queue>
 
-using namespace DirectX;
 
 namespace Spark::Audio {
 

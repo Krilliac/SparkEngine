@@ -28,7 +28,6 @@
 #include <cstdint>
 #include <chrono>
 
-using namespace DirectX;
 
 namespace Spark::Net {
 

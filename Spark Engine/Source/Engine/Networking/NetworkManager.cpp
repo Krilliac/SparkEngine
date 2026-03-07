@@ -8,6 +8,7 @@
 #include <cstring>
 #include <algorithm>
 
+using namespace DirectX;
 namespace Spark::Net {
 
 // ============================================================================

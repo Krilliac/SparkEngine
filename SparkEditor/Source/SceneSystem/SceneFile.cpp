@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstring>
 
+using namespace DirectX;
 namespace SparkEditor {
 
 // Transform implementation

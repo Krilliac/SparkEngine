@@ -21,7 +21,6 @@
 #include <string>
 #include <functional>
 
-using namespace DirectX;
 
 namespace SparkEditor {
 

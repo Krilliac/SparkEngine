@@ -26,7 +26,6 @@
 #include <queue>
 #include <future>
 
-using namespace DirectX;
 
 namespace SparkEditor {
 

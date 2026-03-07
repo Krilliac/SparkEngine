@@ -1,6 +1,7 @@
 #include "LightingTools.h"
 #include <iostream>
 
+using namespace DirectX;
 namespace SparkEditor {
 
 // --- LightingTools ---

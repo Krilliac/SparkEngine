@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cfloat>
 
+using namespace DirectX;
 namespace SparkEditor {
 
 // ============================================================================

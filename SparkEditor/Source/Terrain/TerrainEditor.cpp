@@ -1,5 +1,6 @@
 #include "TerrainEditor.h"
 
+using namespace DirectX;
 namespace SparkEditor {
 
 // --- TerrainBrush ---

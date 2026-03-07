@@ -8,6 +8,60 @@ on:
 
 jobs:
   # ===========================================================================
+  # Code Quality — clang-format enforcement
+  # ===========================================================================
+  check-format:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install clang-format
+      run: sudo apt-get update && sudo apt-get install -y clang-format
+
+    - name: Check formatting
+      run: |
+        find "Spark Engine/Source" SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+          -name '*.h' -o -name '*.hpp' -o -name '*.cpp' | \
+          xargs clang-format --dry-run --Werror 2>&1 || {
+            echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
+            exit 1
+          }
+
+  # ===========================================================================
+  # Linux Build — GCC with AddressSanitizer
+  # ===========================================================================
+  build-linux-asan:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev
+
+    - name: Configure CMake (ASan + UBSan)
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DBUILD_TESTS=ON \
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+          -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Run Tests under ASan
+      run: |
+        cd build
+        ./bin/SparkTests
+
+  # ===========================================================================
   # Windows Build (MSVC VS 2022, v143 toolset + DirectX 11)
   # ===========================================================================
   build-windows-vs2022:

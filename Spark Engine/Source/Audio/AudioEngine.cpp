@@ -10,6 +10,7 @@
 #include <sstream>
 #include <iomanip>
 
+using namespace DirectX;
 AudioEngine::AudioEngine()
     : m_xAudio2(nullptr)
     , m_masterVoice(nullptr)

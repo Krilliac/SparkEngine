@@ -41,6 +41,7 @@ extern Console                         g_console;
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
 #include "../Utils/LogMacros.h"
 
+using namespace DirectX;
 /*-------------------------------------------------------------
   Ctor / Dtor
 --------------------------------------------------------------*/

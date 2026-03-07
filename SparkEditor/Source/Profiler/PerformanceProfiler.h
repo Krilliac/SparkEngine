@@ -27,7 +27,6 @@
 #include <functional>
 #include <cfloat>
 
-using namespace DirectX;
 
 namespace SparkEditor {
 

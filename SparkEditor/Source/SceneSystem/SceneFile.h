@@ -18,7 +18,6 @@
 #include <DirectXMath.h>
 #include "../Enums/SceneSystemEnums.h"
 
-using namespace DirectX;
 
 namespace SparkEditor {
 

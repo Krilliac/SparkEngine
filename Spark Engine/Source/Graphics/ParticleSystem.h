@@ -24,7 +24,6 @@
 #include <functional>
 
 using Microsoft::WRL::ComPtr;
-using namespace DirectX;
 
 /**
  * @brief Emitter shape types for particle spawning

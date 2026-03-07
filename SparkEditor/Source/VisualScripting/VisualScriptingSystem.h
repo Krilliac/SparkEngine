@@ -27,7 +27,6 @@
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
 
-using namespace DirectX;
 
 namespace SparkEditor {
 

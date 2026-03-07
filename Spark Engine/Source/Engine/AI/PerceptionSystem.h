@@ -25,7 +25,6 @@
 #include <cmath>
 #include <cstdint>
 
-using namespace DirectX;
 
 namespace Spark::AI {
 

@@ -1,5 +1,6 @@
 #include "LevelStreamingSystem.h"
 
+using namespace DirectX;
 namespace SparkEditor {
 
 // --- WorldTile ---

@@ -25,7 +25,6 @@
 #include <cmath>
 #include <random>
 
-using namespace DirectX;
 
 namespace Spark::AI {
 

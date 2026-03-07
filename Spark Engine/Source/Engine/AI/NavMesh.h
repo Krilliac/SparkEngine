@@ -75,7 +75,6 @@
 #include <queue>
 #include <algorithm>
 
-using namespace DirectX;
 
 namespace Spark::AI {
 

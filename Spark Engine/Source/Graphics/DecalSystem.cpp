@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <algorithm>
 
+using namespace DirectX;
 namespace Spark::Graphics {
 
 // ============================================================================

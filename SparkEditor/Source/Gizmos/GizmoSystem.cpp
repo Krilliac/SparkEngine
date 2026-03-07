@@ -1,5 +1,6 @@
 #include "GizmoSystem.h"
 
+using namespace DirectX;
 namespace SparkEditor {
 
 // --- Ray ---
