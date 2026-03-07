@@ -384,6 +384,7 @@ FodyWeavers.xsd
 # Ignore entire build directory (CMake, crash dumps, etc.)
 build/
 build/**
+build-linux/
 
 # Never track crash dumps or large binary dumps
 *.dmp
