@@ -12,6 +12,7 @@
 #include <chrono>
 #include <sstream>
 #include <algorithm>
+#include <set>
 
 #ifdef _WIN32
 #include <ShlObj.h>
@@ -149,6 +150,12 @@ bool ProjectManager::CreateProject(const std::string& projectName,
                                    const std::string& parentDirectory,
                                    ProjectTemplate templateType,
                                    const std::string& description) {
+    // If engine root is set and templates exist, use template-based creation
+    if (!m_engineRoot.empty()) {
+        return CreateProjectFromTemplate(projectName,
+            (fs::path(parentDirectory) / projectName).string(), "EmptyProject");
+    }
+
     std::cout << "Creating project '" << projectName << "' in " << parentDirectory << "\n";
 
     // Build the project root: parentDirectory/projectName
@@ -174,6 +181,7 @@ bool ProjectManager::CreateProject(const std::string& projectName,
         m_currentProject.createdTime = GetCurrentTimestamp();
         m_currentProject.lastModified = m_currentProject.createdTime;
         m_currentProject.templateType = templateType;
+        m_currentProject.modules.push_back(projectName);
 
         // Add the default scene
         std::string defaultSceneRelative = "Scenes/Default.sparkscene";
@@ -200,6 +208,108 @@ bool ProjectManager::CreateProject(const std::string& projectName,
     }
 }
 
+bool ProjectManager::CreateProjectFromTemplate(const std::string& projectName,
+                                                const std::string& projectPath,
+                                                const std::string& templateName)
+{
+    std::cout << "Creating project '" << projectName << "' from template '"
+              << templateName << "' at " << projectPath << "\n";
+
+    std::string templateDir = m_engineRoot + "/Templates/" + templateName;
+    if (!fs::exists(templateDir)) {
+        std::cerr << "Template not found: " << templateDir << "\n";
+        return false;
+    }
+
+    try {
+        // Copy template and replace placeholders
+        if (!CopyTemplate(templateDir, projectPath, projectName)) {
+            return false;
+        }
+
+        // Load the generated project settings
+        if (!LoadProjectFile(projectPath + "/" + projectName + ".sparkproject")) {
+            // Fall back: set defaults if no .sparkproject was in template
+            m_currentProject = ProjectInfo{};
+            m_currentProject.name = projectName;
+            m_currentProject.path = projectPath;
+            m_currentProject.version = "1.0.0";
+            m_currentProject.engineVersion = GetCurrentEngineVersion().ToString();
+            m_currentProject.modules.push_back(projectName);
+        }
+
+        m_hasOpenProject = true;
+        AddToRecentProjects(projectName, projectPath);
+
+        if (m_onProjectOpened) {
+            m_onProjectOpened(m_currentProject);
+        }
+
+        std::cout << "Project '" << projectName << "' created successfully from template '"
+                  << templateName << "'\n";
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "Error creating project from template: " << e.what() << "\n";
+        return false;
+    }
+}
+
+bool ProjectManager::CopyTemplate(const std::string& templatePath,
+                                   const std::string& destPath,
+                                   const std::string& projectName)
+{
+    try {
+        // Copy the entire template directory
+        fs::copy(templatePath, destPath,
+            fs::copy_options::recursive |
+            fs::copy_options::overwrite_existing);
+
+        // Text file extensions that should have placeholders replaced
+        static const std::set<std::string> textExtensions = {
+            ".h", ".hpp", ".cpp", ".c", ".txt", ".json", ".cmake", ".md", ".py"
+        };
+
+        const std::string placeholder = "{{PROJECT_NAME}}";
+
+        // Walk through all files and replace {{PROJECT_NAME}}
+        for (auto& entry : fs::recursive_directory_iterator(destPath)) {
+            if (!entry.is_regular_file()) continue;
+
+            auto ext = entry.path().extension().string();
+            if (textExtensions.find(ext) == textExtensions.end()) continue;
+
+            // Read file
+            std::ifstream inFile(entry.path());
+            if (!inFile.is_open()) continue;
+
+            std::string content((std::istreambuf_iterator<char>(inFile)),
+                                 std::istreambuf_iterator<char>());
+            inFile.close();
+
+            // Replace placeholders
+            if (content.find(placeholder) == std::string::npos) continue;
+
+            size_t pos = 0;
+            while ((pos = content.find(placeholder, pos)) != std::string::npos) {
+                content.replace(pos, placeholder.length(), projectName);
+                pos += projectName.length();
+            }
+
+            // Write back
+            std::ofstream outFile(entry.path());
+            if (outFile.is_open()) {
+                outFile << content;
+                outFile.close();
+            }
+        }
+
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "Error copying template: " << e.what() << "\n";
+        return false;
+    }
+}
+
 bool ProjectManager::OpenProject(const std::string& sparkprojectPath) {
     std::cout << "Opening project: " << sparkprojectPath << "\n";
 
@@ -211,6 +321,13 @@ bool ProjectManager::OpenProject(const std::string& sparkprojectPath) {
             if (entry.path().extension() == ".sparkproject") {
                 resolvedPath = entry.path().string();
                 break;
+            }
+        }
+        // Also try spark.project.json (new module format)
+        if (resolvedPath == sparkprojectPath) {
+            std::string sparkJson = sparkprojectPath + "/spark.project.json";
+            if (fs::exists(sparkJson)) {
+                resolvedPath = sparkJson;
             }
         }
     }
@@ -353,6 +470,7 @@ bool ProjectManager::LoadProjectFile(const std::string& sparkprojectPath) {
     uint64_t lastModified = ExtractJsonUint64(content, "lastModified");
     uint64_t createdTime = ExtractJsonUint64(content, "createdTime");
     auto scenes = ExtractJsonStringArray(content, "scenes");
+    auto modules = ExtractJsonStringArray(content, "modules");
 
     // Derive project root from the .sparkproject file location
     std::string projectRoot = fs::path(sparkprojectPath).parent_path().string();
@@ -368,6 +486,7 @@ bool ProjectManager::LoadProjectFile(const std::string& sparkprojectPath) {
     m_currentProject.lastModified = lastModified;
     m_currentProject.createdTime = createdTime;
     m_currentProject.scenes = scenes;
+    m_currentProject.modules = modules;
 
     std::cout << "Loaded project: " << m_currentProject.name
               << " v" << m_currentProject.version
@@ -399,6 +518,15 @@ bool ProjectManager::SaveProjectFile() {
         file << "  \"createdTime\": " << m_currentProject.createdTime << ",\n";
         file << "  \"lastModified\": " << m_currentProject.lastModified << ",\n";
 
+        // modules array
+        file << "  \"modules\": [\n";
+        for (size_t i = 0; i < m_currentProject.modules.size(); ++i) {
+            file << "    \"" << EscapeJsonString(m_currentProject.modules[i]) << "\"";
+            if (i + 1 < m_currentProject.modules.size()) file << ",";
+            file << "\n";
+        }
+        file << "  ],\n";
+
         // scenes array
         file << "  \"scenes\": [\n";
         for (size_t i = 0; i < m_currentProject.scenes.size(); ++i) {
@@ -427,6 +555,7 @@ bool ProjectManager::CreateProjectStructure(const std::string& projectPath,
         fs::create_directories(projectPath);
 
         // Core directories every project needs
+        fs::create_directories(projectPath + "/Source");
         fs::create_directories(projectPath + "/Assets");
         fs::create_directories(projectPath + "/Assets/Textures");
         fs::create_directories(projectPath + "/Assets/Models");

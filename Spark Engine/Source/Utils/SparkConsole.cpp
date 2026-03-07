@@ -17,19 +17,21 @@
 #endif // SPARK_PLATFORM_WINDOWS
 #include <dbghelp.h>
 
-// Include actual headers for complete type definitions
-#include "../Game/Game.h"
-#include "../Game/Player.h"
+// Engine headers
 #include "../Camera/SparkEngineCamera.h"
 #include "../Graphics/GraphicsEngine.h"
 #include "../Input/InputManager.h"
-#include "../Projectiles/ProjectilePool.h"
 #include "../SceneManager/SceneManager.h"
 #include "../Utils/Timer.h"
 #include "../Utils/CrashHandler.h"
 #include "../Utils/Profiler.h"
 #include "../Utils/SparkError.h"
-#include "../Game/Console.h"
+
+// Game-specific headers (from SparkGame project)
+#include "Game/Game.h"
+#include "Game/Player.h"
+#include "Game/Console.h"
+#include "Projectiles/ProjectilePool.h"
 
 // External references to global engine components
 extern std::unique_ptr<GraphicsEngine> g_graphics;

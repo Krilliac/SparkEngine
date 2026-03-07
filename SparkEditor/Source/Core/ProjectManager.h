@@ -49,6 +49,7 @@ struct ProjectInfo {
     std::string description;         ///< Project description
     std::string engineVersion;       ///< Engine version that created this project
     std::vector<std::string> scenes; ///< Scene file paths (relative to project root)
+    std::vector<std::string> modules; ///< Module names in this project
     std::string lastOpenedScene;     ///< Last opened scene path
     std::string defaultScene;        ///< Default scene loaded on play
     uint64_t lastModified = 0;       ///< Last modified timestamp (epoch seconds)
@@ -85,12 +86,17 @@ public:
     bool CreateProject(const std::string& projectName, const std::string& parentDirectory,
                        ProjectTemplate templateType = ProjectTemplate::Blank3D,
                        const std::string& description = "");
+    bool CreateProjectFromTemplate(const std::string& projectName,
+                                   const std::string& projectPath,
+                                   const std::string& templateName = "EmptyProject");
     bool OpenProject(const std::string& sparkprojectPath);
     bool SaveProject();
     void CloseProject();
 
     bool HasOpenProject() const { return m_hasOpenProject; }
     const ProjectInfo& GetCurrentProject() const { return m_currentProject; }
+
+    void SetEngineRoot(const std::string& engineRoot) { m_engineRoot = engineRoot; }
 
     // --- Recent projects ---
     const std::vector<RecentProject>& GetRecentProjects() const { return m_recentProjects; }
@@ -122,6 +128,9 @@ private:
     bool CreateProjectStructure(const std::string& projectPath, ProjectTemplate templateType);
     void CreateDefaultScene(const std::string& scenePath, ProjectTemplate templateType);
     void CreateDefaultEditorSettings(const std::string& configPath);
+    bool CopyTemplate(const std::string& templatePath,
+                      const std::string& destPath,
+                      const std::string& projectName);
 
     void LoadRecentProjectsList();
     void SaveRecentProjectsList();
@@ -131,6 +140,7 @@ private:
 
     ProjectInfo m_currentProject;
     std::vector<RecentProject> m_recentProjects;
+    std::string m_engineRoot;
     bool m_hasOpenProject = false;
     bool m_isInitialized = false;
 

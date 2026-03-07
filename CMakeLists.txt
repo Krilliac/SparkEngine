@@ -424,8 +424,17 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkShaderCompiler/CMakeLists.txt")
 endif()
 
 # ---------------------------------------------------------------------
-# 9) SparkEngine source files and executable
+# 9) SparkEngine - Static library + Executable
 # ---------------------------------------------------------------------
+# Architecture:
+#   SparkEngineLib  = STATIC LIBRARY (all engine systems)
+#   SparkEngine     = EXECUTABLE (entry point + game module loader)
+#   SparkGame       = SHARED LIBRARY / DLL (game code, links SparkEngineLib)
+#
+# The engine exe loads SparkGame.dll at runtime via GameModuleLoader.
+# Both the engine exe and game DLL link SparkEngineLib for shared engine code.
+# ---------------------------------------------------------------------
+
 file(GLOB_RECURSE SPARK_ENGINE_SOURCES
     CONFIGURE_DEPENDS
     "Spark Engine/Source/*.cpp"
@@ -435,29 +444,37 @@ file(GLOB_RECURSE SPARK_ENGINE_SOURCES
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 
-# Create the main executable
-# On Windows: WIN32 subsystem (uses wWinMain entry point)
-# On Linux: Standard executable (uses main() entry point)
-if(WIN32)
-    add_executable(SparkEngine WIN32 ${SPARK_ENGINE_SOURCES})
-else()
-    add_executable(SparkEngine ${SPARK_ENGINE_SOURCES})
-endif()
+# Separate entry point from library sources
+# SparkEngine.cpp contains wWinMain/main - it goes in the exe only
+set(SPARK_ENGINE_ENTRY_POINT "${CMAKE_SOURCE_DIR}/Spark Engine/Source/Core/SparkEngine.cpp")
+set(SPARK_ENGINE_LIB_SOURCES ${SPARK_ENGINE_SOURCES})
+list(REMOVE_ITEM SPARK_ENGINE_LIB_SOURCES "${SPARK_ENGINE_ENTRY_POINT}")
 
-# Link third-party libraries properly
+# 9a) SparkEngineLib - Static library with all engine systems
+add_library(SparkEngineLib STATIC ${SPARK_ENGINE_LIB_SOURCES})
+set_target_properties(SparkEngineLib PROPERTIES OUTPUT_NAME "SparkEngineLib")
+
+# 9b) SparkEngine - Executable (entry point + module loader)
+if(WIN32)
+    add_executable(SparkEngine WIN32 "${SPARK_ENGINE_ENTRY_POINT}")
+else()
+    add_executable(SparkEngine "${SPARK_ENGINE_ENTRY_POINT}")
+endif()
+target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
+
+# Link third-party libraries to the static lib (both exe and game DLL get them)
 if(MINIZ_FOUND)
-    target_link_libraries(SparkEngine PRIVATE miniz)
-    message(STATUS "Linking SparkEngine with MINIZ")
+    target_link_libraries(SparkEngineLib PRIVATE miniz)
+    message(STATUS "Linking SparkEngineLib with MINIZ")
 endif()
 
 if(TINYOBJ_FOUND)
-    target_link_libraries(SparkEngine PRIVATE tinyobjloader)
-    message(STATUS "Linking SparkEngine with TinyObjLoader")
+    target_link_libraries(SparkEngineLib PRIVATE tinyobjloader)
+    message(STATUS "Linking SparkEngineLib with TinyObjLoader")
 endif()
 
 # Link Bullet Physics
 if(BULLET_FOUND)
-    # Build Bullet from source via its own CMake
     set(BUILD_BULLET2_DEMOS OFF CACHE BOOL "" FORCE)
     set(BUILD_CPU_DEMOS OFF CACHE BOOL "" FORCE)
     set(BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
@@ -466,33 +483,43 @@ if(BULLET_FOUND)
     set(USE_GRAPHICAL_BENCHMARK OFF CACHE BOOL "" FORCE)
     set(USE_MSVC_RUNTIME_LIBRARY_DLL ON CACHE BOOL "" FORCE)
     add_subdirectory("${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3" "${CMAKE_BINARY_DIR}/bullet3")
-    target_link_libraries(SparkEngine PRIVATE BulletDynamics BulletCollision LinearMath)
-    message(STATUS "Linking SparkEngine with Bullet Physics")
+    target_link_libraries(SparkEngineLib PRIVATE BulletDynamics BulletCollision LinearMath)
+    message(STATUS "Linking SparkEngineLib with Bullet Physics")
 endif()
 
-# Ensure SparkEngine depends on SparkConsole
+# SparkConsole dependency
 if(TARGET SparkConsole)
     add_dependencies(SparkEngine SparkConsole)
-    message(STATUS "SparkEngine will be built after SparkConsole")
-
-    # FIXED: Simplified post-build step to copy SparkConsole.exe
     add_custom_command(TARGET SparkEngine POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:SparkConsole>
             $<TARGET_FILE_DIR:SparkEngine>
-        COMMENT "Copying SparkConsole to SparkEngine output directory"
+        COMMENT "Copying SparkConsole to engine output directory"
         VERBATIM
     )
+    message(STATUS "SparkEngine will be built after SparkConsole")
 endif()
 
 # ---------------------------------------------------------------------
-# 9.5) Build SparkEditor if enabled and exists
+# 9.5) Build SparkGame (game module DLL loaded by engine at runtime)
+# ---------------------------------------------------------------------
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGame/CMakeLists.txt")
+    message(STATUS "Adding SparkGame game module to build...")
+    add_subdirectory(SparkGame)
+
+    if(TARGET SparkGame)
+        add_dependencies(SparkGame SparkEngine)
+        message(STATUS "SparkGame DLL will be built after SparkEngine")
+    endif()
+endif()
+
+# ---------------------------------------------------------------------
+# 9.6) Build SparkEditor if enabled and exists
 # ---------------------------------------------------------------------
 if(ENABLE_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/SparkEditor/CMakeLists.txt")
     message(STATUS "Adding SparkEditor to build...")
     add_subdirectory(SparkEditor)
 
-    # Ensure SparkEditor is built after SparkEngine
     if(TARGET SparkEngine AND TARGET SparkEditor)
         add_dependencies(SparkEditor SparkEngine)
         message(STATUS "SparkEditor will be built after SparkEngine")
@@ -500,43 +527,17 @@ if(ENABLE_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/SparkEditor/CMakeLists.txt")
 endif()
 
 # ---------------------------------------------------------------------
-# 10) Asset Management
+# 10) Asset Management - Copy shaders and assets to engine output
 # ---------------------------------------------------------------------
-# Create necessary directories
 add_custom_command(TARGET SparkEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Assets"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Models"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Textures"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Audio"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Scripts"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Config"
-    COMMENT "Creating asset directory structure"
+    COMMENT "Creating engine asset directory structure"
 )
 
-# Copy model assets to output directory
-if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Models")
-    add_custom_command(TARGET SparkEngine POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Assets/Models"
-            "$<TARGET_FILE_DIR:SparkEngine>/Assets/Models"
-        COMMENT "Copying model assets"
-    )
-endif()
-
-# Copy scene files to output directory
-if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Scenes")
-    add_custom_command(TARGET SparkEngine POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Assets/Scenes"
-            "$<TARGET_FILE_DIR:SparkEngine>/Assets/Scenes"
-        COMMENT "Copying scene assets"
-    )
-endif()
-
-# Copy shaders to output directory instead of compiling them
-file(GLOB_RECURSE SHADER_FILES "Spark Engine/Shaders/HLSL/*.hlsl")
-foreach(SHADER_FILE ${SHADER_FILES})
+# Copy HLSL shaders
+file(GLOB_RECURSE ENGINE_SHADER_FILES "${CMAKE_SOURCE_DIR}/Spark Engine/Shaders/HLSL/*.hlsl")
+foreach(SHADER_FILE ${ENGINE_SHADER_FILES})
     get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
     add_custom_command(TARGET SparkEngine POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -546,59 +547,21 @@ foreach(SHADER_FILE ${SHADER_FILES})
     )
 endforeach()
 
-# Copy GLSL shaders to output directory
-if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/GLSL")
-    file(GLOB GLSL_SHADER_FILES "${CMAKE_SOURCE_DIR}/Shaders/GLSL/*.glsl")
-    foreach(SHADER_FILE ${GLSL_SHADER_FILES})
-        get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-        add_custom_command(TARGET SparkEngine POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders/GLSL"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${SHADER_FILE}
-                "$<TARGET_FILE_DIR:SparkEngine>/Shaders/GLSL/${SHADER_NAME}"
-            COMMENT "Copying GLSL shader ${SHADER_NAME}"
-        )
-    endforeach()
-endif()
-
-# Copy SPIR-V compiled shaders to output directory
-if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/SPIRV")
-    file(GLOB SPIRV_SHADER_FILES "${CMAKE_SOURCE_DIR}/Shaders/SPIRV/*.spv")
-    foreach(SHADER_FILE ${SPIRV_SHADER_FILES})
-        get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-        add_custom_command(TARGET SparkEngine POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${SHADER_FILE}
-                "$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV/${SHADER_NAME}"
-            COMMENT "Copying SPIR-V shader ${SHADER_NAME}"
-        )
-    endforeach()
-endif()
-
-# Exclude shader files from automatic compilation (VS only)
-if(MSVC)
-    file(GLOB_RECURSE ALL_SHADER_FILES "*.hlsl")
-    set_source_files_properties(${ALL_SHADER_FILES} PROPERTIES
-        VS_TOOL_OVERRIDE "None"
-        VS_DEPLOYMENT_CONTENT 1
-        VS_DEPLOYMENT_LOCATION "Shaders"
+# Copy model assets
+if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Models")
+    add_custom_command(TARGET SparkEngine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/Assets/Models"
+            "$<TARGET_FILE_DIR:SparkEngine>/Assets/Models"
+        COMMENT "Copying model assets"
     )
 endif()
-
-# ---------------------------------------------------------------------
-# 11) Include directories
-# ---------------------------------------------------------------------
-target_include_directories(SparkEngine PRIVATE
-    "Spark Engine/Source"
-    ${THIRDPARTY_INCLUDE_DIRS}
-)
 
 # ---------------------------------------------------------------------
 # 11.5) Precompiled Headers (PCH)
 # ---------------------------------------------------------------------
 if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
-    target_precompile_headers(SparkEngine PRIVATE
+    target_precompile_headers(SparkEngineLib PRIVATE
         <string>
         <vector>
         <memory>
@@ -613,22 +576,24 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
 endif()
 
 # ---------------------------------------------------------------------
-# 12) System libraries - Platform-specific
+# 11.6) Include directories (on SparkEngineLib so game DLL inherits them)
+# ---------------------------------------------------------------------
+target_include_directories(SparkEngineLib PUBLIC
+    "Spark Engine/Source"
+    "SparkSDK/Include"
+    ${THIRDPARTY_INCLUDE_DIRS}
+)
+
+# ---------------------------------------------------------------------
+# 12) System libraries - Platform-specific (on SparkEngineLib)
 # ---------------------------------------------------------------------
 if(WIN32)
-    target_link_libraries(SparkEngine PRIVATE
-        # DirectX and graphics
+    target_link_libraries(SparkEngineLib PUBLIC
         d3d11 dxgi d3dcompiler dxguid
-
-        # Windows core libraries
         kernel32 user32 gdi32 winspool
         shell32 comdlg32 advapi32
         ole32 oleaut32 uuid
-
-        # Multimedia and timing
         winmm
-
-        # Networking libraries (only if networking is enabled)
         $<$<BOOL:${ENABLE_NETWORKING}>:ws2_32>
         $<$<BOOL:${ENABLE_NETWORKING}>:wsock32>
         $<$<BOOL:${ENABLE_NETWORKING}>:crypt32>
@@ -636,46 +601,42 @@ if(WIN32)
         $<$<BOOL:${ENABLE_NETWORKING}>:normaliz>
     )
 else()
-    # Linux/macOS system libraries
     find_package(Threads REQUIRED)
-    target_link_libraries(SparkEngine PRIVATE
+    target_link_libraries(SparkEngineLib PUBLIC
         Threads::Threads
-        ${CMAKE_DL_LIBS}  # libdl for dynamic loading
+        ${CMAKE_DL_LIBS}
     )
-    # Platform define for cross-platform code
-    target_compile_definitions(SparkEngine PRIVATE SPARK_PLATFORM_LINUX)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_PLATFORM_LINUX)
 endif()
 
-# Add legacy stdio for compatibility
 if(MSVC)
-    target_link_libraries(SparkEngine PRIVATE legacy_stdio_definitions)
+    target_link_libraries(SparkEngineLib PUBLIC legacy_stdio_definitions)
 endif()
 
 # --- Vulkan backend libraries ---
 if(SPARK_VULKAN_AVAILABLE)
-    target_compile_definitions(SparkEngine PRIVATE SPARK_VULKAN_SUPPORT)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_VULKAN_SUPPORT)
     if(Vulkan_FOUND)
-        target_link_libraries(SparkEngine PRIVATE Vulkan::Vulkan)
+        target_link_libraries(SparkEngineLib PUBLIC Vulkan::Vulkan)
     else()
-        target_include_directories(SparkEngine PRIVATE ${Vulkan_INCLUDE_DIR})
-        target_link_libraries(SparkEngine PRIVATE ${Vulkan_LIBRARY})
+        target_include_directories(SparkEngineLib PUBLIC ${Vulkan_INCLUDE_DIR})
+        target_link_libraries(SparkEngineLib PUBLIC ${Vulkan_LIBRARY})
     endif()
     message(STATUS "SparkEngine: Vulkan backend ENABLED")
 endif()
 
 # --- OpenGL backend libraries ---
 if(SPARK_OPENGL_AVAILABLE)
-    target_compile_definitions(SparkEngine PRIVATE SPARK_OPENGL_SUPPORT)
-    target_link_libraries(SparkEngine PRIVATE OpenGL::GL)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_OPENGL_SUPPORT)
+    target_link_libraries(SparkEngineLib PUBLIC OpenGL::GL)
 
     if(GLAD_FOUND)
-        # Build GLAD as a static library
         add_library(glad STATIC "${GLAD_SOURCE_DIR}/glad.c")
         target_include_directories(glad PUBLIC "${GLAD_INCLUDE_DIR}")
         if(MSVC)
             set_property(TARGET glad PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
         endif()
-        target_link_libraries(SparkEngine PRIVATE glad)
+        target_link_libraries(SparkEngineLib PUBLIC glad)
     endif()
 
     message(STATUS "SparkEngine: OpenGL backend ENABLED")
@@ -694,11 +655,11 @@ if(ENABLE_LUA)
             if(PATH MATCHES "sol2")
                 add_library(sol2 INTERFACE)
                 target_include_directories(sol2 INTERFACE "${CMAKE_SOURCE_DIR}/${PATH}")
-                target_link_libraries(SparkEngine PRIVATE sol2)
-                target_compile_definitions(SparkEngine PRIVATE LUA_SCRIPTING_ENABLED)
+                target_link_libraries(SparkEngineLib PUBLIC sol2)
+                target_compile_definitions(SparkEngineLib PUBLIC LUA_SCRIPTING_ENABLED)
                 message(STATUS "Found Sol2 at: ${PATH}")
             else()
-                target_include_directories(SparkEngine PRIVATE "${CMAKE_SOURCE_DIR}/${PATH}")
+                target_include_directories(SparkEngineLib PUBLIC "${CMAKE_SOURCE_DIR}/${PATH}")
                 message(STATUS "Found Lua headers at: ${PATH}")
             endif()
         endif()
@@ -707,8 +668,8 @@ endif()
 
 if(ENABLE_PHYSX)
     if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/PhysX/include")
-        target_include_directories(SparkEngine PRIVATE "ThirdParty/Physics/PhysX/include")
-        target_compile_definitions(SparkEngine PRIVATE PHYSX_AVAILABLE)
+        target_include_directories(SparkEngineLib PUBLIC "ThirdParty/Physics/PhysX/include")
+        target_compile_definitions(SparkEngineLib PUBLIC PHYSX_AVAILABLE)
         message(STATUS "PhysX headers found")
     else()
         message(STATUS "PhysX not found (optional)")
@@ -840,16 +801,16 @@ if(ENABLE_SDL2)
     list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
     find_package(SDL2 QUIET)
     if(SDL2_FOUND)
-        target_link_libraries(SparkEngine PRIVATE SDL2::SDL2)
+        target_link_libraries(SparkEngineLib PUBLIC SDL2::SDL2)
         message(STATUS "SDL2 found and linked")
     else()
         message(STATUS "SDL2 not found - SDL2 input backend unavailable")
     endif()
 endif()
 
-# Apply feature definitions to target
+# Apply feature definitions to the static library (inherited by exe and game DLL)
 if(FEATURE_DEFINITIONS)
-    target_compile_definitions(SparkEngine PRIVATE ${FEATURE_DEFINITIONS})
+    target_compile_definitions(SparkEngineLib PUBLIC ${FEATURE_DEFINITIONS})
 endif()
 
 # ---------------------------------------------------------------------
@@ -867,7 +828,7 @@ if(MSVC)
         endif()
     endforeach()
 
-    # Set working directory and startup project
+    # Set startup project to SparkEngine (the runtime host)
     set_property(TARGET SparkEngine PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT SparkEngine)
 
@@ -889,9 +850,91 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
 endif()
 
 # ---------------------------------------------------------------------
-# 17) Build summary
+# 17) CMake install rules and find_package support
 # ---------------------------------------------------------------------
-message(STATUS "=== SPARKENGINE CONFIGURED SUCCESSFULLY ===")
+# Allows standalone game projects to use:
+#   find_package(SparkEngine REQUIRED)
+#   spark_add_game_module(MyGame ${SOURCES})
+#
+# Install with: cmake --install build --prefix /path/to/install
+# ---------------------------------------------------------------------
+
+install(TARGETS SparkEngineLib
+    EXPORT SparkEngineTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+)
+
+# Install SparkSDK public headers
+install(DIRECTORY SparkSDK/Include/Spark
+    DESTINATION include
+)
+
+# Install the engine's public headers (needed by modules that use engine types directly)
+install(DIRECTORY "Spark Engine/Source/"
+    DESTINATION include/SparkEngine
+    FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.hpp"
+)
+
+# Install third-party headers that are part of the public interface
+foreach(dir ${THIRDPARTY_INCLUDE_DIRS})
+    if(EXISTS "${dir}")
+        install(DIRECTORY "${dir}/"
+            DESTINATION include/SparkEngine/ThirdParty
+            FILES_MATCHING
+                PATTERN "*.h"
+                PATTERN "*.hpp"
+        )
+    endif()
+endforeach()
+
+# Export targets
+install(EXPORT SparkEngineTargets
+    FILE SparkEngineTargets.cmake
+    NAMESPACE Spark::
+    DESTINATION lib/cmake/SparkEngine
+)
+
+# Package config
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    "${CMAKE_SOURCE_DIR}/cmake/SparkEngineConfig.cmake.in"
+    "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/SparkEngine
+)
+
+install(FILES
+    "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+    DESTINATION lib/cmake/SparkEngine
+)
+
+# Install engine executable and game DLL
+install(TARGETS SparkEngine
+    RUNTIME DESTINATION bin
+)
+if(TARGET SparkGame)
+    install(TARGETS SparkGame
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION bin
+    )
+endif()
+
+# Install shaders
+if(EXISTS "${CMAKE_SOURCE_DIR}/Spark Engine/Shaders")
+    install(DIRECTORY "Spark Engine/Shaders/"
+        DESTINATION bin/Shaders
+    )
+endif()
+
+message(STATUS "CMake install rules configured (use 'cmake --install' for find_package support)")
+
+# ---------------------------------------------------------------------
+# 18) Build summary
+# ---------------------------------------------------------------------
+message(STATUS "=== SPARK ENGINE + GAME CONFIGURED SUCCESSFULLY ===")
 if(MSVC)
     message(STATUS "Platform: ${CMAKE_SYSTEM_NAME} (MSVC VS ${SPARK_VS_YEAR} / ${SPARK_VS_TOOLSET})")
 else()
@@ -914,6 +957,8 @@ if(SPARK_OPENGL_AVAILABLE)
 else()
     message(STATUS "  OpenGL     : DISABLED")
 endif()
+message(STATUS "SparkEngine: EXECUTABLE (runtime host)")
+message(STATUS "SparkGame: SHARED LIBRARY (game module DLL)")
 message(STATUS "Editor: ${ENABLE_EDITOR}")
 message(STATUS "Shader Compiler Tool: ENABLED")
 message(STATUS "Tests: ${BUILD_TESTS}")

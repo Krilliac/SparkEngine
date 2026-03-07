@@ -1,12 +1,16 @@
 /**
  * @file SparkEngine.h
- * @brief Main engine header containing global declarations and forward declarations
+ * @brief Main engine header - SparkEngine is the executable runtime host
  * @author Spark Engine Team
  * @date 2025
  *
- * This file serves as the central header for the Spark Engine, providing forward
- * declarations for core engine systems and global variable declarations that are
- * shared across the entire engine framework.
+ * SparkEngine is the executable that hosts the runtime. It initializes all
+ * engine systems (graphics, input, audio, etc.) and loads game modules
+ * (DLLs/shared libraries) at runtime via the IGameModule interface.
+ *
+ * This architecture is similar to Unreal Engine: the engine is the exe,
+ * game logic lives in a dynamically loaded module. The editor can trigger
+ * recompilation of the game DLL and hot-reload it.
  */
 
 #pragma once
@@ -14,47 +18,20 @@
 #include "Platform.h"
 #include <memory>
 
-// Forward declarations
+// Forward declarations for engine systems
 class GraphicsEngine;
-class Game;
 class InputManager;
 class Timer;
+class SparkEngineCamera;
+class GameModuleLoader;
+class IGameModule;
 
 #ifdef SPARK_PLATFORM_WINDOWS
-/**
- * @brief Global application instance handle (Windows only)
- */
 extern HINSTANCE g_hInst;
 #endif
 
-/**
- * @brief Global graphics engine instance
- *
- * Manages DirectX 11 rendering pipeline, device creation, swap chain,
- * render targets, and all graphics-related operations.
- */
-extern std::unique_ptr<GraphicsEngine> g_graphics;
-
-/**
- * @brief Global game instance
- *
- * Main game loop controller that manages scene updates, rendering,
- * game objects, and coordinates between all engine systems.
- */
-extern std::unique_ptr<Game> g_game;
-
-/**
- * @brief Global input manager instance
- *
- * Handles keyboard and mouse input processing, key mapping,
- * and provides input state queries for the game systems.
- */
-extern std::unique_ptr<InputManager> g_input;
-
-/**
- * @brief Global timer instance
- *
- * High-precision timing system for delta time calculation,
- * frame rate management, and game loop timing control.
- */
-extern std::unique_ptr<Timer> g_timer;
+// Engine subsystem globals
+extern std::unique_ptr<GraphicsEngine>    g_graphics;
+extern std::unique_ptr<InputManager>      g_input;
+extern std::unique_ptr<Timer>             g_timer;
+extern std::unique_ptr<GameModuleLoader>  g_moduleLoader;

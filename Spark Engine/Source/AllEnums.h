@@ -22,9 +22,11 @@
 #include "SparkEditor/Source/Enums/AudioSystemEnums.h"
 
 // Spark Engine Enums
-#include "Spark Engine/Source/Enums/GameSystemEnums.h"
 #include "Spark Engine/Source/Enums/GraphicsEnums.h"
 #include "Spark Engine/Source/Enums/InputEnums.h"
+
+// Game Enums (from SparkGame project)
+#include "SparkGame/Source/Enums/GameSystemEnums.h"
 
 // Enum Utilities (validation, string conversion, iteration)
 #include "Spark Engine/Source/Enums/EnumUtils.h"
