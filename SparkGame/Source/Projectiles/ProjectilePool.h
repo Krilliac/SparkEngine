@@ -48,6 +48,8 @@ enum class ProjectileType
  * @note Pool size should be large enough to handle peak projectile usage
  * @warning Initialize() must be called before firing any projectiles
  */
+class PhysicsSystem;
+
 class ProjectilePool
 {
 public:
@@ -134,6 +136,12 @@ public:
     void FireProjectile(ProjectileType type, const DirectX::XMFLOAT3& pos, const DirectX::XMFLOAT3& dir, float speed);
 
     /**
+     * @brief Set the physics system on all managed projectiles
+     * @param ps Physics system pointer for area queries (explosions)
+     */
+    void SetPhysicsSystem(PhysicsSystem* ps);
+
+    /**
      * @brief Get the number of currently active projectiles
      * @return Number of projectiles in use
      */
@@ -151,6 +159,7 @@ private:
      */
     void CreateProjectiles();
 
+    PhysicsSystem*                  m_physicsSystem{ nullptr }; ///< Cached physics system
     size_t                          m_poolSize;    ///< Maximum pool size
     ID3D11Device* m_device{ nullptr };             ///< DirectX device reference
     ID3D11DeviceContext* m_context{ nullptr };     ///< DirectX context reference

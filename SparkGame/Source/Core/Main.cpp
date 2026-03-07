@@ -74,6 +74,10 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
     if (m_game && context->GetEventBus())
         m_game->SetEventBus(context->GetEventBus());
 
+    // Wire up physics system for projectile area queries (explosions)
+    if (m_game && context->GetPhysics())
+        m_game->SetPhysicsSystem(context->GetPhysics());
+
     return true;
 }
 

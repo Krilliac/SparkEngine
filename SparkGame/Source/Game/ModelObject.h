@@ -12,6 +12,8 @@
 #include <memory>
 #include <string>
 
+class GraphicsEngine;
+
 /**
  * @brief GameObject that can load and render .obj model files
  */
@@ -63,7 +65,11 @@ public:
      */
     void OnHitWorld(const DirectX::XMFLOAT3& hitPoint, const DirectX::XMFLOAT3& normal) override;
 
+    /** @brief Set graphics engine for rendering */
+    void SetGraphicsEngine(GraphicsEngine* gfx) { m_graphics = gfx; }
+
 protected:
+    GraphicsEngine* m_graphics{ nullptr }; ///< Graphics engine for rendering
     std::wstring m_modelPath;              ///< Path to the model file
     std::unique_ptr<Model> m_model;        ///< The loaded model
 };

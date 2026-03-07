@@ -7,8 +7,6 @@
 using DirectX::XMMATRIX;
 using DirectX::XMFLOAT3;
 
-// External physics system reference for area damage queries
-extern PhysicsSystem* g_physicsSystem;
 
 Grenade::Grenade()
     : m_fuseTime(3.0f)
@@ -80,10 +78,10 @@ void Grenade::Explode()
     XMFLOAT3 position = GetPosition();
 
     // Apply area damage to all physics bodies within explosion radius
-    if (g_physicsSystem)
+    if (m_physicsSystem)
     {
         std::vector<PhysicsBody*> hitBodies;
-        if (g_physicsSystem->SphereOverlap(position, m_explosionRadius, hitBodies))
+        if (m_physicsSystem->SphereOverlap(position, m_explosionRadius, hitBodies))
         {
             for (PhysicsBody* body : hitBodies)
             {

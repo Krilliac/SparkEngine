@@ -8,8 +8,6 @@
 using DirectX::XMFLOAT3;
 using DirectX::XMMATRIX;
 
-// External physics system reference for area damage queries
-extern PhysicsSystem* g_physicsSystem;
 
 Rocket::Rocket()
     : m_explosionRadius(5.0f)
@@ -96,10 +94,10 @@ void Rocket::Explode(const XMFLOAT3& position)
     m_hasExploded = true;
 
     // Apply area damage to all physics bodies within explosion radius
-    if (g_physicsSystem)
+    if (m_physicsSystem)
     {
         std::vector<PhysicsBody*> hitBodies;
-        if (g_physicsSystem->SphereOverlap(position, m_explosionRadius, hitBodies))
+        if (m_physicsSystem->SphereOverlap(position, m_explosionRadius, hitBodies))
         {
             for (PhysicsBody* body : hitBodies)
             {

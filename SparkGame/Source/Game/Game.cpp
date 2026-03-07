@@ -34,8 +34,7 @@
 #include "Engine/Events/EventSystem.h"
 #include <filesystem>
 
-// Pull in globals defined in Main.cpp (SparkGame entry point)
-extern std::unique_ptr<GraphicsEngine> g_graphics;
+// Pull in game-specific globals defined in Main.cpp (SparkGame entry point)
 extern Console                         g_console;
 
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
@@ -128,6 +127,13 @@ HRESULT Game::Initialize(GraphicsEngine* graphics,
 
     /* Scene objects - Enhanced combat arena ----------------*/
     CreateCombatArena();
+
+    // Wire up graphics engine on all ModelObjects so they don't need the global
+    for (auto& obj : m_gameObjects) {
+        if (auto* mo = dynamic_cast<ModelObject*>(obj.get()))
+            mo->SetGraphicsEngine(m_graphics);
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Game initialization complete - class system & combat arena ready", L"SUCCESS");
 
     /* Vehicle System -----------------------------------*/
@@ -418,6 +424,18 @@ void Game::Shutdown()
     m_eventBus = nullptr;
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Game shutdown complete - all systems cleaned up.", L"INFO");
+}
+
+/*-------------------------------------------------------------
+  Physics system wiring — propagates to all projectile pools
+--------------------------------------------------------------*/
+void Game::SetPhysicsSystem(PhysicsSystem* ps)
+{
+    if (m_projectilePool)
+        m_projectilePool->SetPhysicsSystem(ps);
+    // Player may own a separate projectile pool
+    if (m_player && m_player->GetProjectilePool())
+        m_player->GetProjectilePool()->SetPhysicsSystem(ps);
 }
 
 /*-------------------------------------------------------------

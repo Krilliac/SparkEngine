@@ -750,6 +750,7 @@ void RegisterEngineConsoleCommands()
 #include "Engine/Events/EventSystem.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
+#include "Physics/PhysicsSystem.h"
 #include "Utils/Timer.h"
 #include <iostream>
 

@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.16)
 # Modern CMake Configuration - Cross-Platform Build
 # ================================================================
 
+# All targets need PIC since SparkGame is a shared library that links SparkEngineLib
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Set CMake policies for modern behavior
 cmake_policy(SET CMP0091 NEW)  # Enable MSVC_RUNTIME_LIBRARY support
 

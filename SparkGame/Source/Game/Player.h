@@ -202,6 +202,9 @@ public:
         m_projectilePool = pool;
     }
 
+    /** @brief Get the player's projectile pool (owned or external) */
+    ProjectilePool* GetProjectilePool() const { return m_projectilePool; }
+
     /**
      * @brief Get current player health
      * @return Current health value
