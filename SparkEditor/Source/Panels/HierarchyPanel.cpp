@@ -200,6 +200,26 @@ void HierarchyPanel::RenderHierarchyTree() {
         RenderObjectNode(obj, 0);
     }
 
+    // Drop on empty space to unparent (make root)
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_OBJECT")) {
+            ObjectID draggedID = *static_cast<const ObjectID*>(payload->Data);
+            SceneObject* draggedObj = m_scene->FindObject(draggedID);
+            if (draggedObj && draggedObj->transform.parentID != INVALID_OBJECT_ID) {
+                // Remove from old parent
+                SceneObject* oldParent = m_scene->FindObject(draggedObj->transform.parentID);
+                if (oldParent) {
+                    auto& children = oldParent->transform.childIDs;
+                    children.erase(
+                        std::remove(children.begin(), children.end(), draggedID),
+                        children.end());
+                }
+                draggedObj->transform.parentID = INVALID_OBJECT_ID;
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
     // Empty space context menu
     if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && !ImGui::IsAnyItemHovered()) {
         m_showEmptyContextMenu = true;
@@ -239,6 +259,28 @@ void HierarchyPanel::RenderObjectNode(SceneObject* object, int depth) {
     if (ImGui::IsItemClicked()) {
         bool addToSelection = ImGui::GetIO().KeyCtrl;
         SelectObject(object->id, addToSelection);
+    }
+
+    // Drag source
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+        ObjectID dragID = object->id;
+        ImGui::SetDragDropPayload("HIERARCHY_OBJECT", &dragID, sizeof(ObjectID));
+        ImGui::Text("%s %s", icon, object->name.c_str());
+        ImGui::EndDragDropSource();
+    }
+
+    // Drop target
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_OBJECT")) {
+            ObjectID draggedID = *static_cast<const ObjectID*>(payload->Data);
+            if (draggedID != object->id) {
+                SceneObject* draggedObj = m_scene->FindObject(draggedID);
+                if (draggedObj) {
+                    HandleObjectDragDrop(draggedObj, object);
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
     }
 
     // Context menu
@@ -281,9 +323,38 @@ void HierarchyPanel::RenderEmptyContextMenu() {
     }
 }
 
-bool HierarchyPanel::HandleObjectDragDrop(SceneObject* /*draggedObject*/, SceneObject* /*targetObject*/) {
-    // Stub for drag and drop
-    return false;
+bool HierarchyPanel::HandleObjectDragDrop(SceneObject* draggedObject, SceneObject* targetObject) {
+    if (!draggedObject || !targetObject || !m_scene) return false;
+
+    // Prevent parenting to self
+    if (draggedObject->id == targetObject->id) return false;
+
+    // Prevent circular parenting: walk up from target to ensure dragged isn't an ancestor
+    ObjectID checkID = targetObject->transform.parentID;
+    while (checkID != INVALID_OBJECT_ID) {
+        if (checkID == draggedObject->id) return false; // would create cycle
+        SceneObject* parent = m_scene->FindObject(checkID);
+        if (!parent) break;
+        checkID = parent->transform.parentID;
+    }
+
+    // Remove from old parent's child list
+    ObjectID oldParentID = draggedObject->transform.parentID;
+    if (oldParentID != INVALID_OBJECT_ID) {
+        SceneObject* oldParent = m_scene->FindObject(oldParentID);
+        if (oldParent) {
+            auto& children = oldParent->transform.childIDs;
+            children.erase(
+                std::remove(children.begin(), children.end(), draggedObject->id),
+                children.end());
+        }
+    }
+
+    // Set new parent
+    draggedObject->transform.parentID = targetObject->id;
+    targetObject->transform.childIDs.push_back(draggedObject->id);
+
+    return true;
 }
 
 const char* HierarchyPanel::GetObjectIcon(const SceneObject* object) const {

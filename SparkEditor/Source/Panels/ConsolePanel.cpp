@@ -663,7 +663,26 @@ void ConsolePanel::UpdateStats() {
 }
 
 void ConsolePanel::ProcessPendingLogEntries() {
-    // Stub — in a full implementation, poll entries from the logger
+    if (!m_logger) {
+        m_logger = &EditorLogger::GetInstance();
+    }
+
+    const auto& memoryLogs = m_logger->GetMemoryLogs();
+    size_t currentCount = memoryLogs.size();
+
+    if (currentCount <= m_lastPolledLogIndex) {
+        // Logger was cleared or no new entries
+        if (currentCount < m_lastPolledLogIndex) {
+            m_lastPolledLogIndex = 0;
+        }
+        return;
+    }
+
+    // Copy new entries from the logger into the console panel
+    for (size_t i = m_lastPolledLogIndex; i < currentCount; ++i) {
+        AddLogEntry(memoryLogs[i]);
+    }
+    m_lastPolledLogIndex = currentCount;
 }
 
 } // namespace SparkEditor

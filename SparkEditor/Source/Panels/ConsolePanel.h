@@ -296,6 +296,7 @@ private:
     // Integration
     EditorLogger* m_logger = nullptr;
     bool m_isLoggerIntegrated = false;
+    size_t m_lastPolledLogIndex = 0;  ///< Tracks how many logger entries we've already consumed
 
     // Performance
     static constexpr size_t MAX_VISIBLE_ENTRIES = 1000;
