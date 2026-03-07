@@ -83,6 +83,9 @@ class btCollisionShape;
 class btMotionState;
 class btTypedConstraint;
 
+// NOTE: Lightweight type-only header available at "PhysicsTypes.h" for code
+// that needs physics enums/structs without the full PhysicsSystem class.
+
 /**
  * @brief Physics body types
  */

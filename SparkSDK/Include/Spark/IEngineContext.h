@@ -20,6 +20,8 @@
 class GraphicsEngine;
 class InputManager;
 class Timer;
+class AudioEngine;
+class PhysicsSystem;
 
 namespace Spark {
 
@@ -32,6 +34,9 @@ class EventBus;
  * to query for engine services. This decouples modules from the engine's
  * internal structure and allows the engine to evolve without breaking
  * the module API.
+ *
+ * Prefer using IEngineContext over global variables (g_graphics, g_input, etc.)
+ * which are deprecated and will be removed in a future release.
  */
 class IEngineContext
 {
@@ -49,6 +54,12 @@ public:
 
     /** @brief Get the event bus for publish/subscribe messaging */
     virtual EventBus* GetEventBus() = 0;
+
+    /** @brief Get the audio engine (may return nullptr if audio init failed) */
+    virtual AudioEngine* GetAudio() = 0;
+
+    /** @brief Get the physics system (may return nullptr if not initialized) */
+    virtual PhysicsSystem* GetPhysics() = 0;
 
     /** @brief Get the packed engine version (0xMMmmpp) */
     virtual uint32_t GetEngineVersion() const = 0;

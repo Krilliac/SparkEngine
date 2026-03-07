@@ -176,6 +176,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     g_engineContext = std::make_unique<EngineContext>(
         g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
 
+    // Register physics from GraphicsEngine into EngineContext so modules
+    // can access physics without going through the graphics engine.
+    if (g_graphics && g_graphics->GetPhysicsSystem())
+        g_engineContext->SetPhysics(g_graphics->GetPhysicsSystem());
+
     // 6. Load game modules via ModuleManager
     g_moduleManager = std::make_unique<ModuleManager>();
 
@@ -214,6 +219,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     g_audioEngine = std::make_unique<AudioEngine>();
     if (SUCCEEDED(g_audioEngine->Initialize(32))) {
         console.LogInfo("AudioEngine initialized (32 sources)");
+        g_engineContext->SetAudio(g_audioEngine.get());
     } else {
         console.LogWarning("AudioEngine initialization failed - audio commands will be unavailable");
         g_audioEngine.reset();
@@ -793,8 +799,11 @@ int main(int argc, char* argv[]) {
         std::cout << "Graphics engine initialized (headless mode)." << std::endl;
     }
 
-    // Create engine context
-    g_engineContext = std::make_unique<EngineContext>();
+    // Create engine context (service locator for all subsystems)
+    g_engineContext = std::make_unique<EngineContext>(
+        g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
+    if (g_graphics && g_graphics->GetPhysicsSystem())
+        g_engineContext->SetPhysics(g_graphics->GetPhysicsSystem());
     g_moduleManager = std::make_unique<ModuleManager>();
 
     std::cout << "Spark Engine ready. Linux platform support active." << std::endl;

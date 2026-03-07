@@ -92,6 +92,17 @@
 #endif
 
 // ============================================================================
+// Platform-Agnostic Type Aliases
+// ============================================================================
+
+namespace Spark {
+
+/// Platform-agnostic window handle. Use in public APIs instead of HWND.
+using NativeWindowHandle = void*;  // compatible with HWND on Windows
+
+} // namespace Spark
+
+// ============================================================================
 // Windows: Use native types
 // ============================================================================
 
@@ -607,21 +618,6 @@ inline XMMATRIX operator*(const XMMATRIX& a, const XMMATRIX& b) {
     return XMMatrixMultiply(a, b);
 }
 
-inline XMMATRIX XMMatrixLookAtLH(XMVECTOR eye, XMVECTOR target, XMVECTOR up) {
-    XMVECTOR zAxis = XMVector3Normalize(XMVectorSubtract(target, eye));
-    XMVECTOR xAxis = XMVector3Normalize(XMVector3Cross(up, zAxis));
-    XMVECTOR yAxis = XMVector3Cross(zAxis, xAxis);
-    float dx = -(XMVectorGetX(XMVector3Dot(xAxis, eye)));
-    float dy = -(XMVectorGetX(XMVector3Dot(yAxis, eye)));
-    float dz = -(XMVectorGetX(XMVector3Dot(zAxis, eye)));
-    XMMATRIX mat;
-    mat.m[0][0] = xAxis.x; mat.m[0][1] = yAxis.x; mat.m[0][2] = zAxis.x; mat.m[0][3] = 0.0f;
-    mat.m[1][0] = xAxis.y; mat.m[1][1] = yAxis.y; mat.m[1][2] = zAxis.y; mat.m[1][3] = 0.0f;
-    mat.m[2][0] = xAxis.z; mat.m[2][1] = yAxis.z; mat.m[2][2] = zAxis.z; mat.m[2][3] = 0.0f;
-    mat.m[3][0] = dx;       mat.m[3][1] = dy;       mat.m[3][2] = dz;       mat.m[3][3] = 1.0f;
-    return mat;
-}
-
 inline XMMATRIX XMMatrixInverse(XMVECTOR* det, XMMATRIX mat) {
     const float* m = &mat.m[0][0];
     float inv[16];
@@ -847,6 +843,21 @@ inline float XMVectorGetX(XMVECTOR v) { return v.x; }
 inline float XMVectorGetY(XMVECTOR v) { return v.y; }
 inline float XMVectorGetZ(XMVECTOR v) { return v.z; }
 inline float XMVectorGetW(XMVECTOR v) { return v.w; }
+
+inline XMMATRIX XMMatrixLookAtLH(XMVECTOR eye, XMVECTOR target, XMVECTOR up) {
+    XMVECTOR zAxis = XMVector3Normalize(XMVectorSubtract(target, eye));
+    XMVECTOR xAxis = XMVector3Normalize(XMVector3Cross(up, zAxis));
+    XMVECTOR yAxis = XMVector3Cross(zAxis, xAxis);
+    float dx = -(XMVectorGetX(XMVector3Dot(xAxis, eye)));
+    float dy = -(XMVectorGetX(XMVector3Dot(yAxis, eye)));
+    float dz = -(XMVectorGetX(XMVector3Dot(zAxis, eye)));
+    XMMATRIX mat;
+    mat.m[0][0] = xAxis.x; mat.m[0][1] = yAxis.x; mat.m[0][2] = zAxis.x; mat.m[0][3] = 0.0f;
+    mat.m[1][0] = xAxis.y; mat.m[1][1] = yAxis.y; mat.m[1][2] = zAxis.y; mat.m[1][3] = 0.0f;
+    mat.m[2][0] = xAxis.z; mat.m[2][1] = yAxis.z; mat.m[2][2] = zAxis.z; mat.m[2][3] = 0.0f;
+    mat.m[3][0] = dx;       mat.m[3][1] = dy;       mat.m[3][2] = dz;       mat.m[3][3] = 1.0f;
+    return mat;
+}
 
 // Transform functions
 inline XMVECTOR XMVector3Transform(XMVECTOR v, const XMMATRIX& m) {
