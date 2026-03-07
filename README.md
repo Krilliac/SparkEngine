@@ -10,6 +10,8 @@
 
 > **Early Development** — SparkEngine is under active development. Systems are being built out and stabilized. Expect rough edges.
 
+> **AI Disclosure** — This project makes extensive use of AI-assisted development. All AI-generated code is reviewed, tested, and validated to ensure correctness, stability, and functional integrity. If the use of AI in development is a concern for you, this project may not be the right fit — but if you're open to it, contributions of any and all kinds are welcome!
+
 ### Why Spark Engine?
 
 - **Complete game engine** — rendering, physics, audio, AI, animation, networking, scripting, and editor all in one package
