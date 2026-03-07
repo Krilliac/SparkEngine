@@ -19,6 +19,10 @@
 #include "GravitySystem.h"
 #include "InteractiveObject.h"
 #include "GameMechanics.h"
+#include "GameMode.h"
+#include "HUDSystem.h"
+#include "InventorySystem.h"
+#include "QuestSystem.h"
 #include <memory>
 #include <vector>
 
@@ -29,6 +33,7 @@ class SparkEngineCamera;
 class GameObject;
 class Player;
 class ProjectilePool;
+namespace Spark { class EventBus; }
 
 #include "Primitives.h"
 #include "PlaceholderMesh.h"
@@ -278,6 +283,31 @@ public:
     void CreateCombatArena();
 
     // ============================================================================
+    // INTEGRATED SYSTEMS - GameMode, HUD, Inventory, Quests, Events
+    // ============================================================================
+
+    /** @brief Connect the engine's event bus for cross-system communication */
+    void SetEventBus(Spark::EventBus* bus);
+
+    /** @brief Get the game mode manager */
+    Spark::GameMode* GetGameMode() const { return m_gameMode.get(); }
+
+    /** @brief Get the HUD system */
+    Spark::HUDSystem* GetHUDSystem() const { return m_hudSystem.get(); }
+
+    /** @brief Get the item registry for inventory lookups */
+    Spark::ItemRegistry& GetItemRegistry() { return m_itemRegistry; }
+
+    /** @brief Get the quest registry for quest lookups */
+    Spark::QuestRegistry& GetQuestRegistry() { return m_questRegistry; }
+
+    /** @brief Get the player's inventory component */
+    Spark::InventoryComponent& GetPlayerInventory() { return m_playerInventory; }
+
+    /** @brief Get the player's quest journal */
+    Spark::QuestJournalComponent& GetPlayerQuests() { return m_playerQuests; }
+
+    // ============================================================================
     // NEW SYSTEMS - Vehicles, Gravity Zones, Interactions, Game Mechanics
     // ============================================================================
 
@@ -435,6 +465,15 @@ private:
     std::unique_ptr<Spark::InteractionSystem> m_interactionSystem;  ///< Interactive objects
     std::unique_ptr<Spark::DamageZoneSystem>  m_damageZoneSystem;   ///< Environmental hazards
     std::unique_ptr<Spark::RespawnSystem>     m_respawnSystem;      ///< Respawn & scoring
+
+    // Integrated systems - GameMode, HUD, Inventory, Quests
+    std::unique_ptr<Spark::GameMode>          m_gameMode;           ///< FPS game mode (scoring, rounds)
+    std::unique_ptr<Spark::HUDSystem>         m_hudSystem;          ///< Heads-up display
+    Spark::ItemRegistry                       m_itemRegistry;       ///< Item definitions
+    Spark::InventoryComponent                 m_playerInventory;    ///< Player inventory data
+    Spark::QuestRegistry                      m_questRegistry;      ///< Quest definitions
+    Spark::QuestJournalComponent              m_playerQuests;       ///< Player quest journal
+    Spark::EventBus*                          m_eventBus{ nullptr }; ///< Engine event bus (not owned)
 
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene

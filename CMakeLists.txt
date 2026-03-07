@@ -281,7 +281,10 @@ if(TINYOBJLOADER_INCLUDE_DIR)
     add_library(tinyobjloader STATIC
         "Spark Engine/Source/Utils/TinyObjImpl.cpp"
     )
-    target_include_directories(tinyobjloader PUBLIC ${TINYOBJLOADER_INCLUDE_DIR})
+    target_include_directories(tinyobjloader PUBLIC
+        $<BUILD_INTERFACE:${TINYOBJLOADER_INCLUDE_DIR}>
+        $<INSTALL_INTERFACE:include>
+    )
     # Don't add TINYOBJLOADER_IMPLEMENTATION to the interface - it's only in TinyObjImpl.cpp
 
     # Set consistent runtime library for tinyobjloader
@@ -579,10 +582,15 @@ endif()
 # 11.6) Include directories (on SparkEngineLib so game DLL inherits them)
 # ---------------------------------------------------------------------
 target_include_directories(SparkEngineLib PUBLIC
-    "Spark Engine/Source"
-    "SparkSDK/Include"
-    ${THIRDPARTY_INCLUDE_DIRS}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Spark Engine/Source>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkSDK/Include>
+    $<INSTALL_INTERFACE:include>
 )
+foreach(_tp_dir ${THIRDPARTY_INCLUDE_DIRS})
+    target_include_directories(SparkEngineLib PUBLIC
+        $<BUILD_INTERFACE:${_tp_dir}>
+    )
+endforeach()
 
 # ---------------------------------------------------------------------
 # 12) System libraries - Platform-specific (on SparkEngineLib)
@@ -859,7 +867,11 @@ endif()
 # Install with: cmake --install build --prefix /path/to/install
 # ---------------------------------------------------------------------
 
-install(TARGETS SparkEngineLib
+set(_SPARK_INSTALL_TARGETS SparkEngineLib)
+if(TARGET tinyobjloader)
+    list(APPEND _SPARK_INSTALL_TARGETS tinyobjloader)
+endif()
+install(TARGETS ${_SPARK_INSTALL_TARGETS}
     EXPORT SparkEngineTargets
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib

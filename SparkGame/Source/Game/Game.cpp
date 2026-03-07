@@ -33,6 +33,7 @@
 #include "SceneManager/SceneManager.h"
 #include "Utils/SparkConsole.h"
 #include "Console/AdvancedConsoleCommands.h"
+#include "Engine/Events/EventSystem.h"
 
 // Pull in globals defined in Main.cpp (SparkGame entry point)
 extern std::unique_ptr<GraphicsEngine> g_graphics;
@@ -237,10 +238,95 @@ HRESULT Game::Initialize(GraphicsEngine* graphics,
     m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::HELICOPTER, {0.0f, 5.0f, -25.0f}, dev, ctx);
     LOG_TO_CONSOLE_IMMEDIATE(L"Spawned 4 vehicles in combat arena", L"SUCCESS");
 
+    /* GameMode System --------------------------------*/
+    m_gameMode = std::make_unique<Spark::GameMode>();
+    Spark::GameModeRules rules = Spark::GameMode::GetPreset(Spark::GameModeType::Deathmatch);
+    m_gameMode->Initialize(rules);
+    m_gameMode->AddPlayer("Player1");
+    m_gameMode->StartMatch();
+    LOG_TO_CONSOLE_IMMEDIATE(L"GameMode initialized (Deathmatch)", L"SUCCESS");
+
+    /* HUD System ------------------------------------*/
+    m_hudSystem = std::make_unique<Spark::HUDSystem>();
+    m_hudSystem->Initialize();
+    m_hudSystem->SetPlayer(m_player.get());
+    LOG_TO_CONSOLE_IMMEDIATE(L"HUD system initialized", L"SUCCESS");
+
+    /* Inventory System - Register base items --------*/
+    Spark::ItemDef healthPotion;
+    healthPotion.id = 1; healthPotion.name = "Health Potion";
+    healthPotion.description = "Restores 50 HP";
+    healthPotion.category = Spark::ItemCategory::Consumable;
+    healthPotion.rarity = Spark::ItemRarity::Common;
+    healthPotion.maxStackSize = 10; healthPotion.weight = 0.5f;
+    m_itemRegistry.RegisterItem(healthPotion);
+
+    Spark::ItemDef armorShard;
+    armorShard.id = 2; armorShard.name = "Armor Shard";
+    armorShard.description = "Adds 25 armor";
+    armorShard.category = Spark::ItemCategory::Consumable;
+    armorShard.rarity = Spark::ItemRarity::Common;
+    armorShard.maxStackSize = 5; armorShard.weight = 0.3f;
+    m_itemRegistry.RegisterItem(armorShard);
+
+    Spark::ItemDef ammoPack;
+    ammoPack.id = 3; ammoPack.name = "Ammo Pack";
+    ammoPack.description = "Standard ammunition";
+    ammoPack.category = Spark::ItemCategory::Material;
+    ammoPack.rarity = Spark::ItemRarity::Common;
+    ammoPack.maxStackSize = 20; ammoPack.weight = 0.2f;
+    m_itemRegistry.RegisterItem(ammoPack);
+
+    Spark::ItemDef rareWeapon;
+    rareWeapon.id = 4; rareWeapon.name = "Plasma Rifle";
+    rareWeapon.description = "High-energy plasma weapon";
+    rareWeapon.category = Spark::ItemCategory::Weapon;
+    rareWeapon.rarity = Spark::ItemRarity::Rare;
+    rareWeapon.maxStackSize = 1; rareWeapon.weight = 5.0f;
+    m_itemRegistry.RegisterItem(rareWeapon);
+
+    m_playerInventory.maxSlots = 20;
+    m_playerInventory.maxWeight = 50.0f;
+    LOG_TO_CONSOLE_IMMEDIATE(L"Inventory system initialized (4 item types)", L"SUCCESS");
+
+    /* Quest System - Register starter quests --------*/
+    Spark::QuestDef arenaQuest;
+    arenaQuest.id = 1;
+    arenaQuest.name = "Arena Champion";
+    arenaQuest.description = "Prove your worth in the combat arena";
+    arenaQuest.objectives.push_back({Spark::ObjectiveType::Kill, "Defeat 10 enemies", 0, 10});
+    arenaQuest.objectives.push_back({Spark::ObjectiveType::Survive, "Survive for 120 seconds", 0, 1});
+    arenaQuest.reward.experiencePoints = 500;
+    m_questRegistry.RegisterQuest(arenaQuest);
+
+    Spark::QuestDef exploreQuest;
+    exploreQuest.id = 2;
+    exploreQuest.name = "Explorer";
+    exploreQuest.description = "Discover all gravity zones";
+    exploreQuest.objectives.push_back({Spark::ObjectiveType::Reach, "Visit low-gravity zone", 0, 1});
+    exploreQuest.objectives.push_back({Spark::ObjectiveType::Reach, "Visit zero-gravity zone", 0, 1});
+    exploreQuest.objectives.push_back({Spark::ObjectiveType::Reach, "Visit reverse-gravity zone", 0, 1});
+    exploreQuest.reward.experiencePoints = 300;
+    m_questRegistry.RegisterQuest(exploreQuest);
+
+    Spark::QuestDef collectQuest;
+    collectQuest.id = 3;
+    collectQuest.name = "Scavenger";
+    collectQuest.description = "Collect supplies from the arena";
+    collectQuest.objectives.push_back({Spark::ObjectiveType::Collect, "Collect 5 health potions", 1, 5});
+    collectQuest.objectives.push_back({Spark::ObjectiveType::Collect, "Collect 3 ammo packs", 3, 3});
+    collectQuest.reward.experiencePoints = 200;
+    collectQuest.reward.currency = 100;
+    m_questRegistry.RegisterQuest(collectQuest);
+
+    // Auto-start the first quest
+    Spark::QuestOps::StartQuest(m_playerQuests, m_questRegistry, 1);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Quest system initialized (3 quests, 1 active)", L"SUCCESS");
+
     /* Register Advanced Console Commands */
     SparkConsole::RegisterAdvancedCommands(this, m_graphics);
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"All systems online - vehicles, gravity zones, interactions, damage zones, respawn", L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(L"All systems online - gamemode, HUD, inventory, quests, vehicles, gravity, interactions, damage zones, respawn", L"SUCCESS");
 
     return S_OK;
 }
@@ -253,6 +339,8 @@ void Game::Shutdown()
     LOG_TO_CONSOLE_IMMEDIATE(L"Game::Shutdown called.", L"INFO");
 
     m_gameObjects.clear();
+    m_hudSystem.reset();
+    m_gameMode.reset();
     m_vehicleSystem.reset();
     m_interactionSystem.reset();
     m_damageZoneSystem.reset();
@@ -263,8 +351,39 @@ void Game::Shutdown()
     m_classSystem.reset();
     m_camera.reset();
     m_sceneManager.reset();
+    m_eventBus = nullptr;
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Game shutdown complete - all systems cleaned up.", L"INFO");
+}
+
+/*-------------------------------------------------------------
+  EventBus wiring — connects cross-system event subscriptions
+--------------------------------------------------------------*/
+void Game::SetEventBus(Spark::EventBus* bus)
+{
+    m_eventBus = bus;
+    if (!bus) return;
+
+    // Entity killed → update gamemode scoring + quest progress
+    bus->Subscribe<Spark::EntityKilledEvent>([this](const Spark::EntityKilledEvent& e) {
+        if (m_gameMode)
+            m_gameMode->RecordKill("Player1", "Enemy");
+        // Progress kill-based quest objectives
+        Spark::QuestOps::UpdateObjective(m_playerQuests, m_questRegistry, 1, 0, 1, m_eventBus, 0);
+    });
+
+    // Item pickup → add to player inventory
+    bus->Subscribe<Spark::ItemPickedUpEvent>([this](const Spark::ItemPickedUpEvent& e) {
+        Spark::InventoryOps::AddItem(m_playerInventory, m_itemRegistry, e.itemDefId, e.count);
+    });
+
+    // Player respawn → log and reset scoring streak
+    bus->Subscribe<Spark::PlayerRespawnEvent>([this](const Spark::PlayerRespawnEvent& e) {
+        (void)e;
+        LOG_TO_CONSOLE_IMMEDIATE(L"Player respawned", L"INFO");
+    });
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"EventBus connected - cross-system events wired", L"SUCCESS");
 }
 
 /*-------------------------------------------------------------
@@ -304,6 +423,11 @@ void Game::Update(float dt)
     if (m_interactionSystem)  m_interactionSystem->Update(dt, m_player.get());
     if (m_damageZoneSystem)   m_damageZoneSystem->Update(dt, m_player.get());
     if (m_respawnSystem)      m_respawnSystem->Update(dt);
+
+    // Integrated systems
+    if (m_gameMode)           m_gameMode->Update(dt);
+    if (m_hudSystem)          m_hudSystem->Update(dt);
+    Spark::QuestOps::UpdateTimers(m_playerQuests, m_questRegistry, dt);
 
     // Update advanced systems through main GraphicsEngine
     if (m_graphics) {

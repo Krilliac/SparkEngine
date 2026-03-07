@@ -14,6 +14,10 @@
 #include "SparkGame.h"
 #include "Game/Game.h"
 #include "Game/Console.h"
+#include "Game/GameMode.h"
+#include "Game/InventorySystem.h"
+#include "Game/QuestSystem.h"
+#include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -60,8 +64,17 @@ Spark::ModuleInfo SparkGameModule::GetModuleInfo() const
 
 bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
 {
+    m_context = context;
+
     // Delegate to the shared Initialize logic using the context's subsystems
-    return Initialize(context->GetGraphics(), context->GetInput());
+    if (!Initialize(context->GetGraphics(), context->GetInput()))
+        return false;
+
+    // Wire up EventBus so game systems can communicate via events
+    if (m_game && context->GetEventBus())
+        m_game->SetEventBus(context->GetEventBus());
+
+    return true;
 }
 
 void SparkGameModule::OnUnload()
@@ -243,6 +256,177 @@ void SparkGameModule::RegisterGameConsoleCommands()
         ss << "Time Scale: " << game->GetTimeScale() << "\n";
         return ss.str();
     }, "Display game performance statistics");
+
+    // -------------------------------------------------------------------------
+    // GameMode commands
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand("gamemode_info", [game](const std::vector<std::string>&) -> std::string {
+        if (!game) return "Game not available";
+        auto* gm = game->GetGameMode();
+        if (!gm) return "GameMode not initialized";
+        auto& rules = gm->GetRules();
+        std::stringstream ss;
+        ss << "=== Game Mode ===\n";
+        ss << "Mode: " << rules.modeName << "\n";
+        ss << "Score Limit: " << rules.scoreLimit << "\n";
+        ss << "Time Limit: " << rules.timeLimit << "s\n";
+        ss << "Round: " << gm->GetCurrentRound() << "/" << rules.roundLimit << "\n";
+        ss << "Active: " << (gm->IsMatchActive() ? "Yes" : "No") << "\n";
+        auto scoreboard = gm->GetScoreboard();
+        for (const auto& ps : scoreboard) {
+            ss << "  " << ps.playerName << ": K=" << ps.kills
+               << " D=" << ps.deaths << " Score=" << ps.totalScore << "\n";
+        }
+        return ss.str();
+    }, "Show current game mode info and scoreboard");
+
+    console.RegisterCommand("gamemode", [game](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: gamemode <freeplay|deathmatch|tdm|ctf|domination|elimination>";
+        if (!game) return "Game not available";
+        auto* gm = game->GetGameMode();
+        if (!gm) return "GameMode not initialized";
+
+        Spark::GameModeType type = Spark::GameModeType::FreePlay;
+        if (args[0] == "deathmatch" || args[0] == "dm")  type = Spark::GameModeType::Deathmatch;
+        else if (args[0] == "tdm")                        type = Spark::GameModeType::TeamDeathmatch;
+        else if (args[0] == "ctf")                        type = Spark::GameModeType::CaptureTheFlag;
+        else if (args[0] == "domination")                 type = Spark::GameModeType::Domination;
+        else if (args[0] == "elimination")                type = Spark::GameModeType::Elimination;
+        else if (args[0] == "gungame")                    type = Spark::GameModeType::GunGame;
+        else if (args[0] == "koth")                       type = Spark::GameModeType::KingOfTheHill;
+        else if (args[0] == "survival")                   type = Spark::GameModeType::Survival;
+        else if (args[0] == "freeplay")                   type = Spark::GameModeType::FreePlay;
+
+        gm->EndMatch();
+        auto rules = Spark::GameMode::GetPreset(type);
+        gm->Initialize(rules);
+        gm->AddPlayer("Player1");
+        gm->StartMatch();
+        return "Switched to " + rules.modeName;
+    }, "Switch game mode");
+
+    // -------------------------------------------------------------------------
+    // Inventory commands
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand("inventory", [game](const std::vector<std::string>&) -> std::string {
+        if (!game) return "Game not available";
+        auto& inv = game->GetPlayerInventory();
+        auto& reg = game->GetItemRegistry();
+        if (inv.slots.empty()) return "Inventory is empty";
+        std::stringstream ss;
+        ss << "=== Inventory (" << inv.slots.size() << "/" << inv.maxSlots << " slots) ===\n";
+        float totalWeight = Spark::InventoryOps::GetTotalWeight(inv, reg);
+        ss << "Weight: " << totalWeight << "/" << inv.maxWeight << " kg\n";
+        ss << "Currency: " << inv.currency << "\n";
+        for (size_t i = 0; i < inv.slots.size(); ++i) {
+            auto& slot = inv.slots[i];
+            if (auto* def = reg.GetItem(slot.itemDefId)) {
+                ss << "  [" << i << "] " << def->name << " x" << slot.count << "\n";
+            }
+        }
+        return ss.str();
+    }, "Show player inventory");
+
+    console.RegisterCommand("give", [game](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: give <item_id> [count]";
+        if (!game) return "Game not available";
+        try {
+            uint32_t id = static_cast<uint32_t>(std::stoul(args[0]));
+            int count = args.size() > 1 ? std::stoi(args[1]) : 1;
+            int added = Spark::InventoryOps::AddItem(
+                game->GetPlayerInventory(), game->GetItemRegistry(), id, count);
+            auto* def = game->GetItemRegistry().GetItem(id);
+            std::string name = def ? def->name : "Item #" + args[0];
+            return "Added " + std::to_string(added) + "x " + name;
+        } catch (const std::exception& e) {
+            return std::string("Error: ") + e.what();
+        }
+    }, "Give item to player (give <id> [count])");
+
+    // -------------------------------------------------------------------------
+    // Quest commands
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand("quest_list", [game](const std::vector<std::string>&) -> std::string {
+        if (!game) return "Game not available";
+        auto& journal = game->GetPlayerQuests();
+        auto& reg = game->GetQuestRegistry();
+        std::stringstream ss;
+        ss << "=== Active Quests ===\n";
+        for (const auto& aq : journal.activeQuests) {
+            if (aq.status != Spark::QuestStatus::Active) continue;
+            auto* def = reg.GetQuest(aq.questId);
+            if (!def) continue;
+            ss << "[" << aq.questId << "] " << def->name << "\n";
+            ss << "  " << def->description << "\n";
+            for (size_t i = 0; i < def->objectives.size(); ++i) {
+                auto& obj = def->objectives[i];
+                auto& prog = aq.objectiveProgress[i];
+                ss << "  " << (prog.completed ? "[X] " : "[ ] ")
+                   << obj.description << " (" << prog.currentCount
+                   << "/" << obj.requiredCount << ")\n";
+            }
+        }
+        ss << "\nCompleted: " << journal.completedQuestIds.size() << " quests\n";
+        return ss.str();
+    }, "Show active quests and progress");
+
+    console.RegisterCommand("quest_start", [game](const std::vector<std::string>& args) -> std::string {
+        if (args.empty()) return "Usage: quest_start <quest_id>";
+        if (!game) return "Game not available";
+        try {
+            uint32_t id = static_cast<uint32_t>(std::stoul(args[0]));
+            bool ok = Spark::QuestOps::StartQuest(
+                game->GetPlayerQuests(), game->GetQuestRegistry(), id);
+            if (ok) {
+                auto* def = game->GetQuestRegistry().GetQuest(id);
+                return "Started quest: " + (def ? def->name : "Quest #" + args[0]);
+            }
+            return "Failed to start quest (not found, already active, or prerequisites not met)";
+        } catch (const std::exception& e) {
+            return std::string("Error: ") + e.what();
+        }
+    }, "Start a quest by ID");
+
+    console.RegisterCommand("quest_all", [game](const std::vector<std::string>&) -> std::string {
+        if (!game) return "Game not available";
+        auto& reg = game->GetQuestRegistry();
+        std::stringstream ss;
+        ss << "=== All Quests ===\n";
+        for (auto& [id, def] : reg.GetAllQuests()) {
+            ss << "[" << id << "] " << def.name << " - " << def.description << "\n";
+        }
+        return ss.str();
+    }, "List all available quests");
+
+    // -------------------------------------------------------------------------
+    // HUD commands
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand("hud", [game](const std::vector<std::string>& args) -> std::string {
+        if (!game) return "Game not available";
+        auto* hud = game->GetHUDSystem();
+        if (!hud) return "HUD not initialized";
+        if (args.empty()) {
+            auto& cfg = hud->GetConfig();
+            std::stringstream ss;
+            ss << "=== HUD Config ===\n";
+            ss << "Health Bar: " << (cfg.showHealthBar ? "On" : "Off") << "\n";
+            ss << "Ammo Counter: " << (cfg.showAmmoCounter ? "On" : "Off") << "\n";
+            ss << "Minimap: " << (cfg.showMinimap ? "On" : "Off") << "\n";
+            ss << "Kill Feed: " << (cfg.showKillFeed ? "On" : "Off") << "\n";
+            return ss.str();
+        }
+        bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+        auto& cfg = hud->GetConfig();
+        cfg.showHealthBar = enable;
+        cfg.showAmmoCounter = enable;
+        cfg.showMinimap = enable;
+        cfg.showKillFeed = enable;
+        return enable ? "HUD elements enabled" : "HUD elements disabled";
+    }, "Toggle HUD visibility (hud [on|off])");
 }
 
 // ===================================================================================

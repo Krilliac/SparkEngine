@@ -60,6 +60,7 @@ private:
 
     std::unique_ptr<Game> m_game;
     std::unique_ptr<Console> m_console;
+    Spark::IEngineContext* m_context{ nullptr };
     bool m_initialized{ false };
 };
 
