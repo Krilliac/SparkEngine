@@ -30,6 +30,8 @@
 #include <cmath>
 #include <vector>
 
+#ifdef SPARK_PLATFORM_WINDOWS
+
 #pragma comment(lib, "d3dcompiler.lib")
 
 using Microsoft::WRL::ComPtr;
@@ -1497,5 +1499,14 @@ std::string PostProcessingSystem::Console_ListEffects() const
 
     return ss.str();
 }
+
+#endif // inner SPARK_PLATFORM_WINDOWS
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux no-op stub
+#include "PostProcessingSystem.h"
+PostProcessingSystem::PostProcessingSystem() {}
+PostProcessingSystem::~PostProcessingSystem() {}
 
 #endif // SPARK_PLATFORM_WINDOWS

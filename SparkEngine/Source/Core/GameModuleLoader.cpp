@@ -10,7 +10,9 @@
     #ifndef WIN32_LEAN_AND_MEAN
     #define WIN32_LEAN_AND_MEAN
     #endif
+#ifdef SPARK_PLATFORM_WINDOWS
     #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #else
     #include <dlfcn.h>
 #endif

@@ -19,8 +19,12 @@
 #include <chrono>
 
 // Direct3D texture loading
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <wincodec.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <wincodecsdk.h>
+
+#ifdef SPARK_PLATFORM_WINDOWS
 
  // ============================================================================
  // MATERIAL CLASS IMPLEMENTATION
@@ -2044,7 +2048,17 @@ std::string MaterialSystem::Console_ListMaterialVariants(const std::string& mate
             ss << "\n";
         }
     }
-    
+
     return ss.str();
 }
+
+#endif // inner SPARK_PLATFORM_WINDOWS
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux no-op stub
+#include "MaterialSystem.h"
+MaterialSystem::MaterialSystem() {}
+MaterialSystem::~MaterialSystem() {}
+
 #endif // SPARK_PLATFORM_WINDOWS

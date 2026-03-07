@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "Player.h"
 #include "VehicleSystem.h"
 #include "InteractiveObject.h"
@@ -1155,4 +1154,3 @@ Player::PlayerState Player::GetStateThreadSafe() const
     state.secondaryAbilityActive = m_secondaryAbility.isActive;
     return state;
 }
-#endif // SPARK_PLATFORM_WINDOWS

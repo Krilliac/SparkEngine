@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file ModelObject.cpp
  * @brief Implementation of ModelObject class
@@ -90,4 +89,3 @@ void ModelObject::OnHitWorld(const DirectX::XMFLOAT3& hitPoint, const DirectX::X
     // Handle collision with world geometry
     // For now, just do nothing - override in derived classes for specific behavior
 }
-#endif // SPARK_PLATFORM_WINDOWS

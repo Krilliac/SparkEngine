@@ -23,8 +23,8 @@
 #include "Core/Platform.h"
 
 #include "Game/GameObject.h"
-#include "PlaceholderMesh.h"
-#include "Primitives.h"
+#include "Game/PlaceholderMesh.h"
+#include "Game/Primitives.h"
 #include "Utils/Assert.h"        // custom assert system
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>

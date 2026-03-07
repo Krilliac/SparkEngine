@@ -1,5 +1,4 @@
 #include "../Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 // Primitives.cpp
 #include "Primitives.h"
 #include "../Utils/Assert.h"
@@ -110,4 +109,3 @@ MeshData Primitives::CreateSphere(float radius, int slices, int stacks)
         "CreateSphere produced empty mesh");
     return m;
 }
-#endif // SPARK_PLATFORM_WINDOWS

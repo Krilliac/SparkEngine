@@ -23,12 +23,14 @@ using Spark::Graphics::PostProcessingPipeline;
 #include "../Game/GameObject.h"
 
 // Windows headers for DirectX
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <DirectXMath.h>
 #include <wrl.h>
 #include <d3dcompiler.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 // **CRITICAL FIX: Add missing standard library includes**
 #include <string>
@@ -2499,4 +2501,30 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
     ApplyGraphicsState();
     ApplyAdvancedGraphicsState();
 }
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux no-op stubs — GraphicsEngine requires D3D11 (Windows-only).
+// Minimal stubs to satisfy linker (unique_ptr destructor, etc.)
+#include "GraphicsEngine.h"
+#include "TextureSystem.h"
+#include "MaterialSystem.h"
+#include "LightingSystem.h"
+#include "PostProcessingSystem.h"
+#include "AssetPipeline.h"
+#include "LightManager.h"
+#include "PostProcessingPipeline.h"
+#include "RenderTarget.h"
+#include "../Physics/PhysicsSystem.h"
+#include "../Game/GameObject.h"
+
+GraphicsEngine::GraphicsEngine() {}
+GraphicsEngine::~GraphicsEngine() {}
+HRESULT GraphicsEngine::Initialize(HWND) { return E_FAIL; }
+void GraphicsEngine::Shutdown() {}
+HRESULT GraphicsEngine::Resize(uint32_t, uint32_t) { return E_FAIL; }
+void GraphicsEngine::BeginFrame() {}
+void GraphicsEngine::EndFrame() {}
+void GraphicsEngine::RenderScene(const DirectX::XMMATRIX&, const DirectX::XMMATRIX&, const std::vector<GameObject*>&) {}
+
 #endif // SPARK_PLATFORM_WINDOWS

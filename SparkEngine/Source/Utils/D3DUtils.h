@@ -28,11 +28,18 @@
 
 #pragma once
 #include "../Core/Platform.h"
+
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <dxgi.h>
 #include <d3d11.h>
+#else // !SPARK_PLATFORM_WINDOWS
+// Forward-declare D3D11 types as opaque structs so function signatures compile
+struct IDXGISwapChain;
+struct ID3D11Device;
+struct ID3D11DeviceContext;
 #endif // SPARK_PLATFORM_WINDOWS
 
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @name Global DirectX Object Pointers
  * @brief Extern pointers to the core DirectX 11 objects.
@@ -45,6 +52,7 @@ extern IDXGISwapChain* g_MainSwapChain;      ///< The primary DXGI swap chain fo
 extern ID3D11Device* g_D3DDevice;            ///< The DirectX 11 device for resource creation
 extern ID3D11DeviceContext* g_D3DContext;     ///< The immediate device context for rendering commands
 /** @} */
+#endif // SPARK_PLATFORM_WINDOWS
 
 /**
  * @name Global Accessors

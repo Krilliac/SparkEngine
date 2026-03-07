@@ -40,9 +40,7 @@
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
-#endif // SPARK_PLATFORM_WINDOWS
 #include <Xinput.h>
-#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>
@@ -50,7 +48,9 @@
 #include <functional>
 #include <array>
 
+#ifdef _MSC_VER
 #pragma comment(lib, "xinput.lib")
+#endif
 
 using DirectX::XMFLOAT2;
 

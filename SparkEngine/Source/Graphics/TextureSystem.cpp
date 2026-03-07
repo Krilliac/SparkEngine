@@ -12,12 +12,16 @@
 #include <d3d11.h>
 #include <dxgi.h>
 #endif // SPARK_PLATFORM_WINDOWS
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <wincodec.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <filesystem>
+
+#ifdef SPARK_PLATFORM_WINDOWS
 
 using namespace DirectX;
 
@@ -852,4 +856,14 @@ uint32_t GetFormatBytesPerPixel(TextureFormat format)
             return 4; // Default to 4 bytes per pixel
     }
 }
+
+#endif // inner SPARK_PLATFORM_WINDOWS
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux no-op stub
+#include "TextureSystem.h"
+TextureSystem::TextureSystem() {}
+TextureSystem::~TextureSystem() {}
+
 #endif // SPARK_PLATFORM_WINDOWS

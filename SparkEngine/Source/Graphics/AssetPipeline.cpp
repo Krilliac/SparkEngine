@@ -16,6 +16,8 @@
 #include <filesystem>
 #include <algorithm>
 
+#ifdef SPARK_PLATFORM_WINDOWS
+
 using namespace DirectX;
 
 // ============================================================================
@@ -1109,4 +1111,16 @@ std::string LoadingPriorityToString(LoadingPriority priority)
         default: return "Unknown";
     }
 }
+
+#endif // inner SPARK_PLATFORM_WINDOWS
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux no-op stubs
+#include "AssetPipeline.h"
+AssetPipeline::AssetPipeline() {}
+AssetPipeline::~AssetPipeline() {}
+AssetCache::AssetCache(size_t) {}
+AssetCache::~AssetCache() {}
+
 #endif // SPARK_PLATFORM_WINDOWS

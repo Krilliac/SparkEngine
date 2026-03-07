@@ -1,17 +1,19 @@
 #include "../Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "Model.h"
 #include "ModelVertex.h"
 #include "../Utils/Assert.h"
-#include "../Graphics/GraphicsEngine.h"  // ✅ ADD: For shader access
+#include "../Graphics/GraphicsEngine.h"
 #include <tiny_obj_loader.h>
 #include <vector>
 #include <string>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#include <d3d11.h>
 #endif // SPARK_PLATFORM_WINDOWS
 
 using namespace DirectX;
+
+#ifdef SPARK_PLATFORM_WINDOWS
 
 HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
 {
@@ -151,4 +153,25 @@ Model::~Model()
         m_ib = nullptr;
     }
 }
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux stub — Model loading requires D3D11, which is Windows-only.
+// Vulkan/OpenGL model loading would go here.
+HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
+{
+    (void)filename; (void)device;
+    return E_FAIL;
+}
+
+void Model::Render(ID3D11DeviceContext* ctx, GraphicsEngine* graphics,
+                   const DirectX::XMMATRIX* world, const DirectX::XMMATRIX* view, const DirectX::XMMATRIX* proj)
+{
+    (void)ctx; (void)graphics; (void)world; (void)view; (void)proj;
+}
+
+Model::~Model()
+{
+}
+
 #endif // SPARK_PLATFORM_WINDOWS

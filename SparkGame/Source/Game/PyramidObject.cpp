@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "PyramidObject.h"
 #include <string>
 #include <iostream>
@@ -58,4 +57,3 @@ void PyramidObject::CreateMesh()
     ASSERT_MSG(m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
         "Pyramid mesh must have vertices and indices after loading/creation");
 }
-#endif // SPARK_PLATFORM_WINDOWS

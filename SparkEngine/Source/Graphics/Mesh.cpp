@@ -13,6 +13,8 @@
 #include <cmath>
 #include <iostream>
 
+#ifdef SPARK_PLATFORM_WINDOWS
+
 using namespace DirectX;
 
 Mesh::Mesh() {
@@ -545,4 +547,7 @@ void Mesh::Render(ID3D11DeviceContext* ctx) {
         std::wcout << L"[DEBUG] Mesh rendered " << renderCallCount << L" times. IndexCount=" << m_indexCount << std::endl;
     }
 }
+
+#endif // SPARK_PLATFORM_WINDOWS
+
 #endif // SPARK_PLATFORM_WINDOWS

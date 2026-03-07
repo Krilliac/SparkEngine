@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 // Grenade.cpp
 #include "Grenade.h"
 #include "Utils/Assert.h"
@@ -120,4 +119,3 @@ void Grenade::Explode()
     Deactivate();
 }
 
-#endif // SPARK_PLATFORM_WINDOWS

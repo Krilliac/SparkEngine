@@ -18,6 +18,8 @@
 #include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 
+#ifdef SPARK_PLATFORM_WINDOWS
+
 using namespace DirectX;
 
 // Helper function for C++14 compatible file existence check
@@ -1200,5 +1202,14 @@ bool Shader::CompileWithRHI(const std::string& sourceFile, ShaderType type, int 
     LOG_TO_CONSOLE_IMMEDIATE(L"RHI shader compiled successfully: " + wFile, L"SUCCESS");
     return true;
 }
+
+#endif // inner SPARK_PLATFORM_WINDOWS
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux no-op stub
+#include "Shader.h"
+Shader::Shader() {}
+Shader::~Shader() {}
 
 #endif // SPARK_PLATFORM_WINDOWS

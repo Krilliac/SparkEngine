@@ -1,5 +1,4 @@
 #include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "PlaneObject.h"
 #include "Utils/Assert.h"
 #include <string>
@@ -50,4 +49,3 @@ void PlaneObject::CreateMesh()
     ASSERT_MSG(m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
         "Plane mesh must have vertices and indices after loading/creation");
 }
-#endif // SPARK_PLATFORM_WINDOWS

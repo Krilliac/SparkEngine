@@ -1,5 +1,4 @@
 #include "../Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file PlatformInput.cpp
  * @brief Cross-platform input abstraction implementation
@@ -15,7 +14,9 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Xinput.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #pragma comment(lib, "xinput.lib")
 #endif
 
@@ -863,4 +864,3 @@ void PlatformInputManager::Console_SetSensitivity(float sensitivity) {
 
 } // namespace Spark::Input
 
-#endif // SPARK_PLATFORM_WINDOWS

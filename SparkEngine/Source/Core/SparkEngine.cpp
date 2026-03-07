@@ -22,9 +22,13 @@
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <memory>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <cstdio>
 #include <algorithm>
 #include <sstream>

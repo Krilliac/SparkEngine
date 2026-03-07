@@ -12,6 +12,8 @@
 #include <numeric>
 #include <set>
 
+#ifdef SPARK_PLATFORM_WINDOWS
+
 namespace Spark::Graphics {
 
 // ============================================================================
@@ -279,5 +281,8 @@ LODManager::LODStats LODManager::GetStats() const {
 }
 
 } // namespace Spark::Graphics
+
+#endif // SPARK_PLATFORM_WINDOWS
+
 
 #endif // SPARK_PLATFORM_WINDOWS

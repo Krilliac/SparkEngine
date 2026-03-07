@@ -1,22 +1,24 @@
 #include "../Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "SparkConsole.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <chrono>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <conio.h>
+#endif
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <thread>
 #include <map>
-#include <psapi.h>
 #ifdef SPARK_PLATFORM_WINDOWS
+#include <psapi.h>
 #include <DirectXMath.h>
-#endif // SPARK_PLATFORM_WINDOWS
 #include <dbghelp.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
+#ifdef SPARK_PLATFORM_WINDOWS
 // Engine headers
 #include "../Camera/SparkEngineCamera.h"
 #include "../Graphics/GraphicsEngine.h"
@@ -4070,8 +4072,16 @@ void SimpleConsole::RegisterHealthCommands() {
 #include "../Core/Platform.h"
 #include "SparkConsole.h"
 #include <iostream>
+#include <sstream>
 #include <chrono>
 #include <ctime>
+#include <algorithm>
+#ifdef SPARK_PLATFORM_LINUX
+#include <unistd.h>
+#include <termios.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#endif
 
 namespace Spark {
 
@@ -4080,16 +4090,55 @@ SimpleConsole& SimpleConsole::GetInstance() {
     return instance;
 }
 
-bool SimpleConsole::Initialize() { m_initialized = true; return true; }
-void SimpleConsole::Shutdown() { m_initialized = false; }
-void SimpleConsole::Update() {}
+bool SimpleConsole::Initialize() {
+    if (m_initialized) return true;
+    CreateConsoleWindow();
+    SetupConsoleHandles();
+    m_initialized = true;
+    PrintLine("Spark Engine Console (Linux)", Color::Cyan);
+    PrintLine("Type 'help' for available commands.", Color::DarkGray);
+    DisplayPrompt();
+    return true;
+}
+void SimpleConsole::Shutdown() {
+    m_initialized = false;
+    m_commands.clear();
+    m_logHistory.clear();
+    m_commandHistory.clear();
+    m_aliases.clear();
+    m_watchEntries.clear();
+}
+void SimpleConsole::Update() {
+    if (!m_initialized || !m_visible) return;
+    ProcessInput();
+    UpdateWatches();
+}
 
 void SimpleConsole::Log(const std::string& message, const std::string& type) {
     std::lock_guard<std::mutex> lock(m_logMutex);
     LogEntry entry{message, type, GetTimestamp()};
     m_logHistory.push_back(entry);
     if (m_logHistory.size() > 1000) m_logHistory.pop_front();
-    std::cout << "[" << type << "] " << message << std::endl;
+
+    // Apply log filter
+    if (!m_logFilter.empty() && type != m_logFilter) return;
+    if (!m_logSearchTerm.empty() && message.find(m_logSearchTerm) == std::string::npos) return;
+
+    // Determine color based on log type
+    Color color = Color::White;
+    if (type == "ERROR")         color = Color::Red;
+    else if (type == "WARNING")  color = Color::Yellow;
+    else if (type == "SUCCESS")  color = Color::Green;
+    else if (type == "CRITICAL") color = Color::Magenta;
+    else if (type == "TRACE")    color = Color::DarkGray;
+    else if (type == "DEBUG")    color = Color::Cyan;
+
+    SetColor(Color::DarkGray);
+    std::cout << "[" << entry.timestamp << "] ";
+    SetColor(color);
+    std::cout << "[" << type << "] " << message;
+    SetColor(Color::White);
+    std::cout << std::endl;
 }
 
 void SimpleConsole::LogInfo(const std::string& msg) { Log(msg, "INFO"); }
@@ -4115,9 +4164,15 @@ bool SimpleConsole::ExecuteCommand(const std::string& commandLine) {
     return true;
 }
 
-void SimpleConsole::Show() { m_visible = true; }
-void SimpleConsole::Hide() { m_visible = false; }
-void SimpleConsole::Toggle() { m_visible = !m_visible; }
+void SimpleConsole::Show() {
+    m_visible = true;
+    // On Linux, no window to show - just resume accepting input
+}
+void SimpleConsole::Hide() {
+    m_visible = false;
+    // On Linux, no window to hide - just stop processing input
+}
+void SimpleConsole::Toggle() { if (m_visible) Hide(); else Show(); }
 void SimpleConsole::Clear() { std::lock_guard<std::mutex> lock(m_logMutex); m_logHistory.clear(); }
 
 std::vector<SimpleConsole::LogEntry> SimpleConsole::GetLogHistory() const {
@@ -4146,13 +4201,108 @@ void SimpleConsole::RemoveWatch(const std::string& name) {
 void SimpleConsole::UpdateWatches() {}
 
 // Private helpers
-void SimpleConsole::SetColor(Color) {}
-void SimpleConsole::Print(const std::string& text, Color) { std::cout << text; }
-void SimpleConsole::PrintLine(const std::string& text, Color) { std::cout << text << "\n"; }
-void SimpleConsole::ProcessInput() {}
-void SimpleConsole::DisplayPrompt() {}
-void SimpleConsole::RedrawConsole() {}
-void SimpleConsole::RedrawInputLine() {}
+void SimpleConsole::SetColor(Color color) {
+#ifdef SPARK_PLATFORM_LINUX
+    // ANSI escape codes for terminal colors
+    switch (color) {
+        case Color::Red:         std::cout << "\033[91m"; break;
+        case Color::Green:       std::cout << "\033[92m"; break;
+        case Color::Yellow:      std::cout << "\033[93m"; break;
+        case Color::Blue:        std::cout << "\033[94m"; break;
+        case Color::Magenta:     std::cout << "\033[95m"; break;
+        case Color::Cyan:        std::cout << "\033[96m"; break;
+        case Color::DarkGray:    std::cout << "\033[90m"; break;
+        case Color::BrightWhite: std::cout << "\033[97m"; break;
+        case Color::White:
+        default:                 std::cout << "\033[0m";  break;
+    }
+#endif
+}
+void SimpleConsole::Print(const std::string& text, Color color) {
+    SetColor(color);
+    std::cout << text;
+    SetColor(Color::White);
+}
+void SimpleConsole::PrintLine(const std::string& text, Color color) {
+    SetColor(color);
+    std::cout << text << "\n";
+    SetColor(Color::White);
+}
+void SimpleConsole::ProcessInput() {
+#ifdef SPARK_PLATFORM_LINUX
+    if (!m_initialized || !m_visible) return;
+
+    // Check if input is available using non-blocking read
+    struct termios oldt, newt;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    newt.c_cc[VMIN] = 0;
+    newt.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    char ch;
+    while (read(STDIN_FILENO, &ch, 1) > 0) {
+        if (ch == '\n' || ch == '\r') {
+            std::cout << std::endl;
+            if (!m_currentInput.empty()) {
+                m_commandHistory.push_back(m_currentInput);
+                if (m_commandHistory.size() > 100) m_commandHistory.pop_front();
+                ExecuteCommand(m_currentInput);
+                m_currentInput.clear();
+                m_cursorPosition = 0;
+            }
+            DisplayPrompt();
+        } else if (ch == 127 || ch == 8) { // Backspace
+            if (!m_currentInput.empty() && m_cursorPosition > 0) {
+                m_currentInput.erase(m_cursorPosition - 1, 1);
+                m_cursorPosition--;
+                RedrawInputLine();
+            }
+        } else if (ch == '\t') {
+            HandleTabCompletion();
+        } else if (ch == 27) { // Escape sequence
+            char seq[2];
+            if (read(STDIN_FILENO, &seq[0], 1) > 0 && seq[0] == '[') {
+                if (read(STDIN_FILENO, &seq[1], 1) > 0) {
+                    if (seq[1] == 'A') NavigateHistoryUp();
+                    else if (seq[1] == 'B') NavigateHistoryDown();
+                }
+            }
+        } else if (ch >= 32 && ch < 127) {
+            m_currentInput.insert(m_cursorPosition, 1, ch);
+            m_cursorPosition++;
+            RedrawInputLine();
+        }
+    }
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+#endif
+}
+void SimpleConsole::DisplayPrompt() {
+#ifdef SPARK_PLATFORM_LINUX
+    SetColor(Color::Green);
+    std::cout << "> ";
+    SetColor(Color::White);
+    std::cout << m_currentInput << std::flush;
+#endif
+}
+void SimpleConsole::RedrawConsole() {
+#ifdef SPARK_PLATFORM_LINUX
+    // On Linux, we don't redraw the full console - just show the prompt
+    DisplayPrompt();
+#endif
+}
+void SimpleConsole::RedrawInputLine() {
+#ifdef SPARK_PLATFORM_LINUX
+    // Clear current line and redraw
+    std::cout << "\r\033[K";
+    SetColor(Color::Green);
+    std::cout << "> ";
+    SetColor(Color::White);
+    std::cout << m_currentInput << std::flush;
+#endif
+}
 
 std::vector<std::string> SimpleConsole::ParseCommand(const std::string& commandLine) {
     std::vector<std::string> args;
@@ -4175,8 +4325,16 @@ std::string SimpleConsole::GetTimestamp() {
 
 void SimpleConsole::RegisterDefaultCommands() {}
 void SimpleConsole::RegisterAdvancedCommands() {}
-bool SimpleConsole::CreateConsoleWindow() { return true; }
-void SimpleConsole::SetupConsoleHandles() {}
+bool SimpleConsole::CreateConsoleWindow() {
+    // On Linux, we use the existing terminal - no window creation needed
+    return true;
+}
+void SimpleConsole::SetupConsoleHandles() {
+#ifdef SPARK_PLATFORM_LINUX
+    m_consoleOutputFd = STDOUT_FILENO;
+    m_consoleInputFd = STDIN_FILENO;
+#endif
+}
 void SimpleConsole::HandleTabCompletion() {}
 std::vector<std::string> SimpleConsole::GetCompletions(const std::string&) { return {}; }
 void SimpleConsole::NavigateHistoryUp() {}
@@ -4192,6 +4350,19 @@ void SimpleConsole::RegisterSystemCommands() {}
 void SimpleConsole::RegisterDebugCommands() {}
 void SimpleConsole::RegisterFileCommands() {}
 void SimpleConsole::RegisterPerformanceCommands() {}
+void SimpleConsole::RegisterRenderingCommands() {}
+void SimpleConsole::RegisterAudioCommands() {}
+void SimpleConsole::RegisterNetworkingCommands() {}
+void SimpleConsole::RegisterProfilingCommands() {}
+void SimpleConsole::RegisterSceneCommands() {}
+void SimpleConsole::RegisterInputCommands() {}
+void SimpleConsole::RegisterConfigCommands() {}
+void SimpleConsole::RegisterTestingCommands() {}
+void SimpleConsole::RegisterLogCommands() {}
+void SimpleConsole::RegisterWatchCommands() {}
+void SimpleConsole::RegisterAliasCommands() {}
+void SimpleConsole::RegisterCrashCommands() {}
+void SimpleConsole::RegisterHealthCommands() {}
 
 } // namespace Spark
 #endif // !SPARK_PLATFORM_WINDOWS

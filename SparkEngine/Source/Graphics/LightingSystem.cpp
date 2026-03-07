@@ -14,6 +14,8 @@
 #include <cmath>
 #include <DirectXColors.h>
 
+#ifdef SPARK_PLATFORM_WINDOWS
+
 using namespace DirectX;
 // ============================================================================
 // LIGHT CLASS IMPLEMENTATION
@@ -1069,4 +1071,14 @@ ShadowTechnique StringToShadowTechnique(const std::string& str)
     if (str == "pcss") return ShadowTechnique::PCSS;
     return ShadowTechnique::PCF; // Default
 }
+
+#endif // inner SPARK_PLATFORM_WINDOWS
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux no-op stub
+#include "LightingSystem.h"
+LightingSystem::LightingSystem() {}
+LightingSystem::~LightingSystem() {}
+
 #endif // SPARK_PLATFORM_WINDOWS

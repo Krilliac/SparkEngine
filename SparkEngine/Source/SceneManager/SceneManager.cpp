@@ -1,5 +1,4 @@
 #include "../Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 #include "SceneManager.h"
 #include "Game/GameObject.h"
 #include "Game/CubeObject.h"
@@ -598,4 +597,3 @@ bool SceneManager::Console_RenameNode(int index, const std::string& newName)
     m_dirty = true;
     return true;
 }
-#endif // SPARK_PLATFORM_WINDOWS

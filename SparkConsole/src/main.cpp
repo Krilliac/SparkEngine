@@ -1,6 +1,8 @@
 #include "ConsoleApp.h"
 #include <iostream>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <conio.h> // For _getch()
 
 int main() {

@@ -11,6 +11,8 @@
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
 
+#ifdef SPARK_PLATFORM_WINDOWS
+
 // ============================================================================
 // RENDERTARGET IMPLEMENTATION
 // ============================================================================
@@ -908,4 +910,14 @@ RenderTargetFormat RenderTargetManager::StringToFormat(const std::string& str) c
     if (str == "D32_FLOAT") return RenderTargetFormat::D32_FLOAT;
     return RenderTargetFormat::RGBA8_UNORM; // Default
 }
+
+#endif // inner SPARK_PLATFORM_WINDOWS
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Linux no-op stub
+#include "RenderTarget.h"
+RenderTarget::RenderTarget(const RenderTargetDesc& desc) : m_desc(desc) {}
+RenderTarget::~RenderTarget() {}
+
 #endif // SPARK_PLATFORM_WINDOWS

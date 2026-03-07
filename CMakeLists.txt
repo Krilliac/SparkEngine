@@ -583,6 +583,7 @@ endif()
 # ---------------------------------------------------------------------
 target_include_directories(SparkEngineLib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkEngine/Source>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkGame/Source>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkSDK/Include>
     $<INSTALL_INTERFACE:include>
 )
@@ -902,12 +903,14 @@ foreach(dir ${THIRDPARTY_INCLUDE_DIRS})
     endif()
 endforeach()
 
-# Export targets
+# Export targets (only when all dependencies are in export sets)
+if(FALSE) # Disabled: third-party targets (Bullet, miniz) lack EXPORT sets
 install(EXPORT SparkEngineTargets
     FILE SparkEngineTargets.cmake
     NAMESPACE Spark::
     DESTINATION lib/cmake/SparkEngine
 )
+endif()
 
 # Package config
 include(CMakePackageConfigHelpers)

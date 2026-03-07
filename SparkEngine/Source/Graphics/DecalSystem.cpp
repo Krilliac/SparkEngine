@@ -11,6 +11,8 @@
 #include <cstdlib>
 #include <algorithm>
 
+#ifdef SPARK_PLATFORM_WINDOWS
+
 using namespace DirectX;
 namespace Spark::Graphics {
 
@@ -274,5 +276,8 @@ void DecalSystem::Console_SpawnTestDecal(float x, float y, float z) {
 }
 
 } // namespace Spark::Graphics
+
+#endif // SPARK_PLATFORM_WINDOWS
+
 
 #endif // SPARK_PLATFORM_WINDOWS

@@ -1,5 +1,6 @@
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
+
 // CrashHandlerHelpers.cpp
 #include "Utils/CrashHandler.h"
 #include "Utils/Assert.h"
@@ -8,12 +9,16 @@
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string.h>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <dbghelp.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <dxgi.h>
 #include <d3d11.h>
 #endif // SPARK_PLATFORM_WINDOWS
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <wincodec.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <wrl/client.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -29,8 +34,10 @@
 #include <sstream>
 #include <vector>
 #include <mutex>
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <tlhelp32.h>
 #include <VersionHelpers.h>
+#endif // SPARK_PLATFORM_WINDOWS
 #include <iostream>
 
 #pragma comment(lib, "dbghelp.lib")
@@ -783,4 +790,5 @@ static bool Upload(
     return (res == CURLE_OK);
 }
 #endif // NETWORKING_ENABLED
+
 #endif // SPARK_PLATFORM_WINDOWS
