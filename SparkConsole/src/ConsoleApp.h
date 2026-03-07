@@ -54,6 +54,7 @@ private:
 
     // Thread safety and state
     std::atomic<bool> m_running;
+    std::thread m_engineInputThread;   ///< Background thread reading engine pipe input
     std::mutex m_outputMutex;
     std::mutex m_historyMutex;
 

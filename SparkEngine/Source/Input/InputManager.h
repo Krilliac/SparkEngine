@@ -79,6 +79,7 @@ private:
     
     mutable std::mutex m_inputMutex;   ///< Thread safety for input access
     std::function<void()> m_stateCallback; ///< Callback for state changes
+    std::vector<std::thread> m_pendingTimedThreads; ///< Timed key release threads to join on destruction
 
 public:
     /**

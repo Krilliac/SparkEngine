@@ -55,6 +55,14 @@ SceneManager::SceneManager(GraphicsEngine* graphics, InputManager* input)
     ASSERT_MSG(input != nullptr, "SceneManager: input is null");
 }
 
+SceneManager::~SceneManager()
+{
+    // Join any in-flight async load thread to avoid use-after-free
+    if (m_asyncLoadThread.joinable()) {
+        m_asyncLoadThread.join();
+    }
+}
+
 const std::vector<std::unique_ptr<GameObject>>& SceneManager::GetObjects() const
 {
     return m_objects;
@@ -109,11 +117,16 @@ bool SceneManager::SaveScene(const std::wstring& filepath) const
 
 void SceneManager::LoadSceneAsync(const std::wstring& filepath, SceneLoadCallback callback)
 {
-    std::thread([this, filepath, callback]() {
+    // Join any previous async load before starting a new one
+    if (m_asyncLoadThread.joinable()) {
+        m_asyncLoadThread.join();
+    }
+
+    m_asyncLoadThread = std::thread([this, filepath, callback]() {
         bool success = LoadScene(filepath);
         if (callback)
             callback(success, std::string(filepath.begin(), filepath.end()));
-    }).detach();
+    });
 }
 
 // ============================================================================
