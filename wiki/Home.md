@@ -1,0 +1,75 @@
+# Spark Engine
+
+**Spark Engine** is a free, open-source 3D game engine written in C++20. Designed for first-person shooters and other 3D games, it ships with DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an EnTT-based ECS architecture, and an ImGui visual editor.
+
+> **Early Development** — SparkEngine is under active development. Expect rough edges.
+
+## Platform Support
+
+| Platform | Status | Compiler |
+|----------|--------|----------|
+| Windows 10+ | Primary | MSVC v143 (VS 2022), v144 (VS 2026) |
+| Linux x64 | Experimental | GCC 11+, Clang 14+ |
+| macOS | Experimental | Apple Clang with C++20 |
+
+## Feature Highlights
+
+- **Rendering** — DirectX 11 with forward, deferred, forward+, and clustered pipelines. PBR materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting, bloom, HDR tone mapping, TAA/FXAA/MSAA, IBL, GPU particles, decals, fog, and quality presets. Experimental Vulkan and OpenGL backends via RHI abstraction.
+- **Physics** — Bullet Physics 3 with rigid bodies, 9 collision shape types, constraints, raycasting, overlap queries, physics materials, and debug draw.
+- **Audio** — XAudio2 3D spatial audio with Doppler effects, distance attenuation, volume channels, and object pooling. Miniaudio as cross-platform fallback.
+- **Gameplay** — ECS architecture (EnTT), FPS player controller, weapons, vehicles, inventory, quests, day/night cycle, weather, terrain with quadtree LOD.
+- **AI** — Behavior trees, NavMesh A* pathfinding, perception system, steering behaviors.
+- **Animation** — Skeletal animation, state machines, multi-layer blending, IK (two-bone, look-at, FABRIK), root motion, FBX/glTF import.
+- **Scripting** — AngelScript with hot-reload, lifecycle callbacks, and full engine API bindings.
+- **Networking** — UDP client/server, entity replication, client-side prediction, lag compensation.
+- **Editor** — ImGui-powered visual editor with scene hierarchy, inspector, gizmos, material editor, animation timeline, and 200+ debug console commands.
+
+## Downloads
+
+Pre-built binaries are published on every commit to `master`:
+
+- [Windows Release (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Release.zip)
+- [Windows Debug (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Debug.zip)
+- [Linux Release (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Release.tar.gz)
+- [Linux Debug (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Debug.tar.gz)
+
+## Wiki Navigation
+
+### Getting Started
+- [[Getting Started]] — Prerequisites, building, and running
+- [[Architecture Overview]] — Engine design and project structure
+- [[Creating a Game Module]] — Build your first game module
+
+### Engine Subsystems
+- [[Entity Component System]] — EnTT ECS, components, and systems
+- [[Rendering and Graphics]] — Graphics pipeline, materials, and post-processing
+- [[Physics]] — Bullet Physics integration
+- [[Audio]] — Spatial audio system
+- [[Input System]] — Keyboard, mouse, and gamepad
+- [[Scripting with AngelScript]] — Gameplay scripting
+- [[AI and Navigation]] — Behavior trees and pathfinding
+- [[Animation]] — Skeletal animation and IK
+- [[Networking]] — Multiplayer networking
+- [[Scene Management]] — Scenes, hierarchy, and prefabs
+- [[Event System]] — Publish/subscribe event bus
+
+### Gameplay & Tools
+- [[Gameplay Systems]] — Player, weapons, inventory, quests
+- [[Terrain and Procedural Generation]] — Terrain and procedural content
+- [[Save System]] — Save/load functionality
+- [[Day Night Cycle and Weather]] — Time-of-day and weather
+- [[Cinematic Sequencer]] — Timeline-based cinematics
+- [[SparkEditor]] — Visual editor guide
+- [[SparkConsole]] — Debug console
+- [[Shader Pipeline]] — Shader authoring and compilation
+- [[Asset Pipeline]] — Asset loading and formats
+
+### Advanced
+- [[Build System and CMake Modules]] — CMake configuration and CI/CD
+- [[Testing]] — Unit tests and test framework
+- [[Troubleshooting]] — Common issues and solutions
+- [[Contributing]] — How to contribute
+
+## License
+
+SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/SparkEngine/blob/master/LICENSE) — no royalties, no strings attached.
