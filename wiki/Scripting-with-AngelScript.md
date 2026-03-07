@@ -6,7 +6,7 @@ SparkEngine integrates **AngelScript** as its gameplay scripting language, suppo
 
 ## Overview
 
-AngelScript is a statically-typed scripting language with C/C++-like syntax. Scripts are attached to [[Entity Component System|ECS]] entities and driven through lifecycle callbacks, similar to Unity's MonoBehaviour pattern.
+AngelScript is a statically-typed scripting language with C/C++-like syntax. Scripts are attached to [ECS](Entity-Component-System) entities and driven through lifecycle callbacks, similar to Unity's MonoBehaviour pattern.
 
 ## Writing a Script
 
@@ -146,11 +146,11 @@ Script contexts are **not thread-safe**. All script calls must happen on the mai
 
 ## See Also
 
-- [[Entity Component System]] — Script component
-- [[Creating a Game Module]] — Module lifecycle
-- [[Event System]] — Publishing and subscribing to events from scripts
-- [[Physics]] — Physics API available in scripts
-- [[Input System]] — Input API available in scripts
-- [[Audio]] — Audio API available in scripts
-- [[Animation]] — Controlling animations from scripts
-- [[Scene Management]] — Scene operations from scripts
+- [Entity Component System](Entity-Component-System) — Script component
+- [Creating a Game Module](Creating-a-Game-Module) — Module lifecycle
+- [Event System](Event-System) — Publishing and subscribing to events from scripts
+- [Physics](Physics) — Physics API available in scripts
+- [Input System](Input-System) — Input API available in scripts
+- [Audio](Audio) — Audio API available in scripts
+- [Animation](Animation) — Controlling animations from scripts
+- [Scene Management](Scene-Management) — Scene operations from scripts

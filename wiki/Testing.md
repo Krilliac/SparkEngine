@@ -101,7 +101,7 @@ TEST(MyFeature_EdgeCase) {
 }
 ```
 
-2. The test is automatically discovered by CMake (tests are globbed in `Tests/CMakeLists.txt`). See [[Build System and CMake Modules]] for build configuration.
+2. The test is automatically discovered by CMake (tests are globbed in `Tests/CMakeLists.txt`). See [Build System and CMake Modules](Build-System-and-CMake-Modules) for build configuration.
 
 3. Build and run:
 
@@ -121,6 +121,6 @@ Tests run automatically on every push via GitHub Actions:
 
 ## See Also
 
-- [[Build System and CMake Modules]] — BUILD_TESTS flag
-- [[Getting Started]] — Building the project
-- [[Contributing]] — Contribution workflow and adding tests
+- [Build System and CMake Modules](Build-System-and-CMake-Modules) — BUILD_TESTS flag
+- [Getting Started](Getting-Started) — Building the project
+- [Contributing](Contributing) — Contribution workflow and adding tests

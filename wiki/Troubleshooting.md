@@ -4,7 +4,7 @@ Common issues and solutions when building and running SparkEngine.
 
 ## Quick Verification
 
-### Test [[SparkConsole]] Standalone
+### Test [SparkConsole](SparkConsole) Standalone
 
 ```batch
 cd build\bin
@@ -181,7 +181,7 @@ And these directories should be present:
 
 ## See Also
 
-- [[Getting Started]] — Build instructions
-- [[Build System and CMake Modules]] — Build configuration
-- [[SparkConsole]] — Debug console usage
-- [[Rendering and Graphics]] — Graphics troubleshooting and render pipelines
+- [Getting Started](Getting-Started) — Build instructions
+- [Build System and CMake Modules](Build-System-and-CMake-Modules) — Build configuration
+- [SparkConsole](SparkConsole) — Debug console usage
+- [Rendering and Graphics](Rendering-and-Graphics) — Graphics troubleshooting and render pipelines

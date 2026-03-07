@@ -36,39 +36,39 @@ Pre-built binaries are published on every commit to `master`:
 ## Wiki Navigation
 
 ### Getting Started
-- [[Getting Started]] — Prerequisites, building, and running
-- [[Architecture Overview]] — Engine design and project structure
-- [[Creating a Game Module]] — Build your first game module
+- [Getting Started](Getting-Started) — Prerequisites, building, and running
+- [Architecture Overview](Architecture-Overview) — Engine design and project structure
+- [Creating a Game Module](Creating-a-Game-Module) — Build your first game module
 
 ### Engine Subsystems
-- [[Entity Component System]] — EnTT ECS, components, and systems
-- [[Rendering and Graphics]] — Graphics pipeline, materials, and post-processing
-- [[Physics]] — Bullet Physics integration
-- [[Audio]] — Spatial audio system
-- [[Input System]] — Keyboard, mouse, and gamepad
-- [[Scripting with AngelScript]] — Gameplay scripting
-- [[AI and Navigation]] — Behavior trees and pathfinding
-- [[Animation]] — Skeletal animation and IK
-- [[Networking]] — Multiplayer networking
-- [[Scene Management]] — Scenes, hierarchy, and prefabs
-- [[Event System]] — Publish/subscribe event bus
+- [Entity Component System](Entity-Component-System) — EnTT ECS, components, and systems
+- [Rendering and Graphics](Rendering-and-Graphics) — Graphics pipeline, materials, and post-processing
+- [Physics](Physics) — Bullet Physics integration
+- [Audio](Audio) — Spatial audio system
+- [Input System](Input-System) — Keyboard, mouse, and gamepad
+- [Scripting with AngelScript](Scripting-with-AngelScript) — Gameplay scripting
+- [AI and Navigation](AI-and-Navigation) — Behavior trees and pathfinding
+- [Animation](Animation) — Skeletal animation and IK
+- [Networking](Networking) — Multiplayer networking
+- [Scene Management](Scene-Management) — Scenes, hierarchy, and prefabs
+- [Event System](Event-System) — Publish/subscribe event bus
 
 ### Gameplay & Tools
-- [[Gameplay Systems]] — Player, weapons, inventory, quests
-- [[Terrain and Procedural Generation]] — Terrain and procedural content
-- [[Save System]] — Save/load functionality
-- [[Day Night Cycle and Weather]] — Time-of-day and weather
-- [[Cinematic Sequencer]] — Timeline-based cinematics
-- [[SparkEditor]] — Visual editor guide
-- [[SparkConsole]] — Debug console
-- [[Shader Pipeline]] — Shader authoring and compilation
-- [[Asset Pipeline]] — Asset loading and formats
+- [Gameplay Systems](Gameplay-Systems) — Player, weapons, inventory, quests
+- [Terrain and Procedural Generation](Terrain-and-Procedural-Generation) — Terrain and procedural content
+- [Save System](Save-System) — Save/load functionality
+- [Day Night Cycle and Weather](Day-Night-Cycle-and-Weather) — Time-of-day and weather
+- [Cinematic Sequencer](Cinematic-Sequencer) — Timeline-based cinematics
+- [SparkEditor](SparkEditor) — Visual editor guide
+- [SparkConsole](SparkConsole) — Debug console
+- [Shader Pipeline](Shader-Pipeline) — Shader authoring and compilation
+- [Asset Pipeline](Asset-Pipeline) — Asset loading and formats
 
 ### Advanced
-- [[Build System and CMake Modules]] — CMake configuration and CI/CD
-- [[Testing]] — Unit tests and test framework
-- [[Troubleshooting]] — Common issues and solutions
-- [[Contributing]] — How to contribute
+- [Build System and CMake Modules](Build-System-and-CMake-Modules) — CMake configuration and CI/CD
+- [Testing](Testing) — Unit tests and test framework
+- [Troubleshooting](Troubleshooting) — Common issues and solutions
+- [Contributing](Contributing) — How to contribute
 
 ## License
 

@@ -32,7 +32,7 @@ The networking system uses a client/server model:
 
 ## Entity Replication
 
-Entities with `NetworkIdentity` are automatically replicated via the [[Entity Component System]]:
+Entities with `NetworkIdentity` are automatically replicated via the [Entity Component System](Entity-Component-System):
 
 ```cpp
 auto& net = world.AddComponent<NetworkIdentity>(entity);
@@ -62,7 +62,7 @@ When the server's authoritative state differs from the client's prediction:
 
 ## Lag Compensation
 
-For hit detection in fast-paced FPS [[Gameplay Systems|gameplay]]:
+For hit detection in fast-paced FPS [gameplay](Gameplay-Systems):
 
 - Server maintains a **1-second history** of entity positions (hitbox rewinding)
 - When processing a shot, the server rewinds entities to where they were when the shooter fired
@@ -87,10 +87,10 @@ Network messages use built-in serialization helpers for efficient packing and un
 
 ## See Also
 
-- [[Entity Component System]] — NetworkIdentity component
-- [[Gameplay Systems]] — Multiplayer game modes
-- [[Event System]] — Network event handling
-- [[Scene Management]] — Networked scene transitions
-- [[Physics]] — Server-authoritative physics
-- [[Animation]] — Replicated animation states
-- [[Input System]] — Client input processing and prediction
+- [Entity Component System](Entity-Component-System) — NetworkIdentity component
+- [Gameplay Systems](Gameplay-Systems) — Multiplayer game modes
+- [Event System](Event-System) — Network event handling
+- [Scene Management](Scene-Management) — Networked scene transitions
+- [Physics](Physics) — Server-authoritative physics
+- [Animation](Animation) — Replicated animation states
+- [Input System](Input-System) — Client input processing and prediction
