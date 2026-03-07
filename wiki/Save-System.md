@@ -1,6 +1,6 @@
 # Save System
 
-SparkEngine provides an ECS-aware save/load system with JSON serialization and miniz compression.
+SparkEngine provides an [[Entity Component System]]-aware save/load system with JSON serialization and miniz compression.
 
 **Source:** `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h`
 
@@ -8,13 +8,13 @@ SparkEngine provides an ECS-aware save/load system with JSON serialization and m
 
 ## Features
 
-- ECS-aware serialization of all entity components
+- [[Entity Component System]]-aware serialization of all entity components
 - JSON format with miniz compression
 - Multiple save slots
 - Quicksave / quickload
 - Rotating autosaves
 - Per-component serializer registry
-- Metadata tracking (scene name, player class, playtime)
+- Metadata tracking ([[Scene Management|scene name]], player class, playtime)
 
 ## Saving
 
@@ -87,7 +87,12 @@ for (const auto& save : saves) {
 saveSystem.DeleteSave("slot1");
 ```
 
+---
+
 ## See Also
 
 - [[Entity Component System]] — Components that are serialized
 - [[Scene Management]] — Scene state persistence
+- [[Scripting with AngelScript]] — Script-driven save/load triggers
+- [[Event System]] — Save/load event callbacks
+- [[Networking]] — Multiplayer state persistence

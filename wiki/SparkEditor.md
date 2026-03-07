@@ -1,6 +1,6 @@
 # SparkEditor
 
-The SparkEditor is an ImGui-based visual editor for creating and editing game content. It provides a dockable workspace with multiple panels for scene editing, material authoring, animation, and debugging.
+The SparkEditor is an ImGui-based visual editor for creating and editing game content. It provides a dockable workspace with multiple panels for [[Scene Management|scene editing]], material authoring, [[Animation|animation]], and debugging.
 
 **Source:** `SparkEditor/Source/`
 
@@ -23,7 +23,7 @@ The editor includes 22+ subsystem panels:
 
 - Property editor for the selected node/entity
 - Transform editing (position, rotation, scale)
-- Component editing with type-appropriate widgets
+- [[Entity Component System|Component]] editing with type-appropriate widgets
 - Material assignment and configuration
 
 ### Game Viewport
@@ -39,18 +39,18 @@ The editor includes 22+ subsystem panels:
 - World-space and local-space modes
 - Snap to grid functionality
 
-### Asset Browser
+### Asset Browser (see [[Asset Pipeline]])
 
 - File-system view of project assets
 - Drag-and-drop assets into the scene
 - Thumbnail previews for textures and models
 
-### Material Editor
+### Material Editor (see [[Shader Pipeline]])
 
 - PBR material authoring
 - Texture slot assignment
 - Real-time preview sphere
-- Blend mode and shader selection
+- Blend mode and [[Shader Pipeline|shader]] selection
 
 ### Animation Timeline
 
@@ -59,14 +59,14 @@ The editor includes 22+ subsystem panels:
 - Blend tree configuration
 - Animation clip preview
 
-### Terrain Editor
+### Terrain Editor (see [[Terrain and Procedural Generation]])
 
 - Heightmap painting (raise/lower/smooth/flatten)
 - Texture splatting brush
 - Object placement brush
 - Terrain configuration (size, resolution, LOD)
 
-### Weapon Editor
+### Weapon Editor (see [[Gameplay Systems]])
 
 - Weapon property configuration
 - Projectile type selection
@@ -112,9 +112,17 @@ cmake -B build -DENABLE_EDITOR=ON
 cmake --build build --config Release
 ```
 
+---
+
 ## See Also
 
 - [[Scene Management]] — Scene hierarchy and serialization
-- [[Rendering and Graphics]] — Material system
-- [[Animation]] — Animation state machines
+- [[Rendering and Graphics]] — Material system and render pipelines
+- [[Animation]] — Animation state machines and timeline
 - [[Cinematic Sequencer]] — Timeline editor
+- [[Entity Component System]] — Component architecture
+- [[Shader Pipeline]] — Shader authoring and compilation
+- [[Asset Pipeline]] — Asset importing and management
+- [[Physics]] — Physics simulation
+- [[Terrain and Procedural Generation]] — Terrain editing and procedural tools
+- [[Gameplay Systems]] — Weapons, inventory, and game mechanics

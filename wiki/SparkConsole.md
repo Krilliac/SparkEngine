@@ -45,7 +45,7 @@ fps               # Show current framerate
 quit              # Shut down the engine
 ```
 
-### Graphics Commands
+### Graphics Commands (see [[Rendering and Graphics]])
 
 ```
 graphics_info              # GPU and adapter information
@@ -61,7 +61,7 @@ resolution <w> <h>         # Set resolution
 fullscreen                 # Toggle fullscreen
 ```
 
-### Physics Commands
+### Physics Commands (see [[Physics]])
 
 ```
 physics_info               # Physics world statistics
@@ -72,7 +72,7 @@ physics_step               # Single-step physics
 physics_material <name>    # Show material properties
 ```
 
-### Audio Commands
+### Audio Commands (see [[Audio]])
 
 ```
 audio_info                 # Audio system status
@@ -97,7 +97,7 @@ input_log <on|off>         # Toggle input logging
 input_stats                # Input statistics
 ```
 
-### Scene Commands
+### Scene Commands (see [[Scene Management]])
 
 ```
 scene_info                 # Current scene info
@@ -135,7 +135,7 @@ script_run <file>          # Execute a script file
 script_list                # List loaded scripts
 ```
 
-### Time and Weather Commands
+### Time and Weather Commands (see [[Terrain and Procedural Generation]])
 
 ```
 time_set <hour>            # Set time of day
@@ -156,7 +156,7 @@ Engine subsystems register their own console commands during initialization. The
 
 SparkConsole currently requires Windows (named pipe communication). On Linux, console output goes to `stdout`.
 
-## Troubleshooting
+## [[Troubleshooting]]
 
 ### "Standalone mode" message
 
@@ -169,7 +169,15 @@ SparkEngine failed to launch or crashed during startup. Check:
 - Run `engine_status` to check system initialization
 - Verify the engine's main loop is running (CPU usage should be active)
 
+---
+
 ## See Also
 
 - [[Getting Started]] — Running SparkConsole
 - [[Troubleshooting]] — Common console issues
+- [[Rendering and Graphics]] — Graphics commands and render paths
+- [[Physics]] — Physics simulation commands
+- [[Audio]] — Audio system commands
+- [[AI and Navigation]] — AI and pathfinding systems
+- [[Scene Management]] — Scene loading and management
+- [[Terrain and Procedural Generation]] — Weather and terrain systems

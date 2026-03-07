@@ -1,6 +1,6 @@
 # Asset Pipeline
 
-SparkEngine's asset pipeline handles loading, streaming, and management of game assets including 3D models, textures, audio, and scenes.
+SparkEngine's asset pipeline handles loading, streaming, and management of game assets including 3D models, textures, [[Audio|audio]], and [[Scene Management|scenes]].
 
 **Source:** `SparkEngine/Source/Graphics/AssetPipeline.h`
 
@@ -129,9 +129,11 @@ Assets can be streamed in the background to avoid loading hitches:
 
 During development, modified assets are automatically reloaded:
 - Texture files
-- Shader source files
-- AngelScript files
+- [[Shader Pipeline|Shader source files]]
+- [[Scripting with AngelScript|AngelScript files]]
 - Scene files
+
+---
 
 ## See Also
 
@@ -139,3 +141,6 @@ During development, modified assets are automatically reloaded:
 - [[Animation]] — Importing animated models
 - [[Shader Pipeline]] — Shader compilation
 - [[Scene Management]] — Scene file loading
+- [[Audio]] — Audio asset formats and loading
+- [[Terrain and Procedural Generation]] — Terrain asset streaming
+- [[Entity Component System]] — Component-based asset references
