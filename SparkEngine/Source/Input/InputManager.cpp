@@ -44,6 +44,14 @@ InputManager::~InputManager()
     Spark::SimpleConsole::GetInstance().Log("InputManager destructor called.", "INFO");
     if (m_mouseCaptured)
         CaptureMouse(false);
+
+    // Join any pending timed key-release threads to avoid use-after-free
+    for (auto& t : m_pendingTimedThreads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+    m_pendingTimedThreads.clear();
 }
 
 void InputManager::Initialize(HWND hwnd)
@@ -401,7 +409,17 @@ void InputManager::Console_SimulateKeyPress(const std::string& keyName, int dura
     } else {
         // Timed release: schedule a delayed key release using a background thread
         // The key is already pressed above; we schedule the release after 'duration' ms
-        std::thread([this, virtualKey, keyName, duration]() {
+        // Clean up any finished threads first to avoid unbounded growth
+        m_pendingTimedThreads.erase(
+            std::remove_if(m_pendingTimedThreads.begin(), m_pendingTimedThreads.end(),
+                           [](std::thread& t) {
+                               // Can't query if a thread is done without joining, so we skip
+                               // non-joinable (already joined/moved) entries
+                               return !t.joinable();
+                           }),
+            m_pendingTimedThreads.end());
+
+        m_pendingTimedThreads.emplace_back([this, virtualKey, keyName, duration]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(duration));
             {
                 std::lock_guard<std::mutex> lock(m_inputMutex);
@@ -412,7 +430,7 @@ void InputManager::Console_SimulateKeyPress(const std::string& keyName, int dura
             }
             Spark::SimpleConsole::GetInstance().Log(
                 "Timed key release: " + keyName + " after " + std::to_string(duration) + "ms", "SUCCESS");
-        }).detach();
+        });
         Spark::SimpleConsole::GetInstance().Log("Simulated sustained key press: " + keyName + " (duration: " + std::to_string(duration) + "ms)", "SUCCESS");
     }
 }

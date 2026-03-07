@@ -18,15 +18,17 @@ ConsoleApp::ConsoleApp()
 {
     RegisterDefaultCommands();
     
-    // Start engine input reading thread
-    std::thread engineInputThread(&ConsoleApp::ReadEngineInput, this);
-    engineInputThread.detach();
-    
+    // Start engine input reading thread (joined in destructor)
+    m_engineInputThread = std::thread(&ConsoleApp::ReadEngineInput, this);
+
     PrintLog(L"Console initialized with engine communication support.");
 }
 
 ConsoleApp::~ConsoleApp() {
     m_running = false;
+    if (m_engineInputThread.joinable()) {
+        m_engineInputThread.join();
+    }
 }
 
 void ConsoleApp::Run() {

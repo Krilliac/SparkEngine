@@ -1134,11 +1134,14 @@ bool Game::SaveScene(const std::string& scenePath)
         return false;
     }
     
-    // SceneManager does not yet implement SaveScene
     std::wstring wScenePath(scenePath.begin(), scenePath.end());
-    std::wstring saveMsg = L"SaveScene not implemented - path: " + wScenePath;
-    LOG_TO_CONSOLE_IMMEDIATE(saveMsg, L"WARNING");
-    return false;
+    bool saved = m_sceneManager->SaveScene(wScenePath);
+    if (saved) {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: " + wScenePath, L"SUCCESS");
+    } else {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save failed: " + wScenePath, L"ERROR");
+    }
+    return saved;
 }
 
 std::vector<std::string> Game::GetAvailableScenes() const

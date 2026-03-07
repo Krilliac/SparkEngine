@@ -256,13 +256,18 @@ void EngineInterface::CommunicationThread()
 
 void EngineInterface::ProcessIncomingEvents()
 {
-    std::lock_guard<std::mutex> lock(m_eventMutex);
-    
-    while (!m_incomingEvents.empty()) {
-        EngineEvent event = m_incomingEvents.front();
-        m_incomingEvents.pop();
-        
-        // Find and call appropriate callback
+    // Drain the queue under lock, then invoke callbacks without holding the lock.
+    // This prevents deadlocks if a callback tries to send a command or queue an event.
+    std::vector<EngineEvent> pendingEvents;
+    {
+        std::lock_guard<std::mutex> lock(m_eventMutex);
+        while (!m_incomingEvents.empty()) {
+            pendingEvents.push_back(m_incomingEvents.front());
+            m_incomingEvents.pop();
+        }
+    }
+
+    for (const auto& event : pendingEvents) {
         auto it = m_eventCallbacks.find(event.type);
         if (it != m_eventCallbacks.end() && it->second) {
             it->second(event);

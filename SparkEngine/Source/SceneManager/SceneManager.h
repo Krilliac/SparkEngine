@@ -72,6 +72,7 @@
 #include <functional>
 #include <filesystem>
 #include <unordered_map>
+#include <thread>
 
 
 class GraphicsEngine;
@@ -334,9 +335,9 @@ public:
     SceneManager(GraphicsEngine* graphics, InputManager* input);
 
     /**
-     * @brief Default destructor. Owned GameObjects are destroyed automatically.
+     * @brief Destructor. Joins any in-flight async load thread, then destroys GameObjects.
      */
-    ~SceneManager() = default;
+    ~SceneManager();
 
     // =========================================================================
     // Scene Loading / Saving
@@ -755,4 +756,7 @@ private:
      * Cleared by `LoadScene()`, `SaveScene()`, and `NewScene()`.
      */
     bool m_dirty = false;
+
+    /** @brief Background thread for async scene loading (joined in destructor). */
+    std::thread m_asyncLoadThread;
 };

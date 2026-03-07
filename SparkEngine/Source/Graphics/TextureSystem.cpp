@@ -430,13 +430,16 @@ std::shared_ptr<Texture> TextureSystem::LoadTexture(const std::string& filePath,
     // Load the texture
     auto texture = LoadTextureFromFile(filePath, adjustedDesc);
     if (texture) {
-        std::lock_guard<std::mutex> lock(m_texturesMutex);
-        m_textures[filePath] = texture;
-        
-        std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
-        m_metrics.loadedTextures++;
+        {
+            std::lock_guard<std::mutex> lock(m_texturesMutex);
+            m_textures[filePath] = texture;
+        }
+        {
+            std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
+            m_metrics.loadedTextures++;
+        }
     }
-    
+
     return texture;
 }
 
@@ -769,10 +772,13 @@ void TextureSystem::StreamingThreadFunction()
 
 void TextureSystem::UpdateMetrics()
 {
+    // Compute memory usage outside the metrics lock to avoid ABBA deadlock:
+    // GetMemoryUsage() acquires m_texturesMutex, so we must not hold
+    // m_metricsMutex while calling it (other paths lock textures then metrics).
+    size_t memUsage = GetMemoryUsage();
+
     std::lock_guard<std::mutex> lock(m_metricsMutex);
-    
-    m_metrics.totalMemoryUsage = GetMemoryUsage();
-    // Update other metrics as needed
+    m_metrics.totalMemoryUsage = memUsage;
 }
 
 TextureDesc TextureSystem::AdjustDescForQuality(const TextureDesc& desc) const
@@ -1076,10 +1082,16 @@ std::shared_ptr<Texture> TextureSystem::GetTexture(const std::string& name) cons
 
 void TextureSystem::UnloadTexture(const std::string& name)
 {
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    auto it = m_textures.find(name);
-    if (it != m_textures.end()) {
-        m_textures.erase(it);
+    bool erased = false;
+    {
+        std::lock_guard<std::mutex> lock(m_texturesMutex);
+        auto it = m_textures.find(name);
+        if (it != m_textures.end()) {
+            m_textures.erase(it);
+            erased = true;
+        }
+    }
+    if (erased) {
         std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
         if (m_metrics.loadedTextures > 0) m_metrics.loadedTextures--;
     }
@@ -1087,10 +1099,14 @@ void TextureSystem::UnloadTexture(const std::string& name)
 
 void TextureSystem::UnloadAllTextures()
 {
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    m_textures.clear();
-    std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
-    m_metrics.loadedTextures = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_texturesMutex);
+        m_textures.clear();
+    }
+    {
+        std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
+        m_metrics.loadedTextures = 0;
+    }
 }
 
 size_t TextureSystem::GetMemoryUsage() const
@@ -1198,8 +1214,10 @@ void TextureSystem::StreamingThreadFunction()
 
 void TextureSystem::UpdateMetrics()
 {
+    size_t memUsage = GetMemoryUsage();
+
     std::lock_guard<std::mutex> lock(m_metricsMutex);
-    m_metrics.totalMemoryUsage = GetMemoryUsage();
+    m_metrics.totalMemoryUsage = memUsage;
 }
 
 TextureDesc TextureSystem::AdjustDescForQuality(const TextureDesc& desc) const

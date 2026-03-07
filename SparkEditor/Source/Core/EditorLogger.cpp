@@ -208,20 +208,28 @@ LogStatistics EditorLogger::GetStatistics() const {
     return m_statistics;
 }
 
-bool EditorLogger::ExportLogs(const std::string& filename, 
+bool EditorLogger::ExportLogs(const std::string& filename,
                              std::function<bool(const LogEntry&)> filter) const {
     std::ofstream file(filename);
     if (!file.is_open()) {
         return false;
     }
-    
-    const auto& logs = GetMemoryLogs();
-    for (const auto& entry : logs) {
+
+    // Snapshot log entries under lock to avoid data race with concurrent writers.
+    // GetMemoryLogs() returns a reference to the internal vector which can be
+    // modified by other threads calling Log() while we iterate.
+    std::vector<LogEntry> logsCopy;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        logsCopy = GetMemoryLogs();
+    }
+
+    for (const auto& entry : logsCopy) {
         if (!filter || filter(entry)) {
             file << FormatLogEntry(entry) << std::endl;
         }
     }
-    
+
     return true;
 }
 
