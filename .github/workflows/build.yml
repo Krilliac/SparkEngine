@@ -2,9 +2,9 @@ name: Build SparkEngine
 
 on:
   push:
-    branches: [ main, develop, 'feature/**', 'claude/**' ]
+    branches: [ main, develop, Working, 'feature/**', 'claude/**' ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, Working ]
 
 jobs:
   # ===========================================================================
