@@ -88,7 +88,7 @@ add_executable(SparkEditor WIN32 ${SPARK_EDITOR_SOURCES})
 target_include_directories(SparkEditor PRIVATE
     "Source"
     "${CMAKE_SOURCE_DIR}/Shared"
-    "${CMAKE_SOURCE_DIR}/Spark Engine/Source"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
 )
 
 if(IMGUI_FOUND)

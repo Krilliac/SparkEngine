@@ -193,7 +193,7 @@ Standalone debug console application that communicates with SparkEngine via name
 
 ```
 SparkEngine/
-|-- Spark Engine/
+|-- SparkEngine/
 |   |-- Source/
 |       |-- Audio/           # XAudio2 3D audio engine
 |       |-- Camera/          # First-person camera controller

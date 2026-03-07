@@ -19,6 +19,10 @@
 #include "GravitySystem.h"
 #include "InteractiveObject.h"
 #include "GameMechanics.h"
+#include "GameMode.h"
+#include "HUDSystem.h"
+#include "InventorySystem.h"
+#include "QuestSystem.h"
 #include <memory>
 #include <vector>
 
@@ -29,6 +33,7 @@ class SparkEngineCamera;
 class GameObject;
 class Player;
 class ProjectilePool;
+namespace Spark { class EventBus; }
 
 #include "Primitives.h"
 #include "PlaceholderMesh.h"
@@ -211,6 +216,12 @@ public:
      * @return Current time scale multiplier
      */
     float GetTimeScale() const { return m_timeScale; }
+
+    /**
+     * @brief Check if FPS counter display is enabled
+     * @return true if FPS counter should be shown
+     */
+    bool GetShowFPS() const { return m_showFPS; }
     
     // ============================================================================
     // ENHANCED ACCESSOR METHODS - Full System Integration
@@ -276,6 +287,31 @@ public:
      * @brief Create the enhanced combat arena level
      */
     void CreateCombatArena();
+
+    // ============================================================================
+    // INTEGRATED SYSTEMS - GameMode, HUD, Inventory, Quests, Events
+    // ============================================================================
+
+    /** @brief Connect the engine's event bus for cross-system communication */
+    void SetEventBus(Spark::EventBus* bus);
+
+    /** @brief Get the game mode manager */
+    Spark::GameMode* GetGameMode() const { return m_gameMode.get(); }
+
+    /** @brief Get the HUD system */
+    Spark::HUDSystem* GetHUDSystem() const { return m_hudSystem.get(); }
+
+    /** @brief Get the item registry for inventory lookups */
+    Spark::ItemRegistry& GetItemRegistry() { return m_itemRegistry; }
+
+    /** @brief Get the quest registry for quest lookups */
+    Spark::QuestRegistry& GetQuestRegistry() { return m_questRegistry; }
+
+    /** @brief Get the player's inventory component */
+    Spark::InventoryComponent& GetPlayerInventory() { return m_playerInventory; }
+
+    /** @brief Get the player's quest journal */
+    Spark::QuestJournalComponent& GetPlayerQuests() { return m_playerQuests; }
 
     // ============================================================================
     // NEW SYSTEMS - Vehicles, Gravity Zones, Interactions, Game Mechanics
@@ -436,16 +472,24 @@ private:
     std::unique_ptr<Spark::DamageZoneSystem>  m_damageZoneSystem;   ///< Environmental hazards
     std::unique_ptr<Spark::RespawnSystem>     m_respawnSystem;      ///< Respawn & scoring
 
+    // Integrated systems - GameMode, HUD, Inventory, Quests
+    std::unique_ptr<Spark::GameMode>          m_gameMode;           ///< FPS game mode (scoring, rounds)
+    std::unique_ptr<Spark::HUDSystem>         m_hudSystem;          ///< Heads-up display
+    Spark::ItemRegistry                       m_itemRegistry;       ///< Item definitions
+    Spark::InventoryComponent                 m_playerInventory;    ///< Player inventory data
+    Spark::QuestRegistry                      m_questRegistry;      ///< Quest definitions
+    Spark::QuestJournalComponent              m_playerQuests;       ///< Player quest journal
+    Spark::EventBus*                          m_eventBus{ nullptr }; ///< Engine event bus (not owned)
+
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene
 
     bool m_isPaused{ false }; ///< Current pause state of the game
     
     // Console integration state
-    float m_timeScale{ 1.0f };     ///< Global time scale multiplier for console control
-    int m_drawCallCount{ 0 };      ///< Draw call counter for performance monitoring
-    int m_triangleCount{ 0 };      ///< Triangle counter for performance monitoring
-    bool m_godModeEnabled{ false }; ///< God mode state for console debugging
-    bool m_noclipEnabled{ false };  ///< Noclip state for console debugging
+    float m_timeScale{ 1.0f };           ///< Global time scale multiplier for console control
+    bool m_godModeEnabled{ false };      ///< God mode state for console debugging
+    bool m_noclipEnabled{ false };       ///< Noclip state for console debugging
     bool m_infiniteAmmoEnabled{ false }; ///< Infinite ammo state for console debugging
+    bool m_showFPS{ false };             ///< Whether to display FPS counter
 };

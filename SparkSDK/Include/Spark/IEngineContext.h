@@ -23,6 +23,8 @@ class Timer;
 
 namespace Spark {
 
+class EventBus;
+
 /**
  * @brief Service locator providing access to all engine subsystems
  *
@@ -44,6 +46,9 @@ public:
 
     /** @brief Get the frame timer */
     virtual Timer* GetTimer() = 0;
+
+    /** @brief Get the event bus for publish/subscribe messaging */
+    virtual EventBus* GetEventBus() = 0;
 
     /** @brief Get the packed engine version (0xMMmmpp) */
     virtual uint32_t GetEngineVersion() const = 0;

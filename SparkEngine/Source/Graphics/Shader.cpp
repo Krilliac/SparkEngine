@@ -96,9 +96,9 @@ Shader::Shader()
     
     // **FIXED: Add correct search paths pointing to source directory**
     m_searchPaths.clear();
-    m_searchPaths.push_back("D:/Spark Engine/SparkEngine/Spark Engine/Shaders/HLSL/");
-    m_searchPaths.push_back("../Spark Engine/Shaders/HLSL/");
-    m_searchPaths.push_back("../../Spark Engine/Shaders/HLSL/");
+    m_searchPaths.push_back("D:/SparkEngine/SparkEngine/SparkEngine/Shaders/HLSL/");
+    m_searchPaths.push_back("../SparkEngine/Shaders/HLSL/");
+    m_searchPaths.push_back("../../SparkEngine/Shaders/HLSL/");
     m_searchPaths.push_back("Shaders/HLSL/");
     m_searchPaths.push_back("Assets/Shaders/");
     m_searchPaths.push_back("./");

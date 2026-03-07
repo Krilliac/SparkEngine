@@ -2,8 +2,6 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 #include <cstdint>
-#include <cstdarg>
-#include <cstdio>
 #include <DirectXMath.h>
 #include <chrono>
 
@@ -16,23 +14,22 @@
 #include "Graphics/TextureSystem.h"
 #include "Graphics/AssetPipeline.h"
 #include "Physics/PhysicsSystem.h"
-#include "Graphics/MaterialSystem.h"
 #include "Input/InputManager.h"
 #include "Camera/SparkEngineCamera.h"
-#include "Graphics/Shader.h"
 #include "Game/GameObject.h"
 #include "CubeObject.h"
 #include "PlaneObject.h"
 #include "SphereObject.h"
 #include "WallObject.h"
-#include "ModelObject.h"  // Add ModelObject for .obj file rendering
+#include "ModelObject.h"
 #include "Player.h"
 #include "Game/Console.h"
 #include "Projectiles/ProjectilePool.h"
-#include <iostream>
 #include "SceneManager/SceneManager.h"
 #include "Utils/SparkConsole.h"
 #include "Console/AdvancedConsoleCommands.h"
+#include "Engine/Events/EventSystem.h"
+#include <filesystem>
 
 // Pull in globals defined in Main.cpp (SparkGame entry point)
 extern std::unique_ptr<GraphicsEngine> g_graphics;
@@ -85,9 +82,6 @@ HRESULT Game::Initialize(GraphicsEngine* graphics,
     m_camera->Initialize(aspect);
     m_camera->SetPosition({ 0.0f, 2.0f, -5.0f });
     LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized and positioned", L"INFO");
-
-    /* **UNIFIED SYSTEM: Shaders are now managed by the GraphicsEngine** */
-    LOG_TO_CONSOLE_IMMEDIATE(L"Shaders managed by unified GraphicsEngine - no separate initialization needed", L"INFO");
 
     /* Class System -----------------------------------------*/
     m_classSystem = std::make_unique<Spark::ClassSystem>();
@@ -237,10 +231,163 @@ HRESULT Game::Initialize(GraphicsEngine* graphics,
     m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::HELICOPTER, {0.0f, 5.0f, -25.0f}, dev, ctx);
     LOG_TO_CONSOLE_IMMEDIATE(L"Spawned 4 vehicles in combat arena", L"SUCCESS");
 
+    /* GameMode System --------------------------------*/
+    m_gameMode = std::make_unique<Spark::GameMode>();
+    Spark::GameModeRules rules = Spark::GameMode::GetPreset(Spark::GameModeType::Deathmatch);
+    m_gameMode->Initialize(rules);
+    m_gameMode->AddPlayer("Player1");
+    m_gameMode->StartMatch();
+    LOG_TO_CONSOLE_IMMEDIATE(L"GameMode initialized (Deathmatch)", L"SUCCESS");
+
+    /* HUD System ------------------------------------*/
+    m_hudSystem = std::make_unique<Spark::HUDSystem>();
+    m_hudSystem->Initialize();
+    m_hudSystem->SetPlayer(m_player.get());
+    m_hudSystem->SetCurrentClass(GetPlayerClass());
+    LOG_TO_CONSOLE_IMMEDIATE(L"HUD system initialized", L"SUCCESS");
+
+    /* Wire GameMode event callbacks → HUD system ---*/
+    {
+        auto& events = m_gameMode->GetEvents();
+
+        events.onPlayerKill = [this](const std::string& player) {
+            if (m_hudSystem)
+                m_hudSystem->ShowHitMarker(false);
+        };
+
+        events.onPlayerDeath = [this](const std::string& player) {
+            if (m_hudSystem)
+                m_hudSystem->AddDamageIndicator(0.0f, 1.0f, 2.0f);
+        };
+
+        events.onRoundStart = [this](int roundNum) {
+            std::wstring msg = L"Round " + std::to_wstring(roundNum) + L" started";
+            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        };
+
+        events.onRoundEnd = [this](const Spark::RoundResult& result) {
+            std::wstring msg = L"Round " + std::to_wstring(result.roundNumber) +
+                              L" ended - MVP: " + std::wstring(result.mvpPlayer.begin(), result.mvpPlayer.end());
+            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        };
+
+        events.onMatchEnd = [this](Spark::Team winner) {
+            const char* teamName = (winner == Spark::Team::Alpha) ? "Alpha" :
+                                   (winner == Spark::Team::Bravo) ? "Bravo" : "None";
+            std::string tn(teamName);
+            std::wstring msg = L"Match ended - Winner: " + std::wstring(tn.begin(), tn.end());
+            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        };
+
+        events.onKillStreak = [this](const std::string& player, int streak) {
+            if (m_hudSystem) {
+                std::string streakMsg = player + " is on a " + std::to_string(streak) + " kill streak!";
+                m_hudSystem->AddKillFeedEntry("", player, streakMsg);
+            }
+        };
+
+        events.onFirstBlood = [this](const std::string& player) {
+            if (m_hudSystem)
+                m_hudSystem->AddKillFeedEntry(player, "", "First Blood");
+        };
+
+        events.onScoreUpdate = [this](Spark::Team team, int score) {
+            // Update scoreboard on HUD from current gamemode data
+            if (m_hudSystem && m_gameMode) {
+                auto scores = m_gameMode->GetScoreboard();
+                std::vector<Spark::ScoreboardEntry> entries;
+                entries.reserve(scores.size());
+                for (const auto& ps : scores) {
+                    Spark::ScoreboardEntry entry;
+                    entry.playerName = ps.playerName;
+                    entry.kills = ps.kills;
+                    entry.deaths = ps.deaths;
+                    entry.assists = ps.assists;
+                    entry.score = ps.totalScore;
+                    entry.isLocalPlayer = (ps.playerName == "Player1");
+                    entries.push_back(std::move(entry));
+                }
+                m_hudSystem->SetScoreboard(entries);
+            }
+        };
+    }
+    LOG_TO_CONSOLE_IMMEDIATE(L"GameMode events wired to HUD", L"SUCCESS");
+
+    /* Inventory System - Register base items --------*/
+    Spark::ItemDef healthPotion;
+    healthPotion.id = 1; healthPotion.name = "Health Potion";
+    healthPotion.description = "Restores 50 HP";
+    healthPotion.category = Spark::ItemCategory::Consumable;
+    healthPotion.rarity = Spark::ItemRarity::Common;
+    healthPotion.maxStackSize = 10; healthPotion.weight = 0.5f;
+    m_itemRegistry.RegisterItem(healthPotion);
+
+    Spark::ItemDef armorShard;
+    armorShard.id = 2; armorShard.name = "Armor Shard";
+    armorShard.description = "Adds 25 armor";
+    armorShard.category = Spark::ItemCategory::Consumable;
+    armorShard.rarity = Spark::ItemRarity::Common;
+    armorShard.maxStackSize = 5; armorShard.weight = 0.3f;
+    m_itemRegistry.RegisterItem(armorShard);
+
+    Spark::ItemDef ammoPack;
+    ammoPack.id = 3; ammoPack.name = "Ammo Pack";
+    ammoPack.description = "Standard ammunition";
+    ammoPack.category = Spark::ItemCategory::Material;
+    ammoPack.rarity = Spark::ItemRarity::Common;
+    ammoPack.maxStackSize = 20; ammoPack.weight = 0.2f;
+    m_itemRegistry.RegisterItem(ammoPack);
+
+    Spark::ItemDef rareWeapon;
+    rareWeapon.id = 4; rareWeapon.name = "Plasma Rifle";
+    rareWeapon.description = "High-energy plasma weapon";
+    rareWeapon.category = Spark::ItemCategory::Weapon;
+    rareWeapon.rarity = Spark::ItemRarity::Rare;
+    rareWeapon.maxStackSize = 1; rareWeapon.weight = 5.0f;
+    m_itemRegistry.RegisterItem(rareWeapon);
+
+    m_playerInventory.maxSlots = 20;
+    m_playerInventory.maxWeight = 50.0f;
+    LOG_TO_CONSOLE_IMMEDIATE(L"Inventory system initialized (4 item types)", L"SUCCESS");
+
+    /* Quest System - Register starter quests --------*/
+    Spark::QuestDef arenaQuest;
+    arenaQuest.id = 1;
+    arenaQuest.name = "Arena Champion";
+    arenaQuest.description = "Prove your worth in the combat arena";
+    arenaQuest.objectives.push_back({Spark::ObjectiveType::Kill, "Defeat 10 enemies", 0, 10});
+    arenaQuest.objectives.push_back({Spark::ObjectiveType::Survive, "Survive for 120 seconds", 0, 1});
+    arenaQuest.reward.experiencePoints = 500;
+    m_questRegistry.RegisterQuest(arenaQuest);
+
+    Spark::QuestDef exploreQuest;
+    exploreQuest.id = 2;
+    exploreQuest.name = "Explorer";
+    exploreQuest.description = "Discover all gravity zones";
+    exploreQuest.objectives.push_back({Spark::ObjectiveType::Reach, "Visit low-gravity zone", 0, 1});
+    exploreQuest.objectives.push_back({Spark::ObjectiveType::Reach, "Visit zero-gravity zone", 0, 1});
+    exploreQuest.objectives.push_back({Spark::ObjectiveType::Reach, "Visit reverse-gravity zone", 0, 1});
+    exploreQuest.reward.experiencePoints = 300;
+    m_questRegistry.RegisterQuest(exploreQuest);
+
+    Spark::QuestDef collectQuest;
+    collectQuest.id = 3;
+    collectQuest.name = "Scavenger";
+    collectQuest.description = "Collect supplies from the arena";
+    collectQuest.objectives.push_back({Spark::ObjectiveType::Collect, "Collect 5 health potions", 1, 5});
+    collectQuest.objectives.push_back({Spark::ObjectiveType::Collect, "Collect 3 ammo packs", 3, 3});
+    collectQuest.reward.experiencePoints = 200;
+    collectQuest.reward.currency = 100;
+    m_questRegistry.RegisterQuest(collectQuest);
+
+    // Auto-start the first quest
+    Spark::QuestOps::StartQuest(m_playerQuests, m_questRegistry, 1);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Quest system initialized (3 quests, 1 active)", L"SUCCESS");
+
     /* Register Advanced Console Commands */
     SparkConsole::RegisterAdvancedCommands(this, m_graphics);
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"All systems online - vehicles, gravity zones, interactions, damage zones, respawn", L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(L"All systems online - gamemode, HUD, inventory, quests, vehicles, gravity, interactions, damage zones, respawn", L"SUCCESS");
 
     return S_OK;
 }
@@ -253,6 +400,8 @@ void Game::Shutdown()
     LOG_TO_CONSOLE_IMMEDIATE(L"Game::Shutdown called.", L"INFO");
 
     m_gameObjects.clear();
+    m_hudSystem.reset();
+    m_gameMode.reset();
     m_vehicleSystem.reset();
     m_interactionSystem.reset();
     m_damageZoneSystem.reset();
@@ -263,8 +412,70 @@ void Game::Shutdown()
     m_classSystem.reset();
     m_camera.reset();
     m_sceneManager.reset();
+    m_eventBus = nullptr;
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Game shutdown complete - all systems cleaned up.", L"INFO");
+}
+
+/*-------------------------------------------------------------
+  EventBus wiring — connects cross-system event subscriptions
+--------------------------------------------------------------*/
+void Game::SetEventBus(Spark::EventBus* bus)
+{
+    m_eventBus = bus;
+    if (!bus) return;
+
+    // Entity killed → update gamemode scoring, quest progress, and HUD kill feed
+    bus->Subscribe<Spark::EntityKilledEvent>([this](const Spark::EntityKilledEvent& e) {
+        if (m_gameMode)
+            m_gameMode->RecordKill("Player1", "Enemy");
+
+        // Show hit marker and add kill feed entry on HUD
+        if (m_hudSystem) {
+            m_hudSystem->ShowHitMarker(false);
+            m_hudSystem->AddKillFeedEntry("Player1", "Enemy", e.cause);
+        }
+
+        // Progress kill-based quest objectives
+        Spark::QuestOps::UpdateObjective(m_playerQuests, m_questRegistry, 1, 0, 1, m_eventBus, 0);
+    });
+
+    // Entity damaged → show damage indicator on HUD
+    bus->Subscribe<Spark::EntityDamagedEvent>([this](const Spark::EntityDamagedEvent& e) {
+        if (m_hudSystem && m_player) {
+            // Normalize damage to 0-1 intensity range (assume 100 HP max)
+            float intensity = std::min(e.damage / 100.0f, 1.0f);
+            // Use a default forward angle since we don't have source position
+            m_hudSystem->AddDamageIndicator(0.0f, intensity);
+        }
+    });
+
+    // Item pickup → add to player inventory
+    bus->Subscribe<Spark::ItemPickedUpEvent>([this](const Spark::ItemPickedUpEvent& e) {
+        Spark::InventoryOps::AddItem(m_playerInventory, m_itemRegistry, e.itemDefId, e.count);
+    });
+
+    // Player respawn → teleport to spawn point and reset HUD state
+    bus->Subscribe<Spark::PlayerRespawnEvent>([this](const Spark::PlayerRespawnEvent& e) {
+        // Teleport camera/player to spawn location
+        if (m_camera) {
+            m_camera->Console_SetPosition(e.spawnX, e.spawnY, e.spawnZ);
+        }
+        if (m_player) {
+            m_player->Console_SetPosition(e.spawnX, e.spawnY, e.spawnZ);
+        }
+
+        // Reset HUD damage indicators on respawn
+        if (m_hudSystem) {
+            m_hudSystem->ShowHitMarker(false);  // Clear any lingering hit marker
+        }
+
+        std::wstring msg = L"Player respawned at (" + std::to_wstring(e.spawnX) + L", " +
+                          std::to_wstring(e.spawnY) + L", " + std::to_wstring(e.spawnZ) + L")";
+        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+    });
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"EventBus connected - cross-system events wired", L"SUCCESS");
 }
 
 /*-------------------------------------------------------------
@@ -304,6 +515,11 @@ void Game::Update(float dt)
     if (m_interactionSystem)  m_interactionSystem->Update(dt, m_player.get());
     if (m_damageZoneSystem)   m_damageZoneSystem->Update(dt, m_player.get());
     if (m_respawnSystem)      m_respawnSystem->Update(dt);
+
+    // Integrated systems
+    if (m_gameMode)           m_gameMode->Update(dt);
+    if (m_hudSystem)          m_hudSystem->Update(dt);
+    Spark::QuestOps::UpdateTimers(m_playerQuests, m_questRegistry, dt);
 
     // Update advanced systems through main GraphicsEngine
     if (m_graphics) {
@@ -604,68 +820,65 @@ void Game::CreateTestObjects()
 
 void Game::ApplyPhysicsSettings(float gravity, float playerSpeed, float jumpHeight, float friction)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Applying physics settings via console integration", L"INFO");
-    
-    // Apply to player if available
-    if (m_player) {
-        // These would need corresponding setter methods in Player class
-        // For now, we'll use direct console integration approach
-        LOG_TO_CONSOLE_IMMEDIATE(L"Physics settings applied to player", L"SUCCESS");
+    // Apply gravity to the GravitySystem if available
+    if (m_gravitySystem) {
+        m_gravitySystem->Initialize({0, -gravity, 0});
     }
-    
-    // Apply to physics world if available
-    // This would integrate with a physics engine like Bullet Physics
-    // physicsWorld->SetGravity(gravity);
-    
-    std::wstring settingsMsg = L"Physics updated - Gravity: " + std::to_wstring(gravity) + 
-                              L", Speed: " + std::to_wstring(playerSpeed) + 
-                              L", Jump: " + std::to_wstring(jumpHeight) + 
+
+    // Apply player movement settings via Player's console API
+    if (m_player) {
+        m_player->Console_SetSpeed(playerSpeed);
+        m_player->Console_SetJumpHeight(jumpHeight);
+    }
+
+    // Apply friction to camera movement speed as a proxy
+    if (m_camera && friction > 0.0f) {
+        m_camera->Console_SetMoveSpeed(playerSpeed * friction);
+    }
+
+    std::wstring settingsMsg = L"Physics updated - Gravity: " + std::to_wstring(gravity) +
+                              L", Speed: " + std::to_wstring(playerSpeed) +
+                              L", Jump: " + std::to_wstring(jumpHeight) +
                               L", Friction: " + std::to_wstring(friction);
-    LOG_TO_CONSOLE_IMMEDIATE(settingsMsg, L"INFO");
+    LOG_TO_CONSOLE_IMMEDIATE(settingsMsg, L"SUCCESS");
 }
 
 void Game::ApplyCameraSettings(float fov, float sensitivity, bool invertY)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Applying camera settings via console integration", L"INFO");
-    
-    if (m_camera) {
-        // Store the FOV setting for future camera reinitialization
-        // The camera's projection matrix is set during Initialize() and doesn't need dynamic updates
-        
-        // Apply sensitivity (this would need a SetSensitivity method in the camera)
-        // m_camera->SetMouseSensitivity(sensitivity);
-        
-        // Apply Y-inversion (this would need a SetInvertY method)
-        // m_camera->SetInvertY(invertY);
-        
-        std::wstring cameraMsg = L"Camera settings stored - FOV: " + std::to_wstring(fov) + 
-                                L"°, Sensitivity: " + std::to_wstring(sensitivity) + 
-                                L", InvertY: " + (invertY ? L"ON" : L"OFF") + 
-                                L" (will apply on next camera initialization)";
-        LOG_TO_CONSOLE_IMMEDIATE(cameraMsg, L"SUCCESS");
-    } else {
+    if (!m_camera) {
         LOG_TO_CONSOLE_IMMEDIATE(L"Camera settings failed - camera not available", L"ERROR");
+        return;
     }
+
+    // Apply FOV via camera's console API
+    if (fov > 0.0f) {
+        m_camera->Console_SetFOV(fov);
+    }
+
+    // Apply mouse sensitivity and Y-axis inversion
+    m_camera->Console_SetMouseSensitivity(sensitivity);
+    m_camera->Console_SetInvertY(invertY);
+
+    std::wstring cameraMsg = L"Camera settings applied - FOV: " + std::to_wstring(fov) +
+                            L", Sensitivity: " + std::to_wstring(sensitivity) +
+                            L", InvertY: " + (invertY ? L"ON" : L"OFF");
+    LOG_TO_CONSOLE_IMMEDIATE(cameraMsg, L"SUCCESS");
 }
 
 void Game::ApplyDebugSettings(bool godMode, bool noclip, bool infiniteAmmo)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Applying debug settings via console integration", L"INFO");
-    
-    // Store debug state
     m_godModeEnabled = godMode;
     m_noclipEnabled = noclip;
     m_infiniteAmmoEnabled = infiniteAmmo;
-    
-    // Apply to player if available
+
+    // Forward debug settings to the Player's console API
     if (m_player) {
-        // These would need corresponding methods in Player class
-        // m_player->SetGodMode(godMode);
-        // m_player->SetNoclip(noclip);
-        // m_player->SetInfiniteAmmo(infiniteAmmo);
+        m_player->Console_SetGodMode(godMode);
+        m_player->Console_SetNoclip(noclip);
+        m_player->Console_SetInfiniteAmmo(infiniteAmmo);
     }
-    
-    std::wstring debugMsg = L"Debug settings applied - God Mode: " + (godMode ? std::wstring(L"ON") : std::wstring(L"OFF")) + 
+
+    std::wstring debugMsg = L"Debug settings applied - God Mode: " + (godMode ? std::wstring(L"ON") : std::wstring(L"OFF")) +
                            L", Noclip: " + (noclip ? std::wstring(L"ON") : std::wstring(L"OFF")) +
                            L", Infinite Ammo: " + (infiniteAmmo ? std::wstring(L"ON") : std::wstring(L"OFF"));
     LOG_TO_CONSOLE_IMMEDIATE(debugMsg, L"SUCCESS");
@@ -673,30 +886,46 @@ void Game::ApplyDebugSettings(bool godMode, bool noclip, bool infiniteAmmo)
 
 void Game::GetPerformanceStats(int& outDrawCalls, int& outTriangles, int& outActiveObjects) const
 {
-    // Count active objects
     int activeCount = 0;
     for (const auto& obj : m_gameObjects) {
-        if (obj && obj->IsActive()) {
+        if (obj && obj->IsActive())
             activeCount++;
-        }
     }
-    
-    // Add scene manager objects
+
     if (m_sceneManager) {
         for (const auto& obj : m_sceneManager->GetObjects()) {
-            if (obj && obj->IsActive()) {
+            if (obj && obj->IsActive())
                 activeCount++;
-            }
         }
     }
-    
-    // Include player in count
-    if (m_player) {
-        activeCount++;
+
+    if (m_vehicleSystem) {
+        for (const auto& v : m_vehicleSystem->GetVehicles()) {
+            if (v && v->IsActive())
+                activeCount++;
+        }
     }
-    
-    outDrawCalls = m_drawCallCount;
-    outTriangles = m_triangleCount;
+
+    if (m_interactionSystem) {
+        for (const auto& obj : m_interactionSystem->GetObjects()) {
+            if (obj && obj->IsActive())
+                activeCount++;
+        }
+    }
+
+    if (m_player) activeCount++;
+
+    outDrawCalls = activeCount;
+    outTriangles = 0;
+
+    if (m_graphics) {
+        try {
+            auto metrics = m_graphics->Console_GetMetrics();
+            outDrawCalls = static_cast<int>(metrics.drawCalls);
+            outTriangles = static_cast<int>(metrics.triangles);
+        } catch (...) {}
+    }
+
     outActiveObjects = activeCount;
 }
 
@@ -769,20 +998,16 @@ bool Game::DeleteObject(size_t index)
 
 void Game::ClearScene(bool keepPlayer)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Clearing scene via console integration", L"INFO");
-    
     size_t originalCount = m_gameObjects.size();
     m_gameObjects.clear();
-    
-    // Optionally keep player-related objects
-    if (keepPlayer) {
-        // Player is managed separately, so just clear game objects
+
+    if (!keepPlayer) {
+        m_player.reset();
+        m_projectilePool.reset();
     }
-    
+
     std::wstring clearMsg = L"Cleared " + std::to_wstring(originalCount) + L" objects from scene";
-    if (keepPlayer) {
-        clearMsg += L" (player preserved)";
-    }
+    if (keepPlayer) clearMsg += L" (player preserved)";
     LOG_TO_CONSOLE_IMMEDIATE(clearMsg, L"SUCCESS");
 }
 
@@ -811,8 +1036,8 @@ void Game::ApplyGraphicsSettings(bool wireframe, bool vsync, bool showFPS)
         try {
             m_graphics->Console_SetWireframeMode(wireframe);
             m_graphics->Console_SetVSync(vsync);
-            // showFPS would need FPS display system implementation
-            
+            m_showFPS = showFPS;
+
             std::wstring graphicsMsg = L"Graphics settings applied - Wireframe: " + (wireframe ? std::wstring(L"ON") : std::wstring(L"OFF")) + 
                                       L", VSync: " + (vsync ? std::wstring(L"ON") : std::wstring(L"OFF")) +
                                       L", Show FPS: " + (showFPS ? std::wstring(L"ON") : std::wstring(L"OFF"));
@@ -906,43 +1131,34 @@ bool Game::SaveScene(const std::string& scenePath)
         return false;
     }
     
-    try {
-        // Convert string to wstring for scene manager
-        std::wstring wScenePath(scenePath.begin(), scenePath.end());
-        
-        // This would need a SaveScene method in SceneManager
-        // For now, we'll simulate success
-        bool success = true; // m_sceneManager->SaveScene(wScenePath);
-        
-        if (success) {
-            std::wstring saveMsg = L"Scene saved successfully: " + wScenePath;
-            LOG_TO_CONSOLE_IMMEDIATE(saveMsg, L"SUCCESS");
-        } else {
-            std::wstring saveMsg = L"Failed to save scene: " + wScenePath;
-            LOG_TO_CONSOLE_IMMEDIATE(saveMsg, L"ERROR");
-        }
-        
-        return success;
-    } catch (...) {
-        std::wstring errorMsg = L"Exception occurred while saving scene: " + std::wstring(scenePath.begin(), scenePath.end());
-        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
-        return false;
-    }
+    // SceneManager does not yet implement SaveScene
+    std::wstring wScenePath(scenePath.begin(), scenePath.end());
+    std::wstring saveMsg = L"SaveScene not implemented - path: " + wScenePath;
+    LOG_TO_CONSOLE_IMMEDIATE(saveMsg, L"WARNING");
+    return false;
 }
 
 std::vector<std::string> Game::GetAvailableScenes() const
 {
     std::vector<std::string> scenes;
-    
-    // Add some default/example scenes
-    scenes.push_back("Assets/Scenes/level1.scene");
-    scenes.push_back("Assets/Scenes/test.scene");
-    scenes.push_back("Assets/Scenes/demo.scene");
-    
-    // In a real implementation, this would scan the Assets/Scenes directory
-    // for .scene files and populate the vector
-    
-    LOG_TO_CONSOLE_IMMEDIATE(L"Retrieved available scenes list", L"INFO");
+
+    // Scan common scene directories for .scene / .xml / .json files
+    const std::string sceneDirs[] = { "../Assets/Scenes", "../Scenes", "Scenes" };
+    for (const auto& dir : sceneDirs) {
+        try {
+            if (!std::filesystem::exists(dir)) continue;
+            for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+                if (!entry.is_regular_file()) continue;
+                auto ext = entry.path().extension().string();
+                if (ext == ".scene" || ext == ".xml" || ext == ".json") {
+                    scenes.push_back(entry.path().string());
+                }
+            }
+        } catch (...) {
+            // Directory not accessible, skip
+        }
+    }
+
     return scenes;
 }
 
@@ -955,6 +1171,13 @@ void Game::SetPlayerClass(PlayerClass classType)
     if (m_player && m_classSystem) {
         m_player->SetClass(classType, m_classSystem.get());
         const auto& def = m_classSystem->GetClassDefinition(classType);
+
+        // Notify HUD of class change
+        if (m_hudSystem) {
+            m_hudSystem->ShowClassChange(def.name, classType);
+            m_hudSystem->SetCurrentClass(classType);
+        }
+
         std::wstring classMsg = L"Class changed to: " + std::wstring(def.name.begin(), def.name.end());
         LOG_TO_CONSOLE_IMMEDIATE(classMsg, L"SUCCESS");
     }

@@ -18,8 +18,7 @@
 #include "SparkEngine.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
-#include "GameModuleLoader.h"
-#include "IGameModule.h"
+#include "Engine/Events/EventSystem.h"
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 
@@ -53,6 +52,7 @@ WCHAR                              g_szClass[MAX_LOADSTRING];
 std::unique_ptr<GraphicsEngine>    g_graphics;
 std::unique_ptr<InputManager>      g_input;
 std::unique_ptr<Timer>             g_timer;
+std::unique_ptr<Spark::EventBus>   g_eventBus;
 std::unique_ptr<ModuleManager>     g_moduleManager;
 std::unique_ptr<EngineContext>     g_engineContext;
 
@@ -162,9 +162,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     if (!InitInstance(hInstance, nCmdShow))
         return -1;
 
-    // 5. Create engine context (service locator for modules)
+    // 5. Create event bus and engine context (service locator for modules)
+    g_eventBus = std::make_unique<Spark::EventBus>();
     g_engineContext = std::make_unique<EngineContext>(
-        g_graphics.get(), g_input.get(), g_timer.get());
+        g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
 
     // 6. Load game modules via ModuleManager
     g_moduleManager = std::make_unique<ModuleManager>();
@@ -250,6 +251,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     g_engineContext.reset();
+    g_eventBus.reset();
     g_input.reset();
     g_graphics.reset();
     g_timer.reset();
@@ -470,6 +472,7 @@ void RegisterEngineConsoleCommands()
 #include "SparkEngine.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
+#include "Engine/Events/EventSystem.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
 #include "Utils/Timer.h"
@@ -478,6 +481,7 @@ void RegisterEngineConsoleCommands()
 std::unique_ptr<GraphicsEngine>    g_graphics;
 std::unique_ptr<InputManager>      g_input;
 std::unique_ptr<Timer>             g_timer;
+std::unique_ptr<Spark::EventBus>   g_eventBus;
 std::unique_ptr<ModuleManager>     g_moduleManager;
 std::unique_ptr<EngineContext>     g_engineContext;
 

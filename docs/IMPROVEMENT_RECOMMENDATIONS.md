@@ -66,7 +66,7 @@
 | | |
 |---|---|
 | Complexity | Large (incremental migration recommended) |
-| Files | `Spark Engine/Source/Core/SparkEngine.cpp/.h`, `Game/Game.cpp`, every file referencing `g_graphics`, `g_game`, `g_input`, `g_timer`, or `GetInstance()` |
+| Files | `SparkEngine/Source/Core/SparkEngine.cpp/.h`, `Game/Game.cpp`, every file referencing `g_graphics`, `g_game`, `g_input`, `g_timer`, or `GetInstance()` |
 
 ---
 
@@ -97,7 +97,7 @@
 | | |
 |---|---|
 | Complexity | Medium |
-| Files | `Spark Engine/Source/Graphics/AssetPipeline.h/.cpp`, `TextureSystem.h/.cpp` |
+| Files | `SparkEngine/Source/Graphics/AssetPipeline.h/.cpp`, `TextureSystem.h/.cpp` |
 
 ---
 
@@ -129,7 +129,7 @@
 | | |
 |---|---|
 | Complexity | Small |
-| Files | New `Spark Engine/Source/pch.h`, update `CMakeLists.txt` |
+| Files | New `SparkEngine/Source/pch.h`, update `CMakeLists.txt` |
 
 ---
 
@@ -159,13 +159,13 @@
 | | |
 |---|---|
 | Complexity | Medium |
-| Files | `Spark Engine/Source/Utils/Profiler.h`, `Graphics/GraphicsEngine.cpp` |
+| Files | `SparkEngine/Source/Utils/Profiler.h`, `Graphics/GraphicsEngine.cpp` |
 
 ---
 
 ### 11. Wire up the existing settings.ini to actually drive engine initialization
 
-**Why:** A `settings.ini` exists (`Spark Engine/Resources/Config/settings.ini`) with graphics, audio, controls, and game settings — but the engine ignores it. Window size is hardcoded to 1280x720 in `SparkEngine.cpp`, and settings are only changeable via console commands at runtime.
+**Why:** A `settings.ini` exists (`SparkEngine/Resources/Config/settings.ini`) with graphics, audio, controls, and game settings — but the engine ignores it. Window size is hardcoded to 1280x720 in `SparkEngine.cpp`, and settings are only changeable via console commands at runtime.
 
 - Parse `settings.ini` at startup and apply values (window size, fullscreen, vsync, volumes, mouse sensitivity)
 - Wire console commands (`gfx_vsync`, etc.) to write back to the INI file
@@ -175,7 +175,7 @@
 | | |
 |---|---|
 | Complexity | Small–Medium |
-| Files | `Spark Engine/Source/Core/SparkEngine.cpp`, new or existing config parser, `Spark Engine/Resources/Config/settings.ini` |
+| Files | `SparkEngine/Source/Core/SparkEngine.cpp`, new or existing config parser, `SparkEngine/Resources/Config/settings.ini` |
 
 ---
 
@@ -205,7 +205,7 @@
 | | |
 |---|---|
 | Complexity | Small |
-| Files | `Spark Engine/Source/Graphics/GraphicsEngine.cpp` |
+| Files | `SparkEngine/Source/Graphics/GraphicsEngine.cpp` |
 
 ---
 
@@ -267,7 +267,7 @@
 | | |
 |---|---|
 | Complexity | Small |
-| Files | `Spark Engine/Source/Utils/Profiler.h` |
+| Files | `SparkEngine/Source/Utils/Profiler.h` |
 
 ---
 
@@ -325,7 +325,7 @@
 | | |
 |---|---|
 | Complexity | Small |
-| Files | `Spark Engine/Source/Utils/UUID.h` |
+| Files | `SparkEngine/Source/Utils/UUID.h` |
 
 ---
 

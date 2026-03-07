@@ -50,7 +50,7 @@ add_executable(SparkTests
 )
 
 target_include_directories(SparkTests PRIVATE
-    "${CMAKE_SOURCE_DIR}/Spark Engine/Source"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
     "${CMAKE_SOURCE_DIR}/ThirdParty"
 )
 

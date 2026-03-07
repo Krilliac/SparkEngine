@@ -16,13 +16,13 @@ set(COMPILER_SOURCES
 
 # RHI sources needed for shader compilation
 set(RHI_SOURCES
-    "${CMAKE_SOURCE_DIR}/Spark Engine/Source/Graphics/RHI/RHIFactory.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/RHIFactory.cpp"
 )
 
 # Backend implementation files (needed by RHIFactory::CreateDevice)
 if(WIN32)
     list(APPEND RHI_SOURCES
-        "${CMAKE_SOURCE_DIR}/Spark Engine/Source/Graphics/RHI/D3D11/D3D11Device.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp"
     )
 endif()
 
@@ -32,8 +32,8 @@ add_executable(SparkShaderCompiler
 )
 
 target_include_directories(SparkShaderCompiler PRIVATE
-    "${CMAKE_SOURCE_DIR}/Spark Engine/Source/Graphics/RHI"
-    "${CMAKE_SOURCE_DIR}/Spark Engine/Source"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
 )
 
 target_compile_features(SparkShaderCompiler PRIVATE cxx_std_17)

@@ -4,7 +4,7 @@ Load complete project context for comprehensive understanding.
 ## Context Loading
 - #file:README.md
 - #file:CMakeLists.txt  
-- #folder:Spark Engine/Source
+- #folder:SparkEngine/Source
 - #folder:Shaders
 - #folder:Resources
 

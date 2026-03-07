@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../Spark Engine/Source/Utils/FrameAllocator.h"
+#include "../SparkEngine/Source/Utils/FrameAllocator.h"
 
 TEST(FrameAllocator_BasicAlloc) {
     Spark::FrameAllocator alloc(1024);

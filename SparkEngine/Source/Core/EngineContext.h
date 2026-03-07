@@ -18,18 +18,21 @@ class Timer;
 class EngineContext : public Spark::IEngineContext
 {
 public:
-    EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer);
+    EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer,
+                 Spark::EventBus* eventBus = nullptr);
     ~EngineContext() override = default;
 
-    GraphicsEngine* GetGraphics() override { return m_graphics; }
-    InputManager*   GetInput()    override { return m_input; }
-    Timer*          GetTimer()    override { return m_timer; }
+    GraphicsEngine*  GetGraphics()  override { return m_graphics; }
+    InputManager*    GetInput()     override { return m_input; }
+    Timer*           GetTimer()     override { return m_timer; }
+    Spark::EventBus* GetEventBus()  override { return m_eventBus; }
 
     uint32_t GetEngineVersion() const override;
     uint32_t GetSDKVersion()    const override;
 
 private:
-    GraphicsEngine* m_graphics = nullptr;
-    InputManager*   m_input    = nullptr;
-    Timer*          m_timer    = nullptr;
+    GraphicsEngine*  m_graphics  = nullptr;
+    InputManager*    m_input     = nullptr;
+    Timer*           m_timer     = nullptr;
+    Spark::EventBus* m_eventBus  = nullptr;
 };
