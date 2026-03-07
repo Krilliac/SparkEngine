@@ -457,6 +457,13 @@ bool EditorApplication::OnShutdownRequested()
     return true;
 }
 
+void EditorApplication::SetWindowTitle(const std::string& title) {
+    if (m_hwnd) {
+        std::wstring wTitle(title.begin(), title.end());
+        SetWindowTextW(m_hwnd, wTitle.c_str());
+    }
+}
+
 LRESULT CALLBACK EditorApplication::WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     // Forward messages to ImGui

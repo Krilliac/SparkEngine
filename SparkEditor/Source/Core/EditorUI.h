@@ -22,11 +22,13 @@
 #include "EditorLogger.h"
 #include "EditorLayoutManager.h"
 #include "EditorCrashHandler.h"
+#include "ProjectManager.h"
 
 namespace SparkEditor {
 
 // Forward declarations
 class EditorPanel;
+class ProjectBrowserPanel;
 struct EditorConfig; // Forward declare instead of defining
 
 /**
@@ -64,6 +66,12 @@ public:
     EditorLayoutManager* GetLayoutManager() const { return m_layoutManager.get(); }
     EditorLogger* GetLogger() const { return m_logger.get(); }
     EditorCrashHandler* GetCrashHandler() const { return m_crashHandler; }
+    ProjectManager* GetProjectManager() { return m_projectManager.get(); }
+
+    // Project operations (triggered from menu bar)
+    void ShowNewProjectDialog();
+    void ShowOpenProjectDialog();
+    void ShowProjectBrowser();
 
     // Simple layout operations
     bool SaveLayout(const std::string& layoutName, const std::string& description = "");
@@ -111,6 +119,8 @@ private:
     std::unique_ptr<EditorLogger> m_logger;
     std::unique_ptr<EditorLayoutManager> m_layoutManager;
     EditorCrashHandler* m_crashHandler = nullptr;
+    std::unique_ptr<ProjectManager> m_projectManager;
+    std::shared_ptr<ProjectBrowserPanel> m_projectBrowserPanel;
 
     // Panel management
     std::unordered_map<std::string, std::shared_ptr<EditorPanel>> m_panels;

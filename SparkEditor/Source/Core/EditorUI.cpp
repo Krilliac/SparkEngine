@@ -18,6 +18,7 @@
 #include "../Panels/GameViewPanel.h"
 #include "../Panels/WeaponEditorPanel.h"
 #include "../Panels/FPSToolsPanel.h"
+#include "../Panels/ProjectBrowserPanel.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
 #include "EditorApplication.h"
@@ -64,10 +65,45 @@ bool EditorUI::Initialize(const EditorConfig& config) {
             console.LogWarning("Crash handler initialization failed");
         }
         
+        // Initialize project manager
+        console.LogInfo("Initializing project manager...");
+        m_projectManager = std::make_unique<ProjectManager>();
+        if (m_projectManager->Initialize()) {
+            console.LogSuccess("Project manager initialized");
+        } else {
+            console.LogWarning("Project manager initialization failed");
+        }
+
+        // Create project browser panel
+        m_projectBrowserPanel = std::make_shared<ProjectBrowserPanel>(m_projectManager.get());
+        m_projectBrowserPanel->Initialize();
+
         // Create panels
         console.LogInfo("Creating editor panels...");
         CreatePanels();
         console.LogSuccess("Panels created successfully");
+
+        // Wire up project callbacks to update other panels
+        m_projectManager->SetOnProjectOpened([this](const ProjectInfo& project) {
+            // Update asset browser path
+            auto it = m_panels.find("AssetBrowser");
+            if (it != m_panels.end()) {
+                auto* assetBrowser = dynamic_cast<AssetBrowserPanel*>(it->second.get());
+                if (assetBrowser) {
+                    assetBrowser->SetProjectPath(m_projectManager->GetProjectAssetsPath());
+                }
+            }
+            ShowNotification("Project opened: " + project.name, "success");
+        });
+
+        m_projectManager->SetOnProjectClosed([this](const ProjectInfo& project) {
+            ShowNotification("Project closed: " + project.name, "info");
+        });
+
+        // Show project browser on startup if no project is loaded
+        if (!m_projectManager->HasOpenProject()) {
+            m_projectBrowserPanel->ShowBrowser();
+        }
 
         // Apply the Spark Professional theme
         console.LogInfo("Applying Spark Professional theme...");
@@ -147,6 +183,11 @@ void EditorUI::Render() {
     RenderNotifications();
     RenderModalDialogs();
 
+    // Render project browser modal (on top of everything)
+    if (m_projectBrowserPanel && m_projectBrowserPanel->IsModalActive()) {
+        m_projectBrowserPanel->Render();
+    }
+
     if (m_showDemoWindow) {
         ImGui::ShowDemoWindow(&m_showDemoWindow);
     }
@@ -198,8 +239,22 @@ void EditorUI::Shutdown() {
     m_panels.clear();
     console.LogInfo("All panels shutdown and cleared");
     
+    // Shutdown project browser
+    if (m_projectBrowserPanel) {
+        m_projectBrowserPanel->Shutdown();
+        m_projectBrowserPanel.reset();
+    }
+
+    // Shutdown project manager
+    if (m_projectManager) {
+        console.LogInfo("Shutting down project manager...");
+        m_projectManager->Shutdown();
+        m_projectManager.reset();
+        console.LogSuccess("Project manager shutdown complete");
+    }
+
     // Note: Don't shutdown crash handler here as it's managed elsewhere
-    
+
     m_isInitialized = false;
     console.LogSuccess("EditorUI shutdown complete");
 }
@@ -388,12 +443,42 @@ void EditorUI::RenderMainMenuBar() {
                 ShowNotification("Scene saved!", "success");
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("New Project")) {
-                ShowNotification("New Project feature coming soon!", "info");
+            if (ImGui::MenuItem("New Project...")) {
+                ShowNewProjectDialog();
             }
-            if (ImGui::MenuItem("Open Project")) {
-                ShowNotification("Open Project feature coming soon!", "info");
+            if (ImGui::MenuItem("Open Project...")) {
+                ShowOpenProjectDialog();
             }
+            if (ImGui::MenuItem("Save Project", nullptr, false, m_projectManager && m_projectManager->HasOpenProject())) {
+                if (m_projectManager->SaveProject()) {
+                    ShowNotification("Project saved!", "success");
+                } else {
+                    ShowNotification("Failed to save project", "error");
+                }
+            }
+
+            // Recent projects submenu
+            if (m_projectManager && !m_projectManager->GetRecentProjects().empty()) {
+                if (ImGui::BeginMenu("Recent Projects")) {
+                    for (const auto& rp : m_projectManager->GetRecentProjects()) {
+                        std::string label = rp.name + "  (" + rp.path + ")";
+                        if (!rp.valid) label += "  [missing]";
+                        if (ImGui::MenuItem(label.c_str(), nullptr, false, rp.valid)) {
+                            if (m_projectManager->OpenProject(rp.path)) {
+                                ShowNotification("Opened project: " + rp.name, "success");
+                            } else {
+                                ShowNotification("Failed to open project: " + rp.name, "error");
+                            }
+                        }
+                    }
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("Clear Recent Projects")) {
+                        m_projectManager->ClearRecentProjects();
+                    }
+                    ImGui::EndMenu();
+                }
+            }
+
             ImGui::Separator();
             if (ImGui::MenuItem("Import Asset")) {
                 ShowNotification("Import Asset feature coming soon!", "info");
@@ -717,6 +802,14 @@ void EditorUI::RenderStatusBar() {
         ImGui::TextColored(statusColor, ICON_FA_CIRCLE);
         ImGui::SameLine();
         ImGui::Text("Engine: %s", m_engineConnected ? "Connected" : "Disconnected");
+
+        // Project name
+        if (m_projectManager && m_projectManager->HasOpenProject()) {
+            ImGui::SameLine();
+            ImGui::Text("|");
+            ImGui::SameLine();
+            ImGui::Text("Project: %s", m_projectManager->GetCurrentProject().name.c_str());
+        }
 
         ImGui::SameLine();
         ImGui::Text("|");
@@ -1139,6 +1232,27 @@ void EditorUI::ShowModalDialog(const std::string& title,
     m_currentDialog.content = content;
     m_currentDialog.buttons = buttons;
     m_currentDialog.isOpen = true;
+}
+
+// ------------------------------------------------------------------
+// Project operations
+// ------------------------------------------------------------------
+void EditorUI::ShowNewProjectDialog() {
+    if (m_projectBrowserPanel) {
+        m_projectBrowserPanel->ShowNewProject();
+    }
+}
+
+void EditorUI::ShowOpenProjectDialog() {
+    if (m_projectBrowserPanel) {
+        m_projectBrowserPanel->ShowOpenProject();
+    }
+}
+
+void EditorUI::ShowProjectBrowser() {
+    if (m_projectBrowserPanel) {
+        m_projectBrowserPanel->ShowBrowser();
+    }
 }
 
 } // namespace SparkEditor
