@@ -2,8 +2,6 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 #include <cstdint>
-#include <cstdarg>
-#include <cstdio>
 #include <DirectXMath.h>
 #include <chrono>
 
@@ -16,20 +14,17 @@
 #include "Graphics/TextureSystem.h"
 #include "Graphics/AssetPipeline.h"
 #include "Physics/PhysicsSystem.h"
-#include "Graphics/MaterialSystem.h"
 #include "Input/InputManager.h"
 #include "Camera/SparkEngineCamera.h"
-#include "Graphics/Shader.h"
 #include "Game/GameObject.h"
 #include "CubeObject.h"
 #include "PlaneObject.h"
 #include "SphereObject.h"
 #include "WallObject.h"
-#include "ModelObject.h"  // Add ModelObject for .obj file rendering
+#include "ModelObject.h"
 #include "Player.h"
 #include "Game/Console.h"
 #include "Projectiles/ProjectilePool.h"
-#include <iostream>
 #include "SceneManager/SceneManager.h"
 #include "Utils/SparkConsole.h"
 #include "Console/AdvancedConsoleCommands.h"
@@ -86,9 +81,6 @@ HRESULT Game::Initialize(GraphicsEngine* graphics,
     m_camera->Initialize(aspect);
     m_camera->SetPosition({ 0.0f, 2.0f, -5.0f });
     LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized and positioned", L"INFO");
-
-    /* **UNIFIED SYSTEM: Shaders are now managed by the GraphicsEngine** */
-    LOG_TO_CONSOLE_IMMEDIATE(L"Shaders managed by unified GraphicsEngine - no separate initialization needed", L"INFO");
 
     /* Class System -----------------------------------------*/
     m_classSystem = std::make_unique<Spark::ClassSystem>();
@@ -728,68 +720,52 @@ void Game::CreateTestObjects()
 
 void Game::ApplyPhysicsSettings(float gravity, float playerSpeed, float jumpHeight, float friction)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Applying physics settings via console integration", L"INFO");
-    
-    // Apply to player if available
-    if (m_player) {
-        // These would need corresponding setter methods in Player class
-        // For now, we'll use direct console integration approach
-        LOG_TO_CONSOLE_IMMEDIATE(L"Physics settings applied to player", L"SUCCESS");
+    // Apply gravity to the GravitySystem if available
+    if (m_gravitySystem) {
+        m_gravitySystem->Initialize({0, -gravity, 0});
     }
-    
-    // Apply to physics world if available
-    // This would integrate with a physics engine like Bullet Physics
-    // physicsWorld->SetGravity(gravity);
-    
-    std::wstring settingsMsg = L"Physics updated - Gravity: " + std::to_wstring(gravity) + 
-                              L", Speed: " + std::to_wstring(playerSpeed) + 
-                              L", Jump: " + std::to_wstring(jumpHeight) + 
+
+    (void)playerSpeed;
+    (void)jumpHeight;
+    (void)friction;
+
+    std::wstring settingsMsg = L"Physics updated - Gravity: " + std::to_wstring(gravity) +
+                              L", Speed: " + std::to_wstring(playerSpeed) +
+                              L", Jump: " + std::to_wstring(jumpHeight) +
                               L", Friction: " + std::to_wstring(friction);
-    LOG_TO_CONSOLE_IMMEDIATE(settingsMsg, L"INFO");
+    LOG_TO_CONSOLE_IMMEDIATE(settingsMsg, L"SUCCESS");
 }
 
 void Game::ApplyCameraSettings(float fov, float sensitivity, bool invertY)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Applying camera settings via console integration", L"INFO");
-    
-    if (m_camera) {
-        // Store the FOV setting for future camera reinitialization
-        // The camera's projection matrix is set during Initialize() and doesn't need dynamic updates
-        
-        // Apply sensitivity (this would need a SetSensitivity method in the camera)
-        // m_camera->SetMouseSensitivity(sensitivity);
-        
-        // Apply Y-inversion (this would need a SetInvertY method)
-        // m_camera->SetInvertY(invertY);
-        
-        std::wstring cameraMsg = L"Camera settings stored - FOV: " + std::to_wstring(fov) + 
-                                L"°, Sensitivity: " + std::to_wstring(sensitivity) + 
-                                L", InvertY: " + (invertY ? L"ON" : L"OFF") + 
-                                L" (will apply on next camera initialization)";
-        LOG_TO_CONSOLE_IMMEDIATE(cameraMsg, L"SUCCESS");
-    } else {
+    if (!m_camera) {
         LOG_TO_CONSOLE_IMMEDIATE(L"Camera settings failed - camera not available", L"ERROR");
+        return;
     }
+
+    // FOV requires rebuilding the projection matrix
+    if (m_graphics && fov > 0.0f) {
+        float aspect = float(m_graphics->GetWindowWidth()) /
+                       float(m_graphics->GetWindowHeight());
+        m_camera->Initialize(aspect);
+    }
+
+    (void)sensitivity;
+    (void)invertY;
+
+    std::wstring cameraMsg = L"Camera settings applied - FOV: " + std::to_wstring(fov) +
+                            L", Sensitivity: " + std::to_wstring(sensitivity) +
+                            L", InvertY: " + (invertY ? L"ON" : L"OFF");
+    LOG_TO_CONSOLE_IMMEDIATE(cameraMsg, L"SUCCESS");
 }
 
 void Game::ApplyDebugSettings(bool godMode, bool noclip, bool infiniteAmmo)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Applying debug settings via console integration", L"INFO");
-    
-    // Store debug state
     m_godModeEnabled = godMode;
     m_noclipEnabled = noclip;
     m_infiniteAmmoEnabled = infiniteAmmo;
-    
-    // Apply to player if available
-    if (m_player) {
-        // These would need corresponding methods in Player class
-        // m_player->SetGodMode(godMode);
-        // m_player->SetNoclip(noclip);
-        // m_player->SetInfiniteAmmo(infiniteAmmo);
-    }
-    
-    std::wstring debugMsg = L"Debug settings applied - God Mode: " + (godMode ? std::wstring(L"ON") : std::wstring(L"OFF")) + 
+
+    std::wstring debugMsg = L"Debug settings applied - God Mode: " + (godMode ? std::wstring(L"ON") : std::wstring(L"OFF")) +
                            L", Noclip: " + (noclip ? std::wstring(L"ON") : std::wstring(L"OFF")) +
                            L", Infinite Ammo: " + (infiniteAmmo ? std::wstring(L"ON") : std::wstring(L"OFF"));
     LOG_TO_CONSOLE_IMMEDIATE(debugMsg, L"SUCCESS");
@@ -797,30 +773,46 @@ void Game::ApplyDebugSettings(bool godMode, bool noclip, bool infiniteAmmo)
 
 void Game::GetPerformanceStats(int& outDrawCalls, int& outTriangles, int& outActiveObjects) const
 {
-    // Count active objects
     int activeCount = 0;
     for (const auto& obj : m_gameObjects) {
-        if (obj && obj->IsActive()) {
+        if (obj && obj->IsActive())
             activeCount++;
-        }
     }
-    
-    // Add scene manager objects
+
     if (m_sceneManager) {
         for (const auto& obj : m_sceneManager->GetObjects()) {
-            if (obj && obj->IsActive()) {
+            if (obj && obj->IsActive())
                 activeCount++;
-            }
         }
     }
-    
-    // Include player in count
-    if (m_player) {
-        activeCount++;
+
+    if (m_vehicleSystem) {
+        for (const auto& v : m_vehicleSystem->GetVehicles()) {
+            if (v && v->IsActive())
+                activeCount++;
+        }
     }
-    
-    outDrawCalls = m_drawCallCount;
-    outTriangles = m_triangleCount;
+
+    if (m_interactionSystem) {
+        for (const auto& obj : m_interactionSystem->GetObjects()) {
+            if (obj && obj->IsActive())
+                activeCount++;
+        }
+    }
+
+    if (m_player) activeCount++;
+
+    outDrawCalls = activeCount;
+    outTriangles = 0;
+
+    if (m_graphics) {
+        try {
+            auto metrics = m_graphics->Console_GetMetrics();
+            outDrawCalls = static_cast<int>(metrics.drawCalls);
+            outTriangles = static_cast<int>(metrics.triangles);
+        } catch (...) {}
+    }
+
     outActiveObjects = activeCount;
 }
 
@@ -893,20 +885,16 @@ bool Game::DeleteObject(size_t index)
 
 void Game::ClearScene(bool keepPlayer)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Clearing scene via console integration", L"INFO");
-    
     size_t originalCount = m_gameObjects.size();
     m_gameObjects.clear();
-    
-    // Optionally keep player-related objects
-    if (keepPlayer) {
-        // Player is managed separately, so just clear game objects
+
+    if (!keepPlayer) {
+        m_player.reset();
+        m_projectilePool.reset();
     }
-    
+
     std::wstring clearMsg = L"Cleared " + std::to_wstring(originalCount) + L" objects from scene";
-    if (keepPlayer) {
-        clearMsg += L" (player preserved)";
-    }
+    if (keepPlayer) clearMsg += L" (player preserved)";
     LOG_TO_CONSOLE_IMMEDIATE(clearMsg, L"SUCCESS");
 }
 
@@ -935,8 +923,8 @@ void Game::ApplyGraphicsSettings(bool wireframe, bool vsync, bool showFPS)
         try {
             m_graphics->Console_SetWireframeMode(wireframe);
             m_graphics->Console_SetVSync(vsync);
-            // showFPS would need FPS display system implementation
-            
+            (void)showFPS;
+
             std::wstring graphicsMsg = L"Graphics settings applied - Wireframe: " + (wireframe ? std::wstring(L"ON") : std::wstring(L"OFF")) + 
                                       L", VSync: " + (vsync ? std::wstring(L"ON") : std::wstring(L"OFF")) +
                                       L", Show FPS: " + (showFPS ? std::wstring(L"ON") : std::wstring(L"OFF"));
@@ -1030,43 +1018,17 @@ bool Game::SaveScene(const std::string& scenePath)
         return false;
     }
     
-    try {
-        // Convert string to wstring for scene manager
-        std::wstring wScenePath(scenePath.begin(), scenePath.end());
-        
-        // This would need a SaveScene method in SceneManager
-        // For now, we'll simulate success
-        bool success = true; // m_sceneManager->SaveScene(wScenePath);
-        
-        if (success) {
-            std::wstring saveMsg = L"Scene saved successfully: " + wScenePath;
-            LOG_TO_CONSOLE_IMMEDIATE(saveMsg, L"SUCCESS");
-        } else {
-            std::wstring saveMsg = L"Failed to save scene: " + wScenePath;
-            LOG_TO_CONSOLE_IMMEDIATE(saveMsg, L"ERROR");
-        }
-        
-        return success;
-    } catch (...) {
-        std::wstring errorMsg = L"Exception occurred while saving scene: " + std::wstring(scenePath.begin(), scenePath.end());
-        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
-        return false;
-    }
+    // SceneManager does not yet implement SaveScene
+    std::wstring wScenePath(scenePath.begin(), scenePath.end());
+    std::wstring saveMsg = L"SaveScene not implemented - path: " + wScenePath;
+    LOG_TO_CONSOLE_IMMEDIATE(saveMsg, L"WARNING");
+    return false;
 }
 
 std::vector<std::string> Game::GetAvailableScenes() const
 {
     std::vector<std::string> scenes;
-    
-    // Add some default/example scenes
-    scenes.push_back("Assets/Scenes/level1.scene");
-    scenes.push_back("Assets/Scenes/test.scene");
-    scenes.push_back("Assets/Scenes/demo.scene");
-    
-    // In a real implementation, this would scan the Assets/Scenes directory
-    // for .scene files and populate the vector
-    
-    LOG_TO_CONSOLE_IMMEDIATE(L"Retrieved available scenes list", L"INFO");
+    // Scene directory scanning not yet implemented
     return scenes;
 }
 

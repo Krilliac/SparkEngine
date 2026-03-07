@@ -481,10 +481,8 @@ private:
     bool m_isPaused{ false }; ///< Current pause state of the game
     
     // Console integration state
-    float m_timeScale{ 1.0f };     ///< Global time scale multiplier for console control
-    int m_drawCallCount{ 0 };      ///< Draw call counter for performance monitoring
-    int m_triangleCount{ 0 };      ///< Triangle counter for performance monitoring
-    bool m_godModeEnabled{ false }; ///< God mode state for console debugging
-    bool m_noclipEnabled{ false };  ///< Noclip state for console debugging
+    float m_timeScale{ 1.0f };           ///< Global time scale multiplier for console control
+    bool m_godModeEnabled{ false };      ///< God mode state for console debugging
+    bool m_noclipEnabled{ false };       ///< Noclip state for console debugging
     bool m_infiniteAmmoEnabled{ false }; ///< Infinite ammo state for console debugging
 };

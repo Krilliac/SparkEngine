@@ -163,8 +163,8 @@ void SparkGameModule::Render()
 
 void SparkGameModule::OnResize(int width, int height)
 {
-    (void)width;
-    (void)height;
+    if (m_console && width > 0 && height > 0)
+        m_console->Initialize(width, height);
 }
 
 void SparkGameModule::Pause()
