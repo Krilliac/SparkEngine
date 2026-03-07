@@ -33,6 +33,7 @@ class SparkEngineCamera;
 class GameObject;
 class Player;
 class ProjectilePool;
+class PhysicsSystem;
 namespace Spark { class EventBus; }
 
 #include "Game/Primitives.h"
@@ -291,6 +292,9 @@ public:
     // ============================================================================
     // INTEGRATED SYSTEMS - GameMode, HUD, Inventory, Quests, Events
     // ============================================================================
+
+    /** @brief Set physics system on all projectile pools */
+    void SetPhysicsSystem(PhysicsSystem* ps);
 
     /** @brief Connect the engine's event bus for cross-system communication */
     void SetEventBus(Spark::EventBus* bus);

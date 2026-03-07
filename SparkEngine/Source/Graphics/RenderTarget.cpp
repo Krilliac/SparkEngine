@@ -973,10 +973,10 @@ bool RenderTarget::SaveToFile(const std::string& /*filename*/) const
     return false; // No GPU readback on Linux
 }
 
-DXGI_FORMAT RenderTarget::GetDXGIFormat(RenderTargetFormat /*format*/) const { return 0; }
-DXGI_FORMAT RenderTarget::GetTypelessFormat(RenderTargetFormat /*format*/) const { return 0; }
-DXGI_FORMAT RenderTarget::GetSRVFormat(RenderTargetFormat /*format*/) const { return 0; }
-DXGI_FORMAT RenderTarget::GetDSVFormat(RenderTargetFormat /*format*/) const { return 0; }
+DXGI_FORMAT RenderTarget::GetDXGIFormat(RenderTargetFormat /*format*/) const { return static_cast<DXGI_FORMAT>(0); }
+DXGI_FORMAT RenderTarget::GetTypelessFormat(RenderTargetFormat /*format*/) const { return static_cast<DXGI_FORMAT>(0); }
+DXGI_FORMAT RenderTarget::GetSRVFormat(RenderTargetFormat /*format*/) const { return static_cast<DXGI_FORMAT>(0); }
+DXGI_FORMAT RenderTarget::GetDSVFormat(RenderTargetFormat /*format*/) const { return static_cast<DXGI_FORMAT>(0); }
 
 bool RenderTarget::SaveBMP(const std::string& /*filename*/, unsigned char* /*data*/,
                            uint32_t /*width*/, uint32_t /*height*/, uint32_t /*pitch*/) const

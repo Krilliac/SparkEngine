@@ -35,12 +35,18 @@
 #include "Game/Console.h"
 #include "Projectiles/ProjectilePool.h"
 
-// External references to global engine components
-extern std::unique_ptr<GraphicsEngine> g_graphics;
+// Engine subsystems accessed via EngineContext (preferred over globals)
+#include "../Core/EngineContext.h"
+extern std::unique_ptr<EngineContext> g_engineContext;
+
+// Game-specific globals (owned by SparkGame module, not part of EngineContext)
 extern std::unique_ptr<Game> g_game;
-extern std::unique_ptr<InputManager> g_input;
-extern std::unique_ptr<Timer> g_timer;
 extern Console g_console;
+
+// Convenience accessors — route through EngineContext instead of globals
+static GraphicsEngine* GetGfx() { return g_engineContext ? g_engineContext->GetGraphics() : nullptr; }
+static InputManager*   GetInput() { return g_engineContext ? g_engineContext->GetInput() : nullptr; }
+static Timer*          GetTimer() { return g_engineContext ? g_engineContext->GetTimer() : nullptr; }
 
 namespace Spark {
 
@@ -195,7 +201,7 @@ void UpdatePerformanceCounters() {
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - lastUpdate);
     
     if (elapsed.count() > 16667) { // ~60 FPS update rate
-        if (g_timer) {
+        if (GetTimer()) {
             // Use simple time calculation instead of calling GetDeltaTime which may cause issues
             auto timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate);
             g_perfCounters.frameTime = (float)timeDiff.count();
@@ -1622,10 +1628,10 @@ void SimpleConsole::RegisterEngineCommands() {
         ss << "==========================================\n";
         ss << "         ENGINE STATUS REPORT\n";
         ss << "==========================================\n";
-        ss << "Graphics Engine:  " << (g_graphics ? "ACTIVE" : "INACTIVE") << "\n";
+        ss << "Graphics Engine:  " << (GetGfx() ? "ACTIVE" : "INACTIVE") << "\n";
         ss << "Game System:      " << (g_game ? "ACTIVE" : "INACTIVE") << "\n";
-        ss << "Input Manager:    " << (g_input ? "ACTIVE" : "INACTIVE") << "\n";
-        ss << "Timer System:     " << (g_timer ? "ACTIVE" : "INACTIVE") << "\n";
+        ss << "Input Manager:    " << (GetInput() ? "ACTIVE" : "INACTIVE") << "\n";
+        ss << "Timer System:     " << (GetTimer() ? "ACTIVE" : "INACTIVE") << "\n";
         ss << "Main Loop:        RUNNING\n";
         
         if (g_game) {
@@ -2097,9 +2103,9 @@ void SimpleConsole::RegisterSystemCommands() {
 
 void SimpleConsole::RegisterGraphicsCommands() {
     RegisterCommand("graphics_info", [](const std::vector<std::string>& args) -> std::string {
-        if (g_graphics) {
-            auto metrics = g_graphics->Console_GetMetrics();
-            auto settings = g_graphics->Console_GetSettings();
+        if (GetGfx()) {
+            auto metrics = GetGfx()->Console_GetMetrics();
+            auto settings = GetGfx()->Console_GetSettings();
             
             std::stringstream ss;
             ss << "Graphics Engine Status (LIVE DATA):\n";
@@ -2115,12 +2121,12 @@ void SimpleConsole::RegisterGraphicsCommands() {
             ss << "\nMemory Usage:\n";
             ss << "  Texture Memory:   " << (metrics.textureMemory / 1024 / 1024) << " MB\n";
             ss << "  Buffer Memory:    " << (metrics.bufferMemory / 1024 / 1024) << " MB\n";
-            ss << "  VRAM Usage:       " << (g_graphics->Console_GetVRAMUsage() / 1024 / 1024) << " MB\n";
+            ss << "  VRAM Usage:       " << (GetGfx()->Console_GetVRAMUsage() / 1024 / 1024) << " MB\n";
             ss << "\nRender Settings:\n";
             ss << "  VSync:            " << (metrics.vsyncEnabled ? "ON" : "OFF") << "\n";
             ss << "  Wireframe:        " << (metrics.wireframeMode ? "ON" : "OFF") << "\n";
             ss << "  Debug Mode:       " << (metrics.debugMode ? "ON" : "OFF") << "\n";
-            ss << "  Resolution:       " << g_graphics->GetWindowWidth() << "x" << g_graphics->GetWindowHeight() << "\n";
+            ss << "  Resolution:       " << GetGfx()->GetWindowWidth() << "x" << GetGfx()->GetWindowHeight() << "\n";
             ss << "  Render Scale:     " << std::setprecision(2) << settings.renderScale << "x\n";
             ss << "  Clear Color:      (" << settings.clearColor[0] << ", " << settings.clearColor[1] 
                << ", " << settings.clearColor[2] << ", " << settings.clearColor[3] << ")";
@@ -2131,12 +2137,12 @@ void SimpleConsole::RegisterGraphicsCommands() {
     }, "Display comprehensive live graphics engine status and performance metrics");
 
     RegisterCommand("graphics_vsync", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) {
+        if (!GetGfx()) {
             return "Graphics engine not available";
         }
         
         if (args.empty()) {
-            auto settings = g_graphics->Console_GetSettings();
+            auto settings = GetGfx()->Console_GetSettings();
             return "VSync is currently " + std::string(settings.vsync ? "ENABLED" : "DISABLED") + 
                    "\nWireframe: " + std::string(settings.wireframeMode ? "ENABLED" : "DISABLED") +
                    "\nDebug Mode: " + std::string(settings.debugMode ? "ENABLED" : "DISABLED") +
@@ -2147,17 +2153,17 @@ void SimpleConsole::RegisterGraphicsCommands() {
         std::transform(value.begin(), value.end(), value.begin(), ::tolower);
         bool enable = (value == "on" || value == "true" || value == "1");
         
-        g_graphics->Console_SetVSync(enable);
+        GetGfx()->Console_SetVSync(enable);
         return "VSync " + std::string(enable ? "enabled" : "disabled") + " via live graphics integration";
     }, "Enable/disable VSync using live graphics integration");
 
     RegisterCommand("graphics_wireframe", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) {
+        if (!GetGfx()) {
             return "Graphics engine not available";
         }
         
         if (args.empty()) {
-            auto settings = g_graphics->Console_GetSettings();
+            auto settings = GetGfx()->Console_GetSettings();
             return "Wireframe mode is currently " + std::string(settings.wireframeMode ? "ENABLED" : "DISABLED") + 
                    "\nUsage: graphics_wireframe <on|off>";
         }
@@ -2166,17 +2172,17 @@ void SimpleConsole::RegisterGraphicsCommands() {
         std::transform(value.begin(), value.end(), value.begin(), ::tolower);
         bool enable = (value == "on" || value == "true" || value == "1");
         
-        g_graphics->Console_SetWireframeMode(enable);
+        GetGfx()->Console_SetWireframeMode(enable);
         return "Wireframe mode " + std::string(enable ? "enabled" : "disabled") + " via live graphics integration";
     }, "Enable/disable wireframe rendering using live graphics integration");
 
     RegisterCommand("graphics_clearcolor", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) {
+        if (!GetGfx()) {
             return "Graphics engine not available";
         }
         
         if (args.empty()) {
-            auto settings = g_graphics->Console_GetSettings();
+            auto settings = GetGfx()->Console_GetSettings();
             std::stringstream ss;
             ss << "Current clear color: (" << std::fixed << std::setprecision(3) 
                << settings.clearColor[0] << ", " << settings.clearColor[1] 
@@ -2195,7 +2201,7 @@ void SimpleConsole::RegisterGraphicsCommands() {
             float b = std::stof(args[2]);
             float a = (args.size() > 3) ? std::stof(args[3]) : 1.0f;
             
-            g_graphics->Console_SetClearColor(r, g, b, a);
+            GetGfx()->Console_SetClearColor(r, g, b, a);
             
             std::stringstream ss;
             ss << "Clear color set to (" << r << ", " << g << ", " << b << ", " << a << ") via live graphics integration";
@@ -2206,12 +2212,12 @@ void SimpleConsole::RegisterGraphicsCommands() {
     }, "Set background clear color using live graphics integration");
 
     RegisterCommand("graphics_debug", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) {
+        if (!GetGfx()) {
             return "Graphics engine not available";
         }
         
         if (args.empty()) {
-            auto settings = g_graphics->Console_GetSettings();
+            auto settings = GetGfx()->Console_GetSettings();
             return "Graphics debug mode is currently " + std::string(settings.debugMode ? "ENABLED" : "DISABLED") + 
                    "\nUsage: graphics_debug <on|off>";
         }
@@ -2220,17 +2226,17 @@ void SimpleConsole::RegisterGraphicsCommands() {
         std::transform(value.begin(), value.end(), value.begin(), ::tolower);
         bool enable = (value == "on" || value == "true" || value == "1");
         
-        g_graphics->Console_SetDebugMode(enable);
+        GetGfx()->Console_SetDebugMode(enable);
         return "Graphics debug mode " + std::string(enable ? "enabled" : "disabled") + " via live graphics integration";
     }, "Enable/disable graphics debug mode using live graphics integration");
 
     RegisterCommand("graphics_screenshot", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) {
+        if (!GetGfx()) {
             return "Graphics engine not available";
         }
         
         std::string filename = args.empty() ? "" : args[0];
-        bool success = g_graphics->Console_TakeScreenshot(filename);
+        bool success = GetGfx()->Console_TakeScreenshot(filename);
         
         if (success) {
             return "Screenshot captured successfully" + (filename.empty() ? " (auto-named)" : " as " + filename);
@@ -2240,19 +2246,19 @@ void SimpleConsole::RegisterGraphicsCommands() {
     }, "Take a screenshot using live graphics integration");
 
     RegisterCommand("graphics_scale", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) {
+        if (!GetGfx()) {
             return "Graphics engine not available";
         }
         
         if (args.empty()) {
-            auto settings = g_graphics->Console_GetSettings();
+            auto settings = GetGfx()->Console_GetSettings();
             return "Current render scale: " + std::to_string(settings.renderScale) + "x\n"
                    "Usage: graphics_scale <scale> (0.5-2.0)";
         }
         
         try {
             float scale = std::stof(args[0]);
-            g_graphics->Console_SetRenderScale(scale);
+            GetGfx()->Console_SetRenderScale(scale);
             return "Render scale set to " + std::to_string(scale) + "x via live graphics integration";
         } catch (...) {
             return "Invalid scale value. Must be a number between 0.5 and 2.0.";
@@ -2260,21 +2266,21 @@ void SimpleConsole::RegisterGraphicsCommands() {
     }, "Set render scale factor using live graphics integration");
 
     RegisterCommand("graphics_reset", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) {
+        if (!GetGfx()) {
             return "Graphics engine not available";
         }
         
-        g_graphics->Console_ResetToDefaults();
+        GetGfx()->Console_ResetToDefaults();
         return "Graphics settings reset to defaults via live graphics integration";
     }, "Reset all graphics settings to defaults using live graphics integration");
 
     RegisterCommand("graphics_gputiming", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) {
+        if (!GetGfx()) {
             return "Graphics engine not available";
         }
         
         if (args.empty()) {
-            auto settings = g_graphics->Console_GetSettings();
+            auto settings = GetGfx()->Console_GetSettings();
             return "GPU timing is currently " + std::string(settings.enableGPUTiming ? "ENABLED" : "DISABLED") + 
                    "\nUsage: graphics_gputiming <on|off>";
         }
@@ -2283,7 +2289,7 @@ void SimpleConsole::RegisterGraphicsCommands() {
         std::transform(value.begin(), value.end(), value.begin(), ::tolower);
         bool enable = (value == "on" || value == "true" || value == "1");
         
-        g_graphics->Console_SetGPUTiming(enable);
+        GetGfx()->Console_SetGPUTiming(enable);
         return "GPU timing " + std::string(enable ? "enabled" : "disabled") + " via live graphics integration";
     }, "Enable/disable GPU performance timing using live graphics integration");
 }
@@ -2681,11 +2687,11 @@ void SimpleConsole::RegisterDebugCommands() {
             return "FPS display " + std::string(g_gameState.showFPS ? "enabled" : "disabled");
         } else if (setting == "wireframe") {
             g_gameState.wireframe = !g_gameState.wireframe;
-            if (g_graphics) g_graphics->Console_SetWireframeMode(g_gameState.wireframe);
+            if (GetGfx()) GetGfx()->Console_SetWireframeMode(g_gameState.wireframe);
             return "Wireframe " + std::string(g_gameState.wireframe ? "enabled" : "disabled");
         } else if (setting == "vsync") {
             g_gameState.vsync = !g_gameState.vsync;
-            if (g_graphics) g_graphics->Console_SetVSync(g_gameState.vsync);
+            if (GetGfx()) GetGfx()->Console_SetVSync(g_gameState.vsync);
             return "VSync " + std::string(g_gameState.vsync ? "enabled" : "disabled");
         } else if (setting == "godmode") {
             g_gameState.godMode = !g_gameState.godMode;
@@ -2877,7 +2883,7 @@ void SimpleConsole::RegisterInputCommands() {
         ss << "  F1            - Toggle Dev Console\n";
         ss << "  Escape        - Pause/Menu";
 
-        if (g_input) {
+        if (GetInput()) {
             ss << "\n\nInput Manager: ACTIVE";
         } else {
             ss << "\n\nInput Manager: NOT AVAILABLE";
@@ -2936,11 +2942,11 @@ void SimpleConsole::RegisterRenderingCommands() {
 
         if (mode == "solid") {
             g_gameState.wireframe = false;
-            if (g_graphics) g_graphics->Console_SetWireframeMode(false);
+            if (GetGfx()) GetGfx()->Console_SetWireframeMode(false);
             return "Render mode: solid";
         } else if (mode == "wireframe") {
             g_gameState.wireframe = true;
-            if (g_graphics) g_graphics->Console_SetWireframeMode(true);
+            if (GetGfx()) GetGfx()->Console_SetWireframeMode(true);
             return "Render mode: wireframe";
         } else if (mode == "points") {
             return "Point rendering mode not yet implemented";
@@ -2949,11 +2955,11 @@ void SimpleConsole::RegisterRenderingCommands() {
     }, "Set rendering mode (solid/wireframe/points)", "Rendering");
 
     RegisterCommand("render_resolution", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) return "Graphics engine not available";
+        if (!GetGfx()) return "Graphics engine not available";
 
         if (args.empty()) {
-            return "Current resolution: " + std::to_string(g_graphics->GetWindowWidth()) + "x" +
-                   std::to_string(g_graphics->GetWindowHeight());
+            return "Current resolution: " + std::to_string(GetGfx()->GetWindowWidth()) + "x" +
+                   std::to_string(GetGfx()->GetWindowHeight());
         }
 
         if (args.size() < 2) return "Usage: render_resolution <width> <height>";
@@ -3667,10 +3673,10 @@ void SimpleConsole::RegisterCrashCommands() {
 
             // Engine state
             file << "=== ENGINE STATE ===\n";
-            file << "Graphics: " << (g_graphics ? "ACTIVE" : "INACTIVE") << "\n";
+            file << "Graphics: " << (GetGfx() ? "ACTIVE" : "INACTIVE") << "\n";
             file << "Game: " << (g_game ? "ACTIVE" : "INACTIVE") << "\n";
-            file << "Input: " << (g_input ? "ACTIVE" : "INACTIVE") << "\n";
-            file << "Timer: " << (g_timer ? "ACTIVE" : "INACTIVE") << "\n";
+            file << "Input: " << (GetInput() ? "ACTIVE" : "INACTIVE") << "\n";
+            file << "Timer: " << (GetTimer() ? "ACTIVE" : "INACTIVE") << "\n";
             file << "Scene: " << g_gameState.currentScene << "\n";
             file << "Objects: " << g_gameState.activeObjects << "\n\n";
 
@@ -3752,10 +3758,10 @@ void SimpleConsole::RegisterHealthCommands() {
             }
         };
 
-        checkSubsystem("Graphics Engine", g_graphics != nullptr);
+        checkSubsystem("Graphics Engine", GetGfx() != nullptr);
         checkSubsystem("Game System", g_game != nullptr);
-        checkSubsystem("Input Manager", g_input != nullptr);
-        checkSubsystem("Timer System", g_timer != nullptr);
+        checkSubsystem("Input Manager", GetInput() != nullptr);
+        checkSubsystem("Timer System", GetTimer() != nullptr);
 
         if (g_game) {
             checkSubsystem("Player System", g_game->GetPlayer() != nullptr);
@@ -3975,14 +3981,14 @@ void SimpleConsole::RegisterHealthCommands() {
     }, "Analyze performance stability and detect stuttering", "Health");
 
     RegisterCommand("health_gpu", [this](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) return "Graphics engine not available";
+        if (!GetGfx()) return "Graphics engine not available";
 
         std::stringstream ss;
         ss << "GPU Health Check:\n";
         ss << "==========================================\n";
 
-        auto metrics = g_graphics->Console_GetMetrics();
-        auto settings = g_graphics->Console_GetSettings();
+        auto metrics = GetGfx()->Console_GetMetrics();
+        auto settings = GetGfx()->Console_GetSettings();
 
         ss << "  Draw Calls:      " << metrics.drawCalls;
         if (metrics.drawCalls > 5000) ss << "  HIGH\n"; else ss << "  OK\n";
@@ -3993,7 +3999,7 @@ void SimpleConsole::RegisterHealthCommands() {
         ss << "  GPU Usage:       " << std::fixed << std::setprecision(1) << metrics.gpuUsage << "%";
         if (metrics.gpuUsage > 95.0f) ss << "  CRITICAL\n"; else if (metrics.gpuUsage > 80.0f) ss << "  WARNING\n"; else ss << "  OK\n";
 
-        size_t vramMB = g_graphics->Console_GetVRAMUsage() / 1024 / 1024;
+        size_t vramMB = GetGfx()->Console_GetVRAMUsage() / 1024 / 1024;
         ss << "  VRAM Usage:      " << vramMB << " MB";
         if (vramMB > 4096) ss << "  WARNING (>4GB)\n"; else ss << "  OK\n";
 
@@ -4001,7 +4007,7 @@ void SimpleConsole::RegisterHealthCommands() {
         ss << "  Buffer Memory:   " << (metrics.bufferMemory / 1024 / 1024) << " MB\n";
         ss << "  VSync:           " << (metrics.vsyncEnabled ? "ON" : "OFF") << "\n";
         ss << "  Wireframe:       " << (metrics.wireframeMode ? "ON" : "OFF") << "\n";
-        ss << "  Resolution:      " << g_graphics->GetWindowWidth() << "x" << g_graphics->GetWindowHeight();
+        ss << "  Resolution:      " << GetGfx()->GetWindowWidth() << "x" << GetGfx()->GetWindowHeight();
 
         return ss.str();
     }, "GPU health check and resource analysis", "Health");

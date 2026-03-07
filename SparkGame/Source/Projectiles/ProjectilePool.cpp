@@ -199,6 +199,13 @@ void ProjectilePool::FireProjectile(ProjectileType type, const XMFLOAT3& pos, co
     }
 }
 
+void ProjectilePool::SetPhysicsSystem(PhysicsSystem* ps)
+{
+    m_physicsSystem = ps;
+    for (auto& p : m_projectiles)
+        p->SetPhysicsSystem(ps);
+}
+
 size_t ProjectilePool::GetActiveCount() const
 {
     // **FIXED: Rate-limited logging for count queries**

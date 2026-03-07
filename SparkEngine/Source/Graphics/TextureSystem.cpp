@@ -932,7 +932,7 @@ HRESULT Texture::CreateViews(ID3D11Device* /*device*/)
 
 DXGI_FORMAT Texture::GetDXGIFormat(TextureFormat /*format*/) const
 {
-    return 0;
+    return static_cast<DXGI_FORMAT>(0);
 }
 
 // ============================================================================

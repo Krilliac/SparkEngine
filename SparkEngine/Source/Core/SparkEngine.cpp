@@ -46,6 +46,7 @@
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Audio/AudioEngine.h"
 #include "Physics/PhysicsSystem.h"
+#include "Graphics/GraphicsConsoleCommands.h"
 
 // -----------------------------------------------------------------------------
 // Globals
@@ -64,6 +65,7 @@ std::unique_ptr<Spark::EventBus>   g_eventBus;
 std::unique_ptr<ModuleManager>     g_moduleManager;
 std::unique_ptr<EngineContext>     g_engineContext;
 std::unique_ptr<AudioEngine>       g_audioEngine;
+std::unique_ptr<PhysicsSystem>     g_physicsOwned;
 
 // Win32 forward declarations
 ATOM                MyRegisterClass(HINSTANCE);
@@ -176,6 +178,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     g_engineContext = std::make_unique<EngineContext>(
         g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
 
+    // 5b. Create PhysicsSystem (owned here, not by GraphicsEngine)
+    {
+        extern PhysicsSystem* g_physicsSystem;  // raw global defined in PhysicsSystem.cpp
+        g_physicsOwned = std::make_unique<PhysicsSystem>();
+        g_physicsSystem = g_physicsOwned.get();
+        g_engineContext->SetPhysics(g_physicsOwned.get());
+        if (g_graphics)
+            g_graphics->SetPhysicsSystem(g_physicsOwned.get());
+    }
+
     // 6. Load game modules via ModuleManager
     g_moduleManager = std::make_unique<ModuleManager>();
 
@@ -214,6 +226,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     g_audioEngine = std::make_unique<AudioEngine>();
     if (SUCCEEDED(g_audioEngine->Initialize(32))) {
         console.LogInfo("AudioEngine initialized (32 sources)");
+        g_engineContext->SetAudio(g_audioEngine.get());
     } else {
         console.LogWarning("AudioEngine initialization failed - audio commands will be unavailable");
         g_audioEngine.reset();
@@ -273,6 +286,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     g_audioEngine.reset();
+
+    // Shut down physics before graphics (physics was extracted from GraphicsEngine)
+    if (g_physicsOwned) {
+        extern PhysicsSystem* g_physicsSystem;
+        g_physicsSystem = nullptr;
+        g_physicsOwned->Shutdown();
+        g_physicsOwned.reset();
+    }
+
     g_engineContext.reset();
     g_eventBus.reset();
     g_input.reset();
@@ -424,44 +446,9 @@ void RegisterEngineConsoleCommands()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    console.RegisterCommand("gfx_vsync", [](const std::vector<std::string>& args) -> std::string {
-        if (args.empty()) return "Usage: gfx_vsync <on|off>";
-        if (!g_graphics) return "Graphics engine not available";
-        bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
-        g_graphics->Console_SetVSync(enable);
-        return enable ? "VSync enabled" : "VSync disabled";
-    }, "Enable/disable VSync");
-
-    console.RegisterCommand("gfx_wireframe", [](const std::vector<std::string>& args) -> std::string {
-        if (args.empty()) return "Usage: gfx_wireframe <on|off>";
-        if (!g_graphics) return "Graphics engine not available";
-        bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
-        g_graphics->Console_SetWireframeMode(enable);
-        return enable ? "Wireframe mode enabled" : "Wireframe mode disabled";
-    }, "Enable/disable wireframe rendering");
-
-    console.RegisterCommand("gfx_metrics", [](const std::vector<std::string>&) -> std::string {
-        if (!g_graphics) return "Graphics engine not available";
-        try {
-            auto metrics = g_graphics->Console_GetMetrics();
-            std::stringstream ss;
-            ss << "=== Graphics Metrics ===\n";
-            ss << "FPS: " << metrics.fps << "\n";
-            ss << "Frame Time: " << metrics.frameTime << "ms\n";
-            ss << "Draw Calls: " << metrics.drawCalls << "\n";
-            ss << "Triangles: " << metrics.triangles << "\n";
-            return ss.str();
-        } catch (...) {
-            return "Metrics not available";
-        }
-    }, "Display graphics performance metrics");
-
-    console.RegisterCommand("gfx_screenshot", [](const std::vector<std::string>& args) -> std::string {
-        if (!g_graphics) return "Graphics engine not available";
-        std::string filename = args.empty() ? "" : args[0];
-        bool success = g_graphics->Console_TakeScreenshot(filename);
-        return success ? "Screenshot saved" : "Failed to save screenshot";
-    }, "Take a screenshot");
+    // Graphics console commands are now registered in GraphicsConsoleCommands.cpp
+    if (g_graphics)
+        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
 
     console.RegisterCommand("module_info", [](const std::vector<std::string>&) -> std::string {
         if (!g_moduleManager || !g_moduleManager->HasModules())
@@ -523,8 +510,8 @@ void RegisterEngineConsoleCommands()
 
     // ---- PhysicsSystem commands ----
     console.RegisterCommand("physics_metrics", [](const std::vector<std::string>&) -> std::string {
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         auto m = physics->Console_GetMetrics();
         std::stringstream ss;
@@ -538,24 +525,24 @@ void RegisterEngineConsoleCommands()
     }, "Display physics performance metrics", "Physics");
 
     console.RegisterCommand("physics_list", [](const std::vector<std::string>&) -> std::string {
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         return physics->Console_ListBodies();
     }, "List all physics bodies", "Physics");
 
     console.RegisterCommand("physics_body_info", [](const std::vector<std::string>& args) -> std::string {
         if (args.empty()) return "Usage: physics_body_info <name>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         return physics->Console_GetBodyInfo(args[0]);
     }, "Get detailed info about a physics body", "Physics");
 
     console.RegisterCommand("physics_gravity", [](const std::vector<std::string>& args) -> std::string {
         if (args.size() < 3) return "Usage: physics_gravity <x> <y> <z>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
         physics->Console_SetGravity(x, y, z);
@@ -564,8 +551,8 @@ void RegisterEngineConsoleCommands()
 
     console.RegisterCommand("physics_create", [](const std::vector<std::string>& args) -> std::string {
         if (args.size() < 5) return "Usage: physics_create <name> <type> <x> <y> <z>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         float x = std::stof(args[2]), y = std::stof(args[3]), z = std::stof(args[4]);
         bool ok = physics->Console_CreateBody(args[0], args[1], x, y, z);
@@ -574,8 +561,8 @@ void RegisterEngineConsoleCommands()
 
     console.RegisterCommand("physics_remove", [](const std::vector<std::string>& args) -> std::string {
         if (args.empty()) return "Usage: physics_remove <name>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         bool ok = physics->Console_RemoveBody(args[0]);
         return ok ? "Body '" + args[0] + "' removed" : "Body not found";
@@ -583,8 +570,8 @@ void RegisterEngineConsoleCommands()
 
     console.RegisterCommand("physics_set", [](const std::vector<std::string>& args) -> std::string {
         if (args.size() < 3) return "Usage: physics_set <name> <property> <value>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         physics->Console_SetBodyProperty(args[0], args[1], std::stof(args[2]));
         return args[1] + " set to " + args[2] + " on '" + args[0] + "'";
@@ -592,8 +579,8 @@ void RegisterEngineConsoleCommands()
 
     console.RegisterCommand("physics_force", [](const std::vector<std::string>& args) -> std::string {
         if (args.size() < 4) return "Usage: physics_force <name> <x> <y> <z>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         physics->Console_ApplyForce(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
         return "Force applied to '" + args[0] + "'";
@@ -601,8 +588,8 @@ void RegisterEngineConsoleCommands()
 
     console.RegisterCommand("physics_impulse", [](const std::vector<std::string>& args) -> std::string {
         if (args.size() < 4) return "Usage: physics_impulse <name> <x> <y> <z>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         physics->Console_ApplyImpulse(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
         return "Impulse applied to '" + args[0] + "'";
@@ -610,8 +597,8 @@ void RegisterEngineConsoleCommands()
 
     console.RegisterCommand("physics_debug", [](const std::vector<std::string>& args) -> std::string {
         if (args.empty()) return "Usage: physics_debug <on|off>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
         physics->Console_EnableDebugDraw(enable);
@@ -620,8 +607,8 @@ void RegisterEngineConsoleCommands()
 
     console.RegisterCommand("physics_pause", [](const std::vector<std::string>& args) -> std::string {
         if (args.empty()) return "Usage: physics_pause <on|off>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         bool pause = (args[0] == "on" || args[0] == "true" || args[0] == "1");
         physics->Console_PausePhysics(pause);
@@ -630,8 +617,8 @@ void RegisterEngineConsoleCommands()
 
     console.RegisterCommand("physics_timestep", [](const std::vector<std::string>& args) -> std::string {
         if (args.empty()) return "Usage: physics_timestep <seconds>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         float ts = std::stof(args[0]);
         physics->Console_SetTimeStep(ts);
@@ -640,8 +627,8 @@ void RegisterEngineConsoleCommands()
 
     console.RegisterCommand("physics_raycast", [](const std::vector<std::string>& args) -> std::string {
         if (args.size() < 7) return "Usage: physics_raycast <ox> <oy> <oz> <dx> <dy> <dz> <maxDist>";
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         return physics->Console_Raycast(
             std::stof(args[0]), std::stof(args[1]), std::stof(args[2]),
@@ -650,8 +637,8 @@ void RegisterEngineConsoleCommands()
     }, "Perform a physics raycast", "Physics");
 
     console.RegisterCommand("physics_reset", [](const std::vector<std::string>&) -> std::string {
-        if (!g_graphics) return "Graphics engine not available";
-        auto* physics = g_graphics->GetPhysicsSystem();
+        if (!g_engineContext) return "Engine context not available";
+        auto* physics = g_engineContext->GetPhysics();
         if (!physics) return "Physics system not available";
         physics->Console_Reset();
         return "Physics world reset";
@@ -763,6 +750,7 @@ void RegisterEngineConsoleCommands()
 #include "Engine/Events/EventSystem.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
+#include "Physics/PhysicsSystem.h"
 #include "Utils/Timer.h"
 #include <iostream>
 
@@ -772,6 +760,7 @@ std::unique_ptr<Timer>             g_timer;
 std::unique_ptr<Spark::EventBus>   g_eventBus;
 std::unique_ptr<ModuleManager>     g_moduleManager;
 std::unique_ptr<EngineContext>     g_engineContext;
+std::unique_ptr<PhysicsSystem>     g_physicsOwned;
 
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
@@ -793,8 +782,20 @@ int main(int argc, char* argv[]) {
         std::cout << "Graphics engine initialized (headless mode)." << std::endl;
     }
 
-    // Create engine context
-    g_engineContext = std::make_unique<EngineContext>();
+    // Create engine context (service locator for all subsystems)
+    g_engineContext = std::make_unique<EngineContext>(
+        g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
+
+    // Create PhysicsSystem (owned here, not by GraphicsEngine)
+    {
+        extern PhysicsSystem* g_physicsSystem;
+        g_physicsOwned = std::make_unique<PhysicsSystem>();
+        g_physicsSystem = g_physicsOwned.get();
+        g_engineContext->SetPhysics(g_physicsOwned.get());
+        if (g_graphics)
+            g_graphics->SetPhysicsSystem(g_physicsOwned.get());
+    }
+
     g_moduleManager = std::make_unique<ModuleManager>();
 
     std::cout << "Spark Engine ready. Linux platform support active." << std::endl;
@@ -804,6 +805,14 @@ int main(int argc, char* argv[]) {
     // For now, just clean up
     g_graphics->Shutdown();
     g_moduleManager.reset();
+
+    if (g_physicsOwned) {
+        extern PhysicsSystem* g_physicsSystem;
+        g_physicsSystem = nullptr;
+        g_physicsOwned->Shutdown();
+        g_physicsOwned.reset();
+    }
+
     g_engineContext.reset();
     g_graphics.reset();
     g_input.reset();

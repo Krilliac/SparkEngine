@@ -16,6 +16,8 @@
 #include "Game/GameObject.h"
 #include "Utils/Assert.h"
 
+class PhysicsSystem;
+
 /**
  * @brief Base class for all projectile objects
  * 
@@ -49,6 +51,7 @@ protected:
     BoundingSphere       m_boundingSphere; ///< Collision bounds
     bool                 m_hasGravity;     ///< Whether gravity affects this projectile
     float                m_gravityScale;   ///< Multiplier for gravity effect
+    PhysicsSystem*       m_physicsSystem{ nullptr }; ///< Physics system for queries (e.g. explosions)
 
 public:
     /**
@@ -166,6 +169,12 @@ public:
      * @param lifeTime New lifetime in seconds (must be positive)
      */
     void SetLifeTime(float lifeTime) { ASSERT_MSG(lifeTime > 0, "LifeTime must be positive"); m_maxLifeTime = lifeTime; }
+
+    /**
+     * @brief Set the physics system for area queries (explosions, etc.)
+     * @param ps Physics system pointer
+     */
+    void SetPhysicsSystem(PhysicsSystem* ps) { m_physicsSystem = ps; }
 
 protected:
     /**

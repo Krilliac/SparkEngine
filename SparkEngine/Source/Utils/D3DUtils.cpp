@@ -11,28 +11,30 @@ IDXGISwapChain* g_MainSwapChain = nullptr;
 ID3D11Device* g_D3DDevice = nullptr;
 ID3D11DeviceContext* g_D3DContext = nullptr;
 
-// External reference to the global graphics engine
-extern std::unique_ptr<GraphicsEngine> g_graphics;
+// Access graphics engine via EngineContext (preferred) or legacy global
+#include "../Core/EngineContext.h"
+extern std::unique_ptr<EngineContext> g_engineContext;
 
-// Implement the accessors
+// Implement the accessors — use EngineContext to access GraphicsEngine
+static GraphicsEngine* GetGraphicsFromContext() {
+    return g_engineContext ? g_engineContext->GetGraphics() : nullptr;
+}
+
 IDXGISwapChain* GetMainSwapChain() {
-    if (g_graphics) {
-        return g_graphics->GetSwapChain();
-    }
+    if (auto* gfx = GetGraphicsFromContext())
+        return gfx->GetSwapChain();
     return g_MainSwapChain;
 }
 
 ID3D11Device* GetD3DDevice() {
-    if (g_graphics) {
-        return g_graphics->GetDevice();
-    }
+    if (auto* gfx = GetGraphicsFromContext())
+        return gfx->GetDevice();
     return g_D3DDevice;
 }
 
 ID3D11DeviceContext* GetD3DContext() {
-    if (g_graphics) {
-        return g_graphics->GetContext();
-    }
+    if (auto* gfx = GetGraphicsFromContext())
+        return gfx->GetContext();
     return g_D3DContext;
 }
 

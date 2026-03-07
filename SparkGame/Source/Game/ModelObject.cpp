@@ -51,10 +51,7 @@ void ModelObject::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX&
                                DirectX::XMMatrixRotationRollPitchYaw(rot.x, rot.y, rot.z) *
                                DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
     
-    // ? ENHANCED: Get graphics engine reference (you may need to adjust this based on how you access it)
-    // For now, we'll try to get it from a global or pass it down from the render system
-    extern std::unique_ptr<GraphicsEngine> g_graphics;
-    GraphicsEngine* graphics = g_graphics.get();
+    GraphicsEngine* graphics = m_graphics;
 
     // **ENHANCED RENDERING: Set up shaders, constant buffers, and matrices**
     try {
