@@ -33,7 +33,7 @@ jobs:
 
     - name: Run Tests
       if: matrix.config == 'Release'
-      run: ctest --test-dir build --config ${{ matrix.config }} --output-on-failure
+      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
@@ -89,7 +89,7 @@ jobs:
 
     - name: Run Tests
       if: steps.check-v144.outputs.available == 'true' && matrix.config == 'Release'
-      run: ctest --test-dir build --config ${{ matrix.config }} --output-on-failure
+      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
 
     - name: Upload Build Artifacts
       if: steps.check-v144.outputs.available == 'true' && matrix.config == 'Release'
