@@ -95,8 +95,8 @@ list(FILTER SPARK_GAME_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 # ---------------------------------------------------------------------
 add_library(SparkGame SHARED ${SPARK_GAME_SOURCES})
 
-# Mark this as a game DLL so SPARK_GAME_API exports symbols
-target_compile_definitions(SparkGame PRIVATE SPARK_GAME_DLL)
+# Mark this as a game DLL so SPARK_GAME_API and SPARK_MODULE_API export symbols
+target_compile_definitions(SparkGame PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
 
 # ---------------------------------------------------------------------
 # Link against SparkEngineLib static library (when built as sub-project)
@@ -110,9 +110,17 @@ endif()
 # ---------------------------------------------------------------------
 # Include directories
 # ---------------------------------------------------------------------
+# SparkSDK includes (new module system headers)
+if(SPARK_GAME_STANDALONE)
+    set(SPARK_SDK_INCLUDE_DIR "${SPARK_ENGINE_DIR}/SparkSDK/Include")
+else()
+    set(SPARK_SDK_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/SparkSDK/Include")
+endif()
+
 target_include_directories(SparkGame PRIVATE
     "Source"
     "${ENGINE_SOURCE_DIR}"
+    "${SPARK_SDK_INCLUDE_DIR}"
     ${THIRDPARTY_INCLUDE_DIRS}
 )
 

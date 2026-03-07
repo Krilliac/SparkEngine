@@ -3,10 +3,11 @@
  * @brief SparkEngine executable entry point - loads game modules dynamically
  *
  * SparkEngine is the runtime host. It creates the window, initializes engine
- * systems (graphics, input, timer), then loads a game DLL via GameModuleLoader.
- * The game DLL implements IGameModule and provides all game-specific logic.
+ * systems (graphics, input, timer), then loads game modules via ModuleManager.
+ * Modules implement IModule (or the legacy IGameModule) and provide all
+ * game-specific logic.
  *
- * Architecture: Engine (exe) -> loads -> Game (DLL)
+ * Architecture: Engine (exe) -> loads -> Module DLLs (via ModuleManager)
  * Similar to Unreal Engine's module loading or Unity's player runtime.
  */
 
@@ -15,6 +16,8 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "framework.h"
 #include "SparkEngine.h"
+#include "ModuleManager.h"
+#include "EngineContext.h"
 #include "GameModuleLoader.h"
 #include "IGameModule.h"
 #include "Utils/Assert.h"
@@ -50,7 +53,8 @@ WCHAR                              g_szClass[MAX_LOADSTRING];
 std::unique_ptr<GraphicsEngine>    g_graphics;
 std::unique_ptr<InputManager>      g_input;
 std::unique_ptr<Timer>             g_timer;
-std::unique_ptr<GameModuleLoader>  g_moduleLoader;
+std::unique_ptr<ModuleManager>     g_moduleManager;
+std::unique_ptr<EngineContext>     g_engineContext;
 
 // Win32 forward declarations
 ATOM                MyRegisterClass(HINSTANCE);
@@ -62,16 +66,23 @@ INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 void RegisterEngineConsoleCommands();
 
 /**
- * @brief Find the game module DLL to load
- *
- * Searches for game DLLs in the following order:
- * 1. Command line argument: -game <path>
- * 2. SparkGame.dll in the executable directory
- * 3. Any .dll matching *Game*.dll in the executable directory
+ * @brief Get the executable directory
  */
-static std::string FindGameModule(LPWSTR cmdLine)
+static std::filesystem::path GetExecutableDirectory()
 {
-    // Check command line for -game argument
+    wchar_t exePath[MAX_PATH];
+    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    return std::filesystem::path(exePath).parent_path();
+}
+
+/**
+ * @brief Find a specific game module DLL from command line
+ *
+ * Checks for -game <path> on the command line.
+ * Returns empty string if not specified.
+ */
+static std::string FindGameModuleFromCmdLine(LPWSTR cmdLine)
+{
     std::wstring cmd(cmdLine);
     size_t pos = cmd.find(L"-game ");
     if (pos != std::wstring::npos)
@@ -83,31 +94,33 @@ static std::string FindGameModule(LPWSTR cmdLine)
         if (std::filesystem::exists(path))
             return path;
     }
-
-    // Look for SparkGame.dll next to the engine exe
-    wchar_t exePath[MAX_PATH];
-    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-    std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
-
-    auto defaultPath = exeDir / "SparkGame.dll";
-    if (std::filesystem::exists(defaultPath))
-        return defaultPath.string();
-
-    // Search for any *Game*.dll
-    for (auto& entry : std::filesystem::directory_iterator(exeDir))
-    {
-        if (entry.is_regular_file())
-        {
-            auto fn = entry.path().filename().string();
-            if (fn.find("Game") != std::string::npos &&
-                entry.path().extension() == ".dll")
-            {
-                return entry.path().string();
-            }
-        }
-    }
-
     return "";
+}
+
+/**
+ * @brief Find the module manifest or fall back to directory scan
+ *
+ * Loading priority:
+ * 1. Command line: -game <path> (loads single module)
+ * 2. spark.modules.json manifest next to the engine exe
+ * 3. Directory scan for *Game*.dll / *Module*.dll
+ */
+static bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
+{
+    auto exeDir = GetExecutableDirectory();
+
+    // 1. Check command line for specific module
+    std::string cmdLineModule = FindGameModuleFromCmdLine(cmdLine);
+    if (!cmdLineModule.empty())
+        return manager.LoadModule(cmdLineModule);
+
+    // 2. Check for module manifest
+    auto manifestPath = exeDir / "spark.modules.json";
+    if (std::filesystem::exists(manifestPath))
+        return manager.LoadModulesFromManifest(manifestPath.string());
+
+    // 3. Fall back to directory scan
+    return manager.LoadModulesFromDirectory(exeDir.string());
 }
 
 // ===================================================================================
@@ -149,46 +162,45 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     if (!InitInstance(hInstance, nCmdShow))
         return -1;
 
-    // 5. Load game module DLL
-    g_moduleLoader = std::make_unique<GameModuleLoader>();
-    std::string gameDllPath = FindGameModule(lpCmdLine);
+    // 5. Create engine context (service locator for modules)
+    g_engineContext = std::make_unique<EngineContext>(
+        g_graphics.get(), g_input.get(), g_timer.get());
+
+    // 6. Load game modules via ModuleManager
+    g_moduleManager = std::make_unique<ModuleManager>();
 
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    IGameModule* gameModule = nullptr;
-    if (!gameDllPath.empty())
+    if (LoadGameModules(*g_moduleManager, lpCmdLine))
     {
-        if (g_moduleLoader->Load(gameDllPath))
+        g_moduleManager->InitializeAll(g_engineContext.get());
+
+        // Update window title with primary module name
+        auto* primary = g_moduleManager->GetPrimaryModule();
+        if (primary)
         {
-            gameModule = g_moduleLoader->GetModule();
-            if (gameModule && !gameModule->Initialize(g_graphics.get(), g_input.get()))
-            {
-                console.LogError("Game module Initialize() failed");
-                gameModule = nullptr;
-            }
+            auto info = primary->GetModuleInfo();
+            std::wstring title = L"Spark Engine - ";
+            std::string modName(info.name);
+            title.append(modName.begin(), modName.end());
+            HWND hWnd = FindWindowW(g_szClass, g_szTitle);
+            if (hWnd) SetWindowTextW(hWnd, title.c_str());
         }
+
+        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
     }
     else
     {
-        console.LogWarning("No game module found. Running engine-only mode.");
+        console.LogWarning("No game modules found. Running engine-only mode.");
         console.LogInfo("Place a game DLL (e.g. SparkGame.dll) next to the engine executable,");
-        console.LogInfo("or use -game <path> on the command line.");
+        console.LogInfo("use -game <path> on the command line,");
+        console.LogInfo("or create a spark.modules.json manifest.");
     }
 
-    if (gameModule)
-    {
-        // Update window title with game name
-        std::wstring title = L"Spark Engine - ";
-        std::string gameName = gameModule->GetGameName();
-        title.append(gameName.begin(), gameName.end());
-        HWND hWnd = FindWindowW(g_szClass, g_szTitle);
-        if (hWnd) SetWindowTextW(hWnd, title.c_str());
-    }
-
-    // 6. Register engine console commands
+    // 7. Register engine console commands
     RegisterEngineConsoleCommands();
 
-    // 7. Message loop + tick
+    // 8. Message loop + tick
     HACCEL accel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SparkEngine));
     MSG msg = {};
     ASSERT(g_timer);
@@ -211,13 +223,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
             if (g_input) g_input->Update();
 
-            gameModule = g_moduleLoader ? g_moduleLoader->GetModule() : nullptr;
-
-            if (gameModule)
+            if (g_moduleManager && g_moduleManager->HasModules())
             {
-                if (!gameModule->IsPaused())
-                    gameModule->Update(dt);
-                gameModule->Render();
+                g_moduleManager->UpdateAll(dt);
+                g_moduleManager->RenderAll();
             }
             else if (g_graphics)
             {
@@ -230,17 +239,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
     }
 
-    // 8. Shutdown
+    // 9. Shutdown
     console.LogInfo("Shutting down...");
 
-    if (g_moduleLoader)
+    if (g_moduleManager)
     {
-        auto* mod = g_moduleLoader->GetModule();
-        if (mod) mod->Shutdown();
-        g_moduleLoader->Unload();
-        g_moduleLoader.reset();
+        g_moduleManager->ShutdownAll();
+        g_moduleManager->UnloadAll();
+        g_moduleManager.reset();
     }
 
+    g_engineContext.reset();
     g_input.reset();
     g_graphics.reset();
     g_timer.reset();
@@ -342,8 +351,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_SIZE:
         if (g_graphics)
             g_graphics->OnResize(LOWORD(lParam), HIWORD(lParam));
-        if (g_moduleLoader && g_moduleLoader->GetModule())
-            g_moduleLoader->GetModule()->OnResize(LOWORD(lParam), HIWORD(lParam));
+        if (g_moduleManager)
+            g_moduleManager->ResizeAll(LOWORD(lParam), HIWORD(lParam));
         break;
 
     case WM_DESTROY:
@@ -412,28 +421,44 @@ void RegisterEngineConsoleCommands()
     }, "Take a screenshot");
 
     console.RegisterCommand("module_info", [](const std::vector<std::string>&) -> std::string {
-        if (!g_moduleLoader || !g_moduleLoader->IsLoaded())
-            return "No game module loaded";
-        auto* mod = g_moduleLoader->GetModule();
+        if (!g_moduleManager || !g_moduleManager->HasModules())
+            return "No modules loaded";
         std::stringstream ss;
-        ss << "Game Module: " << mod->GetGameName() << "\n";
-        ss << "Version: " << mod->GetGameVersion() << "\n";
-        ss << "DLL Path: " << g_moduleLoader->GetModulePath() << "\n";
-        return ss.str();
-    }, "Show loaded game module info");
-
-    console.RegisterCommand("module_reload", [](const std::vector<std::string>&) -> std::string {
-        if (!g_moduleLoader || !g_moduleLoader->IsLoaded())
-            return "No game module loaded";
-        if (g_moduleLoader->Reload())
+        ss << "=== Loaded Modules (" << g_moduleManager->GetModuleCount() << ") ===\n";
+        // Show primary module info
+        auto* primary = g_moduleManager->GetPrimaryModule();
+        if (primary)
         {
-            auto* mod = g_moduleLoader->GetModule();
-            if (mod && mod->Initialize(g_graphics.get(), g_input.get()))
-                return "Game module reloaded and initialized";
-            return "Game module reloaded but Initialize() failed";
+            auto info = primary->GetModuleInfo();
+            ss << "Primary: " << info.name << " v" << info.version
+               << " (loadOrder=" << info.loadOrder << ")\n";
         }
-        return "Failed to reload game module";
-    }, "Hot-reload the game module DLL");
+        return ss.str();
+    }, "Show loaded module info");
+
+    console.RegisterCommand("module_reload", [](const std::vector<std::string>& args) -> std::string {
+        if (!g_moduleManager || !g_moduleManager->HasModules())
+            return "No modules loaded";
+        if (!g_engineContext)
+            return "Engine context not available";
+
+        std::string name;
+        if (!args.empty())
+        {
+            name = args[0];
+        }
+        else
+        {
+            // Reload primary module
+            auto* primary = g_moduleManager->GetPrimaryModule();
+            if (!primary) return "No primary module to reload";
+            name = primary->GetModuleInfo().name;
+        }
+
+        if (g_moduleManager->ReloadModule(name, g_engineContext.get()))
+            return "Module '" + name + "' reloaded successfully";
+        return "Failed to reload module '" + name + "'";
+    }, "Hot-reload a module DLL (usage: module_reload [name])");
 }
 
 #endif // SPARK_PLATFORM_WINDOWS
@@ -443,7 +468,8 @@ void RegisterEngineConsoleCommands()
 // ============================================================================
 #ifndef SPARK_PLATFORM_WINDOWS
 #include "SparkEngine.h"
-#include "GameModuleLoader.h"
+#include "ModuleManager.h"
+#include "EngineContext.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
 #include "Utils/Timer.h"
@@ -452,7 +478,8 @@ void RegisterEngineConsoleCommands()
 std::unique_ptr<GraphicsEngine>    g_graphics;
 std::unique_ptr<InputManager>      g_input;
 std::unique_ptr<Timer>             g_timer;
-std::unique_ptr<GameModuleLoader>  g_moduleLoader;
+std::unique_ptr<ModuleManager>     g_moduleManager;
+std::unique_ptr<EngineContext>     g_engineContext;
 
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;

@@ -1,14 +1,14 @@
 /**
  * @file Main.cpp
- * @brief SparkGame DLL - IGameModule implementation and exports
+ * @brief SparkGame DLL - IModule + IGameModule implementation and exports
  *
- * This file implements the SparkGameModule class and exports the factory
- * functions that the engine uses to load the game. No entry point here -
- * the engine (SparkEngine.exe) is the executable host.
+ * This file implements the SparkGameModule class and exports both the new
+ * (CreateModule/DestroyModule) and legacy (CreateGameModule/DestroyGameModule)
+ * factory functions. The engine's ModuleManager will prefer the new exports.
  *
  * When the engine starts, it finds and loads SparkGame.dll, calls
- * CreateGameModule() to get a SparkGameModule instance, then drives
- * the game loop through the IGameModule interface.
+ * CreateModule() to get a SparkGameModule instance, then drives
+ * the game loop through the IModule interface.
  */
 
 #include "SparkGame.h"
@@ -46,6 +46,43 @@ SparkGameModule::~SparkGameModule()
         Shutdown();
 }
 
+// --- Spark::IModule interface (new) ---
+
+Spark::ModuleInfo SparkGameModule::GetModuleInfo() const
+{
+    Spark::ModuleInfo info{};
+    info.name       = "Spark Game";
+    info.version    = "1.0.0";
+    info.sdkVersion = SPARK_SDK_VERSION;
+    info.loadOrder  = 1000;
+    return info;
+}
+
+bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
+{
+    // Delegate to the shared Initialize logic using the context's subsystems
+    return Initialize(context->GetGraphics(), context->GetInput());
+}
+
+void SparkGameModule::OnUnload()
+{
+    Shutdown();
+}
+
+void SparkGameModule::OnUpdate(float deltaTime)
+{
+    if (m_game && !m_game->IsPaused())
+        m_game->Update(deltaTime);
+}
+
+void SparkGameModule::OnRender()
+{
+    if (m_game)
+        m_game->Render();
+}
+
+// --- IGameModule interface (legacy) ---
+
 const char* SparkGameModule::GetGameName() const
 {
     return "Spark Game";
@@ -58,6 +95,8 @@ const char* SparkGameModule::GetGameVersion() const
 
 bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
 {
+    if (m_initialized) return true; // Prevent double-init
+
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Initializing SparkGame module...");
 
@@ -84,6 +123,8 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
 
 void SparkGameModule::Shutdown()
 {
+    if (!m_initialized) return;
+
     if (m_game)
     {
         m_game->Shutdown();
@@ -205,7 +246,26 @@ void SparkGameModule::RegisterGameConsoleCommands()
 }
 
 // ===================================================================================
-// DLL Exports - Called by SparkEngine runtime to load this game module
+// DLL Exports - New API (preferred by ModuleManager)
+// ===================================================================================
+
+extern "C"
+{
+
+SPARK_MODULE_API Spark::IModule* CreateModule()
+{
+    return new SparkGameModule();
+}
+
+SPARK_MODULE_API void DestroyModule(Spark::IModule* mod)
+{
+    delete mod;
+}
+
+} // extern "C"
+
+// ===================================================================================
+// DLL Exports - Legacy API (backward compatibility)
 // ===================================================================================
 
 extern "C"

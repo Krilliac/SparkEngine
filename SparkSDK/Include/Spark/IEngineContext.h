@@ -1,0 +1,55 @@
+/**
+ * @file IEngineContext.h
+ * @brief Service locator interface for accessing engine subsystems
+ *
+ * IEngineContext is the primary interface through which game modules access
+ * engine functionality. The engine creates a concrete implementation and
+ * passes it to each module during OnLoad(). Modules should store this
+ * pointer and use it to access graphics, input, physics, and other systems.
+ *
+ * This replaces the old approach of passing individual system pointers
+ * (GraphicsEngine*, InputManager*) to IGameModule::Initialize().
+ */
+
+#pragma once
+
+#include <cstdint>
+
+// Forward declarations — engine types accessible through the context.
+// Modules include the specific engine headers they need for full definitions.
+class GraphicsEngine;
+class InputManager;
+class Timer;
+
+namespace Spark {
+
+/**
+ * @brief Service locator providing access to all engine subsystems
+ *
+ * Game modules receive an IEngineContext* during OnLoad() and use it
+ * to query for engine services. This decouples modules from the engine's
+ * internal structure and allows the engine to evolve without breaking
+ * the module API.
+ */
+class IEngineContext
+{
+public:
+    virtual ~IEngineContext() = default;
+
+    /** @brief Get the graphics/rendering engine */
+    virtual GraphicsEngine* GetGraphics() = 0;
+
+    /** @brief Get the input manager */
+    virtual InputManager* GetInput() = 0;
+
+    /** @brief Get the frame timer */
+    virtual Timer* GetTimer() = 0;
+
+    /** @brief Get the packed engine version (0xMMmmpp) */
+    virtual uint32_t GetEngineVersion() const = 0;
+
+    /** @brief Get the SDK ABI version */
+    virtual uint32_t GetSDKVersion() const = 0;
+};
+
+} // namespace Spark

@@ -1,0 +1,12 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/SparkEngineTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/SparkGameModule.cmake")
+
+# Convenience variables
+set(SPARK_ENGINE_INCLUDE_DIR "${PACKAGE_PREFIX_DIR}/include")
+set(SPARK_ENGINE_SDK_DIR "${PACKAGE_PREFIX_DIR}/include/Spark")
+set(SPARK_ENGINE_LIBRARIES Spark::SparkEngineLib)
+set(SPARK_ENGINE_FOUND TRUE)
+
+check_required_components(SparkEngine)

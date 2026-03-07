@@ -580,6 +580,7 @@ endif()
 # ---------------------------------------------------------------------
 target_include_directories(SparkEngineLib PUBLIC
     "Spark Engine/Source"
+    "SparkSDK/Include"
     ${THIRDPARTY_INCLUDE_DIRS}
 )
 
@@ -849,7 +850,89 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
 endif()
 
 # ---------------------------------------------------------------------
-# 17) Build summary
+# 17) CMake install rules and find_package support
+# ---------------------------------------------------------------------
+# Allows standalone game projects to use:
+#   find_package(SparkEngine REQUIRED)
+#   spark_add_game_module(MyGame ${SOURCES})
+#
+# Install with: cmake --install build --prefix /path/to/install
+# ---------------------------------------------------------------------
+
+install(TARGETS SparkEngineLib
+    EXPORT SparkEngineTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+)
+
+# Install SparkSDK public headers
+install(DIRECTORY SparkSDK/Include/Spark
+    DESTINATION include
+)
+
+# Install the engine's public headers (needed by modules that use engine types directly)
+install(DIRECTORY "Spark Engine/Source/"
+    DESTINATION include/SparkEngine
+    FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.hpp"
+)
+
+# Install third-party headers that are part of the public interface
+foreach(dir ${THIRDPARTY_INCLUDE_DIRS})
+    if(EXISTS "${dir}")
+        install(DIRECTORY "${dir}/"
+            DESTINATION include/SparkEngine/ThirdParty
+            FILES_MATCHING
+                PATTERN "*.h"
+                PATTERN "*.hpp"
+        )
+    endif()
+endforeach()
+
+# Export targets
+install(EXPORT SparkEngineTargets
+    FILE SparkEngineTargets.cmake
+    NAMESPACE Spark::
+    DESTINATION lib/cmake/SparkEngine
+)
+
+# Package config
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    "${CMAKE_SOURCE_DIR}/cmake/SparkEngineConfig.cmake.in"
+    "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/SparkEngine
+)
+
+install(FILES
+    "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+    DESTINATION lib/cmake/SparkEngine
+)
+
+# Install engine executable and game DLL
+install(TARGETS SparkEngine
+    RUNTIME DESTINATION bin
+)
+if(TARGET SparkGame)
+    install(TARGETS SparkGame
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION bin
+    )
+endif()
+
+# Install shaders
+if(EXISTS "${CMAKE_SOURCE_DIR}/Spark Engine/Shaders")
+    install(DIRECTORY "Spark Engine/Shaders/"
+        DESTINATION bin/Shaders
+    )
+endif()
+
+message(STATUS "CMake install rules configured (use 'cmake --install' for find_package support)")
+
+# ---------------------------------------------------------------------
+# 18) Build summary
 # ---------------------------------------------------------------------
 message(STATUS "=== SPARK ENGINE + GAME CONFIGURED SUCCESSFULLY ===")
 if(MSVC)
