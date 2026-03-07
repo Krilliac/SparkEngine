@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
+using namespace DirectX;
 namespace Spark::Cinematic {
 
 // ============================================================================

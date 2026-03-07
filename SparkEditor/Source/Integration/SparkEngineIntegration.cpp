@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <sstream>
 
+using namespace DirectX;
 namespace SparkEditor {
 
 // ============================================================================

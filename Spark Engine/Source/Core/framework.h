@@ -48,4 +48,3 @@
 #include <cstdlib>
 #include <cstring>
 
-using namespace DirectX;

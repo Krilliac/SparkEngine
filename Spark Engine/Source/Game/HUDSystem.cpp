@@ -10,6 +10,7 @@
 #include <cmath>
 #include <algorithm>
 
+using namespace DirectX;
 namespace Spark {
 
 HUDSystem::HUDSystem() = default;

@@ -25,7 +25,6 @@
 #include <functional>
 
 using Microsoft::WRL::ComPtr;
-using namespace DirectX;
 
 /**
  * @brief Light types supported by the system

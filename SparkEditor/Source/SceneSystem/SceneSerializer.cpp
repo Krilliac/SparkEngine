@@ -12,6 +12,7 @@
 #include <cstring>
 #include <filesystem>
 
+using namespace DirectX;
 namespace SparkEditor {
 
 SceneSerializer::SceneSerializer() = default;

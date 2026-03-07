@@ -786,4 +786,9 @@ struct XMUINT4 {
 };
 } // namespace DirectX
 
+// On non-Windows, bring DirectX stub types into global scope so that
+// existing code using bare XMFLOAT3, XMVECTOR, etc. compiles without
+// requiring DirectX:: qualification everywhere.
+using namespace DirectX;
+
 #endif // !SPARK_PLATFORM_WINDOWS

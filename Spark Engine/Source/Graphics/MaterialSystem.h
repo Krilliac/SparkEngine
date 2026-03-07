@@ -27,7 +27,6 @@
 #include <chrono>
 
 using Microsoft::WRL::ComPtr;
-using namespace DirectX;
 
 /**
  * @brief Material blend modes

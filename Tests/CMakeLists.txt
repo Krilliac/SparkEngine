@@ -44,6 +44,9 @@ add_executable(SparkTests
     TestTween.cpp
     TestCommandHistory.cpp
     TestDebugTools.cpp
+    TestResult.cpp
+    TestFrameAllocator.cpp
+    TestChromeTracing.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

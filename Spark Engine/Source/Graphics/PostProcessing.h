@@ -31,7 +31,6 @@
 #include <functional>
 
 using Microsoft::WRL::ComPtr;
-using namespace DirectX;
 
 /**
  * @brief Post-processing effect types

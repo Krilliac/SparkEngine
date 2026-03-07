@@ -7,6 +7,7 @@
 #include <sstream>
 #include <cmath>
 
+using namespace DirectX;
 namespace Spark::AI {
 
 // ============================================================================

@@ -10,6 +10,7 @@
 #include <numeric>
 #include <queue>
 
+using namespace DirectX;
 namespace Spark::Procedural {
 
 // ============================================================================

@@ -5,6 +5,7 @@
 
 #include "MaterialEditor.h"
 
+using namespace DirectX;
 namespace SparkEditor {
 
 MaterialEditor::MaterialEditor()

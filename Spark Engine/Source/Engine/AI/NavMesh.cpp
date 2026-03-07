@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <random>
 
+using namespace DirectX;
 namespace Spark::AI {
 
 // ============================================================================

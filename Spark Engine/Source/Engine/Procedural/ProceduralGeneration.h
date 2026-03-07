@@ -25,7 +25,6 @@
 #include <random>
 #include <cstdint>
 
-using namespace DirectX;
 
 namespace Spark::Procedural {
 

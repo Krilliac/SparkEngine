@@ -28,7 +28,6 @@
 #include <future>
 
 using Microsoft::WRL::ComPtr;
-using namespace DirectX;
 
 /**
  * @brief Asset types supported by the pipeline

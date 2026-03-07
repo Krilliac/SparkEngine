@@ -75,7 +75,6 @@
 #include <any>
 #include <variant>
 
-using namespace DirectX;
 
 namespace Spark::AI {
 

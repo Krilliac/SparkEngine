@@ -21,7 +21,6 @@
 #include <functional>
 #include <chrono>
 
-using namespace DirectX;
 using SparkEditor::DamageZoneType;
 
 class Player;

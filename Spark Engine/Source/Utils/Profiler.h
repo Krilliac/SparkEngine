@@ -15,14 +15,13 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
+using Microsoft::WRL::ComPtr;
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>
 #include <array>
 #include <unordered_map>
 #include <chrono>
-
-using Microsoft::WRL::ComPtr;
 
 /**
  * @brief Profiling category
@@ -89,6 +88,7 @@ struct FrameTimingHistory
     }
 };
 
+#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @brief GPU timing query wrapper
  */
@@ -100,6 +100,7 @@ struct GPUTimerQuery
     bool pending = false;
     double resultMs = 0.0;
 };
+#endif // SPARK_PLATFORM_WINDOWS
 
 /**
  * @brief Scoped CPU timer - automatically records start/end
@@ -128,10 +129,12 @@ public:
         return instance;
     }
 
+#ifdef SPARK_PLATFORM_WINDOWS
     /**
      * @brief Initialize with D3D11 device for GPU queries
      */
     HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* context);
+#endif // SPARK_PLATFORM_WINDOWS
 
     /**
      * @brief Shutdown and release resources
@@ -162,6 +165,7 @@ public:
      */
     void EndFrame();
 
+#ifdef SPARK_PLATFORM_WINDOWS
     // ============================================================================
     // GPU Timing
     // ============================================================================
@@ -180,6 +184,7 @@ public:
      * @brief Resolve pending GPU queries (call at end of frame)
      */
     void ResolveGPUQueries();
+#endif // SPARK_PLATFORM_WINDOWS
 
     // ============================================================================
     // Memory Tracking
@@ -249,10 +254,12 @@ private:
     FrameTimingHistory m_frameHistory;
     std::chrono::high_resolution_clock::time_point m_frameStart;
 
+#ifdef SPARK_PLATFORM_WINDOWS
     // GPU timing
     ID3D11Device* m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
     std::unordered_map<std::string, GPUTimerQuery> m_gpuTimers;
+#endif // SPARK_PLATFORM_WINDOWS
 
     // Memory tracking
     struct MemoryCategory {
@@ -271,8 +278,13 @@ private:
     #define PROFILE_SCOPE_CAT(name, cat) ScopedProfileTimer _profile_##__LINE__(name, cat)
     #define PROFILE_BEGIN(name)       Profiler::GetInstance().BeginSection(name)
     #define PROFILE_END(name)         Profiler::GetInstance().EndSection(name)
-    #define PROFILE_GPU_BEGIN(name)   Profiler::GetInstance().BeginGPUTimer(name)
-    #define PROFILE_GPU_END(name)     Profiler::GetInstance().EndGPUTimer(name)
+    #ifdef SPARK_PLATFORM_WINDOWS
+        #define PROFILE_GPU_BEGIN(name)   Profiler::GetInstance().BeginGPUTimer(name)
+        #define PROFILE_GPU_END(name)     Profiler::GetInstance().EndGPUTimer(name)
+    #else
+        #define PROFILE_GPU_BEGIN(name)
+        #define PROFILE_GPU_END(name)
+    #endif
 #else
     #define PROFILE_SCOPE(name)
     #define PROFILE_SCOPE_CAT(name, cat)

@@ -25,7 +25,6 @@
 #include <mutex>
 
 using Microsoft::WRL::ComPtr;
-using namespace DirectX;
 
 /**
  * @brief Render target formats for different rendering passes

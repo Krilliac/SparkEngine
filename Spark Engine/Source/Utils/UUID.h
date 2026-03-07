@@ -5,7 +5,7 @@
  * @date 2025
  *
  * Provides a compact 64-bit UUID suitable for entity IDs, asset handles,
- * and resource tracking. Uses a seeded mt19937_64 for generation.
+ * and resource tracking. Uses std::random_device for proper seeding.
  *
  * ## Usage
  * @code
@@ -24,7 +24,6 @@
 #include <string>
 #include <random>
 #include <functional>
-#include <chrono>
 #include <mutex>
 #include <cstdio>
 
@@ -35,18 +34,25 @@ public:
     UUID() : m_value(0) {}
     explicit UUID(uint64_t value) : m_value(value) {}
 
-    /// Generate a new unique identifier
+    /// Generate a new unique identifier (RFC 4122 v4 compliant layout)
     static UUID Generate() {
         static std::mutex s_mutex;
-        static std::mt19937_64 s_rng(
-            static_cast<uint64_t>(
-                std::chrono::high_resolution_clock::now().time_since_epoch().count()));
+        static std::mt19937_64 s_rng = [] {
+            std::random_device rd;
+            // Seed with multiple random_device outputs for better entropy
+            std::seed_seq seq{rd(), rd(), rd(), rd()};
+            return std::mt19937_64(seq);
+        }();
 
         std::lock_guard<std::mutex> lock(s_mutex);
         uint64_t val = 0;
         // Ensure non-zero
         while (val == 0) {
             val = s_rng();
+            // Set version 4 bits (bits 48-51 = 0100)
+            val = (val & ~(uint64_t(0xF) << 48)) | (uint64_t(0x4) << 48);
+            // Set variant bits (bits 62-63 = 10)
+            val = (val & ~(uint64_t(0x3) << 62)) | (uint64_t(0x2) << 62);
         }
         return UUID(val);
     }

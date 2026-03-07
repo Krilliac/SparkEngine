@@ -29,7 +29,6 @@
 #include <condition_variable>
 
 using Microsoft::WRL::ComPtr;
-using namespace DirectX;
 
 /**
  * @brief Texture formats supported by the system

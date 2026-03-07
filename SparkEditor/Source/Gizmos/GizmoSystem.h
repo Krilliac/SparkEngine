@@ -19,7 +19,6 @@
 #include <vector>
 #include <memory>
 
-using namespace DirectX;
 
 namespace SparkEditor {
 

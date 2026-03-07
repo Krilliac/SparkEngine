@@ -73,7 +73,6 @@
 #include <filesystem>
 #include <unordered_map>
 
-using namespace DirectX;
 
 class GraphicsEngine;
 class InputManager;

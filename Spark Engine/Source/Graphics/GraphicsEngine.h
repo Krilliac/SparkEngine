@@ -32,9 +32,6 @@
 #include <atomic>  // **CRITICAL FIX: Added for atomic frame state**
 
 using Microsoft::WRL::ComPtr;
-// Note: using-directive here is intentional - GraphicsEngine.h uses DirectX types
-// extensively throughout (XMMATRIX, XMFLOAT3, etc.) and is Windows-only.
-using namespace DirectX;
 
 // Forward declarations for engine systems
 class RenderTarget;

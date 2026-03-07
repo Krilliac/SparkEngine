@@ -25,7 +25,6 @@
 #include <functional>
 #include <cstdint>
 
-using namespace DirectX;
 
 namespace Spark::Cinematic {
 

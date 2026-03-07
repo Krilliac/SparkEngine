@@ -25,7 +25,6 @@
 #include <string>
 #include <functional>
 
-using namespace DirectX;
 using SparkEditor::InteractiveObjectType;
 using SparkEditor::PlayerClass;
 using SparkEditor::WeaponType;

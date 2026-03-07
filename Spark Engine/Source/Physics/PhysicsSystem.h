@@ -71,7 +71,6 @@
 #include <functional>
 #include <mutex>
 
-using namespace DirectX;
 
 // Forward declarations for Bullet Physics
 class btDiscreteDynamicsWorld;

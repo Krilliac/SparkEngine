@@ -15,7 +15,6 @@
 #include <functional>
 #include <unordered_map>
 
-using namespace DirectX;
 
 namespace SparkEditor {
 

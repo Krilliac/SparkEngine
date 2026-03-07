@@ -17,7 +17,6 @@
 #include <thread>
 #include <DirectXMath.h>
 
-using namespace DirectX;
 
 // Forward declarations
 struct ID3D11Device;

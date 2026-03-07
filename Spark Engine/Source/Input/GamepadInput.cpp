@@ -6,6 +6,7 @@
 #include <cmath>
 #include <algorithm>
 
+using namespace DirectX;
 GamepadInput::GamepadInput() = default;
 GamepadInput::~GamepadInput()
 {
