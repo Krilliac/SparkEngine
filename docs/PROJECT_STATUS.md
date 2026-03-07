@@ -30,7 +30,7 @@
 | Save / Load | **Working** | Game state persistence |
 | Asset Pipeline | **Working** | OBJ mesh, TGA texture, WAV audio loading with fallback placeholders |
 | Shader Cross-Compilation | **Partial** | Basic HLSL-to-GLSL translation; SPIR-V needs DXC/glslang |
-| Editor (ImGui) | **Partial** | Dead code removed; docking, theme, asset import still have TODOs |
+| Editor (ImGui) | **Working** | Docking, theme, asset import all implemented |
 | Networking | **Disabled** | CURL dependency issues; needs ENet or GameNetworkingSockets replacement |
 | DXR / Ray Tracing | **Stub** | Requires D3D12 backend which doesn't exist yet |
 | Vulkan Backend | **Untested** | RHI abstraction in place; needs real SPIR-V compilation |
@@ -105,10 +105,12 @@ All managed as git submodules. Updated to latest upstream as of 2026-03-03.
 
 ### Editor TODOs
 
-- DockingSystem: tab colors, panel refresh/save/reset
-- EditorTheme: live customization UI, JSON export/import
-- EditorUI: recovery dialog, layout import/export
-- AssetBrowserPanel: asset import logic
+All editor TODOs have been resolved:
+
+- DockingSystem: tab colors, panel refresh/save/reset — **Done**
+- EditorTheme: live customization UI, JSON export/import — **Done**
+- EditorUI: recovery dialog, layout import/export — **Done**
+- AssetBrowserPanel: asset import logic — **Done**
 
 ### Infrastructure
 
