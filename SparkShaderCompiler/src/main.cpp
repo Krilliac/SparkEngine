@@ -33,6 +33,7 @@
 #include <vector>
 #include <chrono>
 #include <algorithm>
+#include <filesystem>
 
 // Include the RHI shader compilation API
 #include "../../SparkEngine/Source/Graphics/RHI/RHIFactory.h"
@@ -360,11 +361,79 @@ int main(int argc, char* argv[])
         return CompileSingleShader(config);
     }
 
-    // Batch mode not yet implemented
+    // Batch compilation
     if (!config.batchDir.empty()) {
-        std::cerr << "Batch compilation not yet implemented.\n"
-                  << "Use compile_shaders.sh / compile_shaders.bat for batch compilation.\n";
-        return 1;
+        namespace fs = std::filesystem;
+
+        if (!fs::exists(config.batchDir) || !fs::is_directory(config.batchDir)) {
+            std::cerr << "Error: Batch directory not found: " << config.batchDir << "\n";
+            return 1;
+        }
+
+        // Supported shader file extensions
+        const std::vector<std::string> shaderExts = {
+            ".hlsl", ".glsl", ".vert", ".frag", ".comp",
+            ".geom", ".tesc", ".tese", ".vs", ".ps", ".gs", ".cs"
+        };
+
+        auto isShaderFile = [&](const fs::path& path) {
+            std::string ext = path.extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+            return std::find(shaderExts.begin(), shaderExts.end(), ext) != shaderExts.end();
+        };
+
+        std::vector<std::string> shaderFiles;
+        for (const auto& entry : fs::recursive_directory_iterator(config.batchDir)) {
+            if (entry.is_regular_file() && isShaderFile(entry.path())) {
+                shaderFiles.push_back(entry.path().string());
+            }
+        }
+
+        if (shaderFiles.empty()) {
+            std::cerr << "No shader files found in: " << config.batchDir << "\n";
+            return 1;
+        }
+
+        std::cout << "Batch compiling " << shaderFiles.size() << " shader(s) from " << config.batchDir << "\n";
+
+        auto batchStart = std::chrono::high_resolution_clock::now();
+        int successCount = 0;
+        int failCount = 0;
+
+        for (const auto& shaderPath : shaderFiles) {
+            CompilerConfig fileConfig = config;
+            fileConfig.inputFile = shaderPath;
+            fileConfig.batchDir.clear(); // prevent recursion
+            fileConfig.stage = InferStageFromFilename(shaderPath);
+
+            if (fileConfig.outputFile.empty()) {
+                fileConfig.outputFile = InferOutputPath(shaderPath, fileConfig.targetBackend);
+            } else {
+                // In batch mode with -o, put output files in that directory
+                fs::path outDir(config.outputFile);
+                fs::path inputName = fs::path(shaderPath).filename();
+                std::string outName = InferOutputPath(inputName.string(), fileConfig.targetBackend);
+                fileConfig.outputFile = (outDir / outName).string();
+            }
+
+            int ret = CompileSingleShader(fileConfig);
+            if (ret == 0) {
+                successCount++;
+            } else {
+                failCount++;
+            }
+        }
+
+        auto batchEnd = std::chrono::high_resolution_clock::now();
+        float totalMs = std::chrono::duration<float, std::milli>(batchEnd - batchStart).count();
+
+        std::cout << "\n=== Batch Compilation Summary ===\n"
+                  << "  Total:   " << shaderFiles.size() << "\n"
+                  << "  Success: " << successCount << "\n"
+                  << "  Failed:  " << failCount << "\n"
+                  << "  Time:    " << totalMs << " ms\n";
+
+        return failCount > 0 ? 1 : 0;
     }
 
     return 0;
