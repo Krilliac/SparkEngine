@@ -65,6 +65,7 @@ public:
     PerformanceMetrics GetPerformanceMetrics() const;
     void OnWindowResize(int width, int height);
     bool OnShutdownRequested();
+    void SetWindowTitle(const std::string& title);
 
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
