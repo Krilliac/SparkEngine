@@ -216,6 +216,12 @@ public:
      * @return Current time scale multiplier
      */
     float GetTimeScale() const { return m_timeScale; }
+
+    /**
+     * @brief Check if FPS counter display is enabled
+     * @return true if FPS counter should be shown
+     */
+    bool GetShowFPS() const { return m_showFPS; }
     
     // ============================================================================
     // ENHANCED ACCESSOR METHODS - Full System Integration
@@ -485,4 +491,5 @@ private:
     bool m_godModeEnabled{ false };      ///< God mode state for console debugging
     bool m_noclipEnabled{ false };       ///< Noclip state for console debugging
     bool m_infiniteAmmoEnabled{ false }; ///< Infinite ammo state for console debugging
+    bool m_showFPS{ false };             ///< Whether to display FPS counter
 };

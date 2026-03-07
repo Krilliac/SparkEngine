@@ -29,6 +29,7 @@
 #include "Utils/SparkConsole.h"
 #include "Console/AdvancedConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
+#include <filesystem>
 
 // Pull in globals defined in Main.cpp (SparkGame entry point)
 extern std::unique_ptr<GraphicsEngine> g_graphics;
@@ -242,7 +243,75 @@ HRESULT Game::Initialize(GraphicsEngine* graphics,
     m_hudSystem = std::make_unique<Spark::HUDSystem>();
     m_hudSystem->Initialize();
     m_hudSystem->SetPlayer(m_player.get());
+    m_hudSystem->SetCurrentClass(GetPlayerClass());
     LOG_TO_CONSOLE_IMMEDIATE(L"HUD system initialized", L"SUCCESS");
+
+    /* Wire GameMode event callbacks → HUD system ---*/
+    {
+        auto& events = m_gameMode->GetEvents();
+
+        events.onPlayerKill = [this](const std::string& player) {
+            if (m_hudSystem)
+                m_hudSystem->ShowHitMarker(false);
+        };
+
+        events.onPlayerDeath = [this](const std::string& player) {
+            if (m_hudSystem)
+                m_hudSystem->AddDamageIndicator(0.0f, 1.0f, 2.0f);
+        };
+
+        events.onRoundStart = [this](int roundNum) {
+            std::wstring msg = L"Round " + std::to_wstring(roundNum) + L" started";
+            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        };
+
+        events.onRoundEnd = [this](const Spark::RoundResult& result) {
+            std::wstring msg = L"Round " + std::to_wstring(result.roundNumber) +
+                              L" ended - MVP: " + std::wstring(result.mvpPlayer.begin(), result.mvpPlayer.end());
+            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        };
+
+        events.onMatchEnd = [this](Spark::Team winner) {
+            const char* teamName = (winner == Spark::Team::Alpha) ? "Alpha" :
+                                   (winner == Spark::Team::Bravo) ? "Bravo" : "None";
+            std::string tn(teamName);
+            std::wstring msg = L"Match ended - Winner: " + std::wstring(tn.begin(), tn.end());
+            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        };
+
+        events.onKillStreak = [this](const std::string& player, int streak) {
+            if (m_hudSystem) {
+                std::string streakMsg = player + " is on a " + std::to_string(streak) + " kill streak!";
+                m_hudSystem->AddKillFeedEntry("", player, streakMsg);
+            }
+        };
+
+        events.onFirstBlood = [this](const std::string& player) {
+            if (m_hudSystem)
+                m_hudSystem->AddKillFeedEntry(player, "", "First Blood");
+        };
+
+        events.onScoreUpdate = [this](Spark::Team team, int score) {
+            // Update scoreboard on HUD from current gamemode data
+            if (m_hudSystem && m_gameMode) {
+                auto scores = m_gameMode->GetScoreboard();
+                std::vector<Spark::ScoreboardEntry> entries;
+                entries.reserve(scores.size());
+                for (const auto& ps : scores) {
+                    Spark::ScoreboardEntry entry;
+                    entry.playerName = ps.playerName;
+                    entry.kills = ps.kills;
+                    entry.deaths = ps.deaths;
+                    entry.assists = ps.assists;
+                    entry.score = ps.totalScore;
+                    entry.isLocalPlayer = (ps.playerName == "Player1");
+                    entries.push_back(std::move(entry));
+                }
+                m_hudSystem->SetScoreboard(entries);
+            }
+        };
+    }
+    LOG_TO_CONSOLE_IMMEDIATE(L"GameMode events wired to HUD", L"SUCCESS");
 
     /* Inventory System - Register base items --------*/
     Spark::ItemDef healthPotion;
@@ -356,12 +425,29 @@ void Game::SetEventBus(Spark::EventBus* bus)
     m_eventBus = bus;
     if (!bus) return;
 
-    // Entity killed → update gamemode scoring + quest progress
+    // Entity killed → update gamemode scoring, quest progress, and HUD kill feed
     bus->Subscribe<Spark::EntityKilledEvent>([this](const Spark::EntityKilledEvent& e) {
         if (m_gameMode)
             m_gameMode->RecordKill("Player1", "Enemy");
+
+        // Show hit marker and add kill feed entry on HUD
+        if (m_hudSystem) {
+            m_hudSystem->ShowHitMarker(false);
+            m_hudSystem->AddKillFeedEntry("Player1", "Enemy", e.cause);
+        }
+
         // Progress kill-based quest objectives
         Spark::QuestOps::UpdateObjective(m_playerQuests, m_questRegistry, 1, 0, 1, m_eventBus, 0);
+    });
+
+    // Entity damaged → show damage indicator on HUD
+    bus->Subscribe<Spark::EntityDamagedEvent>([this](const Spark::EntityDamagedEvent& e) {
+        if (m_hudSystem && m_player) {
+            // Normalize damage to 0-1 intensity range (assume 100 HP max)
+            float intensity = std::min(e.damage / 100.0f, 1.0f);
+            // Use a default forward angle since we don't have source position
+            m_hudSystem->AddDamageIndicator(0.0f, intensity);
+        }
     });
 
     // Item pickup → add to player inventory
@@ -369,10 +455,24 @@ void Game::SetEventBus(Spark::EventBus* bus)
         Spark::InventoryOps::AddItem(m_playerInventory, m_itemRegistry, e.itemDefId, e.count);
     });
 
-    // Player respawn → log and reset scoring streak
+    // Player respawn → teleport to spawn point and reset HUD state
     bus->Subscribe<Spark::PlayerRespawnEvent>([this](const Spark::PlayerRespawnEvent& e) {
-        (void)e;
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player respawned", L"INFO");
+        // Teleport camera/player to spawn location
+        if (m_camera) {
+            m_camera->Console_SetPosition(e.spawnX, e.spawnY, e.spawnZ);
+        }
+        if (m_player) {
+            m_player->Console_SetPosition(e.spawnX, e.spawnY, e.spawnZ);
+        }
+
+        // Reset HUD damage indicators on respawn
+        if (m_hudSystem) {
+            m_hudSystem->ShowHitMarker(false);  // Clear any lingering hit marker
+        }
+
+        std::wstring msg = L"Player respawned at (" + std::to_wstring(e.spawnX) + L", " +
+                          std::to_wstring(e.spawnY) + L", " + std::to_wstring(e.spawnZ) + L")";
+        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
     });
 
     LOG_TO_CONSOLE_IMMEDIATE(L"EventBus connected - cross-system events wired", L"SUCCESS");
@@ -725,9 +825,16 @@ void Game::ApplyPhysicsSettings(float gravity, float playerSpeed, float jumpHeig
         m_gravitySystem->Initialize({0, -gravity, 0});
     }
 
-    (void)playerSpeed;
-    (void)jumpHeight;
-    (void)friction;
+    // Apply player movement settings via Player's console API
+    if (m_player) {
+        m_player->Console_SetSpeed(playerSpeed);
+        m_player->Console_SetJumpHeight(jumpHeight);
+    }
+
+    // Apply friction to camera movement speed as a proxy
+    if (m_camera && friction > 0.0f) {
+        m_camera->Console_SetMoveSpeed(playerSpeed * friction);
+    }
 
     std::wstring settingsMsg = L"Physics updated - Gravity: " + std::to_wstring(gravity) +
                               L", Speed: " + std::to_wstring(playerSpeed) +
@@ -743,15 +850,14 @@ void Game::ApplyCameraSettings(float fov, float sensitivity, bool invertY)
         return;
     }
 
-    // FOV requires rebuilding the projection matrix
-    if (m_graphics && fov > 0.0f) {
-        float aspect = float(m_graphics->GetWindowWidth()) /
-                       float(m_graphics->GetWindowHeight());
-        m_camera->Initialize(aspect);
+    // Apply FOV via camera's console API
+    if (fov > 0.0f) {
+        m_camera->Console_SetFOV(fov);
     }
 
-    (void)sensitivity;
-    (void)invertY;
+    // Apply mouse sensitivity and Y-axis inversion
+    m_camera->Console_SetMouseSensitivity(sensitivity);
+    m_camera->Console_SetInvertY(invertY);
 
     std::wstring cameraMsg = L"Camera settings applied - FOV: " + std::to_wstring(fov) +
                             L", Sensitivity: " + std::to_wstring(sensitivity) +
@@ -764,6 +870,13 @@ void Game::ApplyDebugSettings(bool godMode, bool noclip, bool infiniteAmmo)
     m_godModeEnabled = godMode;
     m_noclipEnabled = noclip;
     m_infiniteAmmoEnabled = infiniteAmmo;
+
+    // Forward debug settings to the Player's console API
+    if (m_player) {
+        m_player->Console_SetGodMode(godMode);
+        m_player->Console_SetNoclip(noclip);
+        m_player->Console_SetInfiniteAmmo(infiniteAmmo);
+    }
 
     std::wstring debugMsg = L"Debug settings applied - God Mode: " + (godMode ? std::wstring(L"ON") : std::wstring(L"OFF")) +
                            L", Noclip: " + (noclip ? std::wstring(L"ON") : std::wstring(L"OFF")) +
@@ -923,7 +1036,7 @@ void Game::ApplyGraphicsSettings(bool wireframe, bool vsync, bool showFPS)
         try {
             m_graphics->Console_SetWireframeMode(wireframe);
             m_graphics->Console_SetVSync(vsync);
-            (void)showFPS;
+            m_showFPS = showFPS;
 
             std::wstring graphicsMsg = L"Graphics settings applied - Wireframe: " + (wireframe ? std::wstring(L"ON") : std::wstring(L"OFF")) + 
                                       L", VSync: " + (vsync ? std::wstring(L"ON") : std::wstring(L"OFF")) +
@@ -1028,7 +1141,24 @@ bool Game::SaveScene(const std::string& scenePath)
 std::vector<std::string> Game::GetAvailableScenes() const
 {
     std::vector<std::string> scenes;
-    // Scene directory scanning not yet implemented
+
+    // Scan common scene directories for .scene / .xml / .json files
+    const std::string sceneDirs[] = { "../Assets/Scenes", "../Scenes", "Scenes" };
+    for (const auto& dir : sceneDirs) {
+        try {
+            if (!std::filesystem::exists(dir)) continue;
+            for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+                if (!entry.is_regular_file()) continue;
+                auto ext = entry.path().extension().string();
+                if (ext == ".scene" || ext == ".xml" || ext == ".json") {
+                    scenes.push_back(entry.path().string());
+                }
+            }
+        } catch (...) {
+            // Directory not accessible, skip
+        }
+    }
+
     return scenes;
 }
 
@@ -1041,6 +1171,13 @@ void Game::SetPlayerClass(PlayerClass classType)
     if (m_player && m_classSystem) {
         m_player->SetClass(classType, m_classSystem.get());
         const auto& def = m_classSystem->GetClassDefinition(classType);
+
+        // Notify HUD of class change
+        if (m_hudSystem) {
+            m_hudSystem->ShowClassChange(def.name, classType);
+            m_hudSystem->SetCurrentClass(classType);
+        }
+
         std::wstring classMsg = L"Class changed to: " + std::wstring(def.name.begin(), def.name.end());
         LOG_TO_CONSOLE_IMMEDIATE(classMsg, L"SUCCESS");
     }
