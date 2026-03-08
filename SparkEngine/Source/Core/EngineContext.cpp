@@ -5,6 +5,12 @@
 
 #include "EngineContext.h"
 #include "Spark/Version.h"
+#include <memory>
+
+// Global engine context - defined here (in SparkEngineLib) so that all
+// consumers of the static library (both the executable and SparkGame DLL)
+// can resolve this symbol at link time.
+std::unique_ptr<EngineContext> g_engineContext;
 
 EngineContext::EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer, Spark::EventBus* eventBus)
     : m_graphics(graphics), m_input(input), m_timer(timer), m_eventBus(eventBus)

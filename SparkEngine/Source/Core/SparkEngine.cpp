@@ -63,7 +63,7 @@ std::unique_ptr<InputManager> g_input;
 std::unique_ptr<Timer> g_timer;
 std::unique_ptr<Spark::EventBus> g_eventBus;
 std::unique_ptr<ModuleManager> g_moduleManager;
-std::unique_ptr<EngineContext> g_engineContext;
+extern std::unique_ptr<EngineContext> g_engineContext; // defined in EngineContext.cpp
 std::unique_ptr<AudioEngine> g_audioEngine;
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 
@@ -952,7 +952,7 @@ std::unique_ptr<InputManager> g_input;
 std::unique_ptr<Timer> g_timer;
 std::unique_ptr<Spark::EventBus> g_eventBus;
 std::unique_ptr<ModuleManager> g_moduleManager;
-std::unique_ptr<EngineContext> g_engineContext;
+extern std::unique_ptr<EngineContext> g_engineContext; // defined in EngineContext.cpp
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 
 int main(int argc, char* argv[])
