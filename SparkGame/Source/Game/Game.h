@@ -493,8 +493,8 @@ class SPARK_GAME_API Game
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene
 
-    bool m_isPaused{false};    ///< Current pause state of the game
-    bool m_isShutDown{false};  ///< Guards against double-shutdown
+    bool m_isPaused{false};   ///< Current pause state of the game
+    bool m_isShutDown{false}; ///< Guards against double-shutdown
 
     // Console integration state
     float m_timeScale{1.0f};           ///< Global time scale multiplier for console control
