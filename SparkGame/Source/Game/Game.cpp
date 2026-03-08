@@ -426,6 +426,10 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 --------------------------------------------------------------*/
 void Game::Shutdown()
 {
+    if (m_isShutDown)
+        return;
+    m_isShutDown = true;
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Game::Shutdown called.", L"INFO");
 
     m_gameObjects.clear();
