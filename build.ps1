@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Configure & build SparkEngine from PowerShell.
 .PARAMETER Config
@@ -22,6 +22,50 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# -----------------------------------------------------------------
+# Check and initialize git submodules
+# -----------------------------------------------------------------
+Write-Host ""
+Write-Host "=== Checking git submodules ===" -ForegroundColor Cyan
+
+$submodules = @(
+    @{ Path = "ThirdParty\Utils\miniz";                        Name = "miniz";          Desc = "Compression (crash dumps, save files)" },
+    @{ Path = "ThirdParty\Physics\bullet3";                    Name = "Bullet Physics"; Desc = "Rigid body physics, collision, raycasting" },
+    @{ Path = "ThirdParty\UI\imgui";                           Name = "Dear ImGui";     Desc = "Editor UI, debug overlays" },
+    @{ Path = "ThirdParty\ECS\entt";                           Name = "EnTT";           Desc = "Entity component system" },
+    @{ Path = "ThirdParty\Scripting\angelscript-mirror";       Name = "AngelScript";    Desc = "Hot-reload scripting" },
+    @{ Path = "ThirdParty\Networking\curl";                    Name = "curl";           Desc = "HTTP networking (optional)" }
+)
+
+$missingSubmodules = 0
+foreach ($sub in $submodules) {
+    $fullPath = Join-Path $PSScriptRoot $sub.Path
+    if ((Test-Path $fullPath) -and ((Get-ChildItem $fullPath -Force | Measure-Object).Count -eq 0)) {
+        Write-Host "  [MISSING] $($sub.Name) ($($sub.Path)) - $($sub.Desc)" -ForegroundColor Yellow
+        $missingSubmodules++
+    } elseif (-not (Test-Path $fullPath)) {
+        Write-Host "  [MISSING] $($sub.Name) ($($sub.Path)) - $($sub.Desc)" -ForegroundColor Yellow
+        $missingSubmodules++
+    } else {
+        Write-Host "  [OK]      $($sub.Name)" -ForegroundColor Green
+    }
+}
+
+if ($missingSubmodules -gt 0) {
+    Write-Host ""
+    Write-Host "WARNING: $missingSubmodules submodule(s) not initialized." -ForegroundColor Yellow
+    Write-Host "  The engine will build but with DEGRADED functionality." -ForegroundColor Yellow
+    Write-Host "  Initializing submodules now..." -ForegroundColor Yellow
+    Write-Host ""
+    git submodule update --init --recursive
+    Write-Host ""
+    Write-Host "Submodules initialized successfully." -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "=== Building SparkEngine ($config) ===" -ForegroundColor Cyan
+Write-Host ""
 
 $buildDir = "build"
 if (!(Test-Path $buildDir)) { New-Item $buildDir -ItemType Directory | Out-Null }
