@@ -105,8 +105,8 @@ namespace Spark
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
-// DirectXMath.h is included via framework.h (after windows.h) to ensure
-// correct include ordering.  Platform.h only provides non-Windows stubs.
+#include <DirectXMath.h>
+using namespace DirectX;
 
 #else // !SPARK_PLATFORM_WINDOWS
 
