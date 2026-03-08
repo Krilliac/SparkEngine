@@ -32,7 +32,8 @@ namespace Spark
             Vulkan,
             OpenGL,
             Metal,
-            Auto // Auto-detect best available
+            Auto, // Auto-detect best available
+            None  // No backend available
         };
 
         // ============================================================================

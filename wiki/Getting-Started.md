@@ -11,6 +11,13 @@ This guide covers everything you need to clone, build, and run SparkEngine from 
 | **Graphics** | DirectX 11 capable GPU (Windows). Vulkan SDK optional. OpenGL 4.5 optional. |
 | **Platform** | Windows 10+ (primary), Linux x64 (experimental) |
 | **Git** | For cloning with submodules |
+| **Linux packages** | `build-essential`, `ninja-build`, `cmake` |
+
+**Linux (Debian/Ubuntu):**
+
+```bash
+sudo apt install build-essential ninja-build cmake
+```
 
 ## Clone the Repository
 
