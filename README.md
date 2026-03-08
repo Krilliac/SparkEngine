@@ -361,6 +361,10 @@ cd docs
 
 Requires `doxygen` and `graphviz`.
 
+## Templates
+
+Check out **[SparkTemplates](https://github.com/Krilliac/SparkTemplates)** for ready-made project templates and starter kits built on Spark Engine. These templates give you a pre-configured starting point so you can jump straight into building your game without setting everything up from scratch.
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
