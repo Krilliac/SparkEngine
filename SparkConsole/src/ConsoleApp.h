@@ -30,7 +30,11 @@ class ConsoleApp
     void PrintLog(const std::wstring& msg);
     void PrintEngineLog(const std::wstring& msg);
     void PrintResult(const std::string& result);
+#ifdef SPARK_PLATFORM_WINDOWS
     void SetConsoleColor(WORD color);
+#else
+    void SetConsoleColor(int color);
+#endif
 
     // Command handling
     void ExecuteCommand(const std::string& cmdLine);
@@ -66,8 +70,13 @@ class ConsoleApp
     std::string m_currentInput;
 
     // Console handles
+#ifdef SPARK_PLATFORM_WINDOWS
     HANDLE m_consoleOutput;
     HANDLE m_consoleInput;
+#else
+    int m_consoleOutput; // stdout fd
+    int m_consoleInput;  // stdin fd
+#endif
 
     // Message buffer for performance
     std::deque<std::wstring> m_messageBuffer;

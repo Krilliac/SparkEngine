@@ -39,12 +39,15 @@ if(CONSOLE_SOURCES)
     )
 
     # Compiler definitions
-    target_compile_definitions(SparkConsole PRIVATE
-        CONSOLE_ENABLED
-        _CRT_SECURE_NO_WARNINGS
-        WIN32_LEAN_AND_MEAN
-        NOMINMAX
-    )
+    target_compile_definitions(SparkConsole PRIVATE CONSOLE_ENABLED)
+    if(WIN32)
+        target_compile_definitions(SparkConsole PRIVATE
+            _CRT_SECURE_NO_WARNINGS
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX
+            SPARK_PLATFORM_WINDOWS
+        )
+    endif()
 
     # System libraries - platform-specific
     if(WIN32)
@@ -56,7 +59,11 @@ if(CONSOLE_SOURCES)
     else()
         find_package(Threads REQUIRED)
         target_link_libraries(SparkConsole PRIVATE Threads::Threads)
-        target_compile_definitions(SparkConsole PRIVATE SPARK_PLATFORM_LINUX)
+        if(APPLE)
+            target_compile_definitions(SparkConsole PRIVATE SPARK_PLATFORM_MACOS)
+        else()
+            target_compile_definitions(SparkConsole PRIVATE SPARK_PLATFORM_LINUX)
+        endif()
     endif()
 
     # MSVC specific settings

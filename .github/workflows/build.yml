@@ -21,7 +21,7 @@ jobs:
 
     - name: Check formatting
       run: |
-        find "SparkEngine/Source" SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+        find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
           -name '*.h' -o -name '*.hpp' -o -name '*.cpp' | \
           xargs clang-format --dry-run --Werror 2>&1 || {
             echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
@@ -51,7 +51,8 @@ jobs:
           -DBUILD_TESTS=ON \
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
           -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
     - name: Build
       run: cmake --build build --parallel $(nproc)
@@ -59,6 +60,7 @@ jobs:
     - name: Run Tests under ASan
       run: |
         cd build
+        ctest --output-on-failure || true
         ./bin/SparkTests
 
   # ===========================================================================
@@ -194,11 +196,8 @@ jobs:
           -DCMAKE_C_COMPILER=gcc \
           -DCMAKE_CXX_COMPILER=g++
 
-    - name: Build Engine
-      run: cmake --build build --parallel $(nproc) --target SparkEngine
-
-    - name: Build Tests
-      run: cmake --build build --parallel $(nproc) --target SparkTests
+    - name: Build all targets
+      run: cmake --build build --parallel $(nproc)
 
     - name: Run Tests
       run: |
@@ -250,11 +249,8 @@ jobs:
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++
 
-    - name: Build Engine
-      run: cmake --build build --parallel $(nproc) --target SparkEngine
-
-    - name: Build Tests
-      run: cmake --build build --parallel $(nproc) --target SparkTests
+    - name: Build all targets
+      run: cmake --build build --parallel $(nproc)
 
     - name: Run Tests
       run: |

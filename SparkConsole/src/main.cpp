@@ -2,11 +2,12 @@
 #include <iostream>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
-#endif             // SPARK_PLATFORM_WINDOWS
-#include <conio.h> // For _getch()
+#include <conio.h>
+#endif // SPARK_PLATFORM_WINDOWS
 
 int main()
 {
+#ifdef SPARK_PLATFORM_WINDOWS
     // Set console title and properties
     SetConsoleTitleW(L"Spark Engine Debug Console");
     SetConsoleOutputCP(CP_UTF8);
@@ -23,6 +24,7 @@ int main()
     GetConsoleMode(hConsole, &mode);
     mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     SetConsoleMode(hConsole, mode);
+#endif // SPARK_PLATFORM_WINDOWS
 
     std::wcout << L"Spark Engine Console v1.0.0" << std::endl;
     std::wcout << L"Waiting for engine connection..." << std::endl;
@@ -38,11 +40,19 @@ int main()
     {
         std::cerr << "Console error: " << e.what() << std::endl;
         std::wcout << L"Press any key to continue..." << std::endl;
+#ifdef SPARK_PLATFORM_WINDOWS
         _getch();
+#else
+        std::cin.get();
+#endif
         return 1;
     }
 
     std::wcout << L"Console application finished. Press any key to exit..." << std::endl;
+#ifdef SPARK_PLATFORM_WINDOWS
     _getch();
+#else
+    std::cin.get();
+#endif
     return 0;
 }

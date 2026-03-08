@@ -13,9 +13,9 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ "Working" ]
+    branches: [ main, develop, Working ]
   pull_request:
-    branches: [ "Working" ]
+    branches: [ main, develop, Working ]
   schedule:
     - cron: '35 22 * * 4'
 
@@ -60,6 +60,14 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install build dependencies (C/C++)
+      if: matrix.language == 'c-cpp'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev
 
     # Add any setup steps before running the `github/codeql-action/init` action.
     # This includes steps like installing compilers or runtimes (`actions/setup-node`

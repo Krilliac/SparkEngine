@@ -150,7 +150,11 @@ else()
         Threads::Threads
         ${CMAKE_DL_LIBS}
     )
-    target_compile_definitions(SparkGame PRIVATE SPARK_PLATFORM_LINUX)
+    if(APPLE)
+        target_compile_definitions(SparkGame PRIVATE SPARK_PLATFORM_MACOS)
+    else()
+        target_compile_definitions(SparkGame PRIVATE SPARK_PLATFORM_LINUX)
+    endif()
 endif()
 
 if(MSVC)
