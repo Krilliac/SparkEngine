@@ -4,6 +4,7 @@
  */
 
 #include "EngineContext.h"
+#include "SparkEngine.h"
 #include "Spark/Version.h"
 #include <memory>
 
@@ -25,4 +26,14 @@ uint32_t EngineContext::GetEngineVersion() const
 uint32_t EngineContext::GetSDKVersion() const
 {
     return Spark::GetSDKVersion();
+}
+
+bool EngineContext::IsHeadless() const
+{
+#ifdef SPARK_HEADLESS_SUPPORT
+    extern bool g_headlessMode;
+    return g_headlessMode;
+#else
+    return false;
+#endif
 }

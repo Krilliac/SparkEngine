@@ -61,6 +61,9 @@ public:
     /** @brief Get the physics system (may return nullptr if not initialized) */
     virtual PhysicsSystem* GetPhysics() = 0;
 
+    /** @brief Check if the engine is running in headless/dedicated server mode */
+    virtual bool IsHeadless() const { return false; }
+
     /** @brief Get the packed engine version (0xMMmmpp) */
     virtual uint32_t GetEngineVersion() const = 0;
 

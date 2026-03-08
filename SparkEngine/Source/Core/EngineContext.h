@@ -36,6 +36,7 @@ class EngineContext : public Spark::IEngineContext
     Spark::EventBus* GetEventBus() override { return m_eventBus; }
     AudioEngine* GetAudio() override { return m_audio; }
     PhysicsSystem* GetPhysics() override { return m_physics; }
+    bool IsHeadless() const override;
 
     void SetGraphics(GraphicsEngine* g) { m_graphics = g; }
     void SetInput(InputManager* i) { m_input = i; }

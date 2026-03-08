@@ -55,8 +55,8 @@ class IGameModule
      */
     virtual void Update(float deltaTime) = 0;
 
-    /** @brief Render the current frame */
-    virtual void Render() = 0;
+    /** @brief Render the current frame. Optional — default is a no-op for headless modules. */
+    virtual void Render() {}
 
     /** @brief Called when the window is resized */
     virtual void OnResize(int width, int height)

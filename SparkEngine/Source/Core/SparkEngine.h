@@ -52,6 +52,11 @@ inline InputManager* SparkGetGlobalInput();
 [[deprecated("Use EngineContext::GetTimer() instead of g_timer")]]
 inline Timer* SparkGetGlobalTimer();
 
+// Headless/dedicated server mode flag
+#ifdef SPARK_HEADLESS_SUPPORT
+extern bool g_headlessMode;
+#endif
+
 // Globals are still defined in SparkEngine.cpp for backward compatibility
 // but new code should use EngineContext.
 extern std::unique_ptr<GraphicsEngine> g_graphics;
