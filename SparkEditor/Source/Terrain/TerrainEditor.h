@@ -14,6 +14,7 @@
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
 #include <DirectXMath.h>
+using namespace DirectX;
 #include <vector>
 #include <memory>
 #include <string>

@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <memory>
 #include <DirectXMath.h>
+using namespace DirectX;
 #include "../Enums/SceneSystemEnums.h"
 
 

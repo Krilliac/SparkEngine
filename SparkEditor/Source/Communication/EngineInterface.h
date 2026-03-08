@@ -21,6 +21,7 @@
 #include <thread>
 #include <atomic>
 #include <DirectXMath.h>
+using namespace DirectX;
 
 
 namespace SparkEditor

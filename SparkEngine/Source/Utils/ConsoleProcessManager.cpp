@@ -1,6 +1,7 @@
 #include "Core/Platform.h"
 #include "ConsoleProcessManager.h"
 #include "Utils/Assert.h"
+#include "Utils/CrashHandler.h"
 #include <iostream>
 #include <sstream>
 #include <filesystem>
@@ -121,14 +122,12 @@ namespace Spark
                 std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
                 if (mode == "on" || mode == "true" || mode == "1")
                 {
-                    extern void SetAssertCrashBehavior(bool);
-                    SetAssertCrashBehavior(true);
+                    ::SetAssertCrashBehavior(true);
                     return "Assert crash dumps enabled";
                 }
                 else if (mode == "off" || mode == "false" || mode == "0")
                 {
-                    extern void SetAssertCrashBehavior(bool);
-                    SetAssertCrashBehavior(false);
+                    ::SetAssertCrashBehavior(false);
                     return "Assert crash dumps disabled";
                 }
                 return "Invalid mode. Use: on, off, true, false, 1, or 0";

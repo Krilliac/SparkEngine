@@ -13,6 +13,7 @@
 
 #include "../SceneSystem/SceneFile.h"
 #include <DirectXMath.h>
+using namespace DirectX;
 #include <d3d11.h>
 #include <dxgi.h>
 #include <wrl/client.h>

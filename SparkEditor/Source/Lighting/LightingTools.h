@@ -9,6 +9,7 @@
 
 #include <Core/framework.h>
 #include <DirectXMath.h>
+using namespace DirectX;
 #include <string>
 #include <vector>
 #include <memory>
