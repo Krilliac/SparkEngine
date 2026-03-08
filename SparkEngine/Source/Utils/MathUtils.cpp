@@ -20,8 +20,8 @@ const float MathUtils::RAD_TO_DEG = 57.2957795131f;
 
 // Static random number generator
 static std::random_device s_randomDevice;
-static std::mt19937        s_randomGenerator(s_randomDevice());
-static bool                s_randomInitialized = false;
+static std::mt19937 s_randomGenerator(s_randomDevice());
+static bool s_randomInitialized = false;
 
 // =============================================================================
 // ANGLE UTILITIES
@@ -42,16 +42,20 @@ float MathUtils::RadiansToDegrees(float radians)
 float MathUtils::WrapAngle(float angle)
 {
     ASSERT_MSG(std::isfinite(angle), "Angle must be finite");
-    while (angle > PI)  angle -= TWO_PI;
-    while (angle < -PI) angle += TWO_PI;
+    while (angle > PI)
+        angle -= TWO_PI;
+    while (angle < -PI)
+        angle += TWO_PI;
     return angle;
 }
 
 float MathUtils::NormalizeAngle(float angle)
 {
     ASSERT_MSG(std::isfinite(angle), "Angle must be finite");
-    while (angle < 0.0f)      angle += TWO_PI;
-    while (angle >= TWO_PI)   angle -= TWO_PI;
+    while (angle < 0.0f)
+        angle += TWO_PI;
+    while (angle >= TWO_PI)
+        angle -= TWO_PI;
     return angle;
 }
 
@@ -61,25 +65,19 @@ float MathUtils::NormalizeAngle(float angle)
 
 float MathUtils::Lerp(float a, float b, float t)
 {
-    ASSERT_MSG(std::isfinite(a) && std::isfinite(b) && std::isfinite(t),
-        "Lerp inputs must be finite");
+    ASSERT_MSG(std::isfinite(a) && std::isfinite(b) && std::isfinite(t), "Lerp inputs must be finite");
     return a + t * (b - a);
 }
 
 XMFLOAT3 MathUtils::Lerp(const XMFLOAT3& a, const XMFLOAT3& b, float t)
 {
     ASSERT_MSG(std::isfinite(t), "Lerp t must be finite");
-    return XMFLOAT3(
-        Lerp(a.x, b.x, t),
-        Lerp(a.y, b.y, t),
-        Lerp(a.z, b.z, t)
-    );
+    return XMFLOAT3(Lerp(a.x, b.x, t), Lerp(a.y, b.y, t), Lerp(a.z, b.z, t));
 }
 
 float MathUtils::SmoothStep(float a, float b, float t)
 {
-    ASSERT_MSG(std::isfinite(a) && std::isfinite(b) && std::isfinite(t),
-        "SmoothStep inputs must be finite");
+    ASSERT_MSG(std::isfinite(a) && std::isfinite(b) && std::isfinite(t), "SmoothStep inputs must be finite");
     t = Clamp(t, 0.0f, 1.0f);
     t = t * t * (3.0f - 2.0f * t);
     return Lerp(a, b, t);
@@ -111,7 +109,7 @@ float MathUtils::DistanceSquared(const XMFLOAT3& a, const XMFLOAT3& b)
 
 XMFLOAT3 MathUtils::Direction(const XMFLOAT3& from, const XMFLOAT3& to)
 {
-    XMFLOAT3 dir{ to.x - from.x, to.y - from.y, to.z - from.z };
+    XMFLOAT3 dir{to.x - from.x, to.y - from.y, to.z - from.z};
     return Normalize(dir);
 }
 
@@ -128,7 +126,8 @@ void MathUtils::InitializeRandom()
     }
 }
 
-float MathUtils::RandomFloat(float min, float max) {
+float MathUtils::RandomFloat(float min, float max)
+{
     std::wcout << L"[OPERATION] MathUtils::RandomFloat called. min=" << min << L" max=" << max << std::endl;
     float result = min + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (max - min)));
     std::wcout << L"[INFO] MathUtils::RandomFloat result=" << result << std::endl;
@@ -157,7 +156,8 @@ XMFLOAT3 MathUtils::RandomPointInSphere(float radius)
     ASSERT_MSG(radius >= 0.0f, "Sphere radius must be non-negative");
     XMFLOAT3 point{};
     float lengthSq;
-    do {
+    do
+    {
         point.x = RandomFloat(-1.0f, 1.0f);
         point.y = RandomFloat(-1.0f, 1.0f);
         point.z = RandomFloat(-1.0f, 1.0f);
@@ -173,26 +173,26 @@ XMFLOAT3 MathUtils::RandomPointInSphere(float radius)
 float MathUtils::Clamp(float value, float min, float max)
 {
     ASSERT_MSG(min <= max, "Clamp min must be <= max");
-    if (value < min) return min;
-    if (value > max) return max;
+    if (value < min)
+        return min;
+    if (value > max)
+        return max;
     return value;
 }
 
 int MathUtils::Clamp(int value, int min, int max)
 {
     ASSERT_MSG(min <= max, "Clamp min must be <= max");
-    if (value < min) return min;
-    if (value > max) return max;
+    if (value < min)
+        return min;
+    if (value > max)
+        return max;
     return value;
 }
 
 XMFLOAT3 MathUtils::Clamp(const XMFLOAT3& value, const XMFLOAT3& min, const XMFLOAT3& max)
 {
-    return XMFLOAT3(
-        Clamp(value.x, min.x, max.x),
-        Clamp(value.y, min.y, max.y),
-        Clamp(value.z, min.z, max.z)
-    );
+    return XMFLOAT3(Clamp(value.x, min.x, max.x), Clamp(value.y, min.y, max.y), Clamp(value.z, min.z, max.z));
 }
 
 // =============================================================================
@@ -206,15 +206,13 @@ XMMATRIX MathUtils::CreateLookAt(const XMFLOAT3& eye, const XMFLOAT3& target, co
 
 XMMATRIX MathUtils::CreatePerspective(float fovY, float aspectRatio, float nearPlane, float farPlane)
 {
-    ASSERT_MSG(fovY > 0 && aspectRatio > 0 && nearPlane > 0 && farPlane > nearPlane,
-        "Invalid perspective parameters");
+    ASSERT_MSG(fovY > 0 && aspectRatio > 0 && nearPlane > 0 && farPlane > nearPlane, "Invalid perspective parameters");
     return XMMatrixPerspectiveFovLH(fovY, aspectRatio, nearPlane, farPlane);
 }
 
 XMMATRIX MathUtils::CreateOrthographic(float width, float height, float nearPlane, float farPlane)
 {
-    ASSERT_MSG(width > 0 && height > 0 && farPlane > nearPlane,
-        "Invalid orthographic parameters");
+    ASSERT_MSG(width > 0 && height > 0 && farPlane > nearPlane, "Invalid orthographic parameters");
     return XMMatrixOrthographicLH(width, height, nearPlane, farPlane);
 }
 
@@ -252,17 +250,12 @@ float MathUtils::Dot(const XMFLOAT3& a, const XMFLOAT3& b)
 
 XMFLOAT3 MathUtils::Cross(const XMFLOAT3& a, const XMFLOAT3& b)
 {
-    return XMFLOAT3(
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    );
+    return XMFLOAT3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
 
 XMFLOAT3 MathUtils::Normalize(const XMFLOAT3& v)
 {
-    ASSERT_MSG(std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z),
-        "Normalize input must be finite");
+    ASSERT_MSG(std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z), "Normalize input must be finite");
     float len = Length(v);
     ASSERT_MSG(len >= 0.0f, "Length must be non-negative");
     return len > 0.0f ? Divide(v, len) : XMFLOAT3(0, 0, 0);
@@ -299,7 +292,8 @@ float MathUtils::EaseInOutQuad(float t)
     ASSERT_MSG(std::isfinite(t), "EaseInOutQuad t must be finite");
     if (t < 0.5f)
         return 2.0f * t * t;
-    else {
+    else
+    {
         float f = (1.0f - t);
         return 1.0f - 2.0f * f * f;
     }
@@ -323,7 +317,8 @@ float MathUtils::EaseInOutCubic(float t)
     ASSERT_MSG(std::isfinite(t), "EaseInOutCubic t must be finite");
     if (t < 0.5f)
         return 4.0f * t * t * t;
-    else {
+    else
+    {
         float f = 2.0f * t - 2.0f;
         return 1.0f + f * f * f * 0.5f;
     }

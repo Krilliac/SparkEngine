@@ -8,7 +8,8 @@
 #include <thread>
 #include <cstdio>
 
-TEST(ChromeTracing_StartStop) {
+TEST(ChromeTracing_StartStop)
+{
     auto& tracer = Spark::ChromeTracing::GetInstance();
     tracer.Clear();
 
@@ -19,7 +20,8 @@ TEST(ChromeTracing_StartStop) {
     EXPECT_FALSE(tracer.IsActive());
 }
 
-TEST(ChromeTracing_RecordEvents) {
+TEST(ChromeTracing_RecordEvents)
+{
     auto& tracer = Spark::ChromeTracing::GetInstance();
     tracer.Start();
 
@@ -32,7 +34,8 @@ TEST(ChromeTracing_RecordEvents) {
     tracer.Clear();
 }
 
-TEST(ChromeTracing_ScopeGuard) {
+TEST(ChromeTracing_ScopeGuard)
+{
     auto& tracer = Spark::ChromeTracing::GetInstance();
     tracer.Start();
 
@@ -40,7 +43,8 @@ TEST(ChromeTracing_ScopeGuard) {
         SPARK_TRACE_SCOPE("ScopedTest");
         // Some work
         volatile int x = 0;
-        for (int i = 0; i < 100; i++) x += i;
+        for (int i = 0; i < 100; i++)
+            x += i;
     }
 
     tracer.Stop();
@@ -48,7 +52,8 @@ TEST(ChromeTracing_ScopeGuard) {
     tracer.Clear();
 }
 
-TEST(ChromeTracing_NotActiveSkipsEvents) {
+TEST(ChromeTracing_NotActiveSkipsEvents)
+{
     auto& tracer = Spark::ChromeTracing::GetInstance();
     tracer.Clear();
     tracer.Stop(); // Ensure stopped
@@ -59,7 +64,8 @@ TEST(ChromeTracing_NotActiveSkipsEvents) {
     EXPECT_EQ(tracer.EventCount(), static_cast<size_t>(0));
 }
 
-TEST(ChromeTracing_SaveToFile) {
+TEST(ChromeTracing_SaveToFile)
+{
     auto& tracer = Spark::ChromeTracing::GetInstance();
     tracer.Start();
     tracer.BeginEvent("TestSave");

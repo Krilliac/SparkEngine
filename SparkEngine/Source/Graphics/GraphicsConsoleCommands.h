@@ -10,14 +10,15 @@
 
 class GraphicsEngine;
 
-namespace Spark::Graphics {
+namespace Spark::Graphics
+{
 
-/**
+    /**
  * @brief Register all graphics console commands with the engine console
  * @param engine The graphics engine instance to operate on
  *
  * Registers commands: gfx_vsync, gfx_wireframe, gfx_metrics, gfx_screenshot
  */
-void RegisterGraphicsConsoleCommands(GraphicsEngine& engine);
+    void RegisterGraphicsConsoleCommands(GraphicsEngine& engine);
 
 } // namespace Spark::Graphics

@@ -29,8 +29,8 @@
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
 
-using DirectX::XMMATRIX;
 using DirectX::XMFLOAT3;
+using DirectX::XMMATRIX;
 
 /**
  * @brief Fast straight-line projectile for conventional firearms
@@ -48,7 +48,7 @@ using DirectX::XMFLOAT3;
  */
 class Bullet : public Projectile
 {
-public:
+  public:
     /**
      * @brief Construct a bullet with default weapon statistics
      *
@@ -79,12 +79,12 @@ public:
      *
      * @param deltaTime Time elapsed since last frame in seconds
      */
-    void    Update(float deltaTime) override;
+    void Update(float deltaTime) override;
 
     /**
      * @brief Render the bullet mesh
      * @param view       Camera view matrix
      * @param projection Camera projection matrix
      */
-    void    Render(const XMMATRIX& view, const XMMATRIX& projection) override;
+    void Render(const XMMATRIX& view, const XMMATRIX& projection) override;
 };

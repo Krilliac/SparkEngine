@@ -29,7 +29,7 @@ class Timer;
  */
 class IGameModule
 {
-public:
+  public:
     virtual ~IGameModule() = default;
 
     /** @brief Get the display name of this game module */
@@ -59,7 +59,11 @@ public:
     virtual void Render() = 0;
 
     /** @brief Called when the window is resized */
-    virtual void OnResize(int width, int height) { (void)width; (void)height; }
+    virtual void OnResize(int width, int height)
+    {
+        (void)width;
+        (void)height;
+    }
 
     /** @brief Pause game simulation */
     virtual void Pause() {}
@@ -86,4 +90,3 @@ using CreateGameModuleFn = IGameModule* (*)();
  * The engine calls this before unloading the DLL.
  */
 using DestroyGameModuleFn = void (*)(IGameModule*);
-

@@ -60,9 +60,10 @@
 #include <unordered_map>
 #include <memory>
 
-namespace Spark::AI {
+namespace Spark::AI
+{
 
-/**
+    /**
  * @brief Per-entity AI component that drives decision-making and navigation.
  *
  * Entities with an AIComponent participate in the `AISystem` update loop each frame.
@@ -83,120 +84,129 @@ namespace Spark::AI {
  * may read it but should avoid writing to it directly to prevent conflicts with
  * the behavior tree's decisions.
  */
-struct AIComponent {
-    /**
+    struct AIComponent
+    {
+        /**
      * @brief Name of the behavior tree template to use.
      *
      * Must match a name registered via `AISystem::RegisterBehavior()` before
      * the first `Update()` call that encounters this entity. On first use the
      * AISystem clones the template and stores the instance in `behaviorTreeHandle`.
      */
-    std::string behaviorTreeName;
+        std::string behaviorTreeName;
 
-    /**
+        /**
      * @brief Per-agent configuration parameters (ranges, speed, accuracy).
      *
      * See `AIAgentConfig` in BehaviorTree.h for field descriptions.
      * Adjust before spawning the agent to control difficulty.
      */
-    AIAgentConfig config;
+        AIAgentConfig config;
 
-    /**
+        /**
      * @brief Type-safe handle to this agent's private BehaviorTree instance.
      *
      * Created by `AISystem::CreateBehaviorInstance()` from the named template.
      * Managed exclusively by AISystem; do not dereference from external code.
      */
-    Spark::BehaviorTreeHandle behaviorTreeHandle;
+        Spark::BehaviorTreeHandle behaviorTreeHandle;
 
-    /**
+        /**
      * @brief Type-safe handle to this agent's NavMeshQuery for pathfinding.
      *
      * Created by the AISystem from the active NavMesh at agent initialization.
      * Managed exclusively by AISystem; do not dereference from external code.
      */
-    Spark::NavQueryHandle navQueryHandle;
+        Spark::NavQueryHandle navQueryHandle;
 
-    // ---- Perception & state ------------------------------------------------
+        // ---- Perception & state ------------------------------------------------
 
-    /**
+        /**
      * @brief High-level AI state broadcasted to other game systems.
      *
      * Behavior tree nodes write to this field to indicate what the agent is doing.
      * Other systems (audio, HUD, game mode) may read it to react accordingly.
      * For example, the audio system plays footstep sounds only when state != Dead.
      */
-    enum class State { Idle, Patrolling, Alert, Combat, Fleeing, Dead };
+        enum class State
+        {
+            Idle,
+            Patrolling,
+            Alert,
+            Combat,
+            Fleeing,
+            Dead
+        };
 
-    /** @brief Current high-level AI state. Default: Idle. */
-    State state = State::Idle;
+        /** @brief Current high-level AI state. Default: Idle. */
+        State state = State::Idle;
 
-    /**
+        /**
      * @brief EntityID of the current primary threat/target.
      *
      * Set by the perception system when the player or another threat is detected.
      * `entt::null` indicates no active target. Behavior tree conditions read this
      * to decide between attack, patrol, and idle branches.
      */
-    EntityID targetEntity = entt::null;
+        EntityID targetEntity = entt::null;
 
-    /**
+        /**
      * @brief Last confirmed world-space position of the primary target.
      *
      * Updated each frame the target is directly visible. When line-of-sight is
      * lost the agent navigates to this position to "search" before giving up.
      */
-    XMFLOAT3 lastKnownTargetPos{0, 0, 0};
+        XMFLOAT3 lastKnownTargetPos{0, 0, 0};
 
-    /**
+        /**
      * @brief Time in seconds since the agent last had line-of-sight to the target.
      *
      * The behavior tree uses this to transition between Alert (searching) and
      * Idle (gave up) states after sufficient time has elapsed.
      */
-    float timeSinceLastSeen = 0.0f;
+        float timeSinceLastSeen = 0.0f;
 
-    /**
+        /**
      * @brief Accumulated time in the Alert state (seconds).
      *
      * Enables transitions like "Alert for > 5 seconds → enter Combat" even if
      * the target is briefly not visible.
      */
-    float alertTimer = 0.0f;
+        float alertTimer = 0.0f;
 
-    // ---- Pathfinding -------------------------------------------------------
+        // ---- Pathfinding -------------------------------------------------------
 
-    /**
+        /**
      * @brief World-space waypoints produced by the most recent NavMesh path query.
      *
      * Updated by the AISystem when `AIComponent::state` changes to a movement
      * state or the target moves significantly. The movement subsystem advances
      * `currentPathIndex` as each waypoint is reached.
      */
-    std::vector<XMFLOAT3> currentPath;
+        std::vector<XMFLOAT3> currentPath;
 
-    /**
+        /**
      * @brief Index into `currentPath` pointing to the current waypoint target.
      *
      * Incremented by the movement subsystem each time the agent comes within
      * stopping distance of the waypoint at `currentPath[currentPathIndex]`.
      */
-    size_t currentPathIndex = 0;
+        size_t currentPathIndex = 0;
 
-    /**
+        /**
      * @brief Immediate movement target (may differ from `currentPath` waypoints).
      *
      * Set by steering behaviors when the agent needs to move directly to a point
      * without full path recalculation (e.g. strafing, short-range approach).
      */
-    XMFLOAT3 moveTarget{0, 0, 0};
-};
+        XMFLOAT3 moveTarget{0, 0, 0};
+    };
 
-// =============================================================================
-// AISystem
-// =============================================================================
+    // =============================================================================
+    // AISystem
+    // =============================================================================
 
-/**
+    /**
  * @class AISystem
  * @brief ECS system that drives all AI agents each frame.
  *
@@ -239,22 +249,23 @@ struct AIComponent {
  * @note This class does NOT inherit from the `AIUpdateSystem` stub in ECSystems.h.
  *       It is a standalone, fully-featured system used directly by the game.
  */
-class AISystem : public Spark::ECS::ISystem {
-public:
-    /**
+    class AISystem : public Spark::ECS::ISystem
+    {
+      public:
+        /**
      * @brief Default constructor.
      *
      * Initializes an empty system with no registered behaviors. Call
      * `RegisterBehavior()` before using the system.
      */
-    AISystem();
+        AISystem();
 
-    /**
+        /**
      * @brief Virtual destructor ensures proper cleanup of behavior instances.
      */
-    ~AISystem() override = default;
+        ~AISystem() override = default;
 
-    /**
+        /**
      * @brief Process all AI agents for one simulation frame.
      *
      * For each entity with an `AIComponent`:
@@ -268,11 +279,11 @@ public:
      * @param world      The ECS World containing AIComponent and Transform entities.
      * @param deltaTime  Frame time in seconds for speed-independent AI updates.
      */
-    void Update(World& world, float deltaTime) override;
+        void Update(World& world, float deltaTime) override;
 
-    const char* GetName() const override { return "AISystem"; }
+        const char* GetName() const override { return "AISystem"; }
 
-    /**
+        /**
      * @brief Register a behavior tree template for agent use.
      *
      * The template is stored by `name` and cloned for each agent that specifies
@@ -287,9 +298,9 @@ public:
      *       FPSBehaviors::CreateGuardBehavior({10,0,5}, 20.0f));
      * @endcode
      */
-    void RegisterBehavior(const std::string& name, std::unique_ptr<BehaviorTree> tree);
+        void RegisterBehavior(const std::string& name, std::unique_ptr<BehaviorTree> tree);
 
-    /**
+        /**
      * @brief Clone a registered template into a new per-agent instance.
      *
      * Called by the AISystem internally when an agent with a previously unseen
@@ -301,13 +312,13 @@ public:
      * @return              Non-owning pointer to the new instance, or `nullptr` if
      *                      no template with that name is registered.
      */
-    BehaviorTree* CreateBehaviorInstance(const std::string& templateName);
+        BehaviorTree* CreateBehaviorInstance(const std::string& templateName);
 
-    // =========================================================================
-    // Console integration
-    // =========================================================================
+        // =========================================================================
+        // Console integration
+        // =========================================================================
 
-    /**
+        /**
      * @brief Return a formatted list of all active AI agents (console integration).
      *
      * Lists each entity with an AIComponent, showing its current state, behavior
@@ -316,9 +327,9 @@ public:
      * @param world  The ECS World to query for AIComponent entities.
      * @return       Newline-separated string listing all active agents.
      */
-    std::string Console_ListAgents(World& world) const;
+        std::string Console_ListAgents(World& world) const;
 
-    /**
+        /**
      * @brief Return detailed information about a specific AI agent (console integration).
      *
      * Outputs the agent's full state: AIComponent::state, blackboard entries,
@@ -328,10 +339,10 @@ public:
      * @param entity  EntityID of the agent to inspect.
      * @return        Multi-line formatted string with agent debug information.
      */
-    std::string Console_GetAgentInfo(World& world, EntityID entity) const;
+        std::string Console_GetAgentInfo(World& world, EntityID entity) const;
 
-private:
-    /**
+      private:
+        /**
      * @brief Refresh an agent's perception data (line-of-sight, hearing).
      *
      * Reads the world to determine which entities the agent can detect. Updates
@@ -344,9 +355,9 @@ private:
      * @param transform  The agent's current world transform (determines origin for raycasts).
      * @param deltaTime  Frame time for advancing timers.
      */
-    void UpdatePerception(World& world, AIComponent& ai, const Transform& transform, float deltaTime);
+        void UpdatePerception(World& world, AIComponent& ai, const Transform& transform, float deltaTime);
 
-    /**
+        /**
      * @brief Advance the agent's movement along its current path.
      *
      * Computes the direction to the next waypoint in `AIComponent::currentPath`,
@@ -362,9 +373,9 @@ private:
      * @param transform  The agent's transform; position is modified directly.
      * @param deltaTime  Frame time for speed-independent movement.
      */
-    void UpdateMovement(World& world, AIComponent& ai, Transform& transform, float deltaTime);
+        void UpdateMovement(World& world, AIComponent& ai, Transform& transform, float deltaTime);
 
-    /**
+        /**
      * @brief Tick the agent's behavior tree and update high-level state.
      *
      * Calls `BehaviorTree::Tick(deltaTime)` on the instance referenced by
@@ -376,24 +387,24 @@ private:
      * @param ai         The AIComponent whose behavior tree is ticked.
      * @param deltaTime  Frame time forwarded to the behavior tree.
      */
-    void UpdateBehavior(AIComponent& ai, float deltaTime);
+        void UpdateBehavior(AIComponent& ai, float deltaTime);
 
-    /**
+        /**
      * @brief Named behavior tree templates shared across all agents of a given type.
      *
      * Keyed by the name registered via `RegisterBehavior()`. Templates are never
      * ticked directly; clones are created via `CreateBehaviorInstance()`.
      */
-    std::unordered_map<std::string, std::unique_ptr<BehaviorTree>> m_behaviorTemplates;
+        std::unordered_map<std::string, std::unique_ptr<BehaviorTree>> m_behaviorTemplates;
 
-    /**
+        /**
      * @brief Per-agent behavior tree instances cloned from templates.
      *
      * Owns all agent instances. Each agent's `AIComponent::behaviorTreeHandle`
      * points to an element in this vector. Instances are added on demand and
      * never removed (destroyed with the system).
      */
-    std::vector<std::unique_ptr<BehaviorTree>> m_behaviorInstances;
-};
+        std::vector<std::unique_ptr<BehaviorTree>> m_behaviorInstances;
+    };
 
 } // namespace Spark::AI

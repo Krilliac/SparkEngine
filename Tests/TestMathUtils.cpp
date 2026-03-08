@@ -4,29 +4,31 @@
 #include <algorithm>
 
 // Re-implement core math functions to test independently of DirectXMath
-namespace TestMath {
-
-float Lerp(float a, float b, float t)
+namespace TestMath
 {
-    return a + t * (b - a);
-}
 
-float Clamp(float value, float lo, float hi)
-{
-    return (std::max)(lo, (std::min)(hi, value));
-}
+    float Lerp(float a, float b, float t)
+    {
+        return a + t * (b - a);
+    }
 
-float SmoothStep(float edge0, float edge1, float x)
-{
-    float t = Clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
-    return t * t * (3.0f - 2.0f * t);
-}
+    float Clamp(float value, float lo, float hi)
+    {
+        return (std::max)(lo, (std::min)(hi, value));
+    }
 
-float InverseLerp(float a, float b, float value)
-{
-    if (std::abs(b - a) < 0.0001f) return 0.0f;
-    return (value - a) / (b - a);
-}
+    float SmoothStep(float edge0, float edge1, float x)
+    {
+        float t = Clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    }
+
+    float InverseLerp(float a, float b, float value)
+    {
+        if (std::abs(b - a) < 0.0001f)
+            return 0.0f;
+        return (value - a) / (b - a);
+    }
 
 } // namespace TestMath
 

@@ -33,12 +33,12 @@ using Microsoft::WRL::ComPtr;
  */
 enum class BlendMode
 {
-    Opaque,            ///< Fully opaque material
-    AlphaTest,         ///< Alpha testing (cutout)
-    Transparent,       ///< Alpha blending
-    Additive,          ///< Additive blending
-    Multiply,          ///< Multiplicative blending
-    Screen            ///< Screen blending
+    Opaque,      ///< Fully opaque material
+    AlphaTest,   ///< Alpha testing (cutout)
+    Transparent, ///< Alpha blending
+    Additive,    ///< Additive blending
+    Multiply,    ///< Multiplicative blending
+    Screen       ///< Screen blending
 };
 
 /**
@@ -46,9 +46,9 @@ enum class BlendMode
  */
 enum class CullMode
 {
-    None,             ///< No culling (double-sided)
-    Front,            ///< Front face culling
-    Back              ///< Back face culling (default)
+    None,  ///< No culling (double-sided)
+    Front, ///< Front face culling
+    Back   ///< Back face culling (default)
 };
 
 /**
@@ -56,24 +56,24 @@ enum class CullMode
  */
 enum class MaterialTextureType
 {
-    Albedo,           ///< Base color/albedo texture
-    Normal,           ///< Normal map texture
-    Metallic,         ///< Metallic map texture
-    Roughness,        ///< Roughness map texture
-    Occlusion,        ///< Ambient occlusion texture
-    Emissive,         ///< Emissive texture
-    Height,           ///< Height/displacement map
-    DetailAlbedo,     ///< Detail albedo texture
-    DetailNormal,     ///< Detail normal map
-    Subsurface,       ///< Subsurface scattering map
-    Transmission,     ///< Transmission map
-    Clearcoat,        ///< Clearcoat layer map
+    Albedo,             ///< Base color/albedo texture
+    Normal,             ///< Normal map texture
+    Metallic,           ///< Metallic map texture
+    Roughness,          ///< Roughness map texture
+    Occlusion,          ///< Ambient occlusion texture
+    Emissive,           ///< Emissive texture
+    Height,             ///< Height/displacement map
+    DetailAlbedo,       ///< Detail albedo texture
+    DetailNormal,       ///< Detail normal map
+    Subsurface,         ///< Subsurface scattering map
+    Transmission,       ///< Transmission map
+    Clearcoat,          ///< Clearcoat layer map
     ClearcoatRoughness, ///< Clearcoat roughness map
-    Anisotropy,       ///< Anisotropy direction map
-    Custom0,          ///< Custom texture slot 0
-    Custom1,          ///< Custom texture slot 1
-    Custom2,          ///< Custom texture slot 2
-    Custom3           ///< Custom texture slot 3
+    Anisotropy,         ///< Anisotropy direction map
+    Custom0,            ///< Custom texture slot 0
+    Custom1,            ///< Custom texture slot 1
+    Custom2,            ///< Custom texture slot 2
+    Custom3             ///< Custom texture slot 3
 };
 
 /**
@@ -81,15 +81,15 @@ enum class MaterialTextureType
  */
 struct TextureSampling
 {
-    D3D11_FILTER filter = D3D11_FILTER_ANISOTROPIC;  ///< Texture filtering mode
+    D3D11_FILTER filter = D3D11_FILTER_ANISOTROPIC;                   ///< Texture filtering mode
     D3D11_TEXTURE_ADDRESS_MODE addressU = D3D11_TEXTURE_ADDRESS_WRAP; ///< U address mode
     D3D11_TEXTURE_ADDRESS_MODE addressV = D3D11_TEXTURE_ADDRESS_WRAP; ///< V address mode
     D3D11_TEXTURE_ADDRESS_MODE addressW = D3D11_TEXTURE_ADDRESS_WRAP; ///< W address mode
-    UINT maxAnisotropy = 16;                          ///< Maximum anisotropy level
-    float mipLODBias = 0.0f;                         ///< MIP level bias
-    float minLOD = 0.0f;                             ///< Minimum LOD
-    float maxLOD = D3D11_FLOAT32_MAX;                ///< Maximum LOD
-    XMFLOAT4 borderColor = {0, 0, 0, 0};             ///< Border color for border address mode
+    UINT maxAnisotropy = 16;                                          ///< Maximum anisotropy level
+    float mipLODBias = 0.0f;                                          ///< MIP level bias
+    float minLOD = 0.0f;                                              ///< Minimum LOD
+    float maxLOD = D3D11_FLOAT32_MAX;                                 ///< Maximum LOD
+    XMFLOAT4 borderColor = {0, 0, 0, 0};                              ///< Border color for border address mode
 };
 
 /**
@@ -97,13 +97,13 @@ struct TextureSampling
  */
 struct MaterialTexture
 {
-    ComPtr<ID3D11ShaderResourceView> texture;        ///< DirectX texture resource
-    TextureSampling sampling;                         ///< Sampling parameters
-    XMFLOAT2 tiling = {1.0f, 1.0f};                 ///< UV tiling
-    XMFLOAT2 offset = {0.0f, 0.0f};                 ///< UV offset
-    float intensity = 1.0f;                          ///< Texture intensity/strength
-    bool enabled = false;                            ///< Whether this texture slot is active
-    std::string filePath;                            ///< Original file path for hot-reloading
+    ComPtr<ID3D11ShaderResourceView> texture; ///< DirectX texture resource
+    TextureSampling sampling;                 ///< Sampling parameters
+    XMFLOAT2 tiling = {1.0f, 1.0f};           ///< UV tiling
+    XMFLOAT2 offset = {0.0f, 0.0f};           ///< UV offset
+    float intensity = 1.0f;                   ///< Texture intensity/strength
+    bool enabled = false;                     ///< Whether this texture slot is active
+    std::string filePath;                     ///< Original file path for hot-reloading
 };
 
 /**
@@ -112,14 +112,14 @@ struct MaterialTexture
 struct PBRProperties
 {
     XMFLOAT4 albedoColor = {1.0f, 1.0f, 1.0f, 1.0f}; ///< Base albedo color
-    float metallicFactor = 0.0f;                      ///< Metallic factor (0 = dielectric, 1 = metallic)
-    float roughnessFactor = 0.5f;                     ///< Roughness factor (0 = mirror, 1 = fully rough)
-    float normalScale = 1.0f;                         ///< Normal map intensity
-    float occlusionStrength = 1.0f;                   ///< Ambient occlusion strength
+    float metallicFactor = 0.0f;                     ///< Metallic factor (0 = dielectric, 1 = metallic)
+    float roughnessFactor = 0.5f;                    ///< Roughness factor (0 = mirror, 1 = fully rough)
+    float normalScale = 1.0f;                        ///< Normal map intensity
+    float occlusionStrength = 1.0f;                  ///< Ambient occlusion strength
     XMFLOAT3 emissiveColor = {0.0f, 0.0f, 0.0f};     ///< Emissive color
-    float emissiveFactor = 0.0f;                      ///< Emissive intensity
-    float alphaCutoff = 0.5f;                         ///< Alpha cutoff for alpha testing
-    float indexOfRefraction = 1.5f;                   ///< Index of refraction for dielectrics
+    float emissiveFactor = 0.0f;                     ///< Emissive intensity
+    float alphaCutoff = 0.5f;                        ///< Alpha cutoff for alpha testing
+    float indexOfRefraction = 1.5f;                  ///< Index of refraction for dielectrics
 };
 
 /**
@@ -128,35 +128,35 @@ struct PBRProperties
 struct AdvancedProperties
 {
     // Subsurface scattering
-    bool subsurfaceEnabled = false;                   ///< Enable subsurface scattering
-    XMFLOAT3 subsurfaceColor = {1.0f, 1.0f, 1.0f};  ///< Subsurface scattering color
-    float subsurfaceRadius = 1.0f;                   ///< Subsurface scattering radius
-    
+    bool subsurfaceEnabled = false;                ///< Enable subsurface scattering
+    XMFLOAT3 subsurfaceColor = {1.0f, 1.0f, 1.0f}; ///< Subsurface scattering color
+    float subsurfaceRadius = 1.0f;                 ///< Subsurface scattering radius
+
     // Clearcoat
-    bool clearcoatEnabled = false;                    ///< Enable clearcoat layer
-    float clearcoatFactor = 0.0f;                     ///< Clearcoat layer strength
-    float clearcoatRoughness = 0.0f;                  ///< Clearcoat layer roughness
-    
+    bool clearcoatEnabled = false;   ///< Enable clearcoat layer
+    float clearcoatFactor = 0.0f;    ///< Clearcoat layer strength
+    float clearcoatRoughness = 0.0f; ///< Clearcoat layer roughness
+
     // Anisotropy
-    bool anisotropyEnabled = false;                   ///< Enable anisotropic reflections
-    float anisotropyFactor = 0.0f;                    ///< Anisotropy strength
-    XMFLOAT2 anisotropyDirection = {1.0f, 0.0f};     ///< Anisotropy direction
-    
+    bool anisotropyEnabled = false;              ///< Enable anisotropic reflections
+    float anisotropyFactor = 0.0f;               ///< Anisotropy strength
+    XMFLOAT2 anisotropyDirection = {1.0f, 0.0f}; ///< Anisotropy direction
+
     // Transmission
-    bool transmissionEnabled = false;                 ///< Enable transmission
-    float transmissionFactor = 0.0f;                  ///< Transmission strength
+    bool transmissionEnabled = false;                ///< Enable transmission
+    float transmissionFactor = 0.0f;                 ///< Transmission strength
     XMFLOAT3 transmissionColor = {1.0f, 1.0f, 1.0f}; ///< Transmission color
-    
+
     // Sheen (fabric-like materials)
-    bool sheenEnabled = false;                        ///< Enable sheen
-    XMFLOAT3 sheenColor = {0.0f, 0.0f, 0.0f};       ///< Sheen color
-    float sheenRoughness = 0.0f;                      ///< Sheen roughness
-    
+    bool sheenEnabled = false;                ///< Enable sheen
+    XMFLOAT3 sheenColor = {0.0f, 0.0f, 0.0f}; ///< Sheen color
+    float sheenRoughness = 0.0f;              ///< Sheen roughness
+
     // Iridescence
-    bool iridescenceEnabled = false;                  ///< Enable iridescence
-    float iridescenceFactor = 0.0f;                   ///< Iridescence strength
-    float iridescenceIOR = 1.3f;                      ///< Iridescence IOR
-    float iridescenceThickness = 100.0f;              ///< Iridescence thickness (nm)
+    bool iridescenceEnabled = false;     ///< Enable iridescence
+    float iridescenceFactor = 0.0f;      ///< Iridescence strength
+    float iridescenceIOR = 1.3f;         ///< Iridescence IOR
+    float iridescenceThickness = 100.0f; ///< Iridescence thickness (nm)
 };
 
 /**
@@ -164,14 +164,14 @@ struct AdvancedProperties
  */
 struct MaterialRenderState
 {
-    BlendMode blendMode = BlendMode::Opaque;          ///< Blending mode
-    CullMode cullMode = CullMode::Back;               ///< Face culling mode
-    bool depthTest = true;                            ///< Enable depth testing
-    bool depthWrite = true;                           ///< Enable depth writing
-    bool castShadows = true;                          ///< Cast shadows
-    bool receiveShadows = true;                       ///< Receive shadows
-    int renderQueue = 2000;                           ///< Render queue priority
-    bool doubleSided = false;                         ///< Double-sided rendering
+    BlendMode blendMode = BlendMode::Opaque; ///< Blending mode
+    CullMode cullMode = CullMode::Back;      ///< Face culling mode
+    bool depthTest = true;                   ///< Enable depth testing
+    bool depthWrite = true;                  ///< Enable depth writing
+    bool castShadows = true;                 ///< Cast shadows
+    bool receiveShadows = true;              ///< Receive shadows
+    int renderQueue = 2000;                  ///< Render queue priority
+    bool doubleSided = false;                ///< Double-sided rendering
 };
 
 /**
@@ -179,7 +179,7 @@ struct MaterialRenderState
  */
 class Material
 {
-public:
+  public:
     Material(const std::string& name);
     ~Material() = default;
 
@@ -197,30 +197,30 @@ public:
     void SetAdvancedProperties(const AdvancedProperties& properties) { m_advancedProperties = properties; }
     void SetRenderState(const MaterialRenderState& state) { m_renderState = state; }
     void SetTexture(MaterialTextureType type, const MaterialTexture& texture);
-    
+
     // Texture management
     bool LoadTexture(MaterialTextureType type, const std::string& filePath, ID3D11Device* device);
     void UnloadTexture(MaterialTextureType type);
     bool HasTexture(MaterialTextureType type) const;
-    
+
     // Shader parameter binding
     void BindToShader(ID3D11DeviceContext* context) const;
-    
+
     // Material variants
     void CreateVariant(const std::string& variantName, const std::vector<std::string>& defines);
     void SetActiveVariant(const std::string& variantName);
-    
+
     // Serialization
     bool SaveToFile(const std::string& filePath) const;
     bool LoadFromFile(const std::string& filePath, ID3D11Device* device);
-    
+
     // Console integration
     std::string GetDetailedInfo() const;
     void Console_SetProperty(const std::string& property, float value);
     void Console_SetColor(const std::string& property, float r, float g, float b);
     void Console_ReloadTextures(ID3D11Device* device);
 
-private:
+  private:
     std::string m_name;
     PBRProperties m_pbrProperties;
     AdvancedProperties m_advancedProperties;
@@ -235,21 +235,21 @@ private:
  */
 class MaterialSystem
 {
-public:
+  public:
     /**
      * @brief Material system performance metrics
      */
     struct MaterialMetrics
     {
-        int loadedMaterials;        ///< Number of loaded materials
-        int textureCount;           ///< Total number of loaded textures
-        size_t textureMemory;       ///< Texture memory usage in bytes
-        int materialSwitches;       ///< Material switches per frame
-        int textureBinds;           ///< Texture binds per frame
-        float averageLoadTime;      ///< Average material load time
-        int failedLoads;            ///< Number of failed material loads
-        bool hotReloadEnabled;      ///< Hot reload status
-        int variantCount;           ///< Number of material variants
+        int loadedMaterials;   ///< Number of loaded materials
+        int textureCount;      ///< Total number of loaded textures
+        size_t textureMemory;  ///< Texture memory usage in bytes
+        int materialSwitches;  ///< Material switches per frame
+        int textureBinds;      ///< Texture binds per frame
+        float averageLoadTime; ///< Average material load time
+        int failedLoads;       ///< Number of failed material loads
+        bool hotReloadEnabled; ///< Hot reload status
+        int variantCount;      ///< Number of material variants
     };
 
     MaterialSystem();
@@ -323,7 +323,8 @@ public:
     /**
      * @brief Create material variant
      */
-    bool Console_CreateVariant(const std::string& materialName, const std::string& variantName, const std::vector<std::string>& defines);
+    bool Console_CreateVariant(const std::string& materialName, const std::string& variantName,
+                               const std::vector<std::string>& defines);
 
     /**
      * @brief Set material property via console
@@ -333,7 +334,8 @@ public:
     /**
      * @brief Set material color property via console
      */
-    void Console_SetMaterialColor(const std::string& materialName, const std::string& property, float r, float g, float b);
+    void Console_SetMaterialColor(const std::string& materialName, const std::string& property, float r, float g,
+                                  float b);
 
     /**
      * @brief Enable/disable hot reload
@@ -388,9 +390,8 @@ public:
     /**
      * @brief Load texture to specific material slot
      */
-    bool Console_LoadTextureToSlot(const std::string& materialName, 
-                                  const std::string& textureType, 
-                                  const std::string& texturePath);
+    bool Console_LoadTextureToSlot(const std::string& materialName, const std::string& textureType,
+                                   const std::string& texturePath);
 
     /**
      * @brief Unload texture from material slot
@@ -402,7 +403,7 @@ public:
      */
     std::string Console_ListMaterialVariants(const std::string& materialName) const;
 
-private:
+  private:
     ID3D11Device* m_device;
     ID3D11DeviceContext* m_context;
 

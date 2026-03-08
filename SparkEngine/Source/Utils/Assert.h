@@ -51,20 +51,20 @@
  * - **Fallback**: raise(SIGTRAP) on POSIX systems.
  */
 #if defined(_MSC_VER)
-#  include <intrin.h>
-#  define DEBUG_BREAK() __debugbreak()
+#include <intrin.h>
+#define DEBUG_BREAK() __debugbreak()
 #elif defined(__has_builtin) && __has_builtin(__builtin_debugtrap)
-   // Clang 3.8+, Apple Clang, Intel LLVM (ICPX), GCC 12+
-#  define DEBUG_BREAK() __builtin_debugtrap()
+// Clang 3.8+, Apple Clang, Intel LLVM (ICPX), GCC 12+
+#define DEBUG_BREAK() __builtin_debugtrap()
 #else
-#  include <signal.h>
-#  define DEBUG_BREAK() raise(SIGTRAP)
+#include <signal.h>
+#define DEBUG_BREAK() raise(SIGTRAP)
 #endif
 
 #ifdef _WIN32
-#  include <windows.h>
-#  include <dbghelp.h>
-#  pragma comment(lib, "dbghelp.lib")
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
 #endif
 
 // Forward declarations
@@ -95,10 +95,7 @@ namespace Assert
      *
      * @note This function never returns — it always calls std::abort().
      */
-    inline void Fail(const char* expr,
-        const char* file,
-        int         line,
-        const char* fmt = nullptr, ...)
+    inline void Fail(const char* expr, const char* file, int line, const char* fmt = nullptr, ...)
     {
         // Timestamp
         std::time_t t = std::time(nullptr);
@@ -118,20 +115,17 @@ namespace Assert
         // Build the full assertion text
         char fullMsg[2048];
         std::snprintf(fullMsg, sizeof(fullMsg),
-            "===== ASSERTION FAILED =====\n"
-            "Time       : %s\n"
-            "Expression : %s\n"
-            "Location   : %s(%d)\n"
-            "Message    : %s\n"
-            "Thread ID  : 0x%08X\n",
-            timeBuf,
-            expr,
-            file, line,
-            userMsg[0] ? userMsg : "(none)",
+                      "===== ASSERTION FAILED =====\n"
+                      "Time       : %s\n"
+                      "Expression : %s\n"
+                      "Location   : %s(%d)\n"
+                      "Message    : %s\n"
+                      "Thread ID  : 0x%08X\n",
+                      timeBuf, expr, file, line, userMsg[0] ? userMsg : "(none)",
 #ifdef _WIN32
-            static_cast<unsigned>(GetCurrentThreadId())
+                      static_cast<unsigned>(GetCurrentThreadId())
 #else
-            0u
+                      0u
 #endif
         );
 
@@ -161,11 +155,7 @@ namespace Assert
      *
      * @note This function never returns — it always calls std::abort().
      */
-    inline void FailHResult(const char* expr,
-        const char* file,
-        int         line,
-        long        hr,
-        const char* fmt = nullptr, ...)
+    inline void FailHResult(const char* expr, const char* file, int line, long hr, const char* fmt = nullptr, ...)
     {
         char userMsg[512] = {};
         if (fmt)
@@ -178,18 +168,16 @@ namespace Assert
 
         char fullMsg[2048];
         std::snprintf(fullMsg, sizeof(fullMsg),
-            "===== HRESULT FAILED =====\n"
-            "Expression : %s returned 0x%08lX\n"
-            "Location   : %s(%d)\n"
-            "Message    : %s\n"
-            "Thread ID  : 0x%08X\n",
-            expr, hr,
-            file, line,
-            userMsg[0] ? userMsg : "(none)",
+                      "===== HRESULT FAILED =====\n"
+                      "Expression : %s returned 0x%08lX\n"
+                      "Location   : %s(%d)\n"
+                      "Message    : %s\n"
+                      "Thread ID  : 0x%08X\n",
+                      expr, hr, file, line, userMsg[0] ? userMsg : "(none)",
 #ifdef _WIN32
-            static_cast<unsigned>(GetCurrentThreadId())
+                      static_cast<unsigned>(GetCurrentThreadId())
 #else
-            0u
+                      0u
 #endif
         );
 
@@ -200,7 +188,7 @@ namespace Assert
         DEBUG_BREAK();
         std::abort();
     }
-}
+} // namespace Assert
 
 // ============================================================================
 // Debug-only assertions (compiled out in Release builds)
@@ -212,10 +200,9 @@ namespace Assert
  * @param expr Boolean expression to check
  */
 #if defined(_DEBUG) || defined(DEBUG)
-#  define ASSERT(expr) \
-     ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__))
+#define ASSERT(expr) ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__))
 #else
-#  define ASSERT(expr) ((void)0)
+#define ASSERT(expr) ((void)0)
 #endif
 
 /**
@@ -225,10 +212,9 @@ namespace Assert
  * @param fmt  Printf-style format string
  */
 #if defined(_DEBUG) || defined(DEBUG)
-#  define ASSERT_MSG(expr, fmt, ...) \
-     ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__))
+#define ASSERT_MSG(expr, fmt, ...) ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__))
 #else
-#  define ASSERT_MSG(expr, fmt, ...) ((void)0)
+#define ASSERT_MSG(expr, fmt, ...) ((void)0)
 #endif
 
 // ============================================================================
@@ -252,13 +238,12 @@ namespace Assert
  * @param fmt  Printf-style format string
  */
 #if !defined(DISABLE_ALWAYS_ASSERTS)
-#  define ASSERT_ALWAYS(expr) \
-     ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__))
-#  define ASSERT_ALWAYS_MSG(expr, fmt, ...) \
-     ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__))
+#define ASSERT_ALWAYS(expr) ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__))
+#define ASSERT_ALWAYS_MSG(expr, fmt, ...)                                                                              \
+    ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__))
 #else
-#  define ASSERT_ALWAYS(expr)       ((void)0)
-#  define ASSERT_ALWAYS_MSG(expr, fmt, ...) ((void)0)
+#define ASSERT_ALWAYS(expr) ((void)0)
+#define ASSERT_ALWAYS_MSG(expr, fmt, ...) ((void)0)
 #endif
 
 // ============================================================================
@@ -282,20 +267,24 @@ namespace Assert
  * @param fmt    Printf-style format string
  */
 #if defined(_DEBUG) || defined(DEBUG)
-#  define ASSERT_HR(hrExpr)                                \
-     do { long _hr = static_cast<long>(hrExpr);             \
-          if (FAILED(_hr))                                  \
-             Assert::FailHResult(#hrExpr, __FILE__, __LINE__, _hr); \
-     } while(0)
+#define ASSERT_HR(hrExpr)                                                                                              \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        long _hr = static_cast<long>(hrExpr);                                                                          \
+        if (FAILED(_hr))                                                                                               \
+            Assert::FailHResult(#hrExpr, __FILE__, __LINE__, _hr);                                                     \
+    } while (0)
 
-#  define ASSERT_HR_MSG(hrExpr, fmt, ...)                   \
-     do { long _hr = static_cast<long>(hrExpr);             \
-          if (FAILED(_hr))                                  \
-             Assert::FailHResult(#hrExpr, __FILE__, __LINE__, _hr, fmt, ##__VA_ARGS__); \
-     } while(0)
+#define ASSERT_HR_MSG(hrExpr, fmt, ...)                                                                                \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        long _hr = static_cast<long>(hrExpr);                                                                          \
+        if (FAILED(_hr))                                                                                               \
+            Assert::FailHResult(#hrExpr, __FILE__, __LINE__, _hr, fmt, ##__VA_ARGS__);                                 \
+    } while (0)
 #else
-#  define ASSERT_HR(hrExpr)       ((void)(hrExpr))
-#  define ASSERT_HR_MSG(hrExpr, fmt, ...) ((void)(hrExpr))
+#define ASSERT_HR(hrExpr) ((void)(hrExpr))
+#define ASSERT_HR_MSG(hrExpr, fmt, ...) ((void)(hrExpr))
 #endif
 
 // ============================================================================
@@ -307,7 +296,7 @@ namespace Assert
  * @brief Debug-only null-pointer check with the pointer name in the message
  * @param ptr Pointer to check for non-null
  */
-#define ASSERT_NOT_NULL(ptr)   ASSERT_MSG((ptr) != nullptr, "Pointer " #ptr " must not be null")
+#define ASSERT_NOT_NULL(ptr) ASSERT_MSG((ptr) != nullptr, "Pointer " #ptr " must not be null")
 
 /**
  * @def ASSERT_NOT_NULL_ALWAYS(ptr)
@@ -323,8 +312,7 @@ namespace Assert
  * @param min Minimum allowed value (inclusive)
  * @param max Maximum allowed value (inclusive)
  */
-#define ASSERT_IN_RANGE(v, min, max) \
-    ASSERT_MSG((v) >= (min) && (v) <= (max), #v " out of range [" #min "," #max "]")
+#define ASSERT_IN_RANGE(v, min, max) ASSERT_MSG((v) >= (min) && (v) <= (max), #v " out of range [" #min "," #max "]")
 
 // ============================================================================
 // VERIFY macros (always active, never compiled out)
@@ -340,8 +328,7 @@ namespace Assert
  *
  * @param expr Boolean expression to check
  */
-#define VERIFY(expr) \
-    ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__))
+#define VERIFY(expr) ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__))
 
 /**
  * @def VERIFY_MSG(expr, fmt, ...)
@@ -349,19 +336,20 @@ namespace Assert
  * @param expr Boolean expression to check
  * @param fmt  Printf-style format string
  */
-#define VERIFY_MSG(expr, fmt, ...) \
-    ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__))
+#define VERIFY_MSG(expr, fmt, ...) ((expr) ? (void)0 : Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__))
 
 /**
  * @def VERIFY_HR(hrExpr)
  * @brief HRESULT check active in ALL builds
  * @param hrExpr Expression returning an HRESULT
  */
-#define VERIFY_HR(hrExpr) \
-    do { long _hr = static_cast<long>(hrExpr); \
-         if (FAILED(_hr)) \
-            Assert::FailHResult(#hrExpr, __FILE__, __LINE__, _hr); \
-    } while(0)
+#define VERIFY_HR(hrExpr)                                                                                              \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        long _hr = static_cast<long>(hrExpr);                                                                          \
+        if (FAILED(_hr))                                                                                               \
+            Assert::FailHResult(#hrExpr, __FILE__, __LINE__, _hr);                                                     \
+    } while (0)
 
 /**
  * @def ASSERT_BOUNDS(index, size)
@@ -372,10 +360,10 @@ namespace Assert
  * @param index Array index to validate
  * @param size  Size of the array (valid indices: [0, size))
  */
-#define ASSERT_BOUNDS(index, size) \
-    ASSERT_MSG(static_cast<long long>(index) >= 0 && static_cast<size_t>(index) < (size), \
-               #index " = %lld out of bounds [0, %llu)", \
-               static_cast<long long>(index), static_cast<unsigned long long>(size))
+#define ASSERT_BOUNDS(index, size)                                                                                     \
+    ASSERT_MSG(static_cast<long long>(index) >= 0 && static_cast<size_t>(index) < (size),                              \
+               #index " = %lld out of bounds [0, %llu)", static_cast<long long>(index),                                \
+               static_cast<unsigned long long>(size))
 
 /**
  * @def ASSERT_ENUM_RANGE(val, maxVal)
@@ -387,7 +375,6 @@ namespace Assert
  * @param val    Enum value to validate
  * @param maxVal One-past-the-end maximum (typically the COUNT sentinel)
  */
-#define ASSERT_ENUM_RANGE(val, maxVal) \
-    ASSERT_MSG(static_cast<int>(val) >= 0 && static_cast<int>(val) < static_cast<int>(maxVal), \
-               #val " enum value %d out of valid range [0, %d)", \
-               static_cast<int>(val), static_cast<int>(maxVal))
+#define ASSERT_ENUM_RANGE(val, maxVal)                                                                                 \
+    ASSERT_MSG(static_cast<int>(val) >= 0 && static_cast<int>(val) < static_cast<int>(maxVal),                         \
+               #val " enum value %d out of valid range [0, %d)", static_cast<int>(val), static_cast<int>(maxVal))

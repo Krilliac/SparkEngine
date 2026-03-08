@@ -9,151 +9,201 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace TestQuest {
+namespace TestQuest
+{
 
-enum class QuestStatus { NotStarted, Active, Completed, Failed };
-enum class ObjectiveType { Kill, Collect, Reach, Interact, Survive };
+    enum class QuestStatus
+    {
+        NotStarted,
+        Active,
+        Completed,
+        Failed
+    };
+    enum class ObjectiveType
+    {
+        Kill,
+        Collect,
+        Reach,
+        Interact,
+        Survive
+    };
 
-struct QuestObjective {
-    ObjectiveType type = ObjectiveType::Kill;
-    std::string description;
-    uint32_t targetId = 0;
-    int requiredCount = 1;
-    bool optional = false;
-};
+    struct QuestObjective
+    {
+        ObjectiveType type = ObjectiveType::Kill;
+        std::string description;
+        uint32_t targetId = 0;
+        int requiredCount = 1;
+        bool optional = false;
+    };
 
-struct ObjectiveProgress {
-    int currentCount = 0;
-    bool completed = false;
-};
+    struct ObjectiveProgress
+    {
+        int currentCount = 0;
+        bool completed = false;
+    };
 
-struct QuestDef {
-    uint32_t id = 0;
-    std::string name;
-    std::vector<QuestObjective> objectives;
-    std::vector<uint32_t> requiredQuests;
-    bool isRepeatable = false;
-    float timeLimit = 0.0f;
-};
+    struct QuestDef
+    {
+        uint32_t id = 0;
+        std::string name;
+        std::vector<QuestObjective> objectives;
+        std::vector<uint32_t> requiredQuests;
+        bool isRepeatable = false;
+        float timeLimit = 0.0f;
+    };
 
-struct ActiveQuest {
-    uint32_t questId = 0;
-    QuestStatus status = QuestStatus::Active;
-    std::vector<ObjectiveProgress> objectiveProgress;
-    float elapsedTime = 0.0f;
-};
+    struct ActiveQuest
+    {
+        uint32_t questId = 0;
+        QuestStatus status = QuestStatus::Active;
+        std::vector<ObjectiveProgress> objectiveProgress;
+        float elapsedTime = 0.0f;
+    };
 
-struct QuestJournal {
-    std::vector<ActiveQuest> activeQuests;
-    std::unordered_set<uint32_t> completedQuestIds;
-    std::unordered_set<uint32_t> failedQuestIds;
-};
+    struct QuestJournal
+    {
+        std::vector<ActiveQuest> activeQuests;
+        std::unordered_set<uint32_t> completedQuestIds;
+        std::unordered_set<uint32_t> failedQuestIds;
+    };
 
-class QuestRegistry {
-public:
-    void RegisterQuest(const QuestDef& def) { m_quests[def.id] = def; }
-    const QuestDef* GetQuest(uint32_t id) const {
-        auto it = m_quests.find(id);
-        return (it != m_quests.end()) ? &it->second : nullptr;
-    }
-    size_t GetQuestCount() const { return m_quests.size(); }
-private:
-    std::unordered_map<uint32_t, QuestDef> m_quests;
-};
+    class QuestRegistry
+    {
+      public:
+        void RegisterQuest(const QuestDef& def) { m_quests[def.id] = def; }
+        const QuestDef* GetQuest(uint32_t id) const
+        {
+            auto it = m_quests.find(id);
+            return (it != m_quests.end()) ? &it->second : nullptr;
+        }
+        size_t GetQuestCount() const { return m_quests.size(); }
 
-namespace QuestOps {
+      private:
+        std::unordered_map<uint32_t, QuestDef> m_quests;
+    };
 
-inline bool StartQuest(QuestJournal& journal, const QuestRegistry& reg, uint32_t questId) {
-    const QuestDef* def = reg.GetQuest(questId);
-    if (!def) return false;
-    if (!def->isRepeatable && journal.completedQuestIds.count(questId)) return false;
-    for (const auto& aq : journal.activeQuests)
-        if (aq.questId == questId) return false;
-    for (uint32_t reqId : def->requiredQuests)
-        if (!journal.completedQuestIds.count(reqId)) return false;
+    namespace QuestOps
+    {
 
-    ActiveQuest aq;
-    aq.questId = questId;
-    aq.objectiveProgress.resize(def->objectives.size());
-    journal.activeQuests.push_back(std::move(aq));
-    return true;
-}
+        inline bool StartQuest(QuestJournal& journal, const QuestRegistry& reg, uint32_t questId)
+        {
+            const QuestDef* def = reg.GetQuest(questId);
+            if (!def)
+                return false;
+            if (!def->isRepeatable && journal.completedQuestIds.count(questId))
+                return false;
+            for (const auto& aq : journal.activeQuests)
+                if (aq.questId == questId)
+                    return false;
+            for (uint32_t reqId : def->requiredQuests)
+                if (!journal.completedQuestIds.count(reqId))
+                    return false;
 
-inline bool UpdateObjective(QuestJournal& journal, const QuestRegistry& reg,
-                            uint32_t questId, int objIndex, int increment = 1) {
-    const QuestDef* def = reg.GetQuest(questId);
-    if (!def) return false;
-    for (auto& aq : journal.activeQuests) {
-        if (aq.questId == questId && aq.status == QuestStatus::Active) {
-            if (objIndex < 0 || objIndex >= static_cast<int>(aq.objectiveProgress.size())) return false;
-            auto& prog = aq.objectiveProgress[objIndex];
-            if (prog.completed) return false;
-            prog.currentCount += increment;
-            if (prog.currentCount >= def->objectives[objIndex].requiredCount) {
-                prog.currentCount = def->objectives[objIndex].requiredCount;
-                prog.completed = true;
-            }
-            bool allDone = true;
-            for (int i = 0; i < static_cast<int>(def->objectives.size()); ++i) {
-                if (!def->objectives[i].optional && !aq.objectiveProgress[i].completed) {
-                    allDone = false;
-                    break;
+            ActiveQuest aq;
+            aq.questId = questId;
+            aq.objectiveProgress.resize(def->objectives.size());
+            journal.activeQuests.push_back(std::move(aq));
+            return true;
+        }
+
+        inline bool UpdateObjective(QuestJournal& journal, const QuestRegistry& reg, uint32_t questId, int objIndex,
+                                    int increment = 1)
+        {
+            const QuestDef* def = reg.GetQuest(questId);
+            if (!def)
+                return false;
+            for (auto& aq : journal.activeQuests)
+            {
+                if (aq.questId == questId && aq.status == QuestStatus::Active)
+                {
+                    if (objIndex < 0 || objIndex >= static_cast<int>(aq.objectiveProgress.size()))
+                        return false;
+                    auto& prog = aq.objectiveProgress[objIndex];
+                    if (prog.completed)
+                        return false;
+                    prog.currentCount += increment;
+                    if (prog.currentCount >= def->objectives[objIndex].requiredCount)
+                    {
+                        prog.currentCount = def->objectives[objIndex].requiredCount;
+                        prog.completed = true;
+                    }
+                    bool allDone = true;
+                    for (int i = 0; i < static_cast<int>(def->objectives.size()); ++i)
+                    {
+                        if (!def->objectives[i].optional && !aq.objectiveProgress[i].completed)
+                        {
+                            allDone = false;
+                            break;
+                        }
+                    }
+                    if (allDone)
+                    {
+                        aq.status = QuestStatus::Completed;
+                        journal.completedQuestIds.insert(questId);
+                    }
+                    return true;
                 }
             }
-            if (allDone) {
-                aq.status = QuestStatus::Completed;
-                journal.completedQuestIds.insert(questId);
+            return false;
+        }
+
+        inline bool FailQuest(QuestJournal& journal, uint32_t questId)
+        {
+            for (auto& aq : journal.activeQuests)
+            {
+                if (aq.questId == questId && aq.status == QuestStatus::Active)
+                {
+                    aq.status = QuestStatus::Failed;
+                    journal.failedQuestIds.insert(questId);
+                    return true;
+                }
             }
-            return true;
+            return false;
         }
-    }
-    return false;
-}
 
-inline bool FailQuest(QuestJournal& journal, uint32_t questId) {
-    for (auto& aq : journal.activeQuests) {
-        if (aq.questId == questId && aq.status == QuestStatus::Active) {
-            aq.status = QuestStatus::Failed;
-            journal.failedQuestIds.insert(questId);
-            return true;
+        inline const ActiveQuest* GetActiveQuest(const QuestJournal& journal, uint32_t questId)
+        {
+            for (const auto& aq : journal.activeQuests)
+                if (aq.questId == questId)
+                    return &aq;
+            return nullptr;
         }
-    }
-    return false;
-}
 
-inline const ActiveQuest* GetActiveQuest(const QuestJournal& journal, uint32_t questId) {
-    for (const auto& aq : journal.activeQuests)
-        if (aq.questId == questId) return &aq;
-    return nullptr;
-}
-
-inline int GetActiveQuestCount(const QuestJournal& journal) {
-    int count = 0;
-    for (const auto& aq : journal.activeQuests)
-        if (aq.status == QuestStatus::Active) ++count;
-    return count;
-}
-
-inline void UpdateTimers(QuestJournal& journal, const QuestRegistry& reg, float dt) {
-    for (auto& aq : journal.activeQuests) {
-        if (aq.status != QuestStatus::Active) continue;
-        aq.elapsedTime += dt;
-        const QuestDef* def = reg.GetQuest(aq.questId);
-        if (def && def->timeLimit > 0.0f && aq.elapsedTime >= def->timeLimit) {
-            aq.status = QuestStatus::Failed;
-            journal.failedQuestIds.insert(aq.questId);
+        inline int GetActiveQuestCount(const QuestJournal& journal)
+        {
+            int count = 0;
+            for (const auto& aq : journal.activeQuests)
+                if (aq.status == QuestStatus::Active)
+                    ++count;
+            return count;
         }
-    }
-}
 
-} // namespace QuestOps
+        inline void UpdateTimers(QuestJournal& journal, const QuestRegistry& reg, float dt)
+        {
+            for (auto& aq : journal.activeQuests)
+            {
+                if (aq.status != QuestStatus::Active)
+                    continue;
+                aq.elapsedTime += dt;
+                const QuestDef* def = reg.GetQuest(aq.questId);
+                if (def && def->timeLimit > 0.0f && aq.elapsedTime >= def->timeLimit)
+                {
+                    aq.status = QuestStatus::Failed;
+                    journal.failedQuestIds.insert(aq.questId);
+                }
+            }
+        }
+
+    } // namespace QuestOps
 } // namespace TestQuest
 
 // =============================================================================
 // Tests
 // =============================================================================
 
-TEST(Quest_StartQuest) {
+TEST(Quest_StartQuest)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestDef def;
     def.id = 1;
@@ -167,7 +217,8 @@ TEST(Quest_StartQuest) {
     EXPECT_EQ(TestQuest::QuestOps::GetActiveQuestCount(journal), 1);
 }
 
-TEST(Quest_CannotStartTwice) {
+TEST(Quest_CannotStartTwice)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestDef def;
     def.id = 1;
@@ -180,7 +231,8 @@ TEST(Quest_CannotStartTwice) {
     EXPECT_FALSE(TestQuest::QuestOps::StartQuest(journal, reg, 1));
 }
 
-TEST(Quest_UpdateObjective) {
+TEST(Quest_UpdateObjective)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestDef def;
     def.id = 1;
@@ -201,7 +253,8 @@ TEST(Quest_UpdateObjective) {
     EXPECT_EQ((int)aq->status, (int)TestQuest::QuestStatus::Completed);
 }
 
-TEST(Quest_MultipleObjectives) {
+TEST(Quest_MultipleObjectives)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestDef def;
     def.id = 1;
@@ -223,7 +276,8 @@ TEST(Quest_MultipleObjectives) {
     EXPECT_EQ((int)aq->status, (int)TestQuest::QuestStatus::Completed);
 }
 
-TEST(Quest_OptionalObjective) {
+TEST(Quest_OptionalObjective)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestDef def;
     def.id = 1;
@@ -240,7 +294,8 @@ TEST(Quest_OptionalObjective) {
     EXPECT_EQ((int)aq->status, (int)TestQuest::QuestStatus::Completed);
 }
 
-TEST(Quest_FailQuest) {
+TEST(Quest_FailQuest)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestDef def;
     def.id = 1;
@@ -256,7 +311,8 @@ TEST(Quest_FailQuest) {
     EXPECT_TRUE(journal.failedQuestIds.count(1) > 0);
 }
 
-TEST(Quest_Prerequisites) {
+TEST(Quest_Prerequisites)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestDef quest1;
     quest1.id = 1;
@@ -281,7 +337,8 @@ TEST(Quest_Prerequisites) {
     EXPECT_TRUE(TestQuest::QuestOps::StartQuest(journal, reg, 2));
 }
 
-TEST(Quest_TimeLimitExpiry) {
+TEST(Quest_TimeLimitExpiry)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestDef def;
     def.id = 1;
@@ -301,7 +358,8 @@ TEST(Quest_TimeLimitExpiry) {
     EXPECT_EQ((int)aq->status, (int)TestQuest::QuestStatus::Failed);
 }
 
-TEST(Quest_CannotRestartCompleted) {
+TEST(Quest_CannotRestartCompleted)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestDef def;
     def.id = 1;
@@ -315,7 +373,8 @@ TEST(Quest_CannotRestartCompleted) {
     EXPECT_FALSE(TestQuest::QuestOps::StartQuest(journal, reg, 1));
 }
 
-TEST(Quest_StartInvalidQuest) {
+TEST(Quest_StartInvalidQuest)
+{
     TestQuest::QuestRegistry reg;
     TestQuest::QuestJournal journal;
     EXPECT_FALSE(TestQuest::QuestOps::StartQuest(journal, reg, 999));

@@ -21,15 +21,9 @@ using namespace DirectX;
 UINT GameObject::s_nextID = 1;
 
 GameObject::GameObject()
-    : m_position{ 0,0,0 }
-    , m_rotation{ 0,0,0 }
-    , m_scale{ 1,1,1 }
-    , m_worldMatrix(XMMatrixIdentity())
-    , m_worldMatrixDirty(true)
-    , m_active(true)
-    , m_visible(true)
-    , m_id(s_nextID++)
-    , m_name("GameObject_" + std::to_string(m_id))
+    : m_position{0, 0, 0}, m_rotation{0, 0, 0}, m_scale{1, 1, 1}, m_worldMatrix(XMMatrixIdentity()),
+      m_worldMatrixDirty(true), m_active(true), m_visible(true), m_id(s_nextID++),
+      m_name("GameObject_" + std::to_string(m_id))
 {
     std::wcout << L"[INFO] GameObject constructed. ID=" << m_id << L" Name=" << m_name.c_str() << std::endl;
 }
@@ -50,10 +44,13 @@ HRESULT GameObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* contex
     m_mesh = std::make_unique<Mesh>();
     ASSERT(m_mesh);
     HRESULT hr = m_mesh->Initialize(device, context);
-    std::wcout << L"[INFO] Mesh initialized for GameObject ID=" << m_id << L" Name=" << m_name.c_str() << L" HR=0x" << std::hex << hr << std::dec << std::endl;
+    std::wcout << L"[INFO] Mesh initialized for GameObject ID=" << m_id << L" Name=" << m_name.c_str() << L" HR=0x"
+               << std::hex << hr << std::dec << std::endl;
     ASSERT_MSG(SUCCEEDED(hr), "Mesh::Initialize failed");
-    if (FAILED(hr)) {
-        std::wcerr << L"[ERROR] Mesh::Initialize failed for GameObject ID=" << m_id << L" Name=" << m_name.c_str() << std::endl;
+    if (FAILED(hr))
+    {
+        std::wcerr << L"[ERROR] Mesh::Initialize failed for GameObject ID=" << m_id << L" Name=" << m_name.c_str()
+                   << std::endl;
         return hr;
     }
     CreateMesh();
@@ -64,7 +61,8 @@ HRESULT GameObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* contex
 void GameObject::Shutdown()
 {
     std::wcout << L"[OPERATION] GameObject::Shutdown called. ID=" << m_id << L" Name=" << m_name.c_str() << std::endl;
-    if (m_mesh) m_mesh->Shutdown();
+    if (m_mesh)
+        m_mesh->Shutdown();
     m_mesh.reset();
     m_device = nullptr;
     m_context = nullptr;
@@ -74,13 +72,15 @@ void GameObject::Shutdown()
 void GameObject::Update(float dt)
 {
     // **FIXED: Removed per-frame logging that was causing performance issues**
-    if (m_worldMatrixDirty) UpdateWorldMatrix();
-    
+    if (m_worldMatrixDirty)
+        UpdateWorldMatrix();
+
     // **ONLY log update statistics occasionally for debugging**
     static int updateCallCount = 0;
-    if (++updateCallCount % 7200 == 0) { // Every 2 minutes at 60fps
-        std::wcout << L"[DEBUG] GameObject updated " << updateCallCount << L" times. ID=" << m_id 
-                   << L" Name=" << m_name.c_str() << std::endl;
+    if (++updateCallCount % 7200 == 0)
+    { // Every 2 minutes at 60fps
+        std::wcout << L"[DEBUG] GameObject updated " << updateCallCount << L" times. ID=" << m_id << L" Name="
+                   << m_name.c_str() << std::endl;
     }
 }
 
@@ -91,31 +91,35 @@ void GameObject::Render(const XMMATRIX& view, const XMMATRIX& projection)
     {
         return; // No logging for performance - this happens frequently
     }
-    
-    if (m_worldMatrixDirty) UpdateWorldMatrix();
-    
+
+    if (m_worldMatrixDirty)
+        UpdateWorldMatrix();
+
     ASSERT(m_mesh);
     ASSERT_MSG(m_device != nullptr, "GameObject::Render - device is null");
     ASSERT_MSG(m_context != nullptr, "GameObject::Render - context is null");
-    ASSERT_MSG(m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0, "Mesh has no vertices or indices to render");
-    
+    ASSERT_MSG(m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
+               "Mesh has no vertices or indices to render");
+
     // Get graphics engine via EngineContext
     extern std::unique_ptr<EngineContext> g_engineContext;
     GraphicsEngine* graphics = g_engineContext ? g_engineContext->GetGraphics() : nullptr;
-    
-    if (graphics) {
+
+    if (graphics)
+    {
         // Set up basic shaders and constant buffers
         graphics->SetBasicShaders();
         graphics->UpdateBasicConstants(m_worldMatrix, view, projection);
     }
-    
+
     // **ONLY log rendering statistics occasionally for debugging**
     static int renderCallCount = 0;
-    if (++renderCallCount % 3600 == 0) { // Every 60 seconds at 60fps
-        std::wcout << L"[DEBUG] GameObject rendered " << renderCallCount << L" times. ID=" << m_id 
-                   << L" verts=" << m_mesh->GetVertexCount() << L" inds=" << m_mesh->GetIndexCount() << std::endl;
+    if (++renderCallCount % 3600 == 0)
+    { // Every 60 seconds at 60fps
+        std::wcout << L"[DEBUG] GameObject rendered " << renderCallCount << L" times. ID=" << m_id << L" verts="
+                   << m_mesh->GetVertexCount() << L" inds=" << m_mesh->GetIndexCount() << std::endl;
     }
-    
+
     m_mesh->Render(m_context);
 }
 
@@ -178,7 +182,8 @@ XMFLOAT3 GameObject::GetForward() const
 {
     XMMATRIX rot = XMMatrixRotationRollPitchYaw(m_rotation.x, m_rotation.y, m_rotation.z);
     XMVECTOR fwd = XMVector3TransformCoord(XMVectorSet(0, 0, 1, 0), rot);
-    XMFLOAT3 out; XMStoreFloat3(&out, fwd);
+    XMFLOAT3 out;
+    XMStoreFloat3(&out, fwd);
     return out;
 }
 
@@ -186,7 +191,8 @@ XMFLOAT3 GameObject::GetRight() const
 {
     XMMATRIX rot = XMMatrixRotationRollPitchYaw(m_rotation.x, m_rotation.y, m_rotation.z);
     XMVECTOR rt = XMVector3TransformCoord(XMVectorSet(1, 0, 0, 0), rot);
-    XMFLOAT3 out; XMStoreFloat3(&out, rt);
+    XMFLOAT3 out;
+    XMStoreFloat3(&out, rt);
     return out;
 }
 
@@ -194,7 +200,8 @@ XMFLOAT3 GameObject::GetUp() const
 {
     XMMATRIX rot = XMMatrixRotationRollPitchYaw(m_rotation.x, m_rotation.y, m_rotation.z);
     XMVECTOR up = XMVector3TransformCoord(XMVectorSet(0, 1, 0, 0), rot);
-    XMFLOAT3 out; XMStoreFloat3(&out, up);
+    XMFLOAT3 out;
+    XMStoreFloat3(&out, up);
     return out;
 }
 
@@ -205,7 +212,8 @@ float GameObject::GetDistanceFrom(const GameObject& other) const
 
 float GameObject::GetDistanceFrom(const XMFLOAT3& pos) const
 {
-    ASSERT_MSG(std::isfinite(pos.x) && std::isfinite(pos.y) && std::isfinite(pos.z), "Invalid distance calculation position");
+    ASSERT_MSG(std::isfinite(pos.x) && std::isfinite(pos.y) && std::isfinite(pos.z),
+               "Invalid distance calculation position");
     float dx = m_position.x - pos.x;
     float dy = m_position.y - pos.y;
     float dz = m_position.z - pos.z;
@@ -215,36 +223,42 @@ float GameObject::GetDistanceFrom(const XMFLOAT3& pos) const
 void GameObject::CreateMesh()
 {
     // **FIXED: Reduced excessive logging**
-    if (!m_mesh) {
+    if (!m_mesh)
+    {
         m_mesh = std::make_unique<Mesh>();
     }
     HRESULT hr = m_mesh->Initialize(m_device, m_context);
     ASSERT_MSG(SUCCEEDED(hr), "Mesh initialization failed");
     bool loaded = false;
-    if (!m_modelPath.empty()) {
+    if (!m_modelPath.empty())
+    {
         loaded = m_mesh->LoadFromFile(std::wstring(m_modelPath.begin(), m_modelPath.end()));
     }
-    if (!loaded) {
+    if (!loaded)
+    {
         hr = m_mesh->CreateCube(1.0f);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             hr = m_mesh->CreateTriangle(1.0f);
         }
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             hr = m_mesh->CreatePlane(2.0f, 2.0f);
         }
         ASSERT_MSG(SUCCEEDED(hr), "Failed to create procedural mesh");
     }
     ASSERT_MSG(m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
-        "Mesh must have vertices and indices after loading/creation");
+               "Mesh must have vertices and indices after loading/creation");
     m_worldMatrixDirty = true;
     m_name = "GameObject_" + std::to_string(m_id);
-    
+
     // **ONLY log mesh creation occasionally for debugging**
     static int meshCreateCount = 0;
-    if (++meshCreateCount % 10 == 0) { // Every 10th mesh creation
+    if (++meshCreateCount % 10 == 0)
+    { // Every 10th mesh creation
         std::wcout << L"[DEBUG] Created " << meshCreateCount << L" GameObject meshes" << std::endl;
     }
-    
+
     ASSERT_MSG(!m_name.empty(), "GameObject name unexpected empty");
     ASSERT_MSG(m_device != nullptr, "GameObject device is null");
     ASSERT_MSG(m_context != nullptr, "GameObject context is null");

@@ -27,9 +27,9 @@
  */
 enum class ProjectileType
 {
-    BULLET,   ///< Fast, small projectiles for rifles and pistols
-    ROCKET,   ///< Explosive projectiles with area damage
-    GRENADE   ///< Lobbed explosive projectiles with gravity
+    BULLET, ///< Fast, small projectiles for rifles and pistols
+    ROCKET, ///< Explosive projectiles with area damage
+    GRENADE ///< Lobbed explosive projectiles with gravity
 };
 
 /**
@@ -52,7 +52,7 @@ class PhysicsSystem;
 
 class ProjectilePool
 {
-public:
+  public:
     /**
      * @brief Constructor with pool size specification
      * @param poolSize Maximum number of simultaneous projectiles
@@ -76,19 +76,19 @@ public:
      * @brief Update all active projectiles
      * @param deltaTime Time elapsed since last frame in seconds
      */
-    void    Update(float deltaTime);
+    void Update(float deltaTime);
 
     /**
      * @brief Render all active projectiles
      * @param view Camera view matrix
      * @param proj Camera projection matrix
      */
-    void    Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
+    void Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
 
     /**
      * @brief Shutdown and clean up all resources
      */
-    void    Shutdown();
+    void Shutdown();
 
     /**
      * @brief Get an available projectile from the pool
@@ -100,7 +100,7 @@ public:
      * @brief Return a projectile to the available pool
      * @param p Pointer to the projectile to return
      */
-    void        ReturnProjectile(Projectile* p);
+    void ReturnProjectile(Projectile* p);
 
     /**
      * @brief Fire a bullet projectile
@@ -145,7 +145,7 @@ public:
      * @brief Get the number of currently active projectiles
      * @return Number of projectiles in use
      */
-    size_t GetActiveCount()    const;
+    size_t GetActiveCount() const;
 
     /**
      * @brief Get the number of available projectiles in the pool
@@ -153,16 +153,16 @@ public:
      */
     size_t GetAvailableCount() const;
 
-private:
+  private:
     /**
      * @brief Create all projectile objects for the pool
      */
     void CreateProjectiles();
 
-    PhysicsSystem*                  m_physicsSystem{ nullptr }; ///< Cached physics system
-    size_t                          m_poolSize;    ///< Maximum pool size
-    ID3D11Device* m_device{ nullptr };             ///< DirectX device reference
-    ID3D11DeviceContext* m_context{ nullptr };     ///< DirectX context reference
-    std::vector<std::unique_ptr<Projectile>> m_projectiles;      ///< All projectile objects
-    std::queue<Projectile*>         m_availableProjectiles;      ///< Queue of available projectiles
+    PhysicsSystem* m_physicsSystem{nullptr};                ///< Cached physics system
+    size_t m_poolSize;                                      ///< Maximum pool size
+    ID3D11Device* m_device{nullptr};                        ///< DirectX device reference
+    ID3D11DeviceContext* m_context{nullptr};                ///< DirectX context reference
+    std::vector<std::unique_ptr<Projectile>> m_projectiles; ///< All projectile objects
+    std::queue<Projectile*> m_availableProjectiles;         ///< Queue of available projectiles
 };

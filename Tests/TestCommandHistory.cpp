@@ -13,110 +13,143 @@
 // Standalone reimplementation for cross-platform testing
 // ============================================================================
 
-namespace {
+namespace
+{
 
-class ICommand {
-public:
-    virtual ~ICommand() = default;
-    virtual void Execute() = 0;
-    virtual void Undo() = 0;
-    virtual std::string GetDescription() const = 0;
-    virtual bool MergeWith(const ICommand&) { return false; }
-    virtual int GetTypeId() const { return 0; }
-};
+    class ICommand
+    {
+      public:
+        virtual ~ICommand() = default;
+        virtual void Execute() = 0;
+        virtual void Undo() = 0;
+        virtual std::string GetDescription() const = 0;
+        virtual bool MergeWith(const ICommand&) { return false; }
+        virtual int GetTypeId() const { return 0; }
+    };
 
-class CommandHistory {
-public:
-    void Execute(std::unique_ptr<ICommand> cmd) {
-        cmd->Execute();
-        if (!m_undo.empty() && cmd->GetTypeId() != 0
-            && m_undo.back()->GetTypeId() == cmd->GetTypeId()
-            && m_undo.back()->MergeWith(*cmd)) {
+    class CommandHistory
+    {
+      public:
+        void Execute(std::unique_ptr<ICommand> cmd)
+        {
+            cmd->Execute();
+            if (!m_undo.empty() && cmd->GetTypeId() != 0 && m_undo.back()->GetTypeId() == cmd->GetTypeId() &&
+                m_undo.back()->MergeWith(*cmd))
+            {
+                m_redo.clear();
+                return;
+            }
+            m_undo.push_back(std::move(cmd));
             m_redo.clear();
-            return;
+            while (m_undo.size() > m_maxHistory)
+                m_undo.erase(m_undo.begin());
         }
-        m_undo.push_back(std::move(cmd));
-        m_redo.clear();
-        while (m_undo.size() > m_maxHistory) m_undo.erase(m_undo.begin());
-    }
 
-    bool Undo() {
-        if (m_undo.empty()) return false;
-        auto c = std::move(m_undo.back()); m_undo.pop_back();
-        c->Undo();
-        m_redo.push_back(std::move(c));
-        return true;
-    }
+        bool Undo()
+        {
+            if (m_undo.empty())
+                return false;
+            auto c = std::move(m_undo.back());
+            m_undo.pop_back();
+            c->Undo();
+            m_redo.push_back(std::move(c));
+            return true;
+        }
 
-    bool Redo() {
-        if (m_redo.empty()) return false;
-        auto c = std::move(m_redo.back()); m_redo.pop_back();
-        c->Execute();
-        m_undo.push_back(std::move(c));
-        return true;
-    }
+        bool Redo()
+        {
+            if (m_redo.empty())
+                return false;
+            auto c = std::move(m_redo.back());
+            m_redo.pop_back();
+            c->Execute();
+            m_undo.push_back(std::move(c));
+            return true;
+        }
 
-    bool CanUndo() const { return !m_undo.empty(); }
-    bool CanRedo() const { return !m_redo.empty(); }
-    std::string UndoDesc() const { return m_undo.empty() ? "" : m_undo.back()->GetDescription(); }
-    std::string RedoDesc() const { return m_redo.empty() ? "" : m_redo.back()->GetDescription(); }
-    void Clear() { m_undo.clear(); m_redo.clear(); }
-    size_t UndoCount() const { return m_undo.size(); }
-    size_t RedoCount() const { return m_redo.size(); }
-    void SetMaxHistory(size_t max) { m_maxHistory = max; }
-    void MarkSaved() { m_saved = m_undo.size(); }
-    bool IsModified() const { return m_undo.size() != m_saved; }
+        bool CanUndo() const { return !m_undo.empty(); }
+        bool CanRedo() const { return !m_redo.empty(); }
+        std::string UndoDesc() const { return m_undo.empty() ? "" : m_undo.back()->GetDescription(); }
+        std::string RedoDesc() const { return m_redo.empty() ? "" : m_redo.back()->GetDescription(); }
+        void Clear()
+        {
+            m_undo.clear();
+            m_redo.clear();
+        }
+        size_t UndoCount() const { return m_undo.size(); }
+        size_t RedoCount() const { return m_redo.size(); }
+        void SetMaxHistory(size_t max) { m_maxHistory = max; }
+        void MarkSaved() { m_saved = m_undo.size(); }
+        bool IsModified() const { return m_undo.size() != m_saved; }
 
-private:
-    std::vector<std::unique_ptr<ICommand>> m_undo, m_redo;
-    size_t m_maxHistory = 100, m_saved = 0;
-};
+      private:
+        std::vector<std::unique_ptr<ICommand>> m_undo, m_redo;
+        size_t m_maxHistory = 100, m_saved = 0;
+    };
 
-// Simple command: set an int to a value, undo restores old value
-class SetIntCmd : public ICommand {
-public:
-    SetIntCmd(int* target, int newVal, const std::string& desc)
-        : m_target(target), m_old(*target), m_new(newVal), m_desc(desc) {}
-    void Execute() override { *m_target = m_new; }
-    void Undo() override { *m_target = m_old; }
-    std::string GetDescription() const override { return m_desc; }
-private:
-    int* m_target;
-    int m_old, m_new;
-    std::string m_desc;
-};
+    // Simple command: set an int to a value, undo restores old value
+    class SetIntCmd : public ICommand
+    {
+      public:
+        SetIntCmd(int* target, int newVal, const std::string& desc)
+            : m_target(target), m_old(*target), m_new(newVal), m_desc(desc)
+        {
+        }
+        void Execute() override { *m_target = m_new; }
+        void Undo() override { *m_target = m_old; }
+        std::string GetDescription() const override { return m_desc; }
 
-// Mergeable command for continuous drags
-class DragCmd : public ICommand {
-public:
-    DragCmd(float* target, float newVal) : m_target(target), m_old(*target), m_new(newVal) {}
-    void Execute() override { *m_target = m_new; }
-    void Undo() override { *m_target = m_old; }
-    std::string GetDescription() const override { return "Drag"; }
-    int GetTypeId() const override { return 42; }
-    bool MergeWith(const ICommand& other) override {
-        auto* d = dynamic_cast<const DragCmd*>(&other);
-        if (!d || d->m_target != m_target) return false;
-        m_new = d->m_new;
-        return true;
-    }
-private:
-    float* m_target;
-    float m_old, m_new;
-};
+      private:
+        int* m_target;
+        int m_old, m_new;
+        std::string m_desc;
+    };
 
-// Compound command grouping multiple sub-commands
-class CompoundCmd : public ICommand {
-public:
-    explicit CompoundCmd(const std::string& desc) : m_desc(desc) {}
-    void Add(std::unique_ptr<ICommand> cmd) { m_cmds.push_back(std::move(cmd)); }
-    void Execute() override { for (auto& c : m_cmds) c->Execute(); }
-    void Undo() override { for (auto it = m_cmds.rbegin(); it != m_cmds.rend(); ++it) (*it)->Undo(); }
-    std::string GetDescription() const override { return m_desc; }
-private:
-    std::string m_desc;
-    std::vector<std::unique_ptr<ICommand>> m_cmds;
-};
+    // Mergeable command for continuous drags
+    class DragCmd : public ICommand
+    {
+      public:
+        DragCmd(float* target, float newVal) : m_target(target), m_old(*target), m_new(newVal) {}
+        void Execute() override { *m_target = m_new; }
+        void Undo() override { *m_target = m_old; }
+        std::string GetDescription() const override { return "Drag"; }
+        int GetTypeId() const override { return 42; }
+        bool MergeWith(const ICommand& other) override
+        {
+            auto* d = dynamic_cast<const DragCmd*>(&other);
+            if (!d || d->m_target != m_target)
+                return false;
+            m_new = d->m_new;
+            return true;
+        }
+
+      private:
+        float* m_target;
+        float m_old, m_new;
+    };
+
+    // Compound command grouping multiple sub-commands
+    class CompoundCmd : public ICommand
+    {
+      public:
+        explicit CompoundCmd(const std::string& desc) : m_desc(desc) {}
+        void Add(std::unique_ptr<ICommand> cmd) { m_cmds.push_back(std::move(cmd)); }
+        void Execute() override
+        {
+            for (auto& c : m_cmds)
+                c->Execute();
+        }
+        void Undo() override
+        {
+            for (auto it = m_cmds.rbegin(); it != m_cmds.rend(); ++it)
+                (*it)->Undo();
+        }
+        std::string GetDescription() const override { return m_desc; }
+
+      private:
+        std::string m_desc;
+        std::vector<std::unique_ptr<ICommand>> m_cmds;
+    };
 
 } // anonymous namespace
 
@@ -124,7 +157,8 @@ private:
 // Tests
 // ============================================================================
 
-TEST(CommandHistory_BasicUndoRedo) {
+TEST(CommandHistory_BasicUndoRedo)
+{
     CommandHistory history;
     int value = 0;
 
@@ -138,7 +172,8 @@ TEST(CommandHistory_BasicUndoRedo) {
     EXPECT_EQ(value, 10);
 }
 
-TEST(CommandHistory_MultipleUndos) {
+TEST(CommandHistory_MultipleUndos)
+{
     CommandHistory history;
     int value = 0;
 
@@ -162,7 +197,8 @@ TEST(CommandHistory_MultipleUndos) {
     EXPECT_TRUE(history.CanRedo());
 }
 
-TEST(CommandHistory_RedoClearedByNewCommand) {
+TEST(CommandHistory_RedoClearedByNewCommand)
+{
     CommandHistory history;
     int value = 0;
 
@@ -177,7 +213,8 @@ TEST(CommandHistory_RedoClearedByNewCommand) {
     EXPECT_EQ(value, 5);
 }
 
-TEST(CommandHistory_Descriptions) {
+TEST(CommandHistory_Descriptions)
+{
     CommandHistory history;
     int value = 0;
 
@@ -190,19 +227,22 @@ TEST(CommandHistory_Descriptions) {
     EXPECT_EQ(history.RedoDesc(), std::string("Second"));
 }
 
-TEST(CommandHistory_MaxHistoryEnforced) {
+TEST(CommandHistory_MaxHistoryEnforced)
+{
     CommandHistory history;
     history.SetMaxHistory(3);
     int value = 0;
 
-    for (int i = 1; i <= 5; i++) {
+    for (int i = 1; i <= 5; i++)
+    {
         history.Execute(std::make_unique<SetIntCmd>(&value, i, "Set"));
     }
 
     EXPECT_EQ(history.UndoCount(), (size_t)3);
 }
 
-TEST(CommandHistory_Clear) {
+TEST(CommandHistory_Clear)
+{
     CommandHistory history;
     int value = 0;
 
@@ -214,7 +254,8 @@ TEST(CommandHistory_Clear) {
     EXPECT_EQ(history.UndoCount(), (size_t)0);
 }
 
-TEST(CommandHistory_MergeableCommands) {
+TEST(CommandHistory_MergeableCommands)
+{
     CommandHistory history;
     float pos = 0.0f;
 
@@ -230,7 +271,8 @@ TEST(CommandHistory_MergeableCommands) {
     EXPECT_NEAR(pos, 0.0f, 0.01f); // Undoes entire drag
 }
 
-TEST(CommandHistory_CompoundCommand) {
+TEST(CommandHistory_CompoundCommand)
+{
     CommandHistory history;
     int a = 0, b = 0;
 
@@ -247,7 +289,8 @@ TEST(CommandHistory_CompoundCommand) {
     EXPECT_EQ(b, 0);
 }
 
-TEST(CommandHistory_SavedStateTracking) {
+TEST(CommandHistory_SavedStateTracking)
+{
     CommandHistory history;
     int value = 0;
 
@@ -261,7 +304,8 @@ TEST(CommandHistory_SavedStateTracking) {
     EXPECT_FALSE(history.IsModified()); // back to saved state
 }
 
-TEST(CommandHistory_UndoReturnsFalseWhenEmpty) {
+TEST(CommandHistory_UndoReturnsFalseWhenEmpty)
+{
     CommandHistory history;
     EXPECT_FALSE(history.Undo());
     EXPECT_FALSE(history.Redo());

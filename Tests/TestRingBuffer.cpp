@@ -8,7 +8,8 @@
 // Tests - Fixed RingBuffer
 // =============================================================================
 
-TEST(RingBuffer_Empty) {
+TEST(RingBuffer_Empty)
+{
     Spark::RingBuffer<int, 4> buf;
     EXPECT_TRUE(buf.IsEmpty());
     EXPECT_FALSE(buf.IsFull());
@@ -16,29 +17,32 @@ TEST(RingBuffer_Empty) {
     EXPECT_EQ(buf.Capacity(), (size_t)4);
 }
 
-TEST(RingBuffer_PushAndAccess) {
+TEST(RingBuffer_PushAndAccess)
+{
     Spark::RingBuffer<int, 4> buf;
     buf.Push(10);
     buf.Push(20);
     buf.Push(30);
 
     EXPECT_EQ(buf.Size(), (size_t)3);
-    EXPECT_EQ(buf[0], 30);  // Most recent
+    EXPECT_EQ(buf[0], 30); // Most recent
     EXPECT_EQ(buf[1], 20);
-    EXPECT_EQ(buf[2], 10);  // Oldest
+    EXPECT_EQ(buf[2], 10); // Oldest
 }
 
-TEST(RingBuffer_FrontBack) {
+TEST(RingBuffer_FrontBack)
+{
     Spark::RingBuffer<int, 4> buf;
     buf.Push(1);
     buf.Push(2);
     buf.Push(3);
 
-    EXPECT_EQ(buf.Front(), 3);  // Most recent
-    EXPECT_EQ(buf.Back(), 1);   // Oldest
+    EXPECT_EQ(buf.Front(), 3); // Most recent
+    EXPECT_EQ(buf.Back(), 1);  // Oldest
 }
 
-TEST(RingBuffer_Overflow) {
+TEST(RingBuffer_Overflow)
+{
     Spark::RingBuffer<int, 3> buf;
     buf.Push(1);
     buf.Push(2);
@@ -46,14 +50,15 @@ TEST(RingBuffer_Overflow) {
     EXPECT_TRUE(buf.IsFull());
     EXPECT_EQ(buf.Size(), (size_t)3);
 
-    buf.Push(4);  // Overwrites oldest (1)
-    EXPECT_EQ(buf.Size(), (size_t)3);  // Still 3
-    EXPECT_EQ(buf[0], 4);  // Most recent
+    buf.Push(4);                      // Overwrites oldest (1)
+    EXPECT_EQ(buf.Size(), (size_t)3); // Still 3
+    EXPECT_EQ(buf[0], 4);             // Most recent
     EXPECT_EQ(buf[1], 3);
-    EXPECT_EQ(buf[2], 2);  // Oldest now (1 was overwritten)
+    EXPECT_EQ(buf[2], 2); // Oldest now (1 was overwritten)
 }
 
-TEST(RingBuffer_Clear) {
+TEST(RingBuffer_Clear)
+{
     Spark::RingBuffer<int, 4> buf;
     buf.Push(1);
     buf.Push(2);
@@ -68,7 +73,8 @@ TEST(RingBuffer_Clear) {
     EXPECT_EQ(buf[0], 10);
 }
 
-TEST(RingBuffer_SingleElement) {
+TEST(RingBuffer_SingleElement)
+{
     Spark::RingBuffer<float, 1> buf;
     buf.Push(1.0f);
     EXPECT_TRUE(buf.IsFull());
@@ -79,7 +85,8 @@ TEST(RingBuffer_SingleElement) {
     EXPECT_EQ(buf.Size(), (size_t)1);
 }
 
-TEST(RingBuffer_Iterator) {
+TEST(RingBuffer_Iterator)
+{
     Spark::RingBuffer<int, 8> buf;
     buf.Push(10);
     buf.Push(20);
@@ -87,15 +94,17 @@ TEST(RingBuffer_Iterator) {
 
     // Iterator goes oldest to newest
     std::vector<int> values;
-    for (int v : buf) values.push_back(v);
+    for (int v : buf)
+        values.push_back(v);
 
     EXPECT_EQ((int)values.size(), 3);
-    EXPECT_EQ(values[0], 10);  // Oldest
+    EXPECT_EQ(values[0], 10); // Oldest
     EXPECT_EQ(values[1], 20);
-    EXPECT_EQ(values[2], 30);  // Newest
+    EXPECT_EQ(values[2], 30); // Newest
 }
 
-TEST(RingBuffer_StringType) {
+TEST(RingBuffer_StringType)
+{
     Spark::RingBuffer<std::string, 3> buf;
     buf.Push("hello");
     buf.Push("world");
@@ -103,7 +112,8 @@ TEST(RingBuffer_StringType) {
     EXPECT_EQ(buf[1], std::string("hello"));
 }
 
-TEST(RingBuffer_MutableAccess) {
+TEST(RingBuffer_MutableAccess)
+{
     Spark::RingBuffer<int, 4> buf;
     buf.Push(10);
     buf[0] = 99;
@@ -114,7 +124,8 @@ TEST(RingBuffer_MutableAccess) {
 // Tests - Dynamic RingBuffer
 // =============================================================================
 
-TEST(DynamicRingBuffer_Basic) {
+TEST(DynamicRingBuffer_Basic)
+{
     Spark::DynamicRingBuffer<int> buf(4);
     EXPECT_TRUE(buf.IsEmpty());
     EXPECT_EQ(buf.Capacity(), (size_t)4);
@@ -127,7 +138,8 @@ TEST(DynamicRingBuffer_Basic) {
     EXPECT_EQ(buf[2], 1);
 }
 
-TEST(DynamicRingBuffer_Overflow) {
+TEST(DynamicRingBuffer_Overflow)
+{
     Spark::DynamicRingBuffer<int> buf(3);
     buf.Push(1);
     buf.Push(2);
@@ -139,7 +151,8 @@ TEST(DynamicRingBuffer_Overflow) {
     EXPECT_EQ(buf[2], 2);
 }
 
-TEST(DynamicRingBuffer_Clear) {
+TEST(DynamicRingBuffer_Clear)
+{
     Spark::DynamicRingBuffer<int> buf(4);
     buf.Push(1);
     buf.Push(2);
@@ -147,17 +160,19 @@ TEST(DynamicRingBuffer_Clear) {
     EXPECT_TRUE(buf.IsEmpty());
 }
 
-TEST(DynamicRingBuffer_Resize) {
+TEST(DynamicRingBuffer_Resize)
+{
     Spark::DynamicRingBuffer<int> buf(4);
     buf.Push(1);
     buf.Push(2);
 
     buf.Resize(8);
     EXPECT_EQ(buf.Capacity(), (size_t)8);
-    EXPECT_TRUE(buf.IsEmpty());  // Resize clears
+    EXPECT_TRUE(buf.IsEmpty()); // Resize clears
 }
 
-TEST(DynamicRingBuffer_FrontBack) {
+TEST(DynamicRingBuffer_FrontBack)
+{
     Spark::DynamicRingBuffer<int> buf(8);
     buf.Push(10);
     buf.Push(20);

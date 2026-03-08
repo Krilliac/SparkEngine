@@ -61,17 +61,18 @@
 
 // Forward declarations for engine subsystems that systems depend on.
 // Full headers are included in the .cpp implementations.
-class GraphicsEngine;   ///< Rendering backend (DirectX 11)
-class PhysicsSystem;    ///< Bullet Physics simulation world
-class AudioEngine;      ///< XAudio2 audio backend
+class GraphicsEngine; ///< Rendering backend (DirectX 11)
+class PhysicsSystem;  ///< Bullet Physics simulation world
+class AudioEngine;    ///< XAudio2 audio backend
 
-namespace Spark::ECS {
+namespace Spark::ECS
+{
 
-// =============================================================================
-// Base System Interface
-// =============================================================================
+    // =============================================================================
+    // Base System Interface
+    // =============================================================================
 
-/**
+    /**
  * @class ISystem
  * @brief Abstract base interface for all ECS systems.
  *
@@ -97,13 +98,13 @@ namespace Spark::ECS {
  *   };
  * @endcode
  */
-class ISystem
-{
-public:
-    /** @brief Virtual destructor ensures correct cleanup in derived classes. */
-    virtual ~ISystem() = default;
+    class ISystem
+    {
+      public:
+        /** @brief Virtual destructor ensures correct cleanup in derived classes. */
+        virtual ~ISystem() = default;
 
-    /**
+        /**
      * @brief Execute the system's per-frame logic against the entity world.
      *
      * Called once per frame by `SystemManager::UpdateAll()` (unless disabled).
@@ -114,9 +115,9 @@ public:
      * @param deltaTime  Time elapsed since the previous frame (seconds). Used for
      *                   frame-rate independent simulation and animation.
      */
-    virtual void Update(World& world, float deltaTime) = 0;
+        virtual void Update(World& world, float deltaTime) = 0;
 
-    /**
+        /**
      * @brief Return a stable debug name for this system.
      *
      * Used by the SparkEditor systems panel, profiler, and debug logs. Should be
@@ -124,18 +125,18 @@ public:
      *
      * @return  C-string name of the system.
      */
-    virtual const char* GetName() const = 0;
+        virtual const char* GetName() const = 0;
 
-    /**
+        /**
      * @brief Query whether this system is currently active.
      *
      * Disabled systems are not updated by `SystemManager::UpdateAll()`.
      *
      * @return  `true` if the system will be updated this frame.
      */
-    virtual bool IsEnabled() const { return m_enabled; }
+        virtual bool IsEnabled() const { return m_enabled; }
 
-    /**
+        /**
      * @brief Enable or disable this system.
      *
      * Disabled systems retain their internal state; they can be re-enabled at any
@@ -144,18 +145,18 @@ public:
      *
      * @param enabled  `true` to activate, `false` to deactivate.
      */
-    virtual void SetEnabled(bool enabled) { m_enabled = enabled; }
+        virtual void SetEnabled(bool enabled) { m_enabled = enabled; }
 
-protected:
-    /** @brief Whether this system participates in each `UpdateAll()` call. Default: true. */
-    bool m_enabled = true;
-};
+      protected:
+        /** @brief Whether this system participates in each `UpdateAll()` call. Default: true. */
+        bool m_enabled = true;
+    };
 
-// =============================================================================
-// Render System
-// =============================================================================
+    // =============================================================================
+    // Render System
+    // =============================================================================
 
-/**
+    /**
  * @class RenderSystem
  * @brief Submits renderable entities (MeshRenderer + Transform) to the GraphicsEngine.
  *
@@ -179,18 +180,18 @@ protected:
  * @note This system reads Transform and MeshRenderer but does NOT write to them.
  *       It is safe to run after physics and animation systems have updated transforms.
  */
-class RenderSystem : public ISystem
-{
-public:
-    /**
+    class RenderSystem : public ISystem
+    {
+      public:
+        /**
      * @brief Construct the RenderSystem with a reference to the graphics engine.
      *
      * @param graphics  Non-owning pointer to the active GraphicsEngine. Must not be null.
      *                  The engine must remain alive for the lifetime of this system.
      */
-    RenderSystem(GraphicsEngine* graphics) : m_graphics(graphics) {}
+        RenderSystem(GraphicsEngine* graphics) : m_graphics(graphics) {}
 
-    /**
+        /**
      * @brief Iterate all (MeshRenderer, Transform) entities and submit draw calls.
      *
      * For each visible entity:
@@ -203,11 +204,11 @@ public:
      * @param world      The ECS World to query.
      * @param deltaTime  Unused by the render system but required by the interface.
      */
-    void Update(World& world, float deltaTime) override;
+        void Update(World& world, float deltaTime) override;
 
-    const char* GetName() const override { return "RenderSystem"; }
+        const char* GetName() const override { return "RenderSystem"; }
 
-    /**
+        /**
      * @brief Return the number of entities submitted for rendering in the last frame.
      *
      * Useful for monitoring scene complexity and render budget. A high count may
@@ -215,21 +216,21 @@ public:
      *
      * @return  Count of entities rendered (visible + having a mesh) in the last Update() call.
      */
-    int GetRenderedEntityCount() const { return m_renderedCount; }
+        int GetRenderedEntityCount() const { return m_renderedCount; }
 
-private:
-    /** @brief Non-owning reference to the graphics engine used to issue draw calls. */
-    GraphicsEngine* m_graphics;
+      private:
+        /** @brief Non-owning reference to the graphics engine used to issue draw calls. */
+        GraphicsEngine* m_graphics;
 
-    /** @brief Entities submitted for rendering in the most recent Update() call. */
-    int m_renderedCount = 0;
-};
+        /** @brief Entities submitted for rendering in the most recent Update() call. */
+        int m_renderedCount = 0;
+    };
 
-// =============================================================================
-// Physics Update System
-// =============================================================================
+    // =============================================================================
+    // Physics Update System
+    // =============================================================================
 
-/**
+    /**
  * @class PhysicsUpdateSystem
  * @brief Synchronizes ECS Transform components with Bullet Physics rigid body simulation.
  *
@@ -254,18 +255,18 @@ private:
  * @note Static bodies (PhysicsBodyType::Static) are never written back to Transform
  *       since they never move. Their Transform is only written once at creation time.
  */
-class PhysicsUpdateSystem : public ISystem
-{
-public:
-    /**
+    class PhysicsUpdateSystem : public ISystem
+    {
+      public:
+        /**
      * @brief Construct with a reference to the physics simulation.
      *
      * @param physics  Non-owning pointer to the PhysicsSystem. Must not be null.
      *                 The physics system must remain alive for the lifetime of this object.
      */
-    PhysicsUpdateSystem(PhysicsSystem* physics) : m_physics(physics) {}
+        PhysicsUpdateSystem(PhysicsSystem* physics) : m_physics(physics) {}
 
-    /**
+        /**
      * @brief Sync transforms between the ECS world and the physics simulation.
      *
      * - Kinematic entities: writes ECS Transform → Bullet rigid body.
@@ -275,20 +276,20 @@ public:
      * @param world      The ECS World containing RigidBodyComponent and Transform.
      * @param deltaTime  Physics time step (seconds), forwarded to PhysicsSystem::Update().
      */
-    void Update(World& world, float deltaTime) override;
+        void Update(World& world, float deltaTime) override;
 
-    const char* GetName() const override { return "PhysicsUpdateSystem"; }
+        const char* GetName() const override { return "PhysicsUpdateSystem"; }
 
-private:
-    /** @brief Non-owning pointer to the Bullet Physics simulation world. */
-    PhysicsSystem* m_physics;
-};
+      private:
+        /** @brief Non-owning pointer to the Bullet Physics simulation world. */
+        PhysicsSystem* m_physics;
+    };
 
-// =============================================================================
-// Audio Update System
-// =============================================================================
+    // =============================================================================
+    // Audio Update System
+    // =============================================================================
 
-/**
+    /**
  * @class AudioUpdateSystem
  * @brief Updates 3D audio source positions from entity Transform components.
  *
@@ -311,17 +312,17 @@ private:
  * @note Only entities with `AudioSourceComponent::is3D == true` benefit from this
  *       system. 2D sources are unaffected by position changes.
  */
-class AudioUpdateSystem : public ISystem
-{
-public:
-    /**
+    class AudioUpdateSystem : public ISystem
+    {
+      public:
+        /**
      * @brief Construct with a reference to the audio engine.
      *
      * @param audio  Non-owning pointer to the AudioEngine. Must not be null.
      */
-    AudioUpdateSystem(AudioEngine* audio) : m_audio(audio) {}
+        AudioUpdateSystem(AudioEngine* audio) : m_audio(audio) {}
 
-    /**
+        /**
      * @brief Sync 3D audio source positions from entity transforms.
      *
      * Iterates all entities with AudioSourceComponent + Transform.
@@ -330,20 +331,20 @@ public:
      * @param world      The ECS World to query.
      * @param deltaTime  Frame time used to compute position-delta velocity (seconds).
      */
-    void Update(World& world, float deltaTime) override;
+        void Update(World& world, float deltaTime) override;
 
-    const char* GetName() const override { return "AudioUpdateSystem"; }
+        const char* GetName() const override { return "AudioUpdateSystem"; }
 
-private:
-    /** @brief Non-owning pointer to the XAudio2-based audio engine. */
-    AudioEngine* m_audio;
-};
+      private:
+        /** @brief Non-owning pointer to the XAudio2-based audio engine. */
+        AudioEngine* m_audio;
+    };
 
-// =============================================================================
-// Lifecycle System
-// =============================================================================
+    // =============================================================================
+    // Lifecycle System
+    // =============================================================================
 
-/**
+    /**
  * @class LifecycleSystem
  * @brief Manages entity activation state and death events.
  *
@@ -373,17 +374,17 @@ private:
  *       To prevent the callback firing again, either destroy the entity or clear
  *       the `HealthComponent::isDead` flag.
  */
-class LifecycleSystem : public ISystem
-{
-public:
-    /**
+    class LifecycleSystem : public ISystem
+    {
+      public:
+        /**
      * @brief Callback signature invoked when an entity's health reaches zero.
      *
      * @param entityID  The EntityID of the entity that died.
      */
-    using DeathCallback = std::function<void(EntityID)>;
+        using DeathCallback = std::function<void(EntityID)>;
 
-    /**
+        /**
      * @brief Scan all entities for death and activation state changes.
      *
      * - Fires `m_onDeath` for each entity with `HealthComponent::isDead == true`.
@@ -392,11 +393,11 @@ public:
      * @param world      The ECS World to query.
      * @param deltaTime  Frame time (seconds). May be used for deferred actions.
      */
-    void Update(World& world, float deltaTime) override;
+        void Update(World& world, float deltaTime) override;
 
-    const char* GetName() const override { return "LifecycleSystem"; }
+        const char* GetName() const override { return "LifecycleSystem"; }
 
-    /**
+        /**
      * @brief Register the callback invoked when an entity's HealthComponent marks it dead.
      *
      * Only one callback can be registered; subsequent calls overwrite the previous one.
@@ -404,22 +405,22 @@ public:
      *
      * @param cb  Callback function receiving the EntityID of the dead entity.
      */
-    void SetDeathCallback(DeathCallback cb) { m_onDeath = cb; }
+        void SetDeathCallback(DeathCallback cb) { m_onDeath = cb; }
 
-private:
-    /**
+      private:
+        /**
      * @brief Callback invoked when `HealthComponent::isDead` is detected.
      *
      * Set via `SetDeathCallback()`. May be empty (no-op) if not registered.
      */
-    DeathCallback m_onDeath;
-};
+        DeathCallback m_onDeath;
+    };
 
-// =============================================================================
-// Animation Update System
-// =============================================================================
+    // =============================================================================
+    // Animation Update System
+    // =============================================================================
 
-/**
+    /**
  * @class AnimationUpdateSystem
  * @brief Evaluates skeletal animation for all entities with AnimationController.
  *
@@ -443,10 +444,10 @@ private:
  *       internally (keyed by EntityID). These are lazily created on first
  *       encounter and destroyed when the entity or component is removed.
  */
-class AnimationUpdateSystem : public ISystem
-{
-public:
-    /**
+    class AnimationUpdateSystem : public ISystem
+    {
+      public:
+        /**
      * @brief Advance animation playback for all animated entities.
      *
      * Queries all entities with AnimationController, updates state machines,
@@ -455,16 +456,16 @@ public:
      * @param world      The ECS World to query.
      * @param deltaTime  Frame time in seconds used to advance animation playback.
      */
-    void Update(World& world, float deltaTime) override;
+        void Update(World& world, float deltaTime) override;
 
-    const char* GetName() const override { return "AnimationUpdateSystem"; }
-};
+        const char* GetName() const override { return "AnimationUpdateSystem"; }
+    };
 
-// =============================================================================
-// AI Update System
-// =============================================================================
+    // =============================================================================
+    // AI Update System
+    // =============================================================================
 
-/**
+    /**
  * @class AIUpdateSystem
  * @brief Processes AI agent perception, behavior trees, and pathfinding each frame.
  *
@@ -495,10 +496,10 @@ public:
  * @note The AIUpdateSystem respects `AIComponent::state == State::Dead` — dead
  *       agents are skipped entirely, avoiding unnecessary behavior tree ticks.
  */
-class AIUpdateSystem : public ISystem
-{
-public:
-    /**
+    class AIUpdateSystem : public ISystem
+    {
+      public:
+        /**
      * @brief Process all AI agents for one simulation frame.
      *
      * Iterates entities with AIComponent, runs perception, ticks behavior trees,
@@ -507,16 +508,16 @@ public:
      * @param world      The ECS World to query.
      * @param deltaTime  Frame time in seconds for speed-independent AI updates.
      */
-    void Update(World& world, float deltaTime) override;
+        void Update(World& world, float deltaTime) override;
 
-    const char* GetName() const override { return "AIUpdateSystem"; }
-};
+        const char* GetName() const override { return "AIUpdateSystem"; }
+    };
 
-// =============================================================================
-// System Manager
-// =============================================================================
+    // =============================================================================
+    // System Manager
+    // =============================================================================
 
-/**
+    /**
  * @class SystemManager
  * @brief Owns, orders, and updates all ECS systems.
  *
@@ -546,13 +547,13 @@ public:
  *   mgr.GetSystem("AIUpdateSystem")->SetEnabled(false);
  * @endcode
  */
-class SystemManager
-{
-public:
-    SystemManager() = default;
-    ~SystemManager() = default;
+    class SystemManager
+    {
+      public:
+        SystemManager() = default;
+        ~SystemManager() = default;
 
-    /**
+        /**
      * @brief Construct and register a system of type T.
      *
      * Systems are executed in the order they are added. Constructor arguments for
@@ -568,16 +569,15 @@ public:
      *   render->SetEnabled(false);  // disable initially
      * @endcode
      */
-    template<typename T, typename... Args>
-    T* AddSystem(Args&&... args)
-    {
-        auto system = std::make_unique<T>(std::forward<Args>(args)...);
-        T* ptr = system.get();
-        m_systems.push_back(std::move(system));
-        return ptr;
-    }
+        template <typename T, typename... Args> T* AddSystem(Args&&... args)
+        {
+            auto system = std::make_unique<T>(std::forward<Args>(args)...);
+            T* ptr = system.get();
+            m_systems.push_back(std::move(system));
+            return ptr;
+        }
 
-    /**
+        /**
      * @brief Update all enabled systems in registration order.
      *
      * Iterates the internal system list and calls `Update(world, deltaTime)` on
@@ -587,16 +587,16 @@ public:
      * @param world      The ECS World shared by all systems.
      * @param deltaTime  Frame time in seconds passed to every system.
      */
-    void UpdateAll(World& world, float deltaTime)
-    {
-        for (auto& system : m_systems)
+        void UpdateAll(World& world, float deltaTime)
         {
-            if (system->IsEnabled())
-                system->Update(world, deltaTime);
+            for (auto& system : m_systems)
+            {
+                if (system->IsEnabled())
+                    system->Update(world, deltaTime);
+            }
         }
-    }
 
-    /**
+        /**
      * @brief Find a system by its name.
      *
      * Performs a linear search comparing `GetName()` to the supplied string.
@@ -610,36 +610,36 @@ public:
      *   if (ai) ai->SetEnabled(false);  // pause AI during cutscene
      * @endcode
      */
-    ISystem* GetSystem(const std::string& name) const
-    {
-        for (const auto& system : m_systems)
+        ISystem* GetSystem(const std::string& name) const
         {
-            if (system->GetName() == name)
-                return system.get();
+            for (const auto& system : m_systems)
+            {
+                if (system->GetName() == name)
+                    return system.get();
+            }
+            return nullptr;
         }
-        return nullptr;
-    }
 
-    /**
+        /**
      * @brief Return the total number of registered systems (enabled and disabled).
      * @return  Count of systems registered with this manager.
      */
-    size_t GetSystemCount() const { return m_systems.size(); }
+        size_t GetSystemCount() const { return m_systems.size(); }
 
-    /**
+        /**
      * @brief List all registered systems and their enabled state (console integration).
      *
      * @return  Newline-separated string of "SystemName: enabled/disabled" entries.
      */
-    std::string Console_ListSystems() const;
+        std::string Console_ListSystems() const;
 
-private:
-    /**
+      private:
+        /**
      * @brief Ordered collection of all registered systems.
      *
      * Unique ownership via `unique_ptr`; systems are processed in insertion order.
      */
-    std::vector<std::unique_ptr<ISystem>> m_systems;
-};
+        std::vector<std::unique_ptr<ISystem>> m_systems;
+    };
 
 } // namespace Spark::ECS

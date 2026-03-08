@@ -36,170 +36,177 @@
 
 #include "Engine/Events/EventSystem.h"
 
-namespace Spark {
+namespace Spark
+{
 
-// =============================================================================
-// Item Rarity
-// =============================================================================
+    // =============================================================================
+    // Item Rarity
+    // =============================================================================
 
-/**
+    /**
  * @brief Item rarity tiers affecting drop rates and visual display
  */
-enum class ItemRarity {
-    Common,         ///< White - basic items
-    Uncommon,       ///< Green - slightly better
-    Rare,           ///< Blue - notable finds
-    Epic,           ///< Purple - powerful items
-    Legendary       ///< Gold - extremely rare
-};
+    enum class ItemRarity
+    {
+        Common,   ///< White - basic items
+        Uncommon, ///< Green - slightly better
+        Rare,     ///< Blue - notable finds
+        Epic,     ///< Purple - powerful items
+        Legendary ///< Gold - extremely rare
+    };
 
-/**
+    /**
  * @brief Item category for filtering and UI grouping
  */
-enum class ItemCategory {
-    Weapon,
-    Armor,
-    Consumable,
-    Material,
-    Quest,
-    Misc
-};
+    enum class ItemCategory
+    {
+        Weapon,
+        Armor,
+        Consumable,
+        Material,
+        Quest,
+        Misc
+    };
 
-// =============================================================================
-// Item Definition
-// =============================================================================
+    // =============================================================================
+    // Item Definition
+    // =============================================================================
 
-/**
+    /**
  * @brief Immutable definition of an item type (shared across all instances)
  *
  * ItemDef describes the properties of an item class, not an individual instance.
  * All items of the same type share the same ItemDef.
  */
-struct ItemDef {
-    uint32_t id = 0;                    ///< Unique item type identifier
-    std::string name;                   ///< Display name
-    std::string description;            ///< Flavor text / tooltip
-    ItemCategory category = ItemCategory::Misc;
-    ItemRarity rarity = ItemRarity::Common;
-    int maxStackSize = 1;               ///< Max items per inventory slot (1 = unstackable)
-    float weight = 1.0f;               ///< Weight per unit in kg
-    std::string iconPath;              ///< Path to UI icon texture
-    bool isQuestItem = false;          ///< Quest items cannot be dropped or sold
-    int sellValue = 0;                 ///< Base sell price in currency
-};
+    struct ItemDef
+    {
+        uint32_t id = 0;         ///< Unique item type identifier
+        std::string name;        ///< Display name
+        std::string description; ///< Flavor text / tooltip
+        ItemCategory category = ItemCategory::Misc;
+        ItemRarity rarity = ItemRarity::Common;
+        int maxStackSize = 1;     ///< Max items per inventory slot (1 = unstackable)
+        float weight = 1.0f;      ///< Weight per unit in kg
+        std::string iconPath;     ///< Path to UI icon texture
+        bool isQuestItem = false; ///< Quest items cannot be dropped or sold
+        int sellValue = 0;        ///< Base sell price in currency
+    };
 
-// =============================================================================
-// Item Stack (inventory slot contents)
-// =============================================================================
+    // =============================================================================
+    // Item Stack (inventory slot contents)
+    // =============================================================================
 
-/**
+    /**
  * @brief A stack of items in a single inventory slot
  */
-struct ItemStack {
-    uint32_t itemDefId = 0;            ///< References an ItemDef by ID
-    int count = 0;                     ///< Number of items in this stack
+    struct ItemStack
+    {
+        uint32_t itemDefId = 0; ///< References an ItemDef by ID
+        int count = 0;          ///< Number of items in this stack
 
-    bool IsEmpty() const { return count <= 0 || itemDefId == 0; }
-};
+        bool IsEmpty() const { return count <= 0 || itemDefId == 0; }
+    };
 
-// =============================================================================
-// Inventory Component (ECS)
-// =============================================================================
+    // =============================================================================
+    // Inventory Component (ECS)
+    // =============================================================================
 
-/**
+    /**
  * @brief ECS component representing an entity's inventory
  *
  * Pure data struct following the engine's ECS pattern.
  * Use InventoryOps for logic operations.
  */
-struct InventoryComponent {
-    std::vector<ItemStack> slots;      ///< Inventory slots
-    int maxSlots = 20;                 ///< Maximum number of slots
-    float maxWeight = 100.0f;          ///< Maximum carry weight in kg
-    int currency = 0;                  ///< Currency/gold amount
-};
+    struct InventoryComponent
+    {
+        std::vector<ItemStack> slots; ///< Inventory slots
+        int maxSlots = 20;            ///< Maximum number of slots
+        float maxWeight = 100.0f;     ///< Maximum carry weight in kg
+        int currency = 0;             ///< Currency/gold amount
+    };
 
-// =============================================================================
-// Item Registry
-// =============================================================================
+    // =============================================================================
+    // Item Registry
+    // =============================================================================
 
-/**
+    /**
  * @class ItemRegistry
  * @brief Global registry of all item definitions
  *
  * Stores ItemDef objects by ID for lookup. Typically one instance
  * exists per game session.
  */
-class ItemRegistry {
-public:
-    /**
+    class ItemRegistry
+    {
+      public:
+        /**
      * @brief Register a new item definition
      * @param def  The item definition to register
      */
-    void RegisterItem(const ItemDef& def) {
-        m_items[def.id] = def;
-    }
+        void RegisterItem(const ItemDef& def) { m_items[def.id] = def; }
 
-    /**
+        /**
      * @brief Look up an item definition by ID
      * @param id  Item type ID
      * @return    Pointer to the definition, or nullptr if not found
      */
-    const ItemDef* GetItem(uint32_t id) const {
-        auto it = m_items.find(id);
-        return (it != m_items.end()) ? &it->second : nullptr;
-    }
+        const ItemDef* GetItem(uint32_t id) const
+        {
+            auto it = m_items.find(id);
+            return (it != m_items.end()) ? &it->second : nullptr;
+        }
 
-    /**
+        /**
      * @brief Check if an item ID is registered
      */
-    bool HasItem(uint32_t id) const {
-        return m_items.count(id) > 0;
-    }
+        bool HasItem(uint32_t id) const { return m_items.count(id) > 0; }
 
-    /**
+        /**
      * @brief Get all registered item definitions
      */
-    const std::unordered_map<uint32_t, ItemDef>& GetAllItems() const {
-        return m_items;
-    }
+        const std::unordered_map<uint32_t, ItemDef>& GetAllItems() const { return m_items; }
 
-    /**
+        /**
      * @brief Get the number of registered items
      */
-    size_t GetItemCount() const { return m_items.size(); }
+        size_t GetItemCount() const { return m_items.size(); }
 
-private:
-    std::unordered_map<uint32_t, ItemDef> m_items;
-};
+      private:
+        std::unordered_map<uint32_t, ItemDef> m_items;
+    };
 
-// =============================================================================
-// Inventory Operations (stateless utility functions)
-// =============================================================================
+    // =============================================================================
+    // Inventory Operations (stateless utility functions)
+    // =============================================================================
 
-/**
+    /**
  * @brief Stateless operations for manipulating InventoryComponent data
  *
  * Follows the ECS pattern: components hold data, external functions provide logic.
  */
-namespace InventoryOps {
+    namespace InventoryOps
+    {
 
-    /**
+        /**
      * @brief Calculate total weight of all items in inventory
      */
-    inline float GetTotalWeight(const InventoryComponent& inv, const ItemRegistry& registry) {
-        float total = 0.0f;
-        for (const auto& slot : inv.slots) {
-            if (!slot.IsEmpty()) {
-                if (auto* def = registry.GetItem(slot.itemDefId)) {
-                    total += def->weight * slot.count;
+        inline float GetTotalWeight(const InventoryComponent& inv, const ItemRegistry& registry)
+        {
+            float total = 0.0f;
+            for (const auto& slot : inv.slots)
+            {
+                if (!slot.IsEmpty())
+                {
+                    if (auto* def = registry.GetItem(slot.itemDefId))
+                    {
+                        total += def->weight * slot.count;
+                    }
                 }
             }
+            return total;
         }
-        return total;
-    }
 
-    /**
+        /**
      * @brief Try to add items to the inventory
      *
      * First tries to stack with existing slots, then uses empty slots.
@@ -212,56 +219,64 @@ namespace InventoryOps {
      * @param entityId  Entity ID for the event (only used if eventBus is set)
      * @return          Number of items actually added (may be less if full/overweight)
      */
-    inline int AddItem(InventoryComponent& inv, const ItemRegistry& registry,
-                       uint32_t itemId, int count = 1,
-                       EventBus* eventBus = nullptr, uint32_t entityId = 0) {
-        const ItemDef* def = registry.GetItem(itemId);
-        if (!def || count <= 0) return 0;
+        inline int AddItem(InventoryComponent& inv, const ItemRegistry& registry, uint32_t itemId, int count = 1,
+                           EventBus* eventBus = nullptr, uint32_t entityId = 0)
+        {
+            const ItemDef* def = registry.GetItem(itemId);
+            if (!def || count <= 0)
+                return 0;
 
-        // Check weight limit
-        float currentWeight = GetTotalWeight(inv, registry);
-        float addedWeight = def->weight * count;
-        if (currentWeight + addedWeight > inv.maxWeight) {
-            // Reduce count to fit weight
-            int fittable = static_cast<int>((inv.maxWeight - currentWeight) / def->weight);
-            if (fittable <= 0) return 0;
-            count = std::min(count, fittable);
-        }
-
-        int remaining = count;
-
-        // Try to stack with existing slots
-        for (auto& slot : inv.slots) {
-            if (remaining <= 0) break;
-            if (slot.itemDefId == itemId && slot.count < def->maxStackSize) {
-                int canAdd = std::min(remaining, def->maxStackSize - slot.count);
-                slot.count += canAdd;
-                remaining -= canAdd;
+            // Check weight limit
+            float currentWeight = GetTotalWeight(inv, registry);
+            float addedWeight = def->weight * count;
+            if (currentWeight + addedWeight > inv.maxWeight)
+            {
+                // Reduce count to fit weight
+                int fittable = static_cast<int>((inv.maxWeight - currentWeight) / def->weight);
+                if (fittable <= 0)
+                    return 0;
+                count = std::min(count, fittable);
             }
+
+            int remaining = count;
+
+            // Try to stack with existing slots
+            for (auto& slot : inv.slots)
+            {
+                if (remaining <= 0)
+                    break;
+                if (slot.itemDefId == itemId && slot.count < def->maxStackSize)
+                {
+                    int canAdd = std::min(remaining, def->maxStackSize - slot.count);
+                    slot.count += canAdd;
+                    remaining -= canAdd;
+                }
+            }
+
+            // Use empty slots
+            while (remaining > 0 && static_cast<int>(inv.slots.size()) < inv.maxSlots)
+            {
+                int stackSize = std::min(remaining, def->maxStackSize);
+                inv.slots.push_back({itemId, stackSize});
+                remaining -= stackSize;
+            }
+
+            int added = count - remaining;
+
+            // Publish item picked up event
+            if (added > 0 && eventBus)
+            {
+                ItemPickedUpEvent evt;
+                evt.entityId = entityId;
+                evt.itemDefId = itemId;
+                evt.count = added;
+                eventBus->Publish(evt);
+            }
+
+            return added;
         }
 
-        // Use empty slots
-        while (remaining > 0 && static_cast<int>(inv.slots.size()) < inv.maxSlots) {
-            int stackSize = std::min(remaining, def->maxStackSize);
-            inv.slots.push_back({itemId, stackSize});
-            remaining -= stackSize;
-        }
-
-        int added = count - remaining;
-
-        // Publish item picked up event
-        if (added > 0 && eventBus) {
-            ItemPickedUpEvent evt;
-            evt.entityId = entityId;
-            evt.itemDefId = itemId;
-            evt.count = added;
-            eventBus->Publish(evt);
-        }
-
-        return added;
-    }
-
-    /**
+        /**
      * @brief Remove items from inventory
      *
      * @param inv     Inventory to remove from
@@ -269,99 +284,111 @@ namespace InventoryOps {
      * @param count   Number to remove
      * @return        Number actually removed
      */
-    inline int RemoveItem(InventoryComponent& inv, uint32_t itemId, int count = 1) {
-        if (count <= 0) return 0;
-        int remaining = count;
+        inline int RemoveItem(InventoryComponent& inv, uint32_t itemId, int count = 1)
+        {
+            if (count <= 0)
+                return 0;
+            int remaining = count;
 
-        for (auto it = inv.slots.begin(); it != inv.slots.end() && remaining > 0; ) {
-            if (it->itemDefId == itemId) {
-                int toRemove = std::min(remaining, it->count);
-                it->count -= toRemove;
-                remaining -= toRemove;
-                if (it->count <= 0) {
-                    it = inv.slots.erase(it);
-                    continue;
+            for (auto it = inv.slots.begin(); it != inv.slots.end() && remaining > 0;)
+            {
+                if (it->itemDefId == itemId)
+                {
+                    int toRemove = std::min(remaining, it->count);
+                    it->count -= toRemove;
+                    remaining -= toRemove;
+                    if (it->count <= 0)
+                    {
+                        it = inv.slots.erase(it);
+                        continue;
+                    }
                 }
+                ++it;
             }
-            ++it;
+
+            return count - remaining;
         }
 
-        return count - remaining;
-    }
-
-    /**
+        /**
      * @brief Count total items of a given type in inventory
      */
-    inline int CountItem(const InventoryComponent& inv, uint32_t itemId) {
-        int total = 0;
-        for (const auto& slot : inv.slots) {
-            if (slot.itemDefId == itemId)
-                total += slot.count;
+        inline int CountItem(const InventoryComponent& inv, uint32_t itemId)
+        {
+            int total = 0;
+            for (const auto& slot : inv.slots)
+            {
+                if (slot.itemDefId == itemId)
+                    total += slot.count;
+            }
+            return total;
         }
-        return total;
-    }
 
-    /**
+        /**
      * @brief Check if inventory contains at least N of an item
      */
-    inline bool HasItem(const InventoryComponent& inv, uint32_t itemId, int minCount = 1) {
-        return CountItem(inv, itemId) >= minCount;
-    }
+        inline bool HasItem(const InventoryComponent& inv, uint32_t itemId, int minCount = 1)
+        {
+            return CountItem(inv, itemId) >= minCount;
+        }
 
-    /**
+        /**
      * @brief Find the first slot index containing a given item
      * @return Slot index, or -1 if not found
      */
-    inline int FindItem(const InventoryComponent& inv, uint32_t itemId) {
-        for (int i = 0; i < static_cast<int>(inv.slots.size()); ++i) {
-            if (inv.slots[i].itemDefId == itemId)
-                return i;
+        inline int FindItem(const InventoryComponent& inv, uint32_t itemId)
+        {
+            for (int i = 0; i < static_cast<int>(inv.slots.size()); ++i)
+            {
+                if (inv.slots[i].itemDefId == itemId)
+                    return i;
+            }
+            return -1;
         }
-        return -1;
-    }
 
-    /**
+        /**
      * @brief Remove all empty slots (compact the inventory)
      */
-    inline void Compact(InventoryComponent& inv) {
-        inv.slots.erase(
-            std::remove_if(inv.slots.begin(), inv.slots.end(),
-                [](const ItemStack& s) { return s.IsEmpty(); }),
-            inv.slots.end()
-        );
-    }
+        inline void Compact(InventoryComponent& inv)
+        {
+            inv.slots.erase(
+                std::remove_if(inv.slots.begin(), inv.slots.end(), [](const ItemStack& s) { return s.IsEmpty(); }),
+                inv.slots.end());
+        }
 
-    /**
+        /**
      * @brief Clear the entire inventory
      */
-    inline void Clear(InventoryComponent& inv) {
-        inv.slots.clear();
-    }
+        inline void Clear(InventoryComponent& inv)
+        {
+            inv.slots.clear();
+        }
 
-    /**
+        /**
      * @brief Check if the inventory is full (no empty slots and no stackable space)
      */
-    inline bool IsFull(const InventoryComponent& inv) {
-        return static_cast<int>(inv.slots.size()) >= inv.maxSlots;
-    }
+        inline bool IsFull(const InventoryComponent& inv)
+        {
+            return static_cast<int>(inv.slots.size()) >= inv.maxSlots;
+        }
 
-} // namespace InventoryOps
+    } // namespace InventoryOps
 
-// =============================================================================
-// Loot Tables
-// =============================================================================
+    // =============================================================================
+    // Loot Tables
+    // =============================================================================
 
-/**
+    /**
  * @brief A single entry in a loot table
  */
-struct LootTableEntry {
-    uint32_t itemDefId = 0;            ///< Item to drop
-    int minCount = 1;                  ///< Minimum drop count
-    int maxCount = 1;                  ///< Maximum drop count
-    float weight = 1.0f;              ///< Relative drop weight (higher = more likely)
-};
+    struct LootTableEntry
+    {
+        uint32_t itemDefId = 0; ///< Item to drop
+        int minCount = 1;       ///< Minimum drop count
+        int maxCount = 1;       ///< Maximum drop count
+        float weight = 1.0f;    ///< Relative drop weight (higher = more likely)
+    };
 
-/**
+    /**
  * @class LootTable
  * @brief Weighted random item selection for enemy drops, chest contents, etc.
  *
@@ -373,49 +400,56 @@ struct LootTableEntry {
  *   auto drops = loot.Roll(rng, 2);   // Roll for 2 items
  * @endcode
  */
-class LootTable {
-public:
-    void AddEntry(const LootTableEntry& entry) {
-        m_entries.push_back(entry);
-        m_totalWeight += entry.weight;
-    }
+    class LootTable
+    {
+      public:
+        void AddEntry(const LootTableEntry& entry)
+        {
+            m_entries.push_back(entry);
+            m_totalWeight += entry.weight;
+        }
 
-    /**
+        /**
      * @brief Roll the loot table for random items
      *
      * @param rng       Random engine
      * @param numRolls  Number of items to roll for
      * @return          Vector of (itemDefId, count) pairs
      */
-    std::vector<ItemStack> Roll(std::mt19937& rng, int numRolls = 1) const {
-        std::vector<ItemStack> results;
-        if (m_entries.empty() || m_totalWeight <= 0.0f) return results;
+        std::vector<ItemStack> Roll(std::mt19937& rng, int numRolls = 1) const
+        {
+            std::vector<ItemStack> results;
+            if (m_entries.empty() || m_totalWeight <= 0.0f)
+                return results;
 
-        std::uniform_real_distribution<float> dist(0.0f, m_totalWeight);
+            std::uniform_real_distribution<float> dist(0.0f, m_totalWeight);
 
-        for (int r = 0; r < numRolls; ++r) {
-            float roll = dist(rng);
-            float cumulative = 0.0f;
+            for (int r = 0; r < numRolls; ++r)
+            {
+                float roll = dist(rng);
+                float cumulative = 0.0f;
 
-            for (const auto& entry : m_entries) {
-                cumulative += entry.weight;
-                if (roll <= cumulative) {
-                    std::uniform_int_distribution<int> countDist(entry.minCount, entry.maxCount);
-                    results.push_back({entry.itemDefId, countDist(rng)});
-                    break;
+                for (const auto& entry : m_entries)
+                {
+                    cumulative += entry.weight;
+                    if (roll <= cumulative)
+                    {
+                        std::uniform_int_distribution<int> countDist(entry.minCount, entry.maxCount);
+                        results.push_back({entry.itemDefId, countDist(rng)});
+                        break;
+                    }
                 }
             }
+
+            return results;
         }
 
-        return results;
-    }
+        const std::vector<LootTableEntry>& GetEntries() const { return m_entries; }
+        float GetTotalWeight() const { return m_totalWeight; }
 
-    const std::vector<LootTableEntry>& GetEntries() const { return m_entries; }
-    float GetTotalWeight() const { return m_totalWeight; }
-
-private:
-    std::vector<LootTableEntry> m_entries;
-    float m_totalWeight = 0.0f;
-};
+      private:
+        std::vector<LootTableEntry> m_entries;
+        float m_totalWeight = 0.0f;
+    };
 
 } // namespace Spark

@@ -12,27 +12,27 @@
 #pragma once
 
 #ifdef _WIN32
-    #define SPARK_EXPORT __declspec(dllexport)
-    #define SPARK_IMPORT __declspec(dllimport)
+#define SPARK_EXPORT __declspec(dllexport)
+#define SPARK_IMPORT __declspec(dllimport)
 #else
-    #define SPARK_EXPORT __attribute__((visibility("default")))
-    #define SPARK_IMPORT
+#define SPARK_EXPORT __attribute__((visibility("default")))
+#define SPARK_IMPORT
 #endif
 
 /**
  * @brief Use SPARK_MODULE_API on functions exported from module DLLs (new API)
  */
 #ifdef SPARK_MODULE_DLL
-    #define SPARK_MODULE_API SPARK_EXPORT
+#define SPARK_MODULE_API SPARK_EXPORT
 #else
-    #define SPARK_MODULE_API SPARK_IMPORT
+#define SPARK_MODULE_API SPARK_IMPORT
 #endif
 
 /**
  * @brief Use SPARK_GAME_API on functions exported from game DLLs (legacy API)
  */
 #ifdef SPARK_GAME_DLL
-    #define SPARK_GAME_API SPARK_EXPORT
+#define SPARK_GAME_API SPARK_EXPORT
 #else
-    #define SPARK_GAME_API SPARK_IMPORT
+#define SPARK_GAME_API SPARK_IMPORT
 #endif

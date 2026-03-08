@@ -88,7 +88,7 @@ struct MeshAssetData
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
-    std::vector<uint32_t> submeshes;     // Submesh start indices
+    std::vector<uint32_t> submeshes; // Submesh start indices
     XMFLOAT3 boundingBoxMin;
     XMFLOAT3 boundingBoxMax;
     float boundingSphereRadius;
@@ -125,17 +125,17 @@ struct AnimationAssetData
  */
 struct AssetMetadata
 {
-    std::string guid;                    ///< Unique asset identifier
-    std::string filePath;                ///< Original file path
-    std::string name;                    ///< Asset name
-    AssetType type;                      ///< Asset type
-    size_t fileSize;                     ///< File size in bytes
-    size_t memorySize;                   ///< Memory footprint
-    uint64_t lastModified;               ///< Last modification timestamp
-    std::string checksum;                ///< Content checksum
-    std::vector<std::string> dependencies; ///< Asset dependencies
-    LoadingPriority priority;            ///< Loading priority
-    StreamingState state;                ///< Current streaming state
+    std::string guid;                                              ///< Unique asset identifier
+    std::string filePath;                                          ///< Original file path
+    std::string name;                                              ///< Asset name
+    AssetType type;                                                ///< Asset type
+    size_t fileSize;                                               ///< File size in bytes
+    size_t memorySize;                                             ///< Memory footprint
+    uint64_t lastModified;                                         ///< Last modification timestamp
+    std::string checksum;                                          ///< Content checksum
+    std::vector<std::string> dependencies;                         ///< Asset dependencies
+    LoadingPriority priority;                                      ///< Loading priority
+    StreamingState state;                                          ///< Current streaming state
     std::unordered_map<std::string, std::string> customProperties; ///< Custom metadata
 };
 
@@ -157,9 +157,8 @@ struct AssetLoadRequest
  */
 class Asset
 {
-public:
-    Asset(const std::string& path, AssetType type) 
-        : m_path(path), m_type(type), m_loaded(false) {}
+  public:
+    Asset(const std::string& path, AssetType type) : m_path(path), m_type(type), m_loaded(false) {}
     virtual ~Asset() = default;
 
     const std::string& GetPath() const { return m_path; }
@@ -171,7 +170,7 @@ public:
     virtual void Unload() = 0;
     virtual size_t GetMemoryUsage() const = 0;
 
-protected:
+  protected:
     std::string m_path;
     AssetType m_type;
     bool m_loaded;
@@ -183,7 +182,7 @@ protected:
  */
 class MeshAsset : public Asset
 {
-public:
+  public:
     MeshAsset(const std::string& path) : Asset(path, AssetType::Mesh) {}
 
     HRESULT Load(ID3D11Device* device) override;
@@ -196,7 +195,7 @@ public:
     uint32_t GetVertexCount() const { return static_cast<uint32_t>(m_meshData.vertices.size()); }
     uint32_t GetIndexCount() const { return static_cast<uint32_t>(m_meshData.indices.size()); }
 
-private:
+  private:
     MeshAssetData m_meshData;
     ComPtr<ID3D11Buffer> m_vertexBuffer;
     ComPtr<ID3D11Buffer> m_indexBuffer;
@@ -207,7 +206,7 @@ private:
  */
 class TextureAsset : public Asset
 {
-public:
+  public:
     TextureAsset(const std::string& path) : Asset(path, AssetType::Texture) {}
 
     HRESULT Load(ID3D11Device* device) override;
@@ -218,7 +217,7 @@ public:
     uint32_t GetWidth() const { return m_width; }
     uint32_t GetHeight() const { return m_height; }
 
-private:
+  private:
     ComPtr<ID3D11Texture2D> m_texture;
     ComPtr<ID3D11ShaderResourceView> m_srv;
     uint32_t m_width = 0;
@@ -230,7 +229,7 @@ private:
  */
 class AudioAsset : public Asset
 {
-public:
+  public:
     AudioAsset(const std::string& path) : Asset(path, AssetType::Audio) {}
 
     HRESULT Load(ID3D11Device* device) override;
@@ -242,7 +241,7 @@ public:
     uint32_t GetChannels() const { return m_channels; }
     uint32_t GetBitsPerSample() const { return m_bitsPerSample; }
 
-private:
+  private:
     std::vector<uint8_t> m_audioData;
     uint32_t m_sampleRate = 0;
     uint32_t m_channels = 0;
@@ -254,7 +253,7 @@ private:
  */
 class AssetCache
 {
-public:
+  public:
     AssetCache(size_t maxMemoryMB = 512);
     ~AssetCache();
 
@@ -273,7 +272,7 @@ public:
     uint32_t GetCacheMisses() const { return m_misses; }
     float GetHitRatio() const;
 
-private:
+  private:
     struct CacheEntry
     {
         std::shared_ptr<Asset> asset;
@@ -293,22 +292,22 @@ private:
  */
 class AssetPipeline
 {
-public:
+  public:
     /**
      * @brief Asset pipeline metrics
      */
     struct AssetMetrics
     {
-        uint32_t totalAssets;              ///< Total number of assets
-        uint32_t loadedAssets;             ///< Currently loaded assets
-        uint32_t pendingRequests;          ///< Pending load requests
-        uint32_t failedLoads;              ///< Failed load attempts
-        size_t memoryUsage;                ///< Current memory usage (bytes)
-        size_t maxMemoryUsage;             ///< Maximum memory usage (bytes)
-        float averageLoadTime;             ///< Average asset load time (ms)
-        float cacheHitRatio;               ///< Cache hit ratio (0-1)
-        uint32_t streamingThreads;         ///< Number of streaming threads
-        bool backgroundLoading;            ///< Background loading enabled
+        uint32_t totalAssets;      ///< Total number of assets
+        uint32_t loadedAssets;     ///< Currently loaded assets
+        uint32_t pendingRequests;  ///< Pending load requests
+        uint32_t failedLoads;      ///< Failed load attempts
+        size_t memoryUsage;        ///< Current memory usage (bytes)
+        size_t maxMemoryUsage;     ///< Maximum memory usage (bytes)
+        float averageLoadTime;     ///< Average asset load time (ms)
+        float cacheHitRatio;       ///< Cache hit ratio (0-1)
+        uint32_t streamingThreads; ///< Number of streaming threads
+        bool backgroundLoading;    ///< Background loading enabled
     };
 
     AssetPipeline();
@@ -442,7 +441,7 @@ public:
      */
     int Console_ReloadAllAssets();
 
-private:
+  private:
     ID3D11Device* m_device;
     ID3D11DeviceContext* m_context;
 
@@ -478,7 +477,7 @@ private:
     std::shared_ptr<MeshAsset> LoadMeshFromFile(const std::string& path);
     std::shared_ptr<TextureAsset> LoadTextureFromFile(const std::string& path);
     std::shared_ptr<AudioAsset> LoadAudioFromFile(const std::string& path);
-    
+
     // Format-specific loaders
     HRESULT LoadOBJ(const std::string& path, MeshAssetData& meshData);
     HRESULT LoadFBX(const std::string& path, MeshAssetData& meshData);

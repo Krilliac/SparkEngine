@@ -14,14 +14,14 @@
 #include <sstream>
 
 #ifdef _WIN32
-    #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-    #endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #ifdef SPARK_PLATFORM_WINDOWS
-    #include <Windows.h>
+#include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #else
-    #include <dlfcn.h>
+#include <dlfcn.h>
 #endif
 
 // =============================================================================
@@ -36,31 +36,35 @@
  */
 class LegacyModuleAdapter : public Spark::IModule
 {
-public:
+  public:
     LegacyModuleAdapter(IGameModule* legacy, DestroyGameModuleFn destroyFn)
-        : m_legacy(legacy), m_legacyDestroyFn(destroyFn) {}
+        : m_legacy(legacy), m_legacyDestroyFn(destroyFn)
+    {
+    }
 
     ~LegacyModuleAdapter() override = default;
 
     Spark::ModuleInfo GetModuleInfo() const override
     {
         Spark::ModuleInfo info{};
-        info.name       = m_legacy ? m_legacy->GetGameName() : "Unknown";
-        info.version    = m_legacy ? m_legacy->GetGameVersion() : "0.0.0";
+        info.name = m_legacy ? m_legacy->GetGameName() : "Unknown";
+        info.version = m_legacy ? m_legacy->GetGameVersion() : "0.0.0";
         info.sdkVersion = SPARK_SDK_VERSION;
-        info.loadOrder  = 1000;
+        info.loadOrder = 1000;
         return info;
     }
 
     bool OnLoad(Spark::IEngineContext* context) override
     {
-        if (!m_legacy) return false;
+        if (!m_legacy)
+            return false;
         return m_legacy->Initialize(context->GetGraphics(), context->GetInput());
     }
 
     void OnUnload() override
     {
-        if (m_legacy) m_legacy->Shutdown();
+        if (m_legacy)
+            m_legacy->Shutdown();
     }
 
     void OnUpdate(float deltaTime) override
@@ -71,18 +75,20 @@ public:
 
     void OnRender() override
     {
-        if (m_legacy) m_legacy->Render();
+        if (m_legacy)
+            m_legacy->Render();
     }
 
     void OnResize(int width, int height) override
     {
-        if (m_legacy) m_legacy->OnResize(width, height);
+        if (m_legacy)
+            m_legacy->OnResize(width, height);
     }
 
     /** @brief Access the underlying legacy module (for backward-compat console commands) */
     IGameModule* GetLegacyModule() const { return m_legacy; }
 
-private:
+  private:
     IGameModule* m_legacy = nullptr;
     DestroyGameModuleFn m_legacyDestroyFn = nullptr;
 };
@@ -125,10 +131,10 @@ bool ModuleManager::LoadModule(const std::string& path)
     DestroyModuleFn destroyFn = nullptr;
 
 #ifdef _WIN32
-    createFn  = reinterpret_cast<CreateModuleFn>(GetProcAddress(static_cast<HMODULE>(handle), "CreateModule"));
+    createFn = reinterpret_cast<CreateModuleFn>(GetProcAddress(static_cast<HMODULE>(handle), "CreateModule"));
     destroyFn = reinterpret_cast<DestroyModuleFn>(GetProcAddress(static_cast<HMODULE>(handle), "DestroyModule"));
 #else
-    createFn  = reinterpret_cast<CreateModuleFn>(dlsym(handle, "CreateModule"));
+    createFn = reinterpret_cast<CreateModuleFn>(dlsym(handle, "CreateModule"));
     destroyFn = reinterpret_cast<DestroyModuleFn>(dlsym(handle, "DestroyModule"));
 #endif
 
@@ -152,9 +158,8 @@ bool ModuleManager::LoadModule(const std::string& path)
         // SDK version compatibility check
         if (!Spark::IsSDKCompatible(info.sdkVersion))
         {
-            console.LogError(std::string("Module '") + info.name +
-                "' SDK version mismatch (module=" + std::to_string(info.sdkVersion) +
-                ", engine=" + std::to_string(SPARK_SDK_VERSION) + ")");
+            console.LogError(std::string("Module '") + info.name + "' SDK version mismatch (module=" +
+                             std::to_string(info.sdkVersion) + ", engine=" + std::to_string(SPARK_SDK_VERSION) + ")");
             destroyFn(instance);
 #ifdef _WIN32
             FreeLibrary(static_cast<HMODULE>(handle));
@@ -165,13 +170,13 @@ bool ModuleManager::LoadModule(const std::string& path)
         }
 
         LoadedModule entry{};
-        entry.name          = info.name;
-        entry.path          = path;
+        entry.name = info.name;
+        entry.path = path;
         entry.libraryHandle = handle;
-        entry.instance      = instance;
-        entry.createFn      = createFn;
-        entry.destroyFn     = destroyFn;
-        entry.loadOrder     = info.loadOrder;
+        entry.instance = instance;
+        entry.createFn = createFn;
+        entry.destroyFn = destroyFn;
+        entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = false;
 
         console.LogSuccess(std::string("Loaded module: ") + info.name + " v" + info.version);
@@ -185,10 +190,12 @@ bool ModuleManager::LoadModule(const std::string& path)
     DestroyGameModuleFn legacyDestroyFn = nullptr;
 
 #ifdef _WIN32
-    legacyCreateFn  = reinterpret_cast<CreateGameModuleFn>(GetProcAddress(static_cast<HMODULE>(handle), "CreateGameModule"));
-    legacyDestroyFn = reinterpret_cast<DestroyGameModuleFn>(GetProcAddress(static_cast<HMODULE>(handle), "DestroyGameModule"));
+    legacyCreateFn =
+        reinterpret_cast<CreateGameModuleFn>(GetProcAddress(static_cast<HMODULE>(handle), "CreateGameModule"));
+    legacyDestroyFn =
+        reinterpret_cast<DestroyGameModuleFn>(GetProcAddress(static_cast<HMODULE>(handle), "DestroyGameModule"));
 #else
-    legacyCreateFn  = reinterpret_cast<CreateGameModuleFn>(dlsym(handle, "CreateGameModule"));
+    legacyCreateFn = reinterpret_cast<CreateGameModuleFn>(dlsym(handle, "CreateGameModule"));
     legacyDestroyFn = reinterpret_cast<DestroyGameModuleFn>(dlsym(handle, "DestroyGameModule"));
 #endif
 
@@ -213,13 +220,13 @@ bool ModuleManager::LoadModule(const std::string& path)
         auto info = adapter->GetModuleInfo();
 
         LoadedModule entry{};
-        entry.name          = info.name;
-        entry.path          = path;
+        entry.name = info.name;
+        entry.path = path;
         entry.libraryHandle = handle;
-        entry.instance      = adapter;
-        entry.createFn      = nullptr; // managed by adapter
-        entry.destroyFn     = [](Spark::IModule* mod) { delete mod; };
-        entry.loadOrder     = info.loadOrder;
+        entry.instance = adapter;
+        entry.createFn = nullptr; // managed by adapter
+        entry.destroyFn = [](Spark::IModule* mod) { delete mod; };
+        entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = true;
 
         console.LogSuccess(std::string("Loaded legacy module: ") + info.name + " v" + info.version);
@@ -249,8 +256,7 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
         return false;
     }
 
-    std::string content((std::istreambuf_iterator<char>(file)),
-                         std::istreambuf_iterator<char>());
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
     // Simple JSON parsing for the modules array
@@ -264,11 +270,14 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
     {
         // Extract the path value
         size_t colon = content.find(':', pos);
-        if (colon == std::string::npos) break;
+        if (colon == std::string::npos)
+            break;
         size_t quote1 = content.find('\"', colon + 1);
-        if (quote1 == std::string::npos) break;
+        if (quote1 == std::string::npos)
+            break;
         size_t quote2 = content.find('\"', quote1 + 1);
-        if (quote2 == std::string::npos) break;
+        if (quote2 == std::string::npos)
+            break;
 
         std::string modulePath = content.substr(quote1 + 1, quote2 - quote1 - 1);
 
@@ -315,26 +324,25 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
 
     for (auto& entry : std::filesystem::directory_iterator(directory))
     {
-        if (!entry.is_regular_file()) continue;
+        if (!entry.is_regular_file())
+            continue;
 
         auto filePath = entry.path();
-        if (filePath.extension() != ext) continue;
+        if (filePath.extension() != ext)
+            continue;
 
         auto filename = filePath.filename().string();
 
         // Skip the engine executable's own DLLs that aren't modules
         // Look for common module naming patterns
-        bool isCandidate = (filename.find("Game") != std::string::npos ||
-                           filename.find("Module") != std::string::npos ||
-                           filename.find("Plugin") != std::string::npos);
+        bool isCandidate =
+            (filename.find("Game") != std::string::npos || filename.find("Module") != std::string::npos ||
+             filename.find("Plugin") != std::string::npos);
 
         // Skip system/runtime DLLs
-        bool isSystem = (filename.find("d3d") == 0 ||
-                        filename.find("vcruntime") == 0 ||
-                        filename.find("msvcp") == 0 ||
-                        filename.find("ucrtbase") == 0 ||
-                        filename.find("SparkConsole") != std::string::npos ||
-                        filename.find("SparkEngine") != std::string::npos);
+        bool isSystem = (filename.find("d3d") == 0 || filename.find("vcruntime") == 0 || filename.find("msvcp") == 0 ||
+                         filename.find("ucrtbase") == 0 || filename.find("SparkConsole") != std::string::npos ||
+                         filename.find("SparkEngine") != std::string::npos);
 
         if (isCandidate && !isSystem)
         {
@@ -353,7 +361,8 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
 
     for (auto& entry : m_modules)
     {
-        if (entry.initialized) continue;
+        if (entry.initialized)
+            continue;
 
         console.LogInfo("Initializing module: " + entry.name);
         if (entry.instance->OnLoad(context))
@@ -417,7 +426,8 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 
     for (auto& entry : m_modules)
     {
-        if (entry.name != name) continue;
+        if (entry.name != name)
+            continue;
 
         std::string savedPath = entry.path;
         int savedOrder = entry.loadOrder;
@@ -431,10 +441,9 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         UnloadEntry(entry);
 
         // Remove from list
-        m_modules.erase(
-            std::remove_if(m_modules.begin(), m_modules.end(),
-                [&name](const LoadedModule& m) { return m.name == name; }),
-            m_modules.end());
+        m_modules.erase(std::remove_if(m_modules.begin(), m_modules.end(),
+                                       [&name](const LoadedModule& m) { return m.name == name; }),
+                        m_modules.end());
 
         // Reload
         console.LogInfo("Reloading module: " + savedPath);
@@ -495,9 +504,7 @@ Spark::IModule* ModuleManager::GetPrimaryModule() const
 void ModuleManager::SortModules()
 {
     std::stable_sort(m_modules.begin(), m_modules.end(),
-        [](const LoadedModule& a, const LoadedModule& b) {
-            return a.loadOrder < b.loadOrder;
-        });
+                     [](const LoadedModule& a, const LoadedModule& b) { return a.loadOrder < b.loadOrder; });
 }
 
 void ModuleManager::UnloadEntry(LoadedModule& entry)
@@ -506,8 +513,8 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
     {
         entry.destroyFn(entry.instance);
     }
-    entry.instance  = nullptr;
-    entry.createFn  = nullptr;
+    entry.instance = nullptr;
+    entry.createFn = nullptr;
     entry.destroyFn = nullptr;
 
     if (entry.libraryHandle)

@@ -23,7 +23,8 @@ using EntityID = entt::entity;
 // NameComponent
 // =============================================================================
 
-struct NameComponent {
+struct NameComponent
+{
     std::string name;
 };
 
@@ -31,7 +32,8 @@ struct NameComponent {
 // Transform
 // =============================================================================
 
-struct Transform {
+struct Transform
+{
     DirectX::XMFLOAT3 position{0, 0, 0};
     DirectX::XMFLOAT3 rotation{0, 0, 0};
     DirectX::XMFLOAT3 scale{1, 1, 1};
@@ -44,7 +46,8 @@ struct Transform {
 // MeshRenderer
 // =============================================================================
 
-struct MeshRenderer {
+struct MeshRenderer
+{
     std::string meshPath;
     std::string materialPath;
     bool castShadows = true;
@@ -58,7 +61,8 @@ struct MeshRenderer {
 // Camera
 // =============================================================================
 
-struct Camera {
+struct Camera
+{
     float fov = 60.0f;
     float nearPlane = 0.1f;
     float farPlane = 1000.0f;
@@ -69,7 +73,8 @@ struct Camera {
 // Script
 // =============================================================================
 
-struct Script {
+struct Script
+{
     std::string scriptPath;
     std::string className;
     std::string moduleName;

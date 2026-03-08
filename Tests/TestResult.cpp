@@ -10,7 +10,8 @@
 // Result<T> Tests
 // ============================================================================
 
-TEST(Result_OkInt) {
+TEST(Result_OkInt)
+{
     Spark::Result<int> r(42);
     EXPECT_TRUE(r.IsOk());
     EXPECT_FALSE(r.IsErr());
@@ -18,7 +19,8 @@ TEST(Result_OkInt) {
     EXPECT_EQ(r.Value(), 42);
 }
 
-TEST(Result_ErrInt) {
+TEST(Result_ErrInt)
+{
     Spark::Result<int> r(Spark::Err("not found", 404));
     EXPECT_FALSE(r.IsOk());
     EXPECT_TRUE(r.IsErr());
@@ -27,7 +29,8 @@ TEST(Result_ErrInt) {
     EXPECT_EQ(r.ErrorMessage(), std::string("not found"));
 }
 
-TEST(Result_ValueOr) {
+TEST(Result_ValueOr)
+{
     Spark::Result<int> ok(42);
     Spark::Result<int> err(Spark::Err("oops"));
 
@@ -35,32 +38,37 @@ TEST(Result_ValueOr) {
     EXPECT_EQ(err.ValueOr(99), 99);
 }
 
-TEST(Result_OkString) {
+TEST(Result_OkString)
+{
     Spark::Result<std::string> r(std::string("hello"));
     EXPECT_TRUE(r.IsOk());
     EXPECT_EQ(r.Value(), std::string("hello"));
 }
 
-TEST(Result_VoidOk) {
+TEST(Result_VoidOk)
+{
     Spark::Result<void> r = Spark::Ok();
     EXPECT_TRUE(r.IsOk());
     EXPECT_FALSE(r.IsErr());
 }
 
-TEST(Result_VoidErr) {
+TEST(Result_VoidErr)
+{
     Spark::Result<void> r(Spark::Err("failed"));
     EXPECT_FALSE(r.IsOk());
     EXPECT_TRUE(r.IsErr());
     EXPECT_EQ(r.ErrorMessage(), std::string("failed"));
 }
 
-TEST(Result_OkHelper) {
+TEST(Result_OkHelper)
+{
     auto r = Spark::Ok(123);
     EXPECT_TRUE(r.IsOk());
     EXPECT_EQ(r.Value(), 123);
 }
 
-TEST(Result_ErrorMessageOnOk) {
+TEST(Result_ErrorMessageOnOk)
+{
     Spark::Result<int> r(42);
     EXPECT_EQ(r.ErrorMessage(), std::string(""));
 }

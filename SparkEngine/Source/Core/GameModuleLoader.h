@@ -18,7 +18,7 @@
 
 class GameModuleLoader
 {
-public:
+  public:
     GameModuleLoader() = default;
     ~GameModuleLoader();
 
@@ -59,10 +59,10 @@ public:
     /** @brief Get the path the module was loaded from */
     const std::string& GetModulePath() const { return m_modulePath; }
 
-private:
-    void* m_libraryHandle{ nullptr };
-    IGameModule* m_module{ nullptr };
-    CreateGameModuleFn m_createFn{ nullptr };
-    DestroyGameModuleFn m_destroyFn{ nullptr };
+  private:
+    void* m_libraryHandle{nullptr};
+    IGameModule* m_module{nullptr};
+    CreateGameModuleFn m_createFn{nullptr};
+    DestroyGameModuleFn m_destroyFn{nullptr};
     std::string m_modulePath;
 };

@@ -70,8 +70,9 @@
  * @warning Script contexts are not thread-safe. All script calls must happen
  *          on the same thread (typically the main game loop thread).
  */
-class AngelScriptEngine {
-public:
+class AngelScriptEngine
+{
+  public:
     /**
      * @brief Initialize the AngelScript engine and register the engine API
      *
@@ -186,11 +187,11 @@ public:
      */
     static AngelScriptEngine* GetInstance() { return s_instance; }
 
-private:
-    static AngelScriptEngine* s_instance;    ///< Singleton instance pointer
+  private:
+    static AngelScriptEngine* s_instance; ///< Singleton instance pointer
 
-    asIScriptEngine* m_engine = nullptr;     ///< The core AngelScript engine
-    std::unordered_map<std::string, asIScriptModule*> m_modules;  ///< Compiled script modules by name
+    asIScriptEngine* m_engine = nullptr;                         ///< The core AngelScript engine
+    std::unordered_map<std::string, asIScriptModule*> m_modules; ///< Compiled script modules by name
 
     /**
      * @brief Per-entity script instance data
@@ -198,19 +199,20 @@ private:
      * Holds the AngelScript object, type info, execution context, and cached
      * method pointers for a single entity's attached script.
      */
-    struct ScriptInstance {
+    struct ScriptInstance
+    {
         asIScriptObject* object = nullptr;              ///< The instantiated script object
-        asITypeInfo* typeInfo = nullptr;                 ///< Type metadata for the script class
-        asIScriptContext* context = nullptr;             ///< Execution context for calling methods
-        asIScriptFunction* startMethod = nullptr;        ///< Cached pointer to the Start() method
-        asIScriptFunction* updateMethod = nullptr;       ///< Cached pointer to the Update(float) method
-        asIScriptFunction* onCollisionMethod = nullptr;  ///< Cached pointer to the OnCollision(EntityID) method
-        std::string className;                           ///< Name of the script class
-        std::string moduleName;                          ///< Name of the module containing the class
+        asITypeInfo* typeInfo = nullptr;                ///< Type metadata for the script class
+        asIScriptContext* context = nullptr;            ///< Execution context for calling methods
+        asIScriptFunction* startMethod = nullptr;       ///< Cached pointer to the Start() method
+        asIScriptFunction* updateMethod = nullptr;      ///< Cached pointer to the Update(float) method
+        asIScriptFunction* onCollisionMethod = nullptr; ///< Cached pointer to the OnCollision(EntityID) method
+        std::string className;                          ///< Name of the script class
+        std::string moduleName;                         ///< Name of the module containing the class
     };
 
-    std::unordered_map<EntityID, ScriptInstance> m_entityScripts;  ///< Active script instances by entity ID
-    std::string m_lastError;                                        ///< Last error message from AS engine
+    std::unordered_map<EntityID, ScriptInstance> m_entityScripts; ///< Active script instances by entity ID
+    std::string m_lastError;                                      ///< Last error message from AS engine
 
     // ========================================================================
     // Engine API Registration (called during Initialize)

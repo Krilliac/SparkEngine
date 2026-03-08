@@ -40,7 +40,7 @@ struct Vertex
     /**
      * @brief Default constructor with safe default values
      */
-    Vertex() : Position{ 0,0,0 }, Normal{ 0,1,0 }, TexCoord{ 0,0 } {}
+    Vertex() : Position{0, 0, 0}, Normal{0, 1, 0}, TexCoord{0, 0} {}
 
     /**
      * @brief Parameterized constructor with validation
@@ -51,10 +51,7 @@ struct Vertex
      * 
      * @note Includes assertions to validate that all values are finite
      */
-    Vertex(const XMFLOAT3& p,
-        const XMFLOAT3& n,
-        const XMFLOAT2& t)
-        : Position(p), Normal(n), TexCoord(t)
+    Vertex(const XMFLOAT3& p, const XMFLOAT3& n, const XMFLOAT2& t) : Position(p), Normal(n), TexCoord(t)
     {
         ASSERT(std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z));
         ASSERT(std::isfinite(n.x) && std::isfinite(n.y) && std::isfinite(n.z));
@@ -70,8 +67,8 @@ struct Vertex
  */
 struct MeshData
 {
-    std::vector<Vertex>       vertices; ///< Array of mesh vertices
-    std::vector<unsigned int> indices;  ///< Array of vertex indices for triangles
+    std::vector<Vertex> vertices;      ///< Array of mesh vertices
+    std::vector<unsigned int> indices; ///< Array of vertex indices for triangles
 };
 
 /**
@@ -86,7 +83,7 @@ struct MeshData
  */
 class Mesh
 {
-public:
+  public:
     /**
      * @brief Default constructor
      * 
@@ -118,7 +115,7 @@ public:
      * 
      * Releases vertex and index buffers and clears mesh data. Safe to call multiple times.
      */
-    void    Shutdown();
+    void Shutdown();
 
     /**
      * @brief Generate a procedural cube mesh
@@ -185,8 +182,7 @@ public:
      * @param inds Vector of indices defining triangle connectivity
      * @return HRESULT indicating success or failure of mesh creation
      */
-    HRESULT CreateFromVertices(const std::vector<Vertex>& verts,
-        const std::vector<unsigned int>& inds);
+    HRESULT CreateFromVertices(const std::vector<Vertex>& verts, const std::vector<unsigned int>& inds);
 
     /**
      * @brief Load mesh data from an external file
@@ -231,9 +227,9 @@ public:
      * @brief Get the number of indices in the mesh
      * @return Number of indices
      */
-    UINT GetIndexCount()  const { return m_indexCount; }
+    UINT GetIndexCount() const { return m_indexCount; }
 
-private:
+  private:
     /**
      * @brief Create DirectX vertex and index buffers from mesh data
      * @return HRESULT indicating success or failure of buffer creation
@@ -246,16 +242,16 @@ private:
      * Computes face normals and averages them for each vertex to provide
      * smooth shading across the mesh surface.
      */
-    void    CalculateNormals();
+    void CalculateNormals();
 
-    ID3D11Buffer* m_vb{ nullptr };      ///< DirectX vertex buffer
-    ID3D11Buffer* m_ib{ nullptr };      ///< DirectX index buffer
-    ID3D11Device* m_device{ nullptr };  ///< DirectX device reference
-    ID3D11DeviceContext* m_context{ nullptr }; ///< DirectX context reference
+    ID3D11Buffer* m_vb{nullptr};             ///< DirectX vertex buffer
+    ID3D11Buffer* m_ib{nullptr};             ///< DirectX index buffer
+    ID3D11Device* m_device{nullptr};         ///< DirectX device reference
+    ID3D11DeviceContext* m_context{nullptr}; ///< DirectX context reference
 
-    std::vector<Vertex>       m_vertices;    ///< CPU vertex data
-    std::vector<unsigned int> m_indices;     ///< CPU index data
-    unsigned int              m_vertexCount{ 0 }; ///< Number of vertices
-    unsigned int              m_indexCount{ 0 };  ///< Number of indices
-    bool                      m_placeholder{ false }; ///< Placeholder mesh flag
+    std::vector<Vertex> m_vertices;      ///< CPU vertex data
+    std::vector<unsigned int> m_indices; ///< CPU index data
+    unsigned int m_vertexCount{0};       ///< Number of vertices
+    unsigned int m_indexCount{0};        ///< Number of indices
+    bool m_placeholder{false};           ///< Placeholder mesh flag
 };

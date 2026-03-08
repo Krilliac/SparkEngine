@@ -96,42 +96,60 @@ static void PrintUsage(const char* programName)
 
 static Spark::RHI::RHIShaderStage ParseStage(const std::string& str)
 {
-    if (str == "vertex"   || str == "vert" || str == "vs") return Spark::RHI::RHIShaderStage::Vertex;
-    if (str == "pixel"    || str == "frag" || str == "ps") return Spark::RHI::RHIShaderStage::Pixel;
-    if (str == "geometry" || str == "geom" || str == "gs") return Spark::RHI::RHIShaderStage::Geometry;
-    if (str == "hull"     || str == "hs")                  return Spark::RHI::RHIShaderStage::Hull;
-    if (str == "domain"   || str == "ds")                  return Spark::RHI::RHIShaderStage::Domain;
-    if (str == "compute"  || str == "cs")                  return Spark::RHI::RHIShaderStage::Compute;
+    if (str == "vertex" || str == "vert" || str == "vs")
+        return Spark::RHI::RHIShaderStage::Vertex;
+    if (str == "pixel" || str == "frag" || str == "ps")
+        return Spark::RHI::RHIShaderStage::Pixel;
+    if (str == "geometry" || str == "geom" || str == "gs")
+        return Spark::RHI::RHIShaderStage::Geometry;
+    if (str == "hull" || str == "hs")
+        return Spark::RHI::RHIShaderStage::Hull;
+    if (str == "domain" || str == "ds")
+        return Spark::RHI::RHIShaderStage::Domain;
+    if (str == "compute" || str == "cs")
+        return Spark::RHI::RHIShaderStage::Compute;
     std::cerr << "Warning: Unknown shader stage '" << str << "', defaulting to vertex\n";
     return Spark::RHI::RHIShaderStage::Vertex;
 }
 
 static Spark::RHI::GraphicsBackend ParseBackend(const std::string& str)
 {
-    if (str == "d3d11"  || str == "dx11")   return Spark::RHI::GraphicsBackend::D3D11;
-    if (str == "d3d12"  || str == "dx12")   return Spark::RHI::GraphicsBackend::D3D12;
-    if (str == "vulkan" || str == "vk")     return Spark::RHI::GraphicsBackend::Vulkan;
-    if (str == "opengl" || str == "gl")     return Spark::RHI::GraphicsBackend::OpenGL;
-    if (str == "auto")                      return Spark::RHI::GraphicsBackend::Auto;
+    if (str == "d3d11" || str == "dx11")
+        return Spark::RHI::GraphicsBackend::D3D11;
+    if (str == "d3d12" || str == "dx12")
+        return Spark::RHI::GraphicsBackend::D3D12;
+    if (str == "vulkan" || str == "vk")
+        return Spark::RHI::GraphicsBackend::Vulkan;
+    if (str == "opengl" || str == "gl")
+        return Spark::RHI::GraphicsBackend::OpenGL;
+    if (str == "auto")
+        return Spark::RHI::GraphicsBackend::Auto;
     std::cerr << "Warning: Unknown backend '" << str << "', defaulting to auto\n";
     return Spark::RHI::GraphicsBackend::Auto;
 }
 
 static const char* StageToString(Spark::RHI::RHIShaderStage stage)
 {
-    switch (stage) {
-        case Spark::RHI::RHIShaderStage::Vertex:   return "Vertex";
-        case Spark::RHI::RHIShaderStage::Pixel:    return "Pixel";
-        case Spark::RHI::RHIShaderStage::Geometry:  return "Geometry";
-        case Spark::RHI::RHIShaderStage::Hull:     return "Hull";
-        case Spark::RHI::RHIShaderStage::Domain:   return "Domain";
-        case Spark::RHI::RHIShaderStage::Compute:  return "Compute";
-        default:                                   return "Unknown";
+    switch (stage)
+    {
+    case Spark::RHI::RHIShaderStage::Vertex:
+        return "Vertex";
+    case Spark::RHI::RHIShaderStage::Pixel:
+        return "Pixel";
+    case Spark::RHI::RHIShaderStage::Geometry:
+        return "Geometry";
+    case Spark::RHI::RHIShaderStage::Hull:
+        return "Hull";
+    case Spark::RHI::RHIShaderStage::Domain:
+        return "Domain";
+    case Spark::RHI::RHIShaderStage::Compute:
+        return "Compute";
+    default:
+        return "Unknown";
     }
 }
 
-static std::string InferOutputPath(const std::string& inputFile,
-                                   Spark::RHI::GraphicsBackend backend)
+static std::string InferOutputPath(const std::string& inputFile, Spark::RHI::GraphicsBackend backend)
 {
     std::string base = inputFile;
     size_t dotPos = base.find_last_of('.');
@@ -141,8 +159,7 @@ static std::string InferOutputPath(const std::string& inputFile,
     const char* ext = Spark::RHI::GetShaderExtension(backend);
     if (backend == Spark::RHI::GraphicsBackend::Vulkan)
         return base + ".spv";
-    if (backend == Spark::RHI::GraphicsBackend::D3D11 ||
-        backend == Spark::RHI::GraphicsBackend::D3D12)
+    if (backend == Spark::RHI::GraphicsBackend::D3D11 || backend == Spark::RHI::GraphicsBackend::D3D12)
         return base + ".cso";
     return base + ext;
 }
@@ -177,7 +194,8 @@ static Spark::RHI::RHIShaderStage InferStageFromFilename(const std::string& file
 
 static int CompileSingleShader(const CompilerConfig& config)
 {
-    if (config.verbose) {
+    if (config.verbose)
+    {
         std::cout << "Compiling: " << config.inputFile << "\n"
                   << "  Stage:   " << StageToString(config.stage) << "\n"
                   << "  Backend: " << Spark::RHI::GetBackendName(config.targetBackend) << "\n"
@@ -208,55 +226,61 @@ static int CompileSingleShader(const CompilerConfig& config)
     auto endTime = std::chrono::high_resolution_clock::now();
     float elapsed = std::chrono::duration<float, std::milli>(endTime - startTime).count();
 
-    if (!result.success) {
+    if (!result.success)
+    {
         std::cerr << "ERROR: Compilation failed for " << config.inputFile << "\n";
         if (!result.errorMessage.empty())
             std::cerr << "  " << result.errorMessage << "\n";
         return 1;
     }
 
-    if (!result.warningMessage.empty()) {
+    if (!result.warningMessage.empty())
+    {
         std::cerr << "WARNING: " << result.warningMessage << "\n";
     }
 
-    if (config.verbose) {
-        std::cout << "  Compiled in " << elapsed << " ms"
-                  << " (" << result.bytecode.size() << " bytes)\n";
+    if (config.verbose)
+    {
+        std::cout << "  Compiled in " << elapsed << " ms" << " (" << result.bytecode.size() << " bytes)\n";
     }
 
     // Reflection
-    if (config.reflect && !result.bytecode.empty()) {
+    if (config.reflect && !result.bytecode.empty())
+    {
         auto reflection = Spark::RHI::ReflectSPIRV(result.bytecode);
         std::cout << "\nShader Reflection:\n";
         std::cout << "  Inputs: " << reflection.inputs.size() << "\n";
-        for (const auto& input : reflection.inputs) {
-            std::cout << "    location=" << input.location
-                      << " " << input.semanticName << "\n";
+        for (const auto& input : reflection.inputs)
+        {
+            std::cout << "    location=" << input.location << " " << input.semanticName << "\n";
         }
         std::cout << "  Resources: " << reflection.resources.size() << "\n";
-        for (const auto& res : reflection.resources) {
-            std::cout << "    set=" << res.set << " binding=" << res.binding
-                      << " " << res.name << " (size=" << res.size << ")\n";
+        for (const auto& res : reflection.resources)
+        {
+            std::cout << "    set=" << res.set << " binding=" << res.binding << " " << res.name << " (size=" << res.size
+                      << ")\n";
         }
     }
 
     // Write output
-    if (!config.validateOnly) {
+    if (!config.validateOnly)
+    {
         std::string outputPath = config.outputFile;
         if (outputPath.empty())
             outputPath = InferOutputPath(config.inputFile, config.targetBackend);
 
-        if (!Spark::RHI::SaveCompiledShader(outputPath, result.bytecode)) {
+        if (!Spark::RHI::SaveCompiledShader(outputPath, result.bytecode))
+        {
             std::cerr << "ERROR: Failed to write output file: " << outputPath << "\n";
             return 1;
         }
 
-        std::cout << config.inputFile << " -> " << outputPath
-                  << " (" << result.bytecode.size() << " bytes, "
-                  << elapsed << " ms)\n";
-    } else {
-        std::cout << config.inputFile << " - OK"
-                  << " (" << elapsed << " ms)\n";
+        std::cout << config.inputFile << " -> " << outputPath << " (" << result.bytecode.size() << " bytes, " << elapsed
+                  << " ms)\n";
+    }
+    else
+    {
+        std::cout << config.inputFile << " - OK" << " (" << elapsed << " ms)\n";
     }
 
     return 0;
@@ -268,75 +292,95 @@ static int CompileSingleShader(const CompilerConfig& config)
 
 static bool ParseArgs(int argc, char* argv[], CompilerConfig& config)
 {
-    if (argc < 2) {
+    if (argc < 2)
+    {
         PrintUsage(argv[0]);
         return false;
     }
 
     bool stageExplicit = false;
 
-    for (int i = 1; i < argc; ++i) {
+    for (int i = 1; i < argc; ++i)
+    {
         std::string arg = argv[i];
 
-        if (arg == "-h" || arg == "--help") {
+        if (arg == "-h" || arg == "--help")
+        {
             PrintUsage(argv[0]);
             return false;
         }
-        else if (arg == "-o" && i + 1 < argc) {
+        else if (arg == "-o" && i + 1 < argc)
+        {
             config.outputFile = argv[++i];
         }
-        else if (arg == "-stage" && i + 1 < argc) {
+        else if (arg == "-stage" && i + 1 < argc)
+        {
             config.stage = ParseStage(argv[++i]);
             stageExplicit = true;
         }
-        else if (arg == "-backend" && i + 1 < argc) {
+        else if (arg == "-backend" && i + 1 < argc)
+        {
             config.targetBackend = ParseBackend(argv[++i]);
         }
-        else if (arg == "-entry" && i + 1 < argc) {
+        else if (arg == "-entry" && i + 1 < argc)
+        {
             config.entryPoint = argv[++i];
         }
-        else if (arg.substr(0, 2) == "-D") {
+        else if (arg.substr(0, 2) == "-D")
+        {
             config.defines.push_back(arg.substr(2));
         }
-        else if (arg.substr(0, 2) == "-I") {
+        else if (arg.substr(0, 2) == "-I")
+        {
             config.includePaths.push_back(arg.substr(2));
         }
-        else if (arg == "-O") {
+        else if (arg == "-O")
+        {
             config.optimization = true;
         }
-        else if (arg == "-Od") {
+        else if (arg == "-Od")
+        {
             config.optimization = false;
         }
-        else if (arg == "-Zi") {
+        else if (arg == "-Zi")
+        {
             config.debugInfo = true;
         }
-        else if (arg == "-validate") {
+        else if (arg == "-validate")
+        {
             config.validateOnly = true;
         }
-        else if (arg == "-reflect") {
+        else if (arg == "-reflect")
+        {
             config.reflect = true;
         }
-        else if (arg == "-batch" && i + 1 < argc) {
+        else if (arg == "-batch" && i + 1 < argc)
+        {
             config.batchDir = argv[++i];
         }
-        else if (arg == "-v") {
+        else if (arg == "-v")
+        {
             config.verbose = true;
         }
-        else if (arg[0] != '-') {
+        else if (arg[0] != '-')
+        {
             config.inputFile = arg;
         }
-        else {
+        else
+        {
             std::cerr << "Unknown option: " << arg << "\n";
             return false;
         }
     }
 
     // Infer stage from filename if not explicit
-    if (!stageExplicit && !config.inputFile.empty()) {
+    if (!stageExplicit && !config.inputFile.empty())
+    {
         config.stage = InferStageFromFilename(config.inputFile);
     }
 
-    if (config.inputFile.empty() && config.batchDir.empty()) {
+    if (config.inputFile.empty() && config.batchDir.empty())
+    {
         std::cerr << "Error: No input file specified.\n";
         PrintUsage(argv[0]);
         return false;
@@ -357,39 +401,44 @@ int main(int argc, char* argv[])
         return 1;
 
     // Single file compilation
-    if (!config.inputFile.empty()) {
+    if (!config.inputFile.empty())
+    {
         return CompileSingleShader(config);
     }
 
     // Batch compilation
-    if (!config.batchDir.empty()) {
+    if (!config.batchDir.empty())
+    {
         namespace fs = std::filesystem;
 
-        if (!fs::exists(config.batchDir) || !fs::is_directory(config.batchDir)) {
+        if (!fs::exists(config.batchDir) || !fs::is_directory(config.batchDir))
+        {
             std::cerr << "Error: Batch directory not found: " << config.batchDir << "\n";
             return 1;
         }
 
         // Supported shader file extensions
-        const std::vector<std::string> shaderExts = {
-            ".hlsl", ".glsl", ".vert", ".frag", ".comp",
-            ".geom", ".tesc", ".tese", ".vs", ".ps", ".gs", ".cs"
-        };
+        const std::vector<std::string> shaderExts = {".hlsl", ".glsl", ".vert", ".frag", ".comp", ".geom",
+                                                     ".tesc", ".tese", ".vs",   ".ps",   ".gs",   ".cs"};
 
-        auto isShaderFile = [&](const fs::path& path) {
+        auto isShaderFile = [&](const fs::path& path)
+        {
             std::string ext = path.extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
             return std::find(shaderExts.begin(), shaderExts.end(), ext) != shaderExts.end();
         };
 
         std::vector<std::string> shaderFiles;
-        for (const auto& entry : fs::recursive_directory_iterator(config.batchDir)) {
-            if (entry.is_regular_file() && isShaderFile(entry.path())) {
+        for (const auto& entry : fs::recursive_directory_iterator(config.batchDir))
+        {
+            if (entry.is_regular_file() && isShaderFile(entry.path()))
+            {
                 shaderFiles.push_back(entry.path().string());
             }
         }
 
-        if (shaderFiles.empty()) {
+        if (shaderFiles.empty())
+        {
             std::cerr << "No shader files found in: " << config.batchDir << "\n";
             return 1;
         }
@@ -400,15 +449,19 @@ int main(int argc, char* argv[])
         int successCount = 0;
         int failCount = 0;
 
-        for (const auto& shaderPath : shaderFiles) {
+        for (const auto& shaderPath : shaderFiles)
+        {
             CompilerConfig fileConfig = config;
             fileConfig.inputFile = shaderPath;
             fileConfig.batchDir.clear(); // prevent recursion
             fileConfig.stage = InferStageFromFilename(shaderPath);
 
-            if (fileConfig.outputFile.empty()) {
+            if (fileConfig.outputFile.empty())
+            {
                 fileConfig.outputFile = InferOutputPath(shaderPath, fileConfig.targetBackend);
-            } else {
+            }
+            else
+            {
                 // In batch mode with -o, put output files in that directory
                 fs::path outDir(config.outputFile);
                 fs::path inputName = fs::path(shaderPath).filename();
@@ -417,9 +470,12 @@ int main(int argc, char* argv[])
             }
 
             int ret = CompileSingleShader(fileConfig);
-            if (ret == 0) {
+            if (ret == 0)
+            {
                 successCount++;
-            } else {
+            }
+            else
+            {
                 failCount++;
             }
         }

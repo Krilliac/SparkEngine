@@ -17,75 +17,78 @@
 #include <vector>
 #include <functional>
 
-namespace Spark { namespace RHI {
+namespace Spark
+{
+    namespace RHI
+    {
 
-// ============================================================================
-// BACKEND DETECTION & CREATION
-// ============================================================================
+        // ============================================================================
+        // BACKEND DETECTION & CREATION
+        // ============================================================================
 
-/**
+        /**
  * @brief Detect and return all available graphics backends on the system
  */
-std::vector<GraphicsBackend> DetectAvailableBackends();
+        std::vector<GraphicsBackend> DetectAvailableBackends();
 
-/**
+        /**
  * @brief Get the recommended backend for the current platform
  */
-GraphicsBackend GetRecommendedBackend();
+        GraphicsBackend GetRecommendedBackend();
 
-/**
+        /**
  * @brief Create an RHI device for the specified backend
  * @param backend Graphics API to use (Auto will pick the best available)
  * @return Unique pointer to the created device, or nullptr on failure
  */
-std::unique_ptr<IRHIDevice> CreateDevice(GraphicsBackend backend = GraphicsBackend::Auto);
+        std::unique_ptr<IRHIDevice> CreateDevice(GraphicsBackend backend = GraphicsBackend::Auto);
 
-/**
+        /**
  * @brief Get a human-readable name for a graphics backend
  */
-const char* GetBackendName(GraphicsBackend backend);
+        const char* GetBackendName(GraphicsBackend backend);
 
-/**
+        /**
  * @brief Check if a specific backend is available on the current system
  */
-bool IsBackendAvailable(GraphicsBackend backend);
+        bool IsBackendAvailable(GraphicsBackend backend);
 
-// ============================================================================
-// CROSS-PLATFORM SHADER COMPILATION
-// ============================================================================
+        // ============================================================================
+        // CROSS-PLATFORM SHADER COMPILATION
+        // ============================================================================
 
-/**
+        /**
  * @brief Shader compilation result
  */
-struct ShaderCompileResult
-{
-    bool success = false;
-    std::vector<uint8_t> bytecode;
-    std::string errorMessage;
-    std::string warningMessage;
-    std::string infoLog;
-};
+        struct ShaderCompileResult
+        {
+            bool success = false;
+            std::vector<uint8_t> bytecode;
+            std::string errorMessage;
+            std::string warningMessage;
+            std::string infoLog;
+        };
 
-/**
+        /**
  * @brief Cross-platform shader compilation options
  */
-struct ShaderCompileOptions
-{
-    RHIShaderStage stage = RHIShaderStage::Vertex;
-    ShaderLanguage sourceLanguage = ShaderLanguage::Auto;
-    ShaderLanguage targetLanguage = ShaderLanguage::Auto;
-    GraphicsBackend targetBackend = GraphicsBackend::Auto;
-    std::string entryPoint = "main";
-    std::string sourceFile;
-    std::string sourceCode;
-    std::vector<std::string> defines;
-    std::vector<std::string> includePaths;
-    bool optimizationEnabled = true;
-    bool debugInfoEnabled = false;
-    bool generateReflection = false;
-};
+        struct ShaderCompileOptions
+        {
+            RHIShaderStage stage = RHIShaderStage::Vertex;
+            ShaderLanguage sourceLanguage = ShaderLanguage::Auto;
+            ShaderLanguage targetLanguage = ShaderLanguage::Auto;
+            GraphicsBackend targetBackend = GraphicsBackend::Auto;
+            std::string entryPoint = "main";
+            std::string sourceFile;
+            std::string sourceCode;
+            std::vector<std::string> defines;
+            std::vector<std::string> includePaths;
+            bool optimizationEnabled = true;
+            bool debugInfoEnabled = false;
+            bool generateReflection = false;
+        };
 
-/**
+        /**
  * @brief Compile a shader for a specific backend
  *
  * Handles cross-compilation between shader languages:
@@ -95,125 +98,123 @@ struct ShaderCompileOptions
  * - GLSL -> native (for OpenGL)
  * - SPIR-V -> SPIR-V (passthrough for Vulkan)
  */
-ShaderCompileResult CompileShader(const ShaderCompileOptions& options);
+        ShaderCompileResult CompileShader(const ShaderCompileOptions& options);
 
-/**
+        /**
  * @brief Load pre-compiled shader bytecode from file
  */
-ShaderCompileResult LoadPrecompiledShader(const std::string& filePath);
+        ShaderCompileResult LoadPrecompiledShader(const std::string& filePath);
 
-/**
+        /**
  * @brief Save compiled shader bytecode to file
  */
-bool SaveCompiledShader(const std::string& filePath,
-                        const std::vector<uint8_t>& bytecode);
+        bool SaveCompiledShader(const std::string& filePath, const std::vector<uint8_t>& bytecode);
 
-// ============================================================================
-// SHADER CROSS-COMPILATION PIPELINE
-// ============================================================================
+        // ============================================================================
+        // SHADER CROSS-COMPILATION PIPELINE
+        // ============================================================================
 
-/**
+        /**
  * @brief Cross-compile HLSL to GLSL
  */
-std::string CrossCompileHLSLtoGLSL(const std::string& hlslSource,
-                                    RHIShaderStage stage,
-                                    const std::string& entryPoint = "main");
+        std::string CrossCompileHLSLtoGLSL(const std::string& hlslSource, RHIShaderStage stage,
+                                           const std::string& entryPoint = "main");
 
-/**
+        /**
  * @brief Cross-compile HLSL to SPIR-V
  */
-std::vector<uint8_t> CrossCompileHLSLtoSPIRV(const std::string& hlslSource,
-                                               RHIShaderStage stage,
-                                               const std::string& entryPoint = "main");
+        std::vector<uint8_t> CrossCompileHLSLtoSPIRV(const std::string& hlslSource, RHIShaderStage stage,
+                                                     const std::string& entryPoint = "main");
 
-/**
+        /**
  * @brief Compile GLSL to SPIR-V using glslang
  */
-std::vector<uint8_t> CompileGLSLtoSPIRV(const std::string& glslSource,
-                                          RHIShaderStage stage,
-                                          const std::string& entryPoint = "main");
+        std::vector<uint8_t> CompileGLSLtoSPIRV(const std::string& glslSource, RHIShaderStage stage,
+                                                const std::string& entryPoint = "main");
 
-// ============================================================================
-// SHADER REFLECTION
-// ============================================================================
+        // ============================================================================
+        // SHADER REFLECTION
+        // ============================================================================
 
-/**
+        /**
  * @brief Reflected shader resource binding
  */
-struct ShaderResourceBinding
-{
-    std::string name;
-    uint32_t binding = 0;
-    uint32_t set = 0;
-    uint32_t size = 0;
-    enum class Type {
-        ConstantBuffer,
-        Texture,
-        Sampler,
-        StorageBuffer,
-        StorageImage
-    } type = Type::ConstantBuffer;
-};
+        struct ShaderResourceBinding
+        {
+            std::string name;
+            uint32_t binding = 0;
+            uint32_t set = 0;
+            uint32_t size = 0;
+            enum class Type
+            {
+                ConstantBuffer,
+                Texture,
+                Sampler,
+                StorageBuffer,
+                StorageImage
+            } type = Type::ConstantBuffer;
+        };
 
-/**
+        /**
  * @brief Reflected vertex input attribute
  */
-struct ShaderInputAttribute
-{
-    std::string semanticName;
-    uint32_t location = 0;
-    RHIVertexFormat format = RHIVertexFormat::Float3;
-};
+        struct ShaderInputAttribute
+        {
+            std::string semanticName;
+            uint32_t location = 0;
+            RHIVertexFormat format = RHIVertexFormat::Float3;
+        };
 
-/**
+        /**
  * @brief Complete shader reflection data
  */
-struct ShaderReflection
-{
-    std::vector<ShaderResourceBinding> resources;
-    std::vector<ShaderInputAttribute> inputs;
-    uint32_t threadGroupSizeX = 0;
-    uint32_t threadGroupSizeY = 0;
-    uint32_t threadGroupSizeZ = 0;
-};
+        struct ShaderReflection
+        {
+            std::vector<ShaderResourceBinding> resources;
+            std::vector<ShaderInputAttribute> inputs;
+            uint32_t threadGroupSizeX = 0;
+            uint32_t threadGroupSizeY = 0;
+            uint32_t threadGroupSizeZ = 0;
+        };
 
-/**
+        /**
  * @brief Reflect SPIR-V shader to get binding information
  */
-ShaderReflection ReflectSPIRV(const std::vector<uint8_t>& spirvCode);
+        ShaderReflection ReflectSPIRV(const std::vector<uint8_t>& spirvCode);
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
+        // ============================================================================
+        // UTILITY FUNCTIONS
+        // ============================================================================
 
-/**
+        /**
  * @brief Get the appropriate shader file extension for a backend
  */
-const char* GetShaderExtension(GraphicsBackend backend);
+        const char* GetShaderExtension(GraphicsBackend backend);
 
-/**
+        /**
  * @brief Get the shader search path for a backend
  */
-std::string GetShaderSearchPath(GraphicsBackend backend);
+        std::string GetShaderSearchPath(GraphicsBackend backend);
 
-/**
+        /**
  * @brief Calculate the size of a pixel format in bytes
  */
-uint32_t GetPixelFormatSize(PixelFormat format);
+        uint32_t GetPixelFormatSize(PixelFormat format);
 
-/**
+        /**
  * @brief Check if a pixel format is a compressed format
  */
-bool IsCompressedFormat(PixelFormat format);
+        bool IsCompressedFormat(PixelFormat format);
 
-/**
+        /**
  * @brief Check if a pixel format is a depth/stencil format
  */
-bool IsDepthStencilFormat(PixelFormat format);
+        bool IsDepthStencilFormat(PixelFormat format);
 
-/**
+        /**
  * @brief Get a human-readable name for a pixel format
  */
-const char* GetPixelFormatName(PixelFormat format);
+        const char* GetPixelFormatName(PixelFormat format);
 
-}} // namespace Spark::RHI
+    } // namespace RHI
+} // namespace Spark

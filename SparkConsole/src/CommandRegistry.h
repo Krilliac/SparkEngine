@@ -10,13 +10,15 @@
 using CommandArgs = std::vector<std::string>;
 using CommandHandler = std::function<std::string(const CommandArgs&)>;
 
-class CommandRegistry {
-public:
+class CommandRegistry
+{
+  public:
     CommandRegistry();
     ~CommandRegistry();
 
     // Command metadata
-    struct CommandInfo {
+    struct CommandInfo
+    {
         std::string name;
         std::string description;
         std::string usage;
@@ -24,8 +26,8 @@ public:
     };
 
     // Register a command
-    void RegisterCommand(const std::string& name, const std::string& description,
-                         const std::string& usage, CommandHandler handler);
+    void RegisterCommand(const std::string& name, const std::string& description, const std::string& usage,
+                         CommandHandler handler);
 
     // Execute a command with arguments
     std::string ExecuteCommand(const std::string& name, const CommandArgs& args);
@@ -35,6 +37,6 @@ public:
     std::vector<CommandInfo> GetAllCommands() const;
     std::string GetCommandHelp(const std::string& name) const;
 
-private:
+  private:
     std::unordered_map<std::string, CommandInfo> m_commands;
 };

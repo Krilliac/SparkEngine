@@ -17,12 +17,14 @@ struct TestHealthComponent
     float maxHealth = 100.0f;
     bool isDead = false;
 
-    void TakeDamage(float amount) {
+    void TakeDamage(float amount)
+    {
         health = (std::max)(health - amount, 0.0f);
         isDead = (health <= 0.0f);
     }
 
-    void Heal(float amount) {
+    void Heal(float amount)
+    {
         health = (std::min)(health + amount, maxHealth);
         isDead = false;
     }
@@ -83,13 +85,16 @@ struct TestTagComponent
 {
     std::vector<std::string> tags;
 
-    bool HasTag(const std::string& tag) const {
+    bool HasTag(const std::string& tag) const
+    {
         for (const auto& t : tags)
-            if (t == tag) return true;
+            if (t == tag)
+                return true;
         return false;
     }
 
-    void AddTag(const std::string& tag) {
+    void AddTag(const std::string& tag)
+    {
         if (!HasTag(tag))
             tags.push_back(tag);
     }

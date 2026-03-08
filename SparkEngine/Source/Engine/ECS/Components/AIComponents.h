@@ -22,8 +22,17 @@ using EntityID = entt::entity;
 // AIComponent
 // =============================================================================
 
-struct AIComponent {
-    enum class State { Idle, Patrolling, Alert, Combat, Fleeing, Dead };
+struct AIComponent
+{
+    enum class State
+    {
+        Idle,
+        Patrolling,
+        Alert,
+        Combat,
+        Fleeing,
+        Dead
+    };
 
     State state = State::Idle;
     std::string behaviorTreeName;
@@ -41,7 +50,8 @@ struct AIComponent {
     size_t currentPathIndex = 0;
 
     // Config
-    struct Config {
+    struct Config
+    {
         float detectionRange = 30.0f;
         float attackRange = 15.0f;
         float moveSpeed = 5.0f;
@@ -54,7 +64,8 @@ struct AIComponent {
 // NetworkIdentity
 // =============================================================================
 
-struct NetworkIdentity {
+struct NetworkIdentity
+{
     uint32_t networkID = 0;
     uint32_t ownerClientID = 0;
     bool isLocalAuthority = false;

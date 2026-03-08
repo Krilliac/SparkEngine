@@ -10,10 +10,12 @@
 //------------------------------------------------------------------------------
 //  SoundEffect implementation
 //------------------------------------------------------------------------------
-SoundEffect::SoundEffect() {
+SoundEffect::SoundEffect()
+{
     std::wcout << L"[INFO] SoundEffect constructed." << std::endl;
 }
-SoundEffect::~SoundEffect() {
+SoundEffect::~SoundEffect()
+{
     std::wcout << L"[INFO] SoundEffect destructor called." << std::endl;
 }
 
@@ -60,9 +62,7 @@ void SoundEffect::Unload()
 
 float SoundEffect::GetDuration() const
 {
-    return (m_format.nAvgBytesPerSec == 0)
-        ? 0.f
-        : static_cast<float>(m_audioDataSize) / m_format.nAvgBytesPerSec;
+    return (m_format.nAvgBytesPerSec == 0) ? 0.f : static_cast<float>(m_audioDataSize) / m_format.nAvgBytesPerSec;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ float SoundEffect::GetDuration() const
 // ---------------------------------------------------------------------------
 HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
 {
-    ASSERT_ALWAYS(data && size >= 44);   // minimum WAV header
+    ASSERT_ALWAYS(data && size >= 44); // minimum WAV header
 
     DWORD fmtSize = 0, fmtPos = 0;
     if (FAILED(FindChunk(data, size, 0x20746d66, fmtSize, fmtPos))) // 'fmt '
@@ -92,11 +92,10 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
     return S_OK;
 }
 
-HRESULT SoundEffect::FindChunk(const BYTE* data, DWORD dataSize,
-    DWORD fourCC, DWORD& outSize, DWORD& outPos)
+HRESULT SoundEffect::FindChunk(const BYTE* data, DWORD dataSize, DWORD fourCC, DWORD& outSize, DWORD& outPos)
 {
-    ASSERT(dataSize > 12);          // RIFF header size
-    DWORD offset = 12;              // skip RIFF + WAVE ids
+    ASSERT(dataSize > 12); // RIFF header size
+    DWORD offset = 12;     // skip RIFF + WAVE ids
 
     while (offset + 8 <= dataSize)
     {
@@ -125,9 +124,7 @@ HRESULT SoundEffect::ReadChunkData(const BYTE* src, DWORD pos, void* dst, DWORD 
 //------------------------------------------------------------------------------
 static constexpr float PI = 3.14159265358979f;
 
-void SoundEffectFactory::GenerateWaveform(std::vector<short>& samples,
-    float freq, float dur,
-    float (*wave)(float))
+void SoundEffectFactory::GenerateWaveform(std::vector<short>& samples, float freq, float dur, float (*wave)(float))
 {
     const DWORD SR = 44100;
     const DWORD count = static_cast<DWORD>(dur * SR);
@@ -143,8 +140,7 @@ void SoundEffectFactory::GenerateWaveform(std::vector<short>& samples,
     }
 }
 
-std::unique_ptr<SoundEffect>
-SoundEffectFactory::CreateFromSamples(const std::vector<short>& samples, DWORD SR)
+std::unique_ptr<SoundEffect> SoundEffectFactory::CreateFromSamples(const std::vector<short>& samples, DWORD SR)
 {
     ASSERT_ALWAYS(!samples.empty());
 
@@ -165,29 +161,32 @@ SoundEffectFactory::CreateFromSamples(const std::vector<short>& samples, DWORD S
 }
 
 // ----- basic wave helpers ----------------------------------------------------
-float SoundEffectFactory::SineWave(float t) { return std::sin(t); }
+float SoundEffectFactory::SineWave(float t)
+{
+    return std::sin(t);
+}
 
 float SoundEffectFactory::NoiseWave(float)
 {
-    static thread_local std::mt19937 gen{ std::random_device{}() };
+    static thread_local std::mt19937 gen{std::random_device{}()};
     static thread_local std::uniform_real_distribution<float> dist(-1.f, 1.f);
     return dist(gen);
 }
 
 // ----- simple tones ----------------------------------------------------------
-std::unique_ptr<SoundEffect>
-SoundEffectFactory::CreateSine(float f, float d)
+std::unique_ptr<SoundEffect> SoundEffectFactory::CreateSine(float f, float d)
 {
     std::vector<short> s;
     GenerateWaveform(s, f, d, SineWave);
     return CreateFromSamples(s);
 }
 
-std::unique_ptr<SoundEffect>
-SoundEffectFactory::CreateBeep(float f, float d) { return CreateSine(f, d); }
+std::unique_ptr<SoundEffect> SoundEffectFactory::CreateBeep(float f, float d)
+{
+    return CreateSine(f, d);
+}
 
-std::unique_ptr<SoundEffect>
-SoundEffectFactory::CreateNoise(float d)
+std::unique_ptr<SoundEffect> SoundEffectFactory::CreateNoise(float d)
 {
     std::vector<short> s;
     GenerateWaveform(s, 0.f, d, NoiseWave);
@@ -202,13 +201,13 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateGunshot()
     const DWORD CNT = static_cast<DWORD>(SR * DUR);
 
     std::vector<short> s(CNT);
-    std::mt19937 rng{ std::random_device{}() };
+    std::mt19937 rng{std::random_device{}()};
     std::uniform_real_distribution<float> rnd(-1.f, 1.f);
 
     for (DWORD i = 0; i < CNT; ++i)
     {
         float t = static_cast<float>(i) / SR;
-        float env = std::exp(-t * 45.f);            // fast decay
+        float env = std::exp(-t * 45.f); // fast decay
         s[i] = static_cast<short>(rnd(rng) * env * 32767.f);
     }
     return CreateFromSamples(s, SR);
@@ -221,7 +220,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateExplosion()
     const DWORD CNT = static_cast<DWORD>(SR * DUR);
 
     std::vector<short> s(CNT);
-    std::mt19937 rng{ std::random_device{}() };
+    std::mt19937 rng{std::random_device{}()};
     std::uniform_real_distribution<float> rnd(-1.f, 1.f);
 
     for (DWORD i = 0; i < CNT; ++i)
@@ -247,7 +246,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateFootstep()
         float t = static_cast<float>(i) / SR;
         float env = std::exp(-t * 22.f);
         float thp = std::sin(2.f * PI * 110.f * t);
-        s[i] = static_cast<short>(thp * env * 16383.f);  // half volume
+        s[i] = static_cast<short>(thp * env * 16383.f); // half volume
     }
     return CreateFromSamples(s, SR);
 }
@@ -259,7 +258,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateReload()
     const DWORD CNT = static_cast<DWORD>(SR * DUR);
 
     std::vector<short> s(CNT);
-    std::mt19937 rng{ std::random_device{}() };
+    std::mt19937 rng{std::random_device{}()};
     std::uniform_real_distribution<float> rnd(-0.3f, 0.3f);
 
     for (DWORD i = 0; i < CNT; ++i)
@@ -294,8 +293,8 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreatePickup()
     {
         float t = static_cast<float>(i) / SR;
         float prog = t / DUR;
-        float freq = 440.f + 440.f * prog;   // glide 440->880
-        float env = 1.f - prog;             // fade out
+        float freq = 440.f + 440.f * prog; // glide 440->880
+        float env = 1.f - prog;            // fade out
         float samp = std::sin(2.f * PI * freq * t) * env;
         s[i] = static_cast<short>(samp * 16383.f);
     }

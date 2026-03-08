@@ -25,34 +25,33 @@ class PhysicsSystem;
  */
 class EngineContext : public Spark::IEngineContext
 {
-public:
+  public:
     EngineContext() = default;
-    EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer,
-                 Spark::EventBus* eventBus = nullptr);
+    EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer, Spark::EventBus* eventBus = nullptr);
     ~EngineContext() override = default;
 
-    GraphicsEngine*  GetGraphics()  override { return m_graphics; }
-    InputManager*    GetInput()     override { return m_input; }
-    Timer*           GetTimer()     override { return m_timer; }
-    Spark::EventBus* GetEventBus()  override { return m_eventBus; }
-    AudioEngine*     GetAudio()     override { return m_audio; }
-    PhysicsSystem*   GetPhysics()   override { return m_physics; }
+    GraphicsEngine* GetGraphics() override { return m_graphics; }
+    InputManager* GetInput() override { return m_input; }
+    Timer* GetTimer() override { return m_timer; }
+    Spark::EventBus* GetEventBus() override { return m_eventBus; }
+    AudioEngine* GetAudio() override { return m_audio; }
+    PhysicsSystem* GetPhysics() override { return m_physics; }
 
     void SetGraphics(GraphicsEngine* g) { m_graphics = g; }
-    void SetInput(InputManager* i)      { m_input = i; }
-    void SetTimer(Timer* t)             { m_timer = t; }
-    void SetEventBus(Spark::EventBus* e){ m_eventBus = e; }
-    void SetAudio(AudioEngine* a)       { m_audio = a; }
-    void SetPhysics(PhysicsSystem* p)   { m_physics = p; }
+    void SetInput(InputManager* i) { m_input = i; }
+    void SetTimer(Timer* t) { m_timer = t; }
+    void SetEventBus(Spark::EventBus* e) { m_eventBus = e; }
+    void SetAudio(AudioEngine* a) { m_audio = a; }
+    void SetPhysics(PhysicsSystem* p) { m_physics = p; }
 
     uint32_t GetEngineVersion() const override;
-    uint32_t GetSDKVersion()    const override;
+    uint32_t GetSDKVersion() const override;
 
-private:
-    GraphicsEngine*  m_graphics  = nullptr;
-    InputManager*    m_input     = nullptr;
-    Timer*           m_timer     = nullptr;
-    Spark::EventBus* m_eventBus  = nullptr;
-    AudioEngine*     m_audio     = nullptr;
-    PhysicsSystem*   m_physics   = nullptr;
+  private:
+    GraphicsEngine* m_graphics = nullptr;
+    InputManager* m_input = nullptr;
+    Timer* m_timer = nullptr;
+    Spark::EventBus* m_eventBus = nullptr;
+    AudioEngine* m_audio = nullptr;
+    PhysicsSystem* m_physics = nullptr;
 };

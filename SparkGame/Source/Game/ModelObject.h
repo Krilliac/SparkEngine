@@ -19,7 +19,7 @@ class GraphicsEngine;
  */
 class ModelObject : public GameObject
 {
-public:
+  public:
     /**
      * @brief Constructor with model file path
      * @param modelPath Path to the .obj file to load
@@ -68,8 +68,8 @@ public:
     /** @brief Set graphics engine for rendering */
     void SetGraphicsEngine(GraphicsEngine* gfx) { m_graphics = gfx; }
 
-protected:
-    GraphicsEngine* m_graphics{ nullptr }; ///< Graphics engine for rendering
-    std::wstring m_modelPath;              ///< Path to the model file
-    std::unique_ptr<Model> m_model;        ///< The loaded model
+  protected:
+    GraphicsEngine* m_graphics{nullptr}; ///< Graphics engine for rendering
+    std::wstring m_modelPath;            ///< Path to the model file
+    std::unique_ptr<Model> m_model;      ///< The loaded model
 };

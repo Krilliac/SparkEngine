@@ -514,8 +514,26 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGame/CMakeLists.txt")
     add_subdirectory(SparkGame)
 
     if(TARGET SparkGame)
-        add_dependencies(SparkGame SparkEngine)
-        message(STATUS "SparkGame DLL will be built after SparkEngine")
+        # SparkEngineLib (static) contains SparkConsole code that references
+        # Game/Player symbols exported from SparkGame.  Link SparkEngine
+        # against SparkGame's import library so the linker can resolve them.
+        target_link_libraries(SparkEngine PRIVATE SparkGame)
+        # Re-add SparkEngineLib so the linker can resolve symbols that
+        # SparkGame.so/.dll left undefined (e.g. CrashHandler functions
+        # referenced by SparkConsole code linked into SparkGame).
+        target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
+        message(STATUS "SparkEngine will link SparkGame import library")
+
+        # Copy SparkGame DLL next to the engine executable after build.
+        # This is done here (on SparkEngine) rather than as a SparkGame
+        # post-build step to avoid a circular build dependency.
+        add_custom_command(TARGET SparkEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SparkGame>
+                $<TARGET_FILE_DIR:SparkEngine>
+            COMMENT "Copying SparkGame DLL to engine output directory"
+            VERBATIM
+        )
     endif()
 endif()
 

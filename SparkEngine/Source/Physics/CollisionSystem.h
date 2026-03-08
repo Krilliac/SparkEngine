@@ -51,7 +51,7 @@ struct BoundingBox
      * @brief Get the center point of the bounding box
      * @return Center point coordinates
      */
-    XMFLOAT3 GetCenter()  const;
+    XMFLOAT3 GetCenter() const;
 
     /**
      * @brief Get the extents (half-sizes) of the bounding box
@@ -63,7 +63,7 @@ struct BoundingBox
      * @brief Transform the bounding box by a matrix
      * @param transform 4x4 transformation matrix to apply
      */
-    void      Transform(const XMMATRIX& transform);
+    void Transform(const XMMATRIX& transform);
 };
 
 /**
@@ -75,7 +75,7 @@ struct BoundingBox
 struct BoundingSphere
 {
     XMFLOAT3 Center; ///< Center point of the sphere
-    float     Radius; ///< Radius of the sphere
+    float Radius;    ///< Radius of the sphere
 
     /**
      * @brief Default constructor creating a unit sphere at origin
@@ -139,14 +139,13 @@ struct ContactManifold
 {
     XMFLOAT3 ContactPoints[4]; ///< Up to 4 contact points for stable collision resolution
     XMFLOAT3 Normal;           ///< Surface normal at the collision point
-    float     PenetrationDepth; ///< How deep objects are interpenetrating
-    int       ContactCount;     ///< Number of valid contact points (0-4)
+    float PenetrationDepth;    ///< How deep objects are interpenetrating
+    int ContactCount;          ///< Number of valid contact points (0-4)
 
     /**
      * @brief Default constructor with safe initial values
      */
-    ContactManifold()
-        : Normal(0, 1, 0), PenetrationDepth(0), ContactCount(0)
+    ContactManifold() : Normal(0, 1, 0), PenetrationDepth(0), ContactCount(0)
     {
         for (int i = 0; i < 4; ++i)
             ContactPoints[i] = XMFLOAT3(0, 0, 0);
@@ -161,18 +160,16 @@ struct ContactManifold
  */
 struct CollisionResult
 {
-    bool     Hit;      ///< Whether the ray hit the object
-    XMFLOAT3 Point;    ///< World position of the intersection point
-    XMFLOAT3 Normal;   ///< Surface normal at the intersection point
-    float    Distance; ///< Distance from ray origin to intersection point
-    void* UserData;    ///< Optional pointer to additional collision data
+    bool Hit;        ///< Whether the ray hit the object
+    XMFLOAT3 Point;  ///< World position of the intersection point
+    XMFLOAT3 Normal; ///< Surface normal at the intersection point
+    float Distance;  ///< Distance from ray origin to intersection point
+    void* UserData;  ///< Optional pointer to additional collision data
 
     /**
      * @brief Default constructor indicating no collision
      */
-    CollisionResult()
-        : Hit(false), Point(0, 0, 0), Normal(0, 1, 0), Distance(0), UserData(nullptr) {
-    }
+    CollisionResult() : Hit(false), Point(0, 0, 0), Normal(0, 1, 0), Distance(0), UserData(nullptr) {}
 };
 
 /**
@@ -195,7 +192,7 @@ struct CollisionResult
  */
 class CollisionSystem
 {
-public:
+  public:
     /**
      * @brief Test collision between two spheres
      * @param a First bounding sphere
@@ -287,7 +284,7 @@ public:
      * @param planeNormal Normal vector of the plane (should be normalized)
      * @return Signed distance to the plane (positive = in front of normal)
      */
-    static float    DistancePointToPlane(const XMFLOAT3& point, const XMFLOAT3& planePoint, const XMFLOAT3& planeNormal);
+    static float DistancePointToPlane(const XMFLOAT3& point, const XMFLOAT3& planePoint, const XMFLOAT3& planeNormal);
 
     /**
      * @brief Test if a point is inside a sphere
@@ -310,14 +307,14 @@ public:
      * @param v Vector to calculate length of
      * @return Length (magnitude) of the vector
      */
-    static float    Vector3Length(const XMFLOAT3& v);
+    static float Vector3Length(const XMFLOAT3& v);
 
     /**
      * @brief Calculate the squared length of a 3D vector
      * @param v Vector to calculate squared length of
      * @return Squared length of the vector (avoids sqrt for performance)
      */
-    static float    Vector3LengthSquared(const XMFLOAT3& v);
+    static float Vector3LengthSquared(const XMFLOAT3& v);
 
     /**
      * @brief Normalize a 3D vector to unit length
@@ -332,7 +329,7 @@ public:
      * @param b Second vector
      * @return Dot product (scalar result)
      */
-    static float    Vector3Dot(const XMFLOAT3& a, const XMFLOAT3& b);
+    static float Vector3Dot(const XMFLOAT3& a, const XMFLOAT3& b);
 
     /**
      * @brief Calculate the cross product of two 3D vectors

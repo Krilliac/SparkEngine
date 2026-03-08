@@ -25,139 +25,145 @@
 #include <cstdint>
 
 
-namespace Spark::Graphics {
+namespace Spark::Graphics
+{
 
-// ============================================================================
-// Decal Types
-// ============================================================================
+    // ============================================================================
+    // Decal Types
+    // ============================================================================
 
-enum class SurfaceType : uint8_t {
-    Default,
-    Concrete,
-    Metal,
-    Wood,
-    Glass,
-    Dirt,
-    Flesh,
-    Water,
-    Foliage,
-    Count
-};
+    enum class SurfaceType : uint8_t
+    {
+        Default,
+        Concrete,
+        Metal,
+        Wood,
+        Glass,
+        Dirt,
+        Flesh,
+        Water,
+        Foliage,
+        Count
+    };
 
-enum class DecalType : uint8_t {
-    BulletHole,
-    ScorchMark,
-    BloodSplatter,
-    Footprint,
-    TireTrack,
-    Crack,
-    Custom
-};
+    enum class DecalType : uint8_t
+    {
+        BulletHole,
+        ScorchMark,
+        BloodSplatter,
+        Footprint,
+        TireTrack,
+        Crack,
+        Custom
+    };
 
-// ============================================================================
-// Decal Data
-// ============================================================================
+    // ============================================================================
+    // Decal Data
+    // ============================================================================
 
-struct DecalMaterial {
-    std::string name;
-    std::string albedoTexture;
-    std::string normalTexture;
-    std::string roughnessTexture;
-    float opacity = 1.0f;
-    bool affectsNormals = true;
-    bool affectsRoughness = true;
-};
+    struct DecalMaterial
+    {
+        std::string name;
+        std::string albedoTexture;
+        std::string normalTexture;
+        std::string roughnessTexture;
+        float opacity = 1.0f;
+        bool affectsNormals = true;
+        bool affectsRoughness = true;
+    };
 
-struct Decal {
-    XMFLOAT3 position;
-    XMFLOAT3 normal;          ///< Surface normal at hit point
-    XMFLOAT3 tangent;         ///< Tangent direction (for alignment)
-    XMFLOAT3 halfExtents;     ///< Size of the decal OBB
-    float rotation;            ///< Random rotation around normal (radians)
-    float opacity;
-    float fadeTimer;           ///< Time remaining before fade starts
-    float fadeDuration;        ///< How long to fade out
-    float age;                 ///< Time since spawn
-    DecalType type;
-    SurfaceType surface;
-    const DecalMaterial* material;
-    bool active;
+    struct Decal
+    {
+        XMFLOAT3 position;
+        XMFLOAT3 normal;      ///< Surface normal at hit point
+        XMFLOAT3 tangent;     ///< Tangent direction (for alignment)
+        XMFLOAT3 halfExtents; ///< Size of the decal OBB
+        float rotation;       ///< Random rotation around normal (radians)
+        float opacity;
+        float fadeTimer;    ///< Time remaining before fade starts
+        float fadeDuration; ///< How long to fade out
+        float age;          ///< Time since spawn
+        DecalType type;
+        SurfaceType surface;
+        const DecalMaterial* material;
+        bool active;
 
-    XMMATRIX GetWorldMatrix() const;
-    float GetCurrentOpacity() const;
-};
+        XMMATRIX GetWorldMatrix() const;
+        float GetCurrentOpacity() const;
+    };
 
-// ============================================================================
-// Surface-Decal Mapping
-// ============================================================================
+    // ============================================================================
+    // Surface-Decal Mapping
+    // ============================================================================
 
-struct SurfaceDecalMapping {
-    SurfaceType surface;
-    DecalType decalType;
-    std::string materialName;
-    XMFLOAT2 sizeRange{0.1f, 0.3f};       ///< Random size between min and max
-    float rotationVariance = 3.14159f;       ///< Max random rotation
-};
+    struct SurfaceDecalMapping
+    {
+        SurfaceType surface;
+        DecalType decalType;
+        std::string materialName;
+        XMFLOAT2 sizeRange{0.1f, 0.3f};    ///< Random size between min and max
+        float rotationVariance = 3.14159f; ///< Max random rotation
+    };
 
-// ============================================================================
-// DecalSystem
-// ============================================================================
+    // ============================================================================
+    // DecalSystem
+    // ============================================================================
 
-class DecalSystem {
-public:
-    static DecalSystem& GetInstance();
+    class DecalSystem
+    {
+      public:
+        static DecalSystem& GetInstance();
 
-    void Initialize(uint32_t maxDecals = 512);
-    void Update(float deltaTime);
-    void Shutdown();
+        void Initialize(uint32_t maxDecals = 512);
+        void Update(float deltaTime);
+        void Shutdown();
 
-    /// Spawn a decal at a hit point
-    Decal* SpawnDecal(const XMFLOAT3& position, const XMFLOAT3& normal,
-                       DecalType type, SurfaceType surface = SurfaceType::Default,
-                       float size = -1.0f);
+        /// Spawn a decal at a hit point
+        Decal* SpawnDecal(const XMFLOAT3& position, const XMFLOAT3& normal, DecalType type,
+                          SurfaceType surface = SurfaceType::Default, float size = -1.0f);
 
-    /// Spawn a decal with explicit material
-    Decal* SpawnDecalWithMaterial(const XMFLOAT3& position, const XMFLOAT3& normal,
-                                  const std::string& materialName, float size = 0.2f);
+        /// Spawn a decal with explicit material
+        Decal* SpawnDecalWithMaterial(const XMFLOAT3& position, const XMFLOAT3& normal, const std::string& materialName,
+                                      float size = 0.2f);
 
-    /// Get all active decals for rendering
-    const std::vector<Decal>& GetActiveDecals() const { return m_decals; }
-    uint32_t GetActiveDecalCount() const;
+        /// Get all active decals for rendering
+        const std::vector<Decal>& GetActiveDecals() const { return m_decals; }
+        uint32_t GetActiveDecalCount() const;
 
-    // Material management
-    void RegisterMaterial(const DecalMaterial& material);
-    const DecalMaterial* GetMaterial(const std::string& name) const;
+        // Material management
+        void RegisterMaterial(const DecalMaterial& material);
+        const DecalMaterial* GetMaterial(const std::string& name) const;
 
-    // Surface-decal mapping
-    void RegisterSurfaceMapping(const SurfaceDecalMapping& mapping);
+        // Surface-decal mapping
+        void RegisterSurfaceMapping(const SurfaceDecalMapping& mapping);
 
-    // Configuration
-    void SetMaxDecals(uint32_t maxDecals) { m_maxDecals = maxDecals; }
-    void SetDefaultFadeTime(float seconds) { m_defaultFadeTime = seconds; }
-    void SetDefaultFadeDuration(float seconds) { m_defaultFadeDuration = seconds; }
+        // Configuration
+        void SetMaxDecals(uint32_t maxDecals) { m_maxDecals = maxDecals; }
+        void SetDefaultFadeTime(float seconds) { m_defaultFadeTime = seconds; }
+        void SetDefaultFadeDuration(float seconds) { m_defaultFadeDuration = seconds; }
 
-    /// Clear all decals
-    void ClearAllDecals();
+        /// Clear all decals
+        void ClearAllDecals();
 
-    /// Console integration
-    std::string Console_GetStatus() const;
-    void Console_SetMaxDecals(uint32_t max);
-    void Console_SpawnTestDecal(float x, float y, float z);
+        /// Console integration
+        std::string Console_GetStatus() const;
+        void Console_SetMaxDecals(uint32_t max);
+        void Console_SpawnTestDecal(float x, float y, float z);
 
-private:
-    DecalSystem() = default;
+      private:
+        DecalSystem() = default;
 
-    Decal* GetAvailableDecal();
-    void FadeOldestDecal();
-    XMFLOAT3 ComputeTangent(const XMFLOAT3& normal) const;
+        Decal* GetAvailableDecal();
+        void FadeOldestDecal();
+        XMFLOAT3 ComputeTangent(const XMFLOAT3& normal) const;
 
-    std::vector<Decal> m_decals;
-    std::unordered_map<std::string, DecalMaterial> m_materials;
-    std::vector<SurfaceDecalMapping> m_surfaceMappings;
+        std::vector<Decal> m_decals;
+        std::unordered_map<std::string, DecalMaterial> m_materials;
+        std::vector<SurfaceDecalMapping> m_surfaceMappings;
 
-    uint32_t m_maxDecals = 512;
-    float m_defaultFadeTime = 15.0f;     ///< Seconds before fade starts
-    float m_defaultFadeDuration = 3.0f;  ///< Seconds to fade out
-};
+        uint32_t m_maxDecals = 512;
+        float m_defaultFadeTime = 15.0f;    ///< Seconds before fade starts
+        float m_defaultFadeDuration = 3.0f; ///< Seconds to fade out
+    };
 
 } // namespace Spark::Graphics

@@ -24,12 +24,12 @@
 #include "../Core/Platform.h"
 
 #include "../Utils/Assert.h"
-#include "../Graphics/Mesh.h"    // MeshData
+#include "../Graphics/Mesh.h" // MeshData
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
-using DirectX::XMFLOAT3;
 using DirectX::XMFLOAT2;
+using DirectX::XMFLOAT3;
 
 /**
  * @brief Namespace containing procedural primitive mesh generators
@@ -83,4 +83,4 @@ namespace Primitives
      *       using a cube-mapped sphere instead.
      */
     MeshData CreateSphere(float radius = 0.5f, int slices = 16, int stacks = 16);
-}
+} // namespace Primitives

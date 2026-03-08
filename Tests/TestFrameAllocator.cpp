@@ -6,7 +6,8 @@
 #include "TestFramework.h"
 #include "../SparkEngine/Source/Utils/FrameAllocator.h"
 
-TEST(FrameAllocator_BasicAlloc) {
+TEST(FrameAllocator_BasicAlloc)
+{
     Spark::FrameAllocator alloc(1024);
     int* p = alloc.Alloc<int>(1);
     EXPECT_TRUE(p != nullptr);
@@ -14,7 +15,8 @@ TEST(FrameAllocator_BasicAlloc) {
     EXPECT_EQ(*p, 42);
 }
 
-TEST(FrameAllocator_MultipleAllocs) {
+TEST(FrameAllocator_MultipleAllocs)
+{
     Spark::FrameAllocator alloc(4096);
     float* a = alloc.Alloc<float>(10);
     double* b = alloc.Alloc<double>(5);
@@ -28,7 +30,8 @@ TEST(FrameAllocator_MultipleAllocs) {
     EXPECT_TRUE(reinterpret_cast<uintptr_t>(c) > reinterpret_cast<uintptr_t>(b));
 }
 
-TEST(FrameAllocator_Reset) {
+TEST(FrameAllocator_Reset)
+{
     Spark::FrameAllocator alloc(256);
     alloc.Alloc<int>(10); // 40 bytes
     EXPECT_TRUE(alloc.Used() >= 40);
@@ -37,28 +40,35 @@ TEST(FrameAllocator_Reset) {
     EXPECT_EQ(alloc.Used(), static_cast<size_t>(0));
 }
 
-TEST(FrameAllocator_Capacity) {
+TEST(FrameAllocator_Capacity)
+{
     Spark::FrameAllocator alloc(512);
     EXPECT_EQ(alloc.Capacity(), static_cast<size_t>(512));
     EXPECT_EQ(alloc.Used(), static_cast<size_t>(0));
     EXPECT_EQ(alloc.Remaining(), static_cast<size_t>(512));
 }
 
-TEST(FrameAllocator_OutOfSpace) {
+TEST(FrameAllocator_OutOfSpace)
+{
     Spark::FrameAllocator alloc(32);
     void* p = alloc.AllocRaw(64); // Larger than capacity
     EXPECT_TRUE(p == nullptr);
 }
 
-TEST(FrameAllocator_New) {
+TEST(FrameAllocator_New)
+{
     Spark::FrameAllocator alloc(1024);
 
-    struct Point { float x, y; };
+    struct Point
+    {
+        float x, y;
+    };
     Point* p = alloc.New<Point>();
     EXPECT_TRUE(p != nullptr);
 }
 
-TEST(FrameAllocator_PeakTracking) {
+TEST(FrameAllocator_PeakTracking)
+{
     Spark::FrameAllocator alloc(1024);
     alloc.Alloc<int>(10);
     alloc.UpdatePeak();
@@ -72,7 +82,8 @@ TEST(FrameAllocator_PeakTracking) {
     EXPECT_TRUE(alloc.PeakUsed() >= peak1);
 }
 
-TEST(FrameAllocator_MoveConstruct) {
+TEST(FrameAllocator_MoveConstruct)
+{
     Spark::FrameAllocator alloc(512);
     alloc.Alloc<int>(10);
 

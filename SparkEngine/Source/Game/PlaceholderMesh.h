@@ -55,11 +55,8 @@
  * @warning Triggers ASSERT_ALWAYS_MSG if all fallback methods fail, as a mesh
  *          with zero vertices or indices would cause rendering crashes.
  */
-inline void LoadOrPlaceholderMesh(
-    Mesh& mesh,
-    ID3D11Device* device,
-    ID3D11DeviceContext* context,
-    const std::wstring& path)
+inline void LoadOrPlaceholderMesh(Mesh& mesh, ID3D11Device* device, ID3D11DeviceContext* context,
+                                  const std::wstring& path)
 {
     // 1) Initialize mesh with device/context
     HRESULT hrInit = mesh.Initialize(device, context);
@@ -72,21 +69,27 @@ inline void LoadOrPlaceholderMesh(
     {
         bool fileExists = std::filesystem::exists(path);
 
-        if (fileExists) {
+        if (fileExists)
+        {
             std::wstring ext = std::filesystem::path(path).extension().wstring();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
 
-            if (ext == L".obj") {
+            if (ext == L".obj")
+            {
                 loaded = mesh.LoadFromFile(path);
-                if (!loaded) {
+                if (!loaded)
+                {
                     SPARK_LOG_WARN("Mesh", "LoadFromFile failed, falling back to procedural cube");
                 }
             }
-            else {
-                SPARK_LOG_WARN("Mesh", "Unsupported file format (tinyobjloader only supports .obj). Falling back to cube");
+            else
+            {
+                SPARK_LOG_WARN("Mesh",
+                               "Unsupported file format (tinyobjloader only supports .obj). Falling back to cube");
             }
         }
-        else {
+        else
+        {
             SPARK_LOG_WARN("Mesh", "Mesh file not found, falling back to procedural cube");
         }
     }
@@ -96,20 +99,26 @@ inline void LoadOrPlaceholderMesh(
     {
         HRESULT hrShape = mesh.CreateCube(1.0f);
 
-        if (FAILED(hrShape)) {
+        if (FAILED(hrShape))
+        {
             SPARK_LOG_WARN("Mesh", "CreateCube failed (HR=0x%08lX), trying CreateTriangle", static_cast<long>(hrShape));
             hrShape = mesh.CreateTriangle(1.0f);
         }
 
-        if (FAILED(hrShape)) {
-            SPARK_LOG_WARN("Mesh", "CreateTriangle failed (HR=0x%08lX), trying CreatePlane", static_cast<long>(hrShape));
+        if (FAILED(hrShape))
+        {
+            SPARK_LOG_WARN("Mesh", "CreateTriangle failed (HR=0x%08lX), trying CreatePlane",
+                           static_cast<long>(hrShape));
             hrShape = mesh.CreatePlane(2.0f, 2.0f);
         }
 
-        if (FAILED(hrShape)) {
-            SPARK_LOG_ERROR("Mesh", "All fallback mesh creation methods failed (HR=0x%08lX)", static_cast<long>(hrShape));
+        if (FAILED(hrShape))
+        {
+            SPARK_LOG_ERROR("Mesh", "All fallback mesh creation methods failed (HR=0x%08lX)",
+                            static_cast<long>(hrShape));
         }
-        else {
+        else
+        {
             mesh.SetPlaceholder(true);
         }
     }
@@ -118,12 +127,13 @@ inline void LoadOrPlaceholderMesh(
     UINT vc = mesh.GetVertexCount();
     UINT ic = mesh.GetIndexCount();
 
-    if (vc == 0 || ic == 0) {
-        SPARK_LOG_ERROR("Mesh", "Mesh has zero vertices (%u) or indices (%u). "
-            "Possible causes: invalid D3D device/context, buffer creation failure, or mesh creation bug",
-            vc, ic);
+    if (vc == 0 || ic == 0)
+    {
+        SPARK_LOG_ERROR("Mesh",
+                        "Mesh has zero vertices (%u) or indices (%u). "
+                        "Possible causes: invalid D3D device/context, buffer creation failure, or mesh creation bug",
+                        vc, ic);
     }
 
-    ASSERT_ALWAYS_MSG(vc > 0 && ic > 0,
-        "Mesh ended up with zero vertices or indices after placeholder creation!");
+    ASSERT_ALWAYS_MSG(vc > 0 && ic > 0, "Mesh ended up with zero vertices or indices after placeholder creation!");
 }

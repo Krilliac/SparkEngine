@@ -2,10 +2,7 @@
 #include "Timer.h"
 #include <iostream>
 
-Timer::Timer()
-    : m_deltaTime(0.0f)
-    , m_totalTime(0.0f)
-    , m_paused(false)
+Timer::Timer() : m_deltaTime(0.0f), m_totalTime(0.0f), m_paused(false)
 {
     m_lastTime = std::chrono::high_resolution_clock::now();
     std::wcout << L"[INFO] Timer constructed." << std::endl;

@@ -18,90 +18,95 @@
 #include <wrl/client.h>
 
 // Forward declarations
-namespace SparkEditor {
+namespace SparkEditor
+{
     class EditorUI;
 }
 
-namespace SparkEditor {
+namespace SparkEditor
+{
 
-/**
+    /**
  * @brief Configuration for the editor
  */
-struct EditorConfig {
-    std::string projectPath = ".";
-    std::string layoutDirectory = "Layouts";
-    std::string logDirectory = "Logs";
-    bool enableLogging = true;
-    bool startMaximized = true;
-    float autoSaveInterval = 30.0f;
-    int windowWidth = 1600;
-    int windowHeight = 900;
-};
-
-/**
- * @brief Main SparkEditor application class with full GUI support
- */
-class EditorApplication {
-public:
-    /**
-     * @brief Performance metrics structure
-     */
-    struct PerformanceMetrics {
-        float fps = 0.0f;
-        float frameTime = 0.0f;
+    struct EditorConfig
+    {
+        std::string projectPath = ".";
+        std::string layoutDirectory = "Layouts";
+        std::string logDirectory = "Logs";
+        bool enableLogging = true;
+        bool startMaximized = true;
+        float autoSaveInterval = 30.0f;
+        int windowWidth = 1600;
+        int windowHeight = 900;
     };
 
-public:
-    EditorApplication();
-    ~EditorApplication();
+    /**
+ * @brief Main SparkEditor application class with full GUI support
+ */
+    class EditorApplication
+    {
+      public:
+        /**
+     * @brief Performance metrics structure
+     */
+        struct PerformanceMetrics
+        {
+            float fps = 0.0f;
+            float frameTime = 0.0f;
+        };
 
-    bool Initialize(const EditorConfig& config);
-    int Run();
-    void Shutdown();
+      public:
+        EditorApplication();
+        ~EditorApplication();
 
-    bool IsRunning() const { return m_isRunning; }
-    void RequestExit();
-    
-    PerformanceMetrics GetPerformanceMetrics() const;
-    void OnWindowResize(int width, int height);
-    bool OnShutdownRequested();
-    void SetWindowTitle(const std::string& title);
+        bool Initialize(const EditorConfig& config);
+        int Run();
+        void Shutdown();
 
-    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+        bool IsRunning() const { return m_isRunning; }
+        void RequestExit();
 
-private:
-    bool CreateMainWindow(const EditorConfig& config);
-    bool InitializeDirectX();
-    bool InitializeImGui();
-    bool ProcessMessages();
-    void Update(float deltaTime);
-    void Render();
-    void UpdatePerformanceMetrics();
+        PerformanceMetrics GetPerformanceMetrics() const;
+        void OnWindowResize(int width, int height);
+        bool OnShutdownRequested();
+        void SetWindowTitle(const std::string& title);
 
-private:
-    // Configuration and state
-    EditorConfig m_config;
-    bool m_isInitialized = false;
-    bool m_isRunning = false;
-    
-    // Window management
-    HWND m_hwnd = nullptr;
-    int m_windowWidth = 1600;
-    int m_windowHeight = 900;
-    
-    // DirectX 11 resources
-    Microsoft::WRL::ComPtr<ID3D11Device> m_device;
-    Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context;
-    Microsoft::WRL::ComPtr<IDXGISwapChain> m_swapChain;
-    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_rtv;
-    
-    // UI system
-    std::unique_ptr<EditorUI> m_ui;
-    
-    // Performance tracking
-    PerformanceMetrics m_performanceMetrics;
-    std::chrono::high_resolution_clock::time_point m_startTime;
-    std::chrono::high_resolution_clock::time_point m_lastFrameTime;
-};
+        static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+      private:
+        bool CreateMainWindow(const EditorConfig& config);
+        bool InitializeDirectX();
+        bool InitializeImGui();
+        bool ProcessMessages();
+        void Update(float deltaTime);
+        void Render();
+        void UpdatePerformanceMetrics();
+
+      private:
+        // Configuration and state
+        EditorConfig m_config;
+        bool m_isInitialized = false;
+        bool m_isRunning = false;
+
+        // Window management
+        HWND m_hwnd = nullptr;
+        int m_windowWidth = 1600;
+        int m_windowHeight = 900;
+
+        // DirectX 11 resources
+        Microsoft::WRL::ComPtr<ID3D11Device> m_device;
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context;
+        Microsoft::WRL::ComPtr<IDXGISwapChain> m_swapChain;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_rtv;
+
+        // UI system
+        std::unique_ptr<EditorUI> m_ui;
+
+        // Performance tracking
+        PerformanceMetrics m_performanceMetrics;
+        std::chrono::high_resolution_clock::time_point m_startTime;
+        std::chrono::high_resolution_clock::time_point m_lastFrameTime;
+    };
 
 } // namespace SparkEditor

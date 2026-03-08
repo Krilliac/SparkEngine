@@ -26,10 +26,10 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     // Convert UTF-16 filename to UTF-8 for tinyobjloader
     std::string fileUtf8(filename.begin(), filename.end());
 
-    tinyobj::attrib_t                attrib;
-    std::vector<tinyobj::shape_t>    shapes;
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> mats;
-    std::string  warn, err;
+    std::string warn, err;
 
     // ------------------------------------------------------------------
     //  TinyOBJ load
@@ -45,7 +45,7 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     //  Build vertex / index arrays
     // ------------------------------------------------------------------
     std::vector<ModelVertex> verts;
-    std::vector<UINT>        idxs;
+    std::vector<UINT> idxs;
     verts.reserve(shapes.size() * 16);
     idxs.reserve(shapes.size() * 16);
 
@@ -53,29 +53,21 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     {
         for (const auto& idx : shape.mesh.indices)
         {
-            XMFLOAT3 pos{
-                attrib.vertices[3 * idx.vertex_index + 0],
-                attrib.vertices[3 * idx.vertex_index + 1],
-                attrib.vertices[3 * idx.vertex_index + 2]
-            };
+            XMFLOAT3 pos{attrib.vertices[3 * idx.vertex_index + 0], attrib.vertices[3 * idx.vertex_index + 1],
+                         attrib.vertices[3 * idx.vertex_index + 2]};
 
-            XMFLOAT3 norm{ 0.f, 0.f, 0.f };
+            XMFLOAT3 norm{0.f, 0.f, 0.f};
             if (idx.normal_index >= 0)
             {
-                norm = XMFLOAT3(
-                    attrib.normals[3 * idx.normal_index + 0],
-                    attrib.normals[3 * idx.normal_index + 1],
-                    attrib.normals[3 * idx.normal_index + 2]
-                );
+                norm = XMFLOAT3(attrib.normals[3 * idx.normal_index + 0], attrib.normals[3 * idx.normal_index + 1],
+                                attrib.normals[3 * idx.normal_index + 2]);
             }
 
-            XMFLOAT2 uv{ 0.f, 0.f };
+            XMFLOAT2 uv{0.f, 0.f};
             if (idx.texcoord_index >= 0)
             {
-                uv = XMFLOAT2(
-                    attrib.texcoords[2 * idx.texcoord_index + 0],
-                    attrib.texcoords[2 * idx.texcoord_index + 1]
-                );
+                uv = XMFLOAT2(attrib.texcoords[2 * idx.texcoord_index + 0],
+                              attrib.texcoords[2 * idx.texcoord_index + 1]);
             }
 
             verts.emplace_back(pos, norm, uv);
@@ -101,7 +93,8 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
 
     HRESULT hr = device->CreateBuffer(&bd, &sd, &m_vb);
     ASSERT_MSG(SUCCEEDED(hr), "Failed to create vertex buffer");
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr))
+        return hr;
 
     // Index buffer
     bd.ByteWidth = UINT(idxs.size() * sizeof(UINT));
@@ -113,19 +106,21 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     return hr;
 }
 
-void Model::Render(ID3D11DeviceContext* ctx, GraphicsEngine* graphics, 
-                   const DirectX::XMMATRIX* world, const DirectX::XMMATRIX* view, const DirectX::XMMATRIX* proj)
+void Model::Render(ID3D11DeviceContext* ctx, GraphicsEngine* graphics, const DirectX::XMMATRIX* world,
+                   const DirectX::XMMATRIX* view, const DirectX::XMMATRIX* proj)
 {
     ASSERT(ctx != nullptr);
 
     // **SAFETY CHECK: Don't render if model failed to load**
-    if (m_vb == nullptr || m_ib == nullptr || m_indexCount == 0) {
+    if (m_vb == nullptr || m_ib == nullptr || m_indexCount == 0)
+    {
         // Model failed to load or is empty, skip rendering
         return;
     }
 
     // ✅ ENHANCED: Set up shaders if graphics engine is provided
-    if (graphics && world && view && proj) {
+    if (graphics && world && view && proj)
+    {
         // Set up basic shaders and constant buffers
         graphics->SetBasicShaders();
         graphics->UpdateBasicConstants(*world, *view, *proj);
@@ -137,18 +132,20 @@ void Model::Render(ID3D11DeviceContext* ctx, GraphicsEngine* graphics,
     ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
     ctx->IASetIndexBuffer(m_ib, DXGI_FORMAT_R32_UINT, 0);
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    
+
     // ✅ FIXED: Now shaders are bound, so this will actually render something visible
     ctx->DrawIndexed(m_indexCount, 0, 0);
 }
 
 Model::~Model()
 {
-    if (m_vb) {
+    if (m_vb)
+    {
         m_vb->Release();
         m_vb = nullptr;
     }
-    if (m_ib) {
+    if (m_ib)
+    {
         m_ib->Release();
         m_ib = nullptr;
     }
@@ -163,13 +160,14 @@ Model::~Model()
 
 HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* /*device*/)
 {
-    if (filename.empty()) return E_FAIL;
+    if (filename.empty())
+        return E_FAIL;
 
     // Convert wstring to string for tinyobjloader
     std::string fileUtf8(filename.begin(), filename.end());
 
-    tinyobj::attrib_t                attrib;
-    std::vector<tinyobj::shape_t>    shapes;
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> mats;
     std::string warn, err;
 
@@ -178,7 +176,8 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* /*device*/)
         fprintf(stderr, "Model::LoadObj error: %s%s\n", warn.c_str(), err.c_str());
         return E_FAIL;
     }
-    if (shapes.empty()) return E_FAIL;
+    if (shapes.empty())
+        return E_FAIL;
 
     // Count total indices for m_indexCount
     m_indexCount = 0;
@@ -189,8 +188,8 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* /*device*/)
     return S_OK;
 }
 
-void Model::Render(ID3D11DeviceContext* /*ctx*/, GraphicsEngine* /*graphics*/,
-                   const DirectX::XMMATRIX* /*world*/, const DirectX::XMMATRIX* /*view*/, const DirectX::XMMATRIX* /*proj*/)
+void Model::Render(ID3D11DeviceContext* /*ctx*/, GraphicsEngine* /*graphics*/, const DirectX::XMMATRIX* /*world*/,
+                   const DirectX::XMMATRIX* /*view*/, const DirectX::XMMATRIX* /*proj*/)
 {
     // No D3D11 rendering on Linux - RHI backend would handle this
 }

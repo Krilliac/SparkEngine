@@ -9,9 +9,10 @@
 class Game;
 class GraphicsEngine;
 
-namespace SparkConsole {
+namespace SparkConsole
+{
     /**
      * @brief Register all advanced console commands for the unified GraphicsEngine
      */
     void RegisterAdvancedCommands(Game* game, GraphicsEngine* graphics);
-}
+} // namespace SparkConsole

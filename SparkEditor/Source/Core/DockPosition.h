@@ -7,19 +7,21 @@
 
 #pragma once
 
-namespace SparkEditor {
+namespace SparkEditor
+{
 
-/**
+    /**
  * @brief Dock position enumeration for panel docking
  */
-enum class DockPosition {
-    Left,
-    Right,
-    Top,
-    Bottom,
-    Center,
-    Tab,
-    Floating
-};
+    enum class DockPosition
+    {
+        Left,
+        Right,
+        Top,
+        Bottom,
+        Center,
+        Tab,
+        Floating
+    };
 
 } // namespace SparkEditor

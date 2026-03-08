@@ -280,7 +280,7 @@ TEST(DebugDraw_DrawLine)
     dd.SetEnabled(true);
     dd.Clear();
 
-    dd.DrawLine({0,0,0}, {1,1,1}, Spark::DebugColor::Red());
+    dd.DrawLine({0, 0, 0}, {1, 1, 1}, Spark::DebugColor::Red());
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(1));
 
     auto& requests = dd.GetRequests();
@@ -295,7 +295,7 @@ TEST(DebugDraw_DrawSphere)
     dd.SetEnabled(true);
     dd.Clear();
 
-    dd.DrawSphere({5,0,0}, 2.0f, Spark::DebugColor::Green());
+    dd.DrawSphere({5, 0, 0}, 2.0f, Spark::DebugColor::Green());
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(1));
 
     auto& requests = dd.GetRequests();
@@ -311,7 +311,7 @@ TEST(DebugDraw_DrawAABB)
     dd.SetEnabled(true);
     dd.Clear();
 
-    dd.DrawAABB({-1,-1,-1}, {1,1,1}, Spark::DebugColor::Yellow());
+    dd.DrawAABB({-1, -1, -1}, {1, 1, 1}, Spark::DebugColor::Yellow());
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(1));
 
     dd.Clear();
@@ -323,11 +323,11 @@ TEST(DebugDraw_EnableDisable)
     dd.Clear();
 
     dd.SetEnabled(false);
-    dd.DrawLine({0,0,0}, {1,1,1});
+    dd.DrawLine({0, 0, 0}, {1, 1, 1});
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(0));
 
     dd.SetEnabled(true);
-    dd.DrawLine({0,0,0}, {1,1,1});
+    dd.DrawLine({0, 0, 0}, {1, 1, 1});
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(1));
 
     dd.Clear();
@@ -339,7 +339,7 @@ TEST(DebugDraw_FlushExpiresSingleFrame)
     dd.SetEnabled(true);
     dd.Clear();
 
-    dd.DrawLine({0,0,0}, {1,1,1}); // lifetime = 0 (single frame)
+    dd.DrawLine({0, 0, 0}, {1, 1, 1}); // lifetime = 0 (single frame)
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(1));
 
     dd.Flush(0.016f);
@@ -352,13 +352,13 @@ TEST(DebugDraw_PersistentShapes)
     dd.SetEnabled(true);
     dd.Clear();
 
-    dd.DrawLine({0,0,0}, {1,1,1}, Spark::DebugColor::White(), 1.0f); // 1 second lifetime
+    dd.DrawLine({0, 0, 0}, {1, 1, 1}, Spark::DebugColor::White(), 1.0f); // 1 second lifetime
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(1));
 
-    dd.Flush(0.5f); // 0.5 seconds
+    dd.Flush(0.5f);                                          // 0.5 seconds
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(1)); // Still alive
 
-    dd.Flush(0.6f); // 0.6 more seconds (total 1.1)
+    dd.Flush(0.6f);                                          // 0.6 more seconds (total 1.1)
     EXPECT_EQ(dd.GetRequestCount(), static_cast<size_t>(0)); // Expired
 
     dd.Clear();
@@ -370,7 +370,7 @@ TEST(DebugDraw_DrawAxes)
     dd.SetEnabled(true);
     dd.Clear();
 
-    dd.DrawAxes({0,0,0}, 1.0f);
+    dd.DrawAxes({0, 0, 0}, 1.0f);
     // Axes draws 3 arrows (each = line + 2 arrowhead lines), but implementation varies
     EXPECT_GT(dd.GetRequestCount(), static_cast<size_t>(0));
 

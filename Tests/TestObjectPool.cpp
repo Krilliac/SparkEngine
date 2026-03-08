@@ -6,10 +6,9 @@
 #include <memory>
 
 // Simplified ObjectPool for testing (mirrors engine implementation)
-template<typename T>
-class TestObjectPool
+template <typename T> class TestObjectPool
 {
-public:
+  public:
     explicit TestObjectPool(size_t capacity)
     {
         m_objects.resize(capacity);
@@ -23,7 +22,8 @@ public:
 
     T* Acquire()
     {
-        if (m_available.empty()) return nullptr;
+        if (m_available.empty())
+            return nullptr;
         T* obj = m_available.back();
         m_available.pop_back();
         return obj;
@@ -31,7 +31,8 @@ public:
 
     void Release(T* obj)
     {
-        if (!obj) return;
+        if (!obj)
+            return;
         m_available.push_back(obj);
     }
 
@@ -39,12 +40,15 @@ public:
     size_t GetAvailableCount() const { return m_available.size(); }
     size_t GetActiveCount() const { return m_objects.size() - m_available.size(); }
 
-private:
+  private:
     std::vector<std::unique_ptr<T>> m_objects;
     std::vector<T*> m_available;
 };
 
-struct TestObj { int value = 0; };
+struct TestObj
+{
+    int value = 0;
+};
 
 TEST(ObjectPool_InitialState)
 {

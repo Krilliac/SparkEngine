@@ -10,21 +10,25 @@
 // Tests
 // =============================================================================
 
-TEST(UUID_NullIsInvalid) {
+TEST(UUID_NullIsInvalid)
+{
     Spark::UUID null = Spark::UUID::Null();
     EXPECT_FALSE(null.IsValid());
     EXPECT_EQ(null.GetValue(), (uint64_t)0);
 }
 
-TEST(UUID_GenerateIsValid) {
+TEST(UUID_GenerateIsValid)
+{
     Spark::UUID id = Spark::UUID::Generate();
     EXPECT_TRUE(id.IsValid());
     EXPECT_NE(id.GetValue(), (uint64_t)0);
 }
 
-TEST(UUID_GenerateUnique) {
+TEST(UUID_GenerateUnique)
+{
     std::unordered_set<uint64_t> ids;
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 1000; ++i)
+    {
         Spark::UUID id = Spark::UUID::Generate();
         ids.insert(id.GetValue());
     }
@@ -32,7 +36,8 @@ TEST(UUID_GenerateUnique) {
     EXPECT_EQ((int)ids.size(), 1000);
 }
 
-TEST(UUID_Equality) {
+TEST(UUID_Equality)
+{
     Spark::UUID a(42);
     Spark::UUID b(42);
     Spark::UUID c(99);
@@ -43,7 +48,8 @@ TEST(UUID_Equality) {
     EXPECT_FALSE(a != b);
 }
 
-TEST(UUID_Comparison) {
+TEST(UUID_Comparison)
+{
     Spark::UUID a(10);
     Spark::UUID b(20);
 
@@ -55,7 +61,8 @@ TEST(UUID_Comparison) {
     EXPECT_TRUE(b >= a);
 }
 
-TEST(UUID_ToStringRoundTrip) {
+TEST(UUID_ToStringRoundTrip)
+{
     Spark::UUID original(0xDEADBEEFCAFE1234ULL);
     std::string hex = original.ToString();
 
@@ -65,7 +72,8 @@ TEST(UUID_ToStringRoundTrip) {
     EXPECT_TRUE(original == parsed);
 }
 
-TEST(UUID_FromStringInvalid) {
+TEST(UUID_FromStringInvalid)
+{
     Spark::UUID null = Spark::UUID::FromString("");
     EXPECT_FALSE(null.IsValid());
 
@@ -75,20 +83,23 @@ TEST(UUID_FromStringInvalid) {
     (void)bad;
 }
 
-TEST(UUID_GenerateToStringRoundTrip) {
+TEST(UUID_GenerateToStringRoundTrip)
+{
     Spark::UUID id = Spark::UUID::Generate();
     std::string hex = id.ToString();
     Spark::UUID parsed = Spark::UUID::FromString(hex);
     EXPECT_TRUE(id == parsed);
 }
 
-TEST(UUID_ExplicitValue) {
+TEST(UUID_ExplicitValue)
+{
     Spark::UUID id(12345);
     EXPECT_EQ(id.GetValue(), (uint64_t)12345);
     EXPECT_TRUE(id.IsValid());
 }
 
-TEST(UUID_BoolConversion) {
+TEST(UUID_BoolConversion)
+{
     Spark::UUID valid(42);
     Spark::UUID null = Spark::UUID::Null();
 
@@ -96,7 +107,8 @@ TEST(UUID_BoolConversion) {
     EXPECT_FALSE(static_cast<bool>(null));
 }
 
-TEST(UUID_Hash) {
+TEST(UUID_Hash)
+{
     // Test that UUID works in unordered containers
     std::unordered_set<Spark::UUID> set;
     Spark::UUID a(100);
@@ -104,14 +116,15 @@ TEST(UUID_Hash) {
 
     set.insert(a);
     set.insert(b);
-    set.insert(a);  // Duplicate
+    set.insert(a); // Duplicate
 
     EXPECT_EQ((int)set.size(), 2);
     EXPECT_TRUE(set.count(a) == 1);
     EXPECT_TRUE(set.count(b) == 1);
 }
 
-TEST(UUID_OrderedContainer) {
+TEST(UUID_OrderedContainer)
+{
     std::set<Spark::UUID> ordered;
     ordered.insert(Spark::UUID(30));
     ordered.insert(Spark::UUID(10));

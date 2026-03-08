@@ -10,83 +10,121 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-namespace TestDayNight {
+namespace TestDayNight
+{
 
-struct Color {
-    float r = 1.0f, g = 1.0f, b = 1.0f, a = 1.0f;
-    static Color Lerp(const Color& a, const Color& b, float t) {
-        return { a.r+(b.r-a.r)*t, a.g+(b.g-a.g)*t, a.b+(b.b-a.b)*t, a.a+(b.a-a.a)*t };
-    }
-};
+    struct Color
+    {
+        float r = 1.0f, g = 1.0f, b = 1.0f, a = 1.0f;
+        static Color Lerp(const Color& a, const Color& b, float t)
+        {
+            return {a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t};
+        }
+    };
 
-struct Vec3 { float x=0, y=0, z=0; };
+    struct Vec3
+    {
+        float x = 0, y = 0, z = 0;
+    };
 
-enum class DayPeriod { Night, Dawn, Morning, Midday, Afternoon, Dusk, Evening, LateNight };
+    enum class DayPeriod
+    {
+        Night,
+        Dawn,
+        Morning,
+        Midday,
+        Afternoon,
+        Dusk,
+        Evening,
+        LateNight
+    };
 
-class DayNightCycle {
-public:
-    void Update(float dt) {
-        if (m_paused) return;
-        float gameSeconds = dt * m_timeScale;
-        m_hour += gameSeconds / 3600.0f;
-        while (m_hour >= 24.0f) { m_hour -= 24.0f; m_dayCount++; }
-        UpdateSun();
-    }
+    class DayNightCycle
+    {
+      public:
+        void Update(float dt)
+        {
+            if (m_paused)
+                return;
+            float gameSeconds = dt * m_timeScale;
+            m_hour += gameSeconds / 3600.0f;
+            while (m_hour >= 24.0f)
+            {
+                m_hour -= 24.0f;
+                m_dayCount++;
+            }
+            UpdateSun();
+        }
 
-    void SetTimeOfDay(float hour) {
-        m_hour = std::fmod(std::max(0.0f, hour), 24.0f);
-        UpdateSun();
-    }
+        void SetTimeOfDay(float hour)
+        {
+            m_hour = std::fmod(std::max(0.0f, hour), 24.0f);
+            UpdateSun();
+        }
 
-    float GetTimeOfDay() const { return m_hour; }
-    void SetTimeScale(float s) { m_timeScale = std::max(0.0f, s); }
-    float GetTimeScale() const { return m_timeScale; }
-    void SetPaused(bool p) { m_paused = p; }
-    bool IsPaused() const { return m_paused; }
-    int GetDayCount() const { return m_dayCount; }
+        float GetTimeOfDay() const { return m_hour; }
+        void SetTimeScale(float s) { m_timeScale = std::max(0.0f, s); }
+        float GetTimeScale() const { return m_timeScale; }
+        void SetPaused(bool p) { m_paused = p; }
+        bool IsPaused() const { return m_paused; }
+        int GetDayCount() const { return m_dayCount; }
 
-    Vec3 GetSunDirection() const { return m_sunDir; }
-    float GetSunIntensity() const { return m_sunIntensity; }
-    bool IsNight() const { return m_sunDir.y < 0.0f; }
-    bool IsDay() const { return m_sunDir.y >= 0.0f; }
+        Vec3 GetSunDirection() const { return m_sunDir; }
+        float GetSunIntensity() const { return m_sunIntensity; }
+        bool IsNight() const { return m_sunDir.y < 0.0f; }
+        bool IsDay() const { return m_sunDir.y >= 0.0f; }
 
-    DayPeriod GetDayPeriod() const {
-        if (m_hour < 5.0f) return DayPeriod::Night;
-        if (m_hour < 7.0f) return DayPeriod::Dawn;
-        if (m_hour < 10.0f) return DayPeriod::Morning;
-        if (m_hour < 14.0f) return DayPeriod::Midday;
-        if (m_hour < 17.0f) return DayPeriod::Afternoon;
-        if (m_hour < 19.0f) return DayPeriod::Dusk;
-        if (m_hour < 21.0f) return DayPeriod::Evening;
-        return DayPeriod::LateNight;
-    }
+        DayPeriod GetDayPeriod() const
+        {
+            if (m_hour < 5.0f)
+                return DayPeriod::Night;
+            if (m_hour < 7.0f)
+                return DayPeriod::Dawn;
+            if (m_hour < 10.0f)
+                return DayPeriod::Morning;
+            if (m_hour < 14.0f)
+                return DayPeriod::Midday;
+            if (m_hour < 17.0f)
+                return DayPeriod::Afternoon;
+            if (m_hour < 19.0f)
+                return DayPeriod::Dusk;
+            if (m_hour < 21.0f)
+                return DayPeriod::Evening;
+            return DayPeriod::LateNight;
+        }
 
-    std::string GetTimeString() const {
-        int h = static_cast<int>(m_hour);
-        int m = static_cast<int>((m_hour - h) * 60.0f);
-        char buf[8];
-        std::snprintf(buf, sizeof(buf), "%02d:%02d", h, m);
-        return std::string(buf);
-    }
+        std::string GetTimeString() const
+        {
+            int h = static_cast<int>(m_hour);
+            int m = static_cast<int>((m_hour - h) * 60.0f);
+            char buf[8];
+            std::snprintf(buf, sizeof(buf), "%02d:%02d", h, m);
+            return std::string(buf);
+        }
 
-private:
-    void UpdateSun() {
-        float angle = (m_hour / 24.0f) * 2.0f * static_cast<float>(M_PI) - static_cast<float>(M_PI) / 2.0f;
-        m_sunDir.x = std::cos(angle);
-        m_sunDir.y = std::sin(angle);
-        m_sunDir.z = 0.0f;
-        float len = std::sqrt(m_sunDir.x*m_sunDir.x + m_sunDir.y*m_sunDir.y);
-        if (len > 0.0001f) { m_sunDir.x /= len; m_sunDir.y /= len; }
-        m_sunIntensity = std::clamp(m_sunDir.y * 2.0f, 0.0f, 1.0f);
-    }
+      private:
+        void UpdateSun()
+        {
+            float angle = (m_hour / 24.0f) * 2.0f * static_cast<float>(M_PI) - static_cast<float>(M_PI) / 2.0f;
+            m_sunDir.x = std::cos(angle);
+            m_sunDir.y = std::sin(angle);
+            m_sunDir.z = 0.0f;
+            float len = std::sqrt(m_sunDir.x * m_sunDir.x + m_sunDir.y * m_sunDir.y);
+            if (len > 0.0001f)
+            {
+                m_sunDir.x /= len;
+                m_sunDir.y /= len;
+            }
+            m_sunIntensity = std::clamp(m_sunDir.y * 2.0f, 0.0f, 1.0f);
+        }
 
-    float m_hour = 12.0f;
-    float m_timeScale = 60.0f;
-    bool m_paused = false;
-    int m_dayCount = 0;
-    Vec3 m_sunDir = {0, 1, 0};
-    float m_sunIntensity = 1.0f;
-};
+        float m_hour = 12.0f;
+        float m_timeScale = 60.0f;
+        bool m_paused = false;
+        int m_dayCount = 0;
+        Vec3 m_sunDir = {0, 1, 0};
+        float m_sunIntensity = 1.0f;
+    };
 
 } // namespace TestDayNight
 
@@ -94,7 +132,8 @@ private:
 // Tests
 // =============================================================================
 
-TEST(DayNight_DefaultIsNoon) {
+TEST(DayNight_DefaultIsNoon)
+{
     TestDayNight::DayNightCycle cycle;
     EXPECT_NEAR(cycle.GetTimeOfDay(), 12.0f, 0.01f);
     EXPECT_TRUE(cycle.IsDay());
@@ -102,7 +141,8 @@ TEST(DayNight_DefaultIsNoon) {
     EXPECT_EQ((int)cycle.GetDayPeriod(), (int)TestDayNight::DayPeriod::Midday);
 }
 
-TEST(DayNight_SetTimeOfDay) {
+TEST(DayNight_SetTimeOfDay)
+{
     TestDayNight::DayNightCycle cycle;
     cycle.SetTimeOfDay(6.0f);
     EXPECT_NEAR(cycle.GetTimeOfDay(), 6.0f, 0.01f);
@@ -113,7 +153,8 @@ TEST(DayNight_SetTimeOfDay) {
     EXPECT_EQ((int)cycle.GetDayPeriod(), (int)TestDayNight::DayPeriod::LateNight);
 }
 
-TEST(DayNight_TimeWraps) {
+TEST(DayNight_TimeWraps)
+{
     TestDayNight::DayNightCycle cycle;
     cycle.SetTimeOfDay(23.0f);
     cycle.SetTimeScale(3600.0f); // 1 real second = 1 game hour
@@ -123,7 +164,8 @@ TEST(DayNight_TimeWraps) {
     EXPECT_EQ(cycle.GetDayCount(), 1);
 }
 
-TEST(DayNight_SunAtNoon) {
+TEST(DayNight_SunAtNoon)
+{
     TestDayNight::DayNightCycle cycle;
     cycle.SetTimeOfDay(12.0f);
     auto sun = cycle.GetSunDirection();
@@ -132,7 +174,8 @@ TEST(DayNight_SunAtNoon) {
     EXPECT_GT(cycle.GetSunIntensity(), 0.9f);
 }
 
-TEST(DayNight_SunAtMidnight) {
+TEST(DayNight_SunAtMidnight)
+{
     TestDayNight::DayNightCycle cycle;
     cycle.SetTimeOfDay(0.0f);
     auto sun = cycle.GetSunDirection();
@@ -142,7 +185,8 @@ TEST(DayNight_SunAtMidnight) {
     EXPECT_NEAR(cycle.GetSunIntensity(), 0.0f, 0.01f);
 }
 
-TEST(DayNight_TimeScale) {
+TEST(DayNight_TimeScale)
+{
     TestDayNight::DayNightCycle cycle;
     cycle.SetTimeOfDay(12.0f);
     cycle.SetTimeScale(3600.0f); // 1 second = 1 hour
@@ -151,7 +195,8 @@ TEST(DayNight_TimeScale) {
     EXPECT_NEAR(cycle.GetTimeOfDay(), 13.0f, 0.01f);
 }
 
-TEST(DayNight_Pause) {
+TEST(DayNight_Pause)
+{
     TestDayNight::DayNightCycle cycle;
     cycle.SetTimeOfDay(12.0f);
     cycle.SetPaused(true);
@@ -161,7 +206,8 @@ TEST(DayNight_Pause) {
     EXPECT_NEAR(cycle.GetTimeOfDay(), 12.0f, 0.01f); // Time should not advance
 }
 
-TEST(DayNight_DayPeriods) {
+TEST(DayNight_DayPeriods)
+{
     TestDayNight::DayNightCycle cycle;
 
     cycle.SetTimeOfDay(2.0f);
@@ -189,7 +235,8 @@ TEST(DayNight_DayPeriods) {
     EXPECT_EQ((int)cycle.GetDayPeriod(), (int)TestDayNight::DayPeriod::LateNight);
 }
 
-TEST(DayNight_TimeString) {
+TEST(DayNight_TimeString)
+{
     TestDayNight::DayNightCycle cycle;
     cycle.SetTimeOfDay(14.5f); // 14:30
     EXPECT_EQ(cycle.GetTimeString(), std::string("14:30"));
@@ -201,7 +248,8 @@ TEST(DayNight_TimeString) {
     EXPECT_EQ(cycle.GetTimeString(), std::string("09:15"));
 }
 
-TEST(DayNight_DayCountIncrements) {
+TEST(DayNight_DayCountIncrements)
+{
     TestDayNight::DayNightCycle cycle;
     EXPECT_EQ(cycle.GetDayCount(), 0);
 

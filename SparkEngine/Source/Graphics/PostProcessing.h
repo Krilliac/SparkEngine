@@ -38,21 +38,21 @@ using Microsoft::WRL::ComPtr;
 enum class PostProcessEffect
 {
     None,
-    Bloom,              ///< Bloom effect
-    ToneMapping,        ///< HDR tone mapping
-    ColorGrading,       ///< Color grading/correction
-    FXAA,              ///< Fast Approximate Anti-Aliasing
-    TAA,               ///< Temporal Anti-Aliasing
-    SSAO,              ///< Screen Space Ambient Occlusion
-    SSR,               ///< Screen Space Reflections
-    MotionBlur,        ///< Motion blur
-    DepthOfField,      ///< Depth of field
-    Vignette,          ///< Vignette effect
+    Bloom,               ///< Bloom effect
+    ToneMapping,         ///< HDR tone mapping
+    ColorGrading,        ///< Color grading/correction
+    FXAA,                ///< Fast Approximate Anti-Aliasing
+    TAA,                 ///< Temporal Anti-Aliasing
+    SSAO,                ///< Screen Space Ambient Occlusion
+    SSR,                 ///< Screen Space Reflections
+    MotionBlur,          ///< Motion blur
+    DepthOfField,        ///< Depth of field
+    Vignette,            ///< Vignette effect
     ChromaticAberration, ///< Chromatic aberration
-    FilmGrain,         ///< Film grain
-    LensDistortion,    ///< Lens distortion
-    LightShafts,       ///< Volumetric light shafts
-    LensFlare          ///< Lens flare
+    FilmGrain,           ///< Film grain
+    LensDistortion,      ///< Lens distortion
+    LightShafts,         ///< Volumetric light shafts
+    LensFlare            ///< Lens flare
 };
 
 /**
@@ -60,14 +60,14 @@ enum class PostProcessEffect
  */
 enum class ToneMappingOperator
 {
-    None,              ///< No tone mapping
-    Reinhard,          ///< Reinhard tone mapping
-    ReinhardJodie,     ///< Reinhard-Jodie tone mapping
-    Uncharted2,        ///< Uncharted 2 tone mapping
-    ACES,              ///< ACES filmic tone mapping
-    AgX,               ///< AgX tone mapping
-    FilmicALU,         ///< Filmic ALU tone mapping
-    Custom             ///< Custom tone mapping curve
+    None,          ///< No tone mapping
+    Reinhard,      ///< Reinhard tone mapping
+    ReinhardJodie, ///< Reinhard-Jodie tone mapping
+    Uncharted2,    ///< Uncharted 2 tone mapping
+    ACES,          ///< ACES filmic tone mapping
+    AgX,           ///< AgX tone mapping
+    FilmicALU,     ///< Filmic ALU tone mapping
+    Custom         ///< Custom tone mapping curve
 };
 
 /**
@@ -75,7 +75,7 @@ enum class ToneMappingOperator
  */
 class PostProcessingSystem
 {
-public:
+  public:
     /**
      * @brief Bloom settings
      */
@@ -155,7 +155,7 @@ public:
     void Console_SetExposure(float exposure);
     void Console_SetBloomParams(float threshold, float intensity, float radius);
 
-private:
+  private:
     ID3D11Device* m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
 

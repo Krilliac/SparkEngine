@@ -67,46 +67,36 @@
  * exposes a strongly-typed interface for creating entities and managing their
  * components. Every Scene owns exactly one World instance.
  */
-class World {
-public:
-    EntityID CreateEntity(const std::string& name = "") {
+class World
+{
+  public:
+    EntityID CreateEntity(const std::string& name = "")
+    {
         EntityID entity = m_registry.create();
-        if (!name.empty()) {
+        if (!name.empty())
+        {
             m_registry.emplace<NameComponent>(entity, NameComponent{name});
         }
         return entity;
     }
 
-    void DestroyEntity(EntityID entity) {
-        m_registry.destroy(entity);
-    }
+    void DestroyEntity(EntityID entity) { m_registry.destroy(entity); }
 
-    template<typename T, typename... Args>
-    T& AddComponent(EntityID entity, Args&&... args) {
+    template <typename T, typename... Args> T& AddComponent(EntityID entity, Args&&... args)
+    {
         return m_registry.emplace<T>(entity, std::forward<Args>(args)...);
     }
 
-    template<typename T>
-    T* GetComponent(EntityID entity) {
-        return m_registry.try_get<T>(entity);
-    }
+    template <typename T> T* GetComponent(EntityID entity) { return m_registry.try_get<T>(entity); }
 
-    template<typename T>
-    bool HasComponent(EntityID entity) {
-        return m_registry.all_of<T>(entity);
-    }
+    template <typename T> bool HasComponent(EntityID entity) { return m_registry.all_of<T>(entity); }
 
-    template<typename T>
-    void RemoveComponent(EntityID entity) {
-        m_registry.remove<T>(entity);
-    }
+    template <typename T> void RemoveComponent(EntityID entity) { m_registry.remove<T>(entity); }
 
-    template<typename... Components>
-    auto GetEntitiesWith() {
-        return m_registry.view<Components...>();
-    }
+    template <typename... Components> auto GetEntitiesWith() { return m_registry.view<Components...>(); }
 
-    size_t GetEntityCount() const {
+    size_t GetEntityCount() const
+    {
         size_t count = 0;
         for ([[maybe_unused]] auto entity : m_registry.template storage<entt::entity>()->each())
             ++count;
@@ -116,6 +106,6 @@ public:
     entt::registry& GetRegistry() { return m_registry; }
     const entt::registry& GetRegistry() const { return m_registry; }
 
-private:
+  private:
     entt::registry m_registry;
 };

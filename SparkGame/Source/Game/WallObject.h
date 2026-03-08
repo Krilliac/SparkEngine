@@ -46,7 +46,7 @@
  */
 class WallObject : public GameObject
 {
-public:
+  public:
     /**
      * @brief Construct a wall with the given dimensions
      * @param width  Horizontal extent of the wall in world units (default: 5.0f)
@@ -73,32 +73,29 @@ public:
      * @brief Per-frame update — delegates to GameObject::Update
      * @param dt Delta time in seconds since the last frame
      */
-    void    Update(float dt) override { GameObject::Update(dt); }
+    void Update(float dt) override { GameObject::Update(dt); }
 
     /**
      * @brief Render the wall — delegates to GameObject::Render
      * @param v Camera view matrix
      * @param p Camera projection matrix
      */
-    void    Render(const DirectX::XMMATRIX& v, const DirectX::XMMATRIX& p) override
-    {
-        GameObject::Render(v, p);
-    }
+    void Render(const DirectX::XMMATRIX& v, const DirectX::XMMATRIX& p) override { GameObject::Render(v, p); }
 
     /**
      * @brief Collision callback when hit by another game object (no-op)
      * @param target The other game object involved in the collision
      */
-    void    OnHit(GameObject*) override {}
+    void OnHit(GameObject*) override {}
 
     /**
      * @brief Collision callback when hitting world geometry (no-op)
      * @param hitPoint World-space position of the collision
      * @param normal   Surface normal at the collision point
      */
-    void    OnHitWorld(const DirectX::XMFLOAT3&, const DirectX::XMFLOAT3&) override {}
+    void OnHitWorld(const DirectX::XMFLOAT3&, const DirectX::XMFLOAT3&) override {}
 
-protected:
+  protected:
     /**
      * @brief Create or load the wall mesh geometry
      *
@@ -107,8 +104,8 @@ protected:
      */
     void CreateMesh() override;
 
-private:
-    float        m_width;                                       ///< Horizontal extent of the wall in world units
-    float        m_height;                                      ///< Vertical extent of the wall in world units
-    std::wstring m_modelPath{ L"Assets/Models/Wall.obj" };   ///< Path to the wall OBJ model on disk
+  private:
+    float m_width;                                       ///< Horizontal extent of the wall in world units
+    float m_height;                                      ///< Vertical extent of the wall in world units
+    std::wstring m_modelPath{L"Assets/Models/Wall.obj"}; ///< Path to the wall OBJ model on disk
 };

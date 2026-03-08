@@ -51,7 +51,7 @@ using DirectX::XMMATRIX;
  */
 class PlaneObject : public GameObject
 {
-public:
+  public:
     /**
      * @brief Construct a plane with the given dimensions
      * @param width  Extent along the X-axis in world units (default: 10.0f)
@@ -78,17 +78,14 @@ public:
      * @brief Per-frame update — delegates to GameObject::Update
      * @param dt Delta time in seconds since the last frame
      */
-    void     Update(float dt) override { GameObject::Update(dt); }
+    void Update(float dt) override { GameObject::Update(dt); }
 
     /**
      * @brief Render the plane — delegates to GameObject::Render
      * @param v Camera view matrix
      * @param p Camera projection matrix
      */
-    void     Render(const XMMATRIX& v, const XMMATRIX& p) override
-    {
-        GameObject::Render(v, p);
-    }
+    void Render(const XMMATRIX& v, const XMMATRIX& p) override { GameObject::Render(v, p); }
 
     /**
      * @brief Collision callback when hit by another game object (no-op)
@@ -106,7 +103,7 @@ public:
      */
     void OnHitWorld(const XMFLOAT3&, const XMFLOAT3&) override {}
 
-protected:
+  protected:
     /**
      * @brief Create or load the plane mesh geometry
      *
@@ -115,8 +112,8 @@ protected:
      */
     void CreateMesh() override;
 
-private:
-    float        m_width;                                      ///< Width of the plane along the X-axis
-    float        m_depth;                                      ///< Depth of the plane along the Z-axis
-    std::wstring m_modelPath{ L"Assets/Models/Plane.obj" };    ///< Path to the plane OBJ model on disk
+  private:
+    float m_width;                                        ///< Width of the plane along the X-axis
+    float m_depth;                                        ///< Depth of the plane along the Z-axis
+    std::wstring m_modelPath{L"Assets/Models/Plane.obj"}; ///< Path to the plane OBJ model on disk
 };

@@ -46,43 +46,43 @@
  */
 class InputManager
 {
-private:
+  private:
     std::unordered_map<int, bool> m_keyStates;     ///< Current frame keyboard states
     std::unordered_map<int, bool> m_prevKeyStates; ///< Previous frame keyboard states
 
-    bool m_mouseButtons[3];      ///< Current frame mouse button states [Left, Right, Middle]
-    bool m_prevMouseButtons[3];  ///< Previous frame mouse button states
+    bool m_mouseButtons[3];     ///< Current frame mouse button states [Left, Right, Middle]
+    bool m_prevMouseButtons[3]; ///< Previous frame mouse button states
 
-    int  m_mouseX, m_mouseY;           ///< Current mouse position
-    int  m_prevMouseX, m_prevMouseY;   ///< Previous frame mouse position
-    int  m_mouseDeltaX, m_mouseDeltaY; ///< Mouse movement delta since last frame
+    int m_mouseX, m_mouseY;           ///< Current mouse position
+    int m_prevMouseX, m_prevMouseY;   ///< Previous frame mouse position
+    int m_mouseDeltaX, m_mouseDeltaY; ///< Mouse movement delta since last frame
 
-    HWND m_hwnd;           ///< Window handle for mouse capture
-    bool m_mouseCaptured;  ///< Whether mouse is currently captured
+    HWND m_hwnd;          ///< Window handle for mouse capture
+    bool m_mouseCaptured; ///< Whether mouse is currently captured
 
     // Console integration state
-    float m_mouseSensitivity;          ///< Mouse sensitivity multiplier
-    float m_mouseDeadZone;             ///< Mouse dead zone for small movements
-    bool m_mouseAcceleration;          ///< Enable/disable mouse acceleration
-    bool m_invertMouseY;               ///< Invert Y-axis for mouse movement
-    bool m_rawMouseInput;              ///< Use raw mouse input instead of system cursor
-    bool m_inputLogging;               ///< Enable input event logging
-    
+    float m_mouseSensitivity; ///< Mouse sensitivity multiplier
+    float m_mouseDeadZone;    ///< Mouse dead zone for small movements
+    bool m_mouseAcceleration; ///< Enable/disable mouse acceleration
+    bool m_invertMouseY;      ///< Invert Y-axis for mouse movement
+    bool m_rawMouseInput;     ///< Use raw mouse input instead of system cursor
+    bool m_inputLogging;      ///< Enable input event logging
+
     // Key binding system
-    std::unordered_map<std::string, int> m_keyBindings;  ///< Action name to key mappings
+    std::unordered_map<std::string, int> m_keyBindings;     ///< Action name to key mappings
     std::unordered_map<int, std::string> m_reverseBindings; ///< Key to action name mappings
-    
+
     // Input metrics and monitoring
-    size_t m_keyPressCount;            ///< Total key press count this session
-    size_t m_mousePressCount;          ///< Total mouse press count this session
-    float m_totalMouseDistance;        ///< Total mouse movement distance
+    size_t m_keyPressCount;                                ///< Total key press count this session
+    size_t m_mousePressCount;                              ///< Total mouse press count this session
+    float m_totalMouseDistance;                            ///< Total mouse movement distance
     std::vector<std::pair<int, bool>> m_recentInputEvents; ///< Recent input events for debugging
-    
-    mutable std::mutex m_inputMutex;   ///< Thread safety for input access
-    std::function<void()> m_stateCallback; ///< Callback for state changes
+
+    mutable std::mutex m_inputMutex;                ///< Thread safety for input access
+    std::function<void()> m_stateCallback;          ///< Callback for state changes
     std::vector<std::thread> m_pendingTimedThreads; ///< Timed key release threads to join on destruction
 
-public:
+  public:
     /**
      * @brief Default constructor
      * 
@@ -249,32 +249,34 @@ public:
     /**
      * @brief Input metrics structure for console integration
      */
-    struct InputMetrics {
-        size_t keyPressCount;           ///< Total key presses this session
-        size_t mousePressCount;         ///< Total mouse presses this session
-        float totalMouseDistance;       ///< Total mouse movement distance
-        size_t activeKeys;              ///< Number of currently pressed keys
-        size_t activeMouseButtons;      ///< Number of currently pressed mouse buttons
-        bool mouseCaptured;             ///< Whether mouse is captured
-        float mouseSensitivity;         ///< Current mouse sensitivity
-        float mouseDeadZone;            ///< Current mouse dead zone
-        bool mouseAcceleration;         ///< Mouse acceleration state
-        bool invertMouseY;              ///< Y-axis inversion state
-        bool rawMouseInput;             ///< Raw mouse input state
-        bool inputLogging;              ///< Input logging state
-        size_t totalKeyBindings;        ///< Number of active key bindings
+    struct InputMetrics
+    {
+        size_t keyPressCount;      ///< Total key presses this session
+        size_t mousePressCount;    ///< Total mouse presses this session
+        float totalMouseDistance;  ///< Total mouse movement distance
+        size_t activeKeys;         ///< Number of currently pressed keys
+        size_t activeMouseButtons; ///< Number of currently pressed mouse buttons
+        bool mouseCaptured;        ///< Whether mouse is captured
+        float mouseSensitivity;    ///< Current mouse sensitivity
+        float mouseDeadZone;       ///< Current mouse dead zone
+        bool mouseAcceleration;    ///< Mouse acceleration state
+        bool invertMouseY;         ///< Y-axis inversion state
+        bool rawMouseInput;        ///< Raw mouse input state
+        bool inputLogging;         ///< Input logging state
+        size_t totalKeyBindings;   ///< Number of active key bindings
     };
 
     /**
      * @brief Input settings structure for console control
      */
-    struct InputSettings {
-        float mouseSensitivity;         ///< Mouse sensitivity multiplier (0.1-10.0)
-        float mouseDeadZone;            ///< Mouse dead zone threshold (0.0-10.0)
-        bool mouseAcceleration;         ///< Enable mouse acceleration
-        bool invertMouseY;              ///< Invert Y-axis for mouse movement
-        bool rawMouseInput;             ///< Use raw mouse input
-        bool inputLogging;              ///< Enable input event logging
+    struct InputSettings
+    {
+        float mouseSensitivity;                           ///< Mouse sensitivity multiplier (0.1-10.0)
+        float mouseDeadZone;                              ///< Mouse dead zone threshold (0.0-10.0)
+        bool mouseAcceleration;                           ///< Enable mouse acceleration
+        bool invertMouseY;                                ///< Invert Y-axis for mouse movement
+        bool rawMouseInput;                               ///< Use raw mouse input
+        bool inputLogging;                                ///< Enable input event logging
         std::unordered_map<std::string, int> keyBindings; ///< Action to key mappings
     };
 
@@ -394,7 +396,7 @@ public:
      */
     void Console_RefreshInput();
 
-private:
+  private:
     /**
      * @brief Update the state of a specific key
      * 

@@ -21,13 +21,14 @@
 #include <memory>
 #include <string>
 
-using Microsoft::WRL::ComPtr;
-using DirectX::XMFLOAT3;
 using DirectX::XMFLOAT2;
+using DirectX::XMFLOAT3;
 using DirectX::XMFLOAT4;
 using DirectX::XMMATRIX;
+using Microsoft::WRL::ComPtr;
 
-struct TerrainVertex {
+struct TerrainVertex
+{
     XMFLOAT3 Position;
     XMFLOAT3 Normal;
     XMFLOAT2 TexCoord;
@@ -37,36 +38,39 @@ struct TerrainVertex {
 /**
  * @brief Terrain texture layer for multi-texture splatting
  */
-struct TerrainTextureLayer {
+struct TerrainTextureLayer
+{
     std::wstring diffusePath;
     std::wstring normalPath;
-    float tileScale = 10.0f;       ///< UV tiling scale
-    float heightThreshold = 0.0f;  ///< Height at which this layer begins (for auto-splatting)
-    float blendSharpness = 5.0f;   ///< How sharply to transition between layers
+    float tileScale = 10.0f;      ///< UV tiling scale
+    float heightThreshold = 0.0f; ///< Height at which this layer begins (for auto-splatting)
+    float blendSharpness = 5.0f;  ///< How sharply to transition between layers
 };
 
 /**
  * @brief Quadtree node for LOD terrain rendering
  */
-struct TerrainQuadNode {
-    XMFLOAT3 center;          ///< Center of this terrain patch
-    float halfSize;             ///< Half-size of this patch
-    int lodLevel;               ///< LOD level (0 = highest detail)
-    int startIndex;             ///< Start index in the index buffer
-    int indexCount;             ///< Number of indices for this patch
+struct TerrainQuadNode
+{
+    XMFLOAT3 center; ///< Center of this terrain patch
+    float halfSize;  ///< Half-size of this patch
+    int lodLevel;    ///< LOD level (0 = highest detail)
+    int startIndex;  ///< Start index in the index buffer
+    int indexCount;  ///< Number of indices for this patch
     bool isLeaf;
-    int children[4] = {-1,-1,-1,-1};
+    int children[4] = {-1, -1, -1, -1};
 };
 
 /**
  * @brief Terrain configuration
  */
-struct TerrainDesc {
-    UINT width = 256;           ///< Heightmap width
-    UINT height = 256;          ///< Heightmap height
-    float cellSpacing = 1.0f;   ///< World space distance between vertices
-    float heightScale = 50.0f;  ///< Maximum terrain height
-    int maxLODLevels = 4;       ///< Maximum number of LOD levels
+struct TerrainDesc
+{
+    UINT width = 256;                                        ///< Heightmap width
+    UINT height = 256;                                       ///< Heightmap height
+    float cellSpacing = 1.0f;                                ///< World space distance between vertices
+    float heightScale = 50.0f;                               ///< Maximum terrain height
+    int maxLODLevels = 4;                                    ///< Maximum number of LOD levels
     float lodDistances[4] = {50.0f, 100.0f, 200.0f, 400.0f}; ///< LOD transition distances
 
     // Texture layers (up to 4 for splat map)
@@ -76,27 +80,23 @@ struct TerrainDesc {
 /**
  * @brief Enhanced terrain with LOD and texture splatting
  */
-class Terrain {
-public:
+class Terrain
+{
+  public:
     Terrain();
     ~Terrain() = default; // ComPtr handles cleanup via RAII
 
     /**
      * @brief Initialize terrain from a heightmap file
      */
-    HRESULT Initialize(ID3D11Device* device,
-        ID3D11DeviceContext* ctx,
-        const wchar_t* heightmapFile,
-        const TerrainDesc& desc);
+    HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, const wchar_t* heightmapFile,
+                       const TerrainDesc& desc);
 
     /**
      * @brief Legacy initialize (backward compatible)
      */
-    HRESULT Initialize(ID3D11Device* device,
-        ID3D11DeviceContext* ctx,
-        const wchar_t* heightmapFile,
-        UINT width, UINT height,
-        float cellSpacing);
+    HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, const wchar_t* heightmapFile, UINT width,
+                       UINT height, float cellSpacing);
 
     /**
      * @brief Update LOD selection based on camera position
@@ -176,7 +176,7 @@ public:
     // Console integration
     std::string Console_GetInfo() const;
 
-private:
+  private:
     void BuildMesh(const std::vector<uint8_t>& rawHeightData, UINT w, UINT h, float s);
     void CalculateNormals();
     void CalculateSplatWeights();
@@ -193,7 +193,7 @@ private:
     ComPtr<ID3D11Buffer> m_vb;
     ComPtr<ID3D11Buffer> m_ib;
 
-    UINT m_indexCount{ 0 };
+    UINT m_indexCount{0};
     std::vector<TerrainVertex> m_vertices;
     std::vector<UINT> m_indices;
     std::vector<float> m_heightData; ///< Normalized height data [0..1]

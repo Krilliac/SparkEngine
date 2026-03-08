@@ -9,74 +9,80 @@
 #include <sstream>
 #include <unordered_map>
 
-namespace TestSave {
+namespace TestSave
+{
 
-// Minimal NetBuffer-like serialization for testing
-class TestBuffer {
-public:
-    void WriteUInt32(uint32_t val) {
-        const char* p = reinterpret_cast<const char*>(&val);
-        m_data.insert(m_data.end(), p, p + sizeof(val));
-    }
+    // Minimal NetBuffer-like serialization for testing
+    class TestBuffer
+    {
+      public:
+        void WriteUInt32(uint32_t val)
+        {
+            const char* p = reinterpret_cast<const char*>(&val);
+            m_data.insert(m_data.end(), p, p + sizeof(val));
+        }
 
-    void WriteFloat(float val) {
-        const char* p = reinterpret_cast<const char*>(&val);
-        m_data.insert(m_data.end(), p, p + sizeof(val));
-    }
+        void WriteFloat(float val)
+        {
+            const char* p = reinterpret_cast<const char*>(&val);
+            m_data.insert(m_data.end(), p, p + sizeof(val));
+        }
 
-    void WriteString(const std::string& str) {
-        WriteUInt32(static_cast<uint32_t>(str.size()));
-        m_data.insert(m_data.end(), str.begin(), str.end());
-    }
+        void WriteString(const std::string& str)
+        {
+            WriteUInt32(static_cast<uint32_t>(str.size()));
+            m_data.insert(m_data.end(), str.begin(), str.end());
+        }
 
-    void WriteBool(bool val) {
-        m_data.push_back(val ? 1 : 0);
-    }
+        void WriteBool(bool val) { m_data.push_back(val ? 1 : 0); }
 
-    uint32_t ReadUInt32() {
-        uint32_t val;
-        std::memcpy(&val, m_data.data() + m_readPos, sizeof(val));
-        m_readPos += sizeof(val);
-        return val;
-    }
+        uint32_t ReadUInt32()
+        {
+            uint32_t val;
+            std::memcpy(&val, m_data.data() + m_readPos, sizeof(val));
+            m_readPos += sizeof(val);
+            return val;
+        }
 
-    float ReadFloat() {
-        float val;
-        std::memcpy(&val, m_data.data() + m_readPos, sizeof(val));
-        m_readPos += sizeof(val);
-        return val;
-    }
+        float ReadFloat()
+        {
+            float val;
+            std::memcpy(&val, m_data.data() + m_readPos, sizeof(val));
+            m_readPos += sizeof(val);
+            return val;
+        }
 
-    std::string ReadString() {
-        uint32_t len = ReadUInt32();
-        std::string str(m_data.data() + m_readPos, m_data.data() + m_readPos + len);
-        m_readPos += len;
-        return str;
-    }
+        std::string ReadString()
+        {
+            uint32_t len = ReadUInt32();
+            std::string str(m_data.data() + m_readPos, m_data.data() + m_readPos + len);
+            m_readPos += len;
+            return str;
+        }
 
-    bool ReadBool() {
-        return m_data[m_readPos++] != 0;
-    }
+        bool ReadBool() { return m_data[m_readPos++] != 0; }
 
-    size_t Size() const { return m_data.size(); }
-    void ResetRead() { m_readPos = 0; }
+        size_t Size() const { return m_data.size(); }
+        void ResetRead() { m_readPos = 0; }
 
-private:
-    std::vector<char> m_data;
-    size_t m_readPos = 0;
-};
+      private:
+        std::vector<char> m_data;
+        size_t m_readPos = 0;
+    };
 
-// Minimal component serializer
-struct SerializedComponent {
-    std::string typeName;
-    std::unordered_map<std::string, std::string> properties;
-};
+    // Minimal component serializer
+    struct SerializedComponent
+    {
+        std::string typeName;
+        std::unordered_map<std::string, std::string> properties;
+    };
 
-struct SerializedEntity {
-    uint32_t id;
-    std::string name;
-    std::vector<SerializedComponent> components;
-};
+    struct SerializedEntity
+    {
+        uint32_t id;
+        std::string name;
+        std::vector<SerializedComponent> components;
+    };
 
 } // namespace TestSave
 
