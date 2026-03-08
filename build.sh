@@ -1,9 +1,9 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # build.sh  â”€ simple cross-platform build helper
 set -e
 
 CFG=Debug
-GENERATOR="Unix Makefiles"
+GENERATOR="Ninja"
 ENABLE_EDITOR=ON
 ENABLE_CONSOLE=ON
 ENABLE_AS=ON

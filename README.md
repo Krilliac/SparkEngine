@@ -116,7 +116,8 @@ chmod +x generate.sh
 ### Requirements
 
 - **Compiler**: MSVC v143 (Visual Studio 2022), GCC 11+, or Clang 14+ with C++20 support
-- **Build System**: CMake 3.16+
+- **Build System**: CMake 3.16+, Ninja (recommended on Linux)
+- **Linux packages**: `build-essential`, `ninja-build`, `cmake` (e.g. `sudo apt install build-essential ninja-build cmake`)
 - **Graphics**: DirectX 11 capable GPU (Windows), Vulkan SDK (optional), OpenGL 4.5 (optional)
 - **Platform**: Windows 10+ (primary), Linux (experimental)
 

@@ -58,7 +58,10 @@ namespace Spark
             auto backends = DetectAvailableBackends();
 
             if (backends.empty())
-                return GraphicsBackend::Auto;
+            {
+                std::cerr << "[RHI] No graphics backends available on this platform." << std::endl;
+                return GraphicsBackend::None;
+            }
 
                 // Priority: D3D11 on Windows, Vulkan on Linux, OpenGL as fallback
 #ifdef _WIN32
@@ -78,6 +81,12 @@ namespace Spark
         {
             if (backend == GraphicsBackend::Auto)
                 backend = GetRecommendedBackend();
+
+            if (backend == GraphicsBackend::None)
+            {
+                std::cerr << "[RHI] No graphics backend available. Engine will run without rendering." << std::endl;
+                return nullptr;
+            }
 
             std::unique_ptr<IRHIDevice> device;
 
@@ -126,6 +135,8 @@ namespace Spark
                 return "Metal";
             case GraphicsBackend::Auto:
                 return "Auto";
+            case GraphicsBackend::None:
+                return "None";
             default:
                 return "Unknown";
             }
