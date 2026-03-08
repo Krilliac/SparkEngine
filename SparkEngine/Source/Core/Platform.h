@@ -1146,6 +1146,24 @@ namespace DirectX
         return mat;
     }
 
+    // Plane operations (used by frustum culling)
+    inline XMVECTOR XMPlaneNormalize(XMVECTOR plane)
+    {
+        float len = sqrtf(plane.x * plane.x + plane.y * plane.y + plane.z * plane.z);
+        if (len > 1e-8f)
+        {
+            float invLen = 1.0f / len;
+            return {plane.x * invLen, plane.y * invLen, plane.z * invLen, plane.w * invLen};
+        }
+        return plane;
+    }
+
+    inline XMVECTOR XMPlaneDotCoord(XMVECTOR plane, XMVECTOR point)
+    {
+        float d = plane.x * point.x + plane.y * point.y + plane.z * point.z + plane.w;
+        return {d, d, d, d};
+    }
+
 } // namespace DirectX
 
 // ============================================================================

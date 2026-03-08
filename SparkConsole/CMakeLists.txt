@@ -46,21 +46,27 @@ if(CONSOLE_SOURCES)
         NOMINMAX
     )
 
-    # System libraries
-    target_link_libraries(SparkConsole PRIVATE
-        kernel32 user32 gdi32
-        shell32 comdlg32 advapi32
-        winmm
-    )
+    # System libraries - platform-specific
+    if(WIN32)
+        target_link_libraries(SparkConsole PRIVATE
+            kernel32 user32 gdi32
+            shell32 comdlg32 advapi32
+            winmm
+        )
+    else()
+        find_package(Threads REQUIRED)
+        target_link_libraries(SparkConsole PRIVATE Threads::Threads)
+        target_compile_definitions(SparkConsole PRIVATE SPARK_PLATFORM_LINUX)
+    endif()
 
     # MSVC specific settings
     if(MSVC)
-        target_compile_options(SparkConsole PRIVATE 
+        target_compile_options(SparkConsole PRIVATE
             /W3 /MP
             /wd4996  # Deprecated functions
         )
         set_property(TARGET SparkConsole PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-        
+
         # Organize source files in Visual Studio
         foreach(src ${CONSOLE_SOURCES})
             get_filename_component(dir "${src}" DIRECTORY)

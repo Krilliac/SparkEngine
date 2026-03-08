@@ -16,6 +16,13 @@
  */
 
 #pragma once
+
+// Mutual exclusion: PostProcessingSystem.h defines the canonical version
+#ifdef SPARK_POST_PROCESSING_SYSTEM_H
+#error "Do not include both PostProcessing.h and PostProcessingSystem.h in the same translation unit"
+#endif
+#define SPARK_POST_PROCESSING_H
+
 #include "../Core/Platform.h"
 
 #include "Utils/Assert.h"

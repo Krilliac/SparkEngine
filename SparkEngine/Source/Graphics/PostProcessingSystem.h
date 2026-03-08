@@ -6,6 +6,13 @@
  */
 
 #pragma once
+
+// Mutual exclusion: PostProcessing.h defines an older version of the same class
+#ifdef SPARK_POST_PROCESSING_H
+#error "Do not include both PostProcessing.h and PostProcessingSystem.h in the same translation unit"
+#endif
+#define SPARK_POST_PROCESSING_SYSTEM_H
+
 #include "../Core/Platform.h"
 
 #include "Utils/Assert.h"

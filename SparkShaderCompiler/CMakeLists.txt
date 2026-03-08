@@ -36,7 +36,7 @@ target_include_directories(SparkShaderCompiler PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
 )
 
-target_compile_features(SparkShaderCompiler PRIVATE cxx_std_17)
+target_compile_features(SparkShaderCompiler PRIVATE cxx_std_20)
 
 # Platform-specific link libraries
 if(WIN32)

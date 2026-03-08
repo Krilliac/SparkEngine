@@ -10,12 +10,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Set CMake policies for modern behavior
 cmake_policy(SET CMP0091 NEW)  # Enable MSVC_RUNTIME_LIBRARY support
 
-# Set consistent runtime library for all targets using modern CMake (CMP0091)
-if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    # Note: With CMP0091 NEW, CMAKE_MSVC_RUNTIME_LIBRARY handles /MD and /MDd
-    # automatically. Do NOT manually add /MD or /MDd flags as they conflict.
-endif()
+# Note: CMAKE_MSVC_RUNTIME_LIBRARY is set after project() below,
+# because the MSVC variable is not defined until the compiler is identified.
 
 # MSVC toolset selection:
 #   v143 = Visual Studio 2022
@@ -50,6 +46,12 @@ if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
 endif()
 
 project(SparkEngine LANGUAGES CXX C)
+
+# Set consistent runtime library for all targets using modern CMake (CMP0091)
+# Must be after project() so that the MSVC variable is defined.
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 
 # ---------------------------------------------------------------------
 # 2.5) Compiler identification and version reporting
@@ -418,8 +420,8 @@ endif()
 # ---------------------------------------------------------------------
 # 8) Build SparkConsole FIRST to ensure it's available for SparkEngine
 # ---------------------------------------------------------------------
-if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/SparkConsole/CMakeLists.txt")
-    message(STATUS "Building SparkConsole first...")
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkConsole/CMakeLists.txt")
+    message(STATUS "Building SparkConsole...")
     add_subdirectory(SparkConsole)
 endif()
 
@@ -447,7 +449,7 @@ file(GLOB_RECURSE SPARK_ENGINE_SOURCES
     "SparkEngine/Source/*.h"
     "SparkEngine/Source/*.hpp"
 )
-list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
+list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*/[Tt]est[^a-z].*|.*/[Tt]ests/.*")
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 
 # Separate entry point from library sources
@@ -636,7 +638,11 @@ else()
         Threads::Threads
         ${CMAKE_DL_LIBS}
     )
-    target_compile_definitions(SparkEngineLib PUBLIC SPARK_PLATFORM_LINUX)
+    if(APPLE)
+        target_compile_definitions(SparkEngineLib PUBLIC SPARK_PLATFORM_MACOS)
+    else()
+        target_compile_definitions(SparkEngineLib PUBLIC SPARK_PLATFORM_LINUX)
+    endif()
 
     # X11 for windowing and OpenGL context (GLX)
     find_package(X11 QUIET)
@@ -692,7 +698,7 @@ if(ENABLE_LUA)
         "ThirdParty/sol2/single/include"
     )
         if(EXISTS "${CMAKE_SOURCE_DIR}/${PATH}")
-            if(PATH MATCHES "sol2")
+            if(PATH MATCHES "sol2" AND NOT TARGET sol2)
                 add_library(sol2 INTERFACE)
                 target_include_directories(sol2 INTERFACE "${CMAKE_SOURCE_DIR}/${PATH}")
                 target_link_libraries(SparkEngineLib PUBLIC sol2)
@@ -885,6 +891,7 @@ endif()
 # 16) Test suite
 # ---------------------------------------------------------------------
 if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
+    enable_testing()
     message(STATUS "Adding test suite...")
     add_subdirectory(Tests)
 endif()

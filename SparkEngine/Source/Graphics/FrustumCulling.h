@@ -60,9 +60,12 @@ namespace Spark::Graphics
     };
 
     /**
- * @brief Bounding sphere represented by center and radius.
+ * @brief Bounding sphere for frustum culling (center/radius).
+ *
+ * Named CullingSphere to avoid conflict with Physics/CollisionSystem.h
+ * BoundingSphere which uses different member names (Center/Radius).
  */
-    struct BoundingSphere
+    struct CullingSphere
     {
         DirectX::XMFLOAT3 center{0, 0, 0};
         float radius = 0.0f;
@@ -209,7 +212,7 @@ namespace Spark::Graphics
      * @param sphere  The bounding sphere to test.
      * @return CullResult indicating visibility.
      */
-        CullResult TestSphere(const BoundingSphere& sphere) const
+        CullResult TestSphere(const CullingSphere& sphere) const
         {
             bool allInside = true;
 
@@ -233,7 +236,7 @@ namespace Spark::Graphics
         /**
      * @brief Quick boolean test — returns true if the sphere is at least partially visible.
      */
-        bool IsVisible(const BoundingSphere& sphere) const { return TestSphere(sphere) != CullResult::Outside; }
+        bool IsVisible(const CullingSphere& sphere) const { return TestSphere(sphere) != CullResult::Outside; }
 
         /**
      * @brief Test a single point against the frustum.

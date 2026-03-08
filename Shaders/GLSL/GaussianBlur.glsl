@@ -20,7 +20,7 @@ layout(binding = 0) uniform sampler2D u_InputTexture;
 
 // 9-tap Gaussian weights (sigma ~1.8)
 const float weights[5] = float[5](
-    0.204164, 0.304005, 0.193783, 0.0727, 0.0155
+    0.227027, 0.194595, 0.121622, 0.054054, 0.016216
 );
 
 void main()

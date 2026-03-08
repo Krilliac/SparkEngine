@@ -38,7 +38,7 @@ void main()
 
     // Scrolling UV for normal map distortion
     vec2 scrollUV = inTexCoord + vec2(u_Time * u_WaveSpeed.x, u_Time * u_WaveSpeed.y);
-    vec2 distortion = texture(u_NormalMap, scrollUV).rg * 2.0 - 1.0;
+    vec2 distortion = textureLod(u_NormalMap, scrollUV, 0.0).rg * 2.0 - 1.0;
 
     fragUV_Refraction = inTexCoord + distortion * u_DistortionStrength;
     fragUV_Reflection = inTexCoord - distortion * u_DistortionStrength;
