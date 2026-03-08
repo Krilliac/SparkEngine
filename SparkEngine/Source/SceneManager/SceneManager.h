@@ -322,7 +322,7 @@ using SceneLoadCallback = std::function<void(bool success, const std::string& sc
  */
 class SceneManager
 {
-public:
+  public:
     /**
      * @brief Construct the SceneManager with required engine subsystems.
      *
@@ -660,7 +660,7 @@ public:
      */
     bool Console_RenameNode(int index, const std::string& newName);
 
-private:
+  private:
     /**
      * @brief Load a scene from the legacy binary `.scene` format.
      *

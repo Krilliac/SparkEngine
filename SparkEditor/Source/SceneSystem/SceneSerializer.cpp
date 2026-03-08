@@ -16,984 +16,1341 @@
 #include <cctype>
 
 using namespace DirectX;
-namespace SparkEditor {
+namespace SparkEditor
+{
 
-SceneSerializer::SceneSerializer() = default;
-SceneSerializer::~SceneSerializer() = default;
+    SceneSerializer::SceneSerializer() = default;
+    SceneSerializer::~SceneSerializer() = default;
 
-SerializationResult SceneSerializer::SaveScene(const SceneFile& scene,
-                                                const std::string& filePath,
-                                                SerializationFormat format) {
-    auto startTime = std::chrono::high_resolution_clock::now();
+    SerializationResult SceneSerializer::SaveScene(const SceneFile& scene, const std::string& filePath,
+                                                   SerializationFormat format)
+    {
+        auto startTime = std::chrono::high_resolution_clock::now();
 
-    SerializationFormat actualFormat = format;
-    if (actualFormat == SerializationFormat::AUTO) {
-        actualFormat = DetectFormat(filePath);
-        if (actualFormat == SerializationFormat::AUTO) {
-            actualFormat = SerializationFormat::BINARY;
+        SerializationFormat actualFormat = format;
+        if (actualFormat == SerializationFormat::AUTO)
+        {
+            actualFormat = DetectFormat(filePath);
+            if (actualFormat == SerializationFormat::AUTO)
+            {
+                actualFormat = SerializationFormat::BINARY;
+            }
         }
-    }
 
-    SerializationResult result;
-    if (m_createBackups) {
-        CreateBackup(filePath);
-    }
+        SerializationResult result;
+        if (m_createBackups)
+        {
+            CreateBackup(filePath);
+        }
 
-    if (actualFormat == SerializationFormat::BINARY) {
-        result = SaveBinary(scene, filePath);
-    } else {
-        result = SaveJSON(scene, filePath);
-    }
+        if (actualFormat == SerializationFormat::BINARY)
+        {
+            result = SaveBinary(scene, filePath);
+        }
+        else
+        {
+            result = SaveJSON(scene, filePath);
+        }
 
-    auto endTime = std::chrono::high_resolution_clock::now();
-    result.processingTime = std::chrono::duration<float>(endTime - startTime).count();
-    m_totalProcessingTime += result.processingTime;
-    return result;
-}
-
-SerializationResult SceneSerializer::LoadScene(const std::string& filePath,
-                                                SceneFile& outScene) {
-    auto startTime = std::chrono::high_resolution_clock::now();
-
-    SerializationFormat format = DetectFormat(filePath);
-    SerializationResult result;
-
-    if (format == SerializationFormat::JSON) {
-        result = LoadJSON(filePath, outScene);
-    } else {
-        result = LoadBinary(filePath, outScene);
-    }
-
-    auto endTime = std::chrono::high_resolution_clock::now();
-    result.processingTime = std::chrono::duration<float>(endTime - startTime).count();
-    m_totalProcessingTime += result.processingTime;
-    return result;
-}
-
-SerializationResult SceneSerializer::ValidateSceneFile(const std::string& filePath) {
-    SerializationResult result;
-
-    std::vector<uint8_t> data;
-    if (!ReadFromFile(filePath, data)) {
-        result.success = false;
-        result.errorMessage = "Failed to read file: " + filePath;
+        auto endTime = std::chrono::high_resolution_clock::now();
+        result.processingTime = std::chrono::duration<float>(endTime - startTime).count();
+        m_totalProcessingTime += result.processingTime;
         return result;
     }
 
-    if (data.size() < sizeof(SceneHeader)) {
-        result.success = false;
-        result.errorMessage = "File too small to be a valid scene file";
+    SerializationResult SceneSerializer::LoadScene(const std::string& filePath, SceneFile& outScene)
+    {
+        auto startTime = std::chrono::high_resolution_clock::now();
+
+        SerializationFormat format = DetectFormat(filePath);
+        SerializationResult result;
+
+        if (format == SerializationFormat::JSON)
+        {
+            result = LoadJSON(filePath, outScene);
+        }
+        else
+        {
+            result = LoadBinary(filePath, outScene);
+        }
+
+        auto endTime = std::chrono::high_resolution_clock::now();
+        result.processingTime = std::chrono::duration<float>(endTime - startTime).count();
+        m_totalProcessingTime += result.processingTime;
         return result;
     }
 
-    SceneHeader header;
-    memcpy(&header, data.data(), sizeof(SceneHeader));
+    SerializationResult SceneSerializer::ValidateSceneFile(const std::string& filePath)
+    {
+        SerializationResult result;
 
-    if (header.magic != SCENE_FILE_MAGIC) {
-        result.success = false;
-        result.errorMessage = "Invalid scene file magic number";
+        std::vector<uint8_t> data;
+        if (!ReadFromFile(filePath, data))
+        {
+            result.success = false;
+            result.errorMessage = "Failed to read file: " + filePath;
+            return result;
+        }
+
+        if (data.size() < sizeof(SceneHeader))
+        {
+            result.success = false;
+            result.errorMessage = "File too small to be a valid scene file";
+            return result;
+        }
+
+        SceneHeader header;
+        memcpy(&header, data.data(), sizeof(SceneHeader));
+
+        if (header.magic != SCENE_FILE_MAGIC)
+        {
+            result.success = false;
+            result.errorMessage = "Invalid scene file magic number";
+            return result;
+        }
+
+        if (header.version > SCENE_FILE_VERSION)
+        {
+            result.warnings.push_back("Scene file version is newer than supported");
+        }
+
+        result.success = true;
+        result.bytesProcessed = data.size();
         return result;
     }
 
-    if (header.version > SCENE_FILE_VERSION) {
-        result.warnings.push_back("Scene file version is newer than supported");
+    SerializationResult SceneSerializer::ConvertSceneFormat(const std::string& inputPath, const std::string& outputPath,
+                                                            SerializationFormat outputFormat)
+    {
+        SceneFile scene;
+        SerializationResult loadResult = LoadScene(inputPath, scene);
+        if (!loadResult.success)
+        {
+            return loadResult;
+        }
+        return SaveScene(scene, outputPath, outputFormat);
     }
 
-    result.success = true;
-    result.bytesProcessed = data.size();
-    return result;
-}
-
-SerializationResult SceneSerializer::ConvertSceneFormat(const std::string& inputPath,
-                                                         const std::string& outputPath,
-                                                         SerializationFormat outputFormat) {
-    SceneFile scene;
-    SerializationResult loadResult = LoadScene(inputPath, scene);
-    if (!loadResult.success) {
-        return loadResult;
-    }
-    return SaveScene(scene, outputPath, outputFormat);
-}
-
-std::vector<std::string> SceneSerializer::GetSupportedExtensions(SerializationFormat format) {
-    switch (format) {
+    std::vector<std::string> SceneSerializer::GetSupportedExtensions(SerializationFormat format)
+    {
+        switch (format)
+        {
         case SerializationFormat::BINARY:
             return {".spks", ".scene"};
         case SerializationFormat::JSON:
             return {".json", ".scenejson"};
         default:
             return {".spks", ".scene", ".json", ".scenejson"};
+        }
     }
-}
 
-SerializationFormat SceneSerializer::DetectFormat(const std::string& filePath) {
-    size_t dotPos = filePath.rfind('.');
-    if (dotPos == std::string::npos) {
+    SerializationFormat SceneSerializer::DetectFormat(const std::string& filePath)
+    {
+        size_t dotPos = filePath.rfind('.');
+        if (dotPos == std::string::npos)
+        {
+            return SerializationFormat::AUTO;
+        }
+        std::string ext = filePath.substr(dotPos);
+        if (ext == ".json" || ext == ".scenejson")
+        {
+            return SerializationFormat::JSON;
+        }
+        if (ext == ".spks" || ext == ".scene")
+        {
+            return SerializationFormat::BINARY;
+        }
         return SerializationFormat::AUTO;
     }
-    std::string ext = filePath.substr(dotPos);
-    if (ext == ".json" || ext == ".scenejson") {
-        return SerializationFormat::JSON;
-    }
-    if (ext == ".spks" || ext == ".scene") {
-        return SerializationFormat::BINARY;
-    }
-    return SerializationFormat::AUTO;
-}
 
-bool SceneSerializer::IsSceneFile(const std::string& filePath) {
-    std::ifstream file(filePath, std::ios::binary);
-    if (!file.is_open()) return false;
+    bool SceneSerializer::IsSceneFile(const std::string& filePath)
+    {
+        std::ifstream file(filePath, std::ios::binary);
+        if (!file.is_open())
+            return false;
 
-    uint32_t magic = 0;
-    file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-    if (magic == SCENE_FILE_MAGIC) return true;
+        uint32_t magic = 0;
+        file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+        if (magic == SCENE_FILE_MAGIC)
+            return true;
 
-    // Check for JSON format
-    file.seekg(0);
-    char firstChar = 0;
-    file.read(&firstChar, 1);
-    return firstChar == '{';
-}
-
-// Private methods
-
-SerializationResult SceneSerializer::SaveBinary(const SceneFile& scene, const std::string& filePath) {
-    SerializationResult result;
-    std::vector<uint8_t> buffer;
-
-    // Write header
-    size_t headerSize = sizeof(SceneHeader);
-    buffer.resize(headerSize);
-    memcpy(buffer.data(), &scene.header, headerSize);
-
-    // Write objects
-    for (const auto& obj : scene.objects) {
-        // Object ID
-        size_t offset = buffer.size();
-        buffer.resize(offset + sizeof(ObjectID));
-        memcpy(buffer.data() + offset, &obj.id, sizeof(ObjectID));
-
-        // Name length + name
-        uint32_t nameLen = static_cast<uint32_t>(obj.name.size());
-        offset = buffer.size();
-        buffer.resize(offset + sizeof(uint32_t) + nameLen);
-        memcpy(buffer.data() + offset, &nameLen, sizeof(uint32_t));
-        memcpy(buffer.data() + offset + sizeof(uint32_t), obj.name.data(), nameLen);
-
-        // Transform
-        SerializeTransform(obj.transform, buffer);
-
-        // Active flag
-        offset = buffer.size();
-        buffer.resize(offset + 1);
-        buffer[offset] = obj.active ? 1 : 0;
+        // Check for JSON format
+        file.seekg(0);
+        char firstChar = 0;
+        file.read(&firstChar, 1);
+        return firstChar == '{';
     }
 
-    if (!WriteToFile(filePath, buffer)) {
-        result.success = false;
-        result.errorMessage = "Failed to write file: " + filePath;
+    // Private methods
+
+    SerializationResult SceneSerializer::SaveBinary(const SceneFile& scene, const std::string& filePath)
+    {
+        SerializationResult result;
+        std::vector<uint8_t> buffer;
+
+        // Write header
+        size_t headerSize = sizeof(SceneHeader);
+        buffer.resize(headerSize);
+        memcpy(buffer.data(), &scene.header, headerSize);
+
+        // Write objects
+        for (const auto& obj : scene.objects)
+        {
+            // Object ID
+            size_t offset = buffer.size();
+            buffer.resize(offset + sizeof(ObjectID));
+            memcpy(buffer.data() + offset, &obj.id, sizeof(ObjectID));
+
+            // Name length + name
+            uint32_t nameLen = static_cast<uint32_t>(obj.name.size());
+            offset = buffer.size();
+            buffer.resize(offset + sizeof(uint32_t) + nameLen);
+            memcpy(buffer.data() + offset, &nameLen, sizeof(uint32_t));
+            memcpy(buffer.data() + offset + sizeof(uint32_t), obj.name.data(), nameLen);
+
+            // Transform
+            SerializeTransform(obj.transform, buffer);
+
+            // Active flag
+            offset = buffer.size();
+            buffer.resize(offset + 1);
+            buffer[offset] = obj.active ? 1 : 0;
+        }
+
+        if (!WriteToFile(filePath, buffer))
+        {
+            result.success = false;
+            result.errorMessage = "Failed to write file: " + filePath;
+            return result;
+        }
+
+        result.success = true;
+        result.bytesProcessed = buffer.size();
+        m_totalBytesWritten += buffer.size();
         return result;
     }
 
-    result.success = true;
-    result.bytesProcessed = buffer.size();
-    m_totalBytesWritten += buffer.size();
-    return result;
-}
+    // =============================================================================
+    // JSON Writing Helpers
+    // =============================================================================
 
-// =============================================================================
-// JSON Writing Helpers
-// =============================================================================
-
-static std::string EscapeJSON(const std::string& s) {
-    std::string out;
-    out.reserve(s.size() + 8);
-    for (char c : s) {
-        switch (c) {
-            case '"':  out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
-            default:   out += c; break;
-        }
-    }
-    return out;
-}
-
-static std::string ComponentTypeToString(ComponentType type) {
-    switch (type) {
-        case ComponentType::TRANSFORM:      return "Transform";
-        case ComponentType::MESH_RENDERER:  return "MeshRenderer";
-        case ComponentType::LIGHT:          return "Light";
-        case ComponentType::CAMERA:         return "Camera";
-        case ComponentType::RIGID_BODY:     return "RigidBody";
-        case ComponentType::COLLIDER:       return "Collider";
-        case ComponentType::AUDIO_SOURCE:   return "AudioSource";
-        case ComponentType::SCRIPT:         return "Script";
-        case ComponentType::PARTICLE_SYSTEM:return "ParticleSystem";
-        case ComponentType::ANIMATION:      return "Animation";
-        default:                            return "Custom_" + std::to_string(static_cast<uint32_t>(type));
-    }
-}
-
-static ComponentType StringToComponentType(const std::string& s) {
-    if (s == "Transform")      return ComponentType::TRANSFORM;
-    if (s == "MeshRenderer")   return ComponentType::MESH_RENDERER;
-    if (s == "Light")          return ComponentType::LIGHT;
-    if (s == "Camera")         return ComponentType::CAMERA;
-    if (s == "RigidBody")      return ComponentType::RIGID_BODY;
-    if (s == "Collider")       return ComponentType::COLLIDER;
-    if (s == "AudioSource")    return ComponentType::AUDIO_SOURCE;
-    if (s == "Script")         return ComponentType::SCRIPT;
-    if (s == "ParticleSystem") return ComponentType::PARTICLE_SYSTEM;
-    if (s == "Animation")      return ComponentType::ANIMATION;
-    return ComponentType::CUSTOM;
-}
-
-static std::string BytesToHex(const std::vector<uint8_t>& data) {
-    std::ostringstream ss;
-    ss << std::hex << std::setfill('0');
-    for (uint8_t b : data) ss << std::setw(2) << static_cast<int>(b);
-    return ss.str();
-}
-
-static std::vector<uint8_t> HexToBytes(const std::string& hex) {
-    std::vector<uint8_t> bytes;
-    bytes.reserve(hex.size() / 2);
-    for (size_t i = 0; i + 1 < hex.size(); i += 2) {
-        uint8_t b = static_cast<uint8_t>(std::stoi(hex.substr(i, 2), nullptr, 16));
-        bytes.push_back(b);
-    }
-    return bytes;
-}
-
-// Write helpers for indented JSON
-class JSONWriter {
-public:
-    explicit JSONWriter(std::ostream& os, bool pretty = true) : m_os(os), m_pretty(pretty) {}
-
-    void BeginObject() { m_os << "{"; if (m_pretty) m_os << "\n"; m_depth++; m_first.push_back(true); }
-    void EndObject() { m_depth--; if (m_pretty) Indent(); m_os << "}"; m_first.pop_back(); }
-    void BeginArray() { m_os << "["; if (m_pretty) m_os << "\n"; m_depth++; m_first.push_back(true); }
-    void EndArray() { m_depth--; if (m_pretty) Indent(); m_os << "]"; m_first.pop_back(); }
-
-    void Key(const std::string& k) { Sep(); if (m_pretty) Indent(); m_os << "\"" << k << "\": "; }
-    void Value(const std::string& v) { m_os << "\"" << EscapeJSON(v) << "\""; }
-    void Value(int v) { m_os << v; }
-    void Value(uint32_t v) { m_os << v; }
-    void Value(uint64_t v) { m_os << v; }
-    void Value(float v) { m_os << v; }
-    void Value(bool v) { m_os << (v ? "true" : "false"); }
-    void Value(size_t v) { m_os << v; }
-
-    void KV(const std::string& k, const std::string& v) { Key(k); Value(v); }
-    void KV(const std::string& k, const char* v) { Key(k); Value(std::string(v)); }
-    void KV(const std::string& k, int v) { Key(k); Value(v); }
-    void KV(const std::string& k, uint32_t v) { Key(k); Value(v); }
-    void KV(const std::string& k, uint64_t v) { Key(k); Value(v); }
-    void KV(const std::string& k, float v) { Key(k); Value(v); }
-    void KV(const std::string& k, bool v) { Key(k); Value(v); }
-
-    void Float3(const std::string& k, const XMFLOAT3& v) {
-        Key(k); m_os << "[" << v.x << ", " << v.y << ", " << v.z << "]";
-    }
-    void Float4(const std::string& k, const XMFLOAT4& v) {
-        Key(k); m_os << "[" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << "]";
-    }
-
-    void ArrayElement() { Sep(); if (m_pretty) Indent(); }
-
-private:
-    void Sep() {
-        if (!m_first.empty() && !m_first.back()) m_os << ",";
-        if (!m_first.empty() && !m_first.back() && m_pretty) m_os << "\n";
-        if (!m_first.empty()) m_first.back() = false;
-    }
-    void Indent() { for (int i = 0; i < m_depth; ++i) m_os << "  "; }
-
-    std::ostream& m_os;
-    bool m_pretty;
-    int m_depth = 0;
-    std::vector<bool> m_first;
-};
-
-SerializationResult SceneSerializer::SaveJSON(const SceneFile& scene, const std::string& filePath) {
-    SerializationResult result;
-
-    std::ofstream file(filePath);
-    if (!file.is_open()) {
-        result.success = false;
-        result.errorMessage = "Failed to open file for writing: " + filePath;
-        return result;
-    }
-
-    JSONWriter w(file, m_prettyPrintJSON);
-    w.BeginObject();
-
-    // Header
-    w.KV("sceneName", std::string(scene.header.sceneName));
-    w.KV("version", scene.header.version);
-    w.KV("description", std::string(scene.header.description));
-    w.KV("objectCount", scene.header.objectCount);
-    w.KV("componentCount", scene.header.componentCount);
-    w.KV("assetReferenceCount", scene.header.assetReferenceCount);
-    w.KV("timestamp", scene.header.timestamp);
-    w.Float3("gravity", scene.header.gravity);
-    w.Float4("ambientColor", scene.header.ambientColor);
-    w.KV("ambientIntensity", scene.header.ambientIntensity);
-
-    // Objects
-    w.Key("objects"); w.BeginArray();
-    for (const auto& obj : scene.objects) {
-        w.ArrayElement(); w.BeginObject();
-        w.KV("id", obj.id);
-        w.KV("name", obj.name);
-        w.KV("tag", obj.tag);
-        w.KV("layer", obj.layer);
-        w.KV("active", obj.active);
-        w.KV("staticObject", obj.staticObject);
-
-        // Transform
-        w.Key("transform"); w.BeginObject();
-        w.Float3("position", obj.transform.position);
-        w.Float4("rotation", obj.transform.rotation);
-        w.Float3("scale", obj.transform.scale);
-        w.KV("parentID", obj.transform.parentID);
-        if (!obj.transform.childIDs.empty()) {
-            w.Key("childIDs"); w.BeginArray();
-            for (auto cid : obj.transform.childIDs) { w.ArrayElement(); w.Value(cid); }
-            w.EndArray();
-        }
-        w.EndObject(); // transform
-
-        // Component types
-        if (!obj.componentTypes.empty()) {
-            w.Key("componentTypes"); w.BeginArray();
-            for (auto ct : obj.componentTypes) {
-                w.ArrayElement(); w.Value(ComponentTypeToString(ct));
+    static std::string EscapeJSON(const std::string& s)
+    {
+        std::string out;
+        out.reserve(s.size() + 8);
+        for (char c : s)
+        {
+            switch (c)
+            {
+            case '"':
+                out += "\\\"";
+                break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            default:
+                out += c;
+                break;
             }
-            w.EndArray();
+        }
+        return out;
+    }
+
+    static std::string ComponentTypeToString(ComponentType type)
+    {
+        switch (type)
+        {
+        case ComponentType::TRANSFORM:
+            return "Transform";
+        case ComponentType::MESH_RENDERER:
+            return "MeshRenderer";
+        case ComponentType::LIGHT:
+            return "Light";
+        case ComponentType::CAMERA:
+            return "Camera";
+        case ComponentType::RIGID_BODY:
+            return "RigidBody";
+        case ComponentType::COLLIDER:
+            return "Collider";
+        case ComponentType::AUDIO_SOURCE:
+            return "AudioSource";
+        case ComponentType::SCRIPT:
+            return "Script";
+        case ComponentType::PARTICLE_SYSTEM:
+            return "ParticleSystem";
+        case ComponentType::ANIMATION:
+            return "Animation";
+        default:
+            return "Custom_" + std::to_string(static_cast<uint32_t>(type));
+        }
+    }
+
+    static ComponentType StringToComponentType(const std::string& s)
+    {
+        if (s == "Transform")
+            return ComponentType::TRANSFORM;
+        if (s == "MeshRenderer")
+            return ComponentType::MESH_RENDERER;
+        if (s == "Light")
+            return ComponentType::LIGHT;
+        if (s == "Camera")
+            return ComponentType::CAMERA;
+        if (s == "RigidBody")
+            return ComponentType::RIGID_BODY;
+        if (s == "Collider")
+            return ComponentType::COLLIDER;
+        if (s == "AudioSource")
+            return ComponentType::AUDIO_SOURCE;
+        if (s == "Script")
+            return ComponentType::SCRIPT;
+        if (s == "ParticleSystem")
+            return ComponentType::PARTICLE_SYSTEM;
+        if (s == "Animation")
+            return ComponentType::ANIMATION;
+        return ComponentType::CUSTOM;
+    }
+
+    static std::string BytesToHex(const std::vector<uint8_t>& data)
+    {
+        std::ostringstream ss;
+        ss << std::hex << std::setfill('0');
+        for (uint8_t b : data)
+            ss << std::setw(2) << static_cast<int>(b);
+        return ss.str();
+    }
+
+    static std::vector<uint8_t> HexToBytes(const std::string& hex)
+    {
+        std::vector<uint8_t> bytes;
+        bytes.reserve(hex.size() / 2);
+        for (size_t i = 0; i + 1 < hex.size(); i += 2)
+        {
+            uint8_t b = static_cast<uint8_t>(std::stoi(hex.substr(i, 2), nullptr, 16));
+            bytes.push_back(b);
+        }
+        return bytes;
+    }
+
+    // Write helpers for indented JSON
+    class JSONWriter
+    {
+      public:
+        explicit JSONWriter(std::ostream& os, bool pretty = true) : m_os(os), m_pretty(pretty) {}
+
+        void BeginObject()
+        {
+            m_os << "{";
+            if (m_pretty)
+                m_os << "\n";
+            m_depth++;
+            m_first.push_back(true);
+        }
+        void EndObject()
+        {
+            m_depth--;
+            if (m_pretty)
+                Indent();
+            m_os << "}";
+            m_first.pop_back();
+        }
+        void BeginArray()
+        {
+            m_os << "[";
+            if (m_pretty)
+                m_os << "\n";
+            m_depth++;
+            m_first.push_back(true);
+        }
+        void EndArray()
+        {
+            m_depth--;
+            if (m_pretty)
+                Indent();
+            m_os << "]";
+            m_first.pop_back();
         }
 
-        w.EndObject(); // object
-    }
-    w.EndArray(); // objects
-
-    // Components
-    w.Key("components"); w.BeginArray();
-    for (const auto& comp : scene.components) {
-        w.ArrayElement(); w.BeginObject();
-        w.KV("type", ComponentTypeToString(comp.type));
-        w.KV("objectID", comp.objectID);
-        w.KV("enabled", comp.enabled);
-        if (!comp.data.empty()) {
-            w.KV("data", BytesToHex(comp.data));
+        void Key(const std::string& k)
+        {
+            Sep();
+            if (m_pretty)
+                Indent();
+            m_os << "\"" << k << "\": ";
         }
-        w.EndObject();
-    }
-    w.EndArray(); // components
+        void Value(const std::string& v) { m_os << "\"" << EscapeJSON(v) << "\""; }
+        void Value(int v) { m_os << v; }
+        void Value(uint32_t v) { m_os << v; }
+        void Value(uint64_t v) { m_os << v; }
+        void Value(float v) { m_os << v; }
+        void Value(bool v) { m_os << (v ? "true" : "false"); }
+        void Value(size_t v) { m_os << v; }
 
-    // Environment
-    w.Key("environment"); w.BeginObject();
-    const auto& env = scene.environment;
-    w.KV("skyType", static_cast<int>(env.skyType));
-    w.Float4("skyColor", env.skyColor);
-    w.Float4("horizonColor", env.horizonColor);
-    w.KV("skyboxAssetPath", env.skyboxAssetPath);
-    w.KV("fogEnabled", env.fogEnabled);
-    w.Float4("fogColor", env.fogColor);
-    w.KV("fogDensity", env.fogDensity);
-    w.KV("fogStart", env.fogStart);
-    w.KV("fogEnd", env.fogEnd);
-    w.Float3("windDirection", env.windDirection);
-    w.KV("windStrength", env.windStrength);
-    w.KV("windTurbulence", env.windTurbulence);
-    w.KV("bloomEnabled", env.bloomEnabled);
-    w.KV("bloomIntensity", env.bloomIntensity);
-    w.KV("bloomThreshold", env.bloomThreshold);
-    w.KV("tonemappingEnabled", env.tonemappingEnabled);
-    w.KV("exposure", env.exposure);
-    w.KV("gamma", env.gamma);
-    w.EndObject(); // environment
-
-    // Default camera
-    w.Key("defaultCamera"); w.BeginObject();
-    const auto& cam = scene.defaultCamera;
-    w.KV("projectionType", static_cast<int>(cam.projectionType));
-    w.KV("fieldOfView", cam.fieldOfView);
-    w.KV("orthographicSize", cam.orthographicSize);
-    w.KV("nearPlane", cam.nearPlane);
-    w.KV("farPlane", cam.farPlane);
-    w.Float4("clearColor", cam.clearColor);
-    w.KV("isMainCamera", cam.isMainCamera);
-    w.KV("renderTargetWidth", cam.renderTargetWidth);
-    w.KV("renderTargetHeight", cam.renderTargetHeight);
-    w.EndObject(); // defaultCamera
-
-    // Asset references
-    w.Key("assetReferences"); w.BeginArray();
-    for (const auto& ref : scene.assetReferences) {
-        w.ArrayElement(); w.BeginObject();
-        w.KV("assetPath", ref.assetPath);
-        w.KV("assetType", ref.assetType);
-        w.KV("lastModified", ref.lastModified);
-        w.KV("fileSize", ref.fileSize);
-        w.KV("checksum", ref.checksum);
-        if (!ref.dependencies.empty()) {
-            w.Key("dependencies"); w.BeginArray();
-            for (const auto& dep : ref.dependencies) { w.ArrayElement(); w.Value(dep); }
-            w.EndArray();
+        void KV(const std::string& k, const std::string& v)
+        {
+            Key(k);
+            Value(v);
         }
-        w.EndObject();
-    }
-    w.EndArray(); // assetReferences
+        void KV(const std::string& k, const char* v)
+        {
+            Key(k);
+            Value(std::string(v));
+        }
+        void KV(const std::string& k, int v)
+        {
+            Key(k);
+            Value(v);
+        }
+        void KV(const std::string& k, uint32_t v)
+        {
+            Key(k);
+            Value(v);
+        }
+        void KV(const std::string& k, uint64_t v)
+        {
+            Key(k);
+            Value(v);
+        }
+        void KV(const std::string& k, float v)
+        {
+            Key(k);
+            Value(v);
+        }
+        void KV(const std::string& k, bool v)
+        {
+            Key(k);
+            Value(v);
+        }
 
-    w.EndObject(); // root
-    file << "\n";
+        void Float3(const std::string& k, const XMFLOAT3& v)
+        {
+            Key(k);
+            m_os << "[" << v.x << ", " << v.y << ", " << v.z << "]";
+        }
+        void Float4(const std::string& k, const XMFLOAT4& v)
+        {
+            Key(k);
+            m_os << "[" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << "]";
+        }
 
-    result.success = true;
-    result.bytesProcessed = static_cast<size_t>(file.tellp());
-    m_totalBytesWritten += result.bytesProcessed;
-    return result;
-}
+        void ArrayElement()
+        {
+            Sep();
+            if (m_pretty)
+                Indent();
+        }
 
-SerializationResult SceneSerializer::LoadBinary(const std::string& filePath, SceneFile& outScene) {
-    SerializationResult result;
+      private:
+        void Sep()
+        {
+            if (!m_first.empty() && !m_first.back())
+                m_os << ",";
+            if (!m_first.empty() && !m_first.back() && m_pretty)
+                m_os << "\n";
+            if (!m_first.empty())
+                m_first.back() = false;
+        }
+        void Indent()
+        {
+            for (int i = 0; i < m_depth; ++i)
+                m_os << "  ";
+        }
 
-    std::vector<uint8_t> data;
-    if (!ReadFromFile(filePath, data)) {
-        result.success = false;
-        result.errorMessage = "Failed to read file: " + filePath;
-        return result;
-    }
+        std::ostream& m_os;
+        bool m_pretty;
+        int m_depth = 0;
+        std::vector<bool> m_first;
+    };
 
-    if (data.size() < sizeof(SceneHeader)) {
-        result.success = false;
-        result.errorMessage = "File too small for scene header";
-        return result;
-    }
+    SerializationResult SceneSerializer::SaveJSON(const SceneFile& scene, const std::string& filePath)
+    {
+        SerializationResult result;
 
-    memcpy(&outScene.header, data.data(), sizeof(SceneHeader));
+        std::ofstream file(filePath);
+        if (!file.is_open())
+        {
+            result.success = false;
+            result.errorMessage = "Failed to open file for writing: " + filePath;
+            return result;
+        }
 
-    if (outScene.header.magic != SCENE_FILE_MAGIC) {
-        result.success = false;
-        result.errorMessage = "Invalid scene file magic number";
-        return result;
-    }
+        JSONWriter w(file, m_prettyPrintJSON);
+        w.BeginObject();
 
-    HandleVersionCompatibility(outScene.header.version, outScene, result);
+        // Header
+        w.KV("sceneName", std::string(scene.header.sceneName));
+        w.KV("version", scene.header.version);
+        w.KV("description", std::string(scene.header.description));
+        w.KV("objectCount", scene.header.objectCount);
+        w.KV("componentCount", scene.header.componentCount);
+        w.KV("assetReferenceCount", scene.header.assetReferenceCount);
+        w.KV("timestamp", scene.header.timestamp);
+        w.Float3("gravity", scene.header.gravity);
+        w.Float4("ambientColor", scene.header.ambientColor);
+        w.KV("ambientIntensity", scene.header.ambientIntensity);
 
-    result.success = true;
-    result.bytesProcessed = data.size();
-    m_totalBytesRead += data.size();
-    return result;
-}
+        // Objects
+        w.Key("objects");
+        w.BeginArray();
+        for (const auto& obj : scene.objects)
+        {
+            w.ArrayElement();
+            w.BeginObject();
+            w.KV("id", obj.id);
+            w.KV("name", obj.name);
+            w.KV("tag", obj.tag);
+            w.KV("layer", obj.layer);
+            w.KV("active", obj.active);
+            w.KV("staticObject", obj.staticObject);
 
-// =============================================================================
-// Simple JSON Parser (no external dependencies)
-// =============================================================================
-
-namespace {
-
-struct JSONValue;
-using JSONObject = std::vector<std::pair<std::string, JSONValue>>;
-using JSONArray = std::vector<JSONValue>;
-
-struct JSONValue {
-    enum Type { NONE, STRING, NUMBER, BOOL, OBJECT, ARRAY } type = NONE;
-    std::string strVal;
-    double numVal = 0.0;
-    bool boolVal = false;
-    JSONObject objVal;
-    JSONArray arrVal;
-
-    std::string GetString(const std::string& def = "") const { return type == STRING ? strVal : def; }
-    double GetNumber(double def = 0.0) const { return type == NUMBER ? numVal : def; }
-    float GetFloat(float def = 0.0f) const { return static_cast<float>(GetNumber(def)); }
-    int GetInt(int def = 0) const { return static_cast<int>(GetNumber(def)); }
-    uint32_t GetUint32(uint32_t def = 0) const { return static_cast<uint32_t>(GetNumber(def)); }
-    uint64_t GetUint64(uint64_t def = 0) const { return static_cast<uint64_t>(GetNumber(def)); }
-    bool GetBool(bool def = false) const { return type == BOOL ? boolVal : def; }
-
-    const JSONValue* Find(const std::string& key) const {
-        if (type != OBJECT) return nullptr;
-        for (const auto& [k, v] : objVal) { if (k == key) return &v; }
-        return nullptr;
-    }
-
-    XMFLOAT3 GetFloat3(XMFLOAT3 def = {0,0,0}) const {
-        if (type != ARRAY || arrVal.size() < 3) return def;
-        return { arrVal[0].GetFloat(), arrVal[1].GetFloat(), arrVal[2].GetFloat() };
-    }
-
-    XMFLOAT4 GetFloat4(XMFLOAT4 def = {0,0,0,1}) const {
-        if (type != ARRAY || arrVal.size() < 4) return def;
-        return { arrVal[0].GetFloat(), arrVal[1].GetFloat(), arrVal[2].GetFloat(), arrVal[3].GetFloat() };
-    }
-};
-
-class JSONParser {
-public:
-    explicit JSONParser(const std::string& input) : m_input(input), m_pos(0) {}
-
-    bool Parse(JSONValue& out) {
-        SkipWhitespace();
-        return ParseValue(out);
-    }
-
-private:
-    void SkipWhitespace() {
-        while (m_pos < m_input.size() && std::isspace(static_cast<unsigned char>(m_input[m_pos]))) m_pos++;
-    }
-
-    char Peek() { return m_pos < m_input.size() ? m_input[m_pos] : '\0'; }
-    char Next() { return m_pos < m_input.size() ? m_input[m_pos++] : '\0'; }
-
-    bool ParseValue(JSONValue& val) {
-        SkipWhitespace();
-        char c = Peek();
-        if (c == '"') return ParseString(val);
-        if (c == '{') return ParseObject(val);
-        if (c == '[') return ParseArray(val);
-        if (c == 't' || c == 'f') return ParseBool(val);
-        if (c == 'n') return ParseNull(val);
-        if (c == '-' || std::isdigit(static_cast<unsigned char>(c))) return ParseNumber(val);
-        return false;
-    }
-
-    bool ParseString(JSONValue& val) {
-        if (Next() != '"') return false;
-        std::string s;
-        while (m_pos < m_input.size()) {
-            char c = Next();
-            if (c == '"') { val.type = JSONValue::STRING; val.strVal = s; return true; }
-            if (c == '\\') {
-                char esc = Next();
-                switch (esc) {
-                    case '"': s += '"'; break;
-                    case '\\': s += '\\'; break;
-                    case 'n': s += '\n'; break;
-                    case 'r': s += '\r'; break;
-                    case 't': s += '\t'; break;
-                    default: s += esc; break;
+            // Transform
+            w.Key("transform");
+            w.BeginObject();
+            w.Float3("position", obj.transform.position);
+            w.Float4("rotation", obj.transform.rotation);
+            w.Float3("scale", obj.transform.scale);
+            w.KV("parentID", obj.transform.parentID);
+            if (!obj.transform.childIDs.empty())
+            {
+                w.Key("childIDs");
+                w.BeginArray();
+                for (auto cid : obj.transform.childIDs)
+                {
+                    w.ArrayElement();
+                    w.Value(cid);
                 }
-            } else {
-                s += c;
+                w.EndArray();
             }
+            w.EndObject(); // transform
+
+            // Component types
+            if (!obj.componentTypes.empty())
+            {
+                w.Key("componentTypes");
+                w.BeginArray();
+                for (auto ct : obj.componentTypes)
+                {
+                    w.ArrayElement();
+                    w.Value(ComponentTypeToString(ct));
+                }
+                w.EndArray();
+            }
+
+            w.EndObject(); // object
         }
-        return false;
+        w.EndArray(); // objects
+
+        // Components
+        w.Key("components");
+        w.BeginArray();
+        for (const auto& comp : scene.components)
+        {
+            w.ArrayElement();
+            w.BeginObject();
+            w.KV("type", ComponentTypeToString(comp.type));
+            w.KV("objectID", comp.objectID);
+            w.KV("enabled", comp.enabled);
+            if (!comp.data.empty())
+            {
+                w.KV("data", BytesToHex(comp.data));
+            }
+            w.EndObject();
+        }
+        w.EndArray(); // components
+
+        // Environment
+        w.Key("environment");
+        w.BeginObject();
+        const auto& env = scene.environment;
+        w.KV("skyType", static_cast<int>(env.skyType));
+        w.Float4("skyColor", env.skyColor);
+        w.Float4("horizonColor", env.horizonColor);
+        w.KV("skyboxAssetPath", env.skyboxAssetPath);
+        w.KV("fogEnabled", env.fogEnabled);
+        w.Float4("fogColor", env.fogColor);
+        w.KV("fogDensity", env.fogDensity);
+        w.KV("fogStart", env.fogStart);
+        w.KV("fogEnd", env.fogEnd);
+        w.Float3("windDirection", env.windDirection);
+        w.KV("windStrength", env.windStrength);
+        w.KV("windTurbulence", env.windTurbulence);
+        w.KV("bloomEnabled", env.bloomEnabled);
+        w.KV("bloomIntensity", env.bloomIntensity);
+        w.KV("bloomThreshold", env.bloomThreshold);
+        w.KV("tonemappingEnabled", env.tonemappingEnabled);
+        w.KV("exposure", env.exposure);
+        w.KV("gamma", env.gamma);
+        w.EndObject(); // environment
+
+        // Default camera
+        w.Key("defaultCamera");
+        w.BeginObject();
+        const auto& cam = scene.defaultCamera;
+        w.KV("projectionType", static_cast<int>(cam.projectionType));
+        w.KV("fieldOfView", cam.fieldOfView);
+        w.KV("orthographicSize", cam.orthographicSize);
+        w.KV("nearPlane", cam.nearPlane);
+        w.KV("farPlane", cam.farPlane);
+        w.Float4("clearColor", cam.clearColor);
+        w.KV("isMainCamera", cam.isMainCamera);
+        w.KV("renderTargetWidth", cam.renderTargetWidth);
+        w.KV("renderTargetHeight", cam.renderTargetHeight);
+        w.EndObject(); // defaultCamera
+
+        // Asset references
+        w.Key("assetReferences");
+        w.BeginArray();
+        for (const auto& ref : scene.assetReferences)
+        {
+            w.ArrayElement();
+            w.BeginObject();
+            w.KV("assetPath", ref.assetPath);
+            w.KV("assetType", ref.assetType);
+            w.KV("lastModified", ref.lastModified);
+            w.KV("fileSize", ref.fileSize);
+            w.KV("checksum", ref.checksum);
+            if (!ref.dependencies.empty())
+            {
+                w.Key("dependencies");
+                w.BeginArray();
+                for (const auto& dep : ref.dependencies)
+                {
+                    w.ArrayElement();
+                    w.Value(dep);
+                }
+                w.EndArray();
+            }
+            w.EndObject();
+        }
+        w.EndArray(); // assetReferences
+
+        w.EndObject(); // root
+        file << "\n";
+
+        result.success = true;
+        result.bytesProcessed = static_cast<size_t>(file.tellp());
+        m_totalBytesWritten += result.bytesProcessed;
+        return result;
     }
 
-    bool ParseNumber(JSONValue& val) {
-        size_t start = m_pos;
-        if (Peek() == '-') m_pos++;
-        while (m_pos < m_input.size() && std::isdigit(static_cast<unsigned char>(m_input[m_pos]))) m_pos++;
-        if (m_pos < m_input.size() && m_input[m_pos] == '.') {
-            m_pos++;
-            while (m_pos < m_input.size() && std::isdigit(static_cast<unsigned char>(m_input[m_pos]))) m_pos++;
+    SerializationResult SceneSerializer::LoadBinary(const std::string& filePath, SceneFile& outScene)
+    {
+        SerializationResult result;
+
+        std::vector<uint8_t> data;
+        if (!ReadFromFile(filePath, data))
+        {
+            result.success = false;
+            result.errorMessage = "Failed to read file: " + filePath;
+            return result;
         }
-        if (m_pos < m_input.size() && (m_input[m_pos] == 'e' || m_input[m_pos] == 'E')) {
-            m_pos++;
-            if (m_pos < m_input.size() && (m_input[m_pos] == '+' || m_input[m_pos] == '-')) m_pos++;
-            while (m_pos < m_input.size() && std::isdigit(static_cast<unsigned char>(m_input[m_pos]))) m_pos++;
+
+        if (data.size() < sizeof(SceneHeader))
+        {
+            result.success = false;
+            result.errorMessage = "File too small for scene header";
+            return result;
         }
-        val.type = JSONValue::NUMBER;
-        val.numVal = std::stod(m_input.substr(start, m_pos - start));
+
+        memcpy(&outScene.header, data.data(), sizeof(SceneHeader));
+
+        if (outScene.header.magic != SCENE_FILE_MAGIC)
+        {
+            result.success = false;
+            result.errorMessage = "Invalid scene file magic number";
+            return result;
+        }
+
+        HandleVersionCompatibility(outScene.header.version, outScene, result);
+
+        result.success = true;
+        result.bytesProcessed = data.size();
+        m_totalBytesRead += data.size();
+        return result;
+    }
+
+    // =============================================================================
+    // Simple JSON Parser (no external dependencies)
+    // =============================================================================
+
+    namespace
+    {
+
+        struct JSONValue;
+        using JSONObject = std::vector<std::pair<std::string, JSONValue>>;
+        using JSONArray = std::vector<JSONValue>;
+
+        struct JSONValue
+        {
+            enum Type
+            {
+                NONE,
+                STRING,
+                NUMBER,
+                BOOL,
+                OBJECT,
+                ARRAY
+            } type = NONE;
+            std::string strVal;
+            double numVal = 0.0;
+            bool boolVal = false;
+            JSONObject objVal;
+            JSONArray arrVal;
+
+            std::string GetString(const std::string& def = "") const { return type == STRING ? strVal : def; }
+            double GetNumber(double def = 0.0) const { return type == NUMBER ? numVal : def; }
+            float GetFloat(float def = 0.0f) const { return static_cast<float>(GetNumber(def)); }
+            int GetInt(int def = 0) const { return static_cast<int>(GetNumber(def)); }
+            uint32_t GetUint32(uint32_t def = 0) const { return static_cast<uint32_t>(GetNumber(def)); }
+            uint64_t GetUint64(uint64_t def = 0) const { return static_cast<uint64_t>(GetNumber(def)); }
+            bool GetBool(bool def = false) const { return type == BOOL ? boolVal : def; }
+
+            const JSONValue* Find(const std::string& key) const
+            {
+                if (type != OBJECT)
+                    return nullptr;
+                for (const auto& [k, v] : objVal)
+                {
+                    if (k == key)
+                        return &v;
+                }
+                return nullptr;
+            }
+
+            XMFLOAT3 GetFloat3(XMFLOAT3 def = {0, 0, 0}) const
+            {
+                if (type != ARRAY || arrVal.size() < 3)
+                    return def;
+                return {arrVal[0].GetFloat(), arrVal[1].GetFloat(), arrVal[2].GetFloat()};
+            }
+
+            XMFLOAT4 GetFloat4(XMFLOAT4 def = {0, 0, 0, 1}) const
+            {
+                if (type != ARRAY || arrVal.size() < 4)
+                    return def;
+                return {arrVal[0].GetFloat(), arrVal[1].GetFloat(), arrVal[2].GetFloat(), arrVal[3].GetFloat()};
+            }
+        };
+
+        class JSONParser
+        {
+          public:
+            explicit JSONParser(const std::string& input) : m_input(input), m_pos(0) {}
+
+            bool Parse(JSONValue& out)
+            {
+                SkipWhitespace();
+                return ParseValue(out);
+            }
+
+          private:
+            void SkipWhitespace()
+            {
+                while (m_pos < m_input.size() && std::isspace(static_cast<unsigned char>(m_input[m_pos])))
+                    m_pos++;
+            }
+
+            char Peek() { return m_pos < m_input.size() ? m_input[m_pos] : '\0'; }
+            char Next() { return m_pos < m_input.size() ? m_input[m_pos++] : '\0'; }
+
+            bool ParseValue(JSONValue& val)
+            {
+                SkipWhitespace();
+                char c = Peek();
+                if (c == '"')
+                    return ParseString(val);
+                if (c == '{')
+                    return ParseObject(val);
+                if (c == '[')
+                    return ParseArray(val);
+                if (c == 't' || c == 'f')
+                    return ParseBool(val);
+                if (c == 'n')
+                    return ParseNull(val);
+                if (c == '-' || std::isdigit(static_cast<unsigned char>(c)))
+                    return ParseNumber(val);
+                return false;
+            }
+
+            bool ParseString(JSONValue& val)
+            {
+                if (Next() != '"')
+                    return false;
+                std::string s;
+                while (m_pos < m_input.size())
+                {
+                    char c = Next();
+                    if (c == '"')
+                    {
+                        val.type = JSONValue::STRING;
+                        val.strVal = s;
+                        return true;
+                    }
+                    if (c == '\\')
+                    {
+                        char esc = Next();
+                        switch (esc)
+                        {
+                        case '"':
+                            s += '"';
+                            break;
+                        case '\\':
+                            s += '\\';
+                            break;
+                        case 'n':
+                            s += '\n';
+                            break;
+                        case 'r':
+                            s += '\r';
+                            break;
+                        case 't':
+                            s += '\t';
+                            break;
+                        default:
+                            s += esc;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        s += c;
+                    }
+                }
+                return false;
+            }
+
+            bool ParseNumber(JSONValue& val)
+            {
+                size_t start = m_pos;
+                if (Peek() == '-')
+                    m_pos++;
+                while (m_pos < m_input.size() && std::isdigit(static_cast<unsigned char>(m_input[m_pos])))
+                    m_pos++;
+                if (m_pos < m_input.size() && m_input[m_pos] == '.')
+                {
+                    m_pos++;
+                    while (m_pos < m_input.size() && std::isdigit(static_cast<unsigned char>(m_input[m_pos])))
+                        m_pos++;
+                }
+                if (m_pos < m_input.size() && (m_input[m_pos] == 'e' || m_input[m_pos] == 'E'))
+                {
+                    m_pos++;
+                    if (m_pos < m_input.size() && (m_input[m_pos] == '+' || m_input[m_pos] == '-'))
+                        m_pos++;
+                    while (m_pos < m_input.size() && std::isdigit(static_cast<unsigned char>(m_input[m_pos])))
+                        m_pos++;
+                }
+                val.type = JSONValue::NUMBER;
+                val.numVal = std::stod(m_input.substr(start, m_pos - start));
+                return true;
+            }
+
+            bool ParseBool(JSONValue& val)
+            {
+                if (m_input.compare(m_pos, 4, "true") == 0)
+                {
+                    m_pos += 4;
+                    val.type = JSONValue::BOOL;
+                    val.boolVal = true;
+                    return true;
+                }
+                if (m_input.compare(m_pos, 5, "false") == 0)
+                {
+                    m_pos += 5;
+                    val.type = JSONValue::BOOL;
+                    val.boolVal = false;
+                    return true;
+                }
+                return false;
+            }
+
+            bool ParseNull(JSONValue& val)
+            {
+                if (m_input.compare(m_pos, 4, "null") == 0)
+                {
+                    m_pos += 4;
+                    val.type = JSONValue::NONE;
+                    return true;
+                }
+                return false;
+            }
+
+            bool ParseObject(JSONValue& val)
+            {
+                if (Next() != '{')
+                    return false;
+                val.type = JSONValue::OBJECT;
+                SkipWhitespace();
+                if (Peek() == '}')
+                {
+                    m_pos++;
+                    return true;
+                }
+                while (true)
+                {
+                    SkipWhitespace();
+                    JSONValue key;
+                    if (!ParseString(key))
+                        return false;
+                    SkipWhitespace();
+                    if (Next() != ':')
+                        return false;
+                    JSONValue value;
+                    if (!ParseValue(value))
+                        return false;
+                    val.objVal.push_back({key.strVal, std::move(value)});
+                    SkipWhitespace();
+                    char c = Next();
+                    if (c == '}')
+                        return true;
+                    if (c != ',')
+                        return false;
+                }
+            }
+
+            bool ParseArray(JSONValue& val)
+            {
+                if (Next() != '[')
+                    return false;
+                val.type = JSONValue::ARRAY;
+                SkipWhitespace();
+                if (Peek() == ']')
+                {
+                    m_pos++;
+                    return true;
+                }
+                while (true)
+                {
+                    JSONValue elem;
+                    if (!ParseValue(elem))
+                        return false;
+                    val.arrVal.push_back(std::move(elem));
+                    SkipWhitespace();
+                    char c = Next();
+                    if (c == ']')
+                        return true;
+                    if (c != ',')
+                        return false;
+                }
+            }
+
+            const std::string& m_input;
+            size_t m_pos;
+        };
+
+        // Helper to read a field safely
+        static const JSONValue* Field(const JSONValue& obj, const std::string& key)
+        {
+            return obj.Find(key);
+        }
+
+        static std::string FieldStr(const JSONValue& obj, const std::string& key, const std::string& def = "")
+        {
+            auto* v = obj.Find(key);
+            return v ? v->GetString(def) : def;
+        }
+        static float FieldFloat(const JSONValue& obj, const std::string& key, float def = 0.0f)
+        {
+            auto* v = obj.Find(key);
+            return v ? v->GetFloat(def) : def;
+        }
+        static int FieldInt(const JSONValue& obj, const std::string& key, int def = 0)
+        {
+            auto* v = obj.Find(key);
+            return v ? v->GetInt(def) : def;
+        }
+        static uint32_t FieldUint32(const JSONValue& obj, const std::string& key, uint32_t def = 0)
+        {
+            auto* v = obj.Find(key);
+            return v ? v->GetUint32(def) : def;
+        }
+        static uint64_t FieldUint64(const JSONValue& obj, const std::string& key, uint64_t def = 0)
+        {
+            auto* v = obj.Find(key);
+            return v ? v->GetUint64(def) : def;
+        }
+        static bool FieldBool(const JSONValue& obj, const std::string& key, bool def = false)
+        {
+            auto* v = obj.Find(key);
+            return v ? v->GetBool(def) : def;
+        }
+        static XMFLOAT3 FieldFloat3(const JSONValue& obj, const std::string& key, XMFLOAT3 def = {0, 0, 0})
+        {
+            auto* v = obj.Find(key);
+            return v ? v->GetFloat3(def) : def;
+        }
+        static XMFLOAT4 FieldFloat4(const JSONValue& obj, const std::string& key, XMFLOAT4 def = {0, 0, 0, 1})
+        {
+            auto* v = obj.Find(key);
+            return v ? v->GetFloat4(def) : def;
+        }
+
+    } // anonymous namespace
+
+    SerializationResult SceneSerializer::LoadJSON(const std::string& filePath, SceneFile& outScene)
+    {
+        SerializationResult result;
+
+        std::ifstream file(filePath);
+        if (!file.is_open())
+        {
+            result.success = false;
+            result.errorMessage = "Failed to open file: " + filePath;
+            return result;
+        }
+
+        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        file.close();
+
+        JSONValue root;
+        JSONParser parser(content);
+        if (!parser.Parse(root) || root.type != JSONValue::OBJECT)
+        {
+            result.success = false;
+            result.errorMessage = "Failed to parse JSON";
+            return result;
+        }
+
+        // Header
+        {
+            std::string name = FieldStr(root, "sceneName");
+            std::strncpy(outScene.header.sceneName, name.c_str(), sizeof(outScene.header.sceneName) - 1);
+            std::string desc = FieldStr(root, "description");
+            std::strncpy(outScene.header.description, desc.c_str(), sizeof(outScene.header.description) - 1);
+        }
+        outScene.header.version = FieldUint32(root, "version", SCENE_FILE_VERSION);
+        outScene.header.objectCount = FieldUint32(root, "objectCount");
+        outScene.header.componentCount = FieldUint32(root, "componentCount");
+        outScene.header.assetReferenceCount = FieldUint32(root, "assetReferenceCount");
+        outScene.header.timestamp = FieldUint64(root, "timestamp");
+        outScene.header.gravity = FieldFloat3(root, "gravity", {0, -9.81f, 0});
+        outScene.header.ambientColor = FieldFloat4(root, "ambientColor", {0.2f, 0.2f, 0.2f, 1.0f});
+        outScene.header.ambientIntensity = FieldFloat(root, "ambientIntensity", 1.0f);
+        outScene.header.magic = SCENE_FILE_MAGIC;
+
+        // Objects
+        auto* objectsArr = Field(root, "objects");
+        if (objectsArr && objectsArr->type == JSONValue::ARRAY)
+        {
+            for (const auto& objVal : objectsArr->arrVal)
+            {
+                if (objVal.type != JSONValue::OBJECT)
+                    continue;
+                SceneObject obj;
+                obj.id = FieldUint64(objVal, "id", INVALID_OBJECT_ID);
+                obj.name = FieldStr(objVal, "name", "GameObject");
+                obj.tag = FieldStr(objVal, "tag", "Default");
+                obj.layer = FieldInt(objVal, "layer", 0);
+                obj.active = FieldBool(objVal, "active", true);
+                obj.staticObject = FieldBool(objVal, "staticObject", false);
+
+                // Transform
+                auto* txVal = Field(objVal, "transform");
+                if (txVal && txVal->type == JSONValue::OBJECT)
+                {
+                    obj.transform.position = FieldFloat3(*txVal, "position");
+                    obj.transform.rotation = FieldFloat4(*txVal, "rotation", {0, 0, 0, 1});
+                    obj.transform.scale = FieldFloat3(*txVal, "scale", {1, 1, 1});
+                    obj.transform.parentID = FieldUint64(*txVal, "parentID", INVALID_OBJECT_ID);
+
+                    auto* childArr = Field(*txVal, "childIDs");
+                    if (childArr && childArr->type == JSONValue::ARRAY)
+                    {
+                        for (const auto& cid : childArr->arrVal)
+                            obj.transform.childIDs.push_back(cid.GetUint64());
+                    }
+                }
+                else
+                {
+                    // Legacy format: position as top-level array
+                    auto* posArr = Field(objVal, "position");
+                    if (posArr)
+                        obj.transform.position = posArr->GetFloat3();
+                }
+
+                // Component types
+                auto* ctArr = Field(objVal, "componentTypes");
+                if (ctArr && ctArr->type == JSONValue::ARRAY)
+                {
+                    for (const auto& ct : ctArr->arrVal)
+                        obj.componentTypes.push_back(StringToComponentType(ct.GetString()));
+                }
+
+                outScene.objects.push_back(std::move(obj));
+            }
+        }
+
+        // Components
+        auto* compsArr = Field(root, "components");
+        if (compsArr && compsArr->type == JSONValue::ARRAY)
+        {
+            for (const auto& compVal : compsArr->arrVal)
+            {
+                if (compVal.type != JSONValue::OBJECT)
+                    continue;
+                Component comp;
+                comp.type = StringToComponentType(FieldStr(compVal, "type"));
+                comp.objectID = FieldUint64(compVal, "objectID");
+                comp.enabled = FieldBool(compVal, "enabled", true);
+                std::string hexData = FieldStr(compVal, "data");
+                if (!hexData.empty())
+                    comp.data = HexToBytes(hexData);
+                outScene.components.push_back(std::move(comp));
+            }
+        }
+
+        // Environment
+        auto* envVal = Field(root, "environment");
+        if (envVal && envVal->type == JSONValue::OBJECT)
+        {
+            auto& env = outScene.environment;
+            env.skyType = static_cast<EnvironmentSettings::SkyType>(FieldInt(*envVal, "skyType", 0));
+            env.skyColor = FieldFloat4(*envVal, "skyColor", {0.5f, 0.8f, 1.0f, 1.0f});
+            env.horizonColor = FieldFloat4(*envVal, "horizonColor", {0.9f, 0.9f, 0.9f, 1.0f});
+            env.skyboxAssetPath = FieldStr(*envVal, "skyboxAssetPath");
+            env.fogEnabled = FieldBool(*envVal, "fogEnabled", false);
+            env.fogColor = FieldFloat4(*envVal, "fogColor", {0.7f, 0.7f, 0.7f, 1.0f});
+            env.fogDensity = FieldFloat(*envVal, "fogDensity", 0.01f);
+            env.fogStart = FieldFloat(*envVal, "fogStart", 10.0f);
+            env.fogEnd = FieldFloat(*envVal, "fogEnd", 100.0f);
+            env.windDirection = FieldFloat3(*envVal, "windDirection", {1, 0, 0});
+            env.windStrength = FieldFloat(*envVal, "windStrength", 1.0f);
+            env.windTurbulence = FieldFloat(*envVal, "windTurbulence", 0.1f);
+            env.bloomEnabled = FieldBool(*envVal, "bloomEnabled", false);
+            env.bloomIntensity = FieldFloat(*envVal, "bloomIntensity", 1.0f);
+            env.bloomThreshold = FieldFloat(*envVal, "bloomThreshold", 1.0f);
+            env.tonemappingEnabled = FieldBool(*envVal, "tonemappingEnabled", true);
+            env.exposure = FieldFloat(*envVal, "exposure", 1.0f);
+            env.gamma = FieldFloat(*envVal, "gamma", 2.2f);
+        }
+
+        // Default camera
+        auto* camVal = Field(root, "defaultCamera");
+        if (camVal && camVal->type == JSONValue::OBJECT)
+        {
+            auto& cam = outScene.defaultCamera;
+            cam.projectionType = static_cast<Camera::ProjectionType>(FieldInt(*camVal, "projectionType", 0));
+            cam.fieldOfView = FieldFloat(*camVal, "fieldOfView", 75.0f);
+            cam.orthographicSize = FieldFloat(*camVal, "orthographicSize", 5.0f);
+            cam.nearPlane = FieldFloat(*camVal, "nearPlane", 0.1f);
+            cam.farPlane = FieldFloat(*camVal, "farPlane", 1000.0f);
+            cam.clearColor = FieldFloat4(*camVal, "clearColor", {0.2f, 0.3f, 0.5f, 1.0f});
+            cam.isMainCamera = FieldBool(*camVal, "isMainCamera", false);
+            cam.renderTargetWidth = FieldInt(*camVal, "renderTargetWidth", 1920);
+            cam.renderTargetHeight = FieldInt(*camVal, "renderTargetHeight", 1080);
+        }
+
+        // Asset references
+        auto* refsArr = Field(root, "assetReferences");
+        if (refsArr && refsArr->type == JSONValue::ARRAY)
+        {
+            for (const auto& refVal : refsArr->arrVal)
+            {
+                if (refVal.type != JSONValue::OBJECT)
+                    continue;
+                AssetReference ref;
+                ref.assetPath = FieldStr(refVal, "assetPath");
+                ref.assetType = FieldStr(refVal, "assetType");
+                ref.lastModified = FieldUint64(refVal, "lastModified");
+                ref.fileSize = FieldUint64(refVal, "fileSize");
+                ref.checksum = FieldStr(refVal, "checksum");
+                auto* depsArr = Field(refVal, "dependencies");
+                if (depsArr && depsArr->type == JSONValue::ARRAY)
+                {
+                    for (const auto& dep : depsArr->arrVal)
+                        ref.dependencies.push_back(dep.GetString());
+                }
+                outScene.assetReferences.push_back(std::move(ref));
+            }
+        }
+
+        HandleVersionCompatibility(outScene.header.version, outScene, result);
+
+        result.success = true;
+        result.bytesProcessed = content.size();
+        m_totalBytesRead += content.size();
+        return result;
+    }
+
+    void SceneSerializer::SerializeTransform(const Transform& transform, std::vector<uint8_t>& buffer)
+    {
+        size_t offset = buffer.size();
+        size_t transformSize = sizeof(float) * 10 + sizeof(ObjectID); // pos(3) + rot(4) + scale(3) + parentID
+        buffer.resize(offset + transformSize);
+
+        memcpy(buffer.data() + offset, &transform.position, sizeof(XMFLOAT3));
+        offset += sizeof(XMFLOAT3);
+        memcpy(buffer.data() + offset, &transform.rotation, sizeof(XMFLOAT4));
+        offset += sizeof(XMFLOAT4);
+        memcpy(buffer.data() + offset, &transform.scale, sizeof(XMFLOAT3));
+        offset += sizeof(XMFLOAT3);
+        memcpy(buffer.data() + offset, &transform.parentID, sizeof(ObjectID));
+    }
+
+    bool SceneSerializer::DeserializeTransform(const std::vector<uint8_t>& buffer, size_t& offset, Transform& transform)
+    {
+        size_t needed = sizeof(XMFLOAT3) + sizeof(XMFLOAT4) + sizeof(XMFLOAT3) + sizeof(ObjectID);
+        if (offset + needed > buffer.size())
+            return false;
+
+        memcpy(&transform.position, buffer.data() + offset, sizeof(XMFLOAT3));
+        offset += sizeof(XMFLOAT3);
+        memcpy(&transform.rotation, buffer.data() + offset, sizeof(XMFLOAT4));
+        offset += sizeof(XMFLOAT4);
+        memcpy(&transform.scale, buffer.data() + offset, sizeof(XMFLOAT3));
+        offset += sizeof(XMFLOAT3);
+        memcpy(&transform.parentID, buffer.data() + offset, sizeof(ObjectID));
+        offset += sizeof(ObjectID);
         return true;
     }
 
-    bool ParseBool(JSONValue& val) {
-        if (m_input.compare(m_pos, 4, "true") == 0) { m_pos += 4; val.type = JSONValue::BOOL; val.boolVal = true; return true; }
-        if (m_input.compare(m_pos, 5, "false") == 0) { m_pos += 5; val.type = JSONValue::BOOL; val.boolVal = false; return true; }
-        return false;
-    }
-
-    bool ParseNull(JSONValue& val) {
-        if (m_input.compare(m_pos, 4, "null") == 0) { m_pos += 4; val.type = JSONValue::NONE; return true; }
-        return false;
-    }
-
-    bool ParseObject(JSONValue& val) {
-        if (Next() != '{') return false;
-        val.type = JSONValue::OBJECT;
-        SkipWhitespace();
-        if (Peek() == '}') { m_pos++; return true; }
-        while (true) {
-            SkipWhitespace();
-            JSONValue key;
-            if (!ParseString(key)) return false;
-            SkipWhitespace();
-            if (Next() != ':') return false;
-            JSONValue value;
-            if (!ParseValue(value)) return false;
-            val.objVal.push_back({key.strVal, std::move(value)});
-            SkipWhitespace();
-            char c = Next();
-            if (c == '}') return true;
-            if (c != ',') return false;
-        }
-    }
-
-    bool ParseArray(JSONValue& val) {
-        if (Next() != '[') return false;
-        val.type = JSONValue::ARRAY;
-        SkipWhitespace();
-        if (Peek() == ']') { m_pos++; return true; }
-        while (true) {
-            JSONValue elem;
-            if (!ParseValue(elem)) return false;
-            val.arrVal.push_back(std::move(elem));
-            SkipWhitespace();
-            char c = Next();
-            if (c == ']') return true;
-            if (c != ',') return false;
-        }
-    }
-
-    const std::string& m_input;
-    size_t m_pos;
-};
-
-// Helper to read a field safely
-static const JSONValue* Field(const JSONValue& obj, const std::string& key) {
-    return obj.Find(key);
-}
-
-static std::string FieldStr(const JSONValue& obj, const std::string& key, const std::string& def = "") {
-    auto* v = obj.Find(key); return v ? v->GetString(def) : def;
-}
-static float FieldFloat(const JSONValue& obj, const std::string& key, float def = 0.0f) {
-    auto* v = obj.Find(key); return v ? v->GetFloat(def) : def;
-}
-static int FieldInt(const JSONValue& obj, const std::string& key, int def = 0) {
-    auto* v = obj.Find(key); return v ? v->GetInt(def) : def;
-}
-static uint32_t FieldUint32(const JSONValue& obj, const std::string& key, uint32_t def = 0) {
-    auto* v = obj.Find(key); return v ? v->GetUint32(def) : def;
-}
-static uint64_t FieldUint64(const JSONValue& obj, const std::string& key, uint64_t def = 0) {
-    auto* v = obj.Find(key); return v ? v->GetUint64(def) : def;
-}
-static bool FieldBool(const JSONValue& obj, const std::string& key, bool def = false) {
-    auto* v = obj.Find(key); return v ? v->GetBool(def) : def;
-}
-static XMFLOAT3 FieldFloat3(const JSONValue& obj, const std::string& key, XMFLOAT3 def = {0,0,0}) {
-    auto* v = obj.Find(key); return v ? v->GetFloat3(def) : def;
-}
-static XMFLOAT4 FieldFloat4(const JSONValue& obj, const std::string& key, XMFLOAT4 def = {0,0,0,1}) {
-    auto* v = obj.Find(key); return v ? v->GetFloat4(def) : def;
-}
-
-} // anonymous namespace
-
-SerializationResult SceneSerializer::LoadJSON(const std::string& filePath, SceneFile& outScene) {
-    SerializationResult result;
-
-    std::ifstream file(filePath);
-    if (!file.is_open()) {
-        result.success = false;
-        result.errorMessage = "Failed to open file: " + filePath;
-        return result;
-    }
-
-    std::string content((std::istreambuf_iterator<char>(file)),
-                         std::istreambuf_iterator<char>());
-    file.close();
-
-    JSONValue root;
-    JSONParser parser(content);
-    if (!parser.Parse(root) || root.type != JSONValue::OBJECT) {
-        result.success = false;
-        result.errorMessage = "Failed to parse JSON";
-        return result;
-    }
-
-    // Header
+    void SceneSerializer::SerializeComponent(const Component& component, std::vector<uint8_t>& buffer)
     {
-        std::string name = FieldStr(root, "sceneName");
-        std::strncpy(outScene.header.sceneName, name.c_str(), sizeof(outScene.header.sceneName) - 1);
-        std::string desc = FieldStr(root, "description");
-        std::strncpy(outScene.header.description, desc.c_str(), sizeof(outScene.header.description) - 1);
+        size_t offset = buffer.size();
+        buffer.resize(offset + sizeof(ComponentType) + sizeof(ObjectID) + sizeof(uint32_t) + component.data.size());
+
+        memcpy(buffer.data() + offset, &component.type, sizeof(ComponentType));
+        offset += sizeof(ComponentType);
+        memcpy(buffer.data() + offset, &component.objectID, sizeof(ObjectID));
+        offset += sizeof(ObjectID);
+        uint32_t dataSize = static_cast<uint32_t>(component.data.size());
+        memcpy(buffer.data() + offset, &dataSize, sizeof(uint32_t));
+        offset += sizeof(uint32_t);
+        if (dataSize > 0)
+        {
+            memcpy(buffer.data() + offset, component.data.data(), dataSize);
+        }
     }
-    outScene.header.version = FieldUint32(root, "version", SCENE_FILE_VERSION);
-    outScene.header.objectCount = FieldUint32(root, "objectCount");
-    outScene.header.componentCount = FieldUint32(root, "componentCount");
-    outScene.header.assetReferenceCount = FieldUint32(root, "assetReferenceCount");
-    outScene.header.timestamp = FieldUint64(root, "timestamp");
-    outScene.header.gravity = FieldFloat3(root, "gravity", {0, -9.81f, 0});
-    outScene.header.ambientColor = FieldFloat4(root, "ambientColor", {0.2f, 0.2f, 0.2f, 1.0f});
-    outScene.header.ambientIntensity = FieldFloat(root, "ambientIntensity", 1.0f);
-    outScene.header.magic = SCENE_FILE_MAGIC;
 
-    // Objects
-    auto* objectsArr = Field(root, "objects");
-    if (objectsArr && objectsArr->type == JSONValue::ARRAY) {
-        for (const auto& objVal : objectsArr->arrVal) {
-            if (objVal.type != JSONValue::OBJECT) continue;
-            SceneObject obj;
-            obj.id = FieldUint64(objVal, "id", INVALID_OBJECT_ID);
-            obj.name = FieldStr(objVal, "name", "GameObject");
-            obj.tag = FieldStr(objVal, "tag", "Default");
-            obj.layer = FieldInt(objVal, "layer", 0);
-            obj.active = FieldBool(objVal, "active", true);
-            obj.staticObject = FieldBool(objVal, "staticObject", false);
+    bool SceneSerializer::DeserializeComponent(const std::vector<uint8_t>& buffer, size_t& offset, Component& component)
+    {
+        if (offset + sizeof(ComponentType) + sizeof(ObjectID) + sizeof(uint32_t) > buffer.size())
+            return false;
 
-            // Transform
-            auto* txVal = Field(objVal, "transform");
-            if (txVal && txVal->type == JSONValue::OBJECT) {
-                obj.transform.position = FieldFloat3(*txVal, "position");
-                obj.transform.rotation = FieldFloat4(*txVal, "rotation", {0,0,0,1});
-                obj.transform.scale = FieldFloat3(*txVal, "scale", {1,1,1});
-                obj.transform.parentID = FieldUint64(*txVal, "parentID", INVALID_OBJECT_ID);
+        memcpy(&component.type, buffer.data() + offset, sizeof(ComponentType));
+        offset += sizeof(ComponentType);
+        memcpy(&component.objectID, buffer.data() + offset, sizeof(ObjectID));
+        offset += sizeof(ObjectID);
+        uint32_t dataSize = 0;
+        memcpy(&dataSize, buffer.data() + offset, sizeof(uint32_t));
+        offset += sizeof(uint32_t);
 
-                auto* childArr = Field(*txVal, "childIDs");
-                if (childArr && childArr->type == JSONValue::ARRAY) {
-                    for (const auto& cid : childArr->arrVal)
-                        obj.transform.childIDs.push_back(cid.GetUint64());
-                }
-            } else {
-                // Legacy format: position as top-level array
-                auto* posArr = Field(objVal, "position");
-                if (posArr) obj.transform.position = posArr->GetFloat3();
+        if (offset + dataSize > buffer.size())
+            return false;
+        component.data.resize(dataSize);
+        if (dataSize > 0)
+        {
+            memcpy(component.data.data(), buffer.data() + offset, dataSize);
+        }
+        offset += dataSize;
+        return true;
+    }
+
+    void* SceneSerializer::TransformToJSON(const Transform& /*transform*/)
+    {
+        return nullptr; // Would require a JSON library
+    }
+
+    bool SceneSerializer::JSONToTransform(void* /*json*/, Transform& /*transform*/)
+    {
+        return false; // Would require a JSON library
+    }
+
+    void* SceneSerializer::ComponentToJSON(const Component& /*component*/)
+    {
+        return nullptr; // Would require a JSON library
+    }
+
+    bool SceneSerializer::JSONToComponent(void* /*json*/, Component& /*component*/)
+    {
+        return false; // Would require a JSON library
+    }
+
+    bool SceneSerializer::ValidateScene(const SceneFile& scene, SerializationResult& result)
+    {
+        std::vector<std::string> errors;
+        bool valid = scene.Validate(errors);
+        for (const auto& err : errors)
+        {
+            result.warnings.push_back(err);
+        }
+        return valid;
+    }
+
+    bool SceneSerializer::HandleVersionCompatibility(uint32_t fileVersion, SceneFile& /*scene*/,
+                                                     SerializationResult& result)
+    {
+        if (fileVersion > SCENE_FILE_VERSION)
+        {
+            result.warnings.push_back("Scene file version " + std::to_string(fileVersion) +
+                                      " is newer than supported version " + std::to_string(SCENE_FILE_VERSION));
+        }
+        return true;
+    }
+
+    bool SceneSerializer::CreateBackup(const std::string& filePath)
+    {
+        std::string backupPath = filePath + ".bak";
+        try
+        {
+            if (std::filesystem::exists(filePath))
+            {
+                std::filesystem::copy_file(filePath, backupPath, std::filesystem::copy_options::overwrite_existing);
+                return true;
             }
-
-            // Component types
-            auto* ctArr = Field(objVal, "componentTypes");
-            if (ctArr && ctArr->type == JSONValue::ARRAY) {
-                for (const auto& ct : ctArr->arrVal)
-                    obj.componentTypes.push_back(StringToComponentType(ct.GetString()));
-            }
-
-            outScene.objects.push_back(std::move(obj));
         }
-    }
-
-    // Components
-    auto* compsArr = Field(root, "components");
-    if (compsArr && compsArr->type == JSONValue::ARRAY) {
-        for (const auto& compVal : compsArr->arrVal) {
-            if (compVal.type != JSONValue::OBJECT) continue;
-            Component comp;
-            comp.type = StringToComponentType(FieldStr(compVal, "type"));
-            comp.objectID = FieldUint64(compVal, "objectID");
-            comp.enabled = FieldBool(compVal, "enabled", true);
-            std::string hexData = FieldStr(compVal, "data");
-            if (!hexData.empty()) comp.data = HexToBytes(hexData);
-            outScene.components.push_back(std::move(comp));
+        catch (const std::exception&)
+        {
+            // Backup failure is non-fatal
         }
+        return false;
     }
 
-    // Environment
-    auto* envVal = Field(root, "environment");
-    if (envVal && envVal->type == JSONValue::OBJECT) {
-        auto& env = outScene.environment;
-        env.skyType = static_cast<EnvironmentSettings::SkyType>(FieldInt(*envVal, "skyType", 0));
-        env.skyColor = FieldFloat4(*envVal, "skyColor", {0.5f, 0.8f, 1.0f, 1.0f});
-        env.horizonColor = FieldFloat4(*envVal, "horizonColor", {0.9f, 0.9f, 0.9f, 1.0f});
-        env.skyboxAssetPath = FieldStr(*envVal, "skyboxAssetPath");
-        env.fogEnabled = FieldBool(*envVal, "fogEnabled", false);
-        env.fogColor = FieldFloat4(*envVal, "fogColor", {0.7f, 0.7f, 0.7f, 1.0f});
-        env.fogDensity = FieldFloat(*envVal, "fogDensity", 0.01f);
-        env.fogStart = FieldFloat(*envVal, "fogStart", 10.0f);
-        env.fogEnd = FieldFloat(*envVal, "fogEnd", 100.0f);
-        env.windDirection = FieldFloat3(*envVal, "windDirection", {1,0,0});
-        env.windStrength = FieldFloat(*envVal, "windStrength", 1.0f);
-        env.windTurbulence = FieldFloat(*envVal, "windTurbulence", 0.1f);
-        env.bloomEnabled = FieldBool(*envVal, "bloomEnabled", false);
-        env.bloomIntensity = FieldFloat(*envVal, "bloomIntensity", 1.0f);
-        env.bloomThreshold = FieldFloat(*envVal, "bloomThreshold", 1.0f);
-        env.tonemappingEnabled = FieldBool(*envVal, "tonemappingEnabled", true);
-        env.exposure = FieldFloat(*envVal, "exposure", 1.0f);
-        env.gamma = FieldFloat(*envVal, "gamma", 2.2f);
+    bool SceneSerializer::WriteToFile(const std::string& filePath, const std::vector<uint8_t>& data)
+    {
+        std::ofstream file(filePath, std::ios::binary);
+        if (!file.is_open())
+            return false;
+        file.write(reinterpret_cast<const char*>(data.data()), data.size());
+        return file.good();
     }
 
-    // Default camera
-    auto* camVal = Field(root, "defaultCamera");
-    if (camVal && camVal->type == JSONValue::OBJECT) {
-        auto& cam = outScene.defaultCamera;
-        cam.projectionType = static_cast<Camera::ProjectionType>(FieldInt(*camVal, "projectionType", 0));
-        cam.fieldOfView = FieldFloat(*camVal, "fieldOfView", 75.0f);
-        cam.orthographicSize = FieldFloat(*camVal, "orthographicSize", 5.0f);
-        cam.nearPlane = FieldFloat(*camVal, "nearPlane", 0.1f);
-        cam.farPlane = FieldFloat(*camVal, "farPlane", 1000.0f);
-        cam.clearColor = FieldFloat4(*camVal, "clearColor", {0.2f, 0.3f, 0.5f, 1.0f});
-        cam.isMainCamera = FieldBool(*camVal, "isMainCamera", false);
-        cam.renderTargetWidth = FieldInt(*camVal, "renderTargetWidth", 1920);
-        cam.renderTargetHeight = FieldInt(*camVal, "renderTargetHeight", 1080);
+    bool SceneSerializer::ReadFromFile(const std::string& filePath, std::vector<uint8_t>& data)
+    {
+        std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+        if (!file.is_open())
+            return false;
+
+        size_t fileSize = static_cast<size_t>(file.tellg());
+        if (fileSize > m_maxFileSize)
+            return false;
+
+        file.seekg(0);
+        data.resize(fileSize);
+        file.read(reinterpret_cast<char*>(data.data()), fileSize);
+        return file.good();
     }
 
-    // Asset references
-    auto* refsArr = Field(root, "assetReferences");
-    if (refsArr && refsArr->type == JSONValue::ARRAY) {
-        for (const auto& refVal : refsArr->arrVal) {
-            if (refVal.type != JSONValue::OBJECT) continue;
-            AssetReference ref;
-            ref.assetPath = FieldStr(refVal, "assetPath");
-            ref.assetType = FieldStr(refVal, "assetType");
-            ref.lastModified = FieldUint64(refVal, "lastModified");
-            ref.fileSize = FieldUint64(refVal, "fileSize");
-            ref.checksum = FieldStr(refVal, "checksum");
-            auto* depsArr = Field(refVal, "dependencies");
-            if (depsArr && depsArr->type == JSONValue::ARRAY) {
-                for (const auto& dep : depsArr->arrVal)
-                    ref.dependencies.push_back(dep.GetString());
-            }
-            outScene.assetReferences.push_back(std::move(ref));
-        }
+    bool SceneSerializer::CompressData(const std::vector<uint8_t>& input, std::vector<uint8_t>& output)
+    {
+        // No compression without a compression library - just copy
+        output = input;
+        return true;
     }
 
-    HandleVersionCompatibility(outScene.header.version, outScene, result);
-
-    result.success = true;
-    result.bytesProcessed = content.size();
-    m_totalBytesRead += content.size();
-    return result;
-}
-
-void SceneSerializer::SerializeTransform(const Transform& transform, std::vector<uint8_t>& buffer) {
-    size_t offset = buffer.size();
-    size_t transformSize = sizeof(float) * 10 + sizeof(ObjectID); // pos(3) + rot(4) + scale(3) + parentID
-    buffer.resize(offset + transformSize);
-
-    memcpy(buffer.data() + offset, &transform.position, sizeof(XMFLOAT3));
-    offset += sizeof(XMFLOAT3);
-    memcpy(buffer.data() + offset, &transform.rotation, sizeof(XMFLOAT4));
-    offset += sizeof(XMFLOAT4);
-    memcpy(buffer.data() + offset, &transform.scale, sizeof(XMFLOAT3));
-    offset += sizeof(XMFLOAT3);
-    memcpy(buffer.data() + offset, &transform.parentID, sizeof(ObjectID));
-}
-
-bool SceneSerializer::DeserializeTransform(const std::vector<uint8_t>& buffer, size_t& offset, Transform& transform) {
-    size_t needed = sizeof(XMFLOAT3) + sizeof(XMFLOAT4) + sizeof(XMFLOAT3) + sizeof(ObjectID);
-    if (offset + needed > buffer.size()) return false;
-
-    memcpy(&transform.position, buffer.data() + offset, sizeof(XMFLOAT3));
-    offset += sizeof(XMFLOAT3);
-    memcpy(&transform.rotation, buffer.data() + offset, sizeof(XMFLOAT4));
-    offset += sizeof(XMFLOAT4);
-    memcpy(&transform.scale, buffer.data() + offset, sizeof(XMFLOAT3));
-    offset += sizeof(XMFLOAT3);
-    memcpy(&transform.parentID, buffer.data() + offset, sizeof(ObjectID));
-    offset += sizeof(ObjectID);
-    return true;
-}
-
-void SceneSerializer::SerializeComponent(const Component& component, std::vector<uint8_t>& buffer) {
-    size_t offset = buffer.size();
-    buffer.resize(offset + sizeof(ComponentType) + sizeof(ObjectID) + sizeof(uint32_t) + component.data.size());
-
-    memcpy(buffer.data() + offset, &component.type, sizeof(ComponentType));
-    offset += sizeof(ComponentType);
-    memcpy(buffer.data() + offset, &component.objectID, sizeof(ObjectID));
-    offset += sizeof(ObjectID);
-    uint32_t dataSize = static_cast<uint32_t>(component.data.size());
-    memcpy(buffer.data() + offset, &dataSize, sizeof(uint32_t));
-    offset += sizeof(uint32_t);
-    if (dataSize > 0) {
-        memcpy(buffer.data() + offset, component.data.data(), dataSize);
+    bool SceneSerializer::DecompressData(const std::vector<uint8_t>& input, std::vector<uint8_t>& output)
+    {
+        // No decompression without a compression library - just copy
+        output = input;
+        return true;
     }
-}
-
-bool SceneSerializer::DeserializeComponent(const std::vector<uint8_t>& buffer, size_t& offset, Component& component) {
-    if (offset + sizeof(ComponentType) + sizeof(ObjectID) + sizeof(uint32_t) > buffer.size()) return false;
-
-    memcpy(&component.type, buffer.data() + offset, sizeof(ComponentType));
-    offset += sizeof(ComponentType);
-    memcpy(&component.objectID, buffer.data() + offset, sizeof(ObjectID));
-    offset += sizeof(ObjectID);
-    uint32_t dataSize = 0;
-    memcpy(&dataSize, buffer.data() + offset, sizeof(uint32_t));
-    offset += sizeof(uint32_t);
-
-    if (offset + dataSize > buffer.size()) return false;
-    component.data.resize(dataSize);
-    if (dataSize > 0) {
-        memcpy(component.data.data(), buffer.data() + offset, dataSize);
-    }
-    offset += dataSize;
-    return true;
-}
-
-void* SceneSerializer::TransformToJSON(const Transform& /*transform*/) {
-    return nullptr; // Would require a JSON library
-}
-
-bool SceneSerializer::JSONToTransform(void* /*json*/, Transform& /*transform*/) {
-    return false; // Would require a JSON library
-}
-
-void* SceneSerializer::ComponentToJSON(const Component& /*component*/) {
-    return nullptr; // Would require a JSON library
-}
-
-bool SceneSerializer::JSONToComponent(void* /*json*/, Component& /*component*/) {
-    return false; // Would require a JSON library
-}
-
-bool SceneSerializer::ValidateScene(const SceneFile& scene, SerializationResult& result) {
-    std::vector<std::string> errors;
-    bool valid = scene.Validate(errors);
-    for (const auto& err : errors) {
-        result.warnings.push_back(err);
-    }
-    return valid;
-}
-
-bool SceneSerializer::HandleVersionCompatibility(uint32_t fileVersion, SceneFile& /*scene*/, SerializationResult& result) {
-    if (fileVersion > SCENE_FILE_VERSION) {
-        result.warnings.push_back("Scene file version " + std::to_string(fileVersion) +
-                                   " is newer than supported version " + std::to_string(SCENE_FILE_VERSION));
-    }
-    return true;
-}
-
-bool SceneSerializer::CreateBackup(const std::string& filePath) {
-    std::string backupPath = filePath + ".bak";
-    try {
-        if (std::filesystem::exists(filePath)) {
-            std::filesystem::copy_file(filePath, backupPath,
-                std::filesystem::copy_options::overwrite_existing);
-            return true;
-        }
-    } catch (const std::exception&) {
-        // Backup failure is non-fatal
-    }
-    return false;
-}
-
-bool SceneSerializer::WriteToFile(const std::string& filePath, const std::vector<uint8_t>& data) {
-    std::ofstream file(filePath, std::ios::binary);
-    if (!file.is_open()) return false;
-    file.write(reinterpret_cast<const char*>(data.data()), data.size());
-    return file.good();
-}
-
-bool SceneSerializer::ReadFromFile(const std::string& filePath, std::vector<uint8_t>& data) {
-    std::ifstream file(filePath, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) return false;
-
-    size_t fileSize = static_cast<size_t>(file.tellg());
-    if (fileSize > m_maxFileSize) return false;
-
-    file.seekg(0);
-    data.resize(fileSize);
-    file.read(reinterpret_cast<char*>(data.data()), fileSize);
-    return file.good();
-}
-
-bool SceneSerializer::CompressData(const std::vector<uint8_t>& input, std::vector<uint8_t>& output) {
-    // No compression without a compression library - just copy
-    output = input;
-    return true;
-}
-
-bool SceneSerializer::DecompressData(const std::vector<uint8_t>& input, std::vector<uint8_t>& output) {
-    // No decompression without a compression library - just copy
-    output = input;
-    return true;
-}
 
 } // namespace SparkEditor

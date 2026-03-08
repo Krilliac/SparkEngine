@@ -16,38 +16,45 @@ ID3D11DeviceContext* g_D3DContext = nullptr;
 extern std::unique_ptr<EngineContext> g_engineContext;
 
 // Implement the accessors — use EngineContext to access GraphicsEngine
-static GraphicsEngine* GetGraphicsFromContext() {
+static GraphicsEngine* GetGraphicsFromContext()
+{
     return g_engineContext ? g_engineContext->GetGraphics() : nullptr;
 }
 
-IDXGISwapChain* GetMainSwapChain() {
+IDXGISwapChain* GetMainSwapChain()
+{
     if (auto* gfx = GetGraphicsFromContext())
         return gfx->GetSwapChain();
     return g_MainSwapChain;
 }
 
-ID3D11Device* GetD3DDevice() {
+ID3D11Device* GetD3DDevice()
+{
     if (auto* gfx = GetGraphicsFromContext())
         return gfx->GetDevice();
     return g_D3DDevice;
 }
 
-ID3D11DeviceContext* GetD3DContext() {
+ID3D11DeviceContext* GetD3DContext()
+{
     if (auto* gfx = GetGraphicsFromContext())
         return gfx->GetContext();
     return g_D3DContext;
 }
 
 // Functions to set the globals (for backwards compatibility or manual setup)
-void SetMainSwapChain(IDXGISwapChain* swapChain) {
+void SetMainSwapChain(IDXGISwapChain* swapChain)
+{
     g_MainSwapChain = swapChain;
 }
 
-void SetD3DDevice(ID3D11Device* device) {
+void SetD3DDevice(ID3D11Device* device)
+{
     g_D3DDevice = device;
 }
 
-void SetD3DContext(ID3D11DeviceContext* context) {
+void SetD3DContext(ID3D11DeviceContext* context)
+{
     g_D3DContext = context;
 }
 
@@ -56,9 +63,18 @@ void SetD3DContext(ID3D11DeviceContext* context) {
 #include "D3DUtils.h"
 
 // No-op stubs for non-Windows platforms
-IDXGISwapChain* GetMainSwapChain() { return nullptr; }
-ID3D11Device* GetD3DDevice() { return nullptr; }
-ID3D11DeviceContext* GetD3DContext() { return nullptr; }
+IDXGISwapChain* GetMainSwapChain()
+{
+    return nullptr;
+}
+ID3D11Device* GetD3DDevice()
+{
+    return nullptr;
+}
+ID3D11DeviceContext* GetD3DContext()
+{
+    return nullptr;
+}
 void SetMainSwapChain(IDXGISwapChain*) {}
 void SetD3DDevice(ID3D11Device*) {}
 void SetD3DContext(ID3D11DeviceContext*) {}

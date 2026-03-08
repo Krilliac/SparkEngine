@@ -10,13 +10,15 @@ using namespace Spark::Graphics;
 // Tests
 // =============================================================================
 
-TEST(SSE_Initialize) {
+TEST(SSE_Initialize)
+{
     ScreenSpaceEffects sse;
     EXPECT_TRUE(sse.Initialize(1920, 1080));
     sse.Shutdown();
 }
 
-TEST(SSE_SSAODefaults) {
+TEST(SSE_SSAODefaults)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -29,7 +31,8 @@ TEST(SSE_SSAODefaults) {
     sse.Shutdown();
 }
 
-TEST(SSE_SSAOKernelGeneration) {
+TEST(SSE_SSAOKernelGeneration)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -37,7 +40,8 @@ TEST(SSE_SSAOKernelGeneration) {
     EXPECT_EQ((int)kernel.size(), 64);
 
     // All samples should have finite length
-    for (const auto& s : kernel) {
+    for (const auto& s : kernel)
+    {
         float len = s.Length();
         EXPECT_GT(len, 0.0f);
         EXPECT_LT(len, 2.0f);
@@ -46,20 +50,23 @@ TEST(SSE_SSAOKernelGeneration) {
     sse.Shutdown();
 }
 
-TEST(SSE_SSAOKernelDeterministic) {
+TEST(SSE_SSAOKernelDeterministic)
+{
     auto k1 = SSAOKernel::GenerateKernel(16, 42);
     auto k2 = SSAOKernel::GenerateKernel(16, 42);
     EXPECT_EQ((int)k1.size(), (int)k2.size());
 
     // Same seed should produce same results
-    for (int i = 0; i < (int)k1.size(); ++i) {
+    for (int i = 0; i < (int)k1.size(); ++i)
+    {
         EXPECT_NEAR(k1[i].x, k2[i].x, 0.0001f);
         EXPECT_NEAR(k1[i].y, k2[i].y, 0.0001f);
         EXPECT_NEAR(k1[i].z, k2[i].z, 0.0001f);
     }
 }
 
-TEST(SSE_NoiseTextureGeneration) {
+TEST(SSE_NoiseTextureGeneration)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -67,7 +74,8 @@ TEST(SSE_NoiseTextureGeneration) {
     EXPECT_EQ((int)noise.size(), 16); // 4x4
 
     // All noise vectors should be unit length in XY
-    for (const auto& n : noise) {
+    for (const auto& n : noise)
+    {
         float len = std::sqrt(n.x * n.x + n.y * n.y);
         EXPECT_NEAR(len, 1.0f, 0.01f);
         EXPECT_NEAR(n.z, 0.0f, 0.001f);
@@ -76,7 +84,8 @@ TEST(SSE_NoiseTextureGeneration) {
     sse.Shutdown();
 }
 
-TEST(SSE_SSAOQualitySettings) {
+TEST(SSE_SSAOQualitySettings)
+{
     SSAOSettings s;
 
     s.quality = SSAOQuality::Low;
@@ -96,7 +105,8 @@ TEST(SSE_SSAOQualitySettings) {
     EXPECT_FALSE(s.IsHalfRes());
 }
 
-TEST(SSE_SSRDefaults) {
+TEST(SSE_SSRDefaults)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -108,7 +118,8 @@ TEST(SSE_SSRDefaults) {
     sse.Shutdown();
 }
 
-TEST(SSE_SSRQualitySettings) {
+TEST(SSE_SSRQualitySettings)
+{
     SSRSettings s;
 
     s.quality = SSRQuality::Low;
@@ -124,7 +135,8 @@ TEST(SSE_SSRQualitySettings) {
     EXPECT_EQ(s.GetStepCount(), 128);
 }
 
-TEST(SSE_ContactShadowsDefault) {
+TEST(SSE_ContactShadowsDefault)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -139,7 +151,8 @@ TEST(SSE_ContactShadowsDefault) {
     sse.Shutdown();
 }
 
-TEST(SSE_EnableDisable) {
+TEST(SSE_EnableDisable)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -155,7 +168,8 @@ TEST(SSE_EnableDisable) {
     sse.Shutdown();
 }
 
-TEST(SSE_SSAORadiusClamp) {
+TEST(SSE_SSAORadiusClamp)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -168,7 +182,8 @@ TEST(SSE_SSAORadiusClamp) {
     sse.Shutdown();
 }
 
-TEST(SSE_QualityChange) {
+TEST(SSE_QualityChange)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -181,7 +196,8 @@ TEST(SSE_QualityChange) {
     sse.Shutdown();
 }
 
-TEST(SSE_Metrics) {
+TEST(SSE_Metrics)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -200,7 +216,8 @@ TEST(SSE_Metrics) {
     sse.Shutdown();
 }
 
-TEST(SSE_ConsoleStatus) {
+TEST(SSE_ConsoleStatus)
+{
     ScreenSpaceEffects sse;
     sse.Initialize();
 
@@ -212,7 +229,8 @@ TEST(SSE_ConsoleStatus) {
     sse.Shutdown();
 }
 
-TEST(SSE_SamplePointNormalize) {
+TEST(SSE_SamplePointNormalize)
+{
     SamplePoint p = {3.0f, 4.0f, 0.0f};
     auto n = p.Normalized();
     EXPECT_NEAR(n.Length(), 1.0f, 0.001f);
@@ -220,7 +238,8 @@ TEST(SSE_SamplePointNormalize) {
     EXPECT_NEAR(n.y, 0.8f, 0.001f);
 }
 
-TEST(SSE_Resize) {
+TEST(SSE_Resize)
+{
     ScreenSpaceEffects sse;
     sse.Initialize(1920, 1080);
     sse.Resize(1280, 720);

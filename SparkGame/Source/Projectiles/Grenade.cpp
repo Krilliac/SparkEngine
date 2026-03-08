@@ -4,14 +4,11 @@
 #include "Utils/Assert.h"
 #include "Physics/PhysicsSystem.h"
 
-using DirectX::XMMATRIX;
 using DirectX::XMFLOAT3;
+using DirectX::XMMATRIX;
 
 
-Grenade::Grenade()
-    : m_fuseTime(3.0f)
-    , m_explosionRadius(8.0f)
-    , m_hasExploded(false)
+Grenade::Grenade() : m_fuseTime(3.0f), m_explosionRadius(8.0f), m_hasExploded(false)
 {
     // Validate parameters
     ASSERT_MSG(m_fuseTime > 0.0f, "Grenade fuse time must be positive");
@@ -25,7 +22,7 @@ Grenade::Grenade()
     SetGravity(true, 1.0f);
 
     // Scale grenade
-    XMFLOAT3 scale{ 0.3f, 0.3f, 0.3f };
+    XMFLOAT3 scale{0.3f, 0.3f, 0.3f};
     ASSERT_MSG(scale.x > 0.0f && scale.y > 0.0f && scale.z > 0.0f, "Grenade scale must be positive");
     SetScale(scale);
 }
@@ -44,7 +41,8 @@ void Grenade::Update(float deltaTime)
 {
     ASSERT_MSG(deltaTime >= 0.0f && std::isfinite(deltaTime), "Invalid deltaTime in Grenade::Update");
 
-    if (!m_active) return;
+    if (!m_active)
+        return;
 
     // Use base physics/lifetime/collision (this also increments m_lifeTime)
     Projectile::Update(deltaTime);
@@ -59,7 +57,8 @@ void Grenade::Update(float deltaTime)
 
 void Grenade::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
-    if (!m_active) return;
+    if (!m_active)
+        return;
     ASSERT_MSG(m_mesh != nullptr, "Grenade mesh not initialized");
     Projectile::Render(view, projection);
 }
@@ -72,7 +71,8 @@ void Grenade::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, flo
 
 void Grenade::Explode()
 {
-    if (m_hasExploded) return;
+    if (m_hasExploded)
+        return;
     m_hasExploded = true;
 
     XMFLOAT3 position = GetPosition();
@@ -85,7 +85,8 @@ void Grenade::Explode()
         {
             for (PhysicsBody* body : hitBodies)
             {
-                if (!body) continue;
+                if (!body)
+                    continue;
 
                 // Calculate distance-based damage falloff (grenades have larger radius, higher damage)
                 XMFLOAT3 bodyPos = body->GetPosition();
@@ -103,11 +104,9 @@ void Grenade::Explode()
                 if (distance > 0.001f)
                 {
                     float impulseStrength = appliedDamage * 3.0f * falloff;
-                    XMFLOAT3 impulseDir = {
-                        (dx / distance) * impulseStrength,
-                        (dy / distance + 0.7f) * impulseStrength, // Higher upward bias than rocket
-                        (dz / distance) * impulseStrength
-                    };
+                    XMFLOAT3 impulseDir = {(dx / distance) * impulseStrength,
+                                           (dy / distance + 0.7f) * impulseStrength, // Higher upward bias than rocket
+                                           (dz / distance) * impulseStrength};
                     body->ApplyImpulse(impulseDir);
                 }
             }
@@ -116,4 +115,3 @@ void Grenade::Explode()
 
     Deactivate();
 }
-

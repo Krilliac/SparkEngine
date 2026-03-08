@@ -3,8 +3,8 @@
 #include "Bullet.h"
 #include "Utils/Assert.h"
 
-using DirectX::XMMATRIX;
 using DirectX::XMFLOAT3;
+using DirectX::XMMATRIX;
 
 Bullet::Bullet()
 {
@@ -14,7 +14,7 @@ Bullet::Bullet()
     m_maxLifeTime = 3.0f;
 
     // Assert scale values are positive
-    XMFLOAT3 scale = { 0.05f, 0.05f, 0.2f };
+    XMFLOAT3 scale = {0.05f, 0.05f, 0.2f};
     ASSERT_MSG(scale.x > 0 && scale.y > 0 && scale.z > 0, "Bullet scale must be positive");
     SetScale(scale);
 }
@@ -39,7 +39,8 @@ void Bullet::Update(float deltaTime)
 
 void Bullet::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
-    if (!m_active) return;
+    if (!m_active)
+        return;
     ASSERT_MSG(m_mesh != nullptr, "Bullet mesh not initialized");
     Projectile::Render(view, projection);
 }

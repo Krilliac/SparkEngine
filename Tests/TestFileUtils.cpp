@@ -11,27 +11,32 @@ using namespace Spark::FileUtils;
 // Path Manipulation Tests
 // =============================================================================
 
-TEST(FileUtils_GetExtension) {
+TEST(FileUtils_GetExtension)
+{
     EXPECT_EQ(GetExtension("model.fbx"), std::string(".fbx"));
     EXPECT_EQ(GetExtension("archive.tar.gz"), std::string(".gz"));
     EXPECT_EQ(GetExtension("noext"), std::string(""));
 }
 
-TEST(FileUtils_GetFilename) {
+TEST(FileUtils_GetFilename)
+{
     EXPECT_EQ(GetFilename("path/to/model.fbx"), std::string("model.fbx"));
     EXPECT_EQ(GetFilename("model.fbx"), std::string("model.fbx"));
 }
 
-TEST(FileUtils_GetStem) {
+TEST(FileUtils_GetStem)
+{
     EXPECT_EQ(GetStem("path/to/model.fbx"), std::string("model"));
     EXPECT_EQ(GetStem("noext"), std::string("noext"));
 }
 
-TEST(FileUtils_GetDirectory) {
+TEST(FileUtils_GetDirectory)
+{
     EXPECT_EQ(GetDirectory("path/to/model.fbx"), std::string("path/to"));
 }
 
-TEST(FileUtils_JoinPath) {
+TEST(FileUtils_JoinPath)
+{
     std::string joined = JoinPath("assets", "model.fbx");
     // Should contain both parts with a separator
     EXPECT_TRUE(joined.find("assets") != std::string::npos);
@@ -40,13 +45,15 @@ TEST(FileUtils_JoinPath) {
 
 #if SPARK_HAS_FILESYSTEM
 
-TEST(FileUtils_ChangeExtension) {
+TEST(FileUtils_ChangeExtension)
+{
     std::string changed = ChangeExtension("model.fbx", ".obj");
     EXPECT_TRUE(changed.find(".obj") != std::string::npos);
     EXPECT_TRUE(changed.find(".fbx") == std::string::npos);
 }
 
-TEST(FileUtils_NormalizePath) {
+TEST(FileUtils_NormalizePath)
+{
     std::string norm = NormalizePath("a/b/../c");
     EXPECT_TRUE(norm.find("..") == std::string::npos);
 }
@@ -57,7 +64,8 @@ TEST(FileUtils_NormalizePath) {
 // File I/O Tests
 // =============================================================================
 
-TEST(FileUtils_WriteAndReadText) {
+TEST(FileUtils_WriteAndReadText)
+{
     std::string path = "/tmp/spark_test_text.txt";
     std::string content = "Hello, SparkEngine!\nLine 2.";
 
@@ -70,7 +78,8 @@ TEST(FileUtils_WriteAndReadText) {
     std::remove(path.c_str());
 }
 
-TEST(FileUtils_WriteAndReadBinary) {
+TEST(FileUtils_WriteAndReadBinary)
+{
     std::string path = "/tmp/spark_test_binary.bin";
     std::vector<uint8_t> data = {0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD};
 
@@ -79,21 +88,24 @@ TEST(FileUtils_WriteAndReadBinary) {
     auto result = ReadBinaryFile(path);
     EXPECT_TRUE(result.has_value());
     EXPECT_EQ((int)result.value().size(), (int)data.size());
-    for (int i = 0; i < (int)data.size(); ++i) {
+    for (int i = 0; i < (int)data.size(); ++i)
+    {
         EXPECT_EQ(result.value()[i], data[i]);
     }
 
     std::remove(path.c_str());
 }
 
-TEST(FileUtils_ReadNonexistent) {
+TEST(FileUtils_ReadNonexistent)
+{
     auto result = ReadTextFile("/tmp/spark_nonexistent_file_xyz.txt");
     EXPECT_FALSE(result.has_value());
 }
 
 #if SPARK_HAS_FILESYSTEM
 
-TEST(FileUtils_FileExists) {
+TEST(FileUtils_FileExists)
+{
     std::string path = "/tmp/spark_test_exists.txt";
     WriteTextFile(path, "test");
     EXPECT_TRUE(FileExists(path));
@@ -101,12 +113,14 @@ TEST(FileUtils_FileExists) {
     EXPECT_FALSE(FileExists(path));
 }
 
-TEST(FileUtils_IsDirectory) {
+TEST(FileUtils_IsDirectory)
+{
     EXPECT_TRUE(IsDirectory("/tmp"));
     EXPECT_FALSE(IsDirectory("/tmp/spark_nonexistent_dir_xyz"));
 }
 
-TEST(FileUtils_GetFileSize) {
+TEST(FileUtils_GetFileSize)
+{
     std::string path = "/tmp/spark_test_size.txt";
     WriteTextFile(path, "12345");
 
@@ -117,7 +131,8 @@ TEST(FileUtils_GetFileSize) {
     std::remove(path.c_str());
 }
 
-TEST(FileUtils_CreateDirectories) {
+TEST(FileUtils_CreateDirectories)
+{
     std::string dir = "/tmp/spark_test_dir/sub/deep";
     EXPECT_TRUE(CreateDirectories(dir));
     EXPECT_TRUE(IsDirectory(dir));
@@ -127,7 +142,8 @@ TEST(FileUtils_CreateDirectories) {
     fs::remove_all("/tmp/spark_test_dir", ec);
 }
 
-TEST(FileUtils_ListFiles) {
+TEST(FileUtils_ListFiles)
+{
     std::string dir = "/tmp/spark_test_list";
     CreateDirectories(dir);
     WriteTextFile(dir + "/a.txt", "a");

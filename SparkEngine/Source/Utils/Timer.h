@@ -34,13 +34,13 @@
  */
 class Timer
 {
-private:
-    std::chrono::high_resolution_clock::time_point m_lastTime;  ///< Time point of last measurement
-    float                                          m_deltaTime; ///< Time elapsed since last frame in seconds
-    float                                          m_totalTime; ///< Total elapsed time since start in seconds
-    bool                                           m_paused;    ///< Whether the timer is currently paused
+  private:
+    std::chrono::high_resolution_clock::time_point m_lastTime; ///< Time point of last measurement
+    float m_deltaTime;                                         ///< Time elapsed since last frame in seconds
+    float m_totalTime;                                         ///< Total elapsed time since start in seconds
+    bool m_paused;                                             ///< Whether the timer is currently paused
 
-public:
+  public:
     /**
      * @brief Default constructor
      * 
@@ -62,7 +62,7 @@ public:
      * Begins timing operations or resumes from a paused state.
      * Records the current time as the reference point for delta calculations.
      */
-    void  Start();
+    void Start();
 
     /**
      * @brief Pause the timer
@@ -70,7 +70,7 @@ public:
      * Stops time accumulation while preserving current state.
      * Can be resumed with Start().
      */
-    void  Stop();
+    void Stop();
 
     /**
      * @brief Reset timer to initial state
@@ -78,7 +78,7 @@ public:
      * Resets total time to zero and stops the timer.
      * Must call Start() again to resume timing.
      */
-    void  Reset();
+    void Reset();
 
     /**
      * @brief Get delta time since last call and update internal time
@@ -107,7 +107,7 @@ public:
      */
     bool IsPaused() const { return m_paused; }
 
-private:
+  private:
     /**
      * @brief Update internal time tracking
      * 

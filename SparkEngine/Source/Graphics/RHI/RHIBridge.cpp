@@ -11,491 +11,506 @@
 #include <fstream>
 #include <algorithm>
 
-namespace Spark { namespace RHI {
-
-// ============================================================================
-// SHADER CACHE
-// ============================================================================
-
-void ShaderCache::RegisterShader(const std::string& name, const ShaderEntry& entry)
+namespace Spark
 {
-    m_entries[name] = entry;
-}
-
-IRHIShader* ShaderCache::GetShader(const std::string& name, IRHIDevice* device)
-{
-    auto cached = m_loadedShaders.find(name);
-    if (cached != m_loadedShaders.end())
-        return cached->second;
-
-    auto entry = m_entries.find(name);
-    if (entry == m_entries.end())
-        return nullptr;
-
-    const auto& e = entry->second;
-    RHIShaderDesc desc;
-    desc.stage = e.stage;
-    desc.entryPoint = e.entryPoint;
-    desc.debugName = name;
-
-    // Select shader source based on backend
-    GraphicsBackend backend = device->GetBackendType();
-    std::string filePath;
-
-    switch (backend)
+    namespace RHI
     {
-    case GraphicsBackend::D3D11:
-    case GraphicsBackend::D3D12:
-        filePath = e.hlslPath;
-        desc.language = ShaderLanguage::HLSL;
-        break;
-    case GraphicsBackend::Vulkan:
-        filePath = !e.spirvPath.empty() ? e.spirvPath : e.glslPath;
-        desc.language = !e.spirvPath.empty() ? ShaderLanguage::SPIRV : ShaderLanguage::GLSL;
-        break;
-    case GraphicsBackend::OpenGL:
-        filePath = e.glslPath;
-        desc.language = ShaderLanguage::GLSL;
-        break;
-    default:
-        return nullptr;
-    }
 
-    if (filePath.empty())
-        return nullptr;
+        // ============================================================================
+        // SHADER CACHE
+        // ============================================================================
 
-    // Load shader source
-    if (desc.language == ShaderLanguage::SPIRV)
-    {
-        std::ifstream file(filePath, std::ios::binary | std::ios::ate);
-        if (!file.is_open()) return nullptr;
+        void ShaderCache::RegisterShader(const std::string& name, const ShaderEntry& entry)
+        {
+            m_entries[name] = entry;
+        }
 
-        size_t size = file.tellg();
-        file.seekg(0);
-        std::vector<uint8_t> buffer(size);
-        file.read(reinterpret_cast<char*>(buffer.data()), size);
-        desc.bytecode = buffer.data();
-        desc.bytecodeSize = size;
+        IRHIShader* ShaderCache::GetShader(const std::string& name, IRHIDevice* device)
+        {
+            auto cached = m_loadedShaders.find(name);
+            if (cached != m_loadedShaders.end())
+                return cached->second;
 
-        IRHIShader* shader = device->CreateShader(desc);
-        if (shader)
-            m_loadedShaders[name] = shader;
-        return shader;
-    }
-    else
-    {
-        std::ifstream file(filePath);
-        if (!file.is_open()) return nullptr;
+            auto entry = m_entries.find(name);
+            if (entry == m_entries.end())
+                return nullptr;
 
-        desc.sourceCode = std::string(
-            std::istreambuf_iterator<char>(file),
-            std::istreambuf_iterator<char>());
-        desc.filePath = filePath;
+            const auto& e = entry->second;
+            RHIShaderDesc desc;
+            desc.stage = e.stage;
+            desc.entryPoint = e.entryPoint;
+            desc.debugName = name;
 
-        IRHIShader* shader = device->CreateShader(desc);
-        if (shader)
-            m_loadedShaders[name] = shader;
-        return shader;
-    }
-}
+            // Select shader source based on backend
+            GraphicsBackend backend = device->GetBackendType();
+            std::string filePath;
 
-void ShaderCache::Clear(IRHIDevice* device)
-{
-    for (auto& [name, shader] : m_loadedShaders)
-    {
-        device->DestroyShader(shader);
-    }
-    m_loadedShaders.clear();
-}
+            switch (backend)
+            {
+            case GraphicsBackend::D3D11:
+            case GraphicsBackend::D3D12:
+                filePath = e.hlslPath;
+                desc.language = ShaderLanguage::HLSL;
+                break;
+            case GraphicsBackend::Vulkan:
+                filePath = !e.spirvPath.empty() ? e.spirvPath : e.glslPath;
+                desc.language = !e.spirvPath.empty() ? ShaderLanguage::SPIRV : ShaderLanguage::GLSL;
+                break;
+            case GraphicsBackend::OpenGL:
+                filePath = e.glslPath;
+                desc.language = ShaderLanguage::GLSL;
+                break;
+            default:
+                return nullptr;
+            }
 
-void ShaderCache::ReloadAll(IRHIDevice* device)
-{
-    // Destroy existing shaders
-    Clear(device);
+            if (filePath.empty())
+                return nullptr;
 
-    // Reload all registered shaders
-    for (const auto& [name, entry] : m_entries)
-    {
-        GetShader(name, device);
-    }
-}
+            // Load shader source
+            if (desc.language == ShaderLanguage::SPIRV)
+            {
+                std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+                if (!file.is_open())
+                    return nullptr;
 
-// ============================================================================
-// RHI BRIDGE
-// ============================================================================
+                size_t size = file.tellg();
+                file.seekg(0);
+                std::vector<uint8_t> buffer(size);
+                file.read(reinterpret_cast<char*>(buffer.data()), size);
+                desc.bytecode = buffer.data();
+                desc.bytecodeSize = size;
 
-RHIBridge::RHIBridge() = default;
+                IRHIShader* shader = device->CreateShader(desc);
+                if (shader)
+                    m_loadedShaders[name] = shader;
+                return shader;
+            }
+            else
+            {
+                std::ifstream file(filePath);
+                if (!file.is_open())
+                    return nullptr;
 
-RHIBridge::~RHIBridge()
-{
-    Shutdown();
-}
+                desc.sourceCode = std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+                desc.filePath = filePath;
 
-bool RHIBridge::Initialize(void* windowHandle, uint32_t width, uint32_t height,
-                            GraphicsBackend backend, bool enableDebug)
-{
-    if (m_initialized)
-        Shutdown();
+                IRHIShader* shader = device->CreateShader(desc);
+                if (shader)
+                    m_loadedShaders[name] = shader;
+                return shader;
+            }
+        }
 
-    m_windowHandle = windowHandle;
-    m_width = width;
-    m_height = height;
+        void ShaderCache::Clear(IRHIDevice* device)
+        {
+            for (auto& [name, shader] : m_loadedShaders)
+            {
+                device->DestroyShader(shader);
+            }
+            m_loadedShaders.clear();
+        }
 
-    // Auto-select backend if requested
-    if (backend == GraphicsBackend::Auto)
-        backend = SelectBestBackend();
+        void ShaderCache::ReloadAll(IRHIDevice* device)
+        {
+            // Destroy existing shaders
+            Clear(device);
 
-    // Create the device via factory
-    m_device = CreateDevice(backend);
-    if (!m_device)
-        return false;
+            // Reload all registered shaders
+            for (const auto& [name, entry] : m_entries)
+            {
+                GetShader(name, device);
+            }
+        }
 
-    // Initialize device
-    RHIDeviceDesc deviceDesc;
-    deviceDesc.preferredBackend = backend;
-    deviceDesc.enableDebugLayer = enableDebug;
-    deviceDesc.enableGPUValidation = enableDebug;
-    deviceDesc.applicationName = "SparkEngine";
+        // ============================================================================
+        // RHI BRIDGE
+        // ============================================================================
 
-    if (!m_device->Initialize(deviceDesc))
-    {
-        m_device.reset();
-        return false;
-    }
+        RHIBridge::RHIBridge() = default;
 
-    // Create swap chain
-    RHISwapChainDesc swapDesc;
-    swapDesc.windowHandle = windowHandle;
-    swapDesc.width = width;
-    swapDesc.height = height;
-    swapDesc.format = PixelFormat::R8G8B8A8_UNORM;
-    swapDesc.bufferCount = 2;
-    swapDesc.fullscreen = false;
-    swapDesc.vsync = true;
+        RHIBridge::~RHIBridge()
+        {
+            Shutdown();
+        }
 
-    m_swapChain = m_device->CreateSwapChain(swapDesc);
-    if (!m_swapChain)
-    {
-        m_device->Shutdown();
-        m_device.reset();
-        return false;
-    }
+        bool RHIBridge::Initialize(void* windowHandle, uint32_t width, uint32_t height, GraphicsBackend backend,
+                                   bool enableDebug)
+        {
+            if (m_initialized)
+                Shutdown();
 
-    // Create depth buffer
-    if (!CreateDepthBufferInternal(width, height))
-    {
-        m_swapChain.reset();
-        m_device->Shutdown();
-        m_device.reset();
-        return false;
-    }
+            m_windowHandle = windowHandle;
+            m_width = width;
+            m_height = height;
 
-    m_initialized = true;
-    return true;
-}
+            // Auto-select backend if requested
+            if (backend == GraphicsBackend::Auto)
+                backend = SelectBestBackend();
 
-void RHIBridge::Shutdown()
-{
-    if (!m_initialized) return;
+            // Create the device via factory
+            m_device = CreateDevice(backend);
+            if (!m_device)
+                return false;
 
-    m_shaderCache.Clear(m_device.get());
+            // Initialize device
+            RHIDeviceDesc deviceDesc;
+            deviceDesc.preferredBackend = backend;
+            deviceDesc.enableDebugLayer = enableDebug;
+            deviceDesc.enableGPUValidation = enableDebug;
+            deviceDesc.applicationName = "SparkEngine";
 
-    if (m_depthBuffer)
-    {
-        m_device->DestroyTexture(m_depthBuffer);
-        m_depthBuffer = nullptr;
-    }
+            if (!m_device->Initialize(deviceDesc))
+            {
+                m_device.reset();
+                return false;
+            }
 
-    m_swapChain.reset();
+            // Create swap chain
+            RHISwapChainDesc swapDesc;
+            swapDesc.windowHandle = windowHandle;
+            swapDesc.width = width;
+            swapDesc.height = height;
+            swapDesc.format = PixelFormat::R8G8B8A8_UNORM;
+            swapDesc.bufferCount = 2;
+            swapDesc.fullscreen = false;
+            swapDesc.vsync = true;
 
-    if (m_device)
-    {
-        m_device->WaitForIdle();
-        m_device->Shutdown();
-        m_device.reset();
-    }
+            m_swapChain = m_device->CreateSwapChain(swapDesc);
+            if (!m_swapChain)
+            {
+                m_device->Shutdown();
+                m_device.reset();
+                return false;
+            }
 
-    m_initialized = false;
-}
+            // Create depth buffer
+            if (!CreateDepthBufferInternal(width, height))
+            {
+                m_swapChain.reset();
+                m_device->Shutdown();
+                m_device.reset();
+                return false;
+            }
 
-bool RHIBridge::Resize(uint32_t width, uint32_t height)
-{
-    if (!m_initialized) return false;
-    if (width == 0 || height == 0) return false;
+            m_initialized = true;
+            return true;
+        }
 
-    m_device->WaitForIdle();
+        void RHIBridge::Shutdown()
+        {
+            if (!m_initialized)
+                return;
 
-    // Destroy old depth buffer
-    if (m_depthBuffer)
-    {
-        m_device->DestroyTexture(m_depthBuffer);
-        m_depthBuffer = nullptr;
-    }
+            m_shaderCache.Clear(m_device.get());
 
-    // Resize swap chain
-    if (!m_swapChain->Resize(width, height))
-        return false;
+            if (m_depthBuffer)
+            {
+                m_device->DestroyTexture(m_depthBuffer);
+                m_depthBuffer = nullptr;
+            }
 
-    m_width = width;
-    m_height = height;
+            m_swapChain.reset();
 
-    // Recreate depth buffer
-    return CreateDepthBufferInternal(width, height);
-}
+            if (m_device)
+            {
+                m_device->WaitForIdle();
+                m_device->Shutdown();
+                m_device.reset();
+            }
 
-void RHIBridge::BeginFrame()
-{
-    if (m_device) m_device->BeginFrame();
-}
+            m_initialized = false;
+        }
 
-void RHIBridge::EndFrame()
-{
-    if (m_device) m_device->EndFrame();
-}
+        bool RHIBridge::Resize(uint32_t width, uint32_t height)
+        {
+            if (!m_initialized)
+                return false;
+            if (width == 0 || height == 0)
+                return false;
 
-bool RHIBridge::Present(bool vsync)
-{
-    return m_swapChain ? m_swapChain->Present(vsync) : false;
-}
+            m_device->WaitForIdle();
 
-IRHICommandList* RHIBridge::GetCommandList() const
-{
-    return m_device ? m_device->GetImmediateCommandList() : nullptr;
-}
+            // Destroy old depth buffer
+            if (m_depthBuffer)
+            {
+                m_device->DestroyTexture(m_depthBuffer);
+                m_depthBuffer = nullptr;
+            }
 
-IRHITexture* RHIBridge::GetBackBuffer() const
-{
-    return m_swapChain ? m_swapChain->GetBackBuffer() : nullptr;
-}
+            // Resize swap chain
+            if (!m_swapChain->Resize(width, height))
+                return false;
 
-GraphicsBackend RHIBridge::GetActiveBackend() const
-{
-    return m_device ? m_device->GetBackendType() : GraphicsBackend::Auto;
-}
+            m_width = width;
+            m_height = height;
 
-// ============================================================================
-// RESOURCE CONVENIENCE METHODS
-// ============================================================================
+            // Recreate depth buffer
+            return CreateDepthBufferInternal(width, height);
+        }
 
-IRHIBuffer* RHIBridge::CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride)
-{
-    RHIBufferDesc desc;
-    desc.size = size;
-    desc.stride = stride;
-    desc.usage = RHIBufferUsage::Vertex;
-    desc.access = data ? RHIBufferAccess::Static : RHIBufferAccess::Dynamic;
-    desc.initialData = data;
-    return m_device->CreateBuffer(desc);
-}
+        void RHIBridge::BeginFrame()
+        {
+            if (m_device)
+                m_device->BeginFrame();
+        }
 
-IRHIBuffer* RHIBridge::CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride)
-{
-    RHIBufferDesc desc;
-    desc.size = size;
-    desc.stride = stride;
-    desc.usage = RHIBufferUsage::Index;
-    desc.access = data ? RHIBufferAccess::Static : RHIBufferAccess::Dynamic;
-    desc.initialData = data;
-    return m_device->CreateBuffer(desc);
-}
+        void RHIBridge::EndFrame()
+        {
+            if (m_device)
+                m_device->EndFrame();
+        }
 
-IRHIBuffer* RHIBridge::CreateConstantBuffer(uint64_t size)
-{
-    RHIBufferDesc desc;
-    desc.size = size;
-    desc.usage = RHIBufferUsage::Constant;
-    desc.access = RHIBufferAccess::Dynamic;
-    return m_device->CreateBuffer(desc);
-}
+        bool RHIBridge::Present(bool vsync)
+        {
+            return m_swapChain ? m_swapChain->Present(vsync) : false;
+        }
 
-IRHITexture* RHIBridge::CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format,
-                                          RHITextureUsage usage, const void* data)
-{
-    RHITextureDesc desc;
-    desc.width = width;
-    desc.height = height;
-    desc.format = format;
-    desc.usage = usage;
-    desc.mipLevels = 1;
-    return m_device->CreateTexture(desc);
-}
+        IRHICommandList* RHIBridge::GetCommandList() const
+        {
+            return m_device ? m_device->GetImmediateCommandList() : nullptr;
+        }
 
-IRHITexture* RHIBridge::CreateDepthBuffer(uint32_t width, uint32_t height, PixelFormat format)
-{
-    RHITextureDesc desc;
-    desc.width = width;
-    desc.height = height;
-    desc.format = format;
-    desc.usage = RHITextureUsage::DepthStencil;
-    desc.mipLevels = 1;
-    return m_device->CreateTexture(desc);
-}
+        IRHITexture* RHIBridge::GetBackBuffer() const
+        {
+            return m_swapChain ? m_swapChain->GetBackBuffer() : nullptr;
+        }
 
-IRHITexture* RHIBridge::CreateRenderTarget(uint32_t width, uint32_t height, PixelFormat format)
-{
-    RHITextureDesc desc;
-    desc.width = width;
-    desc.height = height;
-    desc.format = format;
-    desc.usage = RHITextureUsage::RenderTarget | RHITextureUsage::ShaderResource;
-    desc.mipLevels = 1;
-    return m_device->CreateTexture(desc);
-}
+        GraphicsBackend RHIBridge::GetActiveBackend() const
+        {
+            return m_device ? m_device->GetBackendType() : GraphicsBackend::Auto;
+        }
 
-IRHISampler* RHIBridge::CreateSamplerLinearWrap()
-{
-    RHISamplerDesc desc;
-    desc.minFilter = RHIFilterMode::Linear;
-    desc.magFilter = RHIFilterMode::Linear;
-    desc.mipFilter = RHIFilterMode::Linear;
-    desc.addressU = RHIAddressMode::Wrap;
-    desc.addressV = RHIAddressMode::Wrap;
-    desc.addressW = RHIAddressMode::Wrap;
-    return m_device->CreateSampler(desc);
-}
+        // ============================================================================
+        // RESOURCE CONVENIENCE METHODS
+        // ============================================================================
 
-IRHISampler* RHIBridge::CreateSamplerLinearClamp()
-{
-    RHISamplerDesc desc;
-    desc.minFilter = RHIFilterMode::Linear;
-    desc.magFilter = RHIFilterMode::Linear;
-    desc.mipFilter = RHIFilterMode::Linear;
-    desc.addressU = RHIAddressMode::Clamp;
-    desc.addressV = RHIAddressMode::Clamp;
-    desc.addressW = RHIAddressMode::Clamp;
-    return m_device->CreateSampler(desc);
-}
+        IRHIBuffer* RHIBridge::CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride)
+        {
+            RHIBufferDesc desc;
+            desc.size = size;
+            desc.stride = stride;
+            desc.usage = RHIBufferUsage::Vertex;
+            desc.access = data ? RHIBufferAccess::Static : RHIBufferAccess::Dynamic;
+            desc.initialData = data;
+            return m_device->CreateBuffer(desc);
+        }
 
-IRHISampler* RHIBridge::CreateSamplerPointClamp()
-{
-    RHISamplerDesc desc;
-    desc.minFilter = RHIFilterMode::Nearest;
-    desc.magFilter = RHIFilterMode::Nearest;
-    desc.mipFilter = RHIFilterMode::Nearest;
-    desc.addressU = RHIAddressMode::Clamp;
-    desc.addressV = RHIAddressMode::Clamp;
-    desc.addressW = RHIAddressMode::Clamp;
-    return m_device->CreateSampler(desc);
-}
+        IRHIBuffer* RHIBridge::CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride)
+        {
+            RHIBufferDesc desc;
+            desc.size = size;
+            desc.stride = stride;
+            desc.usage = RHIBufferUsage::Index;
+            desc.access = data ? RHIBufferAccess::Static : RHIBufferAccess::Dynamic;
+            desc.initialData = data;
+            return m_device->CreateBuffer(desc);
+        }
 
-IRHISampler* RHIBridge::CreateSamplerAnisotropic(uint32_t maxAnisotropy)
-{
-    RHISamplerDesc desc;
-    desc.minFilter = RHIFilterMode::Anisotropic;
-    desc.magFilter = RHIFilterMode::Anisotropic;
-    desc.mipFilter = RHIFilterMode::Linear;
-    desc.addressU = RHIAddressMode::Wrap;
-    desc.addressV = RHIAddressMode::Wrap;
-    desc.addressW = RHIAddressMode::Wrap;
-    desc.maxAnisotropy = maxAnisotropy;
-    return m_device->CreateSampler(desc);
-}
+        IRHIBuffer* RHIBridge::CreateConstantBuffer(uint64_t size)
+        {
+            RHIBufferDesc desc;
+            desc.size = size;
+            desc.usage = RHIBufferUsage::Constant;
+            desc.access = RHIBufferAccess::Dynamic;
+            return m_device->CreateBuffer(desc);
+        }
 
-// ============================================================================
-// SHADER MANAGEMENT
-// ============================================================================
+        IRHITexture* RHIBridge::CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format,
+                                                RHITextureUsage usage, const void* data)
+        {
+            RHITextureDesc desc;
+            desc.width = width;
+            desc.height = height;
+            desc.format = format;
+            desc.usage = usage;
+            desc.mipLevels = 1;
+            return m_device->CreateTexture(desc);
+        }
 
-void RHIBridge::RegisterShader(const std::string& name, RHIShaderStage stage,
-                                const std::string& hlslPath, const std::string& glslPath,
-                                const std::string& spirvPath, const std::string& entryPoint)
-{
-    ShaderCache::ShaderEntry entry;
-    entry.hlslPath = hlslPath;
-    entry.glslPath = glslPath;
-    entry.spirvPath = spirvPath;
-    entry.entryPoint = entryPoint;
-    entry.stage = stage;
-    m_shaderCache.RegisterShader(name, entry);
-}
+        IRHITexture* RHIBridge::CreateDepthBuffer(uint32_t width, uint32_t height, PixelFormat format)
+        {
+            RHITextureDesc desc;
+            desc.width = width;
+            desc.height = height;
+            desc.format = format;
+            desc.usage = RHITextureUsage::DepthStencil;
+            desc.mipLevels = 1;
+            return m_device->CreateTexture(desc);
+        }
 
-IRHIShader* RHIBridge::GetShader(const std::string& name)
-{
-    return m_shaderCache.GetShader(name, m_device.get());
-}
+        IRHITexture* RHIBridge::CreateRenderTarget(uint32_t width, uint32_t height, PixelFormat format)
+        {
+            RHITextureDesc desc;
+            desc.width = width;
+            desc.height = height;
+            desc.format = format;
+            desc.usage = RHITextureUsage::RenderTarget | RHITextureUsage::ShaderResource;
+            desc.mipLevels = 1;
+            return m_device->CreateTexture(desc);
+        }
 
-// ============================================================================
-// CAPABILITIES & INFO
-// ============================================================================
+        IRHISampler* RHIBridge::CreateSamplerLinearWrap()
+        {
+            RHISamplerDesc desc;
+            desc.minFilter = RHIFilterMode::Linear;
+            desc.magFilter = RHIFilterMode::Linear;
+            desc.mipFilter = RHIFilterMode::Linear;
+            desc.addressU = RHIAddressMode::Wrap;
+            desc.addressV = RHIAddressMode::Wrap;
+            desc.addressW = RHIAddressMode::Wrap;
+            return m_device->CreateSampler(desc);
+        }
 
-const RHIDeviceCapabilities& RHIBridge::GetCapabilities() const
-{
-    return m_device->GetCapabilities();
-}
+        IRHISampler* RHIBridge::CreateSamplerLinearClamp()
+        {
+            RHISamplerDesc desc;
+            desc.minFilter = RHIFilterMode::Linear;
+            desc.magFilter = RHIFilterMode::Linear;
+            desc.mipFilter = RHIFilterMode::Linear;
+            desc.addressU = RHIAddressMode::Clamp;
+            desc.addressV = RHIAddressMode::Clamp;
+            desc.addressW = RHIAddressMode::Clamp;
+            return m_device->CreateSampler(desc);
+        }
 
-const RHIStatistics& RHIBridge::GetFrameStatistics() const
-{
-    return m_device->GetStatistics();
-}
+        IRHISampler* RHIBridge::CreateSamplerPointClamp()
+        {
+            RHISamplerDesc desc;
+            desc.minFilter = RHIFilterMode::Nearest;
+            desc.magFilter = RHIFilterMode::Nearest;
+            desc.mipFilter = RHIFilterMode::Nearest;
+            desc.addressU = RHIAddressMode::Clamp;
+            desc.addressV = RHIAddressMode::Clamp;
+            desc.addressW = RHIAddressMode::Clamp;
+            return m_device->CreateSampler(desc);
+        }
 
-std::string RHIBridge::GetDeviceInfo() const
-{
-    return m_device ? m_device->GetDeviceInfo() : "No device";
-}
+        IRHISampler* RHIBridge::CreateSamplerAnisotropic(uint32_t maxAnisotropy)
+        {
+            RHISamplerDesc desc;
+            desc.minFilter = RHIFilterMode::Anisotropic;
+            desc.magFilter = RHIFilterMode::Anisotropic;
+            desc.mipFilter = RHIFilterMode::Linear;
+            desc.addressU = RHIAddressMode::Wrap;
+            desc.addressV = RHIAddressMode::Wrap;
+            desc.addressW = RHIAddressMode::Wrap;
+            desc.maxAnisotropy = maxAnisotropy;
+            return m_device->CreateSampler(desc);
+        }
 
-std::string RHIBridge::GetBackendName() const
-{
-    switch (GetActiveBackend())
-    {
-    case GraphicsBackend::D3D11:  return "DirectX 11";
-    case GraphicsBackend::D3D12:  return "DirectX 12";
-    case GraphicsBackend::Vulkan: return "Vulkan";
-    case GraphicsBackend::OpenGL: return "OpenGL";
-    case GraphicsBackend::Metal:  return "Metal";
-    default:                      return "Unknown";
-    }
-}
+        // ============================================================================
+        // SHADER MANAGEMENT
+        // ============================================================================
 
-bool RHIBridge::IsBackendAvailable(GraphicsBackend backend)
-{
-    auto available = GetAvailableBackends();
-    return std::find(available.begin(), available.end(), backend) != available.end();
-}
+        void RHIBridge::RegisterShader(const std::string& name, RHIShaderStage stage, const std::string& hlslPath,
+                                       const std::string& glslPath, const std::string& spirvPath,
+                                       const std::string& entryPoint)
+        {
+            ShaderCache::ShaderEntry entry;
+            entry.hlslPath = hlslPath;
+            entry.glslPath = glslPath;
+            entry.spirvPath = spirvPath;
+            entry.entryPoint = entryPoint;
+            entry.stage = stage;
+            m_shaderCache.RegisterShader(name, entry);
+        }
 
-std::vector<GraphicsBackend> RHIBridge::GetAvailableBackends()
-{
-    std::vector<GraphicsBackend> backends;
+        IRHIShader* RHIBridge::GetShader(const std::string& name)
+        {
+            return m_shaderCache.GetShader(name, m_device.get());
+        }
+
+        // ============================================================================
+        // CAPABILITIES & INFO
+        // ============================================================================
+
+        const RHIDeviceCapabilities& RHIBridge::GetCapabilities() const
+        {
+            return m_device->GetCapabilities();
+        }
+
+        const RHIStatistics& RHIBridge::GetFrameStatistics() const
+        {
+            return m_device->GetStatistics();
+        }
+
+        std::string RHIBridge::GetDeviceInfo() const
+        {
+            return m_device ? m_device->GetDeviceInfo() : "No device";
+        }
+
+        std::string RHIBridge::GetBackendName() const
+        {
+            switch (GetActiveBackend())
+            {
+            case GraphicsBackend::D3D11:
+                return "DirectX 11";
+            case GraphicsBackend::D3D12:
+                return "DirectX 12";
+            case GraphicsBackend::Vulkan:
+                return "Vulkan";
+            case GraphicsBackend::OpenGL:
+                return "OpenGL";
+            case GraphicsBackend::Metal:
+                return "Metal";
+            default:
+                return "Unknown";
+            }
+        }
+
+        bool RHIBridge::IsBackendAvailable(GraphicsBackend backend)
+        {
+            auto available = GetAvailableBackends();
+            return std::find(available.begin(), available.end(), backend) != available.end();
+        }
+
+        std::vector<GraphicsBackend> RHIBridge::GetAvailableBackends()
+        {
+            std::vector<GraphicsBackend> backends;
 
 #ifdef _WIN32
-    backends.push_back(GraphicsBackend::D3D11);
+            backends.push_back(GraphicsBackend::D3D11);
 #endif
 
 #ifdef SPARK_VULKAN_SUPPORT
-    backends.push_back(GraphicsBackend::Vulkan);
+            backends.push_back(GraphicsBackend::Vulkan);
 #endif
 
 #ifdef SPARK_OPENGL_SUPPORT
-    backends.push_back(GraphicsBackend::OpenGL);
+            backends.push_back(GraphicsBackend::OpenGL);
 #endif
 
-    return backends;
-}
+            return backends;
+        }
 
-GraphicsBackend RHIBridge::GetRecommendedBackend()
-{
+        GraphicsBackend RHIBridge::GetRecommendedBackend()
+        {
 #ifdef _WIN32
-    return GraphicsBackend::D3D11;
+            return GraphicsBackend::D3D11;
 #elif defined(SPARK_VULKAN_SUPPORT)
-    return GraphicsBackend::Vulkan;
+            return GraphicsBackend::Vulkan;
 #elif defined(SPARK_OPENGL_SUPPORT)
-    return GraphicsBackend::OpenGL;
+            return GraphicsBackend::OpenGL;
 #else
-    return GraphicsBackend::Auto;
+            return GraphicsBackend::Auto;
 #endif
-}
+        }
 
-// ============================================================================
-// PRIVATE
-// ============================================================================
+        // ============================================================================
+        // PRIVATE
+        // ============================================================================
 
-GraphicsBackend RHIBridge::SelectBestBackend() const
-{
-    return GetRecommendedBackend();
-}
+        GraphicsBackend RHIBridge::SelectBestBackend() const
+        {
+            return GetRecommendedBackend();
+        }
 
-bool RHIBridge::CreateDepthBufferInternal(uint32_t width, uint32_t height)
-{
-    m_depthBuffer = CreateDepthBuffer(width, height);
-    return m_depthBuffer != nullptr;
-}
+        bool RHIBridge::CreateDepthBufferInternal(uint32_t width, uint32_t height)
+        {
+            m_depthBuffer = CreateDepthBuffer(width, height);
+            return m_depthBuffer != nullptr;
+        }
 
-}} // namespace Spark::RHI
+    } // namespace RHI
+} // namespace Spark

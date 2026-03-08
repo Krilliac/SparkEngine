@@ -28,8 +28,8 @@
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
 
-using DirectX::XMMATRIX;
 using DirectX::XMFLOAT3;
+using DirectX::XMMATRIX;
 
 /**
  * @brief Gravity-affected explosive projectile with timed detonation
@@ -49,7 +49,7 @@ using DirectX::XMFLOAT3;
  */
 class Grenade : public Projectile
 {
-public:
+  public:
     /**
      * @brief Construct a grenade with default fuse and explosion parameters
      *
@@ -81,14 +81,14 @@ public:
      *
      * @param deltaTime Time elapsed since last frame in seconds
      */
-    void    Update(float deltaTime) override;
+    void Update(float deltaTime) override;
 
     /**
      * @brief Render the grenade mesh
      * @param view       Camera view matrix
      * @param projection Camera projection matrix
      */
-    void    Render(const XMMATRIX& view, const XMMATRIX& projection) override;
+    void Render(const XMMATRIX& view, const XMMATRIX& projection) override;
 
     /**
      * @brief Fire the grenade with an initial arcing trajectory
@@ -100,9 +100,9 @@ public:
      * @param direction     Normalized throw direction vector
      * @param speed         Initial throw speed in units per second
      */
-    void    Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed) override;
+    void Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed) override;
 
-private:
+  private:
     /**
      * @brief Trigger the grenade explosion
      *
@@ -112,7 +112,7 @@ private:
      */
     void Explode();
 
-    float m_fuseTime;          ///< Remaining fuse time in seconds before detonation
-    float m_explosionRadius;   ///< Radius of the explosion's area-of-effect damage
-    bool  m_hasExploded;       ///< Guard flag to prevent double detonation
+    float m_fuseTime;        ///< Remaining fuse time in seconds before detonation
+    float m_explosionRadius; ///< Radius of the explosion's area-of-effect damage
+    bool m_hasExploded;      ///< Guard flag to prevent double detonation
 };

@@ -30,12 +30,13 @@
 using SparkEditor::WeaponType;
 
 // Forward declarations
-namespace Spark {
+namespace Spark
+{
     class SimpleConsole;
     class Vehicle;
     class GravitySystem;
     class InteractionSystem;
-}
+} // namespace Spark
 
 /**
  * @brief Player character controller class with full console integration
@@ -58,7 +59,7 @@ namespace Spark {
  */
 class Player : public GameObject
 {
-public:
+  public:
     /**
      * @brief Default constructor
      * 
@@ -87,10 +88,8 @@ public:
      * @return HRESULT indicating success or failure of initialization
      * @note The camera and input pointers are stored but not owned by Player
      */
-    HRESULT Initialize(ID3D11Device* device,
-        ID3D11DeviceContext* context,
-        SparkEngineCamera* camera,
-        InputManager* input);
+    HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* context, SparkEngineCamera* camera,
+                       InputManager* input);
 
     /**
      * @brief Update player logic for the current frame
@@ -111,8 +110,7 @@ public:
      * @param view Camera view transformation matrix
      * @param proj Camera projection transformation matrix
      */
-    void Render(const DirectX::XMMATRIX& view,
-        const DirectX::XMMATRIX& proj) override;
+    void Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj) override;
 
     /**
      * @brief Render the weapon model in first-person view
@@ -209,7 +207,7 @@ public:
      * @brief Get current player health
      * @return Current health value
      */
-    float GetHealth()    const { return m_health; }
+    float GetHealth() const { return m_health; }
 
     /**
      * @brief Get maximum player health
@@ -257,7 +255,7 @@ public:
      * @brief Check if the player is alive
      * @return true if health is above zero, false if dead
      */
-    bool  IsAlive()      const { return m_health > 0.0f; }
+    bool IsAlive() const { return m_health > 0.0f; }
 
     /**
      * @brief Check if the player is on the ground
@@ -539,7 +537,8 @@ public:
      * @brief Get comprehensive player state for console display
      * @return Structure containing all relevant player state information
      */
-    struct PlayerState {
+    struct PlayerState
+    {
         float health, maxHealth, armor, maxArmor, stamina, maxStamina;
         float shield, maxShield, energy, maxEnergy;
         DirectX::XMFLOAT3 position, velocity;
@@ -592,93 +591,92 @@ public:
      * @param hitPoint World position where the collision occurred
      * @param normal Surface normal at the collision point
      */
-    void OnHitWorld(const DirectX::XMFLOAT3& hitPoint,
-        const DirectX::XMFLOAT3& normal) override;
+    void OnHitWorld(const DirectX::XMFLOAT3& hitPoint, const DirectX::XMFLOAT3& normal) override;
 
-private:
+  private:
     // Stats
-    float m_health{ 100 }, m_maxHealth{ 100 };     ///< Current and maximum health
-    float m_armor{ 0 }, m_maxArmor{ 100 };         ///< Current and maximum armor
-    float m_stamina{ 100 }, m_maxStamina{ 100 };   ///< Current and maximum stamina
-    float m_speed{ 5 }, m_jumpHeight{ 3 };         ///< Movement speed and jump height
+    float m_health{100}, m_maxHealth{100};   ///< Current and maximum health
+    float m_armor{0}, m_maxArmor{100};       ///< Current and maximum armor
+    float m_stamina{100}, m_maxStamina{100}; ///< Current and maximum stamina
+    float m_speed{5}, m_jumpHeight{3};       ///< Movement speed and jump height
 
     // Class system
-    PlayerClass m_playerClass{ PlayerClass::LIGHT_ASSAULT };  ///< Current class
-    Spark::ClassSystem* m_classSystem{ nullptr };              ///< Reference to class system
-    float m_shield{ 0 }, m_maxShield{ 50 };                   ///< Rechargeable shield
-    float m_shieldRechargeRate{ 10.0f };
-    float m_shieldRechargeDelay{ 6.0f };
-    float m_shieldRechargeTimer{ 0.0f };                      ///< Timer since last damage
-    float m_energy{ 100 }, m_maxEnergy{ 100 };                ///< Ability energy pool
-    float m_energyRegenRate{ 10.0f };                         ///< Energy regen per second
+    PlayerClass m_playerClass{PlayerClass::LIGHT_ASSAULT}; ///< Current class
+    Spark::ClassSystem* m_classSystem{nullptr};            ///< Reference to class system
+    float m_shield{0}, m_maxShield{50};                    ///< Rechargeable shield
+    float m_shieldRechargeRate{10.0f};
+    float m_shieldRechargeDelay{6.0f};
+    float m_shieldRechargeTimer{0.0f};     ///< Timer since last damage
+    float m_energy{100}, m_maxEnergy{100}; ///< Ability energy pool
+    float m_energyRegenRate{10.0f};        ///< Energy regen per second
     Spark::AbilityState m_primaryAbility;
     Spark::AbilityState m_secondaryAbility;
-    float m_damageResistance{ 0.0f };
-    float m_explosiveResistance{ 0.0f };
-    float m_sprintMultiplier{ 2.0f };
-    float m_crouchMultiplier{ 0.5f };
-    float m_adsSpeedMultiplier{ 0.5f };
+    float m_damageResistance{0.0f};
+    float m_explosiveResistance{0.0f};
+    float m_sprintMultiplier{2.0f};
+    float m_crouchMultiplier{0.5f};
+    float m_adsSpeedMultiplier{0.5f};
     Spark::ClassLoadout m_loadout;
-    int m_activeLoadoutSlot{ 0 };  ///< 0=primary, 1=secondary, 2=sidearm, 3=tool
+    int m_activeLoadoutSlot{0}; ///< 0=primary, 1=secondary, 2=sidearm, 3=tool
     std::vector<WeaponType> m_allowedWeapons;
-    bool m_jetpackActive{ false };
-    float m_jetpackFuel{ 100.0f };
-    float m_jetpackMaxFuel{ 100.0f };
-    float m_jetpackThrust{ 8.0f };
-    bool m_cloakActive{ false };
-    float m_overshieldHP{ 0.0f };
-    float m_overshieldMaxHP{ 200.0f };
-    bool m_lockedDown{ false };  ///< MAX lockdown state
+    bool m_jetpackActive{false};
+    float m_jetpackFuel{100.0f};
+    float m_jetpackMaxFuel{100.0f};
+    float m_jetpackThrust{8.0f};
+    bool m_cloakActive{false};
+    float m_overshieldHP{0.0f};
+    float m_overshieldMaxHP{200.0f};
+    bool m_lockedDown{false}; ///< MAX lockdown state
 
     // Movement
-    DirectX::XMFLOAT3 m_velocity{};                ///< Current velocity vector
-    bool m_isGrounded{ true }, m_isRunning{ false }, ///< Movement state flags
-        m_isCrouching{ false }, m_isJumping{ false };
+    DirectX::XMFLOAT3 m_velocity{};              ///< Current velocity vector
+    bool m_isGrounded{true}, m_isRunning{false}, ///< Movement state flags
+        m_isCrouching{false}, m_isJumping{false};
 
     // Combat
-    WeaponStats m_currentWeapon;    ///< Current weapon configuration
-    int         m_currentAmmo{ 0 }; ///< Current ammunition count
-    float       m_fireTimer{ 0 }, m_reloadTimer{ 0 }; ///< Weapon timing
-    bool        m_isReloading{ false }, m_isFiring{ false }; ///< Combat state
+    WeaponStats m_currentWeapon;                  ///< Current weapon configuration
+    int m_currentAmmo{0};                         ///< Current ammunition count
+    float m_fireTimer{0}, m_reloadTimer{0};       ///< Weapon timing
+    bool m_isReloading{false}, m_isFiring{false}; ///< Combat state
 
     // Weapon models for rendering
-    std::unique_ptr<class Model> m_pistolModel;      ///< Pistol weapon model
-    std::unique_ptr<class Model> m_rifleModel;       ///< Rifle weapon model
-    std::unique_ptr<class Model> m_shotgunModel;     ///< Shotgun weapon model
-    std::unique_ptr<class Model> m_rocketModel;      ///< Rocket launcher model
-    std::unique_ptr<class Model> m_grenadeModel;     ///< Grenade launcher model
+    std::unique_ptr<class Model> m_pistolModel;  ///< Pistol weapon model
+    std::unique_ptr<class Model> m_rifleModel;   ///< Rifle weapon model
+    std::unique_ptr<class Model> m_shotgunModel; ///< Shotgun weapon model
+    std::unique_ptr<class Model> m_rocketModel;  ///< Rocket launcher model
+    std::unique_ptr<class Model> m_grenadeModel; ///< Grenade launcher model
 
     // Console integration state
-    bool m_godModeEnabled{ false };      ///< God mode prevents damage
-    bool m_noclipEnabled{ false };       ///< Noclip disables collision
-    bool m_infiniteAmmoEnabled{ false }; ///< Infinite ammo prevents consumption
-    float m_gravityForce{ -20.0f };      ///< Gravity force applied
-    float m_frictionCoeff{ 0.9f };       ///< Movement friction coefficient
-    
+    bool m_godModeEnabled{false};      ///< God mode prevents damage
+    bool m_noclipEnabled{false};       ///< Noclip disables collision
+    bool m_infiniteAmmoEnabled{false}; ///< Infinite ammo prevents consumption
+    float m_gravityForce{-20.0f};      ///< Gravity force applied
+    float m_frictionCoeff{0.9f};       ///< Movement friction coefficient
+
     // Console callback system
     std::function<void(const PlayerState&)> m_stateCallback;
-    mutable std::recursive_mutex m_stateMutex;     ///< Thread safety for state access
+    mutable std::recursive_mutex m_stateMutex; ///< Thread safety for state access
 
     // External references (not owned)
-    SparkEngineCamera* m_camera{ nullptr };      ///< Reference to camera system
-    InputManager* m_input{ nullptr };            ///< Reference to input manager
-    ProjectilePool* m_projectilePool{ nullptr }; ///< Reference to projectile pool
+    SparkEngineCamera* m_camera{nullptr};                  ///< Reference to camera system
+    InputManager* m_input{nullptr};                        ///< Reference to input manager
+    ProjectilePool* m_projectilePool{nullptr};             ///< Reference to projectile pool
     std::unique_ptr<ProjectilePool> m_ownedProjectilePool; ///< Owned pool if created by Player
 
     // Vehicle system
-    Spark::Vehicle* m_currentVehicle{ nullptr }; ///< Vehicle currently occupied (not owned)
-    int m_vehicleSeatIndex{ -1 };                ///< Seat index in current vehicle
+    Spark::Vehicle* m_currentVehicle{nullptr}; ///< Vehicle currently occupied (not owned)
+    int m_vehicleSeatIndex{-1};                ///< Seat index in current vehicle
 
     // Gravity zone system
-    Spark::GravitySystem* m_gravitySystem{ nullptr }; ///< Gravity system reference (not owned)
-    Spark::GravityState m_gravityState;               ///< Current gravity state with transitions
+    Spark::GravitySystem* m_gravitySystem{nullptr}; ///< Gravity system reference (not owned)
+    Spark::GravityState m_gravityState;             ///< Current gravity state with transitions
 
     // Interaction system
-    Spark::InteractionSystem* m_interactionSystem{ nullptr }; ///< Interaction system (not owned)
+    Spark::InteractionSystem* m_interactionSystem{nullptr}; ///< Interaction system (not owned)
 
     // Collision & animation
-    BoundingSphere m_collisionSphere;            ///< Collision bounds for player
-    float          m_bobTimer{ 0 }, m_footstepTimer{ 0 }; ///< Animation timers
+    BoundingSphere m_collisionSphere;        ///< Collision bounds for player
+    float m_bobTimer{0}, m_footstepTimer{0}; ///< Animation timers
 
     /**
      * @brief Process input for movement and actions
@@ -766,7 +764,7 @@ private:
      * @param type Weapon type to get stats for
      * @return WeaponStats structure with weapon parameters
      */
-    WeaponStats       GetWeaponStats(WeaponType type);
+    WeaponStats GetWeaponStats(WeaponType type);
 
     /**
      * @brief Calculate the direction vector for projectile firing

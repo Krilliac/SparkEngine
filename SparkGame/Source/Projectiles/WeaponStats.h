@@ -22,25 +22,20 @@
  */
 struct WeaponStats
 {
-    SparkEditor::WeaponType Type;         ///< Weapon category/type
-    float      Damage;       ///< Base damage per shot/projectile
-    float      FireRate;     ///< Rate of fire in rounds per minute
-    int        MagazineSize; ///< Number of rounds per magazine/clip
-    float      ReloadTime;   ///< Time required to reload in seconds
-    float      MuzzleVelocity; ///< Initial projectile speed in units per second
-    float      Accuracy;     ///< Accuracy factor (0.0 = completely inaccurate, 1.0 = perfect accuracy)
+    SparkEditor::WeaponType Type; ///< Weapon category/type
+    float Damage;                 ///< Base damage per shot/projectile
+    float FireRate;               ///< Rate of fire in rounds per minute
+    int MagazineSize;             ///< Number of rounds per magazine/clip
+    float ReloadTime;             ///< Time required to reload in seconds
+    float MuzzleVelocity;         ///< Initial projectile speed in units per second
+    float Accuracy;               ///< Accuracy factor (0.0 = completely inaccurate, 1.0 = perfect accuracy)
 
     /**
      * @brief Default constructor with safe initial values
      */
     WeaponStats()
-        : Type(SparkEditor::WeaponType::PISTOL)
-        , Damage(10.0f)
-        , FireRate(600.0f)
-        , MagazineSize(15)
-        , ReloadTime(2.0f)
-        , MuzzleVelocity(300.0f)
-        , Accuracy(0.85f)
+        : Type(SparkEditor::WeaponType::PISTOL), Damage(10.0f), FireRate(600.0f), MagazineSize(15), ReloadTime(2.0f),
+          MuzzleVelocity(300.0f), Accuracy(0.85f)
     {
     }
 
@@ -55,15 +50,10 @@ struct WeaponStats
      * @param velocity Muzzle velocity
      * @param accuracy Accuracy factor (0.0-1.0)
      */
-    WeaponStats(SparkEditor::WeaponType type, float damage, float fireRate, int magSize,
-               float reloadTime, float velocity, float accuracy)
-        : Type(type)
-        , Damage(damage)
-        , FireRate(fireRate)
-        , MagazineSize(magSize)
-        , ReloadTime(reloadTime)
-        , MuzzleVelocity(velocity)
-        , Accuracy(accuracy)
+    WeaponStats(SparkEditor::WeaponType type, float damage, float fireRate, int magSize, float reloadTime,
+                float velocity, float accuracy)
+        : Type(type), Damage(damage), FireRate(fireRate), MagazineSize(magSize), ReloadTime(reloadTime),
+          MuzzleVelocity(velocity), Accuracy(accuracy)
     {
         assert(damage >= 0.0f && "Weapon damage must be non-negative");
         assert(fireRate >= 0.0f && "Fire rate must be non-negative");
@@ -79,7 +69,8 @@ struct WeaponStats
      */
     float GetShotInterval() const
     {
-        if (FireRate <= 0.0f) return 1.0f; // Safety fallback
+        if (FireRate <= 0.0f)
+            return 1.0f;         // Safety fallback
         return 60.0f / FireRate; // Convert RPM to seconds per shot
     }
 
@@ -96,10 +87,7 @@ struct WeaponStats
      * @brief Calculate damage per second (DPS)
      * @return Theoretical maximum damage per second
      */
-    float GetDPS() const
-    {
-        return Damage * (FireRate / 60.0f);
-    }
+    float GetDPS() const { return Damage * (FireRate / 60.0f); }
 
     /**
      * @brief Validate weapon statistics for logical consistency
@@ -107,12 +95,8 @@ struct WeaponStats
      */
     bool IsValid() const
     {
-        return Damage >= 0.0f &&
-               FireRate >= 0.0f &&
-               MagazineSize >= 0 &&
-               ReloadTime >= 0.0f &&
-               MuzzleVelocity >= 0.0f &&
-               Accuracy >= 0.0f && Accuracy <= 1.0f;
+        return Damage >= 0.0f && FireRate >= 0.0f && MagazineSize >= 0 && ReloadTime >= 0.0f &&
+               MuzzleVelocity >= 0.0f && Accuracy >= 0.0f && Accuracy <= 1.0f;
     }
 };
 
@@ -141,8 +125,8 @@ WeaponStats GetDefaultWeaponStats(SparkEditor::WeaponType type);
  * @param accuracy Accuracy factor (0.0-1.0)
  * @return WeaponStats structure with specified values
  */
-WeaponStats CreateWeaponStats(SparkEditor::WeaponType type, float damage, float fireRate,
-                             int magSize, float reloadTime, float velocity, float accuracy);
+WeaponStats CreateWeaponStats(SparkEditor::WeaponType type, float damage, float fireRate, int magSize, float reloadTime,
+                              float velocity, float accuracy);
 
 /**
  * @brief Apply weapon modifications to base stats
@@ -157,11 +141,9 @@ WeaponStats CreateWeaponStats(SparkEditor::WeaponType type, float damage, float 
  * @param reloadTimeMultiplier Reload time modification factor (lower is better)
  * @return Modified weapon statistics
  */
-WeaponStats ApplyWeaponModifications(const WeaponStats& baseStats,
-                                   float damageMultiplier = 1.0f,
-                                   float fireRateMultiplier = 1.0f,
-                                   float accuracyMultiplier = 1.0f,
-                                   float reloadTimeMultiplier = 1.0f);
+WeaponStats ApplyWeaponModifications(const WeaponStats& baseStats, float damageMultiplier = 1.0f,
+                                     float fireRateMultiplier = 1.0f, float accuracyMultiplier = 1.0f,
+                                     float reloadTimeMultiplier = 1.0f);
 
 /**
  * @brief Convert weapon type to string representation

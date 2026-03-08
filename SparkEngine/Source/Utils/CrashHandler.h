@@ -41,15 +41,16 @@
  * Controls what data is captured when a crash occurs and how the crash
  * report is processed (local storage, compression, upload).
  */
-struct CrashConfig {
-    std::wstring dumpPrefix = L"GameEngineCrash";  ///< Filename prefix for generated minidump files
-    std::string  uploadURL = "";                   ///< Remote URL to upload crash reports (empty = no upload)
-    bool         captureScreenshot = true;          ///< Whether to capture a screenshot at crash time
-    bool         captureSystemInfo = true;          ///< Whether to collect OS/GPU/memory information
-    bool         captureAllThreads = true;          ///< Whether to dump call stacks for all threads
-    bool         zipBeforeUpload = true;            ///< Whether to compress the report before uploading
-    bool         triggerCrashOnAssert = false;       ///< Whether assertion failures should generate a full crash report
-    int          connectTimeoutSeconds = 5;          ///< HTTP connection timeout for crash report uploads
+struct CrashConfig
+{
+    std::wstring dumpPrefix = L"GameEngineCrash"; ///< Filename prefix for generated minidump files
+    std::string uploadURL = "";                   ///< Remote URL to upload crash reports (empty = no upload)
+    bool captureScreenshot = true;                ///< Whether to capture a screenshot at crash time
+    bool captureSystemInfo = true;                ///< Whether to collect OS/GPU/memory information
+    bool captureAllThreads = true;                ///< Whether to dump call stacks for all threads
+    bool zipBeforeUpload = true;                  ///< Whether to compress the report before uploading
+    bool triggerCrashOnAssert = false;            ///< Whether assertion failures should generate a full crash report
+    int connectTimeoutSeconds = 5;                ///< HTTP connection timeout for crash report uploads
 };
 
 /**

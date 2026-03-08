@@ -44,65 +44,65 @@ using namespace DirectX;
 namespace
 {
 
-// Maximum number of bloom mip levels for downsampling / blurring
-static constexpr int   kBloomMipCount      = 5;
-static constexpr float kDefaultBloomThreshold   = 1.0f;
-static constexpr float kDefaultBloomIntensity   = 0.8f;
-static constexpr float kDefaultExposure         = 1.0f;
-static constexpr float kDefaultContrast         = 1.0f;
-static constexpr float kDefaultSaturation       = 1.0f;
-static constexpr float kDefaultGamma            = 2.2f;
+    // Maximum number of bloom mip levels for downsampling / blurring
+    static constexpr int kBloomMipCount = 5;
+    static constexpr float kDefaultBloomThreshold = 1.0f;
+    static constexpr float kDefaultBloomIntensity = 0.8f;
+    static constexpr float kDefaultExposure = 1.0f;
+    static constexpr float kDefaultContrast = 1.0f;
+    static constexpr float kDefaultSaturation = 1.0f;
+    static constexpr float kDefaultGamma = 2.2f;
 
-// Tone-mapping operator IDs
-enum class ToneMapOperator : int
-{
-    Reinhard    = 0,
-    ACESFilmic  = 1,
-    Uncharted2  = 2
-};
+    // Tone-mapping operator IDs
+    enum class ToneMapOperator : int
+    {
+        Reinhard = 0,
+        ACESFilmic = 1,
+        Uncharted2 = 2
+    };
 
-// -----------------------------------------------------------------
-// Constant-buffer layout shared by all post-processing shaders.
-// Must be 16-byte aligned and match the HLSL cbuffer declaration.
-// -----------------------------------------------------------------
-struct alignas(16) PostProcessCB
-{
-    // Bloom
-    float BloomThreshold;
-    float BloomIntensity;
-    float TexelSizeX;
-    float TexelSizeY;
+    // -----------------------------------------------------------------
+    // Constant-buffer layout shared by all post-processing shaders.
+    // Must be 16-byte aligned and match the HLSL cbuffer declaration.
+    // -----------------------------------------------------------------
+    struct alignas(16) PostProcessCB
+    {
+        // Bloom
+        float BloomThreshold;
+        float BloomIntensity;
+        float TexelSizeX;
+        float TexelSizeY;
 
-    // Tone mapping
-    int   ToneMapOperator;   // 0=Reinhard, 1=ACES, 2=Uncharted2
-    float Exposure;
-    float Gamma;
-    float _pad0;
+        // Tone mapping
+        int ToneMapOperator; // 0=Reinhard, 1=ACES, 2=Uncharted2
+        float Exposure;
+        float Gamma;
+        float _pad0;
 
-    // Color grading
-    float Contrast;
-    float Saturation;
-    float _pad1;
-    float _pad2;
+        // Color grading
+        float Contrast;
+        float Saturation;
+        float _pad1;
+        float _pad2;
 
-    // FXAA
-    float FXAAQualitySubpix;
-    float FXAAQualityEdgeThreshold;
-    float FXAAQualityEdgeThresholdMin;
-    float _pad3;
+        // FXAA
+        float FXAAQualitySubpix;
+        float FXAAQualityEdgeThreshold;
+        float FXAAQualityEdgeThresholdMin;
+        float _pad3;
 
-    // Screen dimensions for FXAA
-    float ScreenWidthInv;
-    float ScreenHeightInv;
-    float _pad4;
-    float _pad5;
-};
+        // Screen dimensions for FXAA
+        float ScreenWidthInv;
+        float ScreenHeightInv;
+        float _pad4;
+        float _pad5;
+    };
 
-// -----------------------------------------------------------------
-// Full-screen triangle vertex shader (used by every pass)
-// Renders a full-screen triangle without a vertex buffer.
-// -----------------------------------------------------------------
-static const char* kFullScreenVS = R"(
+    // -----------------------------------------------------------------
+    // Full-screen triangle vertex shader (used by every pass)
+    // Renders a full-screen triangle without a vertex buffer.
+    // -----------------------------------------------------------------
+    static const char* kFullScreenVS = R"(
 void VSMain(uint id : SV_VertexID,
             out float4 pos : SV_Position,
             out float2 uv  : TEXCOORD0)
@@ -113,10 +113,10 @@ void VSMain(uint id : SV_VertexID,
 }
 )";
 
-// -----------------------------------------------------------------
-// Brightness extraction (first bloom pass)
-// -----------------------------------------------------------------
-static const char* kBrightnessExtractPS = R"(
+    // -----------------------------------------------------------------
+    // Brightness extraction (first bloom pass)
+    // -----------------------------------------------------------------
+    static const char* kBrightnessExtractPS = R"(
 cbuffer PostProcessCB : register(b0)
 {
     float BloomThreshold;
@@ -164,10 +164,10 @@ float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
 }
 )";
 
-// -----------------------------------------------------------------
-// Gaussian blur (horizontal pass)
-// -----------------------------------------------------------------
-static const char* kGaussianBlurHPS = R"(
+    // -----------------------------------------------------------------
+    // Gaussian blur (horizontal pass)
+    // -----------------------------------------------------------------
+    static const char* kGaussianBlurHPS = R"(
 cbuffer PostProcessCB : register(b0)
 {
     float BloomThreshold;
@@ -219,10 +219,10 @@ float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
 }
 )";
 
-// -----------------------------------------------------------------
-// Gaussian blur (vertical pass)
-// -----------------------------------------------------------------
-static const char* kGaussianBlurVPS = R"(
+    // -----------------------------------------------------------------
+    // Gaussian blur (vertical pass)
+    // -----------------------------------------------------------------
+    static const char* kGaussianBlurVPS = R"(
 cbuffer PostProcessCB : register(b0)
 {
     float BloomThreshold;
@@ -273,10 +273,10 @@ float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
 }
 )";
 
-// -----------------------------------------------------------------
-// Bloom composite (additive blend of blurred bloom onto the scene)
-// -----------------------------------------------------------------
-static const char* kBloomCompositePS = R"(
+    // -----------------------------------------------------------------
+    // Bloom composite (additive blend of blurred bloom onto the scene)
+    // -----------------------------------------------------------------
+    static const char* kBloomCompositePS = R"(
 cbuffer PostProcessCB : register(b0)
 {
     float BloomThreshold;
@@ -318,10 +318,10 @@ float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
 }
 )";
 
-// -----------------------------------------------------------------
-// Tone mapping + color grading combined pass
-// -----------------------------------------------------------------
-static const char* kToneMapColorGradePS = R"(
+    // -----------------------------------------------------------------
+    // Tone mapping + color grading combined pass
+    // -----------------------------------------------------------------
+    static const char* kToneMapColorGradePS = R"(
 cbuffer PostProcessCB : register(b0)
 {
     float BloomThreshold;
@@ -427,11 +427,11 @@ float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
 }
 )";
 
-// -----------------------------------------------------------------
-// FXAA 3.11 quality pixel shader
-// Adapted from Timothy Lottes / NVIDIA FXAA 3.11
-// -----------------------------------------------------------------
-static const char* kFXAAPS = R"(
+    // -----------------------------------------------------------------
+    // FXAA 3.11 quality pixel shader
+    // Adapted from Timothy Lottes / NVIDIA FXAA 3.11
+    // -----------------------------------------------------------------
+    static const char* kFXAAPS = R"(
 cbuffer PostProcessCB : register(b0)
 {
     float BloomThreshold;
@@ -619,11 +619,11 @@ float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
 }
 )";
 
-// -----------------------------------------------------------------
-// Simple pass-through / copy shader (used when an effect is disabled
-// but we still need to copy between render targets)
-// -----------------------------------------------------------------
-static const char* kCopyPS = R"(
+    // -----------------------------------------------------------------
+    // Simple pass-through / copy shader (used when an effect is disabled
+    // but we still need to copy between render targets)
+    // -----------------------------------------------------------------
+    static const char* kCopyPS = R"(
 Texture2D    SourceTexture : register(t0);
 SamplerState LinearSampler : register(s0);
 
@@ -633,46 +633,37 @@ float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
 }
 )";
 
-// -----------------------------------------------------------------
-// Helper: compile an HLSL shader from an inline source string
-// -----------------------------------------------------------------
-HRESULT CompileShaderFromString(const char* source,
-                                const char* entryPoint,
-                                const char* target,
-                                ID3DBlob** blobOut)
-{
-    DWORD flags = D3DCOMPILE_ENABLE_STRICTNESS;
+    // -----------------------------------------------------------------
+    // Helper: compile an HLSL shader from an inline source string
+    // -----------------------------------------------------------------
+    HRESULT CompileShaderFromString(const char* source, const char* entryPoint, const char* target, ID3DBlob** blobOut)
+    {
+        DWORD flags = D3DCOMPILE_ENABLE_STRICTNESS;
 #if defined(_DEBUG) || defined(DEBUG)
-    flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+        flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
-    flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+        flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
 
-    ComPtr<ID3DBlob> errorBlob;
-    HRESULT hr = D3DCompile(source,
-                            strlen(source),
-                            nullptr,  // source name
-                            nullptr,  // defines
-                            nullptr,  // includes
-                            entryPoint,
-                            target,
-                            flags,
-                            0,
-                            blobOut,
-                            &errorBlob);
+        ComPtr<ID3DBlob> errorBlob;
+        HRESULT hr = D3DCompile(source, strlen(source),
+                                nullptr, // source name
+                                nullptr, // defines
+                                nullptr, // includes
+                                entryPoint, target, flags, 0, blobOut, &errorBlob);
 
-    if (FAILED(hr))
-    {
-        if (errorBlob)
+        if (FAILED(hr))
         {
-            std::string errMsg = "Shader compile error: ";
-            errMsg += static_cast<const char*>(errorBlob->GetBufferPointer());
-            Spark::SimpleConsole::GetInstance().LogError(errMsg);
+            if (errorBlob)
+            {
+                std::string errMsg = "Shader compile error: ";
+                errMsg += static_cast<const char*>(errorBlob->GetBufferPointer());
+                Spark::SimpleConsole::GetInstance().LogError(errMsg);
+            }
+            return hr;
         }
-        return hr;
+        return S_OK;
     }
-    return S_OK;
-}
 
 } // anonymous namespace
 
@@ -689,427 +680,447 @@ HRESULT CompileShaderFromString(const char* source,
 namespace PPInternal
 {
 
-struct EffectState
-{
-    bool enabled = true;
-};
+    struct EffectState
+    {
+        bool enabled = true;
+    };
 
-struct BloomState : EffectState
-{
-    float threshold  = kDefaultBloomThreshold;
-    float intensity  = kDefaultBloomIntensity;
-};
+    struct BloomState : EffectState
+    {
+        float threshold = kDefaultBloomThreshold;
+        float intensity = kDefaultBloomIntensity;
+    };
 
-struct ToneMapState : EffectState
-{
-    ToneMapOperator op = ToneMapOperator::ACESFilmic;
-    float exposure     = kDefaultExposure;
-    float gamma        = kDefaultGamma;
-};
+    struct ToneMapState : EffectState
+    {
+        ToneMapOperator op = ToneMapOperator::ACESFilmic;
+        float exposure = kDefaultExposure;
+        float gamma = kDefaultGamma;
+    };
 
-struct ColorGradeState : EffectState
-{
-    float contrast   = kDefaultContrast;
-    float saturation = kDefaultSaturation;
-};
+    struct ColorGradeState : EffectState
+    {
+        float contrast = kDefaultContrast;
+        float saturation = kDefaultSaturation;
+    };
 
-struct FXAAState : EffectState
-{
-    float qualitySubpix           = 0.75f;
-    float qualityEdgeThreshold    = 0.166f;
-    float qualityEdgeThresholdMin = 0.0833f;
-};
+    struct FXAAState : EffectState
+    {
+        float qualitySubpix = 0.75f;
+        float qualityEdgeThreshold = 0.166f;
+        float qualityEdgeThresholdMin = 0.0833f;
+    };
 
-// Per-mip render target pair (for bloom ping-pong)
-struct MipTarget
-{
-    ComPtr<ID3D11Texture2D>          texture;
-    ComPtr<ID3D11RenderTargetView>   rtv;
-    ComPtr<ID3D11ShaderResourceView> srv;
-    UINT width  = 0;
-    UINT height = 0;
-};
+    // Per-mip render target pair (for bloom ping-pong)
+    struct MipTarget
+    {
+        ComPtr<ID3D11Texture2D> texture;
+        ComPtr<ID3D11RenderTargetView> rtv;
+        ComPtr<ID3D11ShaderResourceView> srv;
+        UINT width = 0;
+        UINT height = 0;
+    };
 
-struct PPData
-{
-    // Initialisation state
-    bool initialised = false;
-    UINT screenWidth  = 0;
-    UINT screenHeight = 0;
+    struct PPData
+    {
+        // Initialisation state
+        bool initialised = false;
+        UINT screenWidth = 0;
+        UINT screenHeight = 0;
 
-    // Effect parameters
-    BloomState      bloom;
-    ToneMapState    toneMap;
-    ColorGradeState colorGrade;
-    FXAAState       fxaa;
+        // Effect parameters
+        BloomState bloom;
+        ToneMapState toneMap;
+        ColorGradeState colorGrade;
+        FXAAState fxaa;
 
-    // ------ GPU resources ------
+        // ------ GPU resources ------
 
-    // Shared vertex shader (full-screen triangle)
-    ComPtr<ID3D11VertexShader> fullscreenVS;
+        // Shared vertex shader (full-screen triangle)
+        ComPtr<ID3D11VertexShader> fullscreenVS;
 
-    // Pixel shaders
-    ComPtr<ID3D11PixelShader> brightnessExtractPS;
-    ComPtr<ID3D11PixelShader> gaussianBlurHPS;
-    ComPtr<ID3D11PixelShader> gaussianBlurVPS;
-    ComPtr<ID3D11PixelShader> bloomCompositePS;
-    ComPtr<ID3D11PixelShader> toneMapColorGradePS;
-    ComPtr<ID3D11PixelShader> fxaaPS;
-    ComPtr<ID3D11PixelShader> copyPS;
+        // Pixel shaders
+        ComPtr<ID3D11PixelShader> brightnessExtractPS;
+        ComPtr<ID3D11PixelShader> gaussianBlurHPS;
+        ComPtr<ID3D11PixelShader> gaussianBlurVPS;
+        ComPtr<ID3D11PixelShader> bloomCompositePS;
+        ComPtr<ID3D11PixelShader> toneMapColorGradePS;
+        ComPtr<ID3D11PixelShader> fxaaPS;
+        ComPtr<ID3D11PixelShader> copyPS;
 
-    // Constant buffer
-    ComPtr<ID3D11Buffer> constantBuffer;
+        // Constant buffer
+        ComPtr<ID3D11Buffer> constantBuffer;
 
-    // Sampler state (bilinear, clamp)
-    ComPtr<ID3D11SamplerState> linearClampSampler;
+        // Sampler state (bilinear, clamp)
+        ComPtr<ID3D11SamplerState> linearClampSampler;
 
-    // Blend states
-    ComPtr<ID3D11BlendState> noBlendState;
+        // Blend states
+        ComPtr<ID3D11BlendState> noBlendState;
 
-    // Rasterizer state (no culling for full-screen passes)
-    ComPtr<ID3D11RasterizerState> noCullRasterState;
+        // Rasterizer state (no culling for full-screen passes)
+        ComPtr<ID3D11RasterizerState> noCullRasterState;
 
-    // Depth-stencil state (depth disabled for post-processing)
-    ComPtr<ID3D11DepthStencilState> noDepthState;
+        // Depth-stencil state (depth disabled for post-processing)
+        ComPtr<ID3D11DepthStencilState> noDepthState;
 
-    // Intermediate render targets
-    // Ping-pong pair at full resolution
-    MipTarget fullResA;
-    MipTarget fullResB;
+        // Intermediate render targets
+        // Ping-pong pair at full resolution
+        MipTarget fullResA;
+        MipTarget fullResB;
 
-    // Bloom mip chain (downsampled) - two sets for ping-pong blur
-    MipTarget bloomMipsA[kBloomMipCount];
-    MipTarget bloomMipsB[kBloomMipCount];
+        // Bloom mip chain (downsampled) - two sets for ping-pong blur
+        MipTarget bloomMipsA[kBloomMipCount];
+        MipTarget bloomMipsB[kBloomMipCount];
 
-    // Back-buffer reference (we need to capture and restore it)
-    ComPtr<ID3D11RenderTargetView>   backBufferRTV;
-    ComPtr<ID3D11DepthStencilView>   backBufferDSV;
-};
+        // Back-buffer reference (we need to capture and restore it)
+        ComPtr<ID3D11RenderTargetView> backBufferRTV;
+        ComPtr<ID3D11DepthStencilView> backBufferDSV;
+    };
 
 // Global map of instance -> internal data
 #include <unordered_map>
-static std::unordered_map<const PostProcessingSystem*, std::unique_ptr<PPData>> s_dataMap;
+    static std::unordered_map<const PostProcessingSystem*, std::unique_ptr<PPData>> s_dataMap;
 
-PPData* GetData(const PostProcessingSystem* instance)
-{
-    auto it = s_dataMap.find(instance);
-    return (it != s_dataMap.end()) ? it->second.get() : nullptr;
-}
-
-PPData* GetOrCreateData(const PostProcessingSystem* instance)
-{
-    auto& ptr = s_dataMap[instance];
-    if (!ptr)
-        ptr = std::make_unique<PPData>();
-    return ptr.get();
-}
-
-void DestroyData(const PostProcessingSystem* instance)
-{
-    s_dataMap.erase(instance);
-}
-
-// -----------------------------------------------------------------
-// Helper: create a single render target (texture + RTV + SRV)
-// -----------------------------------------------------------------
-HRESULT CreateRenderTargetPair(ID3D11Device* device,
-                               UINT width, UINT height,
-                               DXGI_FORMAT format,
-                               MipTarget& out)
-{
-    out.width  = width;
-    out.height = height;
-
-    D3D11_TEXTURE2D_DESC texDesc = {};
-    texDesc.Width      = width;
-    texDesc.Height     = height;
-    texDesc.MipLevels  = 1;
-    texDesc.ArraySize  = 1;
-    texDesc.Format     = format;
-    texDesc.SampleDesc.Count   = 1;
-    texDesc.SampleDesc.Quality = 0;
-    texDesc.Usage      = D3D11_USAGE_DEFAULT;
-    texDesc.BindFlags  = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-
-    HRESULT hr = device->CreateTexture2D(&texDesc, nullptr, &out.texture);
-    if (FAILED(hr)) return hr;
-
-    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-    rtvDesc.Format        = format;
-    rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-    hr = device->CreateRenderTargetView(out.texture.Get(), &rtvDesc, &out.rtv);
-    if (FAILED(hr)) return hr;
-
-    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format              = format;
-    srvDesc.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = 1;
-    hr = device->CreateShaderResourceView(out.texture.Get(), &srvDesc, &out.srv);
-    return hr;
-}
-
-// -----------------------------------------------------------------
-// Create all intermediate render targets
-// -----------------------------------------------------------------
-HRESULT CreateRenderTargets(ID3D11Device* device, PPData* d)
-{
-    const DXGI_FORMAT hdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-    const DXGI_FORMAT ldrFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-    HRESULT hr;
-
-    // Full-resolution ping-pong (HDR)
-    hr = CreateRenderTargetPair(device, d->screenWidth, d->screenHeight, hdrFormat, d->fullResA);
-    if (FAILED(hr)) return hr;
-
-    hr = CreateRenderTargetPair(device, d->screenWidth, d->screenHeight, hdrFormat, d->fullResB);
-    if (FAILED(hr)) return hr;
-
-    // Bloom mip chain
-    for (int i = 0; i < kBloomMipCount; ++i)
+    PPData* GetData(const PostProcessingSystem* instance)
     {
-        UINT w = std::max<UINT>(1u, d->screenWidth  >> (i + 1));
-        UINT h = std::max<UINT>(1u, d->screenHeight >> (i + 1));
-
-        hr = CreateRenderTargetPair(device, w, h, hdrFormat, d->bloomMipsA[i]);
-        if (FAILED(hr)) return hr;
-
-        hr = CreateRenderTargetPair(device, w, h, hdrFormat, d->bloomMipsB[i]);
-        if (FAILED(hr)) return hr;
+        auto it = s_dataMap.find(instance);
+        return (it != s_dataMap.end()) ? it->second.get() : nullptr;
     }
 
-    return S_OK;
-}
+    PPData* GetOrCreateData(const PostProcessingSystem* instance)
+    {
+        auto& ptr = s_dataMap[instance];
+        if (!ptr)
+            ptr = std::make_unique<PPData>();
+        return ptr.get();
+    }
 
-// -----------------------------------------------------------------
-// Compile and create all shaders
-// -----------------------------------------------------------------
-HRESULT CreateShaders(ID3D11Device* device, PPData* d)
-{
-    HRESULT hr;
-    ComPtr<ID3DBlob> blob;
+    void DestroyData(const PostProcessingSystem* instance)
+    {
+        s_dataMap.erase(instance);
+    }
 
-    // Full-screen vertex shader
-    hr = CompileShaderFromString(kFullScreenVS, "VSMain", "vs_5_0", &blob);
-    if (FAILED(hr)) return hr;
-    hr = device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->fullscreenVS);
-    if (FAILED(hr)) return hr;
+    // -----------------------------------------------------------------
+    // Helper: create a single render target (texture + RTV + SRV)
+    // -----------------------------------------------------------------
+    HRESULT CreateRenderTargetPair(ID3D11Device* device, UINT width, UINT height, DXGI_FORMAT format, MipTarget& out)
+    {
+        out.width = width;
+        out.height = height;
 
-    // Brightness extraction PS
-    hr = CompileShaderFromString(kBrightnessExtractPS, "PSMain", "ps_5_0", &blob);
-    if (FAILED(hr)) return hr;
-    hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->brightnessExtractPS);
-    if (FAILED(hr)) return hr;
+        D3D11_TEXTURE2D_DESC texDesc = {};
+        texDesc.Width = width;
+        texDesc.Height = height;
+        texDesc.MipLevels = 1;
+        texDesc.ArraySize = 1;
+        texDesc.Format = format;
+        texDesc.SampleDesc.Count = 1;
+        texDesc.SampleDesc.Quality = 0;
+        texDesc.Usage = D3D11_USAGE_DEFAULT;
+        texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-    // Gaussian blur horizontal PS
-    hr = CompileShaderFromString(kGaussianBlurHPS, "PSMain", "ps_5_0", &blob);
-    if (FAILED(hr)) return hr;
-    hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->gaussianBlurHPS);
-    if (FAILED(hr)) return hr;
+        HRESULT hr = device->CreateTexture2D(&texDesc, nullptr, &out.texture);
+        if (FAILED(hr))
+            return hr;
 
-    // Gaussian blur vertical PS
-    hr = CompileShaderFromString(kGaussianBlurVPS, "PSMain", "ps_5_0", &blob);
-    if (FAILED(hr)) return hr;
-    hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->gaussianBlurVPS);
-    if (FAILED(hr)) return hr;
+        D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+        rtvDesc.Format = format;
+        rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+        hr = device->CreateRenderTargetView(out.texture.Get(), &rtvDesc, &out.rtv);
+        if (FAILED(hr))
+            return hr;
 
-    // Bloom composite PS
-    hr = CompileShaderFromString(kBloomCompositePS, "PSMain", "ps_5_0", &blob);
-    if (FAILED(hr)) return hr;
-    hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->bloomCompositePS);
-    if (FAILED(hr)) return hr;
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Format = format;
+        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = 1;
+        hr = device->CreateShaderResourceView(out.texture.Get(), &srvDesc, &out.srv);
+        return hr;
+    }
 
-    // Tone map + color grading PS
-    hr = CompileShaderFromString(kToneMapColorGradePS, "PSMain", "ps_5_0", &blob);
-    if (FAILED(hr)) return hr;
-    hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->toneMapColorGradePS);
-    if (FAILED(hr)) return hr;
+    // -----------------------------------------------------------------
+    // Create all intermediate render targets
+    // -----------------------------------------------------------------
+    HRESULT CreateRenderTargets(ID3D11Device* device, PPData* d)
+    {
+        const DXGI_FORMAT hdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        const DXGI_FORMAT ldrFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-    // FXAA PS
-    hr = CompileShaderFromString(kFXAAPS, "PSMain", "ps_5_0", &blob);
-    if (FAILED(hr)) return hr;
-    hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->fxaaPS);
-    if (FAILED(hr)) return hr;
+        HRESULT hr;
 
-    // Copy / pass-through PS
-    hr = CompileShaderFromString(kCopyPS, "PSMain", "ps_5_0", &blob);
-    if (FAILED(hr)) return hr;
-    hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->copyPS);
-    if (FAILED(hr)) return hr;
+        // Full-resolution ping-pong (HDR)
+        hr = CreateRenderTargetPair(device, d->screenWidth, d->screenHeight, hdrFormat, d->fullResA);
+        if (FAILED(hr))
+            return hr;
 
-    return S_OK;
-}
+        hr = CreateRenderTargetPair(device, d->screenWidth, d->screenHeight, hdrFormat, d->fullResB);
+        if (FAILED(hr))
+            return hr;
 
-// -----------------------------------------------------------------
-// Create pipeline state objects (constant buffer, sampler, blend,
-// rasterizer, depth-stencil)
-// -----------------------------------------------------------------
-HRESULT CreatePipelineStates(ID3D11Device* device, PPData* d)
-{
-    HRESULT hr;
+        // Bloom mip chain
+        for (int i = 0; i < kBloomMipCount; ++i)
+        {
+            UINT w = std::max<UINT>(1u, d->screenWidth >> (i + 1));
+            UINT h = std::max<UINT>(1u, d->screenHeight >> (i + 1));
 
-    // Constant buffer
-    D3D11_BUFFER_DESC cbDesc = {};
-    cbDesc.ByteWidth      = sizeof(PostProcessCB);
-    cbDesc.Usage           = D3D11_USAGE_DYNAMIC;
-    cbDesc.BindFlags       = D3D11_BIND_CONSTANT_BUFFER;
-    cbDesc.CPUAccessFlags  = D3D11_CPU_ACCESS_WRITE;
-    hr = device->CreateBuffer(&cbDesc, nullptr, &d->constantBuffer);
-    if (FAILED(hr)) return hr;
+            hr = CreateRenderTargetPair(device, w, h, hdrFormat, d->bloomMipsA[i]);
+            if (FAILED(hr))
+                return hr;
 
-    // Linear clamp sampler
-    D3D11_SAMPLER_DESC sampDesc = {};
-    sampDesc.Filter   = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-    sampDesc.MaxLOD   = D3D11_FLOAT32_MAX;
-    hr = device->CreateSamplerState(&sampDesc, &d->linearClampSampler);
-    if (FAILED(hr)) return hr;
+            hr = CreateRenderTargetPair(device, w, h, hdrFormat, d->bloomMipsB[i]);
+            if (FAILED(hr))
+                return hr;
+        }
 
-    // No-blend state (opaque write)
-    D3D11_BLEND_DESC blendDesc = {};
-    blendDesc.RenderTarget[0].BlendEnable    = FALSE;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-    hr = device->CreateBlendState(&blendDesc, &d->noBlendState);
-    if (FAILED(hr)) return hr;
+        return S_OK;
+    }
 
-    // No-cull rasterizer
-    D3D11_RASTERIZER_DESC rastDesc = {};
-    rastDesc.FillMode = D3D11_FILL_SOLID;
-    rastDesc.CullMode = D3D11_CULL_NONE;
-    rastDesc.DepthClipEnable = TRUE;
-    hr = device->CreateRasterizerState(&rastDesc, &d->noCullRasterState);
-    if (FAILED(hr)) return hr;
+    // -----------------------------------------------------------------
+    // Compile and create all shaders
+    // -----------------------------------------------------------------
+    HRESULT CreateShaders(ID3D11Device* device, PPData* d)
+    {
+        HRESULT hr;
+        ComPtr<ID3DBlob> blob;
 
-    // No-depth state
-    D3D11_DEPTH_STENCIL_DESC dsDesc = {};
-    dsDesc.DepthEnable    = FALSE;
-    dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-    dsDesc.StencilEnable  = FALSE;
-    hr = device->CreateDepthStencilState(&dsDesc, &d->noDepthState);
-    if (FAILED(hr)) return hr;
+        // Full-screen vertex shader
+        hr = CompileShaderFromString(kFullScreenVS, "VSMain", "vs_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->fullscreenVS);
+        if (FAILED(hr))
+            return hr;
 
-    return S_OK;
-}
+        // Brightness extraction PS
+        hr = CompileShaderFromString(kBrightnessExtractPS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr,
+                                       &d->brightnessExtractPS);
+        if (FAILED(hr))
+            return hr;
 
-// -----------------------------------------------------------------
-// Update the constant buffer with the current effect parameters
-// -----------------------------------------------------------------
-void UpdateConstantBuffer(ID3D11DeviceContext* context,
-                          PPData* d,
-                          float texelW, float texelH)
-{
-    D3D11_MAPPED_SUBRESOURCE mapped;
-    HRESULT hr = context->Map(d->constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (FAILED(hr)) return;
+        // Gaussian blur horizontal PS
+        hr = CompileShaderFromString(kGaussianBlurHPS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->gaussianBlurHPS);
+        if (FAILED(hr))
+            return hr;
 
-    PostProcessCB* cb = static_cast<PostProcessCB*>(mapped.pData);
+        // Gaussian blur vertical PS
+        hr = CompileShaderFromString(kGaussianBlurVPS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->gaussianBlurVPS);
+        if (FAILED(hr))
+            return hr;
 
-    cb->BloomThreshold = d->bloom.threshold;
-    cb->BloomIntensity = d->bloom.intensity;
-    cb->TexelSizeX     = texelW;
-    cb->TexelSizeY     = texelH;
+        // Bloom composite PS
+        hr = CompileShaderFromString(kBloomCompositePS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->bloomCompositePS);
+        if (FAILED(hr))
+            return hr;
 
-    cb->ToneMapOperator = static_cast<int>(d->toneMap.op);
-    cb->Exposure        = d->toneMap.exposure;
-    cb->Gamma           = d->toneMap.gamma;
-    cb->_pad0           = 0.0f;
+        // Tone map + color grading PS
+        hr = CompileShaderFromString(kToneMapColorGradePS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr,
+                                       &d->toneMapColorGradePS);
+        if (FAILED(hr))
+            return hr;
 
-    cb->Contrast   = d->colorGrade.contrast;
-    cb->Saturation = d->colorGrade.saturation;
-    cb->_pad1      = 0.0f;
-    cb->_pad2      = 0.0f;
+        // FXAA PS
+        hr = CompileShaderFromString(kFXAAPS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->fxaaPS);
+        if (FAILED(hr))
+            return hr;
 
-    cb->FXAAQualitySubpix           = d->fxaa.qualitySubpix;
-    cb->FXAAQualityEdgeThreshold    = d->fxaa.qualityEdgeThreshold;
-    cb->FXAAQualityEdgeThresholdMin = d->fxaa.qualityEdgeThresholdMin;
-    cb->_pad3                       = 0.0f;
+        // Copy / pass-through PS
+        hr = CompileShaderFromString(kCopyPS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->copyPS);
+        if (FAILED(hr))
+            return hr;
 
-    cb->ScreenWidthInv  = 1.0f / static_cast<float>(d->screenWidth);
-    cb->ScreenHeightInv = 1.0f / static_cast<float>(d->screenHeight);
-    cb->_pad4           = 0.0f;
-    cb->_pad5           = 0.0f;
+        return S_OK;
+    }
 
-    context->Unmap(d->constantBuffer.Get(), 0);
-}
+    // -----------------------------------------------------------------
+    // Create pipeline state objects (constant buffer, sampler, blend,
+    // rasterizer, depth-stencil)
+    // -----------------------------------------------------------------
+    HRESULT CreatePipelineStates(ID3D11Device* device, PPData* d)
+    {
+        HRESULT hr;
 
-// -----------------------------------------------------------------
-// Draw a full-screen triangle (3 vertices, no VB/IB)
-// -----------------------------------------------------------------
-void DrawFullScreenTriangle(ID3D11DeviceContext* context, PPData* d)
-{
-    context->IASetInputLayout(nullptr);
-    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    context->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
-    context->VSSetShader(d->fullscreenVS.Get(), nullptr, 0);
-    context->Draw(3, 0);
-}
+        // Constant buffer
+        D3D11_BUFFER_DESC cbDesc = {};
+        cbDesc.ByteWidth = sizeof(PostProcessCB);
+        cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+        cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        hr = device->CreateBuffer(&cbDesc, nullptr, &d->constantBuffer);
+        if (FAILED(hr))
+            return hr;
 
-// -----------------------------------------------------------------
-// Set the pipeline state for a post-processing pass
-// -----------------------------------------------------------------
-void SetPostProcessState(ID3D11DeviceContext* context, PPData* d)
-{
-    float blendFactor[4] = {0, 0, 0, 0};
-    context->OMSetBlendState(d->noBlendState.Get(), blendFactor, 0xFFFFFFFF);
-    context->RSSetState(d->noCullRasterState.Get());
-    context->OMSetDepthStencilState(d->noDepthState.Get(), 0);
+        // Linear clamp sampler
+        D3D11_SAMPLER_DESC sampDesc = {};
+        sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+        hr = device->CreateSamplerState(&sampDesc, &d->linearClampSampler);
+        if (FAILED(hr))
+            return hr;
 
-    ID3D11SamplerState* samplers[] = { d->linearClampSampler.Get() };
-    context->PSSetSamplers(0, 1, samplers);
+        // No-blend state (opaque write)
+        D3D11_BLEND_DESC blendDesc = {};
+        blendDesc.RenderTarget[0].BlendEnable = FALSE;
+        blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        hr = device->CreateBlendState(&blendDesc, &d->noBlendState);
+        if (FAILED(hr))
+            return hr;
 
-    ID3D11Buffer* cbs[] = { d->constantBuffer.Get() };
-    context->PSSetConstantBuffers(0, 1, cbs);
-}
+        // No-cull rasterizer
+        D3D11_RASTERIZER_DESC rastDesc = {};
+        rastDesc.FillMode = D3D11_FILL_SOLID;
+        rastDesc.CullMode = D3D11_CULL_NONE;
+        rastDesc.DepthClipEnable = TRUE;
+        hr = device->CreateRasterizerState(&rastDesc, &d->noCullRasterState);
+        if (FAILED(hr))
+            return hr;
 
-// -----------------------------------------------------------------
-// Set a viewport for the given dimensions
-// -----------------------------------------------------------------
-void SetViewport(ID3D11DeviceContext* context, UINT w, UINT h)
-{
-    D3D11_VIEWPORT vp = {};
-    vp.Width    = static_cast<float>(w);
-    vp.Height   = static_cast<float>(h);
-    vp.MinDepth = 0.0f;
-    vp.MaxDepth = 1.0f;
-    context->RSSetViewports(1, &vp);
-}
+        // No-depth state
+        D3D11_DEPTH_STENCIL_DESC dsDesc = {};
+        dsDesc.DepthEnable = FALSE;
+        dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+        dsDesc.StencilEnable = FALSE;
+        hr = device->CreateDepthStencilState(&dsDesc, &d->noDepthState);
+        if (FAILED(hr))
+            return hr;
 
-// -----------------------------------------------------------------
-// Render a single post-processing pass
-// -----------------------------------------------------------------
-void RenderPass(ID3D11DeviceContext* context,
-                PPData* d,
-                ID3D11PixelShader* ps,
-                ID3D11RenderTargetView* rtv,
-                UINT viewW, UINT viewH,
-                ID3D11ShaderResourceView* srv0,
-                ID3D11ShaderResourceView* srv1 = nullptr)
-{
-    // Unbind all SRVs first to avoid hazards
-    ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
-    context->PSSetShaderResources(0, 2, nullSRVs);
+        return S_OK;
+    }
 
-    // Set render target
-    ID3D11RenderTargetView* rtvs[] = { rtv };
-    context->OMSetRenderTargets(1, rtvs, nullptr);
+    // -----------------------------------------------------------------
+    // Update the constant buffer with the current effect parameters
+    // -----------------------------------------------------------------
+    void UpdateConstantBuffer(ID3D11DeviceContext* context, PPData* d, float texelW, float texelH)
+    {
+        D3D11_MAPPED_SUBRESOURCE mapped;
+        HRESULT hr = context->Map(d->constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        if (FAILED(hr))
+            return;
 
-    SetViewport(context, viewW, viewH);
+        PostProcessCB* cb = static_cast<PostProcessCB*>(mapped.pData);
 
-    // Bind SRVs
-    ID3D11ShaderResourceView* srvs[2] = { srv0, srv1 };
-    int srvCount = srv1 ? 2 : 1;
-    context->PSSetShaderResources(0, srvCount, srvs);
+        cb->BloomThreshold = d->bloom.threshold;
+        cb->BloomIntensity = d->bloom.intensity;
+        cb->TexelSizeX = texelW;
+        cb->TexelSizeY = texelH;
 
-    // Bind pixel shader
-    context->PSSetShader(ps, nullptr, 0);
+        cb->ToneMapOperator = static_cast<int>(d->toneMap.op);
+        cb->Exposure = d->toneMap.exposure;
+        cb->Gamma = d->toneMap.gamma;
+        cb->_pad0 = 0.0f;
 
-    DrawFullScreenTriangle(context, d);
+        cb->Contrast = d->colorGrade.contrast;
+        cb->Saturation = d->colorGrade.saturation;
+        cb->_pad1 = 0.0f;
+        cb->_pad2 = 0.0f;
 
-    // Unbind
-    context->PSSetShaderResources(0, 2, nullSRVs);
-}
+        cb->FXAAQualitySubpix = d->fxaa.qualitySubpix;
+        cb->FXAAQualityEdgeThreshold = d->fxaa.qualityEdgeThreshold;
+        cb->FXAAQualityEdgeThresholdMin = d->fxaa.qualityEdgeThresholdMin;
+        cb->_pad3 = 0.0f;
+
+        cb->ScreenWidthInv = 1.0f / static_cast<float>(d->screenWidth);
+        cb->ScreenHeightInv = 1.0f / static_cast<float>(d->screenHeight);
+        cb->_pad4 = 0.0f;
+        cb->_pad5 = 0.0f;
+
+        context->Unmap(d->constantBuffer.Get(), 0);
+    }
+
+    // -----------------------------------------------------------------
+    // Draw a full-screen triangle (3 vertices, no VB/IB)
+    // -----------------------------------------------------------------
+    void DrawFullScreenTriangle(ID3D11DeviceContext* context, PPData* d)
+    {
+        context->IASetInputLayout(nullptr);
+        context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        context->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+        context->VSSetShader(d->fullscreenVS.Get(), nullptr, 0);
+        context->Draw(3, 0);
+    }
+
+    // -----------------------------------------------------------------
+    // Set the pipeline state for a post-processing pass
+    // -----------------------------------------------------------------
+    void SetPostProcessState(ID3D11DeviceContext* context, PPData* d)
+    {
+        float blendFactor[4] = {0, 0, 0, 0};
+        context->OMSetBlendState(d->noBlendState.Get(), blendFactor, 0xFFFFFFFF);
+        context->RSSetState(d->noCullRasterState.Get());
+        context->OMSetDepthStencilState(d->noDepthState.Get(), 0);
+
+        ID3D11SamplerState* samplers[] = {d->linearClampSampler.Get()};
+        context->PSSetSamplers(0, 1, samplers);
+
+        ID3D11Buffer* cbs[] = {d->constantBuffer.Get()};
+        context->PSSetConstantBuffers(0, 1, cbs);
+    }
+
+    // -----------------------------------------------------------------
+    // Set a viewport for the given dimensions
+    // -----------------------------------------------------------------
+    void SetViewport(ID3D11DeviceContext* context, UINT w, UINT h)
+    {
+        D3D11_VIEWPORT vp = {};
+        vp.Width = static_cast<float>(w);
+        vp.Height = static_cast<float>(h);
+        vp.MinDepth = 0.0f;
+        vp.MaxDepth = 1.0f;
+        context->RSSetViewports(1, &vp);
+    }
+
+    // -----------------------------------------------------------------
+    // Render a single post-processing pass
+    // -----------------------------------------------------------------
+    void RenderPass(ID3D11DeviceContext* context, PPData* d, ID3D11PixelShader* ps, ID3D11RenderTargetView* rtv,
+                    UINT viewW, UINT viewH, ID3D11ShaderResourceView* srv0, ID3D11ShaderResourceView* srv1 = nullptr)
+    {
+        // Unbind all SRVs first to avoid hazards
+        ID3D11ShaderResourceView* nullSRVs[2] = {nullptr, nullptr};
+        context->PSSetShaderResources(0, 2, nullSRVs);
+
+        // Set render target
+        ID3D11RenderTargetView* rtvs[] = {rtv};
+        context->OMSetRenderTargets(1, rtvs, nullptr);
+
+        SetViewport(context, viewW, viewH);
+
+        // Bind SRVs
+        ID3D11ShaderResourceView* srvs[2] = {srv0, srv1};
+        int srvCount = srv1 ? 2 : 1;
+        context->PSSetShaderResources(0, srvCount, srvs);
+
+        // Bind pixel shader
+        context->PSSetShader(ps, nullptr, 0);
+
+        DrawFullScreenTriangle(context, d);
+
+        // Unbind
+        context->PSSetShaderResources(0, 2, nullSRVs);
+    }
 
 } // namespace PPInternal
 
@@ -1117,10 +1128,7 @@ void RenderPass(ID3D11DeviceContext* context,
 // PUBLIC API IMPLEMENTATION
 // ============================================================================
 
-PostProcessingSystem::PostProcessingSystem()
-    : m_device(nullptr), m_context(nullptr)
-{
-}
+PostProcessingSystem::PostProcessingSystem() : m_device(nullptr), m_context(nullptr) {}
 
 PostProcessingSystem::~PostProcessingSystem()
 {
@@ -1131,7 +1139,7 @@ HRESULT PostProcessingSystem::Initialize(ID3D11Device* device, ID3D11DeviceConte
 {
     ASSERT(device && context);
 
-    m_device  = device;
+    m_device = device;
     m_context = context;
 
     auto* d = PPInternal::GetOrCreateData(this);
@@ -1156,7 +1164,7 @@ HRESULT PostProcessingSystem::Initialize(ID3D11Device* device, ID3D11DeviceConte
         {
             D3D11_TEXTURE2D_DESC desc;
             tex2D->GetDesc(&desc);
-            d->screenWidth  = desc.Width;
+            d->screenWidth = desc.Width;
             d->screenHeight = desc.Height;
         }
     }
@@ -1164,7 +1172,7 @@ HRESULT PostProcessingSystem::Initialize(ID3D11Device* device, ID3D11DeviceConte
     // Fallback dimensions if we could not query
     if (d->screenWidth == 0 || d->screenHeight == 0)
     {
-        d->screenWidth  = 1920;
+        d->screenWidth = 1920;
         d->screenHeight = 1080;
         Spark::SimpleConsole::GetInstance().LogWarning(
             "PostProcessingSystem: Could not determine screen size from back buffer. "
@@ -1175,8 +1183,7 @@ HRESULT PostProcessingSystem::Initialize(ID3D11Device* device, ID3D11DeviceConte
     HRESULT hr = PPInternal::CreateShaders(device, d);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError(
-            "PostProcessingSystem: Failed to compile one or more shaders.");
+        Spark::SimpleConsole::GetInstance().LogError("PostProcessingSystem: Failed to compile one or more shaders.");
         return hr;
     }
 
@@ -1184,8 +1191,7 @@ HRESULT PostProcessingSystem::Initialize(ID3D11Device* device, ID3D11DeviceConte
     hr = PPInternal::CreateRenderTargets(device, d);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError(
-            "PostProcessingSystem: Failed to create render targets.");
+        Spark::SimpleConsole::GetInstance().LogError("PostProcessingSystem: Failed to create render targets.");
         return hr;
     }
 
@@ -1193,17 +1199,15 @@ HRESULT PostProcessingSystem::Initialize(ID3D11Device* device, ID3D11DeviceConte
     hr = PPInternal::CreatePipelineStates(device, d);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError(
-            "PostProcessingSystem: Failed to create pipeline state objects.");
+        Spark::SimpleConsole::GetInstance().LogError("PostProcessingSystem: Failed to create pipeline state objects.");
         return hr;
     }
 
     d->initialised = true;
 
     Spark::SimpleConsole::GetInstance().LogSuccess(
-        "PostProcessingSystem initialized successfully (" +
-        std::to_string(d->screenWidth) + "x" + std::to_string(d->screenHeight) +
-        ", " + std::to_string(kBloomMipCount) + " bloom mip levels)");
+        "PostProcessingSystem initialized successfully (" + std::to_string(d->screenWidth) + "x" +
+        std::to_string(d->screenHeight) + ", " + std::to_string(kBloomMipCount) + " bloom mip levels)");
 
     return S_OK;
 }
@@ -1211,7 +1215,7 @@ HRESULT PostProcessingSystem::Initialize(ID3D11Device* device, ID3D11DeviceConte
 void PostProcessingSystem::Shutdown()
 {
     PPInternal::DestroyData(this);
-    m_device  = nullptr;
+    m_device = nullptr;
     m_context = nullptr;
 
     Spark::SimpleConsole::GetInstance().LogInfo("PostProcessingSystem shutdown complete");
@@ -1255,7 +1259,7 @@ void PostProcessingSystem::Update(float deltaTime)
             if (desc.Width != d->screenWidth || desc.Height != d->screenHeight)
             {
                 // Screen size changed -- recreate render targets
-                d->screenWidth  = desc.Width;
+                d->screenWidth = desc.Width;
                 d->screenHeight = desc.Height;
                 PPInternal::CreateRenderTargets(m_device, d);
             }
@@ -1287,13 +1291,9 @@ void PostProcessingSystem::Update(float deltaTime)
         {
             UINT mw = d->bloomMipsA[0].width;
             UINT mh = d->bloomMipsA[0].height;
-            PPInternal::UpdateConstantBuffer(m_context, d,
-                                             1.0f / static_cast<float>(mw),
+            PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(mw),
                                              1.0f / static_cast<float>(mh));
-            PPInternal::RenderPass(m_context, d,
-                                   d->brightnessExtractPS.Get(),
-                                   d->bloomMipsA[0].rtv.Get(),
-                                   mw, mh,
+            PPInternal::RenderPass(m_context, d, d->brightnessExtractPS.Get(), d->bloomMipsA[0].rtv.Get(), mw, mh,
                                    currentSource->srv.Get());
         }
 
@@ -1311,26 +1311,17 @@ void PostProcessingSystem::Update(float deltaTime)
             if (mip > 0)
             {
                 PPInternal::UpdateConstantBuffer(m_context, d, texelW, texelH);
-                PPInternal::RenderPass(m_context, d,
-                                       d->copyPS.Get(),
-                                       d->bloomMipsA[mip].rtv.Get(),
-                                       mw, mh,
+                PPInternal::RenderPass(m_context, d, d->copyPS.Get(), d->bloomMipsA[mip].rtv.Get(), mw, mh,
                                        d->bloomMipsA[mip - 1].srv.Get());
             }
 
             // Horizontal blur: bloomMipsA[mip] -> bloomMipsB[mip]
             PPInternal::UpdateConstantBuffer(m_context, d, texelW, texelH);
-            PPInternal::RenderPass(m_context, d,
-                                   d->gaussianBlurHPS.Get(),
-                                   d->bloomMipsB[mip].rtv.Get(),
-                                   mw, mh,
+            PPInternal::RenderPass(m_context, d, d->gaussianBlurHPS.Get(), d->bloomMipsB[mip].rtv.Get(), mw, mh,
                                    d->bloomMipsA[mip].srv.Get());
 
             // Vertical blur: bloomMipsB[mip] -> bloomMipsA[mip]
-            PPInternal::RenderPass(m_context, d,
-                                   d->gaussianBlurVPS.Get(),
-                                   d->bloomMipsA[mip].rtv.Get(),
-                                   mw, mh,
+            PPInternal::RenderPass(m_context, d, d->gaussianBlurVPS.Get(), d->bloomMipsA[mip].rtv.Get(), mw, mh,
                                    d->bloomMipsB[mip].srv.Get());
         }
 
@@ -1350,12 +1341,8 @@ void PostProcessingSystem::Update(float deltaTime)
             // Composite: bloomMipsA[mip] (scene at this level) +
             //            bloomMipsA[mip+1] (blurred smaller mip, bilinear upsampled)
             // We write into bloomMipsB[mip] to avoid read/write to the same target
-            PPInternal::RenderPass(m_context, d,
-                                   d->bloomCompositePS.Get(),
-                                   d->bloomMipsB[mip].rtv.Get(),
-                                   mw, mh,
-                                   d->bloomMipsA[mip].srv.Get(),
-                                   d->bloomMipsA[mip + 1].srv.Get());
+            PPInternal::RenderPass(m_context, d, d->bloomCompositePS.Get(), d->bloomMipsB[mip].rtv.Get(), mw, mh,
+                                   d->bloomMipsA[mip].srv.Get(), d->bloomMipsA[mip + 1].srv.Get());
 
             // Swap so bloomMipsA[mip] holds the composited result
             std::swap(d->bloomMipsA[mip], d->bloomMipsB[mip]);
@@ -1363,15 +1350,10 @@ void PostProcessingSystem::Update(float deltaTime)
 
         // 1d. Final bloom composite: combine original scene with bloom result
         {
-            PPInternal::UpdateConstantBuffer(m_context, d,
-                                             1.0f / static_cast<float>(d->screenWidth),
+            PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
                                              1.0f / static_cast<float>(d->screenHeight));
-            PPInternal::RenderPass(m_context, d,
-                                   d->bloomCompositePS.Get(),
-                                   d->fullResB.rtv.Get(),
-                                   d->screenWidth, d->screenHeight,
-                                   currentSource->srv.Get(),
-                                   d->bloomMipsA[0].srv.Get());
+            PPInternal::RenderPass(m_context, d, d->bloomCompositePS.Get(), d->fullResB.rtv.Get(), d->screenWidth,
+                                   d->screenHeight, currentSource->srv.Get(), d->bloomMipsA[0].srv.Get());
             currentSource = &d->fullResB;
         }
     }
@@ -1383,15 +1365,11 @@ void PostProcessingSystem::Update(float deltaTime)
     {
         PPInternal::MipTarget* dest = (currentSource == &d->fullResA) ? &d->fullResB : &d->fullResA;
 
-        PPInternal::UpdateConstantBuffer(m_context, d,
-                                         1.0f / static_cast<float>(d->screenWidth),
+        PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
                                          1.0f / static_cast<float>(d->screenHeight));
 
-        PPInternal::RenderPass(m_context, d,
-                               d->toneMapColorGradePS.Get(),
-                               dest->rtv.Get(),
-                               d->screenWidth, d->screenHeight,
-                               currentSource->srv.Get());
+        PPInternal::RenderPass(m_context, d, d->toneMapColorGradePS.Get(), dest->rtv.Get(), d->screenWidth,
+                               d->screenHeight, currentSource->srv.Get());
         currentSource = dest;
     }
 
@@ -1402,14 +1380,10 @@ void PostProcessingSystem::Update(float deltaTime)
     {
         PPInternal::MipTarget* dest = (currentSource == &d->fullResA) ? &d->fullResB : &d->fullResA;
 
-        PPInternal::UpdateConstantBuffer(m_context, d,
-                                         1.0f / static_cast<float>(d->screenWidth),
+        PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
                                          1.0f / static_cast<float>(d->screenHeight));
 
-        PPInternal::RenderPass(m_context, d,
-                               d->fxaaPS.Get(),
-                               dest->rtv.Get(),
-                               d->screenWidth, d->screenHeight,
+        PPInternal::RenderPass(m_context, d, d->fxaaPS.Get(), dest->rtv.Get(), d->screenWidth, d->screenHeight,
                                currentSource->srv.Get());
         currentSource = dest;
     }
@@ -1419,16 +1393,16 @@ void PostProcessingSystem::Update(float deltaTime)
     // ====================================================================
     {
         // Unbind SRVs to avoid hazards
-        ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
+        ID3D11ShaderResourceView* nullSRVs[2] = {nullptr, nullptr};
         m_context->PSSetShaderResources(0, 2, nullSRVs);
 
         // Set the original back-buffer as render target
-        ID3D11RenderTargetView* rtvs[] = { originalRTV.Get() };
+        ID3D11RenderTargetView* rtvs[] = {originalRTV.Get()};
         m_context->OMSetRenderTargets(1, rtvs, originalDSV.Get());
         PPInternal::SetViewport(m_context, d->screenWidth, d->screenHeight);
 
         // Bind the final result
-        ID3D11ShaderResourceView* srvs[] = { currentSource->srv.Get() };
+        ID3D11ShaderResourceView* srvs[] = {currentSource->srv.Get()};
         m_context->PSSetShaderResources(0, 1, srvs);
 
         m_context->PSSetShader(d->copyPS.Get(), nullptr, 0);
@@ -1440,7 +1414,7 @@ void PostProcessingSystem::Update(float deltaTime)
 
     // Restore original render target and depth-stencil for subsequent passes
     {
-        ID3D11RenderTargetView* rtvs[] = { originalRTV.Get() };
+        ID3D11RenderTargetView* rtvs[] = {originalRTV.Get()};
         m_context->OMSetRenderTargets(1, rtvs, originalDSV.Get());
     }
 }
@@ -1453,8 +1427,7 @@ void PostProcessingSystem::Console_SetExposure(float exposure)
         d->toneMap.exposure = std::max(0.01f, exposure);
     }
 
-    Spark::SimpleConsole::GetInstance().LogInfo(
-        "Set post-processing exposure to: " + std::to_string(exposure));
+    Spark::SimpleConsole::GetInstance().LogInfo("Set post-processing exposure to: " + std::to_string(exposure));
 }
 
 std::string PostProcessingSystem::Console_ListEffects() const
@@ -1477,9 +1450,15 @@ std::string PostProcessingSystem::Console_ListEffects() const
     ss << "   Operator:      ";
     switch (d->toneMap.op)
     {
-        case ToneMapOperator::Reinhard:   ss << "Reinhard";       break;
-        case ToneMapOperator::ACESFilmic: ss << "ACES Filmic";    break;
-        case ToneMapOperator::Uncharted2: ss << "Uncharted 2";    break;
+    case ToneMapOperator::Reinhard:
+        ss << "Reinhard";
+        break;
+    case ToneMapOperator::ACESFilmic:
+        ss << "ACES Filmic";
+        break;
+    case ToneMapOperator::Uncharted2:
+        ss << "Uncharted 2";
+        break;
     }
     ss << "\n";
     ss << "   Exposure:      " << d->toneMap.exposure << "\n";
@@ -1511,10 +1490,7 @@ std::string PostProcessingSystem::Console_ListEffects() const
 // PostProcessingSystem (Linux stub)
 // ============================================================================
 
-PostProcessingSystem::PostProcessingSystem()
-    : m_device(nullptr), m_context(nullptr)
-{
-}
+PostProcessingSystem::PostProcessingSystem() : m_device(nullptr), m_context(nullptr) {}
 
 PostProcessingSystem::~PostProcessingSystem()
 {

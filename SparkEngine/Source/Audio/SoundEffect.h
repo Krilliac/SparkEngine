@@ -46,7 +46,7 @@
  */
 class SoundEffect
 {
-public:
+  public:
     /**
      * @brief Default constructor
      * 
@@ -91,60 +91,60 @@ public:
      * Releases all audio data and resets the sound effect to an empty state.
      * Safe to call multiple times.
      */
-    void    Unload();
+    void Unload();
 
     /**
      * @brief Get the audio format structure
      * @return Reference to the WAVEFORMATEX structure describing the audio format
      */
-    const WAVEFORMATEX& GetFormat()   const { return m_format; }
+    const WAVEFORMATEX& GetFormat() const { return m_format; }
 
     /**
      * @brief Get pointer to the raw audio data
      * @return Pointer to the audio sample data, or nullptr if not loaded
      */
-    const BYTE* GetData()     const { return m_audioData.data(); }
+    const BYTE* GetData() const { return m_audioData.data(); }
 
     /**
      * @brief Get the size of the audio data in bytes
      * @return Size of the audio data buffer in bytes
      */
-    DWORD              GetDataSize() const { return m_audioDataSize; }
+    DWORD GetDataSize() const { return m_audioDataSize; }
 
     /**
      * @brief Check if audio data is currently loaded
      * @return true if audio data is loaded, false if empty
      */
-    bool               IsLoaded()    const { return m_audioDataSize != 0; }
+    bool IsLoaded() const { return m_audioDataSize != 0; }
 
     /**
      * @brief Get the duration of the audio in seconds
      * @return Duration of the audio clip in seconds
      */
-    float  GetDuration()     const;                 // seconds
+    float GetDuration() const; // seconds
 
     /**
      * @brief Get the sample rate of the audio
      * @return Sample rate in samples per second (Hz)
      */
-    DWORD  GetSampleRate()   const { return m_format.nSamplesPerSec; }
+    DWORD GetSampleRate() const { return m_format.nSamplesPerSec; }
 
     /**
      * @brief Get the number of audio channels
      * @return Number of channels (1 = mono, 2 = stereo, etc.)
      */
-    WORD   GetChannels()     const { return m_format.nChannels; }
+    WORD GetChannels() const { return m_format.nChannels; }
 
     /**
      * @brief Get the bit depth of the audio samples
      * @return Bits per sample (typically 8, 16, or 24)
      */
-    WORD   GetBitsPerSample()const { return m_format.wBitsPerSample; }
+    WORD GetBitsPerSample() const { return m_format.wBitsPerSample; }
 
-private:
-    WAVEFORMATEX              m_format;         ///< Audio format description
-    std::vector<BYTE>         m_audioData;      ///< Raw audio sample data
-    DWORD                     m_audioDataSize;  ///< Size of audio data in bytes
+  private:
+    WAVEFORMATEX m_format;         ///< Audio format description
+    std::vector<BYTE> m_audioData; ///< Raw audio sample data
+    DWORD m_audioDataSize;         ///< Size of audio data in bytes
 
     /**
      * @brief Parse WAV file format from memory buffer
@@ -170,8 +170,7 @@ private:
      * @param outPos Output parameter for chunk position
      * @return HRESULT indicating success or failure of chunk location
      */
-    HRESULT FindChunk(const BYTE* data, DWORD dataSize,
-        DWORD fourCC, DWORD& outSize, DWORD& outPos);
+    HRESULT FindChunk(const BYTE* data, DWORD dataSize, DWORD fourCC, DWORD& outSize, DWORD& outPos);
 
     /**
      * @brief Read data from a located chunk
@@ -208,7 +207,7 @@ private:
  */
 class SoundEffectFactory
 {
-public:
+  public:
     /**
      * @brief Create a simple beep tone
      * 
@@ -288,7 +287,7 @@ public:
      */
     static std::unique_ptr<SoundEffect> CreatePickup();
 
-private:
+  private:
     /**
      * @brief Generate waveform samples using a wave function
      * 
@@ -299,9 +298,7 @@ private:
      * @param dur Duration of the waveform in seconds
      * @param wave Function pointer to the wave generation function
      */
-    static void  GenerateWaveform(std::vector<short>& dst,
-        float freq, float dur,
-        float (*wave)(float));
+    static void GenerateWaveform(std::vector<short>& dst, float freq, float dur, float (*wave)(float));
 
     /**
      * @brief Create a SoundEffect from sample data
@@ -313,9 +310,7 @@ private:
      * @param sampleRate Sample rate for the audio (default: 44100 Hz)
      * @return Unique pointer to the created SoundEffect
      */
-    static std::unique_ptr<SoundEffect>
-        CreateFromSamples(const std::vector<short>& samples,
-            DWORD sampleRate = 44100);
+    static std::unique_ptr<SoundEffect> CreateFromSamples(const std::vector<short>& samples, DWORD sampleRate = 44100);
 
     /**
      * @brief Generate sine wave sample
@@ -329,5 +324,5 @@ private:
      * @param phase Phase value (ignored for noise)
      * @return Random noise sample value
      */
-    static float NoiseWave(float);      // phase ignored
+    static float NoiseWave(float); // phase ignored
 };

@@ -10,7 +10,8 @@ using namespace Spark::Graphics;
 // Tests
 // =============================================================================
 
-TEST(Fog_LinearFogFactor) {
+TEST(Fog_LinearFogFactor)
+{
     EXPECT_NEAR(FogMath::LinearFog(0.0f, 10.0f, 100.0f), 0.0f, 0.001f);
     EXPECT_NEAR(FogMath::LinearFog(10.0f, 10.0f, 100.0f), 0.0f, 0.001f);
     EXPECT_NEAR(FogMath::LinearFog(55.0f, 10.0f, 100.0f), 0.5f, 0.001f);
@@ -18,7 +19,8 @@ TEST(Fog_LinearFogFactor) {
     EXPECT_NEAR(FogMath::LinearFog(200.0f, 10.0f, 100.0f), 1.0f, 0.001f);
 }
 
-TEST(Fog_ExponentialFogFactor) {
+TEST(Fog_ExponentialFogFactor)
+{
     float f = FogMath::ExponentialFog(0.0f, 0.01f);
     EXPECT_NEAR(f, 0.0f, 0.001f);
 
@@ -32,7 +34,8 @@ TEST(Fog_ExponentialFogFactor) {
     EXPECT_LT(f1, f2);
 }
 
-TEST(Fog_ExponentialSquaredFogFactor) {
+TEST(Fog_ExponentialSquaredFogFactor)
+{
     float f = FogMath::ExponentialSquaredFog(0.0f, 0.01f);
     EXPECT_NEAR(f, 0.0f, 0.001f);
 
@@ -51,7 +54,8 @@ TEST(Fog_ExponentialSquaredFogFactor) {
     EXPECT_GT(fSq2, fExp2);
 }
 
-TEST(Fog_HeightDensity) {
+TEST(Fog_HeightDensity)
+{
     float d = FogMath::HeightDensity(0.0f, 0.0f, 0.5f, 0.02f);
     EXPECT_NEAR(d, 0.02f, 0.001f); // At base height = base density
 
@@ -65,7 +69,8 @@ TEST(Fog_HeightDensity) {
     EXPECT_NEAR(d3, 0.02f, 0.001f);
 }
 
-TEST(Fog_IntegratedHeightFog) {
+TEST(Fog_IntegratedHeightFog)
+{
     float f = FogMath::IntegratedHeightFog(0.0f, 0.0f, 50.0f, 0.0f, 0.5f, 0.02f);
     EXPECT_GT(f, 0.0f);
     EXPECT_LT(f, 1.0f);
@@ -76,7 +81,8 @@ TEST(Fog_IntegratedHeightFog) {
     EXPECT_GT(fLow, fHigh);
 }
 
-TEST(Fog_HenyeyGreenstein) {
+TEST(Fog_HenyeyGreenstein)
+{
     // Forward scattering (g > 0): more light in forward direction
     float forward = FogMath::HenyeyGreenstein(1.0f, 0.5f);
     float backward = FogMath::HenyeyGreenstein(-1.0f, 0.5f);
@@ -87,13 +93,15 @@ TEST(Fog_HenyeyGreenstein) {
     EXPECT_GT(iso, 0.0f);
 }
 
-TEST(Fog_BeerLambert) {
+TEST(Fog_BeerLambert)
+{
     EXPECT_NEAR(FogMath::BeerLambert(0.0f), 1.0f, 0.001f);
     EXPECT_LT(FogMath::BeerLambert(1.0f), 1.0f);
     EXPECT_GT(FogMath::BeerLambert(1.0f), 0.0f);
 }
 
-TEST(Fog_SystemModes) {
+TEST(Fog_SystemModes)
+{
     FogSystem fog;
     fog.Initialize();
 
@@ -109,7 +117,8 @@ TEST(Fog_SystemModes) {
     fog.Shutdown();
 }
 
-TEST(Fog_LinearMode) {
+TEST(Fog_LinearMode)
+{
     FogSystem fog;
     fog.Initialize();
     fog.SetMode(FogMode::Linear);
@@ -122,7 +131,8 @@ TEST(Fog_LinearMode) {
     fog.Shutdown();
 }
 
-TEST(Fog_ExponentialMode) {
+TEST(Fog_ExponentialMode)
+{
     FogSystem fog;
     fog.Initialize();
     fog.SetMode(FogMode::Exponential);
@@ -135,7 +145,8 @@ TEST(Fog_ExponentialMode) {
     fog.Shutdown();
 }
 
-TEST(Fog_HeightMode) {
+TEST(Fog_HeightMode)
+{
     FogSystem fog;
     fog.Initialize();
     fog.SetMode(FogMode::Height);
@@ -149,7 +160,8 @@ TEST(Fog_HeightMode) {
     fog.Shutdown();
 }
 
-TEST(Fog_DisabledReturnsZero) {
+TEST(Fog_DisabledReturnsZero)
+{
     FogSystem fog;
     fog.Initialize();
     fog.SetMode(FogMode::Linear);
@@ -161,7 +173,8 @@ TEST(Fog_DisabledReturnsZero) {
     fog.Shutdown();
 }
 
-TEST(Fog_ApplyFog) {
+TEST(Fog_ApplyFog)
+{
     FogSystem fog;
     fog.Initialize();
     fog.SetColor({0.5f, 0.5f, 0.5f, 1.0f});
@@ -176,7 +189,8 @@ TEST(Fog_ApplyFog) {
     fog.Shutdown();
 }
 
-TEST(Fog_ColorLerp) {
+TEST(Fog_ColorLerp)
+{
     FogColor a = {0.0f, 0.0f, 0.0f, 1.0f};
     FogColor b = {1.0f, 1.0f, 1.0f, 1.0f};
     FogColor mid = a.Lerp(b, 0.5f);
@@ -184,7 +198,8 @@ TEST(Fog_ColorLerp) {
     EXPECT_NEAR(mid.g, 0.5f, 0.001f);
 }
 
-TEST(Fog_ColorPresets) {
+TEST(Fog_ColorPresets)
+{
     auto white = FogColor::White();
     EXPECT_NEAR(white.r, 1.0f, 0.001f);
 
@@ -195,7 +210,8 @@ TEST(Fog_ColorPresets) {
     EXPECT_GT(warm.r, warm.b);
 }
 
-TEST(Fog_Metrics) {
+TEST(Fog_Metrics)
+{
     FogSystem fog;
     fog.Initialize();
     fog.SetMode(FogMode::Linear);
@@ -208,7 +224,8 @@ TEST(Fog_Metrics) {
     fog.Shutdown();
 }
 
-TEST(Fog_ConsoleStatus) {
+TEST(Fog_ConsoleStatus)
+{
     FogSystem fog;
     fog.Initialize();
     fog.SetMode(FogMode::Exponential);

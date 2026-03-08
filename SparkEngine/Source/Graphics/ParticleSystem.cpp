@@ -29,8 +29,7 @@ static float RandomFloat01()
 // ParticleEmitter
 // ============================================================================
 
-ParticleEmitter::ParticleEmitter(const ParticleEmitterDesc& desc)
-    : m_desc(desc)
+ParticleEmitter::ParticleEmitter(const ParticleEmitterDesc& desc) : m_desc(desc)
 {
     m_particles.resize(desc.maxParticles);
     for (auto& p : m_particles)
@@ -60,7 +59,8 @@ HRESULT ParticleEmitter::Initialize(ID3D11Device* device)
 
 void ParticleEmitter::Update(float deltaTime)
 {
-    if (!m_playing) return;
+    if (!m_playing)
+        return;
 
     m_elapsedTime += deltaTime;
 
@@ -96,7 +96,8 @@ void ParticleEmitter::Update(float deltaTime)
     m_activeCount = 0;
     for (auto& p : m_particles)
     {
-        if (!p.alive) continue;
+        if (!p.alive)
+            continue;
 
         UpdateParticle(p, deltaTime);
 
@@ -109,8 +110,10 @@ void ParticleEmitter::Update(float deltaTime)
 
 void ParticleEmitter::Render(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& projection)
 {
-    if (m_activeCount == 0) return;
-    if (!m_vertexBuffer) return;
+    if (m_activeCount == 0)
+        return;
+    if (!m_vertexBuffer)
+        return;
 
     // Update vertex buffer with current particle data
     if (m_bufferDirty)
@@ -171,7 +174,8 @@ void ParticleEmitter::Burst(int count)
 
 bool ParticleEmitter::IsAlive() const
 {
-    if (m_playing) return true;
+    if (m_playing)
+        return true;
     return m_activeCount > 0;
 }
 
@@ -180,7 +184,8 @@ void ParticleEmitter::EmitParticle()
     // Find a dead particle slot
     for (auto& p : m_particles)
     {
-        if (p.alive) continue;
+        if (p.alive)
+            continue;
 
         float t = RandomFloat01();
         p.alive = true;
@@ -195,7 +200,7 @@ void ParticleEmitter::EmitParticle()
         // Initial velocity from spawn direction * speed
         XMFLOAT3 dir = GetRandomSpawnDirection();
         float speed = m_desc.startSpeed.Evaluate(RandomFloat01());
-        p.velocity = { dir.x * speed, dir.y * speed, dir.z * speed };
+        p.velocity = {dir.x * speed, dir.y * speed, dir.z * speed};
 
         p.color = SampleColorGradient(0.0f);
         return;
@@ -246,8 +251,10 @@ void ParticleEmitter::UpdateParticle(Particle& p, float dt)
 XMFLOAT4 ParticleEmitter::SampleColorGradient(float t) const
 {
     const auto& keys = m_desc.colorOverLife;
-    if (keys.empty()) return {1,1,1,1};
-    if (keys.size() == 1) return keys[0].color;
+    if (keys.empty())
+        return {1, 1, 1, 1};
+    if (keys.size() == 1)
+        return keys[0].color;
 
     // Find the two keys to lerp between
     for (size_t i = 0; i + 1 < keys.size(); ++i)
@@ -255,12 +262,10 @@ XMFLOAT4 ParticleEmitter::SampleColorGradient(float t) const
         if (t >= keys[i].time && t <= keys[i + 1].time)
         {
             float localT = (t - keys[i].time) / (keys[i + 1].time - keys[i].time);
-            return {
-                keys[i].color.x + localT * (keys[i + 1].color.x - keys[i].color.x),
-                keys[i].color.y + localT * (keys[i + 1].color.y - keys[i].color.y),
-                keys[i].color.z + localT * (keys[i + 1].color.z - keys[i].color.z),
-                keys[i].color.w + localT * (keys[i + 1].color.w - keys[i].color.w)
-            };
+            return {keys[i].color.x + localT * (keys[i + 1].color.x - keys[i].color.x),
+                    keys[i].color.y + localT * (keys[i + 1].color.y - keys[i].color.y),
+                    keys[i].color.z + localT * (keys[i + 1].color.z - keys[i].color.z),
+                    keys[i].color.w + localT * (keys[i + 1].color.w - keys[i].color.w)};
         }
     }
     return keys.back().color;
@@ -269,8 +274,10 @@ XMFLOAT4 ParticleEmitter::SampleColorGradient(float t) const
 float ParticleEmitter::SampleSizeCurve(float t) const
 {
     const auto& curve = m_desc.sizeOverLife;
-    if (curve.empty()) return 1.0f;
-    if (curve.size() == 1) return curve[0].second;
+    if (curve.empty())
+        return 1.0f;
+    if (curve.size() == 1)
+        return curve[0].second;
 
     for (size_t i = 0; i + 1 < curve.size(); ++i)
     {
@@ -363,7 +370,8 @@ void ParticleEmitter::UpdateVertexBuffer()
     m_vertexData.clear();
     for (const auto& p : m_particles)
     {
-        if (!p.alive) continue;
+        if (!p.alive)
+            continue;
         m_vertexData.push_back({p.position, p.color, p.size, p.rotation});
     }
 }
@@ -373,7 +381,10 @@ void ParticleEmitter::UpdateVertexBuffer()
 // ============================================================================
 
 ParticleSystem::ParticleSystem() = default;
-ParticleSystem::~ParticleSystem() { Shutdown(); }
+ParticleSystem::~ParticleSystem()
+{
+    Shutdown();
+}
 
 HRESULT ParticleSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
@@ -420,9 +431,7 @@ ParticleEmitter* ParticleSystem::CreateEmitter(const ParticleEmitterDesc& desc)
     if (m_device)
         emitter->Initialize(m_device);
 
-    std::string name = desc.name.empty()
-        ? "emitter_" + std::to_string(m_nextEmitterID++)
-        : desc.name;
+    std::string name = desc.name.empty() ? "emitter_" + std::to_string(m_nextEmitterID++) : desc.name;
 
     auto* ptr = emitter.get();
     m_emitters[name] = std::move(emitter);
@@ -467,10 +476,10 @@ ParticleEmitter* ParticleSystem::SpawnExplosion(const XMFLOAT3& position, float 
     desc.duration = 1.5f;
     desc.blendMode = ParticleBlendMode::Additive;
     desc.colorOverLife = {
-        {0.0f, {1.0f, 0.9f, 0.3f, 1.0f}},   // Bright yellow-orange
-        {0.3f, {1.0f, 0.4f, 0.1f, 0.9f}},    // Orange-red
-        {0.7f, {0.5f, 0.1f, 0.0f, 0.5f}},    // Dark red
-        {1.0f, {0.2f, 0.2f, 0.2f, 0.0f}}     // Smoke fade
+        {0.0f, {1.0f, 0.9f, 0.3f, 1.0f}}, // Bright yellow-orange
+        {0.3f, {1.0f, 0.4f, 0.1f, 0.9f}}, // Orange-red
+        {0.7f, {0.5f, 0.1f, 0.0f, 0.5f}}, // Dark red
+        {1.0f, {0.2f, 0.2f, 0.2f, 0.0f}}  // Smoke fade
     };
     desc.sizeOverLife = {{0.0f, 0.5f}, {0.2f, 1.5f}, {1.0f, 0.3f}};
 
@@ -496,10 +505,7 @@ ParticleEmitter* ParticleSystem::SpawnMuzzleFlash(const XMFLOAT3& position, cons
     desc.loop = false;
     desc.duration = 0.1f;
     desc.blendMode = ParticleBlendMode::Additive;
-    desc.colorOverLife = {
-        {0.0f, {1.0f, 1.0f, 0.8f, 1.0f}},
-        {1.0f, {1.0f, 0.6f, 0.1f, 0.0f}}
-    };
+    desc.colorOverLife = {{0.0f, {1.0f, 1.0f, 0.8f, 1.0f}}, {1.0f, {1.0f, 0.6f, 0.1f, 0.0f}}};
 
     auto* emitter = CreateEmitter(desc);
     emitter->SetPosition(position);
@@ -524,10 +530,7 @@ ParticleEmitter* ParticleSystem::SpawnSparks(const XMFLOAT3& position, const XMF
     desc.duration = 0.8f;
     desc.blendMode = ParticleBlendMode::Additive;
     desc.colorOverLife = {
-        {0.0f, {1.0f, 0.9f, 0.5f, 1.0f}},
-        {0.5f, {1.0f, 0.5f, 0.1f, 0.8f}},
-        {1.0f, {0.5f, 0.1f, 0.0f, 0.0f}}
-    };
+        {0.0f, {1.0f, 0.9f, 0.5f, 1.0f}}, {0.5f, {1.0f, 0.5f, 0.1f, 0.8f}}, {1.0f, {0.5f, 0.1f, 0.0f, 0.0f}}};
 
     auto* emitter = CreateEmitter(desc);
     emitter->SetPosition(position);
@@ -551,12 +554,10 @@ ParticleEmitter* ParticleSystem::SpawnSmoke(const XMFLOAT3& position, float dura
     desc.loop = false;
     desc.duration = duration;
     desc.blendMode = ParticleBlendMode::AlphaBlend;
-    desc.colorOverLife = {
-        {0.0f, {0.5f, 0.5f, 0.5f, 0.0f}},
-        {0.1f, {0.5f, 0.5f, 0.5f, 0.4f}},
-        {0.8f, {0.3f, 0.3f, 0.3f, 0.2f}},
-        {1.0f, {0.2f, 0.2f, 0.2f, 0.0f}}
-    };
+    desc.colorOverLife = {{0.0f, {0.5f, 0.5f, 0.5f, 0.0f}},
+                          {0.1f, {0.5f, 0.5f, 0.5f, 0.4f}},
+                          {0.8f, {0.3f, 0.3f, 0.3f, 0.2f}},
+                          {1.0f, {0.2f, 0.2f, 0.2f, 0.0f}}};
     desc.sizeOverLife = {{0.0f, 0.5f}, {0.5f, 1.2f}, {1.0f, 2.0f}};
 
     auto* emitter = CreateEmitter(desc);
@@ -578,10 +579,7 @@ ParticleEmitter* ParticleSystem::SpawnTrail(const XMFLOAT3& startPos)
     desc.loop = true;
     desc.blendMode = ParticleBlendMode::Additive;
     desc.colorOverLife = {
-        {0.0f, {1.0f, 0.8f, 0.3f, 0.8f}},
-        {0.5f, {0.8f, 0.3f, 0.1f, 0.4f}},
-        {1.0f, {0.3f, 0.1f, 0.1f, 0.0f}}
-    };
+        {0.0f, {1.0f, 0.8f, 0.3f, 0.8f}}, {0.5f, {0.8f, 0.3f, 0.1f, 0.4f}}, {1.0f, {0.3f, 0.1f, 0.1f, 0.0f}}};
     desc.sizeOverLife = {{0.0f, 1.0f}, {1.0f, 0.2f}};
 
     auto* emitter = CreateEmitter(desc);
@@ -607,10 +605,8 @@ std::string ParticleSystem::Console_ListEmitters() const
     ss << "=== Particle Emitters (" << m_emitters.size() << ") ===\n";
     for (const auto& pair : m_emitters)
     {
-        ss << "  " << pair.first
-           << " | Particles: " << pair.second->GetActiveParticleCount()
-           << "/" << pair.second->GetDesc().maxParticles
-           << " | " << (pair.second->IsPlaying() ? "Playing" : "Stopped")
+        ss << "  " << pair.first << " | Particles: " << pair.second->GetActiveParticleCount() << "/"
+           << pair.second->GetDesc().maxParticles << " | " << (pair.second->IsPlaying() ? "Playing" : "Stopped")
            << "\n";
     }
     ss << "Total active particles: " << GetTotalActiveParticles() << "\n";
@@ -620,7 +616,8 @@ std::string ParticleSystem::Console_ListEmitters() const
 std::string ParticleSystem::Console_GetEmitterInfo(const std::string& name) const
 {
     auto* emitter = GetEmitter(name);
-    if (!emitter) return "Emitter not found: " + name;
+    if (!emitter)
+        return "Emitter not found: " + name;
 
     const auto& desc = emitter->GetDesc();
     std::ostringstream ss;
@@ -677,8 +674,7 @@ static float RandomFloat01()
 // ParticleEmitter (Linux stub)
 // ============================================================================
 
-ParticleEmitter::ParticleEmitter(const ParticleEmitterDesc& desc)
-    : m_desc(desc)
+ParticleEmitter::ParticleEmitter(const ParticleEmitterDesc& desc) : m_desc(desc)
 {
     m_particles.resize(desc.maxParticles);
     for (auto& p : m_particles)
@@ -700,7 +696,8 @@ HRESULT ParticleEmitter::Initialize(ID3D11Device* /*device*/)
 
 void ParticleEmitter::Update(float deltaTime)
 {
-    if (!m_playing) return;
+    if (!m_playing)
+        return;
 
     m_elapsedTime += deltaTime;
 
@@ -732,7 +729,8 @@ void ParticleEmitter::Update(float deltaTime)
     m_activeCount = 0;
     for (auto& p : m_particles)
     {
-        if (!p.alive) continue;
+        if (!p.alive)
+            continue;
         UpdateParticle(p, deltaTime);
         if (p.alive)
             m_activeCount++;
@@ -746,9 +744,18 @@ void ParticleEmitter::Render(ID3D11DeviceContext* /*context*/, const XMMATRIX& /
     // No-op on Linux - no GPU rendering
 }
 
-void ParticleEmitter::Play() { m_playing = true; }
-void ParticleEmitter::Stop() { m_playing = false; }
-void ParticleEmitter::Pause() { m_playing = false; }
+void ParticleEmitter::Play()
+{
+    m_playing = true;
+}
+void ParticleEmitter::Stop()
+{
+    m_playing = false;
+}
+void ParticleEmitter::Pause()
+{
+    m_playing = false;
+}
 
 void ParticleEmitter::Reset()
 {
@@ -770,7 +777,8 @@ void ParticleEmitter::Burst(int count)
 
 bool ParticleEmitter::IsAlive() const
 {
-    if (m_playing) return true;
+    if (m_playing)
+        return true;
     return m_activeCount > 0;
 }
 
@@ -778,7 +786,8 @@ void ParticleEmitter::EmitParticle()
 {
     for (auto& p : m_particles)
     {
-        if (p.alive) continue;
+        if (p.alive)
+            continue;
 
         float t = RandomFloat01();
         p.alive = true;
@@ -792,7 +801,7 @@ void ParticleEmitter::EmitParticle()
 
         XMFLOAT3 dir = GetRandomSpawnDirection();
         float speed = m_desc.startSpeed.Evaluate(RandomFloat01());
-        p.velocity = { dir.x * speed, dir.y * speed, dir.z * speed };
+        p.velocity = {dir.x * speed, dir.y * speed, dir.z * speed};
 
         p.color = SampleColorGradient(0.0f);
         return;
@@ -838,20 +847,20 @@ void ParticleEmitter::UpdateParticle(Particle& p, float dt)
 XMFLOAT4 ParticleEmitter::SampleColorGradient(float t) const
 {
     const auto& keys = m_desc.colorOverLife;
-    if (keys.empty()) return {1,1,1,1};
-    if (keys.size() == 1) return keys[0].color;
+    if (keys.empty())
+        return {1, 1, 1, 1};
+    if (keys.size() == 1)
+        return keys[0].color;
 
     for (size_t i = 0; i + 1 < keys.size(); ++i)
     {
         if (t >= keys[i].time && t <= keys[i + 1].time)
         {
             float localT = (t - keys[i].time) / (keys[i + 1].time - keys[i].time);
-            return {
-                keys[i].color.x + localT * (keys[i + 1].color.x - keys[i].color.x),
-                keys[i].color.y + localT * (keys[i + 1].color.y - keys[i].color.y),
-                keys[i].color.z + localT * (keys[i + 1].color.z - keys[i].color.z),
-                keys[i].color.w + localT * (keys[i + 1].color.w - keys[i].color.w)
-            };
+            return {keys[i].color.x + localT * (keys[i + 1].color.x - keys[i].color.x),
+                    keys[i].color.y + localT * (keys[i + 1].color.y - keys[i].color.y),
+                    keys[i].color.z + localT * (keys[i + 1].color.z - keys[i].color.z),
+                    keys[i].color.w + localT * (keys[i + 1].color.w - keys[i].color.w)};
         }
     }
     return keys.back().color;
@@ -860,8 +869,10 @@ XMFLOAT4 ParticleEmitter::SampleColorGradient(float t) const
 float ParticleEmitter::SampleSizeCurve(float t) const
 {
     const auto& curve = m_desc.sizeOverLife;
-    if (curve.empty()) return 1.0f;
-    if (curve.size() == 1) return curve[0].second;
+    if (curve.empty())
+        return 1.0f;
+    if (curve.size() == 1)
+        return curve[0].second;
 
     for (size_t i = 0; i + 1 < curve.size(); ++i)
     {
@@ -948,7 +959,8 @@ void ParticleEmitter::UpdateVertexBuffer()
     m_vertexData.clear();
     for (const auto& p : m_particles)
     {
-        if (!p.alive) continue;
+        if (!p.alive)
+            continue;
         m_vertexData.push_back({p.position, p.color, p.size, p.rotation});
     }
 }
@@ -958,7 +970,10 @@ void ParticleEmitter::UpdateVertexBuffer()
 // ============================================================================
 
 ParticleSystem::ParticleSystem() = default;
-ParticleSystem::~ParticleSystem() { Shutdown(); }
+ParticleSystem::~ParticleSystem()
+{
+    Shutdown();
+}
 
 HRESULT ParticleSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
@@ -996,9 +1011,7 @@ ParticleEmitter* ParticleSystem::CreateEmitter(const ParticleEmitterDesc& desc)
     auto emitter = std::make_unique<ParticleEmitter>(desc);
     emitter->Initialize(nullptr);
 
-    std::string name = desc.name.empty()
-        ? "emitter_" + std::to_string(m_nextEmitterID++)
-        : desc.name;
+    std::string name = desc.name.empty() ? "emitter_" + std::to_string(m_nextEmitterID++) : desc.name;
 
     auto* ptr = emitter.get();
     m_emitters[name] = std::move(emitter);
@@ -1038,12 +1051,10 @@ ParticleEmitter* ParticleSystem::SpawnExplosion(const XMFLOAT3& position, float 
     desc.loop = false;
     desc.duration = 1.5f;
     desc.blendMode = ParticleBlendMode::Additive;
-    desc.colorOverLife = {
-        {0.0f, {1.0f, 0.9f, 0.3f, 1.0f}},
-        {0.3f, {1.0f, 0.4f, 0.1f, 0.9f}},
-        {0.7f, {0.5f, 0.1f, 0.0f, 0.5f}},
-        {1.0f, {0.2f, 0.2f, 0.2f, 0.0f}}
-    };
+    desc.colorOverLife = {{0.0f, {1.0f, 0.9f, 0.3f, 1.0f}},
+                          {0.3f, {1.0f, 0.4f, 0.1f, 0.9f}},
+                          {0.7f, {0.5f, 0.1f, 0.0f, 0.5f}},
+                          {1.0f, {0.2f, 0.2f, 0.2f, 0.0f}}};
     desc.sizeOverLife = {{0.0f, 0.5f}, {0.2f, 1.5f}, {1.0f, 0.3f}};
 
     auto* emitter = CreateEmitter(desc);
@@ -1068,10 +1079,7 @@ ParticleEmitter* ParticleSystem::SpawnMuzzleFlash(const XMFLOAT3& position, cons
     desc.loop = false;
     desc.duration = 0.1f;
     desc.blendMode = ParticleBlendMode::Additive;
-    desc.colorOverLife = {
-        {0.0f, {1.0f, 1.0f, 0.8f, 1.0f}},
-        {1.0f, {1.0f, 0.6f, 0.1f, 0.0f}}
-    };
+    desc.colorOverLife = {{0.0f, {1.0f, 1.0f, 0.8f, 1.0f}}, {1.0f, {1.0f, 0.6f, 0.1f, 0.0f}}};
 
     auto* emitter = CreateEmitter(desc);
     emitter->SetPosition(position);
@@ -1096,10 +1104,7 @@ ParticleEmitter* ParticleSystem::SpawnSparks(const XMFLOAT3& position, const XMF
     desc.duration = 0.8f;
     desc.blendMode = ParticleBlendMode::Additive;
     desc.colorOverLife = {
-        {0.0f, {1.0f, 0.9f, 0.5f, 1.0f}},
-        {0.5f, {1.0f, 0.5f, 0.1f, 0.8f}},
-        {1.0f, {0.5f, 0.1f, 0.0f, 0.0f}}
-    };
+        {0.0f, {1.0f, 0.9f, 0.5f, 1.0f}}, {0.5f, {1.0f, 0.5f, 0.1f, 0.8f}}, {1.0f, {0.5f, 0.1f, 0.0f, 0.0f}}};
 
     auto* emitter = CreateEmitter(desc);
     emitter->SetPosition(position);
@@ -1123,12 +1128,10 @@ ParticleEmitter* ParticleSystem::SpawnSmoke(const XMFLOAT3& position, float dura
     desc.loop = false;
     desc.duration = duration;
     desc.blendMode = ParticleBlendMode::AlphaBlend;
-    desc.colorOverLife = {
-        {0.0f, {0.5f, 0.5f, 0.5f, 0.0f}},
-        {0.1f, {0.5f, 0.5f, 0.5f, 0.4f}},
-        {0.8f, {0.3f, 0.3f, 0.3f, 0.2f}},
-        {1.0f, {0.2f, 0.2f, 0.2f, 0.0f}}
-    };
+    desc.colorOverLife = {{0.0f, {0.5f, 0.5f, 0.5f, 0.0f}},
+                          {0.1f, {0.5f, 0.5f, 0.5f, 0.4f}},
+                          {0.8f, {0.3f, 0.3f, 0.3f, 0.2f}},
+                          {1.0f, {0.2f, 0.2f, 0.2f, 0.0f}}};
     desc.sizeOverLife = {{0.0f, 0.5f}, {0.5f, 1.2f}, {1.0f, 2.0f}};
 
     auto* emitter = CreateEmitter(desc);
@@ -1150,10 +1153,7 @@ ParticleEmitter* ParticleSystem::SpawnTrail(const XMFLOAT3& startPos)
     desc.loop = true;
     desc.blendMode = ParticleBlendMode::Additive;
     desc.colorOverLife = {
-        {0.0f, {1.0f, 0.8f, 0.3f, 0.8f}},
-        {0.5f, {0.8f, 0.3f, 0.1f, 0.4f}},
-        {1.0f, {0.3f, 0.1f, 0.1f, 0.0f}}
-    };
+        {0.0f, {1.0f, 0.8f, 0.3f, 0.8f}}, {0.5f, {0.8f, 0.3f, 0.1f, 0.4f}}, {1.0f, {0.3f, 0.1f, 0.1f, 0.0f}}};
     desc.sizeOverLife = {{0.0f, 1.0f}, {1.0f, 0.2f}};
 
     auto* emitter = CreateEmitter(desc);
@@ -1175,10 +1175,8 @@ std::string ParticleSystem::Console_ListEmitters() const
     ss << "=== Particle Emitters (" << m_emitters.size() << ") ===\n";
     for (const auto& pair : m_emitters)
     {
-        ss << "  " << pair.first
-           << " | Particles: " << pair.second->GetActiveParticleCount()
-           << "/" << pair.second->GetDesc().maxParticles
-           << " | " << (pair.second->IsPlaying() ? "Playing" : "Stopped")
+        ss << "  " << pair.first << " | Particles: " << pair.second->GetActiveParticleCount() << "/"
+           << pair.second->GetDesc().maxParticles << " | " << (pair.second->IsPlaying() ? "Playing" : "Stopped")
            << "\n";
     }
     ss << "Total active particles: " << GetTotalActiveParticles() << "\n";
@@ -1188,7 +1186,8 @@ std::string ParticleSystem::Console_ListEmitters() const
 std::string ParticleSystem::Console_GetEmitterInfo(const std::string& name) const
 {
     auto* emitter = GetEmitter(name);
-    if (!emitter) return "Emitter not found: " + name;
+    if (!emitter)
+        return "Emitter not found: " + name;
 
     const auto& desc = emitter->GetDesc();
     std::ostringstream ss;

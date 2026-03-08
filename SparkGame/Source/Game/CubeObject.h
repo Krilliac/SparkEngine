@@ -25,7 +25,7 @@
 #include "Game/GameObject.h"
 #include "Game/PlaceholderMesh.h"
 #include "Game/Primitives.h"
-#include "Utils/Assert.h"        // custom assert system
+#include "Utils/Assert.h" // custom assert system
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -52,7 +52,7 @@ using DirectX::XMMATRIX;
  */
 class CubeObject : public GameObject
 {
-public:
+  public:
     /**
      * @brief Construct a cube with the given edge length
      * @param size Edge length of the cube in world units (default: 1.0f)
@@ -78,17 +78,14 @@ public:
      * @brief Per-frame update — delegates to GameObject::Update
      * @param dt Delta time in seconds since the last frame
      */
-    void    Update(float dt) override { GameObject::Update(dt); }
+    void Update(float dt) override { GameObject::Update(dt); }
 
     /**
      * @brief Render the cube — delegates to GameObject::Render
      * @param v Camera view matrix
      * @param p Camera projection matrix
      */
-    void    Render(const XMMATRIX& v, const XMMATRIX& p) override
-    {
-        GameObject::Render(v, p);
-    }
+    void Render(const XMMATRIX& v, const XMMATRIX& p) override { GameObject::Render(v, p); }
 
     /**
      * @brief Collision callback when hit by another game object (no-op)
@@ -103,7 +100,7 @@ public:
      */
     void OnHitWorld(const XMFLOAT3&, const XMFLOAT3&) override {}
 
-protected:
+  protected:
     /**
      * @brief Create or load the cube mesh geometry
      *
@@ -112,7 +109,7 @@ protected:
      */
     void CreateMesh() override;
 
-private:
-    float         m_size;                                      ///< Edge length of the cube in world units
-    std::wstring  m_modelPath = L"Assets/Models/Cube.obj";     ///< Path to the cube OBJ model on disk
+  private:
+    float m_size;                                         ///< Edge length of the cube in world units
+    std::wstring m_modelPath = L"Assets/Models/Cube.obj"; ///< Path to the cube OBJ model on disk
 };

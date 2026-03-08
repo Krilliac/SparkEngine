@@ -16,9 +16,10 @@
 #include <string>
 #include <functional>
 
-namespace SparkEditor {
+namespace SparkEditor
+{
 
-/**
+    /**
  * @brief Project browser panel for creating/opening projects
  *
  * Displayed as a modal window on startup (when no project is loaded),
@@ -27,49 +28,54 @@ namespace SparkEditor {
  * - New project wizard with template selection
  * - Browse for existing project
  */
-class ProjectBrowserPanel : public EditorPanel {
-public:
-    ProjectBrowserPanel(ProjectManager* projectManager);
-    ~ProjectBrowserPanel() override = default;
+    class ProjectBrowserPanel : public EditorPanel
+    {
+      public:
+        ProjectBrowserPanel(ProjectManager* projectManager);
+        ~ProjectBrowserPanel() override = default;
 
-    bool Initialize() override;
-    void Update(float deltaTime) override;
-    void Render() override;
-    void Shutdown() override;
+        bool Initialize() override;
+        void Update(float deltaTime) override;
+        void Render() override;
+        void Shutdown() override;
 
-    /// Show the panel in "New Project" mode
-    void ShowNewProject();
-    /// Show the panel in "Open Project" mode
-    void ShowOpenProject();
-    /// Show the full browser (recent projects + new/open buttons)
-    void ShowBrowser();
+        /// Show the panel in "New Project" mode
+        void ShowNewProject();
+        /// Show the panel in "Open Project" mode
+        void ShowOpenProject();
+        /// Show the full browser (recent projects + new/open buttons)
+        void ShowBrowser();
 
-    /// Returns true while the browser wants to be shown as a modal overlay
-    bool IsModalActive() const { return m_showModal; }
-    void SetModalActive(bool active) { m_showModal = active; }
+        /// Returns true while the browser wants to be shown as a modal overlay
+        bool IsModalActive() const { return m_showModal; }
+        void SetModalActive(bool active) { m_showModal = active; }
 
-private:
-    enum class Tab { RecentProjects, NewProject };
+      private:
+        enum class Tab
+        {
+            RecentProjects,
+            NewProject
+        };
 
-    void RenderModal();
-    void RenderRecentProjects();
-    void RenderNewProjectForm();
-    void RenderTemplateCard(ProjectTemplate tmpl, const char* icon);
-    bool BrowseForFolder(std::string& outPath);
+        void RenderModal();
+        void RenderRecentProjects();
+        void RenderNewProjectForm();
+        void RenderTemplateCard(ProjectTemplate tmpl, const char* icon);
+        bool BrowseForFolder(std::string& outPath);
 
-    ProjectManager* m_projectManager = nullptr;
-    bool m_showModal = false;
-    Tab m_activeTab = Tab::RecentProjects;
+        ProjectManager* m_projectManager = nullptr;
+        bool m_showModal = false;
+        Tab m_activeTab = Tab::RecentProjects;
 
-    // New project form state
-    char m_newProjectName[256] = "MyProject";
-    char m_newProjectPath[512] = "";
-    char m_newProjectDescription[512] = "";
-    ProjectTemplate m_selectedTemplate = ProjectTemplate::Blank3D;
-    std::string m_createError;
+        // New project form state
+        char m_newProjectName[256] = "MyProject";
+        char m_newProjectPath[512] = "";
+        char m_newProjectDescription[512] = "";
+        ProjectTemplate m_selectedTemplate = ProjectTemplate::Blank3D;
+        std::string m_createError;
 
-    // Open project state
-    std::string m_openError;
-};
+        // Open project state
+        std::string m_openError;
+    };
 
 } // namespace SparkEditor

@@ -31,14 +31,15 @@
  * @param wmsg  Wide-string message (e.g. L"Player spawned")
  * @param wtype Wide-string log type (e.g. L"INFO", L"ERROR", L"SUCCESS")
  */
-#define LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype) \
-    do { \
-        std::wstring wstrMsg = wmsg; \
-        std::wstring wstrType = wtype; \
-        std::string strMsg(wstrMsg.begin(), wstrMsg.end()); \
-        std::string strType(wstrType.begin(), wstrType.end()); \
-        Spark::SimpleConsole::GetInstance().Log(strMsg, strType); \
-    } while(0)
+#define LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype)                                                                          \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        std::wstring wstrMsg = wmsg;                                                                                   \
+        std::wstring wstrType = wtype;                                                                                 \
+        std::string strMsg(wstrMsg.begin(), wstrMsg.end());                                                            \
+        std::string strType(wstrType.begin(), wstrType.end());                                                         \
+        Spark::SimpleConsole::GetInstance().Log(strMsg, strType);                                                      \
+    } while (0)
 
 /**
  * @brief Log a message with rate limiting (max 3 messages per 3-second window).
@@ -49,22 +50,27 @@
  * @param wmsg  Wide-string message
  * @param wtype Wide-string log type
  */
-#define LOG_TO_CONSOLE_RATE_LIMITED(wmsg, wtype) \
-    do { \
-        static auto lastLogTime = std::chrono::steady_clock::now(); \
-        static int logCounter = 0; \
-        auto now = std::chrono::steady_clock::now(); \
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count(); \
-        if (elapsed >= 3 || logCounter < 3) { \
-            LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype); \
-            if (elapsed >= 3) { \
-                lastLogTime = now; \
-                logCounter = 0; \
-            } else { \
-                logCounter++; \
-            } \
-        } \
-    } while(0)
+#define LOG_TO_CONSOLE_RATE_LIMITED(wmsg, wtype)                                                                       \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        static auto lastLogTime = std::chrono::steady_clock::now();                                                    \
+        static int logCounter = 0;                                                                                     \
+        auto now = std::chrono::steady_clock::now();                                                                   \
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count();                    \
+        if (elapsed >= 3 || logCounter < 3)                                                                            \
+        {                                                                                                              \
+            LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype);                                                                     \
+            if (elapsed >= 3)                                                                                          \
+            {                                                                                                          \
+                lastLogTime = now;                                                                                     \
+                logCounter = 0;                                                                                        \
+            }                                                                                                          \
+            else                                                                                                       \
+            {                                                                                                          \
+                logCounter++;                                                                                          \
+            }                                                                                                          \
+        }                                                                                                              \
+    } while (0)
 
 /** @brief Convenience alias — defaults to rate-limited logging. */
 #define LOG_TO_CONSOLE(wmsg, wtype) LOG_TO_CONSOLE_RATE_LIMITED(wmsg, wtype)

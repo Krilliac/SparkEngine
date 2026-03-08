@@ -37,9 +37,9 @@ enum class TextureFormat
 {
     R8G8B8A8_UNORM,
     R8G8B8A8_SRGB,
-    BC1_UNORM,      // DXT1
+    BC1_UNORM, // DXT1
     BC1_SRGB,
-    BC3_UNORM,      // DXT5
+    BC3_UNORM, // DXT5
     BC3_SRGB,
     BC7_UNORM,
     BC7_SRGB,
@@ -80,10 +80,10 @@ enum class TextureUsage : uint32_t
  */
 enum class TextureQuality
 {
-    Low,        // Quarter resolution, high compression
-    Medium,     // Half resolution, medium compression
-    High,       // Full resolution, low compression
-    Ultra       // Full resolution, no compression
+    Low,    // Quarter resolution, high compression
+    Medium, // Half resolution, medium compression
+    High,   // Full resolution, low compression
+    Ultra   // Full resolution, no compression
 };
 
 /**
@@ -110,7 +110,7 @@ struct TextureDesc
  */
 class Texture
 {
-public:
+  public:
     Texture(const std::string& name, const TextureDesc& desc);
     ~Texture() = default;
 
@@ -122,24 +122,24 @@ public:
     ID3D11DepthStencilView* GetDSV() const { return m_dsv.Get(); }
     ID3D11UnorderedAccessView* GetUAV() const { return m_uav.Get(); }
     ID3D11Resource* GetResource() const { return m_resource.Get(); }
-    
+
     // Status
     bool IsLoaded() const { return m_loaded; }
     bool IsStreaming() const { return m_streaming; }
     size_t GetMemoryUsage() const { return m_memoryUsage; }
-    
+
     // Resource creation
     HRESULT CreateFromFile(const std::string& filePath, ID3D11Device* device);
     HRESULT CreateFromData(const void* data, size_t dataSize, ID3D11Device* device);
     HRESULT CreateRenderTarget(ID3D11Device* device);
     HRESULT CreateDepthStencil(ID3D11Device* device);
-    
+
     // Resource management
     void Release();
     void Bind(ID3D11DeviceContext* context, uint32_t slot);
     void UnBind(ID3D11DeviceContext* context, uint32_t slot);
 
-private:
+  private:
     std::string m_name;
     TextureDesc m_desc;
     ComPtr<ID3D11Resource> m_resource;
@@ -150,7 +150,7 @@ private:
     bool m_loaded = false;
     bool m_streaming = false;
     size_t m_memoryUsage = 0;
-    
+
     HRESULT CreateViews(ID3D11Device* device);
     DXGI_FORMAT GetDXGIFormat(TextureFormat format) const;
 };
@@ -172,7 +172,7 @@ struct StreamingRequest
  */
 class TextureSystem
 {
-public:
+  public:
     /**
      * @brief Texture system metrics
      */
@@ -211,38 +211,37 @@ public:
     // Synchronous loading
     std::shared_ptr<Texture> LoadTexture(const std::string& filePath, const TextureDesc& desc = {});
     std::shared_ptr<Texture> CreateTexture(const std::string& name, const TextureDesc& desc);
-    
+
     // Asynchronous loading/streaming
-    void LoadTextureAsync(const std::string& filePath, 
-                         std::function<void(std::shared_ptr<Texture>)> callback,
-                         const TextureDesc& desc = {});
-    
+    void LoadTextureAsync(const std::string& filePath, std::function<void(std::shared_ptr<Texture>)> callback,
+                          const TextureDesc& desc = {});
+
     // Texture management
     std::shared_ptr<Texture> GetTexture(const std::string& name) const;
     void UnloadTexture(const std::string& name);
     void UnloadAllTextures();
-    
+
     // Default textures
     std::shared_ptr<Texture> GetWhiteTexture() const { return m_whiteTexture; }
     std::shared_ptr<Texture> GetBlackTexture() const { return m_blackTexture; }
     std::shared_ptr<Texture> GetNormalTexture() const { return m_normalTexture; }
     std::shared_ptr<Texture> GetNoiseTexture() const { return m_noiseTexture; }
-    
+
     // Quality settings
     void SetTextureQuality(TextureQuality quality) { m_quality = quality; }
     TextureQuality GetTextureQuality() const { return m_quality; }
-    
+
     // Memory management
     void SetMemoryBudget(size_t budgetBytes) { m_memoryBudget = budgetBytes; }
     size_t GetMemoryBudget() const { return m_memoryBudget; }
     size_t GetMemoryUsage() const;
     void GarbageCollect();
-    
+
     // Streaming
     void EnableStreaming(bool enabled) { m_streamingEnabled = enabled; }
     bool IsStreamingEnabled() const { return m_streamingEnabled; }
     void SetStreamingThreadCount(int count);
-    
+
     // Console integration
     TextureMetrics Console_GetMetrics() const;
     std::string Console_ListTextures() const;
@@ -253,24 +252,24 @@ public:
     void Console_ReloadTexture(const std::string& name);
     void Console_ReloadAllTextures();
 
-private:
+  private:
     ID3D11Device* m_device;
     ID3D11DeviceContext* m_context;
-    
+
     // Texture storage
     mutable std::mutex m_texturesMutex;
     std::unordered_map<std::string, std::shared_ptr<Texture>> m_textures;
-    
+
     // Default textures
     std::shared_ptr<Texture> m_whiteTexture;
     std::shared_ptr<Texture> m_blackTexture;
     std::shared_ptr<Texture> m_normalTexture;
     std::shared_ptr<Texture> m_noiseTexture;
-    
+
     // Settings
     TextureQuality m_quality = TextureQuality::High;
     size_t m_memoryBudget = 512 * 1024 * 1024; // 512MB default
-    
+
     // Streaming
     bool m_streamingEnabled = true;
     std::vector<std::thread> m_streamingThreads;
@@ -278,11 +277,11 @@ private:
     mutable std::mutex m_streamingMutex;
     std::condition_variable m_streamingCondition;
     std::atomic<bool> m_shouldStop{false};
-    
+
     // Metrics
     mutable std::mutex m_metricsMutex;
     TextureMetrics m_metrics;
-    
+
     // Helper methods
     HRESULT CreateDefaultTextures();
     void StreamingThreadFunction();

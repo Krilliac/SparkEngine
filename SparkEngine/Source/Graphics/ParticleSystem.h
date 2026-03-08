@@ -30,11 +30,11 @@ using Microsoft::WRL::ComPtr;
  */
 enum class EmitterShape
 {
-    Point,      ///< All particles spawn at a single point
-    Sphere,     ///< Particles spawn on/within a sphere
-    Cone,       ///< Particles spawn within a cone
-    Box,        ///< Particles spawn within a box volume
-    Circle      ///< Particles spawn on/within a circle (2D)
+    Point,  ///< All particles spawn at a single point
+    Sphere, ///< Particles spawn on/within a sphere
+    Cone,   ///< Particles spawn within a cone
+    Box,    ///< Particles spawn within a box volume
+    Circle  ///< Particles spawn on/within a circle (2D)
 };
 
 /**
@@ -42,10 +42,10 @@ enum class EmitterShape
  */
 enum class ParticleBlendMode
 {
-    Additive,       ///< Additive blending (fire, sparks, glow)
-    AlphaBlend,     ///< Standard alpha blending (smoke, dust)
-    Multiply,       ///< Multiplicative blending (shadows, darkening)
-    Premultiplied   ///< Pre-multiplied alpha blending
+    Additive,     ///< Additive blending (fire, sparks, glow)
+    AlphaBlend,   ///< Standard alpha blending (smoke, dust)
+    Multiply,     ///< Multiplicative blending (shadows, darkening)
+    Premultiplied ///< Pre-multiplied alpha blending
 };
 
 /**
@@ -53,8 +53,8 @@ enum class ParticleBlendMode
  */
 enum class ParticleSpace
 {
-    World,  ///< Particles simulate in world space (detach from emitter)
-    Local   ///< Particles simulate relative to emitter
+    World, ///< Particles simulate in world space (detach from emitter)
+    Local  ///< Particles simulate relative to emitter
 };
 
 /**
@@ -77,8 +77,8 @@ struct FloatRange
  */
 struct ColorKey
 {
-    float time = 0.0f;         ///< Normalized time [0..1]
-    XMFLOAT4 color = {1,1,1,1}; ///< RGBA color at this time
+    float time = 0.0f;             ///< Normalized time [0..1]
+    XMFLOAT4 color = {1, 1, 1, 1}; ///< RGBA color at this time
 };
 
 /**
@@ -94,7 +94,7 @@ struct Particle
     float rotationSpeed;
     float lifetime;
     float maxLifetime;
-    float age;       ///< Normalized age [0..1]
+    float age; ///< Normalized age [0..1]
     bool alive;
 };
 
@@ -117,16 +117,16 @@ struct ParticleEmitterDesc
     std::string name;
 
     // Emission
-    float emissionRate = 10.0f;        ///< Particles per second
-    int maxParticles = 1000;            ///< Maximum live particles
-    int burstCount = 0;                 ///< Particles to emit in a burst
-    float burstInterval = 0.0f;        ///< Time between bursts (0 = one-shot)
+    float emissionRate = 10.0f; ///< Particles per second
+    int maxParticles = 1000;    ///< Maximum live particles
+    int burstCount = 0;         ///< Particles to emit in a burst
+    float burstInterval = 0.0f; ///< Time between bursts (0 = one-shot)
 
     // Shape
     EmitterShape shape = EmitterShape::Point;
     float shapeRadius = 1.0f;          ///< Radius for sphere/cone/circle
-    XMFLOAT3 shapeExtents = {1,1,1};  ///< Half-extents for box shape
-    float coneAngle = 45.0f;          ///< Cone angle in degrees
+    XMFLOAT3 shapeExtents = {1, 1, 1}; ///< Half-extents for box shape
+    float coneAngle = 45.0f;           ///< Cone angle in degrees
 
     // Particle properties
     FloatRange lifetime = {1.0f, 2.0f};
@@ -136,36 +136,30 @@ struct ParticleEmitterDesc
     FloatRange rotationSpeed = {0.0f, 0.0f};
 
     // Color over lifetime (gradient)
-    std::vector<ColorKey> colorOverLife = {
-        {0.0f, {1,1,1,1}},
-        {1.0f, {1,1,1,0}}
-    };
+    std::vector<ColorKey> colorOverLife = {{0.0f, {1, 1, 1, 1}}, {1.0f, {1, 1, 1, 0}}};
 
     // Size over lifetime multiplier curve
-    std::vector<std::pair<float, float>> sizeOverLife = {
-        {0.0f, 1.0f},
-        {1.0f, 0.0f}
-    };
+    std::vector<std::pair<float, float>> sizeOverLife = {{0.0f, 1.0f}, {1.0f, 0.0f}};
 
     // Physics
     XMFLOAT3 gravity = {0, -9.81f, 0};
-    float gravityMultiplier = 0.0f;    ///< 0 = no gravity
-    float drag = 0.0f;                 ///< Velocity damping
+    float gravityMultiplier = 0.0f; ///< 0 = no gravity
+    float drag = 0.0f;              ///< Velocity damping
 
     // Rendering
     ParticleBlendMode blendMode = ParticleBlendMode::Additive;
     ParticleSpace space = ParticleSpace::World;
-    std::string texturePath;           ///< Optional billboard texture
+    std::string texturePath; ///< Optional billboard texture
 
     // Sub-emitters
-    std::string onDeathEmitter;        ///< Emitter to trigger when particle dies
-    std::string onCollisionEmitter;    ///< Emitter to trigger on collision
+    std::string onDeathEmitter;     ///< Emitter to trigger when particle dies
+    std::string onCollisionEmitter; ///< Emitter to trigger on collision
 
     // Flags
     bool loop = true;
     bool playOnAwake = true;
     bool prewarm = false;
-    float duration = 0.0f;            ///< Total duration (0 = infinite with loop)
+    float duration = 0.0f; ///< Total duration (0 = infinite with loop)
 };
 
 /**
@@ -173,7 +167,7 @@ struct ParticleEmitterDesc
  */
 class ParticleEmitter
 {
-public:
+  public:
     ParticleEmitter(const ParticleEmitterDesc& desc);
     ~ParticleEmitter();
 
@@ -186,7 +180,7 @@ public:
     void Stop();
     void Pause();
     void Reset();
-    void Burst(int count = -1);  ///< -1 uses desc.burstCount
+    void Burst(int count = -1); ///< -1 uses desc.burstCount
 
     // Transform
     void SetPosition(const XMFLOAT3& pos) { m_position = pos; }
@@ -199,7 +193,7 @@ public:
     int GetActiveParticleCount() const { return m_activeCount; }
     const ParticleEmitterDesc& GetDesc() const { return m_desc; }
 
-private:
+  private:
     void EmitParticle();
     void UpdateParticle(Particle& p, float dt);
     XMFLOAT4 SampleColorGradient(float t) const;
@@ -211,8 +205,8 @@ private:
     ParticleEmitterDesc m_desc;
     std::vector<Particle> m_particles;
 
-    XMFLOAT3 m_position = {0,0,0};
-    XMFLOAT3 m_rotation = {0,0,0};
+    XMFLOAT3 m_position = {0, 0, 0};
+    XMFLOAT3 m_rotation = {0, 0, 0};
 
     bool m_playing = false;
     float m_emissionAccumulator = 0.0f;
@@ -231,7 +225,7 @@ private:
  */
 class ParticleSystem
 {
-public:
+  public:
     ParticleSystem();
     ~ParticleSystem();
 
@@ -262,7 +256,7 @@ public:
     std::string Console_GetEmitterInfo(const std::string& name) const;
     void Console_SpawnEffect(const std::string& effectType, float x, float y, float z);
 
-private:
+  private:
     ID3D11Device* m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
 

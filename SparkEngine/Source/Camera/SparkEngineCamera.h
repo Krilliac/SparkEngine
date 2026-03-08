@@ -20,11 +20,11 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #include <DirectXMath.h>
-#endif // SPARK_PLATFORM_WINDOWS
-#include <algorithm>           // std::clamp
-#include <functional>          // std::function
-#include <mutex>               // std::mutex
-#include "Utils/Assert.h"      // custom assert
+#endif                    // SPARK_PLATFORM_WINDOWS
+#include <algorithm>      // std::clamp
+#include <functional>     // std::function
+#include <mutex>          // std::mutex
+#include "Utils/Assert.h" // custom assert
 
 using DirectX::XMFLOAT3;
 using DirectX::XMMATRIX;
@@ -52,34 +52,34 @@ using DirectX::XMMATRIX;
  */
 class SparkEngineCamera
 {
-private:
-    XMFLOAT3 m_position{ 0,0,0 };  ///< Camera position in world space
-    XMFLOAT3 m_forward{ 0,0,1 };   ///< Camera forward direction vector
-    XMFLOAT3 m_right{ 1,0,0 };     ///< Camera right direction vector
-    XMFLOAT3 m_up{ 0,1,0 };        ///< Camera up direction vector
-    float    m_pitch{ 0 }, m_yaw{ 0 }, m_roll{ 0 }; ///< Camera rotation angles in radians
+  private:
+    XMFLOAT3 m_position{0, 0, 0};          ///< Camera position in world space
+    XMFLOAT3 m_forward{0, 0, 1};           ///< Camera forward direction vector
+    XMFLOAT3 m_right{1, 0, 0};             ///< Camera right direction vector
+    XMFLOAT3 m_up{0, 1, 0};                ///< Camera up direction vector
+    float m_pitch{0}, m_yaw{0}, m_roll{0}; ///< Camera rotation angles in radians
 
     XMMATRIX m_viewMatrix{};       ///< Cached view transformation matrix
     XMMATRIX m_projectionMatrix{}; ///< Cached projection transformation matrix
 
-    float m_moveSpeed{ 10.0f };        ///< Movement speed in units per second
-    float m_rotationSpeed{ 2.0f };     ///< Rotation speed multiplier
-    float m_defaultFov{ DirectX::XM_PIDIV2 };      ///< Default field of view (90 degrees)
-    float m_zoomedFov{ DirectX::XM_PIDIV2 / 2.0f }; ///< Zoomed field of view (45 degrees)
-    float m_aspectRatio{ 16.0f / 9.0f }; ///< Screen aspect ratio
-    
+    float m_moveSpeed{10.0f};                     ///< Movement speed in units per second
+    float m_rotationSpeed{2.0f};                  ///< Rotation speed multiplier
+    float m_defaultFov{DirectX::XM_PIDIV2};       ///< Default field of view (90 degrees)
+    float m_zoomedFov{DirectX::XM_PIDIV2 / 2.0f}; ///< Zoomed field of view (45 degrees)
+    float m_aspectRatio{16.0f / 9.0f};            ///< Screen aspect ratio
+
     // Console integration state
-    float m_mouseSensitivity{ 1.0f };   ///< Mouse sensitivity multiplier
-    bool m_invertY{ false };            ///< Invert Y-axis for mouse look
-    bool m_smoothMovement{ true };      ///< Enable smooth movement interpolation
-    float m_nearPlane{ 0.1f };          ///< Near clipping plane distance
-    float m_farPlane{ 1000.0f };        ///< Far clipping plane distance
-    
+    float m_mouseSensitivity{1.0f}; ///< Mouse sensitivity multiplier
+    bool m_invertY{false};          ///< Invert Y-axis for mouse look
+    bool m_smoothMovement{true};    ///< Enable smooth movement interpolation
+    float m_nearPlane{0.1f};        ///< Near clipping plane distance
+    float m_farPlane{1000.0f};      ///< Far clipping plane distance
+
     // Console callback system
-    mutable std::mutex m_stateMutex;    ///< Thread safety for state access
+    mutable std::mutex m_stateMutex;       ///< Thread safety for state access
     std::function<void()> m_stateCallback; ///< Callback for state changes
 
-public:
+  public:
     /**
      * @brief Default constructor
      * 
@@ -174,7 +174,7 @@ public:
      * 
      * @param angle Roll angle to add in radians
      */
-	void Roll(float angle);
+    void Roll(float angle);
 
     /**
      * @brief Toggle between normal and zoomed field of view
@@ -206,7 +206,7 @@ public:
      * @brief Get the current view transformation matrix
      * @return 4x4 view matrix for rendering transformations
      */
-    const XMMATRIX& GetViewMatrix()       const { return m_viewMatrix; }
+    const XMMATRIX& GetViewMatrix() const { return m_viewMatrix; }
 
     /**
      * @brief Get the current projection transformation matrix
@@ -218,25 +218,28 @@ public:
      * @brief Get the current camera position
      * @return Position vector in world coordinates
      */
-    const XMFLOAT3& GetPosition()         const { 
+    const XMFLOAT3& GetPosition() const
+    {
         std::lock_guard<std::mutex> lock(m_stateMutex);
-        return m_position; 
+        return m_position;
     }
 
     /**
      * @brief Get the current camera forward direction
      * @return Normalized forward direction vector
      */
-    const XMFLOAT3& GetForward()          const { 
+    const XMFLOAT3& GetForward() const
+    {
         std::lock_guard<std::mutex> lock(m_stateMutex);
-        return m_forward; 
+        return m_forward;
     }
 
     /**
      * @brief Get the current camera rotation (pitch, yaw, roll)
      * @return Rotation vector in radians
      */
-    XMFLOAT3 GetRotation() const {
+    XMFLOAT3 GetRotation() const
+    {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         return XMFLOAT3(m_pitch, m_yaw, m_roll);
     }
@@ -248,7 +251,8 @@ public:
     /**
      * @brief Camera state structure for console integration
      */
-    struct CameraState {
+    struct CameraState
+    {
         XMFLOAT3 position;
         XMFLOAT3 rotation;
         XMFLOAT3 forward, right, up;
@@ -345,7 +349,7 @@ public:
      */
     void Console_SmoothMoveTo(float targetX, float targetY, float targetZ, float duration);
 
-private:
+  private:
     /**
      * @brief Recalculate the view matrix from current transform
      * 

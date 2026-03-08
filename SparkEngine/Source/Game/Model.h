@@ -16,7 +16,7 @@ class GraphicsEngine;
 //------------------------------------------------------------------------------
 class Model
 {
-public:
+  public:
     /**
      * @brief Default constructor
      */
@@ -33,13 +33,11 @@ public:
     HRESULT LoadObj(const std::wstring& filename, ID3D11Device* device);
 
     // ✅ ENHANCED: Render with shader setup using graphics engine
-    void Render(ID3D11DeviceContext* ctx, GraphicsEngine* graphics = nullptr, 
-                const DirectX::XMMATRIX* world = nullptr, 
-                const DirectX::XMMATRIX* view = nullptr, 
-                const DirectX::XMMATRIX* proj = nullptr);
+    void Render(ID3D11DeviceContext* ctx, GraphicsEngine* graphics = nullptr, const DirectX::XMMATRIX* world = nullptr,
+                const DirectX::XMMATRIX* view = nullptr, const DirectX::XMMATRIX* proj = nullptr);
 
-private:
-    ID3D11Buffer* m_vb{ nullptr };
-    ID3D11Buffer* m_ib{ nullptr };
-    UINT          m_indexCount{ 0 };
+  private:
+    ID3D11Buffer* m_vb{nullptr};
+    ID3D11Buffer* m_ib{nullptr};
+    UINT m_indexCount{0};
 };

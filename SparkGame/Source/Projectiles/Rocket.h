@@ -56,7 +56,7 @@ using DirectX::XMMATRIX;
  */
 class Rocket : public Projectile
 {
-public:
+  public:
     /**
      * @brief Construct a rocket with default explosion and trail parameters
      *
@@ -87,14 +87,14 @@ public:
      *
      * @param deltaTime Time elapsed since last frame in seconds
      */
-    void    Update(float deltaTime) override;
+    void Update(float deltaTime) override;
 
     /**
      * @brief Render the rocket mesh
      * @param view       Camera view matrix
      * @param projection Camera projection matrix
      */
-    void    Render(const XMMATRIX& view, const XMMATRIX& projection) override;
+    void Render(const XMMATRIX& view, const XMMATRIX& projection) override;
 
     /**
      * @brief Fire the rocket with initial velocity and clear trail state
@@ -106,7 +106,7 @@ public:
      * @param direction     Normalized aim direction vector
      * @param speed         Initial speed in units per second
      */
-    void    Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed) override;
+    void Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed) override;
 
     /**
      * @brief Handle collision with another game object — triggers explosion
@@ -132,7 +132,7 @@ public:
      */
     const std::vector<XMFLOAT3>& GetTrailPositions() const { return m_trailPositions; }
 
-private:
+  private:
     /**
      * @brief Trigger the rocket explosion at the given position
      *
@@ -143,10 +143,10 @@ private:
      */
     void Explode(const XMFLOAT3& position);
 
-    float m_explosionRadius;              ///< Radius of the explosion's area-of-effect damage
-    bool  m_hasExploded;                  ///< Guard flag to prevent double detonation
+    float m_explosionRadius; ///< Radius of the explosion's area-of-effect damage
+    bool m_hasExploded;      ///< Guard flag to prevent double detonation
 
     // Trail effect state
-    std::vector<XMFLOAT3> m_trailPositions;  ///< Recorded positions along the flight path for trail rendering
-    float m_trailTimer;                       ///< Timer controlling trail position recording interval
+    std::vector<XMFLOAT3> m_trailPositions; ///< Recorded positions along the flight path for trail rendering
+    float m_trailTimer;                     ///< Timer controlling trail position recording interval
 };

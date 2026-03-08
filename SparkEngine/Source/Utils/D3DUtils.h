@@ -32,7 +32,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <dxgi.h>
 #include <d3d11.h>
-#else // !SPARK_PLATFORM_WINDOWS
+#else  // !SPARK_PLATFORM_WINDOWS
 // Forward-declare D3D11 types as opaque structs so function signatures compile
 struct IDXGISwapChain;
 struct ID3D11Device;
@@ -48,9 +48,9 @@ struct ID3D11DeviceContext;
  * treated as read-only by all subsystems except the graphics engine initializer.
  * @{
  */
-extern IDXGISwapChain* g_MainSwapChain;      ///< The primary DXGI swap chain for presentation
-extern ID3D11Device* g_D3DDevice;            ///< The DirectX 11 device for resource creation
-extern ID3D11DeviceContext* g_D3DContext;     ///< The immediate device context for rendering commands
+extern IDXGISwapChain* g_MainSwapChain;   ///< The primary DXGI swap chain for presentation
+extern ID3D11Device* g_D3DDevice;         ///< The DirectX 11 device for resource creation
+extern ID3D11DeviceContext* g_D3DContext; ///< The immediate device context for rendering commands
 /** @} */
 #endif // SPARK_PLATFORM_WINDOWS
 

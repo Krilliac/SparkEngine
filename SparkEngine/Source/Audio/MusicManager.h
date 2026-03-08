@@ -27,244 +27,266 @@
 #include <queue>
 
 
-namespace Spark::Audio {
+namespace Spark::Audio
+{
 
-// ============================================================================
-// Mixer Bus System
-// ============================================================================
+    // ============================================================================
+    // Mixer Bus System
+    // ============================================================================
 
-enum class AudioBus {
-    Master,
-    SFX,
-    Music,
-    Voice,
-    Ambient,
-    UI,
-    Count
-};
-
-struct MixerBusSettings {
-    float volume = 1.0f;
-    bool muted = false;
-    AudioBus parent = AudioBus::Master;  ///< Parent bus for volume cascade
-    float lowPassCutoff = 22000.0f;      ///< Low-pass filter cutoff Hz
-    float highPassCutoff = 20.0f;        ///< High-pass filter cutoff Hz
-};
-
-class AudioMixer {
-public:
-    static AudioMixer& GetInstance();
-
-    void SetBusVolume(AudioBus bus, float volume);
-    float GetBusVolume(AudioBus bus) const;
-    void SetBusMuted(AudioBus bus, bool muted);
-    bool IsBusMuted(AudioBus bus) const;
-
-    /// Get effective volume (cascaded through parent buses)
-    float GetEffectiveVolume(AudioBus bus) const;
-
-    /// Apply settings to a bus
-    void SetBusSettings(AudioBus bus, const MixerBusSettings& settings);
-    const MixerBusSettings& GetBusSettings(AudioBus bus) const;
-
-    /// Fade a bus volume over time
-    void FadeBus(AudioBus bus, float targetVolume, float duration);
-
-    /// Update fades
-    void Update(float deltaTime);
-
-    /// Console integration
-    std::string Console_GetMixerInfo() const;
-
-private:
-    AudioMixer();
-    MixerBusSettings m_buses[static_cast<int>(AudioBus::Count)];
-
-    struct FadeState {
-        AudioBus bus;
-        float startVolume;
-        float targetVolume;
-        float duration;
-        float elapsed;
+    enum class AudioBus
+    {
+        Master,
+        SFX,
+        Music,
+        Voice,
+        Ambient,
+        UI,
+        Count
     };
-    std::vector<FadeState> m_activeFades;
-};
 
-// ============================================================================
-// Music Track & Playlist
-// ============================================================================
+    struct MixerBusSettings
+    {
+        float volume = 1.0f;
+        bool muted = false;
+        AudioBus parent = AudioBus::Master; ///< Parent bus for volume cascade
+        float lowPassCutoff = 22000.0f;     ///< Low-pass filter cutoff Hz
+        float highPassCutoff = 20.0f;       ///< High-pass filter cutoff Hz
+    };
 
-struct MusicTrack {
-    std::string name;
-    std::string filepath;
-    float bpm = 120.0f;             ///< Beats per minute (for sync)
-    float loopStartTime = 0.0f;     ///< Where to loop back to
-    float loopEndTime = -1.0f;      ///< Where loop ends (-1 = end of file)
-    bool loop = true;
-    std::string nextTrack;           ///< Name of next track to play automatically
-};
+    class AudioMixer
+    {
+      public:
+        static AudioMixer& GetInstance();
 
-enum class PlaylistMode {
-    Sequential,     ///< Play tracks in order
-    Shuffle,        ///< Random order
-    Loop,           ///< Loop entire playlist
-    LoopOne         ///< Loop current track
-};
+        void SetBusVolume(AudioBus bus, float volume);
+        float GetBusVolume(AudioBus bus) const;
+        void SetBusMuted(AudioBus bus, bool muted);
+        bool IsBusMuted(AudioBus bus) const;
 
-struct Playlist {
-    std::string name;
-    std::vector<std::string> trackNames;
-    PlaylistMode mode = PlaylistMode::Loop;
-    int currentIndex = 0;
+        /// Get effective volume (cascaded through parent buses)
+        float GetEffectiveVolume(AudioBus bus) const;
 
-    std::string GetCurrentTrack() const;
-    std::string GetNextTrack() const;
-    void Advance();
-};
+        /// Apply settings to a bus
+        void SetBusSettings(AudioBus bus, const MixerBusSettings& settings);
+        const MixerBusSettings& GetBusSettings(AudioBus bus) const;
 
-// ============================================================================
-// Dynamic Music System (Intensity Layers)
-// ============================================================================
+        /// Fade a bus volume over time
+        void FadeBus(AudioBus bus, float targetVolume, float duration);
 
-enum class CombatIntensity {
-    Exploration,    ///< Calm ambient music
-    LowThreat,     ///< Tension building
-    Combat,         ///< Full combat music
-    BossFight       ///< Maximum intensity
-};
+        /// Update fades
+        void Update(float deltaTime);
 
-struct DynamicMusicState {
-    std::string explorationTrack;
-    std::string lowThreatTrack;
-    std::string combatTrack;
-    std::string bossFightTrack;
-    CombatIntensity currentIntensity = CombatIntensity::Exploration;
-    float transitionDuration = 2.0f;  ///< Crossfade time between intensity levels
-};
+        /// Console integration
+        std::string Console_GetMixerInfo() const;
 
-// ============================================================================
-// Audio Occlusion
-// ============================================================================
+      private:
+        AudioMixer();
+        MixerBusSettings m_buses[static_cast<int>(AudioBus::Count)];
 
-struct OcclusionSettings {
-    bool enabled = true;
-    float maxOcclusionFactor = 0.8f;  ///< Maximum volume reduction (0-1)
-    float lowPassWhenOccluded = 800.0f;  ///< Low-pass cutoff when fully occluded
-    int maxRays = 4;                   ///< Number of occlusion rays to cast
-};
+        struct FadeState
+        {
+            AudioBus bus;
+            float startVolume;
+            float targetVolume;
+            float duration;
+            float elapsed;
+        };
+        std::vector<FadeState> m_activeFades;
+    };
 
-struct OcclusionResult {
-    float occlusionFactor;  ///< 0 = no occlusion, 1 = fully occluded
-    float lowPassCutoff;    ///< Resulting low-pass filter cutoff
-};
+    // ============================================================================
+    // Music Track & Playlist
+    // ============================================================================
 
-// ============================================================================
-// Reverb Zone
-// ============================================================================
+    struct MusicTrack
+    {
+        std::string name;
+        std::string filepath;
+        float bpm = 120.0f;         ///< Beats per minute (for sync)
+        float loopStartTime = 0.0f; ///< Where to loop back to
+        float loopEndTime = -1.0f;  ///< Where loop ends (-1 = end of file)
+        bool loop = true;
+        std::string nextTrack; ///< Name of next track to play automatically
+    };
 
-struct ReverbZone {
-    std::string name;
-    XMFLOAT3 position;
-    XMFLOAT3 halfExtents;       ///< Box-shaped zone
-    float innerRadius;           ///< Full reverb within this radius
-    float outerRadius;           ///< Reverb fades from inner to outer
+    enum class PlaylistMode
+    {
+        Sequential, ///< Play tracks in order
+        Shuffle,    ///< Random order
+        Loop,       ///< Loop entire playlist
+        LoopOne     ///< Loop current track
+    };
 
-    // Reverb parameters
-    float decayTime = 1.0f;     ///< Seconds for reverb to decay
-    float earlyReflections = 0.5f;
-    float lateReverbLevel = 0.3f;
-    float diffusion = 0.8f;
-    float density = 0.9f;
-    float hfDecayRatio = 0.5f;  ///< High-frequency decay relative to overall
+    struct Playlist
+    {
+        std::string name;
+        std::vector<std::string> trackNames;
+        PlaylistMode mode = PlaylistMode::Loop;
+        int currentIndex = 0;
 
-    enum class Type { Small, Medium, Large, Hall, Cave, Outdoor } type = Type::Medium;
-};
+        std::string GetCurrentTrack() const;
+        std::string GetNextTrack() const;
+        void Advance();
+    };
 
-// ============================================================================
-// MusicManager
-// ============================================================================
+    // ============================================================================
+    // Dynamic Music System (Intensity Layers)
+    // ============================================================================
 
-class MusicManager {
-public:
-    static MusicManager& GetInstance();
+    enum class CombatIntensity
+    {
+        Exploration, ///< Calm ambient music
+        LowThreat,   ///< Tension building
+        Combat,      ///< Full combat music
+        BossFight    ///< Maximum intensity
+    };
 
-    void Initialize();
-    void Update(float deltaTime);
-    void Shutdown();
+    struct DynamicMusicState
+    {
+        std::string explorationTrack;
+        std::string lowThreatTrack;
+        std::string combatTrack;
+        std::string bossFightTrack;
+        CombatIntensity currentIntensity = CombatIntensity::Exploration;
+        float transitionDuration = 2.0f; ///< Crossfade time between intensity levels
+    };
 
-    // Track management
-    void RegisterTrack(const MusicTrack& track);
-    void UnregisterTrack(const std::string& name);
-    const MusicTrack* GetTrack(const std::string& name) const;
+    // ============================================================================
+    // Audio Occlusion
+    // ============================================================================
 
-    // Playback
-    void Play(const std::string& trackName, float fadeInDuration = 1.0f);
-    void Stop(float fadeOutDuration = 1.0f);
-    void Pause();
-    void Resume();
-    void CrossfadeTo(const std::string& trackName, float duration = 2.0f);
-    bool IsPlaying() const { return m_isPlaying; }
-    const std::string& GetCurrentTrackName() const { return m_currentTrack; }
+    struct OcclusionSettings
+    {
+        bool enabled = true;
+        float maxOcclusionFactor = 0.8f;    ///< Maximum volume reduction (0-1)
+        float lowPassWhenOccluded = 800.0f; ///< Low-pass cutoff when fully occluded
+        int maxRays = 4;                    ///< Number of occlusion rays to cast
+    };
 
-    // Playlist management
-    void RegisterPlaylist(const Playlist& playlist);
-    void PlayPlaylist(const std::string& playlistName);
-    void NextTrack();
-    void PreviousTrack();
-    void SetPlaylistMode(PlaylistMode mode);
+    struct OcclusionResult
+    {
+        float occlusionFactor; ///< 0 = no occlusion, 1 = fully occluded
+        float lowPassCutoff;   ///< Resulting low-pass filter cutoff
+    };
 
-    // Dynamic music
-    void SetDynamicMusicState(const DynamicMusicState& state);
-    void SetCombatIntensity(CombatIntensity intensity);
-    CombatIntensity GetCombatIntensity() const { return m_dynamicState.currentIntensity; }
+    // ============================================================================
+    // Reverb Zone
+    // ============================================================================
 
-    // Reverb zones
-    void AddReverbZone(const ReverbZone& zone);
-    void RemoveReverbZone(const std::string& name);
-    void UpdateListenerReverbZone(const XMFLOAT3& listenerPosition);
+    struct ReverbZone
+    {
+        std::string name;
+        XMFLOAT3 position;
+        XMFLOAT3 halfExtents; ///< Box-shaped zone
+        float innerRadius;    ///< Full reverb within this radius
+        float outerRadius;    ///< Reverb fades from inner to outer
 
-    // Audio occlusion
-    void SetOcclusionSettings(const OcclusionSettings& settings);
-    OcclusionResult ComputeOcclusion(const XMFLOAT3& sourcePos, const XMFLOAT3& listenerPos) const;
+        // Reverb parameters
+        float decayTime = 1.0f; ///< Seconds for reverb to decay
+        float earlyReflections = 0.5f;
+        float lateReverbLevel = 0.3f;
+        float diffusion = 0.8f;
+        float density = 0.9f;
+        float hfDecayRatio = 0.5f; ///< High-frequency decay relative to overall
 
-    /// Console integration
-    std::string Console_GetStatus() const;
-    std::string Console_ListTracks() const;
-    std::string Console_ListPlaylists() const;
-    std::string Console_ListReverbZones() const;
+        enum class Type
+        {
+            Small,
+            Medium,
+            Large,
+            Hall,
+            Cave,
+            Outdoor
+        } type = Type::Medium;
+    };
 
-private:
-    MusicManager() = default;
+    // ============================================================================
+    // MusicManager
+    // ============================================================================
 
-    void UpdateCrossfade(float deltaTime);
-    void UpdateDynamicMusic(float deltaTime);
+    class MusicManager
+    {
+      public:
+        static MusicManager& GetInstance();
 
-    // Tracks
-    std::unordered_map<std::string, MusicTrack> m_tracks;
+        void Initialize();
+        void Update(float deltaTime);
+        void Shutdown();
 
-    // Playback state
-    std::string m_currentTrack;
-    std::string m_nextTrack;       ///< Track being crossfaded to
-    float m_crossfadeProgress = 0.0f;
-    float m_crossfadeDuration = 0.0f;
-    bool m_isCrossfading = false;
-    bool m_isPlaying = false;
-    bool m_isPaused = false;
+        // Track management
+        void RegisterTrack(const MusicTrack& track);
+        void UnregisterTrack(const std::string& name);
+        const MusicTrack* GetTrack(const std::string& name) const;
 
-    // Playlists
-    std::unordered_map<std::string, Playlist> m_playlists;
-    std::string m_activePlaylist;
+        // Playback
+        void Play(const std::string& trackName, float fadeInDuration = 1.0f);
+        void Stop(float fadeOutDuration = 1.0f);
+        void Pause();
+        void Resume();
+        void CrossfadeTo(const std::string& trackName, float duration = 2.0f);
+        bool IsPlaying() const { return m_isPlaying; }
+        const std::string& GetCurrentTrackName() const { return m_currentTrack; }
 
-    // Dynamic music
-    DynamicMusicState m_dynamicState;
-    CombatIntensity m_targetIntensity = CombatIntensity::Exploration;
+        // Playlist management
+        void RegisterPlaylist(const Playlist& playlist);
+        void PlayPlaylist(const std::string& playlistName);
+        void NextTrack();
+        void PreviousTrack();
+        void SetPlaylistMode(PlaylistMode mode);
 
-    // Reverb zones
-    std::vector<ReverbZone> m_reverbZones;
-    const ReverbZone* m_activeReverbZone = nullptr;
+        // Dynamic music
+        void SetDynamicMusicState(const DynamicMusicState& state);
+        void SetCombatIntensity(CombatIntensity intensity);
+        CombatIntensity GetCombatIntensity() const { return m_dynamicState.currentIntensity; }
 
-    // Occlusion
-    OcclusionSettings m_occlusionSettings;
-};
+        // Reverb zones
+        void AddReverbZone(const ReverbZone& zone);
+        void RemoveReverbZone(const std::string& name);
+        void UpdateListenerReverbZone(const XMFLOAT3& listenerPosition);
+
+        // Audio occlusion
+        void SetOcclusionSettings(const OcclusionSettings& settings);
+        OcclusionResult ComputeOcclusion(const XMFLOAT3& sourcePos, const XMFLOAT3& listenerPos) const;
+
+        /// Console integration
+        std::string Console_GetStatus() const;
+        std::string Console_ListTracks() const;
+        std::string Console_ListPlaylists() const;
+        std::string Console_ListReverbZones() const;
+
+      private:
+        MusicManager() = default;
+
+        void UpdateCrossfade(float deltaTime);
+        void UpdateDynamicMusic(float deltaTime);
+
+        // Tracks
+        std::unordered_map<std::string, MusicTrack> m_tracks;
+
+        // Playback state
+        std::string m_currentTrack;
+        std::string m_nextTrack; ///< Track being crossfaded to
+        float m_crossfadeProgress = 0.0f;
+        float m_crossfadeDuration = 0.0f;
+        bool m_isCrossfading = false;
+        bool m_isPlaying = false;
+        bool m_isPaused = false;
+
+        // Playlists
+        std::unordered_map<std::string, Playlist> m_playlists;
+        std::string m_activePlaylist;
+
+        // Dynamic music
+        DynamicMusicState m_dynamicState;
+        CombatIntensity m_targetIntensity = CombatIntensity::Exploration;
+
+        // Reverb zones
+        std::vector<ReverbZone> m_reverbZones;
+        const ReverbZone* m_activeReverbZone = nullptr;
+
+        // Occlusion
+        OcclusionSettings m_occlusionSettings;
+    };
 
 } // namespace Spark::Audio

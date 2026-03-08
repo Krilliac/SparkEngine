@@ -15,16 +15,20 @@
 // TagComponent
 // =============================================================================
 
-struct TagComponent {
+struct TagComponent
+{
     std::vector<std::string> tags;
 
-    bool HasTag(const std::string& tag) const {
+    bool HasTag(const std::string& tag) const
+    {
         for (const auto& t : tags)
-            if (t == tag) return true;
+            if (t == tag)
+                return true;
         return false;
     }
 
-    void AddTag(const std::string& tag) {
+    void AddTag(const std::string& tag)
+    {
         if (!HasTag(tag))
             tags.push_back(tag);
     }
@@ -34,7 +38,8 @@ struct TagComponent {
 // ActiveComponent
 // =============================================================================
 
-struct ActiveComponent {
+struct ActiveComponent
+{
     bool active = true;
 };
 
@@ -42,18 +47,21 @@ struct ActiveComponent {
 // HealthComponent
 // =============================================================================
 
-struct HealthComponent {
+struct HealthComponent
+{
     float health = 100.0f;
     float maxHealth = 100.0f;
     bool isDead = false;
     bool deathProcessed = false;
 
-    void TakeDamage(float amount) {
+    void TakeDamage(float amount)
+    {
         health = (std::max)(health - amount, 0.0f);
         isDead = (health <= 0.0f);
     }
 
-    void Heal(float amount) {
+    void Heal(float amount)
+    {
         health = (std::min)(health + amount, maxHealth);
         isDead = false;
         deathProcessed = false;
@@ -64,7 +72,8 @@ struct HealthComponent {
 // WeatherComponent
 // =============================================================================
 
-struct WeatherComponent {
+struct WeatherComponent
+{
     int weatherType = 0;
     float intensity = 0.0f;
     float windX = 1.0f, windY = 0.0f, windZ = 0.0f;
@@ -77,7 +86,8 @@ struct WeatherComponent {
 // InventoryTag
 // =============================================================================
 
-struct InventoryTag {
+struct InventoryTag
+{
     int maxSlots = 20;
     float maxWeight = 100.0f;
     int currency = 0;
@@ -88,7 +98,8 @@ struct InventoryTag {
 // QuestTrackerTag
 // =============================================================================
 
-struct QuestTrackerTag {
+struct QuestTrackerTag
+{
     int activeQuestCount = 0;
     int completedQuestCount = 0;
     bool questLogOpen = false;

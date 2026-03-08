@@ -20,8 +20,8 @@
 #include "../Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
-#endif // SPARK_PLATFORM_WINDOWS
-#include <cmath>               // add this for std::isfinite
+#endif           // SPARK_PLATFORM_WINDOWS
+#include <cmath> // add this for std::isfinite
 
 /**
  * @brief Vertex data for imported 3D models (position, normal, UV)
@@ -42,9 +42,9 @@
  */
 struct ModelVertex
 {
-    DirectX::XMFLOAT3 Position;  ///< 3D world-space position of the vertex
-    DirectX::XMFLOAT3 Normal;    ///< Surface normal vector for lighting calculations
-    DirectX::XMFLOAT2 TexCoord;  ///< 2D texture coordinates for UV mapping
+    DirectX::XMFLOAT3 Position; ///< 3D world-space position of the vertex
+    DirectX::XMFLOAT3 Normal;   ///< Surface normal vector for lighting calculations
+    DirectX::XMFLOAT2 TexCoord; ///< 2D texture coordinates for UV mapping
 
     /**
      * @brief Default constructor — zero-initializes all fields
@@ -53,11 +53,7 @@ struct ModelVertex
      * This is safe for placeholder geometry but the normal should be
      * overwritten before rendering to avoid incorrect lighting.
      */
-    ModelVertex() noexcept
-        : Position(0.f, 0.f, 0.f)
-        , Normal(0.f, 0.f, 0.f)
-        , TexCoord(0.f, 0.f) {
-    }
+    ModelVertex() noexcept : Position(0.f, 0.f, 0.f), Normal(0.f, 0.f, 0.f), TexCoord(0.f, 0.f) {}
 
     /**
      * @brief Parameterized constructor with debug validation
@@ -73,12 +69,8 @@ struct ModelVertex
      * @warning Triggers an assertion failure in debug builds if any component
      *          is NaN or infinity.
      */
-    ModelVertex(const DirectX::XMFLOAT3& pos,
-        const DirectX::XMFLOAT3& norm,
-        const DirectX::XMFLOAT2& uv) noexcept
-        : Position(pos)
-        , Normal(norm)
-        , TexCoord(uv)
+    ModelVertex(const DirectX::XMFLOAT3& pos, const DirectX::XMFLOAT3& norm, const DirectX::XMFLOAT2& uv) noexcept
+        : Position(pos), Normal(norm), TexCoord(uv)
     {
         // Validate incoming data
         ASSERT(std::isfinite(pos.x) && std::isfinite(pos.y) && std::isfinite(pos.z));

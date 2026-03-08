@@ -24,7 +24,7 @@ using Microsoft::WRL::ComPtr;
  */
 class PostProcessingSystem
 {
-public:
+  public:
     PostProcessingSystem();
     ~PostProcessingSystem();
 
@@ -42,18 +42,18 @@ public:
      * @brief Update the system
      */
     void Update(float deltaTime);
-    
+
     /**
      * @brief Console integration - Set exposure
      */
     void Console_SetExposure(float exposure);
-    
+
     /**
      * @brief Console integration - List effects
      */
     std::string Console_ListEffects() const;
 
-private:
+  private:
     ID3D11Device* m_device;
     ID3D11DeviceContext* m_context;
 };

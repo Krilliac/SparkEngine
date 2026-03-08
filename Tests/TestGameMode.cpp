@@ -15,9 +15,7 @@ struct TestPlayerScore
     int currentStreak = 0;
     int headshots = 0;
 
-    float GetKDRatio() const {
-        return deaths > 0 ? static_cast<float>(kills) / deaths : static_cast<float>(kills);
-    }
+    float GetKDRatio() const { return deaths > 0 ? static_cast<float>(kills) / deaths : static_cast<float>(kills); }
 };
 
 TEST(PlayerScore_InitialState)

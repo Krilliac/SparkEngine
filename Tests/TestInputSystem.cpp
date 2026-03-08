@@ -8,82 +8,101 @@
 #include <cmath>
 #include <algorithm>
 
-namespace TestInput {
+namespace TestInput
+{
 
-enum class KeyState { Up, Down };
+    enum class KeyState
+    {
+        Up,
+        Down
+    };
 
-class MockInputState {
-public:
-    void SetKey(int key, KeyState state) { m_keys[key] = state; }
-    bool IsKeyDown(int key) const {
-        auto it = m_keys.find(key);
-        return (it != m_keys.end()) ? (it->second == KeyState::Down) : false;
-    }
-
-private:
-    std::unordered_map<int, KeyState> m_keys;
-};
-
-struct ActionBinding {
-    std::string name;
-    int key;
-};
-
-struct AxisBinding {
-    std::string name;
-    int positiveKey;
-    int negativeKey;
-    float scale;
-};
-
-class MockActionMapper {
-public:
-    void BindAction(const std::string& name, int key) {
-        m_actions.push_back({name, key});
-    }
-
-    void BindAxis(const std::string& name, int posKey, int negKey, float scale = 1.0f) {
-        m_axes.push_back({name, posKey, negKey, scale});
-    }
-
-    bool IsActionActive(const std::string& name, const MockInputState& state) const {
-        for (const auto& a : m_actions) {
-            if (a.name == name && state.IsKeyDown(a.key)) return true;
+    class MockInputState
+    {
+      public:
+        void SetKey(int key, KeyState state) { m_keys[key] = state; }
+        bool IsKeyDown(int key) const
+        {
+            auto it = m_keys.find(key);
+            return (it != m_keys.end()) ? (it->second == KeyState::Down) : false;
         }
-        return false;
-    }
 
-    float GetAxisValue(const std::string& name, const MockInputState& state) const {
-        float result = 0.0f;
-        for (const auto& a : m_axes) {
-            if (a.name == name) {
-                if (state.IsKeyDown(a.positiveKey)) result += a.scale;
-                if (state.IsKeyDown(a.negativeKey)) result -= a.scale;
+      private:
+        std::unordered_map<int, KeyState> m_keys;
+    };
+
+    struct ActionBinding
+    {
+        std::string name;
+        int key;
+    };
+
+    struct AxisBinding
+    {
+        std::string name;
+        int positiveKey;
+        int negativeKey;
+        float scale;
+    };
+
+    class MockActionMapper
+    {
+      public:
+        void BindAction(const std::string& name, int key) { m_actions.push_back({name, key}); }
+
+        void BindAxis(const std::string& name, int posKey, int negKey, float scale = 1.0f)
+        {
+            m_axes.push_back({name, posKey, negKey, scale});
+        }
+
+        bool IsActionActive(const std::string& name, const MockInputState& state) const
+        {
+            for (const auto& a : m_actions)
+            {
+                if (a.name == name && state.IsKeyDown(a.key))
+                    return true;
             }
+            return false;
         }
-        return result;
+
+        float GetAxisValue(const std::string& name, const MockInputState& state) const
+        {
+            float result = 0.0f;
+            for (const auto& a : m_axes)
+            {
+                if (a.name == name)
+                {
+                    if (state.IsKeyDown(a.positiveKey))
+                        result += a.scale;
+                    if (state.IsKeyDown(a.negativeKey))
+                        result -= a.scale;
+                }
+            }
+            return result;
+        }
+
+        void RemoveAction(const std::string& name)
+        {
+            m_actions.erase(std::remove_if(m_actions.begin(), m_actions.end(),
+                                           [&](const ActionBinding& a) { return a.name == name; }),
+                            m_actions.end());
+        }
+
+        size_t GetActionCount() const { return m_actions.size(); }
+        size_t GetAxisCount() const { return m_axes.size(); }
+
+      private:
+        std::vector<ActionBinding> m_actions;
+        std::vector<AxisBinding> m_axes;
+    };
+
+    // Dead zone helper
+    float ApplyDeadZone(float value, float deadZone)
+    {
+        if (std::abs(value) < deadZone)
+            return 0.0f;
+        return value;
     }
-
-    void RemoveAction(const std::string& name) {
-        m_actions.erase(
-            std::remove_if(m_actions.begin(), m_actions.end(),
-                            [&](const ActionBinding& a) { return a.name == name; }),
-            m_actions.end());
-    }
-
-    size_t GetActionCount() const { return m_actions.size(); }
-    size_t GetAxisCount() const { return m_axes.size(); }
-
-private:
-    std::vector<ActionBinding> m_actions;
-    std::vector<AxisBinding> m_axes;
-};
-
-// Dead zone helper
-float ApplyDeadZone(float value, float deadZone) {
-    if (std::abs(value) < deadZone) return 0.0f;
-    return value;
-}
 
 } // namespace TestInput
 
@@ -91,7 +110,7 @@ TEST(ActionMapping_BasicBind)
 {
     TestInput::MockInputState state;
     TestInput::MockActionMapper mapper;
-    mapper.BindAction("jump", 32);  // Space
+    mapper.BindAction("jump", 32); // Space
 
     state.SetKey(32, TestInput::KeyState::Down);
     EXPECT_TRUE(mapper.IsActionActive("jump", state));
@@ -129,9 +148,9 @@ TEST(AxisMapping_PositiveOnly)
 {
     TestInput::MockInputState state;
     TestInput::MockActionMapper mapper;
-    mapper.BindAxis("moveX", 68, 65);  // D/A
+    mapper.BindAxis("moveX", 68, 65); // D/A
 
-    state.SetKey(68, TestInput::KeyState::Down);  // D pressed
+    state.SetKey(68, TestInput::KeyState::Down); // D pressed
     EXPECT_NEAR(mapper.GetAxisValue("moveX", state), 1.0f, 0.001f);
 }
 
@@ -141,7 +160,7 @@ TEST(AxisMapping_NegativeOnly)
     TestInput::MockActionMapper mapper;
     mapper.BindAxis("moveX", 68, 65);
 
-    state.SetKey(65, TestInput::KeyState::Down);  // A pressed
+    state.SetKey(65, TestInput::KeyState::Down); // A pressed
     EXPECT_NEAR(mapper.GetAxisValue("moveX", state), -1.0f, 0.001f);
 }
 

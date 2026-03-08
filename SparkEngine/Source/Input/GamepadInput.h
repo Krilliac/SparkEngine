@@ -62,21 +62,21 @@ using DirectX::XMFLOAT2;
  */
 enum class GamepadButton
 {
-    A,              ///< A button (bottom face button)
-    B,              ///< B button (right face button)
-    X,              ///< X button (left face button)
-    Y,              ///< Y button (top face button)
-    LeftBumper,     ///< Left bumper (LB / L1)
-    RightBumper,    ///< Right bumper (RB / R1)
-    Back,           ///< Back / Select / View button
-    Start,          ///< Start / Menu button
-    LeftStick,      ///< Left thumbstick click (L3)
-    RightStick,     ///< Right thumbstick click (R3)
-    DPadUp,         ///< D-pad up
-    DPadDown,       ///< D-pad down
-    DPadLeft,       ///< D-pad left
-    DPadRight,      ///< D-pad right
-    Count           ///< Sentinel value for array sizing — not a valid button
+    A,           ///< A button (bottom face button)
+    B,           ///< B button (right face button)
+    X,           ///< X button (left face button)
+    Y,           ///< Y button (top face button)
+    LeftBumper,  ///< Left bumper (LB / L1)
+    RightBumper, ///< Right bumper (RB / R1)
+    Back,        ///< Back / Select / View button
+    Start,       ///< Start / Menu button
+    LeftStick,   ///< Left thumbstick click (L3)
+    RightStick,  ///< Right thumbstick click (R3)
+    DPadUp,      ///< D-pad up
+    DPadDown,    ///< D-pad down
+    DPadLeft,    ///< D-pad left
+    DPadRight,   ///< D-pad right
+    Count        ///< Sentinel value for array sizing — not a valid button
 };
 
 /**
@@ -84,8 +84,8 @@ enum class GamepadButton
  */
 enum class GamepadTrigger
 {
-    Left,           ///< Left trigger (LT / L2)
-    Right           ///< Right trigger (RT / R2)
+    Left, ///< Left trigger (LT / L2)
+    Right ///< Right trigger (RT / R2)
 };
 
 /**
@@ -93,8 +93,8 @@ enum class GamepadTrigger
  */
 enum class GamepadStick
 {
-    Left,           ///< Left thumbstick
-    Right           ///< Right thumbstick
+    Left, ///< Left thumbstick
+    Right ///< Right thumbstick
 };
 
 /**
@@ -109,8 +109,8 @@ enum class GamepadStick
  */
 enum class DeadZoneMode
 {
-    Circular,   ///< Radial dead zone based on combined stick magnitude (recommended)
-    Axial       ///< Per-axis dead zone applied to X and Y independently
+    Circular, ///< Radial dead zone based on combined stick magnitude (recommended)
+    Axial     ///< Per-axis dead zone applied to X and Y independently
 };
 
 /**
@@ -122,20 +122,20 @@ enum class DeadZoneMode
  */
 struct GamepadState
 {
-    bool connected = false;                ///< Whether this controller is currently connected
-    XINPUT_STATE xinputState = {};          ///< Current raw XInput state
-    XINPUT_STATE prevXinputState = {};      ///< Previous frame's raw XInput state (for edge detection)
+    bool connected = false;            ///< Whether this controller is currently connected
+    XINPUT_STATE xinputState = {};     ///< Current raw XInput state
+    XINPUT_STATE prevXinputState = {}; ///< Previous frame's raw XInput state (for edge detection)
 
     // Processed values (dead-zone-corrected and normalized)
-    XMFLOAT2 leftStick = {0, 0};          ///< Left thumbstick position in [-1, 1] range (dead-zone applied)
-    XMFLOAT2 rightStick = {0, 0};         ///< Right thumbstick position in [-1, 1] range (dead-zone applied)
-    float leftTrigger = 0.0f;             ///< Left trigger value in [0, 1] range (threshold applied)
-    float rightTrigger = 0.0f;            ///< Right trigger value in [0, 1] range (threshold applied)
+    XMFLOAT2 leftStick = {0, 0};  ///< Left thumbstick position in [-1, 1] range (dead-zone applied)
+    XMFLOAT2 rightStick = {0, 0}; ///< Right thumbstick position in [-1, 1] range (dead-zone applied)
+    float leftTrigger = 0.0f;     ///< Left trigger value in [0, 1] range (threshold applied)
+    float rightTrigger = 0.0f;    ///< Right trigger value in [0, 1] range (threshold applied)
 
     // Vibration state
-    float leftMotor = 0.0f;               ///< Left vibration motor intensity [0, 1] (low-frequency rumble)
-    float rightMotor = 0.0f;              ///< Right vibration motor intensity [0, 1] (high-frequency buzz)
-    float vibrationTimer = 0.0f;          ///< Remaining vibration duration in seconds (0 = indefinite)
+    float leftMotor = 0.0f;      ///< Left vibration motor intensity [0, 1] (low-frequency rumble)
+    float rightMotor = 0.0f;     ///< Right vibration motor intensity [0, 1] (high-frequency buzz)
+    float vibrationTimer = 0.0f; ///< Remaining vibration duration in seconds (0 = indefinite)
 };
 
 /**
@@ -155,8 +155,8 @@ struct GamepadState
  */
 class GamepadInput
 {
-public:
-    static constexpr int MAX_CONTROLLERS = 4;  ///< Maximum number of simultaneous controllers (XInput limit)
+  public:
+    static constexpr int MAX_CONTROLLERS = 4; ///< Maximum number of simultaneous controllers (XInput limit)
 
     /** @brief Initialize dead zone and sensitivity settings to platform defaults */
     GamepadInput();
@@ -424,7 +424,7 @@ public:
      */
     std::string Console_ListBindings() const;
 
-private:
+  private:
     /**
      * @brief Convert a GamepadButton enum to the corresponding XInput WORD bitmask
      * @param button The GamepadButton to convert
@@ -452,28 +452,33 @@ private:
      */
     float NormalizeTrigger(BYTE raw) const;
 
-    std::array<GamepadState, MAX_CONTROLLERS> m_states;  ///< Per-controller state arrays
+    std::array<GamepadState, MAX_CONTROLLERS> m_states; ///< Per-controller state arrays
 
     // Dead zone configuration
-    float m_leftStickDeadZone = 0.24f;    ///< Left stick dead zone (~7849 / 32767, XInput default)
-    float m_rightStickDeadZone = 0.26f;   ///< Right stick dead zone (~8689 / 32767, XInput default)
-    float m_triggerThreshold = 0.12f;      ///< Minimum trigger value to register (~30 / 255)
-    DeadZoneMode m_deadZoneMode = DeadZoneMode::Circular;  ///< Active dead zone processing mode
-    float m_stickSensitivity = 1.0f;      ///< Global stick sensitivity multiplier
+    float m_leftStickDeadZone = 0.24f;                    ///< Left stick dead zone (~7849 / 32767, XInput default)
+    float m_rightStickDeadZone = 0.26f;                   ///< Right stick dead zone (~8689 / 32767, XInput default)
+    float m_triggerThreshold = 0.12f;                     ///< Minimum trigger value to register (~30 / 255)
+    DeadZoneMode m_deadZoneMode = DeadZoneMode::Circular; ///< Active dead zone processing mode
+    float m_stickSensitivity = 1.0f;                      ///< Global stick sensitivity multiplier
 
     /**
      * @brief Internal action binding record linking a game action name to a button or trigger
      */
-    struct ActionBinding {
-        enum class Type { Button, Trigger };  ///< Whether this binding targets a button or trigger
-        Type type;                            ///< Type of input bound to this action
-        GamepadButton button;                 ///< Button identifier (valid when type == Button)
-        GamepadTrigger trigger;               ///< Trigger identifier (valid when type == Trigger)
-        float triggerThreshold;               ///< Activation threshold for trigger bindings
+    struct ActionBinding
+    {
+        enum class Type
+        {
+            Button,
+            Trigger
+        }; ///< Whether this binding targets a button or trigger
+        Type type;              ///< Type of input bound to this action
+        GamepadButton button;   ///< Button identifier (valid when type == Button)
+        GamepadTrigger trigger; ///< Trigger identifier (valid when type == Trigger)
+        float triggerThreshold; ///< Activation threshold for trigger bindings
     };
-    std::unordered_map<std::string, ActionBinding> m_actionBindings;  ///< Map of action names to their bindings
+    std::unordered_map<std::string, ActionBinding> m_actionBindings; ///< Map of action names to their bindings
 
     // Connection polling (don't check every frame for disconnected controllers)
-    float m_connectionPollTimer = 0.0f;                          ///< Time since last disconnected controller poll
-    static constexpr float CONNECTION_POLL_INTERVAL = 2.0f;      ///< Seconds between disconnected controller polls
+    float m_connectionPollTimer = 0.0f;                     ///< Time since last disconnected controller poll
+    static constexpr float CONNECTION_POLL_INTERVAL = 2.0f; ///< Seconds between disconnected controller polls
 };

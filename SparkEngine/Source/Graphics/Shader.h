@@ -42,17 +42,15 @@ struct ConstantBuffer
  */
 struct ShaderVariant
 {
-    int id;                                 ///< Unique variant ID
-    std::string name;                       ///< Variant name
-    std::string baseName;                   ///< Base shader name
-    std::vector<std::string> defines;       ///< Preprocessor defines
-    bool isCompiled;                        ///< Compilation status
-    FILETIME lastModified;                  ///< Last modification time
-    
+    int id;                           ///< Unique variant ID
+    std::string name;                 ///< Variant name
+    std::string baseName;             ///< Base shader name
+    std::vector<std::string> defines; ///< Preprocessor defines
+    bool isCompiled;                  ///< Compilation status
+    FILETIME lastModified;            ///< Last modification time
+
     // Constructor for C++14 compatibility
-    ShaderVariant() 
-        : id(-1)
-        , isCompiled(false)
+    ShaderVariant() : id(-1), isCompiled(false)
     {
         lastModified.dwLowDateTime = 0;
         lastModified.dwHighDateTime = 0;
@@ -77,24 +75,21 @@ enum class ShaderType
  */
 struct ShaderCompilationFlags
 {
-    bool enableDebug;                       ///< Include debug information
-    bool enableOptimization;                ///< Enable shader optimization
-    bool enableValidation;                  ///< Enable shader validation
-    bool treatWarningsAsErrors;             ///< Treat warnings as compilation errors
-    std::string entryPoint;                 ///< Shader entry point function name
-    std::string target;                     ///< Shader model target (auto-detected if empty)
-    std::vector<std::string> defines;       ///< Preprocessor defines
-    std::vector<std::string> includePaths;  ///< Include search paths
-    
+    bool enableDebug;                      ///< Include debug information
+    bool enableOptimization;               ///< Enable shader optimization
+    bool enableValidation;                 ///< Enable shader validation
+    bool treatWarningsAsErrors;            ///< Treat warnings as compilation errors
+    std::string entryPoint;                ///< Shader entry point function name
+    std::string target;                    ///< Shader model target (auto-detected if empty)
+    std::vector<std::string> defines;      ///< Preprocessor defines
+    std::vector<std::string> includePaths; ///< Include search paths
+
     // Constructor for C++14 compatibility
-    ShaderCompilationFlags() 
-        : enableDebug(false)
-        , enableOptimization(true)
-        , enableValidation(true)
-        , treatWarningsAsErrors(false)
-        , entryPoint("main")
-        , target("")
-    {}
+    ShaderCompilationFlags()
+        : enableDebug(false), enableOptimization(true), enableValidation(true), treatWarningsAsErrors(false),
+          entryPoint("main"), target("")
+    {
+    }
 };
 
 /**
@@ -111,7 +106,7 @@ struct PerFrameConstants
     float DeltaTime;
     DirectX::XMFLOAT2 ScreenResolution;
     DirectX::XMFLOAT2 InvScreenResolution;
-    
+
     // Lighting parameters
     DirectX::XMFLOAT3 DirectionalLightDir;
     float DirectionalLightIntensity;
@@ -158,23 +153,23 @@ struct PerMaterialConstants
 struct LightingData
 {
     // Directional lights
-    DirectX::XMFLOAT4 DirectionalLights[4];     // xyz: direction, w: intensity
+    DirectX::XMFLOAT4 DirectionalLights[4];      // xyz: direction, w: intensity
     DirectX::XMFLOAT4 DirectionalLightColors[4]; // rgb: color, a: shadow index
-    
+
     // Point lights
-    DirectX::XMFLOAT4 PointLightPositions[32];  // xyz: position, w: range
-    DirectX::XMFLOAT4 PointLightColors[32];     // rgb: color, a: intensity
-    
+    DirectX::XMFLOAT4 PointLightPositions[32]; // xyz: position, w: range
+    DirectX::XMFLOAT4 PointLightColors[32];    // rgb: color, a: intensity
+
     // Spot lights
-    DirectX::XMFLOAT4 SpotLightPositions[16];   // xyz: position, w: range
-    DirectX::XMFLOAT4 SpotLightDirections[16];  // xyz: direction, w: inner cone
-    DirectX::XMFLOAT4 SpotLightColors[16];      // rgb: color, a: outer cone
-    
+    DirectX::XMFLOAT4 SpotLightPositions[16];  // xyz: position, w: range
+    DirectX::XMFLOAT4 SpotLightDirections[16]; // xyz: direction, w: inner cone
+    DirectX::XMFLOAT4 SpotLightColors[16];     // rgb: color, a: outer cone
+
     int NumDirectionalLights;
     int NumPointLights;
     int NumSpotLights;
     float LightingScale;
-    
+
     // IBL parameters
     float IBLIntensity;
     float IBLRotation;
@@ -195,8 +190,8 @@ struct PostProcessingConstants
     float Vignette;
     float FilmGrain;
     float ChromaticAberration;
-    DirectX::XMFLOAT4 ColorGrading;         // xyz: shadows/midtones/highlights, w: temperature
-    DirectX::XMFLOAT4 TonemappingParams;    // ACES, Reinhard, etc.
+    DirectX::XMFLOAT4 ColorGrading;      // xyz: shadows/midtones/highlights, w: temperature
+    DirectX::XMFLOAT4 TonemappingParams; // ACES, Reinhard, etc.
 };
 
 /**
@@ -204,16 +199,16 @@ struct PostProcessingConstants
  */
 class ShaderResource
 {
-public:
+  public:
     explicit ShaderResource(ShaderType type) : m_type(type) {}
     virtual ~ShaderResource() = default;
-    
+
     ShaderType GetType() const { return m_type; }
     virtual void Bind(ID3D11DeviceContext* context) = 0;
     virtual void Unbind(ID3D11DeviceContext* context) = 0;
     virtual bool IsValid() const = 0;
-    
-protected:
+
+  protected:
     ShaderType m_type;
 };
 
@@ -222,13 +217,13 @@ protected:
  */
 class VertexShaderResource : public ShaderResource
 {
-public:
+  public:
     VertexShaderResource() : ShaderResource(ShaderType::VERTEX_SHADER) {}
-    
+
     void Bind(ID3D11DeviceContext* context) override;
     void Unbind(ID3D11DeviceContext* context) override;
     bool IsValid() const override { return m_vertexShader && m_inputLayout; }
-    
+
     ComPtr<ID3D11VertexShader> m_vertexShader;
     ComPtr<ID3D11InputLayout> m_inputLayout;
     ComPtr<ID3DBlob> m_shaderBlob; // Keep for input layout creation
@@ -239,13 +234,13 @@ public:
  */
 class PixelShaderResource : public ShaderResource
 {
-public:
+  public:
     PixelShaderResource() : ShaderResource(ShaderType::PIXEL_SHADER) {}
-    
+
     void Bind(ID3D11DeviceContext* context) override;
     void Unbind(ID3D11DeviceContext* context) override;
     bool IsValid() const override { return m_pixelShader; }
-    
+
     ComPtr<ID3D11PixelShader> m_pixelShader;
 };
 
@@ -257,7 +252,7 @@ public:
  */
 class Shader
 {
-public:
+  public:
     /**
      * @brief Default constructor
      */
@@ -291,7 +286,8 @@ public:
      * @param flags Compilation flags and settings
      * @return HRESULT indicating success or failure
      */
-    HRESULT LoadVertexShader(const std::wstring& filename, const ShaderCompilationFlags& flags = ShaderCompilationFlags());
+    HRESULT LoadVertexShader(const std::wstring& filename,
+                             const ShaderCompilationFlags& flags = ShaderCompilationFlags());
 
     /**
      * @brief Load and compile a pixel shader from file
@@ -299,7 +295,8 @@ public:
      * @param flags Compilation flags and settings
      * @return HRESULT indicating success or failure
      */
-    HRESULT LoadPixelShader(const std::wstring& filename, const ShaderCompilationFlags& flags = ShaderCompilationFlags());
+    HRESULT LoadPixelShader(const std::wstring& filename,
+                            const ShaderCompilationFlags& flags = ShaderCompilationFlags());
 
     /**
      * @brief Load shader from memory
@@ -308,7 +305,8 @@ public:
      * @param flags Compilation flags and settings
      * @return HRESULT indicating success or failure
      */
-    HRESULT LoadShaderFromSource(const std::string& source, ShaderType type, const ShaderCompilationFlags& flags = ShaderCompilationFlags());
+    HRESULT LoadShaderFromSource(const std::string& source, ShaderType type,
+                                 const ShaderCompilationFlags& flags = ShaderCompilationFlags());
 
     /**
      * @brief Load shader from file
@@ -317,7 +315,8 @@ public:
      * @param flags Compilation flags and settings
      * @return HRESULT indicating success or failure
      */
-    HRESULT LoadFromFile(const std::string& filePath, ShaderType type, const ShaderCompilationFlags& flags = ShaderCompilationFlags());
+    HRESULT LoadFromFile(const std::string& filePath, ShaderType type,
+                         const ShaderCompilationFlags& flags = ShaderCompilationFlags());
 
     /**
      * @brief Create a shader variant with preprocessor defines
@@ -399,27 +398,23 @@ public:
     /**
      * @brief Shader performance metrics structure
      */
-    struct ShaderMetrics {
-        int compiledShaders;        ///< Number of compiled shaders
-        int failedCompilations;     ///< Number of failed compilations
-        int activeVariants;         ///< Number of active shader variants
-        int hotReloadCount;         ///< Number of hot reloads performed
-        float lastCompileTime;      ///< Last compilation time in milliseconds
-        float totalCompileTime;     ///< Total compilation time
-        size_t shaderMemoryUsage;   ///< Memory usage of compiled shaders
-        bool hotReloadEnabled;      ///< Hot reload status
-        
+    struct ShaderMetrics
+    {
+        int compiledShaders;      ///< Number of compiled shaders
+        int failedCompilations;   ///< Number of failed compilations
+        int activeVariants;       ///< Number of active shader variants
+        int hotReloadCount;       ///< Number of hot reloads performed
+        float lastCompileTime;    ///< Last compilation time in milliseconds
+        float totalCompileTime;   ///< Total compilation time
+        size_t shaderMemoryUsage; ///< Memory usage of compiled shaders
+        bool hotReloadEnabled;    ///< Hot reload status
+
         // Constructor for C++14 compatibility
-        ShaderMetrics() 
-            : compiledShaders(0)
-            , failedCompilations(0)
-            , activeVariants(0)
-            , hotReloadCount(0)
-            , lastCompileTime(0.0f)
-            , totalCompileTime(0.0f)
-            , shaderMemoryUsage(0)
-            , hotReloadEnabled(false)
-        {}
+        ShaderMetrics()
+            : compiledShaders(0), failedCompilations(0), activeVariants(0), hotReloadCount(0), lastCompileTime(0.0f),
+              totalCompileTime(0.0f), shaderMemoryUsage(0), hotReloadEnabled(false)
+        {
+        }
     };
 
     /**
@@ -496,8 +491,7 @@ public:
      * @param targetBackend Target graphics backend (Auto for current platform)
      * @return true on success
      */
-    bool CompileWithRHI(const std::string& sourceFile, ShaderType type,
-                        int targetBackend = 0);
+    bool CompileWithRHI(const std::string& sourceFile, ShaderType type, int targetBackend = 0);
 
     // ========================================================================
     // LEGACY COMPATIBILITY (for existing code)
@@ -512,12 +506,10 @@ public:
     /**
      * @brief Static shader compilation utility (legacy support)
      */
-    static HRESULT CompileShaderFromFile(const std::wstring& filename,
-        const std::string& entryPoint,
-        const std::string& shaderModel,
-        ID3DBlob** blobOut);
+    static HRESULT CompileShaderFromFile(const std::wstring& filename, const std::string& entryPoint,
+                                         const std::string& shaderModel, ID3DBlob** blobOut);
 
-private:
+  private:
     /**
      * @brief Create constant buffers for the shader system
      */
@@ -526,10 +518,8 @@ private:
     /**
      * @brief Compile shader from file with advanced options
      */
-    HRESULT CompileShaderFromFileAdvanced(const std::wstring& filename, 
-        ShaderType type, 
-        const ShaderCompilationFlags& flags,
-        ID3DBlob** blobOut);
+    HRESULT CompileShaderFromFileAdvanced(const std::wstring& filename, ShaderType type,
+                                          const ShaderCompilationFlags& flags, ID3DBlob** blobOut);
 
     /**
      * @brief Create input layout from vertex shader
@@ -574,22 +564,22 @@ private:
     // File monitoring for hot reload
     std::vector<std::wstring> m_watchedFiles;
     std::vector<std::string> m_searchPaths;
-    
+
     // Console integration
     mutable std::mutex m_metricsMutex;
     std::function<void()> m_stateCallback;
     mutable ShaderMetrics m_metrics;
-    
+
     // Configuration
     ShaderCompilationFlags m_defaultFlags;
     bool m_hotReloadEnabled = false;
     bool m_validationEnabled = false;
-    
+
     // Additional members for implementation
-    std::vector<ShaderVariant> m_variants;  ///< Shader variants
-    std::string m_filePath;                 ///< Current shader file path
-    FILETIME m_lastModified = {};            ///< Last modification time
-    ShaderType m_type = ShaderType::VERTEX_SHADER;  ///< Current shader type
-    bool m_isCompiled = false;              ///< Compilation status
-    ID3D11DeviceChild* m_shader = nullptr;  ///< Generic shader interface
+    std::vector<ShaderVariant> m_variants;         ///< Shader variants
+    std::string m_filePath;                        ///< Current shader file path
+    FILETIME m_lastModified = {};                  ///< Last modification time
+    ShaderType m_type = ShaderType::VERTEX_SHADER; ///< Current shader type
+    bool m_isCompiled = false;                     ///< Compilation status
+    ID3D11DeviceChild* m_shader = nullptr;         ///< Generic shader interface
 };

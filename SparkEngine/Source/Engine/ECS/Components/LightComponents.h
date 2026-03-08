@@ -16,8 +16,14 @@
 // LightComponent
 // =============================================================================
 
-struct LightComponent {
-    enum class Type { Directional, Point, Spot };
+struct LightComponent
+{
+    enum class Type
+    {
+        Directional,
+        Point,
+        Spot
+    };
 
     Type type = Type::Point;
     DirectX::XMFLOAT3 color{1, 1, 1};

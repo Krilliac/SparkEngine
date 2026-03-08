@@ -17,8 +17,14 @@
 // RigidBodyComponent
 // =============================================================================
 
-struct RigidBodyComponent {
-    enum class Type { Static, Kinematic, Dynamic };
+struct RigidBodyComponent
+{
+    enum class Type
+    {
+        Static,
+        Kinematic,
+        Dynamic
+    };
 
     Type type = Type::Dynamic;
     float mass = 1.0f;
@@ -36,8 +42,15 @@ struct RigidBodyComponent {
 // ColliderComponent
 // =============================================================================
 
-struct ColliderComponent {
-    enum class Shape { Box, Sphere, Capsule, Mesh };
+struct ColliderComponent
+{
+    enum class Shape
+    {
+        Box,
+        Sphere,
+        Capsule,
+        Mesh
+    };
 
     Shape shape = Shape::Box;
     DirectX::XMFLOAT3 halfExtents{0.5f, 0.5f, 0.5f};

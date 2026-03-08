@@ -31,7 +31,7 @@ class Console;
  */
 class SparkGameModule : public Spark::IModule, public IGameModule
 {
-public:
+  public:
     SparkGameModule();
     ~SparkGameModule() override;
 
@@ -55,13 +55,13 @@ public:
     void Resume() override;
     bool IsPaused() const override;
 
-private:
+  private:
     void RegisterGameConsoleCommands();
 
     std::unique_ptr<Game> m_game;
     std::unique_ptr<Console> m_console;
-    Spark::IEngineContext* m_context{ nullptr };
-    bool m_initialized{ false };
+    Spark::IEngineContext* m_context{nullptr};
+    bool m_initialized{false};
 };
 
 // New module exports (preferred by ModuleManager)

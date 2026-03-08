@@ -10,18 +10,11 @@
 using namespace DirectX;
 
 Projectile::Projectile()
-    : m_velocity{ 0,0,0 }
-    , m_speed(50.0f)
-    , m_lifeTime(0.0f)
-    , m_maxLifeTime(5.0f)
-    , m_damage(25.0f)
-    , m_active(false)
-    , m_boundingSphere(GetPosition(), 0.1f)
-    , m_hasGravity(false)
-    , m_gravityScale(1.0f)
+    : m_velocity{0, 0, 0}, m_speed(50.0f), m_lifeTime(0.0f), m_maxLifeTime(5.0f), m_damage(25.0f), m_active(false),
+      m_boundingSphere(GetPosition(), 0.1f), m_hasGravity(false), m_gravityScale(1.0f)
 {
     // Base GameObject scale
-    XMFLOAT3 scale{ 0.1f,0.1f,0.3f };
+    XMFLOAT3 scale{0.1f, 0.1f, 0.3f};
     ASSERT_MSG(scale.x > 0 && scale.y > 0 && scale.z > 0, "Scale must be positive");
     SetScale(scale);
 }
@@ -35,7 +28,8 @@ HRESULT Projectile::Initialize(ID3D11Device* device, ID3D11DeviceContext* contex
 
     HRESULT hr = GameObject::Initialize(device, context);
     ASSERT_MSG(SUCCEEDED(hr), "GameObject::Initialize failed in Projectile");
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr))
+        return hr;
 
     UpdateBoundingSphere();
     return S_OK;
@@ -44,15 +38,14 @@ HRESULT Projectile::Initialize(ID3D11Device* device, ID3D11DeviceContext* contex
 void Projectile::Update(float deltaTime)
 {
     ASSERT_MSG(deltaTime >= 0 && std::isfinite(deltaTime), "Invalid deltaTime");
-    if (!m_active) return;
+    if (!m_active)
+        return;
 
     // Physics integration
     UpdatePhysics(deltaTime);
 
     // Move
-    XMFLOAT3 delta{ m_velocity.x * deltaTime,
-                    m_velocity.y * deltaTime,
-                    m_velocity.z * deltaTime };
+    XMFLOAT3 delta{m_velocity.x * deltaTime, m_velocity.y * deltaTime, m_velocity.z * deltaTime};
     Translate(delta);
 
     // Lifetime
@@ -75,13 +68,12 @@ void Projectile::Update(float deltaTime)
 
 void Projectile::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
-    if (!m_active) return;
+    if (!m_active)
+        return;
     GameObject::Render(view, projection);
 }
 
-void Projectile::Fire(const XMFLOAT3& startPosition,
-    const XMFLOAT3& direction,
-    float speed)
+void Projectile::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
 {
     ASSERT_MSG(speed >= 0, "Speed must be non-negative");
     SetPosition(startPosition);
@@ -105,14 +97,14 @@ void Projectile::Deactivate()
     SetActive(false);
     SetVisible(false);
     m_lifeTime = 0.0f;
-    m_velocity = XMFLOAT3{ 0,0,0 };
+    m_velocity = XMFLOAT3{0, 0, 0};
 }
 
 void Projectile::Reset()
 {
     Deactivate();
-    SetPosition(XMFLOAT3{ 0,0,0 });
-    SetRotation(XMFLOAT3{ 0,0,0 });
+    SetPosition(XMFLOAT3{0, 0, 0});
+    SetRotation(XMFLOAT3{0, 0, 0});
 }
 
 void Projectile::OnHit(GameObject* target)
@@ -153,7 +145,7 @@ void Projectile::CheckCollisions()
     // Example: ground plane at y=0
     if (GetPosition().y < 0.0f)
     {
-        OnHitWorld(GetPosition(), XMFLOAT3{ 0,1,0 });
+        OnHitWorld(GetPosition(), XMFLOAT3{0, 1, 0});
     }
 }
 

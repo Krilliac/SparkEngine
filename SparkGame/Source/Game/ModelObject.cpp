@@ -10,9 +10,7 @@
 #include "Utils/Assert.h"
 #include <iostream>
 
-ModelObject::ModelObject(const std::wstring& modelPath)
-    : m_modelPath(modelPath)
-    , m_model(std::make_unique<Model>())
+ModelObject::ModelObject(const std::wstring& modelPath) : m_modelPath(modelPath), m_model(std::make_unique<Model>())
 {
     SetName("ModelObject");
 }
@@ -24,7 +22,8 @@ HRESULT ModelObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* conte
 
     // Load the model
     HRESULT hr = m_model->LoadObj(m_modelPath, device);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         // Convert wstring to string for logging
         std::string modelPathStr(m_modelPath.begin(), m_modelPath.end());
         std::wcout << L"Warning: Failed to load model: " << m_modelPath << std::endl;
@@ -37,7 +36,8 @@ HRESULT ModelObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* conte
 
 void ModelObject::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj)
 {
-    if (!IsVisible() || !m_model) {
+    if (!IsVisible() || !m_model)
+    {
         return;
     }
 
@@ -48,18 +48,22 @@ void ModelObject::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX&
     DirectX::XMFLOAT3 rot = GetRotation();
     DirectX::XMFLOAT3 scl = GetScale();
     DirectX::XMMATRIX world = DirectX::XMMatrixScaling(scl.x, scl.y, scl.z) *
-                               DirectX::XMMatrixRotationRollPitchYaw(rot.x, rot.y, rot.z) *
-                               DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
-    
+                              DirectX::XMMatrixRotationRollPitchYaw(rot.x, rot.y, rot.z) *
+                              DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
+
     GraphicsEngine* graphics = m_graphics;
 
     // **ENHANCED RENDERING: Set up shaders, constant buffers, and matrices**
-    try {
+    try
+    {
         m_model->Render(m_context, graphics, &world, &view, &proj);
-    } catch (...) {
+    }
+    catch (...)
+    {
         // Handle rendering errors gracefully
         static int errorCount = 0;
-        if (++errorCount <= 3) {
+        if (++errorCount <= 3)
+        {
             std::wcout << L"Warning: Model rendering error for " << m_modelPath << std::endl;
         }
     }
@@ -69,7 +73,7 @@ void ModelObject::Update(float deltaTime)
 {
     // Base update
     GameObject::Update(deltaTime);
-    
+
     // Add any model-specific update logic here if needed
 }
 

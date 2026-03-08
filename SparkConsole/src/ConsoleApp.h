@@ -12,15 +12,16 @@
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 
-class ConsoleApp {
-public:
+class ConsoleApp
+{
+  public:
     ConsoleApp();
     ~ConsoleApp();
 
     // Main execution loop
     void Run();
 
-private:
+  private:
     // Thread functions for reading input/output
     void ReadEngineInput();
     void ReadUserInput();
@@ -54,7 +55,7 @@ private:
 
     // Thread safety and state
     std::atomic<bool> m_running;
-    std::thread m_engineInputThread;   ///< Background thread reading engine pipe input
+    std::thread m_engineInputThread; ///< Background thread reading engine pipe input
     std::mutex m_outputMutex;
     std::mutex m_historyMutex;
 

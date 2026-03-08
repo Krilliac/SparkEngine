@@ -13,24 +13,27 @@
 #include "Utils/ConfigParser.h"
 #include <string>
 
-class EngineSettings {
-public:
+class EngineSettings
+{
+  public:
     // =========================================================================
     // Settings structures
     // =========================================================================
 
-    struct GraphicsSettings {
+    struct GraphicsSettings
+    {
         int windowWidth = 1280;
         int windowHeight = 720;
         bool fullscreen = false;
         bool vsync = true;
-        int antiAliasing = 4;       // MSAA sample count (1, 2, 4, 8)
-        int shadowQuality = 2;      // 0=Off, 1=Low, 2=Medium, 3=High
-        float renderScale = 1.0f;   // Internal resolution scale
+        int antiAliasing = 4;     // MSAA sample count (1, 2, 4, 8)
+        int shadowQuality = 2;    // 0=Off, 1=Low, 2=Medium, 3=High
+        float renderScale = 1.0f; // Internal resolution scale
         bool hdr = false;
     };
 
-    struct AudioSettings {
+    struct AudioSettings
+    {
         float masterVolume = 1.0f;
         float sfxVolume = 0.8f;
         float musicVolume = 0.6f;
@@ -38,7 +41,8 @@ public:
         bool muteOnFocusLoss = true;
     };
 
-    struct ControlsSettings {
+    struct ControlsSettings
+    {
         float mouseSensitivity = 1.0f;
         bool invertMouseY = false;
         float mouseDeadZone = 0.0f;
@@ -46,7 +50,8 @@ public:
         bool mouseAcceleration = false;
     };
 
-    struct GameSettings {
+    struct GameSettings
+    {
         std::string difficulty = "Normal";
         bool showFPS = true;
         bool showDebugInfo = false;
@@ -117,7 +122,7 @@ public:
     /// Register settings-related console commands with SparkConsole.
     void RegisterConsoleCommands();
 
-private:
+  private:
     EngineSettings() = default;
 
     /// Read struct fields from the ConfigParser.
@@ -136,8 +141,8 @@ private:
     mutable Spark::ConfigParser m_config;
     std::string m_filePath;
 
-    GraphicsSettings  m_graphics;
-    AudioSettings     m_audio;
-    ControlsSettings  m_controls;
-    GameSettings      m_game;
+    GraphicsSettings m_graphics;
+    AudioSettings m_audio;
+    ControlsSettings m_controls;
+    GameSettings m_game;
 };

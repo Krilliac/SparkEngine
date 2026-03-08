@@ -10,7 +10,7 @@
 #include "Utils/MathUtils.h"
 #include "Game/Console.h"
 #include "Utils/ConsoleProcessManager.h"
-#include "Game/Model.h"  // Add Model class for weapon rendering
+#include "Game/Model.h" // Add Model class for weapon rendering
 #include <algorithm>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -22,31 +22,34 @@ using namespace DirectX;
 extern Console g_console;
 
 // **FIXED: Rate-limited logging for Player to prevent console spam**
-#define LOG_TO_CONSOLE_RATE_LIMITED(msg, type) \
-    do { \
-        static auto lastLogTime = std::chrono::steady_clock::now(); \
-        static int logCounter = 0; \
-        auto now = std::chrono::steady_clock::now(); \
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count(); \
-        if (elapsed >= 5 || logCounter < 2) { \
-            Spark::ConsoleProcessManager::GetInstance().Log(msg, type); \
-            if (elapsed >= 5) { \
-                lastLogTime = now; \
-                logCounter = 0; \
-            } else { \
-                logCounter++; \
-            } \
-        } \
-    } while(0)
+#define LOG_TO_CONSOLE_RATE_LIMITED(msg, type)                                                                         \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        static auto lastLogTime = std::chrono::steady_clock::now();                                                    \
+        static int logCounter = 0;                                                                                     \
+        auto now = std::chrono::steady_clock::now();                                                                   \
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count();                    \
+        if (elapsed >= 5 || logCounter < 2)                                                                            \
+        {                                                                                                              \
+            Spark::ConsoleProcessManager::GetInstance().Log(msg, type);                                                \
+            if (elapsed >= 5)                                                                                          \
+            {                                                                                                          \
+                lastLogTime = now;                                                                                     \
+                logCounter = 0;                                                                                        \
+            }                                                                                                          \
+            else                                                                                                       \
+            {                                                                                                          \
+                logCounter++;                                                                                          \
+            }                                                                                                          \
+        }                                                                                                              \
+    } while (0)
 
 // Use rate-limited logging for most messages, immediate for critical ones
 #define LOG_TO_CONSOLE(msg, type) LOG_TO_CONSOLE_RATE_LIMITED(msg, type)
 #define LOG_TO_CONSOLE_IMMEDIATE(msg, type) Spark::ConsoleProcessManager::GetInstance().Log(msg, type)
 
 // Constructor
-Player::Player()
-    : m_currentWeapon(GetWeaponStats(WeaponType::PISTOL))
-    , m_collisionSphere(GetPosition(), 0.5f)
+Player::Player() : m_currentWeapon(GetWeaponStats(WeaponType::PISTOL)), m_collisionSphere(GetPosition(), 0.5f)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Player constructed.", L"INFO");
     SetName("Player");
@@ -55,10 +58,8 @@ Player::Player()
 }
 
 // Initialization
-HRESULT Player::Initialize(ID3D11Device* device,
-    ID3D11DeviceContext* context,
-    SparkEngineCamera* camera,
-    InputManager* input)
+HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, SparkEngineCamera* camera,
+                           InputManager* input)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Player::Initialize called.", L"OPERATION");
     ASSERT_NOT_NULL(device);
@@ -80,28 +81,33 @@ HRESULT Player::Initialize(ID3D11Device* device,
     // Load weapon models from assets
     HRESULT hr = S_OK;
     hr = m_pistolModel->LoadObj(L"../Assets/Models/pistol.obj", device);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load pistol model", L"WARNING");
     }
-    
+
     hr = m_rifleModel->LoadObj(L"../Assets/Models/rifle.obj", device);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load rifle model", L"WARNING");
     }
 
     // For weapons without specific models, we'll use pistol as fallback
     hr = m_shotgunModel->LoadObj(L"../Assets/Models/rifle.obj", device);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load shotgun model (using rifle fallback)", L"WARNING");
     }
-    
+
     hr = m_rocketModel->LoadObj(L"../Assets/Models/rifle.obj", device);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load rocket launcher model (using rifle fallback)", L"WARNING");
     }
-    
+
     hr = m_grenadeModel->LoadObj(L"../Assets/Models/rifle.obj", device);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load grenade launcher model (using rifle fallback)", L"WARNING");
     }
 
@@ -113,7 +119,8 @@ HRESULT Player::Initialize(ID3D11Device* device,
         hr = m_projectilePool->Initialize(device, context);
         LOG_TO_CONSOLE_IMMEDIATE(L"Player projectile pool initialized. HR=0x" + std::to_wstring(hr), L"INFO");
         ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
-        if (FAILED(hr)) return hr;
+        if (FAILED(hr))
+            return hr;
     }
     LOG_TO_CONSOLE_IMMEDIATE(L"Player initialization complete with weapon models.", L"INFO");
     return GameObject::Initialize(device, context);
@@ -124,7 +131,8 @@ void Player::Update(float dt)
 {
     // **FIXED: No per-frame logging to prevent console spam**
     ASSERT_MSG(dt >= 0.0f && std::isfinite(dt), "Delta time must be non-negative and finite");
-    if (!IsAlive()) return;
+    if (!IsAlive())
+        return;
 
     HandleInput(dt);
     UpdateMovement(dt);
@@ -146,74 +154,77 @@ void Player::Render(const XMMATRIX& view, const XMMATRIX& proj)
 // Render weapon model in first-person view
 void Player::RenderWeapon(const XMMATRIX& view, const XMMATRIX& proj)
 {
-    if (!m_camera) return;
-    
+    if (!m_camera)
+        return;
+
     // Get the appropriate weapon model based on current weapon
     Model* currentWeaponModel = nullptr;
-    switch (m_currentWeapon.Type) {
-        case WeaponType::PISTOL:
-            currentWeaponModel = m_pistolModel.get();
-            break;
-        case WeaponType::RIFLE:
-            currentWeaponModel = m_rifleModel.get();
-            break;
-        case WeaponType::SHOTGUN:
-            currentWeaponModel = m_shotgunModel.get();
-            break;
-        case WeaponType::ROCKET_LAUNCHER:
-            currentWeaponModel = m_rocketModel.get();
-            break;
-        case WeaponType::GRENADE_LAUNCHER:
-            currentWeaponModel = m_grenadeModel.get();
-            break;
-        default:
-            currentWeaponModel = m_pistolModel.get(); // Fallback
-            break;
+    switch (m_currentWeapon.Type)
+    {
+    case WeaponType::PISTOL:
+        currentWeaponModel = m_pistolModel.get();
+        break;
+    case WeaponType::RIFLE:
+        currentWeaponModel = m_rifleModel.get();
+        break;
+    case WeaponType::SHOTGUN:
+        currentWeaponModel = m_shotgunModel.get();
+        break;
+    case WeaponType::ROCKET_LAUNCHER:
+        currentWeaponModel = m_rocketModel.get();
+        break;
+    case WeaponType::GRENADE_LAUNCHER:
+        currentWeaponModel = m_grenadeModel.get();
+        break;
+    default:
+        currentWeaponModel = m_pistolModel.get(); // Fallback
+        break;
     }
-    
-    if (currentWeaponModel && m_context) {
+
+    if (currentWeaponModel && m_context)
+    {
         // Position weapon relative to camera for first-person view
         XMFLOAT3 cameraPos = m_camera->GetPosition();
         XMFLOAT3 cameraForward = m_camera->GetForward();
-        
+
         // Calculate right vector from forward vector (cross product with world up)
         XMVECTOR forwardVec = XMLoadFloat3(&cameraForward);
         XMVECTOR worldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
         XMVECTOR rightVec = XMVector3Normalize(XMVector3Cross(worldUp, forwardVec));
         XMFLOAT3 cameraRight;
         XMStoreFloat3(&cameraRight, rightVec);
-        
+
         // Calculate weapon position (down and to the right from camera)
         XMFLOAT3 weaponOffset = {
-            cameraRight.x * 0.3f - cameraForward.x * 0.1f,  // Right and slightly back
-            -0.2f,                                            // Down from camera
-            cameraRight.z * 0.3f - cameraForward.z * 0.1f   // Right and slightly back
+            cameraRight.x * 0.3f - cameraForward.x * 0.1f, // Right and slightly back
+            -0.2f,                                         // Down from camera
+            cameraRight.z * 0.3f - cameraForward.z * 0.1f  // Right and slightly back
         };
-        
-        XMFLOAT3 weaponPos = {
-            cameraPos.x + weaponOffset.x,
-            cameraPos.y + weaponOffset.y,
-            cameraPos.z + weaponOffset.z
-        };
-        
+
+        XMFLOAT3 weaponPos = {cameraPos.x + weaponOffset.x, cameraPos.y + weaponOffset.y, cameraPos.z + weaponOffset.z};
+
         // Create weapon transformation matrix
         XMMATRIX weaponWorld = XMMatrixTranslation(weaponPos.x, weaponPos.y, weaponPos.z);
-        
+
         // Apply weapon rotation to match camera orientation
         XMMATRIX cameraRotation = XMMatrixInverse(nullptr, view);
         weaponWorld = weaponWorld * cameraRotation;
-        
+
         // Set up constant buffer for weapon rendering (simplified)
         // In a real implementation, you'd set shader constants here
         // For now, we'll just assume the shaders are already bound
-        
+
         // Render the weapon model
-        try {
+        try
+        {
             currentWeaponModel->Render(m_context);
-        } catch (...) {
+        }
+        catch (...)
+        {
             // Handle any rendering errors gracefully
             static int errorCount = 0;
-            if (++errorCount <= 3) { // Only log first few errors
+            if (++errorCount <= 3)
+            { // Only log first few errors
                 LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Weapon model rendering error", L"WARNING");
             }
         }
@@ -227,32 +238,37 @@ void Player::TakeDamage(float dmg)
     ASSERT_MSG(dmg >= 0.0f, "Damage must be non-negative");
 
     // Check god mode from console integration
-    if (m_godModeEnabled) {
+    if (m_godModeEnabled)
+    {
         LOG_TO_CONSOLE(L"Damage blocked by god mode", L"INFO");
         return;
     }
 
-    if (!IsAlive()) return;
+    if (!IsAlive())
+        return;
 
     // Apply class damage resistance
     float effectiveDmg = dmg * (1.0f - m_damageResistance);
 
     // Cloaked infiltrator takes bonus damage (de-cloaks on hit)
-    if (m_cloakActive) {
+    if (m_cloakActive)
+    {
         m_cloakActive = false;
         m_primaryAbility.Deactivate();
         effectiveDmg *= 1.5f; // 50% bonus damage while cloaked
     }
 
     // Overshield absorbs damage first (Heavy Assault)
-    if (m_overshieldHP > 0.0f) {
+    if (m_overshieldHP > 0.0f)
+    {
         float shieldAbsorbed = std::min(effectiveDmg, m_overshieldHP);
         m_overshieldHP -= shieldAbsorbed;
         effectiveDmg -= shieldAbsorbed;
     }
 
     // Rechargeable shield absorbs next
-    if (m_shield > 0.0f && effectiveDmg > 0.0f) {
+    if (m_shield > 0.0f && effectiveDmg > 0.0f)
+    {
         float shieldAbsorbed = std::min(effectiveDmg, m_shield);
         m_shield -= shieldAbsorbed;
         effectiveDmg -= shieldAbsorbed;
@@ -260,7 +276,8 @@ void Player::TakeDamage(float dmg)
     }
 
     // Armor absorbs 50% of remaining damage
-    if (effectiveDmg > 0.0f) {
+    if (effectiveDmg > 0.0f)
+    {
         float armorAbsorbed = std::min(effectiveDmg * 0.5f, m_armor);
         m_armor -= armorAbsorbed;
         effectiveDmg -= armorAbsorbed;
@@ -268,7 +285,8 @@ void Player::TakeDamage(float dmg)
 
     // Remaining damage hits health
     m_health = std::max(0.0f, m_health - effectiveDmg);
-    if (m_health <= 0.0f) SetActive(false);
+    if (m_health <= 0.0f)
+        SetActive(false);
 
     // Reset shield recharge timer on any damage
     m_shieldRechargeTimer = 0.0f;
@@ -276,9 +294,9 @@ void Player::TakeDamage(float dmg)
     // Notify console of state change
     NotifyStateChange();
 
-    LOG_TO_CONSOLE(L"Player took damage. Health=" + std::to_wstring(m_health) +
-                   L" Shield=" + std::to_wstring(m_shield) +
-                   L" Armor=" + std::to_wstring(m_armor), L"INFO");
+    LOG_TO_CONSOLE(L"Player took damage. Health=" + std::to_wstring(m_health) + L" Shield=" +
+                       std::to_wstring(m_shield) + L" Armor=" + std::to_wstring(m_armor),
+                   L"INFO");
 }
 
 void Player::Heal(float amt)
@@ -328,12 +346,14 @@ void Player::Fire()
     static auto lastFireLog = std::chrono::steady_clock::now();
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastFireLog).count();
-    
-    if (m_isReloading || m_fireTimer > 0.0f) return;
-    
+
+    if (m_isReloading || m_fireTimer > 0.0f)
+        return;
+
     // **ENHANCED: Check infinite ammo from console integration**
-    if (!m_infiniteAmmoEnabled && m_currentAmmo <= 0) return;
-    
+    if (!m_infiniteAmmoEnabled && m_currentAmmo <= 0)
+        return;
+
     ASSERT_NOT_NULL(m_projectilePool);
 
     XMFLOAT3 pos = m_camera->GetPosition();
@@ -342,26 +362,34 @@ void Player::Fire()
     ProjectileType type = ProjectileType::BULLET;
     switch (m_currentWeapon.Type)
     {
-    case WeaponType::ROCKET_LAUNCHER:   type = ProjectileType::ROCKET;   break;
-    case WeaponType::GRENADE_LAUNCHER:  type = ProjectileType::GRENADE;  break;
-    default:                            type = ProjectileType::BULLET;   break;
+    case WeaponType::ROCKET_LAUNCHER:
+        type = ProjectileType::ROCKET;
+        break;
+    case WeaponType::GRENADE_LAUNCHER:
+        type = ProjectileType::GRENADE;
+        break;
+    default:
+        type = ProjectileType::BULLET;
+        break;
     }
 
     m_projectilePool->FireProjectile(type, pos, dir, m_currentWeapon.MuzzleVelocity);
 
     // Only consume ammo if infinite ammo is disabled
-    if (!m_infiniteAmmoEnabled) {
+    if (!m_infiniteAmmoEnabled)
+    {
         --m_currentAmmo;
     }
-    
+
     m_fireTimer = 60.0f / m_currentWeapon.FireRate;
     m_isFiring = true;
-    
+
     // Notify console of state change
     NotifyStateChange();
-    
+
     // Only log weapon firing every 2 seconds
-    if (elapsed >= 2) {
+    if (elapsed >= 2)
+    {
         LOG_TO_CONSOLE(L"Player fired weapon. Ammo=" + std::to_wstring(m_currentAmmo), L"INFO");
         lastFireLog = now;
     }
@@ -370,7 +398,8 @@ void Player::Fire()
 void Player::ChangeWeapon(WeaponType t)
 {
     LOG_TO_CONSOLE(L"Player::ChangeWeapon called. type=" + std::to_wstring(static_cast<int>(t)), L"OPERATION");
-    if (m_isReloading) return;
+    if (m_isReloading)
+        return;
     m_currentWeapon = GetWeaponStats(t);
     m_currentAmmo = m_currentWeapon.MagazineSize;
     m_fireTimer = 0.0f;
@@ -390,8 +419,7 @@ void Player::OnHit(GameObject* target)
 void Player::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
 {
     LOG_TO_CONSOLE(L"Player::OnHitWorld called.", L"OPERATION");
-    ASSERT_MSG(std::isfinite(hitPoint.x) && std::isfinite(hitPoint.y) && std::isfinite(hitPoint.z),
-        "Invalid hitPoint");
+    ASSERT_MSG(std::isfinite(hitPoint.x) && std::isfinite(hitPoint.y) && std::isfinite(hitPoint.z), "Invalid hitPoint");
     // World collision - no damage from hitting world geometry
     LOG_TO_CONSOLE(L"Player hit world.", L"INFO");
 }
@@ -399,12 +427,15 @@ void Player::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
 // Input handling - enhanced with class abilities, loadout slots, vehicles, and interactions
 void Player::HandleInput(float)
 {
-    if (!m_input) return;
+    if (!m_input)
+        return;
 
     // === VEHICLE CONTROLS ===
-    if (m_currentVehicle) {
+    if (m_currentVehicle)
+    {
         // E to exit vehicle
-        if (m_input->WasKeyPressed('E')) {
+        if (m_input->WasKeyPressed('E'))
+        {
             ExitVehicle();
             return;
         }
@@ -412,29 +443,40 @@ void Player::HandleInput(float)
         // Driver/pilot controls
         int seatIdx = m_vehicleSeatIndex;
         auto& seats = m_currentVehicle->GetDefinition().seats;
-        if (seatIdx >= 0 && seatIdx < (int)seats.size()) {
+        if (seatIdx >= 0 && seatIdx < (int)seats.size())
+        {
             auto role = seats[seatIdx].role;
-            if (role == VehicleSeatRole::DRIVER || role == VehicleSeatRole::PILOT) {
+            if (role == VehicleSeatRole::DRIVER || role == VehicleSeatRole::PILOT)
+            {
                 float throttle = 0.0f;
                 float steering = 0.0f;
-                if (m_input->IsKeyDown('W')) throttle += 1.0f;
-                if (m_input->IsKeyDown('S')) throttle -= 1.0f;
-                if (m_input->IsKeyDown('A')) steering -= 1.0f;
-                if (m_input->IsKeyDown('D')) steering += 1.0f;
+                if (m_input->IsKeyDown('W'))
+                    throttle += 1.0f;
+                if (m_input->IsKeyDown('S'))
+                    throttle -= 1.0f;
+                if (m_input->IsKeyDown('A'))
+                    steering -= 1.0f;
+                if (m_input->IsKeyDown('D'))
+                    steering += 1.0f;
                 m_currentVehicle->SetThrottle(throttle);
                 m_currentVehicle->SetSteering(steering);
                 m_currentVehicle->SetBrake(m_input->IsKeyDown(VK_SPACE));
 
                 // Aerial vertical thrust
-                if (m_currentVehicle->IsAerial()) {
+                if (m_currentVehicle->IsAerial())
+                {
                     float vThrust = 0.0f;
-                    if (m_input->IsKeyDown(VK_SPACE)) vThrust += 1.0f;
-                    if (m_input->IsKeyDown(VK_LCONTROL)) vThrust -= 1.0f;
+                    if (m_input->IsKeyDown(VK_SPACE))
+                        vThrust += 1.0f;
+                    if (m_input->IsKeyDown(VK_LCONTROL))
+                        vThrust -= 1.0f;
                     m_currentVehicle->SetVerticalThrust(vThrust);
                 }
             }
-            if (role == VehicleSeatRole::GUNNER || role == VehicleSeatRole::DRIVER) {
-                if (m_input->IsMouseButtonDown(0)) {
+            if (role == VehicleSeatRole::GUNNER || role == VehicleSeatRole::DRIVER)
+            {
+                if (m_input->IsMouseButtonDown(0))
+                {
                     m_currentVehicle->FireWeapon(seatIdx);
                 }
             }
@@ -443,37 +485,50 @@ void Player::HandleInput(float)
     }
 
     // === INTERACTION (E key) ===
-    if (m_input->WasKeyPressed('E')) {
-        if (m_interactionSystem) {
+    if (m_input->WasKeyPressed('E'))
+    {
+        if (m_interactionSystem)
+        {
             m_interactionSystem->TryInteract(this);
         }
     }
 
     // === NORMAL PLAYER CONTROLS ===
-    if (m_input->WasKeyPressed('R')) StartReload();
-    if (m_input->IsMouseButtonDown(0)) Fire();
-    if (m_input->WasKeyPressed(VK_SPACE)) Jump();
+    if (m_input->WasKeyPressed('R'))
+        StartReload();
+    if (m_input->IsMouseButtonDown(0))
+        Fire();
+    if (m_input->WasKeyPressed(VK_SPACE))
+        Jump();
 
     m_isRunning = m_input->IsKeyDown(VK_LSHIFT);
     m_isCrouching = m_input->IsKeyDown(VK_LCONTROL);
 
     // Class loadout weapon slots (1-4)
-    if (m_input->WasKeyPressed('1')) EquipPrimary();
-    if (m_input->WasKeyPressed('2')) EquipSecondary();
-    if (m_input->WasKeyPressed('3')) EquipSidearm();
-    if (m_input->WasKeyPressed('4')) EquipTool();
+    if (m_input->WasKeyPressed('1'))
+        EquipPrimary();
+    if (m_input->WasKeyPressed('2'))
+        EquipSecondary();
+    if (m_input->WasKeyPressed('3'))
+        EquipSidearm();
+    if (m_input->WasKeyPressed('4'))
+        EquipTool();
 
     // Class abilities
-    if (m_input->WasKeyPressed('F')) ActivatePrimaryAbility();
-    if (m_input->WasKeyPressed('G')) ActivateSecondaryAbility();
+    if (m_input->WasKeyPressed('F'))
+        ActivatePrimaryAbility();
+    if (m_input->WasKeyPressed('G'))
+        ActivateSecondaryAbility();
 
     // Jetpack hold (Light Assault) - hold Space while in air
-    if (m_playerClass == PlayerClass::LIGHT_ASSAULT && m_primaryAbility.isActive) {
+    if (m_playerClass == PlayerClass::LIGHT_ASSAULT && m_primaryAbility.isActive)
+    {
         m_jetpackActive = m_input->IsKeyDown(VK_SPACE) && m_jetpackFuel > 0.0f;
     }
 
     // Toggle cloak off manually
-    if (m_cloakActive && m_input->WasKeyPressed('F')) {
+    if (m_cloakActive && m_input->WasKeyPressed('F'))
+    {
         m_cloakActive = false;
         m_primaryAbility.Deactivate();
     }
@@ -482,13 +537,16 @@ void Player::HandleInput(float)
 // Movement logic - enhanced with class-specific speed and ability modifiers
 void Player::UpdateMovement(float dt)
 {
-    if (!m_camera || !m_input) return;
+    if (!m_camera || !m_input)
+        return;
 
     // Skip player movement when in vehicle (vehicle handles position)
-    if (m_currentVehicle) return;
+    if (m_currentVehicle)
+        return;
 
     // MAX lockdown prevents all movement
-    if (m_lockedDown) return;
+    if (m_lockedDown)
+        return;
 
     float speed = m_speed;
 
@@ -503,22 +561,27 @@ void Player::UpdateMovement(float dt)
     }
 
     // Cloaked infiltrator moves slightly slower
-    if (m_cloakActive) {
+    if (m_cloakActive)
+    {
         speed *= 0.75f;
     }
 
     // Heavy Assault overshield active = slower
-    if (m_overshieldHP > 0.0f && m_primaryAbility.isActive &&
-        m_playerClass == PlayerClass::HEAVY_ASSAULT) {
+    if (m_overshieldHP > 0.0f && m_primaryAbility.isActive && m_playerClass == PlayerClass::HEAVY_ASSAULT)
+    {
         speed *= 0.8f;
     }
 
     speed *= dt;
 
-    if (m_input->IsKeyDown('W')) m_camera->MoveForward(speed);
-    if (m_input->IsKeyDown('S')) m_camera->MoveForward(-speed);
-    if (m_input->IsKeyDown('A')) m_camera->MoveRight(-speed);
-    if (m_input->IsKeyDown('D')) m_camera->MoveRight(speed);
+    if (m_input->IsKeyDown('W'))
+        m_camera->MoveForward(speed);
+    if (m_input->IsKeyDown('S'))
+        m_camera->MoveForward(-speed);
+    if (m_input->IsKeyDown('A'))
+        m_camera->MoveRight(-speed);
+    if (m_input->IsKeyDown('D'))
+        m_camera->MoveRight(speed);
 
     if (!m_isRunning)
         m_stamina = std::min(m_maxStamina, m_stamina + 50.0f * dt);
@@ -530,7 +593,12 @@ void Player::UpdateMovement(float dt)
 void Player::UpdateCombat(float dt)
 {
     // **FIXED: No per-frame logging**
-    if (m_fireTimer > 0.0f) { m_fireTimer -= dt; if (m_fireTimer < 0) m_fireTimer = 0; }
+    if (m_fireTimer > 0.0f)
+    {
+        m_fireTimer -= dt;
+        if (m_fireTimer < 0)
+            m_fireTimer = 0;
+    }
     if (m_isReloading)
     {
         m_reloadTimer -= dt;
@@ -546,12 +614,14 @@ void Player::UpdateCombat(float dt)
 void Player::UpdatePhysics(float dt)
 {
     // **ENHANCED: Apply console-controlled physics settings**
-    if (!m_isGrounded && !m_noclipEnabled) {
+    if (!m_isGrounded && !m_noclipEnabled)
+    {
         ApplyGravity(dt);
     }
-    
+
     // Skip collision in noclip mode
-    if (!m_noclipEnabled) {
+    if (!m_noclipEnabled)
+    {
         CheckGroundCollision();
     }
 
@@ -560,7 +630,8 @@ void Player::UpdatePhysics(float dt)
     pos.y += m_velocity.y * dt;
     pos.z += m_velocity.z * dt;
     SetPosition(pos);
-    if (m_camera) m_camera->SetPosition(pos);
+    if (m_camera)
+        m_camera->SetPosition(pos);
 
     // Apply console-controlled friction
     m_velocity.x *= m_frictionCoeff;
@@ -571,8 +642,8 @@ void Player::UpdatePhysics(float dt)
 void Player::UpdateAnimation(float dt)
 {
     // **FIXED: No per-frame logging**
-    if (m_input && (m_input->IsKeyDown('W') || m_input->IsKeyDown('A') ||
-        m_input->IsKeyDown('S') || m_input->IsKeyDown('D')))
+    if (m_input &&
+        (m_input->IsKeyDown('W') || m_input->IsKeyDown('A') || m_input->IsKeyDown('S') || m_input->IsKeyDown('D')))
     {
         m_bobTimer += dt * 8.0f;
         HandleFootsteps(dt);
@@ -590,22 +661,24 @@ void Player::UpdateCollision()
 void Player::ApplyGravity(float dt)
 {
     // Use gravity zone system if available
-    if (m_gravitySystem) {
+    if (m_gravitySystem)
+    {
         m_gravityState = m_gravitySystem->UpdateObjectGravity(GetPosition(), m_gravityState, dt);
         XMFLOAT3 gravity = m_gravityState.currentGravity;
         m_velocity.x += gravity.x * dt;
         m_velocity.y += gravity.y * dt;
         m_velocity.z += gravity.z * dt;
-    } else {
+    }
+    else
+    {
         // Fallback to console-controlled gravity force
         m_velocity.y += m_gravityForce * dt;
     }
 
     // Terminal velocity clamp
-    float velMag = std::sqrt(m_velocity.x * m_velocity.x +
-                             m_velocity.y * m_velocity.y +
-                             m_velocity.z * m_velocity.z);
-    if (velMag > 50.0f) {
+    float velMag = std::sqrt(m_velocity.x * m_velocity.x + m_velocity.y * m_velocity.y + m_velocity.z * m_velocity.z);
+    if (velMag > 50.0f)
+    {
         float scale = 50.0f / velMag;
         m_velocity.x *= scale;
         m_velocity.y *= scale;
@@ -620,10 +693,13 @@ void Player::CheckGroundCollision()
     XMFLOAT3 pos = GetPosition();
     if (pos.y <= 0.0f && m_velocity.y <= 0.0f)
     {
-        pos.y = 0.0f; SetPosition(pos);
+        pos.y = 0.0f;
+        SetPosition(pos);
         m_velocity.y = 0.0f;
-        m_isGrounded = true; m_isJumping = false;
-        if (m_camera) m_camera->SetPosition(pos);
+        m_isGrounded = true;
+        m_isJumping = false;
+        if (m_camera)
+            m_camera->SetPosition(pos);
     }
 }
 
@@ -649,7 +725,8 @@ WeaponStats Player::GetWeaponStats(WeaponType type)
 // Fire direction w/spread
 XMFLOAT3 Player::CalculateFireDirection()
 {
-    if (!m_camera) return XMFLOAT3(0, 0, 1);
+    if (!m_camera)
+        return XMFLOAT3(0, 0, 1);
     XMFLOAT3 f = m_camera->GetForward();
     float spread = (1.0f - m_currentWeapon.Accuracy) * 0.1f;
     if (spread > 0.0f)
@@ -671,12 +748,11 @@ void Player::SetClass(PlayerClass classType, Spark::ClassSystem* classSystem)
     m_playerClass = classType;
     m_classSystem = classSystem;
 
-    if (classSystem) {
+    if (classSystem)
+    {
         const auto& def = classSystem->GetClassDefinition(classType);
         ApplyClassStats(def);
-        LOG_TO_CONSOLE_IMMEDIATE(
-            L"Player class set to: " + std::wstring(def.name.begin(), def.name.end()),
-            L"SUCCESS");
+        LOG_TO_CONSOLE_IMMEDIATE(L"Player class set to: " + std::wstring(def.name.begin(), def.name.end()), L"SUCCESS");
     }
 }
 
@@ -726,11 +802,13 @@ void Player::ApplyClassStats(const Spark::ClassDefinition& classDef)
 
 bool Player::ActivatePrimaryAbility()
 {
-    if (m_primaryAbility.Activate(m_energy)) {
+    if (m_primaryAbility.Activate(m_energy))
+    {
         m_energy -= m_primaryAbility.energyCost;
 
         // Class-specific activation logic
-        switch (m_primaryAbility.type) {
+        switch (m_primaryAbility.type)
+        {
         case ClassAbility::JETPACK:
             m_jetpackActive = true;
             m_jetpackFuel = m_jetpackMaxFuel;
@@ -749,10 +827,10 @@ bool Player::ActivatePrimaryAbility()
         }
 
         LOG_TO_CONSOLE(L"Primary ability activated: " +
-            std::wstring(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type),
-                Spark::ClassSystem::GetAbilityName(m_primaryAbility.type) +
-                strlen(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type))),
-            L"INFO");
+                           std::wstring(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type),
+                                        Spark::ClassSystem::GetAbilityName(m_primaryAbility.type) +
+                                            strlen(Spark::ClassSystem::GetAbilityName(m_primaryAbility.type))),
+                       L"INFO");
         return true;
     }
     return false;
@@ -760,11 +838,13 @@ bool Player::ActivatePrimaryAbility()
 
 bool Player::ActivateSecondaryAbility()
 {
-    if (m_secondaryAbility.Activate(m_energy)) {
+    if (m_secondaryAbility.Activate(m_energy))
+    {
         m_energy -= m_secondaryAbility.energyCost;
 
         // Class-specific secondary activation
-        switch (m_secondaryAbility.type) {
+        switch (m_secondaryAbility.type)
+        {
         case ClassAbility::EMERGENCY_REPAIR:
             // MAX self-repair: restore 50% health
             Heal(m_maxHealth * 0.5f);
@@ -785,7 +865,8 @@ bool Player::ActivateSecondaryAbility()
 
 void Player::DeactivatePrimaryAbility()
 {
-    if (m_primaryAbility.isActive) {
+    if (m_primaryAbility.isActive)
+    {
         m_primaryAbility.Deactivate();
         m_jetpackActive = false;
         m_cloakActive = false;
@@ -795,9 +876,12 @@ void Player::DeactivatePrimaryAbility()
 
 bool Player::CanEquipWeapon(WeaponType type) const
 {
-    if (m_allowedWeapons.empty()) return true; // No restrictions
-    for (auto w : m_allowedWeapons) {
-        if (w == type) return true;
+    if (m_allowedWeapons.empty())
+        return true; // No restrictions
+    for (auto w : m_allowedWeapons)
+    {
+        if (w == type)
+            return true;
     }
     return false;
 }
@@ -822,7 +906,8 @@ void Player::EquipSidearm()
 
 void Player::EquipTool()
 {
-    if (m_loadout.tool.weapon != WeaponType::PISTOL || m_activeLoadoutSlot == 3) {
+    if (m_loadout.tool.weapon != WeaponType::PISTOL || m_activeLoadoutSlot == 3)
+    {
         m_activeLoadoutSlot = 3;
         ChangeWeapon(m_loadout.tool.weapon);
     }
@@ -832,7 +917,8 @@ void Player::UpdateClassMechanics(float dt)
 {
     // Shield recharge (PlanetSide 2 style)
     m_shieldRechargeTimer += dt;
-    if (m_shieldRechargeTimer >= m_shieldRechargeDelay && m_shield < m_maxShield) {
+    if (m_shieldRechargeTimer >= m_shieldRechargeDelay && m_shield < m_maxShield)
+    {
         m_shield = std::min(m_maxShield, m_shield + m_shieldRechargeRate * dt);
     }
 
@@ -844,12 +930,14 @@ void Player::UpdateClassMechanics(float dt)
     m_secondaryAbility.Update(dt);
 
     // Class-specific passive: Combat Medic health regen
-    if (m_playerClass == PlayerClass::COMBAT_MEDIC && m_health < m_maxHealth) {
+    if (m_playerClass == PlayerClass::COMBAT_MEDIC && m_health < m_maxHealth)
+    {
         m_health = std::min(m_maxHealth, m_health + 2.0f * dt);
     }
 
     // Class-specific updates
-    switch (m_playerClass) {
+    switch (m_playerClass)
+    {
     case PlayerClass::LIGHT_ASSAULT:
         UpdateJetpack(dt);
         break;
@@ -861,7 +949,8 @@ void Player::UpdateClassMechanics(float dt)
         break;
     case PlayerClass::MAX_SUIT:
         // Lockdown: deactivate when ability ends
-        if (m_lockedDown && !m_primaryAbility.isActive) {
+        if (m_lockedDown && !m_primaryAbility.isActive)
+        {
             m_lockedDown = false;
         }
         break;
@@ -872,16 +961,20 @@ void Player::UpdateClassMechanics(float dt)
 
 void Player::UpdateJetpack(float dt)
 {
-    if (m_jetpackActive && m_jetpackFuel > 0.0f) {
+    if (m_jetpackActive && m_jetpackFuel > 0.0f)
+    {
         // Apply upward thrust
         m_velocity.y = m_jetpackThrust;
         m_isGrounded = false;
         m_jetpackFuel -= 25.0f * dt; // Fuel consumption
-        if (m_jetpackFuel <= 0.0f) {
+        if (m_jetpackFuel <= 0.0f)
+        {
             m_jetpackFuel = 0.0f;
             m_jetpackActive = false;
         }
-    } else if (!m_jetpackActive) {
+    }
+    else if (!m_jetpackActive)
+    {
         // Recharge fuel when not using jetpack
         m_jetpackFuel = std::min(m_jetpackMaxFuel, m_jetpackFuel + 15.0f * dt);
     }
@@ -890,13 +983,15 @@ void Player::UpdateJetpack(float dt)
 void Player::UpdateCloak(float dt)
 {
     // Firing decloaks the infiltrator
-    if (m_cloakActive && m_isFiring) {
+    if (m_cloakActive && m_isFiring)
+    {
         m_cloakActive = false;
         m_primaryAbility.Deactivate();
     }
 
     // Cloak deactivates when ability duration runs out
-    if (!m_primaryAbility.isActive && m_cloakActive) {
+    if (!m_primaryAbility.isActive && m_cloakActive)
+    {
         m_cloakActive = false;
     }
 }
@@ -904,15 +999,18 @@ void Player::UpdateCloak(float dt)
 void Player::UpdateOvershield(float dt)
 {
     // Overshield decays slowly
-    if (m_overshieldHP > 0.0f && m_primaryAbility.isActive) {
+    if (m_overshieldHP > 0.0f && m_primaryAbility.isActive)
+    {
         m_overshieldHP -= 5.0f * dt; // Slow decay
-        if (m_overshieldHP <= 0.0f) {
+        if (m_overshieldHP <= 0.0f)
+        {
             m_overshieldHP = 0.0f;
         }
     }
 
     // Overshield disappears when ability ends
-    if (!m_primaryAbility.isActive) {
+    if (!m_primaryAbility.isActive)
+    {
         m_overshieldHP = 0.0f;
     }
 }
@@ -923,14 +1021,16 @@ void Player::UpdateOvershield(float dt)
 
 bool Player::EnterVehicle(Spark::Vehicle* vehicle, int seatIndex)
 {
-    if (!vehicle || m_currentVehicle) return false; // Already in a vehicle
+    if (!vehicle || m_currentVehicle)
+        return false; // Already in a vehicle
 
-    if (vehicle->EnterSeat(this, seatIndex)) {
+    if (vehicle->EnterSeat(this, seatIndex))
+    {
         m_currentVehicle = vehicle;
         m_vehicleSeatIndex = vehicle->GetPlayerSeatIndex(this);
         LOG_TO_CONSOLE_IMMEDIATE(L"Player entered vehicle: " +
-            std::wstring(vehicle->GetVehicleName().begin(), vehicle->GetVehicleName().end()),
-            L"SUCCESS");
+                                     std::wstring(vehicle->GetVehicleName().begin(), vehicle->GetVehicleName().end()),
+                                 L"SUCCESS");
         return true;
     }
     return false;
@@ -938,13 +1038,16 @@ bool Player::EnterVehicle(Spark::Vehicle* vehicle, int seatIndex)
 
 bool Player::ExitVehicle()
 {
-    if (!m_currentVehicle) return false;
+    if (!m_currentVehicle)
+        return false;
 
     XMFLOAT3 exitPos = m_currentVehicle->GetExitPosition(m_vehicleSeatIndex);
 
-    if (m_currentVehicle->ExitSeat(this)) {
+    if (m_currentVehicle->ExitSeat(this))
+    {
         SetPosition(exitPos);
-        if (m_camera) m_camera->SetPosition(exitPos);
+        if (m_camera)
+            m_camera->SetPosition(exitPos);
         m_velocity = {0, 0, 0};
 
         LOG_TO_CONSOLE_IMMEDIATE(L"Player exited vehicle", L"SUCCESS");
@@ -963,9 +1066,12 @@ void Player::Console_SetHealth(float health)
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_health = std::max(0.0f, std::min(m_maxHealth, health));
-    if (m_health <= 0.0f) {
+    if (m_health <= 0.0f)
+    {
         SetActive(false);
-    } else if (!IsActive()) {
+    }
+    else if (!IsActive())
+    {
         SetActive(true); // Resurrect if health is restored
     }
     NotifyStateChange();
@@ -983,15 +1089,20 @@ void Player::Console_SetArmor(float armor)
 void Player::Console_SetMaxHealth(float maxHealth)
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
-    if (maxHealth > 0.0f && maxHealth <= 9999.0f) {
+    if (maxHealth > 0.0f && maxHealth <= 9999.0f)
+    {
         m_maxHealth = maxHealth;
         // Ensure current health doesn't exceed new maximum
-        if (m_health > m_maxHealth) {
+        if (m_health > m_maxHealth)
+        {
             m_health = m_maxHealth;
         }
         NotifyStateChange();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player max health set to " + std::to_wstring(m_maxHealth) + L" via console", L"SUCCESS");
-    } else {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Player max health set to " + std::to_wstring(m_maxHealth) + L" via console",
+                                 L"SUCCESS");
+    }
+    else
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Invalid max health value. Must be between 1 and 9999", L"ERROR");
     }
 }
@@ -999,11 +1110,14 @@ void Player::Console_SetMaxHealth(float maxHealth)
 void Player::Console_SetSpeed(float speed)
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
-    if (speed > 0.0f && speed <= 100.0f) {
+    if (speed > 0.0f && speed <= 100.0f)
+    {
         m_speed = speed;
         NotifyStateChange();
         LOG_TO_CONSOLE_IMMEDIATE(L"Player speed set to " + std::to_wstring(m_speed) + L" via console", L"SUCCESS");
-    } else {
+    }
+    else
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Invalid speed value. Must be between 0.1 and 100", L"ERROR");
     }
 }
@@ -1011,11 +1125,15 @@ void Player::Console_SetSpeed(float speed)
 void Player::Console_SetJumpHeight(float height)
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
-    if (height > 0.0f && height <= 50.0f) {
+    if (height > 0.0f && height <= 50.0f)
+    {
         m_jumpHeight = height;
         NotifyStateChange();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player jump height set to " + std::to_wstring(m_jumpHeight) + L" via console", L"SUCCESS");
-    } else {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Player jump height set to " + std::to_wstring(m_jumpHeight) + L" via console",
+                                 L"SUCCESS");
+    }
+    else
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Invalid jump height. Must be between 0.1 and 50", L"ERROR");
     }
 }
@@ -1023,20 +1141,22 @@ void Player::Console_SetJumpHeight(float height)
 void Player::Console_SetPosition(float x, float y, float z)
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
-    DirectX::XMFLOAT3 newPos = { x, y, z };
+    DirectX::XMFLOAT3 newPos = {x, y, z};
     SetPosition(newPos);
-    
+
     // Update camera position to match
-    if (m_camera) {
+    if (m_camera)
+    {
         m_camera->SetPosition(newPos);
     }
-    
+
     // Reset velocity on teleport
-    m_velocity = { 0.0f, 0.0f, 0.0f };
-    
+    m_velocity = {0.0f, 0.0f, 0.0f};
+
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player teleported to (" + std::to_wstring(x) + L", " + 
-                            std::to_wstring(y) + L", " + std::to_wstring(z) + L") via console", L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(L"Player teleported to (" + std::to_wstring(x) + L", " + std::to_wstring(y) + L", " +
+                                 std::to_wstring(z) + L") via console",
+                             L"SUCCESS");
 }
 
 void Player::Console_SetGodMode(bool enabled)
@@ -1044,7 +1164,8 @@ void Player::Console_SetGodMode(bool enabled)
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_godModeEnabled = enabled;
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player god mode " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console", L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(L"Player god mode " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console",
+                             L"SUCCESS");
 }
 
 void Player::Console_SetNoclip(bool enabled)
@@ -1052,7 +1173,8 @@ void Player::Console_SetNoclip(bool enabled)
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_noclipEnabled = enabled;
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player noclip " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console", L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(L"Player noclip " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console",
+                             L"SUCCESS");
 }
 
 void Player::Console_SetInfiniteAmmo(bool enabled)
@@ -1060,18 +1182,23 @@ void Player::Console_SetInfiniteAmmo(bool enabled)
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_infiniteAmmoEnabled = enabled;
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player infinite ammo " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console", L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(
+        L"Player infinite ammo " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console", L"SUCCESS");
 }
 
 void Player::Console_GiveAmmo(int amount)
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
-    if (amount > 0 && amount <= 9999) {
+    if (amount > 0 && amount <= 9999)
+    {
         m_currentAmmo = std::min(m_currentWeapon.MagazineSize, m_currentAmmo + amount);
         NotifyStateChange();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player given " + std::to_wstring(amount) + L" ammo. Current: " + 
-                                std::to_wstring(m_currentAmmo) + L" via console", L"SUCCESS");
-    } else {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Player given " + std::to_wstring(amount) + L" ammo. Current: " +
+                                     std::to_wstring(m_currentAmmo) + L" via console",
+                                 L"SUCCESS");
+    }
+    else
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Invalid ammo amount. Must be between 1 and 9999", L"ERROR");
     }
 }
@@ -1099,20 +1226,24 @@ void Player::Console_RegisterStateCallback(std::function<void(const PlayerState&
 void Player::Console_ApplyPhysicsSettings(float gravity, float friction)
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
-    if (gravity >= -100.0f && gravity <= 100.0f) {
+    if (gravity >= -100.0f && gravity <= 100.0f)
+    {
         m_gravityForce = gravity;
     }
-    if (friction >= 0.0f && friction <= 1.0f) {
+    if (friction >= 0.0f && friction <= 1.0f)
+    {
         m_frictionCoeff = friction;
     }
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player physics settings updated - Gravity: " + std::to_wstring(m_gravityForce) + 
-                            L", Friction: " + std::to_wstring(m_frictionCoeff) + L" via console", L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(L"Player physics settings updated - Gravity: " + std::to_wstring(m_gravityForce) +
+                                 L", Friction: " + std::to_wstring(m_frictionCoeff) + L" via console",
+                             L"SUCCESS");
 }
 
 void Player::NotifyStateChange()
 {
-    if (m_stateCallback) {
+    if (m_stateCallback)
+    {
         m_stateCallback(GetStateThreadSafe());
     }
 }

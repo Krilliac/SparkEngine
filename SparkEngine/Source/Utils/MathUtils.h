@@ -43,7 +43,7 @@
 
 #pragma once
 
-#include "../Core/framework.h"    // XMFLOAT3, XMMATRIX
+#include "../Core/framework.h" // XMFLOAT3, XMMATRIX
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -62,8 +62,7 @@
  */
 class MathUtils
 {
-public:
-
+  public:
     // =========================================================================
     // Constants
     // =========================================================================
@@ -188,7 +187,7 @@ public:
      *   float volume = MathUtils::Lerp(1.0f, 0.0f, elapsedTime / 2.0f);
      * @endcode
      */
-    static float    Lerp(float a, float b, float t);
+    static float Lerp(float a, float b, float t);
 
     /**
      * @brief Linear interpolation between two 3D vectors.
@@ -225,7 +224,7 @@ public:
      *   float alpha = MathUtils::SmoothStep(0.0f, 1.0f, progress);
      * @endcode
      */
-    static float    SmoothStep(float a, float b, float t);
+    static float SmoothStep(float a, float b, float t);
 
 
     // =========================================================================
@@ -242,7 +241,7 @@ public:
      * @param b  Second point in world space.
      * @return   Distance between the two points in world units.
      */
-    static float    Distance(const XMFLOAT3& a, const XMFLOAT3& b);
+    static float Distance(const XMFLOAT3& a, const XMFLOAT3& b);
 
     /**
      * @brief Compute the squared Euclidean distance between two 3D points.
@@ -264,7 +263,7 @@ public:
      *   }
      * @endcode
      */
-    static float    DistanceSquared(const XMFLOAT3& a, const XMFLOAT3& b);
+    static float DistanceSquared(const XMFLOAT3& a, const XMFLOAT3& b);
 
     /**
      * @brief Compute the unit direction vector from one point to another.
@@ -291,7 +290,7 @@ public:
      * sequences. For deterministic (reproducible) runs, manually seed via the
      * C standard library srand() before calling any Random* methods.
      */
-    static void     InitializeRandom();
+    static void InitializeRandom();
 
     /**
      * @brief Generate a random float in the range [min, max].
@@ -307,7 +306,7 @@ public:
      *   float randomAngle = MathUtils::RandomFloat(0.0f, MathUtils::TWO_PI);
      * @endcode
      */
-    static float    RandomFloat(float min = 0.0f, float max = 1.0f);
+    static float RandomFloat(float min = 0.0f, float max = 1.0f);
 
     /**
      * @brief Generate a random integer in the range [min, max].
@@ -322,7 +321,7 @@ public:
      *   int side = MathUtils::RandomInt(0, 3);  // random face of a cube
      * @endcode
      */
-    static int      RandomInt(int min, int max);
+    static int RandomInt(int min, int max);
 
     /**
      * @brief Generate a random unit direction vector.
@@ -365,7 +364,7 @@ public:
      *   health = MathUtils::Clamp(health, 0.0f, 100.0f);
      * @endcode
      */
-    static float    Clamp(float value, float min, float max);
+    static float Clamp(float value, float min, float max);
 
     /**
      * @brief Clamp an integer value to the range [min, max].
@@ -377,7 +376,7 @@ public:
      * @param max    Upper bound (inclusive).
      * @return       Clamped value in [min, max].
      */
-    static int      Clamp(int value, int min, int max);
+    static int Clamp(int value, int min, int max);
 
     /**
      * @brief Clamp each component of a 3D vector independently.
@@ -468,7 +467,7 @@ public:
      *       enemy.TakeDamage(damage);
      * @endcode
      */
-    static bool     PointInSphere(const XMFLOAT3& point, const XMFLOAT3& sphereCenter, float sphereRadius);
+    static bool PointInSphere(const XMFLOAT3& point, const XMFLOAT3& sphereCenter, float sphereRadius);
 
     /**
      * @brief Test whether a point lies inside an axis-aligned bounding box.
@@ -481,7 +480,7 @@ public:
      * @param boxMax  Maximum corner of the AABB (world space).
      * @return        `true` if the point is inside or on the box.
      */
-    static bool     PointInBox(const XMFLOAT3& point, const XMFLOAT3& boxMin, const XMFLOAT3& boxMax);
+    static bool PointInBox(const XMFLOAT3& point, const XMFLOAT3& boxMin, const XMFLOAT3& boxMax);
 
 
     // =========================================================================
@@ -539,7 +538,7 @@ public:
      *   bool inFront = facing > 0.0f;
      * @endcode
      */
-    static float    Dot(const XMFLOAT3& a, const XMFLOAT3& b);
+    static float Dot(const XMFLOAT3& a, const XMFLOAT3& b);
 
     /**
      * @brief Compute the cross product of two 3D vectors.
@@ -578,7 +577,7 @@ public:
      * @param v  Input vector.
      * @return   Length of the vector.
      */
-    static float    Length(const XMFLOAT3& v);
+    static float Length(const XMFLOAT3& v);
 
     /**
      * @brief Compute the squared length of a 3D vector.
@@ -588,7 +587,7 @@ public:
      * @param v  Input vector.
      * @return   Squared length v.x² + v.y² + v.z².
      */
-    static float    LengthSquared(const XMFLOAT3& v);
+    static float LengthSquared(const XMFLOAT3& v);
 
 
     // =========================================================================
@@ -604,7 +603,7 @@ public:
      * @param t  Normalized progress in [0, 1].
      * @return   Eased value in [0, 1].
      */
-    static float    EaseInQuad(float t);
+    static float EaseInQuad(float t);
 
     /**
      * @brief Quadratic ease-out curve.
@@ -615,7 +614,7 @@ public:
      * @param t  Normalized progress in [0, 1].
      * @return   Eased value in [0, 1].
      */
-    static float    EaseOutQuad(float t);
+    static float EaseOutQuad(float t);
 
     /**
      * @brief Quadratic ease-in-out curve.
@@ -626,7 +625,7 @@ public:
      * @param t  Normalized progress in [0, 1].
      * @return   Eased value in [0, 1].
      */
-    static float    EaseInOutQuad(float t);
+    static float EaseInOutQuad(float t);
 
     /**
      * @brief Cubic ease-in curve.
@@ -637,7 +636,7 @@ public:
      * @param t  Normalized progress in [0, 1].
      * @return   Eased value in [0, 1].
      */
-    static float    EaseInCubic(float t);
+    static float EaseInCubic(float t);
 
     /**
      * @brief Cubic ease-out curve.
@@ -648,7 +647,7 @@ public:
      * @param t  Normalized progress in [0, 1].
      * @return   Eased value in [0, 1].
      */
-    static float    EaseOutCubic(float t);
+    static float EaseOutCubic(float t);
 
     /**
      * @brief Cubic ease-in-out curve.
@@ -659,5 +658,5 @@ public:
      * @param t  Normalized progress in [0, 1].
      * @return   Eased value in [0, 1].
      */
-    static float    EaseInOutCubic(float t);
+    static float EaseInOutCubic(float t);
 };

@@ -51,16 +51,14 @@ using DirectX::XMMATRIX;
  */
 class SphereObject : public GameObject
 {
-public:
+  public:
     /**
      * @brief Construct a sphere with the given radius and tessellation
      * @param radius Radius of the sphere in world units (default: 1.0f)
      * @param slices Number of vertical slices / longitude divisions (default: 20)
      * @param stacks Number of horizontal stacks / latitude divisions (default: 20)
      */
-    SphereObject(float radius = 1.0f,
-        int slices = 20,
-        int stacks = 20);
+    SphereObject(float radius = 1.0f, int slices = 20, int stacks = 20);
 
     /** @brief Default virtual destructor */
     ~SphereObject() override = default;
@@ -75,8 +73,7 @@ public:
      * @param context DirectX 11 device context for rendering commands
      * @return S_OK on success, or an error HRESULT on failure
      */
-    HRESULT Initialize(ID3D11Device* device,
-        ID3D11DeviceContext* context) override;
+    HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* context) override;
 
     /**
      * @brief Per-frame update — delegates to GameObject::Update
@@ -89,11 +86,7 @@ public:
      * @param v Camera view matrix
      * @param p Camera projection matrix
      */
-    void Render(const XMMATRIX& v,
-        const XMMATRIX& p) override
-    {
-        GameObject::Render(v, p);
-    }
+    void Render(const XMMATRIX& v, const XMMATRIX& p) override { GameObject::Render(v, p); }
 
     /**
      * @brief Collision callback when hit by another game object (no-op)
@@ -108,7 +101,7 @@ public:
      */
     void OnHitWorld(const XMFLOAT3&, const XMFLOAT3&) override {}
 
-protected:
+  protected:
     /**
      * @brief Create or load the sphere mesh geometry
      *
@@ -117,9 +110,9 @@ protected:
      */
     void CreateMesh() override;
 
-private:
-    float         m_radius;                                     ///< Sphere radius in world units
-    int           m_slices;                                     ///< Number of longitude divisions (vertical slices)
-    int           m_stacks;                                     ///< Number of latitude divisions (horizontal stacks)
-    std::wstring  m_modelPath{ L"Assets/Models/Sphere.obj" };   ///< Path to the sphere OBJ model on disk
+  private:
+    float m_radius;                                        ///< Sphere radius in world units
+    int m_slices;                                          ///< Number of longitude divisions (vertical slices)
+    int m_stacks;                                          ///< Number of latitude divisions (horizontal stacks)
+    std::wstring m_modelPath{L"Assets/Models/Sphere.obj"}; ///< Path to the sphere OBJ model on disk
 };

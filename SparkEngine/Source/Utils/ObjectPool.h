@@ -85,10 +85,9 @@
  *
  * @tparam T  Type of the pooled objects.
  */
-template<typename T>
-class ObjectPool
+template <typename T> class ObjectPool
 {
-private:
+  private:
     /**
      * @brief Storage for all objects owned by this pool.
      *
@@ -96,7 +95,7 @@ private:
      * itself is destroyed. The vector is reserved to `maxSize` at construction to
      * avoid re-allocations.
      */
-    std::vector<std::unique_ptr<T>>        m_objects;
+    std::vector<std::unique_ptr<T>> m_objects;
 
     /**
      * @brief Queue of raw pointers to objects currently available for acquisition.
@@ -106,7 +105,7 @@ private:
      * re-acquired, giving any external state (e.g. particle rendering) time to
      * finish processing before the slot is reused.
      */
-    std::queue<T*>                         m_available;
+    std::queue<T*> m_available;
 
     /**
      * @brief Optional factory function used to create new objects on demand.
@@ -115,7 +114,7 @@ private:
      * reached `maxSize` and Acquire() is called on an empty available queue.
      * If null, Acquire() returns nullptr when the pool is exhausted.
      */
-    std::function<std::unique_ptr<T>()>    m_factory;
+    std::function<std::unique_ptr<T>()> m_factory;
 
     /**
      * @brief Maximum number of objects this pool will ever hold.
@@ -123,9 +122,9 @@ private:
      * Once `m_objects.size() == m_maxSize` no new objects are created; subsequent
      * Acquire() calls on an empty queue return nullptr.
      */
-    size_t                                 m_maxSize;
+    size_t m_maxSize;
 
-public:
+  public:
     /**
      * @brief Construct an empty pool with a given capacity.
      *
@@ -140,8 +139,7 @@ public:
      *   pool.PreAllocate(500, []() { return std::make_unique<Particle>(); });
      * @endcode
      */
-    explicit ObjectPool(size_t maxSize = 100)
-        : m_maxSize(maxSize)
+    explicit ObjectPool(size_t maxSize = 100) : m_maxSize(maxSize)
     {
         ASSERT_MSG(maxSize > 0, "ObjectPool maxSize must be positive");
         m_objects.reserve(maxSize);
@@ -167,9 +165,7 @@ public:
      *   // All 200 Bullet instances now exist and are available for Acquire().
      * @endcode
      */
-    ObjectPool(size_t maxSize, std::function<std::unique_ptr<T>()> factory)
-        : m_maxSize(maxSize)
-        , m_factory(factory)
+    ObjectPool(size_t maxSize, std::function<std::unique_ptr<T>()> factory) : m_maxSize(maxSize), m_factory(factory)
     {
         ASSERT_MSG(maxSize > 0, "ObjectPool maxSize must be positive");
         ASSERT_MSG(factory != nullptr, "ObjectPool factory must not be null");
@@ -264,7 +260,8 @@ public:
      */
     void Release(T* obj)
     {
-        if (!obj) return;
+        if (!obj)
+            return;
         // Reset object if it supports Reset()
         if constexpr (requires { obj->Reset(); })
         {
@@ -285,7 +282,7 @@ public:
      *
      * @return  Total object count (created so far), including those currently in use.
      */
-    size_t GetTotalSize()      const { return m_objects.size(); }
+    size_t GetTotalSize() const { return m_objects.size(); }
 
     /**
      * @brief Return the number of objects currently available for Acquire().
@@ -305,7 +302,7 @@ public:
      *
      * @return  Number of objects currently held by callers.
      */
-    size_t GetUsedCount()      const { return m_objects.size() - m_available.size(); }
+    size_t GetUsedCount() const { return m_objects.size() - m_available.size(); }
 
     /**
      * @brief Return the maximum capacity of the pool.
@@ -315,7 +312,7 @@ public:
      *
      * @return  Maximum number of objects the pool can hold.
      */
-    size_t GetMaxSize()        const { return m_maxSize; }
+    size_t GetMaxSize() const { return m_maxSize; }
 
     // =========================================================================
     // Lifetime management
@@ -406,5 +403,5 @@ public:
      * @brief Const end iterator for read-only traversal of all owned objects.
      * @return  Const end iterator into the internal `unique_ptr` vector.
      */
-    auto end()   const { return m_objects.end(); }
+    auto end() const { return m_objects.end(); }
 };

@@ -31,11 +31,11 @@ using Microsoft::WRL::ComPtr;
  */
 enum class LightType
 {
-    Directional,    ///< Directional light (sun)
-    Point,          ///< Point light (bulb)
-    Spot,           ///< Spot light (flashlight)
-    Area,           ///< Area light (panel)
-    Environment     ///< Environment/IBL light
+    Directional, ///< Directional light (sun)
+    Point,       ///< Point light (bulb)
+    Spot,        ///< Spot light (flashlight)
+    Area,        ///< Area light (panel)
+    Environment  ///< Environment/IBL light
 };
 
 /**
@@ -43,12 +43,12 @@ enum class LightType
  */
 enum class ShadowTechnique
 {
-    None,           ///< No shadows
-    Basic,          ///< Basic shadow mapping
-    PCF,            ///< Percentage Closer Filtering
-    VSM,            ///< Variance Shadow Maps
-    CSM,            ///< Cascaded Shadow Maps
-    PCSS            ///< Percentage Closer Soft Shadows
+    None,  ///< No shadows
+    Basic, ///< Basic shadow mapping
+    PCF,   ///< Percentage Closer Filtering
+    VSM,   ///< Variance Shadow Maps
+    CSM,   ///< Cascaded Shadow Maps
+    PCSS   ///< Percentage Closer Soft Shadows
 };
 
 /**
@@ -56,13 +56,13 @@ enum class ShadowTechnique
  */
 struct LightData
 {
-    XMFLOAT4 position;           ///< Light position (w = light type)
-    XMFLOAT4 direction;          ///< Light direction (w = spot angle)
-    XMFLOAT4 color;              ///< Light color (w = intensity)
-    XMFLOAT4 attenuation;        ///< Attenuation factors (constant, linear, quadratic, range)
-    XMFLOAT4 shadowParams;       ///< Shadow parameters (enabled, bias, normal bias, split)
-    XMMATRIX lightMatrix;        ///< Light space transformation matrix
-    XMMATRIX shadowMatrix;       ///< Shadow projection matrix
+    XMFLOAT4 position;     ///< Light position (w = light type)
+    XMFLOAT4 direction;    ///< Light direction (w = spot angle)
+    XMFLOAT4 color;        ///< Light color (w = intensity)
+    XMFLOAT4 attenuation;  ///< Attenuation factors (constant, linear, quadratic, range)
+    XMFLOAT4 shadowParams; ///< Shadow parameters (enabled, bias, normal bias, split)
+    XMMATRIX lightMatrix;  ///< Light space transformation matrix
+    XMMATRIX shadowMatrix; ///< Shadow projection matrix
 };
 
 /**
@@ -70,103 +70,115 @@ struct LightData
  */
 class Light
 {
-public:
+  public:
     Light(LightType type = LightType::Directional);
     ~Light() = default;
 
     // Type and basic properties
     LightType GetType() const { return m_type; }
     void SetType(LightType type) { m_type = type; }
-    
+
     // Transform
     const XMFLOAT3& GetPosition() const { return m_position; }
-    void SetPosition(const XMFLOAT3& position) { m_position = position; m_dirty = true; }
-    
+    void SetPosition(const XMFLOAT3& position)
+    {
+        m_position = position;
+        m_dirty = true;
+    }
+
     const XMFLOAT3& GetDirection() const { return m_direction; }
-    void SetDirection(const XMFLOAT3& direction) { m_direction = direction; m_dirty = true; }
-    
+    void SetDirection(const XMFLOAT3& direction)
+    {
+        m_direction = direction;
+        m_dirty = true;
+    }
+
     const XMFLOAT3& GetRotation() const { return m_rotation; }
-    void SetRotation(const XMFLOAT3& rotation) { m_rotation = rotation; m_dirty = true; }
-    
+    void SetRotation(const XMFLOAT3& rotation)
+    {
+        m_rotation = rotation;
+        m_dirty = true;
+    }
+
     // Color and intensity
     const XMFLOAT3& GetColor() const { return m_color; }
     void SetColor(const XMFLOAT3& color) { m_color = color; }
-    
+
     float GetIntensity() const { return m_intensity; }
     void SetIntensity(float intensity) { m_intensity = intensity; }
-    
+
     // Attenuation (for point/spot lights)
     float GetRange() const { return m_range; }
     void SetRange(float range) { m_range = range; }
-    
+
     const XMFLOAT3& GetAttenuation() const { return m_attenuation; }
     void SetAttenuation(const XMFLOAT3& attenuation) { m_attenuation = attenuation; }
-    
+
     // Spot light specific
     float GetSpotAngle() const { return m_spotAngle; }
     void SetSpotAngle(float angle) { m_spotAngle = angle; }
-    
+
     float GetSpotExponent() const { return m_spotExponent; }
     void SetSpotExponent(float exponent) { m_spotExponent = exponent; }
-    
+
     // Shadow settings
     bool GetCastShadows() const { return m_castShadows; }
     void SetCastShadows(bool cast) { m_castShadows = cast; }
-    
+
     ShadowTechnique GetShadowTechnique() const { return m_shadowTechnique; }
     void SetShadowTechnique(ShadowTechnique technique) { m_shadowTechnique = technique; }
-    
+
     float GetShadowBias() const { return m_shadowBias; }
     void SetShadowBias(float bias) { m_shadowBias = bias; }
-    
+
     uint32_t GetShadowMapSize() const { return m_shadowMapSize; }
     void SetShadowMapSize(uint32_t size) { m_shadowMapSize = size; }
-    
+
     // State
     bool IsEnabled() const { return m_enabled; }
     void SetEnabled(bool enabled) { m_enabled = enabled; }
-    
+
     bool IsDirty() const { return m_dirty; }
     void SetClean() { m_dirty = false; }
-    
+
     // Matrix calculations
     XMMATRIX GetLightMatrix() const;
     XMMATRIX GetShadowMatrix() const;
-    
+
     // Shader data generation
     LightData GetShaderData() const;
-    
+
     // Console integration
     std::string GetInfo() const;
     void Console_SetProperty(const std::string& property, float value);
     void Console_SetColor(float r, float g, float b);
 
-private:
+  private:
     LightType m_type;
-    
+
     // Transform
     XMFLOAT3 m_position = {0, 0, 0};
     XMFLOAT3 m_direction = {0, -1, 0};
     XMFLOAT3 m_rotation = {0, 0, 0};
-    
+
     // Color and intensity
     XMFLOAT3 m_color = {1, 1, 1};
     float m_intensity = 1.0f;
-    
+
     // Attenuation
     float m_range = 10.0f;
     XMFLOAT3 m_attenuation = {1.0f, 0.09f, 0.032f}; // constant, linear, quadratic
-    
+
     // Spot light
     float m_spotAngle = 45.0f;
     float m_spotExponent = 1.0f;
-    
+
     // Shadow settings
     bool m_castShadows = true;
     ShadowTechnique m_shadowTechnique = ShadowTechnique::PCF;
     float m_shadowBias = 0.005f;
     uint32_t m_shadowMapSize = 1024;
-    
+
     // State
     bool m_enabled = true;
     bool m_dirty = true;
@@ -178,27 +190,27 @@ private:
 struct EnvironmentLighting
 {
     // Image-based lighting
-    ComPtr<ID3D11ShaderResourceView> environmentMap;    ///< HDR environment map
-    ComPtr<ID3D11ShaderResourceView> irradianceMap;     ///< Precomputed irradiance map
-    ComPtr<ID3D11ShaderResourceView> prefilterMap;      ///< Prefiltered environment map
-    ComPtr<ID3D11ShaderResourceView> brdfLUT;           ///< BRDF integration LUT
-    
+    ComPtr<ID3D11ShaderResourceView> environmentMap; ///< HDR environment map
+    ComPtr<ID3D11ShaderResourceView> irradianceMap;  ///< Precomputed irradiance map
+    ComPtr<ID3D11ShaderResourceView> prefilterMap;   ///< Prefiltered environment map
+    ComPtr<ID3D11ShaderResourceView> brdfLUT;        ///< BRDF integration LUT
+
     // Sky settings
-    XMFLOAT3 skyColor = {0.5f, 0.7f, 1.0f};           ///< Sky color
-    float skyIntensity = 1.0f;                          ///< Sky intensity
-    float skyTurbidity = 2.0f;                          ///< Atmospheric turbidity
-    
+    XMFLOAT3 skyColor = {0.5f, 0.7f, 1.0f}; ///< Sky color
+    float skyIntensity = 1.0f;              ///< Sky intensity
+    float skyTurbidity = 2.0f;              ///< Atmospheric turbidity
+
     // Sun settings (for procedural sky)
-    XMFLOAT3 sunDirection = {0.5f, 0.5f, 0.5f};       ///< Sun direction
-    float sunSize = 0.04f;                              ///< Sun angular size
-    float sunIntensity = 5.0f;                          ///< Sun intensity
-    
+    XMFLOAT3 sunDirection = {0.5f, 0.5f, 0.5f}; ///< Sun direction
+    float sunSize = 0.04f;                      ///< Sun angular size
+    float sunIntensity = 5.0f;                  ///< Sun intensity
+
     // Fog settings
-    bool fogEnabled = false;                            ///< Enable volumetric fog
-    XMFLOAT3 fogColor = {0.5f, 0.6f, 0.7f};           ///< Fog color
-    float fogDensity = 0.01f;                          ///< Fog density
-    float fogStart = 10.0f;                            ///< Fog start distance
-    float fogEnd = 100.0f;                             ///< Fog end distance
+    bool fogEnabled = false;                ///< Enable volumetric fog
+    XMFLOAT3 fogColor = {0.5f, 0.6f, 0.7f}; ///< Fog color
+    float fogDensity = 0.01f;               ///< Fog density
+    float fogStart = 10.0f;                 ///< Fog start distance
+    float fogEnd = 100.0f;                  ///< Fog end distance
 };
 
 /**
@@ -206,12 +218,12 @@ struct EnvironmentLighting
  */
 struct ShadowMap
 {
-    ComPtr<ID3D11Texture2D> texture;                   ///< Shadow map texture
-    ComPtr<ID3D11DepthStencilView> dsv;                ///< Depth stencil view
-    ComPtr<ID3D11ShaderResourceView> srv;              ///< Shader resource view
-    uint32_t size = 0;                                    ///< Shadow map size
-    XMMATRIX lightMatrix;                              ///< Light projection matrix
-    XMMATRIX shadowMatrix;                             ///< Shadow transformation matrix
+    ComPtr<ID3D11Texture2D> texture;      ///< Shadow map texture
+    ComPtr<ID3D11DepthStencilView> dsv;   ///< Depth stencil view
+    ComPtr<ID3D11ShaderResourceView> srv; ///< Shader resource view
+    uint32_t size = 0;                    ///< Shadow map size
+    XMMATRIX lightMatrix;                 ///< Light projection matrix
+    XMMATRIX shadowMatrix;                ///< Shadow transformation matrix
 };
 
 /**
@@ -220,12 +232,12 @@ struct ShadowMap
 struct CascadedShadowMap
 {
     static const int MAX_CASCADES = 4;
-    
-    std::vector<ShadowMap> cascades;                   ///< Shadow map cascades
-    std::vector<float> splitDistances;                 ///< Cascade split distances
-    std::vector<XMMATRIX> lightMatrices;              ///< Light matrices for each cascade
-    uint32_t cascadeCount = 3;                         ///< Number of cascades
-    float splitLambda = 0.5f;                         ///< Cascade split interpolation factor
+
+    std::vector<ShadowMap> cascades;     ///< Shadow map cascades
+    std::vector<float> splitDistances;   ///< Cascade split distances
+    std::vector<XMMATRIX> lightMatrices; ///< Light matrices for each cascade
+    uint32_t cascadeCount = 3;           ///< Number of cascades
+    float splitLambda = 0.5f;            ///< Cascade split interpolation factor
 };
 
 /**
@@ -233,20 +245,20 @@ struct CascadedShadowMap
  */
 class LightingSystem
 {
-public:
+  public:
     /**
      * @brief Lighting system metrics
      */
     struct LightingMetrics
     {
-        uint32_t activeLights = 0;                     ///< Number of active lights
-        uint32_t shadowCastingLights = 0;              ///< Number of shadow casting lights
-        uint32_t shadowMapUpdates = 0;                 ///< Shadow map updates per frame
-        float shadowMapMemory = 0.0f;                  ///< Shadow map memory usage (MB)
-        float lightCullingTime = 0.0f;                 ///< Light culling time (ms)
-        float shadowRenderTime = 0.0f;                 ///< Shadow rendering time (ms)
-        uint32_t visibleLights = 0;                    ///< Lights visible to camera
-        uint32_t culledLights = 0;                     ///< Lights culled this frame
+        uint32_t activeLights = 0;        ///< Number of active lights
+        uint32_t shadowCastingLights = 0; ///< Number of shadow casting lights
+        uint32_t shadowMapUpdates = 0;    ///< Shadow map updates per frame
+        float shadowMapMemory = 0.0f;     ///< Shadow map memory usage (MB)
+        float lightCullingTime = 0.0f;    ///< Light culling time (ms)
+        float shadowRenderTime = 0.0f;    ///< Shadow rendering time (ms)
+        uint32_t visibleLights = 0;       ///< Lights visible to camera
+        uint32_t culledLights = 0;        ///< Lights culled this frame
     };
 
     LightingSystem();
@@ -368,7 +380,7 @@ public:
      */
     void Console_ReloadIBL();
 
-private:
+  private:
     ID3D11Device* m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
 

@@ -10,7 +10,8 @@ using namespace DirectX;
 // Tests
 // =============================================================================
 
-TEST(LightManager_Initialize) {
+TEST(LightManager_Initialize)
+{
     LightManager mgr;
     EXPECT_TRUE(mgr.Initialize(1920, 1080, 16));
     EXPECT_EQ(mgr.GetTilesX(), 120);
@@ -18,12 +19,14 @@ TEST(LightManager_Initialize) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_SubmitLight) {
+TEST(LightManager_SubmitLight)
+{
     LightManager mgr;
     mgr.Initialize(800, 600, 16);
 
     XMFLOAT4X4 identity = {};
-    for (int i = 0; i < 4; ++i) identity.m[i][i] = 1.0f;
+    for (int i = 0; i < 4; ++i)
+        identity.m[i][i] = 1.0f;
     mgr.BeginFrame(identity);
 
     RuntimeLight light;
@@ -40,12 +43,14 @@ TEST(LightManager_SubmitLight) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_DisabledLightNotSubmitted) {
+TEST(LightManager_DisabledLightNotSubmitted)
+{
     LightManager mgr;
     mgr.Initialize();
 
     XMFLOAT4X4 identity = {};
-    for (int i = 0; i < 4; ++i) identity.m[i][i] = 1.0f;
+    for (int i = 0; i < 4; ++i)
+        identity.m[i][i] = 1.0f;
     mgr.BeginFrame(identity);
 
     RuntimeLight light;
@@ -56,13 +61,15 @@ TEST(LightManager_DisabledLightNotSubmitted) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_CullAndBin) {
+TEST(LightManager_CullAndBin)
+{
     LightManager mgr;
     mgr.Initialize(800, 600, 16);
 
     // Use identity as view-proj (simple case)
     XMFLOAT4X4 identity = {};
-    for (int i = 0; i < 4; ++i) identity.m[i][i] = 1.0f;
+    for (int i = 0; i < 4; ++i)
+        identity.m[i][i] = 1.0f;
     mgr.BeginFrame(identity);
 
     RuntimeLight dirLight;
@@ -88,12 +95,14 @@ TEST(LightManager_CullAndBin) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_GetVisibleLights) {
+TEST(LightManager_GetVisibleLights)
+{
     LightManager mgr;
     mgr.Initialize(800, 600, 16);
 
     XMFLOAT4X4 identity = {};
-    for (int i = 0; i < 4; ++i) identity.m[i][i] = 1.0f;
+    for (int i = 0; i < 4; ++i)
+        identity.m[i][i] = 1.0f;
     mgr.BeginFrame(identity);
 
     RuntimeLight light;
@@ -110,12 +119,14 @@ TEST(LightManager_GetVisibleLights) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_ShadowCasters) {
+TEST(LightManager_ShadowCasters)
+{
     LightManager mgr;
     mgr.Initialize(800, 600, 16);
 
     XMFLOAT4X4 identity = {};
-    for (int i = 0; i < 4; ++i) identity.m[i][i] = 1.0f;
+    for (int i = 0; i < 4; ++i)
+        identity.m[i][i] = 1.0f;
     mgr.BeginFrame(identity);
 
     RuntimeLight light;
@@ -140,7 +151,8 @@ TEST(LightManager_ShadowCasters) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_ShadowAtlasAllocation) {
+TEST(LightManager_ShadowAtlasAllocation)
+{
     LightManager mgr;
     mgr.Initialize();
 
@@ -159,7 +171,8 @@ TEST(LightManager_ShadowAtlasAllocation) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_ShadowAtlasFree) {
+TEST(LightManager_ShadowAtlasFree)
+{
     LightManager mgr;
     mgr.Initialize();
 
@@ -175,7 +188,8 @@ TEST(LightManager_ShadowAtlasFree) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_Resize) {
+TEST(LightManager_Resize)
+{
     LightManager mgr;
     mgr.Initialize(1920, 1080, 16);
     EXPECT_EQ(mgr.GetTilesX(), 120);
@@ -188,12 +202,14 @@ TEST(LightManager_Resize) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_TileLightList) {
+TEST(LightManager_TileLightList)
+{
     LightManager mgr;
     mgr.Initialize(320, 240, 16);
 
     XMFLOAT4X4 identity = {};
-    for (int i = 0; i < 4; ++i) identity.m[i][i] = 1.0f;
+    for (int i = 0; i < 4; ++i)
+        identity.m[i][i] = 1.0f;
     mgr.BeginFrame(identity);
 
     RuntimeLight dirLight;
@@ -211,7 +227,8 @@ TEST(LightManager_TileLightList) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_ConsoleStatus) {
+TEST(LightManager_ConsoleStatus)
+{
     LightManager mgr;
     mgr.Initialize(800, 600, 16);
     std::string status = mgr.Console_GetStatus();
@@ -219,12 +236,14 @@ TEST(LightManager_ConsoleStatus) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_BeginFrameClears) {
+TEST(LightManager_BeginFrameClears)
+{
     LightManager mgr;
     mgr.Initialize(800, 600, 16);
 
     XMFLOAT4X4 identity = {};
-    for (int i = 0; i < 4; ++i) identity.m[i][i] = 1.0f;
+    for (int i = 0; i < 4; ++i)
+        identity.m[i][i] = 1.0f;
 
     mgr.BeginFrame(identity);
     RuntimeLight light;
@@ -240,7 +259,8 @@ TEST(LightManager_BeginFrameClears) {
     mgr.Shutdown();
 }
 
-TEST(LightManager_FrustumTestSphere) {
+TEST(LightManager_FrustumTestSphere)
+{
     // Test the ViewFrustum directly
     ViewFrustum f;
     // Simple frustum: just one plane facing +Z at distance 10

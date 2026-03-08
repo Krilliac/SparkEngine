@@ -49,7 +49,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #include <vector>
 #include <memory>
 #include <functional>
-#include <cfloat>  // ✅ ADD: For FLT_MAX
+#include <cfloat> // ✅ ADD: For FLT_MAX
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -62,19 +62,10 @@ using Microsoft::WRL::ComPtr;
 // ============================================================================
 
 GraphicsEngine::GraphicsEngine()
-    : m_windowWidth(1280)
-    , m_windowHeight(720)
-    , m_width(1280)
-    , m_height(720)
-    , m_fullscreen(false)
-    , m_hwnd(nullptr)
-    , m_textureMemoryUsage(0)
-    , m_bufferMemoryUsage(0)
-    , m_frameInProgress(false)
-    , m_currentPipeline(RenderingPipeline::Forward)
-    , m_hdrEnabled(false)
-    , m_msaaLevel(MSAALevel::None)
-    , m_physicsSystem()
+    : m_windowWidth(1280), m_windowHeight(720), m_width(1280), m_height(720), m_fullscreen(false), m_hwnd(nullptr),
+      m_textureMemoryUsage(0), m_bufferMemoryUsage(0), m_frameInProgress(false),
+      m_currentPipeline(RenderingPipeline::Forward), m_hdrEnabled(false), m_msaaLevel(MSAALevel::None),
+      m_physicsSystem()
 {
     // Initialize unified settings to defaults
     m_settings.vsync = true;
@@ -108,7 +99,8 @@ GraphicsEngine::GraphicsEngine()
     m_statistics = {};
 
     // Create advanced systems
-    try {
+    try
+    {
         m_textureSystem = std::make_unique<TextureSystem>();
         m_materialSystem = std::make_unique<MaterialSystem>();
         m_lightingSystem = std::make_unique<LightingSystem>();
@@ -116,18 +108,21 @@ GraphicsEngine::GraphicsEngine()
         m_assetPipeline = std::make_unique<AssetPipeline>();
         // PhysicsSystem is now created and owned by SparkEngine.cpp / EngineContext
         // m_physicsSystem is set via SetPhysicsSystem() after engine init
-        
+
         // Create legacy systems for compatibility
         m_lightManager = std::make_unique<LightManager>();
         m_postProcessing = std::make_unique<PostProcessingPipeline>();
         m_temporalEffects = std::make_unique<TemporalEffects>();
-        
+
         LOG_TO_CONSOLE_IMMEDIATE(L"Advanced systems created successfully", L"INFO");
-    } catch (const std::exception&) {
+    }
+    catch (const std::exception&)
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Some advanced systems failed to create", L"WARNING");
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine constructed with unified architecture and atomic frame management.", L"INFO");
+    LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine constructed with unified architecture and atomic frame management.",
+                             L"INFO");
 }
 
 GraphicsEngine::~GraphicsEngine()
@@ -144,21 +139,24 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::Initialize started with critical fixes.", L"INFO");
     ASSERT(hWnd != nullptr);
-    if (!hWnd) {
+    if (!hWnd)
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Error: hWnd is null in GraphicsEngine::Initialize", L"ERROR");
         return E_INVALIDARG;
     }
 
-    HWND hwnd = static_cast<HWND>(hWnd);  // Cast to platform type for Win32 APIs
+    HWND hwnd = static_cast<HWND>(hWnd); // Cast to platform type for Win32 APIs
     RECT rc;
     // Defensive: Only call GetClientRect if hWnd is valid
-    if (hwnd) {
+    if (hwnd)
+    {
         GetClientRect(hwnd, &rc);
     }
-    else {
+    else
+    {
         // Should never reach here due to earlier check, but avoid C6387 warning
         rc.left = rc.top = rc.right = rc.bottom = 0;
-		LOG_TO_CONSOLE_IMMEDIATE(L"Error: Invalid window handle in GraphicsEngine::Initialize", L"ERROR");
+        LOG_TO_CONSOLE_IMMEDIATE(L"Error: Invalid window handle in GraphicsEngine::Initialize", L"ERROR");
     }
     m_windowWidth = rc.right - rc.left;
     m_windowHeight = rc.bottom - rc.top;
@@ -169,7 +167,8 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
     HRESULT hr = CreateDeviceAndSwapChain(hwnd);
     ASSERT_MSG(SUCCEEDED(hr), "CreateDeviceAndSwapChain failed");
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         std::wstring errorMsg = L"CreateDeviceAndSwapChain failed with HR=0x" + std::to_wstring(hr);
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
         return hr;
@@ -177,7 +176,8 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
     hr = CreateRenderTargetView();
     ASSERT_MSG(SUCCEEDED(hr), "CreateRenderTargetView failed");
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         std::wstring errorMsg = L"CreateRenderTargetView failed with HR=0x" + std::to_wstring(hr);
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
         return hr;
@@ -185,7 +185,8 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
     hr = CreateDepthStencilView();
     ASSERT_MSG(SUCCEEDED(hr), "CreateDepthStencilView failed");
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         std::wstring errorMsg = L"CreateDepthStencilView failed with HR=0x" + std::to_wstring(hr);
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
         return hr;
@@ -206,15 +207,18 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
     hr = m_device->CreateRasterizerState(&rastDesc, &m_solidRasterState);
     ASSERT_MSG(SUCCEEDED(hr), "CreateRasterizerState (solid) failed");
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr))
+        return hr;
 
     rastDesc.FillMode = D3D11_FILL_WIREFRAME;
     hr = m_device->CreateRasterizerState(&rastDesc, &m_wireframeRasterState);
     ASSERT_MSG(SUCCEEDED(hr), "CreateRasterizerState (wireframe) failed");
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr))
+        return hr;
 
     // Create GPU timing query if supported
-    if (m_settings.enableGPUTiming) {
+    if (m_settings.enableGPUTiming)
+    {
         D3D11_QUERY_DESC queryDesc = {};
         queryDesc.Query = D3D11_QUERY_TIMESTAMP;
         m_device->CreateQuery(&queryDesc, &m_gpuTimingQuery);
@@ -222,12 +226,14 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
     // Create advanced render targets and states
     hr = CreateAdvancedRenderTargets();
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to create advanced render targets", L"WARNING");
     }
 
     hr = CreateRenderStates();
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to create render states", L"WARNING");
     }
 
@@ -236,71 +242,98 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     ApplyAdvancedGraphicsState();
 
     // Initialize advanced systems
-    if (m_textureSystem) {
+    if (m_textureSystem)
+    {
         hr = m_textureSystem->Initialize(m_device.Get(), m_context.Get());
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize TextureSystem", L"ERROR");
-        } else {
+        }
+        else
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"TextureSystem initialized successfully", L"SUCCESS");
         }
     }
 
-    if (m_materialSystem) {
+    if (m_materialSystem)
+    {
         hr = m_materialSystem->Initialize(m_device.Get(), m_context.Get());
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize MaterialSystem", L"ERROR");
-        } else {
+        }
+        else
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"MaterialSystem initialized successfully", L"SUCCESS");
         }
     }
 
-    if (m_lightingSystem) {
+    if (m_lightingSystem)
+    {
         hr = m_lightingSystem->Initialize(m_device.Get(), m_context.Get());
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize LightingSystem", L"ERROR");
-        } else {
+        }
+        else
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"LightingSystem initialized successfully", L"SUCCESS");
         }
     }
 
-    if (m_postProcessingSystem) {
+    if (m_postProcessingSystem)
+    {
         hr = m_postProcessingSystem->Initialize(m_device.Get(), m_context.Get());
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize PostProcessingSystem", L"ERROR");
-        } else {
+        }
+        else
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"PostProcessingSystem initialized successfully", L"SUCCESS");
         }
     }
 
-    if (m_assetPipeline) {
+    if (m_assetPipeline)
+    {
         hr = m_assetPipeline->Initialize(m_device.Get(), m_context.Get());
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize AssetPipeline", L"ERROR");
-        } else {
+        }
+        else
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"AssetPipeline initialized successfully", L"SUCCESS");
         }
     }
 
-    if (m_physicsSystem) {
+    if (m_physicsSystem)
+    {
         hr = m_physicsSystem->Initialize();
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize PhysicsSystem", L"ERROR");
-        } else {
+        }
+        else
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"PhysicsSystem initialized successfully", L"SUCCESS");
         }
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine initialization complete - rendering ready.", L"SUCCESS");
-    
+
     // ✅ ADD: Initialize basic shaders for rendering
     HRESULT shaderResult = InitializeBasicShaders();
-    if (FAILED(shaderResult)) {
+    if (FAILED(shaderResult))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to initialize basic shaders", L"WARNING");
-    } else {
+    }
+    else
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Basic shaders initialized successfully", L"SUCCESS");
     }
-    
-    return S_OK;  // ✅ FIXED: Missing return statement
+
+    return S_OK; // ✅ FIXED: Missing return statement
 }
 
 void GraphicsEngine::Shutdown()
@@ -308,27 +341,32 @@ void GraphicsEngine::Shutdown()
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::Shutdown called.", L"INFO");
 
     // Shutdown advanced systems
-    if (m_textureSystem) {
+    if (m_textureSystem)
+    {
         m_textureSystem->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"TextureSystem shutdown complete", L"INFO");
     }
 
-    if (m_materialSystem) {
+    if (m_materialSystem)
+    {
         m_materialSystem->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"MaterialSystem shutdown complete", L"INFO");
     }
 
-    if (m_lightingSystem) {
+    if (m_lightingSystem)
+    {
         m_lightingSystem->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"LightingSystem shutdown complete", L"INFO");
     }
 
-    if (m_postProcessingSystem) {
+    if (m_postProcessingSystem)
+    {
         m_postProcessingSystem->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"PostProcessingSystem shutdown complete", L"INFO");
     }
 
-    if (m_assetPipeline) {
+    if (m_assetPipeline)
+    {
         m_assetPipeline->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"AssetPipeline shutdown complete", L"INFO");
     }
@@ -337,17 +375,20 @@ void GraphicsEngine::Shutdown()
     m_physicsSystem = nullptr;
 
     // Shutdown legacy systems
-    if (m_lightManager) {
+    if (m_lightManager)
+    {
         m_lightManager->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"LightManager shutdown complete", L"INFO");
     }
 
-    if (m_postProcessing) {
+    if (m_postProcessing)
+    {
         m_postProcessing->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"PostProcessingPipeline shutdown complete", L"INFO");
     }
 
-    if (m_temporalEffects) {
+    if (m_temporalEffects)
+    {
         m_temporalEffects->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"TemporalEffects shutdown complete", L"INFO");
     }
@@ -356,13 +397,14 @@ void GraphicsEngine::Shutdown()
     m_hdrSRV.Reset();
     m_hdrRTV.Reset();
     m_hdrTexture.Reset();
-    
-    for (int i = 0; i < 4; i++) {
+
+    for (int i = 0; i < 4; i++)
+    {
         m_gBufferSRVs[i].Reset();
         m_gBufferRTVs[i].Reset();
         m_gBufferTextures[i].Reset();
     }
-    
+
     m_defaultBlendState.Reset();
     m_defaultDepthState.Reset();
     m_gpuTimingQuery.Reset();
@@ -384,16 +426,19 @@ void GraphicsEngine::Shutdown()
 void GraphicsEngine::BeginFrame()
 {
     bool expected = false;
-    if (!m_frameInProgress.compare_exchange_strong(expected, true)) {
-        LOG_TO_CONSOLE_RATE_LIMITED(L"Warning: BeginFrame called while frame already in progress - skipping", L"WARNING");
+    if (!m_frameInProgress.compare_exchange_strong(expected, true))
+    {
+        LOG_TO_CONSOLE_RATE_LIMITED(L"Warning: BeginFrame called while frame already in progress - skipping",
+                                    L"WARNING");
         return;
     }
-    
+
     m_frameStartTime = std::chrono::high_resolution_clock::now();
 
     ASSERT(m_context && m_renderTargetView && m_depthStencilView);
-    
-    if (!m_context || !m_renderTargetView || !m_depthStencilView) {
+
+    if (!m_context || !m_renderTargetView || !m_depthStencilView)
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Error: Invalid render targets in BeginFrame", L"ERROR");
         m_frameInProgress = false;
         return;
@@ -412,7 +457,8 @@ void GraphicsEngine::BeginFrame()
     ApplyGraphicsState();
 
     // Start GPU timing if enabled
-    if (m_gpuTimingQuery && m_settings.enableGPUTiming) {
+    if (m_gpuTimingQuery && m_settings.enableGPUTiming)
+    {
         m_context->Begin(m_gpuTimingQuery.Get());
     }
 }
@@ -420,37 +466,45 @@ void GraphicsEngine::BeginFrame()
 void GraphicsEngine::EndFrame()
 {
     bool expected = true;
-    if (!m_frameInProgress.compare_exchange_strong(expected, false)) {
+    if (!m_frameInProgress.compare_exchange_strong(expected, false))
+    {
         LOG_TO_CONSOLE_RATE_LIMITED(L"Warning: EndFrame called without matching BeginFrame - skipping", L"WARNING");
         return;
     }
 
     auto renderEndTime = std::chrono::high_resolution_clock::now();
 
-    if (!m_swapChain) {
+    if (!m_swapChain)
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Error: Invalid swap chain in EndFrame", L"ERROR");
         return;
     }
 
     // End GPU timing if enabled
-    if (m_gpuTimingQuery && m_settings.enableGPUTiming) {
+    if (m_gpuTimingQuery && m_settings.enableGPUTiming)
+    {
         m_context->End(m_gpuTimingQuery.Get());
     }
 
     UINT syncInterval = m_settings.vsync ? 1 : 0;
     HRESULT hr = m_swapChain->Present(syncInterval, 0);
 
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         SPARK_LOG_ERROR("Graphics", "SwapChain::Present failed with HR=0x%08lX", static_cast<long>(hr));
 
-        if (hr == DXGI_ERROR_DEVICE_REMOVED) {
+        if (hr == DXGI_ERROR_DEVICE_REMOVED)
+        {
             HRESULT reason = m_device ? m_device->GetDeviceRemovedReason() : E_FAIL;
-            SPARK_LOG_FATAL("Graphics", "GPU DEVICE REMOVED -- Reason HR=0x%08lX. "
+            SPARK_LOG_FATAL("Graphics",
+                            "GPU DEVICE REMOVED -- Reason HR=0x%08lX. "
                             "Possible causes: driver crash, GPU hang, TDR timeout, or hardware fault",
                             static_cast<long>(reason));
-        } else if (hr == DXGI_ERROR_DEVICE_RESET) {
+        }
+        else if (hr == DXGI_ERROR_DEVICE_RESET)
+        {
             SPARK_LOG_FATAL("Graphics", "GPU DEVICE RESET -- The GPU device was reset. "
-                            "This may indicate a driver update or GPU resource exhaustion");
+                                        "This may indicate a driver update or GPU resource exhaustion");
         }
     }
 
@@ -475,13 +529,16 @@ void GraphicsEngine::EndFrame()
 // ============================================================================
 
 void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix,
-    const std::vector<GameObject*>& objects)
+                                 const std::vector<GameObject*>& objects)
 {
     std::vector<GameObject*> visibleObjects;
-    
-    if (m_settings.frustumCulling) {
+
+    if (m_settings.frustumCulling)
+    {
         CullObjects(objects, viewMatrix, projMatrix, visibleObjects);
-    } else {
+    }
+    else
+    {
         visibleObjects = objects;
     }
 
@@ -496,22 +553,23 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
     }
 
     // Choose rendering path
-    switch (m_currentPipeline) {
-        case RenderingPipeline::Forward:
-            RenderForward(viewMatrix, projMatrix, visibleObjects);
-            break;
-        case RenderingPipeline::Deferred:
-            RenderDeferred(viewMatrix, projMatrix, visibleObjects);
-            break;
-        case RenderingPipeline::ForwardPlus:
-            RenderForwardPlus(viewMatrix, projMatrix, visibleObjects);
-            break;
-        case RenderingPipeline::Clustered:
-            RenderForwardPlus(viewMatrix, projMatrix, visibleObjects);
-            break;
-        default:
-            RenderForward(viewMatrix, projMatrix, visibleObjects);
-            break;
+    switch (m_currentPipeline)
+    {
+    case RenderingPipeline::Forward:
+        RenderForward(viewMatrix, projMatrix, visibleObjects);
+        break;
+    case RenderingPipeline::Deferred:
+        RenderDeferred(viewMatrix, projMatrix, visibleObjects);
+        break;
+    case RenderingPipeline::ForwardPlus:
+        RenderForwardPlus(viewMatrix, projMatrix, visibleObjects);
+        break;
+    case RenderingPipeline::Clustered:
+        RenderForwardPlus(viewMatrix, projMatrix, visibleObjects);
+        break;
+    default:
+        RenderForward(viewMatrix, projMatrix, visibleObjects);
+        break;
     }
 
     // Update final statistics
@@ -525,32 +583,40 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
 // RENDERING PIPELINE IMPLEMENTATIONS
 // ============================================================================
 
-void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix, const std::vector<GameObject*>& objects)
+void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
+                                   const std::vector<GameObject*>& objects)
 {
     // ✅ ENHANCED: Update per-frame constants at the start of rendering
-    if (m_basicFrameConstantBuffer) {
+    if (m_basicFrameConstantBuffer)
+    {
         // Calculate camera position from inverse view matrix
         XMMATRIX invView = XMMatrixInverse(nullptr, viewMatrix);
         XMFLOAT3 cameraPos;
         XMStoreFloat3(&cameraPos, invView.r[3]);
-        
+
         UpdateFrameConstants(viewMatrix, projMatrix, cameraPos);
     }
 
     uint32_t drawCalls = 0;
     uint32_t triangles = 0;
     uint32_t vertices = 0;
-    
-    for (auto* obj : objects) {
-        if (obj && obj->IsActive() && obj->IsVisible()) {
-            try {
+
+    for (auto* obj : objects)
+    {
+        if (obj && obj->IsActive() && obj->IsVisible())
+        {
+            try
+            {
                 obj->Render(viewMatrix, projMatrix);
                 drawCalls++;
                 triangles += 12;
                 vertices += 36;
-            } catch (...) {
+            }
+            catch (...)
+            {
                 static int errorCount = 0;
-                if (++errorCount <= 5) {
+                if (++errorCount <= 5)
+                {
                     LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Object rendering error", L"WARNING");
                 }
             }
@@ -566,32 +632,40 @@ void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& p
     }
 }
 
-void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix, const std::vector<GameObject*>& objects)
+void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
+                                    const std::vector<GameObject*>& objects)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Starting deferred rendering pass", L"INFO");
-    
+
     // Phase 1: Fill G-Buffer
     FillGBuffer(objects, viewMatrix, projMatrix);
-    
+
     // Phase 2: Lighting pass
     LightingPass(viewMatrix, projMatrix);
-    
+
     // Phase 3: Forward rendering for transparent objects
     uint32_t transparentDrawCalls = 0;
-    for (auto* obj : objects) {
-        if (obj && obj->IsActive() && obj->IsVisible()) {
-            try {
+    for (auto* obj : objects)
+    {
+        if (obj && obj->IsActive() && obj->IsVisible())
+        {
+            try
+            {
                 obj->Render(viewMatrix, projMatrix);
                 transparentDrawCalls++;
-            } catch (...) {
+            }
+            catch (...)
+            {
                 static int errorCount = 0;
-                if (++errorCount <= 3) {
-                    LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Transparent object rendering error in deferred pass", L"WARNING");
+                if (++errorCount <= 3)
+                {
+                    LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Transparent object rendering error in deferred pass",
+                                             L"WARNING");
                 }
             }
         }
     }
-    
+
     // Update statistics
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
@@ -599,48 +673,58 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
         m_statistics.triangles += transparentDrawCalls * 12;
         m_statistics.vertices += transparentDrawCalls * 36;
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Deferred rendering pass complete", L"INFO");
 }
 
-void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix, const std::vector<GameObject*>& objects)
+void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
+                                       const std::vector<GameObject*>& objects)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Starting Forward+ rendering pass", L"INFO");
-    
+
     // Phase 1: Depth pre-pass
     uint32_t depthDrawCalls = 0;
-    for (auto* obj : objects) {
-        if (obj && obj->IsActive() && obj->IsVisible()) {
+    for (auto* obj : objects)
+    {
+        if (obj && obj->IsActive() && obj->IsVisible())
+        {
             depthDrawCalls++;
         }
     }
-    
+
     // Phase 2: Light culling
-    if (m_lightingSystem) {
+    if (m_lightingSystem)
+    {
         m_lightingSystem->BindLightingData(m_context.Get());
     }
-    
+
     // Phase 3: Shading pass
     uint32_t shadingDrawCalls = 0;
     uint32_t triangles = 0;
     uint32_t vertices = 0;
-    
-    for (auto* obj : objects) {
-        if (obj && obj->IsActive() && obj->IsVisible()) {
-            try {
+
+    for (auto* obj : objects)
+    {
+        if (obj && obj->IsActive() && obj->IsVisible())
+        {
+            try
+            {
                 obj->Render(viewMatrix, projMatrix);
                 shadingDrawCalls++;
                 triangles += 12;
                 vertices += 36;
-            } catch (...) {
+            }
+            catch (...)
+            {
                 static int errorCount = 0;
-                if (++errorCount <= 3) {
+                if (++errorCount <= 3)
+                {
                     LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Forward+ shading pass rendering error", L"WARNING");
                 }
             }
         }
     }
-    
+
     // Update statistics
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
@@ -648,7 +732,7 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
         m_statistics.triangles = triangles;
         m_statistics.vertices = vertices;
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Forward+ rendering pass complete", L"INFO");
 }
 
@@ -656,34 +740,42 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
 // ADVANCED RENDERING METHODS
 // ============================================================================
 
-void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
+void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix,
+                                 const XMMATRIX& projMatrix)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Filling G-Buffer for deferred rendering", L"INFO");
-    
+
     uint32_t gBufferDrawCalls = 0;
     uint32_t totalTriangles = 0;
     uint32_t totalVertices = 0;
-    
-    if (m_context && m_solidRasterState) {
+
+    if (m_context && m_solidRasterState)
+    {
         m_context->RSSetState(m_solidRasterState.Get());
     }
-    
-    for (auto* obj : objects) {
-        if (obj && obj->IsActive() && obj->IsVisible()) {
-            try {
+
+    for (auto* obj : objects)
+    {
+        if (obj && obj->IsActive() && obj->IsVisible())
+        {
+            try
+            {
                 obj->Render(viewMatrix, projMatrix);
                 gBufferDrawCalls++;
                 totalTriangles += 12;
                 totalVertices += 36;
-            } catch (...) {
+            }
+            catch (...)
+            {
                 static int errorCount = 0;
-                if (++errorCount <= 3) {
+                if (++errorCount <= 3)
+                {
                     LOG_TO_CONSOLE_IMMEDIATE(L"Warning: G-Buffer object rendering error", L"WARNING");
                 }
             }
         }
     }
-    
+
     // Update statistics
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
@@ -691,202 +783,227 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
         m_statistics.triangles += totalTriangles;
         m_statistics.vertices += totalVertices;
     }
-    
-    LOG_TO_CONSOLE_IMMEDIATE(L"G-Buffer fill complete with " + std::to_wstring(gBufferDrawCalls) + L" draw calls", L"INFO");
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"G-Buffer fill complete with " + std::to_wstring(gBufferDrawCalls) + L" draw calls",
+                             L"INFO");
 }
 
 void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Starting deferred lighting pass", L"INFO");
-    
+
     auto lightingStartTime = std::chrono::high_resolution_clock::now();
-    
-    if (m_context && m_renderTargetView) {
+
+    if (m_context && m_renderTargetView)
+    {
         m_context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(), nullptr);
     }
-    
-    if (m_lightingSystem) {
-        try {
+
+    if (m_lightingSystem)
+    {
+        try
+        {
             // Bind lighting data to shaders
             m_lightingSystem->BindLightingData(m_context.Get());
-            
+
             // Update lighting system with current frame parameters
             m_lightingSystem->Update(0.016f, viewMatrix, projMatrix);
-            
+
             // Render shadow maps if shadows are enabled
-            if (m_settings.shadows) {
-                try {
-                    m_lightingSystem->RenderShadowMaps([this](const XMMATRIX& lightView, const XMMATRIX& lightProj) {
-                        LOG_TO_CONSOLE_IMMEDIATE(L"Rendering shadow map for light", L"INFO");
-                        // Here we would render shadow casters from the light's perspective
-                        // The callback provides the light's view and projection matrices
-                    });
-                } catch (const std::exception& e) {
-                    LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Shadow map rendering failed: " + 
-                        std::wstring(e.what(), e.what() + strlen(e.what())), L"WARNING");
-                } catch (...) {
+            if (m_settings.shadows)
+            {
+                try
+                {
+                    m_lightingSystem->RenderShadowMaps(
+                        [this](const XMMATRIX& lightView, const XMMATRIX& lightProj)
+                        {
+                            LOG_TO_CONSOLE_IMMEDIATE(L"Rendering shadow map for light", L"INFO");
+                            // Here we would render shadow casters from the light's perspective
+                            // The callback provides the light's view and projection matrices
+                        });
+                }
+                catch (const std::exception& e)
+                {
+                    LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Shadow map rendering failed: " +
+                                                 std::wstring(e.what(), e.what() + strlen(e.what())),
+                                             L"WARNING");
+                }
+                catch (...)
+                {
                     LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Shadow map rendering failed - unknown error", L"WARNING");
                 }
             }
-            
-        } catch (const std::exception& e) {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Error in lighting system update: " + 
-                std::wstring(e.what(), e.what() + strlen(e.what())), L"ERROR");
-        } catch (...) {
+        }
+        catch (const std::exception& e)
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(
+                L"Error in lighting system update: " + std::wstring(e.what(), e.what() + strlen(e.what())), L"ERROR");
+        }
+        catch (...)
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Unknown error in lighting system update", L"ERROR");
         }
-    } else {
+    }
+    else
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: LightingSystem not available for lighting pass", L"WARNING");
     }
-    
+
     uint32_t lightingDrawCalls = 1;
-    
+
     auto lightingEndTime = std::chrono::high_resolution_clock::now();
     auto lightingTime = std::chrono::duration_cast<std::chrono::microseconds>(lightingEndTime - lightingStartTime);
-    
+
     // Update statistics with actual lighting system metrics
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         m_statistics.drawCalls += lightingDrawCalls;
-        
-        if (m_lightingSystem) {
-            try {
+
+        if (m_lightingSystem)
+        {
+            try
+            {
                 auto lightingMetrics = m_lightingSystem->Console_GetMetrics();
                 m_statistics.activeLights = lightingMetrics.activeLights;
                 m_statistics.shadowUpdates = lightingMetrics.shadowMapUpdates;
                 m_statistics.lightCullingTime = lightingMetrics.lightCullingTime;
-            } catch (const std::exception& e) {
-                LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Could not retrieve lighting metrics: " + 
-                    std::wstring(e.what(), e.what() + strlen(e.what())), L"WARNING");
+            }
+            catch (const std::exception& e)
+            {
+                LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Could not retrieve lighting metrics: " +
+                                             std::wstring(e.what(), e.what() + strlen(e.what())),
+                                         L"WARNING");
                 // Use timing-based fallback
                 m_statistics.activeLights = 3;
                 m_statistics.shadowUpdates = m_settings.shadows ? 1 : 0;
                 m_statistics.lightCullingTime = lightingTime.count() / 1000.0f;
-            } catch (...) {
+            }
+            catch (...)
+            {
                 LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Could not retrieve lighting metrics - unknown error", L"WARNING");
                 m_statistics.activeLights = 3;
                 m_statistics.shadowUpdates = m_settings.shadows ? 1 : 0;
                 m_statistics.lightCullingTime = lightingTime.count() / 1000.0f;
             }
-        } else {
+        }
+        else
+        {
             // No lighting system available
             m_statistics.activeLights = 0;
             m_statistics.shadowUpdates = 0;
             m_statistics.lightCullingTime = lightingTime.count() / 1000.0f;
         }
     }
-    
-    LOG_TO_CONSOLE_IMMEDIATE(L"Deferred lighting pass complete in " + 
-        std::to_wstring(lightingTime.count() / 1000.0f) + L"ms", L"INFO");
+
+    LOG_TO_CONSOLE_IMMEDIATE(
+        L"Deferred lighting pass complete in " + std::to_wstring(lightingTime.count() / 1000.0f) + L"ms", L"INFO");
 }
 
-void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix, std::vector<GameObject*>& visibleObjects)
+void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix,
+                                 const XMMATRIX& projMatrix, std::vector<GameObject*>& visibleObjects)
 {
     auto cullingStartTime = std::chrono::high_resolution_clock::now();
-    
+
     visibleObjects.clear();
     visibleObjects.reserve(objects.size());
-    
+
     // Extract frustum planes from view-projection matrix
     XMMATRIX viewProjMatrix = XMMatrixMultiply(viewMatrix, projMatrix);
-    
+
     XMVECTOR frustumPlanes[6];
-    
+
     // Left plane
-    frustumPlanes[0] = XMVectorSet(
-        XMVectorGetX(viewProjMatrix.r[3]) + XMVectorGetX(viewProjMatrix.r[0]),
-        XMVectorGetY(viewProjMatrix.r[3]) + XMVectorGetY(viewProjMatrix.r[0]),
-        XMVectorGetZ(viewProjMatrix.r[3]) + XMVectorGetZ(viewProjMatrix.r[0]),
-        XMVectorGetW(viewProjMatrix.r[3]) + XMVectorGetW(viewProjMatrix.r[0])
-    );
-    
+    frustumPlanes[0] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) + XMVectorGetX(viewProjMatrix.r[0]),
+                                   XMVectorGetY(viewProjMatrix.r[3]) + XMVectorGetY(viewProjMatrix.r[0]),
+                                   XMVectorGetZ(viewProjMatrix.r[3]) + XMVectorGetZ(viewProjMatrix.r[0]),
+                                   XMVectorGetW(viewProjMatrix.r[3]) + XMVectorGetW(viewProjMatrix.r[0]));
+
     // Right plane
-    frustumPlanes[1] = XMVectorSet(
-        XMVectorGetX(viewProjMatrix.r[3]) - XMVectorGetX(viewProjMatrix.r[0]),
-        XMVectorGetY(viewProjMatrix.r[3]) - XMVectorGetY(viewProjMatrix.r[0]),
-        XMVectorGetZ(viewProjMatrix.r[3]) - XMVectorGetZ(viewProjMatrix.r[0]),
-        XMVectorGetW(viewProjMatrix.r[3]) - XMVectorGetW(viewProjMatrix.r[0])
-    );
-    
+    frustumPlanes[1] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) - XMVectorGetX(viewProjMatrix.r[0]),
+                                   XMVectorGetY(viewProjMatrix.r[3]) - XMVectorGetY(viewProjMatrix.r[0]),
+                                   XMVectorGetZ(viewProjMatrix.r[3]) - XMVectorGetZ(viewProjMatrix.r[0]),
+                                   XMVectorGetW(viewProjMatrix.r[3]) - XMVectorGetW(viewProjMatrix.r[0]));
+
     // Top plane
-    frustumPlanes[2] = XMVectorSet(
-        XMVectorGetX(viewProjMatrix.r[3]) - XMVectorGetX(viewProjMatrix.r[1]),
-        XMVectorGetY(viewProjMatrix.r[3]) - XMVectorGetY(viewProjMatrix.r[1]),
-        XMVectorGetZ(viewProjMatrix.r[3]) - XMVectorGetZ(viewProjMatrix.r[1]),
-        XMVectorGetW(viewProjMatrix.r[3]) - XMVectorGetW(viewProjMatrix.r[1])
-    );
-    
+    frustumPlanes[2] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) - XMVectorGetX(viewProjMatrix.r[1]),
+                                   XMVectorGetY(viewProjMatrix.r[3]) - XMVectorGetY(viewProjMatrix.r[1]),
+                                   XMVectorGetZ(viewProjMatrix.r[3]) - XMVectorGetZ(viewProjMatrix.r[1]),
+                                   XMVectorGetW(viewProjMatrix.r[3]) - XMVectorGetW(viewProjMatrix.r[1]));
+
     // Bottom plane
-    frustumPlanes[3] = XMVectorSet(
-        XMVectorGetX(viewProjMatrix.r[3]) + XMVectorGetX(viewProjMatrix.r[1]),
-        XMVectorGetY(viewProjMatrix.r[3]) + XMVectorGetY(viewProjMatrix.r[1]),
-        XMVectorGetZ(viewProjMatrix.r[3]) + XMVectorGetZ(viewProjMatrix.r[1]),
-        XMVectorGetW(viewProjMatrix.r[3]) + XMVectorGetW(viewProjMatrix.r[1])
-    );
-    
+    frustumPlanes[3] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) + XMVectorGetX(viewProjMatrix.r[1]),
+                                   XMVectorGetY(viewProjMatrix.r[3]) + XMVectorGetY(viewProjMatrix.r[1]),
+                                   XMVectorGetZ(viewProjMatrix.r[3]) + XMVectorGetZ(viewProjMatrix.r[1]),
+                                   XMVectorGetW(viewProjMatrix.r[3]) + XMVectorGetW(viewProjMatrix.r[1]));
+
     // Near plane
-    frustumPlanes[4] = XMVectorSet(
-        XMVectorGetX(viewProjMatrix.r[3]) + XMVectorGetX(viewProjMatrix.r[2]),
-        XMVectorGetY(viewProjMatrix.r[3]) + XMVectorGetY(viewProjMatrix.r[2]),
-        XMVectorGetZ(viewProjMatrix.r[3]) + XMVectorGetZ(viewProjMatrix.r[2]),
-        XMVectorGetW(viewProjMatrix.r[3]) + XMVectorGetW(viewProjMatrix.r[2])
-    );
-    
+    frustumPlanes[4] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) + XMVectorGetX(viewProjMatrix.r[2]),
+                                   XMVectorGetY(viewProjMatrix.r[3]) + XMVectorGetY(viewProjMatrix.r[2]),
+                                   XMVectorGetZ(viewProjMatrix.r[3]) + XMVectorGetZ(viewProjMatrix.r[2]),
+                                   XMVectorGetW(viewProjMatrix.r[3]) + XMVectorGetW(viewProjMatrix.r[2]));
+
     // Far plane
-    frustumPlanes[5] = XMVectorSet(
-        XMVectorGetX(viewProjMatrix.r[3]) - XMVectorGetX(viewProjMatrix.r[2]),
-        XMVectorGetY(viewProjMatrix.r[3]) - XMVectorGetY(viewProjMatrix.r[2]),
-        XMVectorGetZ(viewProjMatrix.r[3]) - XMVectorGetZ(viewProjMatrix.r[2]),
-        XMVectorGetW(viewProjMatrix.r[3]) - XMVectorGetW(viewProjMatrix.r[2])
-    );
-    
+    frustumPlanes[5] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) - XMVectorGetX(viewProjMatrix.r[2]),
+                                   XMVectorGetY(viewProjMatrix.r[3]) - XMVectorGetY(viewProjMatrix.r[2]),
+                                   XMVectorGetZ(viewProjMatrix.r[3]) - XMVectorGetZ(viewProjMatrix.r[2]),
+                                   XMVectorGetW(viewProjMatrix.r[3]) - XMVectorGetW(viewProjMatrix.r[2]));
+
     // Normalize frustum planes
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 6; i++)
+    {
         frustumPlanes[i] = XMPlaneNormalize(frustumPlanes[i]);
     }
-    
+
     uint32_t totalObjects = 0;
     uint32_t culledObjects = 0;
     uint32_t visibleObjectCount = 0;
-    
+
     // Test each object against frustum
-    for (auto* obj : objects) {
-        if (!obj) continue;
-        
+    for (auto* obj : objects)
+    {
+        if (!obj)
+            continue;
+
         totalObjects++;
-        
-        if (!obj->IsActive() || !obj->IsVisible()) {
+
+        if (!obj->IsActive() || !obj->IsVisible())
+        {
             culledObjects++;
             continue;
         }
-        
+
         XMFLOAT3 objPos = obj->GetPosition();
         XMVECTOR objectPosition = XMLoadFloat3(&objPos);
         float boundingRadius = 5.0f;
-        
+
         bool isVisible = true;
-        
+
         // Test against all frustum planes
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 6; i++)
+        {
             float distance = XMVectorGetX(XMPlaneDotCoord(frustumPlanes[i], objectPosition));
-            
-            if (distance < -boundingRadius) {
+
+            if (distance < -boundingRadius)
+            {
                 isVisible = false;
                 break;
             }
         }
-        
-        if (isVisible) {
+
+        if (isVisible)
+        {
             visibleObjects.push_back(obj);
             visibleObjectCount++;
-        } else {
+        }
+        else
+        {
             culledObjects++;
         }
     }
-    
+
     auto cullingEndTime = std::chrono::high_resolution_clock::now();
     auto cullingTime = std::chrono::duration_cast<std::chrono::microseconds>(cullingEndTime - cullingStartTime);
-    
+
     // Update statistics
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
@@ -895,11 +1012,14 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
         m_statistics.culledObjects = culledObjects;
         m_statistics.cullingTime = cullingTime.count() / 1000.0f;
     }
-    
-    if (cullingTime.count() > 1000) {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Frustum culling: " + std::to_wstring(visibleObjectCount) + L"/" + 
-            std::to_wstring(totalObjects) + L" objects visible (culled " + std::to_wstring(culledObjects) + 
-            L") in " + std::to_wstring(cullingTime.count() / 1000.0f) + L"ms", L"INFO");
+
+    if (cullingTime.count() > 1000)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Frustum culling: " + std::to_wstring(visibleObjectCount) + L"/" +
+                                     std::to_wstring(totalObjects) + L" objects visible (culled " +
+                                     std::to_wstring(culledObjects) + L") in " +
+                                     std::to_wstring(cullingTime.count() / 1000.0f) + L"ms",
+                                 L"INFO");
     }
 }
 
@@ -927,21 +1047,14 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
 
     SPARK_LOG_INFO("Graphics", "Creating D3D11 device (flags=0x%X)...", createDeviceFlags);
 
-    HRESULT hr = D3D11CreateDevice(
-        nullptr,
-        D3D_DRIVER_TYPE_HARDWARE,
-        nullptr,
-        createDeviceFlags,
-        featureLevels,
-        ARRAYSIZE(featureLevels),
-        D3D11_SDK_VERSION,
-        &baseDevice,
-        &featureLevel,
-        &baseContext
-    );
+    HRESULT hr =
+        D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createDeviceFlags, featureLevels,
+                          ARRAYSIZE(featureLevels), D3D11_SDK_VERSION, &baseDevice, &featureLevel, &baseContext);
 
-    if (FAILED(hr)) {
-        SPARK_LOG_FATAL("Graphics", "D3D11CreateDevice failed with HR=0x%08lX. "
+    if (FAILED(hr))
+    {
+        SPARK_LOG_FATAL("Graphics",
+                        "D3D11CreateDevice failed with HR=0x%08lX. "
                         "Check GPU driver installation and DirectX 11 support.",
                         static_cast<long>(hr));
         return hr;
@@ -949,24 +1062,36 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
 
     // Log the feature level we got
     const char* featureLevelStr = "Unknown";
-    switch (featureLevel) {
-        case D3D_FEATURE_LEVEL_11_1: featureLevelStr = "11.1"; break;
-        case D3D_FEATURE_LEVEL_11_0: featureLevelStr = "11.0"; break;
-        case D3D_FEATURE_LEVEL_10_1: featureLevelStr = "10.1"; break;
-        case D3D_FEATURE_LEVEL_10_0: featureLevelStr = "10.0"; break;
-        default: break;
+    switch (featureLevel)
+    {
+    case D3D_FEATURE_LEVEL_11_1:
+        featureLevelStr = "11.1";
+        break;
+    case D3D_FEATURE_LEVEL_11_0:
+        featureLevelStr = "11.0";
+        break;
+    case D3D_FEATURE_LEVEL_10_1:
+        featureLevelStr = "10.1";
+        break;
+    case D3D_FEATURE_LEVEL_10_0:
+        featureLevelStr = "10.0";
+        break;
+    default:
+        break;
     }
     SPARK_LOG_INFO("Graphics", "D3D11 device created -- Feature Level %s", featureLevelStr);
 
     // Query for ID3D11Device1 interface
     hr = baseDevice.As(&m_device);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to query ID3D11Device1", L"ERROR");
         return hr;
     }
 
     hr = baseContext.As(&m_context);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to query ID3D11DeviceContext1", L"ERROR");
         return hr;
     }
@@ -974,7 +1099,8 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     // Create DXGI factory
     ComPtr<IDXGIFactory1> dxgiFactory;
     hr = CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&dxgiFactory);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"CreateDXGIFactory1 failed", L"ERROR");
         return hr;
     }
@@ -996,13 +1122,15 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
 
     ComPtr<IDXGISwapChain> tempSwapChain;
     hr = dxgiFactory->CreateSwapChain(m_device.Get(), &swapChainDesc, &tempSwapChain);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"CreateSwapChain failed", L"ERROR");
         return hr;
     }
 
     hr = tempSwapChain.As(&m_swapChain);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to query IDXGISwapChain1", L"ERROR");
         return hr;
     }
@@ -1015,13 +1143,15 @@ HRESULT GraphicsEngine::CreateRenderTargetView()
 {
     ComPtr<ID3D11Texture2D> backBuffer;
     HRESULT hr = m_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to get back buffer", L"ERROR");
         return hr;
     }
 
     hr = m_device->CreateRenderTargetView(backBuffer.Get(), nullptr, &m_renderTargetView);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create render target view", L"ERROR");
         return hr;
     }
@@ -1047,7 +1177,8 @@ HRESULT GraphicsEngine::CreateDepthStencilView()
 
     ComPtr<ID3D11Texture2D> depthStencilTexture;
     HRESULT hr = m_device->CreateTexture2D(&depthStencilDesc, nullptr, &depthStencilTexture);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create depth stencil texture", L"ERROR");
         return hr;
     }
@@ -1058,7 +1189,8 @@ HRESULT GraphicsEngine::CreateDepthStencilView()
     depthStencilViewDesc.Texture2D.MipSlice = 0;
 
     hr = m_device->CreateDepthStencilView(depthStencilTexture.Get(), &depthStencilViewDesc, &m_depthStencilView);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create depth stencil view", L"ERROR");
         return hr;
     }
@@ -1086,10 +1218,12 @@ void GraphicsEngine::SetViewport()
 
 void GraphicsEngine::ApplyGraphicsState()
 {
-    if (m_settings.wireframeMode && m_wireframeRasterState) {
+    if (m_settings.wireframeMode && m_wireframeRasterState)
+    {
         m_context->RSSetState(m_wireframeRasterState.Get());
     }
-    else if (m_solidRasterState) {
+    else if (m_solidRasterState)
+    {
         m_context->RSSetState(m_solidRasterState.Get());
     }
 }
@@ -1103,7 +1237,8 @@ void GraphicsEngine::UpdateMetrics()
     static auto lastUpdate = now;
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate);
 
-    if (elapsed.count() >= 1000) {
+    if (elapsed.count() >= 1000)
+    {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
 
         m_statistics.fps = static_cast<uint32_t>(frameCount * 1000.0f / elapsed.count());
@@ -1126,83 +1261,118 @@ void GraphicsEngine::UpdateAdvancedMetrics()
     static auto lastAdvancedUpdate = now;
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastAdvancedUpdate);
 
-    if (elapsed.count() >= 500) {
+    if (elapsed.count() >= 500)
+    {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
 
         // Update texture system metrics
-        if (m_textureSystem) {
-            try {
+        if (m_textureSystem)
+        {
+            try
+            {
                 auto textureMetrics = m_textureSystem->Console_GetMetrics();
                 m_statistics.textureMemory = textureMetrics.totalMemoryUsage;
                 m_statistics.textureBinds = textureMetrics.textureBinds;
-            } catch (const std::exception& e) {
-                LOG_TO_CONSOLE_IMMEDIATE(L"Warning: TextureSystem metrics unavailable: " + 
-                    std::wstring(e.what(), e.what() + strlen(e.what())), L"WARNING");
+            }
+            catch (const std::exception& e)
+            {
+                LOG_TO_CONSOLE_IMMEDIATE(L"Warning: TextureSystem metrics unavailable: " +
+                                             std::wstring(e.what(), e.what() + strlen(e.what())),
+                                         L"WARNING");
                 // Use fallback values
                 m_statistics.textureMemory = m_textureMemoryUsage;
                 m_statistics.textureBinds = 50;
-            } catch (...) {
+            }
+            catch (...)
+            {
                 LOG_TO_CONSOLE_IMMEDIATE(L"Warning: TextureSystem metrics unavailable - unknown error", L"WARNING");
                 m_statistics.textureMemory = m_textureMemoryUsage;
                 m_statistics.textureBinds = 50;
             }
-        } else {
+        }
+        else
+        {
             // System not available, use tracked values
             m_statistics.textureMemory = m_textureMemoryUsage;
             m_statistics.textureBinds = 0;
         }
 
         // Update material system metrics
-        if (m_materialSystem) {
-            try {
+        if (m_materialSystem)
+        {
+            try
+            {
                 auto materialMetrics = m_materialSystem->Console_GetMetrics();
                 m_statistics.materialSwitches = materialMetrics.materialSwitches;
-            } catch (const std::exception& e) {
-                LOG_TO_CONSOLE_IMMEDIATE(L"Warning: MaterialSystem metricsUnavailable: " + 
-                    std::wstring(e.what(), e.what() + strlen(e.what())), L"WARNING");
+            }
+            catch (const std::exception& e)
+            {
+                LOG_TO_CONSOLE_IMMEDIATE(L"Warning: MaterialSystem metricsUnavailable: " +
+                                             std::wstring(e.what(), e.what() + strlen(e.what())),
+                                         L"WARNING");
                 m_statistics.materialSwitches = 10;
-            } catch (...) {
+            }
+            catch (...)
+            {
                 LOG_TO_CONSOLE_IMMEDIATE(L"Warning: MaterialSystem metrics unavailable - unknown error", L"WARNING");
                 m_statistics.materialSwitches = 10;
             }
-        } else {
+        }
+        else
+        {
             m_statistics.materialSwitches = 0;
         }
 
         // Update lighting system metrics
-        if (m_lightingSystem) {
-            try {
+        if (m_lightingSystem)
+        {
+            try
+            {
                 auto lightingMetrics = m_lightingSystem->Console_GetMetrics();
                 m_statistics.activeLights = lightingMetrics.activeLights;
                 m_statistics.shadowUpdates = lightingMetrics.shadowMapUpdates;
                 m_statistics.lightCullingTime = lightingMetrics.lightCullingTime;
-            } catch (const std::exception& e) {
-                LOG_TO_CONSOLE_IMMEDIATE(L"Warning: LightingSystem metrics unavailable: " + 
-                    std::wstring(e.what(), e.what() + strlen(e.what())), L"WARNING");
+            }
+            catch (const std::exception& e)
+            {
+                LOG_TO_CONSOLE_IMMEDIATE(L"Warning: LightingSystem metrics unavailable: " +
+                                             std::wstring(e.what(), e.what() + strlen(e.what())),
+                                         L"WARNING");
                 // Use reasonable defaults
                 m_statistics.activeLights = 3;
                 m_statistics.shadowUpdates = 1;
                 m_statistics.lightCullingTime = 0.5f;
-            } catch (...) {
+            }
+            catch (...)
+            {
                 LOG_TO_CONSOLE_IMMEDIATE(L"Warning: LightingSystem metrics unavailable - unknown error", L"WARNING");
                 m_statistics.activeLights = 3;
                 m_statistics.shadowUpdates = 1;
                 m_statistics.lightCullingTime = 0.5f;
             }
-        } else {
+        }
+        else
+        {
             m_statistics.activeLights = 0;
             m_statistics.shadowUpdates = 0;
             m_statistics.lightCullingTime = 0.0f;
         }
 
         // Update post-processing metrics
-        if (m_postProcessingSystem) {
+        if (m_postProcessingSystem)
+        {
             m_statistics.postProcessPasses = 0;
-            if (m_settings.bloom) m_statistics.postProcessPasses++;
-            if (m_settings.ssao && m_ssaoSettings.enabled) m_statistics.postProcessPasses++;
-            if (m_settings.taa && m_taaSettings.enabled) m_statistics.postProcessPasses++;
-            if (m_hdrEnabled) m_statistics.postProcessPasses++;
-        } else {
+            if (m_settings.bloom)
+                m_statistics.postProcessPasses++;
+            if (m_settings.ssao && m_ssaoSettings.enabled)
+                m_statistics.postProcessPasses++;
+            if (m_settings.taa && m_taaSettings.enabled)
+                m_statistics.postProcessPasses++;
+            if (m_hdrEnabled)
+                m_statistics.postProcessPasses++;
+        }
+        else
+        {
             m_statistics.postProcessPasses = 0;
         }
 
@@ -1216,26 +1386,34 @@ void GraphicsEngine::UpdateAdvancedMetrics()
 
 void GraphicsEngine::ApplyAdvancedGraphicsState()
 {
-    if (m_taaSettings.enabled) {
+    if (m_taaSettings.enabled)
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Applying TAA settings", L"INFO");
     }
 
-    if (m_ssaoSettings.enabled && m_postProcessingSystem) {
+    if (m_ssaoSettings.enabled && m_postProcessingSystem)
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Applying SSAO settings", L"INFO");
     }
 
-    if (m_lightingSystem) {
+    if (m_lightingSystem)
+    {
         m_lightingSystem->EnableShadows(m_settings.shadows);
         m_lightingSystem->SetGlobalShadowQuality(m_settings.shadowMapSize);
     }
 
-    if (m_materialSystem) {
+    if (m_materialSystem)
+    {
         std::string quality = "high";
-        if (m_settings.maxTextureSize <= 512) quality = "low";
-        else if (m_settings.maxTextureSize <= 1024) quality = "medium";
-        else if (m_settings.maxTextureSize <= 2048) quality = "high";
-        else quality = "ultra";
-        
+        if (m_settings.maxTextureSize <= 512)
+            quality = "low";
+        else if (m_settings.maxTextureSize <= 1024)
+            quality = "medium";
+        else if (m_settings.maxTextureSize <= 2048)
+            quality = "high";
+        else
+            quality = "ultra";
+
         m_materialSystem->Console_SetTextureQuality(quality);
     }
 
@@ -1249,8 +1427,9 @@ void GraphicsEngine::ApplyAdvancedGraphicsState()
 HRESULT GraphicsEngine::CreateAdvancedRenderTargets()
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Creating advanced render targets", L"INFO");
-    
-    if (m_hdrEnabled) {
+
+    if (m_hdrEnabled)
+    {
         D3D11_TEXTURE2D_DESC hdrDesc = {};
         hdrDesc.Width = m_windowWidth;
         hdrDesc.Height = m_windowHeight;
@@ -1265,19 +1444,22 @@ HRESULT GraphicsEngine::CreateAdvancedRenderTargets()
         hdrDesc.MiscFlags = 0;
 
         HRESULT hr = m_device->CreateTexture2D(&hdrDesc, nullptr, &m_hdrTexture);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create HDR texture", L"ERROR");
             return hr;
         }
 
         hr = m_device->CreateRenderTargetView(m_hdrTexture.Get(), nullptr, &m_hdrRTV);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create HDR RTV", L"ERROR");
             return hr;
         }
 
         hr = m_device->CreateShaderResourceView(m_hdrTexture.Get(), nullptr, &m_hdrSRV);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create HDR SRV", L"ERROR");
             return hr;
         }
@@ -1285,15 +1467,13 @@ HRESULT GraphicsEngine::CreateAdvancedRenderTargets()
         LOG_TO_CONSOLE_IMMEDIATE(L"HDR render targets created successfully", L"SUCCESS");
     }
 
-    if (m_currentPipeline == RenderingPipeline::Deferred) {
-        DXGI_FORMAT gBufferFormats[4] = {
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            DXGI_FORMAT_R10G10B10A2_UNORM,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            DXGI_FORMAT_R11G11B10_FLOAT
-        };
+    if (m_currentPipeline == RenderingPipeline::Deferred)
+    {
+        DXGI_FORMAT gBufferFormats[4] = {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM,
+                                         DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_R11G11B10_FLOAT};
 
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 4; i++)
+        {
             D3D11_TEXTURE2D_DESC gBufferDesc = {};
             gBufferDesc.Width = m_windowWidth;
             gBufferDesc.Height = m_windowHeight;
@@ -1308,19 +1488,22 @@ HRESULT GraphicsEngine::CreateAdvancedRenderTargets()
             gBufferDesc.MiscFlags = 0;
 
             HRESULT hr = m_device->CreateTexture2D(&gBufferDesc, nullptr, &m_gBufferTextures[i]);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create G-Buffer texture " + std::to_wstring(i), L"ERROR");
                 return hr;
             }
 
             hr = m_device->CreateRenderTargetView(m_gBufferTextures[i].Get(), nullptr, &m_gBufferRTVs[i]);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create G-Buffer RTV " + std::to_wstring(i), L"ERROR");
                 return hr;
             }
 
             hr = m_device->CreateShaderResourceView(m_gBufferTextures[i].Get(), nullptr, &m_gBufferSRVs[i]);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create G-Buffer SRV " + std::to_wstring(i), L"ERROR");
                 return hr;
             }
@@ -1335,7 +1518,7 @@ HRESULT GraphicsEngine::CreateAdvancedRenderTargets()
 HRESULT GraphicsEngine::CreateRenderStates()
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Creating advanced render states", L"INFO");
-    
+
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc = {};
     depthStencilDesc.DepthEnable = TRUE;
     depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
@@ -1343,7 +1526,8 @@ HRESULT GraphicsEngine::CreateRenderStates()
     depthStencilDesc.StencilEnable = FALSE;
 
     HRESULT hr = m_device->CreateDepthStencilState(&depthStencilDesc, &m_defaultDepthState);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create default depth state", L"ERROR");
         return hr;
     }
@@ -1353,7 +1537,8 @@ HRESULT GraphicsEngine::CreateRenderStates()
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
     hr = m_device->CreateBlendState(&blendDesc, &m_defaultBlendState);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create default blend state", L"ERROR");
         return hr;
     }
@@ -1370,30 +1555,32 @@ void GraphicsEngine::SetupDeferredPipeline()
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Setting up deferred rendering pipeline", L"INFO");
     m_currentPipeline = RenderingPipeline::Deferred;
-    
+
     // Create G-Buffer render targets if not already created
-    if (!m_gBufferTextures[0]) {
+    if (!m_gBufferTextures[0])
+    {
         HRESULT hr = CreateAdvancedRenderTargets();
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create G-Buffer render targets", L"ERROR");
         }
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Deferred pipeline setup complete", L"SUCCESS");
 }
 
 void GraphicsEngine::SetupForwardPlusPipeline()
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Setting up Forward+ rendering pipeline", L"INFO");
-    
+
     uint32_t tileSize = 16;
     uint32_t tilesX = (m_windowWidth + tileSize - 1) / tileSize;
     uint32_t tilesY = (m_windowHeight + tileSize - 1) / tileSize;
-    
-    LOG_TO_CONSOLE_IMMEDIATE(L"Forward+ pipeline setup: " + std::to_wstring(tilesX) + L"x" + 
-        std::to_wstring(tilesY) + L" tiles (" + std::to_wstring(tileSize) + L"x" + 
-        std::to_wstring(tileSize) + L" each)", L"INFO");
-    
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Forward+ pipeline setup: " + std::to_wstring(tilesX) + L"x" + std::to_wstring(tilesY) +
+                                 L" tiles (" + std::to_wstring(tileSize) + L"x" + std::to_wstring(tileSize) + L" each)",
+                             L"INFO");
+
     m_currentPipeline = RenderingPipeline::ForwardPlus;
     LOG_TO_CONSOLE_IMMEDIATE(L"Forward+ pipeline setup complete", L"SUCCESS");
 }
@@ -1405,69 +1592,74 @@ void GraphicsEngine::SetupForwardPlusPipeline()
 HRESULT GraphicsEngine::InitializeBasicShaders()
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Initializing basic shader system", L"INFO");
-    
+
     // Create constant buffer first
     HRESULT hr = CreateBasicConstantBuffer();
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create basic constant buffer", L"ERROR");
         return hr;
     }
-    
+
     // Try to compile from file first, then fall back to embedded shaders
     ComPtr<ID3DBlob> vsBlob;
     hr = CompileShaderFromFile(L"Shaders/HLSL/BasicVertex.hlsl", "main", "vs_5_0", &vsBlob);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Falling back to embedded vertex shader", L"WARNING");
         hr = CompileEmbeddedVertexShader(&vsBlob);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to compile embedded vertex shader", L"ERROR");
             return hr;
         }
     }
-    
+
     // Create vertex shader
-    hr = m_device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), 
-                                      nullptr, &m_basicVertexShader);
-    if (FAILED(hr)) {
+    hr = m_device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr,
+                                      &m_basicVertexShader);
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create vertex shader", L"ERROR");
         return hr;
     }
-    
+
     // Create input layout
     D3D11_INPUT_ELEMENT_DESC layout[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 }
-    };
-    
-    hr = m_device->CreateInputLayout(layout, ARRAYSIZE(layout), 
-                                     vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), 
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0}};
+
+    hr = m_device->CreateInputLayout(layout, ARRAYSIZE(layout), vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
                                      &m_basicInputLayout);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create input layout", L"ERROR");
         return hr;
     }
-    
+
     // Try to compile pixel shader from file, then fall back to embedded
     ComPtr<ID3DBlob> psBlob;
     hr = CompileShaderFromFile(L"Shaders/HLSL/BasicPixel.hlsl", "main", "ps_5_0", &psBlob);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Falling back to embedded pixel shader", L"WARNING");
         hr = CompileEmbeddedPixelShader(&psBlob);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to compile embedded pixel shader", L"ERROR");
             return hr;
         }
     }
-    
+
     // Create pixel shader
-    hr = m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), 
-                                     nullptr, &m_basicPixelShader);
-    if (FAILED(hr)) {
+    hr = m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_basicPixelShader);
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create pixel shader", L"ERROR");
         return hr;
     }
-    
+
     // Create basic sampler state
     D3D11_SAMPLER_DESC samplerDesc = {};
     samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -1477,20 +1669,22 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
     samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
     samplerDesc.MinLOD = 0;
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    
+
     hr = m_device->CreateSamplerState(&samplerDesc, &m_basicSamplerState);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create sampler state", L"ERROR");
         return hr;
     }
-    
+
     // Create default 1x1 white texture
     hr = CreateDefaultTexture();
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create default texture", L"ERROR");
         return hr;
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Basic shader system initialized successfully", L"SUCCESS");
     return S_OK;
 }
@@ -1504,68 +1698,74 @@ HRESULT GraphicsEngine::CreateBasicConstantBuffer()
     bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     bufferDesc.MiscFlags = 0;
-    
+
     HRESULT hr = m_device->CreateBuffer(&bufferDesc, nullptr, &m_basicConstantBuffer);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create basic constant buffer", L"ERROR");
         return hr;
     }
-    
+
     // Create constant buffer for per-frame constants
     bufferDesc.ByteWidth = sizeof(PerFrameConstants);
     hr = m_device->CreateBuffer(&bufferDesc, nullptr, &m_basicFrameConstantBuffer);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create frame constant buffer", L"ERROR");
         return hr;
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Basic constant buffers created successfully", L"SUCCESS");
     return S_OK;
 }
 
 void GraphicsEngine::SetBasicShaders()
 {
-    if (!m_context) {
+    if (!m_context)
+    {
         return;
     }
-    
+
     // Set shaders
     m_context->VSSetShader(m_basicVertexShader.Get(), nullptr, 0);
     m_context->PSSetShader(m_basicPixelShader.Get(), nullptr, 0);
-    
+
     // Set input layout
     m_context->IASetInputLayout(m_basicInputLayout.Get());
-    
+
     // Set constant buffers (per-object at slot 0, per-frame at slot 1)
     m_context->VSSetConstantBuffers(0, 1, m_basicConstantBuffer.GetAddressOf());
     m_context->VSSetConstantBuffers(1, 1, m_basicFrameConstantBuffer.GetAddressOf());
     m_context->PSSetConstantBuffers(0, 1, m_basicConstantBuffer.GetAddressOf());
     m_context->PSSetConstantBuffers(1, 1, m_basicFrameConstantBuffer.GetAddressOf());
-    
+
     // Set sampler state and default texture
     m_context->PSSetSamplers(0, 1, m_basicSamplerState.GetAddressOf());
-    if (m_defaultSRV) {
+    if (m_defaultSRV)
+    {
         m_context->PSSetShaderResources(0, 1, m_defaultSRV.GetAddressOf());
     }
 }
 
 void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX& view, const XMMATRIX& proj)
 {
-    if (!m_basicConstantBuffer || !m_context) {
+    if (!m_basicConstantBuffer || !m_context)
+    {
         return;
     }
-    
+
     PerObjectConstants constants = {};
     constants.WorldMatrix = XMMatrixTranspose(world);
     constants.WorldViewProjectionMatrix = XMMatrixTranspose(world * view * proj);
     constants.WorldInverseTransposeMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, world));
     constants.ObjectColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     constants.MaterialProperties = XMFLOAT4(0.0f, 0.5f, 0.0f, 1.0f); // Default material
-    constants.UVTiling = XMFLOAT4(1.0f, 1.0f, 0.0f, 0.0f); // Default UV tiling
-    
+    constants.UVTiling = XMFLOAT4(1.0f, 1.0f, 0.0f, 0.0f);           // Default UV tiling
+
     D3D11_MAPPED_SUBRESOURCE mappedResource;
     HRESULT hr = m_context->Map(m_basicConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
-    if (SUCCEEDED(hr)) {
+    if (SUCCEEDED(hr))
+    {
         memcpy(mappedResource.pData, &constants, sizeof(PerObjectConstants));
         m_context->Unmap(m_basicConstantBuffer.Get(), 0);
     }
@@ -1573,32 +1773,33 @@ void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX&
 
 void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& view, const XMMATRIX& proj, const XMFLOAT3& cameraPos)
 {
-    if (!m_basicFrameConstantBuffer || !m_context) {
+    if (!m_basicFrameConstantBuffer || !m_context)
+    {
         return;
     }
-    
+
     PerFrameConstants frameConstants = {};
     frameConstants.ViewMatrix = XMMatrixTranspose(view);
     frameConstants.ProjectionMatrix = XMMatrixTranspose(proj);
     frameConstants.ViewProjectionMatrix = XMMatrixTranspose(view * proj);
     frameConstants.CameraPosition = cameraPos;
-    frameConstants.Time = 0.0f; // You could track actual time here
+    frameConstants.Time = 0.0f;        // You could track actual time here
     frameConstants.DeltaTime = 0.016f; // Approximate 60 FPS
     frameConstants.ScreenResolution = XMFLOAT2(static_cast<float>(m_windowWidth), static_cast<float>(m_windowHeight));
-    frameConstants.InvScreenResolution = XMFLOAT2(
-        (m_windowWidth > 0) ? (1.0f / m_windowWidth) : 0.0f,
-        (m_windowHeight > 0) ? (1.0f / m_windowHeight) : 0.0f);
-    
+    frameConstants.InvScreenResolution = XMFLOAT2((m_windowWidth > 0) ? (1.0f / m_windowWidth) : 0.0f,
+                                                  (m_windowHeight > 0) ? (1.0f / m_windowHeight) : 0.0f);
+
     // Set up basic directional lighting
     frameConstants.DirectionalLightDir = XMFLOAT3(0.3f, -0.7f, 0.6f); // Pointing down and slightly forward
     frameConstants.DirectionalLightIntensity = 1.0f;
     frameConstants.DirectionalLightColor = XMFLOAT3(1.0f, 1.0f, 0.9f); // Slightly warm white
     frameConstants.AmbientIntensity = 0.3f;
     frameConstants.AmbientColor = XMFLOAT3(0.2f, 0.3f, 0.4f); // Cool ambient
-    
+
     D3D11_MAPPED_SUBRESOURCE mappedResource;
     HRESULT hr = m_context->Map(m_basicFrameConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
-    if (SUCCEEDED(hr)) {
+    if (SUCCEEDED(hr))
+    {
         memcpy(mappedResource.pData, &frameConstants, sizeof(PerFrameConstants));
         m_context->Unmap(m_basicFrameConstantBuffer.Get(), 0);
     }
@@ -1616,40 +1817,42 @@ HRESULT GraphicsEngine::CreateDefaultTexture()
     texDesc.SampleDesc.Count = 1;
     texDesc.Usage = D3D11_USAGE_DEFAULT;
     texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    
+
     // White pixel data
     UINT32 whitePixel = 0xFFFFFFFF;
     D3D11_SUBRESOURCE_DATA texData = {};
     texData.pSysMem = &whitePixel;
     texData.SysMemPitch = sizeof(UINT32);
-    
+
     HRESULT hr = m_device->CreateTexture2D(&texDesc, &texData, &m_defaultTexture);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create default texture", L"ERROR");
         return hr;
     }
-    
+
     // Create shader resource view
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = texDesc.Format;
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
-    
+
     hr = m_device->CreateShaderResourceView(m_defaultTexture.Get(), &srvDesc, &m_defaultSRV);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create default texture SRV", L"ERROR");
         return hr;
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Default white texture created successfully", L"SUCCESS");
     return S_OK;
 }
 
-HRESULT GraphicsEngine::CompileShaderFromFile(const std::wstring& filename, const char* entryPoint, 
+HRESULT GraphicsEngine::CompileShaderFromFile(const std::wstring& filename, const char* entryPoint,
                                               const char* shaderModel, ID3DBlob** blobOut)
 {
     HRESULT hr = S_OK;
-    
+
     DWORD shaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;
 #ifdef _DEBUG
     shaderFlags |= D3DCOMPILE_DEBUG;
@@ -1657,18 +1860,20 @@ HRESULT GraphicsEngine::CompileShaderFromFile(const std::wstring& filename, cons
 #endif
 
     ComPtr<ID3DBlob> errorBlob;
-    hr = D3DCompileFromFile(filename.c_str(), nullptr, nullptr, entryPoint, shaderModel, 
-                           shaderFlags, 0, blobOut, &errorBlob);
-    
-    if (FAILED(hr)) {
-        if (errorBlob) {
+    hr = D3DCompileFromFile(filename.c_str(), nullptr, nullptr, entryPoint, shaderModel, shaderFlags, 0, blobOut,
+                            &errorBlob);
+
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
             std::string errorMsg = (char*)errorBlob->GetBufferPointer();
             std::wstring wErrorMsg(errorMsg.begin(), errorMsg.end());
             LOG_TO_CONSOLE_IMMEDIATE(L"Shader compilation error: " + wErrorMsg, L"ERROR");
         }
         return hr;
     }
-    
+
     return S_OK;
 }
 
@@ -1725,18 +1930,20 @@ HRESULT GraphicsEngine::CompileEmbeddedVertexShader(ID3DBlob** blobOut)
 #endif
 
     ComPtr<ID3DBlob> errorBlob;
-    HRESULT hr = D3DCompile(vertexShaderSource, strlen(vertexShaderSource), "EmbeddedVertexShader",
-                           nullptr, nullptr, "main", "vs_5_0", shaderFlags, 0, blobOut, &errorBlob);
-    
-    if (FAILED(hr)) {
-        if (errorBlob) {
+    HRESULT hr = D3DCompile(vertexShaderSource, strlen(vertexShaderSource), "EmbeddedVertexShader", nullptr, nullptr,
+                            "main", "vs_5_0", shaderFlags, 0, blobOut, &errorBlob);
+
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
             std::string errorMsg = (char*)errorBlob->GetBufferPointer();
             std::wstring wErrorMsg(errorMsg.begin(), errorMsg.end());
             LOG_TO_CONSOLE_IMMEDIATE(L"Embedded vertex shader compilation error: " + wErrorMsg, L"ERROR");
         }
         return hr;
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Embedded vertex shader compiled successfully", L"SUCCESS");
     return S_OK;
 }
@@ -1804,18 +2011,20 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
 #endif
 
     ComPtr<ID3DBlob> errorBlob;
-    HRESULT hr = D3DCompile(pixelShaderSource, strlen(pixelShaderSource), "EmbeddedPixelShader",
-                           nullptr, nullptr, "main", "ps_5_0", shaderFlags, 0, blobOut, &errorBlob);
-    
-    if (FAILED(hr)) {
-        if (errorBlob) {
+    HRESULT hr = D3DCompile(pixelShaderSource, strlen(pixelShaderSource), "EmbeddedPixelShader", nullptr, nullptr,
+                            "main", "ps_5_0", shaderFlags, 0, blobOut, &errorBlob);
+
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
             std::string errorMsg = (char*)errorBlob->GetBufferPointer();
             std::wstring wErrorMsg(errorMsg.begin(), errorMsg.end());
             LOG_TO_CONSOLE_IMMEDIATE(L"Embedded pixel shader compilation error: " + wErrorMsg, L"ERROR");
         }
         return hr;
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Embedded pixel shader compiled successfully", L"SUCCESS");
     return S_OK;
 }
@@ -1824,179 +2033,242 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
 // SYSTEM ACCESSORS
 // ============================================================================
 
-ID3D11Device* GraphicsEngine::GetDevice() const { 
-    return m_device.Get(); 
+ID3D11Device* GraphicsEngine::GetDevice() const
+{
+    return m_device.Get();
 }
 
-ID3D11DeviceContext* GraphicsEngine::GetContext() const { 
-    return m_context.Get(); 
+ID3D11DeviceContext* GraphicsEngine::GetContext() const
+{
+    return m_context.Get();
 }
 
-UINT GraphicsEngine::GetWindowWidth() const { 
-    return m_windowWidth; 
+UINT GraphicsEngine::GetWindowWidth() const
+{
+    return m_windowWidth;
 }
 
-UINT GraphicsEngine::GetWindowHeight() const { 
-    return m_windowHeight; 
+UINT GraphicsEngine::GetWindowHeight() const
+{
+    return m_windowHeight;
 }
 
-const RenderStatistics& GraphicsEngine::GetStatistics() const { 
-    return m_statistics; 
+const RenderStatistics& GraphicsEngine::GetStatistics() const
+{
+    return m_statistics;
 }
 
-TextureSystem* GraphicsEngine::GetTextureSystem() const { 
-    return m_textureSystem.get(); 
+TextureSystem* GraphicsEngine::GetTextureSystem() const
+{
+    return m_textureSystem.get();
 }
 
-MaterialSystem* GraphicsEngine::GetMaterialSystem() const { 
-    return m_materialSystem.get(); 
+MaterialSystem* GraphicsEngine::GetMaterialSystem() const
+{
+    return m_materialSystem.get();
 }
 
-LightingSystem* GraphicsEngine::GetLightingSystem() const { 
-    return m_lightingSystem.get(); 
+LightingSystem* GraphicsEngine::GetLightingSystem() const
+{
+    return m_lightingSystem.get();
 }
 
-PostProcessingSystem* GraphicsEngine::GetPostProcessingSystem() const { 
-    return m_postProcessingSystem.get(); 
+PostProcessingSystem* GraphicsEngine::GetPostProcessingSystem() const
+{
+    return m_postProcessingSystem.get();
 }
 
-AssetPipeline* GraphicsEngine::GetAssetPipeline() const { 
-    return m_assetPipeline.get(); 
+AssetPipeline* GraphicsEngine::GetAssetPipeline() const
+{
+    return m_assetPipeline.get();
 }
 
-PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const {
+PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const
+{
     return m_physicsSystem;
 }
 
-LightManager* GraphicsEngine::GetLightManager() const { 
-    return m_lightManager.get(); 
+LightManager* GraphicsEngine::GetLightManager() const
+{
+    return m_lightManager.get();
 }
 
-RenderingPipeline GraphicsEngine::GetRenderingPipeline() const { 
-    return m_currentPipeline; 
+RenderingPipeline GraphicsEngine::GetRenderingPipeline() const
+{
+    return m_currentPipeline;
 }
 
-const GraphicsSettings& GraphicsEngine::GetGraphicsSettings() const { 
-    return m_settings; 
+const GraphicsSettings& GraphicsEngine::GetGraphicsSettings() const
+{
+    return m_settings;
 }
 
-IDXGISwapChain* GraphicsEngine::GetSwapChain() const { 
-    return m_swapChain.Get(); 
+IDXGISwapChain* GraphicsEngine::GetSwapChain() const
+{
+    return m_swapChain.Get();
 }
 
-ID3D11RenderTargetView* GraphicsEngine::GetBackBufferRTV() const { 
-    return m_renderTargetView.Get(); 
+ID3D11RenderTargetView* GraphicsEngine::GetBackBufferRTV() const
+{
+    return m_renderTargetView.Get();
 }
 
-ID3D11DepthStencilView* GraphicsEngine::GetDepthStencilView() const { 
-    return m_depthStencilView.Get(); 
+ID3D11DepthStencilView* GraphicsEngine::GetDepthStencilView() const
+{
+    return m_depthStencilView.Get();
 }
 
 // ============================================================================
 // CONSOLE METHODS IMPLEMENTATION - FIXED AND COMPLETE
 // ============================================================================
 
-RenderStatistics GraphicsEngine::Console_GetStatistics() const {
+RenderStatistics GraphicsEngine::Console_GetStatistics() const
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     return m_statistics;
 }
 
-void GraphicsEngine::Console_SetQuality(const std::string& preset) {
+void GraphicsEngine::Console_SetQuality(const std::string& preset)
+{
     QualityPreset qualityPreset = QualityPreset::Medium;
-    
-    if (preset == "low") qualityPreset = QualityPreset::Low;
-    else if (preset == "medium") qualityPreset = QualityPreset::Medium;
-    else if (preset == "high") qualityPreset = QualityPreset::High;
-    else if (preset == "ultra") qualityPreset = QualityPreset::Ultra;
-    else if (preset == "custom") qualityPreset = QualityPreset::Custom;
-    
+
+    if (preset == "low")
+        qualityPreset = QualityPreset::Low;
+    else if (preset == "medium")
+        qualityPreset = QualityPreset::Medium;
+    else if (preset == "high")
+        qualityPreset = QualityPreset::High;
+    else if (preset == "ultra")
+        qualityPreset = QualityPreset::Ultra;
+    else if (preset == "custom")
+        qualityPreset = QualityPreset::Custom;
+
     SetQualityPreset(qualityPreset);
     LOG_TO_CONSOLE_IMMEDIATE(L"Quality preset set to " + std::wstring(preset.begin(), preset.end()), L"INFO");
 }
 
-void GraphicsEngine::Console_SetRenderPath(const std::string& path) {
+void GraphicsEngine::Console_SetRenderPath(const std::string& path)
+{
     RenderPath renderPath = RenderPath::Forward;
-    
-    if (path == "forward") renderPath = RenderPath::Forward;
-    else if (path == "deferred") renderPath = RenderPath::Deferred;
-    else if (path == "forward_plus") renderPath = RenderPath::ForwardPlus;
-    else if (path == "clustered") renderPath = RenderPath::Clustered;
-    
+
+    if (path == "forward")
+        renderPath = RenderPath::Forward;
+    else if (path == "deferred")
+        renderPath = RenderPath::Deferred;
+    else if (path == "forward_plus")
+        renderPath = RenderPath::ForwardPlus;
+    else if (path == "clustered")
+        renderPath = RenderPath::Clustered;
+
     SetRenderPath(renderPath);
     LOG_TO_CONSOLE_IMMEDIATE(L"Render path set to " + std::wstring(path.begin(), path.end()), L"INFO");
 }
 
-void GraphicsEngine::Console_EnableFeature(const std::string& feature, bool enabled) {
-    if (feature == "vsync") {
+void GraphicsEngine::Console_EnableFeature(const std::string& feature, bool enabled)
+{
+    if (feature == "vsync")
+    {
         m_settings.vsync = enabled;
-    } else if (feature == "wireframe") {
+    }
+    else if (feature == "wireframe")
+    {
         m_settings.wireframeMode = enabled;
         ApplyGraphicsState();
-    } else if (feature == "shadows") {
+    }
+    else if (feature == "shadows")
+    {
         m_settings.shadows = enabled;
-        if (m_lightingSystem) {
+        if (m_lightingSystem)
+        {
             m_lightingSystem->EnableShadows(enabled);
         }
-    } else if (feature == "bloom") {
+    }
+    else if (feature == "bloom")
+    {
         m_settings.bloom = enabled;
-    } else if (feature == "ssao") {
+    }
+    else if (feature == "ssao")
+    {
         m_settings.ssao = enabled;
-    } else if (feature == "taa") {
+    }
+    else if (feature == "taa")
+    {
         m_settings.taa = enabled;
-    } else if (feature == "hdr") {
+    }
+    else if (feature == "hdr")
+    {
         m_settings.hdr = enabled;
         m_hdrEnabled = enabled;
-    } else if (feature == "frustum_culling") {
+    }
+    else if (feature == "frustum_culling")
+    {
         m_settings.frustumCulling = enabled;
     }
-    
+
     std::wstring featureName(feature.begin(), feature.end());
     std::wstring statusMsg = enabled ? L" enabled" : L" disabled";
     LOG_TO_CONSOLE_IMMEDIATE(featureName + statusMsg, L"INFO");
 }
 
-void GraphicsEngine::Console_SetSetting(const std::string& setting, float value) {
-    if (setting == "shadow_map_size") {
+void GraphicsEngine::Console_SetSetting(const std::string& setting, float value)
+{
+    if (setting == "shadow_map_size")
+    {
         m_settings.shadowMapSize = static_cast<uint32_t>(value);
-        if (m_lightingSystem) {
+        if (m_lightingSystem)
+        {
             m_lightingSystem->SetGlobalShadowQuality(m_settings.shadowMapSize);
         }
-    } else if (setting == "max_texture_size") {
+    }
+    else if (setting == "max_texture_size")
+    {
         m_settings.maxTextureSize = static_cast<uint32_t>(value);
-    } else if (setting == "anisotropy_level") {
+    }
+    else if (setting == "anisotropy_level")
+    {
         m_settings.anisotropyLevel = static_cast<uint32_t>(value);
-    } else if (setting == "msaa_samples") {
+    }
+    else if (setting == "msaa_samples")
+    {
         m_settings.msaaSamples = static_cast<uint32_t>(value);
-    } else if (setting == "render_scale") {
+    }
+    else if (setting == "render_scale")
+    {
         m_settings.renderScale = value;
     }
-    
+
     std::wstring settingName(setting.begin(), setting.end());
     LOG_TO_CONSOLE_IMMEDIATE(settingName + L" set to " + std::to_wstring(value), L"INFO");
 }
 
-void GraphicsEngine::Console_ReloadShaders() {
+void GraphicsEngine::Console_ReloadShaders()
+{
     LOG_TO_CONSOLE_IMMEDIATE(L"Reloading shaders via console", L"INFO");
-    
+
     // Release existing shaders
     m_basicVertexShader.Reset();
     m_basicPixelShader.Reset();
     m_basicInputLayout.Reset();
-    
+
     // Reinitialize shader system
     HRESULT hr = InitializeBasicShaders();
-    if (SUCCEEDED(hr)) {
+    if (SUCCEEDED(hr))
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Shaders reloaded successfully", L"SUCCESS");
-    } else {
+    }
+    else
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to reload shaders", L"ERROR");
     }
 }
 
-bool GraphicsEngine::Console_Screenshot(const std::string& filename) {
+bool GraphicsEngine::Console_Screenshot(const std::string& filename)
+{
     LOG_TO_CONSOLE_IMMEDIATE(L"Taking screenshot", L"INFO");
 
     std::string actualFilename = filename;
-    if (actualFilename.empty()) {
+    if (actualFilename.empty())
+    {
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);
         std::stringstream ss;
@@ -2004,70 +2276,87 @@ bool GraphicsEngine::Console_Screenshot(const std::string& filename) {
         actualFilename = ss.str();
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot saved as " + std::wstring(actualFilename.begin(), actualFilename.end()), L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot saved as " + std::wstring(actualFilename.begin(), actualFilename.end()),
+                             L"SUCCESS");
     return true;
 }
 
-std::string GraphicsEngine::Console_GetSystemInfo() const {
+std::string GraphicsEngine::Console_GetSystemInfo() const
+{
     std::stringstream ss;
-    
+
     ss << "=== Graphics System Information ===\n";
     ss << "Window Resolution: " << m_windowWidth << "x" << m_windowHeight << "\n";
     ss << "Rendering Pipeline: ";
-    
-    switch (m_currentPipeline) {
-        case RenderingPipeline::Forward: ss << "Forward\n"; break;
-        case RenderingPipeline::Deferred: ss << "Deferred\n"; break;
-        case RenderingPipeline::ForwardPlus: ss << "Forward+\n"; break;
-        case RenderingPipeline::Clustered: ss << "Clustered\n"; break;
-        default: ss << "Unknown\n"; break;
+
+    switch (m_currentPipeline)
+    {
+    case RenderingPipeline::Forward:
+        ss << "Forward\n";
+        break;
+    case RenderingPipeline::Deferred:
+        ss << "Deferred\n";
+        break;
+    case RenderingPipeline::ForwardPlus:
+        ss << "Forward+\n";
+        break;
+    case RenderingPipeline::Clustered:
+        ss << "Clustered\n";
+        break;
+    default:
+        ss << "Unknown\n";
+        break;
     }
-    
+
     ss << "VSync: " << (m_settings.vsync ? "Enabled" : "Disabled") << "\n";
     ss << "HDR: " << (m_hdrEnabled ? "Enabled" : "Disabled") << "\n";
     ss << "MSAA Samples: " << m_settings.msaaSamples << "\n";
     ss << "Shadow Map Size: " << m_settings.shadowMapSize << "\n";
     ss << "Max Texture Size: " << m_settings.maxTextureSize << "\n";
     ss << "Anisotropy Level: " << m_settings.anisotropyLevel << "\n";
-    
+
     // Add memory usage
     size_t vramUsage = Console_GetVRAMUsage();
     ss << "VRAM Usage: " << (vramUsage / 1024 / 1024) << " MB\n";
-    
+
     return ss.str();
 }
 
-std::string GraphicsEngine::Console_Benchmark(int seconds) {
+std::string GraphicsEngine::Console_Benchmark(int seconds)
+{
     LOG_TO_CONSOLE_IMMEDIATE(L"Starting " + std::to_wstring(seconds) + L" second benchmark", L"INFO");
-    
+
     auto startTime = std::chrono::high_resolution_clock::now();
     int frameCount = 0;
     float totalFrameTime = 0.0f;
     float maxFrameTime = 0.0f;
     float minFrameTime = FLT_MAX;
-    
+
     // Simple benchmark - just count frames and measure timing
-    while (true) {
+    while (true)
+    {
         auto currentTime = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime);
-        
-        if (elapsed.count() >= seconds) {
+
+        if (elapsed.count() >= seconds)
+        {
             break;
         }
-        
+
         // Simulate frame timing
         auto frameStart = std::chrono::high_resolution_clock::now();
         std::this_thread::sleep_for(std::chrono::microseconds(16667)); // ~60 FPS
         auto frameEnd = std::chrono::high_resolution_clock::now();
-        
-        float frameTime = std::chrono::duration_cast<std::chrono::microseconds>(frameEnd - frameStart).count() / 1000.0f;
-        
+
+        float frameTime =
+            std::chrono::duration_cast<std::chrono::microseconds>(frameEnd - frameStart).count() / 1000.0f;
+
         totalFrameTime += frameTime;
         maxFrameTime = (std::max)(maxFrameTime, frameTime);
         minFrameTime = (std::min)(minFrameTime, frameTime);
         frameCount++;
     }
-    
+
     std::stringstream ss;
     ss << "=== Benchmark Results ===\n";
     ss << "Duration: " << seconds << " seconds\n";
@@ -2076,177 +2365,215 @@ std::string GraphicsEngine::Console_Benchmark(int seconds) {
     ss << "Average Frame Time: " << (totalFrameTime / frameCount) << " ms\n";
     ss << "Min Frame Time: " << minFrameTime << " ms\n";
     ss << "Max Frame Time: " << maxFrameTime << " ms\n";
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Benchmark completed", L"SUCCESS");
-    
+
     return ss.str();
 }
 
-void GraphicsEngine::Console_SetWireframe(bool enabled) {
+void GraphicsEngine::Console_SetWireframe(bool enabled)
+{
     m_settings.wireframeMode = enabled;
     ApplyGraphicsState();
     LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"Wireframe mode enabled" : L"Wireframe mode disabled", L"INFO");
 }
 
-void GraphicsEngine::Console_SetWireframeMode(bool enabled) {
+void GraphicsEngine::Console_SetWireframeMode(bool enabled)
+{
     Console_SetWireframe(enabled);
 }
 
-void GraphicsEngine::Console_SetVSync(bool enabled) {
+void GraphicsEngine::Console_SetVSync(bool enabled)
+{
     m_settings.vsync = enabled;
     LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"VSync enabled" : L"VSync disabled", L"INFO");
 }
 
-void GraphicsEngine::Console_SetRenderingPipeline(RenderingPipeline pipeline) {
+void GraphicsEngine::Console_SetRenderingPipeline(RenderingPipeline pipeline)
+{
     SetRenderingPipeline(pipeline);
 }
 
-void GraphicsEngine::Console_SetHDR(bool enabled) {
+void GraphicsEngine::Console_SetHDR(bool enabled)
+{
     SetHDREnabled(enabled);
 }
 
-bool GraphicsEngine::Console_TakeScreenshot(const std::string& filename) {
+bool GraphicsEngine::Console_TakeScreenshot(const std::string& filename)
+{
     return Console_Screenshot(filename);
 }
 
-void GraphicsEngine::Console_ForceGarbageCollection() {
+void GraphicsEngine::Console_ForceGarbageCollection()
+{
     LOG_TO_CONSOLE_IMMEDIATE(L"Forcing garbage collection", L"INFO");
-    
+
     // Force release of temporary resources
-    if (m_textureSystem) {
-        try {
+    if (m_textureSystem)
+    {
+        try
+        {
             // If texture system has a cleanup method, call it
             LOG_TO_CONSOLE_IMMEDIATE(L"Texture system cleanup triggered", L"INFO");
-        } catch (...) {
+        }
+        catch (...)
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Texture system cleanup failed", L"WARNING");
         }
     }
-    
-    if (m_assetPipeline) {
-        try {
+
+    if (m_assetPipeline)
+    {
+        try
+        {
             m_assetPipeline->Console_ForceGC();
             LOG_TO_CONSOLE_IMMEDIATE(L"Asset pipeline garbage collection triggered", L"INFO");
-        } catch (...) {
+        }
+        catch (...)
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Asset pipeline GC failed", L"WARNING");
         }
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Garbage collection complete", L"SUCCESS");
 }
 
-RenderStatistics GraphicsEngine::Console_GetMetrics() const {
+RenderStatistics GraphicsEngine::Console_GetMetrics() const
+{
     return Console_GetStatistics(); // Delegates to canonical method
 }
 
-void GraphicsEngine::Console_SetGPUTiming(bool enabled) {
-    LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"Enabling GPU timing via console" : L"Disabling GPU timing via console", L"INFO");
-    
+void GraphicsEngine::Console_SetGPUTiming(bool enabled)
+{
+    LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"Enabling GPU timing via console" : L"Disabling GPU timing via console",
+                             L"INFO");
+
     // Update the setting
     m_settings.enableGPUTiming = enabled;
-    
+
     // If enabling, try to create the timing query if it doesn't exist
-    if (enabled && !m_gpuTimingQuery && m_device) {
+    if (enabled && !m_gpuTimingQuery && m_device)
+    {
         D3D11_QUERY_DESC queryDesc = {};
         queryDesc.Query = D3D11_QUERY_TIMESTAMP;
         HRESULT hr = m_device->CreateQuery(&queryDesc, &m_gpuTimingQuery);
-        
-        if (SUCCEEDED(hr)) {
+
+        if (SUCCEEDED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"GPU timing query created successfully", L"SUCCESS");
-        } else {
+        }
+        else
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create GPU timing query", L"ERROR");
             m_settings.enableGPUTiming = false; // Revert setting if creation failed
         }
     }
-    
+
     // Notify state change
     NotifyStateChange();
-    
-    LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"GPU timing enabled successfully" : L"GPU timing disabled successfully", L"SUCCESS");
+
+    LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"GPU timing enabled successfully" : L"GPU timing disabled successfully",
+                             L"SUCCESS");
 }
 
-size_t GraphicsEngine::Console_GetVRAMUsage() const {
+size_t GraphicsEngine::Console_GetVRAMUsage() const
+{
     LOG_TO_CONSOLE_IMMEDIATE(L"Retrieving VRAM usage via console", L"INFO");
-    
+
     // Calculate total VRAM usage from tracked memory
     size_t totalUsage = m_textureMemoryUsage + m_bufferMemoryUsage;
-    
+
     // Add advanced system memory usage if available
-    if (m_textureSystem) {
-        try {
+    if (m_textureSystem)
+    {
+        try
+        {
             auto textureMetrics = m_textureSystem->Console_GetMetrics();
             totalUsage = textureMetrics.totalMemoryUsage + m_bufferMemoryUsage;
-        } catch (...) {
+        }
+        catch (...)
+        {
             // Fall back to tracked usage if metrics are unavailable
         }
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"VRAM usage retrieved: " + std::to_wstring(totalUsage / 1024 / 1024) + L" MB", L"INFO");
-    
+
     return totalUsage;
 }
 
-GraphicsSettings GraphicsEngine::Console_GetSettings() const {
+GraphicsSettings GraphicsEngine::Console_GetSettings() const
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     return m_settings;
 }
 
-void GraphicsEngine::Console_ApplySettings(const GraphicsSettings& settings) {
+void GraphicsEngine::Console_ApplySettings(const GraphicsSettings& settings)
+{
     m_settings = settings;
     ApplyGraphicsState();
     ApplyAdvancedGraphicsState();
     NotifyStateChange();
 }
 
-void GraphicsEngine::Console_ResetToDefaults() {
+void GraphicsEngine::Console_ResetToDefaults()
+{
     LOG_TO_CONSOLE_IMMEDIATE(L"Resetting graphics settings to defaults via console", L"INFO");
-    
+
     // Create a new default settings structure
     GraphicsSettings defaults;
-    
+
     // Apply the default settings
     m_settings = defaults;
-    
+
     // Apply the graphics state changes
     ApplyGraphicsState();
     ApplyAdvancedGraphicsState();
-    
+
     // Notify state change if callback is registered
     NotifyStateChange();
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Graphics settings reset to defaults successfully", L"SUCCESS");
 }
 
-void GraphicsEngine::Console_RegisterStateCallback(std::function<void()> callback) {
+void GraphicsEngine::Console_RegisterStateCallback(std::function<void()> callback)
+{
     m_stateCallback = callback;
 }
 
-void GraphicsEngine::Console_ResetDevice() {
+void GraphicsEngine::Console_ResetDevice()
+{
     LOG_TO_CONSOLE_IMMEDIATE(L"Graphics device reset requested via console", L"WARNING");
-    
-    if (!m_device || !m_swapChain) {
+
+    if (!m_device || !m_swapChain)
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Graphics device not available for reset", L"ERROR");
         return;
     }
 
-    try {
+    try
+    {
         m_context->OMSetRenderTargets(0, nullptr, nullptr);
         m_renderTargetView.Reset();
         m_depthStencilView.Reset();
 
         HRESULT hr = m_swapChain->ResizeBuffers(0, m_windowWidth, m_windowHeight, DXGI_FORMAT_UNKNOWN, 0);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to resize buffers during device reset", L"ERROR");
             return;
         }
 
         hr = CreateRenderTargetView();
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to recreate render target view", L"ERROR");
             return;
         }
 
         hr = CreateDepthStencilView();
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Failed to recreate depth stencil view", L"ERROR");
             return;
         }
@@ -2256,18 +2583,21 @@ void GraphicsEngine::Console_ResetDevice() {
         ApplyAdvancedGraphicsState();
 
         LOG_TO_CONSOLE_IMMEDIATE(L"Graphics device reset complete", L"SUCCESS");
-
-    } catch (...) {
+    }
+    catch (...)
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Exception occurred during device reset", L"ERROR");
     }
 }
 
-void GraphicsEngine::Console_SetDebugMode(bool enabled) {
+void GraphicsEngine::Console_SetDebugMode(bool enabled)
+{
     m_settings.debugMode = enabled;
     LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"Debug mode enabled" : L"Debug mode disabled", L"INFO");
 }
 
-void GraphicsEngine::Console_SetClearColor(float r, float g, float b, float a) {
+void GraphicsEngine::Console_SetClearColor(float r, float g, float b, float a)
+{
     m_settings.clearColor[0] = (std::max)(0.0f, (std::min)(1.0f, r));
     m_settings.clearColor[1] = (std::max)(0.0f, (std::min)(1.0f, g));
     m_settings.clearColor[2] = (std::max)(0.0f, (std::min)(1.0f, b));
@@ -2275,7 +2605,8 @@ void GraphicsEngine::Console_SetClearColor(float r, float g, float b, float a) {
     LOG_TO_CONSOLE_IMMEDIATE(L"Clear color set", L"INFO");
 }
 
-void GraphicsEngine::Console_SetRenderScale(float scale) {
+void GraphicsEngine::Console_SetRenderScale(float scale)
+{
     m_settings.renderScale = (std::max)(0.1f, (std::min)(4.0f, scale));
     LOG_TO_CONSOLE_IMMEDIATE(L"Render scale set to " + std::to_wstring(scale), L"INFO");
 }
@@ -2288,24 +2619,25 @@ void GraphicsEngine::SetRenderPath(RenderPath path)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Setting render path", L"INFO");
     m_settings.renderPath = path;
-    
-    switch (path) {
-        case RenderPath::Forward:
-            m_currentPipeline = RenderingPipeline::Forward;
-            break;
-        case RenderPath::Deferred:
-            m_currentPipeline = RenderingPipeline::Deferred;
-            SetupDeferredPipeline();
-            break;
-        case RenderPath::ForwardPlus:
-            m_currentPipeline = RenderingPipeline::ForwardPlus;
-            SetupForwardPlusPipeline();
-            break;
-        case RenderPath::Clustered:
-            m_currentPipeline = RenderingPipeline::Clustered;
-            break;
+
+    switch (path)
+    {
+    case RenderPath::Forward:
+        m_currentPipeline = RenderingPipeline::Forward;
+        break;
+    case RenderPath::Deferred:
+        m_currentPipeline = RenderingPipeline::Deferred;
+        SetupDeferredPipeline();
+        break;
+    case RenderPath::ForwardPlus:
+        m_currentPipeline = RenderingPipeline::ForwardPlus;
+        SetupForwardPlusPipeline();
+        break;
+    case RenderPath::Clustered:
+        m_currentPipeline = RenderingPipeline::Clustered;
+        break;
     }
-    
+
     NotifyStateChange();
     LOG_TO_CONSOLE_IMMEDIATE(L"Render path changed", L"INFO");
 }
@@ -2313,57 +2645,58 @@ void GraphicsEngine::SetRenderPath(RenderPath path)
 void GraphicsEngine::SetQualityPreset(QualityPreset preset)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Applying quality preset", L"INFO");
-    
-    switch (preset) {
-        case QualityPreset::Low:
-            m_settings.msaaSamples = 1;
-            m_settings.shadowMapSize = 512;
-            m_settings.maxTextureSize = 512;
-            m_settings.anisotropyLevel = 1;
-            m_settings.shadows = false;
-            m_settings.bloom = false;
-            m_settings.ssao = false;
-            m_settings.taa = false;
-            break;
-            
-        case QualityPreset::Medium:
-            m_settings.msaaSamples = 2;
-            m_settings.shadowMapSize = 1024;
-            m_settings.maxTextureSize = 1024;
-            m_settings.anisotropyLevel = 4;
-            m_settings.shadows = true;
-            m_settings.bloom = true;
-            m_settings.ssao = false;
-            m_settings.taa = false;
-            break;
-            
-        case QualityPreset::High:
-            m_settings.msaaSamples = 4;
-            m_settings.shadowMapSize = 2048;
-            m_settings.maxTextureSize = 2048;
-            m_settings.anisotropyLevel = 8;
-            m_settings.shadows = true;
-            m_settings.bloom = true;
-            m_settings.ssao = true;
-            m_settings.taa = false;
-            break;
-            
-        case QualityPreset::Ultra:
-            m_settings.msaaSamples = 8;
-            m_settings.shadowMapSize = 4096;
-            m_settings.maxTextureSize = 4096;
-            m_settings.anisotropyLevel = 16;
-            m_settings.shadows = true;
-            m_settings.bloom = true;
-            m_settings.ssao = true;
-            m_settings.taa = true;
-            break;
-            
-        case QualityPreset::Custom:
-            LOG_TO_CONSOLE_IMMEDIATE(L"Custom quality preset selected - no changes applied", L"INFO");
-            return;
+
+    switch (preset)
+    {
+    case QualityPreset::Low:
+        m_settings.msaaSamples = 1;
+        m_settings.shadowMapSize = 512;
+        m_settings.maxTextureSize = 512;
+        m_settings.anisotropyLevel = 1;
+        m_settings.shadows = false;
+        m_settings.bloom = false;
+        m_settings.ssao = false;
+        m_settings.taa = false;
+        break;
+
+    case QualityPreset::Medium:
+        m_settings.msaaSamples = 2;
+        m_settings.shadowMapSize = 1024;
+        m_settings.maxTextureSize = 1024;
+        m_settings.anisotropyLevel = 4;
+        m_settings.shadows = true;
+        m_settings.bloom = true;
+        m_settings.ssao = false;
+        m_settings.taa = false;
+        break;
+
+    case QualityPreset::High:
+        m_settings.msaaSamples = 4;
+        m_settings.shadowMapSize = 2048;
+        m_settings.maxTextureSize = 2048;
+        m_settings.anisotropyLevel = 8;
+        m_settings.shadows = true;
+        m_settings.bloom = true;
+        m_settings.ssao = true;
+        m_settings.taa = false;
+        break;
+
+    case QualityPreset::Ultra:
+        m_settings.msaaSamples = 8;
+        m_settings.shadowMapSize = 4096;
+        m_settings.maxTextureSize = 4096;
+        m_settings.anisotropyLevel = 16;
+        m_settings.shadows = true;
+        m_settings.bloom = true;
+        m_settings.ssao = true;
+        m_settings.taa = true;
+        break;
+
+    case QualityPreset::Custom:
+        LOG_TO_CONSOLE_IMMEDIATE(L"Custom quality preset selected - no changes applied", L"INFO");
+        return;
     }
-    
+
     m_settings.qualityPreset = preset;
     ApplyQualityPreset(preset);
     ApplyGraphicsState();
@@ -2371,46 +2704,56 @@ void GraphicsEngine::SetQualityPreset(QualityPreset preset)
     LOG_TO_CONSOLE_IMMEDIATE(L"Quality preset applied successfully", L"SUCCESS");
 }
 
-void GraphicsEngine::SetRenderingPipeline(RenderingPipeline pipeline) {
+void GraphicsEngine::SetRenderingPipeline(RenderingPipeline pipeline)
+{
     LOG_TO_CONSOLE_IMMEDIATE(L"Setting rendering pipeline", L"INFO");
     m_currentPipeline = pipeline;
-    
+
     // Update corresponding settings
-    switch (pipeline) {
-        case RenderingPipeline::Forward:
-            m_settings.renderPath = RenderPath::Forward;
-            break;
-        case RenderingPipeline::Deferred:
-            m_settings.renderPath = RenderPath::Deferred;
-            SetupDeferredPipeline();
-            break;
-        case RenderingPipeline::ForwardPlus:
-            m_settings.renderPath = RenderPath::ForwardPlus;
-            SetupForwardPlusPipeline();
-            break;
-        case RenderingPipeline::Clustered:
-            m_settings.renderPath = RenderPath::Clustered;
-            break;
+    switch (pipeline)
+    {
+    case RenderingPipeline::Forward:
+        m_settings.renderPath = RenderPath::Forward;
+        break;
+    case RenderingPipeline::Deferred:
+        m_settings.renderPath = RenderPath::Deferred;
+        SetupDeferredPipeline();
+        break;
+    case RenderingPipeline::ForwardPlus:
+        m_settings.renderPath = RenderPath::ForwardPlus;
+        SetupForwardPlusPipeline();
+        break;
+    case RenderingPipeline::Clustered:
+        m_settings.renderPath = RenderPath::Clustered;
+        break;
     }
-    
+
     NotifyStateChange();
 }
 
-void GraphicsEngine::SetHDREnabled(bool enabled) {
+void GraphicsEngine::SetHDREnabled(bool enabled)
+{
     LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"Enabling HDR" : L"Disabling HDR", L"INFO");
     m_hdrEnabled = enabled;
     m_settings.hdr = enabled;
     NotifyStateChange();
 }
 
-void GraphicsEngine::NotifyStateChange() {
-    if (m_stateCallback) {
-        try {
+void GraphicsEngine::NotifyStateChange()
+{
+    if (m_stateCallback)
+    {
+        try
+        {
             m_stateCallback();
-        } catch (const std::exception& e) {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Error in state change callback: " + 
-                std::wstring(e.what(), e.what() + strlen(e.what())), L"ERROR");
-        } catch (...) {
+        }
+        catch (const std::exception& e)
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(
+                L"Error in state change callback: " + std::wstring(e.what(), e.what() + strlen(e.what())), L"ERROR");
+        }
+        catch (...)
+        {
             LOG_TO_CONSOLE_IMMEDIATE(L"Unknown error in state change callback", L"ERROR");
         }
     }
@@ -2419,37 +2762,62 @@ void GraphicsEngine::NotifyStateChange() {
 void GraphicsEngine::ApplyQualityPreset(QualityPreset preset)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Applying quality preset configurations", L"INFO");
-    
+
     // Apply preset-specific configurations to subsystems
-    if (m_lightingSystem) {
+    if (m_lightingSystem)
+    {
         m_lightingSystem->EnableShadows(m_settings.shadows);
         m_lightingSystem->SetGlobalShadowQuality(m_settings.shadowMapSize);
     }
-    
-    if (m_materialSystem) {
+
+    if (m_materialSystem)
+    {
         std::string quality;
-        switch (preset) {
-            case QualityPreset::Low: quality = "low"; break;
-            case QualityPreset::Medium: quality = "medium"; break;
-            case QualityPreset::High: quality = "high"; break;
-            case QualityPreset::Ultra: quality = "ultra"; break;
-            default: quality = "medium"; break;
+        switch (preset)
+        {
+        case QualityPreset::Low:
+            quality = "low";
+            break;
+        case QualityPreset::Medium:
+            quality = "medium";
+            break;
+        case QualityPreset::High:
+            quality = "high";
+            break;
+        case QualityPreset::Ultra:
+            quality = "ultra";
+            break;
+        default:
+            quality = "medium";
+            break;
         }
         m_materialSystem->Console_SetTextureQuality(quality);
     }
-    
-    if (m_textureSystem) {
+
+    if (m_textureSystem)
+    {
         std::string quality;
-        switch (preset) {
-            case QualityPreset::Low: quality = "low"; break;
-            case QualityPreset::Medium: quality = "medium"; break;
-            case QualityPreset::High: quality = "high"; break;
-            case QualityPreset::Ultra: quality = "ultra"; break;
-            default: quality = "medium"; break;
+        switch (preset)
+        {
+        case QualityPreset::Low:
+            quality = "low";
+            break;
+        case QualityPreset::Medium:
+            quality = "medium";
+            break;
+        case QualityPreset::High:
+            quality = "high";
+            break;
+        case QualityPreset::Ultra:
+            quality = "ultra";
+            break;
+        default:
+            quality = "medium";
+            break;
         }
         m_textureSystem->Console_SetQuality(quality);
     }
-    
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Quality preset configurations applied", L"INFO");
 }
 
@@ -2459,35 +2827,42 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
         return;
     else
     {
-		LOG_TO_CONSOLE_IMMEDIATE(L"Handling window resize to " + std::to_wstring(width) + L"x" + std::to_wstring(height), L"INFO");
+        LOG_TO_CONSOLE_IMMEDIATE(
+            L"Handling window resize to " + std::to_wstring(width) + L"x" + std::to_wstring(height), L"INFO");
     }
 
     m_windowWidth = width;
     m_windowHeight = height;
 
-    if (m_context) {
+    if (m_context)
+    {
         m_context->OMSetRenderTargets(0, nullptr, nullptr);
     }
-    else {
+    else
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Device context not available during resize", L"WARNING");
-	}
+    }
     m_renderTargetView.Reset();
     m_depthStencilView.Reset();
-    if (m_swapChain) {
+    if (m_swapChain)
+    {
         HRESULT resizeHr = m_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
-        if (FAILED(resizeHr)) {
+        if (FAILED(resizeHr))
+        {
             SPARK_LOG_ERROR("Graphics", "SwapChain::ResizeBuffers failed HR=0x%08lX for size %ux%u",
                             static_cast<long>(resizeHr), width, height);
         }
     }
-    else {
+    else
+    {
         SPARK_LOG_WARN("Graphics", "Swap chain not available during resize to %ux%u", width, height);
     }
 
-    if (!m_device) {
+    if (!m_device)
+    {
         LOG_TO_CONSOLE_IMMEDIATE(L"Device not available during resize", L"ERROR");
         return;
-	}
+    }
 
     CreateRenderTargetView();
     CreateDepthStencilView();
@@ -2523,25 +2898,26 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
 // Stored as a local static so that the header (which uses ComPtr<> and D3D11
 // types) does not need to know about it.
 // ---------------------------------------------------------------------------
-namespace {
-
-struct LinuxRHIState
+namespace
 {
-    Spark::RHI::RHIBridge bridge;
-    bool initialized = false;
-    uint32_t width = 0;
-    uint32_t height = 0;
-    std::chrono::high_resolution_clock::time_point frameStart;
-    uint32_t frameCount = 0;
-    float accumulatedTime = 0.0f;
-    uint32_t measuredFps = 0;
-};
 
-static LinuxRHIState& GetRHI()
-{
-    static LinuxRHIState s;
-    return s;
-}
+    struct LinuxRHIState
+    {
+        Spark::RHI::RHIBridge bridge;
+        bool initialized = false;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        std::chrono::high_resolution_clock::time_point frameStart;
+        uint32_t frameCount = 0;
+        float accumulatedTime = 0.0f;
+        uint32_t measuredFps = 0;
+    };
+
+    static LinuxRHIState& GetRHI()
+    {
+        static LinuxRHIState s;
+        return s;
+    }
 
 } // anonymous namespace
 
@@ -2550,20 +2926,9 @@ static LinuxRHIState& GetRHI()
 // ============================================================================
 
 GraphicsEngine::GraphicsEngine()
-    : m_currentPipeline(RenderPath::Forward)
-    , m_settings()
-    , m_statistics()
-    , m_width(0)
-    , m_height(0)
-    , m_fullscreen(false)
-    , m_hwnd(nullptr)
-    , m_hdrEnabled(false)
-    , m_msaaLevel(MSAALevel::None)
-    , m_windowWidth(0)
-    , m_windowHeight(0)
-    , m_frameInProgress(false)
-    , m_textureMemoryUsage(0)
-    , m_bufferMemoryUsage(0)
+    : m_currentPipeline(RenderPath::Forward), m_settings(), m_statistics(), m_width(0), m_height(0),
+      m_fullscreen(false), m_hwnd(nullptr), m_hdrEnabled(false), m_msaaLevel(MSAALevel::None), m_windowWidth(0),
+      m_windowHeight(0), m_frameInProgress(false), m_textureMemoryUsage(0), m_bufferMemoryUsage(0)
 {
 }
 
@@ -2591,14 +2956,11 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     // Select the best available backend (Vulkan preferred, OpenGL fallback)
     Spark::RHI::GraphicsBackend backend = Spark::RHI::RHIBridge::GetRecommendedBackend();
 
-    bool ok = rhi.bridge.Initialize(
-        static_cast<void*>(hWnd),
-        m_width, m_height,
-        backend,
+    bool ok = rhi.bridge.Initialize(static_cast<void*>(hWnd), m_width, m_height, backend,
 #ifndef NDEBUG
-        true   // enable validation in debug builds
+                                    true // enable validation in debug builds
 #else
-        false
+                                    false
 #endif
     );
 
@@ -2622,8 +2984,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     // m_physicsSystem is set via SetPhysicsSystem() after engine init
     m_lightManager = std::make_unique<LightManager>();
 
-    std::cout << "[GraphicsEngine] Initialized on Linux via RHI ("
-              << rhi.bridge.GetBackendName() << ")" << std::endl;
+    std::cout << "[GraphicsEngine] Initialized on Linux via RHI (" << rhi.bridge.GetBackendName() << ")" << std::endl;
 
     return S_OK;
 }
@@ -2635,7 +2996,8 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 void GraphicsEngine::Shutdown()
 {
     auto& rhi = GetRHI();
-    if (!rhi.initialized) return;
+    if (!rhi.initialized)
+        return;
 
     // Tear down subsystems
     m_textureSystem.reset();
@@ -2643,7 +3005,7 @@ void GraphicsEngine::Shutdown()
     m_lightingSystem.reset();
     m_postProcessingSystem.reset();
     m_assetPipeline.reset();
-    m_physicsSystem = nullptr;  // Non-owning, just clear the pointer
+    m_physicsSystem = nullptr; // Non-owning, just clear the pointer
     m_lightManager.reset();
     m_postProcessing.reset();
     m_temporalEffects.reset();
@@ -2661,10 +3023,12 @@ void GraphicsEngine::Shutdown()
 
 HRESULT GraphicsEngine::Resize(uint32_t width, uint32_t height)
 {
-    if (width == 0 || height == 0) return E_INVALIDARG;
+    if (width == 0 || height == 0)
+        return E_INVALIDARG;
 
     auto& rhi = GetRHI();
-    if (!rhi.initialized) return E_FAIL;
+    if (!rhi.initialized)
+        return E_FAIL;
 
     if (!rhi.bridge.Resize(width, height))
         return E_FAIL;
@@ -2691,7 +3055,8 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
 void GraphicsEngine::BeginFrame()
 {
     auto& rhi = GetRHI();
-    if (!rhi.initialized) return;
+    if (!rhi.initialized)
+        return;
 
     bool expected = false;
     if (!m_frameInProgress.compare_exchange_strong(expected, true))
@@ -2744,8 +3109,10 @@ void GraphicsEngine::BeginFrame()
 void GraphicsEngine::EndFrame()
 {
     auto& rhi = GetRHI();
-    if (!rhi.initialized) return;
-    if (!m_frameInProgress.load()) return;
+    if (!rhi.initialized)
+        return;
+    if (!m_frameInProgress.load())
+        return;
 
     rhi.bridge.EndFrame();
     rhi.bridge.Present(m_settings.vsync);
@@ -2783,15 +3150,16 @@ void GraphicsEngine::EndFrame()
 // RenderScene
 // ============================================================================
 
-void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix,
-                                  const DirectX::XMMATRIX& projMatrix,
-                                  const std::vector<GameObject*>& objects)
+void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix,
+                                 const std::vector<GameObject*>& objects)
 {
     auto& rhi = GetRHI();
-    if (!rhi.initialized) return;
+    if (!rhi.initialized)
+        return;
 
     Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-    if (!cmd) return;
+    if (!cmd)
+        return;
 
     cmd->BeginEvent("RenderScene");
 
@@ -2800,8 +3168,10 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix,
 
     for (auto* obj : objects)
     {
-        if (!obj) continue;
-        if (!obj->IsActive() || !obj->IsVisible()) continue;
+        if (!obj)
+            continue;
+        if (!obj->IsActive() || !obj->IsVisible())
+            continue;
 
         visibleCount++;
 
@@ -2821,13 +3191,34 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix,
 // System Accessors
 // ============================================================================
 
-TextureSystem*         GraphicsEngine::GetTextureSystem()        const { return m_textureSystem.get(); }
-MaterialSystem*        GraphicsEngine::GetMaterialSystem()       const { return m_materialSystem.get(); }
-LightingSystem*        GraphicsEngine::GetLightingSystem()       const { return m_lightingSystem.get(); }
-PostProcessingSystem*  GraphicsEngine::GetPostProcessingSystem() const { return m_postProcessingSystem.get(); }
-AssetPipeline*         GraphicsEngine::GetAssetPipeline()        const { return m_assetPipeline.get(); }
-PhysicsSystem*         GraphicsEngine::GetPhysicsSystem()        const { return m_physicsSystem; }
-LightManager*          GraphicsEngine::GetLightManager()         const { return m_lightManager.get(); }
+TextureSystem* GraphicsEngine::GetTextureSystem() const
+{
+    return m_textureSystem.get();
+}
+MaterialSystem* GraphicsEngine::GetMaterialSystem() const
+{
+    return m_materialSystem.get();
+}
+LightingSystem* GraphicsEngine::GetLightingSystem() const
+{
+    return m_lightingSystem.get();
+}
+PostProcessingSystem* GraphicsEngine::GetPostProcessingSystem() const
+{
+    return m_postProcessingSystem.get();
+}
+AssetPipeline* GraphicsEngine::GetAssetPipeline() const
+{
+    return m_assetPipeline.get();
+}
+PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const
+{
+    return m_physicsSystem;
+}
+LightManager* GraphicsEngine::GetLightManager() const
+{
+    return m_lightManager.get();
+}
 
 // ============================================================================
 // Rendering Settings
@@ -2938,13 +3329,34 @@ void GraphicsEngine::SetVolumetricSettings(const VolumetricSettings& settings)
 // D3D11 Resource Access — return nullptr on Linux
 // ============================================================================
 
-ID3D11Device*           GraphicsEngine::GetDevice()           const { return nullptr; }
-ID3D11DeviceContext*    GraphicsEngine::GetContext()          const { return nullptr; }
-UINT                    GraphicsEngine::GetWindowWidth()      const { return m_windowWidth; }
-UINT                    GraphicsEngine::GetWindowHeight()     const { return m_windowHeight; }
-IDXGISwapChain*         GraphicsEngine::GetSwapChain()       const { return nullptr; }
-ID3D11RenderTargetView* GraphicsEngine::GetBackBufferRTV()   const { return nullptr; }
-ID3D11DepthStencilView* GraphicsEngine::GetDepthStencilView() const { return nullptr; }
+ID3D11Device* GraphicsEngine::GetDevice() const
+{
+    return nullptr;
+}
+ID3D11DeviceContext* GraphicsEngine::GetContext() const
+{
+    return nullptr;
+}
+UINT GraphicsEngine::GetWindowWidth() const
+{
+    return m_windowWidth;
+}
+UINT GraphicsEngine::GetWindowHeight() const
+{
+    return m_windowHeight;
+}
+IDXGISwapChain* GraphicsEngine::GetSwapChain() const
+{
+    return nullptr;
+}
+ID3D11RenderTargetView* GraphicsEngine::GetBackBufferRTV() const
+{
+    return nullptr;
+}
+ID3D11DepthStencilView* GraphicsEngine::GetDepthStencilView() const
+{
+    return nullptr;
+}
 
 // ============================================================================
 // Statistics
@@ -2964,8 +3376,7 @@ void GraphicsEngine::ResetStatistics()
 HRESULT GraphicsEngine::SaveScreenshot(const std::string& filename)
 {
     // Screenshots require platform-specific pixel readback; not yet implemented
-    std::cerr << "[GraphicsEngine] SaveScreenshot not implemented on Linux: "
-              << filename << std::endl;
+    std::cerr << "[GraphicsEngine] SaveScreenshot not implemented on Linux: " << filename << std::endl;
     return E_NOTIMPL;
 }
 
@@ -2981,43 +3392,68 @@ RenderStatistics GraphicsEngine::Console_GetStatistics() const
 
 void GraphicsEngine::Console_SetQuality(const std::string& preset)
 {
-    if (preset == "low")         SetQualityPreset(QualityPreset::Low);
-    else if (preset == "medium") SetQualityPreset(QualityPreset::Medium);
-    else if (preset == "high")   SetQualityPreset(QualityPreset::High);
-    else if (preset == "ultra")  SetQualityPreset(QualityPreset::Ultra);
-    else std::cerr << "[Console] Unknown quality preset: " << preset << std::endl;
+    if (preset == "low")
+        SetQualityPreset(QualityPreset::Low);
+    else if (preset == "medium")
+        SetQualityPreset(QualityPreset::Medium);
+    else if (preset == "high")
+        SetQualityPreset(QualityPreset::High);
+    else if (preset == "ultra")
+        SetQualityPreset(QualityPreset::Ultra);
+    else
+        std::cerr << "[Console] Unknown quality preset: " << preset << std::endl;
 }
 
 void GraphicsEngine::Console_SetRenderPath(const std::string& path)
 {
-    if (path == "forward")           SetRenderPath(RenderPath::Forward);
-    else if (path == "deferred")     SetRenderPath(RenderPath::Deferred);
-    else if (path == "forward+")     SetRenderPath(RenderPath::ForwardPlus);
-    else if (path == "forwardplus")  SetRenderPath(RenderPath::ForwardPlus);
-    else if (path == "clustered")    SetRenderPath(RenderPath::Clustered);
-    else std::cerr << "[Console] Unknown render path: " << path << std::endl;
+    if (path == "forward")
+        SetRenderPath(RenderPath::Forward);
+    else if (path == "deferred")
+        SetRenderPath(RenderPath::Deferred);
+    else if (path == "forward+")
+        SetRenderPath(RenderPath::ForwardPlus);
+    else if (path == "forwardplus")
+        SetRenderPath(RenderPath::ForwardPlus);
+    else if (path == "clustered")
+        SetRenderPath(RenderPath::Clustered);
+    else
+        std::cerr << "[Console] Unknown render path: " << path << std::endl;
 }
 
 void GraphicsEngine::Console_EnableFeature(const std::string& feature, bool enabled)
 {
-    if (feature == "bloom")            m_settings.bloom = enabled;
-    else if (feature == "ssao")        m_settings.ssao = enabled;
-    else if (feature == "taa")         m_settings.taa = enabled;
-    else if (feature == "motionblur")  m_settings.motionBlur = enabled;
-    else if (feature == "hdr")         SetHDREnabled(enabled);
-    else if (feature == "vsync")       m_settings.vsync = enabled;
-    else if (feature == "shadows")     m_settings.shadows = enabled;
-    else if (feature == "wireframe")   m_settings.wireframeMode = enabled;
-    else std::cerr << "[Console] Unknown feature: " << feature << std::endl;
+    if (feature == "bloom")
+        m_settings.bloom = enabled;
+    else if (feature == "ssao")
+        m_settings.ssao = enabled;
+    else if (feature == "taa")
+        m_settings.taa = enabled;
+    else if (feature == "motionblur")
+        m_settings.motionBlur = enabled;
+    else if (feature == "hdr")
+        SetHDREnabled(enabled);
+    else if (feature == "vsync")
+        m_settings.vsync = enabled;
+    else if (feature == "shadows")
+        m_settings.shadows = enabled;
+    else if (feature == "wireframe")
+        m_settings.wireframeMode = enabled;
+    else
+        std::cerr << "[Console] Unknown feature: " << feature << std::endl;
 }
 
 void GraphicsEngine::Console_SetSetting(const std::string& setting, float value)
 {
-    if (setting == "renderscale")       m_settings.renderScale = value;
-    else if (setting == "shadowmapsize") m_settings.shadowMapSize = static_cast<uint32_t>(value);
-    else if (setting == "anisotropy")   m_settings.anisotropyLevel = static_cast<uint32_t>(value);
-    else if (setting == "maxdrawcalls") m_settings.maxDrawCalls = static_cast<uint32_t>(value);
-    else std::cerr << "[Console] Unknown setting: " << setting << std::endl;
+    if (setting == "renderscale")
+        m_settings.renderScale = value;
+    else if (setting == "shadowmapsize")
+        m_settings.shadowMapSize = static_cast<uint32_t>(value);
+    else if (setting == "anisotropy")
+        m_settings.anisotropyLevel = static_cast<uint32_t>(value);
+    else if (setting == "maxdrawcalls")
+        m_settings.maxDrawCalls = static_cast<uint32_t>(value);
+    else
+        std::cerr << "[Console] Unknown setting: " << setting << std::endl;
 }
 
 void GraphicsEngine::Console_ReloadShaders()
@@ -3060,7 +3496,8 @@ std::string GraphicsEngine::Console_GetSystemInfo() const
 std::string GraphicsEngine::Console_Benchmark(int seconds)
 {
     auto& rhi = GetRHI();
-    if (!rhi.initialized) return "RHI not initialized — cannot benchmark.";
+    if (!rhi.initialized)
+        return "RHI not initialized — cannot benchmark.";
 
     auto start = std::chrono::high_resolution_clock::now();
     uint32_t frames = 0;
@@ -3070,7 +3507,8 @@ std::string GraphicsEngine::Console_Benchmark(int seconds)
     {
         auto now = std::chrono::high_resolution_clock::now();
         float elapsed = std::chrono::duration<float>(now - start).count();
-        if (elapsed >= static_cast<float>(seconds)) break;
+        if (elapsed >= static_cast<float>(seconds))
+            break;
 
         BeginFrame();
         EndFrame();
@@ -3142,7 +3580,8 @@ bool GraphicsEngine::Console_TakeScreenshot(const std::string& filename)
 void GraphicsEngine::Console_ResetDevice()
 {
     auto& rhi = GetRHI();
-    if (!rhi.initialized) return;
+    if (!rhi.initialized)
+        return;
 
     auto savedHwnd = m_hwnd;
     Shutdown();
@@ -3192,7 +3631,8 @@ void GraphicsEngine::Console_SetGPUTiming(bool enabled)
 size_t GraphicsEngine::Console_GetVRAMUsage() const
 {
     auto& rhi = GetRHI();
-    if (!rhi.initialized) return 0;
+    if (!rhi.initialized)
+        return 0;
     return rhi.bridge.GetFrameStatistics().gpuMemoryUsed;
 }
 
@@ -3217,17 +3657,15 @@ void GraphicsEngine::SetBasicShaders()
     // This is a no-op; shaders are set when pipeline states are created.
 }
 
-void GraphicsEngine::UpdateBasicConstants(const DirectX::XMMATRIX& /*world*/,
-                                           const DirectX::XMMATRIX& /*view*/,
-                                           const DirectX::XMMATRIX& /*proj*/)
+void GraphicsEngine::UpdateBasicConstants(const DirectX::XMMATRIX& /*world*/, const DirectX::XMMATRIX& /*view*/,
+                                          const DirectX::XMMATRIX& /*proj*/)
 {
     // Constant buffer updates go through the RHI bridge on Linux.
     // Individual subsystems using the RHI will update their own constant buffers.
 }
 
-void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& /*view*/,
-                                           const XMMATRIX& /*proj*/,
-                                           const XMFLOAT3& /*cameraPos*/)
+void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& /*view*/, const XMMATRIX& /*proj*/,
+                                          const XMFLOAT3& /*cameraPos*/)
 {
     // Frame constants are managed per-subsystem through the RHI on Linux.
 }
@@ -3236,43 +3674,86 @@ void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& /*view*/,
 // Private Methods — stubs for methods only used by the Windows pipeline
 // ============================================================================
 
-HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND)             { return E_NOTIMPL; }
-HRESULT GraphicsEngine::CreateDevice(HWND, uint32_t, uint32_t, bool) { return E_NOTIMPL; }
-HRESULT GraphicsEngine::CreateRenderTargetView()                   { return E_NOTIMPL; }
-HRESULT GraphicsEngine::CreateDepthStencilView()                   { return E_NOTIMPL; }
-HRESULT GraphicsEngine::CreateRenderTargets()                      { return E_NOTIMPL; }
-HRESULT GraphicsEngine::CreateAdvancedRenderTargets()              { return E_NOTIMPL; }
-HRESULT GraphicsEngine::CreateRenderStates()                       { return E_NOTIMPL; }
-void    GraphicsEngine::SetViewport()                              {}
-void    GraphicsEngine::UpdateMetrics()                            {}
-void    GraphicsEngine::UpdateAdvancedMetrics()                    {}
-void    GraphicsEngine::ApplyGraphicsState()                       {}
-void    GraphicsEngine::ApplyAdvancedGraphicsState()               {}
-void    GraphicsEngine::ApplyQualityPreset(QualityPreset)          {}
-void    GraphicsEngine::NotifyStateChange()
+HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND)
 {
-    if (m_stateCallback) m_stateCallback();
+    return E_NOTIMPL;
+}
+HRESULT GraphicsEngine::CreateDevice(HWND, uint32_t, uint32_t, bool)
+{
+    return E_NOTIMPL;
+}
+HRESULT GraphicsEngine::CreateRenderTargetView()
+{
+    return E_NOTIMPL;
+}
+HRESULT GraphicsEngine::CreateDepthStencilView()
+{
+    return E_NOTIMPL;
+}
+HRESULT GraphicsEngine::CreateRenderTargets()
+{
+    return E_NOTIMPL;
+}
+HRESULT GraphicsEngine::CreateAdvancedRenderTargets()
+{
+    return E_NOTIMPL;
+}
+HRESULT GraphicsEngine::CreateRenderStates()
+{
+    return E_NOTIMPL;
+}
+void GraphicsEngine::SetViewport() {}
+void GraphicsEngine::UpdateMetrics() {}
+void GraphicsEngine::UpdateAdvancedMetrics() {}
+void GraphicsEngine::ApplyGraphicsState() {}
+void GraphicsEngine::ApplyAdvancedGraphicsState() {}
+void GraphicsEngine::ApplyQualityPreset(QualityPreset) {}
+void GraphicsEngine::NotifyStateChange()
+{
+    if (m_stateCallback)
+        m_stateCallback();
 }
 
-void GraphicsEngine::SetupDeferredPipeline()     {}
-void GraphicsEngine::SetupForwardPlusPipeline()  {}
+void GraphicsEngine::SetupDeferredPipeline() {}
+void GraphicsEngine::SetupForwardPlusPipeline() {}
 
 void GraphicsEngine::RenderForward(const XMMATRIX&, const XMMATRIX&, const std::vector<GameObject*>&) {}
 void GraphicsEngine::RenderDeferred(const XMMATRIX&, const XMMATRIX&, const std::vector<GameObject*>&) {}
 void GraphicsEngine::RenderForwardPlus(const XMMATRIX&, const XMMATRIX&, const std::vector<GameObject*>&) {}
 void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>&, const XMMATRIX&, const XMMATRIX&) {}
 void GraphicsEngine::LightingPass(const XMMATRIX&, const XMMATRIX&) {}
-void GraphicsEngine::CullObjects(const std::vector<GameObject*>&, const XMMATRIX&, const XMMATRIX&, std::vector<GameObject*>&) {}
-void GraphicsEngine::RenderGeometryPass()     {}
-void GraphicsEngine::RenderLightingPass()     {}
-void GraphicsEngine::RenderPostProcessing()   {}
-void GraphicsEngine::RenderTemporalEffects()  {}
+void GraphicsEngine::CullObjects(const std::vector<GameObject*>&, const XMMATRIX&, const XMMATRIX&,
+                                 std::vector<GameObject*>&)
+{
+}
+void GraphicsEngine::RenderGeometryPass() {}
+void GraphicsEngine::RenderLightingPass() {}
+void GraphicsEngine::RenderPostProcessing() {}
+void GraphicsEngine::RenderTemporalEffects() {}
 
-HRESULT GraphicsEngine::InitializeBasicShaders()   { return S_OK; }
-HRESULT GraphicsEngine::CompileShaderFromFile(const std::wstring&, const char*, const char*, ID3DBlob**) { return E_NOTIMPL; }
-HRESULT GraphicsEngine::CreateBasicConstantBuffer() { return S_OK; }
-HRESULT GraphicsEngine::CreateDefaultTexture()      { return S_OK; }
-HRESULT GraphicsEngine::CompileEmbeddedVertexShader(ID3DBlob**) { return E_NOTIMPL; }
-HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob**)  { return E_NOTIMPL; }
+HRESULT GraphicsEngine::InitializeBasicShaders()
+{
+    return S_OK;
+}
+HRESULT GraphicsEngine::CompileShaderFromFile(const std::wstring&, const char*, const char*, ID3DBlob**)
+{
+    return E_NOTIMPL;
+}
+HRESULT GraphicsEngine::CreateBasicConstantBuffer()
+{
+    return S_OK;
+}
+HRESULT GraphicsEngine::CreateDefaultTexture()
+{
+    return S_OK;
+}
+HRESULT GraphicsEngine::CompileEmbeddedVertexShader(ID3DBlob**)
+{
+    return E_NOTIMPL;
+}
+HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob**)
+{
+    return E_NOTIMPL;
+}
 
 #endif // SPARK_PLATFORM_WINDOWS

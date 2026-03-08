@@ -19,7 +19,8 @@
 // ParticleEmitterComponent
 // =============================================================================
 
-struct ParticleEmitterComponent {
+struct ParticleEmitterComponent
+{
     std::string effectName;
     bool autoPlay = true;
     bool isPlaying = false;
@@ -35,7 +36,8 @@ struct ParticleEmitterComponent {
 // AnimationController
 // =============================================================================
 
-struct AnimationController {
+struct AnimationController
+{
     std::string currentAnimation;
     std::string defaultAnimation;
     float playbackSpeed = 1.0f;

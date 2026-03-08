@@ -19,8 +19,8 @@
 #include <string>
 #include <vector>
 #include <functional>
-#include <algorithm>   // std::max
-#include <sstream>     // std::wistringstream
+#include <algorithm> // std::max
+#include <sstream>   // std::wistringstream
 #include "Utils/Assert.h"
 
 /**
@@ -38,9 +38,7 @@
  * @note This is a simple implementation using OutputDebugString
  * @warning Parameters x, y, scale, and ctx are currently ignored
  */
-inline void DrawText(const std::wstring& text,
-    float /*x*/, float /*y*/, float /*scale*/,
-    ID3D11DeviceContext* /*ctx*/)
+inline void DrawText(const std::wstring& text, float /*x*/, float /*y*/, float /*scale*/, ID3D11DeviceContext* /*ctx*/)
 {
     OutputDebugStringW(text.c_str());
     OutputDebugStringW(L"\n");
@@ -55,7 +53,7 @@ inline void DrawText(const std::wstring& text,
  */
 struct ConsoleCommand
 {
-    std::wstring name; ///< Command name as typed by the user
+    std::wstring name;                                              ///< Command name as typed by the user
     std::function<void(const std::vector<std::wstring>&)> callback; ///< Function to execute when command is called
 };
 
@@ -79,7 +77,7 @@ struct ConsoleCommand
  */
 class Console
 {
-public:
+  public:
     /**
      * @brief Initialize the console system
      *
@@ -97,7 +95,8 @@ public:
      * Shows or hides the console interface and manages the mouse cursor
      * visibility accordingly.
      */
-    void Toggle() {
+    void Toggle()
+    {
         visible = !visible;
 #ifdef SPARK_PLATFORM_WINDOWS
         ShowCursor(visible);
@@ -108,7 +107,7 @@ public:
      * @brief Check if the console is currently visible
      * @return true if console is visible and active, false otherwise
      */
-    bool IsVisible()    const { return visible; }
+    bool IsVisible() const { return visible; }
 
     /**
      * @brief Handle character input for console text entry
@@ -119,7 +118,7 @@ public:
      * @param c Wide character from WM_CHAR message
      * @return true if character was handled, false otherwise
      */
-    bool HandleChar(wchar_t c);       // WM_CHAR
+    bool HandleChar(wchar_t c); // WM_CHAR
 
     /**
      * @brief Handle key down events for console control
@@ -130,7 +129,7 @@ public:
      * @param key Virtual key code from WM_KEYDOWN message
      * @return true if key was handled, false otherwise
      */
-    bool HandleKeyDown(WPARAM key);   // WM_KEYDOWN
+    bool HandleKeyDown(WPARAM key); // WM_KEYDOWN
 
     /**
      * @brief Add a log message to the console buffer
@@ -148,8 +147,7 @@ public:
      * @param name Command name
      * @param callback Function to call when command is executed
      */
-    void RegisterCommand(const std::wstring& name,
-                         std::function<void(const std::vector<std::wstring>&)> callback);
+    void RegisterCommand(const std::wstring& name, std::function<void(const std::vector<std::wstring>&)> callback);
 
     /**
      * @brief Render the console interface
@@ -166,20 +164,20 @@ public:
      */
     int GetCommandCount() const { return static_cast<int>(commands.size()); }
 
-private:
-    bool                      visible{ false }; ///< Whether console is currently visible
-    int                       width{ 0 }, height{ 0 }; ///< Screen dimensions for positioning
+  private:
+    bool visible{false};     ///< Whether console is currently visible
+    int width{0}, height{0}; ///< Screen dimensions for positioning
 
-    std::vector<std::wstring> buffer;       ///< Rolling log buffer for console messages
-    std::wstring              inputLine;    ///< Current user input line
-    std::vector<ConsoleCommand> commands;   ///< Registered console commands
+    std::vector<std::wstring> buffer;     ///< Rolling log buffer for console messages
+    std::wstring inputLine;               ///< Current user input line
+    std::vector<ConsoleCommand> commands; ///< Registered console commands
 
     // Command history for arrow key navigation
     std::vector<std::wstring> commandHistory; ///< History of executed commands
-    int historyIndex{ 0 };                    ///< Current position in history
+    int historyIndex{0};                      ///< Current position in history
 
     // Scroll offset for viewing older messages
-    int scrollOffset{ 0 };                    ///< Scroll position in buffer
+    int scrollOffset{0}; ///< Scroll position in buffer
 
     /**
      * @brief Parse and execute a command line

@@ -30,18 +30,15 @@ void GamepadInput::Update(float deltaTime)
         DWORD result = XInputGetState(i, &state.xinputState);
         state.connected = (result == ERROR_SUCCESS);
 
-        if (!state.connected) continue;
+        if (!state.connected)
+            continue;
 
         // Process thumbsticks with dead zone
-        state.leftStick = ApplyDeadZone(
-            state.xinputState.Gamepad.sThumbLX,
-            state.xinputState.Gamepad.sThumbLY,
-            m_leftStickDeadZone);
+        state.leftStick =
+            ApplyDeadZone(state.xinputState.Gamepad.sThumbLX, state.xinputState.Gamepad.sThumbLY, m_leftStickDeadZone);
 
-        state.rightStick = ApplyDeadZone(
-            state.xinputState.Gamepad.sThumbRX,
-            state.xinputState.Gamepad.sThumbRY,
-            m_rightStickDeadZone);
+        state.rightStick =
+            ApplyDeadZone(state.xinputState.Gamepad.sThumbRX, state.xinputState.Gamepad.sThumbRY, m_rightStickDeadZone);
 
         // Apply sensitivity
         state.leftStick.x *= m_stickSensitivity;
@@ -74,7 +71,8 @@ void GamepadInput::Update(float deltaTime)
 
 bool GamepadInput::IsConnected(int controllerIndex) const
 {
-    if (controllerIndex < 0 || controllerIndex >= MAX_CONTROLLERS) return false;
+    if (controllerIndex < 0 || controllerIndex >= MAX_CONTROLLERS)
+        return false;
     return m_states[controllerIndex].connected;
 }
 
@@ -82,7 +80,8 @@ int GamepadInput::GetConnectedCount() const
 {
     int count = 0;
     for (const auto& state : m_states)
-        if (state.connected) count++;
+        if (state.connected)
+            count++;
     return count;
 }
 
@@ -92,13 +91,15 @@ int GamepadInput::GetConnectedCount() const
 
 bool GamepadInput::IsButtonDown(GamepadButton button, int controllerIndex) const
 {
-    if (!IsConnected(controllerIndex)) return false;
+    if (!IsConnected(controllerIndex))
+        return false;
     return (m_states[controllerIndex].xinputState.Gamepad.wButtons & GetXInputButton(button)) != 0;
 }
 
 bool GamepadInput::WasButtonPressed(GamepadButton button, int controllerIndex) const
 {
-    if (!IsConnected(controllerIndex)) return false;
+    if (!IsConnected(controllerIndex))
+        return false;
     WORD btn = GetXInputButton(button);
     bool current = (m_states[controllerIndex].xinputState.Gamepad.wButtons & btn) != 0;
     bool previous = (m_states[controllerIndex].prevXinputState.Gamepad.wButtons & btn) != 0;
@@ -107,7 +108,8 @@ bool GamepadInput::WasButtonPressed(GamepadButton button, int controllerIndex) c
 
 bool GamepadInput::WasButtonReleased(GamepadButton button, int controllerIndex) const
 {
-    if (!IsConnected(controllerIndex)) return false;
+    if (!IsConnected(controllerIndex))
+        return false;
     WORD btn = GetXInputButton(button);
     bool current = (m_states[controllerIndex].xinputState.Gamepad.wButtons & btn) != 0;
     bool previous = (m_states[controllerIndex].prevXinputState.Gamepad.wButtons & btn) != 0;
@@ -120,20 +122,34 @@ bool GamepadInput::WasButtonReleased(GamepadButton button, int controllerIndex) 
 
 XMFLOAT2 GamepadInput::GetLeftStick(int controllerIndex) const
 {
-    if (!IsConnected(controllerIndex)) return {0, 0};
+    if (!IsConnected(controllerIndex))
+        return {0, 0};
     return m_states[controllerIndex].leftStick;
 }
 
 XMFLOAT2 GamepadInput::GetRightStick(int controllerIndex) const
 {
-    if (!IsConnected(controllerIndex)) return {0, 0};
+    if (!IsConnected(controllerIndex))
+        return {0, 0};
     return m_states[controllerIndex].rightStick;
 }
 
-float GamepadInput::GetLeftStickX(int controllerIndex) const { return GetLeftStick(controllerIndex).x; }
-float GamepadInput::GetLeftStickY(int controllerIndex) const { return GetLeftStick(controllerIndex).y; }
-float GamepadInput::GetRightStickX(int controllerIndex) const { return GetRightStick(controllerIndex).x; }
-float GamepadInput::GetRightStickY(int controllerIndex) const { return GetRightStick(controllerIndex).y; }
+float GamepadInput::GetLeftStickX(int controllerIndex) const
+{
+    return GetLeftStick(controllerIndex).x;
+}
+float GamepadInput::GetLeftStickY(int controllerIndex) const
+{
+    return GetLeftStick(controllerIndex).y;
+}
+float GamepadInput::GetRightStickX(int controllerIndex) const
+{
+    return GetRightStick(controllerIndex).x;
+}
+float GamepadInput::GetRightStickY(int controllerIndex) const
+{
+    return GetRightStick(controllerIndex).y;
+}
 
 // ============================================================================
 // Triggers
@@ -141,21 +157,22 @@ float GamepadInput::GetRightStickY(int controllerIndex) const { return GetRightS
 
 float GamepadInput::GetLeftTrigger(int controllerIndex) const
 {
-    if (!IsConnected(controllerIndex)) return 0.0f;
+    if (!IsConnected(controllerIndex))
+        return 0.0f;
     return m_states[controllerIndex].leftTrigger;
 }
 
 float GamepadInput::GetRightTrigger(int controllerIndex) const
 {
-    if (!IsConnected(controllerIndex)) return 0.0f;
+    if (!IsConnected(controllerIndex))
+        return 0.0f;
     return m_states[controllerIndex].rightTrigger;
 }
 
 bool GamepadInput::IsTriggerDown(GamepadTrigger trigger, float threshold, int controllerIndex) const
 {
-    float value = (trigger == GamepadTrigger::Left)
-        ? GetLeftTrigger(controllerIndex)
-        : GetRightTrigger(controllerIndex);
+    float value =
+        (trigger == GamepadTrigger::Left) ? GetLeftTrigger(controllerIndex) : GetRightTrigger(controllerIndex);
     return value >= threshold;
 }
 
@@ -165,7 +182,8 @@ bool GamepadInput::IsTriggerDown(GamepadTrigger trigger, float threshold, int co
 
 void GamepadInput::SetVibration(float leftMotor, float rightMotor, float duration, int controllerIndex)
 {
-    if (controllerIndex < 0 || controllerIndex >= MAX_CONTROLLERS) return;
+    if (controllerIndex < 0 || controllerIndex >= MAX_CONTROLLERS)
+        return;
 
     auto& state = m_states[controllerIndex];
     state.leftMotor = std::clamp(leftMotor, 0.0f, 1.0f);
@@ -180,7 +198,8 @@ void GamepadInput::SetVibration(float leftMotor, float rightMotor, float duratio
 
 void GamepadInput::StopVibration(int controllerIndex)
 {
-    if (controllerIndex < 0 || controllerIndex >= MAX_CONTROLLERS) return;
+    if (controllerIndex < 0 || controllerIndex >= MAX_CONTROLLERS)
+        return;
 
     auto& state = m_states[controllerIndex];
     state.leftMotor = 0.0f;
@@ -242,7 +261,8 @@ void GamepadInput::BindAction(const std::string& action, GamepadTrigger trigger,
 bool GamepadInput::IsActionDown(const std::string& action, int controllerIndex) const
 {
     auto it = m_actionBindings.find(action);
-    if (it == m_actionBindings.end()) return false;
+    if (it == m_actionBindings.end())
+        return false;
 
     const auto& binding = it->second;
     if (binding.type == ActionBinding::Type::Button)
@@ -254,7 +274,8 @@ bool GamepadInput::IsActionDown(const std::string& action, int controllerIndex) 
 bool GamepadInput::WasActionPressed(const std::string& action, int controllerIndex) const
 {
     auto it = m_actionBindings.find(action);
-    if (it == m_actionBindings.end()) return false;
+    if (it == m_actionBindings.end())
+        return false;
 
     const auto& binding = it->second;
     if (binding.type == ActionBinding::Type::Button)
@@ -270,21 +291,36 @@ WORD GamepadInput::GetXInputButton(GamepadButton button) const
 {
     switch (button)
     {
-    case GamepadButton::A:           return XINPUT_GAMEPAD_A;
-    case GamepadButton::B:           return XINPUT_GAMEPAD_B;
-    case GamepadButton::X:           return XINPUT_GAMEPAD_X;
-    case GamepadButton::Y:           return XINPUT_GAMEPAD_Y;
-    case GamepadButton::LeftBumper:  return XINPUT_GAMEPAD_LEFT_SHOULDER;
-    case GamepadButton::RightBumper: return XINPUT_GAMEPAD_RIGHT_SHOULDER;
-    case GamepadButton::Back:        return XINPUT_GAMEPAD_BACK;
-    case GamepadButton::Start:       return XINPUT_GAMEPAD_START;
-    case GamepadButton::LeftStick:   return XINPUT_GAMEPAD_LEFT_THUMB;
-    case GamepadButton::RightStick:  return XINPUT_GAMEPAD_RIGHT_THUMB;
-    case GamepadButton::DPadUp:      return XINPUT_GAMEPAD_DPAD_UP;
-    case GamepadButton::DPadDown:    return XINPUT_GAMEPAD_DPAD_DOWN;
-    case GamepadButton::DPadLeft:    return XINPUT_GAMEPAD_DPAD_LEFT;
-    case GamepadButton::DPadRight:   return XINPUT_GAMEPAD_DPAD_RIGHT;
-    default: return 0;
+    case GamepadButton::A:
+        return XINPUT_GAMEPAD_A;
+    case GamepadButton::B:
+        return XINPUT_GAMEPAD_B;
+    case GamepadButton::X:
+        return XINPUT_GAMEPAD_X;
+    case GamepadButton::Y:
+        return XINPUT_GAMEPAD_Y;
+    case GamepadButton::LeftBumper:
+        return XINPUT_GAMEPAD_LEFT_SHOULDER;
+    case GamepadButton::RightBumper:
+        return XINPUT_GAMEPAD_RIGHT_SHOULDER;
+    case GamepadButton::Back:
+        return XINPUT_GAMEPAD_BACK;
+    case GamepadButton::Start:
+        return XINPUT_GAMEPAD_START;
+    case GamepadButton::LeftStick:
+        return XINPUT_GAMEPAD_LEFT_THUMB;
+    case GamepadButton::RightStick:
+        return XINPUT_GAMEPAD_RIGHT_THUMB;
+    case GamepadButton::DPadUp:
+        return XINPUT_GAMEPAD_DPAD_UP;
+    case GamepadButton::DPadDown:
+        return XINPUT_GAMEPAD_DPAD_DOWN;
+    case GamepadButton::DPadLeft:
+        return XINPUT_GAMEPAD_DPAD_LEFT;
+    case GamepadButton::DPadRight:
+        return XINPUT_GAMEPAD_DPAD_RIGHT;
+    default:
+        return 0;
     }
 }
 
@@ -307,11 +343,15 @@ XMFLOAT2 GamepadInput::ApplyDeadZone(short rawX, short rawY, float deadZone) con
     }
     else // Axial
     {
-        if (fabsf(x) < deadZone) x = 0.0f;
-        else x = (x - (x > 0 ? deadZone : -deadZone)) / (1.0f - deadZone);
+        if (fabsf(x) < deadZone)
+            x = 0.0f;
+        else
+            x = (x - (x > 0 ? deadZone : -deadZone)) / (1.0f - deadZone);
 
-        if (fabsf(y) < deadZone) y = 0.0f;
-        else y = (y - (y > 0 ? deadZone : -deadZone)) / (1.0f - deadZone);
+        if (fabsf(y) < deadZone)
+            y = 0.0f;
+        else
+            y = (y - (y > 0 ? deadZone : -deadZone)) / (1.0f - deadZone);
 
         return {std::clamp(x, -1.0f, 1.0f), std::clamp(y, -1.0f, 1.0f)};
     }
@@ -364,4 +404,3 @@ std::string GamepadInput::Console_ListBindings() const
     }
     return ss.str();
 }
-

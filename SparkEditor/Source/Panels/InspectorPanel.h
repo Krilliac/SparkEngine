@@ -11,70 +11,72 @@
 #include <string>
 #include <memory>
 
-namespace SparkEditor {
+namespace SparkEditor
+{
 
-/**
+    /**
  * @brief Inspector panel
  * 
  * Shows properties of the currently selected object(s) and allows editing.
  */
-class InspectorPanel : public EditorPanel {
-public:
-    /**
+    class InspectorPanel : public EditorPanel
+    {
+      public:
+        /**
      * @brief Constructor
      */
-    InspectorPanel();
+        InspectorPanel();
 
-    /**
+        /**
      * @brief Destructor
      */
-    ~InspectorPanel() override = default;
+        ~InspectorPanel() override = default;
 
-    /**
+        /**
      * @brief Initialize the inspector panel
      * @return true if initialization succeeded
      */
-    bool Initialize() override;
+        bool Initialize() override;
 
-    /**
+        /**
      * @brief Update inspector panel
      * @param deltaTime Time elapsed since last update
      */
-    void Update(float deltaTime) override;
+        void Update(float deltaTime) override;
 
-    /**
+        /**
      * @brief Render inspector panel
      */
-    void Render() override;
+        void Render() override;
 
-    /**
+        /**
      * @brief Shutdown the inspector panel
      */
-    void Shutdown() override;
+        void Shutdown() override;
 
-    /**
+        /**
      * @brief Handle panel events
      * @param eventType Event type
      * @param eventData Event data
      * @return true if event was handled
      */
-    bool HandleEvent(const std::string& eventType, void* eventData) override;
+        bool HandleEvent(const std::string& eventType, void* eventData) override;
 
-    /**
+        /**
      * @brief Set object to inspect
      * @param objectId ID of object to inspect
      */
-    void SetInspectedObject(const std::string& objectId);
+        void SetInspectedObject(const std::string& objectId);
 
-private:
-    void RenderObjectProperties();
-    void RenderComponentList();
-    void RenderTransformComponent();
-    void RenderAddComponentMenu();
+      private:
+        void RenderObjectProperties();
+        void RenderComponentList();
+        void RenderTransformComponent();
+        void RenderAddComponentMenu();
 
-private:
-    std::string m_inspectedObject;
-    bool m_showAddComponentMenu = false;
-};
+      private:
+        std::string m_inspectedObject;
+        bool m_showAddComponentMenu = false;
+    };
 
 } // namespace SparkEditor

@@ -33,7 +33,7 @@ using DestroyGameModuleFn = void (*)(IGameModule*);
  */
 class ModuleManager
 {
-public:
+  public:
     ModuleManager() = default;
     ~ModuleManager();
 
@@ -114,18 +114,18 @@ public:
     /** @brief Check if any modules are loaded */
     bool HasModules() const { return !m_modules.empty(); }
 
-private:
+  private:
     struct LoadedModule
     {
         std::string name;
         std::string path;
-        void* libraryHandle        = nullptr;
-        Spark::IModule* instance   = nullptr;
-        CreateModuleFn createFn    = nullptr;
-        DestroyModuleFn destroyFn  = nullptr;
-        int loadOrder              = 1000;
-        bool initialized           = false;
-        bool isLegacyAdapter       = false;   ///< True if wrapping IGameModule
+        void* libraryHandle = nullptr;
+        Spark::IModule* instance = nullptr;
+        CreateModuleFn createFn = nullptr;
+        DestroyModuleFn destroyFn = nullptr;
+        int loadOrder = 1000;
+        bool initialized = false;
+        bool isLegacyAdapter = false; ///< True if wrapping IGameModule
     };
 
     /** @brief Sort modules by loadOrder */

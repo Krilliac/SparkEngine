@@ -32,33 +32,33 @@ using Microsoft::WRL::ComPtr;
 enum class RenderTargetFormat
 {
     // Standard formats
-    RGBA8_UNORM,           ///< 8-bit RGBA (LDR albedo, UI)
-    RGBA8_SRGB,            ///< 8-bit sRGB RGBA (gamma-corrected albedo)
-    RGBA16_FLOAT,          ///< 16-bit float RGBA (HDR color, normals)
-    RGBA32_FLOAT,          ///< 32-bit float RGBA (high precision)
-    
+    RGBA8_UNORM,  ///< 8-bit RGBA (LDR albedo, UI)
+    RGBA8_SRGB,   ///< 8-bit sRGB RGBA (gamma-corrected albedo)
+    RGBA16_FLOAT, ///< 16-bit float RGBA (HDR color, normals)
+    RGBA32_FLOAT, ///< 32-bit float RGBA (high precision)
+
     // Specialized formats
-    RG16_FLOAT,            ///< 16-bit float RG (velocity, depth derivatives)
-    RG32_FLOAT,            ///< 32-bit float RG (motion vectors)
-    R32_FLOAT,             ///< 32-bit float R (depth, shadow maps)
-    R16_FLOAT,             ///< 16-bit float R (single channel data)
-    R8_UNORM,              ///< 8-bit R (masks, single channel)
-    
+    RG16_FLOAT, ///< 16-bit float RG (velocity, depth derivatives)
+    RG32_FLOAT, ///< 32-bit float RG (motion vectors)
+    R32_FLOAT,  ///< 32-bit float R (depth, shadow maps)
+    R16_FLOAT,  ///< 16-bit float R (single channel data)
+    R8_UNORM,   ///< 8-bit R (masks, single channel)
+
     // Compressed formats
-    BC1_UNORM,             ///< BC1 compression (DXT1)
-    BC3_UNORM,             ///< BC3 compression (DXT5)
-    BC5_UNORM,             ///< BC5 compression (normal maps)
-    BC6H_UF16,             ///< BC6H compression (HDR)
-    BC7_UNORM,             ///< BC7 compression (high quality)
-    
+    BC1_UNORM, ///< BC1 compression (DXT1)
+    BC3_UNORM, ///< BC3 compression (DXT5)
+    BC5_UNORM, ///< BC5 compression (normal maps)
+    BC6H_UF16, ///< BC6H compression (HDR)
+    BC7_UNORM, ///< BC7 compression (high quality)
+
     // Depth formats
-    D24_UNORM_S8_UINT,     ///< 24-bit depth + 8-bit stencil
-    D32_FLOAT,             ///< 32-bit float depth
-    D16_UNORM,             ///< 16-bit depth (shadow maps)
-    
+    D24_UNORM_S8_UINT, ///< 24-bit depth + 8-bit stencil
+    D32_FLOAT,         ///< 32-bit float depth
+    D16_UNORM,         ///< 16-bit depth (shadow maps)
+
     // Special formats
-    R11G11B10_FLOAT,       ///< 11:11:10 float RGB (HDR without alpha)
-    RGB10A2_UNORM          ///< 10:10:10:2 RGBA (high precision color)
+    R11G11B10_FLOAT, ///< 11:11:10 float RGB (HDR without alpha)
+    RGB10A2_UNORM    ///< 10:10:10:2 RGBA (high precision color)
 };
 
 /**
@@ -67,21 +67,23 @@ enum class RenderTargetFormat
 enum class RenderTargetUsage : uint32_t
 {
     None = 0,
-    RenderTarget = 1 << 0,     ///< Can be used as render target
-    ShaderResource = 1 << 1,   ///< Can be used as shader resource
-    DepthStencil = 1 << 2,     ///< Can be used as depth stencil
-    UnorderedAccess = 1 << 3,  ///< Can be used for compute shaders
-    GenerateMips = 1 << 4,     ///< Auto-generate mipmaps
-    CubeMap = 1 << 5,          ///< Cube map render target
-    Array = 1 << 6,            ///< Texture array
-    Multisampled = 1 << 7      ///< Multi-sampled render target
+    RenderTarget = 1 << 0,    ///< Can be used as render target
+    ShaderResource = 1 << 1,  ///< Can be used as shader resource
+    DepthStencil = 1 << 2,    ///< Can be used as depth stencil
+    UnorderedAccess = 1 << 3, ///< Can be used for compute shaders
+    GenerateMips = 1 << 4,    ///< Auto-generate mipmaps
+    CubeMap = 1 << 5,         ///< Cube map render target
+    Array = 1 << 6,           ///< Texture array
+    Multisampled = 1 << 7     ///< Multi-sampled render target
 };
 
-inline RenderTargetUsage operator|(RenderTargetUsage a, RenderTargetUsage b) {
+inline RenderTargetUsage operator|(RenderTargetUsage a, RenderTargetUsage b)
+{
     return static_cast<RenderTargetUsage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
 
-inline bool operator&(RenderTargetUsage a, RenderTargetUsage b) {
+inline bool operator&(RenderTargetUsage a, RenderTargetUsage b)
+{
     return (static_cast<uint32_t>(a) & static_cast<uint32_t>(b)) != 0;
 }
 
@@ -90,19 +92,19 @@ inline bool operator&(RenderTargetUsage a, RenderTargetUsage b) {
  */
 struct RenderTargetDesc
 {
-    std::string name;                      ///< Render target name
-    uint32_t width = 1920;                 ///< Width in pixels
-    uint32_t height = 1080;                ///< Height in pixels
-    uint32_t arraySize = 1;                ///< Array size (for texture arrays)
-    uint32_t mipLevels = 1;                ///< Number of mip levels
-    uint32_t sampleCount = 1;              ///< MSAA sample count
-    uint32_t sampleQuality = 0;            ///< MSAA sample quality
+    std::string name;                                            ///< Render target name
+    uint32_t width = 1920;                                       ///< Width in pixels
+    uint32_t height = 1080;                                      ///< Height in pixels
+    uint32_t arraySize = 1;                                      ///< Array size (for texture arrays)
+    uint32_t mipLevels = 1;                                      ///< Number of mip levels
+    uint32_t sampleCount = 1;                                    ///< MSAA sample count
+    uint32_t sampleQuality = 0;                                  ///< MSAA sample quality
     RenderTargetFormat format = RenderTargetFormat::RGBA8_UNORM; ///< Pixel format
     RenderTargetUsage usage = RenderTargetUsage::RenderTarget | RenderTargetUsage::ShaderResource; ///< Usage flags
-    XMFLOAT4 clearColor = {0, 0, 0, 1};   ///< Clear color
-    float clearDepth = 1.0f;               ///< Clear depth value
-    uint8_t clearStencil = 0;              ///< Clear stencil value
-    bool autoClear = true;                 ///< Automatically clear on bind
+    XMFLOAT4 clearColor = {0, 0, 0, 1};                                                            ///< Clear color
+    float clearDepth = 1.0f;  ///< Clear depth value
+    uint8_t clearStencil = 0; ///< Clear stencil value
+    bool autoClear = true;    ///< Automatically clear on bind
 };
 
 /**
@@ -110,7 +112,7 @@ struct RenderTargetDesc
  */
 class RenderTarget
 {
-public:
+  public:
     RenderTarget(const RenderTargetDesc& desc);
     ~RenderTarget();
 
@@ -146,7 +148,7 @@ public:
     ID3D11DepthStencilView* GetDepthStencilView() const { return m_depthStencilView.Get(); }
     ID3D11ShaderResourceView* GetShaderResourceView() const { return m_shaderResourceView.Get(); }
     ID3D11UnorderedAccessView* GetUnorderedAccessView() const { return m_unorderedAccessView.Get(); }
-    
+
     bool IsValid() const { return m_texture != nullptr; }
     bool IsDepthStencil() const { return m_desc.usage & RenderTargetUsage::DepthStencil; }
     bool IsMultisampled() const { return m_desc.sampleCount > 1; }
@@ -155,7 +157,7 @@ public:
     std::string GetInfo() const;
     bool SaveToFile(const std::string& filename) const;
 
-private:
+  private:
     RenderTargetDesc m_desc;
     ComPtr<ID3D11Texture2D> m_texture;
     ComPtr<ID3D11RenderTargetView> m_renderTargetView;
@@ -167,10 +169,10 @@ private:
     DXGI_FORMAT GetTypelessFormat(RenderTargetFormat format) const;
     DXGI_FORMAT GetSRVFormat(RenderTargetFormat format) const;
     DXGI_FORMAT GetDSVFormat(RenderTargetFormat format) const;
-    
+
     // Helper for saving textures
-    bool SaveBMP(const std::string& filename, unsigned char* data, 
-                uint32_t width, uint32_t height, uint32_t pitch) const;
+    bool SaveBMP(const std::string& filename, unsigned char* data, uint32_t width, uint32_t height,
+                 uint32_t pitch) const;
 };
 
 /**
@@ -178,7 +180,7 @@ private:
  */
 class MultipleRenderTargets
 {
-public:
+  public:
     MultipleRenderTargets(const std::string& name);
     ~MultipleRenderTargets();
 
@@ -223,7 +225,7 @@ public:
     std::shared_ptr<RenderTarget> GetDepthStencil() const { return m_depthStencil; }
     uint32_t GetRenderTargetCount() const { return static_cast<uint32_t>(m_renderTargets.size()); }
 
-private:
+  private:
     std::string m_name;
     std::unordered_map<uint32_t, std::shared_ptr<RenderTarget>> m_renderTargets;
     std::shared_ptr<RenderTarget> m_depthStencil;
@@ -234,21 +236,21 @@ private:
  */
 class RenderTargetManager
 {
-public:
+  public:
     /**
      * @brief Render target system metrics
      */
     struct RenderTargetMetrics
     {
-        int totalRenderTargets;        ///< Total number of render targets
-        int activeRenderTargets;       ///< Currently active render targets
-        size_t totalMemoryUsage;       ///< Total memory usage in bytes
-        size_t colorTargetMemory;      ///< Color target memory usage
-        size_t depthTargetMemory;      ///< Depth target memory usage
-        int mrtGroups;                 ///< Number of MRT groups
-        int resizeOperations;          ///< Number of resize operations
-        float averageCreateTime;       ///< Average creation time in ms
-        int failedCreations;           ///< Number of failed creations
+        int totalRenderTargets;   ///< Total number of render targets
+        int activeRenderTargets;  ///< Currently active render targets
+        size_t totalMemoryUsage;  ///< Total memory usage in bytes
+        size_t colorTargetMemory; ///< Color target memory usage
+        size_t depthTargetMemory; ///< Depth target memory usage
+        int mrtGroups;            ///< Number of MRT groups
+        int resizeOperations;     ///< Number of resize operations
+        float averageCreateTime;  ///< Average creation time in ms
+        int failedCreations;      ///< Number of failed creations
     };
 
     RenderTargetManager();
@@ -268,7 +270,7 @@ public:
     std::shared_ptr<RenderTarget> CreateRenderTarget(const RenderTargetDesc& desc);
     std::shared_ptr<RenderTarget> GetRenderTarget(const std::string& name) const;
     void DestroyRenderTarget(const std::string& name);
-    
+
     // MRT management
     std::shared_ptr<MultipleRenderTargets> CreateMRT(const std::string& name);
     std::shared_ptr<MultipleRenderTargets> GetMRT(const std::string& name) const;
@@ -311,7 +313,8 @@ public:
     /**
      * @brief Create render target via console
      */
-    bool Console_CreateRenderTarget(const std::string& name, uint32_t width, uint32_t height, const std::string& format);
+    bool Console_CreateRenderTarget(const std::string& name, uint32_t width, uint32_t height,
+                                    const std::string& format);
 
     /**
      * @brief Resize specific render target
@@ -350,15 +353,14 @@ public:
      * @param screenWidth Current screen width
      * @param screenHeight Current screen height
      */
-    void RenderDebugVisualization(ID3D11DeviceContext* context,
-        uint32_t screenWidth, uint32_t screenHeight);
+    void RenderDebugVisualization(ID3D11DeviceContext* context, uint32_t screenWidth, uint32_t screenHeight);
 
     /**
      * @brief Check if a render target has visualization enabled
      */
     bool IsVisualizationEnabled(const std::string& name) const;
 
-private:
+  private:
     ID3D11Device* m_device;
     ID3D11DeviceContext* m_context;
 

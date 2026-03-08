@@ -11,8 +11,8 @@
 
 #pragma once
 
-#include "Core/framework.h"            // XMFLOAT3, XMMATRIX, HRESULT
-#include "Physics/CollisionSystem.h"   // BoundingSphere
+#include "Core/framework.h"          // XMFLOAT3, XMMATRIX, HRESULT
+#include "Physics/CollisionSystem.h" // BoundingSphere
 #include "Game/GameObject.h"
 #include "Utils/Assert.h"
 
@@ -38,22 +38,22 @@ class PhysicsSystem;
  */
 class Projectile : public GameObject
 {
-protected:
+  protected:
     // Motion
-    DirectX::XMFLOAT3    m_velocity;      ///< Current velocity vector
-    float                m_speed;         ///< Base speed magnitude
-    float                m_lifeTime;      ///< Current lifetime counter
-    float                m_maxLifeTime;   ///< Maximum lifetime before auto-deactivation
-    float                m_damage;        ///< Damage dealt to targets
-    bool                 m_active;        ///< Whether projectile is currently active
+    DirectX::XMFLOAT3 m_velocity; ///< Current velocity vector
+    float m_speed;                ///< Base speed magnitude
+    float m_lifeTime;             ///< Current lifetime counter
+    float m_maxLifeTime;          ///< Maximum lifetime before auto-deactivation
+    float m_damage;               ///< Damage dealt to targets
+    bool m_active;                ///< Whether projectile is currently active
 
     // Physics
-    BoundingSphere       m_boundingSphere; ///< Collision bounds
-    bool                 m_hasGravity;     ///< Whether gravity affects this projectile
-    float                m_gravityScale;   ///< Multiplier for gravity effect
-    PhysicsSystem*       m_physicsSystem{ nullptr }; ///< Physics system for queries (e.g. explosions)
+    BoundingSphere m_boundingSphere;         ///< Collision bounds
+    bool m_hasGravity;                       ///< Whether gravity affects this projectile
+    float m_gravityScale;                    ///< Multiplier for gravity effect
+    PhysicsSystem* m_physicsSystem{nullptr}; ///< Physics system for queries (e.g. explosions)
 
-public:
+  public:
     /**
      * @brief Default constructor
      * 
@@ -78,14 +78,14 @@ public:
      * @brief Update projectile physics and lifetime
      * @param deltaTime Time elapsed since last frame in seconds
      */
-    void    Update(float deltaTime) override;
+    void Update(float deltaTime) override;
 
     /**
      * @brief Render the projectile
      * @param view Camera view matrix
      * @param projection Camera projection matrix
      */
-    void    Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& projection) override;
+    void Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& projection) override;
 
     /**
      * @brief Fire the projectile with initial parameters
@@ -93,9 +93,7 @@ public:
      * @param direction Normalized direction vector
      * @param speed Initial speed magnitude
      */
-    virtual void Fire(const DirectX::XMFLOAT3& startPosition,
-        const DirectX::XMFLOAT3& direction,
-        float speed);
+    virtual void Fire(const DirectX::XMFLOAT3& startPosition, const DirectX::XMFLOAT3& direction, float speed);
 
     /**
      * @brief Deactivate the projectile for object pool return
@@ -118,8 +116,7 @@ public:
      * @param hitPoint World position of collision
      * @param normal Surface normal at collision point
      */
-    void OnHitWorld(const DirectX::XMFLOAT3& hitPoint,
-        const DirectX::XMFLOAT3& normal) override;
+    void OnHitWorld(const DirectX::XMFLOAT3& hitPoint, const DirectX::XMFLOAT3& normal) override;
 
     /**
      * @brief Configure gravity settings for the projectile
@@ -138,13 +135,13 @@ public:
      * @brief Check if projectile is currently active
      * @return true if active, false if available for reuse
      */
-    bool                IsActive() const { return m_active; }
+    bool IsActive() const { return m_active; }
 
     /**
      * @brief Get the damage value of this projectile
      * @return Damage amount
      */
-    float               GetDamage() const { return m_damage; }
+    float GetDamage() const { return m_damage; }
 
     /**
      * @brief Get the current velocity vector
@@ -162,13 +159,21 @@ public:
      * @brief Set the damage amount
      * @param damage New damage value (must be non-negative)
      */
-    void SetDamage(float damage) { ASSERT_MSG(damage >= 0, "Damage must be non-negative"); m_damage = damage; }
+    void SetDamage(float damage)
+    {
+        ASSERT_MSG(damage >= 0, "Damage must be non-negative");
+        m_damage = damage;
+    }
 
     /**
      * @brief Set the maximum lifetime
      * @param lifeTime New lifetime in seconds (must be positive)
      */
-    void SetLifeTime(float lifeTime) { ASSERT_MSG(lifeTime > 0, "LifeTime must be positive"); m_maxLifeTime = lifeTime; }
+    void SetLifeTime(float lifeTime)
+    {
+        ASSERT_MSG(lifeTime > 0, "LifeTime must be positive");
+        m_maxLifeTime = lifeTime;
+    }
 
     /**
      * @brief Set the physics system for area queries (explosions, etc.)
@@ -176,7 +181,7 @@ public:
      */
     void SetPhysicsSystem(PhysicsSystem* ps) { m_physicsSystem = ps; }
 
-protected:
+  protected:
     /**
      * @brief Create the mesh for this projectile type
      * 

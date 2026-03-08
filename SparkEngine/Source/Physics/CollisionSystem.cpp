@@ -15,32 +15,20 @@ using namespace DirectX;
 // BoundingBox methods
 XMFLOAT3 BoundingBox::GetCenter() const
 {
-    return XMFLOAT3(
-        (Min.x + Max.x) * 0.5f,
-        (Min.y + Max.y) * 0.5f,
-        (Min.z + Max.z) * 0.5f
-    );
+    return XMFLOAT3((Min.x + Max.x) * 0.5f, (Min.y + Max.y) * 0.5f, (Min.z + Max.z) * 0.5f);
 }
 
 XMFLOAT3 BoundingBox::GetExtents() const
 {
-    return XMFLOAT3(
-        (Max.x - Min.x) * 0.5f,
-        (Max.y - Min.y) * 0.5f,
-        (Max.z - Min.z) * 0.5f
-    );
+    return XMFLOAT3((Max.x - Min.x) * 0.5f, (Max.y - Min.y) * 0.5f, (Max.z - Min.z) * 0.5f);
 }
 
 void BoundingBox::Transform(const XMMATRIX& transform)
 {
     ASSERT_MSG(std::isfinite(transform.r[0].m128_f32[0]), "Invalid transform matrix");
 
-    XMFLOAT3 corners[8] = {
-        {Min.x, Min.y, Min.z},{Max.x, Min.y, Min.z},
-        {Min.x, Max.y, Min.z},{Max.x, Max.y, Min.z},
-        {Min.x, Min.y, Max.z},{Max.x, Min.y, Max.z},
-        {Min.x, Max.y, Max.z},{Max.x, Max.y, Max.z}
-    };
+    XMFLOAT3 corners[8] = {{Min.x, Min.y, Min.z}, {Max.x, Min.y, Min.z}, {Min.x, Max.y, Min.z}, {Max.x, Max.y, Min.z},
+                           {Min.x, Min.y, Max.z}, {Max.x, Min.y, Max.z}, {Min.x, Max.y, Max.z}, {Max.x, Max.y, Max.z}};
 
     Min = XMFLOAT3(FLT_MAX, FLT_MAX, FLT_MAX);
     Max = XMFLOAT3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
@@ -49,7 +37,8 @@ void BoundingBox::Transform(const XMMATRIX& transform)
     {
         XMVECTOR v = XMLoadFloat3(&corners[i]);
         v = XMVector3Transform(v, transform);
-        XMFLOAT3 t; XMStoreFloat3(&t, v);
+        XMFLOAT3 t;
+        XMStoreFloat3(&t, v);
 
         Min.x = std::min(Min.x, t.x);
         Min.y = std::min(Min.y, t.y);
@@ -72,7 +61,7 @@ void BoundingSphere::Transform(const XMMATRIX& transform)
     float sx = XMVectorGetX(XMVector3Length(transform.r[0]));
     float sy = XMVectorGetX(XMVector3Length(transform.r[1]));
     float sz = XMVectorGetX(XMVector3Length(transform.r[2]));
-    float scale = std::max({ sx, sy, sz });
+    float scale = std::max({sx, sy, sz});
     ASSERT_MSG(scale > 0.0f, "Non-positive scale");
     Radius *= scale;
 }
@@ -81,11 +70,7 @@ void BoundingSphere::Transform(const XMMATRIX& transform)
 XMFLOAT3 Ray::GetPoint(float t) const
 {
     ASSERT_MSG(std::isfinite(t), "Invalid ray parameter");
-    return XMFLOAT3(
-        Origin.x + Direction.x * t,
-        Origin.y + Direction.y * t,
-        Origin.z + Direction.z * t
-    );
+    return XMFLOAT3(Origin.x + Direction.x * t, Origin.y + Direction.y * t, Origin.z + Direction.z * t);
 }
 
 // Sphere-vs-Sphere
@@ -131,8 +116,8 @@ bool CollisionSystem::SphereVsSphere(const BoundingSphere& a, const BoundingSphe
 bool CollisionSystem::SphereVsBox(const BoundingSphere& s, const BoundingBox& b)
 {
     XMFLOAT3 cp = ClosestPointOnBox(s.Center, b);
-    XMVECTOR  c = XMLoadFloat3(&s.Center);
-    XMVECTOR  p = XMLoadFloat3(&cp);
+    XMVECTOR c = XMLoadFloat3(&s.Center);
+    XMVECTOR p = XMLoadFloat3(&cp);
     float dist = XMVectorGetX(XMVector3Length(c - p));
     return dist <= s.Radius;
 }
@@ -140,9 +125,8 @@ bool CollisionSystem::SphereVsBox(const BoundingSphere& s, const BoundingBox& b)
 // Box-vs-Box
 bool CollisionSystem::BoxVsBox(const BoundingBox& a, const BoundingBox& b)
 {
-    return (a.Min.x <= b.Max.x && a.Max.x >= b.Min.x) &&
-        (a.Min.y <= b.Max.y && a.Max.y >= b.Min.y) &&
-        (a.Min.z <= b.Max.z && a.Max.z >= b.Min.z);
+    return (a.Min.x <= b.Max.x && a.Max.x >= b.Min.x) && (a.Min.y <= b.Max.y && a.Max.y >= b.Min.y) &&
+           (a.Min.z <= b.Max.z && a.Max.z >= b.Min.z);
 }
 
 // Ray-vs-Sphere
@@ -158,13 +142,15 @@ CollisionResult CollisionSystem::RayVsSphere(const Ray& ray, const BoundingSpher
     float b = 2.0f * XMVectorGetX(XMVector3Dot(oc, d));
     float cc = XMVectorGetX(XMVector3Dot(oc, oc)) - sphere.Radius * sphere.Radius;
     float disc = b * b - 4 * a * cc;
-    if (disc < 0.0f) return res;
+    if (disc < 0.0f)
+        return res;
 
     float sq = sqrtf(disc);
     float t0 = (-b - sq) / (2 * a);
     float t1 = (-b + sq) / (2 * a);
     float t = (t0 > 0.0f) ? t0 : t1;
-    if (t < 0.0f) return res;
+    if (t < 0.0f)
+        return res;
 
     res.Hit = true;
     res.Distance = t;
@@ -201,9 +187,10 @@ CollisionResult CollisionSystem::RayVsBox(const Ray& ray, const BoundingBox& box
     float t2z = (box.Max.z - oz) * invZ;
     float tminz = std::min(t1z, t2z), tmaxz = std::max(t1z, t2z);
 
-    float tmin = std::max({ tminx, tminy, tminz, 0.0f });
-    float tmax = std::min({ tmaxx, tmaxy, tmaxz, FLT_MAX });
-    if (tmin > tmax) return res;
+    float tmin = std::max({tminx, tminy, tminz, 0.0f});
+    float tmax = std::min({tmaxx, tmaxy, tmaxz, FLT_MAX});
+    if (tmin > tmax)
+        return res;
 
     res.Hit = true;
     res.Distance = tmin;
@@ -226,10 +213,12 @@ CollisionResult CollisionSystem::RayVsPlane(const Ray& ray, const XMFLOAT3& pp, 
     XMVECTOR n = XMVector3Normalize(XMLoadFloat3(&pn));
 
     float denom = XMVectorGetX(XMVector3Dot(d, n));
-    if (fabs(denom) < 1e-6f) return res;
+    if (fabs(denom) < 1e-6f)
+        return res;
     float num = XMVectorGetX(XMVector3Dot(XMVectorSubtract(p, o), n));
     float t = num / denom;
-    if (t < 0.0f) return res;
+    if (t < 0.0f)
+        return res;
 
     res.Hit = true;
     res.Distance = t;
@@ -240,8 +229,8 @@ CollisionResult CollisionSystem::RayVsPlane(const Ray& ray, const XMFLOAT3& pp, 
 }
 
 // Ray-vs-Triangle
-CollisionResult CollisionSystem::RayVsTriangle(const Ray& ray, const XMFLOAT3& v0,
-    const XMFLOAT3& v1, const XMFLOAT3& v2)
+CollisionResult CollisionSystem::RayVsTriangle(const Ray& ray, const XMFLOAT3& v0, const XMFLOAT3& v1,
+                                               const XMFLOAT3& v2)
 {
     CollisionResult res;
     XMVECTOR o = XMLoadFloat3(&ray.Origin);
@@ -252,19 +241,23 @@ CollisionResult CollisionSystem::RayVsTriangle(const Ray& ray, const XMFLOAT3& v
 
     XMVECTOR h = XMVector3Cross(d, e2);
     float a = XMVectorGetX(XMVector3Dot(e1, h));
-    if (fabs(a) < 1e-6f) return res;
+    if (fabs(a) < 1e-6f)
+        return res;
 
     float f = 1.0f / a;
     XMVECTOR s = XMVectorSubtract(o, p0);
     float u = f * XMVectorGetX(XMVector3Dot(s, h));
-    if (u < 0.0f || u > 1.0f) return res;
+    if (u < 0.0f || u > 1.0f)
+        return res;
 
     XMVECTOR q = XMVector3Cross(s, e1);
     float v = f * XMVectorGetX(XMVector3Dot(d, q));
-    if (v < 0.0f || u + v > 1.0f) return res;
+    if (v < 0.0f || u + v > 1.0f)
+        return res;
 
     float t = f * XMVectorGetX(XMVector3Dot(e2, q));
-    if (t <= 1e-6f) return res;
+    if (t <= 1e-6f)
+        return res;
 
     res.Hit = true;
     res.Distance = t;
@@ -278,11 +271,8 @@ CollisionResult CollisionSystem::RayVsTriangle(const Ray& ray, const XMFLOAT3& v
 // Utility
 XMFLOAT3 CollisionSystem::ClosestPointOnBox(const XMFLOAT3& pt, const BoundingBox& b)
 {
-    return XMFLOAT3(
-        std::clamp(pt.x, b.Min.x, b.Max.x),
-        std::clamp(pt.y, b.Min.y, b.Max.y),
-        std::clamp(pt.z, b.Min.z, b.Max.z)
-    );
+    return XMFLOAT3(std::clamp(pt.x, b.Min.x, b.Max.x), std::clamp(pt.y, b.Min.y, b.Max.y),
+                    std::clamp(pt.z, b.Min.z, b.Max.z));
 }
 
 XMFLOAT3 CollisionSystem::ClosestPointOnSphere(const XMFLOAT3& pt, const BoundingSphere& s)
@@ -291,7 +281,8 @@ XMFLOAT3 CollisionSystem::ClosestPointOnSphere(const XMFLOAT3& pt, const Boundin
     XMVECTOR p = XMLoadFloat3(&pt);
     XMVECTOR dir = XMVector3Normalize(XMVectorSubtract(p, c));
     XMVECTOR cp = XMVectorAdd(c, XMVectorScale(dir, s.Radius));
-    XMFLOAT3 out; XMStoreFloat3(&out, cp);
+    XMFLOAT3 out;
+    XMStoreFloat3(&out, cp);
     return out;
 }
 
@@ -313,9 +304,8 @@ bool CollisionSystem::PointInSphere(const XMFLOAT3& pt, const BoundingSphere& s)
 
 bool CollisionSystem::PointInBox(const XMFLOAT3& pt, const BoundingBox& b)
 {
-    return (pt.x >= b.Min.x && pt.x <= b.Max.x) &&
-        (pt.y >= b.Min.y && pt.y <= b.Max.y) &&
-        (pt.z >= b.Min.z && pt.z <= b.Max.z);
+    return (pt.x >= b.Min.x && pt.x <= b.Max.x) && (pt.y >= b.Min.y && pt.y <= b.Max.y) &&
+           (pt.z >= b.Min.z && pt.z <= b.Max.z);
 }
 
 // Vector helpers
@@ -344,28 +334,16 @@ float CollisionSystem::Vector3Dot(const XMFLOAT3& a, const XMFLOAT3& b)
 
 XMFLOAT3 CollisionSystem::Vector3Cross(const XMFLOAT3& a, const XMFLOAT3& b)
 {
-    return XMFLOAT3(
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    );
+    return XMFLOAT3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
 
 XMFLOAT3 CollisionSystem::Vector3Reflect(const XMFLOAT3& i, const XMFLOAT3& n)
 {
     float d = Vector3Dot(i, n);
-    return XMFLOAT3(
-        i.x - 2.0f * d * n.x,
-        i.y - 2.0f * d * n.y,
-        i.z - 2.0f * d * n.z
-    );
+    return XMFLOAT3(i.x - 2.0f * d * n.x, i.y - 2.0f * d * n.y, i.z - 2.0f * d * n.z);
 }
 
 XMFLOAT3 CollisionSystem::Vector3Lerp(const XMFLOAT3& a, const XMFLOAT3& b, float t)
 {
-    return XMFLOAT3(
-        a.x + (b.x - a.x) * t,
-        a.y + (b.y - a.y) * t,
-        a.z + (b.z - a.z) * t
-    );
+    return XMFLOAT3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
 }

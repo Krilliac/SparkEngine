@@ -11,20 +11,10 @@
 
 using namespace DirectX;
 AudioEngine::AudioEngine()
-    : m_xAudio2(nullptr)
-    , m_masterVoice(nullptr)
-    , m_masterVolume(1.0f)
-    , m_sfxVolume(1.0f)
-    , m_musicVolume(1.0f)
-    , m_maxSources(32)
-    , m_nextSourceID(1)
-    , m_listenerPosition(0.0f, 0.0f, 0.0f)
-    , m_listenerVelocity(0.0f, 0.0f, 0.0f)
-    , m_listenerForward(0.0f, 0.0f, 1.0f)
-    , m_listenerUp(0.0f, 1.0f, 0.0f)
-    , m_dopplerScale(1.0f)
-    , m_distanceScale(1.0f)
-    , m_3DEnabled(true)
+    : m_xAudio2(nullptr), m_masterVoice(nullptr), m_masterVolume(1.0f), m_sfxVolume(1.0f), m_musicVolume(1.0f),
+      m_maxSources(32), m_nextSourceID(1), m_listenerPosition(0.0f, 0.0f, 0.0f), m_listenerVelocity(0.0f, 0.0f, 0.0f),
+      m_listenerForward(0.0f, 0.0f, 1.0f), m_listenerUp(0.0f, 1.0f, 0.0f), m_dopplerScale(1.0f), m_distanceScale(1.0f),
+      m_3DEnabled(true)
 {
     // Initialize console-controlled settings to defaults
     m_settings.masterVolume = 1.0f;
@@ -40,7 +30,7 @@ AudioEngine::AudioEngine()
     m_settings.listenerVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
     m_settings.listenerForward = XMFLOAT3(0.0f, 0.0f, 1.0f);
     m_settings.listenerUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
-    
+
     Spark::SimpleConsole::GetInstance().Log("AudioEngine constructed with console integration.", "INFO");
 }
 
@@ -58,16 +48,20 @@ HRESULT AudioEngine::Initialize(size_t maxSources)
     m_settings.maxSources = static_cast<int>(maxSources);
 
     HRESULT hr = XAudio2Create(&m_xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
-    if (FAILED(hr)) {
-        SPARK_LOG_FATAL("Audio", "XAudio2Create failed HR=0x%08lX -- "
+    if (FAILED(hr))
+    {
+        SPARK_LOG_FATAL("Audio",
+                        "XAudio2Create failed HR=0x%08lX -- "
                         "Check audio drivers and Windows Audio Service",
                         static_cast<long>(hr));
         return hr;
     }
 
     hr = m_xAudio2->CreateMasteringVoice(&m_masterVoice);
-    if (FAILED(hr)) {
-        SPARK_LOG_FATAL("Audio", "CreateMasteringVoice failed HR=0x%08lX -- "
+    if (FAILED(hr))
+    {
+        SPARK_LOG_FATAL("Audio",
+                        "CreateMasteringVoice failed HR=0x%08lX -- "
                         "No audio output device available?",
                         static_cast<long>(hr));
         return hr;
@@ -87,21 +81,25 @@ HRESULT AudioEngine::Initialize(size_t maxSources)
         m_audioSources.push_back(std::move(source));
     }
 
-    Spark::SimpleConsole::GetInstance().Log("AudioEngine initialization complete with console integration - audio ready.", "SUCCESS");
+    Spark::SimpleConsole::GetInstance().Log(
+        "AudioEngine initialization complete with console integration - audio ready.", "SUCCESS");
     return S_OK;
 }
 
 void AudioEngine::Update(float deltaTime)
 {
     static bool firstFrame = true;
-    if (firstFrame) {
-        Spark::SimpleConsole::GetInstance().Log("AudioEngine::Update - First frame started with console integration", "INFO");
+    if (firstFrame)
+    {
+        Spark::SimpleConsole::GetInstance().Log("AudioEngine::Update - First frame started with console integration",
+                                                "INFO");
         firstFrame = false;
     }
-    
+
     UpdateSources();
-    
-    if (m_3DEnabled) {
+
+    if (m_3DEnabled)
+    {
         Update3DAudio();
     }
 }
@@ -135,7 +133,8 @@ HRESULT AudioEngine::LoadSound(const std::string& name, const std::wstring& file
 
     HRESULT hr = sound->LoadFromFile(filename);
     ASSERT_MSG(SUCCEEDED(hr), "SoundEffect::LoadFromFile failed");
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         Spark::SimpleConsole::GetInstance().Log("Failed to load sound '" + name + "' from file", "ERROR");
         return hr;
     }
@@ -166,18 +165,19 @@ SoundEffect* AudioEngine::GetSound(const std::string& name)
     return it != m_soundEffects.end() ? it->second.get() : nullptr;
 }
 
-AudioSource* AudioEngine::PlaySound(const std::string& name,
-    float volume, float pitch, bool loop)
+AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float pitch, bool loop)
 {
     ASSERT_MSG(!name.empty(), "Sound name must be non-empty");
     SoundEffect* sound = GetSound(name);
-    if (!sound) {
+    if (!sound)
+    {
         Spark::SimpleConsole::GetInstance().Log("Sound '" + name + "' not found", "ERROR");
         return nullptr;
     }
 
     AudioSource* src = GetAvailableSource();
-    if (!src) {
+    if (!src)
+    {
         Spark::SimpleConsole::GetInstance().Log("No available audio sources", "WARNING");
         return nullptr;
     }
@@ -186,14 +186,17 @@ AudioSource* AudioEngine::PlaySound(const std::string& name,
     {
         HRESULT hr = CreateSourceVoice(sound->GetFormat(), &src->Voice);
         ASSERT_MSG(SUCCEEDED(hr), "CreateSourceVoice failed");
-        if (FAILED(hr)) return nullptr;
+        if (FAILED(hr))
+            return nullptr;
     }
 
-    if (volume < 0.0f || volume > 1.0f) {
+    if (volume < 0.0f || volume > 1.0f)
+    {
         SPARK_LOG_WARN("Audio", "PlaySound '%s': volume %.2f clamped to [0,1]", name.c_str(), volume);
         volume = std::clamp(volume, 0.0f, 1.0f);
     }
-    if (pitch <= 0.0f) {
+    if (pitch <= 0.0f)
+    {
         SPARK_LOG_WARN("Audio", "PlaySound '%s': pitch %.2f invalid, reset to 1.0", name.c_str(), pitch);
         pitch = 1.0f;
     }
@@ -213,27 +216,30 @@ AudioSource* AudioEngine::PlaySound(const std::string& name,
     ASSERT_MSG(buffer.AudioBytes > 0, "Empty audio data");
     buffer.pAudioData = sound->GetData();
     buffer.Flags = XAUDIO2_END_OF_STREAM;
-    if (loop) buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
+    if (loop)
+        buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
 
     HRESULT hr = src->Voice->SubmitSourceBuffer(&buffer);
     ASSERT_MSG(SUCCEEDED(hr), "SubmitSourceBuffer failed");
-    if (FAILED(hr)) return nullptr;
+    if (FAILED(hr))
+        return nullptr;
 
     src->Voice->Start();
     return src;
 }
 
-AudioSource* AudioEngine::PlaySound3D(const std::string& name,
-    const XMFLOAT3& position, float volume, float pitch, bool loop)
+AudioSource* AudioEngine::PlaySound3D(const std::string& name, const XMFLOAT3& position, float volume, float pitch,
+                                      bool loop)
 {
     AudioSource* src = PlaySound(name, volume, pitch, loop);
     if (src)
     {
         src->Is3D = true;
         src->Position = position;
-        
+
         // Apply 3D audio calculations immediately
-        if (m_3DEnabled) {
+        if (m_3DEnabled)
+        {
             Apply3DAudioToSource(src);
         }
     }
@@ -255,19 +261,22 @@ void AudioEngine::StopSound(AudioSource* source)
 void AudioEngine::StopAllSounds()
 {
     for (auto& s : m_audioSources)
-        if (s->IsPlaying) StopSound(s.get());
+        if (s->IsPlaying)
+            StopSound(s.get());
 }
 
 void AudioEngine::PauseAllSounds()
 {
     for (auto& s : m_audioSources)
-        if (s->IsPlaying && s->Voice) s->Voice->Stop();
+        if (s->IsPlaying && s->Voice)
+            s->Voice->Stop();
 }
 
 void AudioEngine::ResumeAllSounds()
 {
     for (auto& s : m_audioSources)
-        if (s->IsPlaying && s->Voice) s->Voice->Start();
+        if (s->IsPlaying && s->Voice)
+            s->Voice->Start();
 }
 
 void AudioEngine::SetMasterVolume(float volume)
@@ -275,11 +284,12 @@ void AudioEngine::SetMasterVolume(float volume)
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     m_masterVolume = std::clamp(volume, 0.0f, 1.0f);
     m_settings.masterVolume = m_masterVolume;
-    
-    if (m_masterVoice) {
+
+    if (m_masterVoice)
+    {
         m_masterVoice->SetVolume(m_masterVolume);
     }
-    
+
     NotifyStateChange();
 }
 
@@ -303,7 +313,8 @@ size_t AudioEngine::GetActiveSourceCount() const
 {
     size_t count = 0;
     for (auto& s : m_audioSources)
-        if (s->IsPlaying) ++count;
+        if (s->IsPlaying)
+            ++count;
     return count;
 }
 
@@ -311,217 +322,287 @@ size_t AudioEngine::GetActiveSourceCount() const
 // CONSOLE INTEGRATION IMPLEMENTATIONS
 // ============================================================================
 
-void AudioEngine::Console_SetMasterVolume(float volume) {
-    if (volume >= 0.0f && volume <= 1.0f) {
+void AudioEngine::Console_SetMasterVolume(float volume)
+{
+    if (volume >= 0.0f && volume <= 1.0f)
+    {
         SetMasterVolume(volume);
-        Spark::SimpleConsole::GetInstance().Log("Master volume set to " + std::to_string(volume) + " via console", "SUCCESS");
-    } else {
+        Spark::SimpleConsole::GetInstance().Log("Master volume set to " + std::to_string(volume) + " via console",
+                                                "SUCCESS");
+    }
+    else
+    {
         Spark::SimpleConsole::GetInstance().Log("Invalid master volume. Must be between 0.0 and 1.0", "ERROR");
     }
 }
 
-void AudioEngine::Console_SetSFXVolume(float volume) {
-    if (volume >= 0.0f && volume <= 1.0f) {
+void AudioEngine::Console_SetSFXVolume(float volume)
+{
+    if (volume >= 0.0f && volume <= 1.0f)
+    {
         SetSFXVolume(volume);
-        Spark::SimpleConsole::GetInstance().Log("SFX volume set to " + std::to_string(volume) + " via console", "SUCCESS");
-    } else {
+        Spark::SimpleConsole::GetInstance().Log("SFX volume set to " + std::to_string(volume) + " via console",
+                                                "SUCCESS");
+    }
+    else
+    {
         Spark::SimpleConsole::GetInstance().Log("Invalid SFX volume. Must be between 0.0 and 1.0", "ERROR");
     }
 }
 
-void AudioEngine::Console_SetMusicVolume(float volume) {
-    if (volume >= 0.0f && volume <= 1.0f) {
+void AudioEngine::Console_SetMusicVolume(float volume)
+{
+    if (volume >= 0.0f && volume <= 1.0f)
+    {
         SetMusicVolume(volume);
-        Spark::SimpleConsole::GetInstance().Log("Music volume set to " + std::to_string(volume) + " via console", "SUCCESS");
-    } else {
+        Spark::SimpleConsole::GetInstance().Log("Music volume set to " + std::to_string(volume) + " via console",
+                                                "SUCCESS");
+    }
+    else
+    {
         Spark::SimpleConsole::GetInstance().Log("Invalid music volume. Must be between 0.0 and 1.0", "ERROR");
     }
 }
 
-void AudioEngine::Console_SetListenerPosition(float x, float y, float z) {
+void AudioEngine::Console_SetListenerPosition(float x, float y, float z)
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     m_listenerPosition = XMFLOAT3(x, y, z);
     m_settings.listenerPosition = m_listenerPosition;
     NotifyStateChange();
-    
+
     std::stringstream ss;
     ss << "3D listener position set to (" << x << ", " << y << ", " << z << ") via console";
     Spark::SimpleConsole::GetInstance().Log(ss.str(), "SUCCESS");
 }
 
-void AudioEngine::Console_SetListenerOrientation(float forwardX, float forwardY, float forwardZ,
-                                                 float upX, float upY, float upZ) {
+void AudioEngine::Console_SetListenerOrientation(float forwardX, float forwardY, float forwardZ, float upX, float upY,
+                                                 float upZ)
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     m_listenerForward = XMFLOAT3(forwardX, forwardY, forwardZ);
     m_listenerUp = XMFLOAT3(upX, upY, upZ);
     m_settings.listenerForward = m_listenerForward;
     m_settings.listenerUp = m_listenerUp;
     NotifyStateChange();
-    
+
     std::stringstream ss;
-    ss << "3D listener orientation set - Forward: (" << forwardX << ", " << forwardY << ", " << forwardZ 
-       << "), Up: (" << upX << ", " << upY << ", " << upZ << ") via console";
+    ss << "3D listener orientation set - Forward: (" << forwardX << ", " << forwardY << ", " << forwardZ << "), Up: ("
+       << upX << ", " << upY << ", " << upZ << ") via console";
     Spark::SimpleConsole::GetInstance().Log(ss.str(), "SUCCESS");
 }
 
-void AudioEngine::Console_SetDopplerScale(float scale) {
+void AudioEngine::Console_SetDopplerScale(float scale)
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
-    if (scale >= 0.0f && scale <= 2.0f) {
+    if (scale >= 0.0f && scale <= 2.0f)
+    {
         m_dopplerScale = scale;
         m_settings.dopplerScale = scale;
         NotifyStateChange();
-        Spark::SimpleConsole::GetInstance().Log("Doppler scale set to " + std::to_string(scale) + " via console", "SUCCESS");
-    } else {
+        Spark::SimpleConsole::GetInstance().Log("Doppler scale set to " + std::to_string(scale) + " via console",
+                                                "SUCCESS");
+    }
+    else
+    {
         Spark::SimpleConsole::GetInstance().Log("Invalid Doppler scale. Must be between 0.0 and 2.0", "ERROR");
     }
 }
 
-void AudioEngine::Console_SetDistanceScale(float scale) {
+void AudioEngine::Console_SetDistanceScale(float scale)
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
-    if (scale >= 0.1f && scale <= 10.0f) {
+    if (scale >= 0.1f && scale <= 10.0f)
+    {
         m_distanceScale = scale;
         m_settings.distanceScale = scale;
         NotifyStateChange();
-        Spark::SimpleConsole::GetInstance().Log("Distance scale set to " + std::to_string(scale) + " via console", "SUCCESS");
-    } else {
+        Spark::SimpleConsole::GetInstance().Log("Distance scale set to " + std::to_string(scale) + " via console",
+                                                "SUCCESS");
+    }
+    else
+    {
         Spark::SimpleConsole::GetInstance().Log("Invalid distance scale. Must be between 0.1 and 10.0", "ERROR");
     }
 }
 
-void AudioEngine::Console_Set3DAudio(bool enabled) {
+void AudioEngine::Console_Set3DAudio(bool enabled)
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     m_3DEnabled = enabled;
     m_settings.enable3D = enabled;
     NotifyStateChange();
-    Spark::SimpleConsole::GetInstance().Log("3D audio " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
+    Spark::SimpleConsole::GetInstance().Log(
+        "3D audio " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
 }
 
-uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool is3D) {
+uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool is3D)
+{
     SoundEffect* sound = GetSound(soundName);
-    if (!sound) {
+    if (!sound)
+    {
         // Try to create a procedural test sound
-        if (soundName == "test_beep") {
+        if (soundName == "test_beep")
+        {
             auto testSound = SoundEffectFactory::CreateBeep(440.0f, 0.5f);
-            if (testSound) {
+            if (testSound)
+            {
                 m_soundEffects["test_beep"] = std::move(testSound);
                 sound = m_soundEffects["test_beep"].get();
                 Spark::SimpleConsole::GetInstance().Log("Created procedural test beep sound", "INFO");
             }
-        } else if (soundName == "test_gunshot") {
+        }
+        else if (soundName == "test_gunshot")
+        {
             auto testSound = SoundEffectFactory::CreateGunshot();
-            if (testSound) {
+            if (testSound)
+            {
                 m_soundEffects["test_gunshot"] = std::move(testSound);
                 sound = m_soundEffects["test_gunshot"].get();
                 Spark::SimpleConsole::GetInstance().Log("Created procedural gunshot sound", "INFO");
             }
-        } else if (soundName == "test_explosion") {
+        }
+        else if (soundName == "test_explosion")
+        {
             auto testSound = SoundEffectFactory::CreateExplosion();
-            if (testSound) {
+            if (testSound)
+            {
                 m_soundEffects["test_explosion"] = std::move(testSound);
                 sound = m_soundEffects["test_explosion"].get();
                 Spark::SimpleConsole::GetInstance().Log("Created procedural explosion sound", "INFO");
             }
-        } else if (soundName == "test_footstep") {
+        }
+        else if (soundName == "test_footstep")
+        {
             auto testSound = SoundEffectFactory::CreateFootstep();
-            if (testSound) {
+            if (testSound)
+            {
                 m_soundEffects["test_footstep"] = std::move(testSound);
                 sound = m_soundEffects["test_footstep"].get();
                 Spark::SimpleConsole::GetInstance().Log("Created procedural footstep sound", "INFO");
             }
-        } else if (soundName == "test_pickup") {
+        }
+        else if (soundName == "test_pickup")
+        {
             auto testSound = SoundEffectFactory::CreatePickup();
-            if (testSound) {
+            if (testSound)
+            {
                 m_soundEffects["test_pickup"] = std::move(testSound);
                 sound = m_soundEffects["test_pickup"].get();
                 Spark::SimpleConsole::GetInstance().Log("Created procedural pickup sound", "INFO");
             }
-        } else if (soundName == "test_noise") {
+        }
+        else if (soundName == "test_noise")
+        {
             auto testSound = SoundEffectFactory::CreateNoise(1.0f);
-            if (testSound) {
+            if (testSound)
+            {
                 m_soundEffects["test_noise"] = std::move(testSound);
                 sound = m_soundEffects["test_noise"].get();
                 Spark::SimpleConsole::GetInstance().Log("Created procedural noise sound", "INFO");
             }
         }
     }
-    
-    if (!sound) {
-        Spark::SimpleConsole::GetInstance().Log("Sound '" + soundName + "' not found and could not create procedural version", "ERROR");
+
+    if (!sound)
+    {
+        Spark::SimpleConsole::GetInstance().Log(
+            "Sound '" + soundName + "' not found and could not create procedural version", "ERROR");
         return 0;
     }
-    
+
     AudioSource* source = nullptr;
-    if (is3D) {
+    if (is3D)
+    {
         // Play at a test position in front of the listener
         XMFLOAT3 testPos(m_listenerPosition.x, m_listenerPosition.y, m_listenerPosition.z + 5.0f);
         source = PlaySound3D(soundName, testPos, 1.0f, 1.0f, false);
-    } else {
+    }
+    else
+    {
         source = PlaySound(soundName, 1.0f, 1.0f, false);
     }
-    
-    if (source) {
+
+    if (source)
+    {
         std::string modeStr = is3D ? "3D" : "2D";
-        Spark::SimpleConsole::GetInstance().Log("Playing test sound '" + soundName + "' in " + modeStr + " mode (ID: " + std::to_string(source->SourceID) + ")", "SUCCESS");
+        Spark::SimpleConsole::GetInstance().Log("Playing test sound '" + soundName + "' in " + modeStr +
+                                                    " mode (ID: " + std::to_string(source->SourceID) + ")",
+                                                "SUCCESS");
         return source->SourceID;
-    } else {
+    }
+    else
+    {
         Spark::SimpleConsole::GetInstance().Log("Failed to play test sound '" + soundName + "'", "ERROR");
         return 0;
     }
 }
 
-void AudioEngine::Console_StopSound(uint32_t sourceID) {
-    for (auto& source : m_audioSources) {
-        if (source->SourceID == sourceID && source->IsPlaying) {
+void AudioEngine::Console_StopSound(uint32_t sourceID)
+{
+    for (auto& source : m_audioSources)
+    {
+        if (source->SourceID == sourceID && source->IsPlaying)
+        {
             StopSound(source.get());
-            Spark::SimpleConsole::GetInstance().Log("Stopped sound source ID " + std::to_string(sourceID) + " via console", "SUCCESS");
+            Spark::SimpleConsole::GetInstance().Log(
+                "Stopped sound source ID " + std::to_string(sourceID) + " via console", "SUCCESS");
             return;
         }
     }
-    Spark::SimpleConsole::GetInstance().Log("Sound source ID " + std::to_string(sourceID) + " not found or not playing", "ERROR");
+    Spark::SimpleConsole::GetInstance().Log("Sound source ID " + std::to_string(sourceID) + " not found or not playing",
+                                            "ERROR");
 }
 
-void AudioEngine::Console_StopAllSounds() {
+void AudioEngine::Console_StopAllSounds()
+{
     size_t stoppedCount = GetActiveSourceCount();
     StopAllSounds();
-    Spark::SimpleConsole::GetInstance().Log("Stopped " + std::to_string(stoppedCount) + " playing sounds via console", "SUCCESS");
+    Spark::SimpleConsole::GetInstance().Log("Stopped " + std::to_string(stoppedCount) + " playing sounds via console",
+                                            "SUCCESS");
 }
 
-std::string AudioEngine::Console_ListSounds() const {
+std::string AudioEngine::Console_ListSounds() const
+{
     std::stringstream ss;
     ss << "Loaded Sounds (" << m_soundEffects.size() << " total):\n";
     ss << "==========================================\n";
-    
-    for (const auto& pair : m_soundEffects) {
+
+    for (const auto& pair : m_soundEffects)
+    {
         const auto& sound = pair.second;
-        ss << "  " << std::left << std::setw(20) << pair.first 
-           << " - " << std::fixed << std::setprecision(2) << sound->GetDuration() << "s, "
-           << sound->GetSampleRate() << "Hz, " << sound->GetChannels() << "ch, "
+        ss << "  " << std::left << std::setw(20) << pair.first << " - " << std::fixed << std::setprecision(2)
+           << sound->GetDuration() << "s, " << sound->GetSampleRate() << "Hz, " << sound->GetChannels() << "ch, "
            << sound->GetBitsPerSample() << "bit\n";
     }
-    
-    if (m_soundEffects.empty()) {
+
+    if (m_soundEffects.empty())
+    {
         ss << "  No sounds currently loaded\n";
         ss << "\nAvailable procedural test sounds:\n";
         ss << "  test_beep, test_gunshot, test_explosion, test_footstep, test_pickup, test_noise\n";
         ss << "  Use 'audio_test <soundname>' to create and play them\n";
     }
-    
+
     return ss.str();
 }
 
-AudioEngine::AudioMetrics AudioEngine::Console_GetMetrics() const {
+AudioEngine::AudioMetrics AudioEngine::Console_GetMetrics() const
+{
     return GetMetricsThreadSafe();
 }
 
-AudioEngine::AudioSettings AudioEngine::Console_GetSettings() const {
+AudioEngine::AudioSettings AudioEngine::Console_GetSettings() const
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     return m_settings;
 }
 
-void AudioEngine::Console_ApplySettings(const AudioSettings& settings) {
+void AudioEngine::Console_ApplySettings(const AudioSettings& settings)
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     m_settings = settings;
-    
+
     // Apply settings to actual audio engine
     m_masterVolume = settings.masterVolume;
     m_sfxVolume = settings.sfxVolume;
@@ -533,16 +614,18 @@ void AudioEngine::Console_ApplySettings(const AudioSettings& settings) {
     m_listenerVelocity = settings.listenerVelocity;
     m_listenerForward = settings.listenerForward;
     m_listenerUp = settings.listenerUp;
-    
-    if (m_masterVoice) {
+
+    if (m_masterVoice)
+    {
         m_masterVoice->SetVolume(m_masterVolume);
     }
-    
+
     NotifyStateChange();
     Spark::SimpleConsole::GetInstance().Log("Audio settings applied via console", "SUCCESS");
 }
 
-void AudioEngine::Console_ResetToDefaults() {
+void AudioEngine::Console_ResetToDefaults()
+{
     Console_SetMasterVolume(1.0f);
     Console_SetSFXVolume(1.0f);
     Console_SetMusicVolume(1.0f);
@@ -554,34 +637,42 @@ void AudioEngine::Console_ResetToDefaults() {
     Spark::SimpleConsole::GetInstance().Log("Audio settings reset to defaults via console", "SUCCESS");
 }
 
-void AudioEngine::Console_RegisterStateCallback(std::function<void()> callback) {
+void AudioEngine::Console_RegisterStateCallback(std::function<void()> callback)
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     m_stateCallback = callback;
     Spark::SimpleConsole::GetInstance().Log("Audio state callback registered", "INFO");
 }
 
-void AudioEngine::Console_RefreshAudio() {
+void AudioEngine::Console_RefreshAudio()
+{
     Spark::SimpleConsole::GetInstance().Log("Audio system refresh requested via console", "INFO");
-    
+
     // Force update all 3D audio sources
-    if (m_3DEnabled) {
+    if (m_3DEnabled)
+    {
         Update3DAudio();
     }
-    
+
     // Update volume for all active sources
-    for (auto& source : m_audioSources) {
-        if (source->IsPlaying && source->Voice) {
+    for (auto& source : m_audioSources)
+    {
+        if (source->IsPlaying && source->Voice)
+        {
             float adjustedVolume = source->Volume * m_sfxVolume * m_masterVolume;
             source->Voice->SetVolume(adjustedVolume);
         }
     }
-    
+
     Spark::SimpleConsole::GetInstance().Log("Audio system refresh complete", "SUCCESS");
 }
 
-std::string AudioEngine::Console_GetSourceInfo(uint32_t sourceID) const {
-    for (const auto& source : m_audioSources) {
-        if (source->SourceID == sourceID) {
+std::string AudioEngine::Console_GetSourceInfo(uint32_t sourceID) const
+{
+    for (const auto& source : m_audioSources)
+    {
+        if (source->SourceID == sourceID)
+        {
             std::stringstream ss;
             ss << "Audio Source ID " << sourceID << ":\n";
             ss << "==========================================\n";
@@ -590,21 +681,23 @@ std::string AudioEngine::Console_GetSourceInfo(uint32_t sourceID) const {
             ss << "Looping:          " << (source->IsLooping ? "YES" : "NO") << "\n";
             ss << "Volume:           " << std::fixed << std::setprecision(2) << source->Volume << "\n";
             ss << "Pitch:            " << std::setprecision(2) << source->Pitch << "\n";
-            
-            if (source->Is3D) {
-                ss << "Position:         (" << std::setprecision(2) 
-                   << source->Position.x << ", " << source->Position.y << ", " << source->Position.z << ")\n";
-                ss << "Velocity:         (" << std::setprecision(2) 
-                   << source->Velocity.x << ", " << source->Velocity.y << ", " << source->Velocity.z << ")\n";
+
+            if (source->Is3D)
+            {
+                ss << "Position:         (" << std::setprecision(2) << source->Position.x << ", " << source->Position.y
+                   << ", " << source->Position.z << ")\n";
+                ss << "Velocity:         (" << std::setprecision(2) << source->Velocity.x << ", " << source->Velocity.y
+                   << ", " << source->Velocity.z << ")\n";
             }
-            
-            if (source->Sound) {
+
+            if (source->Sound)
+            {
                 ss << "Sound Duration:   " << std::setprecision(2) << source->Sound->GetDuration() << "s\n";
                 ss << "Sample Rate:      " << source->Sound->GetSampleRate() << "Hz\n";
                 ss << "Channels:         " << source->Sound->GetChannels() << "\n";
                 ss << "Bits Per Sample:  " << source->Sound->GetBitsPerSample() << "\n";
             }
-            
+
             return ss.str();
         }
     }
@@ -646,22 +739,27 @@ void AudioEngine::UpdateSources()
     }
 }
 
-void AudioEngine::Update3DAudio() {
-    for (auto& source : m_audioSources) {
-        if (source->IsPlaying && source->Is3D) {
+void AudioEngine::Update3DAudio()
+{
+    for (auto& source : m_audioSources)
+    {
+        if (source->IsPlaying && source->Is3D)
+        {
             Apply3DAudioToSource(source.get());
         }
     }
 }
 
-void AudioEngine::Apply3DAudioToSource(AudioSource* source) {
-    if (!source || !source->Voice || !source->Is3D) return;
+void AudioEngine::Apply3DAudioToSource(AudioSource* source)
+{
+    if (!source || !source->Voice || !source->Is3D)
+        return;
 
     // Calculate relative position from listener to source
     float dx = source->Position.x - m_listenerPosition.x;
     float dy = source->Position.y - m_listenerPosition.y;
     float dz = source->Position.z - m_listenerPosition.z;
-    float distance = sqrtf(dx*dx + dy*dy + dz*dz);
+    float distance = sqrtf(dx * dx + dy * dy + dz * dz);
 
     // Apply distance attenuation
     float attenuation = 1.0f / (1.0f + distance * m_distanceScale * 0.1f);
@@ -694,7 +792,7 @@ void AudioEngine::Apply3DAudioToSource(AudioSource* source) {
 
         // Apply stereo output matrix: [leftToLeft, rightToLeft, leftToRight, rightToRight]
         // For mono source -> stereo output: [left, right]
-        float outputMatrix[2] = { leftGain, rightGain };
+        float outputMatrix[2] = {leftGain, rightGain};
 
         XAUDIO2_VOICE_DETAILS voiceDetails;
         source->Voice->GetVoiceDetails(&voiceDetails);
@@ -703,11 +801,8 @@ void AudioEngine::Apply3DAudioToSource(AudioSource* source) {
         m_masterVoice->GetVoiceDetails(&masterDetails);
 
         // SetOutputMatrix: srcChannels * dstChannels matrix
-        source->Voice->SetOutputMatrix(
-            m_masterVoice,
-            voiceDetails.InputChannels,
-            masterDetails.InputChannels,
-            outputMatrix);
+        source->Voice->SetOutputMatrix(m_masterVoice, voiceDetails.InputChannels, masterDetails.InputChannels,
+                                       outputMatrix);
     }
 
     // Doppler effect using relative velocity between source and listener
@@ -722,16 +817,13 @@ void AudioEngine::Apply3DAudioToSource(AudioSource* source) {
         float dirToListenerZ = -dz * invDist;
 
         // Project source velocity onto direction toward listener
-        float sourceApproachSpeed =
-            source->Velocity.x * dirToListenerX +
-            source->Velocity.y * dirToListenerY +
-            source->Velocity.z * dirToListenerZ;
+        float sourceApproachSpeed = source->Velocity.x * dirToListenerX + source->Velocity.y * dirToListenerY +
+                                    source->Velocity.z * dirToListenerZ;
 
         // Project listener velocity onto direction toward source
-        float listenerApproachSpeed =
-            m_listenerVelocity.x * (-dirToListenerX) +
-            m_listenerVelocity.y * (-dirToListenerY) +
-            m_listenerVelocity.z * (-dirToListenerZ);
+        float listenerApproachSpeed = m_listenerVelocity.x * (-dirToListenerX) +
+                                      m_listenerVelocity.y * (-dirToListenerY) +
+                                      m_listenerVelocity.z * (-dirToListenerZ);
 
         // Doppler ratio: f' = f * (v + vL) / (v + vS)
         // where v = speed of sound, vL = listener approach speed, vS = source approach speed
@@ -753,15 +845,18 @@ HRESULT AudioEngine::CreateSourceVoice(const WAVEFORMATEX& format, IXAudio2Sourc
     return m_xAudio2->CreateSourceVoice(voice, &format);
 }
 
-void AudioEngine::NotifyStateChange() {
-    if (m_stateCallback) {
+void AudioEngine::NotifyStateChange()
+{
+    if (m_stateCallback)
+    {
         m_stateCallback();
     }
 }
 
-AudioEngine::AudioMetrics AudioEngine::GetMetricsThreadSafe() const {
+AudioEngine::AudioMetrics AudioEngine::GetMetricsThreadSafe() const
+{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
-    
+
     AudioMetrics metrics;
     metrics.activeSources = GetActiveSourceCount();
     metrics.totalSources = m_audioSources.size();
@@ -776,6 +871,6 @@ AudioEngine::AudioMetrics AudioEngine::GetMetricsThreadSafe() const {
     metrics.listenerVelocity = m_listenerVelocity;
     metrics.dopplerScale = m_dopplerScale;
     metrics.distanceScale = m_distanceScale;
-    
+
     return metrics;
 }

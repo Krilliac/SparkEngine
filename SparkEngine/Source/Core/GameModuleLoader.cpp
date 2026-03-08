@@ -7,14 +7,14 @@
 #include "Utils/SparkConsole.h"
 
 #ifdef _WIN32
-    #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-    #endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #ifdef SPARK_PLATFORM_WINDOWS
-    #include <Windows.h>
+#include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #else
-    #include <dlfcn.h>
+#include <dlfcn.h>
 #endif
 
 GameModuleLoader::~GameModuleLoader()
@@ -38,13 +38,13 @@ bool GameModuleLoader::Load(const std::string& path)
     if (!m_libraryHandle)
     {
         DWORD err = GetLastError();
-        Spark::SimpleConsole::GetInstance().LogError(
-            "Failed to load game module '" + path + "' (error " + std::to_string(err) + ")");
+        Spark::SimpleConsole::GetInstance().LogError("Failed to load game module '" + path + "' (error " +
+                                                     std::to_string(err) + ")");
         return false;
     }
 
-    m_createFn = reinterpret_cast<CreateGameModuleFn>(
-        GetProcAddress(static_cast<HMODULE>(m_libraryHandle), "CreateGameModule"));
+    m_createFn =
+        reinterpret_cast<CreateGameModuleFn>(GetProcAddress(static_cast<HMODULE>(m_libraryHandle), "CreateGameModule"));
     m_destroyFn = reinterpret_cast<DestroyGameModuleFn>(
         GetProcAddress(static_cast<HMODULE>(m_libraryHandle), "DestroyGameModule"));
 #else
@@ -52,8 +52,8 @@ bool GameModuleLoader::Load(const std::string& path)
     if (!m_libraryHandle)
     {
         const char* err = dlerror();
-        Spark::SimpleConsole::GetInstance().LogError(
-            std::string("Failed to load game module '") + path + "': " + (err ? err : "unknown error"));
+        Spark::SimpleConsole::GetInstance().LogError(std::string("Failed to load game module '") + path +
+                                                     "': " + (err ? err : "unknown error"));
         return false;
     }
 
@@ -63,8 +63,8 @@ bool GameModuleLoader::Load(const std::string& path)
 
     if (!m_createFn || !m_destroyFn)
     {
-        Spark::SimpleConsole::GetInstance().LogError(
-            "Game module '" + path + "' missing required exports (CreateGameModule/DestroyGameModule)");
+        Spark::SimpleConsole::GetInstance().LogError("Game module '" + path +
+                                                     "' missing required exports (CreateGameModule/DestroyGameModule)");
         Unload();
         return false;
     }
@@ -78,9 +78,8 @@ bool GameModuleLoader::Load(const std::string& path)
         return false;
     }
 
-    Spark::SimpleConsole::GetInstance().LogSuccess(
-        std::string("Loaded game module: ") + m_module->GetGameName() +
-        " v" + m_module->GetGameVersion());
+    Spark::SimpleConsole::GetInstance().LogSuccess(std::string("Loaded game module: ") + m_module->GetGameName() +
+                                                   " v" + m_module->GetGameVersion());
 
     return true;
 }

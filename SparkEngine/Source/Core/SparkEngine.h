@@ -54,7 +54,7 @@ inline Timer* SparkGetGlobalTimer();
 
 // Globals are still defined in SparkEngine.cpp for backward compatibility
 // but new code should use EngineContext.
-extern std::unique_ptr<GraphicsEngine>    g_graphics;
-extern std::unique_ptr<InputManager>      g_input;
-extern std::unique_ptr<Timer>             g_timer;
-extern std::unique_ptr<GameModuleLoader>  g_moduleLoader;
+extern std::unique_ptr<GraphicsEngine> g_graphics;
+extern std::unique_ptr<InputManager> g_input;
+extern std::unique_ptr<Timer> g_timer;
+extern std::unique_ptr<GameModuleLoader> g_moduleLoader;

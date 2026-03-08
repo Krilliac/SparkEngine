@@ -32,23 +32,32 @@ static std::string WideToNarrow(const std::wstring& wide)
 }
 
 // Rate-limited logging macro to prevent console spam
-#define LOG_TO_CONSOLE_RATE_LIMITED(msg, type) \
-    do { \
-        static auto lastLogTime = std::chrono::steady_clock::now(); \
-        static int logCounter = 0; \
-        auto now = std::chrono::steady_clock::now(); \
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count(); \
-        if (elapsed >= 10 || logCounter < 1) { \
-            Spark::ConsoleProcessManager::GetInstance().Log(msg, type); \
-            if (elapsed >= 10) { lastLogTime = now; logCounter = 0; } else { logCounter++; } \
-        } \
-    } while(0)
+#define LOG_TO_CONSOLE_RATE_LIMITED(msg, type)                                                                         \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        static auto lastLogTime = std::chrono::steady_clock::now();                                                    \
+        static int logCounter = 0;                                                                                     \
+        auto now = std::chrono::steady_clock::now();                                                                   \
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count();                    \
+        if (elapsed >= 10 || logCounter < 1)                                                                           \
+        {                                                                                                              \
+            Spark::ConsoleProcessManager::GetInstance().Log(msg, type);                                                \
+            if (elapsed >= 10)                                                                                         \
+            {                                                                                                          \
+                lastLogTime = now;                                                                                     \
+                logCounter = 0;                                                                                        \
+            }                                                                                                          \
+            else                                                                                                       \
+            {                                                                                                          \
+                logCounter++;                                                                                          \
+            }                                                                                                          \
+        }                                                                                                              \
+    } while (0)
 
 #define LOG_TO_CONSOLE(msg, type) LOG_TO_CONSOLE_RATE_LIMITED(msg, type)
 #define LOG_TO_CONSOLE_IMMEDIATE(msg, type) Spark::ConsoleProcessManager::GetInstance().Log(msg, type)
 
-SceneManager::SceneManager(GraphicsEngine* graphics, InputManager* input)
-    : m_graphics(graphics), m_input(input)
+SceneManager::SceneManager(GraphicsEngine* graphics, InputManager* input) : m_graphics(graphics), m_input(input)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager constructed.", L"INFO");
     ASSERT_MSG(graphics != nullptr, "SceneManager: graphics is null");
@@ -58,7 +67,8 @@ SceneManager::SceneManager(GraphicsEngine* graphics, InputManager* input)
 SceneManager::~SceneManager()
 {
     // Join any in-flight async load thread to avoid use-after-free
-    if (m_asyncLoadThread.joinable()) {
+    if (m_asyncLoadThread.joinable())
+    {
         m_asyncLoadThread.join();
     }
 }
@@ -98,7 +108,8 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
         m_currentFilePath = filepath;
         m_dirty = false;
         LOG_TO_CONSOLE_IMMEDIATE(L"Scene loaded: " + std::to_wstring(m_objects.size()) + L" objects, " +
-            std::to_wstring(m_sceneNodes.size()) + L" nodes", L"SUCCESS");
+                                     std::to_wstring(m_sceneNodes.size()) + L" nodes",
+                                 L"SUCCESS");
     }
     return loaded;
 }
@@ -118,15 +129,18 @@ bool SceneManager::SaveScene(const std::wstring& filepath) const
 void SceneManager::LoadSceneAsync(const std::wstring& filepath, SceneLoadCallback callback)
 {
     // Join any previous async load before starting a new one
-    if (m_asyncLoadThread.joinable()) {
+    if (m_asyncLoadThread.joinable())
+    {
         m_asyncLoadThread.join();
     }
 
-    m_asyncLoadThread = std::thread([this, filepath, callback]() {
-        bool success = LoadScene(filepath);
-        if (callback)
-            callback(success, std::string(filepath.begin(), filepath.end()));
-    });
+    m_asyncLoadThread = std::thread(
+        [this, filepath, callback]()
+        {
+            bool success = LoadScene(filepath);
+            if (callback)
+                callback(success, std::string(filepath.begin(), filepath.end()));
+        });
 }
 
 // ============================================================================
@@ -150,7 +164,8 @@ int SceneManager::AddNode(const SceneNode& node)
 
 void SceneManager::RemoveNode(int index)
 {
-    if (index < 0 || index >= static_cast<int>(m_sceneNodes.size())) return;
+    if (index < 0 || index >= static_cast<int>(m_sceneNodes.size()))
+        return;
 
     // Recursively remove children first
     auto& node = m_sceneNodes[index];
@@ -161,9 +176,7 @@ void SceneManager::RemoveNode(int index)
     if (node.parentIndex >= 0 && node.parentIndex < static_cast<int>(m_sceneNodes.size()))
     {
         auto& parentChildren = m_sceneNodes[node.parentIndex].childIndices;
-        parentChildren.erase(
-            std::remove(parentChildren.begin(), parentChildren.end(), index),
-            parentChildren.end());
+        parentChildren.erase(std::remove(parentChildren.begin(), parentChildren.end(), index), parentChildren.end());
     }
 
     // Mark as removed (tombstone approach to avoid index invalidation)
@@ -174,7 +187,8 @@ void SceneManager::RemoveNode(int index)
 
 void SceneManager::SetParent(int childIndex, int parentIndex)
 {
-    if (childIndex < 0 || childIndex >= static_cast<int>(m_sceneNodes.size())) return;
+    if (childIndex < 0 || childIndex >= static_cast<int>(m_sceneNodes.size()))
+        return;
 
     auto& child = m_sceneNodes[childIndex];
 
@@ -182,9 +196,8 @@ void SceneManager::SetParent(int childIndex, int parentIndex)
     if (child.parentIndex >= 0 && child.parentIndex < static_cast<int>(m_sceneNodes.size()))
     {
         auto& oldParentChildren = m_sceneNodes[child.parentIndex].childIndices;
-        oldParentChildren.erase(
-            std::remove(oldParentChildren.begin(), oldParentChildren.end(), childIndex),
-            oldParentChildren.end());
+        oldParentChildren.erase(std::remove(oldParentChildren.begin(), oldParentChildren.end(), childIndex),
+                                oldParentChildren.end());
     }
 
     // Set new parent
@@ -210,13 +223,15 @@ std::vector<int> SceneManager::GetRootNodes() const
 
 const SceneNode* SceneManager::GetNode(int index) const
 {
-    if (index < 0 || index >= static_cast<int>(m_sceneNodes.size())) return nullptr;
+    if (index < 0 || index >= static_cast<int>(m_sceneNodes.size()))
+        return nullptr;
     return &m_sceneNodes[index];
 }
 
 SceneNode* SceneManager::GetNode(int index)
 {
-    if (index < 0 || index >= static_cast<int>(m_sceneNodes.size())) return nullptr;
+    if (index < 0 || index >= static_cast<int>(m_sceneNodes.size()))
+        return nullptr;
     return &m_sceneNodes[index];
 }
 
@@ -236,17 +251,20 @@ int SceneManager::FindNode(const std::string& name) const
 
 bool SceneManager::SavePrefab(int nodeIndex, const std::wstring& filepath) const
 {
-    if (nodeIndex < 0 || nodeIndex >= static_cast<int>(m_sceneNodes.size())) return false;
+    if (nodeIndex < 0 || nodeIndex >= static_cast<int>(m_sceneNodes.size()))
+        return false;
 
     std::ofstream file(WideToNarrow(filepath));
-    if (!file.is_open()) return false;
+    if (!file.is_open())
+        return false;
 
     // Write prefab header
     file << "# SparkEngine Prefab v1.0\n";
 
     // Collect the node subtree
     std::vector<int> subtree;
-    std::function<void(int)> collectNodes = [&](int idx) {
+    std::function<void(int)> collectNodes = [&](int idx)
+    {
         subtree.push_back(idx);
         if (idx < static_cast<int>(m_sceneNodes.size()))
         {
@@ -260,9 +278,8 @@ bool SceneManager::SavePrefab(int nodeIndex, const std::wstring& filepath) const
     for (int idx : subtree)
     {
         const auto& node = m_sceneNodes[idx];
-        file << node.type << " " << node.name << " "
-             << node.position.x << " " << node.position.y << " " << node.position.z << " "
-             << node.rotation.x << " " << node.rotation.y << " " << node.rotation.z << " "
+        file << node.type << " " << node.name << " " << node.position.x << " " << node.position.y << " "
+             << node.position.z << " " << node.rotation.x << " " << node.rotation.y << " " << node.rotation.z << " "
              << node.scale.x << " " << node.scale.y << " " << node.scale.z << " "
              << (idx == nodeIndex ? -1 : node.parentIndex) << "\n";
     }
@@ -274,22 +291,21 @@ bool SceneManager::SavePrefab(int nodeIndex, const std::wstring& filepath) const
 int SceneManager::LoadPrefab(const std::wstring& filepath, const DirectX::XMFLOAT3& position)
 {
     std::ifstream file(WideToNarrow(filepath));
-    if (!file.is_open()) return -1;
+    if (!file.is_open())
+        return -1;
 
     std::string line;
     int rootIndex = -1;
 
     while (std::getline(file, line))
     {
-        if (line.empty() || line[0] == '#') continue;
+        if (line.empty() || line[0] == '#')
+            continue;
 
         std::istringstream ss(line);
         SceneNode node;
-        ss >> node.type >> node.name
-           >> node.position.x >> node.position.y >> node.position.z
-           >> node.rotation.x >> node.rotation.y >> node.rotation.z
-           >> node.scale.x >> node.scale.y >> node.scale.z
-           >> node.parentIndex;
+        ss >> node.type >> node.name >> node.position.x >> node.position.y >> node.position.z >> node.rotation.x >>
+            node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >> node.scale.z >> node.parentIndex;
 
         // Offset position for the root node
         if (rootIndex < 0)
@@ -300,7 +316,8 @@ int SceneManager::LoadPrefab(const std::wstring& filepath, const DirectX::XMFLOA
         }
 
         int idx = AddNode(node);
-        if (rootIndex < 0) rootIndex = idx;
+        if (rootIndex < 0)
+            rootIndex = idx;
     }
 
     InstantiateNodes();
@@ -329,7 +346,8 @@ void SceneManager::Clear()
 std::vector<std::string> SceneManager::GetAvailableScenes(const std::wstring& directory) const
 {
     std::vector<std::string> scenes;
-    if (!std::filesystem::exists(directory)) return scenes;
+    if (!std::filesystem::exists(directory))
+        return scenes;
 
     for (const auto& entry : std::filesystem::directory_iterator(directory))
     {
@@ -357,8 +375,7 @@ bool SceneManager::LoadJSON(const std::wstring& path)
     }
 
     // Read entire file
-    std::string content((std::istreambuf_iterator<char>(file)),
-                         std::istreambuf_iterator<char>());
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
     // Simple text parser for scene format
@@ -370,17 +387,16 @@ bool SceneManager::LoadJSON(const std::wstring& path)
     std::string line;
     while (std::getline(ss, line))
     {
-        if (line.empty() || line[0] == '#' || line[0] == '/' || line[0] == '{' || line[0] == '}') continue;
+        if (line.empty() || line[0] == '#' || line[0] == '/' || line[0] == '{' || line[0] == '}')
+            continue;
 
         std::istringstream ls(line);
         SceneNode node;
-        ls >> node.type >> node.name
-           >> node.position.x >> node.position.y >> node.position.z;
+        ls >> node.type >> node.name >> node.position.x >> node.position.y >> node.position.z;
 
         // Try to parse extended fields (rotation, scale, parentIndex)
-        ls >> node.rotation.x >> node.rotation.y >> node.rotation.z
-           >> node.scale.x >> node.scale.y >> node.scale.z
-           >> node.parentIndex;
+        ls >> node.rotation.x >> node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >> node.scale.z >>
+            node.parentIndex;
         // If extended fields aren't present, defaults are fine (rotation=0, scale=1, parent=-1)
 
         if (!node.type.empty())
@@ -408,13 +424,12 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
     for (size_t i = 0; i < m_sceneNodes.size(); ++i)
     {
         const auto& node = m_sceneNodes[i];
-        if (node.type.empty()) continue; // Skip tombstoned nodes
+        if (node.type.empty())
+            continue; // Skip tombstoned nodes
 
-        file << node.type << " " << node.name << " "
-             << std::fixed << std::setprecision(3)
-             << node.position.x << " " << node.position.y << " " << node.position.z << " "
-             << node.rotation.x << " " << node.rotation.y << " " << node.rotation.z << " "
-             << node.scale.x << " " << node.scale.y << " " << node.scale.z << " "
+        file << node.type << " " << node.name << " " << std::fixed << std::setprecision(3) << node.position.x << " "
+             << node.position.y << " " << node.position.z << " " << node.rotation.x << " " << node.rotation.y << " "
+             << node.rotation.z << " " << node.scale.x << " " << node.scale.y << " " << node.scale.z << " "
              << node.parentIndex << "\n";
     }
 
@@ -425,11 +440,13 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
 
 void SceneManager::InstantiateNodes()
 {
-    if (!m_graphics || !m_graphics->GetDevice() || !m_graphics->GetContext()) return;
+    if (!m_graphics || !m_graphics->GetDevice() || !m_graphics->GetContext())
+        return;
 
     for (const auto& node : m_sceneNodes)
     {
-        if (node.type.empty()) continue;
+        if (node.type.empty())
+            continue;
 
         std::unique_ptr<GameObject> obj;
 
@@ -455,7 +472,7 @@ void SceneManager::InstantiateNodes()
             {
                 std::wstring wtype(node.type.begin(), node.type.end());
                 LoadOrPlaceholderMesh(*obj->GetMesh(), m_graphics->GetDevice(), m_graphics->GetContext(),
-                    L"Assets\\Models\\" + wtype + L".obj");
+                                      L"Assets\\Models\\" + wtype + L".obj");
                 obj->SetPosition(node.position);
                 obj->SetRotation(node.rotation);
                 obj->SetName(node.name);
@@ -492,7 +509,8 @@ bool SceneManager::LoadCustom(const std::wstring& path)
     while (std::getline(file, line))
     {
         ++lineNum;
-        if (line.empty() || line[0] == L'#') continue;
+        if (line.empty() || line[0] == L'#')
+            continue;
 
         std::wstringstream ss(line);
         std::wstring type;
@@ -504,38 +522,45 @@ bool SceneManager::LoadCustom(const std::wstring& path)
 
         if (type == L"Cube")
         {
-            float size; ss >> size;
+            float size;
+            ss >> size;
             obj = std::make_unique<CubeObject>(size);
         }
         else if (type == L"Plane")
         {
-            float width, depth; ss >> width >> depth;
+            float width, depth;
+            ss >> width >> depth;
             obj = std::make_unique<PlaneObject>(width, depth);
         }
         else if (type == L"Sphere")
         {
-            float radius; int slices, stacks;
+            float radius;
+            int slices, stacks;
             ss >> radius >> slices >> stacks;
             obj = std::make_unique<SphereObject>(radius, slices, stacks);
         }
         else if (type == L"Pyramid")
         {
-            float size; ss >> size;
+            float size;
+            ss >> size;
             obj = std::make_unique<PyramidObject>(size);
         }
         else if (type == L"Ramp")
         {
-            float length, height; ss >> length >> height;
+            float length, height;
+            ss >> length >> height;
             obj = std::make_unique<RampObject>(length, height);
         }
         else if (type == L"Wall")
         {
-            float width, height; ss >> width >> height;
+            float width, height;
+            ss >> width >> height;
             obj = std::make_unique<WallObject>(width, height);
         }
         else
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Unknown type on line " + std::to_wstring(lineNum) + L": " + type, L"ERROR");
+            LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Unknown type on line " + std::to_wstring(lineNum) + L": " + type,
+                                     L"ERROR");
             continue;
         }
 
@@ -543,8 +568,8 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         HRESULT hr = obj->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         ASSERT_MSG(SUCCEEDED(hr), "SceneManager: object Initialize failed");
         LoadOrPlaceholderMesh(*obj->GetMesh(), m_graphics->GetDevice(), m_graphics->GetContext(),
-            L"Assets\\Models\\" + type + L".obj");
-        obj->SetPosition({ x, y, z });
+                              L"Assets\\Models\\" + type + L".obj");
+        obj->SetPosition({x, y, z});
         m_objects.push_back(std::move(obj));
 
         // Also track in scene hierarchy
@@ -572,11 +597,12 @@ std::string SceneManager::Console_ListNodes() const
     for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
     {
         const auto& node = m_sceneNodes[i];
-        if (node.type.empty()) continue;
+        if (node.type.empty())
+            continue;
 
         std::string indent(node.parentIndex >= 0 ? 4 : 2, ' ');
-        ss << indent << "[" << i << "] " << node.name << " (" << node.type << ") "
-           << "pos=(" << node.position.x << "," << node.position.y << "," << node.position.z << ")\n";
+        ss << indent << "[" << i << "] " << node.name << " (" << node.type << ") " << "pos=(" << node.position.x << ","
+           << node.position.y << "," << node.position.z << ")\n";
     }
     return ss.str();
 }
@@ -584,7 +610,8 @@ std::string SceneManager::Console_ListNodes() const
 std::string SceneManager::Console_GetNodeInfo(int index) const
 {
     const auto* node = GetNode(index);
-    if (!node) return "Node not found: " + std::to_string(index);
+    if (!node)
+        return "Node not found: " + std::to_string(index);
 
     std::ostringstream ss;
     ss << "=== Node [" << index << "] ===\n"
@@ -601,7 +628,8 @@ std::string SceneManager::Console_GetNodeInfo(int index) const
 bool SceneManager::Console_MoveNode(int index, float x, float y, float z)
 {
     auto* node = GetNode(index);
-    if (!node) return false;
+    if (!node)
+        return false;
     node->position = {x, y, z};
     m_dirty = true;
     return true;
@@ -610,7 +638,8 @@ bool SceneManager::Console_MoveNode(int index, float x, float y, float z)
 bool SceneManager::Console_RenameNode(int index, const std::string& newName)
 {
     auto* node = GetNode(index);
-    if (!node) return false;
+    if (!node)
+        return false;
     node->name = newName;
     m_dirty = true;
     return true;

@@ -1,271 +1,293 @@
 #include "AdvancedAssetPipeline.h"
 
-namespace SparkEditor {
+namespace SparkEditor
+{
+
+    // --- AssetProcessor ---
+
+    bool AssetProcessor::CanProcess(const std::string& /*filePath*/) const
+    {
+        return false;
+    }
+
+    // --- TextureProcessor ---
+
+    std::vector<std::string> TextureProcessor::GetSupportedExtensions() const
+    {
+        return {};
+    }
+
+    bool TextureProcessor::Process(AssetMetadata& /*metadata*/, const AssetImportSettings& /*settings*/,
+                                   std::function<void(float)> /*progressCallback*/)
+    {
+        return false;
+    }
+
+    bool TextureProcessor::GenerateThumbnail(const AssetMetadata& /*metadata*/, int /*thumbnailSize*/)
+    {
+        return false;
+    }
+
+    bool TextureProcessor::Validate(const AssetMetadata& /*metadata*/)
+    {
+        return false;
+    }
+
+    bool TextureProcessor::CompressTexture(const std::string& /*inputPath*/, const std::string& /*outputPath*/,
+                                           const AssetImportSettings::TextureSettings& /*settings*/)
+    {
+        return false;
+    }
+
+    bool TextureProcessor::GenerateMipMaps(const std::string& /*texturePath*/)
+    {
+        return false;
+    }
+
+    // --- MeshProcessor ---
+
+    std::vector<std::string> MeshProcessor::GetSupportedExtensions() const
+    {
+        return {};
+    }
+
+    bool MeshProcessor::Process(AssetMetadata& /*metadata*/, const AssetImportSettings& /*settings*/,
+                                std::function<void(float)> /*progressCallback*/)
+    {
+        return false;
+    }
+
+    bool MeshProcessor::GenerateThumbnail(const AssetMetadata& /*metadata*/, int /*thumbnailSize*/)
+    {
+        return false;
+    }
+
+    bool MeshProcessor::Validate(const AssetMetadata& /*metadata*/)
+    {
+        return false;
+    }
+
+    bool MeshProcessor::OptimizeMesh(const std::string& /*meshPath*/,
+                                     const AssetImportSettings::MeshSettings& /*settings*/)
+    {
+        return false;
+    }
+
+    bool MeshProcessor::GenerateNormals(const std::string& /*meshPath*/, float /*smoothingAngle*/)
+    {
+        return false;
+    }
+
+    bool MeshProcessor::GenerateTangents(const std::string& /*meshPath*/)
+    {
+        return false;
+    }
+
+    bool MeshProcessor::GenerateLightmapUVs(const std::string& /*meshPath*/)
+    {
+        return false;
+    }
+
+    // --- AudioProcessor ---
+
+    std::vector<std::string> AudioProcessor::GetSupportedExtensions() const
+    {
+        return {};
+    }
+
+    bool AudioProcessor::Process(AssetMetadata& /*metadata*/, const AssetImportSettings& /*settings*/,
+                                 std::function<void(float)> /*progressCallback*/)
+    {
+        return false;
+    }
+
+    bool AudioProcessor::GenerateThumbnail(const AssetMetadata& /*metadata*/, int /*thumbnailSize*/)
+    {
+        return false;
+    }
 
-// --- AssetProcessor ---
+    bool AudioProcessor::Validate(const AssetMetadata& /*metadata*/)
+    {
+        return false;
+    }
 
-bool AssetProcessor::CanProcess(const std::string& /*filePath*/) const {
-    return false;
-}
+    bool AudioProcessor::ConvertAudio(const std::string& /*inputPath*/, const std::string& /*outputPath*/,
+                                      const AssetImportSettings::AudioSettings& /*settings*/)
+    {
+        return false;
+    }
 
-// --- TextureProcessor ---
+    bool AudioProcessor::AnalyzeAudio(const std::string& /*audioPath*/, AssetMetadata& /*metadata*/)
+    {
+        return false;
+    }
+
+    // --- AssetDependencyGraph ---
 
-std::vector<std::string> TextureProcessor::GetSupportedExtensions() const {
-    return {};
-}
+    void AssetDependencyGraph::AddAsset(const std::string& /*assetPath*/) {}
 
-bool TextureProcessor::Process(AssetMetadata& /*metadata*/, const AssetImportSettings& /*settings*/,
-                               std::function<void(float)> /*progressCallback*/) {
-    return false;
-}
+    void AssetDependencyGraph::RemoveAsset(const std::string& /*assetPath*/) {}
 
-bool TextureProcessor::GenerateThumbnail(const AssetMetadata& /*metadata*/, int /*thumbnailSize*/) {
-    return false;
-}
+    void AssetDependencyGraph::AddDependency(const std::string& /*dependent*/, const std::string& /*dependency*/) {}
 
-bool TextureProcessor::Validate(const AssetMetadata& /*metadata*/) {
-    return false;
-}
+    void AssetDependencyGraph::RemoveDependency(const std::string& /*dependent*/, const std::string& /*dependency*/) {}
 
-bool TextureProcessor::CompressTexture(const std::string& /*inputPath*/, const std::string& /*outputPath*/,
-                                       const AssetImportSettings::TextureSettings& /*settings*/) {
-    return false;
-}
+    std::vector<std::string> AssetDependencyGraph::GetDependencies(const std::string& /*assetPath*/) const
+    {
+        return {};
+    }
 
-bool TextureProcessor::GenerateMipMaps(const std::string& /*texturePath*/) {
-    return false;
-}
+    std::vector<std::string> AssetDependencyGraph::GetDependents(const std::string& /*assetPath*/) const
+    {
+        return {};
+    }
 
-// --- MeshProcessor ---
+    std::vector<std::string> AssetDependencyGraph::GetProcessingOrder(
+        const std::vector<std::string>& /*assetPaths*/) const
+    {
+        return {};
+    }
 
-std::vector<std::string> MeshProcessor::GetSupportedExtensions() const {
-    return {};
-}
+    std::vector<std::string> AssetDependencyGraph::DetectCircularDependencies(
+        const std::vector<std::string>& /*assetPaths*/) const
+    {
+        return {};
+    }
 
-bool MeshProcessor::Process(AssetMetadata& /*metadata*/, const AssetImportSettings& /*settings*/,
-                            std::function<void(float)> /*progressCallback*/) {
-    return false;
-}
+    std::vector<std::string> AssetDependencyGraph::GetAffectedAssets(const std::string& /*assetPath*/) const
+    {
+        return {};
+    }
 
-bool MeshProcessor::GenerateThumbnail(const AssetMetadata& /*metadata*/, int /*thumbnailSize*/) {
-    return false;
-}
+    // --- AdvancedAssetPipeline ---
 
-bool MeshProcessor::Validate(const AssetMetadata& /*metadata*/) {
-    return false;
-}
+    AdvancedAssetPipeline::AdvancedAssetPipeline() : EditorPanel("Asset Pipeline", "asset_pipeline") {}
 
-bool MeshProcessor::OptimizeMesh(const std::string& /*meshPath*/,
-                                  const AssetImportSettings::MeshSettings& /*settings*/) {
-    return false;
-}
+    AdvancedAssetPipeline::~AdvancedAssetPipeline() = default;
 
-bool MeshProcessor::GenerateNormals(const std::string& /*meshPath*/, float /*smoothingAngle*/) {
-    return false;
-}
+    bool AdvancedAssetPipeline::Initialize()
+    {
+        return true;
+    }
 
-bool MeshProcessor::GenerateTangents(const std::string& /*meshPath*/) {
-    return false;
-}
+    void AdvancedAssetPipeline::Update(float /*deltaTime*/) {}
 
-bool MeshProcessor::GenerateLightmapUVs(const std::string& /*meshPath*/) {
-    return false;
-}
+    void AdvancedAssetPipeline::Render() {}
 
-// --- AudioProcessor ---
+    void AdvancedAssetPipeline::Shutdown() {}
 
-std::vector<std::string> AudioProcessor::GetSupportedExtensions() const {
-    return {};
-}
+    bool AdvancedAssetPipeline::HandleEvent(const std::string& /*eventType*/, void* /*eventData*/)
+    {
+        return false;
+    }
 
-bool AudioProcessor::Process(AssetMetadata& /*metadata*/, const AssetImportSettings& /*settings*/,
-                             std::function<void(float)> /*progressCallback*/) {
-    return false;
-}
+    void AdvancedAssetPipeline::RegisterProcessor(std::unique_ptr<AssetProcessor> /*processor*/) {}
 
-bool AudioProcessor::GenerateThumbnail(const AssetMetadata& /*metadata*/, int /*thumbnailSize*/) {
-    return false;
-}
+    bool AdvancedAssetPipeline::ProcessAsset(const std::string& /*assetPath*/, const AssetImportSettings& /*settings*/,
+                                             std::function<void(const AssetMetadata&)> /*callback*/)
+    {
+        return false;
+    }
 
-bool AudioProcessor::Validate(const AssetMetadata& /*metadata*/) {
-    return false;
-}
+    uint32_t AdvancedAssetPipeline::ProcessAssetsBatch(const std::vector<std::string>& /*assetPaths*/,
+                                                       const AssetImportSettings& /*settings*/,
+                                                       std::function<void(float)> /*progressCallback*/,
+                                                       std::function<void()> /*completionCallback*/)
+    {
+        return 0;
+    }
 
-bool AudioProcessor::ConvertAudio(const std::string& /*inputPath*/, const std::string& /*outputPath*/,
-                                  const AssetImportSettings::AudioSettings& /*settings*/) {
-    return false;
-}
+    bool AdvancedAssetPipeline::CancelBatchOperation(uint32_t /*operationID*/)
+    {
+        return false;
+    }
 
-bool AudioProcessor::AnalyzeAudio(const std::string& /*audioPath*/, AssetMetadata& /*metadata*/) {
-    return false;
-}
+    const AssetMetadata* AdvancedAssetPipeline::GetAssetMetadata(const std::string& /*assetPath*/) const
+    {
+        return nullptr;
+    }
 
-// --- AssetDependencyGraph ---
+    bool AdvancedAssetPipeline::RefreshAssetMetadata(const std::string& /*assetPath*/)
+    {
+        return false;
+    }
 
-void AssetDependencyGraph::AddAsset(const std::string& /*assetPath*/) {
-}
+    int AdvancedAssetPipeline::ScanDirectory(const std::string& /*directoryPath*/, bool /*recursive*/)
+    {
+        return 0;
+    }
 
-void AssetDependencyGraph::RemoveAsset(const std::string& /*assetPath*/) {
-}
+    AdvancedAssetPipeline::ProcessingStatistics AdvancedAssetPipeline::GetProcessingStatistics() const
+    {
+        return m_statistics;
+    }
 
-void AssetDependencyGraph::AddDependency(const std::string& /*dependent*/, const std::string& /*dependency*/) {
-}
+    void AdvancedAssetPipeline::SetFileSystemMonitoring(bool /*enabled*/) {}
 
-void AssetDependencyGraph::RemoveDependency(const std::string& /*dependent*/, const std::string& /*dependency*/) {
-}
+    void AdvancedAssetPipeline::SetProcessingThreadCount(int /*threadCount*/) {}
 
-std::vector<std::string> AssetDependencyGraph::GetDependencies(const std::string& /*assetPath*/) const {
-    return {};
-}
+    void AdvancedAssetPipeline::OptimizeAllAssets(std::function<void(float)> /*progressCallback*/) {}
 
-std::vector<std::string> AssetDependencyGraph::GetDependents(const std::string& /*assetPath*/) const {
-    return {};
-}
+    std::vector<std::string> AdvancedAssetPipeline::ValidateAllAssets()
+    {
+        return {};
+    }
 
-std::vector<std::string> AssetDependencyGraph::GetProcessingOrder(const std::vector<std::string>& /*assetPaths*/) const {
-    return {};
-}
+    bool AdvancedAssetPipeline::ExportAssetDatabase(const std::string& /*filePath*/)
+    {
+        return false;
+    }
 
-std::vector<std::string> AssetDependencyGraph::DetectCircularDependencies(const std::vector<std::string>& /*assetPaths*/) const {
-    return {};
-}
+    bool AdvancedAssetPipeline::ImportAssetDatabase(const std::string& /*filePath*/)
+    {
+        return false;
+    }
 
-std::vector<std::string> AssetDependencyGraph::GetAffectedAssets(const std::string& /*assetPath*/) const {
-    return {};
-}
+    // Private methods
 
-// --- AdvancedAssetPipeline ---
+    void AdvancedAssetPipeline::RenderAssetList() {}
 
-AdvancedAssetPipeline::AdvancedAssetPipeline()
-    : EditorPanel("Asset Pipeline", "asset_pipeline") {
-}
+    void AdvancedAssetPipeline::RenderProcessingQueue() {}
 
-AdvancedAssetPipeline::~AdvancedAssetPipeline() = default;
+    void AdvancedAssetPipeline::RenderBatchOperations() {}
 
-bool AdvancedAssetPipeline::Initialize() {
-    return true;
-}
+    void AdvancedAssetPipeline::RenderAssetInspector() {}
 
-void AdvancedAssetPipeline::Update(float /*deltaTime*/) {
-}
+    void AdvancedAssetPipeline::RenderDependencyViewer() {}
 
-void AdvancedAssetPipeline::Render() {
-}
+    void AdvancedAssetPipeline::RenderProcessingStatistics() {}
 
-void AdvancedAssetPipeline::Shutdown() {
-}
+    void AdvancedAssetPipeline::RenderImportSettings() {}
 
-bool AdvancedAssetPipeline::HandleEvent(const std::string& /*eventType*/, void* /*eventData*/) {
-    return false;
-}
+    void AdvancedAssetPipeline::ProcessingThreadFunction() {}
 
-void AdvancedAssetPipeline::RegisterProcessor(std::unique_ptr<AssetProcessor> /*processor*/) {
-}
+    void AdvancedAssetPipeline::FileSystemMonitoringFunction() {}
 
-bool AdvancedAssetPipeline::ProcessAsset(const std::string& /*assetPath*/,
-                                         const AssetImportSettings& /*settings*/,
-                                         std::function<void(const AssetMetadata&)> /*callback*/) {
-    return false;
-}
+    bool AdvancedAssetPipeline::ProcessNextJob()
+    {
+        return false;
+    }
 
-uint32_t AdvancedAssetPipeline::ProcessAssetsBatch(const std::vector<std::string>& /*assetPaths*/,
-                                                    const AssetImportSettings& /*settings*/,
-                                                    std::function<void(float)> /*progressCallback*/,
-                                                    std::function<void()> /*completionCallback*/) {
-    return 0;
-}
+    AssetProcessor* AdvancedAssetPipeline::GetProcessorForAsset(const std::string& /*assetPath*/)
+    {
+        return nullptr;
+    }
 
-bool AdvancedAssetPipeline::CancelBatchOperation(uint32_t /*operationID*/) {
-    return false;
-}
+    std::string AdvancedAssetPipeline::CalculateChecksum(const std::string& /*filePath*/)
+    {
+        return {};
+    }
 
-const AssetMetadata* AdvancedAssetPipeline::GetAssetMetadata(const std::string& /*assetPath*/) const {
-    return nullptr;
-}
+    void AdvancedAssetPipeline::UpdateDependencyGraph() {}
 
-bool AdvancedAssetPipeline::RefreshAssetMetadata(const std::string& /*assetPath*/) {
-    return false;
-}
+    bool AdvancedAssetPipeline::SaveMetadata(const AssetMetadata& /*metadata*/)
+    {
+        return false;
+    }
 
-int AdvancedAssetPipeline::ScanDirectory(const std::string& /*directoryPath*/, bool /*recursive*/) {
-    return 0;
-}
-
-AdvancedAssetPipeline::ProcessingStatistics AdvancedAssetPipeline::GetProcessingStatistics() const {
-    return m_statistics;
-}
-
-void AdvancedAssetPipeline::SetFileSystemMonitoring(bool /*enabled*/) {
-}
-
-void AdvancedAssetPipeline::SetProcessingThreadCount(int /*threadCount*/) {
-}
-
-void AdvancedAssetPipeline::OptimizeAllAssets(std::function<void(float)> /*progressCallback*/) {
-}
-
-std::vector<std::string> AdvancedAssetPipeline::ValidateAllAssets() {
-    return {};
-}
-
-bool AdvancedAssetPipeline::ExportAssetDatabase(const std::string& /*filePath*/) {
-    return false;
-}
-
-bool AdvancedAssetPipeline::ImportAssetDatabase(const std::string& /*filePath*/) {
-    return false;
-}
-
-// Private methods
-
-void AdvancedAssetPipeline::RenderAssetList() {
-}
-
-void AdvancedAssetPipeline::RenderProcessingQueue() {
-}
-
-void AdvancedAssetPipeline::RenderBatchOperations() {
-}
-
-void AdvancedAssetPipeline::RenderAssetInspector() {
-}
-
-void AdvancedAssetPipeline::RenderDependencyViewer() {
-}
-
-void AdvancedAssetPipeline::RenderProcessingStatistics() {
-}
-
-void AdvancedAssetPipeline::RenderImportSettings() {
-}
-
-void AdvancedAssetPipeline::ProcessingThreadFunction() {
-}
-
-void AdvancedAssetPipeline::FileSystemMonitoringFunction() {
-}
-
-bool AdvancedAssetPipeline::ProcessNextJob() {
-    return false;
-}
-
-AssetProcessor* AdvancedAssetPipeline::GetProcessorForAsset(const std::string& /*assetPath*/) {
-    return nullptr;
-}
-
-std::string AdvancedAssetPipeline::CalculateChecksum(const std::string& /*filePath*/) {
-    return {};
-}
-
-void AdvancedAssetPipeline::UpdateDependencyGraph() {
-}
-
-bool AdvancedAssetPipeline::SaveMetadata(const AssetMetadata& /*metadata*/) {
-    return false;
-}
-
-std::unique_ptr<AssetMetadata> AdvancedAssetPipeline::LoadMetadata(const std::string& /*assetPath*/) {
-    return nullptr;
-}
+    std::unique_ptr<AssetMetadata> AdvancedAssetPipeline::LoadMetadata(const std::string& /*assetPath*/)
+    {
+        return nullptr;
+    }
 
 } // namespace SparkEditor

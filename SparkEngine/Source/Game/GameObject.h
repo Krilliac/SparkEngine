@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "../Core/framework.h"    // XMFLOAT3, XMMATRIX, HRESULT
+#include "../Core/framework.h" // XMFLOAT3, XMMATRIX, HRESULT
 #include "../Graphics/Mesh.h"
 #include "../Utils/Assert.h"
 #include <memory>
@@ -36,7 +36,7 @@ class Projectile;
  */
 class GameObject
 {
-public:
+  public:
     /**
      * @brief Default constructor
      * 
@@ -73,7 +73,7 @@ public:
      * 
      * @param deltaTime Time elapsed since the last frame in seconds
      */
-    virtual void    Update(float deltaTime);
+    virtual void Update(float deltaTime);
 
     /**
      * @brief Render the game object to the screen
@@ -84,7 +84,7 @@ public:
      * @param view Camera view transformation matrix
      * @param projection Camera projection transformation matrix
      */
-    virtual void    Render(const XMMATRIX& view, const XMMATRIX& projection);
+    virtual void Render(const XMMATRIX& view, const XMMATRIX& projection);
 
     /**
      * @brief Clean up all resources used by the game object
@@ -92,7 +92,7 @@ public:
      * Releases mesh resources and resets the object state. Safe to call
      * multiple times.
      */
-    virtual void    Shutdown();
+    virtual void Shutdown();
 
     /**
      * @brief Collision callback when this object hits another game object
@@ -167,7 +167,7 @@ public:
      * @brief Get the current scale
      * @return Current scale factors for X, Y, and Z axes
      */
-    const XMFLOAT3& GetScale()    const { return m_scale; }
+    const XMFLOAT3& GetScale() const { return m_scale; }
 
     /**
      * @brief Get the world transformation matrix
@@ -189,19 +189,19 @@ public:
      * @brief Get the object's right direction vector
      * @return Normalized right vector in world space
      */
-    XMFLOAT3 GetRight()   const;
+    XMFLOAT3 GetRight() const;
 
     /**
      * @brief Get the object's up direction vector
      * @return Normalized up vector in world space
      */
-    XMFLOAT3 GetUp()      const;
+    XMFLOAT3 GetUp() const;
 
     /**
      * @brief Check if the object is active
      * @return true if object is active and should be updated
      */
-    bool IsActive()  const { return m_active; }
+    bool IsActive() const { return m_active; }
 
     /**
      * @brief Check if the object is visible
@@ -225,13 +225,13 @@ public:
      * @brief Get the unique identifier of the object
      * @return Unique ID assigned during construction
      */
-    UINT GetID()                   const { return m_id; }
+    UINT GetID() const { return m_id; }
 
     /**
      * @brief Get the name of the object
      * @return Current object name string
      */
-    const std::string& GetName()   const { return m_name; }
+    const std::string& GetName() const { return m_name; }
 
     /**
      * @brief Set the name of the object
@@ -259,7 +259,7 @@ public:
      */
     float GetDistanceFrom(const XMFLOAT3& p) const;
 
-protected:
+  protected:
     /**
      * @brief Create or set up the mesh for this object
      * 
@@ -277,32 +277,32 @@ protected:
     void UpdateWorldMatrix();
 
     // Transform state
-    XMFLOAT3             m_position{};           ///< World position
-    XMFLOAT3             m_rotation{};           ///< Rotation in Euler angles (radians)
-    XMFLOAT3             m_scale{ 1,1,1 };       ///< Scale factors for each axis
-    XMMATRIX             m_worldMatrix{};        ///< Cached world transformation matrix
-    bool                 m_worldMatrixDirty{ true }; ///< Flag indicating if world matrix needs recalculation
+    XMFLOAT3 m_position{};         ///< World position
+    XMFLOAT3 m_rotation{};         ///< Rotation in Euler angles (radians)
+    XMFLOAT3 m_scale{1, 1, 1};     ///< Scale factors for each axis
+    XMMATRIX m_worldMatrix{};      ///< Cached world transformation matrix
+    bool m_worldMatrixDirty{true}; ///< Flag indicating if world matrix needs recalculation
 
     // Rendering
-    std::unique_ptr<Mesh> m_mesh;               ///< 3D mesh for rendering
-    ID3D11Device* m_device{ nullptr };         ///< DirectX device reference
-    ID3D11DeviceContext* m_context{ nullptr }; ///< DirectX context reference
+    std::unique_ptr<Mesh> m_mesh;            ///< 3D mesh for rendering
+    ID3D11Device* m_device{nullptr};         ///< DirectX device reference
+    ID3D11DeviceContext* m_context{nullptr}; ///< DirectX context reference
 
     // Visibility/activation
-    bool m_active{ true };  ///< Whether object should be updated
-    bool m_visible{ true }; ///< Whether object should be rendered
+    bool m_active{true};  ///< Whether object should be updated
+    bool m_visible{true}; ///< Whether object should be rendered
 
     // Identification
-    static UINT   s_nextID; ///< Static counter for unique ID generation
-    UINT          m_id{ 0 }; ///< Unique identifier for this object
-    std::string   m_name;   ///< Human-readable name for debugging
+    static UINT s_nextID; ///< Static counter for unique ID generation
+    UINT m_id{0};         ///< Unique identifier for this object
+    std::string m_name;   ///< Human-readable name for debugging
 
     /**
      * @brief Path to model file for mesh loading
      */
     std::wstring m_modelPath{}; // Path to model file for mesh loading
 
-private:
+  private:
     /**
      * @brief Copy constructor (deleted)
      * 

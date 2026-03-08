@@ -85,13 +85,14 @@
 #include <chrono>
 #include <cstdint>
 
-namespace Spark {
+namespace Spark
+{
 
-// ============================================================================
-// Save Data Types
-// ============================================================================
+    // ============================================================================
+    // Save Data Types
+    // ============================================================================
 
-/**
+    /**
  * @brief Lightweight metadata header attached to every save file.
  *
  * SaveMetadata is written both inside the compressed save file and as part of
@@ -122,87 +123,88 @@ namespace Spark {
  *   ss.Save("slot1", world, meta);
  * @endcode
  */
-struct SaveMetadata {
-    /** @brief Human-readable name shown in the save-slot UI (e.g. "Before Boss Fight"). */
-    std::string saveName;
+    struct SaveMetadata
+    {
+        /** @brief Human-readable name shown in the save-slot UI (e.g. "Before Boss Fight"). */
+        std::string saveName;
 
-    /**
+        /**
      * @brief Internal scene/level identifier used to reload the correct level geometry.
      *
      * Should match the scene file name without extension (e.g. "Level03").
      * The SceneManager uses this string when deserializing to load the level
      * before restoring entity state.
      */
-    std::string sceneName;
+        std::string sceneName;
 
-    /**
+        /**
      * @brief Name of the player's chosen class at save time.
      *
      * Stored for UI display only (e.g. "Soldier", "Engineer"). The actual class
      * component data is restored from the serialized entity list.
      */
-    std::string playerClass;
+        std::string playerClass;
 
-    /**
+        /**
      * @brief Save format version number.
      *
      * Defaults to 1. Increment this when the JSON schema changes so that the
      * loader can distinguish old saves and apply migrations. Do not modify this
      * field in game code unless you are implementing a migration.
      */
-    uint32_t version = 1;
+        uint32_t version = 1;
 
-    /**
+        /**
      * @brief Unix timestamp (seconds since epoch) when the save was created.
      *
      * Set automatically by the SaveSystem to `time(nullptr)` at save time.
      * The UI can convert this to a human-readable date string.
      */
-    uint64_t timestamp = 0;
+        uint64_t timestamp = 0;
 
-    /**
+        /**
      * @brief Total accumulated play time in seconds at save time.
      *
      * Populate from your game's running play-time counter before calling Save().
      * Displayed in the slot UI as "Played: 2h 34m".
      */
-    float playTime = 0.0f;
+        float playTime = 0.0f;
 
-    /**
+        /**
      * @brief Relative or absolute path to a PNG/JPG screenshot for the slot thumbnail.
      *
      * The SaveSystem does **not** capture or write the screenshot; your game code
      * must capture it (e.g. via a back-buffer readback) and set this path. Leave
      * empty to display the engine's placeholder thumbnail.
      */
-    std::string screenshotPath;
+        std::string screenshotPath;
 
-    // -------------------------------------------------------------------------
-    // Player summary fields — used by the save-slot UI for quick display.
-    // -------------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Player summary fields — used by the save-slot UI for quick display.
+        // -------------------------------------------------------------------------
 
-    /** @brief Player's health value at save time. Range: [0, maxHealth]. */
-    float playerHealth = 0.0f;
+        /** @brief Player's health value at save time. Range: [0, maxHealth]. */
+        float playerHealth = 0.0f;
 
-    /** @brief Player's armor/shield value at save time. Range: [0, maxArmor]. */
-    float playerArmor = 0.0f;
+        /** @brief Player's armor/shield value at save time. Range: [0, maxArmor]. */
+        float playerArmor = 0.0f;
 
-    /**
+        /**
      * @brief Player's world-space position at save time.
      *
      * Shown in the UI as a map pin or coordinate display. Also used by the
      * SceneManager as a hint for where to spawn the player during load.
      */
-    DirectX::XMFLOAT3 playerPosition{0, 0, 0};
+        DirectX::XMFLOAT3 playerPosition{0, 0, 0};
 
-    /** @brief Total enemy kills accumulated up to this save point. */
-    int playerKills = 0;
+        /** @brief Total enemy kills accumulated up to this save point. */
+        int playerKills = 0;
 
-    /** @brief Total player deaths accumulated up to this save point. */
-    int playerDeaths = 0;
-};
+        /** @brief Total player deaths accumulated up to this save point. */
+        int playerDeaths = 0;
+    };
 
-/**
+    /**
  * @brief Serialized representation of a single component instance.
  *
  * SerializedComponent is an intermediate, type-erased container that bridges
@@ -226,17 +228,18 @@ struct SaveMetadata {
  * }
  * ```
  */
-struct SerializedComponent {
-    /**
+    struct SerializedComponent
+    {
+        /**
      * @brief C++ type name of the component (e.g. "Transform", "HealthComponent").
      *
      * Must match the key used when registering serializers with
      * ComponentSerializerRegistry::Register(). The deserializer uses this string
      * to look up the correct deserialization function.
      */
-    std::string typeName;
+        std::string typeName;
 
-    /**
+        /**
      * @brief String-encoded key-value properties for this component instance.
      *
      * Both keys and values are plain strings. The component serializer encodes
@@ -244,10 +247,10 @@ struct SerializedComponent {
      * deserializer parses them back. Use a consistent encoding convention within
      * each component serializer (e.g. `std::to_string` for numerics).
      */
-    std::unordered_map<std::string, std::string> properties;
-};
+        std::unordered_map<std::string, std::string> properties;
+    };
 
-/**
+    /**
  * @brief Serialized representation of a single entity and all its components.
  *
  * SerializedEntity is a snapshot of one ECS entity at save time. The
@@ -258,25 +261,26 @@ struct SerializedComponent {
  * During deserialization, the SaveSystem creates a brand-new entity via
  * `World::CreateEntity()` and attaches each component listed in `components`.
  */
-struct SerializedEntity {
-    /**
+    struct SerializedEntity
+    {
+        /**
      * @brief EnTT entity ID at save time.
      *
      * Informational only during load; do not use as a stable cross-save reference.
      * If you need stable inter-entity references, store a named identifier in a
      * custom component and reference it via name in `customState`.
      */
-    uint32_t entityID;
+        uint32_t entityID;
 
-    /**
+        /**
      * @brief Human-readable entity name from NameComponent (if present).
      *
      * Used to create the entity with the same display name in the editor and
      * in debug logs. Empty string if the entity had no NameComponent.
      */
-    std::string name;
+        std::string name;
 
-    /**
+        /**
      * @brief All serialized components attached to this entity.
      *
      * Populated by iterating over the entity's component set at save time and
@@ -284,10 +288,10 @@ struct SerializedEntity {
      * registered serializers are included; unrecognized components are silently
      * skipped.
      */
-    std::vector<SerializedComponent> components;
-};
+        std::vector<SerializedComponent> components;
+    };
 
-/**
+    /**
  * @brief Complete snapshot of a game state that can be written to and read from disk.
  *
  * SaveData is the root container passed to `SaveSystem::WriteToFile()` and
@@ -310,25 +314,26 @@ struct SerializedEntity {
  *   SaveSystem::GetInstance().DeserializeWorld(snapshot, world);
  * @endcode
  */
-struct SaveData {
-    /**
+    struct SaveData
+    {
+        /**
      * @brief Metadata header for this save (slot UI display, versioning, scene name).
      *
      * See SaveMetadata for field descriptions. Always populate this before
      * writing; the SaveSystem reads `metadata.version` to select the appropriate
      * migration path during load.
      */
-    SaveMetadata metadata;
+        SaveMetadata metadata;
 
-    /**
+        /**
      * @brief Serialized snapshot of all entities and their components.
      *
      * One entry per entity in the World that has at least one serializable
      * component. Entities with no registered-component types are omitted.
      */
-    std::vector<SerializedEntity> entities;
+        std::vector<SerializedEntity> entities;
 
-    /**
+        /**
      * @brief Free-form key-value store for game-specific state.
      *
      * Use this for data that doesn't map cleanly to ECS components: global game
@@ -340,14 +345,14 @@ struct SaveData {
      *   data.customState["globalTimer"]         = std::to_string(elapsedSeconds);
      * @endcode
      */
-    std::unordered_map<std::string, std::string> customState;
-};
+        std::unordered_map<std::string, std::string> customState;
+    };
 
-// ============================================================================
-// Component Serializer Registry
-// ============================================================================
+    // ============================================================================
+    // Component Serializer Registry
+    // ============================================================================
 
-/**
+    /**
  * @class ComponentSerializerRegistry
  * @brief Singleton registry mapping component type names to (de)serializer functions.
  *
@@ -391,27 +396,28 @@ struct SaveData {
  *       });
  * @endcode
  */
-class ComponentSerializerRegistry {
-public:
-    /**
+    class ComponentSerializerRegistry
+    {
+      public:
+        /**
      * @brief Function signature for component serialization.
      *
      * @param component  Const void pointer to the component struct. Cast to
      *                   `const ConcreteType*` inside the lambda.
      * @return           SerializedComponent containing all field values as strings.
      */
-    using SerializeFunc = std::function<SerializedComponent(const void* component)>;
+        using SerializeFunc = std::function<SerializedComponent(const void* component)>;
 
-    /**
+        /**
      * @brief Function signature for component deserialization.
      *
      * @param world   The World into which the component should be added.
      * @param entity  The entity to attach the component to.
      * @param data    SerializedComponent containing the string properties to parse.
      */
-    using DeserializeFunc = std::function<void(World& world, EntityID entity, const SerializedComponent& data)>;
+        using DeserializeFunc = std::function<void(World& world, EntityID entity, const SerializedComponent& data)>;
 
-    /**
+        /**
      * @brief Access the singleton instance of the registry.
      *
      * Constructed on first call (Meyer's singleton). Safe to call from any thread
@@ -419,9 +425,9 @@ public:
      *
      * @return  Reference to the global ComponentSerializerRegistry instance.
      */
-    static ComponentSerializerRegistry& GetInstance();
+        static ComponentSerializerRegistry& GetInstance();
 
-    /**
+        /**
      * @brief Register a (de)serializer pair for a component type.
      *
      * Overwrites any existing registration for `typeName`. Call this once per
@@ -433,17 +439,17 @@ public:
      * @param serialize    Function that converts `const void*` → SerializedComponent.
      * @param deserialize  Function that restores the component from SerializedComponent.
      */
-    void Register(const std::string& typeName, SerializeFunc serialize, DeserializeFunc deserialize);
+        void Register(const std::string& typeName, SerializeFunc serialize, DeserializeFunc deserialize);
 
-    /**
+        /**
      * @brief Check whether a serializer is registered for the given type name.
      *
      * @param typeName  Component type name to query.
      * @return          `true` if a serializer/deserializer pair exists for `typeName`.
      */
-    bool HasSerializer(const std::string& typeName) const;
+        bool HasSerializer(const std::string& typeName) const;
 
-    /**
+        /**
      * @brief Serialize a component using its registered serializer.
      *
      * @param typeName   Component type name (must have been registered).
@@ -452,9 +458,9 @@ public:
      *
      * @pre HasSerializer(typeName) must be true.
      */
-    SerializedComponent Serialize(const std::string& typeName, const void* component) const;
+        SerializedComponent Serialize(const std::string& typeName, const void* component) const;
 
-    /**
+        /**
      * @brief Deserialize a component and attach it to an entity.
      *
      * Looks up the registered deserializer for `data.typeName` and invokes it.
@@ -466,10 +472,10 @@ public:
      *
      * @pre HasSerializer(typeName) must be true.
      */
-    void Deserialize(const std::string& typeName, World& world, EntityID entity,
-                     const SerializedComponent& data) const;
+        void Deserialize(const std::string& typeName, World& world, EntityID entity,
+                         const SerializedComponent& data) const;
 
-    /**
+        /**
      * @brief Register all built-in Spark Engine component (de)serializers.
      *
      * Covers: Transform, NameComponent, HealthComponent, RigidBodyComponent,
@@ -477,35 +483,36 @@ public:
      * AnimationController, AIComponent, and more. Called automatically by
      * SaveSystem::Initialize(); do not call manually unless reinitializing.
      */
-    void RegisterBuiltins();
+        void RegisterBuiltins();
 
-private:
-    /** @brief Private constructor enforces singleton pattern. */
-    ComponentSerializerRegistry() = default;
+      private:
+        /** @brief Private constructor enforces singleton pattern. */
+        ComponentSerializerRegistry() = default;
 
-    /**
+        /**
      * @brief Internal storage node pairing a serializer with its deserializer.
      */
-    struct Entry {
-        /** @brief Function that converts component data to string properties. */
-        SerializeFunc serialize;
-        /** @brief Function that restores a component from string properties. */
-        DeserializeFunc deserialize;
-    };
+        struct Entry
+        {
+            /** @brief Function that converts component data to string properties. */
+            SerializeFunc serialize;
+            /** @brief Function that restores a component from string properties. */
+            DeserializeFunc deserialize;
+        };
 
-    /**
+        /**
      * @brief Map from component type name to its registered Entry.
      *
      * Keyed by the same `typeName` string used in SerializedComponent::typeName.
      */
-    std::unordered_map<std::string, Entry> m_serializers;
-};
+        std::unordered_map<std::string, Entry> m_serializers;
+    };
 
-// ============================================================================
-// SaveSystem
-// ============================================================================
+    // ============================================================================
+    // SaveSystem
+    // ============================================================================
 
-/**
+    /**
  * @class SaveSystem
  * @brief Singleton façade that orchestrates all save and load operations.
  *
@@ -555,9 +562,10 @@ private:
  *       ss.Load("checkpoint1", world);
  * @endcode
  */
-class SaveSystem {
-public:
-    /**
+    class SaveSystem
+    {
+      public:
+        /**
      * @brief Access the singleton SaveSystem instance.
      *
      * The instance is constructed on the first call (Meyer's singleton, thread-safe
@@ -566,9 +574,9 @@ public:
      *
      * @return  Reference to the global SaveSystem instance.
      */
-    static SaveSystem& GetInstance();
+        static SaveSystem& GetInstance();
 
-    /**
+        /**
      * @brief Initialize the save system and prepare the save directory.
      *
      * Creates the save directory if it does not exist and registers all built-in
@@ -579,9 +587,9 @@ public:
      * @return               `true` on success; `false` if the directory could not be
      *                       created or the serializers could not be registered.
      */
-    bool Initialize(const std::string& saveDirectory = "Saves");
+        bool Initialize(const std::string& saveDirectory = "Saves");
 
-    /**
+        /**
      * @brief Serialize and write the current world state to the specified save slot.
      *
      * Serializes all entities and components in `world`, attaches `metadata`,
@@ -597,9 +605,9 @@ public:
      * @return          `true` if the file was written successfully; `false` on any error
      *                  (serialization failure, disk full, permission denied, etc.).
      */
-    bool Save(const std::string& slotName, World& world, const SaveMetadata& metadata);
+        bool Save(const std::string& slotName, World& world, const SaveMetadata& metadata);
 
-    /**
+        /**
      * @brief Load a previously saved game state from the specified slot.
      *
      * Reads and decompresses the save file, reconstructs all entities and components
@@ -615,9 +623,9 @@ public:
      * @return          `true` if the world was fully restored; `false` on any error
      *                  (file not found, JSON parse error, version mismatch, etc.).
      */
-    bool Load(const std::string& slotName, World& world);
+        bool Load(const std::string& slotName, World& world);
 
-    /**
+        /**
      * @brief Save the current game state to the dedicated quicksave slot.
      *
      * Equivalent to `Save("__quicksave", world, metadata)`. Overwrites the previous
@@ -628,9 +636,9 @@ public:
      *                  automatically if left empty.
      * @return          `true` on success; `false` on error.
      */
-    bool QuickSave(World& world, const SaveMetadata& metadata);
+        bool QuickSave(World& world, const SaveMetadata& metadata);
 
-    /**
+        /**
      * @brief Restore the game state from the dedicated quicksave slot.
      *
      * Equivalent to `Load("__quicksave", world)`. Returns `false` if no quicksave
@@ -639,9 +647,9 @@ public:
      * @param world  The ECS World to restore into. Existing state is cleared.
      * @return       `true` if quicksave was found and loaded; `false` otherwise.
      */
-    bool QuickLoad(World& world);
+        bool QuickLoad(World& world);
 
-    /**
+        /**
      * @brief Save to a rotating autosave slot.
      *
      * Cycles through `maxAutoSaves` slots (named `"__autosave_0"` … `"__autosave_N"`).
@@ -652,9 +660,9 @@ public:
      * @param metadata  Metadata to embed; `saveName` is typically set to "Auto Save".
      * @return          `true` on success; `false` on error.
      */
-    bool AutoSave(World& world, const SaveMetadata& metadata);
+        bool AutoSave(World& world, const SaveMetadata& metadata);
 
-    /**
+        /**
      * @brief Delete the save file for the specified slot.
      *
      * Removes `<saveDirectory>/<slotName>.sav` from the file system. A no-op if the
@@ -664,9 +672,9 @@ public:
      * @param slotName  Slot to delete.
      * @return          `true` if the file was deleted (or didn't exist); `false` on error.
      */
-    bool DeleteSave(const std::string& slotName);
+        bool DeleteSave(const std::string& slotName);
 
-    /**
+        /**
      * @brief Return metadata for all save slots found in the save directory.
      *
      * Scans the save directory for `*.sav` files, reads the metadata header from
@@ -679,9 +687,9 @@ public:
      * @return  Vector of SaveMetadata, one per discovered save file. Empty if the
      *          directory contains no valid save files.
      */
-    std::vector<SaveMetadata> GetSaveSlots() const;
+        std::vector<SaveMetadata> GetSaveSlots() const;
 
-    /**
+        /**
      * @brief Read the metadata header for a specific save slot without loading entities.
      *
      * Faster than Load() when you only need display information (e.g. to show a
@@ -692,9 +700,9 @@ public:
      * @return            `true` if the slot exists and its metadata was read successfully;
      *                    `false` if the file doesn't exist or is corrupt.
      */
-    bool GetSaveMetadata(const std::string& slotName, SaveMetadata& outMetadata) const;
+        bool GetSaveMetadata(const std::string& slotName, SaveMetadata& outMetadata) const;
 
-    /**
+        /**
      * @brief Check whether a save file exists for the given slot name.
      *
      * Performs a simple file-existence check without opening or parsing the file.
@@ -702,9 +710,9 @@ public:
      * @param slotName  Slot identifier to check.
      * @return          `true` if `<saveDirectory>/<slotName>.sav` exists on disk.
      */
-    bool SaveExists(const std::string& slotName) const;
+        bool SaveExists(const std::string& slotName) const;
 
-    /**
+        /**
      * @brief Serialize the world to a SaveData without writing to disk.
      *
      * Useful for in-memory checkpointing (e.g. undo/redo, boss-fight snapshots) or
@@ -715,9 +723,9 @@ public:
      * @param metadata  Metadata to embed in the returned SaveData.
      * @return          A fully populated SaveData snapshot of the current world state.
      */
-    SaveData SerializeWorld(World& world, const SaveMetadata& metadata) const;
+        SaveData SerializeWorld(World& world, const SaveMetadata& metadata) const;
 
-    /**
+        /**
      * @brief Restore world state from a SaveData without reading from disk.
      *
      * Clears `world` and reconstructs all entities and components from `data`.
@@ -729,13 +737,13 @@ public:
      * @param world  The ECS World to restore into. Existing state is cleared.
      * @return       `true` if all entities were restored successfully; `false` on error.
      */
-    bool DeserializeWorld(const SaveData& data, World& world) const;
+        bool DeserializeWorld(const SaveData& data, World& world) const;
 
-    // -------------------------------------------------------------------------
-    // Configuration
-    // -------------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Configuration
+        // -------------------------------------------------------------------------
 
-    /**
+        /**
      * @brief Set the maximum number of rotating autosave slots.
      *
      * When AutoSave() has been called `count` times, the oldest slot is overwritten.
@@ -743,9 +751,9 @@ public:
      *
      * @param count  Number of autosave slots to maintain.
      */
-    void SetMaxAutoSaves(int count) { m_maxAutoSaves = count; }
+        void SetMaxAutoSaves(int count) { m_maxAutoSaves = count; }
 
-    /**
+        /**
      * @brief Override the directory used to store save files at runtime.
      *
      * Changing this after Initialize() has been called takes effect immediately;
@@ -754,13 +762,13 @@ public:
      *
      * @param dir  New save directory path (relative or absolute).
      */
-    void SetSaveDirectory(const std::string& dir) { m_saveDirectory = dir; }
+        void SetSaveDirectory(const std::string& dir) { m_saveDirectory = dir; }
 
-    // -------------------------------------------------------------------------
-    // Console integration
-    // -------------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Console integration
+        // -------------------------------------------------------------------------
 
-    /**
+        /**
      * @brief List all save slots as a formatted string for the debug console.
      *
      * Returns a human-readable table of slot names, timestamps, scene names, and
@@ -768,9 +776,9 @@ public:
      *
      * @return  Formatted multi-line string suitable for console output.
      */
-    std::string Console_ListSaves() const;
+        std::string Console_ListSaves() const;
 
-    /**
+        /**
      * @brief Return detailed information about a specific save slot for the console.
      *
      * Reads full metadata (without loading entities) and formats it as a human-readable
@@ -780,13 +788,13 @@ public:
      * @return          Formatted string with all SaveMetadata fields, or an error message
      *                  if the slot does not exist.
      */
-    std::string Console_GetSaveInfo(const std::string& slotName) const;
+        std::string Console_GetSaveInfo(const std::string& slotName) const;
 
-private:
-    /** @brief Private constructor enforces singleton pattern. */
-    SaveSystem() = default;
+      private:
+        /** @brief Private constructor enforces singleton pattern. */
+        SaveSystem() = default;
 
-    /**
+        /**
      * @brief Compress a SaveData to JSON and write it to disk.
      *
      * Serializes `data` to JSON via RapidJSON, compresses with miniz deflate, and
@@ -796,9 +804,9 @@ private:
      * @param data      SaveData to write.
      * @return          `true` on success; `false` on error.
      */
-    bool WriteToFile(const std::string& filepath, const SaveData& data) const;
+        bool WriteToFile(const std::string& filepath, const SaveData& data) const;
 
-    /**
+        /**
      * @brief Read, decompress, and parse a save file from disk.
      *
      * Reads the binary file at `filepath`, decompresses with miniz, and parses
@@ -809,9 +817,9 @@ private:
      * @param outData   Output parameter populated on success.
      * @return          `true` on success; `false` on any error.
      */
-    bool ReadFromFile(const std::string& filepath, SaveData& outData) const;
+        bool ReadFromFile(const std::string& filepath, SaveData& outData) const;
 
-    /**
+        /**
      * @brief Construct the full file path for a save slot.
      *
      * Returns `m_saveDirectory + "/" + slotName + ".sav"`. Does not perform any
@@ -820,32 +828,32 @@ private:
      * @param slotName  Slot identifier.
      * @return          Full path to the corresponding `.sav` file.
      */
-    std::string GetSavePath(const std::string& slotName) const;
+        std::string GetSavePath(const std::string& slotName) const;
 
-    /** @brief Directory where all `.sav` files are stored. Defaults to `"Saves"`. */
-    std::string m_saveDirectory = "Saves";
+        /** @brief Directory where all `.sav` files are stored. Defaults to `"Saves"`. */
+        std::string m_saveDirectory = "Saves";
 
-    /**
+        /**
      * @brief Maximum number of rotating autosave slots.
      *
      * AutoSave() cycles through slots `0 .. m_maxAutoSaves - 1` and overwrites
      * the oldest when all are filled.
      */
-    int m_maxAutoSaves = 3;
+        int m_maxAutoSaves = 3;
 
-    /**
+        /**
      * @brief Index of the next autosave slot to write (0 .. m_maxAutoSaves - 1).
      *
      * Incremented (mod m_maxAutoSaves) each time AutoSave() is called.
      */
-    int m_currentAutoSaveIndex = 0;
+        int m_currentAutoSaveIndex = 0;
 
-    /**
+        /**
      * @brief Reserved slot name for quicksave/quickload operations.
      *
      * Hard-coded to `"__quicksave"`. Do not use this name for user-facing save slots.
      */
-    std::string m_quickSaveSlot = "__quicksave";
-};
+        std::string m_quickSaveSlot = "__quicksave";
+    };
 
 } // namespace Spark
