@@ -121,12 +121,16 @@ target_include_directories(MyGame PRIVATE "Source")
 
 ### As a Standalone Project
 
-For standalone projects, use `find_package`:
+For standalone projects, use `find_package`. Including the preflight check first gives clear diagnostics if the SDK installation is incomplete:
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(MyGame LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
+
+# Pre-flight validation (optional but recommended)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
+include(SparkEnginePreflight)
 
 find_package(SparkEngine REQUIRED)
 

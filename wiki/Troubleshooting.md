@@ -66,6 +66,21 @@ Ensure your compiler supports C++20:
 - GCC: Version 11 or later
 - Clang: Version 14 or later
 
+### Incomplete SparkEngine Installation (Standalone Projects)
+
+**Symptom:** CMake error like `include could not find requested file: SparkEngineTargets.cmake` when configuring a standalone game project.
+
+**Cause:** `SparkEngineConfig.cmake` exists but companion files (`SparkEngineTargets.cmake`, `SparkGameModule.cmake`) are missing — typically from an interrupted install or pointing at a build tree instead of an install prefix.
+
+**Solution:** Re-run the install step and reconfigure:
+
+```bash
+cmake --install <build-dir> --prefix <install-prefix>
+cmake -B build -DCMAKE_PREFIX_PATH=<install-prefix>
+```
+
+**Tip:** Include `SparkEnginePreflight.cmake` in your project (before `find_package`) for automatic detection. See [Build System and CMake Modules](Build-System-and-CMake-Modules#sparkenginepreflight-cmake).
+
 ## Runtime Issues
 
 ### SparkEngine Crashes Immediately
