@@ -362,9 +362,32 @@ cd docs
 
 Requires `doxygen` and `graphviz`.
 
-## Templates
+## Templates & Game Modules
 
-Check out **[SparkTemplates](https://github.com/Krilliac/SparkTemplates)** for ready-made project templates and starter kits built on Spark Engine. These templates give you a pre-configured starting point so you can jump straight into building your game without setting everything up from scratch.
+SparkEngine supports **game modules** — shared libraries (`.dll` on Windows, `.so` on Linux) that the engine loads at startup. This lets you build your game independently from the engine using only the installed SDK.
+
+### Quick Start (Game Module)
+
+```bash
+# 1. Install SparkEngine to a local prefix
+cmake --install build --prefix ~/SparkEngine-install
+
+# 2. Copy the empty template and build it
+cp -r Templates/EmptyProject MyGame && cd MyGame
+# Replace {{PROJECT_NAME}} placeholders with your project name
+cmake -B build -DCMAKE_PREFIX_PATH=~/SparkEngine-install
+cmake --build build --config Release
+
+# 3. Run your module through the engine
+# Windows:  SparkEngine.exe -game MyGame.dll
+# Linux:    ./SparkEngine -game libMyGame.so
+```
+
+> **Important:** You must use the **install prefix** (the path passed to `--prefix`) as `CMAKE_PREFIX_PATH`, not the build directory. The build tree does not contain the CMake config files that `find_package(SparkEngine)` needs.
+
+See **[Templates/README.md](Templates/README.md)** for full documentation on prerequisites, project structure, and creating new projects.
+
+For additional templates covering physics, AI, networking, procedural generation, and more, check out **[SparkTemplates](https://github.com/Krilliac/SparkTemplates)**.
 
 ## License
 
