@@ -63,7 +63,7 @@ namespace Spark
                 return GraphicsBackend::None;
             }
 
-                // Priority: D3D11 on Windows, Vulkan on Linux, OpenGL as fallback
+            // Priority: D3D11 on Windows, Vulkan on Linux, OpenGL as fallback
 #ifdef _WIN32
             for (auto b : backends)
                 if (b == GraphicsBackend::D3D11)

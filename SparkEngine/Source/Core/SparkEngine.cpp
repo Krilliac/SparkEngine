@@ -1067,22 +1067,34 @@ void RegisterEngineConsoleCommands()
 #endif // SPARK_PLATFORM_WINDOWS
 
 // ============================================================================
-// Non-Windows: main entry point with headless support
+// Non-Windows: main entry point with SDL2 window + event loop
 // ============================================================================
 #ifndef SPARK_PLATFORM_WINDOWS
 #include "SparkEngine.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
+#include "EngineSettings.h"
 #include "Engine/Events/EventSystem.h"
+#include "Engine/SaveSystem/SaveSystem.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
+#include "Audio/AudioEngine.h"
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
+#endif
 #include "Utils/Timer.h"
+#include "Utils/SparkConsole.h"
+#include "Graphics/GraphicsConsoleCommands.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
 #include <csignal>
 #include <cstring>
+#include <filesystem>
+
+#ifdef SPARK_SDL2_AVAILABLE
+#include <SDL.h>
+#endif
 
 std::unique_ptr<GraphicsEngine> g_graphics;
 std::unique_ptr<InputManager> g_input;
@@ -1090,88 +1102,297 @@ std::unique_ptr<Timer> g_timer;
 std::unique_ptr<Spark::EventBus> g_eventBus;
 std::unique_ptr<ModuleManager> g_moduleManager;
 extern std::unique_ptr<EngineContext> g_engineContext; // defined in EngineContext.cpp
+std::unique_ptr<AudioEngine> g_audioEngine;
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
+#endif
 
-#ifdef SPARK_HEADLESS_SUPPORT
-// g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
 static volatile bool g_shutdownRequested = false;
 
-static void HeadlessSignalHandler(int)
+static void SignalHandler(int)
 {
     g_shutdownRequested = true;
 }
 
-static bool ParseHeadlessFlagLinux(int argc, char* argv[])
+static bool ParseFlag(int argc, char* argv[], const char* flag)
 {
     for (int i = 1; i < argc; ++i)
     {
-        if (strcmp(argv[i], "-headless") == 0 || strcmp(argv[i], "-dedicated") == 0)
+        if (strcmp(argv[i], flag) == 0)
             return true;
     }
     return false;
 }
-#endif // SPARK_HEADLESS_SUPPORT
+
+static std::filesystem::path GetExecutableDirectoryLinux()
+{
+    // /proc/self/exe is the canonical way on Linux
+    std::error_code ec;
+    auto exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
+    if (!ec)
+        return exePath.parent_path();
+    return std::filesystem::current_path();
+}
+
+static std::string FindGameModuleFromArgs(int argc, char* argv[])
+{
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        if (strcmp(argv[i], "-game") == 0)
+        {
+            std::string path = argv[i + 1];
+            if (std::filesystem::exists(path))
+                return path;
+        }
+    }
+    return "";
+}
+
+static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
+{
+    auto exeDir = GetExecutableDirectoryLinux();
+
+    // 1. Check command line for specific module
+    std::string cmdLineModule = FindGameModuleFromArgs(argc, argv);
+    if (!cmdLineModule.empty())
+        return manager.LoadModule(cmdLineModule);
+
+    // 2. Check for module manifest
+    auto manifestPath = exeDir / "spark.modules.json";
+    if (std::filesystem::exists(manifestPath))
+        return manager.LoadModulesFromManifest(manifestPath.string());
+
+    // 3. Fall back to directory scan
+    return manager.LoadModulesFromDirectory(exeDir.string());
+}
+
+// Console command registration (engine-side, mirrors the Windows version)
+static void RegisterEngineConsoleCommandsLinux()
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+
+    if (g_graphics)
+        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
+
+    console.RegisterCommand(
+        "module_info",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            if (!g_moduleManager || !g_moduleManager->HasModules())
+                return "No modules loaded";
+            std::stringstream ss;
+            ss << "=== Loaded Modules (" << g_moduleManager->GetModuleCount() << ") ===\n";
+            auto* primary = g_moduleManager->GetPrimaryModule();
+            if (primary)
+            {
+                auto info = primary->GetModuleInfo();
+                ss << "Primary: " << info.name << " v" << info.version << " (loadOrder=" << info.loadOrder << ")\n";
+            }
+            return ss.str();
+        },
+        "Show loaded module info");
+
+    console.RegisterCommand(
+        "module_reload",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (!g_moduleManager || !g_moduleManager->HasModules())
+                return "No modules loaded";
+            if (!g_engineContext)
+                return "Engine context not available";
+            std::string name;
+            if (!args.empty())
+            {
+                name = args[0];
+            }
+            else
+            {
+                auto* primary = g_moduleManager->GetPrimaryModule();
+                if (!primary)
+                    return "No primary module to reload";
+                name = primary->GetModuleInfo().name;
+            }
+            if (g_moduleManager->ReloadModule(name, g_engineContext.get()))
+                return "Module '" + name + "' reloaded successfully";
+            return "Failed to reload module '" + name + "'";
+        },
+        "Hot-reload a module SO (usage: module_reload [name])");
+
+    // SaveSystem
+    console.RegisterCommand(
+        "save_list",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            try
+            {
+                return Spark::SaveSystem::GetInstance().Console_ListSaves();
+            }
+            catch (...)
+            {
+                return "SaveSystem not available";
+            }
+        },
+        "List all save slots", "Save");
+
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+    // PhysicsSystem commands
+    console.RegisterCommand(
+        "physics_metrics",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            if (!g_engineContext)
+                return "Engine context not available";
+            auto* physics = g_engineContext->GetPhysics();
+            if (!physics)
+                return "Physics system not available";
+            auto m = physics->Console_GetMetrics();
+            std::stringstream ss;
+            ss << "=== Physics Metrics ===\n";
+            ss << "Active Bodies: " << m.activeRigidBodies << "/" << m.totalRigidBodies << "\n";
+            ss << "Constraints: " << m.activeConstraints << "\n";
+            ss << "Collision Pairs: " << m.collisionPairs << "\n";
+            ss << "Sim Time: " << m.simulationTime << "ms\n";
+            ss << "Substeps: " << m.substeps << "\n";
+            return ss.str();
+        },
+        "Display physics performance metrics", "Physics");
+
+    console.RegisterCommand(
+        "physics_gravity",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() < 3)
+                return "Usage: physics_gravity <x> <y> <z>";
+            if (!g_engineContext)
+                return "Engine context not available";
+            auto* physics = g_engineContext->GetPhysics();
+            if (!physics)
+                return "Physics system not available";
+            float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
+            physics->Console_SetGravity(x, y, z);
+            return "Gravity set to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
+        },
+        "Set world gravity vector", "Physics");
+
+    console.RegisterCommand(
+        "physics_debug",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: physics_debug <on|off>";
+            if (!g_engineContext)
+                return "Engine context not available";
+            auto* physics = g_engineContext->GetPhysics();
+            if (!physics)
+                return "Physics system not available";
+            bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+            physics->Console_EnableDebugDraw(enable);
+            return enable ? "Physics debug draw enabled" : "Physics debug draw disabled";
+        },
+        "Toggle physics debug overlay", "Physics");
+
+    console.RegisterCommand(
+        "physics_pause",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: physics_pause <on|off>";
+            if (!g_engineContext)
+                return "Engine context not available";
+            auto* physics = g_engineContext->GetPhysics();
+            if (!physics)
+                return "Physics system not available";
+            bool pause = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+            physics->Console_PausePhysics(pause);
+            return pause ? "Physics simulation paused" : "Physics simulation resumed";
+        },
+        "Pause/resume physics simulation", "Physics");
+#endif // SPARK_BULLET_PHYSICS_AVAILABLE
+
+    // AudioEngine commands
+    console.RegisterCommand(
+        "audio_master_volume",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: audio_master_volume <0.0-1.0>";
+            if (!g_audioEngine)
+                return "Audio engine not available";
+            g_audioEngine->Console_SetMasterVolume(std::stof(args[0]));
+            return "Master volume set to " + args[0];
+        },
+        "Set master audio volume", "Audio");
+}
 
 int main(int argc, char* argv[])
 {
+    std::signal(SIGINT, SignalHandler);
+    std::signal(SIGTERM, SignalHandler);
+
 #ifdef SPARK_HEADLESS_SUPPORT
-    g_headlessMode = ParseHeadlessFlagLinux(argc, argv);
+    bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");
+    g_headlessMode = headless;
+#else
+    bool headless = false;
 #endif
 
-    if (
-#ifdef SPARK_HEADLESS_SUPPORT
-        g_headlessMode
-#else
-        false
-#endif
-    )
+    if (headless)
     {
 #ifdef SPARK_HEADLESS_SUPPORT
-        // Headless/dedicated server mode
-        std::signal(SIGINT, HeadlessSignalHandler);
-        std::signal(SIGTERM, HeadlessSignalHandler);
-
         std::cout << "=== Spark Engine (Headless/Dedicated Server - Linux) ===" << std::endl;
 
-        // Initialize only headless subsystems (no graphics, no input, no audio)
         g_eventBus = std::make_unique<Spark::EventBus>();
         g_timer = std::make_unique<Timer>();
         g_engineContext = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
 
-        // Physics
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
         {
             extern PhysicsSystem* g_physicsSystem;
             g_physicsOwned = std::make_unique<PhysicsSystem>();
             g_physicsSystem = g_physicsOwned.get();
             g_engineContext->SetPhysics(g_physicsOwned.get());
         }
+#endif
 
         g_moduleManager = std::make_unique<ModuleManager>();
 
-        // TODO: Load modules from command line args on Linux
-        std::cout << "Headless server ready." << std::endl;
+        auto& console = Spark::SimpleConsole::GetInstance();
+        if (console.Initialize())
+            console.LogSuccess("Headless server console initialized");
 
-        // Fixed 60 Hz server loop
+        if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
+        {
+            g_moduleManager->InitializeAll(g_engineContext.get());
+            console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
+        }
+        else
+        {
+            console.LogWarning("No game modules found. Running engine-only headless mode.");
+        }
+
+        Spark::SaveSystem::GetInstance().Initialize("Saves");
+        RegisterEngineConsoleCommandsLinux();
+
         constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
-        std::cout << "Starting headless server loop (60 Hz)..." << std::endl;
-        std::cout << "Press Ctrl+C to stop." << std::endl;
+        console.LogInfo("Starting headless server loop (60 Hz)...");
+        console.LogInfo("Press Ctrl+C to stop.");
 
         while (!g_shutdownRequested)
         {
             auto tickStart = std::chrono::steady_clock::now();
-
             float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
 
             if (g_moduleManager && g_moduleManager->HasModules())
                 g_moduleManager->UpdateAll(dt);
+
+            console.Update();
 
             auto elapsed = std::chrono::steady_clock::now() - tickStart;
             if (elapsed < TICK_INTERVAL)
                 std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
         }
 
-        // Shutdown
-        std::cout << "\nHeadless server shutting down..." << std::endl;
+        console.LogInfo("Headless server shutting down...");
 
         if (g_moduleManager)
         {
@@ -1180,6 +1401,7 @@ int main(int argc, char* argv[])
             g_moduleManager.reset();
         }
 
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
         if (g_physicsOwned)
         {
             extern PhysicsSystem* g_physicsSystem;
@@ -1187,44 +1409,72 @@ int main(int argc, char* argv[])
             g_physicsOwned->Shutdown();
             g_physicsOwned.reset();
         }
+#endif
 
         g_engineContext.reset();
-        g_timer.reset();
         g_eventBus.reset();
+        g_timer.reset();
+        console.Shutdown();
 
         std::cout << "Headless server shut down cleanly." << std::endl;
         return 0;
 #endif // SPARK_HEADLESS_SUPPORT
     }
 
-    // Normal (windowed) mode
-    (void)argc;
-    (void)argv;
+    // =================================================================
+    // Normal (windowed) mode - SDL2 window + event loop
+    // =================================================================
     std::cout << "=== Spark Engine (Linux Build) ===" << std::endl;
 
-    // Initialize subsystems
-    g_eventBus = std::make_unique<Spark::EventBus>();
+#ifdef SPARK_SDL2_AVAILABLE
+    // 1. Initialize SDL2
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0)
+    {
+        std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
+        return -1;
+    }
+
+    // 2. Load engine settings
+    auto& settings = EngineSettings::GetInstance();
+    settings.Load();
+
+    int winW = settings.Graphics().windowWidth;
+    int winH = settings.Graphics().windowHeight;
+
+    Uint32 windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    if (settings.Graphics().fullscreen)
+        windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+
+    // Request an OpenGL context if the RHI may use it
+    windowFlags |= SDL_WINDOW_OPENGL;
+
+    SDL_Window* window =
+        SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
+    if (!window)
+    {
+        std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
+        SDL_Quit();
+        return -1;
+    }
+
+    // 3. Create engine subsystems
     g_timer = std::make_unique<Timer>();
+    g_eventBus = std::make_unique<Spark::EventBus>();
     g_input = std::make_unique<InputManager>();
+    g_input->Initialize(static_cast<HWND>(window));
     g_graphics = std::make_unique<GraphicsEngine>();
 
-    std::cout << "Subsystems created." << std::endl;
-
-    // Initialize graphics via RHI (OpenGL/Vulkan on Linux)
-    HRESULT hr = g_graphics->Initialize(nullptr); // no HWND on Linux
+    HRESULT hr = g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
     if (SUCCEEDED(hr))
-    {
         std::cout << "Graphics engine initialized (RHI backend)." << std::endl;
-    }
     else
-    {
-        std::cout << "Graphics engine initialized (headless mode)." << std::endl;
-    }
+        std::cout << "Graphics engine initialization deferred (headless fallback)." << std::endl;
 
-    // Create engine context (service locator for all subsystems)
+    // 4. Engine context (service locator)
     g_engineContext = std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
 
-    // Create PhysicsSystem (owned here, not by GraphicsEngine)
+    // 5. Physics
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     {
         extern PhysicsSystem* g_physicsSystem;
         g_physicsOwned = std::make_unique<PhysicsSystem>();
@@ -1233,17 +1483,202 @@ int main(int argc, char* argv[])
         if (g_graphics)
             g_graphics->SetPhysicsSystem(g_physicsOwned.get());
     }
+#endif
 
+    // 6. Module loading
     g_moduleManager = std::make_unique<ModuleManager>();
 
-    std::cout << "Spark Engine ready. Linux platform support active." << std::endl;
-    std::cout << "Rendering backends: OpenGL 4.6, Vulkan 1.3 (via RHI)" << std::endl;
+    auto& console = Spark::SimpleConsole::GetInstance();
+    if (console.Initialize())
+    {
+        console.LogSuccess("Spark Engine runtime initialized (Linux/SDL2)");
+        console.LogInfo("Settings loaded from " + settings.GetFilePath());
+    }
 
-    // Main loop placeholder - would be driven by window events
-    // For now, just clean up
-    g_graphics->Shutdown();
-    g_moduleManager.reset();
+    if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
+    {
+        g_moduleManager->InitializeAll(g_engineContext.get());
 
+        auto* primary = g_moduleManager->GetPrimaryModule();
+        if (primary)
+        {
+            auto info = primary->GetModuleInfo();
+            std::string title = std::string("Spark Engine - ") + info.name;
+            SDL_SetWindowTitle(window, title.c_str());
+        }
+
+        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
+    }
+    else
+    {
+        console.LogWarning("No game modules found. Running engine-only mode.");
+        console.LogInfo("Place a game .so (e.g. libSparkGame.so) next to the engine executable,");
+        console.LogInfo("use -game <path> on the command line,");
+        console.LogInfo("or create a spark.modules.json manifest.");
+    }
+
+    // 7. Additional subsystems
+    Spark::SaveSystem::GetInstance().Initialize("Saves");
+    console.LogInfo("SaveSystem initialized");
+
+    g_audioEngine = std::make_unique<AudioEngine>();
+    if (SUCCEEDED(g_audioEngine->Initialize(32)))
+    {
+        console.LogInfo("AudioEngine initialized (32 sources)");
+        g_engineContext->SetAudio(g_audioEngine.get());
+    }
+    else
+    {
+        console.LogWarning("AudioEngine initialization failed");
+        g_audioEngine.reset();
+    }
+
+    // 8. Console commands
+    RegisterEngineConsoleCommandsLinux();
+    settings.RegisterConsoleCommands();
+
+    // 9. Main event loop (SDL2)
+    console.LogInfo("Starting main engine loop (SDL2)...");
+    bool running = true;
+
+    while (running && !g_shutdownRequested)
+    {
+        SDL_Event event;
+        while (SDL_PollEvent(&event))
+        {
+            switch (event.type)
+            {
+            case SDL_QUIT:
+                running = false;
+                break;
+
+            case SDL_WINDOWEVENT:
+                if (event.window.event == SDL_WINDOWEVENT_CLOSE)
+                    running = false;
+                else if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+                {
+                    int w = event.window.data1;
+                    int h = event.window.data2;
+                    if (g_graphics)
+                        g_graphics->OnResize(w, h);
+                    if (g_moduleManager)
+                        g_moduleManager->ResizeAll(w, h);
+                }
+                break;
+
+            case SDL_KEYDOWN:
+            case SDL_KEYUP:
+                if (g_input)
+                {
+                    // Translate SDL key events to WM_KEYDOWN/WM_KEYUP style messages
+                    // so InputManager::HandleMessage works consistently
+                    UINT msg = (event.type == SDL_KEYDOWN) ? WM_KEYDOWN : WM_KEYUP;
+                    int vk = 0;
+                    auto sym = event.key.keysym.sym;
+                    if (sym >= SDLK_a && sym <= SDLK_z)
+                        vk = 'A' + (sym - SDLK_a);
+                    else if (sym >= SDLK_0 && sym <= SDLK_9)
+                        vk = '0' + (sym - SDLK_0);
+                    else if (sym == SDLK_SPACE)
+                        vk = VK_SPACE;
+                    else if (sym == SDLK_ESCAPE)
+                        vk = VK_ESCAPE;
+                    else if (sym == SDLK_RETURN)
+                        vk = VK_RETURN;
+                    else if (sym == SDLK_TAB)
+                        vk = VK_TAB;
+                    else if (sym == SDLK_BACKSPACE)
+                        vk = VK_BACK;
+                    else if (sym == SDLK_UP)
+                        vk = VK_UP;
+                    else if (sym == SDLK_DOWN)
+                        vk = VK_DOWN;
+                    else if (sym == SDLK_LEFT)
+                        vk = VK_LEFT;
+                    else if (sym == SDLK_RIGHT)
+                        vk = VK_RIGHT;
+                    else if (sym == SDLK_LSHIFT)
+                        vk = VK_LSHIFT;
+                    else if (sym == SDLK_RSHIFT)
+                        vk = VK_RSHIFT;
+                    else if (sym == SDLK_LCTRL)
+                        vk = VK_LCONTROL;
+                    else if (sym == SDLK_RCTRL)
+                        vk = VK_RCONTROL;
+                    else if (sym == SDLK_LALT)
+                        vk = VK_LMENU;
+                    else if (sym == SDLK_RALT)
+                        vk = VK_RMENU;
+                    else if (sym == SDLK_DELETE)
+                        vk = VK_DELETE;
+                    else if (sym >= SDLK_F1 && sym <= SDLK_F12)
+                        vk = VK_F1 + (sym - SDLK_F1);
+
+                    if (vk != 0)
+                        g_input->HandleMessage(msg, static_cast<WPARAM>(vk), 0);
+                }
+                break;
+
+            case SDL_MOUSEMOTION:
+                if (g_input)
+                    g_input->HandleMessage(WM_MOUSEMOVE, 0,
+                                           static_cast<LPARAM>((event.motion.y << 16) | (event.motion.x & 0xFFFF)));
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+                if (g_input)
+                {
+                    UINT msg = 0;
+                    if (event.button.button == SDL_BUTTON_LEFT)
+                        msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_LBUTTONDOWN : WM_LBUTTONUP;
+                    else if (event.button.button == SDL_BUTTON_RIGHT)
+                        msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_RBUTTONDOWN : WM_RBUTTONUP;
+                    else if (event.button.button == SDL_BUTTON_MIDDLE)
+                        msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_MBUTTONDOWN : WM_MBUTTONUP;
+                    if (msg)
+                        g_input->HandleMessage(msg, 0, 0);
+                }
+                break;
+            }
+        }
+
+        if (!running)
+            break;
+
+        // Tick
+        float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
+
+        if (g_input)
+            g_input->Update();
+
+        if (g_moduleManager && g_moduleManager->HasModules())
+        {
+            g_moduleManager->UpdateAll(dt);
+            g_moduleManager->RenderAll();
+        }
+        else if (g_graphics)
+        {
+            g_graphics->BeginFrame();
+            g_graphics->EndFrame();
+        }
+
+        console.Update();
+    }
+
+    // 10. Shutdown
+    console.LogInfo("Shutting down...");
+
+    if (g_moduleManager)
+    {
+        g_moduleManager->ShutdownAll();
+        g_moduleManager->UnloadAll();
+        g_moduleManager.reset();
+    }
+
+    g_audioEngine.reset();
+
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     if (g_physicsOwned)
     {
         extern PhysicsSystem* g_physicsSystem;
@@ -1251,12 +1686,87 @@ int main(int argc, char* argv[])
         g_physicsOwned->Shutdown();
         g_physicsOwned.reset();
     }
+#endif
+
+    g_engineContext.reset();
+    g_eventBus.reset();
+    g_input.reset();
+    g_graphics.reset();
+    g_timer.reset();
+
+    console.Shutdown();
+
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+#else // !SPARK_SDL2_AVAILABLE
+    // Fallback: no SDL2 available, run without a window (headless-like)
+    std::cerr << "Warning: SDL2 not available. Running without a window." << std::endl;
+    std::cerr << "Install SDL2 and rebuild with -DENABLE_SDL2=ON for windowed mode." << std::endl;
+
+    g_eventBus = std::make_unique<Spark::EventBus>();
+    g_timer = std::make_unique<Timer>();
+    g_input = std::make_unique<InputManager>();
+    g_graphics = std::make_unique<GraphicsEngine>();
+    g_graphics->Initialize(nullptr);
+
+    g_engineContext = std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
+
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+    {
+        extern PhysicsSystem* g_physicsSystem;
+        g_physicsOwned = std::make_unique<PhysicsSystem>();
+        g_physicsSystem = g_physicsOwned.get();
+        g_engineContext->SetPhysics(g_physicsOwned.get());
+    }
+#endif
+
+    g_moduleManager = std::make_unique<ModuleManager>();
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.Initialize();
+    console.LogWarning("No SDL2 - engine will exit after initialization.");
+
+    if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
+    {
+        g_moduleManager->InitializeAll(g_engineContext.get());
+        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
+    }
+
+    // Minimal loop - process a few ticks then exit
+    for (int frame = 0; frame < 10 && !g_shutdownRequested; ++frame)
+    {
+        float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
+        if (g_moduleManager && g_moduleManager->HasModules())
+            g_moduleManager->UpdateAll(dt);
+        console.Update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+    }
+
+    if (g_moduleManager)
+    {
+        g_moduleManager->ShutdownAll();
+        g_moduleManager->UnloadAll();
+        g_moduleManager.reset();
+    }
+
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+    if (g_physicsOwned)
+    {
+        extern PhysicsSystem* g_physicsSystem;
+        g_physicsSystem = nullptr;
+        g_physicsOwned->Shutdown();
+        g_physicsOwned.reset();
+    }
+#endif
 
     g_engineContext.reset();
     g_graphics.reset();
     g_input.reset();
     g_timer.reset();
     g_eventBus.reset();
+    console.Shutdown();
+#endif // SPARK_SDL2_AVAILABLE
 
     std::cout << "Spark Engine shut down cleanly." << std::endl;
     return 0;

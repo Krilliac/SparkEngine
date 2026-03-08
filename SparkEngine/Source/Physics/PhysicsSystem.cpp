@@ -653,6 +653,10 @@ HRESULT PhysicsSystem::Initialize()
 
 void PhysicsSystem::Shutdown()
 {
+    // Guard against double shutdown (destructor also calls Shutdown)
+    if (!m_dynamicsWorld && m_bodies.empty() && m_constraints.empty())
+        return;
+
     // Remove all constraints from the world first
     if (m_dynamicsWorld)
     {
