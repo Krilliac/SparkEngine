@@ -792,11 +792,23 @@ InputManager::InputMetrics InputManager::GetMetricsThreadSafe() const
     return metrics;
 }
 
-#else // !SPARK_PLATFORM_WINDOWS
+#endif // SPARK_PLATFORM_WINDOWS
 
-// Linux no-op stubs — InputManager Win32 backend is Windows-only.
-// Minimal stubs to satisfy linker (unique_ptr destructor, etc.)
+// ============================================================================
+// Non-Windows (Linux/macOS) InputManager implementation
+// Provides the same public API as the Windows version, processing input via
+// HandleMessage() which is called by the SDL2 event loop in SparkEngine.cpp.
+// ============================================================================
+#ifndef SPARK_PLATFORM_WINDOWS
+
 #include "InputManager.h"
+#include "Utils/Assert.h"
+#include "../Utils/SparkConsole.h"
+#include <cstring>
+#include <cmath>
+#include <iostream>
+#include <sstream>
+#include <algorithm>
 
 InputManager::InputManager()
     : m_mouseX(0), m_mouseY(0), m_prevMouseX(0), m_prevMouseY(0), m_mouseDeltaX(0), m_mouseDeltaY(0), m_hwnd(nullptr),
@@ -804,97 +816,292 @@ InputManager::InputManager()
       m_invertMouseY(false), m_rawMouseInput(false), m_inputLogging(false), m_keyPressCount(0), m_mousePressCount(0),
       m_totalMouseDistance(0.0f)
 {
-    ZeroMemory(m_mouseButtons, sizeof(m_mouseButtons));
-    ZeroMemory(m_prevMouseButtons, sizeof(m_prevMouseButtons));
+    memset(m_mouseButtons, 0, sizeof(m_mouseButtons));
+    memset(m_prevMouseButtons, 0, sizeof(m_prevMouseButtons));
+    m_recentInputEvents.reserve(100);
 }
 
-InputManager::~InputManager() {}
-void InputManager::Initialize(HWND) {}
-void InputManager::Update() {}
-void InputManager::HandleMessage(UINT, WPARAM, LPARAM) {}
-bool InputManager::IsKeyDown(int) const
+InputManager::~InputManager()
 {
-    return false;
+    for (auto& t : m_pendingTimedThreads)
+    {
+        if (t.joinable())
+            t.join();
+    }
+    m_pendingTimedThreads.clear();
 }
-bool InputManager::IsKeyUp(int) const
+
+void InputManager::Initialize(HWND hwnd)
 {
+    m_hwnd = hwnd;
+    Spark::SimpleConsole::GetInstance().Log("InputManager initialized (Linux/SDL2 backend).", "INFO");
+}
+
+void InputManager::Update()
+{
+    m_prevKeyStates = m_keyStates;
+    memcpy(m_prevMouseButtons, m_mouseButtons, sizeof(m_mouseButtons));
+    m_mouseDeltaX = m_mouseX - m_prevMouseX;
+    m_mouseDeltaY = m_mouseY - m_prevMouseY;
+    m_prevMouseX = m_mouseX;
+    m_prevMouseY = m_mouseY;
+}
+
+void InputManager::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+    case WM_KEYDOWN:
+        UpdateKeyState(static_cast<int>(wParam), true);
+        break;
+    case WM_KEYUP:
+        UpdateKeyState(static_cast<int>(wParam), false);
+        break;
+    case WM_LBUTTONDOWN:
+        UpdateMouseButton(0, true);
+        break;
+    case WM_LBUTTONUP:
+        UpdateMouseButton(0, false);
+        break;
+    case WM_RBUTTONDOWN:
+        UpdateMouseButton(1, true);
+        break;
+    case WM_RBUTTONUP:
+        UpdateMouseButton(1, false);
+        break;
+    case WM_MBUTTONDOWN:
+        UpdateMouseButton(2, true);
+        break;
+    case WM_MBUTTONUP:
+        UpdateMouseButton(2, false);
+        break;
+    case WM_MOUSEMOVE:
+        UpdateMousePosition(static_cast<int>(lParam & 0xFFFF), static_cast<int>((lParam >> 16) & 0xFFFF));
+        break;
+    }
+}
+
+bool InputManager::IsKeyDown(int key) const
+{
+    auto it = m_keyStates.find(key);
+    return it != m_keyStates.end() && it->second;
+}
+
+bool InputManager::IsKeyUp(int key) const
+{
+    return !IsKeyDown(key);
+}
+
+bool InputManager::WasKeyPressed(int key) const
+{
+    bool curr = IsKeyDown(key);
+    auto it = m_prevKeyStates.find(key);
+    bool prev = (it != m_prevKeyStates.end()) && it->second;
+    return curr && !prev;
+}
+
+bool InputManager::WasKeyReleased(int key) const
+{
+    bool curr = IsKeyDown(key);
+    auto it = m_prevKeyStates.find(key);
+    bool prev = (it != m_prevKeyStates.end()) && it->second;
+    return !curr && prev;
+}
+
+bool InputManager::IsMouseButtonDown(int button) const
+{
+    if (button < 0 || button >= 3)
+        return false;
+    return m_mouseButtons[button];
+}
+
+bool InputManager::WasMouseButtonPressed(int button) const
+{
+    if (button < 0 || button >= 3)
+        return false;
+    return m_mouseButtons[button] && !m_prevMouseButtons[button];
+}
+
+bool InputManager::WasMouseButtonReleased(int button) const
+{
+    if (button < 0 || button >= 3)
+        return false;
+    return !m_mouseButtons[button] && m_prevMouseButtons[button];
+}
+
+bool InputManager::GetMouseDelta(int& deltaX, int& deltaY) const
+{
+    deltaX = static_cast<int>(m_mouseDeltaX * m_mouseSensitivity);
+    deltaY = static_cast<int>(m_mouseDeltaY * m_mouseSensitivity);
+    if (m_invertMouseY)
+        deltaY = -deltaY;
     return true;
 }
-bool InputManager::WasKeyPressed(int) const
-{
-    return false;
-}
-bool InputManager::WasKeyReleased(int) const
-{
-    return false;
-}
-bool InputManager::IsMouseButtonDown(int) const
-{
-    return false;
-}
-bool InputManager::WasMouseButtonPressed(int) const
-{
-    return false;
-}
-bool InputManager::WasMouseButtonReleased(int) const
-{
-    return false;
-}
-bool InputManager::GetMouseDelta(int& dx, int& dy) const
-{
-    dx = dy = 0;
-    return false;
-}
+
 void InputManager::GetMousePosition(int& x, int& y) const
 {
-    x = y = 0;
+    x = m_mouseX;
+    y = m_mouseY;
 }
-void InputManager::CaptureMouse(bool) {}
 
-// Console integration stubs
-void InputManager::Console_SetMouseSensitivity(float) {}
-void InputManager::Console_SetMouseDeadZone(float) {}
-void InputManager::Console_SetMouseAcceleration(bool) {}
-void InputManager::Console_SetInvertMouseY(bool) {}
-void InputManager::Console_SetRawMouseInput(bool) {}
-void InputManager::Console_SetInputLogging(bool) {}
-bool InputManager::Console_BindKey(const std::string&, const std::string&)
+void InputManager::CaptureMouse(bool capture)
 {
-    return false;
+    m_mouseCaptured = capture;
+    // SDL2 mouse capture is handled by the main loop via SDL_SetRelativeMouseMode
 }
-void InputManager::Console_UnbindKey(const std::string&) {}
+
+void InputManager::UpdateKeyState(int key, bool isDown)
+{
+    m_keyStates[key] = isDown;
+    if (isDown)
+        ++m_keyPressCount;
+    if (m_inputLogging)
+        LogInputEvent(key, isDown);
+    NotifyStateChange();
+}
+
+void InputManager::UpdateMouseButton(int button, bool isDown)
+{
+    if (button >= 0 && button < 3)
+    {
+        m_mouseButtons[button] = isDown;
+        if (isDown)
+            ++m_mousePressCount;
+    }
+}
+
+void InputManager::UpdateMousePosition(int x, int y)
+{
+    m_mouseX = x;
+    m_mouseY = y;
+}
+
+void InputManager::ProcessMouseDelta(int& deltaX, int& deltaY) const
+{
+    float dx = static_cast<float>(deltaX) * m_mouseSensitivity;
+    float dy = static_cast<float>(deltaY) * m_mouseSensitivity;
+    if (m_invertMouseY)
+        dy = -dy;
+    if (std::abs(dx) < m_mouseDeadZone)
+        dx = 0.0f;
+    if (std::abs(dy) < m_mouseDeadZone)
+        dy = 0.0f;
+    deltaX = static_cast<int>(dx);
+    deltaY = static_cast<int>(dy);
+}
+
+// Console integration
+void InputManager::Console_SetMouseSensitivity(float s)
+{
+    m_mouseSensitivity = std::max(0.1f, std::min(s, 10.0f));
+}
+void InputManager::Console_SetMouseDeadZone(float d)
+{
+    m_mouseDeadZone = std::max(0.0f, std::min(d, 10.0f));
+}
+void InputManager::Console_SetMouseAcceleration(bool e)
+{
+    m_mouseAcceleration = e;
+}
+void InputManager::Console_SetInvertMouseY(bool e)
+{
+    m_invertMouseY = e;
+}
+void InputManager::Console_SetRawMouseInput(bool e)
+{
+    m_rawMouseInput = e;
+}
+void InputManager::Console_SetInputLogging(bool e)
+{
+    m_inputLogging = e;
+}
+bool InputManager::Console_BindKey(const std::string& action, const std::string& keyName)
+{
+    int vk = KeyNameToVirtualKey(keyName);
+    if (vk == 0)
+        return false;
+    m_keyBindings[action] = vk;
+    m_reverseBindings[vk] = action;
+    return true;
+}
+void InputManager::Console_UnbindKey(const std::string& action)
+{
+    m_keyBindings.erase(action);
+}
 std::string InputManager::Console_ListKeyBindings() const
 {
-    return "No key bindings (Linux stub)";
+    std::ostringstream ss;
+    for (const auto& [name, key] : m_keyBindings)
+        ss << name << " -> " << VirtualKeyToKeyName(key) << "\n";
+    return ss.str();
 }
 void InputManager::Console_SimulateKeyPress(const std::string&, int) {}
-void InputManager::Console_ClearInputStates() {}
+void InputManager::Console_ClearInputStates()
+{
+    m_keyStates.clear();
+    memset(m_mouseButtons, 0, sizeof(m_mouseButtons));
+}
 std::string InputManager::Console_GetRecentEvents(int) const
 {
-    return "No events (Linux stub)";
+    return "";
 }
-bool InputManager::Console_IsActionActive(const std::string&) const
+bool InputManager::Console_IsActionActive(const std::string& action) const
 {
-    return false;
+    auto it = m_keyBindings.find(action);
+    if (it == m_keyBindings.end())
+        return false;
+    return IsKeyDown(it->second);
 }
 InputManager::InputMetrics InputManager::Console_GetMetrics() const
 {
-    return {};
+    InputMetrics m{};
+    m.keyPressCount = m_keyPressCount;
+    m.mousePressCount = m_mousePressCount;
+    m.totalMouseDistance = m_totalMouseDistance;
+    m.mouseCaptured = m_mouseCaptured;
+    m.mouseSensitivity = m_mouseSensitivity;
+    m.mouseDeadZone = m_mouseDeadZone;
+    m.mouseAcceleration = m_mouseAcceleration;
+    m.invertMouseY = m_invertMouseY;
+    m.rawMouseInput = m_rawMouseInput;
+    m.inputLogging = m_inputLogging;
+    m.totalKeyBindings = m_keyBindings.size();
+    return m;
 }
 InputManager::InputSettings InputManager::Console_GetSettings() const
 {
-    return {};
+    InputSettings s{};
+    s.mouseSensitivity = m_mouseSensitivity;
+    s.mouseDeadZone = m_mouseDeadZone;
+    s.mouseAcceleration = m_mouseAcceleration;
+    s.invertMouseY = m_invertMouseY;
+    s.rawMouseInput = m_rawMouseInput;
+    s.inputLogging = m_inputLogging;
+    s.keyBindings = m_keyBindings;
+    return s;
 }
-void InputManager::Console_ApplySettings(const InputSettings&) {}
-void InputManager::Console_ResetToDefaults() {}
-void InputManager::Console_RegisterStateCallback(std::function<void()>) {}
+void InputManager::Console_ApplySettings(const InputSettings& s)
+{
+    m_mouseSensitivity = s.mouseSensitivity;
+    m_mouseDeadZone = s.mouseDeadZone;
+    m_mouseAcceleration = s.mouseAcceleration;
+    m_invertMouseY = s.invertMouseY;
+    m_rawMouseInput = s.rawMouseInput;
+    m_inputLogging = s.inputLogging;
+}
+void InputManager::Console_ResetToDefaults()
+{
+    m_mouseSensitivity = 1.0f;
+    m_mouseDeadZone = 0.0f;
+    m_mouseAcceleration = false;
+    m_invertMouseY = false;
+    m_rawMouseInput = false;
+}
+void InputManager::Console_RegisterStateCallback(std::function<void()> cb)
+{
+    m_stateCallback = std::move(cb);
+}
 void InputManager::Console_RefreshInput() {}
-
-// Private helpers
-void InputManager::UpdateKeyState(int, bool) {}
-void InputManager::UpdateMouseButton(int, bool) {}
-void InputManager::UpdateMousePosition(int, int) {}
-void InputManager::ProcessMouseDelta(int&, int&) const {}
 int InputManager::KeyNameToVirtualKey(const std::string&) const
 {
     return 0;
@@ -904,10 +1111,14 @@ std::string InputManager::VirtualKeyToKeyName(int) const
     return "Unknown";
 }
 void InputManager::LogInputEvent(int, bool) {}
-void InputManager::NotifyStateChange() {}
+void InputManager::NotifyStateChange()
+{
+    if (m_stateCallback)
+        m_stateCallback();
+}
 InputManager::InputMetrics InputManager::GetMetricsThreadSafe() const
 {
-    return {};
+    return Console_GetMetrics();
 }
 
-#endif // SPARK_PLATFORM_WINDOWS
+#endif // !SPARK_PLATFORM_WINDOWS

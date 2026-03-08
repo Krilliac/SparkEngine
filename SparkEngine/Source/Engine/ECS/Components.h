@@ -98,7 +98,7 @@ class World
     size_t GetEntityCount() const
     {
         size_t count = 0;
-        for ([[maybe_unused]] auto entity : m_registry.template storage<entt::entity>()->each())
+        for ([[maybe_unused]] auto entity : m_registry.template storage<entt::entity>().each())
             ++count;
         return count;
     }
