@@ -1,4 +1,3 @@
-```gitignore
 # ─────────────────────────────────────────────────────────────────────────────
 #                         SparkEngine .gitignore
 #          Merged GitHub VisualStudio.gitignore + custom rules
@@ -464,6 +463,3 @@ localdev.sh
 !tools/SparkBuild.exe
 
 # End of SparkEngine .gitignore
-```
-
-[1] https://github.com/github/gitignore/blob/master/VisualStudio.gitignorebuild_test/

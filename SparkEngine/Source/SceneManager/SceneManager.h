@@ -746,16 +746,18 @@ class SceneManager
      * @brief File path from which the current scene was last loaded or saved.
      *
      * Empty if the scene was created with `NewScene()` and never saved.
+     * Mutable because SaveScene (logically const) updates this as a side effect.
      */
-    std::wstring m_currentFilePath;
+    mutable std::wstring m_currentFilePath;
 
     /**
      * @brief Dirty flag indicating unsaved changes.
      *
      * Set to `true` by any method that modifies the hierarchy or metadata.
      * Cleared by `LoadScene()`, `SaveScene()`, and `NewScene()`.
+     * Mutable because SaveScene (logically const) clears this flag.
      */
-    bool m_dirty = false;
+    mutable bool m_dirty = false;
 
     /** @brief Background thread for async scene loading (joined in destructor). */
     std::thread m_asyncLoadThread;

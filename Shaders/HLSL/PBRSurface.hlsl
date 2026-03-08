@@ -1,3 +1,5 @@
+static const float PI = 3.14159265358979323846;
+
 cbuffer PerFrame : register(b1)
 {
     float4x4 World; float4x4 View; float4x4 Projection;

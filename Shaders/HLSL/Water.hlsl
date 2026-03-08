@@ -8,7 +8,7 @@ struct VS_IN{float3 Pos:POSITION;float2 UV:TEXCOORD0;};
 struct PS_IN{float4 Pos:SV_POSITION;float2 UV_Re:TEXCOORD0;float2 UV_Ref:TEXCOORD1;float3 ViewDir:TEXCOORD2;};
 PS_IN VS_Water(VS_IN i){PS_IN o;float4 worldPos=float4(i.Pos,1);o.Pos=mul(worldPos,WorldViewProj);
  float2 scroll=i.UV+float2(Time*0.05,Time*0.07);
- float2 dn=NormalMap.Sample(SamTr,scroll).rg*2-1;
+ float2 dn=NormalMap.SampleLevel(SamTr,scroll,0).rg*2-1;
  o.UV_Re=i.UV+dn*0.02;o.UV_Ref=i.UV-dn*0.02;
  o.ViewDir=normalize(CameraPos-i.Pos);return o;}
 float4 PS_Water(PS_IN i):SV_Target{

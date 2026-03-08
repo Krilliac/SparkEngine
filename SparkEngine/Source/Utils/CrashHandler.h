@@ -33,6 +33,7 @@
  */
 
 #pragma once
+#include "../Core/Platform.h"
 #include <string>
 
 /**
@@ -52,6 +53,8 @@ struct CrashConfig
     bool triggerCrashOnAssert = false;            ///< Whether assertion failures should generate a full crash report
     int connectTimeoutSeconds = 5;                ///< HTTP connection timeout for crash report uploads
 };
+
+#ifdef SPARK_PLATFORM_WINDOWS
 
 /**
  * @brief Install the unhandled-exception filter with the given configuration
@@ -89,3 +92,12 @@ void TriggerCrashHandler(const char* assertMsg);
  * @param shouldCrash true to generate crash reports on assert, false to only log
  */
 void SetAssertCrashBehavior(bool shouldCrash);
+
+#else // !SPARK_PLATFORM_WINDOWS
+
+// Stub implementations for non-Windows platforms
+inline void InstallCrashHandler(const CrashConfig&) {}
+inline void TriggerCrashHandler(const char*) {}
+inline void SetAssertCrashBehavior(bool) {}
+
+#endif // SPARK_PLATFORM_WINDOWS

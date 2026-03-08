@@ -21,7 +21,7 @@ while [[ $# -gt 0 ]]; do
     -E) ENABLE_EDITOR=OFF ;;
     -C) ENABLE_CONSOLE=OFF ;;
     -A) ENABLE_AS=OFF ;;
-    -g) shift; GENERATOR="$1" ;;
+    -g) if [[ $# -lt 2 ]]; then echo "Error: -g requires a generator name"; exit 1; fi; shift; GENERATOR="$1" ;;
     *) usage ;;
   esac
   shift

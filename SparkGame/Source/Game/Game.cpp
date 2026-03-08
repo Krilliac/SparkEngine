@@ -78,7 +78,10 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_camera = std::make_unique<SparkEngineCamera>();
     ASSERT(m_camera);
 
-    float aspect = float(m_graphics->GetWindowWidth()) / float(m_graphics->GetWindowHeight());
+    UINT winHeight = m_graphics->GetWindowHeight();
+    float aspect = (winHeight > 0)
+        ? float(m_graphics->GetWindowWidth()) / float(winHeight)
+        : 16.0f / 9.0f;  // Safe fallback if window is minimized
     ASSERT_MSG(aspect > 0.0f, "Invalid aspect ratio");
 
     m_camera->Initialize(aspect);

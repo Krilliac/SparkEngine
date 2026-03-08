@@ -1,11 +1,13 @@
+// InputManager.cpp — Win32 implementation
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-// InputManager.cpp — Win32 implementation
 #include "InputManager.h"
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
 #include <Windows.h>
+#include <windowsx.h>  // GET_X_LPARAM, GET_Y_LPARAM
 #include <cstring>
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <iomanip>

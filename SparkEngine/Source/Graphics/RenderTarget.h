@@ -143,6 +143,7 @@ class RenderTarget
 
     // Getters
     const RenderTargetDesc& GetDesc() const { return m_desc; }
+    RenderTargetDesc& GetDesc() { return m_desc; }
     ID3D11Texture2D* GetTexture() const { return m_texture.Get(); }
     ID3D11RenderTargetView* GetRenderTargetView() const { return m_renderTargetView.Get(); }
     ID3D11DepthStencilView* GetDepthStencilView() const { return m_depthStencilView.Get(); }

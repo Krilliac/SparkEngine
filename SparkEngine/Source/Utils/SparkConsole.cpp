@@ -593,7 +593,11 @@ namespace Spark
             return;
         }
 
+#ifdef SPARK_PLATFORM_WINDOWS
         system("cls");
+#else
+        system("clear");
+#endif
 
         PrintLine("==========================================", Color::Cyan);
         PrintLine("    Spark Engine Development Console", Color::Cyan);
