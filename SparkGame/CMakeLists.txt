@@ -198,17 +198,9 @@ endif()
 # ---------------------------------------------------------------------
 # Post-build: Copy the game DLL next to the engine executable
 # ---------------------------------------------------------------------
-if(NOT SPARK_GAME_STANDALONE)
-    if(TARGET SparkEngine)
-        add_custom_command(TARGET SparkGame POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SparkGame>
-                $<TARGET_FILE_DIR:SparkEngine>
-            COMMENT "Copying SparkGame DLL to engine output directory"
-            VERBATIM
-        )
-    endif()
-endif()
+# NOTE: The copy of SparkGame.dll to the engine output directory is handled
+# by a post-build step on SparkEngine (in root CMakeLists.txt) to avoid a
+# circular build dependency between SparkEngine and SparkGame.
 
 # ---------------------------------------------------------------------
 # Asset Management

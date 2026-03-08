@@ -519,6 +519,17 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGame/CMakeLists.txt")
         # against SparkGame's import library so the linker can resolve them.
         target_link_libraries(SparkEngine PRIVATE SparkGame)
         message(STATUS "SparkEngine will link SparkGame import library")
+
+        # Copy SparkGame DLL next to the engine executable after build.
+        # This is done here (on SparkEngine) rather than as a SparkGame
+        # post-build step to avoid a circular build dependency.
+        add_custom_command(TARGET SparkEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SparkGame>
+                $<TARGET_FILE_DIR:SparkEngine>
+            COMMENT "Copying SparkGame DLL to engine output directory"
+            VERBATIM
+        )
     endif()
 endif()
 
