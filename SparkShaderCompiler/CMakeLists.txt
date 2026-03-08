@@ -26,6 +26,12 @@ if(WIN32)
     )
 endif()
 
+if(SPARK_VULKAN_AVAILABLE)
+    list(APPEND RHI_SOURCES
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp"
+    )
+endif()
+
 add_executable(SparkShaderCompiler
     ${COMPILER_SOURCES}
     ${RHI_SOURCES}
@@ -62,6 +68,16 @@ endif()
 # OpenGL backend for shader compilation
 if(SPARK_OPENGL_AVAILABLE)
     target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_OPENGL_SUPPORT)
+endif()
+
+if(SPARK_VULKAN_AVAILABLE)
+    target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_VULKAN_SUPPORT)
+    if(Vulkan_FOUND)
+        target_link_libraries(SparkShaderCompiler PRIVATE Vulkan::Vulkan)
+    else()
+        target_include_directories(SparkShaderCompiler PRIVATE "${Vulkan_INCLUDE_DIR}")
+        target_link_libraries(SparkShaderCompiler PRIVATE "${Vulkan_LIBRARY}")
+    endif()
 endif()
 
 set_target_properties(SparkShaderCompiler PROPERTIES
