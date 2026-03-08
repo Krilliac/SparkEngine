@@ -38,9 +38,30 @@ target_include_directories(SparkShaderCompiler PRIVATE
 
 target_compile_features(SparkShaderCompiler PRIVATE cxx_std_20)
 
-# Platform-specific link libraries
+# Platform-specific link libraries and definitions
 if(WIN32)
     target_link_libraries(SparkShaderCompiler PRIVATE d3dcompiler)
+    target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_PLATFORM_WINDOWS)
+else()
+    find_package(Threads QUIET)
+    if(Threads_FOUND)
+        target_link_libraries(SparkShaderCompiler PRIVATE Threads::Threads)
+    endif()
+    if(APPLE)
+        target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_PLATFORM_MACOS)
+    else()
+        target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_PLATFORM_LINUX)
+    endif()
+endif()
+
+# Vulkan backend for shader compilation
+if(SPARK_VULKAN_AVAILABLE)
+    target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_VULKAN_SUPPORT)
+endif()
+
+# OpenGL backend for shader compilation
+if(SPARK_OPENGL_AVAILABLE)
+    target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_OPENGL_SUPPORT)
 endif()
 
 set_target_properties(SparkShaderCompiler PROPERTIES

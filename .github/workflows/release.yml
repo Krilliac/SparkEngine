@@ -117,7 +117,7 @@ jobs:
           -DCMAKE_CXX_COMPILER=g++
 
     - name: Build
-      run: cmake --build build --parallel $(nproc) --target SparkEngine
+      run: cmake --build build --parallel $(nproc)
 
     - name: Package artifacts
       run: |

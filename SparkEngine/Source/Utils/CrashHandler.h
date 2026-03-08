@@ -54,19 +54,14 @@ struct CrashConfig
     int connectTimeoutSeconds = 5;                ///< HTTP connection timeout for crash report uploads
 };
 
-#ifdef SPARK_PLATFORM_WINDOWS
-
 /**
- * @brief Install the unhandled-exception filter with the given configuration
+ * @brief Install the crash handler with the given configuration
  *
- * Registers a Windows SEH filter that catches unhandled exceptions and generates
- * crash reports according to the provided configuration. This should be called
- * once at application startup.
+ * On Windows: registers an SEH unhandled-exception filter that catches crashes
+ * and generates minidumps. On Linux: installs signal handlers for SIGSEGV,
+ * SIGFPE, SIGABRT, etc. On other platforms: a no-op stub.
  *
  * @param cfg Configuration controlling crash report behavior
- *
- * @note Calling this function multiple times will replace the previously
- *       installed handler.
  */
 void InstallCrashHandler(const CrashConfig& cfg);
 
@@ -78,8 +73,6 @@ void InstallCrashHandler(const CrashConfig& cfg);
  * the assertion message without generating a crash dump.
  *
  * @param assertMsg The formatted assertion failure message
- *
- * @see Assert::Fail, SetAssertCrashBehavior
  */
 void TriggerCrashHandler(const char* assertMsg);
 
@@ -92,12 +85,3 @@ void TriggerCrashHandler(const char* assertMsg);
  * @param shouldCrash true to generate crash reports on assert, false to only log
  */
 void SetAssertCrashBehavior(bool shouldCrash);
-
-#else // !SPARK_PLATFORM_WINDOWS
-
-// Stub implementations for non-Windows platforms
-inline void InstallCrashHandler(const CrashConfig&) {}
-inline void TriggerCrashHandler(const char*) {}
-inline void SetAssertCrashBehavior(bool) {}
-
-#endif // SPARK_PLATFORM_WINDOWS
