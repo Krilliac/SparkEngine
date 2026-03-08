@@ -70,8 +70,7 @@ std::unique_ptr<AudioEngine> g_audioEngine;
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 
 #ifdef SPARK_HEADLESS_SUPPORT
-// Headless/dedicated server mode
-bool g_headlessMode = false;
+// g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
 static volatile bool g_shutdownRequested = false;
 
 /**
@@ -1094,7 +1093,7 @@ extern std::unique_ptr<EngineContext> g_engineContext; // defined in EngineConte
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 
 #ifdef SPARK_HEADLESS_SUPPORT
-bool g_headlessMode = false;
+// g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
 static volatile bool g_shutdownRequested = false;
 
 static void HeadlessSignalHandler(int)
