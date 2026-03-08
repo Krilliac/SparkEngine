@@ -385,6 +385,7 @@ build/
 build/**
 build-linux/
 build-linux-check/
+build-debug/
 
 # Never track crash dumps or large binary dumps
 *.dmp

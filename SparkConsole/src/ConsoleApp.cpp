@@ -337,8 +337,7 @@ void ConsoleApp::ReadEngineInput()
 
         if (bytesAvailable2 > 0)
         {
-            OutputDebugStringA(
-                ("ReadEngineInput: " + std::to_string(bytesAvailable2) + " bytes available\n").c_str());
+            OutputDebugStringA(("ReadEngineInput: " + std::to_string(bytesAvailable2) + " bytes available\n").c_str());
 
             // Read available data
             DWORD bytesToRead = std::min(bytesAvailable2, static_cast<DWORD>(sizeof(buffer) - 1));
@@ -349,8 +348,7 @@ void ConsoleApp::ReadEngineInput()
                     buffer[bytesRead] = '\0';
                     std::string message(buffer);
 
-                    std::string debugMsg =
-                        "ReadEngineInput: Received data: " + message.substr(0, 100) + "\n";
+                    std::string debugMsg = "ReadEngineInput: Received data: " + message.substr(0, 100) + "\n";
                     OutputDebugStringA(debugMsg.c_str());
 
                     // Process each line in the message
@@ -368,8 +366,7 @@ void ConsoleApp::ReadEngineInput()
 
                             if (!pipeLine.empty())
                             {
-                                OutputDebugStringA(
-                                    ("ReadEngineInput: Processing line: " + pipeLine + "\n").c_str());
+                                OutputDebugStringA(("ReadEngineInput: Processing line: " + pipeLine + "\n").c_str());
 
                                 // Convert to wide string and display
                                 std::wstring wMessage(pipeLine.begin(), pipeLine.end());
@@ -390,8 +387,7 @@ void ConsoleApp::ReadEngineInput()
             {
                 DWORD error = GetLastError();
                 OutputDebugStringA(
-                    ("ReadEngineInput: ReadFile failed with error " + std::to_string(error) + "\n")
-                        .c_str());
+                    ("ReadEngineInput: ReadFile failed with error " + std::to_string(error) + "\n").c_str());
                 if (error == ERROR_BROKEN_PIPE)
                 {
                     PrintLog(L"Engine connection lost.");
@@ -406,7 +402,7 @@ void ConsoleApp::ReadEngineInput()
     OutputDebugStringA("ReadEngineInput: Engine input reader thread terminated\n");
     PrintLog(L"Engine input reader thread terminated.");
 
-#else // Linux/macOS
+#else  // Linux/macOS
     if (!LinuxIsStdinPipe())
     {
         PrintLog(L"No pipe connection detected. Running in standalone mode.");
@@ -937,11 +933,26 @@ void ConsoleApp::ExecuteCommand(const std::string& cmdLine)
 
 bool ConsoleApp::ShouldForwardToEngine(const std::string& command)
 {
-    static const std::vector<std::string> engineCommands = {
-        "fps",           "info",           "test_assert",       "test_null_access", "test_assert_not_null",
-        "test_assert_range", "crash_mode", "memory_info",       "assert_test",      "crash_test",
-        "assert_mode",   "graphics_info",  "engine_status",     "render_debug",     "shader_debug",
-        "test_engine",   "minimal_test",   "console_status",    "quit",             "help"};
+    static const std::vector<std::string> engineCommands = {"fps",
+                                                            "info",
+                                                            "test_assert",
+                                                            "test_null_access",
+                                                            "test_assert_not_null",
+                                                            "test_assert_range",
+                                                            "crash_mode",
+                                                            "memory_info",
+                                                            "assert_test",
+                                                            "crash_test",
+                                                            "assert_mode",
+                                                            "graphics_info",
+                                                            "engine_status",
+                                                            "render_debug",
+                                                            "shader_debug",
+                                                            "test_engine",
+                                                            "minimal_test",
+                                                            "console_status",
+                                                            "quit",
+                                                            "help"};
 
     return std::find(engineCommands.begin(), engineCommands.end(), command) != engineCommands.end();
 }
@@ -983,30 +994,29 @@ void ConsoleApp::RegisterDefaultCommands()
                                       });
 
     // Clear command
-    m_commandRegistry.RegisterCommand(
-        "clear", "Clear the console screen and refresh display", "clear",
-        [this](const std::vector<std::string>& args) -> std::string
-        {
+    m_commandRegistry.RegisterCommand("clear", "Clear the console screen and refresh display", "clear",
+                                      [this](const std::vector<std::string>& args) -> std::string
+                                      {
 #ifdef SPARK_PLATFORM_WINDOWS
-            system("cls");
+                                          system("cls");
 
-            HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-            DWORD fileType = GetFileType(hStdin);
+                                          HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+                                          DWORD fileType = GetFileType(hStdin);
 #else
             system("clear");
 #endif
 
-            std::wcout << L"========================================" << std::endl;
-            std::wcout << L"   Spark Engine Console v1.0.0" << std::endl;
-            std::wcout << L"   Console Refreshed" << std::endl;
-            std::wcout << L"========================================" << std::endl;
-            std::wcout << std::endl;
+                                          std::wcout << L"========================================" << std::endl;
+                                          std::wcout << L"   Spark Engine Console v1.0.0" << std::endl;
+                                          std::wcout << L"   Console Refreshed" << std::endl;
+                                          std::wcout << L"========================================" << std::endl;
+                                          std::wcout << std::endl;
 
 #ifdef SPARK_PLATFORM_WINDOWS
-            if (fileType == FILE_TYPE_PIPE)
-                std::wcout << L"Connected to Spark Engine via pipe" << std::endl;
-            else
-                std::wcout << L"Running in standalone mode" << std::endl;
+                                          if (fileType == FILE_TYPE_PIPE)
+                                              std::wcout << L"Connected to Spark Engine via pipe" << std::endl;
+                                          else
+                                              std::wcout << L"Running in standalone mode" << std::endl;
 #else
             if (LinuxIsStdinPipe())
                 std::wcout << L"Connected to Spark Engine via pipe" << std::endl;
@@ -1014,13 +1024,13 @@ void ConsoleApp::RegisterDefaultCommands()
                 std::wcout << L"Running in standalone mode" << std::endl;
 #endif
 
-            std::wcout << L"Type 'help' for available commands" << std::endl;
-            std::wcout << L"Type 'info' to test engine connection" << std::endl;
-            std::wcout << std::endl;
-            std::wcout.flush();
+                                          std::wcout << L"Type 'help' for available commands" << std::endl;
+                                          std::wcout << L"Type 'info' to test engine connection" << std::endl;
+                                          std::wcout << std::endl;
+                                          std::wcout.flush();
 
-            return "";
-        });
+                                          return "";
+                                      });
 
     // History command
     m_commandRegistry.RegisterCommand("history", "Show command history", "history",
@@ -1037,19 +1047,20 @@ void ConsoleApp::RegisterDefaultCommands()
                                       });
 
     // Status command
-    m_commandRegistry.RegisterCommand(
-        "status", "Show console status information", "status",
-        [this](const std::vector<std::string>& args) -> std::string
-        {
-            std::stringstream ss;
-            ss << "Spark Engine Debug Console\n";
-            ss << "Version: 1.0.0\n";
-            ss << "Commands registered: " << m_commandRegistry.GetAllCommands().size() << "\n";
-            ss << "History entries: " << m_commandHistory.size() << "\n";
-            ss << "Buffer size: " << m_messageBuffer.size() << "/" << MAX_BUFFER_SIZE << "\n";
-            ss << "Connection status: " << (m_running ? "Active" : "Disconnected");
-            return ss.str();
-        });
+    m_commandRegistry.RegisterCommand("status", "Show console status information", "status",
+                                      [this](const std::vector<std::string>& args) -> std::string
+                                      {
+                                          std::stringstream ss;
+                                          ss << "Spark Engine Debug Console\n";
+                                          ss << "Version: 1.0.0\n";
+                                          ss << "Commands registered: " << m_commandRegistry.GetAllCommands().size()
+                                             << "\n";
+                                          ss << "History entries: " << m_commandHistory.size() << "\n";
+                                          ss << "Buffer size: " << m_messageBuffer.size() << "/" << MAX_BUFFER_SIZE
+                                             << "\n";
+                                          ss << "Connection status: " << (m_running ? "Active" : "Disconnected");
+                                          return ss.str();
+                                      });
 
     // Echo command
     m_commandRegistry.RegisterCommand("echo", "Echo back the provided arguments", "echo <message>",
@@ -1075,93 +1086,93 @@ void ConsoleApp::RegisterDefaultCommands()
                                       });
 
     // Diagnostic command
-    m_commandRegistry.RegisterCommand(
-        "diag", "Show console diagnostic information", "diag",
-        [this](const std::vector<std::string>& args) -> std::string
-        {
-            std::stringstream ss;
-            ss << "SparkConsole Diagnostics:\n";
-            ss << "  Console running: " << (m_running ? "Yes" : "No") << "\n";
-            ss << "  Commands registered: " << m_commandRegistry.GetAllCommands().size() << "\n";
-            ss << "  Message buffer size: " << m_messageBuffer.size() << "/" << MAX_BUFFER_SIZE << "\n";
+    m_commandRegistry.RegisterCommand("diag", "Show console diagnostic information", "diag",
+                                      [this](const std::vector<std::string>& args) -> std::string
+                                      {
+                                          std::stringstream ss;
+                                          ss << "SparkConsole Diagnostics:\n";
+                                          ss << "  Console running: " << (m_running ? "Yes" : "No") << "\n";
+                                          ss << "  Commands registered: " << m_commandRegistry.GetAllCommands().size()
+                                             << "\n";
+                                          ss << "  Message buffer size: " << m_messageBuffer.size() << "/"
+                                             << MAX_BUFFER_SIZE << "\n";
 
 #ifdef SPARK_PLATFORM_WINDOWS
-            HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-            DWORD fileType = GetFileType(hStdin);
-            ss << "  Input mode: ";
-            switch (fileType)
-            {
-            case FILE_TYPE_CHAR:
-                ss << "Character device";
-                break;
-            case FILE_TYPE_DISK:
-                ss << "Disk file";
-                break;
-            case FILE_TYPE_PIPE:
-                ss << "Named pipe (connected to engine)";
-                break;
-            default:
-                ss << "Unknown (" << fileType << ")";
-                break;
-            }
-            ss << "\n";
-            ss << "  Looking for SparkEngine.exe: ";
-            ss << (std::filesystem::exists("SparkEngine.exe") ? "Found" : "Not found");
+                                          HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+                                          DWORD fileType = GetFileType(hStdin);
+                                          ss << "  Input mode: ";
+                                          switch (fileType)
+                                          {
+                                          case FILE_TYPE_CHAR:
+                                              ss << "Character device";
+                                              break;
+                                          case FILE_TYPE_DISK:
+                                              ss << "Disk file";
+                                              break;
+                                          case FILE_TYPE_PIPE:
+                                              ss << "Named pipe (connected to engine)";
+                                              break;
+                                          default:
+                                              ss << "Unknown (" << fileType << ")";
+                                              break;
+                                          }
+                                          ss << "\n";
+                                          ss << "  Looking for SparkEngine.exe: ";
+                                          ss << (std::filesystem::exists("SparkEngine.exe") ? "Found" : "Not found");
 #else
             ss << "  Input mode: " << (LinuxIsStdinPipe() ? "Pipe (connected to engine)" : "Terminal (standalone)") << "\n";
             ss << "  Looking for SparkEngine: ";
             ss << (std::filesystem::exists("SparkEngine") ? "Found" : "Not found");
 #endif
 
-            return ss.str();
-        });
+                                          return ss.str();
+                                      });
 
     // Pipe test command
-    m_commandRegistry.RegisterCommand(
-        "pipe_test", "Test pipe communication with engine", "pipe_test",
-        [this](const std::vector<std::string>& args) -> std::string
-        {
-            std::stringstream ss;
-            ss << "Pipe Communication Test:\n";
+    m_commandRegistry.RegisterCommand("pipe_test", "Test pipe communication with engine", "pipe_test",
+                                      [this](const std::vector<std::string>& args) -> std::string
+                                      {
+                                          std::stringstream ss;
+                                          ss << "Pipe Communication Test:\n";
 
 #ifdef SPARK_PLATFORM_WINDOWS
-            HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-            DWORD fileType = GetFileType(hStdin);
-            bool connected = (fileType == FILE_TYPE_PIPE);
-            ss << "  Stdin file type: ";
-            switch (fileType)
-            {
-            case FILE_TYPE_CHAR:
-                ss << "Character device (no pipe)";
-                break;
-            case FILE_TYPE_PIPE:
-                ss << "Named pipe (connected!)";
-                break;
-            default:
-                ss << "Other (" << fileType << ")";
-                break;
-            }
+                                          HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+                                          DWORD fileType = GetFileType(hStdin);
+                                          bool connected = (fileType == FILE_TYPE_PIPE);
+                                          ss << "  Stdin file type: ";
+                                          switch (fileType)
+                                          {
+                                          case FILE_TYPE_CHAR:
+                                              ss << "Character device (no pipe)";
+                                              break;
+                                          case FILE_TYPE_PIPE:
+                                              ss << "Named pipe (connected!)";
+                                              break;
+                                          default:
+                                              ss << "Other (" << fileType << ")";
+                                              break;
+                                          }
 #else
             bool connected = LinuxIsStdinPipe();
             ss << "  Stdin type: " << (connected ? "Pipe (connected!)" : "Terminal (no pipe)");
 #endif
-            ss << "\n";
+                                          ss << "\n";
 
-            if (connected)
-            {
-                ss << "  Sending test command to engine...";
-                std::cout << "test_engine" << std::endl;
-                std::cout.flush();
-                ss << " Sent!\n";
-                ss << "  Watch for response from engine above.";
-            }
-            else
-            {
-                ss << "  No pipe connection - cannot send commands to engine";
-            }
+                                          if (connected)
+                                          {
+                                              ss << "  Sending test command to engine...";
+                                              std::cout << "test_engine" << std::endl;
+                                              std::cout.flush();
+                                              ss << " Sent!\n";
+                                              ss << "  Watch for response from engine above.";
+                                          }
+                                          else
+                                          {
+                                              ss << "  No pipe connection - cannot send commands to engine";
+                                          }
 
-            return ss.str();
-        });
+                                          return ss.str();
+                                      });
 
     // Console refresh command
     m_commandRegistry.RegisterCommand("refresh", "Refresh console display", "refresh",

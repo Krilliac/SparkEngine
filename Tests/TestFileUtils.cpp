@@ -4,22 +4,13 @@
 #include "TestFramework.h"
 #include "Utils/FileUtils.h"
 #include <cstdio>
-#include <cstdlib>
+#include <filesystem>
 
 using namespace Spark::FileUtils;
 
-static std::string GetTestTempDir()
+static std::string GetTempDir()
 {
-#if SPARK_HAS_FILESYSTEM
-    return fs::temp_directory_path().string();
-#elif defined(_WIN32)
-    const char* tmp = std::getenv("TEMP");
-    if (!tmp)
-        tmp = std::getenv("TMP");
-    return tmp ? std::string(tmp) : std::string(".");
-#else
-    return "/tmp";
-#endif
+    return std::filesystem::temp_directory_path().string();
 }
 
 // =============================================================================
@@ -81,7 +72,7 @@ TEST(FileUtils_NormalizePath)
 
 TEST(FileUtils_WriteAndReadText)
 {
-    std::string path = GetTestTempDir() + "/spark_test_text.txt";
+    std::string path = GetTempDir() + "/spark_test_text.txt";
     std::string content = "Hello, SparkEngine!\nLine 2.";
 
     EXPECT_TRUE(WriteTextFile(path, content));
@@ -95,7 +86,7 @@ TEST(FileUtils_WriteAndReadText)
 
 TEST(FileUtils_WriteAndReadBinary)
 {
-    std::string path = GetTestTempDir() + "/spark_test_binary.bin";
+    std::string path = GetTempDir() + "/spark_test_binary.bin";
     std::vector<uint8_t> data = {0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD};
 
     EXPECT_TRUE(WriteBinaryFile(path, data));
@@ -113,7 +104,7 @@ TEST(FileUtils_WriteAndReadBinary)
 
 TEST(FileUtils_ReadNonexistent)
 {
-    auto result = ReadTextFile(GetTestTempDir() + "/spark_nonexistent_file_xyz.txt");
+    auto result = ReadTextFile(GetTempDir() + "/spark_nonexistent_file_xyz.txt");
     EXPECT_FALSE(result.has_value());
 }
 
@@ -121,7 +112,7 @@ TEST(FileUtils_ReadNonexistent)
 
 TEST(FileUtils_FileExists)
 {
-    std::string path = GetTestTempDir() + "/spark_test_exists.txt";
+    std::string path = GetTempDir() + "/spark_test_exists.txt";
     WriteTextFile(path, "test");
     EXPECT_TRUE(FileExists(path));
     std::remove(path.c_str());
@@ -130,13 +121,13 @@ TEST(FileUtils_FileExists)
 
 TEST(FileUtils_IsDirectory)
 {
-    EXPECT_TRUE(IsDirectory(GetTestTempDir()));
-    EXPECT_FALSE(IsDirectory(GetTestTempDir() + "/spark_nonexistent_dir_xyz"));
+    EXPECT_TRUE(IsDirectory(GetTempDir()));
+    EXPECT_FALSE(IsDirectory(GetTempDir() + "/spark_nonexistent_dir_xyz"));
 }
 
 TEST(FileUtils_GetFileSize)
 {
-    std::string path = GetTestTempDir() + "/spark_test_size.txt";
+    std::string path = GetTempDir() + "/spark_test_size.txt";
     WriteTextFile(path, "12345");
 
     auto size = GetFileSize(path);
@@ -148,18 +139,18 @@ TEST(FileUtils_GetFileSize)
 
 TEST(FileUtils_CreateDirectories)
 {
-    std::string dir = GetTestTempDir() + "/spark_test_dir/sub/deep";
+    std::string dir = GetTempDir() + "/spark_test_dir/sub/deep";
     EXPECT_TRUE(CreateDirectories(dir));
     EXPECT_TRUE(IsDirectory(dir));
 
     // Cleanup
     std::error_code ec;
-    fs::remove_all(GetTestTempDir() + "/spark_test_dir", ec);
+    fs::remove_all(GetTempDir() + "/spark_test_dir", ec);
 }
 
 TEST(FileUtils_ListFiles)
 {
-    std::string dir = GetTestTempDir() + "/spark_test_list";
+    std::string dir = GetTempDir() + "/spark_test_list";
     CreateDirectories(dir);
     WriteTextFile(dir + "/a.txt", "a");
     WriteTextFile(dir + "/b.txt", "b");
