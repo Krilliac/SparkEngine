@@ -389,7 +389,8 @@ bool SceneManager::LoadJSON(const std::wstring& path)
     // Parse metadata from comment headers
     while (std::getline(ss, line))
     {
-        if (line.empty()) continue;
+        if (line.empty())
+            continue;
         if (line[0] == '#')
         {
             // Parse metadata comments like "# name: MyScene"
@@ -402,7 +403,8 @@ bool SceneManager::LoadJSON(const std::wstring& path)
             }
             continue;
         }
-        if (line[0] == '/' || line[0] == '{' || line[0] == '}') continue;
+        if (line[0] == '/' || line[0] == '{' || line[0] == '}')
+            continue;
 
         // Parse node line: type name posX posY posZ [rotX rotY rotZ scaleX scaleY scaleZ parentIndex]
         std::istringstream ls(line);
@@ -415,9 +417,8 @@ bool SceneManager::LoadJSON(const std::wstring& path)
         // If extended fields aren't present, defaults are fine (rotation=0, scale=1, parent=-1)
 
         // Try to read optional rotation, scale, and parent fields (written by SaveJSON)
-        if (ls >> node.rotation.x >> node.rotation.y >> node.rotation.z
-               >> node.scale.x >> node.scale.y >> node.scale.z
-               >> node.parentIndex)
+        if (ls >> node.rotation.x >> node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >>
+            node.scale.z >> node.parentIndex)
         {
             // All 12 fields parsed successfully
         }
@@ -500,16 +501,16 @@ void SceneManager::InstantiateNodes()
             if (meshPath.empty())
             {
                 // No modelPath specified, skip this model node
-                LOG_TO_CONSOLE(L"SceneManager: model node '" +
-                    std::wstring(node.name.begin(), node.name.end()) +
-                    L"' has no modelPath, using placeholder", L"WARNING");
+                LOG_TO_CONSOLE(L"SceneManager: model node '" + std::wstring(node.name.begin(), node.name.end()) +
+                                   L"' has no modelPath, using placeholder",
+                               L"WARNING");
             }
         }
         else
         {
-            LOG_TO_CONSOLE(L"SceneManager: Unknown node type '" +
-                std::wstring(node.type.begin(), node.type.end()) +
-                L"', skipping", L"WARNING");
+            LOG_TO_CONSOLE(L"SceneManager: Unknown node type '" + std::wstring(node.type.begin(), node.type.end()) +
+                               L"', skipping",
+                           L"WARNING");
             m_objects.push_back(nullptr);
             continue;
         }
@@ -548,7 +549,9 @@ void SceneManager::InstantiateNodes()
 static bool ParseFloat3(const std::string& str, DirectX::XMFLOAT3& out)
 {
     std::string s = str;
-    for (char& c : s) if (c == ',') c = ' ';
+    for (char& c : s)
+        if (c == ',')
+            c = ' ';
     std::istringstream ss(s);
     return bool(ss >> out.x >> out.y >> out.z);
 }
@@ -572,12 +575,10 @@ bool SceneManager::LoadCustom(const std::wstring& path)
     }
 
     // Peek at the first non-empty, non-comment line to detect format
-    std::string content((std::istreambuf_iterator<char>(file)),
-                         std::istreambuf_iterator<char>());
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
-    bool isINIFormat = (content.find("[Scene]") != std::string::npos ||
-                        content.find("[Object]") != std::string::npos);
+    bool isINIFormat = (content.find("[Scene]") != std::string::npos || content.find("[Object]") != std::string::npos);
 
     if (isINIFormat)
     {
@@ -588,7 +589,8 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         SceneNode currentNode;
         bool hasNode = false;
 
-        auto flushNode = [&]() {
+        auto flushNode = [&]()
+        {
             if (hasNode && !currentNode.type.empty())
             {
                 if (currentNode.name.empty())
@@ -602,8 +604,10 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         while (std::getline(ss, line))
         {
             // Trim whitespace
-            while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
-            if (line.empty() || line[0] == '#' || line[0] == ';') continue;
+            while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+                line.pop_back();
+            if (line.empty() || line[0] == '#' || line[0] == ';')
+                continue;
 
             // Section header
             if (line[0] == '[' && line.back() == ']')
@@ -618,14 +622,17 @@ bool SceneManager::LoadCustom(const std::wstring& path)
 
             // Key=Value pair
             auto eqPos = line.find('=');
-            if (eqPos == std::string::npos) continue;
+            if (eqPos == std::string::npos)
+                continue;
             std::string key = line.substr(0, eqPos);
             std::string value = line.substr(eqPos + 1);
 
             if (currentSection == "Scene")
             {
-                if (key == "name") m_metadata.sceneName = value;
-                else if (key == "author") m_metadata.author = value;
+                if (key == "name")
+                    m_metadata.sceneName = value;
+                else if (key == "author")
+                    m_metadata.author = value;
                 else if (key == "gravity")
                 {
                     XMFLOAT3 grav;
@@ -639,14 +646,22 @@ bool SceneManager::LoadCustom(const std::wstring& path)
             }
             else if (hasNode)
             {
-                if (key == "type") currentNode.type = value;
-                else if (key == "name") currentNode.name = value;
-                else if (key == "model") currentNode.modelPath = value;
-                else if (key == "position") ParseFloat3(value, currentNode.position);
-                else if (key == "rotation") ParseFloat3(value, currentNode.rotation);
-                else if (key == "scale") ParseFloat3(value, currentNode.scale);
-                else if (key == "material") currentNode.materialPath = value;
-                else currentNode.properties[key] = value;
+                if (key == "type")
+                    currentNode.type = value;
+                else if (key == "name")
+                    currentNode.name = value;
+                else if (key == "model")
+                    currentNode.modelPath = value;
+                else if (key == "position")
+                    ParseFloat3(value, currentNode.position);
+                else if (key == "rotation")
+                    ParseFloat3(value, currentNode.rotation);
+                else if (key == "scale")
+                    ParseFloat3(value, currentNode.scale);
+                else if (key == "material")
+                    currentNode.materialPath = value;
+                else
+                    currentNode.properties[key] = value;
             }
         }
         flushNode();
@@ -664,8 +679,10 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         {
             ++lineNum;
             // Trim
-            while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
-            if (line.empty() || line[0] == '#') continue;
+            while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+                line.pop_back();
+            if (line.empty() || line[0] == '#')
+                continue;
 
             std::istringstream ls(line);
             std::string type;
@@ -677,39 +694,46 @@ bool SceneManager::LoadCustom(const std::wstring& path)
 
             if (type == "Cube")
             {
-                float size = 1.0f; ls >> size;
+                float size = 1.0f;
+                ls >> size;
                 obj = std::make_unique<CubeObject>(size);
             }
             else if (type == "Plane")
             {
-                float width = 10.0f, depth = 10.0f; ls >> width >> depth;
+                float width = 10.0f, depth = 10.0f;
+                ls >> width >> depth;
                 obj = std::make_unique<PlaneObject>(width, depth);
             }
             else if (type == "Sphere")
             {
-                float radius = 0.5f; int slices = 16, stacks = 16;
+                float radius = 0.5f;
+                int slices = 16, stacks = 16;
                 ls >> radius >> slices >> stacks;
                 obj = std::make_unique<SphereObject>(radius, slices, stacks);
             }
             else if (type == "Pyramid")
             {
-                float size = 1.0f; ls >> size;
+                float size = 1.0f;
+                ls >> size;
                 obj = std::make_unique<PyramidObject>(size);
             }
             else if (type == "Ramp")
             {
-                float length = 2.0f, height = 1.0f; ls >> length >> height;
+                float length = 2.0f, height = 1.0f;
+                ls >> length >> height;
                 obj = std::make_unique<RampObject>(length, height);
             }
             else if (type == "Wall")
             {
-                float width = 1.0f, height = 2.0f; ls >> width >> height;
+                float width = 1.0f, height = 2.0f;
+                ls >> width >> height;
                 obj = std::make_unique<WallObject>(width, height);
             }
             else
             {
                 std::wstring wtype(type.begin(), type.end());
-                LOG_TO_CONSOLE(L"SceneManager: Unknown type on line " + std::to_wstring(lineNum) + L": " + wtype, L"WARNING");
+                LOG_TO_CONSOLE(L"SceneManager: Unknown type on line " + std::to_wstring(lineNum) + L": " + wtype,
+                               L"WARNING");
                 continue;
             }
 
@@ -724,7 +748,7 @@ bool SceneManager::LoadCustom(const std::wstring& path)
             std::transform(lowerType.begin(), lowerType.end(), lowerType.begin(), ::tolower);
             std::wstring meshPath = L"Assets\\Models\\" + std::wstring(lowerType.begin(), lowerType.end()) + L".obj";
             LoadOrPlaceholderMesh(*obj->GetMesh(), m_graphics->GetDevice(), m_graphics->GetContext(), meshPath);
-            obj->SetPosition({ x, y, z });
+            obj->SetPosition({x, y, z});
             m_objects.push_back(std::move(obj));
 
             // Also track in scene hierarchy

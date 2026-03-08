@@ -60,10 +60,12 @@ static bool g_triggerCrashOnAssert = false;
 static std::string WideToUtf8(const std::wstring& w)
 {
 #ifdef SPARK_PLATFORM_WINDOWS
-    if (w.empty()) return {};
+    if (w.empty())
+        return {};
     int len = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (len <= 1) return {};  // Only null terminator
-    std::string s(len - 1, '\0');  // Exclude the null terminator from std::string length
+    if (len <= 1)
+        return {};                // Only null terminator
+    std::string s(len - 1, '\0'); // Exclude the null terminator from std::string length
     WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &s[0], len, nullptr, nullptr);
     return s;
 #else
@@ -529,7 +531,8 @@ static void SaveScreenshot(const std::wstring& file)
 
     auto dev = GetD3DDevice();
     auto ctx = GetD3DContext();
-    if (!dev || !ctx) return;
+    if (!dev || !ctx)
+        return;
     Microsoft::WRL::ComPtr<ID3D11Texture2D> cpu;
     if (FAILED(dev->CreateTexture2D(&d, nullptr, &cpu)))
         return;

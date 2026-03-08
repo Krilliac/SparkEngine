@@ -7,6 +7,7 @@
 #include "../SparkEngine/Source/Utils/ChromeTracing.h"
 #include <thread>
 #include <cstdio>
+#include <filesystem>
 
 TEST(ChromeTracing_StartStop)
 {
@@ -72,11 +73,11 @@ TEST(ChromeTracing_SaveToFile)
     tracer.EndEvent("TestSave");
     tracer.Stop();
 
-    const char* path = "/tmp/spark_test_trace.json";
-    bool ok = tracer.SaveToFile(path);
+    std::string path = (std::filesystem::temp_directory_path() / "spark_test_trace.json").string();
+    bool ok = tracer.SaveToFile(path.c_str());
     EXPECT_TRUE(ok);
 
     // Cleanup
-    std::remove(path);
+    std::remove(path.c_str());
     tracer.Clear();
 }

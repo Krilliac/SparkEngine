@@ -4,6 +4,7 @@
 #include "TestFramework.h"
 #include "Utils/ConfigParser.h"
 #include <cstdio>
+#include <filesystem>
 
 // =============================================================================
 // Tests
@@ -142,7 +143,7 @@ TEST(ConfigParser_Clear)
 
 TEST(ConfigParser_SaveAndLoad)
 {
-    std::string path = "/tmp/spark_test_config.ini";
+    std::string path = (std::filesystem::temp_directory_path() / "spark_test_config.ini").string();
 
     Spark::ConfigParser cfg;
     cfg.SetString("Graphics", "resolution", "1920x1080");
