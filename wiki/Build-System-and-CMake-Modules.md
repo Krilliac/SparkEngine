@@ -147,6 +147,19 @@ This:
 - Links against SparkEngineLib
 - Handles platform-specific compilation flags
 
+### SparkEnginePreflight.cmake
+
+Validates that a SparkEngine SDK installation is complete before `find_package` runs. Include it in standalone projects to get clear error messages when `SparkEngineTargets.cmake` or `SparkGameModule.cmake` is missing (e.g. due to an interrupted install or pointing at a build tree):
+
+```cmake
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
+include(SparkEnginePreflight)
+
+find_package(SparkEngine REQUIRED)
+```
+
+If the installation is incomplete, the preflight check emits a `FATAL_ERROR` with the exact missing file and remediation steps.
+
 ### SparkEngineConfig.cmake
 
 Enables `find_package(SparkEngine)` for standalone game projects.
