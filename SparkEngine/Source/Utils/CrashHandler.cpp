@@ -37,6 +37,7 @@
 #elif defined(SPARK_PLATFORM_LINUX)
 #include <signal.h>
 #include <unistd.h>
+#include <sys/syscall.h>
 #include <execinfo.h>
 #include <cxxabi.h>
 #include <sys/utsname.h>
