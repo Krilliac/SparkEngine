@@ -1184,39 +1184,38 @@ void ConsoleApp::RegisterDefaultCommands()
                                       });
 
     // Alias command
-    m_commandRegistry.RegisterCommand(
-        "alias", "Create or list command aliases", "alias [name] [command]",
-        [this](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-            {
-                if (m_aliases.empty())
-                    return "No aliases defined. Usage: alias <name> <command>";
-                std::stringstream ss;
-                ss << "Defined Aliases:\n";
-                for (const auto& pair : m_aliases)
-                {
-                    ss << "  " << pair.first << " -> " << pair.second << "\n";
-                }
-                return ss.str();
-            }
-            if (args.size() < 2)
-            {
-                auto it = m_aliases.find(args[0]);
-                if (it != m_aliases.end())
-                    return "Alias '" + args[0] + "' -> '" + it->second + "'";
-                return "No alias '" + args[0] + "'. Usage: alias <name> <command>";
-            }
-            std::string cmd;
-            for (size_t i = 1; i < args.size(); ++i)
-            {
-                if (i > 1)
-                    cmd += " ";
-                cmd += args[i];
-            }
-            m_aliases[args[0]] = cmd;
-            return "Alias set: " + args[0] + " -> " + cmd;
-        });
+    m_commandRegistry.RegisterCommand("alias", "Create or list command aliases", "alias [name] [command]",
+                                      [this](const std::vector<std::string>& args) -> std::string
+                                      {
+                                          if (args.empty())
+                                          {
+                                              if (m_aliases.empty())
+                                                  return "No aliases defined. Usage: alias <name> <command>";
+                                              std::stringstream ss;
+                                              ss << "Defined Aliases:\n";
+                                              for (const auto& pair : m_aliases)
+                                              {
+                                                  ss << "  " << pair.first << " -> " << pair.second << "\n";
+                                              }
+                                              return ss.str();
+                                          }
+                                          if (args.size() < 2)
+                                          {
+                                              auto it = m_aliases.find(args[0]);
+                                              if (it != m_aliases.end())
+                                                  return "Alias '" + args[0] + "' -> '" + it->second + "'";
+                                              return "No alias '" + args[0] + "'. Usage: alias <name> <command>";
+                                          }
+                                          std::string cmd;
+                                          for (size_t i = 1; i < args.size(); ++i)
+                                          {
+                                              if (i > 1)
+                                                  cmd += " ";
+                                              cmd += args[i];
+                                          }
+                                          m_aliases[args[0]] = cmd;
+                                          return "Alias set: " + args[0] + " -> " + cmd;
+                                      });
 
     // Unalias command
     m_commandRegistry.RegisterCommand("unalias", "Remove a command alias", "unalias <name|all>",
