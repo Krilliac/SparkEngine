@@ -80,8 +80,7 @@ static volatile bool g_shutdownRequested = false;
 static bool ParseHeadlessFlag(LPWSTR cmdLine)
 {
     std::wstring cmd(cmdLine);
-    return cmd.find(L"-headless") != std::wstring::npos
-        || cmd.find(L"-dedicated") != std::wstring::npos;
+    return cmd.find(L"-headless") != std::wstring::npos || cmd.find(L"-dedicated") != std::wstring::npos;
 }
 
 /**

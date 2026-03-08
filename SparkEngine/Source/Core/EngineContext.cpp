@@ -4,7 +4,6 @@
  */
 
 #include "EngineContext.h"
-#include "SparkEngine.h"
 #include "Spark/Version.h"
 #include <memory>
 
