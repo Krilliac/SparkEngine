@@ -143,6 +143,27 @@ namespace entt
         std::uint32_t m_next = 0;
     };
 
+    /**
+     * Wrapper around entity_storage* that supports both -> and . access.
+     * Real EnTT returns a type where storage<entity>()->each() and
+     * storage<entity>().each() both work (pointer-like with member access).
+     */
+    class storage_proxy
+    {
+      public:
+        explicit storage_proxy(entity_storage* s) : m_storage(s) {}
+        explicit storage_proxy(const entity_storage* s) : m_storage(const_cast<entity_storage*>(s)) {}
+
+        entity_storage* operator->() { return m_storage; }
+        const entity_storage* operator->() const { return m_storage; }
+
+        entity_storage::each_proxy each() const { return m_storage->each(); }
+        std::size_t size() const { return m_storage->size(); }
+
+      private:
+        entity_storage* m_storage;
+    };
+
     // ---------------------------------------------------------------------------
     // View – filtered iteration over entities with specific components
     // ---------------------------------------------------------------------------
@@ -271,15 +292,15 @@ namespace entt
             return basic_view<Components...>(m_entities.m_alive, std::make_tuple(&get_or_create_pool<Components>()...));
         }
 
-        /** Access the entity storage (returns pointer to match real EnTT API). */
-        template <typename T> std::enable_if_t<std::is_same_v<T, entity>, entity_storage*> storage()
+        /** Access the entity storage (returns proxy supporting both -> and . access). */
+        template <typename T> std::enable_if_t<std::is_same_v<T, entity>, storage_proxy> storage()
         {
-            return &m_entities;
+            return storage_proxy(&m_entities);
         }
 
-        template <typename T> std::enable_if_t<std::is_same_v<T, entity>, const entity_storage*> storage() const
+        template <typename T> std::enable_if_t<std::is_same_v<T, entity>, storage_proxy> storage() const
         {
-            return &m_entities;
+            return storage_proxy(&m_entities);
         }
 
       private:

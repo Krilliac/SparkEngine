@@ -652,7 +652,7 @@ namespace Spark
         auto& registry = world.GetRegistry();
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
 
-        for (auto&& [entity] : registry.storage<entt::entity>()->each())
+        for (auto&& [entity] : registry.storage<entt::entity>().each())
         {
             SerializedEntity se;
             se.entityID = static_cast<uint32_t>(entity);
