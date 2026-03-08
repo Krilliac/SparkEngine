@@ -35,6 +35,8 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <thread>
+#include <iostream>
 
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
@@ -66,6 +68,33 @@ std::unique_ptr<ModuleManager> g_moduleManager;
 extern std::unique_ptr<EngineContext> g_engineContext; // defined in EngineContext.cpp
 std::unique_ptr<AudioEngine> g_audioEngine;
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
+
+#ifdef SPARK_HEADLESS_SUPPORT
+// g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
+static volatile bool g_shutdownRequested = false;
+
+/**
+ * @brief Parse command line for -headless or -dedicated flags
+ */
+static bool ParseHeadlessFlag(LPWSTR cmdLine)
+{
+    std::wstring cmd(cmdLine);
+    return cmd.find(L"-headless") != std::wstring::npos || cmd.find(L"-dedicated") != std::wstring::npos;
+}
+
+/**
+ * @brief Console Ctrl handler for graceful headless shutdown (Windows)
+ */
+static BOOL WINAPI HeadlessCtrlHandler(DWORD ctrlType)
+{
+    if (ctrlType == CTRL_C_EVENT || ctrlType == CTRL_CLOSE_EVENT || ctrlType == CTRL_BREAK_EVENT)
+    {
+        g_shutdownRequested = true;
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif // SPARK_HEADLESS_SUPPORT
 
 // Win32 forward declarations
 ATOM MyRegisterClass(HINSTANCE);
@@ -152,7 +181,111 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     crashCfg.triggerCrashOnAssert = false;
     InstallCrashHandler(crashCfg);
 
-    // 2. Class & window title
+    // 2. Check for headless/dedicated server mode
+#ifdef SPARK_HEADLESS_SUPPORT
+    g_headlessMode = ParseHeadlessFlag(lpCmdLine);
+    if (g_headlessMode)
+    {
+        // Allocate a console for stdout/stderr output
+        AllocConsole();
+        FILE* fp = nullptr;
+        freopen_s(&fp, "CONOUT$", "w", stdout);
+        freopen_s(&fp, "CONOUT$", "w", stderr);
+        freopen_s(&fp, "CONIN$", "r", stdin);
+
+        // Install Ctrl+C handler for graceful shutdown
+        SetConsoleCtrlHandler(HeadlessCtrlHandler, TRUE);
+
+        std::cout << "=== Spark Engine (Headless/Dedicated Server) ===" << std::endl;
+
+        // Initialize only the subsystems needed for headless operation
+        g_timer = std::make_unique<Timer>();
+        g_eventBus = std::make_unique<Spark::EventBus>();
+        g_engineContext = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
+
+        // Physics
+        {
+            extern PhysicsSystem* g_physicsSystem;
+            g_physicsOwned = std::make_unique<PhysicsSystem>();
+            g_physicsSystem = g_physicsOwned.get();
+            g_engineContext->SetPhysics(g_physicsOwned.get());
+        }
+
+        // Module loading
+        g_moduleManager = std::make_unique<ModuleManager>();
+
+        auto& console = Spark::SimpleConsole::GetInstance();
+        if (console.Initialize())
+            console.LogSuccess("Headless server console initialized");
+
+        if (LoadGameModules(*g_moduleManager, lpCmdLine))
+        {
+            g_moduleManager->InitializeAll(g_engineContext.get());
+            console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
+        }
+        else
+        {
+            console.LogWarning("No game modules found. Running engine-only headless mode.");
+        }
+
+        // SaveSystem
+        Spark::SaveSystem::GetInstance().Initialize("Saves");
+        console.LogInfo("SaveSystem initialized");
+
+        // Register console commands (no graphics commands in headless)
+        RegisterEngineConsoleCommands();
+
+        // Fixed 60 Hz server loop
+        constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
+        console.LogInfo("Starting headless server loop (60 Hz)...");
+        console.LogInfo("Press Ctrl+C or type 'quit' to stop.");
+
+        while (!g_shutdownRequested)
+        {
+            auto tickStart = std::chrono::steady_clock::now();
+
+            float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
+
+            if (g_moduleManager && g_moduleManager->HasModules())
+                g_moduleManager->UpdateAll(dt);
+
+            console.Update();
+
+            auto elapsed = std::chrono::steady_clock::now() - tickStart;
+            if (elapsed < TICK_INTERVAL)
+                std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
+        }
+
+        // Shutdown
+        console.LogInfo("Headless server shutting down...");
+
+        if (g_moduleManager)
+        {
+            g_moduleManager->ShutdownAll();
+            g_moduleManager->UnloadAll();
+            g_moduleManager.reset();
+        }
+
+        if (g_physicsOwned)
+        {
+            extern PhysicsSystem* g_physicsSystem;
+            g_physicsSystem = nullptr;
+            g_physicsOwned->Shutdown();
+            g_physicsOwned.reset();
+        }
+
+        g_engineContext.reset();
+        g_eventBus.reset();
+        g_timer.reset();
+
+        console.Shutdown();
+
+        FreeConsole();
+        return 0;
+    }
+#endif // SPARK_HEADLESS_SUPPORT
+
+    // 2b. Class & window title (normal windowed mode)
     ASSERT(MAX_LOADSTRING <= _countof(g_szClass) && MAX_LOADSTRING <= _countof(g_szTitle));
     wcscpy_s(g_szClass, MAX_LOADSTRING, L"SparkEngineWindowClass");
     wcscpy_s(g_szTitle, MAX_LOADSTRING, L"Spark Engine");
@@ -934,7 +1067,7 @@ void RegisterEngineConsoleCommands()
 #endif // SPARK_PLATFORM_WINDOWS
 
 // ============================================================================
-// Non-Windows: Minimal main entry point
+// Non-Windows: main entry point with headless support
 // ============================================================================
 #ifndef SPARK_PLATFORM_WINDOWS
 #include "SparkEngine.h"
@@ -946,6 +1079,10 @@ void RegisterEngineConsoleCommands()
 #include "Physics/PhysicsSystem.h"
 #include "Utils/Timer.h"
 #include <iostream>
+#include <thread>
+#include <chrono>
+#include <csignal>
+#include <cstring>
 
 std::unique_ptr<GraphicsEngine> g_graphics;
 std::unique_ptr<InputManager> g_input;
@@ -955,8 +1092,112 @@ std::unique_ptr<ModuleManager> g_moduleManager;
 extern std::unique_ptr<EngineContext> g_engineContext; // defined in EngineContext.cpp
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 
+#ifdef SPARK_HEADLESS_SUPPORT
+// g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
+static volatile bool g_shutdownRequested = false;
+
+static void HeadlessSignalHandler(int)
+{
+    g_shutdownRequested = true;
+}
+
+static bool ParseHeadlessFlagLinux(int argc, char* argv[])
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        if (strcmp(argv[i], "-headless") == 0 || strcmp(argv[i], "-dedicated") == 0)
+            return true;
+    }
+    return false;
+}
+#endif // SPARK_HEADLESS_SUPPORT
+
 int main(int argc, char* argv[])
 {
+#ifdef SPARK_HEADLESS_SUPPORT
+    g_headlessMode = ParseHeadlessFlagLinux(argc, argv);
+#endif
+
+    if (
+#ifdef SPARK_HEADLESS_SUPPORT
+        g_headlessMode
+#else
+        false
+#endif
+    )
+    {
+#ifdef SPARK_HEADLESS_SUPPORT
+        // Headless/dedicated server mode
+        std::signal(SIGINT, HeadlessSignalHandler);
+        std::signal(SIGTERM, HeadlessSignalHandler);
+
+        std::cout << "=== Spark Engine (Headless/Dedicated Server - Linux) ===" << std::endl;
+
+        // Initialize only headless subsystems (no graphics, no input, no audio)
+        g_eventBus = std::make_unique<Spark::EventBus>();
+        g_timer = std::make_unique<Timer>();
+        g_engineContext = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
+
+        // Physics
+        {
+            extern PhysicsSystem* g_physicsSystem;
+            g_physicsOwned = std::make_unique<PhysicsSystem>();
+            g_physicsSystem = g_physicsOwned.get();
+            g_engineContext->SetPhysics(g_physicsOwned.get());
+        }
+
+        g_moduleManager = std::make_unique<ModuleManager>();
+
+        // TODO: Load modules from command line args on Linux
+        std::cout << "Headless server ready." << std::endl;
+
+        // Fixed 60 Hz server loop
+        constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
+        std::cout << "Starting headless server loop (60 Hz)..." << std::endl;
+        std::cout << "Press Ctrl+C to stop." << std::endl;
+
+        while (!g_shutdownRequested)
+        {
+            auto tickStart = std::chrono::steady_clock::now();
+
+            float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
+
+            if (g_moduleManager && g_moduleManager->HasModules())
+                g_moduleManager->UpdateAll(dt);
+
+            auto elapsed = std::chrono::steady_clock::now() - tickStart;
+            if (elapsed < TICK_INTERVAL)
+                std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
+        }
+
+        // Shutdown
+        std::cout << "\nHeadless server shutting down..." << std::endl;
+
+        if (g_moduleManager)
+        {
+            g_moduleManager->ShutdownAll();
+            g_moduleManager->UnloadAll();
+            g_moduleManager.reset();
+        }
+
+        if (g_physicsOwned)
+        {
+            extern PhysicsSystem* g_physicsSystem;
+            g_physicsSystem = nullptr;
+            g_physicsOwned->Shutdown();
+            g_physicsOwned.reset();
+        }
+
+        g_engineContext.reset();
+        g_timer.reset();
+        g_eventBus.reset();
+
+        std::cout << "Headless server shut down cleanly." << std::endl;
+        return 0;
+#endif // SPARK_HEADLESS_SUPPORT
+    }
+
+    // Normal (windowed) mode
     (void)argc;
     (void)argv;
     std::cout << "=== Spark Engine (Linux Build) ===" << std::endl;

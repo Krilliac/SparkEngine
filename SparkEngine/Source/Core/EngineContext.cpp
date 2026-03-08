@@ -26,3 +26,16 @@ uint32_t EngineContext::GetSDKVersion() const
 {
     return Spark::GetSDKVersion();
 }
+
+#ifdef SPARK_HEADLESS_SUPPORT
+bool g_headlessMode = false;
+#endif
+
+bool EngineContext::IsHeadless() const
+{
+#ifdef SPARK_HEADLESS_SUPPORT
+    return g_headlessMode;
+#else
+    return false;
+#endif
+}

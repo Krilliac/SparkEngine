@@ -388,6 +388,12 @@ void ModuleManager::UpdateAll(float deltaTime)
 
 void ModuleManager::RenderAll()
 {
+#ifdef SPARK_HEADLESS_SUPPORT
+    extern bool g_headlessMode;
+    if (g_headlessMode)
+        return;
+#endif
+
     for (auto& entry : m_modules)
     {
         if (entry.initialized && entry.instance)
