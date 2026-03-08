@@ -314,7 +314,6 @@ endif()
 
 # Bullet Physics
 if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
-    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
     set(BULLET_PHYSICS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
     set(BULLET_FOUND TRUE)
     message(STATUS "Found Bullet Physics")
@@ -489,6 +488,21 @@ if(BULLET_FOUND)
     set(USE_GRAPHICAL_BENCHMARK OFF CACHE BOOL "" FORCE)
     set(USE_MSVC_RUNTIME_LIBRARY_DLL ON CACHE BOOL "" FORCE)
     add_subdirectory("${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3" "${CMAKE_BINARY_DIR}/bullet3")
+    # Suppress warnings in third-party bullet3 code (deprecated-copy triggers on GCC 12+)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
+        foreach(_bullet_target
+            BulletDynamics BulletCollision LinearMath
+            BulletSoftBody BulletInverseDynamics
+            Bullet3Common Bullet3Collision Bullet3Dynamics Bullet3Geometry
+        )
+            if(TARGET ${_bullet_target})
+                target_compile_options(${_bullet_target} PRIVATE
+                    -Wno-deprecated-copy
+                    -Wno-implicit-fallthrough
+                )
+            endif()
+        endforeach()
+    endif()
     target_link_libraries(SparkEngineLib PRIVATE BulletDynamics BulletCollision LinearMath)
     message(STATUS "Linking SparkEngineLib with Bullet Physics")
 endif()
@@ -613,6 +627,13 @@ foreach(_tp_dir ${THIRDPARTY_INCLUDE_DIRS})
         $<BUILD_INTERFACE:${_tp_dir}>
     )
 endforeach()
+
+# Bullet Physics headers are added as SYSTEM to suppress third-party warnings
+if(BULLET_FOUND)
+    target_include_directories(SparkEngineLib SYSTEM PUBLIC
+        $<BUILD_INTERFACE:${BULLET_PHYSICS_SOURCE_DIR}>
+    )
+endif()
 
 # ---------------------------------------------------------------------
 # 12) System libraries - Platform-specific (on SparkEngineLib)
