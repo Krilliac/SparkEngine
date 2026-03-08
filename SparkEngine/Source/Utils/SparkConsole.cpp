@@ -32,16 +32,13 @@
 // Game-specific headers (from SparkGame project)
 #include "Game/Game.h"
 #include "Game/Player.h"
-#include "Game/Console.h"
-#include "Projectiles/ProjectilePool.h"
 
 // Engine subsystems accessed via EngineContext (preferred over globals)
 #include "../Core/EngineContext.h"
 extern std::unique_ptr<EngineContext> g_engineContext;
 
-// Game-specific globals (owned by SparkGame module, not part of EngineContext)
-extern std::unique_ptr<Game> g_game;
-extern Console g_console;
+// Game-specific global (owned by SparkGame module, not part of EngineContext)
+extern SPARK_GAME_API std::unique_ptr<Game> g_game;
 
 // Convenience accessors — route through EngineContext instead of globals
 static GraphicsEngine* GetGfx()

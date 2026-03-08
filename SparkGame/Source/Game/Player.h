@@ -10,6 +10,7 @@
  */
 
 #pragma once
+#include "Spark/SparkExport.h"
 #include "Core/Platform.h"
 
 #include "Game/GameObject.h"
@@ -57,7 +58,7 @@ namespace Spark
  * @note The Player does not own the camera, input manager, or projectile pool references
  * @warning Ensure SetProjectilePool() is called before using weapons
  */
-class Player : public GameObject
+class SPARK_GAME_API Player : public GameObject
 {
   public:
     /**

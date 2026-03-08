@@ -22,6 +22,9 @@
 class Game;
 class Console;
 
+// Global game pointer shared between SparkGame and SparkEngineLib (SparkConsole)
+extern SPARK_GAME_API std::unique_ptr<Game> g_game;
+
 /**
  * @brief Game module implementation for SparkGame
  *
@@ -58,7 +61,6 @@ class SparkGameModule : public Spark::IModule, public IGameModule
   private:
     void RegisterGameConsoleCommands();
 
-    std::unique_ptr<Game> m_game;
     std::unique_ptr<Console> m_console;
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};

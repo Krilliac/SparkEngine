@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "Spark/SparkExport.h"
 #include "Core/framework.h" // XMFLOAT3, XMMATRIX, HRESULT
 #include "Utils/Assert.h"
 #include "ClassSystem.h"
@@ -61,7 +62,7 @@ using SparkEditor::PlayerClass;
  * @note The Game class does not own the graphics or input systems, but holds references
  * @warning Ensure Initialize() is called before any Update() or Render() operations
  */
-class Game
+class SPARK_GAME_API Game
 {
   public:
     /**

@@ -20,6 +20,11 @@
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
 
+// Global game pointer used by SparkConsole (in SparkEngineLib) to call into
+// game systems.  Owned by SparkGameModule; set during Initialize, cleared
+// during Shutdown.
+SPARK_GAME_API std::unique_ptr<Game> g_game;
+
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 
@@ -71,12 +76,12 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
         return false;
 
     // Wire up EventBus so game systems can communicate via events
-    if (m_game && context->GetEventBus())
-        m_game->SetEventBus(context->GetEventBus());
+    if (g_game && context->GetEventBus())
+        g_game->SetEventBus(context->GetEventBus());
 
     // Wire up physics system for projectile area queries (explosions)
-    if (m_game && context->GetPhysics())
-        m_game->SetPhysicsSystem(context->GetPhysics());
+    if (g_game && context->GetPhysics())
+        g_game->SetPhysicsSystem(context->GetPhysics());
 
     return true;
 }
@@ -88,14 +93,14 @@ void SparkGameModule::OnUnload()
 
 void SparkGameModule::OnUpdate(float deltaTime)
 {
-    if (m_game && !m_game->IsPaused())
-        m_game->Update(deltaTime);
+    if (g_game && !g_game->IsPaused())
+        g_game->Update(deltaTime);
 }
 
 void SparkGameModule::OnRender()
 {
-    if (m_game)
-        m_game->Render();
+    if (g_game)
+        g_game->Render();
 }
 
 // --- IGameModule interface (legacy) ---
@@ -118,12 +123,12 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Initializing SparkGame module...");
 
-    m_game = std::make_unique<Game>();
-    HRESULT hr = m_game->Initialize(graphics, input);
+    g_game = std::make_unique<Game>();
+    HRESULT hr = g_game->Initialize(graphics, input);
     if (FAILED(hr))
     {
         console.LogError("Game::Initialize() failed");
-        m_game.reset();
+        g_game.reset();
         return false;
     }
 
@@ -144,10 +149,10 @@ void SparkGameModule::Shutdown()
     if (!m_initialized)
         return;
 
-    if (m_game)
+    if (g_game)
     {
-        m_game->Shutdown();
-        m_game.reset();
+        g_game->Shutdown();
+        g_game.reset();
     }
     m_console.reset();
     m_initialized = false;
@@ -157,14 +162,14 @@ void SparkGameModule::Shutdown()
 
 void SparkGameModule::Update(float deltaTime)
 {
-    if (m_game)
-        m_game->Update(deltaTime);
+    if (g_game)
+        g_game->Update(deltaTime);
 }
 
 void SparkGameModule::Render()
 {
-    if (m_game)
-        m_game->Render();
+    if (g_game)
+        g_game->Render();
 }
 
 void SparkGameModule::OnResize(int width, int height)
@@ -175,19 +180,19 @@ void SparkGameModule::OnResize(int width, int height)
 
 void SparkGameModule::Pause()
 {
-    if (m_game)
-        m_game->Pause();
+    if (g_game)
+        g_game->Pause();
 }
 
 void SparkGameModule::Resume()
 {
-    if (m_game)
-        m_game->Resume();
+    if (g_game)
+        g_game->Resume();
 }
 
 bool SparkGameModule::IsPaused() const
 {
-    return m_game ? m_game->IsPaused() : false;
+    return g_game ? g_game->IsPaused() : false;
 }
 
 // ===================================================================================
@@ -196,7 +201,7 @@ bool SparkGameModule::IsPaused() const
 void SparkGameModule::RegisterGameConsoleCommands()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
-    Game* game = m_game.get();
+    Game* game = g_game.get();
 
     console.RegisterCommand(
         "game_timescale",

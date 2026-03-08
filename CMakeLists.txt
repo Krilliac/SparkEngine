@@ -468,6 +468,14 @@ else()
 endif()
 target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
 
+# SparkEngine also links SparkGame (import library) because SparkEngineLib
+# contains SparkConsole code that references Game/Player symbols defined in
+# SparkGame.  The DLL is still loaded at runtime; this link only resolves
+# the import-library symbols at build time.
+if(TARGET SparkGame)
+    target_link_libraries(SparkEngine PRIVATE SparkGame)
+endif()
+
 # Link third-party libraries to the static lib (both exe and game DLL get them)
 if(MINIZ_FOUND)
     target_link_libraries(SparkEngineLib PRIVATE miniz)
@@ -514,8 +522,10 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGame/CMakeLists.txt")
     add_subdirectory(SparkGame)
 
     if(TARGET SparkGame)
-        add_dependencies(SparkGame SparkEngine)
-        message(STATUS "SparkGame DLL will be built after SparkEngine")
+        # SparkEngine links SparkGame's import library, so SparkGame must
+        # be built first.  The target_link_libraries above already creates
+        # this dependency implicitly, but we log it for clarity.
+        message(STATUS "SparkEngine will link SparkGame import library")
     endif()
 endif()
 
