@@ -271,15 +271,15 @@ namespace entt
             return basic_view<Components...>(m_entities.m_alive, std::make_tuple(&get_or_create_pool<Components>()...));
         }
 
-        /** Access the entity storage. */
-        template <typename T> std::enable_if_t<std::is_same_v<T, entity>, entity_storage&> storage()
+        /** Access the entity storage (returns pointer to match real EnTT API). */
+        template <typename T> std::enable_if_t<std::is_same_v<T, entity>, entity_storage*> storage()
         {
-            return m_entities;
+            return &m_entities;
         }
 
-        template <typename T> std::enable_if_t<std::is_same_v<T, entity>, const entity_storage&> storage() const
+        template <typename T> std::enable_if_t<std::is_same_v<T, entity>, const entity_storage*> storage() const
         {
-            return m_entities;
+            return &m_entities;
         }
 
       private:
