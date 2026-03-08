@@ -59,8 +59,10 @@ static void LogMissingModuleWarnings()
     int missingCount = 0;
 
 #ifndef SPARK_BULLET_PHYSICS_AVAILABLE
-    console.LogWarning("[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and raycasting are DISABLED.");
-    console.LogWarning("                 Physics-dependent features (gravity, projectiles, triggers) will not function.");
+    console.LogWarning(
+        "[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and raycasting are DISABLED.");
+    console.LogWarning(
+        "                 Physics-dependent features (gravity, projectiles, triggers) will not function.");
     ++missingCount;
 #endif
 
@@ -1158,8 +1160,10 @@ static void LogMissingModuleWarnings()
     int missingCount = 0;
 
 #ifndef SPARK_BULLET_PHYSICS_AVAILABLE
-    console.LogWarning("[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and raycasting are DISABLED.");
-    console.LogWarning("                 Physics-dependent features (gravity, projectiles, triggers) will not function.");
+    console.LogWarning(
+        "[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and raycasting are DISABLED.");
+    console.LogWarning(
+        "                 Physics-dependent features (gravity, projectiles, triggers) will not function.");
     ++missingCount;
 #endif
 
