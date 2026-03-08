@@ -67,14 +67,8 @@
 #pragma comment(lib, "dbghelp.lib")
 #endif
 
-// TriggerCrashHandler is defined in CrashHandler.cpp when available.
-// When the crash handler is not built (e.g. missing miniz), provide a no-op
-// fallback via a weak symbol (GCC/Clang) so the linker doesn't fail.
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((weak)) void TriggerCrashHandler(const char* /*assertMsg*/) {}
-#else
+// Forward declarations
 void TriggerCrashHandler(const char* assertMsg);
-#endif
 
 /**
  * @brief Core assertion failure handling functions

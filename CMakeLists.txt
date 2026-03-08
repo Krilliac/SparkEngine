@@ -474,7 +474,10 @@ endif()
 if(NOT MINIZ_FOUND)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandler\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandlerHelpers\\.cpp$")
-    message(STATUS "MINIZ not found - excluding CrashHandler*.cpp")
+    message(STATUS "MINIZ not found - excluding CrashHandler*.cpp, using CrashHandlerStub.cpp")
+else()
+    # When the real CrashHandler is built, exclude the stub
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandlerStub\\.cpp$")
 endif()
 
 # 9a) SparkEngineLib - Static library with all engine systems
