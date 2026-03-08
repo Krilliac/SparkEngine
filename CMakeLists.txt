@@ -1099,3 +1099,101 @@ message(STATUS "  Mesh LOD       : ${ENABLE_MESH_LOD}")
 message(STATUS "  DXR RayTracing : ${ENABLE_DXR}")
 message(STATUS "  SDL2 Input     : ${ENABLE_SDL2}")
 message(STATUS "  Headless Mode  : ${SPARK_HEADLESS_SUPPORT}")
+
+# ---------------------------------------------------------------------
+# 19) Third-party dependency status and missing module warnings
+# ---------------------------------------------------------------------
+message(STATUS "")
+message(STATUS "=== THIRD-PARTY DEPENDENCY STATUS ===")
+
+set(_SPARK_MISSING_DEPS "")
+set(_SPARK_MISSING_COUNT 0)
+
+# Bullet Physics
+if(BULLET_FOUND)
+    message(STATUS "  [OK]      Bullet Physics  — rigid body physics, collision, raycasting")
+else()
+    list(APPEND _SPARK_MISSING_DEPS "bullet3")
+    math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
+    message(STATUS "  [MISSING] Bullet Physics  — PhysicsSystem disabled, no rigid body simulation")
+endif()
+
+# miniz
+if(MINIZ_FOUND)
+    message(STATUS "  [OK]      miniz           — crash dump compression, save file compression")
+else()
+    list(APPEND _SPARK_MISSING_DEPS "miniz")
+    math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
+    message(STATUS "  [MISSING] miniz           — CrashHandler disabled (using stub), no save compression")
+endif()
+
+# EnTT
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include/entt/entt.hpp")
+    message(STATUS "  [OK]      EnTT            — entity component system")
+else()
+    list(APPEND _SPARK_MISSING_DEPS "entt")
+    math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
+    message(STATUS "  [STUB]    EnTT            — using minimal stub, ECS features limited")
+endif()
+
+# Dear ImGui
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.cpp")
+    message(STATUS "  [OK]      Dear ImGui      — editor UI, debug overlays")
+else()
+    list(APPEND _SPARK_MISSING_DEPS "imgui")
+    math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
+    message(STATUS "  [MISSING] Dear ImGui      — editor and debug UI unavailable")
+endif()
+
+# AngelScript
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
+    message(STATUS "  [OK]      AngelScript     — hot-reload scripting")
+else()
+    list(APPEND _SPARK_MISSING_DEPS "angelscript")
+    math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
+    message(STATUS "  [MISSING] AngelScript     — scripting system unavailable")
+endif()
+
+# curl
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Networking/curl/CMakeLists.txt")
+    message(STATUS "  [OK]      curl            — HTTP client (networking)")
+else()
+    list(APPEND _SPARK_MISSING_DEPS "curl")
+    math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
+    message(STATUS "  [MISSING] curl            — HTTP networking unavailable")
+endif()
+
+# TinyObjLoader
+if(TINYOBJ_FOUND)
+    message(STATUS "  [OK]      TinyObjLoader   — OBJ model loading")
+else()
+    message(STATUS "  [MISSING] TinyObjLoader   — OBJ model loading unavailable")
+endif()
+
+# SDL2 (Linux)
+if(ENABLE_SDL2)
+    if(SDL2_FOUND OR SDL2_PKG_FOUND)
+        message(STATUS "  [OK]      SDL2            — cross-platform windowing and input")
+    else()
+        list(APPEND _SPARK_MISSING_DEPS "SDL2")
+        math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
+        message(STATUS "  [MISSING] SDL2            — no windowed mode on Linux (install libsdl2-dev)")
+    endif()
+endif()
+
+# Print warnings if dependencies are missing
+if(_SPARK_MISSING_COUNT GREATER 0)
+    message(STATUS "")
+    message(WARNING
+        "${_SPARK_MISSING_COUNT} third-party dependency(ies) not found: ${_SPARK_MISSING_DEPS}\n"
+        "  The engine will build but with DEGRADED functionality.\n"
+        "  To fix: initialize git submodules and install system packages:\n"
+        "    git submodule update --init --recursive\n"
+        "    # Linux: sudo apt install libsdl2-dev    (for SDL2)\n"
+        "  See README.md 'Dependencies' section for details."
+    )
+else()
+    message(STATUS "")
+    message(STATUS "All third-party dependencies found. Full engine functionality available.")
+endif()
+message(STATUS "")

@@ -51,6 +51,45 @@
 #include "Graphics/GraphicsConsoleCommands.h"
 
 // -----------------------------------------------------------------------------
+// Missing module startup warnings
+// -----------------------------------------------------------------------------
+static void LogMissingModuleWarnings()
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    int missingCount = 0;
+
+#ifndef SPARK_BULLET_PHYSICS_AVAILABLE
+    console.LogWarning("[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and raycasting are DISABLED.");
+    console.LogWarning("                 Physics-dependent features (gravity, projectiles, triggers) will not function.");
+    ++missingCount;
+#endif
+
+#ifndef SPARK_MINIZ_AVAILABLE
+    console.LogWarning("[MISSING MODULE] miniz — crash dump compression and save file compression are DISABLED.");
+    console.LogWarning("                 CrashHandler is using a stub. Save files will not be compressed.");
+    ++missingCount;
+#endif
+
+#ifndef SPARK_SDL2_AVAILABLE
+#ifndef SPARK_PLATFORM_WINDOWS
+    console.LogWarning("[MISSING MODULE] SDL2 — cross-platform windowing and input are DISABLED.");
+    console.LogWarning("                 Install libsdl2-dev and rebuild with -DENABLE_SDL2=ON for windowed mode.");
+    ++missingCount;
+#endif
+#endif
+
+    if (missingCount > 0)
+    {
+        console.LogWarning("------------------------------------------------------------");
+        console.LogWarning(std::to_string(missingCount) + " module(s) missing. Expect degraded functionality.");
+        console.LogWarning("Run: git submodule update --init --recursive");
+        console.LogWarning("Then rebuild to restore full engine features.");
+        console.LogWarning("See README.md 'Dependencies' section for details.");
+        console.LogWarning("------------------------------------------------------------");
+    }
+}
+
+// -----------------------------------------------------------------------------
 // Globals
 // -----------------------------------------------------------------------------
 constexpr int MAX_LOADSTRING = 100;
@@ -368,6 +407,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // 8. Register engine console commands
     RegisterEngineConsoleCommands();
     EngineSettings::GetInstance().RegisterConsoleCommands();
+
+    // 8b. Log warnings for missing third-party modules
+    LogMissingModuleWarnings();
 
     // 9. Message loop + tick
     HACCEL accel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SparkEngine));
@@ -1107,6 +1149,43 @@ std::unique_ptr<AudioEngine> g_audioEngine;
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 #endif
 
+// -----------------------------------------------------------------------------
+// Missing module startup warnings (Linux)
+// -----------------------------------------------------------------------------
+static void LogMissingModuleWarnings()
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    int missingCount = 0;
+
+#ifndef SPARK_BULLET_PHYSICS_AVAILABLE
+    console.LogWarning("[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and raycasting are DISABLED.");
+    console.LogWarning("                 Physics-dependent features (gravity, projectiles, triggers) will not function.");
+    ++missingCount;
+#endif
+
+#ifndef SPARK_MINIZ_AVAILABLE
+    console.LogWarning("[MISSING MODULE] miniz — crash dump compression and save file compression are DISABLED.");
+    console.LogWarning("                 CrashHandler is using a stub. Save files will not be compressed.");
+    ++missingCount;
+#endif
+
+#ifndef SPARK_SDL2_AVAILABLE
+    console.LogWarning("[MISSING MODULE] SDL2 — cross-platform windowing and input are DISABLED.");
+    console.LogWarning("                 Install libsdl2-dev and rebuild with -DENABLE_SDL2=ON for windowed mode.");
+    ++missingCount;
+#endif
+
+    if (missingCount > 0)
+    {
+        console.LogWarning("------------------------------------------------------------");
+        console.LogWarning(std::to_string(missingCount) + " module(s) missing. Expect degraded functionality.");
+        console.LogWarning("Run: git submodule update --init --recursive");
+        console.LogWarning("Then rebuild to restore full engine features.");
+        console.LogWarning("See README.md 'Dependencies' section for details.");
+        console.LogWarning("------------------------------------------------------------");
+    }
+}
+
 static volatile bool g_shutdownRequested = false;
 
 static void SignalHandler(int)
@@ -1372,6 +1451,7 @@ int main(int argc, char* argv[])
 
         Spark::SaveSystem::GetInstance().Initialize("Saves");
         RegisterEngineConsoleCommandsLinux();
+        LogMissingModuleWarnings();
 
         constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
         console.LogInfo("Starting headless server loop (60 Hz)...");
@@ -1536,6 +1616,9 @@ int main(int argc, char* argv[])
     // 8. Console commands
     RegisterEngineConsoleCommandsLinux();
     settings.RegisterConsoleCommands();
+
+    // 8b. Log warnings for missing third-party modules
+    LogMissingModuleWarnings();
 
     // 9. Main event loop (SDL2)
     console.LogInfo("Starting main engine loop (SDL2)...");
@@ -1726,6 +1809,7 @@ int main(int argc, char* argv[])
     auto& console = Spark::SimpleConsole::GetInstance();
     console.Initialize();
     console.LogWarning("No SDL2 - engine will exit after initialization.");
+    LogMissingModuleWarnings();
 
     if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
     {
