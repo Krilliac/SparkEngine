@@ -16,6 +16,7 @@
 #include <atomic>
 #include <thread>
 #include <DirectXMath.h>
+using namespace DirectX;
 
 
 // Forward declarations

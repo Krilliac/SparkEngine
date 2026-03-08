@@ -13,6 +13,7 @@
 
 #include "../Core/EditorPanel.h"
 #include <DirectXMath.h>
+using namespace DirectX;
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <vector>

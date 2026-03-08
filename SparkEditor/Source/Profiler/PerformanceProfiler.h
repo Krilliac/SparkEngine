@@ -15,6 +15,7 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
+using namespace DirectX;
 #include <vector>
 #include <memory>
 #include <unordered_map>

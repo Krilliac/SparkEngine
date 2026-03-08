@@ -15,6 +15,7 @@
 #include "../SceneSystem/SceneFile.h"
 #include "../Enums/LevelStreamingEnums.h"
 #include <DirectXMath.h>
+using namespace DirectX;
 #include <vector>
 #include <memory>
 #include <unordered_map>
