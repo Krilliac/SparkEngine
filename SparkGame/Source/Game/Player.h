@@ -74,7 +74,7 @@ class SPARK_GAME_API Player : public GameObject
      * 
      * Uses default cleanup as all resources are managed automatically.
      */
-    ~Player() override = default;
+    ~Player() override;
 
     /**
      * @brief Initialize the player with required engine systems

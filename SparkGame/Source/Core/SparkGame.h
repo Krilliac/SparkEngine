@@ -61,7 +61,6 @@ class SparkGameModule : public Spark::IModule, public IGameModule
   private:
     void RegisterGameConsoleCommands();
 
-    std::unique_ptr<Console> m_console;
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};
 };

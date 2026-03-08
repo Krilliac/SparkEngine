@@ -25,6 +25,9 @@
 // during Shutdown.
 SPARK_GAME_API std::unique_ptr<Game> g_game;
 
+// Global in-game console overlay used by Game::Render().
+Console g_console;
+
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 
@@ -132,9 +135,8 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
         return false;
     }
 
-    // Initialize the in-game console overlay
-    m_console = std::make_unique<Console>();
-    m_console->Initialize(1280, 720);
+    // Initialize the in-game console overlay (global used by Game::Render)
+    g_console.Initialize(1280, 720);
 
     // Register game-specific console commands
     RegisterGameConsoleCommands();
@@ -154,7 +156,6 @@ void SparkGameModule::Shutdown()
         g_game->Shutdown();
         g_game.reset();
     }
-    m_console.reset();
     m_initialized = false;
 
     Spark::SimpleConsole::GetInstance().LogInfo("SparkGame module shut down");
@@ -174,8 +175,8 @@ void SparkGameModule::Render()
 
 void SparkGameModule::OnResize(int width, int height)
 {
-    if (m_console && width > 0 && height > 0)
-        m_console->Initialize(width, height);
+    if (width > 0 && height > 0)
+        g_console.Initialize(width, height);
 }
 
 void SparkGameModule::Pause()

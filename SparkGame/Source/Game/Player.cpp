@@ -19,7 +19,6 @@
 #include <iostream>
 
 using namespace DirectX;
-extern Console g_console;
 
 // **FIXED: Rate-limited logging for Player to prevent console spam**
 #define LOG_TO_CONSOLE_RATE_LIMITED(msg, type)                                                                         \
@@ -47,6 +46,11 @@ extern Console g_console;
 // Use rate-limited logging for most messages, immediate for critical ones
 #define LOG_TO_CONSOLE(msg, type) LOG_TO_CONSOLE_RATE_LIMITED(msg, type)
 #define LOG_TO_CONSOLE_IMMEDIATE(msg, type) Spark::ConsoleProcessManager::GetInstance().Log(msg, type)
+
+// Destructor - defined here (not = default in header) so that the compiler
+// can see the full definition of Model when instantiating unique_ptr<Model>'s
+// destructor.  This is required because Player is exported with SPARK_GAME_API.
+Player::~Player() = default;
 
 // Constructor
 Player::Player() : m_currentWeapon(GetWeaponStats(WeaponType::PISTOL)), m_collisionSphere(GetPosition(), 0.5f)

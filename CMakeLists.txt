@@ -518,6 +518,10 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGame/CMakeLists.txt")
         # Game/Player symbols exported from SparkGame.  Link SparkEngine
         # against SparkGame's import library so the linker can resolve them.
         target_link_libraries(SparkEngine PRIVATE SparkGame)
+        # Re-add SparkEngineLib so the linker can resolve symbols that
+        # SparkGame.so/.dll left undefined (e.g. CrashHandler functions
+        # referenced by SparkConsole code linked into SparkGame).
+        target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
         message(STATUS "SparkEngine will link SparkGame import library")
 
         # Copy SparkGame DLL next to the engine executable after build.
