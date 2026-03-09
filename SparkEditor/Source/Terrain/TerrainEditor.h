@@ -13,7 +13,11 @@
 
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
+#ifdef _WIN32
 #include <DirectXMath.h>
+#else
+#include "Core/Platform.h"
+#endif
 using namespace DirectX;
 #include <vector>
 #include <memory>

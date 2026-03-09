@@ -42,7 +42,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev libglew-dev
 
     - name: Configure CMake (ASan + UBSan)
       run: |
@@ -186,7 +186,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev libglew-dev
 
     - name: Configure CMake
       run: |
@@ -239,7 +239,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake libgl-dev libvulkan-dev
+        sudo apt-get install -y clang cmake libgl-dev libvulkan-dev libsdl2-dev libglew-dev
 
     - name: Configure CMake
       run: |

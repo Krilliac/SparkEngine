@@ -535,24 +535,34 @@ std::shared_ptr<Texture> TextureSystem::GetTexture(const std::string& name) cons
 
 void TextureSystem::UnloadTexture(const std::string& name)
 {
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    auto it = m_textures.find(name);
-    if (it != m_textures.end())
+    bool erased = false;
     {
-        m_textures.erase(it);
-
+        std::lock_guard<std::mutex> lock(m_texturesMutex);
+        auto it = m_textures.find(name);
+        if (it != m_textures.end())
+        {
+            m_textures.erase(it);
+            erased = true;
+        }
+    }
+    if (erased)
+    {
         std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
-        m_metrics.loadedTextures--;
+        if (m_metrics.loadedTextures > 0)
+            m_metrics.loadedTextures--;
     }
 }
 
 void TextureSystem::UnloadAllTextures()
 {
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    m_textures.clear();
-
-    std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
-    m_metrics.loadedTextures = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_texturesMutex);
+        m_textures.clear();
+    }
+    {
+        std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
+        m_metrics.loadedTextures = 0;
+    }
 }
 
 size_t TextureSystem::GetMemoryUsage() const
@@ -1125,6 +1135,8 @@ std::shared_ptr<Texture> TextureSystem::LoadTexture(const std::string& filePath,
     {
         std::lock_guard<std::mutex> lock(m_texturesMutex);
         m_textures[filePath] = texture;
+    }
+    {
         std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
         m_metrics.loadedTextures++;
     }

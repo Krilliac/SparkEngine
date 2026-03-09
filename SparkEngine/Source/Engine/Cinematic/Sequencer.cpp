@@ -194,7 +194,7 @@ namespace Spark::Cinematic
         if (time >= keys.back().time)
             return keys.back().value;
 
-        for (size_t i = 0; i < keys.size() - 1; ++i)
+        for (size_t i = 0; i + 1 < keys.size(); ++i)
         {
             if (time >= keys[i].time && time < keys[i + 1].time)
             {
@@ -238,7 +238,7 @@ namespace Spark::Cinematic
         if (time >= m_keyframes.back().time)
             return m_keyframes.back().value;
 
-        for (size_t i = 0; i < m_keyframes.size() - 1; ++i)
+        for (size_t i = 0; i + 1 < m_keyframes.size(); ++i)
         {
             if (time >= m_keyframes[i].time && time < m_keyframes[i + 1].time)
             {
@@ -372,7 +372,7 @@ namespace Spark::Cinematic
         if (time >= m_keyframes.back().time)
             return m_keyframes.back();
 
-        for (size_t i = 0; i < m_keyframes.size() - 1; ++i)
+        for (size_t i = 0; i + 1 < m_keyframes.size(); ++i)
         {
             if (time >= m_keyframes[i].time && time < m_keyframes[i + 1].time)
             {

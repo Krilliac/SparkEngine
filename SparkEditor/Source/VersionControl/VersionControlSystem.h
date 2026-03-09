@@ -24,6 +24,7 @@
 #include <chrono>
 #include <filesystem>
 #include "../Enums/VersionControlEnums.h"
+#include <condition_variable>
 
 namespace SparkEditor
 {

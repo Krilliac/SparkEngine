@@ -112,11 +112,16 @@ namespace SparkEditor
 
     void SceneViewPanel::SetDevice(ID3D11Device* device, ID3D11DeviceContext* context)
     {
+#ifdef _WIN32
         m_device = device;
         m_context = context;
 
         // Create render texture and related resources
         CreateRenderTexture(512, 512);
+#else
+        (void)device;
+        (void)context;
+#endif
     }
 
     void SceneViewPanel::RenderToolbar()
@@ -189,6 +194,7 @@ namespace SparkEditor
 
     void SceneViewPanel::RenderSceneContent()
     {
+#ifdef _WIN32
         if (!m_device || !m_context)
             return;
 
@@ -211,29 +217,25 @@ namespace SparkEditor
             m_context->RSSetViewports(1, &viewport);
 
             // Render a skybox-style gradient background as scene placeholder
-            // A real implementation would dispatch draw calls for scene objects here.
-            // The clear color above provides a base; for a gradient sky effect, we
-            // use a secondary clear with a slightly different tone in the upper half
-            // by adjusting the viewport and clearing again.
             {
-                // Upper half -- lighter sky blue
                 D3D11_VIEWPORT upperVP = viewport;
                 upperVP.Height = viewport.Height * 0.5f;
                 m_context->RSSetViewports(1, &upperVP);
                 float skyColor[4] = {0.4f, 0.6f, 0.9f, 1.0f};
                 m_context->ClearRenderTargetView(m_rtv.Get(), skyColor);
 
-                // Restore full viewport for any future drawing
                 m_context->RSSetViewports(1, &viewport);
             }
 
             // Restore main render target
             m_context->OMSetRenderTargets(0, nullptr, nullptr);
         }
+#endif
     }
 
     void SceneViewPanel::CreateRenderTexture(int width, int height)
     {
+#ifdef _WIN32
         if (!m_device)
             return;
 
@@ -283,6 +285,10 @@ namespace SparkEditor
         m_renderTextureHeight = height;
 
         std::cout << "Created render texture: " << width << "x" << height << "\n";
+#else
+        (void)width;
+        (void)height;
+#endif
     }
 
     void SceneViewPanel::HandleInput()

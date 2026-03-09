@@ -360,7 +360,8 @@ namespace SparkEditor
             if (m_pretty)
                 Indent();
             m_os << "}";
-            m_first.pop_back();
+            if (!m_first.empty())
+                m_first.pop_back();
         }
         void BeginArray()
         {
@@ -376,7 +377,8 @@ namespace SparkEditor
             if (m_pretty)
                 Indent();
             m_os << "]";
-            m_first.pop_back();
+            if (!m_first.empty())
+                m_first.pop_back();
         }
 
         void Key(const std::string& k)
@@ -392,8 +394,8 @@ namespace SparkEditor
         void Value(uint64_t v) { m_os << v; }
         void Value(float v) { m_os << v; }
         void Value(bool v) { m_os << (v ? "true" : "false"); }
-#if !defined(_MSC_VER) || !defined(_WIN64)
-        // On MSVC x64, size_t is uint64_t so this would be a duplicate
+// size_t overload only when it differs from uint64_t (e.g. 32-bit builds)
+#if !(defined(_MSC_VER) && defined(_WIN64)) && !defined(__LP64__)
         void Value(size_t v) { m_os << v; }
 #endif
 
@@ -687,9 +689,11 @@ namespace SparkEditor
     namespace
     {
 
-        struct JSONValue;
-        using JSONObject = std::vector<std::pair<std::string, JSONValue>>;
-        using JSONArray = std::vector<JSONValue>;
+        // Forward declarations. std::vector does not require a complete type
+        // at the point of member declaration, only when member functions are
+        // instantiated, so the ordering below is valid.
+        struct JSONMember;
+        using JSONObject = std::vector<JSONMember>;
 
         struct JSONValue
         {
@@ -706,7 +710,7 @@ namespace SparkEditor
             double numVal = 0.0;
             bool boolVal = false;
             JSONObject objVal;
-            JSONArray arrVal;
+            std::vector<JSONValue> arrVal;
 
             std::string GetString(const std::string& def = "") const { return type == STRING ? strVal : def; }
             double GetNumber(double def = 0.0) const { return type == NUMBER ? numVal : def; }
@@ -716,17 +720,8 @@ namespace SparkEditor
             uint64_t GetUint64(uint64_t def = 0) const { return static_cast<uint64_t>(GetNumber(def)); }
             bool GetBool(bool def = false) const { return type == BOOL ? boolVal : def; }
 
-            const JSONValue* Find(const std::string& key) const
-            {
-                if (type != OBJECT)
-                    return nullptr;
-                for (const auto& [k, v] : objVal)
-                {
-                    if (k == key)
-                        return &v;
-                }
-                return nullptr;
-            }
+            // Defined out-of-line after JSONMember is complete.
+            const JSONValue* Find(const std::string& key) const;
 
             XMFLOAT3 GetFloat3(XMFLOAT3 def = {0, 0, 0}) const
             {
@@ -742,6 +737,26 @@ namespace SparkEditor
                 return {arrVal[0].GetFloat(), arrVal[1].GetFloat(), arrVal[2].GetFloat(), arrVal[3].GetFloat()};
             }
         };
+
+        // Plain struct instead of std::pair to avoid Clang + libstdc++ 14
+        // constructibility trait checks on incomplete types.
+        struct JSONMember
+        {
+            std::string key;
+            JSONValue value;
+        };
+
+        const JSONValue* JSONValue::Find(const std::string& key) const
+        {
+            if (type != OBJECT)
+                return nullptr;
+            for (const auto& m : objVal)
+            {
+                if (m.key == key)
+                    return &m.value;
+            }
+            return nullptr;
+        }
 
         class JSONParser
         {
@@ -909,7 +924,7 @@ namespace SparkEditor
                     JSONValue value;
                     if (!ParseValue(value))
                         return false;
-                    val.objVal.push_back({key.strVal, std::move(value)});
+                    val.objVal.push_back(JSONMember{key.strVal, std::move(value)});
                     SkipWhitespace();
                     char c = Next();
                     if (c == '}')

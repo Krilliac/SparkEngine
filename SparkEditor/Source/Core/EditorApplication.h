@@ -1,6 +1,6 @@
-﻿/**
+/**
  * @file EditorApplication.h
- * @brief Main SparkEditor application class with DirectX 11 and ImGui integration
+ * @brief Main SparkEditor application class with cross-platform graphics and ImGui integration
  * @author Spark Engine Team
  * @date 2025
  */
@@ -10,12 +10,16 @@
 #include <string>
 #include <memory>
 #include <chrono>
-#include <Windows.h>
 
-// DirectX includes
+#ifdef _WIN32
+#include <Windows.h>
 #include <d3d11.h>
 #include <dxgi.h>
 #include <wrl/client.h>
+#else
+struct SDL_Window;
+typedef void* SDL_GLContext;
+#endif
 
 // Forward declarations
 namespace SparkEditor
@@ -72,11 +76,13 @@ namespace SparkEditor
         bool OnShutdownRequested();
         void SetWindowTitle(const std::string& title);
 
+#ifdef _WIN32
         static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#endif
 
       private:
         bool CreateMainWindow(const EditorConfig& config);
-        bool InitializeDirectX();
+        bool InitializeGraphics();
         bool InitializeImGui();
         bool ProcessMessages();
         void Update(float deltaTime);
@@ -90,15 +96,21 @@ namespace SparkEditor
         bool m_isRunning = false;
 
         // Window management
-        HWND m_hwnd = nullptr;
         int m_windowWidth = 1600;
         int m_windowHeight = 900;
+
+#ifdef _WIN32
+        HWND m_hwnd = nullptr;
 
         // DirectX 11 resources
         Microsoft::WRL::ComPtr<ID3D11Device> m_device;
         Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context;
         Microsoft::WRL::ComPtr<IDXGISwapChain> m_swapChain;
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_rtv;
+#else
+        SDL_Window* m_window = nullptr;
+        SDL_GLContext m_glContext = nullptr;
+#endif
 
         // UI system
         std::unique_ptr<EditorUI> m_ui;

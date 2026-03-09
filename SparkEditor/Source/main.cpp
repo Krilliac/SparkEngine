@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file main.cpp
  * @brief SparkEditor entry point with integrated debug support
  * @author Spark Engine Team
@@ -8,10 +8,42 @@
 #include "Core/EditorApplication.h"
 #include "Utils/SparkConsole.h" // Use local SparkConsole instead of engine version
 #include <iostream>
+#include <fstream>
 #include <memory>
-#include <Windows.h>
 #include <sstream>
 #include <vector>
+#include <cstring>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
+static bool IsDebuggerAttached()
+{
+#ifdef _WIN32
+    return IsDebuggerPresent() != 0;
+#else
+    // On Linux, check /proc/self/status for TracerPid
+    std::ifstream status("/proc/self/status");
+    if (status.is_open())
+    {
+        std::string line;
+        while (std::getline(status, line))
+        {
+            if (line.find("TracerPid:") == 0)
+            {
+                int pid = std::stoi(line.substr(10));
+                return pid != 0;
+            }
+        }
+    }
+    return false;
+#endif
+}
+
+#ifndef _WIN32
+#include <fstream>
+#endif
 
 // Unified main entry point with debug support when needed
 int main(int argc, char* argv[])
@@ -33,7 +65,7 @@ int main(int argc, char* argv[])
     }
 
     // Also show debug console if debugger is attached
-    if (IsDebuggerPresent())
+    if (IsDebuggerAttached())
     {
         showDebugConsole = true;
     }
@@ -41,6 +73,7 @@ int main(int argc, char* argv[])
     // Create console window for debugging if needed
     if (showDebugConsole)
     {
+#ifdef _WIN32
         AllocConsole();
         FILE* pCout;
         FILE* pCerr;
@@ -48,6 +81,7 @@ int main(int argc, char* argv[])
         freopen_s(&pCout, "CONOUT$", "w", stdout);
         freopen_s(&pCerr, "CONOUT$", "w", stderr);
         freopen_s(&pCin, "CONIN$", "r", stdin);
+#endif
 
         // Make cout, wcout, cin, wcin, wcerr, cerr, wclog and clog point to console
         std::ios::sync_with_stdio(true);
@@ -144,7 +178,7 @@ int main(int argc, char* argv[])
         {
             std::cout << "Shutdown complete." << std::endl;
             // Only wait for input if we're in debug mode and not launched from debugger
-            if (!IsDebuggerPresent())
+            if (!IsDebuggerAttached())
             {
                 std::cout << "Press Enter to exit..." << std::endl;
                 std::cin.get();
@@ -183,6 +217,7 @@ int main(int argc, char* argv[])
     }
 }
 
+#ifdef _WIN32
 // WinMain entry point for Windows applications
 // This is required by the linker when building as a Windows application
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
@@ -223,3 +258,4 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     // Call main function
     return main(argc, argv);
 }
+#endif // _WIN32

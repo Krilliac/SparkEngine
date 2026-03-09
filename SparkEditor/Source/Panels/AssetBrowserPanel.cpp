@@ -361,7 +361,7 @@ namespace SparkEditor
                 if (std::filesystem::exists(m_selectedAsset))
                 {
                     auto fileSize = std::filesystem::file_size(m_selectedAsset);
-                    ImGui::Text("Size: %lld bytes", fileSize);
+                    ImGui::Text("Size: %ju bytes", static_cast<uintmax_t>(fileSize));
 
                     auto writeTime = std::filesystem::last_write_time(m_selectedAsset);
                     ImGui::Text("Modified: [File timestamp]");
