@@ -561,7 +561,8 @@ void Terrain::BuildQuadTree()
     m_quadNodes.push_back(root);
 
     // Recursively subdivide up to maxLODLevels
-    std::function<void(int, int)> subdivide = [&](int nodeIdx, int depth) {
+    std::function<void(int, int)> subdivide = [&](int nodeIdx, int depth)
+    {
         if (depth >= m_desc.maxLODLevels)
             return;
 

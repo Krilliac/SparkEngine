@@ -869,8 +869,7 @@ bool Mesh::LoadFromFile(const std::wstring& path)
 
             if (index.normal_index >= 0 && !attrib.normals.empty())
             {
-                vertex.Normal = {attrib.normals[3 * index.normal_index + 0],
-                                 attrib.normals[3 * index.normal_index + 1],
+                vertex.Normal = {attrib.normals[3 * index.normal_index + 0], attrib.normals[3 * index.normal_index + 1],
                                  attrib.normals[3 * index.normal_index + 2]};
             }
 
