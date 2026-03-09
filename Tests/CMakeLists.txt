@@ -55,9 +55,7 @@ target_include_directories(SparkTests PRIVATE
 )
 
 # Link with EnTT (header-only)
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/entt")
-    target_include_directories(SparkTests PRIVATE "${CMAKE_SOURCE_DIR}/ThirdParty/entt/single_include")
-elseif(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt")
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt")
     target_include_directories(SparkTests PRIVATE "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include")
 endif()
 

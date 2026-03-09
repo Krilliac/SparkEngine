@@ -278,8 +278,8 @@ namespace Spark::AI
             // Attack if in range
             auto attackSeq = std::make_unique<SequenceNode>("AttackSequence");
             attackSeq->AddChild(std::make_unique<ConditionNode>(
-                "InAttackRange", [&config](const Blackboard& bb)
-                { return bb.Get<float>("targetDistance", 999.0f) < config.attackRange; }));
+                "InAttackRange", [attackRange = config.attackRange](const Blackboard& bb)
+                { return bb.Get<float>("targetDistance", 999.0f) < attackRange; }));
             attackSeq->AddChild(
                 std::make_unique<ActionNode>("Attack", [](float dt, Blackboard& bb) { return NodeStatus::Running; }));
 

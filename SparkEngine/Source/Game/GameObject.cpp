@@ -18,7 +18,7 @@
 using namespace DirectX;
 
 // Definition and initialization of the static member
-UINT GameObject::s_nextID = 1;
+std::atomic<UINT> GameObject::s_nextID{1};
 
 GameObject::GameObject()
     : m_position{0, 0, 0}, m_rotation{0, 0, 0}, m_scale{1, 1, 1}, m_worldMatrix(XMMatrixIdentity()),

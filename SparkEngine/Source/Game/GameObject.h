@@ -15,6 +15,7 @@
 #include "../Core/framework.h" // XMFLOAT3, XMMATRIX, HRESULT
 #include "../Graphics/Mesh.h"
 #include "../Utils/Assert.h"
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -293,9 +294,9 @@ class GameObject
     bool m_visible{true}; ///< Whether object should be rendered
 
     // Identification
-    static UINT s_nextID; ///< Static counter for unique ID generation
-    UINT m_id{0};         ///< Unique identifier for this object
-    std::string m_name;   ///< Human-readable name for debugging
+    static std::atomic<UINT> s_nextID; ///< Static counter for unique ID generation
+    UINT m_id{0};                      ///< Unique identifier for this object
+    std::string m_name;                ///< Human-readable name for debugging
 
     /**
      * @brief Path to model file for mesh loading

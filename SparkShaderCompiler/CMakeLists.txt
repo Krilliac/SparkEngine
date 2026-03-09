@@ -63,21 +63,17 @@ endif()
 # Vulkan backend for shader compilation
 if(SPARK_VULKAN_AVAILABLE)
     target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_VULKAN_SUPPORT)
-endif()
-
-# OpenGL backend for shader compilation
-if(SPARK_OPENGL_AVAILABLE)
-    target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_OPENGL_SUPPORT)
-endif()
-
-if(SPARK_VULKAN_AVAILABLE)
-    target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_VULKAN_SUPPORT)
     if(Vulkan_FOUND)
         target_link_libraries(SparkShaderCompiler PRIVATE Vulkan::Vulkan)
     else()
         target_include_directories(SparkShaderCompiler PRIVATE "${Vulkan_INCLUDE_DIR}")
         target_link_libraries(SparkShaderCompiler PRIVATE "${Vulkan_LIBRARY}")
     endif()
+endif()
+
+# OpenGL backend for shader compilation
+if(SPARK_OPENGL_AVAILABLE)
+    target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_OPENGL_SUPPORT)
 endif()
 
 set_target_properties(SparkShaderCompiler PROPERTIES

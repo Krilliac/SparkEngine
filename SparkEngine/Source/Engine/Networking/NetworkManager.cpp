@@ -67,16 +67,20 @@ namespace Spark::Net
 
     uint16_t NetBuffer::ReadUint16()
     {
+        if (m_readPos + 2 > m_data.size())
+            return 0;
         uint16_t val = 0;
-        for (int i = 0; i < 2 && m_readPos < m_data.size(); ++i)
+        for (int i = 0; i < 2; ++i)
             val |= static_cast<uint16_t>(m_data[m_readPos++]) << (i * 8);
         return val;
     }
 
     uint32_t NetBuffer::ReadUint32()
     {
+        if (m_readPos + 4 > m_data.size())
+            return 0;
         uint32_t val = 0;
-        for (int i = 0; i < 4 && m_readPos < m_data.size(); ++i)
+        for (int i = 0; i < 4; ++i)
             val |= static_cast<uint32_t>(m_data[m_readPos++]) << (i * 8);
         return val;
     }
@@ -153,7 +157,8 @@ namespace Spark::Net
         // If we have both, interpolate; otherwise use whichever we have
         if (before && after && before != after)
         {
-            float t = (targetTime - before->timestamp) / (after->timestamp - before->timestamp);
+            float timeDelta = after->timestamp - before->timestamp;
+            float t = (timeDelta > 0.0f) ? (targetTime - before->timestamp) / timeDelta : 0.0f;
             t = (std::max)(0.0f, (std::min)(1.0f, t));
 
             outSnapshot.timestamp = targetTime;
@@ -305,6 +310,7 @@ namespace Spark::Net
 
     void NetworkManager::RegisterHandler(MessageType type, MessageHandler handler)
     {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
         m_handlers[static_cast<uint16_t>(type)] = std::move(handler);
     }
 
