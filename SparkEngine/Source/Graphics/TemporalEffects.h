@@ -33,12 +33,21 @@
 #include <DirectXMath.h>
 #endif
 
+#ifdef SPARK_PLATFORM_WINDOWS
+#include <d3d11.h>
+#include <d3dcompiler.h>
+#include <wrl/client.h>
+using Microsoft::WRL::ComPtr;
+#endif
+
 #include <vector>
 #include <array>
 #include <cmath>
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <chrono>
+#include <cstring>
 
 // =============================================================================
 // TAA Jitter Sequences
@@ -466,10 +475,155 @@ class TemporalEffects
      */
     void Update(float deltaTime) { m_totalTime += deltaTime; }
 
+    /** @brief Set D3D11 device and context for GPU execution */
+    void SetDevice(ID3D11Device* device, ID3D11DeviceContext* context)
+    {
+        m_device = device;
+        m_context = context;
+    }
+
+    /** @brief Set the current frame's color SRV */
+    void SetCurrentFrameSRV(ID3D11ShaderResourceView* srv) { m_currentFrameSRV = srv; }
+
+    /** @brief Set the depth buffer SRV */
+    void SetDepthSRV(ID3D11ShaderResourceView* srv) { m_depthSRV = srv; }
+
+    /** @brief Set the motion vectors SRV (RG16F) */
+    void SetMotionVectorsSRV(ID3D11ShaderResourceView* srv) { m_motionVectorsSRV = srv; }
+
+    /** @brief Get the TAA-resolved output SRV */
+    ID3D11ShaderResourceView* GetResolvedSRV() const
+    {
+        return m_historyColorSRVs[m_currentHistoryIndex];
+    }
+
+    /** @brief Initialize GPU resources for temporal effects */
+    bool InitializeGPU()
+    {
+        if (!m_device)
+            return false;
+
+        // Create history color buffers (ping-pong)
+        for (int i = 0; i < 2; ++i)
+        {
+            D3D11_TEXTURE2D_DESC desc = {};
+            desc.Width = m_width;
+            desc.Height = m_height;
+            desc.MipLevels = 1;
+            desc.ArraySize = 1;
+            desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+            desc.SampleDesc.Count = 1;
+            desc.Usage = D3D11_USAGE_DEFAULT;
+            desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+            HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &m_historyColorTextures[i]);
+            if (FAILED(hr))
+                return false;
+            hr = m_device->CreateRenderTargetView(m_historyColorTextures[i].Get(), nullptr, &m_historyColorRTVs[i]);
+            if (FAILED(hr))
+                return false;
+            hr = m_device->CreateShaderResourceView(m_historyColorTextures[i].Get(), nullptr, &m_historyColorSRVs[i]);
+            if (FAILED(hr))
+                return false;
+        }
+
+        // Create constant buffer
+        D3D11_BUFFER_DESC cbDesc = {};
+        cbDesc.ByteWidth = sizeof(TemporalCB);
+        cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+        cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        HRESULT hr = m_device->CreateBuffer(&cbDesc, nullptr, &m_constantBuffer);
+        if (FAILED(hr))
+            return false;
+
+        // Create samplers
+        D3D11_SAMPLER_DESC sampDesc = {};
+        sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        hr = m_device->CreateSamplerState(&sampDesc, &m_linearSampler);
+        if (FAILED(hr))
+            return false;
+
+        sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+        hr = m_device->CreateSamplerState(&sampDesc, &m_pointSampler);
+        if (FAILED(hr))
+            return false;
+
+        // Compile TAA resolve shader
+        CompileTAAShaders();
+        CompileMotionBlurShaders();
+
+        return true;
+    }
+
     /** @brief Render/apply temporal effects (post-process pass) */
     void Render()
     {
-        // GPU implementation would go here - apply TAA resolve and motion blur
+        if (!m_context || !m_device)
+            return;
+
+        // TAA resolve pass
+        if (m_taaSettings.enabled && m_taaResolvePS && m_frameHistory.HasSufficientHistory())
+        {
+            int prevHistory = 1 - m_currentHistoryIndex;
+            int curHistory = m_currentHistoryIndex;
+
+            // Set render target to current history buffer
+            m_context->OMSetRenderTargets(1, &m_historyColorRTVs[curHistory], nullptr);
+
+            // Compile CB
+            TemporalCB cb = {};
+            cb.screenSize = {static_cast<float>(m_width), static_cast<float>(m_height),
+                             1.0f / m_width, 1.0f / m_height};
+            cb.taaParams = {m_taaSettings.historyBlendFactor, m_taaSettings.varianceClipGamma,
+                            m_taaSettings.sharpness, m_taaSettings.ghostingRejectionStrength};
+            cb.jitterOffset = {m_currentJitter.x, m_currentJitter.y,
+                               m_currentJitterNDC.x, m_currentJitterNDC.y};
+            cb.motionBlurParams = {m_motionBlurSettings.intensity,
+                                   static_cast<float>(m_motionBlurSettings.sampleCount),
+                                   m_motionBlurSettings.maxBlurRadius,
+                                   m_motionBlurSettings.velocityScale};
+
+            D3D11_MAPPED_SUBRESOURCE mapped;
+            if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+            {
+                memcpy(mapped.pData, &cb, sizeof(TemporalCB));
+                m_context->Unmap(m_constantBuffer.Get(), 0);
+            }
+
+            m_context->VSSetShader(m_fullscreenVS.Get(), nullptr, 0);
+            m_context->PSSetShader(m_taaResolvePS.Get(), nullptr, 0);
+            m_context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+
+            // t0 = current frame, t1 = history, t2 = motion vectors, t3 = depth
+            ID3D11ShaderResourceView* srvs[] = {
+                m_currentFrameSRV,
+                m_historyColorSRVs[prevHistory],
+                m_motionVectorsSRV,
+                m_depthSRV
+            };
+            m_context->PSSetShaderResources(0, 4, srvs);
+
+            ID3D11SamplerState* samplers[] = {m_linearSampler.Get(), m_pointSampler.Get()};
+            m_context->PSSetSamplers(0, 2, samplers);
+
+            m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            m_context->IASetInputLayout(nullptr);
+            m_context->Draw(3, 0);
+
+            // Swap history index for next frame
+            m_currentHistoryIndex = 1 - m_currentHistoryIndex;
+        }
+
+        // Motion blur pass (after TAA resolve)
+        if (m_motionBlurSettings.enabled && m_motionBlurPS)
+        {
+            // Motion blur reads from the TAA-resolved output
+            // Output goes to the other history buffer or a separate target
+        }
     }
 
     /**
@@ -548,11 +702,211 @@ class TemporalEffects
     }
 
   private:
+    // ---- Shader Compilation ----
+
+    void CompileTAAShaders()
+    {
+        // Fullscreen vertex shader
+        const char* vsSource = R"(
+            struct VSOutput { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
+            VSOutput main(uint id : SV_VertexID) {
+                VSOutput o;
+                o.uv = float2((id << 1) & 2, id & 2);
+                o.pos = float4(o.uv * float2(2,-2) + float2(-1,1), 0, 1);
+                return o;
+            }
+        )";
+        ComPtr<ID3DBlob> vsBlob, errBlob;
+        if (SUCCEEDED(D3DCompile(vsSource, strlen(vsSource), "TemporalVS", nullptr, nullptr,
+                                  "main", "vs_5_0", 0, 0, &vsBlob, &errBlob)))
+        {
+            m_device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
+                                          nullptr, &m_fullscreenVS);
+        }
+
+        // TAA Resolve pixel shader with variance clipping and YCoCg
+        const char* taaPS = R"(
+            Texture2D currentFrame : register(t0);
+            Texture2D historyFrame : register(t1);
+            Texture2D motionVectors : register(t2);
+            Texture2D depthBuffer : register(t3);
+            SamplerState linearSamp : register(s0);
+            SamplerState pointSamp : register(s1);
+
+            cbuffer TemporalCB : register(b0) {
+                float4 screenSize;      // xy=size, zw=1/size
+                float4 taaParams;       // x=blendFactor, y=varianceGamma, z=sharpness, w=ghostRejection
+                float4 jitterOffset;    // xy=pixel, zw=ndc
+                float4 motionBlurParams;
+            };
+
+            float3 RGBToYCoCg(float3 rgb) {
+                return float3(
+                    0.25 * rgb.r + 0.5 * rgb.g + 0.25 * rgb.b,
+                    0.5 * rgb.r - 0.5 * rgb.b,
+                    -0.25 * rgb.r + 0.5 * rgb.g - 0.25 * rgb.b
+                );
+            }
+            float3 YCoCgToRGB(float3 ycocg) {
+                float y = ycocg.x, co = ycocg.y, cg = ycocg.z;
+                return float3(y + co - cg, y + cg, y - co - cg);
+            }
+
+            float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
+                // Remove jitter from UV for unjittered sampling
+                float2 unjitteredUV = uv - jitterOffset.zw * 0.5;
+
+                // Sample motion vector and reproject
+                float2 motion = motionVectors.Sample(pointSamp, uv).rg;
+                float2 historyUV = uv - motion;
+
+                // Current frame sample (unjittered)
+                float3 currentColor = currentFrame.Sample(pointSamp, unjitteredUV).rgb;
+
+                // Check if history UV is valid
+                if (any(historyUV < 0) || any(historyUV > 1)) {
+                    return float4(currentColor, 1);
+                }
+
+                // History sample
+                float3 historyColor = historyFrame.Sample(linearSamp, historyUV).rgb;
+
+                // Neighborhood clamping in YCoCg space
+                float3 neighborMin = float3(1e10, 1e10, 1e10);
+                float3 neighborMax = float3(-1e10, -1e10, -1e10);
+                float3 neighborMean = float3(0, 0, 0);
+                float3 neighborM2 = float3(0, 0, 0);
+
+                [unroll]
+                for (int y = -1; y <= 1; y++) {
+                    [unroll]
+                    for (int x = -1; x <= 1; x++) {
+                        float2 offset = float2(x, y) * screenSize.zw;
+                        float3 s = currentFrame.Sample(pointSamp, unjitteredUV + offset).rgb;
+                        float3 sYCoCg = RGBToYCoCg(s);
+                        neighborMin = min(neighborMin, sYCoCg);
+                        neighborMax = max(neighborMax, sYCoCg);
+                        neighborMean += sYCoCg;
+                        neighborM2 += sYCoCg * sYCoCg;
+                    }
+                }
+
+                neighborMean /= 9.0;
+                neighborM2 /= 9.0;
+                float3 neighborStdDev = sqrt(abs(neighborM2 - neighborMean * neighborMean));
+
+                // Variance clip history
+                float3 histYCoCg = RGBToYCoCg(historyColor);
+                float gamma = taaParams.y;
+                float3 clipMin = neighborMean - neighborStdDev * gamma;
+                float3 clipMax = neighborMean + neighborStdDev * gamma;
+                histYCoCg = clamp(histYCoCg, clipMin, clipMax);
+                historyColor = YCoCgToRGB(histYCoCg);
+
+                // Blend
+                float blendFactor = taaParams.x;
+
+                // Reduce blend when motion is high (less history reliance)
+                float motionMag = length(motion * screenSize.xy);
+                blendFactor *= saturate(1.0 - motionMag * 0.1);
+
+                float3 resolved = lerp(currentColor, historyColor, blendFactor);
+
+                // Optional sharpening
+                if (taaParams.z > 0.001) {
+                    float3 blur = neighborMean;
+                    float3 diff = RGBToYCoCg(resolved) - blur;
+                    resolved = YCoCgToRGB(RGBToYCoCg(resolved) + diff * taaParams.z);
+                }
+
+                return float4(max(resolved, 0), 1);
+            }
+        )";
+
+        ComPtr<ID3DBlob> psBlob;
+        if (SUCCEEDED(D3DCompile(taaPS, strlen(taaPS), "TAAResolve", nullptr, nullptr,
+                                  "main", "ps_5_0", 0, 0, &psBlob, &errBlob)))
+        {
+            m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
+                                         nullptr, &m_taaResolvePS);
+        }
+    }
+
+    void CompileMotionBlurShaders()
+    {
+        const char* mbPS = R"(
+            Texture2D sceneTexture : register(t0);
+            Texture2D motionVectors : register(t1);
+            Texture2D depthBuffer : register(t2);
+            SamplerState linearSamp : register(s0);
+            SamplerState pointSamp : register(s1);
+
+            cbuffer TemporalCB : register(b0) {
+                float4 screenSize;
+                float4 taaParams;
+                float4 jitterOffset;
+                float4 motionBlurParams; // x=intensity, y=samples, z=maxRadius, w=velScale
+            };
+
+            float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
+                float2 velocity = motionVectors.Sample(pointSamp, uv).rg * motionBlurParams.w;
+                float velMag = length(velocity * screenSize.xy);
+
+                // Skip if motion is too small
+                if (velMag < 0.5)
+                    return sceneTexture.Sample(linearSamp, uv);
+
+                // Clamp velocity to max blur radius
+                float maxRad = motionBlurParams.z * screenSize.z;
+                velocity = clamp(velocity, -maxRad, maxRad) * motionBlurParams.x;
+
+                int samples = (int)motionBlurParams.y;
+                float3 color = sceneTexture.Sample(linearSamp, uv).rgb;
+                float totalWeight = 1.0;
+                float centerDepth = depthBuffer.Sample(pointSamp, uv).r;
+
+                for (int i = 1; i < samples && i < 16; i++) {
+                    float t = (float)i / (float)(samples - 1) - 0.5;
+                    float2 sampleUV = uv + velocity * t;
+                    float sampleDepth = depthBuffer.Sample(pointSamp, sampleUV).r;
+
+                    // Depth-aware weighting: don't blur background over foreground
+                    float depthDiff = centerDepth - sampleDepth;
+                    float w = (depthDiff > 0.01) ? 0.2 : 1.0;
+
+                    color += sceneTexture.Sample(linearSamp, sampleUV).rgb * w;
+                    totalWeight += w;
+                }
+
+                return float4(color / totalWeight, 1);
+            }
+        )";
+
+        ComPtr<ID3DBlob> psBlob, errBlob;
+        if (SUCCEEDED(D3DCompile(mbPS, strlen(mbPS), "MotionBlur", nullptr, nullptr,
+                                  "main", "ps_5_0", 0, 0, &psBlob, &errBlob)))
+        {
+            m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
+                                         nullptr, &m_motionBlurPS);
+        }
+    }
+
+    // ---- GPU Constant Buffer ----
+    struct TemporalCB
+    {
+        XMFLOAT4 screenSize;
+        XMFLOAT4 taaParams;
+        XMFLOAT4 jitterOffset;
+        XMFLOAT4 motionBlurParams;
+    };
+
+    // ---- State ----
     bool m_initialized = false;
     uint32_t m_width = 1920;
     uint32_t m_height = 1080;
     uint32_t m_frameIndex = 0;
     float m_totalTime = 0.0f;
+    int m_currentHistoryIndex = 0;
 
     // Settings
     TAASettings m_taaSettings;
@@ -564,4 +918,26 @@ class TemporalEffects
     // Current frame jitter
     XMFLOAT2 m_currentJitter = {0.0f, 0.0f};
     XMFLOAT2 m_currentJitterNDC = {0.0f, 0.0f};
+
+    // GPU Resources
+    ID3D11Device* m_device = nullptr;
+    ID3D11DeviceContext* m_context = nullptr;
+    ID3D11ShaderResourceView* m_currentFrameSRV = nullptr;
+    ID3D11ShaderResourceView* m_depthSRV = nullptr;
+    ID3D11ShaderResourceView* m_motionVectorsSRV = nullptr;
+
+    // History color buffers (ping-pong)
+    ComPtr<ID3D11Texture2D> m_historyColorTextures[2];
+    ID3D11RenderTargetView* m_historyColorRTVs[2] = {};
+    ID3D11ShaderResourceView* m_historyColorSRVs[2] = {};
+
+    // Shaders
+    ComPtr<ID3D11VertexShader> m_fullscreenVS;
+    ComPtr<ID3D11PixelShader> m_taaResolvePS;
+    ComPtr<ID3D11PixelShader> m_motionBlurPS;
+
+    // Resources
+    ComPtr<ID3D11Buffer> m_constantBuffer;
+    ComPtr<ID3D11SamplerState> m_linearSampler;
+    ComPtr<ID3D11SamplerState> m_pointSampler;
 };
