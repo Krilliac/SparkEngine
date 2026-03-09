@@ -152,6 +152,12 @@ int SceneManager::AddNode(const SceneNode& node)
     int index = static_cast<int>(m_sceneNodes.size());
     m_sceneNodes.push_back(node);
 
+    // Update name-to-index cache
+    if (!node.name.empty())
+    {
+        m_nodeNameIndex[node.name] = index;
+    }
+
     // Update parent's child list if parent specified
     if (node.parentIndex >= 0 && node.parentIndex < static_cast<int>(m_sceneNodes.size()))
     {
@@ -177,6 +183,12 @@ void SceneManager::RemoveNode(int index)
     {
         auto& parentChildren = m_sceneNodes[node.parentIndex].childIndices;
         parentChildren.erase(std::remove(parentChildren.begin(), parentChildren.end(), index), parentChildren.end());
+    }
+
+    // Remove from name cache before tombstoning
+    if (!node.name.empty())
+    {
+        m_nodeNameIndex.erase(node.name);
     }
 
     // Mark as removed (tombstone approach to avoid index invalidation)
@@ -237,11 +249,10 @@ SceneNode* SceneManager::GetNode(int index)
 
 int SceneManager::FindNode(const std::string& name) const
 {
-    for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
-    {
-        if (m_sceneNodes[i].name == name)
-            return i;
-    }
+    // O(1) lookup via name cache instead of O(n) linear scan
+    auto it = m_nodeNameIndex.find(name);
+    if (it != m_nodeNameIndex.end())
+        return it->second;
     return -1;
 }
 
@@ -340,6 +351,7 @@ void SceneManager::Clear()
 {
     m_objects.clear();
     m_sceneNodes.clear();
+    m_nodeNameIndex.clear();
     m_dirty = true;
 }
 
@@ -595,7 +607,7 @@ bool SceneManager::LoadCustom(const std::wstring& path)
             {
                 if (currentNode.name.empty())
                     currentNode.name = currentNode.type + "_" + std::to_string(m_sceneNodes.size());
-                m_sceneNodes.push_back(currentNode);
+                AddNode(currentNode);
             }
             currentNode = SceneNode{};
             hasNode = false;
@@ -756,7 +768,7 @@ bool SceneManager::LoadCustom(const std::wstring& path)
             node.type = type;
             node.name = type + "_" + std::to_string(lineNum);
             node.position = {x, y, z};
-            m_sceneNodes.push_back(node);
+            AddNode(node);
         }
     }
 
