@@ -467,11 +467,11 @@ namespace Spark::Graphics
                 if (FAILED(hr))
                     return false;
 
-                hr = m_device->CreateRenderTargetView(m_pingPongTextures[i], nullptr, &m_pingPongRTVs[i]);
+                hr = m_device->CreateRenderTargetView(m_pingPongTextures[i].Get(), nullptr, &m_pingPongRTVs[i]);
                 if (FAILED(hr))
                     return false;
 
-                hr = m_device->CreateShaderResourceView(m_pingPongTextures[i], nullptr, &m_pingPongSRVs[i]);
+                hr = m_device->CreateShaderResourceView(m_pingPongTextures[i].Get(), nullptr, &m_pingPongSRVs[i]);
                 if (FAILED(hr))
                     return false;
             }
