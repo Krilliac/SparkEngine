@@ -51,11 +51,11 @@
  */
 enum class UpscalingMode
 {
-    None,   ///< No upscaling, render at native resolution
-    FSR1,   ///< AMD FidelityFX Super Resolution 1.0 (spatial)
-    FSR2,   ///< AMD FidelityFX Super Resolution 2.0 (temporal)
-    DLSS,   ///< NVIDIA Deep Learning Super Sampling
-    XeSS    ///< Intel Xe Super Sampling
+    None, ///< No upscaling, render at native resolution
+    FSR1, ///< AMD FidelityFX Super Resolution 1.0 (spatial)
+    FSR2, ///< AMD FidelityFX Super Resolution 2.0 (temporal)
+    DLSS, ///< NVIDIA Deep Learning Super Sampling
+    XeSS  ///< Intel Xe Super Sampling
 };
 
 /**
@@ -80,12 +80,12 @@ enum class UpscalingQuality
  */
 struct UpscalingInputRequirements
 {
-    bool needsColor = true;           ///< Color buffer (always required)
-    bool needsDepth = false;          ///< Depth buffer
-    bool needsMotionVectors = false;  ///< Per-pixel motion vectors
-    bool needsExposure = false;       ///< Auto-exposure value
-    bool needsReactiveMask = false;   ///< Reactive/transparency mask
-    bool needsJitterOffset = false;   ///< TAA jitter offset for the frame
+    bool needsColor = true;          ///< Color buffer (always required)
+    bool needsDepth = false;         ///< Depth buffer
+    bool needsMotionVectors = false; ///< Per-pixel motion vectors
+    bool needsExposure = false;      ///< Auto-exposure value
+    bool needsReactiveMask = false;  ///< Reactive/transparency mask
+    bool needsJitterOffset = false;  ///< TAA jitter offset for the frame
 
     /** @brief Get requirements for a specific upscaling mode */
     static UpscalingInputRequirements ForMode(UpscalingMode mode)
@@ -140,7 +140,7 @@ struct UpscalingSettings
 {
     UpscalingMode mode = UpscalingMode::None;
     UpscalingQuality quality = UpscalingQuality::Quality;
-    float sharpness = 0.5f;   ///< Post-upscale sharpening [0, 1]
+    float sharpness = 0.5f; ///< Post-upscale sharpening [0, 1]
 
     /**
      * @brief Get the render scale factor for a quality preset
@@ -174,8 +174,8 @@ struct UpscalingSettings
      * @param outWidth      Computed render width
      * @param outHeight     Computed render height
      */
-    void CalculateRenderResolution(uint32_t displayWidth, uint32_t displayHeight,
-                                   uint32_t& outWidth, uint32_t& outHeight) const
+    void CalculateRenderResolution(uint32_t displayWidth, uint32_t displayHeight, uint32_t& outWidth,
+                                   uint32_t& outHeight) const
     {
         if (mode == UpscalingMode::None)
         {
@@ -226,20 +226,20 @@ struct alignas(16) FSR1RCASConstants
  */
 struct FSR2DispatchDescription
 {
-    ID3D11ShaderResourceView* colorSRV = nullptr;          ///< Low-res color input
-    ID3D11ShaderResourceView* depthSRV = nullptr;          ///< Low-res depth
-    ID3D11ShaderResourceView* motionVectorsSRV = nullptr;  ///< Screen-space motion vectors
-    ID3D11ShaderResourceView* exposureSRV = nullptr;       ///< Auto-exposure value
-    ID3D11ShaderResourceView* reactiveMaskSRV = nullptr;   ///< Reactive mask for transparency
-    ID3D11UnorderedAccessView* outputUAV = nullptr;        ///< Full-res output
+    ID3D11ShaderResourceView* colorSRV = nullptr;         ///< Low-res color input
+    ID3D11ShaderResourceView* depthSRV = nullptr;         ///< Low-res depth
+    ID3D11ShaderResourceView* motionVectorsSRV = nullptr; ///< Screen-space motion vectors
+    ID3D11ShaderResourceView* exposureSRV = nullptr;      ///< Auto-exposure value
+    ID3D11ShaderResourceView* reactiveMaskSRV = nullptr;  ///< Reactive mask for transparency
+    ID3D11UnorderedAccessView* outputUAV = nullptr;       ///< Full-res output
 
     XMFLOAT2 jitterOffset = {0.0f, 0.0f};      ///< Current frame jitter in pixels
-    XMFLOAT2 motionVectorScale = {1.0f, 1.0f};  ///< Motion vector scale factor
-    float deltaTime = 0.016f;                    ///< Frame delta time in seconds
-    float nearPlane = 0.1f;                      ///< Camera near plane
-    float farPlane = 1000.0f;                    ///< Camera far plane
-    float verticalFOV = 1.0472f;                 ///< Vertical FOV in radians (~60 deg)
-    bool resetAccumulation = false;              ///< Reset temporal history (on camera cut)
+    XMFLOAT2 motionVectorScale = {1.0f, 1.0f}; ///< Motion vector scale factor
+    float deltaTime = 0.016f;                  ///< Frame delta time in seconds
+    float nearPlane = 0.1f;                    ///< Camera near plane
+    float farPlane = 1000.0f;                  ///< Camera far plane
+    float verticalFOV = 1.0472f;               ///< Vertical FOV in radians (~60 deg)
+    bool resetAccumulation = false;            ///< Reset temporal history (on camera cut)
 };
 
 // =============================================================================
@@ -251,10 +251,10 @@ struct FSR2DispatchDescription
  */
 struct DLSSFeatureInfo
 {
-    bool isAvailable = false;          ///< DLSS hardware/driver support detected
-    bool isOptimalDriver = false;      ///< Running on optimal driver version
-    uint32_t minDriverMajor = 0;       ///< Minimum required driver major version
-    uint32_t minDriverMinor = 0;       ///< Minimum required driver minor version
+    bool isAvailable = false;     ///< DLSS hardware/driver support detected
+    bool isOptimalDriver = false; ///< Running on optimal driver version
+    uint32_t minDriverMajor = 0;  ///< Minimum required driver major version
+    uint32_t minDriverMinor = 0;  ///< Minimum required driver minor version
 
     /** @brief Optimal render resolution recommended by DLSS for a given quality */
     struct OptimalResolution
@@ -265,7 +265,7 @@ struct DLSSFeatureInfo
         uint32_t minRenderHeight = 0;
         uint32_t maxRenderWidth = 0;
         uint32_t maxRenderHeight = 0;
-        float sharpness = 0.0f;       ///< Recommended sharpness
+        float sharpness = 0.0f; ///< Recommended sharpness
     };
 
     /**
@@ -300,9 +300,9 @@ struct DLSSFeatureInfo
  */
 struct XeSSFeatureInfo
 {
-    bool isAvailable = false;      ///< XeSS support detected (works on any GPU via DP4a)
+    bool isAvailable = false;        ///< XeSS support detected (works on any GPU via DP4a)
     bool hasXMXAcceleration = false; ///< Intel XMX matrix engine available (Arc GPUs)
-    uint32_t driverVersion = 0;    ///< Detected driver version
+    uint32_t driverVersion = 0;      ///< Detected driver version
 };
 
 // =============================================================================
@@ -319,7 +319,7 @@ struct XeSSFeatureInfo
  */
 class UpscalingSystem
 {
-public:
+  public:
     UpscalingSystem() = default;
     ~UpscalingSystem() { Shutdown(); }
 
@@ -333,8 +333,8 @@ public:
      * @param displayHeight Target display resolution height
      * @return true on success
      */
-    bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context,
-                    uint32_t displayWidth = 1920, uint32_t displayHeight = 1080)
+    bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context, uint32_t displayWidth = 1920,
+                    uint32_t displayHeight = 1080)
     {
         if (m_initialized)
         {
@@ -427,8 +427,7 @@ public:
      * @param inputColorSRV  Low-resolution color input
      * @param outputUAV      Full-resolution output
      */
-    void ExecuteFSR1(ID3D11ShaderResourceView* inputColorSRV,
-                     ID3D11UnorderedAccessView* outputUAV)
+    void ExecuteFSR1(ID3D11ShaderResourceView* inputColorSRV, ID3D11UnorderedAccessView* outputUAV)
     {
         if (!m_initialized || m_settings.mode != UpscalingMode::FSR1)
         {
@@ -451,8 +450,7 @@ public:
 
             easuConst.const0 = {inputWidth, inputHeight, outputWidth, outputHeight};
             easuConst.const1 = {0.0f, 0.0f, inputWidth, inputHeight};
-            easuConst.const2 = {1.0f / inputWidth, 1.0f / inputHeight,
-                                1.0f / outputWidth, 1.0f / outputHeight};
+            easuConst.const2 = {1.0f / inputWidth, 1.0f / inputHeight, 1.0f / outputWidth, 1.0f / outputHeight};
             easuConst.const3 = {0.0f, 0.0f, 0.0f, 0.0f};
 
             UpdateFSR1Constants(&easuConst, nullptr);
@@ -539,13 +537,9 @@ public:
      * @param jitterOffset     Current frame jitter in pixels
      * @param resetHistory     Reset temporal accumulation
      */
-    void ExecuteDLSS(ID3D11ShaderResourceView* colorSRV,
-                     ID3D11ShaderResourceView* depthSRV,
-                     ID3D11ShaderResourceView* motionVectorsSRV,
-                     ID3D11ShaderResourceView* exposureSRV,
-                     ID3D11UnorderedAccessView* outputUAV,
-                     const XMFLOAT2& jitterOffset,
-                     bool resetHistory = false)
+    void ExecuteDLSS(ID3D11ShaderResourceView* colorSRV, ID3D11ShaderResourceView* depthSRV,
+                     ID3D11ShaderResourceView* motionVectorsSRV, ID3D11ShaderResourceView* exposureSRV,
+                     ID3D11UnorderedAccessView* outputUAV, const XMFLOAT2& jitterOffset, bool resetHistory = false)
     {
         if (!m_initialized || m_settings.mode != UpscalingMode::DLSS)
         {
@@ -598,12 +592,9 @@ public:
      * @param outputUAV        Full-res output
      * @param jitterOffset     Current frame jitter in pixels
      */
-    void ExecuteXeSS(ID3D11ShaderResourceView* colorSRV,
-                     ID3D11ShaderResourceView* depthSRV,
-                     ID3D11ShaderResourceView* motionVectorsSRV,
-                     ID3D11ShaderResourceView* exposureSRV,
-                     ID3D11UnorderedAccessView* outputUAV,
-                     const XMFLOAT2& jitterOffset)
+    void ExecuteXeSS(ID3D11ShaderResourceView* colorSRV, ID3D11ShaderResourceView* depthSRV,
+                     ID3D11ShaderResourceView* motionVectorsSRV, ID3D11ShaderResourceView* exposureSRV,
+                     ID3D11UnorderedAccessView* outputUAV, const XMFLOAT2& jitterOffset)
     {
         if (!m_initialized || m_settings.mode != UpscalingMode::XeSS)
         {
@@ -657,12 +648,9 @@ public:
      * @param outputUAV        Full-res output
      * @param jitterOffset     Jitter offset (temporal modes)
      */
-    void Execute(ID3D11ShaderResourceView* colorSRV,
-                 ID3D11ShaderResourceView* depthSRV,
-                 ID3D11ShaderResourceView* motionVectorsSRV,
-                 ID3D11ShaderResourceView* exposureSRV,
-                 ID3D11UnorderedAccessView* outputUAV,
-                 const XMFLOAT2& jitterOffset = {0.0f, 0.0f})
+    void Execute(ID3D11ShaderResourceView* colorSRV, ID3D11ShaderResourceView* depthSRV,
+                 ID3D11ShaderResourceView* motionVectorsSRV, ID3D11ShaderResourceView* exposureSRV,
+                 ID3D11UnorderedAccessView* outputUAV, const XMFLOAT2& jitterOffset = {0.0f, 0.0f})
     {
         switch (m_settings.mode)
         {
@@ -684,13 +672,11 @@ public:
         }
 
         case UpscalingMode::DLSS:
-            ExecuteDLSS(colorSRV, depthSRV, motionVectorsSRV, exposureSRV,
-                        outputUAV, jitterOffset);
+            ExecuteDLSS(colorSRV, depthSRV, motionVectorsSRV, exposureSRV, outputUAV, jitterOffset);
             break;
 
         case UpscalingMode::XeSS:
-            ExecuteXeSS(colorSRV, depthSRV, motionVectorsSRV, exposureSRV,
-                        outputUAV, jitterOffset);
+            ExecuteXeSS(colorSRV, depthSRV, motionVectorsSRV, exposureSRV, outputUAV, jitterOffset);
             break;
 
         default:
@@ -749,10 +735,7 @@ public:
     }
 
     /** @brief Set the sharpness value */
-    void SetSharpness(float sharpness)
-    {
-        m_settings.sharpness = std::clamp(sharpness, 0.0f, 1.0f);
-    }
+    void SetSharpness(float sharpness) { m_settings.sharpness = std::clamp(sharpness, 0.0f, 1.0f); }
 
     /** @brief Check if the system is initialized */
     bool IsInitialized() const { return m_initialized; }
@@ -812,10 +795,8 @@ public:
         status += "  Mode: " + std::string(modeStr) + "\n";
         status += "  Quality: " + std::string(qualityStr) + "\n";
         status += "  Sharpness: " + std::to_string(m_settings.sharpness) + "\n";
-        status += "  Render: " + std::to_string(m_renderWidth) + "x"
-                  + std::to_string(m_renderHeight) + "\n";
-        status += "  Display: " + std::to_string(m_displayWidth) + "x"
-                  + std::to_string(m_displayHeight) + "\n";
+        status += "  Render: " + std::to_string(m_renderWidth) + "x" + std::to_string(m_renderHeight) + "\n";
+        status += "  Display: " + std::to_string(m_displayWidth) + "x" + std::to_string(m_displayHeight) + "\n";
         status += "  Scale: " + std::to_string(static_cast<int>(GetCurrentRenderScale() * 100.0f)) + "%\n";
 
         // Feature availability
@@ -880,12 +861,9 @@ public:
     }
 
     /** @brief Console command to set sharpness */
-    void Console_SetSharpness(float sharpness)
-    {
-        SetSharpness(sharpness);
-    }
+    void Console_SetSharpness(float sharpness) { SetSharpness(sharpness); }
 
-private:
+  private:
     // ---- Feature Detection ----
 
     void DetectFeatures()
@@ -918,16 +896,14 @@ private:
         cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
         cbDesc.ByteWidth = sizeof(FSR1EASUConstants);
-        HRESULT hr = m_device->CreateBuffer(&cbDesc, nullptr,
-                                            m_fsr1EASUConstantBuffer.GetAddressOf());
+        HRESULT hr = m_device->CreateBuffer(&cbDesc, nullptr, m_fsr1EASUConstantBuffer.GetAddressOf());
         if (FAILED(hr))
         {
             return false;
         }
 
         cbDesc.ByteWidth = sizeof(FSR1RCASConstants);
-        hr = m_device->CreateBuffer(&cbDesc, nullptr,
-                                    m_fsr1RCASConstantBuffer.GetAddressOf());
+        hr = m_device->CreateBuffer(&cbDesc, nullptr, m_fsr1RCASConstantBuffer.GetAddressOf());
         if (FAILED(hr))
         {
             return false;
@@ -978,27 +954,22 @@ private:
         texDesc.Usage = D3D11_USAGE_DEFAULT;
         texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
-        m_device->CreateTexture2D(&texDesc, nullptr,
-                                  m_intermediateTexture.GetAddressOf());
+        m_device->CreateTexture2D(&texDesc, nullptr, m_intermediateTexture.GetAddressOf());
 
         if (m_intermediateTexture)
         {
-            m_device->CreateShaderResourceView(m_intermediateTexture.Get(), nullptr,
-                                               m_intermediateSRV.GetAddressOf());
-            m_device->CreateUnorderedAccessView(m_intermediateTexture.Get(), nullptr,
-                                                m_intermediateUAV.GetAddressOf());
+            m_device->CreateShaderResourceView(m_intermediateTexture.Get(), nullptr, m_intermediateSRV.GetAddressOf());
+            m_device->CreateUnorderedAccessView(m_intermediateTexture.Get(), nullptr, m_intermediateUAV.GetAddressOf());
         }
 #endif
     }
 
     void UpdateRenderResolution()
     {
-        m_settings.CalculateRenderResolution(m_displayWidth, m_displayHeight,
-                                             m_renderWidth, m_renderHeight);
+        m_settings.CalculateRenderResolution(m_displayWidth, m_displayHeight, m_renderWidth, m_renderHeight);
     }
 
-    void UpdateFSR1Constants(const FSR1EASUConstants* easuConst,
-                             const FSR1RCASConstants* rcasConst)
+    void UpdateFSR1Constants(const FSR1EASUConstants* easuConst, const FSR1RCASConstants* rcasConst)
     {
 #ifdef SPARK_PLATFORM_WINDOWS
         if (!m_context)
@@ -1009,8 +980,7 @@ private:
         if (easuConst && m_fsr1EASUConstantBuffer)
         {
             D3D11_MAPPED_SUBRESOURCE mapped = {};
-            HRESULT hr = m_context->Map(m_fsr1EASUConstantBuffer.Get(), 0,
-                                        D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            HRESULT hr = m_context->Map(m_fsr1EASUConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
             if (SUCCEEDED(hr))
             {
                 memcpy(mapped.pData, easuConst, sizeof(FSR1EASUConstants));
@@ -1021,8 +991,7 @@ private:
         if (rcasConst && m_fsr1RCASConstantBuffer)
         {
             D3D11_MAPPED_SUBRESOURCE mapped = {};
-            HRESULT hr = m_context->Map(m_fsr1RCASConstantBuffer.Get(), 0,
-                                        D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            HRESULT hr = m_context->Map(m_fsr1RCASConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
             if (SUCCEEDED(hr))
             {
                 memcpy(mapped.pData, rcasConst, sizeof(FSR1RCASConstants));

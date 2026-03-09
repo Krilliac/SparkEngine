@@ -43,11 +43,11 @@ namespace Spark::Graphics
 
     struct ShaderPermutation
     {
-        std::string sourcePath;             ///< Shader source file path or identifier
-        std::string entryPoint = "main";    ///< Entry point function name
+        std::string sourcePath;          ///< Shader source file path or identifier
+        std::string entryPoint = "main"; ///< Entry point function name
         ShaderStage stage = ShaderStage::Pixel;
         std::vector<std::pair<std::string, std::string>> defines; ///< Preprocessor defines
-        uint64_t hash = 0;                  ///< Computed hash for cache lookup
+        uint64_t hash = 0;                                        ///< Computed hash for cache lookup
     };
 
     struct ShaderCacheEntry
@@ -73,7 +73,7 @@ namespace Spark::Graphics
         uint32_t failedPermutations = 0;
         uint32_t cacheHits = 0;
         uint32_t cacheMisses = 0;
-        float warmingProgress = 0.0f;      ///< 0.0 to 1.0
+        float warmingProgress = 0.0f; ///< 0.0 to 1.0
         bool isWarming = false;
     };
 
@@ -93,10 +93,7 @@ namespace Spark::Graphics
         using ProgressCallback = std::function<void(float progress, const std::string& currentShader)>;
 
         ShaderCacheWarming() = default;
-        ~ShaderCacheWarming()
-        {
-            StopWarming();
-        }
+        ~ShaderCacheWarming() { StopWarming(); }
 
         bool Initialize(ID3D11Device* device)
         {
@@ -116,9 +113,8 @@ namespace Spark::Graphics
         /**
          * @brief Register a shader permutation for precompilation
          */
-        void RegisterPermutation(const std::string& source, const std::string& entryPoint,
-                                  ShaderStage stage,
-                                  const std::vector<std::pair<std::string, std::string>>& defines = {})
+        void RegisterPermutation(const std::string& source, const std::string& entryPoint, ShaderStage stage,
+                                 const std::vector<std::pair<std::string, std::string>>& defines = {})
         {
             ShaderPermutation perm;
             perm.sourcePath = source;
@@ -142,7 +138,7 @@ namespace Spark::Graphics
         {
             // Common PBR material feature combinations
             std::vector<std::vector<std::pair<std::string, std::string>>> variants = {
-                {},  // Base PBR
+                {}, // Base PBR
                 {{"HAS_NORMAL_MAP", "1"}},
                 {{"HAS_NORMAL_MAP", "1"}, {"HAS_EMISSIVE", "1"}},
                 {{"HAS_NORMAL_MAP", "1"}, {"HAS_METALLIC_ROUGHNESS", "1"}},
@@ -179,13 +175,14 @@ namespace Spark::Graphics
             m_metrics.isWarming = true;
             m_progressCallback = callback;
 
-            m_warmingThread = std::thread([this]()
-            {
-                CompileAllPending();
-                m_warming.store(false);
-                m_metrics.isWarming = false;
-                m_metrics.warmingProgress = 1.0f;
-            });
+            m_warmingThread = std::thread(
+                [this]()
+                {
+                    CompileAllPending();
+                    m_warming.store(false);
+                    m_metrics.isWarming = false;
+                    m_metrics.warmingProgress = 1.0f;
+                });
         }
 
         /**
@@ -204,8 +201,9 @@ namespace Spark::Graphics
 
             CompilePermutation(perm);
 
-            m_metrics.warmingProgress = static_cast<float>(m_metrics.compiledPermutations + m_metrics.failedPermutations)
-                                        / static_cast<float>(m_metrics.totalPermutations);
+            m_metrics.warmingProgress =
+                static_cast<float>(m_metrics.compiledPermutations + m_metrics.failedPermutations) /
+                static_cast<float>(m_metrics.totalPermutations);
 
             return !m_pendingPermutations.empty();
         }
@@ -291,8 +289,7 @@ namespace Spark::Graphics
                 file.write(reinterpret_cast<const char*>(&stageVal), sizeof(stageVal));
                 uint32_t byteSize = static_cast<uint32_t>(entry.bytecode->GetBufferSize());
                 file.write(reinterpret_cast<const char*>(&byteSize), sizeof(byteSize));
-                file.write(reinterpret_cast<const char*>(entry.bytecode->GetBufferPointer()),
-                           byteSize);
+                file.write(reinterpret_cast<const char*>(entry.bytecode->GetBufferPointer()), byteSize);
             }
 
             return true;
@@ -348,11 +345,11 @@ namespace Spark::Graphics
         std::string Console_GetStatus() const
         {
             std::string s = "Shader Cache:\n";
-            s += "  Permutations: " + std::to_string(m_metrics.compiledPermutations) + "/"
-                 + std::to_string(m_metrics.totalPermutations) + " compiled\n";
+            s += "  Permutations: " + std::to_string(m_metrics.compiledPermutations) + "/" +
+                 std::to_string(m_metrics.totalPermutations) + " compiled\n";
             s += "  Failed: " + std::to_string(m_metrics.failedPermutations) + "\n";
-            s += "  Cache hits: " + std::to_string(m_metrics.cacheHits)
-                 + ", misses: " + std::to_string(m_metrics.cacheMisses) + "\n";
+            s += "  Cache hits: " + std::to_string(m_metrics.cacheHits) +
+                 ", misses: " + std::to_string(m_metrics.cacheMisses) + "\n";
             s += "  Warming: " + std::string(m_metrics.isWarming ? "In progress" : "Idle");
             if (m_metrics.isWarming)
                 s += " (" + std::to_string(static_cast<int>(m_metrics.warmingProgress * 100)) + "%)";
@@ -376,8 +373,8 @@ namespace Spark::Graphics
 
                 CompilePermutation(perm);
 
-                float progress = static_cast<float>(m_metrics.compiledPermutations + m_metrics.failedPermutations)
-                                 / static_cast<float>(m_metrics.totalPermutations);
+                float progress = static_cast<float>(m_metrics.compiledPermutations + m_metrics.failedPermutations) /
+                                 static_cast<float>(m_metrics.totalPermutations);
                 m_metrics.warmingProgress = progress;
 
                 if (m_progressCallback)
@@ -398,21 +395,30 @@ namespace Spark::Graphics
             const char* target = nullptr;
             switch (perm.stage)
             {
-            case ShaderStage::Vertex:  target = "vs_5_0"; break;
-            case ShaderStage::Pixel:   target = "ps_5_0"; break;
-            case ShaderStage::Compute: target = "cs_5_0"; break;
-            case ShaderStage::Geometry: target = "gs_5_0"; break;
-            case ShaderStage::Hull:    target = "hs_5_0"; break;
-            case ShaderStage::Domain:  target = "ds_5_0"; break;
+            case ShaderStage::Vertex:
+                target = "vs_5_0";
+                break;
+            case ShaderStage::Pixel:
+                target = "ps_5_0";
+                break;
+            case ShaderStage::Compute:
+                target = "cs_5_0";
+                break;
+            case ShaderStage::Geometry:
+                target = "gs_5_0";
+                break;
+            case ShaderStage::Hull:
+                target = "hs_5_0";
+                break;
+            case ShaderStage::Domain:
+                target = "ds_5_0";
+                break;
             }
 
             ComPtr<ID3DBlob> blob, errorBlob;
-            HRESULT hr = D3DCompile(perm.sourcePath.c_str(),
-                                     perm.sourcePath.size(),
-                                     nullptr, macros.data(), nullptr,
-                                     perm.entryPoint.c_str(), target,
-                                     D3DCOMPILE_OPTIMIZATION_LEVEL3, 0,
-                                     &blob, &errorBlob);
+            HRESULT hr =
+                D3DCompile(perm.sourcePath.c_str(), perm.sourcePath.size(), nullptr, macros.data(), nullptr,
+                           perm.entryPoint.c_str(), target, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &blob, &errorBlob);
 
             std::lock_guard<std::mutex> lock(m_mutex);
 

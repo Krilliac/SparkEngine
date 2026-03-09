@@ -47,8 +47,7 @@ namespace Spark::Graphics
         ScreenSpaceEffectsGPU() = default;
         ~ScreenSpaceEffectsGPU() = default;
 
-        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context,
-                        uint32_t width, uint32_t height)
+        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context, uint32_t width, uint32_t height)
         {
             m_device = device;
             m_context = context;
@@ -96,10 +95,8 @@ namespace Spark::Graphics
          * @param viewMatrix Current view matrix
          * @param projMatrix Current projection matrix
          */
-        void RenderSSAO(ID3D11ShaderResourceView* depthSRV,
-                         ID3D11ShaderResourceView* normalSRV,
-                         const XMMATRIX& viewMatrix,
-                         const XMMATRIX& projMatrix)
+        void RenderSSAO(ID3D11ShaderResourceView* depthSRV, ID3D11ShaderResourceView* normalSRV,
+                        const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
         {
             if (!m_initialized || !m_ssaoPS)
                 return;
@@ -112,16 +109,16 @@ namespace Spark::Graphics
 
             // Update CB
             SSGPUCB cb = {};
-            cb.screenSize = {static_cast<float>(m_width), static_cast<float>(m_height),
-                              1.0f / m_width, 1.0f / m_height};
+            cb.screenSize = {static_cast<float>(m_width), static_cast<float>(m_height), 1.0f / m_width,
+                             1.0f / m_height};
 
             XMFLOAT4X4 projMat;
             XMStoreFloat4x4(&projMat, projMatrix);
-            cb.ssaoParams = {m_ssaoSettings.radius, m_ssaoSettings.bias,
-                              m_ssaoSettings.intensity, m_ssaoSettings.power};
+            cb.ssaoParams = {m_ssaoSettings.radius, m_ssaoSettings.bias, m_ssaoSettings.intensity,
+                             m_ssaoSettings.power};
             cb.projParams = {projMat._11, projMat._22, projMat._33, projMat._43};
             cb.sampleParams = {static_cast<float>(m_ssaoSettings.GetSampleCount()),
-                                static_cast<float>(m_ssaoSettings.noiseSize), 0.0f, 0.0f};
+                               static_cast<float>(m_ssaoSettings.noiseSize), 0.0f, 0.0f};
 
             D3D11_MAPPED_SUBRESOURCE mapped;
             if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
@@ -164,11 +161,8 @@ namespace Spark::Graphics
          * @param viewMatrix View matrix
          * @param projMatrix Projection matrix
          */
-        void RenderSSR(ID3D11ShaderResourceView* colorSRV,
-                        ID3D11ShaderResourceView* depthSRV,
-                        ID3D11ShaderResourceView* normalSRV,
-                        const XMMATRIX& viewMatrix,
-                        const XMMATRIX& projMatrix)
+        void RenderSSR(ID3D11ShaderResourceView* colorSRV, ID3D11ShaderResourceView* depthSRV,
+                       ID3D11ShaderResourceView* normalSRV, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
         {
             if (!m_initialized || !m_ssrPS)
                 return;
@@ -179,17 +173,16 @@ namespace Spark::Graphics
             m_context->ClearRenderTargetView(m_ssrRTV.Get(), clearColor);
 
             SSGPUCB cb = {};
-            cb.screenSize = {static_cast<float>(m_width), static_cast<float>(m_height),
-                              1.0f / m_width, 1.0f / m_height};
+            cb.screenSize = {static_cast<float>(m_width), static_cast<float>(m_height), 1.0f / m_width,
+                             1.0f / m_height};
 
             XMFLOAT4X4 viewMat, projMat;
             XMStoreFloat4x4(&viewMat, viewMatrix);
             XMStoreFloat4x4(&projMat, projMatrix);
 
-            cb.ssrParams = {m_ssrSettings.maxDistance, m_ssrSettings.stepSize,
-                             m_ssrSettings.thickness, static_cast<float>(m_ssrSettings.GetStepCount())};
-            cb.ssrParams2 = {m_ssrSettings.fadeStart, m_ssrSettings.fadeEnd,
-                              m_ssrSettings.roughnessThreshold, 0.0f};
+            cb.ssrParams = {m_ssrSettings.maxDistance, m_ssrSettings.stepSize, m_ssrSettings.thickness,
+                            static_cast<float>(m_ssrSettings.GetStepCount())};
+            cb.ssrParams2 = {m_ssrSettings.fadeStart, m_ssrSettings.fadeEnd, m_ssrSettings.roughnessThreshold, 0.0f};
             cb.projParams = {projMat._11, projMat._22, projMat._33, projMat._43};
 
             D3D11_MAPPED_SUBRESOURCE mapped;
@@ -242,13 +235,15 @@ namespace Spark::Graphics
             desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
             HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &m_ssaoTexture);
-            if (FAILED(hr)) return false;
+            if (FAILED(hr))
+                return false;
             m_device->CreateRenderTargetView(m_ssaoTexture.Get(), nullptr, &m_ssaoRTV);
             m_device->CreateShaderResourceView(m_ssaoTexture.Get(), nullptr, &m_ssaoSRV);
 
             // SSAO blur target
             hr = m_device->CreateTexture2D(&desc, nullptr, &m_ssaoBlurTexture);
-            if (FAILED(hr)) return false;
+            if (FAILED(hr))
+                return false;
             m_device->CreateRenderTargetView(m_ssaoBlurTexture.Get(), nullptr, &m_ssaoBlurRTV);
             m_device->CreateShaderResourceView(m_ssaoBlurTexture.Get(), nullptr, &m_ssaoBlurSRV);
 
@@ -257,7 +252,8 @@ namespace Spark::Graphics
             desc.Height = m_height;
             desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
             hr = m_device->CreateTexture2D(&desc, nullptr, &m_ssrTexture);
-            if (FAILED(hr)) return false;
+            if (FAILED(hr))
+                return false;
             m_device->CreateRenderTargetView(m_ssrTexture.Get(), nullptr, &m_ssrRTV);
             m_device->CreateShaderResourceView(m_ssrTexture.Get(), nullptr, &m_ssrSRV);
 
@@ -462,16 +458,20 @@ namespace Spark::Graphics
             // Compile shaders
             ComPtr<ID3DBlob> blob, errBlob;
 
-            if (SUCCEEDED(D3DCompile(vsSource, strlen(vsSource), "SSVS", nullptr, nullptr, "main", "vs_5_0", 0, 0, &blob, &errBlob)))
+            if (SUCCEEDED(D3DCompile(vsSource, strlen(vsSource), "SSVS", nullptr, nullptr, "main", "vs_5_0", 0, 0,
+                                     &blob, &errBlob)))
                 m_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_fullscreenVS);
 
-            if (SUCCEEDED(D3DCompile(ssaoPS, strlen(ssaoPS), "SSAO", nullptr, nullptr, "main", "ps_5_0", 0, 0, &blob, &errBlob)))
+            if (SUCCEEDED(D3DCompile(ssaoPS, strlen(ssaoPS), "SSAO", nullptr, nullptr, "main", "ps_5_0", 0, 0, &blob,
+                                     &errBlob)))
                 m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_ssaoPS);
 
-            if (SUCCEEDED(D3DCompile(ssaoBlurPS, strlen(ssaoBlurPS), "SSAOBlur", nullptr, nullptr, "main", "ps_5_0", 0, 0, &blob, &errBlob)))
+            if (SUCCEEDED(D3DCompile(ssaoBlurPS, strlen(ssaoBlurPS), "SSAOBlur", nullptr, nullptr, "main", "ps_5_0", 0,
+                                     0, &blob, &errBlob)))
                 m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_ssaoBlurPS);
 
-            if (SUCCEEDED(D3DCompile(ssrPS, strlen(ssrPS), "SSR", nullptr, nullptr, "main", "ps_5_0", 0, 0, &blob, &errBlob)))
+            if (SUCCEEDED(
+                    D3DCompile(ssrPS, strlen(ssrPS), "SSR", nullptr, nullptr, "main", "ps_5_0", 0, 0, &blob, &errBlob)))
                 m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_ssrPS);
 
             return m_fullscreenVS && m_ssaoPS;

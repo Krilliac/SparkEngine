@@ -83,8 +83,7 @@ namespace Spark::Graphics
         DeferredLightingPass() = default;
         ~DeferredLightingPass() = default;
 
-        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context,
-                        uint32_t width, uint32_t height)
+        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context, uint32_t width, uint32_t height)
         {
             m_device = device;
             m_context = context;
@@ -123,14 +122,10 @@ namespace Spark::Graphics
          * @param prefilteredSRV Optional IBL prefiltered cubemap
          * @param brdfLUTSRV Optional BRDF integration LUT
          */
-        void Execute(ID3D11ShaderResourceView* gbufferSRVs[4],
-                     ID3D11ShaderResourceView* depthSRV,
-                     ID3D11ShaderResourceView* ssaoSRV,
-                     ID3D11ShaderResourceView* irradianceSRV,
-                     ID3D11ShaderResourceView* prefilteredSRV,
-                     ID3D11ShaderResourceView* brdfLUTSRV,
-                     const XMFLOAT3& cameraPosition,
-                     const XMMATRIX& invViewProj)
+        void Execute(ID3D11ShaderResourceView* gbufferSRVs[4], ID3D11ShaderResourceView* depthSRV,
+                     ID3D11ShaderResourceView* ssaoSRV, ID3D11ShaderResourceView* irradianceSRV,
+                     ID3D11ShaderResourceView* prefilteredSRV, ID3D11ShaderResourceView* brdfLUTSRV,
+                     const XMFLOAT3& cameraPosition, const XMMATRIX& invViewProj)
         {
             if (!m_initialized)
                 return;
@@ -297,12 +292,11 @@ namespace Spark::Graphics
             )";
 
             ComPtr<ID3DBlob> blob, errorBlob;
-            HRESULT hr = D3DCompile(vsSource, strlen(vsSource), "DeferredVS",
-                                     nullptr, nullptr, "main", "vs_5_0", 0, 0,
-                                     &blob, &errorBlob);
-            if (FAILED(hr)) return false;
-            m_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(),
-                                          nullptr, &m_fullscreenVS);
+            HRESULT hr = D3DCompile(vsSource, strlen(vsSource), "DeferredVS", nullptr, nullptr, "main", "vs_5_0", 0, 0,
+                                    &blob, &errorBlob);
+            if (FAILED(hr))
+                return false;
+            m_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_fullscreenVS);
 
             // Deferred lighting pixel shader
             const char* psSource = R"(
@@ -563,14 +557,13 @@ namespace Spark::Graphics
                 }
             )";
 
-            hr = D3DCompile(psSource, strlen(psSource), "DeferredLightingPS",
-                             nullptr, nullptr, "main", "ps_5_0", 0, 0,
-                             &blob, &errorBlob);
-            if (FAILED(hr)) return false;
+            hr = D3DCompile(psSource, strlen(psSource), "DeferredLightingPS", nullptr, nullptr, "main", "ps_5_0", 0, 0,
+                            &blob, &errorBlob);
+            if (FAILED(hr))
+                return false;
 
-            return SUCCEEDED(m_device->CreatePixelShader(blob->GetBufferPointer(),
-                                                          blob->GetBufferSize(),
-                                                          nullptr, &m_lightingPS));
+            return SUCCEEDED(
+                m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_lightingPS));
         }
 
         void UpdateCameraConstants(const XMFLOAT3& camPos, const XMMATRIX& invVP)
@@ -579,8 +572,8 @@ namespace Spark::Graphics
             XMStoreFloat4x4(&cb.invViewProj, XMMatrixTranspose(invVP));
             cb.cameraPosition = camPos;
             cb.padding = 0;
-            cb.screenParams = {static_cast<float>(m_width), static_cast<float>(m_height),
-                               1.0f / m_width, 1.0f / m_height};
+            cb.screenParams = {static_cast<float>(m_width), static_cast<float>(m_height), 1.0f / m_width,
+                               1.0f / m_height};
 
             D3D11_MAPPED_SUBRESOURCE mapped;
             m_context->Map(m_cameraCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
@@ -591,8 +584,7 @@ namespace Spark::Graphics
         void UpdateLightConstants()
         {
             LightCB cb = {};
-            cb.ambientColor = {m_settings.ambientColor.x, m_settings.ambientColor.y,
-                               m_settings.ambientColor.z,
+            cb.ambientColor = {m_settings.ambientColor.x, m_settings.ambientColor.y, m_settings.ambientColor.z,
                                m_settings.enableAmbient ? 1.0f : 0.0f};
             cb.numDirLights = m_numDirLights;
             cb.numPointLights = m_numPointLights;

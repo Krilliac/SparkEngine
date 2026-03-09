@@ -78,9 +78,7 @@ namespace Spark::Graphics
         /**
          * @brief Render skybox using a cubemap texture
          */
-        void RenderCubemap(ID3D11ShaderResourceView* cubemapSRV,
-                            const XMMATRIX& viewMatrix,
-                            const XMMATRIX& projMatrix)
+        void RenderCubemap(ID3D11ShaderResourceView* cubemapSRV, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
         {
             if (!m_initialized || !cubemapSRV)
                 return;
@@ -117,9 +115,8 @@ namespace Spark::Graphics
         /**
          * @brief Render procedural gradient sky (fallback when no cubemap)
          */
-        void RenderProceduralSky(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
-                                   const XMFLOAT3& sunDirection, float sunIntensity,
-                                   const XMFLOAT3& skyColor, const XMFLOAT3& horizonColor)
+        void RenderProceduralSky(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix, const XMFLOAT3& sunDirection,
+                                 float sunIntensity, const XMFLOAT3& skyColor, const XMFLOAT3& horizonColor)
         {
             if (!m_initialized || !m_proceduralSkyPS)
                 return;
@@ -158,9 +155,9 @@ namespace Spark::Graphics
         struct SkyboxCB
         {
             XMFLOAT4X4 viewProj;
-            XMFLOAT4 params;        // intensity, rotation, blur, sunIntensity
+            XMFLOAT4 params; // intensity, rotation, blur, sunIntensity
             XMFLOAT4 tintColor;
-            XMFLOAT4 sunDirection;   // xyz=dir, w=sunSize
+            XMFLOAT4 sunDirection; // xyz=dir, w=sunSize
             XMFLOAT4 horizonColor;
         };
 
@@ -265,31 +262,33 @@ namespace Spark::Graphics
 
             ComPtr<ID3DBlob> blob, errBlob;
 
-            HRESULT hr = D3DCompile(vsSource, strlen(vsSource), "SkyboxVS", nullptr, nullptr, "main", "vs_5_0", 0, 0, &blob, &errBlob);
-            if (FAILED(hr)) return false;
+            HRESULT hr = D3DCompile(vsSource, strlen(vsSource), "SkyboxVS", nullptr, nullptr, "main", "vs_5_0", 0, 0,
+                                    &blob, &errBlob);
+            if (FAILED(hr))
+                return false;
             m_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_skyboxVS);
 
             // Input layout
             D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
-                {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0}
-            };
+                {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0}};
             m_device->CreateInputLayout(layoutDesc, 1, blob->GetBufferPointer(), blob->GetBufferSize(), &m_inputLayout);
 
-            if (SUCCEEDED(D3DCompile(cubemapPS, strlen(cubemapPS), "SkyboxPS", nullptr, nullptr, "main", "ps_5_0", 0, 0, &blob, &errBlob)))
+            if (SUCCEEDED(D3DCompile(cubemapPS, strlen(cubemapPS), "SkyboxPS", nullptr, nullptr, "main", "ps_5_0", 0, 0,
+                                     &blob, &errBlob)))
                 m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_skyboxPS);
 
-            if (SUCCEEDED(D3DCompile(proceduralPS, strlen(proceduralPS), "ProceduralSkyPS", nullptr, nullptr, "main", "ps_5_0", 0, 0, &blob, &errBlob)))
-                m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_proceduralSkyPS);
+            if (SUCCEEDED(D3DCompile(proceduralPS, strlen(proceduralPS), "ProceduralSkyPS", nullptr, nullptr, "main",
+                                     "ps_5_0", 0, 0, &blob, &errBlob)))
+                m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr,
+                                            &m_proceduralSkyPS);
 
             return m_skyboxVS && m_skyboxPS;
         }
 
         bool CreateCubeGeometry()
         {
-            XMFLOAT3 vertices[] = {
-                {-1, -1, -1}, {-1,  1, -1}, { 1,  1, -1}, { 1, -1, -1},
-                {-1, -1,  1}, {-1,  1,  1}, { 1,  1,  1}, { 1, -1,  1}
-            };
+            XMFLOAT3 vertices[] = {{-1, -1, -1}, {-1, 1, -1}, {1, 1, -1}, {1, -1, -1},
+                                   {-1, -1, 1},  {-1, 1, 1},  {1, 1, 1},  {1, -1, 1}};
 
             uint16_t indices[] = {
                 0, 1, 2, 0, 2, 3, // Front

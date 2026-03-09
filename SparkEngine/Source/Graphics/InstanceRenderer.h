@@ -84,25 +84,19 @@ namespace Spark::Graphics
      */
     struct InstanceData
     {
-        DirectX::XMFLOAT4X4 World;         ///< Current frame world transform (64 bytes)
-        DirectX::XMFLOAT4X4 PrevWorld;     ///< Previous frame world transform for motion vectors (64 bytes)
-        DirectX::XMFLOAT4   ColorTint;     ///< RGBA color multiplier (16 bytes)
-        uint32_t             MaterialID;    ///< Index into material array (4 bytes)
-        uint32_t             LODLevel;      ///< Discrete LOD level (4 bytes)
-        float                Padding0;      ///< Pad to 16-byte boundary (4 bytes)
-        float                Padding1;      ///< Pad to 16-byte boundary (4 bytes)
-        DirectX::XMFLOAT4   CustomData;    ///< Arbitrary per-instance float4 for shaders (16 bytes)
+        DirectX::XMFLOAT4X4 World;     ///< Current frame world transform (64 bytes)
+        DirectX::XMFLOAT4X4 PrevWorld; ///< Previous frame world transform for motion vectors (64 bytes)
+        DirectX::XMFLOAT4 ColorTint;   ///< RGBA color multiplier (16 bytes)
+        uint32_t MaterialID;           ///< Index into material array (4 bytes)
+        uint32_t LODLevel;             ///< Discrete LOD level (4 bytes)
+        float Padding0;                ///< Pad to 16-byte boundary (4 bytes)
+        float Padding1;                ///< Pad to 16-byte boundary (4 bytes)
+        DirectX::XMFLOAT4 CustomData;  ///< Arbitrary per-instance float4 for shaders (16 bytes)
         // Total: 176 bytes, 16-byte aligned
 
         InstanceData()
-            : World{}
-            , PrevWorld{}
-            , ColorTint{1.0f, 1.0f, 1.0f, 1.0f}
-            , MaterialID{0}
-            , LODLevel{0}
-            , Padding0{0.0f}
-            , Padding1{0.0f}
-            , CustomData{0.0f, 0.0f, 0.0f, 0.0f}
+            : World{}, PrevWorld{}, ColorTint{1.0f, 1.0f, 1.0f, 1.0f}, MaterialID{0}, LODLevel{0}, Padding0{0.0f},
+              Padding1{0.0f}, CustomData{0.0f, 0.0f, 0.0f, 0.0f}
         {
             DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
             DirectX::XMStoreFloat4x4(&World, identity);
@@ -155,7 +149,7 @@ namespace Spark::Graphics
      */
     class InstanceBatch
     {
-    public:
+      public:
         InstanceBatch() = default;
         ~InstanceBatch() = default;
 
@@ -171,9 +165,7 @@ namespace Spark::Graphics
          * @param capacity Initial instance count the buffer can hold.
          * @return S_OK on success, error HRESULT otherwise.
          */
-        HRESULT Initialize(
-            _In_ ID3D11Device* pDevice,
-            uint32_t capacity = INSTANCE_BATCH_DEFAULT_CAPACITY)
+        HRESULT Initialize(_In_ ID3D11Device* pDevice, uint32_t capacity = INSTANCE_BATCH_DEFAULT_CAPACITY)
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             m_capacity = capacity;
@@ -205,9 +197,7 @@ namespace Spark::Graphics
          * @param pContext  D3D11 device context for Map/Unmap.
          * @return S_OK on success.
          */
-        HRESULT UploadToGPU(
-            _In_ ID3D11Device* pDevice,
-            _In_ ID3D11DeviceContext* pContext)
+        HRESULT UploadToGPU(_In_ ID3D11Device* pDevice, _In_ ID3D11DeviceContext* pContext)
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             if (!m_dirty || m_instanceCount == 0)
@@ -221,8 +211,7 @@ namespace Spark::Graphics
                 uint32_t newCapacity = m_capacity;
                 while (newCapacity < m_instanceCount && newCapacity < INSTANCE_BATCH_MAX_CAPACITY)
                 {
-                    newCapacity = static_cast<uint32_t>(
-                        static_cast<float>(newCapacity) * INSTANCE_BATCH_GROW_FACTOR);
+                    newCapacity = static_cast<uint32_t>(static_cast<float>(newCapacity) * INSTANCE_BATCH_GROW_FACTOR);
                 }
                 newCapacity = (newCapacity < m_instanceCount) ? m_instanceCount : newCapacity;
 
@@ -236,15 +225,13 @@ namespace Spark::Graphics
 
             // Map and copy
             D3D11_MAPPED_SUBRESOURCE mapped{};
-            HRESULT hr = pContext->Map(
-                m_instanceBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            HRESULT hr = pContext->Map(m_instanceBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
             if (FAILED(hr))
             {
                 return hr;
             }
 
-            memcpy(mapped.pData, m_instances.data(),
-                   m_instanceCount * sizeof(InstanceData));
+            memcpy(mapped.pData, m_instances.data(), m_instanceCount * sizeof(InstanceData));
 
             pContext->Unmap(m_instanceBuffer.Get(), 0);
             m_dirty = false;
@@ -276,11 +263,15 @@ namespace Spark::Graphics
 #endif
 
         /** @brief Optional per-batch AABB for frustum culling. */
-        void SetBounds(const AABB& bounds) { m_bounds = bounds; m_hasBounds = true; }
+        void SetBounds(const AABB& bounds)
+        {
+            m_bounds = bounds;
+            m_hasBounds = true;
+        }
         bool HasBounds() const { return m_hasBounds; }
         const AABB& GetBounds() const { return m_bounds; }
 
-    private:
+      private:
 #ifdef SPARK_PLATFORM_WINDOWS
         /**
          * @brief (Re)create the structured buffer and its SRV.
@@ -298,8 +289,7 @@ namespace Spark::Graphics
             bufDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
             bufDesc.StructureByteStride = sizeof(InstanceData);
 
-            HRESULT hr = pDevice->CreateBuffer(
-                &bufDesc, nullptr, m_instanceBuffer.ReleaseAndGetAddressOf());
+            HRESULT hr = pDevice->CreateBuffer(&bufDesc, nullptr, m_instanceBuffer.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return hr;
@@ -311,9 +301,8 @@ namespace Spark::Graphics
             srvDesc.Buffer.FirstElement = 0;
             srvDesc.Buffer.NumElements = capacity;
 
-            hr = pDevice->CreateShaderResourceView(
-                m_instanceBuffer.Get(), &srvDesc,
-                m_instanceSRV.ReleaseAndGetAddressOf());
+            hr = pDevice->CreateShaderResourceView(m_instanceBuffer.Get(), &srvDesc,
+                                                   m_instanceSRV.ReleaseAndGetAddressOf());
             return hr;
         }
 #endif
@@ -326,7 +315,7 @@ namespace Spark::Graphics
         AABB m_bounds{};
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        ComPtr<ID3D11Buffer>             m_instanceBuffer;
+        ComPtr<ID3D11Buffer> m_instanceBuffer;
         ComPtr<ID3D11ShaderResourceView> m_instanceSRV;
 #endif
     };
@@ -344,7 +333,7 @@ namespace Spark::Graphics
      */
     class IndirectDrawBuffer
     {
-    public:
+      public:
         IndirectDrawBuffer() = default;
         ~IndirectDrawBuffer() = default;
 
@@ -356,7 +345,7 @@ namespace Spark::Graphics
             uint32_t IndexCountPerInstance;
             uint32_t InstanceCount;
             uint32_t StartIndexLocation;
-            int32_t  BaseVertexLocation;
+            int32_t BaseVertexLocation;
             uint32_t StartInstanceLocation;
         };
 
@@ -366,9 +355,7 @@ namespace Spark::Graphics
          * @param maxBatches Maximum number of indirect draw arg structs.
          * @return S_OK on success.
          */
-        HRESULT Initialize(
-            _In_ ID3D11Device* pDevice,
-            uint32_t maxBatches = 256)
+        HRESULT Initialize(_In_ ID3D11Device* pDevice, uint32_t maxBatches = 256)
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             m_maxBatches = maxBatches;
@@ -380,8 +367,7 @@ namespace Spark::Graphics
             desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
             desc.MiscFlags = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
 
-            HRESULT hr = pDevice->CreateBuffer(
-                &desc, nullptr, m_argBuffer.ReleaseAndGetAddressOf());
+            HRESULT hr = pDevice->CreateBuffer(&desc, nullptr, m_argBuffer.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return hr;
@@ -394,15 +380,13 @@ namespace Spark::Graphics
             uavDesc.Buffer.FirstElement = 0;
             uavDesc.Buffer.NumElements = maxBatches * (sizeof(DrawArgs) / sizeof(uint32_t));
 
-            hr = pDevice->CreateShaderResourceView(
-                m_argBuffer.Get(), nullptr, m_argSRV.ReleaseAndGetAddressOf());
+            hr = pDevice->CreateShaderResourceView(m_argBuffer.Get(), nullptr, m_argSRV.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return hr;
             }
 
-            hr = pDevice->CreateUnorderedAccessView(
-                m_argBuffer.Get(), &uavDesc, m_argUAV.ReleaseAndGetAddressOf());
+            hr = pDevice->CreateUnorderedAccessView(m_argBuffer.Get(), &uavDesc, m_argUAV.ReleaseAndGetAddressOf());
             return hr;
 #else
             (void)pDevice;
@@ -414,9 +398,7 @@ namespace Spark::Graphics
         /**
          * @brief Upload CPU-authored draw args (fallback when no compute culling).
          */
-        HRESULT UploadArgs(
-            _In_ ID3D11DeviceContext* pContext,
-            const std::vector<DrawArgs>& args)
+        HRESULT UploadArgs(_In_ ID3D11DeviceContext* pContext, const std::vector<DrawArgs>& args)
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             if (args.empty() || !m_argBuffer)
@@ -437,8 +419,7 @@ namespace Spark::Graphics
             box.front = 0;
             box.back = 1;
 
-            pContext->UpdateSubresource(
-                m_argBuffer.Get(), 0, &box, args.data(), 0, 0);
+            pContext->UpdateSubresource(m_argBuffer.Get(), 0, &box, args.data(), 0, 0);
             return S_OK;
 #else
             (void)pContext;
@@ -461,17 +442,17 @@ namespace Spark::Graphics
         uint32_t GetMaxBatches() const { return m_maxBatches; }
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        ID3D11Buffer*              GetArgBuffer() const { return m_argBuffer.Get(); }
-        ID3D11ShaderResourceView*  GetSRV() const { return m_argSRV.Get(); }
+        ID3D11Buffer* GetArgBuffer() const { return m_argBuffer.Get(); }
+        ID3D11ShaderResourceView* GetSRV() const { return m_argSRV.Get(); }
         ID3D11UnorderedAccessView* GetUAV() const { return m_argUAV.Get(); }
 #endif
 
-    private:
+      private:
         uint32_t m_maxBatches = 0;
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        ComPtr<ID3D11Buffer>              m_argBuffer;
-        ComPtr<ID3D11ShaderResourceView>  m_argSRV;
+        ComPtr<ID3D11Buffer> m_argBuffer;
+        ComPtr<ID3D11ShaderResourceView> m_argSRV;
         ComPtr<ID3D11UnorderedAccessView> m_argUAV;
 #endif
     };
@@ -485,14 +466,14 @@ namespace Spark::Graphics
      */
     struct RenderStatistics
     {
-        uint32_t TotalInstances = 0;      ///< Instances submitted this frame
-        uint32_t VisibleInstances = 0;    ///< Instances in visible batches
-        uint32_t BatchCount = 0;          ///< Unique mesh+material batches
-        uint32_t DrawCallsIssued = 0;     ///< Actual GPU draw calls
-        uint32_t DrawCallsSaved = 0;      ///< Instances minus draw calls
-        uint32_t BufferUploads = 0;       ///< Number of Map/Unmap operations
-        uint32_t BufferGrows = 0;         ///< Times a batch buffer was re-allocated
-        uint32_t FrustumCulledBatches = 0;///< Batches skipped by frustum culling
+        uint32_t TotalInstances = 0;       ///< Instances submitted this frame
+        uint32_t VisibleInstances = 0;     ///< Instances in visible batches
+        uint32_t BatchCount = 0;           ///< Unique mesh+material batches
+        uint32_t DrawCallsIssued = 0;      ///< Actual GPU draw calls
+        uint32_t DrawCallsSaved = 0;       ///< Instances minus draw calls
+        uint32_t BufferUploads = 0;        ///< Number of Map/Unmap operations
+        uint32_t BufferGrows = 0;          ///< Times a batch buffer was re-allocated
+        uint32_t FrustumCulledBatches = 0; ///< Batches skipped by frustum culling
     };
 
     // ========================================================================
@@ -762,7 +743,7 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
      */
     class InstanceRenderer
     {
-    public:
+      public:
         InstanceRenderer() = default;
         ~InstanceRenderer() { Shutdown(); }
 
@@ -780,9 +761,7 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
          * @param pContext  D3D11 immediate context.
          * @return S_OK on success.
          */
-        HRESULT Initialize(
-            _In_ ID3D11Device* pDevice,
-            _In_ ID3D11DeviceContext* pContext)
+        HRESULT Initialize(_In_ ID3D11Device* pDevice, _In_ ID3D11DeviceContext* pContext)
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             if (!pDevice || !pContext)
@@ -795,19 +774,15 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
             m_initialized = true;
 
             // Compile the instancing vertex shader
-            HRESULT hr = CompileShaderFromString(
-                INSTANCING_VS_HLSL, "main", "vs_5_0",
-                m_vsBlob.ReleaseAndGetAddressOf());
+            HRESULT hr =
+                CompileShaderFromString(INSTANCING_VS_HLSL, "main", "vs_5_0", m_vsBlob.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return hr;
             }
 
-            hr = pDevice->CreateVertexShader(
-                m_vsBlob->GetBufferPointer(),
-                m_vsBlob->GetBufferSize(),
-                nullptr,
-                m_vertexShader.ReleaseAndGetAddressOf());
+            hr = pDevice->CreateVertexShader(m_vsBlob->GetBufferPointer(), m_vsBlob->GetBufferSize(), nullptr,
+                                             m_vertexShader.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return hr;
@@ -815,37 +790,28 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
 
             // Compile the fallback pixel shader
             ComPtr<ID3DBlob> psBlob;
-            hr = CompileShaderFromString(
-                INSTANCING_PS_HLSL, "main", "ps_5_0",
-                psBlob.ReleaseAndGetAddressOf());
+            hr = CompileShaderFromString(INSTANCING_PS_HLSL, "main", "ps_5_0", psBlob.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return hr;
             }
 
-            hr = pDevice->CreatePixelShader(
-                psBlob->GetBufferPointer(),
-                psBlob->GetBufferSize(),
-                nullptr,
-                m_pixelShader.ReleaseAndGetAddressOf());
+            hr = pDevice->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr,
+                                            m_pixelShader.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return hr;
             }
 
             // Create the standard input layout (Position, Normal, TexCoord)
-            D3D11_INPUT_ELEMENT_DESC layoutDesc[] =
-            {
-                {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-                {"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-                {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
+                {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+                {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+                {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0},
             };
 
-            hr = pDevice->CreateInputLayout(
-                layoutDesc, _countof(layoutDesc),
-                m_vsBlob->GetBufferPointer(),
-                m_vsBlob->GetBufferSize(),
-                m_inputLayout.ReleaseAndGetAddressOf());
+            hr = pDevice->CreateInputLayout(layoutDesc, _countof(layoutDesc), m_vsBlob->GetBufferPointer(),
+                                            m_vsBlob->GetBufferSize(), m_inputLayout.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return hr;
@@ -994,8 +960,7 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
          *                          so the caller can bind the right VB/IB.
          */
         void DrawInstanced(
-            const std::function<void(uint64_t meshID, uint64_t materialID,
-                                     uint32_t indexCount)>& bindMeshCallback)
+            const std::function<void(uint64_t meshID, uint64_t materialID, uint32_t indexCount)>& bindMeshCallback)
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             if (!m_initialized || !m_pContext)
@@ -1031,17 +996,15 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
 
                 if (indexCount > 0)
                 {
-                    m_pContext->DrawIndexedInstanced(
-                        indexCount, instanceCount, 0, 0, 0);
+                    m_pContext->DrawIndexedInstanced(indexCount, instanceCount, 0, 0, 0);
                 }
 
                 ++m_stats.DrawCallsIssued;
             }
 
-            m_stats.DrawCallsSaved =
-                (m_stats.TotalInstances > m_stats.DrawCallsIssued)
-                    ? (m_stats.TotalInstances - m_stats.DrawCallsIssued)
-                    : 0;
+            m_stats.DrawCallsSaved = (m_stats.TotalInstances > m_stats.DrawCallsIssued)
+                                         ? (m_stats.TotalInstances - m_stats.DrawCallsIssued)
+                                         : 0;
 #else
             (void)bindMeshCallback;
 #endif
@@ -1054,8 +1017,7 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
          *
          * @param bindMeshCallback  Per-batch callback for VB/IB binding.
          */
-        void DrawInstancedIndirect(
-            const std::function<void(uint64_t meshID, uint64_t materialID)>& bindMeshCallback)
+        void DrawInstancedIndirect(const std::function<void(uint64_t meshID, uint64_t materialID)>& bindMeshCallback)
         {
 #ifdef SPARK_PLATFORM_WINDOWS
             if (!m_initialized || !m_pContext)
@@ -1083,20 +1045,17 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
                     bindMeshCallback(key.MeshID, key.MaterialID);
                 }
 
-                uint32_t offset = batchIndex *
-                    static_cast<uint32_t>(sizeof(IndirectDrawBuffer::DrawArgs));
+                uint32_t offset = batchIndex * static_cast<uint32_t>(sizeof(IndirectDrawBuffer::DrawArgs));
 
-                m_pContext->DrawIndexedInstancedIndirect(
-                    m_indirectDrawBuffer.GetArgBuffer(), offset);
+                m_pContext->DrawIndexedInstancedIndirect(m_indirectDrawBuffer.GetArgBuffer(), offset);
 
                 ++m_stats.DrawCallsIssued;
                 ++batchIndex;
             }
 
-            m_stats.DrawCallsSaved =
-                (m_stats.TotalInstances > m_stats.DrawCallsIssued)
-                    ? (m_stats.TotalInstances - m_stats.DrawCallsIssued)
-                    : 0;
+            m_stats.DrawCallsSaved = (m_stats.TotalInstances > m_stats.DrawCallsIssued)
+                                         ? (m_stats.TotalInstances - m_stats.DrawCallsIssued)
+                                         : 0;
 #else
             (void)bindMeshCallback;
 #endif
@@ -1136,13 +1095,8 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
                      "InstanceRenderer: %u instances, %u batches, "
                      "%u draw calls (%u saved), %u culled batches, "
                      "%u uploads, %u grows",
-                     m_stats.TotalInstances,
-                     m_stats.BatchCount,
-                     m_stats.DrawCallsIssued,
-                     m_stats.DrawCallsSaved,
-                     m_stats.FrustumCulledBatches,
-                     m_stats.BufferUploads,
-                     m_stats.BufferGrows);
+                     m_stats.TotalInstances, m_stats.BatchCount, m_stats.DrawCallsIssued, m_stats.DrawCallsSaved,
+                     m_stats.FrustumCulledBatches, m_stats.BufferUploads, m_stats.BufferGrows);
             return std::string(buf);
         }
 
@@ -1161,17 +1115,11 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
          * @tparam ConsoleT  Console type (SimpleConsole) to avoid hard include.
          * @param console     Reference to the console singleton.
          */
-        template <typename ConsoleT>
-        void RegisterConsoleCommands(ConsoleT& console)
+        template <typename ConsoleT> void RegisterConsoleCommands(ConsoleT& console)
         {
             console.RegisterCommand(
-                "inst_stats",
-                [this](const std::vector<std::string>&) -> std::string
-                {
-                    return GetStatisticsString();
-                },
-                "Print instance renderer statistics for the current frame",
-                "Graphics");
+                "inst_stats", [this](const std::vector<std::string>&) -> std::string { return GetStatisticsString(); },
+                "Print instance renderer statistics for the current frame", "Graphics");
 
             console.RegisterCommand(
                 "inst_enabled",
@@ -1181,11 +1129,9 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
                     {
                         m_enabled = (args[0] == "1" || args[0] == "true");
                     }
-                    return std::string("Instance rendering: ") +
-                           (m_enabled ? "ON" : "OFF");
+                    return std::string("Instance rendering: ") + (m_enabled ? "ON" : "OFF");
                 },
-                "Toggle instanced rendering (inst_enabled [0|1])",
-                "Graphics");
+                "Toggle instanced rendering (inst_enabled [0|1])", "Graphics");
 
             console.RegisterCommand(
                 "inst_culling",
@@ -1193,14 +1139,11 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
                 {
                     if (!args.empty())
                     {
-                        m_frustumCullingEnabled =
-                            (args[0] == "1" || args[0] == "true");
+                        m_frustumCullingEnabled = (args[0] == "1" || args[0] == "true");
                     }
-                    return std::string("Frustum culling: ") +
-                           (m_frustumCullingEnabled ? "ON" : "OFF");
+                    return std::string("Frustum culling: ") + (m_frustumCullingEnabled ? "ON" : "OFF");
                 },
-                "Toggle per-batch frustum culling (inst_culling [0|1])",
-                "Graphics");
+                "Toggle per-batch frustum culling (inst_culling [0|1])", "Graphics");
         }
 
         // --------------------------------------------------------------------
@@ -1217,17 +1160,14 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
         ID3D11PixelShader* GetPixelShader() const { return m_pixelShader.Get(); }
 #endif
 
-    private:
+      private:
         // --------------------------------------------------------------------
         // Shader Compilation Helper
         // --------------------------------------------------------------------
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        static HRESULT CompileShaderFromString(
-            const char* source,
-            const char* entryPoint,
-            const char* target,
-            ID3DBlob** ppBlob)
+        static HRESULT CompileShaderFromString(const char* source, const char* entryPoint, const char* target,
+                                               ID3DBlob** ppBlob)
         {
             ComPtr<ID3DBlob> errorBlob;
             UINT flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
@@ -1237,23 +1177,15 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
             flags &= ~D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
 
-            HRESULT hr = D3DCompile(
-                source,
-                strlen(source),
-                nullptr,    // source name
-                nullptr,    // defines
-                nullptr,    // includes
-                entryPoint,
-                target,
-                flags,
-                0,
-                ppBlob,
-                errorBlob.GetAddressOf());
+            HRESULT hr = D3DCompile(source, strlen(source),
+                                    nullptr, // source name
+                                    nullptr, // defines
+                                    nullptr, // includes
+                                    entryPoint, target, flags, 0, ppBlob, errorBlob.GetAddressOf());
 
             if (FAILED(hr) && errorBlob)
             {
-                OutputDebugStringA(
-                    static_cast<const char*>(errorBlob->GetBufferPointer()));
+                OutputDebugStringA(static_cast<const char*>(errorBlob->GetBufferPointer()));
             }
             return hr;
         }
@@ -1263,11 +1195,11 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
         // Member Data
         // --------------------------------------------------------------------
 
-        ID3D11Device*        m_pDevice = nullptr;   ///< Non-owning
-        ID3D11DeviceContext*  m_pContext = nullptr;  ///< Non-owning
-        bool                 m_initialized = false;
-        bool                 m_enabled = true;
-        bool                 m_frustumCullingEnabled = true;
+        ID3D11Device* m_pDevice = nullptr;         ///< Non-owning
+        ID3D11DeviceContext* m_pContext = nullptr; ///< Non-owning
+        bool m_initialized = false;
+        bool m_enabled = true;
+        bool m_frustumCullingEnabled = true;
 
         /// Batches keyed by mesh+material
         std::unordered_map<BatchKey, InstanceBatch, BatchKeyHash> m_batches;
@@ -1280,9 +1212,9 @@ void main(uint3 dtid : SV_DispatchThreadID, uint gidx : SV_GroupIndex)
 
 #ifdef SPARK_PLATFORM_WINDOWS
         ComPtr<ID3D11VertexShader> m_vertexShader;
-        ComPtr<ID3D11PixelShader>  m_pixelShader;
-        ComPtr<ID3D11InputLayout>  m_inputLayout;
-        ComPtr<ID3DBlob>           m_vsBlob;
+        ComPtr<ID3D11PixelShader> m_pixelShader;
+        ComPtr<ID3D11InputLayout> m_inputLayout;
+        ComPtr<ID3DBlob> m_vsBlob;
 #endif
     };
 

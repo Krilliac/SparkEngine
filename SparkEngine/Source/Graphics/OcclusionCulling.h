@@ -50,12 +50,12 @@ namespace Spark::Graphics
     struct OcclusionCullingSettings
     {
         OcclusionCullingMode mode = OcclusionCullingMode::HierarchicalZ;
-        uint32_t hiZMipLevels = 10;          ///< Number of Hi-Z mip levels
-        float conservativeScale = 1.1f;      ///< Scale bounding boxes by this factor for conservative testing
-        bool useLastFrameDepth = true;       ///< Use previous frame depth (1 frame latency)
-        int maxQueriesPerFrame = 256;        ///< Max hardware queries per frame
-        float minScreenSize = 0.01f;         ///< Min screen-space size to test (skip tiny objects)
-        bool freezeOcclusion = false;        ///< Debug: freeze occlusion state
+        uint32_t hiZMipLevels = 10;     ///< Number of Hi-Z mip levels
+        float conservativeScale = 1.1f; ///< Scale bounding boxes by this factor for conservative testing
+        bool useLastFrameDepth = true;  ///< Use previous frame depth (1 frame latency)
+        int maxQueriesPerFrame = 256;   ///< Max hardware queries per frame
+        float minScreenSize = 0.01f;    ///< Min screen-space size to test (skip tiny objects)
+        bool freezeOcclusion = false;   ///< Debug: freeze occlusion state
     };
 
     struct OcclusionMetrics
@@ -90,8 +90,7 @@ namespace Spark::Graphics
         OcclusionCullingSystem() = default;
         ~OcclusionCullingSystem() = default;
 
-        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context,
-                        uint32_t width, uint32_t height)
+        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context, uint32_t width, uint32_t height)
         {
             m_device = device;
             m_context = context;
@@ -184,8 +183,8 @@ namespace Spark::Graphics
             }
 
             auto endTime = std::chrono::high_resolution_clock::now();
-            m_metrics.buildHiZTimeMs = std::chrono::duration_cast<std::chrono::microseconds>(
-                endTime - startTime).count() / 1000.0f;
+            m_metrics.buildHiZTimeMs =
+                std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count() / 1000.0f;
         }
 
         /**
@@ -193,8 +192,7 @@ namespace Spark::Graphics
          * @param bounds Array of bounding volumes to test
          * @param results Output visibility array (true = visible)
          */
-        void TestOcclusion(const std::vector<OcclusionBounds>& bounds,
-                           const XMMATRIX& viewProj,
+        void TestOcclusion(const std::vector<OcclusionBounds>& bounds, const XMMATRIX& viewProj,
                            std::vector<bool>& results)
         {
             if (!m_initialized || bounds.empty() || m_settings.mode == OcclusionCullingMode::Disabled)
@@ -223,14 +221,15 @@ namespace Spark::Graphics
 
             uint32_t visible = 0;
             for (bool v : results)
-                if (v) visible++;
+                if (v)
+                    visible++;
 
             m_metrics.visibleObjects = visible;
             m_metrics.occludedObjects = m_metrics.testedObjects - visible;
 
             auto endTime = std::chrono::high_resolution_clock::now();
-            m_metrics.testTimeMs = std::chrono::duration_cast<std::chrono::microseconds>(
-                endTime - startTime).count() / 1000.0f;
+            m_metrics.testTimeMs =
+                std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count() / 1000.0f;
         }
 
         // ---- Settings ----
@@ -245,10 +244,18 @@ namespace Spark::Graphics
             s += "  Mode: ";
             switch (m_settings.mode)
             {
-            case OcclusionCullingMode::Disabled: s += "Disabled"; break;
-            case OcclusionCullingMode::HierarchicalZ: s += "Hi-Z"; break;
-            case OcclusionCullingMode::HardwareQueries: s += "Hardware Queries"; break;
-            case OcclusionCullingMode::Software: s += "Software"; break;
+            case OcclusionCullingMode::Disabled:
+                s += "Disabled";
+                break;
+            case OcclusionCullingMode::HierarchicalZ:
+                s += "Hi-Z";
+                break;
+            case OcclusionCullingMode::HardwareQueries:
+                s += "Hardware Queries";
+                break;
+            case OcclusionCullingMode::Software:
+                s += "Software";
+                break;
             }
             s += "\n";
             s += "  Objects: " + std::to_string(m_metrics.visibleObjects) + "/" +
@@ -268,8 +275,8 @@ namespace Spark::Graphics
             m_hiZUAVs.clear();
             m_hiZMipSRVs.clear();
 
-            m_hiZMipCount = static_cast<uint32_t>(std::floor(
-                std::log2(static_cast<float>(std::max(m_width, m_height))))) + 1;
+            m_hiZMipCount =
+                static_cast<uint32_t>(std::floor(std::log2(static_cast<float>(std::max(m_width, m_height))))) + 1;
             m_hiZMipCount = std::min(m_hiZMipCount, m_settings.hiZMipLevels);
             m_metrics.hiZMipLevels = m_hiZMipCount;
 
@@ -446,15 +453,16 @@ namespace Spark::Graphics
 
             ComPtr<ID3DBlob> blob, errBlob;
 
-            HRESULT hr = D3DCompile(hiZBuildSource, strlen(hiZBuildSource), "HiZBuild", nullptr, nullptr,
-                                     "main", "cs_5_0", 0, 0, &blob, &errBlob);
+            HRESULT hr = D3DCompile(hiZBuildSource, strlen(hiZBuildSource), "HiZBuild", nullptr, nullptr, "main",
+                                    "cs_5_0", 0, 0, &blob, &errBlob);
             if (SUCCEEDED(hr))
                 m_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_hiZBuildCS);
 
-            hr = D3DCompile(testSource, strlen(testSource), "OcclusionTest", nullptr, nullptr,
-                             "main", "cs_5_0", 0, 0, &blob, &errBlob);
+            hr = D3DCompile(testSource, strlen(testSource), "OcclusionTest", nullptr, nullptr, "main", "cs_5_0", 0, 0,
+                            &blob, &errBlob);
             if (SUCCEEDED(hr))
-                m_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_occlusionTestCS);
+                m_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr,
+                                              &m_occlusionTestCS);
 
             // Create constant buffer
             D3D11_BUFFER_DESC cbDesc = {};
@@ -481,8 +489,7 @@ namespace Spark::Graphics
             return true;
         }
 
-        void TestHiZ(const std::vector<OcclusionBounds>& bounds, const XMMATRIX& viewProj,
-                      std::vector<bool>& results)
+        void TestHiZ(const std::vector<OcclusionBounds>& bounds, const XMMATRIX& viewProj, std::vector<bool>& results)
         {
             uint32_t count = static_cast<uint32_t>(bounds.size());
             results.resize(count);
@@ -493,8 +500,8 @@ namespace Spark::Graphics
             {
                 boundsData[i * 2] = {bounds[i].center.x, bounds[i].center.y, bounds[i].center.z, 0.0f};
                 boundsData[i * 2 + 1] = {bounds[i].extents.x * m_settings.conservativeScale,
-                                           bounds[i].extents.y * m_settings.conservativeScale,
-                                           bounds[i].extents.z * m_settings.conservativeScale, 0.0f};
+                                         bounds[i].extents.y * m_settings.conservativeScale,
+                                         bounds[i].extents.z * m_settings.conservativeScale, 0.0f};
             }
 
             // Create/resize bounds buffer
@@ -544,8 +551,8 @@ namespace Spark::Graphics
             cb.viewProjCol1 = {vpMat._21, vpMat._22, vpMat._23, vpMat._24};
             cb.viewProjCol2 = {vpMat._31, vpMat._32, vpMat._33, vpMat._34};
             cb.viewProjCol3 = {vpMat._41, vpMat._42, vpMat._43, vpMat._44};
-            cb.testParams = {static_cast<float>(count), static_cast<float>(m_width),
-                              static_cast<float>(m_height), m_settings.minScreenSize};
+            cb.testParams = {static_cast<float>(count), static_cast<float>(m_width), static_cast<float>(m_height),
+                             m_settings.minScreenSize};
 
             D3D11_MAPPED_SUBRESOURCE mapped;
             if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
@@ -585,14 +592,14 @@ namespace Spark::Graphics
             }
         }
 
-        void TestHardwareQueries(const std::vector<OcclusionBounds>& bounds,
-                                  const XMMATRIX& viewProj, std::vector<bool>& results)
+        void TestHardwareQueries(const std::vector<OcclusionBounds>& bounds, const XMMATRIX& viewProj,
+                                 std::vector<bool>& results)
         {
             // D3D11 occlusion queries - simpler but higher latency
             results.assign(bounds.size(), true);
 
-            uint32_t queryCount = std::min(static_cast<uint32_t>(bounds.size()),
-                                            static_cast<uint32_t>(m_settings.maxQueriesPerFrame));
+            uint32_t queryCount =
+                std::min(static_cast<uint32_t>(bounds.size()), static_cast<uint32_t>(m_settings.maxQueriesPerFrame));
 
             // Create queries if needed
             while (m_occlusionQueries.size() < queryCount)
@@ -612,8 +619,8 @@ namespace Spark::Graphics
             }
         }
 
-        void TestSoftware(const std::vector<OcclusionBounds>& bounds,
-                           const XMMATRIX& viewProj, std::vector<bool>& results)
+        void TestSoftware(const std::vector<OcclusionBounds>& bounds, const XMMATRIX& viewProj,
+                          std::vector<bool>& results)
         {
             // CPU software rasterizer for occlusion culling
             results.resize(bounds.size());
@@ -623,8 +630,7 @@ namespace Spark::Graphics
             {
                 const auto& b = bounds[i];
                 XMVECTOR center = XMLoadFloat3(&b.center);
-                XMVECTOR clipPos = XMVector4Transform(
-                    XMVectorSet(b.center.x, b.center.y, b.center.z, 1.0f), viewProj);
+                XMVECTOR clipPos = XMVector4Transform(XMVectorSet(b.center.x, b.center.y, b.center.z, 1.0f), viewProj);
 
                 float w = XMVectorGetW(clipPos);
                 if (w <= 0.0f)

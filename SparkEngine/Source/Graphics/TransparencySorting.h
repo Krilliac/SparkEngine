@@ -28,9 +28,9 @@ namespace Spark::Graphics
 
     enum class TransparencyMode
     {
-        Sorted,                    ///< Back-to-front sorting (traditional)
-        WeightedBlended,           ///< Weighted Blended OIT (McGuire 2013)
-        DepthPeeling              ///< Depth peeling (exact, multi-pass)
+        Sorted,          ///< Back-to-front sorting (traditional)
+        WeightedBlended, ///< Weighted Blended OIT (McGuire 2013)
+        DepthPeeling     ///< Depth peeling (exact, multi-pass)
     };
 
     struct TransparentObject
@@ -38,7 +38,7 @@ namespace Spark::Graphics
         uint32_t objectIndex = 0;
         float distanceToCamera = 0.0f;
         uint32_t renderQueue = 3000;
-        float sortKey = 0.0f;        ///< Combined sort key for stable sorting
+        float sortKey = 0.0f; ///< Combined sort key for stable sorting
     };
 
     struct TransparencySettings
@@ -67,8 +67,7 @@ namespace Spark::Graphics
         TransparencySortingSystem() = default;
         ~TransparencySortingSystem() = default;
 
-        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context,
-                        uint32_t width, uint32_t height)
+        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context, uint32_t width, uint32_t height)
         {
             m_device = device;
             m_context = context;
@@ -111,17 +110,17 @@ namespace Spark::Graphics
 
             // Back-to-front sort (farthest first)
             std::stable_sort(objects.begin(), objects.end(),
-                [](const TransparentObject& a, const TransparentObject& b)
-                {
-                    // First by render queue, then by distance (back to front)
-                    if (a.renderQueue != b.renderQueue)
-                        return a.renderQueue < b.renderQueue;
-                    return a.distanceToCamera > b.distanceToCamera;
-                });
+                             [](const TransparentObject& a, const TransparentObject& b)
+                             {
+                                 // First by render queue, then by distance (back to front)
+                                 if (a.renderQueue != b.renderQueue)
+                                     return a.renderQueue < b.renderQueue;
+                                 return a.distanceToCamera > b.distanceToCamera;
+                             });
 
             auto endTime = std::chrono::high_resolution_clock::now();
-            m_metrics.sortTimeMs = std::chrono::duration_cast<std::chrono::microseconds>(
-                endTime - startTime).count() / 1000.0f;
+            m_metrics.sortTimeMs =
+                std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count() / 1000.0f;
             m_metrics.transparentObjects = static_cast<uint32_t>(objects.size());
         }
 
@@ -177,10 +176,7 @@ namespace Spark::Graphics
         }
 
         /** @brief Restore default (no blend) state */
-        void RestoreDefaultBlendState()
-        {
-            m_context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
-        }
+        void RestoreDefaultBlendState() { m_context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF); }
 
         TransparencySettings& GetSettings() { return m_settings; }
         const TransparencyMetrics& GetMetrics() const { return m_metrics; }
@@ -191,9 +187,15 @@ namespace Spark::Graphics
             s += "  Mode: ";
             switch (m_settings.mode)
             {
-            case TransparencyMode::Sorted: s += "Back-to-Front Sorted"; break;
-            case TransparencyMode::WeightedBlended: s += "Weighted Blended OIT"; break;
-            case TransparencyMode::DepthPeeling: s += "Depth Peeling"; break;
+            case TransparencyMode::Sorted:
+                s += "Back-to-Front Sorted";
+                break;
+            case TransparencyMode::WeightedBlended:
+                s += "Weighted Blended OIT";
+                break;
+            case TransparencyMode::DepthPeeling:
+                s += "Depth Peeling";
+                break;
             }
             s += "\n  Objects: " + std::to_string(m_metrics.transparentObjects);
             s += "\n  Sort time: " + std::to_string(m_metrics.sortTimeMs) + "ms\n";

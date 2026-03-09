@@ -29,11 +29,11 @@ namespace Spark::Graphics
 
     struct IBLSettings
     {
-        uint32_t irradianceMapSize = 64;        ///< Irradiance cubemap face resolution
-        uint32_t prefilteredMapSize = 256;       ///< Prefiltered env map face resolution
-        uint32_t prefilteredMipLevels = 5;       ///< Number of roughness mip levels
-        uint32_t brdfLUTSize = 512;              ///< BRDF integration LUT resolution
-        uint32_t sampleCount = 1024;             ///< Monte Carlo sample count
+        uint32_t irradianceMapSize = 64;   ///< Irradiance cubemap face resolution
+        uint32_t prefilteredMapSize = 256; ///< Prefiltered env map face resolution
+        uint32_t prefilteredMipLevels = 5; ///< Number of roughness mip levels
+        uint32_t brdfLUTSize = 512;        ///< BRDF integration LUT resolution
+        uint32_t sampleCount = 1024;       ///< Monte Carlo sample count
     };
 
     /**
@@ -105,21 +105,21 @@ namespace Spark::Graphics
         std::string Console_GetStatus() const
         {
             std::string s = "IBL Generator:\n";
-            s += "  Irradiance map: " + std::to_string(m_settings.irradianceMapSize) + "x"
-                 + std::to_string(m_settings.irradianceMapSize) + "\n";
-            s += "  Prefiltered map: " + std::to_string(m_settings.prefilteredMapSize) + "x"
-                 + std::to_string(m_settings.prefilteredMapSize) + " ("
-                 + std::to_string(m_settings.prefilteredMipLevels) + " mips)\n";
-            s += "  BRDF LUT: " + std::to_string(m_settings.brdfLUTSize) + "x"
-                 + std::to_string(m_settings.brdfLUTSize) + "\n";
+            s += "  Irradiance map: " + std::to_string(m_settings.irradianceMapSize) + "x" +
+                 std::to_string(m_settings.irradianceMapSize) + "\n";
+            s += "  Prefiltered map: " + std::to_string(m_settings.prefilteredMapSize) + "x" +
+                 std::to_string(m_settings.prefilteredMapSize) + " (" +
+                 std::to_string(m_settings.prefilteredMipLevels) + " mips)\n";
+            s += "  BRDF LUT: " + std::to_string(m_settings.brdfLUTSize) + "x" +
+                 std::to_string(m_settings.brdfLUTSize) + "\n";
             return s;
         }
 
       private:
         struct IBLCB
         {
-            XMFLOAT4 params;     // x=roughness, y=sampleCount, z=faceSize, w=faceIndex
-            XMFLOAT4 params2;    // x=mipLevel, y=totalMips, z=unused, w=unused
+            XMFLOAT4 params;  // x=roughness, y=sampleCount, z=faceSize, w=faceIndex
+            XMFLOAT4 params2; // x=mipLevel, y=totalMips, z=unused, w=unused
         };
 
         bool CompileShaders()
@@ -404,26 +404,23 @@ namespace Spark::Graphics
 
             ComPtr<ID3DBlob> blob, errorBlob;
 
-            HRESULT hr = D3DCompile(irradianceCSSource, strlen(irradianceCSSource),
-                                     "IrradianceCS", nullptr, nullptr, "main", "cs_5_0",
-                                     0, 0, &blob, &errorBlob);
-            if (FAILED(hr)) return false;
-            m_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(),
-                                           nullptr, &m_irradianceCS);
+            HRESULT hr = D3DCompile(irradianceCSSource, strlen(irradianceCSSource), "IrradianceCS", nullptr, nullptr,
+                                    "main", "cs_5_0", 0, 0, &blob, &errorBlob);
+            if (FAILED(hr))
+                return false;
+            m_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_irradianceCS);
 
-            hr = D3DCompile(prefilterCSSource, strlen(prefilterCSSource),
-                             "PrefilterCS", nullptr, nullptr, "main", "cs_5_0",
-                             0, 0, &blob, &errorBlob);
-            if (FAILED(hr)) return false;
-            m_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(),
-                                           nullptr, &m_prefilterCS);
+            hr = D3DCompile(prefilterCSSource, strlen(prefilterCSSource), "PrefilterCS", nullptr, nullptr, "main",
+                            "cs_5_0", 0, 0, &blob, &errorBlob);
+            if (FAILED(hr))
+                return false;
+            m_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_prefilterCS);
 
-            hr = D3DCompile(brdfLutCSSource, strlen(brdfLutCSSource),
-                             "BRDFLUTCS", nullptr, nullptr, "main", "cs_5_0",
-                             0, 0, &blob, &errorBlob);
-            if (FAILED(hr)) return false;
-            m_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(),
-                                           nullptr, &m_brdfLutCS);
+            hr = D3DCompile(brdfLutCSSource, strlen(brdfLutCSSource), "BRDFLUTCS", nullptr, nullptr, "main", "cs_5_0",
+                            0, 0, &blob, &errorBlob);
+            if (FAILED(hr))
+                return false;
+            m_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_brdfLutCS);
 
             // Create constant buffer
             D3D11_BUFFER_DESC cbDesc = {};
@@ -461,7 +458,8 @@ namespace Spark::Graphics
             texDesc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
 
             HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr, &m_irradianceMap);
-            if (FAILED(hr)) return false;
+            if (FAILED(hr))
+                return false;
 
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
             srvDesc.Format = texDesc.Format;
@@ -515,7 +513,8 @@ namespace Spark::Graphics
             texDesc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
 
             HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr, &m_prefilteredMap);
-            if (FAILED(hr)) return false;
+            if (FAILED(hr))
+                return false;
 
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
             srvDesc.Format = texDesc.Format;
@@ -526,7 +525,8 @@ namespace Spark::Graphics
             for (uint32_t mip = 0; mip < mipLevels; mip++)
             {
                 uint32_t mipSize = size >> mip;
-                if (mipSize < 1) mipSize = 1;
+                if (mipSize < 1)
+                    mipSize = 1;
                 float roughness = static_cast<float>(mip) / static_cast<float>(mipLevels - 1);
 
                 for (uint32_t face = 0; face < 6; face++)
@@ -573,7 +573,8 @@ namespace Spark::Graphics
             texDesc.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
 
             HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr, &m_brdfLUT);
-            if (FAILED(hr)) return false;
+            if (FAILED(hr))
+                return false;
 
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
             srvDesc.Format = texDesc.Format;
@@ -600,8 +601,8 @@ namespace Spark::Graphics
         void UpdateCB(float roughness, uint32_t sampleCount, uint32_t faceSize, uint32_t faceIndex)
         {
             IBLCB cb;
-            cb.params = {roughness, static_cast<float>(sampleCount),
-                         static_cast<float>(faceSize), static_cast<float>(faceIndex)};
+            cb.params = {roughness, static_cast<float>(sampleCount), static_cast<float>(faceSize),
+                         static_cast<float>(faceIndex)};
             cb.params2 = {0, 0, 0, 0};
 
             D3D11_MAPPED_SUBRESOURCE mapped;

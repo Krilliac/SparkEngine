@@ -37,8 +37,8 @@ namespace Spark::Graphics
 
     enum class LightCullingMode
     {
-        ForwardPlus,    ///< 2D tile-based culling (screen-space tiles)
-        Clustered       ///< 3D clustered culling (frustum voxels)
+        ForwardPlus, ///< 2D tile-based culling (screen-space tiles)
+        Clustered    ///< 3D clustered culling (frustum voxels)
     };
 
     struct GPUPointLight
@@ -96,8 +96,7 @@ namespace Spark::Graphics
         ForwardPlusLightCulling() = default;
         ~ForwardPlusLightCulling() = default;
 
-        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context,
-                        uint32_t width, uint32_t height)
+        bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context, uint32_t width, uint32_t height)
         {
             m_device = device;
             m_context = context;
@@ -143,8 +142,7 @@ namespace Spark::Graphics
         /**
          * @brief Upload light data and run GPU culling
          */
-        void CullLights(const std::vector<GPUPointLight>& pointLights,
-                        const XMMATRIX& view, const XMMATRIX& projection,
+        void CullLights(const std::vector<GPUPointLight>& pointLights, const XMMATRIX& view, const XMMATRIX& projection,
                         ID3D11ShaderResourceView* depthSRV)
         {
             if (!m_initialized)
@@ -155,8 +153,7 @@ namespace Spark::Graphics
 
             // Clear light index counter (first uint in light index buffer)
             uint32_t clearVal = 0;
-            m_context->ClearUnorderedAccessViewUint(m_lightIndexUAV.Get(),
-                                                     reinterpret_cast<const UINT*>(&clearVal));
+            m_context->ClearUnorderedAccessViewUint(m_lightIndexUAV.Get(), reinterpret_cast<const UINT*>(&clearVal));
             uint32_t gridClear[4] = {0, 0, 0, 0};
             m_context->ClearUnorderedAccessViewUint(m_lightGridUAV.Get(), gridClear);
 
@@ -200,8 +197,9 @@ namespace Spark::Graphics
         std::string Console_GetStatus() const
         {
             std::string s = "Forward+ Light Culling:\n";
-            s += "  Mode: " + std::string(m_settings.mode == LightCullingMode::ForwardPlus
-                                              ? "Forward+ (Tiled)" : "Clustered") + "\n";
+            s += "  Mode: " +
+                 std::string(m_settings.mode == LightCullingMode::ForwardPlus ? "Forward+ (Tiled)" : "Clustered") +
+                 "\n";
             s += "  Tiles: " + std::to_string(m_tilesX) + "x" + std::to_string(m_tilesY) + "\n";
             s += "  Lights: " + std::to_string(m_metrics.totalLights) + "\n";
             return s;
@@ -234,7 +232,8 @@ namespace Spark::Graphics
             bufDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
             bufDesc.StructureByteStride = sizeof(GPUPointLight);
             HRESULT hr = m_device->CreateBuffer(&bufDesc, nullptr, &m_lightBuffer);
-            if (FAILED(hr)) return false;
+            if (FAILED(hr))
+                return false;
 
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
             srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -252,7 +251,8 @@ namespace Spark::Graphics
             bufDesc.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
             bufDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
             hr = m_device->CreateBuffer(&bufDesc, nullptr, &m_lightIndexBuffer);
-            if (FAILED(hr)) return false;
+            if (FAILED(hr))
+                return false;
 
             D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
             uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
@@ -276,7 +276,8 @@ namespace Spark::Graphics
             bufDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
             bufDesc.StructureByteStride = 2 * sizeof(uint32_t);
             hr = m_device->CreateBuffer(&bufDesc, nullptr, &m_lightGridBuffer);
-            if (FAILED(hr)) return false;
+            if (FAILED(hr))
+                return false;
 
             uavDesc = {};
             uavDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -462,15 +463,15 @@ namespace Spark::Graphics
             )";
 
             ComPtr<ID3DBlob> csBlob, errorBlob;
-            HRESULT hr = D3DCompile(tileCullingCS, strlen(tileCullingCS), "TileCullingCS",
-                                     nullptr, nullptr, "main", "cs_5_0", 0, 0,
-                                     &csBlob, &errorBlob);
-            if (FAILED(hr)) return false;
+            HRESULT hr = D3DCompile(tileCullingCS, strlen(tileCullingCS), "TileCullingCS", nullptr, nullptr, "main",
+                                    "cs_5_0", 0, 0, &csBlob, &errorBlob);
+            if (FAILED(hr))
+                return false;
 
-            hr = m_device->CreateComputeShader(csBlob->GetBufferPointer(),
-                                                csBlob->GetBufferSize(),
-                                                nullptr, &m_tileCullingCS);
-            if (FAILED(hr)) return false;
+            hr = m_device->CreateComputeShader(csBlob->GetBufferPointer(), csBlob->GetBufferSize(), nullptr,
+                                               &m_tileCullingCS);
+            if (FAILED(hr))
+                return false;
 
             // Clustered culling (3D extension)
             const char* clusterCullingCS = R"(
@@ -564,14 +565,13 @@ namespace Spark::Graphics
                 }
             )";
 
-            hr = D3DCompile(clusterCullingCS, strlen(clusterCullingCS), "ClusterCullingCS",
-                             nullptr, nullptr, "main", "cs_5_0", 0, 0,
-                             &csBlob, &errorBlob);
-            if (FAILED(hr)) return false;
+            hr = D3DCompile(clusterCullingCS, strlen(clusterCullingCS), "ClusterCullingCS", nullptr, nullptr, "main",
+                            "cs_5_0", 0, 0, &csBlob, &errorBlob);
+            if (FAILED(hr))
+                return false;
 
-            hr = m_device->CreateComputeShader(csBlob->GetBufferPointer(),
-                                                csBlob->GetBufferSize(),
-                                                nullptr, &m_clusterCullingCS);
+            hr = m_device->CreateComputeShader(csBlob->GetBufferPointer(), csBlob->GetBufferSize(), nullptr,
+                                               &m_clusterCullingCS);
             return SUCCEEDED(hr);
         }
 
@@ -579,8 +579,7 @@ namespace Spark::Graphics
         {
             D3D11_MAPPED_SUBRESOURCE mapped;
             m_context->Map(m_lightBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-            uint32_t count = static_cast<uint32_t>(std::min(lights.size(),
-                                                             static_cast<size_t>(MAX_TOTAL_LIGHTS)));
+            uint32_t count = static_cast<uint32_t>(std::min(lights.size(), static_cast<size_t>(MAX_TOTAL_LIGHTS)));
             memcpy(mapped.pData, lights.data(), count * sizeof(GPUPointLight));
             m_context->Unmap(m_lightBuffer.Get(), 0);
 

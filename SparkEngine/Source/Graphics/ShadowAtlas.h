@@ -46,9 +46,9 @@ class Light;
  */
 enum class ShadowFilterMode
 {
-    PCF,  ///< Percentage Closer Filtering
-    VSM,  ///< Variance Shadow Maps
-    PCSS  ///< Percentage Closer Soft Shadows
+    PCF, ///< Percentage Closer Filtering
+    VSM, ///< Variance Shadow Maps
+    PCSS ///< Percentage Closer Soft Shadows
 };
 
 /**
@@ -69,16 +69,16 @@ enum class ShadowCacheMode
  */
 struct ShadowAtlasSettings
 {
-    uint32_t atlasWidth  = 4096; ///< Atlas texture width in pixels
+    uint32_t atlasWidth = 4096;  ///< Atlas texture width in pixels
     uint32_t atlasHeight = 4096; ///< Atlas texture height in pixels
 
     uint32_t maxTiles = 64; ///< Maximum number of simultaneous shadow tiles
 
     /** Supported tile resolutions (must be power-of-two, sorted ascending). */
-    static constexpr uint32_t TILE_SIZES[]     = {256, 512, 1024, 2048};
-    static constexpr uint32_t TILE_SIZE_COUNT   = 4;
-    static constexpr uint32_t MIN_TILE_SIZE     = 256;
-    static constexpr uint32_t MAX_TILE_SIZE     = 2048;
+    static constexpr uint32_t TILE_SIZES[] = {256, 512, 1024, 2048};
+    static constexpr uint32_t TILE_SIZE_COUNT = 4;
+    static constexpr uint32_t MIN_TILE_SIZE = 256;
+    static constexpr uint32_t MAX_TILE_SIZE = 2048;
 
     /** Maximum number of shadow map updates (render passes) per frame. */
     uint32_t updateBudgetPerFrame = 4;
@@ -94,34 +94,34 @@ struct ShadowAtlasSettings
 struct ShadowTile
 {
     // ---- Atlas location (pixels) ----
-    uint32_t x      = 0; ///< Left edge in atlas (pixels)
-    uint32_t y      = 0; ///< Top edge in atlas (pixels)
-    uint32_t size   = 0; ///< Tile width/height (square, power-of-two)
+    uint32_t x = 0;    ///< Left edge in atlas (pixels)
+    uint32_t y = 0;    ///< Top edge in atlas (pixels)
+    uint32_t size = 0; ///< Tile width/height (square, power-of-two)
 
     // ---- UV transform for shader lookup ----
     XMFLOAT4 uvScaleBias = {0.0f, 0.0f, 0.0f, 0.0f}; ///< (scaleU, scaleV, biasU, biasV)
 
     // ---- Association ----
-    Light* light        = nullptr; ///< Non-owning pointer to the light that owns this tile
-    int32_t cascadeIndex = -1;     ///< -1 for non-cascaded; 0..N for CSM cascade index
+    Light* light = nullptr;    ///< Non-owning pointer to the light that owns this tile
+    int32_t cascadeIndex = -1; ///< -1 for non-cascaded; 0..N for CSM cascade index
 
     // ---- Priority / scheduling ----
-    float   priority        = 0.0f;  ///< Higher = more important to update this frame
-    uint64_t lastUpdateFrame = 0;    ///< Engine frame number when last rendered
-    bool    dirty           = true;  ///< True if the tile needs re-rendering
+    float priority = 0.0f;        ///< Higher = more important to update this frame
+    uint64_t lastUpdateFrame = 0; ///< Engine frame number when last rendered
+    bool dirty = true;            ///< True if the tile needs re-rendering
 
     // ---- Caching ----
-    ShadowCacheMode cacheMode  = ShadowCacheMode::Dynamic;
+    ShadowCacheMode cacheMode = ShadowCacheMode::Dynamic;
     ShadowFilterMode filterMode = ShadowFilterMode::PCF;
 
     // ---- Shadow matrix ----
     XMMATRIX shadowMatrix = XMMatrixIdentity(); ///< World-to-shadow-clip transform
 
     // ---- Grid allocator bookkeeping ----
-    uint32_t gridX = 0; ///< Grid cell column
-    uint32_t gridY = 0; ///< Grid cell row
+    uint32_t gridX = 0;    ///< Grid cell column
+    uint32_t gridY = 0;    ///< Grid cell row
     uint32_t gridSpan = 1; ///< Number of grid cells spanned (size / minCellSize)
-    bool     allocated = false;
+    bool allocated = false;
 };
 
 // ============================================================================
@@ -133,12 +133,12 @@ struct ShadowTile
  */
 struct ShadowAtlasMetrics
 {
-    uint32_t activeTiles      = 0;   ///< Currently allocated tiles
-    uint32_t updatesThisFrame = 0;   ///< Shadow maps rendered this frame
-    uint32_t cacheHits        = 0;   ///< Tiles skipped due to caching
-    float    atlasUtilization = 0.0f; ///< Fraction of atlas area in use [0,1]
-    uint32_t fragmentedCells  = 0;   ///< Free cells surrounded by allocated cells
-    float    memoryUsageMB    = 0.0f; ///< Approximate GPU memory for the atlas
+    uint32_t activeTiles = 0;      ///< Currently allocated tiles
+    uint32_t updatesThisFrame = 0; ///< Shadow maps rendered this frame
+    uint32_t cacheHits = 0;        ///< Tiles skipped due to caching
+    float atlasUtilization = 0.0f; ///< Fraction of atlas area in use [0,1]
+    uint32_t fragmentedCells = 0;  ///< Free cells surrounded by allocated cells
+    float memoryUsageMB = 0.0f;    ///< Approximate GPU memory for the atlas
 };
 
 // ============================================================================
@@ -155,7 +155,7 @@ struct ShadowAtlasMetrics
  */
 class ShadowAtlas
 {
-public:
+  public:
     ShadowAtlas() = default;
     ~ShadowAtlas() { Shutdown(); }
 
@@ -176,21 +176,19 @@ public:
      * @param settings Atlas configuration
      * @return S_OK on success
      */
-    HRESULT Initialize(ID3D11Device* device,
-                       ID3D11DeviceContext* context,
-                       const ShadowAtlasSettings& settings = {})
+    HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* context, const ShadowAtlasSettings& settings = {})
     {
         if (!device || !context)
         {
             return E_INVALIDARG;
         }
 
-        m_device   = device;
-        m_context  = context;
+        m_device = device;
+        m_context = context;
         m_settings = settings;
 
         // Grid dimensions in cells of MIN_TILE_SIZE
-        m_gridCols = m_settings.atlasWidth  / ShadowAtlasSettings::MIN_TILE_SIZE;
+        m_gridCols = m_settings.atlasWidth / ShadowAtlasSettings::MIN_TILE_SIZE;
         m_gridRows = m_settings.atlasHeight / ShadowAtlasSettings::MIN_TILE_SIZE;
         m_gridOccupancy.assign(m_gridCols * m_gridRows, false);
 
@@ -209,7 +207,7 @@ public:
         m_atlasDSV.Reset();
         m_atlasSRV.Reset();
         m_atlasTexture.Reset();
-        m_device  = nullptr;
+        m_device = nullptr;
         m_context = nullptr;
         m_metrics = {};
     }
@@ -227,11 +225,8 @@ public:
      * @param cascadeIndex -1 for non-cascaded; >= 0 for CSM cascade
      * @return Pointer to the new tile, or nullptr if atlas is full
      */
-    ShadowTile* AllocateTile(Light* light,
-                             uint32_t tileSize,
-                             ShadowFilterMode filterMode = ShadowFilterMode::PCF,
-                             ShadowCacheMode cacheMode   = ShadowCacheMode::Dynamic,
-                             int32_t cascadeIndex         = -1)
+    ShadowTile* AllocateTile(Light* light, uint32_t tileSize, ShadowFilterMode filterMode = ShadowFilterMode::PCF,
+                             ShadowCacheMode cacheMode = ShadowCacheMode::Dynamic, int32_t cascadeIndex = -1)
     {
         tileSize = SnapToValidTileSize(tileSize);
 
@@ -252,29 +247,24 @@ public:
         MarkRegion(cellX, cellY, span, true);
 
         ShadowTile tile;
-        tile.x            = cellX * ShadowAtlasSettings::MIN_TILE_SIZE;
-        tile.y            = cellY * ShadowAtlasSettings::MIN_TILE_SIZE;
-        tile.size         = tileSize;
-        tile.light        = light;
+        tile.x = cellX * ShadowAtlasSettings::MIN_TILE_SIZE;
+        tile.y = cellY * ShadowAtlasSettings::MIN_TILE_SIZE;
+        tile.size = tileSize;
+        tile.light = light;
         tile.cascadeIndex = cascadeIndex;
-        tile.filterMode   = filterMode;
-        tile.cacheMode    = cacheMode;
-        tile.dirty        = true;
-        tile.allocated    = true;
-        tile.gridX        = cellX;
-        tile.gridY        = cellY;
-        tile.gridSpan     = span;
+        tile.filterMode = filterMode;
+        tile.cacheMode = cacheMode;
+        tile.dirty = true;
+        tile.allocated = true;
+        tile.gridX = cellX;
+        tile.gridY = cellY;
+        tile.gridSpan = span;
 
         // Precompute UV scale/bias for shader sampling
         const float invW = 1.0f / static_cast<float>(m_settings.atlasWidth);
         const float invH = 1.0f / static_cast<float>(m_settings.atlasHeight);
-        tile.uvScaleBias =
-        {
-            static_cast<float>(tileSize) * invW,
-            static_cast<float>(tileSize) * invH,
-            static_cast<float>(tile.x)   * invW,
-            static_cast<float>(tile.y)   * invH
-        };
+        tile.uvScaleBias = {static_cast<float>(tileSize) * invW, static_cast<float>(tileSize) * invH,
+                            static_cast<float>(tile.x) * invW, static_cast<float>(tile.y) * invH};
 
         m_tiles.push_back(tile);
         return &m_tiles.back();
@@ -288,9 +278,7 @@ public:
      * @param filterMode  Shadow filter
      * @return Vector of pointers to allocated tiles (empty on failure)
      */
-    std::vector<ShadowTile*> AllocateCascadeTiles(Light* light,
-                                                  uint32_t cascadeCount,
-                                                  uint32_t tileSizePerCascade,
+    std::vector<ShadowTile*> AllocateCascadeTiles(Light* light, uint32_t cascadeCount, uint32_t tileSizePerCascade,
                                                   ShadowFilterMode filterMode = ShadowFilterMode::PCF)
     {
         std::vector<ShadowTile*> result;
@@ -298,9 +286,8 @@ public:
 
         for (uint32_t i = 0; i < cascadeCount; ++i)
         {
-            ShadowTile* tile = AllocateTile(light, tileSizePerCascade, filterMode,
-                                            ShadowCacheMode::Dynamic,
-                                            static_cast<int32_t>(i));
+            ShadowTile* tile =
+                AllocateTile(light, tileSizePerCascade, filterMode, ShadowCacheMode::Dynamic, static_cast<int32_t>(i));
             if (!tile)
             {
                 // Roll back all allocated cascade tiles
@@ -328,8 +315,7 @@ public:
 
         MarkRegion(tile->gridX, tile->gridY, tile->gridSpan, false);
 
-        auto it = std::find_if(m_tiles.begin(), m_tiles.end(),
-            [tile](const ShadowTile& t) { return &t == tile; });
+        auto it = std::find_if(m_tiles.begin(), m_tiles.end(), [tile](const ShadowTile& t) { return &t == tile; });
 
         if (it != m_tiles.end())
         {
@@ -347,7 +333,7 @@ public:
      */
     void FreeTilesForLight(const Light* light)
     {
-        for (auto it = m_tiles.begin(); it != m_tiles.end(); )
+        for (auto it = m_tiles.begin(); it != m_tiles.end();)
         {
             if (it->light == light)
             {
@@ -378,8 +364,8 @@ public:
     {
         m_currentFrame = currentFrame;
         m_metrics.updatesThisFrame = 0;
-        m_metrics.cacheHits        = 0;
-        m_metrics.activeTiles      = static_cast<uint32_t>(m_tiles.size());
+        m_metrics.cacheHits = 0;
+        m_metrics.activeTiles = static_cast<uint32_t>(m_tiles.size());
 
         // Collect dirty / dynamic candidates
         std::vector<ShadowTile*> candidates;
@@ -400,10 +386,7 @@ public:
 
         // Sort by descending priority
         std::sort(candidates.begin(), candidates.end(),
-            [](const ShadowTile* a, const ShadowTile* b)
-            {
-                return a->priority > b->priority;
-            });
+                  [](const ShadowTile* a, const ShadowTile* b) { return a->priority > b->priority; });
 
         // Clamp to budget
         const uint32_t budget = m_settings.updateBudgetPerFrame;
@@ -434,16 +417,16 @@ public:
         D3D11_VIEWPORT vp = {};
         vp.TopLeftX = static_cast<float>(tile.x);
         vp.TopLeftY = static_cast<float>(tile.y);
-        vp.Width    = static_cast<float>(tile.size);
-        vp.Height   = static_cast<float>(tile.size);
+        vp.Width = static_cast<float>(tile.size);
+        vp.Height = static_cast<float>(tile.size);
         vp.MinDepth = 0.0f;
         vp.MaxDepth = 1.0f;
         m_context->RSSetViewports(1, &vp);
 
         D3D11_RECT scissor = {};
-        scissor.left   = static_cast<LONG>(tile.x);
-        scissor.top    = static_cast<LONG>(tile.y);
-        scissor.right  = static_cast<LONG>(tile.x + tile.size);
+        scissor.left = static_cast<LONG>(tile.x);
+        scissor.top = static_cast<LONG>(tile.y);
+        scissor.right = static_cast<LONG>(tile.x + tile.size);
         scissor.bottom = static_cast<LONG>(tile.y + tile.size);
         m_context->RSSetScissorRects(1, &scissor);
 #else
@@ -463,10 +446,7 @@ public:
     /**
      * @brief Invalidate a tile so it will be re-rendered (even if static)
      */
-    void InvalidateTile(ShadowTile& tile)
-    {
-        tile.dirty = true;
-    }
+    void InvalidateTile(ShadowTile& tile) { tile.dirty = true; }
 
     /**
      * @brief Invalidate all tiles (e.g. after a scene change)
@@ -486,18 +466,12 @@ public:
     /**
      * @brief Get the world-to-shadow-clip matrix for a tile
      */
-    XMMATRIX GetShadowMatrix(const ShadowTile& tile) const
-    {
-        return tile.shadowMatrix;
-    }
+    XMMATRIX GetShadowMatrix(const ShadowTile& tile) const { return tile.shadowMatrix; }
 
     /**
      * @brief Set the shadow matrix on a tile (called after computing light VP)
      */
-    void SetShadowMatrix(ShadowTile& tile, const XMMATRIX& lightViewProj)
-    {
-        tile.shadowMatrix = lightViewProj;
-    }
+    void SetShadowMatrix(ShadowTile& tile, const XMMATRIX& lightViewProj) { tile.shadowMatrix = lightViewProj; }
 
     /**
      * @brief Get the UV transform to convert shadow-clip coords to atlas UVs
@@ -507,10 +481,7 @@ public:
      *   atlasUV = shadowClipXY * 0.5 + 0.5;            // NDC -> [0,1]
      *   atlasUV = atlasUV * float2(scale) + float2(bias);
      */
-    XMFLOAT4 GetAtlasUVTransform(const ShadowTile& tile) const
-    {
-        return tile.uvScaleBias;
-    }
+    XMFLOAT4 GetAtlasUVTransform(const ShadowTile& tile) const { return tile.uvScaleBias; }
 
     // ========================================================================
     // Defragmentation
@@ -527,10 +498,7 @@ public:
     {
         // Sort tiles by size descending for better packing
         std::sort(m_tiles.begin(), m_tiles.end(),
-            [](const ShadowTile& a, const ShadowTile& b)
-            {
-                return a.size > b.size;
-            });
+                  [](const ShadowTile& a, const ShadowTile& b) { return a.size > b.size; });
 
         // Clear grid
         std::fill(m_gridOccupancy.begin(), m_gridOccupancy.end(), false);
@@ -545,21 +513,16 @@ public:
             if (FindFreeRegion(span, cellX, cellY))
             {
                 MarkRegion(cellX, cellY, span, true);
-                tile.gridX    = cellX;
-                tile.gridY    = cellY;
+                tile.gridX = cellX;
+                tile.gridY = cellY;
                 tile.gridSpan = span;
-                tile.x        = cellX * ShadowAtlasSettings::MIN_TILE_SIZE;
-                tile.y        = cellY * ShadowAtlasSettings::MIN_TILE_SIZE;
+                tile.x = cellX * ShadowAtlasSettings::MIN_TILE_SIZE;
+                tile.y = cellY * ShadowAtlasSettings::MIN_TILE_SIZE;
 
                 const float invW = 1.0f / static_cast<float>(m_settings.atlasWidth);
                 const float invH = 1.0f / static_cast<float>(m_settings.atlasHeight);
-                tile.uvScaleBias =
-                {
-                    static_cast<float>(tile.size) * invW,
-                    static_cast<float>(tile.size) * invH,
-                    static_cast<float>(tile.x)    * invW,
-                    static_cast<float>(tile.y)    * invH
-                };
+                tile.uvScaleBias = {static_cast<float>(tile.size) * invW, static_cast<float>(tile.size) * invH,
+                                    static_cast<float>(tile.x) * invW, static_cast<float>(tile.y) * invH};
             }
 
             tile.dirty = true; // Must re-render after move
@@ -623,11 +586,8 @@ public:
         {
             usedArea += static_cast<uint64_t>(tile.size) * tile.size;
         }
-        const uint64_t totalArea = static_cast<uint64_t>(m_settings.atlasWidth)
-                                 * m_settings.atlasHeight;
-        m.atlasUtilization = totalArea > 0
-            ? static_cast<float>(usedArea) / static_cast<float>(totalArea)
-            : 0.0f;
+        const uint64_t totalArea = static_cast<uint64_t>(m_settings.atlasWidth) * m_settings.atlasHeight;
+        m.atlasUtilization = totalArea > 0 ? static_cast<float>(usedArea) / static_cast<float>(totalArea) : 0.0f;
 
         // Fragmented cells: free cells that have at least one occupied neighbor
         m.fragmentedCells = CountFragmentedCells();
@@ -648,14 +608,11 @@ public:
     std::string Console_GetStatus() const
     {
         const auto m = GetMetrics();
-        return std::format(
-            "ShadowAtlas {}x{} | Tiles: {}/{} | Util: {:.1f}% | "
-            "Updates/frame: {} | Cache hits: {} | Frag cells: {} | Mem: {:.2f} MB",
-            m_settings.atlasWidth, m_settings.atlasHeight,
-            m.activeTiles, m_settings.maxTiles,
-            m.atlasUtilization * 100.0f,
-            m.updatesThisFrame, m.cacheHits,
-            m.fragmentedCells, m.memoryUsageMB);
+        return std::format("ShadowAtlas {}x{} | Tiles: {}/{} | Util: {:.1f}% | "
+                           "Updates/frame: {} | Cache hits: {} | Frag cells: {} | Mem: {:.2f} MB",
+                           m_settings.atlasWidth, m_settings.atlasHeight, m.activeTiles, m_settings.maxTiles,
+                           m.atlasUtilization * 100.0f, m.updatesThisFrame, m.cacheHits, m.fragmentedCells,
+                           m.memoryUsageMB);
     }
 
     /**
@@ -667,14 +624,9 @@ public:
         for (uint32_t i = 0; i < m_tiles.size(); ++i)
         {
             const auto& t = m_tiles[i];
-            result += std::format(
-                "[{}] {}x{} at ({},{}) cascade={} filter={} cache={} dirty={} prio={:.2f}\n",
-                i, t.size, t.size, t.x, t.y,
-                t.cascadeIndex,
-                FilterModeToString(t.filterMode),
-                CacheModeToString(t.cacheMode),
-                t.dirty ? "yes" : "no",
-                t.priority);
+            result += std::format("[{}] {}x{} at ({},{}) cascade={} filter={} cache={} dirty={} prio={:.2f}\n", i,
+                                  t.size, t.size, t.x, t.y, t.cascadeIndex, FilterModeToString(t.filterMode),
+                                  CacheModeToString(t.cacheMode), t.dirty ? "yes" : "no", t.priority);
         }
         if (result.empty())
         {
@@ -686,28 +638,19 @@ public:
     /**
      * @brief Set the per-frame update budget via console
      */
-    void Console_SetUpdateBudget(uint32_t budget)
-    {
-        m_settings.updateBudgetPerFrame = budget;
-    }
+    void Console_SetUpdateBudget(uint32_t budget) { m_settings.updateBudgetPerFrame = budget; }
 
     /**
      * @brief Force defragmentation via console
      */
-    void Console_Defragment()
-    {
-        Defragment();
-    }
+    void Console_Defragment() { Defragment(); }
 
     /**
      * @brief Invalidate all tiles via console
      */
-    void Console_InvalidateAll()
-    {
-        InvalidateAll();
-    }
+    void Console_InvalidateAll() { InvalidateAll(); }
 
-private:
+  private:
     // ========================================================================
     // GPU resource creation
     // ========================================================================
@@ -717,20 +660,19 @@ private:
 #ifdef SPARK_PLATFORM_WINDOWS
         // --- Depth texture ---
         D3D11_TEXTURE2D_DESC texDesc = {};
-        texDesc.Width              = m_settings.atlasWidth;
-        texDesc.Height             = m_settings.atlasHeight;
-        texDesc.MipLevels          = 1;
-        texDesc.ArraySize          = 1;
-        texDesc.Format             = DXGI_FORMAT_R32_TYPELESS;
-        texDesc.SampleDesc.Count   = 1;
+        texDesc.Width = m_settings.atlasWidth;
+        texDesc.Height = m_settings.atlasHeight;
+        texDesc.MipLevels = 1;
+        texDesc.ArraySize = 1;
+        texDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+        texDesc.SampleDesc.Count = 1;
         texDesc.SampleDesc.Quality = 0;
-        texDesc.Usage              = D3D11_USAGE_DEFAULT;
-        texDesc.BindFlags          = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
-        texDesc.CPUAccessFlags     = 0;
-        texDesc.MiscFlags          = 0;
+        texDesc.Usage = D3D11_USAGE_DEFAULT;
+        texDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+        texDesc.CPUAccessFlags = 0;
+        texDesc.MiscFlags = 0;
 
-        HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr,
-                                                m_atlasTexture.ReleaseAndGetAddressOf());
+        HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr, m_atlasTexture.ReleaseAndGetAddressOf());
         if (FAILED(hr))
         {
             return hr;
@@ -738,12 +680,11 @@ private:
 
         // --- Depth stencil view (full atlas) ---
         D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-        dsvDesc.Format             = DXGI_FORMAT_D32_FLOAT;
-        dsvDesc.ViewDimension      = D3D11_DSV_DIMENSION_TEXTURE2D;
+        dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
         dsvDesc.Texture2D.MipSlice = 0;
 
-        hr = m_device->CreateDepthStencilView(m_atlasTexture.Get(), &dsvDesc,
-                                               m_atlasDSV.ReleaseAndGetAddressOf());
+        hr = m_device->CreateDepthStencilView(m_atlasTexture.Get(), &dsvDesc, m_atlasDSV.ReleaseAndGetAddressOf());
         if (FAILED(hr))
         {
             return hr;
@@ -751,13 +692,12 @@ private:
 
         // --- Shader resource view ---
         D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Format                    = DXGI_FORMAT_R32_FLOAT;
-        srvDesc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
         srvDesc.Texture2D.MostDetailedMip = 0;
-        srvDesc.Texture2D.MipLevels       = 1;
+        srvDesc.Texture2D.MipLevels = 1;
 
-        hr = m_device->CreateShaderResourceView(m_atlasTexture.Get(), &srvDesc,
-                                                 m_atlasSRV.ReleaseAndGetAddressOf());
+        hr = m_device->CreateShaderResourceView(m_atlasTexture.Get(), &srvDesc, m_atlasSRV.ReleaseAndGetAddressOf());
         return hr;
 #else
         return S_OK;
@@ -853,10 +793,14 @@ private:
                 }
                 // Check 4-connected neighbours
                 bool hasOccupiedNeighbour = false;
-                if (x > 0            && m_gridOccupancy[idx - 1])           hasOccupiedNeighbour = true;
-                if (x + 1 < m_gridCols && m_gridOccupancy[idx + 1])         hasOccupiedNeighbour = true;
-                if (y > 0            && m_gridOccupancy[idx - m_gridCols])   hasOccupiedNeighbour = true;
-                if (y + 1 < m_gridRows && m_gridOccupancy[idx + m_gridCols]) hasOccupiedNeighbour = true;
+                if (x > 0 && m_gridOccupancy[idx - 1])
+                    hasOccupiedNeighbour = true;
+                if (x + 1 < m_gridCols && m_gridOccupancy[idx + 1])
+                    hasOccupiedNeighbour = true;
+                if (y > 0 && m_gridOccupancy[idx - m_gridCols])
+                    hasOccupiedNeighbour = true;
+                if (y + 1 < m_gridRows && m_gridOccupancy[idx + m_gridCols])
+                    hasOccupiedNeighbour = true;
 
                 if (hasOccupiedNeighbour)
                 {
@@ -875,9 +819,12 @@ private:
     {
         switch (mode)
         {
-            case ShadowFilterMode::PCF:  return "PCF";
-            case ShadowFilterMode::VSM:  return "VSM";
-            case ShadowFilterMode::PCSS: return "PCSS";
+        case ShadowFilterMode::PCF:
+            return "PCF";
+        case ShadowFilterMode::VSM:
+            return "VSM";
+        case ShadowFilterMode::PCSS:
+            return "PCSS";
         }
         return "Unknown";
     }
@@ -886,8 +833,10 @@ private:
     {
         switch (mode)
         {
-            case ShadowCacheMode::Dynamic: return "Dynamic";
-            case ShadowCacheMode::Static:  return "Static";
+        case ShadowCacheMode::Dynamic:
+            return "Dynamic";
+        case ShadowCacheMode::Static:
+            return "Static";
         }
         return "Unknown";
     }
@@ -897,15 +846,15 @@ private:
     // ========================================================================
 
     // Non-owning device pointers
-    ID3D11Device*        m_device  = nullptr;
+    ID3D11Device* m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
 
     // Settings
     ShadowAtlasSettings m_settings;
 
     // GPU resources
-    ComPtr<ID3D11Texture2D>          m_atlasTexture;
-    ComPtr<ID3D11DepthStencilView>   m_atlasDSV;
+    ComPtr<ID3D11Texture2D> m_atlasTexture;
+    ComPtr<ID3D11DepthStencilView> m_atlasDSV;
     ComPtr<ID3D11ShaderResourceView> m_atlasSRV;
 
     // Tile storage

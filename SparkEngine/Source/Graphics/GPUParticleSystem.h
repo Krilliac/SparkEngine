@@ -44,14 +44,14 @@ class ParticleSystem;
 
 namespace GPUParticleConstants
 {
-    constexpr uint32_t DEFAULT_MAX_PARTICLES     = 1048576; // 1M particles
-    constexpr uint32_t EMIT_THREAD_GROUP_SIZE    = 256;
+    constexpr uint32_t DEFAULT_MAX_PARTICLES = 1048576; // 1M particles
+    constexpr uint32_t EMIT_THREAD_GROUP_SIZE = 256;
     constexpr uint32_t SIMULATE_THREAD_GROUP_SIZE = 256;
-    constexpr uint32_t SORT_THREAD_GROUP_SIZE    = 256;
+    constexpr uint32_t SORT_THREAD_GROUP_SIZE = 256;
     constexpr uint32_t BILLBOARD_THREAD_GROUP_SIZE = 256;
-    constexpr uint32_t BITONIC_BLOCK_SIZE        = 512;
-    constexpr uint32_t TRANSPOSE_BLOCK_SIZE      = 16;
-    constexpr float    DEFAULT_FIXED_TIMESTEP    = 1.0f / 60.0f;
+    constexpr uint32_t BITONIC_BLOCK_SIZE = 512;
+    constexpr uint32_t TRANSPOSE_BLOCK_SIZE = 16;
+    constexpr float DEFAULT_FIXED_TIMESTEP = 1.0f / 60.0f;
 } // namespace GPUParticleConstants
 
 // ============================================================================
@@ -63,10 +63,10 @@ namespace GPUParticleConstants
  */
 enum class GPUEmitShape : uint32_t
 {
-    Point  = 0,
+    Point = 0,
     Sphere = 1,
-    Cone   = 2,
-    Box    = 3
+    Cone = 2,
+    Box = 3
 };
 
 /**
@@ -74,10 +74,10 @@ enum class GPUEmitShape : uint32_t
  */
 enum class GPUParticleSortMode : uint32_t
 {
-    None         = 0, ///< No sorting (cheapest)
-    FrontToBack  = 1, ///< Sort nearest-first for opaque-ish effects
-    BackToFront  = 2, ///< Sort farthest-first for transparent blending
-    ByAge        = 3  ///< Sort by particle age (oldest first)
+    None = 0,        ///< No sorting (cheapest)
+    FrontToBack = 1, ///< Sort nearest-first for opaque-ish effects
+    BackToFront = 2, ///< Sort farthest-first for transparent blending
+    ByAge = 3        ///< Sort by particle age (oldest first)
 };
 
 /**
@@ -85,9 +85,9 @@ enum class GPUParticleSortMode : uint32_t
  */
 enum class GPUParticleBlendMode : uint32_t
 {
-    Additive      = 0,
-    AlphaBlend    = 1,
-    Multiply      = 2,
+    Additive = 0,
+    AlphaBlend = 1,
+    Multiply = 2,
     Premultiplied = 3
 };
 
@@ -103,18 +103,18 @@ enum class GPUParticleBlendMode : uint32_t
  */
 struct GPUParticle
 {
-    XMFLOAT3 position;   ///< World-space position
-    float    size;        ///< Current billboard size
+    XMFLOAT3 position; ///< World-space position
+    float size;        ///< Current billboard size
 
-    XMFLOAT3 velocity;   ///< World-space velocity
-    float    life;        ///< Remaining life in seconds
+    XMFLOAT3 velocity; ///< World-space velocity
+    float life;        ///< Remaining life in seconds
 
-    XMFLOAT4 color;      ///< Current RGBA color
+    XMFLOAT4 color; ///< Current RGBA color
 
-    float    maxLife;     ///< Initial life span
-    float    rotation;    ///< Billboard rotation in radians
-    float    age;         ///< Normalized age [0..1] = 1 - (life / maxLife)
-    uint32_t flags;       ///< Bit flags (alive, collided, etc.)
+    float maxLife;  ///< Initial life span
+    float rotation; ///< Billboard rotation in radians
+    float age;      ///< Normalized age [0..1] = 1 - (life / maxLife)
+    uint32_t flags; ///< Bit flags (alive, collided, etc.)
 };
 static_assert(sizeof(GPUParticle) == 64, "GPUParticle must be 64 bytes for GPU alignment");
 
@@ -125,10 +125,10 @@ static_assert(sizeof(GPUParticle) == 64, "GPUParticle must be 64 bytes for GPU a
  */
 struct GPUBillboardVertex
 {
-    XMFLOAT3 position;   ///< World-space corner position
-    XMFLOAT2 texCoord;   ///< UV coordinates
-    XMFLOAT4 color;      ///< Per-vertex color with alpha
-    float    pad;         ///< Padding to 48 bytes
+    XMFLOAT3 position; ///< World-space corner position
+    XMFLOAT2 texCoord; ///< UV coordinates
+    XMFLOAT4 color;    ///< Per-vertex color with alpha
+    float pad;         ///< Padding to 48 bytes
 };
 
 /**
@@ -136,8 +136,8 @@ struct GPUBillboardVertex
  */
 struct GPUSortEntry
 {
-    float    sortKey;     ///< Distance or age for sorting
-    uint32_t index;       ///< Index into alive list
+    float sortKey;  ///< Distance or age for sorting
+    uint32_t index; ///< Index into alive list
 };
 
 /**
@@ -145,9 +145,9 @@ struct GPUSortEntry
  */
 struct GPUColorGradientKey
 {
-    XMFLOAT4 color;      ///< RGBA color at this keyframe
-    float    time;        ///< Normalized time [0..1]
-    float    pad[3];      ///< Padding to 32 bytes for cbuffer alignment
+    XMFLOAT4 color; ///< RGBA color at this keyframe
+    float time;     ///< Normalized time [0..1]
+    float pad[3];   ///< Padding to 32 bytes for cbuffer alignment
 };
 
 // ============================================================================
@@ -163,30 +163,30 @@ struct GPUColorGradientKey
 struct GPUEmitterSettings
 {
     // --- Emission shape ---
-    GPUEmitShape emitShape     = GPUEmitShape::Point;
-    float shapeRadius          = 1.0f;       ///< Radius for Sphere/Cone
-    XMFLOAT3 shapeExtents     = {1, 1, 1};  ///< Half-extents for Box
-    float coneAngle            = 45.0f;      ///< Cone angle in degrees
+    GPUEmitShape emitShape = GPUEmitShape::Point;
+    float shapeRadius = 1.0f;          ///< Radius for Sphere/Cone
+    XMFLOAT3 shapeExtents = {1, 1, 1}; ///< Half-extents for Box
+    float coneAngle = 45.0f;           ///< Cone angle in degrees
 
     // --- Emission rate ---
-    float emissionRate         = 100.0f;     ///< Particles per second
-    uint32_t burstCount        = 0;          ///< One-shot burst particle count
-    float burstInterval        = 0.0f;       ///< Time between repeated bursts (0 = one-shot)
+    float emissionRate = 100.0f; ///< Particles per second
+    uint32_t burstCount = 0;     ///< One-shot burst particle count
+    float burstInterval = 0.0f;  ///< Time between repeated bursts (0 = one-shot)
 
     // --- Initial velocity ---
-    float velocityMin          = 1.0f;       ///< Minimum initial speed
-    float velocityMax          = 5.0f;       ///< Maximum initial speed
-    XMFLOAT3 velocityDirection = {0, 1, 0};  ///< Preferred emission direction
-    float velocitySpread       = 1.0f;       ///< 0 = focused, 1 = omnidirectional
+    float velocityMin = 1.0f;               ///< Minimum initial speed
+    float velocityMax = 5.0f;               ///< Maximum initial speed
+    XMFLOAT3 velocityDirection = {0, 1, 0}; ///< Preferred emission direction
+    float velocitySpread = 1.0f;            ///< 0 = focused, 1 = omnidirectional
 
     // --- Lifetime ---
-    float lifeMin              = 1.0f;       ///< Minimum particle lifetime (seconds)
-    float lifeMax              = 3.0f;       ///< Maximum particle lifetime (seconds)
+    float lifeMin = 1.0f; ///< Minimum particle lifetime (seconds)
+    float lifeMax = 3.0f; ///< Maximum particle lifetime (seconds)
 
     // --- Size ---
-    float sizeMin              = 0.05f;      ///< Minimum initial size
-    float sizeMax              = 0.2f;       ///< Maximum initial size
-    float sizeOverLifeEnd      = 0.0f;       ///< Size multiplier at end of life (0 = shrink to nothing)
+    float sizeMin = 0.05f;        ///< Minimum initial size
+    float sizeMax = 0.2f;         ///< Maximum initial size
+    float sizeOverLifeEnd = 0.0f; ///< Size multiplier at end of life (0 = shrink to nothing)
 
     // --- Color gradient (up to 8 keys) ---
     static constexpr uint32_t MAX_COLOR_KEYS = 8;
@@ -194,40 +194,40 @@ struct GPUEmitterSettings
         {XMFLOAT4{1, 1, 1, 1}, 0.0f, {}},
         {XMFLOAT4{1, 1, 1, 0}, 1.0f, {}},
     }};
-    uint32_t colorKeyCount     = 2;
+    uint32_t colorKeyCount = 2;
 
     // --- Physics ---
-    float gravityMultiplier    = 1.0f;       ///< Scales world gravity
-    XMFLOAT3 gravity           = {0, -9.81f, 0}; ///< Gravity vector
-    float drag                 = 0.0f;       ///< Velocity damping coefficient [0..1]
+    float gravityMultiplier = 1.0f;    ///< Scales world gravity
+    XMFLOAT3 gravity = {0, -9.81f, 0}; ///< Gravity vector
+    float drag = 0.0f;                 ///< Velocity damping coefficient [0..1]
 
     // --- Noise force ---
-    float noiseFrequency       = 1.0f;       ///< Spatial frequency of noise field
-    float noiseAmplitude       = 0.0f;       ///< Strength of noise force (0 = disabled)
-    float noiseScrollSpeed     = 1.0f;       ///< Rate noise field evolves over time
+    float noiseFrequency = 1.0f;   ///< Spatial frequency of noise field
+    float noiseAmplitude = 0.0f;   ///< Strength of noise force (0 = disabled)
+    float noiseScrollSpeed = 1.0f; ///< Rate noise field evolves over time
 
     // --- Rotation ---
-    float rotationMin          = 0.0f;       ///< Min initial rotation (radians)
-    float rotationMax          = 6.2831f;    ///< Max initial rotation (radians)
-    float rotationSpeedMin     = 0.0f;       ///< Min angular velocity
-    float rotationSpeedMax     = 0.0f;       ///< Max angular velocity
+    float rotationMin = 0.0f;      ///< Min initial rotation (radians)
+    float rotationMax = 6.2831f;   ///< Max initial rotation (radians)
+    float rotationSpeedMin = 0.0f; ///< Min angular velocity
+    float rotationSpeedMax = 0.0f; ///< Max angular velocity
 
     // --- Sorting ---
     GPUParticleSortMode sortMode = GPUParticleSortMode::None;
 
     // --- Rendering ---
     GPUParticleBlendMode blendMode = GPUParticleBlendMode::Additive;
-    std::string texturePath;                 ///< Optional billboard texture
+    std::string texturePath; ///< Optional billboard texture
 
     // --- Depth collision ---
-    bool depthCollisionEnabled = false;      ///< Enable depth buffer collision
-    float collisionRestitution = 0.3f;       ///< Bounciness on collision [0..1]
-    float collisionLifetimeLoss = 0.1f;      ///< Fraction of life lost on each bounce
+    bool depthCollisionEnabled = false; ///< Enable depth buffer collision
+    float collisionRestitution = 0.3f;  ///< Bounciness on collision [0..1]
+    float collisionLifetimeLoss = 0.1f; ///< Fraction of life lost on each bounce
 
     // --- Playback ---
-    bool loop                  = true;
-    bool playOnAwake           = true;
-    float duration             = 0.0f;       ///< Total effect duration (0 = infinite when looping)
+    bool loop = true;
+    bool playOnAwake = true;
+    float duration = 0.0f; ///< Total effect duration (0 = infinite when looping)
 };
 
 // ============================================================================
@@ -239,46 +239,46 @@ struct GPUEmitterSettings
  */
 struct alignas(16) GPUEmitCB
 {
-    XMFLOAT4 emitterPosition;               ///< xyz = position, w = pad
-    XMFLOAT4 emitterDirection;              ///< xyz = direction, w = spread
+    XMFLOAT4 emitterPosition;  ///< xyz = position, w = pad
+    XMFLOAT4 emitterDirection; ///< xyz = direction, w = spread
 
-    uint32_t emitCount;                      ///< Particles to emit this frame
-    uint32_t maxParticles;                   ///< Total pool capacity
-    float    deltaTime;                      ///< Frame delta time
-    float    totalTime;                      ///< Accumulated time
+    uint32_t emitCount;    ///< Particles to emit this frame
+    uint32_t maxParticles; ///< Total pool capacity
+    float deltaTime;       ///< Frame delta time
+    float totalTime;       ///< Accumulated time
 
     // Shape
-    uint32_t emitShape;                      ///< GPUEmitShape as uint
-    float    shapeRadius;
-    float    coneAngle;
-    float    pad0;
+    uint32_t emitShape; ///< GPUEmitShape as uint
+    float shapeRadius;
+    float coneAngle;
+    float pad0;
 
-    XMFLOAT4 shapeExtents;                  ///< xyz = half-extents, w = pad
+    XMFLOAT4 shapeExtents; ///< xyz = half-extents, w = pad
 
     // Velocity
-    float    velocityMin;
-    float    velocityMax;
-    float    pad1[2];
+    float velocityMin;
+    float velocityMax;
+    float pad1[2];
 
     // Life
-    float    lifeMin;
-    float    lifeMax;
+    float lifeMin;
+    float lifeMax;
 
     // Size
-    float    sizeMin;
-    float    sizeMax;
+    float sizeMin;
+    float sizeMax;
 
     // Rotation
-    float    rotationMin;
-    float    rotationMax;
-    float    rotationSpeedMin;
-    float    rotationSpeedMax;
+    float rotationMin;
+    float rotationMax;
+    float rotationSpeedMin;
+    float rotationSpeedMax;
 
     // Color gradient
     GPUColorGradientKey colorKeys[GPUEmitterSettings::MAX_COLOR_KEYS];
     uint32_t colorKeyCount;
-    uint32_t randomSeed;                     ///< Per-frame random seed
-    float    pad2[2];
+    uint32_t randomSeed; ///< Per-frame random seed
+    float pad2[2];
 };
 
 /**
@@ -286,28 +286,28 @@ struct alignas(16) GPUEmitCB
  */
 struct alignas(16) GPUSimulateCB
 {
-    float    deltaTime;
-    float    totalTime;
+    float deltaTime;
+    float totalTime;
     uint32_t maxParticles;
-    float    drag;
+    float drag;
 
-    XMFLOAT4 gravity;                       ///< xyz = gravity, w = multiplier
+    XMFLOAT4 gravity; ///< xyz = gravity, w = multiplier
 
     // Noise
-    float    noiseFrequency;
-    float    noiseAmplitude;
-    float    noiseScrollSpeed;
-    float    sizeOverLifeEnd;
+    float noiseFrequency;
+    float noiseAmplitude;
+    float noiseScrollSpeed;
+    float sizeOverLifeEnd;
 
     // Depth collision
     uint32_t depthCollisionEnabled;
-    float    collisionRestitution;
-    float    collisionLifetimeLoss;
-    float    pad0;
+    float collisionRestitution;
+    float collisionLifetimeLoss;
+    float pad0;
 
-    XMFLOAT4X4 inverseView;                 ///< For reconstructing world pos from depth
+    XMFLOAT4X4 inverseView; ///< For reconstructing world pos from depth
     XMFLOAT4X4 inverseProjection;
-    XMFLOAT4 screenParams;                  ///< x = width, y = height, z = 1/w, w = 1/h
+    XMFLOAT4 screenParams; ///< x = width, y = height, z = 1/w, w = 1/h
 };
 
 /**
@@ -329,11 +329,11 @@ struct alignas(16) GPURenderCB
     XMFLOAT4X4 view;
     XMFLOAT4X4 projection;
     XMFLOAT4X4 viewProjection;
-    XMFLOAT4   cameraPosition;              ///< xyz = camera pos, w = pad
-    XMFLOAT4   cameraUp;                    ///< xyz = camera up, w = pad
-    XMFLOAT4   cameraRight;                 ///< xyz = camera right, w = pad
-    uint32_t   aliveCount;                   ///< Number of alive particles
-    float      pad[3];
+    XMFLOAT4 cameraPosition; ///< xyz = camera pos, w = pad
+    XMFLOAT4 cameraUp;       ///< xyz = camera up, w = pad
+    XMFLOAT4 cameraRight;    ///< xyz = camera right, w = pad
+    uint32_t aliveCount;     ///< Number of alive particles
+    float pad[3];
 };
 
 // ============================================================================
@@ -375,7 +375,7 @@ struct GPUDrawArgs
  */
 class GPUParticleEmitter
 {
-public:
+  public:
     GPUParticleEmitter(const std::string& name, const GPUEmitterSettings& settings);
     ~GPUParticleEmitter();
 
@@ -407,11 +407,7 @@ public:
      * @param deltaTime Frame delta time
      * @param totalTime Accumulated time
      */
-    void DispatchEmit(
-        ID3D11DeviceContext* context,
-        ID3D11ComputeShader* emitShader,
-        float deltaTime,
-        float totalTime);
+    void DispatchEmit(ID3D11DeviceContext* context, ID3D11ComputeShader* emitShader, float deltaTime, float totalTime);
 
     /**
      * @brief Simulate alive particles (physics, forces, death)
@@ -425,16 +421,9 @@ public:
      * @param screenWidth Viewport width
      * @param screenHeight Viewport height
      */
-    void DispatchSimulate(
-        ID3D11DeviceContext* context,
-        ID3D11ComputeShader* simulateShader,
-        float deltaTime,
-        float totalTime,
-        const XMMATRIX& view,
-        const XMMATRIX& projection,
-        ID3D11ShaderResourceView* depthSRV,
-        uint32_t screenWidth,
-        uint32_t screenHeight);
+    void DispatchSimulate(ID3D11DeviceContext* context, ID3D11ComputeShader* simulateShader, float deltaTime,
+                          float totalTime, const XMMATRIX& view, const XMMATRIX& projection,
+                          ID3D11ShaderResourceView* depthSRV, uint32_t screenWidth, uint32_t screenHeight);
 
     /**
      * @brief Sort alive particles via GPU bitonic sort
@@ -442,10 +431,8 @@ public:
      * @param bitonicSortShader Bitonic sort compute shader
      * @param transposeShader Matrix transpose compute shader
      */
-    void DispatchSort(
-        ID3D11DeviceContext* context,
-        ID3D11ComputeShader* bitonicSortShader,
-        ID3D11ComputeShader* transposeShader);
+    void DispatchSort(ID3D11DeviceContext* context, ID3D11ComputeShader* bitonicSortShader,
+                      ID3D11ComputeShader* transposeShader);
 
     /**
      * @brief Generate billboard vertices from alive particles
@@ -455,12 +442,8 @@ public:
      * @param projection Current projection matrix
      * @param cameraPos Camera world position
      */
-    void DispatchBillboardGeneration(
-        ID3D11DeviceContext* context,
-        ID3D11ComputeShader* billboardShader,
-        const XMMATRIX& view,
-        const XMMATRIX& projection,
-        const XMFLOAT3& cameraPos);
+    void DispatchBillboardGeneration(ID3D11DeviceContext* context, ID3D11ComputeShader* billboardShader,
+                                     const XMMATRIX& view, const XMMATRIX& projection, const XMFLOAT3& cameraPos);
 
     /**
      * @brief Issue an indirect draw call for the generated billboards
@@ -503,7 +486,7 @@ public:
     ID3D11Buffer* GetBillboardVertexBuffer() const { return m_billboardVertexBuffer.Get(); }
     ID3D11Buffer* GetIndirectDrawBuffer() const { return m_indirectDrawBuffer.Get(); }
 
-private:
+  private:
     // ---- Helper methods ----
 
     HRESULT CreateParticleBuffer(ID3D11Device* device);
@@ -515,19 +498,11 @@ private:
     HRESULT CreateCounterStagingBuffer(ID3D11Device* device);
 
     void UpdateEmitConstantBuffer(ID3D11DeviceContext* context, uint32_t emitCount, float deltaTime, float totalTime);
-    void UpdateSimulateConstantBuffer(
-        ID3D11DeviceContext* context,
-        float deltaTime,
-        float totalTime,
-        const XMMATRIX& view,
-        const XMMATRIX& projection,
-        uint32_t screenWidth,
-        uint32_t screenHeight);
-    void UpdateRenderConstantBuffer(
-        ID3D11DeviceContext* context,
-        const XMMATRIX& view,
-        const XMMATRIX& projection,
-        const XMFLOAT3& cameraPos);
+    void UpdateSimulateConstantBuffer(ID3D11DeviceContext* context, float deltaTime, float totalTime,
+                                      const XMMATRIX& view, const XMMATRIX& projection, uint32_t screenWidth,
+                                      uint32_t screenHeight);
+    void UpdateRenderConstantBuffer(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& projection,
+                                    const XMFLOAT3& cameraPos);
 
     void SwapAliveListBuffers();
 
@@ -543,56 +518,56 @@ private:
 
     // ---- Playback state ----
 
-    bool m_playing                = false;
-    bool m_initialized            = false;
-    float m_emissionAccumulator   = 0.0f;
-    float m_elapsedTime           = 0.0f;
-    float m_burstTimer            = 0.0f;
-    uint32_t m_pendingBurst       = 0;
-    uint32_t m_maxParticles       = 0;
+    bool m_playing = false;
+    bool m_initialized = false;
+    float m_emissionAccumulator = 0.0f;
+    float m_elapsedTime = 0.0f;
+    float m_burstTimer = 0.0f;
+    uint32_t m_pendingBurst = 0;
+    uint32_t m_maxParticles = 0;
 
     // ---- Particle pool (StructuredBuffer with UAV) ----
 
-    ComPtr<ID3D11Buffer>              m_particleBuffer;
-    ComPtr<ID3D11ShaderResourceView>  m_particleSRV;
+    ComPtr<ID3D11Buffer> m_particleBuffer;
+    ComPtr<ID3D11ShaderResourceView> m_particleSRV;
     ComPtr<ID3D11UnorderedAccessView> m_particleUAV;
 
     // ---- Alive / Dead lists (Append/Consume structured buffers) ----
 
-    ComPtr<ID3D11Buffer>              m_deadListBuffer;
-    ComPtr<ID3D11UnorderedAccessView> m_deadListUAV;   ///< AppendStructuredBuffer
+    ComPtr<ID3D11Buffer> m_deadListBuffer;
+    ComPtr<ID3D11UnorderedAccessView> m_deadListUAV; ///< AppendStructuredBuffer
 
-    ComPtr<ID3D11Buffer>              m_aliveListBuffer;
-    ComPtr<ID3D11UnorderedAccessView> m_aliveListUAV;  ///< AppendStructuredBuffer
-    ComPtr<ID3D11ShaderResourceView>  m_aliveListSRV;
+    ComPtr<ID3D11Buffer> m_aliveListBuffer;
+    ComPtr<ID3D11UnorderedAccessView> m_aliveListUAV; ///< AppendStructuredBuffer
+    ComPtr<ID3D11ShaderResourceView> m_aliveListSRV;
 
-    ComPtr<ID3D11Buffer>              m_aliveListBuffer2;   ///< Double-buffered alive list
+    ComPtr<ID3D11Buffer> m_aliveListBuffer2; ///< Double-buffered alive list
     ComPtr<ID3D11UnorderedAccessView> m_aliveListUAV2;
-    ComPtr<ID3D11ShaderResourceView>  m_aliveListSRV2;
+    ComPtr<ID3D11ShaderResourceView> m_aliveListSRV2;
 
-    uint32_t m_currentAliveList   = 0; ///< 0 or 1, indexes the double-buffered alive list
+    uint32_t m_currentAliveList = 0; ///< 0 or 1, indexes the double-buffered alive list
 
     // ---- Indirect dispatch / draw argument buffers ----
 
-    ComPtr<ID3D11Buffer> m_indirectDispatchBuffer;  ///< For DispatchIndirect
-    ComPtr<ID3D11Buffer> m_indirectDrawBuffer;      ///< For DrawInstancedIndirect
+    ComPtr<ID3D11Buffer> m_indirectDispatchBuffer; ///< For DispatchIndirect
+    ComPtr<ID3D11Buffer> m_indirectDrawBuffer;     ///< For DrawInstancedIndirect
     ComPtr<ID3D11UnorderedAccessView> m_indirectDispatchUAV;
     ComPtr<ID3D11UnorderedAccessView> m_indirectDrawUAV;
 
     // ---- Billboard vertex buffer ----
 
-    ComPtr<ID3D11Buffer>              m_billboardVertexBuffer;
-    ComPtr<ID3D11ShaderResourceView>  m_billboardSRV;
+    ComPtr<ID3D11Buffer> m_billboardVertexBuffer;
+    ComPtr<ID3D11ShaderResourceView> m_billboardSRV;
     ComPtr<ID3D11UnorderedAccessView> m_billboardUAV;
 
     // ---- Sort buffers ----
 
-    ComPtr<ID3D11Buffer>              m_sortBuffer;
-    ComPtr<ID3D11ShaderResourceView>  m_sortSRV;
+    ComPtr<ID3D11Buffer> m_sortBuffer;
+    ComPtr<ID3D11ShaderResourceView> m_sortSRV;
     ComPtr<ID3D11UnorderedAccessView> m_sortUAV;
 
-    ComPtr<ID3D11Buffer>              m_sortTempBuffer;
-    ComPtr<ID3D11ShaderResourceView>  m_sortTempSRV;
+    ComPtr<ID3D11Buffer> m_sortTempBuffer;
+    ComPtr<ID3D11ShaderResourceView> m_sortTempSRV;
     ComPtr<ID3D11UnorderedAccessView> m_sortTempUAV;
 
     // ---- Constant buffers ----
@@ -621,7 +596,7 @@ private:
  */
 class GPUParticleSystem
 {
-public:
+  public:
     GPUParticleSystem();
     ~GPUParticleSystem();
 
@@ -638,10 +613,8 @@ public:
      * @param maxParticlesPerEmitter Default max particles per emitter
      * @return S_OK on success, error code on failure
      */
-    HRESULT Initialize(
-        ID3D11Device* device,
-        ID3D11DeviceContext* context,
-        uint32_t maxParticlesPerEmitter = GPUParticleConstants::DEFAULT_MAX_PARTICLES);
+    HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* context,
+                       uint32_t maxParticlesPerEmitter = GPUParticleConstants::DEFAULT_MAX_PARTICLES);
 
     /**
      * @brief Release all GPU resources and emitters
@@ -663,13 +636,8 @@ public:
      * @param screenWidth Viewport width
      * @param screenHeight Viewport height
      */
-    void Update(
-        float deltaTime,
-        const XMMATRIX& view,
-        const XMMATRIX& projection,
-        ID3D11ShaderResourceView* depthSRV = nullptr,
-        uint32_t screenWidth = 0,
-        uint32_t screenHeight = 0);
+    void Update(float deltaTime, const XMMATRIX& view, const XMMATRIX& projection,
+                ID3D11ShaderResourceView* depthSRV = nullptr, uint32_t screenWidth = 0, uint32_t screenHeight = 0);
 
     /**
      * @brief Render all active emitters
@@ -677,10 +645,7 @@ public:
      * @param projection Projection matrix
      * @param cameraPos Camera world position
      */
-    void Render(
-        const XMMATRIX& view,
-        const XMMATRIX& projection,
-        const XMFLOAT3& cameraPos);
+    void Render(const XMMATRIX& view, const XMMATRIX& projection, const XMFLOAT3& cameraPos);
 
     // ---- Emitter management ----
 
@@ -691,10 +656,8 @@ public:
      * @param maxParticles Override max particles (0 = use system default)
      * @return Pointer to the created emitter, or nullptr on failure
      */
-    GPUParticleEmitter* CreateEmitter(
-        const std::string& name,
-        const GPUEmitterSettings& settings,
-        uint32_t maxParticles = 0);
+    GPUParticleEmitter* CreateEmitter(const std::string& name, const GPUEmitterSettings& settings,
+                                      uint32_t maxParticles = 0);
 
     /**
      * @brief Get an emitter by name
@@ -775,14 +738,11 @@ public:
      */
     void Console_SetParticleScale(float scale);
 
-private:
+  private:
     // ---- Shader compilation ----
 
     HRESULT CompileComputeShaders();
-    HRESULT CompileComputeShader(
-        const char* hlslSource,
-        const char* entryPoint,
-        ID3D11ComputeShader** outShader);
+    HRESULT CompileComputeShader(const char* hlslSource, const char* entryPoint, ID3D11ComputeShader** outShader);
 
     // ---- Blend / rasterizer state creation ----
 
@@ -799,17 +759,17 @@ private:
 
     // ---- Device references (non-owning) ----
 
-    ID3D11Device*        m_device  = nullptr;
+    ID3D11Device* m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
 
     // ---- System state ----
 
-    bool     m_initialized             = false;
-    uint32_t m_maxParticlesPerEmitter  = GPUParticleConstants::DEFAULT_MAX_PARTICLES;
-    float    m_totalTime               = 0.0f;
-    float    m_globalEmissionScale     = 1.0f;
-    bool     m_globalDepthCollision    = false;
-    uint32_t m_nextEmitterID           = 0;
+    bool m_initialized = false;
+    uint32_t m_maxParticlesPerEmitter = GPUParticleConstants::DEFAULT_MAX_PARTICLES;
+    float m_totalTime = 0.0f;
+    float m_globalEmissionScale = 1.0f;
+    bool m_globalDepthCollision = false;
+    uint32_t m_nextEmitterID = 0;
 
     // ---- Emitters ----
 
@@ -825,21 +785,21 @@ private:
 
     // ---- Shared render pipeline state ----
 
-    ComPtr<ID3D11VertexShader>      m_billboardVS;
-    ComPtr<ID3D11PixelShader>       m_billboardPS;
-    ComPtr<ID3D11InputLayout>       m_billboardInputLayout;
+    ComPtr<ID3D11VertexShader> m_billboardVS;
+    ComPtr<ID3D11PixelShader> m_billboardPS;
+    ComPtr<ID3D11InputLayout> m_billboardInputLayout;
 
-    ComPtr<ID3D11BlendState>        m_additiveBlend;
-    ComPtr<ID3D11BlendState>        m_alphaBlend;
-    ComPtr<ID3D11BlendState>        m_multiplyBlend;
-    ComPtr<ID3D11BlendState>        m_premultipliedBlend;
+    ComPtr<ID3D11BlendState> m_additiveBlend;
+    ComPtr<ID3D11BlendState> m_alphaBlend;
+    ComPtr<ID3D11BlendState> m_multiplyBlend;
+    ComPtr<ID3D11BlendState> m_premultipliedBlend;
 
-    ComPtr<ID3D11DepthStencilState> m_depthReadOnly;  ///< Depth test on, write off
-    ComPtr<ID3D11RasterizerState>   m_noCullRasterizer;
-    ComPtr<ID3D11SamplerState>      m_linearSampler;
+    ComPtr<ID3D11DepthStencilState> m_depthReadOnly; ///< Depth test on, write off
+    ComPtr<ID3D11RasterizerState> m_noCullRasterizer;
+    ComPtr<ID3D11SamplerState> m_linearSampler;
 
     // ---- Shared texture (default white) ----
 
-    ComPtr<ID3D11Texture2D>          m_defaultTexture;
+    ComPtr<ID3D11Texture2D> m_defaultTexture;
     ComPtr<ID3D11ShaderResourceView> m_defaultTextureSRV;
 };

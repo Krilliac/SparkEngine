@@ -28,10 +28,10 @@ namespace Spark::Graphics
 
     enum class TessellationMode
     {
-        None,           ///< No tessellation
-        Uniform,        ///< Fixed tessellation factor
-        DistanceBased,  ///< Tessellation decreases with distance from camera
-        ScreenSpace     ///< Target a fixed edge length in screen pixels
+        None,          ///< No tessellation
+        Uniform,       ///< Fixed tessellation factor
+        DistanceBased, ///< Tessellation decreases with distance from camera
+        ScreenSpace    ///< Target a fixed edge length in screen pixels
     };
 
     struct TessellationSettings
@@ -39,13 +39,13 @@ namespace Spark::Graphics
         TessellationMode mode = TessellationMode::DistanceBased;
         float minTessFactor = 1.0f;
         float maxTessFactor = 64.0f;
-        float targetEdgeLengthPx = 16.0f;    ///< For screen-space mode
-        float distanceStart = 10.0f;          ///< Distance at which max tess begins
-        float distanceEnd = 100.0f;           ///< Distance at which min tess is used
-        float displacementScale = 1.0f;       ///< Height map displacement magnitude
-        float displacementBias = 0.0f;        ///< Displacement offset
-        bool enablePhongSmoothing = true;      ///< PN-triangle smoothing
-        float phongAlpha = 0.75f;             ///< Phong smoothing factor
+        float targetEdgeLengthPx = 16.0f; ///< For screen-space mode
+        float distanceStart = 10.0f;      ///< Distance at which max tess begins
+        float distanceEnd = 100.0f;       ///< Distance at which min tess is used
+        float displacementScale = 1.0f;   ///< Height map displacement magnitude
+        float displacementBias = 0.0f;    ///< Displacement offset
+        bool enablePhongSmoothing = true; ///< PN-triangle smoothing
+        float phongAlpha = 0.75f;         ///< Phong smoothing factor
     };
 
     /**
@@ -90,8 +90,7 @@ namespace Spark::Graphics
         /**
          * @brief Bind tessellation stages for displacement-mapped rendering
          */
-        void Bind(const XMFLOAT3& cameraPosition, const XMMATRIX& viewProj,
-                  ID3D11ShaderResourceView* heightMapSRV)
+        void Bind(const XMFLOAT3& cameraPosition, const XMMATRIX& viewProj, ID3D11ShaderResourceView* heightMapSRV)
         {
             if (!m_initialized || m_settings.mode == TessellationMode::None)
                 return;
@@ -149,13 +148,21 @@ namespace Spark::Graphics
             s += "  Mode: ";
             switch (m_settings.mode)
             {
-            case TessellationMode::None: s += "Disabled"; break;
-            case TessellationMode::Uniform: s += "Uniform"; break;
-            case TessellationMode::DistanceBased: s += "Distance-Based"; break;
-            case TessellationMode::ScreenSpace: s += "Screen-Space"; break;
+            case TessellationMode::None:
+                s += "Disabled";
+                break;
+            case TessellationMode::Uniform:
+                s += "Uniform";
+                break;
+            case TessellationMode::DistanceBased:
+                s += "Distance-Based";
+                break;
+            case TessellationMode::ScreenSpace:
+                s += "Screen-Space";
+                break;
             }
-            s += "\n  Tess range: [" + std::to_string(m_settings.minTessFactor) + ", "
-                 + std::to_string(m_settings.maxTessFactor) + "]\n";
+            s += "\n  Tess range: [" + std::to_string(m_settings.minTessFactor) + ", " +
+                 std::to_string(m_settings.maxTessFactor) + "]\n";
             s += "  Displacement: " + std::to_string(m_settings.displacementScale) + "\n";
             return s;
         }
@@ -172,7 +179,7 @@ namespace Spark::Graphics
             float displacementScale;
             float displacementBias;
             float phongAlpha;
-            float tessMode;        // 0=uniform, 1=distance, 2=screenSpace
+            float tessMode; // 0=uniform, 1=distance, 2=screenSpace
             float targetEdgeLength;
             XMFLOAT4 screenParams; // width, height, 1/w, 1/h
         };
@@ -429,26 +436,23 @@ namespace Spark::Graphics
 
             ComPtr<ID3DBlob> blob, errorBlob;
 
-            HRESULT hr = D3DCompile(hsSource, strlen(hsSource), "TessHS",
-                                     nullptr, nullptr, "main", "hs_5_0", 0, 0,
-                                     &blob, &errorBlob);
-            if (FAILED(hr)) return false;
-            m_device->CreateHullShader(blob->GetBufferPointer(), blob->GetBufferSize(),
-                                        nullptr, &m_hullShader);
+            HRESULT hr = D3DCompile(hsSource, strlen(hsSource), "TessHS", nullptr, nullptr, "main", "hs_5_0", 0, 0,
+                                    &blob, &errorBlob);
+            if (FAILED(hr))
+                return false;
+            m_device->CreateHullShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_hullShader);
 
-            hr = D3DCompile(dsSource, strlen(dsSource), "TessDS",
-                             nullptr, nullptr, "main", "ds_5_0", 0, 0,
-                             &blob, &errorBlob);
-            if (FAILED(hr)) return false;
-            m_device->CreateDomainShader(blob->GetBufferPointer(), blob->GetBufferSize(),
-                                          nullptr, &m_domainShader);
+            hr = D3DCompile(dsSource, strlen(dsSource), "TessDS", nullptr, nullptr, "main", "ds_5_0", 0, 0, &blob,
+                            &errorBlob);
+            if (FAILED(hr))
+                return false;
+            m_device->CreateDomainShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_domainShader);
 
-            hr = D3DCompile(gsSource, strlen(gsSource), "WireframeGS",
-                             nullptr, nullptr, "main", "gs_5_0", 0, 0,
-                             &blob, &errorBlob);
-            if (FAILED(hr)) return false;
-            m_device->CreateGeometryShader(blob->GetBufferPointer(), blob->GetBufferSize(),
-                                            nullptr, &m_wireframeGS);
+            hr = D3DCompile(gsSource, strlen(gsSource), "WireframeGS", nullptr, nullptr, "main", "gs_5_0", 0, 0, &blob,
+                            &errorBlob);
+            if (FAILED(hr))
+                return false;
+            m_device->CreateGeometryShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &m_wireframeGS);
 
             return true;
         }
@@ -469,10 +473,18 @@ namespace Spark::Graphics
 
             switch (m_settings.mode)
             {
-            case TessellationMode::Uniform: cb.tessMode = 0.0f; break;
-            case TessellationMode::DistanceBased: cb.tessMode = 1.0f; break;
-            case TessellationMode::ScreenSpace: cb.tessMode = 2.0f; break;
-            default: cb.tessMode = 1.0f; break;
+            case TessellationMode::Uniform:
+                cb.tessMode = 0.0f;
+                break;
+            case TessellationMode::DistanceBased:
+                cb.tessMode = 1.0f;
+                break;
+            case TessellationMode::ScreenSpace:
+                cb.tessMode = 2.0f;
+                break;
+            default:
+                cb.tessMode = 1.0f;
+                break;
             }
 
             cb.screenParams = {1920.0f, 1080.0f, 1.0f / 1920.0f, 1.0f / 1080.0f};

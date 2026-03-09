@@ -102,9 +102,7 @@ namespace Spark
                  * @param shaderVisible   Whether the heap is shader-visible (GPU-bound).
                  * @return True on success.
                  */
-                bool Initialize(ID3D12Device* device,
-                                D3D12_DESCRIPTOR_HEAP_TYPE type,
-                                uint32_t descriptorCount,
+                bool Initialize(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t descriptorCount,
                                 bool shaderVisible);
 
                 DescriptorAllocation Allocate(uint32_t count = 1);
@@ -181,8 +179,7 @@ namespace Spark
             class D3D12Buffer : public IRHIBuffer
             {
               public:
-                D3D12Buffer(const RHIBufferDesc& desc,
-                            ComPtr<ID3D12Resource> resource,
+                D3D12Buffer(const RHIBufferDesc& desc, ComPtr<ID3D12Resource> resource,
                             ComPtr<ID3D12Resource> uploadResource = nullptr);
                 ~D3D12Buffer() override = default;
 
@@ -230,8 +227,7 @@ namespace Spark
             class D3D12Texture : public IRHITexture
             {
               public:
-                D3D12Texture(const RHITextureDesc& desc,
-                             ComPtr<ID3D12Resource> resource,
+                D3D12Texture(const RHITextureDesc& desc, ComPtr<ID3D12Resource> resource,
                              const DescriptorAllocation& srvDescriptor = {},
                              const DescriptorAllocation& rtvDescriptor = {},
                              const DescriptorAllocation& dsvDescriptor = {},
@@ -257,20 +253,20 @@ namespace Spark
                 void* GetShaderResourceView() const override
                 {
                     return m_srvDescriptor.IsValid()
-                        ? const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_srvDescriptor.cpuHandle)
-                        : nullptr;
+                               ? const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_srvDescriptor.cpuHandle)
+                               : nullptr;
                 }
                 void* GetRenderTargetView() const override
                 {
                     return m_rtvDescriptor.IsValid()
-                        ? const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_rtvDescriptor.cpuHandle)
-                        : nullptr;
+                               ? const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_rtvDescriptor.cpuHandle)
+                               : nullptr;
                 }
                 void* GetDepthStencilView() const override
                 {
                     return m_dsvDescriptor.IsValid()
-                        ? const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_dsvDescriptor.cpuHandle)
-                        : nullptr;
+                               ? const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_dsvDescriptor.cpuHandle)
+                               : nullptr;
                 }
 
                 ID3D12Resource* GetD3D12Resource() const { return m_resource.Get(); }
@@ -322,15 +318,9 @@ namespace Spark
                 {
                     return m_bytecodeBlob ? m_bytecodeBlob->GetBufferPointer() : nullptr;
                 }
-                size_t GetBytecodeSize() const override
-                {
-                    return m_bytecodeBlob ? m_bytecodeBlob->GetBufferSize() : 0;
-                }
+                size_t GetBytecodeSize() const override { return m_bytecodeBlob ? m_bytecodeBlob->GetBufferSize() : 0; }
 
-                D3D12_SHADER_BYTECODE GetD3D12Bytecode() const
-                {
-                    return { GetBytecode(), GetBytecodeSize() };
-                }
+                D3D12_SHADER_BYTECODE GetD3D12Bytecode() const { return {GetBytecode(), GetBytecodeSize()}; }
 
                 ID3DBlob* GetBlob() const { return m_bytecodeBlob.Get(); }
 
@@ -345,8 +335,7 @@ namespace Spark
             class D3D12Sampler : public IRHISampler
             {
               public:
-                D3D12Sampler(const RHISamplerDesc& desc,
-                             const DescriptorAllocation& descriptor);
+                D3D12Sampler(const RHISamplerDesc& desc, const DescriptorAllocation& descriptor);
                 ~D3D12Sampler() override = default;
 
                 const std::string& GetDebugName() const override { return m_debugName; }
@@ -377,8 +366,7 @@ namespace Spark
             class D3D12PipelineState : public IRHIPipelineState
             {
               public:
-                D3D12PipelineState(const RHIPipelineStateDesc& desc,
-                                   ComPtr<ID3D12PipelineState> pso,
+                D3D12PipelineState(const RHIPipelineStateDesc& desc, ComPtr<ID3D12PipelineState> pso,
                                    ComPtr<ID3D12RootSignature> rootSignature);
                 ~D3D12PipelineState() override = default;
 
@@ -413,11 +401,8 @@ namespace Spark
             class D3D12SwapChain : public IRHISwapChain
             {
               public:
-                D3D12SwapChain(ID3D12Device* device,
-                               ID3D12CommandQueue* commandQueue,
-                               IDXGIFactory4* dxgiFactory,
-                               DescriptorHeapAllocator* rtvAllocator,
-                               const RHISwapChainDesc& desc);
+                D3D12SwapChain(ID3D12Device* device, ID3D12CommandQueue* commandQueue, IDXGIFactory4* dxgiFactory,
+                               DescriptorHeapAllocator* rtvAllocator, const RHISwapChainDesc& desc);
                 ~D3D12SwapChain() override;
 
                 bool Present(bool vsync) override;
@@ -464,9 +449,8 @@ namespace Spark
             class D3D12CommandList : public IRHICommandList
             {
               public:
-                D3D12CommandList(ID3D12Device* device,
-                                D3D12_COMMAND_LIST_TYPE type,
-                                ID3D12PipelineState* initialPSO = nullptr);
+                D3D12CommandList(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE type,
+                                 ID3D12PipelineState* initialPSO = nullptr);
                 ~D3D12CommandList() override = default;
 
                 // IRHICommandList interface
@@ -474,8 +458,7 @@ namespace Spark
                 void End() override;
                 void Reset() override;
 
-                void SetRenderTargets(IRHITexture** renderTargets, uint32_t count,
-                                      IRHITexture* depthStencil) override;
+                void SetRenderTargets(IRHITexture** renderTargets, uint32_t count, IRHITexture* depthStencil) override;
                 void ClearRenderTarget(IRHITexture* target, const float color[4]) override;
                 void ClearDepthStencil(IRHITexture* target, float depth, uint8_t stencil) override;
 
@@ -493,11 +476,10 @@ namespace Spark
 
                 void Draw(uint32_t vertexCount, uint32_t startVertex) override;
                 void DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex) override;
-                void DrawInstanced(uint32_t vertexCount, uint32_t instanceCount,
-                                   uint32_t startVertex, uint32_t startInstance) override;
-                void DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount,
-                                          uint32_t startIndex, int32_t baseVertex,
-                                          uint32_t startInstance) override;
+                void DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex,
+                                   uint32_t startInstance) override;
+                void DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, uint32_t startIndex,
+                                          int32_t baseVertex, uint32_t startInstance) override;
 
                 void Dispatch(uint32_t x, uint32_t y, uint32_t z) override;
 
@@ -513,8 +495,7 @@ namespace Spark
                  * @param stateBefore The current resource state.
                  * @param stateAfter  The desired resource state.
                  */
-                void TransitionBarrier(D3D12Texture* resource,
-                                       D3D12_RESOURCE_STATES stateBefore,
+                void TransitionBarrier(D3D12Texture* resource, D3D12_RESOURCE_STATES stateBefore,
                                        D3D12_RESOURCE_STATES stateAfter);
 
                 /**
@@ -603,8 +584,7 @@ namespace Spark
                 IRHITexture* CreateTexture(const RHITextureDesc& desc) override;
                 IRHIShader* CreateShader(const RHIShaderDesc& desc) override;
                 IRHISampler* CreateSampler(const RHISamplerDesc& desc) override;
-                IRHIPipelineState* CreatePipelineState(const RHIPipelineStateDesc& desc,
-                                                       IRHIShader* vertexShader,
+                IRHIPipelineState* CreatePipelineState(const RHIPipelineStateDesc& desc, IRHIShader* vertexShader,
                                                        IRHIShader* pixelShader) override;
 
                 // -- IRHIDevice: Resource destruction -------------------------------------
@@ -619,10 +599,9 @@ namespace Spark
 
                 void* MapBuffer(IRHIBuffer* buffer) override;
                 void UnmapBuffer(IRHIBuffer* buffer) override;
-                void UpdateBuffer(IRHIBuffer* buffer, const void* data,
-                                  size_t size, size_t offset) override;
-                void UpdateTexture(IRHITexture* texture, const void* data,
-                                   uint32_t mipLevel, uint32_t arraySlice) override;
+                void UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset) override;
+                void UpdateTexture(IRHITexture* texture, const void* data, uint32_t mipLevel,
+                                   uint32_t arraySlice) override;
 
                 // -- IRHIDevice: Command lists --------------------------------------------
 
@@ -723,9 +702,9 @@ namespace Spark
                 ComPtr<IDXGIFactory6> m_dxgiFactory;
                 ComPtr<IDXGIAdapter1> m_adapter;
                 ComPtr<ID3D12Device> m_device;
-                ComPtr<ID3D12Device5> m_dxrDevice;     ///< Non-null when DXR is available.
+                ComPtr<ID3D12Device5> m_dxrDevice; ///< Non-null when DXR is available.
 
-                ComPtr<ID3D12InfoQueue> m_infoQueue;    ///< Active when debug layer is enabled.
+                ComPtr<ID3D12InfoQueue> m_infoQueue; ///< Active when debug layer is enabled.
 
                 // -- Command queues -------------------------------------------------------
 

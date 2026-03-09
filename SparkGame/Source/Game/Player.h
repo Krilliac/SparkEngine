@@ -58,6 +58,12 @@ namespace Spark
  * @note The Player does not own the camera, input manager, or projectile pool references
  * @warning Ensure SetProjectilePool() is called before using weapons
  */
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4251) // class needs dll-interface
+#pragma warning(disable : 4275) // non dll-interface class used as base
+#endif
+
 class SPARK_GAME_API Player : public GameObject
 {
   public:
@@ -784,3 +790,7 @@ class SPARK_GAME_API Player : public GameObject
      */
     PlayerState GetStateThreadSafe() const;
 };
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

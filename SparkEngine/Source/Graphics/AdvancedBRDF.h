@@ -370,7 +370,8 @@ namespace Spark::Graphics
 
         std::string Console_GetStatus() const
         {
-            return "Advanced BRDF System: " + std::string(m_initialized ? "Active" : "Inactive") + "\n"
+            return "Advanced BRDF System: " + std::string(m_initialized ? "Active" : "Inactive") +
+                   "\n"
                    "  Lobes: SSS, Clearcoat, Anisotropy, Transmission, Sheen, Iridescence\n";
         }
 
@@ -426,14 +427,13 @@ namespace Spark::Graphics
             )";
 
             ComPtr<ID3DBlob> psBlob, errorBlob;
-            HRESULT hr = D3DCompile(psSource.c_str(), psSource.size(), "AdvancedBRDF_PS",
-                                     nullptr, nullptr, "main", "ps_5_0", 0, 0,
-                                     &psBlob, &errorBlob);
-            if (FAILED(hr)) return false;
+            HRESULT hr = D3DCompile(psSource.c_str(), psSource.size(), "AdvancedBRDF_PS", nullptr, nullptr, "main",
+                                    "ps_5_0", 0, 0, &psBlob, &errorBlob);
+            if (FAILED(hr))
+                return false;
 
-            return SUCCEEDED(m_device->CreatePixelShader(psBlob->GetBufferPointer(),
-                                                          psBlob->GetBufferSize(),
-                                                          nullptr, &m_advancedBRDFPS));
+            return SUCCEEDED(m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr,
+                                                         &m_advancedBRDFPS));
         }
 
         bool m_initialized = false;

@@ -67,16 +67,16 @@ static constexpr int SH_COEFFICIENT_COUNT = 9;
 struct LightProbe
 {
     XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
-    float radius = 10.0f;          ///< Influence radius in world units
-    float influenceWeight = 1.0f;  ///< Blending weight for overlapping probes
+    float radius = 10.0f;         ///< Influence radius in world units
+    float influenceWeight = 1.0f; ///< Blending weight for overlapping probes
 
     /** @brief SH coefficients per color channel (R, G, B), 9 bands each (L2) */
     std::array<float, SH_COEFFICIENT_COUNT> shCoefficientsR = {};
     std::array<float, SH_COEFFICIENT_COUNT> shCoefficientsG = {};
     std::array<float, SH_COEFFICIENT_COUNT> shCoefficientsB = {};
 
-    bool isDirty = true;           ///< Needs re-bake
-    bool isActive = true;          ///< Contributing to lighting
+    bool isDirty = true;  ///< Needs re-bake
+    bool isActive = true; ///< Contributing to lighting
 
     /** @brief Unique identifier for streaming and serialization */
     uint32_t probeId = 0;
@@ -95,8 +95,8 @@ struct LightProbe
 struct alignas(16) SHProbeGPUData
 {
     XMFLOAT4 shBands[SH_COEFFICIENT_COUNT]; ///< Each band: (R, G, B, 0)
-    XMFLOAT4 positionAndRadius;              ///< (x, y, z, radius)
-    XMFLOAT4 weightAndFlags;                 ///< (weight, active, 0, 0)
+    XMFLOAT4 positionAndRadius;             ///< (x, y, z, radius)
+    XMFLOAT4 weightAndFlags;                ///< (weight, active, 0, 0)
 };
 
 // =============================================================================
@@ -111,12 +111,12 @@ struct alignas(16) SHProbeGPUData
  */
 struct IrradianceVolume
 {
-    XMFLOAT3 boundsMin = {0.0f, 0.0f, 0.0f};   ///< AABB minimum corner
+    XMFLOAT3 boundsMin = {0.0f, 0.0f, 0.0f};      ///< AABB minimum corner
     XMFLOAT3 boundsMax = {100.0f, 50.0f, 100.0f}; ///< AABB maximum corner
 
-    uint32_t resolutionX = 8;  ///< Number of probes along X
-    uint32_t resolutionY = 4;  ///< Number of probes along Y
-    uint32_t resolutionZ = 8;  ///< Number of probes along Z
+    uint32_t resolutionX = 8; ///< Number of probes along X
+    uint32_t resolutionY = 4; ///< Number of probes along Y
+    uint32_t resolutionZ = 8; ///< Number of probes along Z
 
     float updateFrequency = 0.0f; ///< Seconds between updates (0 = manual only)
     float timeSinceLastUpdate = 0.0f;
@@ -154,10 +154,10 @@ struct IrradianceVolume
  */
 enum class GIMode
 {
-    None,              ///< No global illumination
-    LightProbes,       ///< Manually/auto-placed discrete light probes
-    IrradianceVolume,  ///< 3D grid of SH probes
-    DDGI               ///< Dynamic Diffuse GI (ray-traced probe updates)
+    None,             ///< No global illumination
+    LightProbes,      ///< Manually/auto-placed discrete light probes
+    IrradianceVolume, ///< 3D grid of SH probes
+    DDGI              ///< Dynamic Diffuse GI (ray-traced probe updates)
 };
 
 /**
@@ -166,28 +166,28 @@ enum class GIMode
 struct GISettings
 {
     GIMode mode = GIMode::None;
-    int bounceCount = 1;           ///< Number of light bounces to simulate
-    float intensity = 1.0f;        ///< Global intensity multiplier for indirect light
-    float maxDistance = 500.0f;     ///< Maximum distance for probe influence
+    int bounceCount = 1;        ///< Number of light bounces to simulate
+    float intensity = 1.0f;     ///< Global intensity multiplier for indirect light
+    float maxDistance = 500.0f; ///< Maximum distance for probe influence
 
     // Probe baking
-    uint32_t cubemapResolution = 64;   ///< Resolution per face for probe baking cubemaps
-    bool bakeShadows = true;           ///< Include shadow information in probes
-    float skyOcclusionWeight = 0.5f;   ///< Blend between probe data and sky [0, 1]
+    uint32_t cubemapResolution = 64; ///< Resolution per face for probe baking cubemaps
+    bool bakeShadows = true;         ///< Include shadow information in probes
+    float skyOcclusionWeight = 0.5f; ///< Blend between probe data and sky [0, 1]
 
     // DDGI-specific
-    int ddgiRaysPerProbe = 256;        ///< Rays traced per probe per update
-    float ddgiHysteresis = 0.97f;      ///< Temporal blending for DDGI updates [0, 1]
-    float ddgiIrradianceGamma = 5.0f;  ///< Gamma for irradiance encoding
-    float ddgiDepthSharpness = 50.0f;  ///< Sharpness for depth-based visibility
+    int ddgiRaysPerProbe = 256;       ///< Rays traced per probe per update
+    float ddgiHysteresis = 0.97f;     ///< Temporal blending for DDGI updates [0, 1]
+    float ddgiIrradianceGamma = 5.0f; ///< Gamma for irradiance encoding
+    float ddgiDepthSharpness = 50.0f; ///< Sharpness for depth-based visibility
 
     // Streaming
-    float streamingDistance = 200.0f;  ///< Distance at which to load/unload probe data
-    bool enableStreaming = false;       ///< Enable probe data streaming for large worlds
+    float streamingDistance = 200.0f; ///< Distance at which to load/unload probe data
+    bool enableStreaming = false;     ///< Enable probe data streaming for large worlds
 
     // Debug
-    bool debugVisualization = false;   ///< Show probe debug spheres
-    float debugSphereRadius = 0.5f;    ///< Radius of debug visualization spheres
+    bool debugVisualization = false; ///< Show probe debug spheres
+    float debugSphereRadius = 0.5f;  ///< Radius of debug visualization spheres
 };
 
 // =============================================================================
@@ -199,12 +199,12 @@ struct GISettings
  */
 struct alignas(16) GIConstantBuffer
 {
-    XMFLOAT4 volumeBoundsMin;     ///< (minX, minY, minZ, padding)
-    XMFLOAT4 volumeBoundsMax;     ///< (maxX, maxY, maxZ, padding)
-    XMFLOAT4 probeSpacing;        ///< (spacingX, spacingY, spacingZ, padding)
-    XMFLOAT4 volumeResolution;    ///< (resX, resY, resZ, probeCount)
-    XMFLOAT4 giParams;            ///< (intensity, maxDistance, mode, bounceCount)
-    XMFLOAT4 ddgiParams;          ///< (hysteresis, irradianceGamma, depthSharpness, raysPerProbe)
+    XMFLOAT4 volumeBoundsMin;  ///< (minX, minY, minZ, padding)
+    XMFLOAT4 volumeBoundsMax;  ///< (maxX, maxY, maxZ, padding)
+    XMFLOAT4 probeSpacing;     ///< (spacingX, spacingY, spacingZ, padding)
+    XMFLOAT4 volumeResolution; ///< (resX, resY, resZ, probeCount)
+    XMFLOAT4 giParams;         ///< (intensity, maxDistance, mode, bounceCount)
+    XMFLOAT4 ddgiParams;       ///< (hysteresis, irradianceGamma, depthSharpness, raysPerProbe)
 };
 
 // =============================================================================
@@ -237,7 +237,7 @@ struct ProbeStreamingRegion
  */
 class GlobalIlluminationSystem
 {
-public:
+  public:
     GlobalIlluminationSystem() = default;
     ~GlobalIlluminationSystem() { Shutdown(); }
 
@@ -299,8 +299,7 @@ public:
         m_totalTime += deltaTime;
 
         // Update irradiance volume on timer
-        if (m_settings.mode == GIMode::IrradianceVolume ||
-            m_settings.mode == GIMode::DDGI)
+        if (m_settings.mode == GIMode::IrradianceVolume || m_settings.mode == GIMode::DDGI)
         {
             m_irradianceVolume.timeSinceLastUpdate += deltaTime;
             if (m_irradianceVolume.updateFrequency > 0.0f &&
@@ -374,8 +373,7 @@ public:
      * @param boundsMax   Maximum corner of the placement volume
      * @param resolution  Number of probes along each axis (x, y, z)
      */
-    void PlaceProbesOnGrid(const XMFLOAT3& boundsMin, const XMFLOAT3& boundsMax,
-                           const XMFLOAT3& resolution)
+    void PlaceProbesOnGrid(const XMFLOAT3& boundsMin, const XMFLOAT3& boundsMax, const XMFLOAT3& resolution)
     {
         uint32_t resX = std::max(1u, static_cast<uint32_t>(resolution.x));
         uint32_t resY = std::max(1u, static_cast<uint32_t>(resolution.y));
@@ -399,12 +397,9 @@ public:
                 for (uint32_t x = 0; x < resX; ++x)
                 {
                     LightProbe probe;
-                    probe.position =
-                    {
-                        boundsMin.x + static_cast<float>(x) * spacing.x,
-                        boundsMin.y + static_cast<float>(y) * spacing.y,
-                        boundsMin.z + static_cast<float>(z) * spacing.z
-                    };
+                    probe.position = {boundsMin.x + static_cast<float>(x) * spacing.x,
+                                      boundsMin.y + static_cast<float>(y) * spacing.y,
+                                      boundsMin.z + static_cast<float>(z) * spacing.z};
                     probe.radius = std::max({spacing.x, spacing.y, spacing.z}) * 1.5f;
                     probe.probeId = m_nextProbeId++;
                     probe.isDirty = true;
@@ -430,9 +425,7 @@ public:
      * @param cubemapFaces Array of 6 cubemap face textures (SRVs)
      * @param faceSize     Resolution of each cubemap face in pixels
      */
-    void ComputeSHFromCubemap(uint32_t probeIndex,
-                              ID3D11ShaderResourceView* const cubemapFaces[6],
-                              uint32_t faceSize)
+    void ComputeSHFromCubemap(uint32_t probeIndex, ID3D11ShaderResourceView* const cubemapFaces[6], uint32_t faceSize)
     {
         if (probeIndex >= m_probes.size() || !m_context)
         {
@@ -540,8 +533,7 @@ public:
      * @param srvSlot      Shader resource view register slot for probe StructuredBuffer
      * @param cbSlot       Constant buffer register slot for GI parameters
      */
-    void BindGIResources(ID3D11DeviceContext* context, uint32_t srvSlot = 10,
-                         uint32_t cbSlot = 5) const
+    void BindGIResources(ID3D11DeviceContext* context, uint32_t srvSlot = 10, uint32_t cbSlot = 5) const
     {
         if (!m_initialized || !context)
         {
@@ -568,8 +560,7 @@ public:
     /**
      * @brief Unbind GI resources from the pipeline
      */
-    void UnbindGIResources(ID3D11DeviceContext* context, uint32_t srvSlot = 10,
-                           uint32_t cbSlot = 5) const
+    void UnbindGIResources(ID3D11DeviceContext* context, uint32_t srvSlot = 10, uint32_t cbSlot = 5) const
     {
         if (!context)
         {
@@ -658,8 +649,7 @@ public:
      * @param radius Region radius
      * @param probeIndices Indices of probes belonging to this region
      */
-    void AddStreamingRegion(const XMFLOAT3& center, float radius,
-                            const std::vector<uint32_t>& probeIndices)
+    void AddStreamingRegion(const XMFLOAT3& center, float radius, const std::vector<uint32_t>& probeIndices)
     {
         ProbeStreamingRegion region;
         region.center = center;
@@ -696,12 +686,11 @@ public:
         status += "  Bounces: " + std::to_string(m_settings.bounceCount) + "\n";
         status += "  Intensity: " + std::to_string(m_settings.intensity) + "\n";
 
-        if (m_settings.mode == GIMode::IrradianceVolume ||
-            m_settings.mode == GIMode::DDGI)
+        if (m_settings.mode == GIMode::IrradianceVolume || m_settings.mode == GIMode::DDGI)
         {
-            status += "  Volume: " + std::to_string(m_irradianceVolume.resolutionX) + "x"
-                      + std::to_string(m_irradianceVolume.resolutionY) + "x"
-                      + std::to_string(m_irradianceVolume.resolutionZ) + "\n";
+            status += "  Volume: " + std::to_string(m_irradianceVolume.resolutionX) + "x" +
+                      std::to_string(m_irradianceVolume.resolutionY) + "x" +
+                      std::to_string(m_irradianceVolume.resolutionZ) + "\n";
         }
 
         if (m_settings.enableStreaming)
@@ -714,8 +703,8 @@ public:
                     ++loaded;
                 }
             }
-            status += "  Streaming regions: " + std::to_string(loaded) + "/"
-                      + std::to_string(m_streamingRegions.size()) + " loaded\n";
+            status += "  Streaming regions: " + std::to_string(loaded) + "/" +
+                      std::to_string(m_streamingRegions.size()) + " loaded\n";
         }
 
         status += "  Debug viz: " + std::string(m_settings.debugVisualization ? "ON" : "OFF") + "\n";
@@ -744,16 +733,10 @@ public:
     }
 
     /** @brief Console command to toggle debug visualization */
-    void Console_ToggleDebug()
-    {
-        m_settings.debugVisualization = !m_settings.debugVisualization;
-    }
+    void Console_ToggleDebug() { m_settings.debugVisualization = !m_settings.debugVisualization; }
 
     /** @brief Console command to set GI intensity */
-    void Console_SetIntensity(float intensity)
-    {
-        m_settings.intensity = std::clamp(intensity, 0.0f, 10.0f);
-    }
+    void Console_SetIntensity(float intensity) { m_settings.intensity = std::clamp(intensity, 0.0f, 10.0f); }
 
     /** @brief Console command to force re-bake all probes */
     void Console_RebakeAll()
@@ -796,7 +779,7 @@ public:
         return nullptr;
     }
 
-private:
+  private:
     // ---- GPU Resource Creation ----
 
     bool CreateGPUResources()
@@ -814,8 +797,7 @@ private:
         cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-        HRESULT hr = m_device->CreateBuffer(&cbDesc, nullptr,
-                                            m_giConstantBuffer.GetAddressOf());
+        HRESULT hr = m_device->CreateBuffer(&cbDesc, nullptr, m_giConstantBuffer.GetAddressOf());
         if (FAILED(hr))
         {
             return false;
@@ -855,8 +837,7 @@ private:
         bufDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
         bufDesc.StructureByteStride = sizeof(SHProbeGPUData);
 
-        HRESULT hr = m_device->CreateBuffer(&bufDesc, nullptr,
-                                            m_probeStructuredBuffer.GetAddressOf());
+        HRESULT hr = m_device->CreateBuffer(&bufDesc, nullptr, m_probeStructuredBuffer.GetAddressOf());
         if (FAILED(hr))
         {
             return false;
@@ -868,8 +849,7 @@ private:
         srvDesc.Buffer.FirstElement = 0;
         srvDesc.Buffer.NumElements = probeCount;
 
-        hr = m_device->CreateShaderResourceView(m_probeStructuredBuffer.Get(),
-                                                &srvDesc, m_probeSRV.GetAddressOf());
+        hr = m_device->CreateShaderResourceView(m_probeStructuredBuffer.Get(), &srvDesc, m_probeSRV.GetAddressOf());
         if (FAILED(hr))
         {
             return false;
@@ -906,8 +886,7 @@ private:
         }
 
         D3D11_MAPPED_SUBRESOURCE mapped = {};
-        HRESULT hr = m_context->Map(m_probeStructuredBuffer.Get(), 0,
-                                    D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        HRESULT hr = m_context->Map(m_probeStructuredBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
         if (FAILED(hr))
         {
             return;
@@ -921,19 +900,12 @@ private:
 
             for (int band = 0; band < SH_COEFFICIENT_COUNT; ++band)
             {
-                gpu.shBands[band] =
-                {
-                    probe.shCoefficientsR[band],
-                    probe.shCoefficientsG[band],
-                    probe.shCoefficientsB[band],
-                    0.0f
-                };
+                gpu.shBands[band] = {probe.shCoefficientsR[band], probe.shCoefficientsG[band],
+                                     probe.shCoefficientsB[band], 0.0f};
             }
 
-            gpu.positionAndRadius = {probe.position.x, probe.position.y,
-                                     probe.position.z, probe.radius};
-            gpu.weightAndFlags = {probe.influenceWeight,
-                                  probe.isActive ? 1.0f : 0.0f, 0.0f, 0.0f};
+            gpu.positionAndRadius = {probe.position.x, probe.position.y, probe.position.z, probe.radius};
+            gpu.weightAndFlags = {probe.influenceWeight, probe.isActive ? 1.0f : 0.0f, 0.0f, 0.0f};
         }
 
         m_context->Unmap(m_probeStructuredBuffer.Get(), 0);
@@ -952,29 +924,24 @@ private:
         }
 
         GIConstantBuffer cbData = {};
-        cbData.volumeBoundsMin = {m_irradianceVolume.boundsMin.x,
-                                  m_irradianceVolume.boundsMin.y,
+        cbData.volumeBoundsMin = {m_irradianceVolume.boundsMin.x, m_irradianceVolume.boundsMin.y,
                                   m_irradianceVolume.boundsMin.z, 0.0f};
-        cbData.volumeBoundsMax = {m_irradianceVolume.boundsMax.x,
-                                  m_irradianceVolume.boundsMax.y,
+        cbData.volumeBoundsMax = {m_irradianceVolume.boundsMax.x, m_irradianceVolume.boundsMax.y,
                                   m_irradianceVolume.boundsMax.z, 0.0f};
 
         XMFLOAT3 spacing = m_irradianceVolume.GetProbeSpacing();
         cbData.probeSpacing = {spacing.x, spacing.y, spacing.z, 0.0f};
-        cbData.volumeResolution = {static_cast<float>(m_irradianceVolume.resolutionX),
-                                   static_cast<float>(m_irradianceVolume.resolutionY),
-                                   static_cast<float>(m_irradianceVolume.resolutionZ),
-                                   static_cast<float>(m_probes.size())};
+        cbData.volumeResolution = {
+            static_cast<float>(m_irradianceVolume.resolutionX), static_cast<float>(m_irradianceVolume.resolutionY),
+            static_cast<float>(m_irradianceVolume.resolutionZ), static_cast<float>(m_probes.size())};
         cbData.giParams = {m_settings.intensity, m_settings.maxDistance,
                            static_cast<float>(static_cast<int>(m_settings.mode)),
                            static_cast<float>(m_settings.bounceCount)};
-        cbData.ddgiParams = {m_settings.ddgiHysteresis, m_settings.ddgiIrradianceGamma,
-                             m_settings.ddgiDepthSharpness,
+        cbData.ddgiParams = {m_settings.ddgiHysteresis, m_settings.ddgiIrradianceGamma, m_settings.ddgiDepthSharpness,
                              static_cast<float>(m_settings.ddgiRaysPerProbe)};
 
         D3D11_MAPPED_SUBRESOURCE mapped = {};
-        HRESULT hr = m_context->Map(m_giConstantBuffer.Get(), 0,
-                                    D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        HRESULT hr = m_context->Map(m_giConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
         if (SUCCEEDED(hr))
         {
             memcpy(mapped.pData, &cbData, sizeof(cbData));

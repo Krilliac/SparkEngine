@@ -84,12 +84,12 @@ namespace Spark::Graphics
      */
     struct GerstnerWaveParams
     {
-        float amplitude = 0.5f;                     ///< Wave height (peak to trough / 2)
-        float frequency = 0.8f;                     ///< Angular frequency (2*PI / wavelength)
-        float steepness = 0.5f;                     ///< Wave sharpness Q factor [0, 1]
-        XMFLOAT2 direction = {1.0f, 0.0f};         ///< Normalized wave travel direction (XZ)
-        float speed = 1.0f;                         ///< Phase speed multiplier
-        float padding0 = 0.0f;                      ///< Pad to 32 bytes
+        float amplitude = 0.5f;            ///< Wave height (peak to trough / 2)
+        float frequency = 0.8f;            ///< Angular frequency (2*PI / wavelength)
+        float steepness = 0.5f;            ///< Wave sharpness Q factor [0, 1]
+        XMFLOAT2 direction = {1.0f, 0.0f}; ///< Normalized wave travel direction (XZ)
+        float speed = 1.0f;                ///< Phase speed multiplier
+        float padding0 = 0.0f;             ///< Pad to 32 bytes
     };
 
     // =============================================================================
@@ -103,68 +103,68 @@ namespace Spark::Graphics
     {
         // ---- Wave Parameters ----
         std::array<GerstnerWaveParams, MAX_GERSTNER_WAVES> waves = {{
-            {0.5f,  0.8f, 0.5f, {1.0f, 0.0f},   1.0f, 0.0f},
-            {0.25f, 1.2f, 0.4f, {0.7f, 0.7f},   1.2f, 0.0f},
-            {0.15f, 2.0f, 0.3f, {-0.4f, 0.9f},  0.8f, 0.0f},
-            {0.1f,  3.0f, 0.2f, {-0.8f, -0.6f}, 1.5f, 0.0f},
+            {0.5f, 0.8f, 0.5f, {1.0f, 0.0f}, 1.0f, 0.0f},
+            {0.25f, 1.2f, 0.4f, {0.7f, 0.7f}, 1.2f, 0.0f},
+            {0.15f, 2.0f, 0.3f, {-0.4f, 0.9f}, 0.8f, 0.0f},
+            {0.1f, 3.0f, 0.2f, {-0.8f, -0.6f}, 1.5f, 0.0f},
         }};
-        uint32_t activeWaveCount = 4;               ///< Number of active Gerstner waves [1, 4]
-        float globalAmplitude = 1.0f;                ///< Master amplitude multiplier
-        float globalSpeed = 1.0f;                    ///< Master speed multiplier
+        uint32_t activeWaveCount = 4; ///< Number of active Gerstner waves [1, 4]
+        float globalAmplitude = 1.0f; ///< Master amplitude multiplier
+        float globalSpeed = 1.0f;     ///< Master speed multiplier
 
         // ---- Tessellation ----
-        float tessellationFactor = 16.0f;            ///< Max tessellation level
-        float tessellationMinDistance = 10.0f;        ///< Distance for max tessellation
-        float tessellationMaxDistance = 200.0f;       ///< Distance for min tessellation
-        float displacementScale = 1.0f;              ///< Vertex displacement multiplier
+        float tessellationFactor = 16.0f;       ///< Max tessellation level
+        float tessellationMinDistance = 10.0f;  ///< Distance for max tessellation
+        float tessellationMaxDistance = 200.0f; ///< Distance for min tessellation
+        float displacementScale = 1.0f;         ///< Vertex displacement multiplier
 
         // ---- Water Color ----
-        XMFLOAT4 shallowColor = {0.0f, 0.4f, 0.4f, 0.6f};   ///< Color at shallow depths (RGBA)
-        XMFLOAT4 deepColor = {0.0f, 0.05f, 0.1f, 0.95f};     ///< Color at deep water (RGBA)
-        float transparency = 0.8f;                              ///< Base transparency [0=opaque, 1=clear]
-        float depthVisibility = 5.0f;                           ///< Depth at which water becomes fully opaque
+        XMFLOAT4 shallowColor = {0.0f, 0.4f, 0.4f, 0.6f};     ///< Color at shallow depths (RGBA)
+        XMFLOAT4 deepColor = {0.0f, 0.05f, 0.1f, 0.95f};      ///< Color at deep water (RGBA)
+        float transparency = 0.8f;                            ///< Base transparency [0=opaque, 1=clear]
+        float depthVisibility = 5.0f;                         ///< Depth at which water becomes fully opaque
         XMFLOAT3 extinctionCoefficient = {0.5f, 0.2f, 0.05f}; ///< Per-channel light absorption (RGB)
 
         // ---- Reflection / Refraction ----
-        float reflectionDistortion = 0.03f;          ///< Reflection UV distortion strength
-        float refractionDistortion = 0.05f;          ///< Refraction UV distortion strength
-        float fresnelBias = 0.02f;                   ///< Minimum reflectivity at normal incidence
-        float fresnelPower = 5.0f;                   ///< Fresnel exponent (higher = sharper falloff)
-        float reflectionStrength = 1.0f;             ///< Reflection intensity multiplier
-        float refractionStrength = 1.0f;             ///< Refraction intensity multiplier
-        float clipPlaneOffset = 0.1f;                ///< Offset for reflection clip plane to avoid artifacts
-        bool enablePlanarReflection = true;          ///< Use planar reflection (higher quality)
-        bool enableSSR = false;                      ///< Use screen-space reflections as fallback
+        float reflectionDistortion = 0.03f; ///< Reflection UV distortion strength
+        float refractionDistortion = 0.05f; ///< Refraction UV distortion strength
+        float fresnelBias = 0.02f;          ///< Minimum reflectivity at normal incidence
+        float fresnelPower = 5.0f;          ///< Fresnel exponent (higher = sharper falloff)
+        float reflectionStrength = 1.0f;    ///< Reflection intensity multiplier
+        float refractionStrength = 1.0f;    ///< Refraction intensity multiplier
+        float clipPlaneOffset = 0.1f;       ///< Offset for reflection clip plane to avoid artifacts
+        bool enablePlanarReflection = true; ///< Use planar reflection (higher quality)
+        bool enableSSR = false;             ///< Use screen-space reflections as fallback
 
         // ---- Foam ----
-        float shoreFoamWidth = 2.0f;                 ///< Shore foam band width in world units
-        float shoreFoamIntensity = 0.8f;             ///< Shore foam opacity [0, 1]
-        float waveCrestFoamThreshold = 0.6f;         ///< Wave height threshold for crest foam [0, 1]
-        float waveCrestFoamIntensity = 0.5f;         ///< Crest foam opacity [0, 1]
-        float foamScale = 4.0f;                      ///< Foam texture tiling scale
-        float foamSpeed = 0.3f;                      ///< Foam texture scroll speed
-        XMFLOAT3 foamColor = {0.9f, 0.95f, 1.0f};   ///< Foam tint color
+        float shoreFoamWidth = 2.0f;              ///< Shore foam band width in world units
+        float shoreFoamIntensity = 0.8f;          ///< Shore foam opacity [0, 1]
+        float waveCrestFoamThreshold = 0.6f;      ///< Wave height threshold for crest foam [0, 1]
+        float waveCrestFoamIntensity = 0.5f;      ///< Crest foam opacity [0, 1]
+        float foamScale = 4.0f;                   ///< Foam texture tiling scale
+        float foamSpeed = 0.3f;                   ///< Foam texture scroll speed
+        XMFLOAT3 foamColor = {0.9f, 0.95f, 1.0f}; ///< Foam tint color
 
         // ---- Caustics ----
-        float causticsIntensity = 0.5f;              ///< Caustic projection brightness [0, 1]
-        float causticsScale = 8.0f;                  ///< Caustic pattern tiling scale
-        float causticsSpeed = 0.5f;                  ///< Caustic animation speed
-        float causticsDepthFade = 10.0f;             ///< Depth at which caustics fade out
+        float causticsIntensity = 0.5f;  ///< Caustic projection brightness [0, 1]
+        float causticsScale = 8.0f;      ///< Caustic pattern tiling scale
+        float causticsSpeed = 0.5f;      ///< Caustic animation speed
+        float causticsDepthFade = 10.0f; ///< Depth at which caustics fade out
 
         // ---- Underwater Fog ----
-        XMFLOAT3 underwaterFogColor = {0.0f, 0.15f, 0.2f};  ///< Underwater visibility tint
-        float underwaterFogDensity = 0.08f;                   ///< Underwater fog exponential density
-        float underwaterFogStartDistance = 0.5f;              ///< Distance before underwater fog begins
-        float underwaterFogMaxOpacity = 0.95f;                ///< Maximum fog opacity
+        XMFLOAT3 underwaterFogColor = {0.0f, 0.15f, 0.2f}; ///< Underwater visibility tint
+        float underwaterFogDensity = 0.08f;                ///< Underwater fog exponential density
+        float underwaterFogStartDistance = 0.5f;           ///< Distance before underwater fog begins
+        float underwaterFogMaxOpacity = 0.95f;             ///< Maximum fog opacity
 
         // ---- Normal Map ----
-        float normalMapScale = 10.0f;                ///< Normal map tiling scale
-        float normalMapStrength = 1.0f;              ///< Normal map blend strength [0, 1]
+        float normalMapScale = 10.0f;                   ///< Normal map tiling scale
+        float normalMapStrength = 1.0f;                 ///< Normal map blend strength [0, 1]
         XMFLOAT2 normalMapScrollSpeed = {0.02f, 0.01f}; ///< Normal map UV scroll velocity
 
         // ---- Specular ----
-        float specularPower = 256.0f;                ///< Specular highlight tightness
-        float specularIntensity = 1.0f;              ///< Specular highlight brightness
+        float specularPower = 256.0f;   ///< Specular highlight tightness
+        float specularIntensity = 1.0f; ///< Specular highlight brightness
     };
 
     // =============================================================================
@@ -179,31 +179,31 @@ namespace Spark::Graphics
     struct alignas(16) WaterConstants
     {
         // ---- Matrices (64 bytes each) ----
-        XMFLOAT4X4 worldMatrix;                      ///< Water mesh world transform
-        XMFLOAT4X4 viewMatrix;                       ///< Camera view matrix
-        XMFLOAT4X4 projectionMatrix;                 ///< Camera projection matrix
-        XMFLOAT4X4 reflectionViewMatrix;             ///< Reflected camera view matrix
+        XMFLOAT4X4 worldMatrix;          ///< Water mesh world transform
+        XMFLOAT4X4 viewMatrix;           ///< Camera view matrix
+        XMFLOAT4X4 projectionMatrix;     ///< Camera projection matrix
+        XMFLOAT4X4 reflectionViewMatrix; ///< Reflected camera view matrix
 
         // ---- Gerstner Wave Data (32 bytes per wave = 128 bytes) ----
         struct alignas(16) GerstnerWaveGPU
         {
-            XMFLOAT2 direction;                      ///< Normalized wave direction
-            float amplitude;                          ///< Wave amplitude
-            float frequency;                          ///< Angular frequency
-            float steepness;                          ///< Q factor
-            float speed;                              ///< Phase speed
-            float padding[2];                         ///< Pad to 32 bytes
+            XMFLOAT2 direction; ///< Normalized wave direction
+            float amplitude;    ///< Wave amplitude
+            float frequency;    ///< Angular frequency
+            float steepness;    ///< Q factor
+            float speed;        ///< Phase speed
+            float padding[2];   ///< Pad to 32 bytes
         };
         GerstnerWaveGPU gerstnerWaves[MAX_GERSTNER_WAVES];
 
         // ---- Water Colors (16 bytes each) ----
-        XMFLOAT4 shallowColor;                       ///< Shallow water color + alpha
-        XMFLOAT4 deepColor;                          ///< Deep water color + alpha
-        XMFLOAT4 extinctionCoeff;                    ///< RGB extinction + depth visibility in W
+        XMFLOAT4 shallowColor;    ///< Shallow water color + alpha
+        XMFLOAT4 deepColor;       ///< Deep water color + alpha
+        XMFLOAT4 extinctionCoeff; ///< RGB extinction + depth visibility in W
 
         // ---- Camera and Time (16 bytes) ----
-        XMFLOAT3 cameraPosition;                     ///< World-space camera position
-        float totalTime;                              ///< Accumulated time for wave animation
+        XMFLOAT3 cameraPosition; ///< World-space camera position
+        float totalTime;         ///< Accumulated time for wave animation
 
         // ---- Reflection/Refraction Parameters (16 bytes) ----
         float reflectionDistortion;
@@ -241,11 +241,11 @@ namespace Spark::Graphics
         // ---- Specular and Misc (16 bytes) ----
         float specularPower;
         float specularIntensity;
-        float waterHeight;                            ///< Y-coordinate of the water plane
-        uint32_t activeWaveCount;                     ///< Number of active waves
+        float waterHeight;        ///< Y-coordinate of the water plane
+        uint32_t activeWaveCount; ///< Number of active waves
 
         // ---- Clip Plane (16 bytes) ----
-        XMFLOAT4 clipPlane;                           ///< Reflection/refraction clip plane
+        XMFLOAT4 clipPlane; ///< Reflection/refraction clip plane
     };
 
     /**
@@ -253,26 +253,26 @@ namespace Spark::Graphics
      */
     struct alignas(16) UnderwaterPostProcessConstants
     {
-        XMFLOAT3 fogColor;                           ///< Underwater fog color
-        float fogDensity;                             ///< Fog exponential density
+        XMFLOAT3 fogColor; ///< Underwater fog color
+        float fogDensity;  ///< Fog exponential density
 
-        float fogStartDistance;                       ///< Distance before fog begins
-        float fogMaxOpacity;                          ///< Maximum fog opacity
-        float distortionStrength;                     ///< Screen-space distortion amount
-        float distortionSpeed;                        ///< Distortion animation speed
+        float fogStartDistance;   ///< Distance before fog begins
+        float fogMaxOpacity;      ///< Maximum fog opacity
+        float distortionStrength; ///< Screen-space distortion amount
+        float distortionSpeed;    ///< Distortion animation speed
 
-        XMFLOAT3 tintColor;                          ///< Overall underwater color tint
-        float tintIntensity;                          ///< Tint blend factor
+        XMFLOAT3 tintColor;  ///< Overall underwater color tint
+        float tintIntensity; ///< Tint blend factor
 
-        float causticsIntensity;                      ///< Caustic overlay intensity
-        float causticsScale;                          ///< Caustic pattern scale
-        float totalTime;                              ///< Accumulated time for animation
-        float waterSurfaceY;                          ///< Y-coordinate of water surface
+        float causticsIntensity; ///< Caustic overlay intensity
+        float causticsScale;     ///< Caustic pattern scale
+        float totalTime;         ///< Accumulated time for animation
+        float waterSurfaceY;     ///< Y-coordinate of water surface
 
-        XMFLOAT3 cameraPosition;                     ///< Camera world position
-        float depthFade;                              ///< Depth at which effects fully apply
+        XMFLOAT3 cameraPosition; ///< Camera world position
+        float depthFade;         ///< Depth at which effects fully apply
 
-        XMFLOAT4X4 invViewProjection;                ///< Inverse view-projection for position reconstruction
+        XMFLOAT4X4 invViewProjection; ///< Inverse view-projection for position reconstruction
     };
 
     // =============================================================================
@@ -288,13 +288,11 @@ namespace Spark::Graphics
      */
     class WaterVolume
     {
-    public:
+      public:
         WaterVolume() = default;
 
         WaterVolume(const XMFLOAT3& position, const XMFLOAT3& size, float height)
-            : m_position(position)
-            , m_size(size)
-            , m_height(height)
+            : m_position(position), m_size(size), m_height(height)
         {
         }
 
@@ -353,8 +351,8 @@ namespace Spark::Graphics
         {
             float halfW = m_size.x * 0.5f;
             float halfD = m_size.z * 0.5f;
-            return (x >= m_position.x - halfW && x <= m_position.x + halfW &&
-                    z >= m_position.z - halfD && z <= m_position.z + halfD);
+            return (x >= m_position.x - halfW && x <= m_position.x + halfW && z >= m_position.z - halfD &&
+                    z <= m_position.z + halfD);
         }
 
         /**
@@ -383,12 +381,8 @@ namespace Spark::Graphics
          * @param waveCount Number of active waves
          * @return Normalized surface normal at the given point
          */
-        static XMFLOAT3 CalculateNormal(
-            float worldX,
-            float worldZ,
-            float time,
-            const GerstnerWaveParams* waves,
-            uint32_t waveCount)
+        static XMFLOAT3 CalculateNormal(float worldX, float worldZ, float time, const GerstnerWaveParams* waves,
+                                        uint32_t waveCount)
         {
             float nx = 0.0f;
             float ny = 1.0f;
@@ -428,12 +422,8 @@ namespace Spark::Graphics
          * @param waveCount Number of active waves
          * @return Displacement vector (X, Y, Z)
          */
-        static XMFLOAT3 CalculateDisplacement(
-            float worldX,
-            float worldZ,
-            float time,
-            const GerstnerWaveParams* waves,
-            uint32_t waveCount)
+        static XMFLOAT3 CalculateDisplacement(float worldX, float worldZ, float time, const GerstnerWaveParams* waves,
+                                              uint32_t waveCount)
         {
             float dx = 0.0f;
             float dy = 0.0f;
@@ -457,7 +447,7 @@ namespace Spark::Graphics
             return {dx, dy, dz};
         }
 
-    private:
+      private:
         XMFLOAT3 m_position = {0.0f, 0.0f, 0.0f};
         XMFLOAT3 m_size = {100.0f, 1.0f, 100.0f};
         float m_height = WATER_DEFAULT_HEIGHT;
@@ -481,15 +471,15 @@ namespace Spark::Graphics
 
     struct WaterMetrics
     {
-        uint32_t activeVolumeCount = 0;               ///< Number of enabled water volumes
-        uint32_t totalTriangles = 0;                   ///< Triangles rendered this frame
-        float reflectionPassTimeMs = 0.0f;             ///< Reflection render time
-        float refractionPassTimeMs = 0.0f;             ///< Refraction render time
-        float waterPassTimeMs = 0.0f;                  ///< Water surface render time
-        float underwaterPassTimeMs = 0.0f;             ///< Underwater post-process time
-        bool isCameraUnderwater = false;               ///< Whether camera is currently submerged
-        uint32_t reflectionResolutionX = 0;            ///< Reflection render target width
-        uint32_t reflectionResolutionY = 0;            ///< Reflection render target height
+        uint32_t activeVolumeCount = 0;     ///< Number of enabled water volumes
+        uint32_t totalTriangles = 0;        ///< Triangles rendered this frame
+        float reflectionPassTimeMs = 0.0f;  ///< Reflection render time
+        float refractionPassTimeMs = 0.0f;  ///< Refraction render time
+        float waterPassTimeMs = 0.0f;       ///< Water surface render time
+        float underwaterPassTimeMs = 0.0f;  ///< Underwater post-process time
+        bool isCameraUnderwater = false;    ///< Whether camera is currently submerged
+        uint32_t reflectionResolutionX = 0; ///< Reflection render target width
+        uint32_t reflectionResolutionY = 0; ///< Reflection render target height
     };
 
     // =============================================================================
@@ -511,7 +501,7 @@ namespace Spark::Graphics
      */
     class WaterSystem
     {
-    public:
+      public:
         WaterSystem() = default;
         ~WaterSystem() = default;
 
@@ -525,11 +515,8 @@ namespace Spark::Graphics
          * @param height Viewport height for render targets
          * @return true on success
          */
-        bool Initialize(
-            [[maybe_unused]] ID3D11Device* device,
-            [[maybe_unused]] ID3D11DeviceContext* context,
-            uint32_t width = 1920,
-            uint32_t height = 1080)
+        bool Initialize([[maybe_unused]] ID3D11Device* device, [[maybe_unused]] ID3D11DeviceContext* context,
+                        uint32_t width = 1920, uint32_t height = 1080)
         {
             m_viewportWidth = width;
             m_viewportHeight = height;
@@ -599,11 +586,8 @@ namespace Spark::Graphics
          * @param viewMatrix Current view matrix
          * @param projMatrix Current projection matrix
          */
-        void Update(
-            float deltaTime,
-            const XMFLOAT3& cameraPosition,
-            const XMFLOAT4X4& viewMatrix,
-            const XMFLOAT4X4& projMatrix)
+        void Update(float deltaTime, const XMFLOAT3& cameraPosition, const XMFLOAT4X4& viewMatrix,
+                    const XMFLOAT4X4& projMatrix)
         {
             if (!m_initialized)
             {
@@ -660,10 +644,9 @@ namespace Spark::Graphics
             {
                 float clearColor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
                 m_context->ClearRenderTargetView(m_reflectionRTV.Get(), clearColor);
-                m_context->ClearDepthStencilView(m_reflectionDSV.Get(),
-                    D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-                m_context->OMSetRenderTargets(1, m_reflectionRTV.GetAddressOf(),
-                    m_reflectionDSV.Get());
+                m_context->ClearDepthStencilView(m_reflectionDSV.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f,
+                                                 0);
+                m_context->OMSetRenderTargets(1, m_reflectionRTV.GetAddressOf(), m_reflectionDSV.Get());
             }
 #endif
             // Scene rendering with reflected view is done externally via callback
@@ -697,9 +680,7 @@ namespace Spark::Graphics
          * @param viewMatrix View matrix for this frame
          * @param projMatrix Projection matrix for this frame
          */
-        void Render(
-            [[maybe_unused]] const XMFLOAT4X4& viewMatrix,
-            [[maybe_unused]] const XMFLOAT4X4& projMatrix)
+        void Render([[maybe_unused]] const XMFLOAT4X4& viewMatrix, [[maybe_unused]] const XMFLOAT4X4& projMatrix)
         {
             if (!m_initialized)
             {
@@ -943,8 +924,8 @@ namespace Spark::Graphics
             s += "  Camera underwater: " + std::string(m_cameraUnderwater ? "yes" : "no") + "\n";
             s += "  Planar reflection: " + std::string(m_settings.enablePlanarReflection ? "on" : "off") + "\n";
             s += "  SSR fallback: " + std::string(m_settings.enableSSR ? "on" : "off") + "\n";
-            s += "  Reflection res: " + std::to_string(m_reflectionWidth) + "x"
-                 + std::to_string(m_reflectionHeight) + "\n";
+            s += "  Reflection res: " + std::to_string(m_reflectionWidth) + "x" + std::to_string(m_reflectionHeight) +
+                 "\n";
             s += "  Tessellation: " + std::to_string(m_settings.tessellationFactor) + "\n";
             s += "  Total time: " + std::to_string(m_totalTime) + "\n";
             return s;
@@ -955,15 +936,11 @@ namespace Spark::Graphics
             std::string s = "Water Volumes (" + std::to_string(m_volumes.size()) + "):\n";
             for (const auto& v : m_volumes)
             {
-                s += "  [" + std::to_string(v.GetVolumeId()) + "] "
-                     + (v.IsEnabled() ? "ON" : "OFF")
-                     + " pos=(" + std::to_string(v.GetPosition().x) + ", "
-                     + std::to_string(v.GetPosition().y) + ", "
-                     + std::to_string(v.GetPosition().z) + ")"
-                     + " size=(" + std::to_string(v.GetSize().x) + ", "
-                     + std::to_string(v.GetSize().y) + ", "
-                     + std::to_string(v.GetSize().z) + ")"
-                     + " height=" + std::to_string(v.GetHeight()) + "\n";
+                s += "  [" + std::to_string(v.GetVolumeId()) + "] " + (v.IsEnabled() ? "ON" : "OFF") + " pos=(" +
+                     std::to_string(v.GetPosition().x) + ", " + std::to_string(v.GetPosition().y) + ", " +
+                     std::to_string(v.GetPosition().z) + ")" + " size=(" + std::to_string(v.GetSize().x) + ", " +
+                     std::to_string(v.GetSize().y) + ", " + std::to_string(v.GetSize().z) + ")" +
+                     " height=" + std::to_string(v.GetHeight()) + "\n";
             }
             return s;
         }
@@ -974,13 +951,10 @@ namespace Spark::Graphics
             for (uint32_t i = 0; i < m_settings.activeWaveCount && i < MAX_GERSTNER_WAVES; ++i)
             {
                 const auto& w = m_settings.waves[i];
-                s += "  Wave " + std::to_string(i) + ": "
-                     + "amp=" + std::to_string(w.amplitude)
-                     + " freq=" + std::to_string(w.frequency)
-                     + " steep=" + std::to_string(w.steepness)
-                     + " dir=(" + std::to_string(w.direction.x) + ", "
-                     + std::to_string(w.direction.y) + ")"
-                     + " speed=" + std::to_string(w.speed) + "\n";
+                s += "  Wave " + std::to_string(i) + ": " + "amp=" + std::to_string(w.amplitude) +
+                     " freq=" + std::to_string(w.frequency) + " steep=" + std::to_string(w.steepness) + " dir=(" +
+                     std::to_string(w.direction.x) + ", " + std::to_string(w.direction.y) + ")" +
+                     " speed=" + std::to_string(w.speed) + "\n";
             }
             s += "  Global amplitude: " + std::to_string(m_settings.globalAmplitude) + "\n";
             s += "  Global speed: " + std::to_string(m_settings.globalSpeed) + "\n";
@@ -994,8 +968,8 @@ namespace Spark::Graphics
                 return "Error: Wave index must be 0-" + std::to_string(MAX_GERSTNER_WAVES - 1);
             }
             m_settings.waves[index].amplitude = std::max(amplitude, 0.0f);
-            return "Wave " + std::to_string(index) + " amplitude set to "
-                   + std::to_string(m_settings.waves[index].amplitude);
+            return "Wave " + std::to_string(index) + " amplitude set to " +
+                   std::to_string(m_settings.waves[index].amplitude);
         }
 
         std::string Console_SetWaterColor(float sr, float sg, float sb, float dr, float dg, float db)
@@ -1005,8 +979,7 @@ namespace Spark::Graphics
             return "Water colors updated";
         }
 
-    private:
-
+      private:
         // ---- GPU Resource Creation (Windows only) ----
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -1024,22 +997,21 @@ namespace Spark::Graphics
                 texDesc.Usage = D3D11_USAGE_DEFAULT;
                 texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-                HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr,
-                    m_reflectionTexture.ReleaseAndGetAddressOf());
+                HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr, m_reflectionTexture.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
                 }
 
                 hr = m_device->CreateRenderTargetView(m_reflectionTexture.Get(), nullptr,
-                    m_reflectionRTV.ReleaseAndGetAddressOf());
+                                                      m_reflectionRTV.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
                 }
 
                 hr = m_device->CreateShaderResourceView(m_reflectionTexture.Get(), nullptr,
-                    m_reflectionSRV.ReleaseAndGetAddressOf());
+                                                        m_reflectionSRV.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
@@ -1058,15 +1030,15 @@ namespace Spark::Graphics
                 depthDesc.Usage = D3D11_USAGE_DEFAULT;
                 depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 
-                HRESULT hr = m_device->CreateTexture2D(&depthDesc, nullptr,
-                    m_reflectionDepthTexture.ReleaseAndGetAddressOf());
+                HRESULT hr =
+                    m_device->CreateTexture2D(&depthDesc, nullptr, m_reflectionDepthTexture.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
                 }
 
                 hr = m_device->CreateDepthStencilView(m_reflectionDepthTexture.Get(), nullptr,
-                    m_reflectionDSV.ReleaseAndGetAddressOf());
+                                                      m_reflectionDSV.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
@@ -1085,22 +1057,21 @@ namespace Spark::Graphics
                 texDesc.Usage = D3D11_USAGE_DEFAULT;
                 texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-                HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr,
-                    m_refractionTexture.ReleaseAndGetAddressOf());
+                HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr, m_refractionTexture.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
                 }
 
                 hr = m_device->CreateRenderTargetView(m_refractionTexture.Get(), nullptr,
-                    m_refractionRTV.ReleaseAndGetAddressOf());
+                                                      m_refractionRTV.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
                 }
 
                 hr = m_device->CreateShaderResourceView(m_refractionTexture.Get(), nullptr,
-                    m_refractionSRV.ReleaseAndGetAddressOf());
+                                                        m_refractionSRV.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
@@ -1119,8 +1090,8 @@ namespace Spark::Graphics
                 depthDesc.Usage = D3D11_USAGE_DEFAULT;
                 depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
 
-                HRESULT hr = m_device->CreateTexture2D(&depthDesc, nullptr,
-                    m_refractionDepthTexture.ReleaseAndGetAddressOf());
+                HRESULT hr =
+                    m_device->CreateTexture2D(&depthDesc, nullptr, m_refractionDepthTexture.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
@@ -1132,7 +1103,7 @@ namespace Spark::Graphics
                 srvDesc.Texture2D.MipLevels = 1;
 
                 hr = m_device->CreateShaderResourceView(m_refractionDepthTexture.Get(), &srvDesc,
-                    m_refractionDepthSRV.ReleaseAndGetAddressOf());
+                                                        m_refractionDepthSRV.ReleaseAndGetAddressOf());
                 if (FAILED(hr))
                 {
                     return false;
@@ -1152,16 +1123,14 @@ namespace Spark::Graphics
             desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
             desc.ByteWidth = static_cast<UINT>((sizeof(WaterConstants) + 15) & ~15);
-            HRESULT hr = m_device->CreateBuffer(&desc, nullptr,
-                m_waterConstantBuffer.ReleaseAndGetAddressOf());
+            HRESULT hr = m_device->CreateBuffer(&desc, nullptr, m_waterConstantBuffer.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return false;
             }
 
             desc.ByteWidth = static_cast<UINT>((sizeof(UnderwaterPostProcessConstants) + 15) & ~15);
-            hr = m_device->CreateBuffer(&desc, nullptr,
-                m_underwaterConstantBuffer.ReleaseAndGetAddressOf());
+            hr = m_device->CreateBuffer(&desc, nullptr, m_underwaterConstantBuffer.ReleaseAndGetAddressOf());
             if (FAILED(hr))
             {
                 return false;
@@ -1181,15 +1150,11 @@ namespace Spark::Graphics
             sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
             sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 
-            HRESULT hr = m_device->CreateSamplerState(&sampDesc,
-                m_waterSampler.ReleaseAndGetAddressOf());
+            HRESULT hr = m_device->CreateSamplerState(&sampDesc, m_waterSampler.ReleaseAndGetAddressOf());
             return SUCCEEDED(hr);
         }
 
-        void UpdateWaterConstants(
-            const WaterVolume& volume,
-            const XMFLOAT4X4& viewMatrix,
-            const XMFLOAT4X4& projMatrix)
+        void UpdateWaterConstants(const WaterVolume& volume, const XMFLOAT4X4& viewMatrix, const XMFLOAT4X4& projMatrix)
         {
             WaterConstants cb = {};
 
@@ -1217,12 +1182,8 @@ namespace Spark::Graphics
             // Colors
             cb.shallowColor = m_settings.shallowColor;
             cb.deepColor = m_settings.deepColor;
-            cb.extinctionCoeff = {
-                m_settings.extinctionCoefficient.x,
-                m_settings.extinctionCoefficient.y,
-                m_settings.extinctionCoefficient.z,
-                m_settings.depthVisibility
-            };
+            cb.extinctionCoeff = {m_settings.extinctionCoefficient.x, m_settings.extinctionCoefficient.y,
+                                  m_settings.extinctionCoefficient.z, m_settings.depthVisibility};
 
             // Camera and time
             cb.cameraPosition = m_cameraPosition;
@@ -1269,8 +1230,7 @@ namespace Spark::Graphics
 
             // Upload to GPU
             D3D11_MAPPED_SUBRESOURCE mapped;
-            if (SUCCEEDED(m_context->Map(m_waterConstantBuffer.Get(), 0,
-                D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+            if (SUCCEEDED(m_context->Map(m_waterConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
             {
                 memcpy(mapped.pData, &cb, sizeof(cb));
                 m_context->Unmap(m_waterConstantBuffer.Get(), 0);
@@ -1308,8 +1268,7 @@ namespace Spark::Graphics
             XMStoreFloat4x4(&cb.invViewProjection, invViewProj);
 
             D3D11_MAPPED_SUBRESOURCE mapped;
-            if (SUCCEEDED(m_context->Map(m_underwaterConstantBuffer.Get(), 0,
-                D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+            if (SUCCEEDED(m_context->Map(m_underwaterConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
             {
                 memcpy(mapped.pData, &cb, sizeof(cb));
                 m_context->Unmap(m_underwaterConstantBuffer.Get(), 0);
@@ -1326,11 +1285,8 @@ namespace Spark::Graphics
             m_context->PSSetConstantBuffers(0, 1, cbs);
 
             // Bind reflection/refraction SRVs to pixel shader
-            ID3D11ShaderResourceView* srvs[] = {
-                m_reflectionSRV.Get(),
-                m_refractionSRV.Get(),
-                m_refractionDepthSRV.Get()
-            };
+            ID3D11ShaderResourceView* srvs[] = {m_reflectionSRV.Get(), m_refractionSRV.Get(),
+                                                m_refractionDepthSRV.Get()};
             m_context->PSSetShaderResources(0, 3, srvs);
 
             // Bind sampler
