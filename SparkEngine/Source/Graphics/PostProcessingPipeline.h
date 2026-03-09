@@ -300,6 +300,7 @@ namespace Spark::Graphics
         /** @brief Render the final result to the currently bound render target */
         void Render()
         {
+#ifdef SPARK_PLATFORM_WINDOWS
             if (!m_initialized || !m_context || !m_fullscreenVS)
                 return;
 
@@ -333,6 +334,7 @@ namespace Spark::Graphics
                     m_context->Draw(3, 0);
                 }
             }
+#endif
         }
 
         /**
@@ -432,10 +434,20 @@ namespace Spark::Graphics
         ID3D11ShaderResourceView* GetOutputSRV() const { return m_pingPongSRVs[m_currentTarget]; }
 
       private:
+        // ---- GPU Constant Buffer ----
+        struct PostProcessCB
+        {
+            XMFLOAT4 params0;
+            XMFLOAT4 params1;
+            XMFLOAT4 params2;
+            XMFLOAT4 params3;
+        };
+
         // ---- GPU Resource Creation ----
 
         bool CreatePingPongTargets()
         {
+#ifdef SPARK_PLATFORM_WINDOWS
             if (!m_device)
                 return false;
 
@@ -464,10 +476,14 @@ namespace Spark::Graphics
                     return false;
             }
             return true;
+#else
+            return false;
+#endif
         }
 
         bool CreatePostProcessShaders()
         {
+#ifdef SPARK_PLATFORM_WINDOWS
             if (!m_device)
                 return false;
 
@@ -486,13 +502,13 @@ namespace Spark::Graphics
             )";
 
             ComPtr<ID3DBlob> vsBlob, errorBlob;
-            HRESULT hr = D3DCompile(vsSource, strlen(vsSource), "FullscreenVS", nullptr, nullptr,
-                                     "main", "vs_5_0", 0, 0, &vsBlob, &errorBlob);
+            HRESULT hr = D3DCompile(vsSource, strlen(vsSource), "FullscreenVS", nullptr, nullptr, "main", "vs_5_0", 0,
+                                    0, &vsBlob, &errorBlob);
             if (FAILED(hr))
                 return false;
 
-            hr = m_device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
-                                               nullptr, &m_fullscreenVS);
+            hr = m_device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr,
+                                              &m_fullscreenVS);
             if (FAILED(hr))
                 return false;
 
@@ -527,10 +543,14 @@ namespace Spark::Graphics
             CompileEffectShaders();
 
             return true;
+#else
+            return false;
+#endif
         }
 
         void CompileEffectShaders()
         {
+#ifdef SPARK_PLATFORM_WINDOWS
             // FXAA pixel shader
             const char* fxaaPS = R"(
                 Texture2D sceneTexture : register(t0);
@@ -849,7 +869,12 @@ namespace Spark::Graphics
             )";
 
             // Compile each effect shader
-            struct ShaderDef { const char* source; ComPtr<ID3D11PixelShader>* target; const char* name; };
+            struct ShaderDef
+            {
+                const char* source;
+                ComPtr<ID3D11PixelShader>* target;
+                const char* name;
+            };
             ShaderDef shaders[] = {
                 {fxaaPS, &m_fxaaPS, "FXAA"},
                 {dofPS, &m_dofPS, "DOF"},
@@ -866,14 +891,15 @@ namespace Spark::Graphics
             for (auto& sd : shaders)
             {
                 ComPtr<ID3DBlob> psBlob, errBlob;
-                HRESULT hr = D3DCompile(sd.source, strlen(sd.source), sd.name, nullptr, nullptr,
-                                         "main", "ps_5_0", 0, 0, &psBlob, &errBlob);
+                HRESULT hr = D3DCompile(sd.source, strlen(sd.source), sd.name, nullptr, nullptr, "main", "ps_5_0", 0, 0,
+                                        &psBlob, &errBlob);
                 if (SUCCEEDED(hr))
                 {
-                    m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
-                                                 nullptr, sd.target->GetAddressOf());
+                    m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr,
+                                                sd.target->GetAddressOf());
                 }
             }
+#endif
         }
 
         // ---- Pass Execution ----
@@ -884,6 +910,7 @@ namespace Spark::Graphics
 
         void BeginPass(ID3D11PixelShader* ps, const PostProcessCB& cb)
         {
+#ifdef SPARK_PLATFORM_WINDOWS
             if (!m_context || !ps)
                 return;
 
@@ -919,16 +946,22 @@ namespace Spark::Graphics
             // Set samplers
             ID3D11SamplerState* samplers[] = {m_linearSampler.Get(), m_pointSampler.Get()};
             m_context->PSSetSamplers(0, 2, samplers);
+#else
+            (void)ps;
+            (void)cb;
+#endif
         }
 
         void DrawFullscreen()
         {
+#ifdef SPARK_PLATFORM_WINDOWS
             if (!m_context)
                 return;
             m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             m_context->IASetInputLayout(nullptr);
             m_context->Draw(3, 0);
             SwapTargets();
+#endif
         }
 
         void ProcessPass(PostProcessPass pass, float deltaTime)
@@ -951,8 +984,8 @@ namespace Spark::Graphics
                 break;
 
             case PostProcessPass::DepthOfField:
-                cb.params0 = {m_dofSettings.focalDistance, m_dofSettings.focalLength,
-                              m_dofSettings.aperture, m_dofSettings.maxBokehSize};
+                cb.params0 = {m_dofSettings.focalDistance, m_dofSettings.focalLength, m_dofSettings.aperture,
+                              m_dofSettings.maxBokehSize};
                 cb.params1.z = m_dofSettings.nearBlurStart;
                 cb.params1.w = m_dofSettings.nearBlurEnd;
                 cb.params2 = {m_dofSettings.farBlurStart, m_dofSettings.farBlurEnd,
@@ -967,12 +1000,11 @@ namespace Spark::Graphics
                 break;
 
             case PostProcessPass::Vignette:
-                cb.params0 = {m_vignetteSettings.intensity, m_vignetteSettings.smoothness,
-                              m_vignetteSettings.roundness, 0.0f};
+                cb.params0 = {m_vignetteSettings.intensity, m_vignetteSettings.smoothness, m_vignetteSettings.roundness,
+                              0.0f};
                 cb.params1.z = m_vignetteSettings.center.x;
                 cb.params1.w = m_vignetteSettings.center.y;
-                cb.params2 = {m_vignetteSettings.color.x, m_vignetteSettings.color.y,
-                              m_vignetteSettings.color.z, 0.0f};
+                cb.params2 = {m_vignetteSettings.color.x, m_vignetteSettings.color.y, m_vignetteSettings.color.z, 0.0f};
                 ps = m_vignettePS.Get();
                 break;
 
@@ -984,8 +1016,8 @@ namespace Spark::Graphics
                 break;
 
             case PostProcessPass::FilmGrain:
-                cb.params0 = {m_filmGrainSettings.intensity, m_filmGrainSettings.size,
-                              m_filmGrainSettings.speed, m_filmGrainSettings.luminanceContribution};
+                cb.params0 = {m_filmGrainSettings.intensity, m_filmGrainSettings.size, m_filmGrainSettings.speed,
+                              m_filmGrainSettings.luminanceContribution};
                 cb.params1.z = m_totalTime;
                 cb.params1.w = m_filmGrainSettings.colored ? 1.0f : 0.0f;
                 ps = m_filmGrainPS.Get();
@@ -1003,16 +1035,14 @@ namespace Spark::Graphics
                               m_lightShaftSettings.density, m_lightShaftSettings.weight};
                 cb.params1.z = m_lightShaftSettings.decay;
                 cb.params1.w = m_lightShaftSettings.exposure;
-                cb.params2 = {static_cast<float>(m_lightShaftSettings.sampleCount),
-                              m_lightShaftSettings.color.x, m_lightShaftSettings.color.y,
-                              m_lightShaftSettings.color.z};
+                cb.params2 = {static_cast<float>(m_lightShaftSettings.sampleCount), m_lightShaftSettings.color.x,
+                              m_lightShaftSettings.color.y, m_lightShaftSettings.color.z};
                 ps = m_lightShaftsPS.Get();
                 break;
 
             case PostProcessPass::LensFlare:
                 cb.params0 = {m_lensFlareSettings.threshold, m_lensFlareSettings.intensity,
-                              static_cast<float>(m_lensFlareSettings.ghostCount),
-                              m_lensFlareSettings.ghostSpacing};
+                              static_cast<float>(m_lensFlareSettings.ghostCount), m_lensFlareSettings.ghostSpacing};
                 cb.params1.z = m_lensFlareSettings.haloRadius;
                 cb.params1.w = m_lensFlareSettings.haloThickness;
                 cb.params2 = {m_lensFlareSettings.chromaticDistortion, 0.0f, 0.0f, 0.0f};
@@ -1039,15 +1069,6 @@ namespace Spark::Graphics
             float ms = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count() / 1000.0f;
             m_passTimings[static_cast<int>(pass)] = ms;
         }
-
-        // ---- GPU Constant Buffer ----
-        struct PostProcessCB
-        {
-            XMFLOAT4 params0;
-            XMFLOAT4 params1;
-            XMFLOAT4 params2;
-            XMFLOAT4 params3;
-        };
 
         // ---- State ----
         bool m_initialized = false;

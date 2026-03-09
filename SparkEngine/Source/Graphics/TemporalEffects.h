@@ -492,14 +492,12 @@ class TemporalEffects
     void SetMotionVectorsSRV(ID3D11ShaderResourceView* srv) { m_motionVectorsSRV = srv; }
 
     /** @brief Get the TAA-resolved output SRV */
-    ID3D11ShaderResourceView* GetResolvedSRV() const
-    {
-        return m_historyColorSRVs[m_currentHistoryIndex];
-    }
+    ID3D11ShaderResourceView* GetResolvedSRV() const { return m_historyColorSRVs[m_currentHistoryIndex]; }
 
     /** @brief Initialize GPU resources for temporal effects */
     bool InitializeGPU()
     {
+#ifdef SPARK_PLATFORM_WINDOWS
         if (!m_device)
             return false;
 
@@ -557,11 +555,15 @@ class TemporalEffects
         CompileMotionBlurShaders();
 
         return true;
+#else
+        return false;
+#endif
     }
 
     /** @brief Render/apply temporal effects (post-process pass) */
     void Render()
     {
+#ifdef SPARK_PLATFORM_WINDOWS
         if (!m_context || !m_device)
             return;
 
@@ -576,16 +578,13 @@ class TemporalEffects
 
             // Compile CB
             TemporalCB cb = {};
-            cb.screenSize = {static_cast<float>(m_width), static_cast<float>(m_height),
-                             1.0f / m_width, 1.0f / m_height};
-            cb.taaParams = {m_taaSettings.historyBlendFactor, m_taaSettings.varianceClipGamma,
-                            m_taaSettings.sharpness, m_taaSettings.ghostingRejectionStrength};
-            cb.jitterOffset = {m_currentJitter.x, m_currentJitter.y,
-                               m_currentJitterNDC.x, m_currentJitterNDC.y};
-            cb.motionBlurParams = {m_motionBlurSettings.intensity,
-                                   static_cast<float>(m_motionBlurSettings.sampleCount),
-                                   m_motionBlurSettings.maxBlurRadius,
-                                   m_motionBlurSettings.velocityScale};
+            cb.screenSize = {static_cast<float>(m_width), static_cast<float>(m_height), 1.0f / m_width,
+                             1.0f / m_height};
+            cb.taaParams = {m_taaSettings.historyBlendFactor, m_taaSettings.varianceClipGamma, m_taaSettings.sharpness,
+                            m_taaSettings.ghostingRejectionStrength};
+            cb.jitterOffset = {m_currentJitter.x, m_currentJitter.y, m_currentJitterNDC.x, m_currentJitterNDC.y};
+            cb.motionBlurParams = {m_motionBlurSettings.intensity, static_cast<float>(m_motionBlurSettings.sampleCount),
+                                   m_motionBlurSettings.maxBlurRadius, m_motionBlurSettings.velocityScale};
 
             D3D11_MAPPED_SUBRESOURCE mapped;
             if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
@@ -599,12 +598,8 @@ class TemporalEffects
             m_context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
 
             // t0 = current frame, t1 = history, t2 = motion vectors, t3 = depth
-            ID3D11ShaderResourceView* srvs[] = {
-                m_currentFrameSRV,
-                m_historyColorSRVs[prevHistory],
-                m_motionVectorsSRV,
-                m_depthSRV
-            };
+            ID3D11ShaderResourceView* srvs[] = {m_currentFrameSRV, m_historyColorSRVs[prevHistory], m_motionVectorsSRV,
+                                                m_depthSRV};
             m_context->PSSetShaderResources(0, 4, srvs);
 
             ID3D11SamplerState* samplers[] = {m_linearSampler.Get(), m_pointSampler.Get()};
@@ -624,6 +619,7 @@ class TemporalEffects
             // Motion blur reads from the TAA-resolved output
             // Output goes to the other history buffer or a separate target
         }
+#endif
     }
 
     /**
@@ -706,6 +702,7 @@ class TemporalEffects
 
     void CompileTAAShaders()
     {
+#ifdef SPARK_PLATFORM_WINDOWS
         // Fullscreen vertex shader
         const char* vsSource = R"(
             struct VSOutput { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
@@ -717,11 +714,10 @@ class TemporalEffects
             }
         )";
         ComPtr<ID3DBlob> vsBlob, errBlob;
-        if (SUCCEEDED(D3DCompile(vsSource, strlen(vsSource), "TemporalVS", nullptr, nullptr,
-                                  "main", "vs_5_0", 0, 0, &vsBlob, &errBlob)))
+        if (SUCCEEDED(D3DCompile(vsSource, strlen(vsSource), "TemporalVS", nullptr, nullptr, "main", "vs_5_0", 0, 0,
+                                 &vsBlob, &errBlob)))
         {
-            m_device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
-                                          nullptr, &m_fullscreenVS);
+            m_device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &m_fullscreenVS);
         }
 
         // TAA Resolve pixel shader with variance clipping and YCoCg
@@ -824,16 +820,17 @@ class TemporalEffects
         )";
 
         ComPtr<ID3DBlob> psBlob;
-        if (SUCCEEDED(D3DCompile(taaPS, strlen(taaPS), "TAAResolve", nullptr, nullptr,
-                                  "main", "ps_5_0", 0, 0, &psBlob, &errBlob)))
+        if (SUCCEEDED(D3DCompile(taaPS, strlen(taaPS), "TAAResolve", nullptr, nullptr, "main", "ps_5_0", 0, 0, &psBlob,
+                                 &errBlob)))
         {
-            m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
-                                         nullptr, &m_taaResolvePS);
+            m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_taaResolvePS);
         }
+#endif
     }
 
     void CompileMotionBlurShaders()
     {
+#ifdef SPARK_PLATFORM_WINDOWS
         const char* mbPS = R"(
             Texture2D sceneTexture : register(t0);
             Texture2D motionVectors : register(t1);
@@ -883,12 +880,12 @@ class TemporalEffects
         )";
 
         ComPtr<ID3DBlob> psBlob, errBlob;
-        if (SUCCEEDED(D3DCompile(mbPS, strlen(mbPS), "MotionBlur", nullptr, nullptr,
-                                  "main", "ps_5_0", 0, 0, &psBlob, &errBlob)))
+        if (SUCCEEDED(D3DCompile(mbPS, strlen(mbPS), "MotionBlur", nullptr, nullptr, "main", "ps_5_0", 0, 0, &psBlob,
+                                 &errBlob)))
         {
-            m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
-                                         nullptr, &m_motionBlurPS);
+            m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_motionBlurPS);
         }
+#endif
     }
 
     // ---- GPU Constant Buffer ----
