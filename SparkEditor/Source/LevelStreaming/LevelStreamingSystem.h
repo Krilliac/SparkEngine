@@ -30,6 +30,7 @@ using namespace DirectX;
 #include <atomic>
 #include <queue>
 #include <future>
+#include <condition_variable>
 
 
 namespace SparkEditor
