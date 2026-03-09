@@ -4,6 +4,11 @@
 * text=auto
 *.sh text eol=lf
 
+# SparkBuild pre-built binaries — treat as binary
+tools/SparkBuild.exe binary
+tools/SparkBuild-linux binary
+tools/SparkBuild-macos binary
+
 ###############################################################################
 # Set default behavior for command prompt diff.
 #

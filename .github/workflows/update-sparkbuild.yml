@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to download (default: v1.0.0)"
+        description: "Release tag to download (default: latest)"
         required: false
-        default: "v1.0.0"
+        default: "latest"
 
 permissions:
   contents: write
@@ -25,7 +25,7 @@ jobs:
       - name: Determine tag
         id: tag
         run: |
-          TAG="${{ github.event.inputs.tag || 'v1.0.0' }}"
+          TAG="${{ github.event.inputs.tag || 'latest' }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Fetch latest SparkBuild release info
@@ -33,64 +33,116 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get the latest release from SparkBuild
-          LATEST=$(curl -sL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/Krilliac/SparkBuild/releases/latest)
+          TAG="${{ steps.tag.outputs.tag }}"
 
-          LATEST_TAG=$(echo "$LATEST" | jq -r '.tag_name')
+          if [ "$TAG" = "latest" ]; then
+            RELEASE=$(curl -sL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              https://api.github.com/repos/Krilliac/SparkBuild/releases/latest)
+          else
+            RELEASE=$(curl -sL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/Krilliac/SparkBuild/releases/tags/$TAG")
+          fi
+
+          LATEST_TAG=$(echo "$RELEASE" | jq -r '.tag_name')
           echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
 
-          # Find the SparkBuild.exe asset download URL
-          DOWNLOAD_URL=$(echo "$LATEST" | jq -r '.assets[] | select(.name == "SparkBuild.exe") | .browser_download_url')
-          echo "download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
+          # Extract download URLs for each platform binary
+          WIN_URL=$(echo "$RELEASE" | jq -r '.assets[] | select(.name == "SparkBuild.exe") | .browser_download_url')
+          LINUX_URL=$(echo "$RELEASE" | jq -r '.assets[] | select(.name == "SparkBuild-linux") | .browser_download_url')
+          MACOS_URL=$(echo "$RELEASE" | jq -r '.assets[] | select(.name == "SparkBuild-macos") | .browser_download_url')
+
+          echo "win_url=$WIN_URL" >> "$GITHUB_OUTPUT"
+          echo "linux_url=$LINUX_URL" >> "$GITHUB_OUTPUT"
+          echo "macos_url=$MACOS_URL" >> "$GITHUB_OUTPUT"
 
           echo "[*] Latest SparkBuild release: $LATEST_TAG"
-          echo "    Download URL: $DOWNLOAD_URL"
+          echo "    Windows URL: $WIN_URL"
+          echo "    Linux URL:   $LINUX_URL"
+          echo "    macOS URL:   $MACOS_URL"
 
-      - name: Check current binary
+      - name: Compute current checksums
         id: check
         run: |
-          if [ -f tools/SparkBuild.exe ]; then
-            CURRENT_SHA=$(sha256sum tools/SparkBuild.exe | awk '{print $1}')
-          else
-            CURRENT_SHA="none"
-          fi
-          echo "current_sha=$CURRENT_SHA" >> "$GITHUB_OUTPUT"
+          for file in SparkBuild.exe SparkBuild-linux SparkBuild-macos; do
+            key=$(echo "$file" | tr '.-' '_')
+            if [ -f "tools/$file" ]; then
+              SHA=$(sha256sum "tools/$file" | awk '{print $1}')
+            else
+              SHA="none"
+            fi
+            echo "${key}_sha=$SHA" >> "$GITHUB_OUTPUT"
+          done
 
-      - name: Download SparkBuild binary
+      - name: Download SparkBuild binaries
         env:
-          DOWNLOAD_URL: ${{ steps.release.outputs.download_url }}
+          WIN_URL: ${{ steps.release.outputs.win_url }}
+          LINUX_URL: ${{ steps.release.outputs.linux_url }}
+          MACOS_URL: ${{ steps.release.outputs.macos_url }}
         run: |
-          echo "[*] Downloading SparkBuild.exe ..."
-          curl -L -o tools/SparkBuild.exe "$DOWNLOAD_URL"
-          echo "[+] Downloaded to tools/SparkBuild.exe"
+          download() {
+            local url="$1" dest="$2" label="$3"
+            if [ -n "$url" ] && [ "$url" != "null" ]; then
+              echo "[*] Downloading $label ..."
+              curl -L -o "$dest" "$url"
+              echo "[+] Downloaded to $dest"
+            else
+              echo "[~] No $label asset found in this release, skipping."
+            fi
+          }
 
-      - name: Check if binary changed
+          download "$WIN_URL"   "tools/SparkBuild.exe"   "SparkBuild.exe (Windows)"
+          download "$LINUX_URL" "tools/SparkBuild-linux"  "SparkBuild-linux (Linux)"
+          download "$MACOS_URL" "tools/SparkBuild-macos"  "SparkBuild-macos (macOS)"
+
+          # Ensure Linux/macOS binaries are executable
+          [ -f tools/SparkBuild-linux ] && chmod +x tools/SparkBuild-linux
+          [ -f tools/SparkBuild-macos ] && chmod +x tools/SparkBuild-macos
+
+      - name: Check if any binary changed
         id: diff
         run: |
-          NEW_SHA=$(sha256sum tools/SparkBuild.exe | awk '{print $1}')
-          if [ "$NEW_SHA" = "${{ steps.check.outputs.current_sha }}" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "[=] SparkBuild.exe is already up to date."
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "[+] SparkBuild.exe has been updated (sha256: $NEW_SHA)."
-          fi
+          changed=false
+
+          check_changed() {
+            local file="$1" old_sha="$2"
+            if [ -f "tools/$file" ]; then
+              NEW_SHA=$(sha256sum "tools/$file" | awk '{print $1}')
+              if [ "$NEW_SHA" != "$old_sha" ]; then
+                echo "[+] $file has been updated (sha256: $NEW_SHA)."
+                changed=true
+              else
+                echo "[=] $file is already up to date."
+              fi
+            fi
+          }
+
+          check_changed "SparkBuild.exe"   "${{ steps.check.outputs.SparkBuild_exe_sha }}"
+          check_changed "SparkBuild-linux"  "${{ steps.check.outputs.SparkBuild_linux_sha }}"
+          check_changed "SparkBuild-macos"  "${{ steps.check.outputs.SparkBuild_macos_sha }}"
+
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
       - name: Create Pull Request
         if: steps.diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
-          commit-message: "chore: update SparkBuild.exe to ${{ steps.release.outputs.latest_tag }}"
+          commit-message: "chore: update SparkBuild binaries to ${{ steps.release.outputs.latest_tag }}"
           branch: chore/update-sparkbuild
-          title: "chore: update SparkBuild.exe to ${{ steps.release.outputs.latest_tag }}"
+          title: "chore: update SparkBuild binaries to ${{ steps.release.outputs.latest_tag }}"
           body: |
-            Automated weekly update of `tools/SparkBuild.exe` from [Krilliac/SparkBuild](https://github.com/Krilliac/SparkBuild).
+            Automated weekly update of SparkBuild binaries from [Krilliac/SparkBuild](https://github.com/Krilliac/SparkBuild).
 
             **Release:** ${{ steps.release.outputs.latest_tag }}
-            **Source:** ${{ steps.release.outputs.download_url }}
+
+            | Binary | Platform | Status |
+            |--------|----------|--------|
+            | `tools/SparkBuild.exe` | Windows | ${{ steps.release.outputs.win_url && '✅ Updated' || '⏭️ Not available' }} |
+            | `tools/SparkBuild-linux` | Linux | ${{ steps.release.outputs.linux_url && '✅ Updated' || '⏭️ Not available' }} |
+            | `tools/SparkBuild-macos` | macOS | ${{ steps.release.outputs.macos_url && '✅ Updated' || '⏭️ Not available' }} |
 
             ---
             *This PR was created automatically by the [update-sparkbuild](.github/workflows/update-sparkbuild.yml) workflow.*

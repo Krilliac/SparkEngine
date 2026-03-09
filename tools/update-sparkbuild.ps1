@@ -1,6 +1,8 @@
-# update-sparkbuild.ps1 -- Download the latest SparkBuild.exe from GitHub Releases
+# update-sparkbuild.ps1 -- Download SparkBuild binaries from GitHub Releases
 #
-# Usage:  .\tools\update-sparkbuild.ps1            (fetches "latest" pre-release)
+# Downloads Windows, Linux, and macOS binaries.
+#
+# Usage:  .\tools\update-sparkbuild.ps1            (fetches "latest" release)
 #         .\tools\update-sparkbuild.ps1 v1.0.0     (fetches a specific version)
 
 param(
@@ -8,22 +10,32 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$repo  = "Krilliac/SparkBuild"
-$dest  = Join-Path $PSScriptRoot "SparkBuild.exe"
+$repo = "Krilliac/SparkBuild"
 
-if ($Tag -eq "latest") {
-    $url = "https://github.com/$repo/releases/download/latest/SparkBuild.exe"
-} else {
-    $url = "https://github.com/$repo/releases/download/$Tag/SparkBuild.exe"
+# Map of asset name -> local filename
+$binaries = @(
+    @{ Asset = "SparkBuild.exe";   Local = "SparkBuild.exe"   }
+    @{ Asset = "SparkBuild-linux"; Local = "SparkBuild-linux" }
+    @{ Asset = "SparkBuild-macos"; Local = "SparkBuild-macos" }
+)
+
+Write-Host "[*] Fetching SparkBuild binaries ($Tag) from $repo ..."
+Write-Host ""
+
+foreach ($bin in $binaries) {
+    $asset = $bin.Asset
+    $dest  = Join-Path $PSScriptRoot $bin.Local
+    $url   = "https://github.com/$repo/releases/download/$Tag/$asset"
+
+    Write-Host ("    {0,-20} -> {1}" -f $asset, $dest)
+
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+        Write-Host "    [+] OK"
+    } catch {
+        Write-Host "    [~] Not available (skipped)"
+    }
 }
 
-Write-Host "[*] Downloading SparkBuild.exe ($Tag) ..."
-Write-Host "    $url"
-
-try {
-    Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
-    Write-Host "[+] Updated: $dest"
-} catch {
-    Write-Error "[-] Download failed: $_"
-    exit 1
-}
+Write-Host ""
+Write-Host "[*] Done."
