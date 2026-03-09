@@ -29,6 +29,18 @@ jobs:
           }
 
   # ===========================================================================
+  # Prompt System Validation — anti-drift, overload prevention, stale detection
+  # ===========================================================================
+  validate-prompts:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Validate prompt system
+      run: ./tools/validate-prompts.sh --ci
+
+  # ===========================================================================
   # Linux Build — GCC with AddressSanitizer
   # ===========================================================================
   build-linux-asan:

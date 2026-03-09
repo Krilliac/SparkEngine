@@ -100,15 +100,15 @@ option(ENABLE_LUA "Enable Lua scripting support" ON)
 option(ENABLE_COLLABORATIVE "Enable collaborative features" ON)
 option(ENABLE_GRAPHICS "Enable graphics engine" ON)
 option(ENABLE_PROFILING "Enable profiling tools" ON)
-option(ENABLE_NETWORKING "Enable networking features" OFF)  # Disabled for now to avoid CURL issues
+option(ENABLE_NETWORKING "Enable networking features (experimental — requires socket libs)" OFF)  # Disabled by default; UDP multiplayer, no CURL dependency required
 option(ENABLE_ASSET_STREAMING "Enable asset streaming" ON)
 option(ENABLE_HOT_RELOAD "Enable hot reload functionality" ON)
 option(ENABLE_TERRAIN_SYSTEM "Enable terrain system" ON)
 option(ENABLE_POST_PROCESSING "Enable post-processing effects" ON)
 option(ENABLE_LIGHTING_SYSTEM "Enable advanced lighting" ON)
 option(ENABLE_ADVANCED_INPUT "Enable advanced input features" ON)
-option(ENABLE_VULKAN "Enable Vulkan graphics backend" ON)
-option(ENABLE_OPENGL "Enable OpenGL graphics backend" ON)
+option(ENABLE_VULKAN "Enable Vulkan graphics backend (experimental)" ON)
+option(ENABLE_OPENGL "Enable OpenGL graphics backend (experimental)" ON)
 option(ENABLE_AI "Enable AI and navigation systems" ON)
 option(ENABLE_ANIMATION "Enable skeletal animation system" ON)
 option(ENABLE_SAVE_SYSTEM "Enable save/load system" ON)
@@ -116,7 +116,7 @@ option(ENABLE_PROCEDURAL "Enable procedural generation" ON)
 option(ENABLE_CINEMATIC "Enable cinematic sequencer" ON)
 option(ENABLE_DECALS "Enable decal system" ON)
 option(ENABLE_MESH_LOD "Enable mesh LOD system" ON)
-option(ENABLE_DXR "Enable DirectX Raytracing support" OFF)  # Requires D3D12, disabled by default
+option(ENABLE_DXR "Enable DirectX Raytracing support (experimental)" OFF)  # Requires D3D12, disabled by default
 # SDL2 is auto-enabled on Linux for windowing + input; can be used on Windows too
 if(NOT WIN32)
     option(ENABLE_SDL2 "Enable SDL2 cross-platform input and windowing" ON)

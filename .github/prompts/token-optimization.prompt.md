@@ -32,7 +32,19 @@ Layer 3: Specific file references    ← Only as needed (#file: or @file)
 4. **Reference over inline** — `#file:SparkEngine/Source/Physics/PhysicsSystem.h` instead of pasting
 5. **Scope context** — load only the relevant domain prompt
 6. **Prune stale context** — in multi-turn sessions, summarize and drop raw code
-7. **Exclude from indexing**: `ThirdParty/`, `Shaders/Compiled/`, `build/`, `.vs/`, `.vscode/`
+7. **Exclude from indexing**: See `.promptignore` at repo root for the full exclusion list (ThirdParty/, Shaders/Compiled/, build/, .vs/, .vscode/, and more). Tools and scripts should read `.promptignore` to automatically filter excluded paths.
+
+## Automated Enforcement
+
+Run `./tools/validate-prompts.sh` (or `--ci` for non-zero exit on errors) to check:
+
+1. **Anti-drift** — verifies source paths referenced in prompts still exist in the codebase
+2. **Overload prevention** — ensures prompt files follow single-domain loading guidance
+3. **Stale detection** — flags references to removed files, classes, or directories
+4. **Mapping validation** — confirms task-to-prompt mapping entries have corresponding files
+5. **.promptignore** — verifies exclusion rules are present and cover key directories
+
+This runs automatically in CI via the `validate-prompts` job in `build.yml`.
 
 ## Provider Notes
 
