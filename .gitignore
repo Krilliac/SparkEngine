@@ -460,7 +460,9 @@ localdev.ps1
 localdev.bat
 localdev.sh
 
-# SparkBuild pre-built tool (allow binary from release)
+# SparkBuild pre-built tools (allow binaries from release)
 !tools/SparkBuild.exe
+!tools/SparkBuild-linux
+!tools/SparkBuild-macos
 
 # End of SparkEngine .gitignore
