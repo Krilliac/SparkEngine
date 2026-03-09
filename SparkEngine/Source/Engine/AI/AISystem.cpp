@@ -6,10 +6,15 @@
 #include "AISystem.h"
 #include <sstream>
 #include <cmath>
+#include <numbers>
 
 using namespace DirectX;
 namespace Spark::AI
 {
+    // Named constants replacing magic numbers
+    static constexpr float kTargetLostTimeout = 10.0f;      // seconds before losing a target
+    static constexpr float kWaypointArrivalRadius = 0.5f;    // meters to consider waypoint reached
+    static constexpr float kMinMovementEpsilon = 0.001f;     // minimum distance to apply movement
 
     // ============================================================================
     // AISystem
@@ -85,7 +90,7 @@ namespace Spark::AI
             }
 
             // Lose target after not seeing them for a while
-            if (ai.timeSinceLastSeen > 10.0f)
+            if (ai.timeSinceLastSeen > kTargetLostTimeout)
             {
                 ai.targetEntity = entt::null;
                 ai.state = AIComponent::State::Patrolling;
@@ -131,8 +136,7 @@ namespace Spark::AI
         float distSq = dx * dx + dz * dz;
 
         // Reached waypoint?
-        float waypointRadius = 0.5f;
-        if (distSq < waypointRadius * waypointRadius)
+        if (distSq < kWaypointArrivalRadius * kWaypointArrivalRadius)
         {
             ai.currentPathIndex++;
             if (ai.currentPathIndex >= ai.currentPath.size())
@@ -145,7 +149,7 @@ namespace Spark::AI
 
         // Move toward current waypoint
         float dist = std::sqrt(distSq);
-        if (dist > 0.001f)
+        if (dist > kMinMovementEpsilon)
         {
             float speed = ai.config.moveSpeed * deltaTime;
             float moveX = (dx / dist) * speed;
@@ -154,7 +158,7 @@ namespace Spark::AI
             transform.position.z += moveZ;
 
             // Face movement direction
-            transform.rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+            transform.rotation.y = std::atan2(dx, dz) * (180.0f / std::numbers::pi_v<float>);
         }
     }
 

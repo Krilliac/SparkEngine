@@ -239,14 +239,14 @@ namespace Spark
         // Query
         // =============================================================================
 
-        bool HasSection(const std::string& section) const { return m_sections.find(section) != m_sections.end(); }
+        bool HasSection(const std::string& section) const { return m_sections.contains(section); }
 
         bool HasKey(const std::string& section, const std::string& key) const
         {
             auto sit = m_sections.find(section);
             if (sit == m_sections.end())
                 return false;
-            return sit->second.find(key) != sit->second.end();
+            return sit->second.contains(key);
         }
 
         std::vector<std::string> GetSections() const

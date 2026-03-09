@@ -17,12 +17,26 @@ namespace Spark::Animation
 
     template <typename T> static int FindKeyIndex(const std::vector<T>& keys, float time)
     {
-        for (int i = 0; i < static_cast<int>(keys.size()) - 1; ++i)
+        // Binary search for sorted keyframes — O(log n) instead of O(n)
+        if (keys.size() <= 2)
         {
-            if (time < keys[i + 1].time)
-                return i;
+            // Fast path for trivial cases (common: 1 or 2 keyframes)
+            if (keys.size() <= 1 || time < keys[1].time)
+                return 0;
+            return static_cast<int>(keys.size()) - 1;
         }
-        return static_cast<int>(keys.size()) - 1;
+
+        int lo = 0;
+        int hi = static_cast<int>(keys.size()) - 1;
+        while (lo < hi - 1)
+        {
+            int mid = lo + (hi - lo) / 2;
+            if (time < keys[mid].time)
+                hi = mid;
+            else
+                lo = mid;
+        }
+        return lo;
     }
 
     XMFLOAT3 BoneAnimation::InterpolatePosition(float time) const
@@ -163,7 +177,7 @@ namespace Spark::Animation
 
     void AnimationStateMachine::ForceState(const std::string& stateName)
     {
-        if (m_states.find(stateName) != m_states.end())
+        if (m_states.contains(stateName))
         {
             m_currentState = stateName;
             m_isTransitioning = false;

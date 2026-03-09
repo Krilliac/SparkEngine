@@ -32,7 +32,7 @@ namespace Spark
 
     bool ComponentSerializerRegistry::HasSerializer(const std::string& typeName) const
     {
-        return m_serializers.find(typeName) != m_serializers.end();
+        return m_serializers.contains(typeName);
     }
 
     SerializedComponent ComponentSerializerRegistry::Serialize(const std::string& typeName, const void* component) const

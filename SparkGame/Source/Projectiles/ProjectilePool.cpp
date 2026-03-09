@@ -6,6 +6,7 @@
 #include "Grenade.h"
 #include "Utils/Assert.h"
 #include "Utils/ConsoleProcessManager.h"
+#include <algorithm>
 #include <iostream>
 #include <memory>
 
@@ -225,18 +226,12 @@ void ProjectilePool::SetPhysicsSystem(PhysicsSystem* ps)
 
 size_t ProjectilePool::GetActiveCount() const
 {
-    // **FIXED: Rate-limited logging for count queries**
-    LOG_TO_CONSOLE(L"ProjectilePool::GetActiveCount called.", L"OPERATION");
-    size_t count = 0;
-    for (const auto& up : m_projectiles)
-        if (up->IsActive())
-            ++count;
-    return count;
+    return static_cast<size_t>(
+        std::count_if(m_projectiles.begin(), m_projectiles.end(),
+                      [](const auto& p) { return p->IsActive(); }));
 }
 
 size_t ProjectilePool::GetAvailableCount() const
 {
-    // **FIXED: Rate-limited logging for count queries**
-    LOG_TO_CONSOLE(L"ProjectilePool::GetAvailableCount called.", L"OPERATION");
     return m_availableProjectiles.size();
 }
