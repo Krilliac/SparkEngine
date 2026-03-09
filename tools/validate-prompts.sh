@@ -162,20 +162,17 @@ echo ""
 echo "--- Check 5: Task-to-prompt mapping table ---"
 
 # Verify the mapping table in token-optimization.prompt.md references valid prompts
+# Extract only from the "Which Prompt to Load" table: lines matching "| description | `name` |"
 if [[ -f "$PROMPTS_DIR/token-optimization.prompt.md" ]]; then
     while IFS= read -r prompt_ref; do
-        # Clean the reference
-        clean_ref="$(echo "$prompt_ref" | sed 's/[`| ]//g' | sed 's/^#prompt://')"
-        [[ -z "$clean_ref" ]] && continue
-        # Check if the corresponding .prompt.md file exists
-        if [[ -f "$PROMPTS_DIR/${clean_ref}.prompt.md" ]]; then
-            log_ok "Mapping reference '$clean_ref' -> ${clean_ref}.prompt.md exists"
+        [[ -z "$prompt_ref" ]] && continue
+        if [[ -f "$PROMPTS_DIR/${prompt_ref}.prompt.md" ]]; then
+            log_ok "Mapping reference '$prompt_ref' -> ${prompt_ref}.prompt.md exists"
         else
-            log_error "Mapping reference '$clean_ref' has no corresponding prompt file"
+            log_error "Mapping reference '$prompt_ref' has no corresponding prompt file"
         fi
-    done < <(grep -oE '`[a-z-]+`' "$PROMPTS_DIR/token-optimization.prompt.md" | \
-             grep -v 'copilot-instructions' | \
-             sed 's/`//g' | sort -u)
+    done < <(sed -n '/Which Prompt to Load/,/^## /p' "$PROMPTS_DIR/token-optimization.prompt.md" | \
+             sed -n 's/.*| `\([a-z][a-z-]*\)` |.*/\1/p')
 fi
 
 echo ""
