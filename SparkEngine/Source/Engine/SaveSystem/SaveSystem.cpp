@@ -490,11 +490,13 @@ namespace Spark
                 sc.typeName = "TagComponent";
                 // Serialize tags as comma-separated string
                 std::string tagList;
-                for (size_t i = 0; i < tc->tags.size(); ++i)
+                bool first = true;
+                for (const auto& tag : tc->tags)
                 {
-                    if (i > 0)
+                    if (!first)
                         tagList += ",";
-                    tagList += tc->tags[i];
+                    tagList += tag;
+                    first = false;
                 }
                 sc.properties["tags"] = tagList;
                 return sc;
@@ -510,7 +512,7 @@ namespace Spark
                     while (std::getline(iss, tag, ','))
                     {
                         if (!tag.empty())
-                            tc.tags.push_back(tag);
+                            tc.tags.insert(tag);
                     }
                 }
             });

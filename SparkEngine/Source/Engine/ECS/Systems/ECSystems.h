@@ -610,7 +610,17 @@ namespace Spark::ECS
      *   if (ai) ai->SetEnabled(false);  // pause AI during cutscene
      * @endcode
      */
-        ISystem* GetSystem(const std::string& name) const
+        ISystem* GetSystem(const std::string& name)
+        {
+            for (auto& system : m_systems)
+            {
+                if (system->GetName() == name)
+                    return system.get();
+            }
+            return nullptr;
+        }
+
+        const ISystem* GetSystem(const std::string& name) const
         {
             for (const auto& system : m_systems)
             {

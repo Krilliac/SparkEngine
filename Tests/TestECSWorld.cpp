@@ -8,6 +8,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include <algorithm>
 
 // Standalone HealthComponent test (doesn't need EnTT)
@@ -16,17 +17,28 @@ struct TestHealthComponent
     float health = 100.0f;
     float maxHealth = 100.0f;
     bool isDead = false;
+    bool deathProcessed = false;
 
     void TakeDamage(float amount)
     {
+        if (isDead)
+            return;
         health = (std::max)(health - amount, 0.0f);
         isDead = (health <= 0.0f);
     }
 
     void Heal(float amount)
     {
+        if (isDead)
+            return; // Dead entities cannot be healed; use Revive() instead
         health = (std::min)(health + amount, maxHealth);
+    }
+
+    void Revive(float healthAmount)
+    {
+        health = (std::min)(healthAmount, maxHealth);
         isDead = false;
+        deathProcessed = false;
     }
 };
 
@@ -70,34 +82,45 @@ TEST(HealthComponent_HealCannotExceedMax)
     EXPECT_NEAR(hp.health, 100.0f, 0.001f);
 }
 
-TEST(HealthComponent_ReviveFromDead)
+TEST(HealthComponent_HealDoesNotReviveDead)
 {
     TestHealthComponent hp;
     hp.TakeDamage(100.0f);
     EXPECT_TRUE(hp.isDead);
     hp.Heal(50.0f);
+    EXPECT_TRUE(hp.isDead); // Heal should not revive dead entities
+    EXPECT_NEAR(hp.health, 0.0f, 0.001f);
+}
+
+TEST(HealthComponent_ReviveFromDead)
+{
+    TestHealthComponent hp;
+    hp.TakeDamage(100.0f);
+    EXPECT_TRUE(hp.isDead);
+    hp.Revive(50.0f);
     EXPECT_FALSE(hp.isDead);
     EXPECT_NEAR(hp.health, 50.0f, 0.001f);
+}
+
+TEST(HealthComponent_DamagingDeadEntityIsNoop)
+{
+    TestHealthComponent hp;
+    hp.TakeDamage(100.0f);
+    EXPECT_TRUE(hp.isDead);
+    hp.TakeDamage(50.0f); // Should be a no-op
+    EXPECT_NEAR(hp.health, 0.0f, 0.001f);
 }
 
 // Tag component tests
 struct TestTagComponent
 {
-    std::vector<std::string> tags;
+    std::unordered_set<std::string> tags;
 
-    bool HasTag(const std::string& tag) const
-    {
-        for (const auto& t : tags)
-            if (t == tag)
-                return true;
-        return false;
-    }
+    bool HasTag(const std::string& tag) const { return tags.count(tag) > 0; }
 
-    void AddTag(const std::string& tag)
-    {
-        if (!HasTag(tag))
-            tags.push_back(tag);
-    }
+    void AddTag(const std::string& tag) { tags.insert(tag); }
+
+    void RemoveTag(const std::string& tag) { tags.erase(tag); }
 };
 
 TEST(TagComponent_AddAndCheck)
@@ -116,4 +139,14 @@ TEST(TagComponent_NoDuplicates)
     tags.AddTag("test");
     tags.AddTag("test");
     EXPECT_EQ(tags.tags.size(), 1u);
+}
+
+TEST(TagComponent_RemoveTag)
+{
+    TestTagComponent tags;
+    tags.AddTag("enemy");
+    tags.AddTag("boss");
+    tags.RemoveTag("enemy");
+    EXPECT_FALSE(tags.HasTag("enemy"));
+    EXPECT_TRUE(tags.HasTag("boss"));
 }

@@ -31,11 +31,17 @@ class EngineContext : public Spark::IEngineContext
     ~EngineContext() override = default;
 
     GraphicsEngine* GetGraphics() override { return m_graphics; }
+    const GraphicsEngine* GetGraphics() const override { return m_graphics; }
     InputManager* GetInput() override { return m_input; }
+    const InputManager* GetInput() const override { return m_input; }
     Timer* GetTimer() override { return m_timer; }
+    const Timer* GetTimer() const override { return m_timer; }
     Spark::EventBus* GetEventBus() override { return m_eventBus; }
+    const Spark::EventBus* GetEventBus() const override { return m_eventBus; }
     AudioEngine* GetAudio() override { return m_audio; }
+    const AudioEngine* GetAudio() const override { return m_audio; }
     PhysicsSystem* GetPhysics() override { return m_physics; }
+    const PhysicsSystem* GetPhysics() const override { return m_physics; }
     bool IsHeadless() const override;
 
     void SetGraphics(GraphicsEngine* g) { m_graphics = g; }
