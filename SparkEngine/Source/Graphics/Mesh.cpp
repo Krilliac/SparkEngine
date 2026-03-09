@@ -563,6 +563,8 @@ void Mesh::Render(ID3D11DeviceContext* ctx)
 #include "Mesh.h"
 #include <iostream>
 #include <cstring>
+#include <unordered_map>
+#include <tiny_obj_loader.h>
 
 Mesh::Mesh() {}
 Mesh::~Mesh()
@@ -815,9 +817,96 @@ bool Mesh::LoadFromFile(const std::wstring& path)
 {
     // Convert wide string to narrow for tinyobj on Linux
     std::string narrowPath(path.begin(), path.end());
-    // TODO: integrate tinyobj_loader for Linux mesh loading
-    std::cerr << "[Mesh] LoadFromFile not fully implemented on Linux: " << narrowPath << std::endl;
-    return false;
+
+    // Check file extension for OBJ support
+    std::string ext;
+    auto dotPos = narrowPath.rfind('.');
+    if (dotPos != std::string::npos)
+    {
+        ext = narrowPath.substr(dotPos);
+        for (auto& c : ext)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+
+    if (ext != ".obj")
+    {
+        std::cerr << "[Mesh] LoadFromFile: unsupported format '" << ext << "' on Linux: " << narrowPath << std::endl;
+        return false;
+    }
+
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
+
+    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, narrowPath.c_str());
+
+    if (!warn.empty())
+        std::cerr << "[Mesh] tinyobj warning: " << warn << std::endl;
+    if (!err.empty())
+        std::cerr << "[Mesh] tinyobj error: " << err << std::endl;
+    if (!ret)
+        return false;
+
+    m_vertices.clear();
+    m_indices.clear();
+
+    // Use a map to deduplicate vertices
+    std::unordered_map<size_t, unsigned int> uniqueVertices;
+
+    for (const auto& shape : shapes)
+    {
+        for (const auto& index : shape.mesh.indices)
+        {
+            Vertex vertex;
+
+            if (index.vertex_index >= 0)
+            {
+                vertex.Position = {attrib.vertices[3 * index.vertex_index + 0],
+                                   attrib.vertices[3 * index.vertex_index + 1],
+                                   attrib.vertices[3 * index.vertex_index + 2]};
+            }
+
+            if (index.normal_index >= 0 && !attrib.normals.empty())
+            {
+                vertex.Normal = {attrib.normals[3 * index.normal_index + 0], attrib.normals[3 * index.normal_index + 1],
+                                 attrib.normals[3 * index.normal_index + 2]};
+            }
+
+            if (index.texcoord_index >= 0 && !attrib.texcoords.empty())
+            {
+                vertex.TexCoord = {attrib.texcoords[2 * index.texcoord_index + 0],
+                                   1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
+            }
+
+            // Simple hash combining vertex/normal/texcoord indices
+            size_t h = std::hash<int>()(index.vertex_index);
+            h ^= std::hash<int>()(index.normal_index) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<int>()(index.texcoord_index) + 0x9e3779b9 + (h << 6) + (h >> 2);
+
+            auto it = uniqueVertices.find(h);
+            if (it == uniqueVertices.end())
+            {
+                unsigned int newIndex = static_cast<unsigned int>(m_vertices.size());
+                uniqueVertices[h] = newIndex;
+                m_vertices.push_back(vertex);
+                m_indices.push_back(newIndex);
+            }
+            else
+            {
+                m_indices.push_back(it->second);
+            }
+        }
+    }
+
+    // If normals are missing, calculate them
+    if (attrib.normals.empty())
+        CalculateNormals();
+
+    std::cerr << "[Mesh] Loaded OBJ: " << narrowPath << " (" << m_vertices.size() << " vertices, "
+              << m_indices.size() / 3 << " triangles)" << std::endl;
+
+    return CreateBuffers() == S_OK;
 }
 
 void Mesh::Render(ID3D11DeviceContext* ctx)

@@ -14,6 +14,9 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#ifndef _WIN32
+#include <sys/types.h>
+#endif
 
 namespace SparkEditor
 {
@@ -140,6 +143,10 @@ namespace SparkEditor
         void* m_consoleProcess = nullptr; // HANDLE
         void* m_stdinWrite = nullptr;     // HANDLE
         void* m_stdoutRead = nullptr;     // HANDLE
+#else
+        pid_t m_consolePid = -1;
+        int m_stdinWriteFd = -1;
+        int m_stdoutReadFd = -1;
 #endif
     };
 

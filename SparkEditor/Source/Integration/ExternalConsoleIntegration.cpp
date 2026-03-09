@@ -16,6 +16,13 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <process.h>
+#else
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
+#include <cstring>
 #endif
 
 namespace SparkEditor
@@ -102,9 +109,9 @@ namespace SparkEditor
                 }
 
                 // Close console process
+#ifdef _WIN32
                 if (m_consoleProcess != nullptr)
                 {
-#ifdef _WIN32
                     try
                     {
                         std::cout << "Terminating console process...\n";
@@ -156,8 +163,45 @@ namespace SparkEditor
                     {
                         std::cout << "Exception closing pipe handles: " << e.what() << "\n";
                     }
-#endif
                 }
+#else
+                if (m_consolePid > 0)
+                {
+                    // Send exit command via stdin pipe
+                    if (m_stdinWriteFd >= 0)
+                    {
+                        const char* exitMsg = "exit\n";
+                        (void)write(m_stdinWriteFd, exitMsg, strlen(exitMsg));
+                    }
+
+                    // Wait briefly for graceful shutdown
+                    int status = 0;
+                    pid_t result = waitpid(m_consolePid, &status, WNOHANG);
+                    if (result == 0)
+                    {
+                        usleep(500000); // 500ms grace period
+                        result = waitpid(m_consolePid, &status, WNOHANG);
+                        if (result == 0)
+                        {
+                            kill(m_consolePid, SIGTERM);
+                            usleep(200000);
+                            waitpid(m_consolePid, &status, WNOHANG);
+                        }
+                    }
+                    m_consolePid = -1;
+                }
+
+                if (m_stdinWriteFd >= 0)
+                {
+                    close(m_stdinWriteFd);
+                    m_stdinWriteFd = -1;
+                }
+                if (m_stdoutReadFd >= 0)
+                {
+                    close(m_stdoutReadFd);
+                    m_stdoutReadFd = -1;
+                }
+#endif
 
                 std::cout << "Enhanced External Console Integration shutdown complete\n";
             }
@@ -555,8 +599,91 @@ namespace SparkEditor
             return false;
         }
 #else
-        std::cout << "External console launching not implemented for this platform\n";
-        return false;
+        // Linux: launch SparkConsole via fork/exec with pipe-based IPC
+        try
+        {
+            // Find SparkConsole binary
+            std::string consolePath;
+            std::vector<std::string> searchPaths = {"./SparkConsole", "../SparkConsole/SparkConsole",
+                                                    "./build/SparkConsole/SparkConsole"};
+            for (const auto& p : searchPaths)
+            {
+                if (std::filesystem::exists(p))
+                {
+                    consolePath = std::filesystem::absolute(p).string();
+                    break;
+                }
+            }
+
+            if (consolePath.empty())
+            {
+                std::cout << "SparkConsole binary not found on Linux\n";
+                return false;
+            }
+
+            int stdinPipe[2];
+            int stdoutPipe[2];
+
+            if (pipe(stdinPipe) != 0 || pipe(stdoutPipe) != 0)
+            {
+                std::cout << "Failed to create pipes for SparkConsole\n";
+                return false;
+            }
+
+            pid_t pid = fork();
+            if (pid < 0)
+            {
+                std::cout << "Failed to fork for SparkConsole\n";
+                close(stdinPipe[0]);
+                close(stdinPipe[1]);
+                close(stdoutPipe[0]);
+                close(stdoutPipe[1]);
+                return false;
+            }
+
+            if (pid == 0)
+            {
+                // Child process
+                close(stdinPipe[1]);
+                close(stdoutPipe[0]);
+
+                dup2(stdinPipe[0], STDIN_FILENO);
+                dup2(stdoutPipe[1], STDOUT_FILENO);
+                dup2(stdoutPipe[1], STDERR_FILENO);
+
+                close(stdinPipe[0]);
+                close(stdoutPipe[1]);
+
+                execl(consolePath.c_str(), consolePath.c_str(), nullptr);
+                _exit(127);
+            }
+
+            // Parent process
+            close(stdinPipe[0]);
+            close(stdoutPipe[1]);
+
+            m_consolePid = pid;
+            m_stdinWriteFd = stdinPipe[1];
+            m_stdoutReadFd = stdoutPipe[0];
+
+            // Set stdout read to non-blocking
+            int flags = fcntl(m_stdoutReadFd, F_GETFL, 0);
+            fcntl(m_stdoutReadFd, F_SETFL, flags | O_NONBLOCK);
+
+            std::cout << "=== SPARKCONSOLE LAUNCHED SUCCESSFULLY (Linux) ===" << "\n";
+            std::cout << "Process ID: " << pid << "\n";
+            std::cout << "Console communication pipes established" << "\n";
+            std::cout << "=================================================" << "\n";
+
+            usleep(500000); // Give console 500ms to start
+
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "Exception in LaunchExternalConsole (Linux): " << e.what() << "\n";
+            return false;
+        }
 #endif
     }
 
@@ -589,7 +716,12 @@ namespace SparkEditor
             return false;
         }
 #else
-        return false;
+        if (m_stdinWriteFd < 0)
+            return false;
+
+        std::string fullMessage = message + "\n";
+        ssize_t written = write(m_stdinWriteFd, fullMessage.c_str(), fullMessage.length());
+        return written > 0;
 #endif
     }
 
@@ -665,6 +797,38 @@ namespace SparkEditor
             return false;
         }
 #else
+        if (m_stdoutReadFd < 0)
+            return false;
+
+        char buffer[1024];
+        ssize_t bytesRead = read(m_stdoutReadFd, buffer, sizeof(buffer) - 1);
+        if (bytesRead <= 0)
+            return false;
+
+        buffer[bytesRead] = '\0';
+        std::string response(buffer);
+
+        while (!response.empty() && (response.back() == '\n' || response.back() == '\r'))
+            response.pop_back();
+
+        if (!response.empty())
+        {
+            ConsoleMessage msg;
+            msg.level = "CONSOLE";
+            msg.message = response;
+            msg.timestamp = GetCurrentTimestamp();
+
+            {
+                std::lock_guard<std::mutex> lock(m_messagesMutex);
+                m_messages.push_back(msg);
+            }
+
+            if (m_messageCallback)
+                m_messageCallback(msg);
+
+            return true;
+        }
+
         return false;
 #endif
     }

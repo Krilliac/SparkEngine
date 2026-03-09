@@ -2833,17 +2833,62 @@ ComPtr<ID3D11SamplerState> MaterialSystem::GetSampler(const TextureSampling& /*s
 void MaterialSystem::EnableHotReloading(bool enabled)
 {
     m_hotReloadEnabled = enabled;
+    if (enabled)
+    {
+        // Initialize timestamps for all currently loaded materials
+        for (const auto& pair : m_materials)
+        {
+            m_fileTimestamps[pair.first] = GetFileTimestamp(pair.first);
+        }
+    }
+    else
+    {
+        m_fileTimestamps.clear();
+    }
 }
 
 void MaterialSystem::UpdateHotReload()
 {
-    // No-op on Linux - file watching not implemented
+    if (!m_hotReloadEnabled)
+        return;
+
+    for (auto& pair : m_fileTimestamps)
+    {
+        const std::string& filePath = pair.first;
+        uint64_t& lastTimestamp = pair.second;
+
+        uint64_t currentTimestamp = GetFileTimestamp(filePath);
+        if (currentTimestamp > lastTimestamp)
+        {
+            auto it = m_materials.find(filePath);
+            if (it != m_materials.end())
+            {
+                if (it->second->LoadFromFile(filePath, m_device))
+                {
+                    lastTimestamp = currentTimestamp;
+                    fprintf(stderr, "[MaterialSystem] Hot reloaded material: %s\n", filePath.c_str());
+                }
+                else
+                {
+                    fprintf(stderr, "[MaterialSystem] Failed to hot reload material: %s\n", filePath.c_str());
+                }
+            }
+        }
+    }
 }
 
 int MaterialSystem::ReloadAllMaterials()
 {
-    // On Linux, materials are CPU-side only; nothing to reload from GPU
-    return 0;
+    int reloadedCount = 0;
+    for (auto& pair : m_materials)
+    {
+        if (pair.second->LoadFromFile(pair.first, m_device))
+        {
+            reloadedCount++;
+        }
+    }
+    fprintf(stderr, "[MaterialSystem] Reloaded %d materials\n", reloadedCount);
+    return reloadedCount;
 }
 
 void MaterialSystem::BeginFrame()
