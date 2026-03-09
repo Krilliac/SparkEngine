@@ -1,10 +1,10 @@
 # Engine Core & ECS
 
-Context: `#prompt:copilot-instructions` for project overview.
+Context: `#prompt:copilot-instructions` for project overview. Console commands: see `console-scripting` prompt.
 
 ## ECS Architecture (EnTT)
 
-Entity = `uint32_t` ID. Components = plain data structs. Systems = logic that iterates component groups.
+Entity = `uint32_t` ID. Components = plain data structs. Systems = logic iterating component groups.
 
 ### Component Headers (`SparkEngine/Source/Engine/ECS/Components/`)
 
@@ -17,8 +17,6 @@ Entity = `uint32_t` ID. Components = plain data structs. Systems = logic that it
 | `AnimationComponents.h` | `AnimationController`, `ParticleEmitterComponent` |
 | `AIComponents.h` | `AIComponent`, `NetworkIdentity` |
 | `GameplayComponents.h` | `TagComponent`, `ActiveComponent`, `HealthComponent`, weather, inventory, quests |
-
-Prefer specific includes over umbrella `Components.h` for faster compilation.
 
 ### System Execution Order (`ECSystems.h`)
 
@@ -36,59 +34,40 @@ Systems communicate through shared components, never by calling each other.
 ### Adding a New System
 
 ```cpp
-// 1. Create system class in Engine/ECS/Systems/
 class MySystem {
 public:
     void Update(World& world, float dt) {
         world.GetRegistry().view<Transform, MyComponent>().each(
-            [&](auto entity, Transform& t, MyComponent& c) {
-                // process
-            });
+            [&](auto entity, Transform& t, MyComponent& c) { /* process */ });
     }
 };
-
-// 2. Register in SystemManager (in correct execution order)
-sysManager.AddSystem<MySystem>();
+sysManager.AddSystem<MySystem>(); // Register in correct execution order
 ```
 
 ### Adding a New Component
 
 ```cpp
-// 1. Add data struct to appropriate Components/ header
 struct MyComponent {
     float value = 0.0f;
     bool active = true;
 };
-
-// 2. Register serialization in SaveSystem if persistence is needed
+// Register serialization in SaveSystem if persistence needed
 ```
 
 ## Engine Lifecycle
 
 `SparkEngine.cpp` main:
-1. `EngineContext` created with subsystem pointers
-2. Subsystems initialized: Graphics → Input → Audio → Physics → Console
-3. Game module loaded via `GameModuleLoader` → `CreateGameModule()`
-4. Main loop: Input → Update(dt) → Render → Console.Update()
-5. Shutdown: Game module → subsystems (reverse order)
+1. `EngineContext` created → subsystems init: Graphics → Input → Audio → Physics → Console
+2. Game module loaded via `GameModuleLoader` → `CreateGameModule()`
+3. Main loop: Input → Update(dt) → Render → Console.Update()
+4. Shutdown: Game module → subsystems (reverse order)
 
 ## Key Source Files
 
 | File | Purpose |
 |------|---------|
 | `Core/SparkEngine.h` | Main header, global pointers (deprecated — use EngineContext) |
-| `Core/EngineContext.h` | Service locator: `GetGraphics()`, `GetAudio()`, `GetPhysics()`, etc. |
+| `Core/EngineContext.h` | Service locator |
 | `Core/IGameModule.h` | DLL interface: `Initialize`, `Update`, `Render`, `Shutdown` |
-| `Core/Platform.h` | Platform detection macros: `SPARK_PLATFORM_WINDOWS`, `SPARK_PLATFORM_LINUX` |
-| `Utils/Assert.h` | `ASSERT`, `ASSERT_MSG`, `ASSERT_ALWAYS_MSG` macros |
-
-## Console Commands
-
-| Command | Description |
-|---------|-------------|
-| `engine_status` | Show engine state and subsystem status |
-| `entity_count` | Number of active entities |
-| `component_list` | List registered component types |
-| `memory_info` | Memory usage statistics |
-| `thread_status` | Thread utilization info |
-| `performance_profile` | Start/stop performance profiling |
+| `Core/Platform.h` | `SPARK_PLATFORM_WINDOWS`, `SPARK_PLATFORM_LINUX` |
+| `Utils/Assert.h` | `ASSERT`, `ASSERT_MSG`, `ASSERT_ALWAYS_MSG` |
