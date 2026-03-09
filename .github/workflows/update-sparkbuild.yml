@@ -128,7 +128,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.diff.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore: update SparkBuild binaries to ${{ steps.release.outputs.latest_tag }}"
           branch: chore/update-sparkbuild
