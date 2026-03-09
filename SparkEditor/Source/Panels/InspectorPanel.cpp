@@ -96,7 +96,8 @@ namespace SparkEditor
             ImGui::Indent(4);
 
             char nameBuffer[256];
-            strncpy_s(nameBuffer, m_inspectedObject.c_str(), sizeof(nameBuffer) - 1);
+            strncpy(nameBuffer, m_inspectedObject.c_str(), sizeof(nameBuffer) - 1);
+            nameBuffer[sizeof(nameBuffer) - 1] = '\0';
             ImGui::SetNextItemWidth(-1);
             if (ImGui::InputText("##Name", nameBuffer, sizeof(nameBuffer)))
             {
