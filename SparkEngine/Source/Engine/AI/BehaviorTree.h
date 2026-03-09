@@ -183,7 +183,7 @@ namespace Spark::AI
      * @param key  Key to test (case-sensitive).
      * @return     `true` if the key is present (regardless of type).
      */
-        bool Has(const std::string& key) const { return m_data.find(key) != m_data.end(); }
+        bool Has(const std::string& key) const { return m_data.contains(key); }
 
         /**
      * @brief Remove a key and its associated value.

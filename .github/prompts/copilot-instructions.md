@@ -86,6 +86,12 @@ ECS execution order: Physics → Animation → AI → Audio → Lifecycle → Re
 - Targets: SparkEngine (exe), SparkEditor (exe), SparkGame (DLL), SparkConsole (exe)
 - CI: GitHub Actions — Windows MSVC, Linux GCC, Linux Clang (Debug + Release)
 
+## Formatting
+
+- **clang-format** is enforced by CI (`check-format` job). The `.clang-format` config lives at repo root.
+- **Before committing**, always run `clang-format -i` on all modified `.cpp`/`.h` files.
+- Quick check: `clang-format --dry-run --Werror <files>` — must produce zero warnings.
+
 ## NOT Yet Implemented
 
 Do not describe these as working:

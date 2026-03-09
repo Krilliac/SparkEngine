@@ -58,6 +58,7 @@
 #include <functional>
 #include <vector>
 #include <string>
+#include <string_view>
 
 // Forward declarations for engine subsystems that systems depend on.
 // Full headers are included in the .cpp implementations.
@@ -610,21 +611,21 @@ namespace Spark::ECS
      *   if (ai) ai->SetEnabled(false);  // pause AI during cutscene
      * @endcode
      */
-        ISystem* GetSystem(const std::string& name)
+        ISystem* GetSystem(std::string_view name)
         {
             for (auto& system : m_systems)
             {
-                if (system->GetName() == name)
+                if (name == system->GetName())
                     return system.get();
             }
             return nullptr;
         }
 
-        const ISystem* GetSystem(const std::string& name) const
+        const ISystem* GetSystem(std::string_view name) const
         {
             for (const auto& system : m_systems)
             {
-                if (system->GetName() == name)
+                if (name == system->GetName())
                     return system.get();
             }
             return nullptr;

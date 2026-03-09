@@ -633,8 +633,8 @@ HRESULT PhysicsSystem::Initialize()
     m_defaultMaterial.density = 1.0f;
     m_defaultMaterial.name = "Default";
 
-    // Initialize metrics
-    memset(&m_metrics, 0, sizeof(m_metrics));
+    // Initialize metrics (value-initialization instead of memset)
+    m_metrics = {};
 
     // Initialize Bullet Physics world
     m_collisionConfig = new btDefaultCollisionConfiguration();
@@ -685,9 +685,9 @@ void PhysicsSystem::Shutdown()
     m_namedBodies.clear();
 
     // Delete cached collision shapes
-    for (auto& pair : m_shapeCache)
+    for (auto& [hash, shape] : m_shapeCache)
     {
-        delete pair.second;
+        delete shape;
     }
     m_shapeCache.clear();
 
@@ -750,15 +750,8 @@ void PhysicsSystem::UpdateMetrics()
     m_metrics.debugDrawEnabled = m_debugDrawEnabled;
 
     // Count active rigid bodies
-    uint32_t activeCount = 0;
-    for (const auto& body : m_bodies)
-    {
-        if (body && body->IsActive())
-        {
-            activeCount++;
-        }
-    }
-    m_metrics.activeRigidBodies = activeCount;
+    m_metrics.activeRigidBodies = static_cast<uint32_t>(
+        std::count_if(m_bodies.begin(), m_bodies.end(), [](const auto& body) { return body && body->IsActive(); }));
 
     // Collision pairs from dispatcher
     if (m_dispatcher)
@@ -791,19 +784,9 @@ void PhysicsSystem::ProcessCollisions()
         const btCollisionObject* objA = manifold->getBody0();
         const btCollisionObject* objB = manifold->getBody1();
 
-        // Find corresponding PhysicsBody wrappers
-        PhysicsBody* bodyA = nullptr;
-        PhysicsBody* bodyB = nullptr;
-
-        for (const auto& body : m_bodies)
-        {
-            if (body && body->GetBulletBody() == objA)
-                bodyA = body.get();
-            if (body && body->GetBulletBody() == objB)
-                bodyB = body.get();
-            if (bodyA && bodyB)
-                break;
-        }
+        // Retrieve PhysicsBody wrappers via Bullet user pointer (O(1) instead of O(n) search)
+        auto* bodyA = static_cast<PhysicsBody*>(objA->getUserPointer());
+        auto* bodyB = static_cast<PhysicsBody*>(objB->getUserPointer());
 
         // Check for trigger callbacks
         bool isTrigger = false;

@@ -727,6 +727,14 @@ class SceneManager
     std::vector<SceneNode> m_sceneNodes;
 
     /**
+     * @brief Name-to-index lookup cache for O(1) FindNode() instead of O(n) scan.
+     *
+     * Kept in sync by AddNode(), RemoveNode(), and scene load methods. Keys are
+     * node names; values are indices into m_sceneNodes.
+     */
+    std::unordered_map<std::string, int> m_nodeNameIndex;
+
+    /**
      * @brief Instantiated GameObjects corresponding to entries in `m_sceneNodes`.
      *
      * Index `i` in `m_objects` corresponds to index `i` in `m_sceneNodes`.

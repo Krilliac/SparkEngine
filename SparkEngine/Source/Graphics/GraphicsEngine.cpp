@@ -398,12 +398,12 @@ void GraphicsEngine::Shutdown()
     m_hdrRTV.Reset();
     m_hdrTexture.Reset();
 
-    for (int i = 0; i < 4; i++)
-    {
-        m_gBufferSRVs[i].Reset();
-        m_gBufferRTVs[i].Reset();
-        m_gBufferTextures[i].Reset();
-    }
+    for (auto& srv : m_gBufferSRVs)
+        srv.Reset();
+    for (auto& rtv : m_gBufferRTVs)
+        rtv.Reset();
+    for (auto& tex : m_gBufferTextures)
+        tex.Reset();
 
     m_defaultBlendState.Reset();
     m_defaultDepthState.Reset();
@@ -531,16 +531,16 @@ void GraphicsEngine::EndFrame()
 void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix,
                                  const std::vector<GameObject*>& objects)
 {
-    std::vector<GameObject*> visibleObjects;
+    std::vector<GameObject*> culledObjects;
+    const std::vector<GameObject*>* visibleObjectsPtr = &objects;
 
     if (m_settings.frustumCulling)
     {
-        CullObjects(objects, viewMatrix, projMatrix, visibleObjects);
+        CullObjects(objects, viewMatrix, projMatrix, culledObjects);
+        visibleObjectsPtr = &culledObjects;
     }
-    else
-    {
-        visibleObjects = objects;
-    }
+
+    const auto& visibleObjects = *visibleObjectsPtr;
 
     // Update statistics
     {
