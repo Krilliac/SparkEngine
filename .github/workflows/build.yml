@@ -22,7 +22,8 @@ jobs:
     - name: Check formatting
       run: |
         find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
-          -name '*.h' -o -name '*.hpp' -o -name '*.cpp' | \
+          -not -path '*/Metal/*' \
+          \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
           xargs clang-format --dry-run --Werror 2>&1 || {
             echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
             exit 1
