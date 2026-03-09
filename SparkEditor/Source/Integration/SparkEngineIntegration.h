@@ -15,7 +15,11 @@
 #include <mutex>
 #include <atomic>
 #include <thread>
+#ifdef _WIN32
 #include <DirectXMath.h>
+#else
+#include "Core/Platform.h"
+#endif
 using namespace DirectX;
 
 

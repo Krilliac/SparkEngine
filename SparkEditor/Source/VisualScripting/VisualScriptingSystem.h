@@ -21,7 +21,11 @@
 #include <vector>
 
 // Platform headers
+#ifdef _WIN32
 #include <DirectXMath.h>
+#else
+#include "Core/Platform.h"
+#endif
 
 // Project headers
 #include "../Core/EditorPanel.h"
