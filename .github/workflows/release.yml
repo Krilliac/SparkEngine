@@ -81,7 +81,7 @@ jobs:
         Compress-Archive -Path $outDir -DestinationPath "SparkEngine-Windows-${{ matrix.config }}.zip"
 
     - name: Upload packaged artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: SparkEngine-Windows-${{ matrix.config }}
         path: SparkEngine-Windows-${{ matrix.config }}.zip
@@ -127,7 +127,7 @@ jobs:
           -C dist SparkEngine-Linux-${{ matrix.config }}
 
     - name: Upload packaged artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: SparkEngine-Linux-${{ matrix.config }}
         path: SparkEngine-Linux-${{ matrix.config }}.tar.gz
