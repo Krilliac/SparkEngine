@@ -106,7 +106,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: SparkEngine-Windows-VS2022-${{ matrix.config }}
         path: SparkEngine-Windows-${{ matrix.config }}.zip
@@ -162,7 +162,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: steps.check-v144.outputs.available == 'true' && matrix.config == 'Release'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: SparkEngine-Windows-VS2026-${{ matrix.config }}
         path: build/bin/${{ matrix.config }}/
@@ -215,7 +215,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: SparkEngine-Linux-GCC-${{ matrix.config }}
         path: SparkEngine-Linux-GCC-${{ matrix.config }}.tar.gz
@@ -268,7 +268,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: SparkEngine-Linux-Clang-${{ matrix.config }}
         path: SparkEngine-Linux-Clang-${{ matrix.config }}.tar.gz
