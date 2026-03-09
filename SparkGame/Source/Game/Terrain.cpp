@@ -167,6 +167,7 @@ void Terrain::Render(ID3D11DeviceContext* ctx)
 #include <cmath>
 #include <sstream>
 #include <algorithm>
+#include <functional>
 
 Terrain::Terrain() {}
 
@@ -533,13 +534,82 @@ float Terrain::SampleHeight(int x, int z) const
 
 void Terrain::UpdateVertexBuffer()
 {
-    // No GPU vertex buffer on Linux
+    // No GPU vertex buffer on Linux — CPU-side data is already up to date
     m_meshDirty = false;
 }
 
 void Terrain::BuildQuadTree()
 {
-    // Quadtree LOD not implemented on Linux
+    m_quadNodes.clear();
+
+    if (m_vertices.empty() || m_desc.width < 2 || m_desc.height < 2)
+        return;
+
+    float halfW = (m_desc.width / 2.0f) * m_desc.cellSpacing;
+    float halfH = (m_desc.height / 2.0f) * m_desc.cellSpacing;
+    float maxHalf = std::max(halfW, halfH);
+
+    // Build root node covering the entire terrain
+    TerrainQuadNode root;
+    root.center = {0.0f, m_desc.heightScale * 0.5f, 0.0f};
+    root.halfSize = maxHalf;
+    root.lodLevel = 0;
+    root.startIndex = 0;
+    root.indexCount = static_cast<int>(m_indices.size());
+    root.isLeaf = true;
+
+    m_quadNodes.push_back(root);
+
+    // Recursively subdivide up to maxLODLevels
+    std::function<void(int, int)> subdivide = [&](int nodeIdx, int depth) {
+        if (depth >= m_desc.maxLODLevels)
+            return;
+
+        auto& node = m_quadNodes[nodeIdx];
+        float childHalf = node.halfSize * 0.5f;
+
+        // Don't subdivide below a minimum patch size
+        if (childHalf < m_desc.cellSpacing * 2.0f)
+            return;
+
+        node.isLeaf = false;
+
+        // Create 4 children (NW, NE, SW, SE)
+        float offsets[4][2] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
+        for (int i = 0; i < 4; i++)
+        {
+            TerrainQuadNode child;
+            child.center = {node.center.x + offsets[i][0] * childHalf, node.center.y,
+                            node.center.z + offsets[i][1] * childHalf};
+            child.halfSize = childHalf;
+            child.lodLevel = depth + 1;
+            child.startIndex = 0;
+            child.indexCount = 0;
+            child.isLeaf = true;
+
+            // Assign indices that fall within this child's bounds
+            for (size_t j = 0; j + 2 < m_indices.size(); j += 3)
+            {
+                const auto& v = m_vertices[m_indices[j]];
+                float dx = v.Position.x - child.center.x;
+                float dz = v.Position.z - child.center.z;
+                if (std::abs(dx) <= childHalf && std::abs(dz) <= childHalf)
+                {
+                    if (child.indexCount == 0)
+                        child.startIndex = static_cast<int>(j);
+                    child.indexCount += 3;
+                }
+            }
+
+            int childIdx = static_cast<int>(m_quadNodes.size());
+            m_quadNodes[nodeIdx].children[i] = childIdx;
+            m_quadNodes.push_back(child);
+
+            subdivide(childIdx, depth + 1);
+        }
+    };
+
+    subdivide(0, 0);
 }
 
 #endif // SPARK_PLATFORM_WINDOWS
