@@ -1,133 +1,87 @@
 # Build System & Testing
 
-Context: `#prompt:copilot-instructions` for project overview.
+Context: `#prompt:copilot-instructions` for project overview. Console commands: see `console-scripting` prompt.
 
 ## CMake Build System
 
-Root `CMakeLists.txt` (CMake 3.16+) with 30+ feature toggles.
-
 ### Quick Start
 
-```bash
-# Windows (Visual Studio 2022)
-cmake -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
+| Action | Windows | Linux |
+|--------|---------|-------|
+| Generate | `generate.bat` or `cmake -B build -G "Visual Studio 17 2022" -A x64` | `generate.sh` |
+| Build | `build.ps1` or `cmake --build build --config Release` | `build.sh` |
 
-# Or use provided scripts:
-./generate.bat        # Windows: generate VS solution
-./build.ps1           # Windows: build
-./generate.sh         # Linux: generate Makefiles
-./build.sh            # Linux: build
-```
-
-### CMake Presets
-
-`CMakePresets.json` provides pre-configured build presets. Use `cmake --preset <name>`.
+Presets: `cmake --preset <name>` (see `CMakePresets.json`).
 
 ### Key Feature Toggles
 
 | Toggle | Default | Controls |
 |--------|---------|----------|
-| `ENABLE_EDITOR` | ON | ImGui editor (SparkEditor target) |
-| `ENABLE_GRAPHICS` | ON | DirectX 11 rendering |
-| `ENABLE_PHYSX` | ON | Bullet Physics 3 integration |
-| `ENABLE_AI` | ON | AI system (behavior trees, NavMesh) |
-| `ENABLE_ANIMATION` | ON | Skeletal animation system |
+| `ENABLE_EDITOR` | ON | ImGui editor |
+| `ENABLE_GRAPHICS` | ON | DirectX 11 |
+| `ENABLE_PHYSX` | ON | Bullet Physics 3 |
+| `ENABLE_AI` | ON | Behavior trees, NavMesh |
+| `ENABLE_ANIMATION` | ON | Skeletal animation |
 | `ENABLE_NETWORKING` | OFF | UDP multiplayer (requires CURL) |
-| `ENABLE_LUA` | ON | Lua scripting support |
-| `ENABLE_VULKAN` | OFF | Vulkan backend (experimental) |
-| `ENABLE_OPENGL` | OFF | OpenGL backend (experimental) |
-| `ENABLE_DXR` | OFF | DirectX Raytracing (requires D3D12) |
-| `BUILD_TESTS` | ON | Unit tests with CTest |
+| `ENABLE_LUA` | ON | Lua scripting |
+| `ENABLE_VULKAN` | OFF | Vulkan (experimental) |
+| `ENABLE_OPENGL` | OFF | OpenGL (experimental) |
+| `ENABLE_DXR` | OFF | DXR (requires D3D12) |
+| `BUILD_TESTS` | ON | CTest unit tests |
 
 ### Build Targets
 
-| Target | Type | Description |
-|--------|------|-------------|
-| `SparkEngine` | Executable | Runtime host |
-| `SparkEditor` | Executable | ImGui editor |
-| `SparkGame` | Shared Library | Example game module (DLL/SO) |
-| `SparkConsole` | Executable | External debug console |
-| `SparkShaderCompiler` | Executable | Offline shader compilation |
+SparkEngine (exe), SparkEditor (exe), SparkGame (DLL/SO), SparkConsole (exe), SparkShaderCompiler (exe).
 
-### Dependencies (ThirdParty/)
-
-Managed as git submodules:
+### Dependencies (ThirdParty/ — git submodules)
 
 | Library | Purpose |
 |---------|---------|
-| EnTT | Entity Component System |
-| Bullet3 | Physics simulation |
+| EnTT | ECS |
+| Bullet3 | Physics |
 | Dear ImGui | Editor UI (docking branch) |
-| Assimp | 3D model import (FBX, glTF, OBJ) |
-| DirectXTK | DirectX 11 toolkit |
-| spdlog | Fast logging |
+| Assimp | 3D model import |
+| DirectXTK | DX11 toolkit |
+| spdlog | Logging |
 | RapidJSON | JSON serialization |
-| miniz | Compression (save files) |
-| stb | Image loading (stb_image) |
+| miniz | Compression |
+| stb | Image loading |
 | GLM | Math (secondary to DirectXMath) |
 
 ### Platform Support
 
 | Platform | Compiler | Status |
 |----------|----------|--------|
-| Windows 10+ | MSVC v143 (VS 2022), v144 (VS 2026) | Primary |
+| Windows 10+ | MSVC v143/v144 | Primary |
 | Linux | GCC 11+, Clang 14+ | Experimental |
 | macOS | Apple Clang (C++20) | Experimental |
-
-### Quality Policy
-
-- **Zero warnings**: `/W4` (MSVC), `-Wall -Wextra` (GCC/Clang)
-- **Zero memory leaks**: Validate with debug builds
-- All warnings treated as errors in CI
 
 ---
 
 ## CI/CD (GitHub Actions)
 
-### Workflow Matrix
-
-```yaml
-# Builds on every push/PR:
-- Windows MSVC (Debug + Release)
-- Linux GCC (Debug + Release)
-- Linux Clang (Debug + Release)
-```
-
-- Pre-built binaries published on every commit to `master`
-- Dependabot configured for weekly dependency updates
+Builds on every push/PR: Windows MSVC + Linux GCC + Linux Clang (Debug + Release). Pre-built binaries on `master`. Dependabot for weekly updates.
 
 ---
 
 ## Testing
 
-### Test Framework
-
-35 unit tests in `Tests/` directory using internal test framework + CTest integration.
+35 unit tests in `Tests/` with internal framework + CTest.
 
 ```bash
-# Run all tests
-cd build && ctest --output-on-failure
-
-# Run specific test
-ctest -R TestPhysics --output-on-failure
+cd build && ctest --output-on-failure          # all tests
+ctest -R TestPhysics --output-on-failure       # specific test
 ```
 
-### Test Coverage Areas
+### Coverage Areas
 
-- ECS: Component creation, system execution, entity lifecycle
-- Physics: Collision detection, raycasting, body creation
-- Audio: Sound loading, 3D positioning, volume control
-- Graphics: Shader compilation, render target management
-- Serialization: Save/load round-trip, compression
-- Math: Vector/matrix operations, AABB/OBB tests
+ECS, Physics, Audio, Graphics (shader compilation), Serialization (round-trip), Math (vector/matrix, AABB/OBB).
 
 ### Adding a Test
 
 ```cpp
 // Tests/TestMyFeature.cpp
 #include "TestFramework.h"
-
 TEST(MyFeature, BasicFunctionality) {
     MyClass obj;
     obj.Initialize();
@@ -135,13 +89,3 @@ TEST(MyFeature, BasicFunctionality) {
     EXPECT_EQ(obj.GetValue(), 42);
 }
 ```
-
-### Console Commands (Testing)
-
-| Command | Description |
-|---------|-------------|
-| `test_run_all` | Execute all test suites |
-| `test_run <name>` | Run specific test |
-| `benchmark_start` | Start performance benchmark |
-| `stress_test <system>` | Stress-test a subsystem |
-| `test_memory_leaks` | Check for memory leaks |

@@ -46,21 +46,27 @@ namespace Spark
 
         /** @brief Get the graphics/rendering engine */
         virtual GraphicsEngine* GetGraphics() = 0;
+        virtual const GraphicsEngine* GetGraphics() const = 0;
 
         /** @brief Get the input manager */
         virtual InputManager* GetInput() = 0;
+        virtual const InputManager* GetInput() const = 0;
 
         /** @brief Get the frame timer */
         virtual Timer* GetTimer() = 0;
+        virtual const Timer* GetTimer() const = 0;
 
         /** @brief Get the event bus for publish/subscribe messaging */
         virtual EventBus* GetEventBus() = 0;
+        virtual const EventBus* GetEventBus() const = 0;
 
         /** @brief Get the audio engine (may return nullptr if audio init failed) */
         virtual AudioEngine* GetAudio() = 0;
+        virtual const AudioEngine* GetAudio() const = 0;
 
         /** @brief Get the physics system (may return nullptr if not initialized) */
         virtual PhysicsSystem* GetPhysics() = 0;
+        virtual const PhysicsSystem* GetPhysics() const = 0;
 
         /** @brief Check if the engine is running in headless/dedicated server mode */
         virtual bool IsHeadless() const { return false; }

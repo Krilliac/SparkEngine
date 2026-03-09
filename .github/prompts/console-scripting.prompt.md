@@ -4,68 +4,51 @@ Context: `#prompt:copilot-instructions` for project overview.
 
 ## Console System
 
-`Spark::SimpleConsole` (`SparkEngine/Source/Utils/SparkConsole.h`) — Thread-safe singleton with 200+ runtime commands.
+`Spark::SimpleConsole` (`SparkEngine/Source/Utils/SparkConsole.h`) — Thread-safe singleton, 200+ commands.
 
 ### API
 
 ```cpp
 auto& console = Spark::SimpleConsole::GetInstance();
-console.Initialize();
 
-// Register a command
-console.RegisterCommand(
-    "mycommand",
+// Commands
+console.RegisterCommand("mycommand",
     [](const std::vector<std::string>& args) -> std::string {
         if (args.empty()) return "Usage: mycommand <value>";
         return "Set value to " + args[0];
-    },
-    "Description shown in help",
-    "MyCategory"  // Groups command in help output
-);
+    }, "Description", "Category");
 
-// Logging (thread-safe, mutex-protected)
-console.Log("Engine started", "INFO");
-console.Log("Shader failed to compile", "ERROR");
-console.Log("FPS: 60", "DEBUG");
-// Types: INFO, WARNING, ERROR, CRITICAL, TRACE, DEBUG, SUCCESS
+// Logging (thread-safe): INFO, WARNING, ERROR, CRITICAL, TRACE, DEBUG, SUCCESS
+console.Log("Message", "INFO");
 
 // Watch variables (polled every frame)
 console.AddWatch("FPS", [&]() { return std::to_string(fps); });
 
-// Aliases
+// Aliases and programmatic execution
 console.CreateAlias("r", "shader_reload");
-
-// Execute command programmatically
 console.ExecuteCommand("graphics_vsync 1");
 ```
 
-### Internal Architecture
+### Internal Types
 
 | Type | Purpose |
 |------|---------|
 | `CommandHandler` | `std::function<std::string(const std::vector<std::string>&)>` |
-| `CommandInfo` | `{ handler, description, category }` — stored in `m_commands` map |
-| `LogEntry` | `{ message, type, timestamp }` — stored in `m_logHistory` deque |
-| `WatchEntry` | `{ name, getter, lastValue, active }` — polled each `Update()` |
+| `CommandInfo` | `{ handler, description, category }` in `m_commands` map |
+| `LogEntry` | `{ message, type, timestamp }` in `m_logHistory` deque |
+| `WatchEntry` | `{ name, getter, lastValue, active }` polled each `Update()` |
 
 ### Features
 
-- **Tab completion**: Press Tab to cycle through matching commands
-- **Command history**: Up/Down arrows to navigate previous commands
-- **Alias system**: Shorthand for frequently used commands
-- **Log filtering**: Filter by severity type or search text
-- **Rate-limited logging**: Prevents log spam from high-frequency events
-- **Color-coded output**: Windows console colors per severity level
+Tab completion, command history (Up/Down), alias system, log filtering by severity/text, rate-limited logging, color-coded output (Windows console colors).
 
 ### Console Window
 
-- Created via `AllocConsole()` on Windows
-- Runs in separate thread for input processing
-- Platform abstraction: Linux uses `STDOUT_FILENO`/`STDIN_FILENO`
+Windows: `AllocConsole()`, input in separate thread. Linux: `STDOUT_FILENO`/`STDIN_FILENO`.
 
 ### SparkConsole External App
 
-`SparkConsole/` — Standalone console executable communicating via named pipes through `ConsoleProcessManager`. Useful for fullscreen debugging without overlay.
+`SparkConsole/` — standalone exe via named pipes (`ConsoleProcessManager`). Fullscreen debugging without overlay.
 
 ### Complete Command Reference
 
@@ -88,15 +71,14 @@ console.ExecuteCommand("graphics_vsync 1");
 
 ## AngelScript Scripting
 
-`AngelScriptEngine` (`SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h`) — Hot-reload scripting with full engine API bindings.
+`AngelScriptEngine` (`SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h`) — hot-reload scripting with engine API bindings.
 
 ### Script Lifecycle (Unity-style)
 
 ```angelscript
-// Assets/Scripts/PlayerController.as
 class PlayerController {
-    void Start()       { /* called once on spawn */ }
-    void Update(float dt) { /* called every frame */ }
+    void Start()       { /* once on spawn */ }
+    void Update(float dt) { /* every frame */ }
     void OnCollision(Entity other) { /* collision callback */ }
     void OnDestroy()   { /* cleanup */ }
 }
@@ -104,29 +86,17 @@ class PlayerController {
 
 ### Features
 
-- **Hot-reload**: Save script → engine detects change → recompiles → re-binds
-- **Per-file isolation**: Each `.as` file compiled as separate module
-- **Engine API bindings**: Access Transform, Physics, Audio, Input from scripts
-- **Type-safe**: AngelScript is statically typed (similar to C++)
+Hot-reload (save → detect → recompile → rebind), per-file module isolation, engine API bindings (Transform, Physics, Audio, Input), statically typed.
 
 ### Adding Script Bindings
 
 ```cpp
-// Register a new function available in scripts
 engine->RegisterGlobalFunction("void SpawnParticle(float x, float y, float z)",
     asFUNCTION(ScriptSpawnParticle), asCALL_CDECL);
-
-// Register a new type
 engine->RegisterObjectType("Vec3", sizeof(Vec3), asOBJ_VALUE);
 engine->RegisterObjectProperty("Vec3", "float x", offsetof(Vec3, x));
 ```
 
-### Console Commands
+### Script Console Commands
 
-| Command | Description |
-|---------|-------------|
-| `script_reload` | Hot-reload all scripts |
-| `script_debug` | Toggle script debug output |
-| `script_performance` | Show per-script timing |
-| `mod_load <name>` | Load a mod package |
-| `mod_list` | List active mods |
+`script_reload`, `script_debug`, `script_performance`, `mod_load <name>`, `mod_list`

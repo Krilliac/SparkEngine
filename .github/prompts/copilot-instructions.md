@@ -45,9 +45,8 @@ Templates/           ← Game module templates
 Assets/              ← Demo scenes, models, scripts
 ```
 
-## Key APIs
+## Key API: EngineContext (service locator)
 
-### EngineContext (service locator)
 ```cpp
 class EngineContext : public Spark::IEngineContext {
     GraphicsEngine* GetGraphics();
@@ -61,52 +60,7 @@ class EngineContext : public Spark::IEngineContext {
 ```
 Use `EngineContext` — the old `g_graphics`/`g_input`/`g_timer` globals are `[[deprecated]]`.
 
-### Game Module Interface
-```cpp
-class IGameModule {
-    virtual const char* GetGameName() const = 0;
-    virtual bool Initialize(GraphicsEngine*, InputManager*) = 0;
-    virtual void Update(float deltaTime) = 0;
-    virtual void Render() {}
-    virtual void Shutdown() = 0;
-};
-// DLL exports: CreateGameModule() and DestroyGameModule()
-```
-
-### Console Command Registration
-```cpp
-auto& console = Spark::SimpleConsole::GetInstance();
-console.RegisterCommand("mycommand", [](const std::vector<std::string>& args) {
-    return "Result string shown in console";
-}, "Description of command", "Category");
-console.Log("Message text", "INFO");  // Types: INFO, WARNING, ERROR, CRITICAL, TRACE, DEBUG, SUCCESS
-```
-
-### ECS Pattern
-```cpp
-// Components are pure data structs (CoreComponents.h, PhysicsComponents.h, etc.)
-// Systems process components each frame via SystemManager
-SystemManager sysManager;
-sysManager.AddSystem<PhysicsUpdateSystem>(physicsSystem);
-sysManager.AddSystem<AnimationUpdateSystem>();
-sysManager.AddSystem<AIUpdateSystem>();
-sysManager.AddSystem<AudioUpdateSystem>(audioEngine);
-sysManager.AddSystem<LifecycleSystem>();
-sysManager.AddSystem<RenderSystem>(graphicsEngine);
-sysManager.UpdateAll(world, deltaTime);
-```
-System execution order matters: Physics → Animation → AI → Audio → Lifecycle → Render.
-
-### Physics Body Creation
-```cpp
-PhysicsBodyDesc desc;
-desc.type             = PhysicsBodyType::Dynamic;  // Static, Kinematic, Dynamic
-desc.position         = {0, 5, 0};
-desc.mass             = 10.0f;
-desc.shape.type       = CollisionShapeType::Box;   // Box, Sphere, Capsule, Cylinder, Cone, Mesh, ConvexHull, Heightfield, Compound
-desc.shape.dimensions = {1, 1, 1};
-auto body = physics.CreateBody(desc);
-```
+ECS execution order: Physics → Animation → AI → Audio → Lifecycle → Render. See `engine-core` prompt for details.
 
 ## Coding Standards
 
@@ -114,29 +68,27 @@ auto body = physics.CreateBody(desc);
 - **Ownership**: `std::unique_ptr` for owning, raw pointers for non-owning references. No `new`/`delete`.
 - **RAII**: All resources (D3D11 objects via `ComPtr`, file handles, physics bodies) released in destructors
 - **Const-correctness**: `const` on all non-mutating methods and parameters
-- **Error handling**: `ASSERT` / `ASSERT_MSG` for dev validation; `LOG_TO_CONSOLE_IMMEDIATE` for runtime; return `HRESULT` for D3D11 calls
-- **Naming**: PascalCase for classes/methods, camelCase for local variables, m_ prefix for members, UPPER_SNAKE for macros
-- **Headers**: `#pragma once`, forward-declare where possible, include specific component headers over umbrella `Components.h`
+- **Error handling**: `ASSERT` / `ASSERT_MSG` for dev; `LOG_TO_CONSOLE_IMMEDIATE` for runtime; `HRESULT` for D3D11
+- **Naming**: PascalCase classes/methods, camelCase locals, m_ prefix members, UPPER_SNAKE macros
+- **Headers**: `#pragma once`, forward-declare where possible, specific component headers over umbrella `Components.h`
 
 ## Thread Safety
 
-- `Spark::SimpleConsole` is thread-safe (mutex-protected logging)
-- `PhysicsSystem` is NOT thread-safe — call from main thread only
-- `GraphicsEngine` renders on main thread; uses `std::atomic` for frame state
-- Document thread guarantees in Doxygen comments for all public APIs
+- `Spark::SimpleConsole` — thread-safe (mutex-protected)
+- `PhysicsSystem` — NOT thread-safe, main thread only
+- `GraphicsEngine` — main thread render, `std::atomic` frame state
+- Document thread guarantees in Doxygen for all public APIs
 
 ## Build
 
 - CMake 3.16+, 30+ toggles (`ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, etc.)
-- Zero warnings policy (`/W4` MSVC, `-Wall -Wextra` GCC/Clang)
+- Zero warnings: `/W4` MSVC, `-Wall -Wextra` GCC/Clang
 - Targets: SparkEngine (exe), SparkEditor (exe), SparkGame (DLL), SparkConsole (exe)
-- CI: GitHub Actions — Windows MSVC, Linux GCC, Linux Clang (Debug + Release matrix)
+- CI: GitHub Actions — Windows MSVC, Linux GCC, Linux Clang (Debug + Release)
 
 ## NOT Yet Implemented
 
-These features exist as code stubs or are disabled. Do not describe them as working:
-- **Networking/Multiplayer** — `NetworkManager.h` exists but disabled via `ENABLE_NETWORKING=OFF` (avoids CURL dependency)
-- **VR/AR** — No implementation
-- **Ray tracing (DXR)** — No implementation
-- **DLSS/FSR** — No implementation
-- **Mobile/Console platforms** — Build targets defined but untested
+Do not describe these as working:
+- **Networking** — `NetworkManager.h` disabled via `ENABLE_NETWORKING=OFF`
+- **VR/AR, DXR ray tracing, DLSS/FSR** — No implementation
+- **Mobile/Console** — Build targets defined but untested

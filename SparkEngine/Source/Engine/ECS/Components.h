@@ -88,12 +88,14 @@ class World
     }
 
     template <typename T> T* GetComponent(EntityID entity) { return m_registry.try_get<T>(entity); }
+    template <typename T> const T* GetComponent(EntityID entity) const { return m_registry.try_get<T>(entity); }
 
-    template <typename T> bool HasComponent(EntityID entity) { return m_registry.all_of<T>(entity); }
+    template <typename T> bool HasComponent(EntityID entity) const { return m_registry.all_of<T>(entity); }
 
     template <typename T> void RemoveComponent(EntityID entity) { m_registry.remove<T>(entity); }
 
     template <typename... Components> auto GetEntitiesWith() { return m_registry.view<Components...>(); }
+    template <typename... Components> auto GetEntitiesWith() const { return m_registry.view<Components...>(); }
 
     size_t GetEntityCount() const
     {

@@ -9,6 +9,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include <algorithm>
 
 // =============================================================================
@@ -17,21 +18,13 @@
 
 struct TagComponent
 {
-    std::vector<std::string> tags;
+    std::unordered_set<std::string> tags;
 
-    bool HasTag(const std::string& tag) const
-    {
-        for (const auto& t : tags)
-            if (t == tag)
-                return true;
-        return false;
-    }
+    bool HasTag(const std::string& tag) const { return tags.count(tag) > 0; }
 
-    void AddTag(const std::string& tag)
-    {
-        if (!HasTag(tag))
-            tags.push_back(tag);
-    }
+    void AddTag(const std::string& tag) { tags.insert(tag); }
+
+    void RemoveTag(const std::string& tag) { tags.erase(tag); }
 };
 
 // =============================================================================
@@ -56,13 +49,22 @@ struct HealthComponent
 
     void TakeDamage(float amount)
     {
+        if (isDead)
+            return;
         health = (std::max)(health - amount, 0.0f);
         isDead = (health <= 0.0f);
     }
 
     void Heal(float amount)
     {
+        if (isDead)
+            return; // Dead entities cannot be healed; use Revive() instead
         health = (std::min)(health + amount, maxHealth);
+    }
+
+    void Revive(float healthAmount)
+    {
+        health = (std::min)(healthAmount, maxHealth);
         isDead = false;
         deathProcessed = false;
     }

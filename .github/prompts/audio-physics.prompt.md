@@ -1,34 +1,32 @@
 # Audio & Physics
 
-Context: `#prompt:copilot-instructions` for project overview.
+Context: `#prompt:copilot-instructions` for project overview. Console commands: see `console-scripting` prompt.
 
 ## Audio System
 
-`AudioEngine` (`SparkEngine/Source/Audio/AudioEngine.h`) — XAudio2-based with 3D spatial audio.
+`AudioEngine` (`SparkEngine/Source/Audio/AudioEngine.h`) — XAudio2 with 3D spatial audio. Thread-safe (mutex-protected).
 
-### Core Types
+### Core Type
 
 ```cpp
 struct AudioSource {
     IXAudio2SourceVoice* Voice;
-    XMFLOAT3 Position;       // 3D world position
-    XMFLOAT3 Velocity;       // For Doppler effects
+    XMFLOAT3 Position, Velocity;
     float Volume, Pitch;
     bool Is3D, IsLooping, IsPlaying;
     SoundEffect* Sound;
-    uint32_t SourceID;       // Console tracking ID
+    uint32_t SourceID;
 };
 ```
 
 ### Features
 
-- **3D spatial audio**: Listener position/orientation, distance attenuation, Doppler
-- **Voice pooling**: Object pool for efficient source management (100+ concurrent sources)
-- **Volume channels**: Master, SFX, Music — independently adjustable
-- **Formats**: WAV, MP3 via `SoundEffect` (`Audio/SoundEffect.h`)
-- **Thread safety**: Mutex-protected internal state
+- 3D spatial: listener position/orientation, distance attenuation, Doppler
+- Voice pooling: 100+ concurrent sources
+- Volume channels: Master, SFX, Music
+- Formats: WAV, MP3 via `SoundEffect` (`Audio/SoundEffect.h`)
 
-### Usage Pattern
+### Usage
 
 ```cpp
 auto& audio = *context.GetAudio();
@@ -37,77 +35,47 @@ auto sfx = audio.LoadSound("Assets/Sounds/explosion.wav");
 audio.Play3D(sfx, position, velocity, volume, pitch);
 ```
 
-### Console Commands
-
-| Command | Description |
-|---------|-------------|
-| `audio_master_volume <0-1>` | Set master volume |
-| `audio_sfx_volume <0-1>` | Set SFX volume |
-| `audio_music_volume <0-1>` | Set music volume |
-| `audio_debug` | Toggle audio debug overlay |
-| `sound_play <name>` | Play sound by name |
-| `audio_doppler_scale <f>` | Adjust Doppler intensity |
-| `audio_listener_position` | Show current listener position |
-
 ---
 
 ## Physics System
 
-`PhysicsSystem` (`SparkEngine/Source/Physics/PhysicsSystem.h`) — Bullet Physics 3 wrapper with DirectXMath-native API.
+`PhysicsSystem` (`SparkEngine/Source/Physics/PhysicsSystem.h`) — Bullet Physics 3 with DirectXMath-native API. **NOT thread-safe** (main thread only).
 
 ### Architecture
 
 | Class | Purpose |
 |-------|---------|
-| `PhysicsBody` | Wraps `btRigidBody`, exposes `XMFLOAT3`/`XMMATRIX` API |
+| `PhysicsBody` | Wraps `btRigidBody`, `XMFLOAT3`/`XMMATRIX` API |
 | `PhysicsConstraint` | Wraps `btTypedConstraint` (hinge, slider, fixed) |
 | `PhysicsSystem` | World manager: lifecycle, step, queries, callbacks |
 
-### Body Types & Shapes
+### Body Creation
 
 ```cpp
-enum PhysicsBodyType { Static, Kinematic, Dynamic };
-enum CollisionShapeType { Box, Sphere, Capsule, Cylinder, Cone, Mesh, ConvexHull, Heightfield, Compound };
+PhysicsBodyDesc desc;
+desc.type             = PhysicsBodyType::Dynamic;  // Static, Kinematic, Dynamic
+desc.position         = {0, 5, 0};
+desc.mass             = 10.0f;
+desc.shape.type       = CollisionShapeType::Box;   // Box, Sphere, Capsule, Cylinder, Cone, Mesh, ConvexHull, Heightfield, Compound
+desc.shape.dimensions = {1, 1, 1};
+auto body = physics.CreateBody(desc);
 ```
 
-### Queries
-
-- `Raycast(origin, direction, maxDistance)` — single hit
-- `RaycastAll(origin, direction, maxDistance)` — all hits
-- `SphereOverlap(center, radius)` — overlap test
-- `BoxOverlap(center, halfExtents)` — overlap test
-
-### Callbacks
+### Queries & Callbacks
 
 ```cpp
-physics.SetCollisionCallback([](PhysicsBody* a, PhysicsBody* b, const ContactPoint& cp) {
-    // Collision response
-});
-physics.SetTriggerCallback([](PhysicsBody* trigger, PhysicsBody* other, bool entered) {
-    // Trigger enter/exit
-});
+physics.Raycast(origin, direction, maxDistance);     // single hit
+physics.RaycastAll(origin, direction, maxDistance);   // all hits
+physics.SphereOverlap(center, radius);
+physics.BoxOverlap(center, halfExtents);
+
+physics.SetCollisionCallback([](PhysicsBody* a, PhysicsBody* b, const ContactPoint& cp) { });
+physics.SetTriggerCallback([](PhysicsBody* trigger, PhysicsBody* other, bool entered) { });
 ```
 
-### Thread Safety
+### Collision System (`Physics/CollisionSystem.h`)
 
-**PhysicsSystem is NOT thread-safe.** Call all methods from the main game thread. Simulation runs synchronously inside `Update(deltaTime)`.
+Standalone geometric tests (no Bullet dependency), all stateless and thread-safe, uses DirectXMath SIMD.
 
-### Collision System
-
-`CollisionSystem` (`Physics/CollisionSystem.h`) — Standalone geometric collision tests (no Bullet dependency).
-
-- `SphereVsSphere`, `SphereVsBox`, `BoxVsBox`
-- `RayVsSphere`, `RayVsBox`, `RayVsTriangle`
-- Vector utilities: `Vector3Normalize`, `Vector3Dot`, `Vector3Cross`, `Vector3Reflect`, `Vector3Lerp`
-- Uses DirectXMath SIMD. All methods are stateless and thread-safe.
-
-### Console Commands
-
-| Command | Description |
-|---------|-------------|
-| `physics_debug` | Toggle physics debug visualization |
-| `gravity <x> <y> <z>` | Set world gravity |
-| `physics_step` | Single-step physics simulation |
-| `raycast_test` | Fire test raycast from camera |
-| `collision_stats` | Show collision pair counts |
-| `collision_test` | Run collision system diagnostics |
+- Tests: `SphereVsSphere`, `SphereVsBox`, `BoxVsBox`, `RayVsSphere`, `RayVsBox`, `RayVsTriangle`
+- Utilities: `Vector3Normalize`, `Vector3Dot`, `Vector3Cross`, `Vector3Reflect`, `Vector3Lerp`
