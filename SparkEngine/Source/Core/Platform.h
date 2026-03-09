@@ -591,22 +591,22 @@ namespace DirectX
     struct XMFLOAT2
     {
         float x, y;
-        XMFLOAT2() : x(0), y(0) {}
-        XMFLOAT2(float _x, float _y) : x(_x), y(_y) {}
+        constexpr XMFLOAT2() : x(0), y(0) {}
+        constexpr XMFLOAT2(float _x, float _y) : x(_x), y(_y) {}
     };
 
     struct XMFLOAT3
     {
         float x, y, z;
-        XMFLOAT3() : x(0), y(0), z(0) {}
-        XMFLOAT3(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
+        constexpr XMFLOAT3() : x(0), y(0), z(0) {}
+        constexpr XMFLOAT3(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
     };
 
     struct XMFLOAT4
     {
         float x, y, z, w;
-        XMFLOAT4() : x(0), y(0), z(0), w(0) {}
-        XMFLOAT4(float _x, float _y, float _z, float _w) : x(_x), y(_y), z(_z), w(_w) {}
+        constexpr XMFLOAT4() : x(0), y(0), z(0), w(0) {}
+        constexpr XMFLOAT4(float _x, float _y, float _z, float _w) : x(_x), y(_y), z(_z), w(_w) {}
     };
 
     struct XMFLOAT4X4
