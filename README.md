@@ -123,6 +123,15 @@ chmod +x generate.sh
 
 ## Tools
 
+### SparkBuild
+
+[SparkBuild](https://github.com/Krilliac/SparkBuild) is a standalone C++ build tool for SparkEngine. A pre-built binary is included at `tools/SparkBuild.exe` and updated automatically every week via GitHub Actions. You can also update it manually:
+
+```bash
+# Windows:  .\tools\update-sparkbuild.ps1
+# Linux:    ./tools/update-sparkbuild.sh
+```
+
 ### SparkShaderCompiler
 
 Standalone offline shader compilation tool using the RHI cross-compilation pipeline. Compiles HLSL/GLSL shaders for D3D11, Vulkan, and OpenGL backends.
@@ -232,6 +241,9 @@ SparkEngine/
 |   |-- Scenes/             # Level/scene JSON files
 |   |-- Scripts/            # AngelScript game scripts
 |-- Tests/                   # 35 unit tests (CTest integration)
+|-- tools/
+|   |-- SparkBuild.exe       # Pre-built SparkBuild binary
+|   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
 |-- docs/                    # Doxygen docs, roadmap, status reports
 |-- .github/
 |   |-- workflows/          # CI/CD (build + release)
@@ -343,6 +355,10 @@ Two GitHub Actions workflows run automatically:
 - Builds Windows (VS 2022) and Linux (GCC) in Debug + Release
 - Packages each configuration into a zip / tar.gz archive
 - Creates or updates the rolling [`latest` GitHub Release](https://github.com/Krilliac/SparkEngine/releases/tag/latest) with all four binaries and the exact commit hash
+
+**`update-sparkbuild.yml`** — runs weekly (Monday 06:00 UTC) or on manual dispatch:
+- Downloads the latest [SparkBuild](https://github.com/Krilliac/SparkBuild) release binary
+- Opens a PR to update `tools/SparkBuild.exe` when a new version is detected
 
 ## Documentation
 

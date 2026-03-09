@@ -167,6 +167,24 @@ graphics_info   # Display GPU information
 diag            # Run diagnostics
 ```
 
+## SparkBuild Tool
+
+SparkEngine ships with [SparkBuild](https://github.com/Krilliac/SparkBuild), a standalone C++ build tool located at `tools/SparkBuild.exe`. The binary is pre-built and ready to use — no compilation needed.
+
+The tool is kept current automatically via a weekly GitHub Action, but you can also update it manually:
+
+```powershell
+# Windows
+.\tools\update-sparkbuild.ps1
+```
+
+```bash
+# Linux / macOS
+./tools/update-sparkbuild.sh
+```
+
+See [Build System and CMake Modules — SparkBuild](Build-System-and-CMake-Modules#sparkbuild) for more details.
+
 ## Build Options
 
 SparkEngine has 30+ toggleable CMake modules. Pass them during configuration:

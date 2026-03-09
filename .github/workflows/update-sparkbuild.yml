@@ -1,0 +1,97 @@
+name: Update SparkBuild
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to download (default: v1.0.0)"
+        required: false
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || 'v1.0.0' }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch latest SparkBuild release info
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the latest release from SparkBuild
+          LATEST=$(curl -sL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/Krilliac/SparkBuild/releases/latest)
+
+          LATEST_TAG=$(echo "$LATEST" | jq -r '.tag_name')
+          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+
+          # Find the SparkBuild.exe asset download URL
+          DOWNLOAD_URL=$(echo "$LATEST" | jq -r '.assets[] | select(.name == "SparkBuild.exe") | .browser_download_url')
+          echo "download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
+
+          echo "[*] Latest SparkBuild release: $LATEST_TAG"
+          echo "    Download URL: $DOWNLOAD_URL"
+
+      - name: Check current binary
+        id: check
+        run: |
+          if [ -f tools/SparkBuild.exe ]; then
+            CURRENT_SHA=$(sha256sum tools/SparkBuild.exe | awk '{print $1}')
+          else
+            CURRENT_SHA="none"
+          fi
+          echo "current_sha=$CURRENT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Download SparkBuild binary
+        env:
+          DOWNLOAD_URL: ${{ steps.release.outputs.download_url }}
+        run: |
+          echo "[*] Downloading SparkBuild.exe ..."
+          curl -L -o tools/SparkBuild.exe "$DOWNLOAD_URL"
+          echo "[+] Downloaded to tools/SparkBuild.exe"
+
+      - name: Check if binary changed
+        id: diff
+        run: |
+          NEW_SHA=$(sha256sum tools/SparkBuild.exe | awk '{print $1}')
+          if [ "$NEW_SHA" = "${{ steps.check.outputs.current_sha }}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "[=] SparkBuild.exe is already up to date."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "[+] SparkBuild.exe has been updated (sha256: $NEW_SHA)."
+          fi
+
+      - name: Create Pull Request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore: update SparkBuild.exe to ${{ steps.release.outputs.latest_tag }}"
+          branch: chore/update-sparkbuild
+          title: "chore: update SparkBuild.exe to ${{ steps.release.outputs.latest_tag }}"
+          body: |
+            Automated weekly update of `tools/SparkBuild.exe` from [Krilliac/SparkBuild](https://github.com/Krilliac/SparkBuild).
+
+            **Release:** ${{ steps.release.outputs.latest_tag }}
+            **Source:** ${{ steps.release.outputs.download_url }}
+
+            ---
+            *This PR was created automatically by the [update-sparkbuild](.github/workflows/update-sparkbuild.yml) workflow.*
+          labels: dependencies

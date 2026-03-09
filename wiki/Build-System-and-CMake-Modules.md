@@ -110,6 +110,31 @@ cmake --preset windows-release
 cmake --build --preset windows-release
 ```
 
+## SparkBuild
+
+[SparkBuild](https://github.com/Krilliac/SparkBuild) is the standalone C++ build tool for SparkEngine. A pre-built binary ships in `tools/SparkBuild.exe` so you can use it immediately without compiling it yourself.
+
+**Repository:** [Krilliac/SparkBuild](https://github.com/Krilliac/SparkBuild)
+**Current release:** v1.0.0
+
+### Updating SparkBuild
+
+The binary is kept up to date automatically via the [`update-sparkbuild`](../.github/workflows/update-sparkbuild.yml) GitHub Action, which checks for new releases every Monday and opens a PR when a newer binary is available.
+
+You can also update manually:
+
+```powershell
+# Windows (PowerShell)
+.\tools\update-sparkbuild.ps1            # latest release
+.\tools\update-sparkbuild.ps1 v1.0.0     # specific version
+```
+
+```bash
+# Linux / macOS
+./tools/update-sparkbuild.sh             # latest release
+./tools/update-sparkbuild.sh v1.0.0      # specific version
+```
+
 ## Build Targets
 
 | Target | Type | Description |
@@ -189,6 +214,13 @@ Runs on every push to `master`/`main`:
 - Packages: Windows and Linux binaries (Debug + Release)
 - Formats: `.zip` (Windows), `.tar.gz` (Linux)
 - Includes exact commit hash and timestamp
+
+### update-sparkbuild.yml
+
+Runs weekly (every Monday at 06:00 UTC) or on manual dispatch:
+- Downloads the latest [SparkBuild](https://github.com/Krilliac/SparkBuild) release binary
+- Compares SHA-256 checksums to detect changes
+- Opens a PR to update `tools/SparkBuild.exe` when a new version is available
 
 ## Compiler Support
 
