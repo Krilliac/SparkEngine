@@ -13,6 +13,7 @@
 
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
+#include <cfloat>
 #ifdef _WIN32
 #include <DirectXMath.h>
 #else
