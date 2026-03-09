@@ -688,7 +688,16 @@ namespace SparkEditor
     {
 
         struct JSONValue;
-        using JSONObject = std::vector<std::pair<std::string, JSONValue>>;
+
+        // Using a plain struct instead of std::pair avoids an incomplete-type
+        // issue with std::pair's constructibility trait checks on Clang + libstdc++ 14.
+        struct JSONMember
+        {
+            std::string key;
+            JSONValue value;
+        };
+
+        using JSONObject = std::vector<JSONMember>;
         using JSONArray = std::vector<JSONValue>;
 
         struct JSONValue
@@ -720,10 +729,10 @@ namespace SparkEditor
             {
                 if (type != OBJECT)
                     return nullptr;
-                for (const auto& [k, v] : objVal)
+                for (const auto& m : objVal)
                 {
-                    if (k == key)
-                        return &v;
+                    if (m.key == key)
+                        return &m.value;
                 }
                 return nullptr;
             }
@@ -909,7 +918,7 @@ namespace SparkEditor
                     JSONValue value;
                     if (!ParseValue(value))
                         return false;
-                    val.objVal.push_back({key.strVal, std::move(value)});
+                    val.objVal.push_back(JSONMember{key.strVal, std::move(value)});
                     SkipWhitespace();
                     char c = Next();
                     if (c == '}')
