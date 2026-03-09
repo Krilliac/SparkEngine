@@ -687,18 +687,11 @@ namespace SparkEditor
     namespace
     {
 
-        struct JSONValue;
-
-        // Using a plain struct instead of std::pair avoids an incomplete-type
-        // issue with std::pair's constructibility trait checks on Clang + libstdc++ 14.
-        struct JSONMember
-        {
-            std::string key;
-            JSONValue value;
-        };
-
+        // Forward declarations. std::vector does not require a complete type
+        // at the point of member declaration, only when member functions are
+        // instantiated, so the ordering below is valid.
+        struct JSONMember;
         using JSONObject = std::vector<JSONMember>;
-        using JSONArray = std::vector<JSONValue>;
 
         struct JSONValue
         {
@@ -715,7 +708,7 @@ namespace SparkEditor
             double numVal = 0.0;
             bool boolVal = false;
             JSONObject objVal;
-            JSONArray arrVal;
+            std::vector<JSONValue> arrVal;
 
             std::string GetString(const std::string& def = "") const { return type == STRING ? strVal : def; }
             double GetNumber(double def = 0.0) const { return type == NUMBER ? numVal : def; }
@@ -725,17 +718,8 @@ namespace SparkEditor
             uint64_t GetUint64(uint64_t def = 0) const { return static_cast<uint64_t>(GetNumber(def)); }
             bool GetBool(bool def = false) const { return type == BOOL ? boolVal : def; }
 
-            const JSONValue* Find(const std::string& key) const
-            {
-                if (type != OBJECT)
-                    return nullptr;
-                for (const auto& m : objVal)
-                {
-                    if (m.key == key)
-                        return &m.value;
-                }
-                return nullptr;
-            }
+            // Defined out-of-line after JSONMember is complete.
+            const JSONValue* Find(const std::string& key) const;
 
             XMFLOAT3 GetFloat3(XMFLOAT3 def = {0, 0, 0}) const
             {
@@ -751,6 +735,26 @@ namespace SparkEditor
                 return {arrVal[0].GetFloat(), arrVal[1].GetFloat(), arrVal[2].GetFloat(), arrVal[3].GetFloat()};
             }
         };
+
+        // Plain struct instead of std::pair to avoid Clang + libstdc++ 14
+        // constructibility trait checks on incomplete types.
+        struct JSONMember
+        {
+            std::string key;
+            JSONValue value;
+        };
+
+        const JSONValue* JSONValue::Find(const std::string& key) const
+        {
+            if (type != OBJECT)
+                return nullptr;
+            for (const auto& m : objVal)
+            {
+                if (m.key == key)
+                    return &m.value;
+            }
+            return nullptr;
+        }
 
         class JSONParser
         {
