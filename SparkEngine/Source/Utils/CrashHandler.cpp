@@ -44,6 +44,7 @@
 #include <sys/sysinfo.h>
 #include <sys/resource.h>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <fstream>
 #include <climits>
 #include <cstdlib>
@@ -52,6 +53,9 @@
 static CrashConfig g_cfg;
 static std::mutex g_lock;
 static bool g_triggerCrashOnAssert = false;
+#ifdef SPARK_PLATFORM_LINUX
+static volatile sig_atomic_t g_inSignalHandler = 0;
+#endif
 
 // ============================================================================
 // Cross-platform helpers
@@ -741,24 +745,34 @@ static std::string LinuxThreadStacks()
     return out.str();
 }
 
+// Async-signal-safe helper: write a C string to stderr.
+static void WriteStderr(const char* s)
+{
+    if (s)
+    {
+        size_t len = 0;
+        while (s[len])
+            ++len;
+        (void)write(STDERR_FILENO, s, len);
+    }
+}
+
 static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
 {
-    std::lock_guard<std::mutex> guard(g_lock);
+    // Prevent re-entrant crashes (e.g. crash inside the handler itself).
+    // sig_atomic_t is the only type guaranteed safe in signal handlers.
+    if (g_inSignalHandler)
+    {
+        signal(sig, SIG_DFL);
+        raise(sig);
+        return;
+    }
+    g_inSignalHandler = 1;
 
-    std::string stamp = MakeTimeStampUtf8();
-    std::string prefix = WideToUtf8(g_cfg.dumpPrefix);
-    std::string logFile = prefix + stamp + ".log";
-    std::string zipFile = prefix + stamp + ".zip";
-
-    std::ostringstream log;
-    log << "================================================================\n";
-    log << "           SPARK ENGINE CRASH REPORT (Linux)\n";
-    log << "================================================================\n\n";
-    log << "Timestamp  : " << stamp << "\n";
-    log << "Process ID : " << getpid() << "\n";
-    log << "Thread ID  : " << static_cast<unsigned long>(syscall(SYS_gettid)) << "\n\n";
-
-    // Signal info
+    // --- Async-signal-safe section ---
+    // Write a minimal crash notice to stderr using only write(), which is
+    // async-signal-safe.  This guarantees visible output even if the heap
+    // or iostream locks are corrupted.
     const char* sigName = "UNKNOWN";
     switch (sig)
     {
@@ -781,56 +795,83 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         sigName = "SIGTRAP (Trace/breakpoint trap)";
         break;
     }
-    log << "*** CRASH DETECTED ***\n";
-    log << "Signal     : " << sig << " - " << sigName << "\n";
-    if (info)
-    {
-        log << "Fault Addr : 0x" << std::hex << reinterpret_cast<uintptr_t>(info->si_addr) << std::dec << "\n";
-        log << "Signal Code: " << info->si_code << "\n";
-    }
-    log << "\n";
+    WriteStderr("\n[SPARK ENGINE] CRASH: ");
+    WriteStderr(sigName);
+    WriteStderr("\n");
 
-    log << CaptureStackTraceString();
-    if (g_cfg.captureSystemInfo)
-        log << LinuxSystemInfo();
-    if (g_cfg.captureAllThreads)
-        log << LinuxThreadStacks();
-
-    // Write log file
-    {
-        std::ofstream ofs(logFile, std::ios::out | std::ios::trunc);
-        ofs << log.str();
-    }
-
-    // Write core dump path hint
-    std::string coreFile = prefix + stamp + ".core_hint";
-    {
-        std::ofstream ofs(coreFile);
-        ofs << "Core dump may be found at the system core dump location.\n";
-        ofs << "Check: /proc/sys/kernel/core_pattern\n";
-        ofs << "Or run: coredumpctl list\n";
-    }
-
-    // Package files
-    std::vector<std::string> files{logFile, coreFile};
-    if (g_cfg.zipBeforeUpload)
-        ZipFilesUtf8(zipFile, files);
-
-    // Log to console
+    // --- Best-effort section ---
+    // The operations below use the heap and are technically not
+    // async-signal-safe.  However, they are wrapped in a try/catch and
+    // the process is about to terminate anyway, so this is acceptable
+    // best-effort behaviour (matching industry-standard crash reporters).
+    // We intentionally do NOT acquire g_lock here because the crashing
+    // thread may already hold it, which would deadlock.
     try
     {
-        std::string crashSummary = std::string("CRASH DETECTED: ") + sigName;
-        crashSummary += "\nLog file: " + logFile;
-        Spark::ConsoleProcessManager::GetInstance().LogCrash(crashSummary);
+        std::string stamp = MakeTimeStampUtf8();
+        std::string prefix = WideToUtf8(g_cfg.dumpPrefix);
+        std::string logFile = prefix + stamp + ".log";
+        std::string zipFile = prefix + stamp + ".zip";
+
+        std::ostringstream log;
+        log << "================================================================\n";
+        log << "           SPARK ENGINE CRASH REPORT (Linux)\n";
+        log << "================================================================\n\n";
+        log << "Timestamp  : " << stamp << "\n";
+        log << "Process ID : " << getpid() << "\n";
+        log << "Thread ID  : " << static_cast<unsigned long>(syscall(SYS_gettid)) << "\n\n";
+
+        log << "*** CRASH DETECTED ***\n";
+        log << "Signal     : " << sig << " - " << sigName << "\n";
+        if (info)
+        {
+            log << "Fault Addr : 0x" << std::hex << reinterpret_cast<uintptr_t>(info->si_addr) << std::dec << "\n";
+            log << "Signal Code: " << info->si_code << "\n";
+        }
+        log << "\n";
+
+        log << CaptureStackTraceString();
+        if (g_cfg.captureSystemInfo)
+            log << LinuxSystemInfo();
+        if (g_cfg.captureAllThreads)
+            log << LinuxThreadStacks();
+
+        // Write log file using POSIX open/write (safer than std::ofstream
+        // in a signal context, though still best-effort).
+        std::string logStr = log.str();
+        int fd = open(logFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd >= 0)
+        {
+            (void)write(fd, logStr.c_str(), logStr.size());
+            close(fd);
+        }
+
+        // Write core dump path hint
+        std::string coreFile = prefix + stamp + ".core_hint";
+        static const char coreHint[] = "Core dump may be found at the system core dump location.\n"
+                                       "Check: /proc/sys/kernel/core_pattern\n"
+                                       "Or run: coredumpctl list\n";
+        fd = open(coreFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd >= 0)
+        {
+            (void)write(fd, coreHint, sizeof(coreHint) - 1);
+            close(fd);
+        }
+
+        // Package files
+        std::vector<std::string> files{logFile, coreFile};
+        if (g_cfg.zipBeforeUpload)
+            ZipFilesUtf8(zipFile, files);
+
+        // Print log to stderr
+        WriteStderr("Log file: ");
+        WriteStderr(logFile.c_str());
+        WriteStderr("\n");
     }
     catch (...)
     {
+        WriteStderr("[SPARK ENGINE] Failed to write crash report\n");
     }
-
-    // Print to stderr as last resort
-    std::cerr << "\n[SPARK ENGINE] CRASH: " << sigName << "\n";
-    std::cerr << "Log file: " << logFile << "\n";
-    std::cerr << log.str() << "\n";
 
     // Re-raise to get core dump
     signal(sig, SIG_DFL);

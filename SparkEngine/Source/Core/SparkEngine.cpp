@@ -25,6 +25,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
+#include <atomic>
 #include <memory>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -112,7 +113,7 @@ std::unique_ptr<PhysicsSystem> g_physicsOwned;
 
 #ifdef SPARK_HEADLESS_SUPPORT
 // g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
-static volatile bool g_shutdownRequested = false;
+static std::atomic<bool> g_shutdownRequested{false};
 
 /**
  * @brief Parse command line for -headless or -dedicated flags
@@ -1190,11 +1191,11 @@ static void LogMissingModuleWarnings()
     }
 }
 
-static volatile bool g_shutdownRequested = false;
+static std::atomic<bool> g_shutdownRequested{false};
 
 static void SignalHandler(int)
 {
-    g_shutdownRequested = true;
+    g_shutdownRequested.store(true, std::memory_order_relaxed);
 }
 
 static bool ParseFlag(int argc, char* argv[], const char* flag)

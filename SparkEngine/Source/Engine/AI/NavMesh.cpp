@@ -112,7 +112,7 @@ namespace Spark::AI
                 std::reverse(triPath.begin(), triPath.end());
 
                 result.path.push_back({request.start, startTri});
-                for (size_t i = 1; i < triPath.size() - 1; ++i)
+                for (size_t i = 1; i + 1 < triPath.size(); ++i)
                 {
                     result.path.push_back({m_navMesh->triangles[triPath[i]].centroid, triPath[i]});
                 }
@@ -241,6 +241,8 @@ namespace Spark::AI
 
     XMFLOAT3 NavMeshQuery::ProjectPointToTriangle(const XMFLOAT3& point, uint32_t triIndex) const
     {
+        if (!m_navMesh || triIndex >= static_cast<uint32_t>(m_navMesh->triangles.size()))
+            return point;
         const auto& tri = m_navMesh->triangles[triIndex];
         // Simplified — project to centroid
         return tri.centroid;

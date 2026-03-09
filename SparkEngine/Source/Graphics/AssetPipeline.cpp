@@ -1105,12 +1105,16 @@ uint64_t AssetPipeline::GetFileTimestamp(const std::string& filePath)
 
 void AssetPipeline::UpdateMetrics()
 {
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-
+    // Collect data that requires m_assetsMutex first (consistent lock ordering:
+    // assets -> metrics, matching LoadAsset and other call-sites).
+    uint32_t totalAssets = 0;
     {
         std::lock_guard<std::mutex> assetsLock(m_assetsMutex);
-        m_metrics.totalAssets = static_cast<uint32_t>(m_assets.size());
+        totalAssets = static_cast<uint32_t>(m_assets.size());
     }
+
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    m_metrics.totalAssets = totalAssets;
 
     // Update other metrics
     m_metrics.streamingThreads = static_cast<uint32_t>(m_loadingThreads.size());
@@ -2162,31 +2166,41 @@ uint64_t AssetPipeline::GetFileTimestamp(const std::string& filePath)
 
 void AssetPipeline::UpdateMetrics()
 {
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    std::lock_guard<std::mutex> assetsLock(m_assetsMutex);
-
-    m_metrics.totalAssets = static_cast<uint32_t>(m_assets.size());
-    m_metrics.loadedAssets = 0;
-    m_metrics.memoryUsage = 0;
-
-    for (const auto& pair : m_assets)
+    // Collect data that requires m_assetsMutex first (consistent lock ordering:
+    // assets -> metrics, matching LoadAsset and other call-sites).
+    uint32_t totalAssets = 0;
+    uint32_t loadedAssets = 0;
+    size_t memoryUsage = 0;
     {
-        if (pair.second && pair.second->IsLoaded())
+        std::lock_guard<std::mutex> assetsLock(m_assetsMutex);
+        totalAssets = static_cast<uint32_t>(m_assets.size());
+        for (const auto& pair : m_assets)
         {
-            m_metrics.loadedAssets++;
-            m_metrics.memoryUsage += pair.second->GetMemoryUsage();
+            if (pair.second && pair.second->IsLoaded())
+            {
+                loadedAssets++;
+                memoryUsage += pair.second->GetMemoryUsage();
+            }
         }
     }
+
+    uint32_t pendingRequests = 0;
+    {
+        std::lock_guard<std::mutex> queueLock(m_queueMutex);
+        pendingRequests = static_cast<uint32_t>(m_loadQueue.size());
+    }
+
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    m_metrics.totalAssets = totalAssets;
+    m_metrics.loadedAssets = loadedAssets;
+    m_metrics.memoryUsage = memoryUsage;
 
     if (m_metrics.memoryUsage > m_metrics.maxMemoryUsage)
     {
         m_metrics.maxMemoryUsage = m_metrics.memoryUsage;
     }
 
-    {
-        std::lock_guard<std::mutex> queueLock(m_queueMutex);
-        m_metrics.pendingRequests = static_cast<uint32_t>(m_loadQueue.size());
-    }
+    m_metrics.pendingRequests = pendingRequests;
 
     if (m_cache)
     {

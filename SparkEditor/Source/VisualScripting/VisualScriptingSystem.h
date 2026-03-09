@@ -27,11 +27,11 @@
 #include "Core/Platform.h"
 #endif
 
+using namespace DirectX;
+
 // Project headers
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
-
-using namespace DirectX;
 
 namespace SparkEditor
 {

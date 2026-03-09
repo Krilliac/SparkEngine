@@ -360,7 +360,8 @@ namespace SparkEditor
             if (m_pretty)
                 Indent();
             m_os << "}";
-            m_first.pop_back();
+            if (!m_first.empty())
+                m_first.pop_back();
         }
         void BeginArray()
         {
@@ -376,7 +377,8 @@ namespace SparkEditor
             if (m_pretty)
                 Indent();
             m_os << "]";
-            m_first.pop_back();
+            if (!m_first.empty())
+                m_first.pop_back();
         }
 
         void Key(const std::string& k)
