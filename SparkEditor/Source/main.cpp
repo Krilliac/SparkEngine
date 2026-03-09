@@ -8,6 +8,7 @@
 #include "Core/EditorApplication.h"
 #include "Utils/SparkConsole.h" // Use local SparkConsole instead of engine version
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <sstream>
 #include <vector>
