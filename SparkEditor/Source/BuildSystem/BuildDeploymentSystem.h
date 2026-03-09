@@ -24,6 +24,7 @@
 #include <queue>
 #include <chrono>
 #include <filesystem>
+#include <condition_variable>
 
 namespace SparkEditor
 {
