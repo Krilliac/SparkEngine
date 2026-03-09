@@ -7,10 +7,6 @@
 
 #include "EditorCrashHandler.h"
 #include "EditorLogger.h"
-#include <Windows.h>
-#include <dbghelp.h>
-#include <TlHelp32.h>
-#include <VersionHelpers.h>
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -21,7 +17,21 @@
 #include <cstdio>
 #include <sstream>
 
+#ifdef _WIN32
+#include <Windows.h>
+#include <dbghelp.h>
+#include <TlHelp32.h>
+#include <VersionHelpers.h>
 #pragma comment(lib, "dbghelp.lib")
+#else
+#include <csignal>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/sysinfo.h>
+#include <cstring>
+#include <execinfo.h>
+#include <pthread.h>
+#endif
 
 namespace SparkEditor
 {
@@ -66,11 +76,18 @@ namespace SparkEditor
         m_initialized = true;
         m_sessionStartTime = std::chrono::steady_clock::now();
 
-        // Don't start auto-save thread for now to avoid deadlock issues
-        // if (m_autoSaveEnabled) {
-        //     m_shouldStopAutoSave = false;
-        //     m_autoSaveThread = std::thread(&EditorCrashHandler::AutoSaveRecoveryThread, this);
-        // }
+#ifndef _WIN32
+        // Install signal handlers on Linux
+        struct sigaction sa;
+        sa.sa_handler = SignalHandler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_RESTART;
+        sigaction(SIGSEGV, &sa, nullptr);
+        sigaction(SIGABRT, &sa, nullptr);
+        sigaction(SIGFPE, &sa, nullptr);
+        sigaction(SIGILL, &sa, nullptr);
+        sigaction(SIGBUS, &sa, nullptr);
+#endif
 
         std::cout << "EditorCrashHandler initialized successfully\n";
         return true;
@@ -261,17 +278,13 @@ namespace SparkEditor
                         data.lastSavedScene = line.substr(start, end - start);
                     }
                 }
-                // Parse JSON arrays for openFiles and recentOperations
                 else if (line.find("\"openFiles\"") != std::string::npos)
                 {
-                    // Read array entries until the closing bracket
                     std::string arrayLine;
                     while (std::getline(file, arrayLine))
                     {
-                        // Check for end of array
                         if (arrayLine.find(']') != std::string::npos)
                             break;
-                        // Extract the quoted value from lines like:   "some/path"
                         size_t qStart = arrayLine.find('\"');
                         if (qStart == std::string::npos)
                             continue;
@@ -333,7 +346,6 @@ namespace SparkEditor
         }
         catch (...)
         {
-            // Ignore errors when clearing recovery data
         }
     }
 
@@ -363,7 +375,6 @@ namespace SparkEditor
     void EditorCrashHandler::TestCrashHandler()
     {
         std::cout << "Testing crash handler (this should not crash in development)\n";
-        // In a real crash handler, this would trigger a controlled crash for testing
     }
 
     void EditorCrashHandler::TestAssertionHandler()
@@ -383,6 +394,17 @@ namespace SparkEditor
             }
         }
     }
+
+    void EditorCrashHandler::SetAutoSaveRecovery(bool enabled, float interval)
+    {
+        m_autoSaveEnabled = enabled;
+        m_autoSaveInterval = interval;
+    }
+
+    // =========================================================================
+    // Windows-specific crash handling
+    // =========================================================================
+#ifdef _WIN32
 
     LONG WINAPI EditorCrashHandler::ExceptionFilter(EXCEPTION_POINTERS* exceptionPointers)
     {
@@ -441,7 +463,6 @@ namespace SparkEditor
             break;
             }
 
-            // Categorize for statistics
             if (code == EXCEPTION_ACCESS_VIOLATION)
                 m_stats.accessViolations++;
             else if (code == EXCEPTION_STACK_OVERFLOW)
@@ -450,12 +471,10 @@ namespace SparkEditor
                 m_stats.otherExceptions++;
         }
 
-        // Gather additional context
         info.stackTrace = GenerateStackTrace(exceptionPointers);
         info.systemInfo = GetSystemInfo();
         info.threadInfo = GetThreadInfo();
 
-        // Gather recent operations
         {
             std::lock_guard<std::mutex> opsLock(m_operationsMutex);
             std::string opsStr;
@@ -469,7 +488,6 @@ namespace SparkEditor
         m_stats.lastCrash = info.timestamp;
         m_stats.lastCrashType = info.exceptionType;
 
-        // Save crash dump and log
         if (!m_crashDirectory.empty())
         {
             try
@@ -488,11 +506,9 @@ namespace SparkEditor
             }
             catch (...)
             {
-                // Don't let file operations crash the crash handler
             }
         }
 
-        // Save recovery data
         try
         {
             SaveRecoveryData();
@@ -557,7 +573,6 @@ namespace SparkEditor
 
             if (SymFromAddr(GetCurrentProcess(), frame.AddrPC.Offset, &displacement64, sym))
             {
-                // Try to get source file and line
                 IMAGEHLP_LINE64 lineInfo = {};
                 lineInfo.SizeOfStruct = sizeof(lineInfo);
                 DWORD lineDisplacement = 0;
@@ -587,7 +602,6 @@ namespace SparkEditor
     {
         std::string result = "=== System Info ===\n";
 
-        // OS version
         if (IsWindows10OrGreater())
             result += "OS: Windows 10+\n";
         else if (IsWindows8OrGreater())
@@ -595,12 +609,10 @@ namespace SparkEditor
         else
             result += "OS: Windows (version unknown)\n";
 
-        // CPU info
         SYSTEM_INFO si;
         GetNativeSystemInfo(&si);
         result += "CPU Cores: " + std::to_string(si.dwNumberOfProcessors) + "\n";
 
-        // Memory info
         MEMORYSTATUSEX ms = {};
         ms.dwLength = sizeof(ms);
         if (GlobalMemoryStatusEx(&ms))
@@ -618,7 +630,6 @@ namespace SparkEditor
         std::string result = "=== Thread Info ===\n";
         result += "Current Thread ID: 0x" + std::to_string(GetCurrentThreadId()) + "\n";
 
-        // Count threads in this process
         HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
         if (snap != INVALID_HANDLE_VALUE)
         {
@@ -646,7 +657,6 @@ namespace SparkEditor
         if (!exceptionPointers)
             return false;
 
-        // Convert to wide string for Windows API
         std::wstring wpath(filePath.begin(), filePath.end());
 
         HANDLE hFile =
@@ -684,6 +694,207 @@ namespace SparkEditor
         }
         return success != FALSE;
     }
+
+    // =========================================================================
+    // Linux-specific crash handling
+    // =========================================================================
+#else
+
+    void EditorCrashHandler::SignalHandler(int signal)
+    {
+        if (s_instance)
+        {
+            s_instance->HandleCrashInternal(signal);
+        }
+        // Re-raise the signal for default handling (core dump, etc.)
+        struct sigaction sa;
+        sa.sa_handler = SIG_DFL;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(signal, &sa, nullptr);
+        raise(signal);
+    }
+
+    void EditorCrashHandler::HandleCrashInternal(int signal)
+    {
+        std::lock_guard<std::mutex> lock(m_statsMutex);
+        m_stats.totalCrashes++;
+
+        CrashInfo info;
+        info.signalNumber = signal;
+        info.timestamp = std::chrono::system_clock::now();
+        info.processId = static_cast<uint32_t>(getpid());
+        info.threadId = static_cast<uint32_t>(pthread_self());
+        info.editorState = m_currentEditorState;
+
+        switch (signal)
+        {
+        case SIGSEGV:
+            info.exceptionType = "SIGSEGV (Segmentation Fault)";
+            m_stats.accessViolations++;
+            break;
+        case SIGABRT:
+            info.exceptionType = "SIGABRT (Abort)";
+            m_stats.otherExceptions++;
+            break;
+        case SIGFPE:
+            info.exceptionType = "SIGFPE (Floating Point Exception)";
+            m_stats.otherExceptions++;
+            break;
+        case SIGILL:
+            info.exceptionType = "SIGILL (Illegal Instruction)";
+            m_stats.otherExceptions++;
+            break;
+        case SIGBUS:
+            info.exceptionType = "SIGBUS (Bus Error)";
+            m_stats.accessViolations++;
+            break;
+        default:
+        {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Signal %d", signal);
+            info.exceptionType = buf;
+            m_stats.otherExceptions++;
+        }
+        break;
+        }
+
+        info.stackTrace = GenerateStackTrace();
+        info.systemInfo = GetSystemInfo();
+        info.threadInfo = GetThreadInfo();
+
+        {
+            std::lock_guard<std::mutex> opsLock(m_operationsMutex);
+            std::string opsStr;
+            for (const auto& op : m_recentOperations)
+            {
+                opsStr += "  - " + op + "\n";
+            }
+            info.lastOperations = opsStr;
+        }
+
+        m_stats.lastCrash = info.timestamp;
+        m_stats.lastCrashType = info.exceptionType;
+
+        if (!m_crashDirectory.empty())
+        {
+            try
+            {
+                std::filesystem::create_directories(m_crashDirectory);
+
+                auto time_t = std::chrono::system_clock::to_time_t(info.timestamp);
+                char timeBuf[64];
+                strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", std::localtime(&time_t));
+
+                std::string logPath = m_crashDirectory + "/editor_crash_" + timeBuf + ".log";
+                SaveCrashLog(info, logPath);
+            }
+            catch (...)
+            {
+            }
+        }
+
+        try
+        {
+            SaveRecoveryData();
+        }
+        catch (...)
+        {
+        }
+
+        if (m_crashCallback)
+        {
+            m_crashCallback(info);
+        }
+    }
+
+    std::string EditorCrashHandler::GenerateStackTrace()
+    {
+        std::string result = "=== Stack Trace ===\n";
+
+        void* buffer[64];
+        int numFrames = backtrace(buffer, 64);
+        char** symbols = backtrace_symbols(buffer, numFrames);
+
+        if (symbols)
+        {
+            for (int i = 0; i < numFrames; ++i)
+            {
+                char line[512];
+                snprintf(line, sizeof(line), "  [%2d] %s\n", i, symbols[i]);
+                result += line;
+            }
+            free(symbols);
+        }
+        else
+        {
+            result += "Failed to get backtrace symbols\n";
+        }
+
+        return result;
+    }
+
+    std::string EditorCrashHandler::GetSystemInfo()
+    {
+        std::string result = "=== System Info ===\n";
+
+        // OS info
+        std::ifstream osRelease("/etc/os-release");
+        if (osRelease.is_open())
+        {
+            std::string line;
+            while (std::getline(osRelease, line))
+            {
+                if (line.find("PRETTY_NAME=") == 0)
+                {
+                    std::string name = line.substr(13);
+                    if (!name.empty() && name.front() == '"')
+                        name = name.substr(1);
+                    if (!name.empty() && name.back() == '"')
+                        name.pop_back();
+                    result += "OS: " + name + "\n";
+                    break;
+                }
+            }
+            osRelease.close();
+        }
+        else
+        {
+            result += "OS: Linux\n";
+        }
+
+        long cores = sysconf(_SC_NPROCESSORS_ONLN);
+        if (cores > 0)
+        {
+            result += "CPU Cores: " + std::to_string(cores) + "\n";
+        }
+
+        struct sysinfo si;
+        if (sysinfo(&si) == 0)
+        {
+            result += "RAM Total: " + std::to_string(si.totalram * si.mem_unit / (1024 * 1024)) + " MiB\n";
+            result += "RAM Available: " + std::to_string(si.freeram * si.mem_unit / (1024 * 1024)) + " MiB\n";
+            unsigned long used = si.totalram - si.freeram;
+            int loadPercent = static_cast<int>((used * 100) / si.totalram);
+            result += "Memory Load: " + std::to_string(loadPercent) + "%\n";
+        }
+
+        return result;
+    }
+
+    std::string EditorCrashHandler::GetThreadInfo()
+    {
+        std::string result = "=== Thread Info ===\n";
+        result += "Current Thread ID: " + std::to_string(static_cast<unsigned long>(pthread_self())) + "\n";
+        result += "Process ID: " + std::to_string(getpid()) + "\n";
+        return result;
+    }
+
+#endif // _WIN32
+
+    // =========================================================================
+    // Shared implementation (cross-platform)
+    // =========================================================================
 
     bool EditorCrashHandler::SaveCrashLog(const CrashInfo& crashInfo, const std::string& filePath)
     {
@@ -735,7 +946,6 @@ namespace SparkEditor
 
     void EditorCrashHandler::UpdateStats(const CrashInfo& crashInfo)
     {
-        // Calculate average session time
         auto now = std::chrono::steady_clock::now();
         float sessionSeconds = std::chrono::duration_cast<std::chrono::seconds>(now - m_sessionStartTime).count();
         m_stats.averageSessionTime = sessionSeconds;

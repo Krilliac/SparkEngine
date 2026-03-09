@@ -14,7 +14,11 @@
 #include <chrono>
 #include <mutex>
 #include <thread>
+#include <cstdint>
+
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 
 namespace SparkEditor
 {
@@ -26,7 +30,11 @@ namespace SparkEditor
  */
     struct CrashInfo
     {
+#ifdef _WIN32
         EXCEPTION_POINTERS* exceptionPointers = nullptr;
+#else
+        int signalNumber = 0;
+#endif
         std::string exceptionType;
         std::string exceptionMessage;
         std::string stackTrace;
@@ -61,7 +69,7 @@ namespace SparkEditor
 
     /**
  * @brief Enhanced crash handling system for Spark Engine Editor
- * 
+ *
  * Provides comprehensive crash handling with:
  * - Integration with engine crash handler
  * - Editor state preservation
@@ -72,98 +80,28 @@ namespace SparkEditor
     class EditorCrashHandler
     {
       public:
-        /**
-     * @brief Get singleton instance
-     * @return Reference to crash handler instance
-     */
         static EditorCrashHandler& GetInstance();
 
-        /**
-     * @brief Initialize crash handler
-     * @param crashDirectory Directory for crash dumps and logs
-     * @param logger Editor logger instance
-     * @return true if initialization succeeded
-     */
         bool Initialize(const std::string& crashDirectory = "Crashes", EditorLogger* logger = nullptr);
-
-        /**
-     * @brief Shutdown crash handler
-     */
         void Shutdown();
 
-        /**
-     * @brief Set crash callback
-     * @param callback Function to call when crash occurs
-     */
         void SetCrashCallback(CrashCallback callback);
-
-        /**
-     * @brief Set recovery data callback
-     * @param callback Function to call to gather recovery data
-     */
         void SetRecoveryCallback(RecoveryCallback callback);
-
-        /**
-     * @brief Set assert callback
-     * @param callback Function to call when assertion fails
-     */
         void SetAssertCallback(AssertCallback callback);
 
-        /**
-     * @brief Handle assertion failure
-     * @param expression Failed expression
-     * @param file Source file
-     * @param line Line number
-     * @param message Optional message
-     */
         void HandleAssertion(const std::string& expression, const char* file, int line,
                              const std::string& message = "");
 
-        /**
-     * @brief Add operation to recent operations list
-     * @param operation Description of operation
-     */
         void RecordOperation(const std::string& operation);
-
-        /**
-     * @brief Set current editor state
-     * @param state Current state description
-     */
         void SetEditorState(const std::string& state);
 
-        /**
-     * @brief Save recovery data immediately
-     * @return true if save succeeded
-     */
         bool SaveRecoveryData();
-
-        /**
-     * @brief Load recovery data from last session
-     * @return Recovery data if available
-     */
         std::optional<RecoveryData> LoadRecoveryData();
-
-        /**
-     * @brief Check if recovery data is available
-     * @return true if recovery data exists
-     */
         bool HasRecoveryData();
-
-        /**
-     * @brief Clear recovery data
-     */
         void ClearRecoveryData();
 
-        /**
-     * @brief Enable/disable automatic recovery data saving
-     * @param enabled Enable auto-save
-     * @param interval Save interval in seconds
-     */
         void SetAutoSaveRecovery(bool enabled, float interval = 30.0f);
 
-        /**
-     * @brief Get crash statistics
-     */
         struct CrashStats
         {
             int totalCrashes = 0;
@@ -179,21 +117,9 @@ namespace SparkEditor
         };
         CrashStats GetStats() const;
 
-        /**
-     * @brief Generate crash report
-     * @param crashInfo Crash information
-     * @return Formatted crash report
-     */
         std::string GenerateCrashReport(const CrashInfo& crashInfo);
 
-        /**
-     * @brief Test crash handler (debug only)
-     */
         void TestCrashHandler();
-
-        /**
-     * @brief Test assertion handler (debug only)
-     */
         void TestAssertionHandler();
 
       private:
@@ -204,49 +130,21 @@ namespace SparkEditor
         EditorCrashHandler(const EditorCrashHandler&) = delete;
         EditorCrashHandler& operator=(const EditorCrashHandler&) = delete;
 
-        /**
-     * @brief Windows exception filter
-     */
+#ifdef _WIN32
         static LONG WINAPI ExceptionFilter(EXCEPTION_POINTERS* exceptionPointers);
-
-        /**
-     * @brief Handle crash internally
-     */
         void HandleCrashInternal(EXCEPTION_POINTERS* exceptionPointers);
-
-        /**
-     * @brief Generate stack trace
-     */
         std::string GenerateStackTrace(EXCEPTION_POINTERS* exceptionPointers);
-
-        /**
-     * @brief Get system information
-     */
-        std::string GetSystemInfo();
-
-        /**
-     * @brief Get thread information
-     */
-        std::string GetThreadInfo();
-
-        /**
-     * @brief Save crash dump
-     */
         bool SaveCrashDump(EXCEPTION_POINTERS* exceptionPointers, const std::string& filePath);
+#else
+        static void SignalHandler(int signal);
+        void HandleCrashInternal(int signal);
+        std::string GenerateStackTrace();
+#endif
 
-        /**
-     * @brief Save crash log
-     */
+        std::string GetSystemInfo();
+        std::string GetThreadInfo();
         bool SaveCrashLog(const CrashInfo& crashInfo, const std::string& filePath);
-
-        /**
-     * @brief Update statistics
-     */
         void UpdateStats(const CrashInfo& crashInfo);
-
-        /**
-     * @brief Auto-save recovery data thread function
-     */
         void AutoSaveRecoveryThread();
 
       private:
@@ -278,7 +176,9 @@ namespace SparkEditor
         mutable std::mutex m_statsMutex;
 
         // Exception handling
+#ifdef _WIN32
         LPTOP_LEVEL_EXCEPTION_FILTER m_previousFilter = nullptr;
+#endif
         static EditorCrashHandler* s_instance;
     };
 

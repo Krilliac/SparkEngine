@@ -5,6 +5,10 @@
 #include <iomanip>
 #include <chrono>
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 namespace Spark
 {
 
@@ -71,8 +75,10 @@ namespace Spark
 
         // Always output to debug console
         std::string debugMsg = "[" + entry.timestamp + "] [" + type + "] " + message;
+#ifdef _WIN32
         OutputDebugStringA(debugMsg.c_str());
         OutputDebugStringA("\n");
+#endif
 
         // Also output to stdout for debug builds
         std::cout << debugMsg << std::endl;
@@ -283,11 +289,19 @@ namespace Spark
             }
             catch (const std::exception& e)
             {
+#ifdef _WIN32
                 OutputDebugStringA(("Failed to send to external console: " + std::string(e.what()) + "\n").c_str());
+#else
+                std::cerr << "Failed to send to external console: " << e.what() << "\n";
+#endif
             }
             catch (...)
             {
+#ifdef _WIN32
                 OutputDebugStringA("Failed to send to external console: Unknown exception\n");
+#else
+                std::cerr << "Failed to send to external console: Unknown exception\n";
+#endif
             }
         }
     }

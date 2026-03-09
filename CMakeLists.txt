@@ -134,13 +134,8 @@ option(ENABLE_SCREEN_SPACE "Enable screen-space effects (SSAO, SSR)" ON)
 option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON)
 option(BUILD_TESTS "Build test suite" ON)
 
-# Editor only available on Windows (requires Win32 + DX11 ImGui backends)
-if(WIN32)
-    option(ENABLE_EDITOR "Enable editor features" ON)
-else()
-    set(ENABLE_EDITOR OFF)
-    message(STATUS "SparkEditor disabled on non-Windows platform (requires Win32+DX11)")
-endif()
+# Editor available on Windows (Win32+DX11) and Linux (SDL2+OpenGL3)
+option(ENABLE_EDITOR "Enable editor features" ON)
 
 # ---------------------------------------------------------------------
 # 4) C++ standard and in-source build guard

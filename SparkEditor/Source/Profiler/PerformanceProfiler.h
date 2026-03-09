@@ -12,10 +12,16 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#ifdef _WIN32
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
 using namespace DirectX;
+#else
+#include "Core/Platform.h"
+using namespace DirectX;
+using Microsoft::WRL::ComPtr;
+#endif
 #include <vector>
 #include <memory>
 #include <unordered_map>

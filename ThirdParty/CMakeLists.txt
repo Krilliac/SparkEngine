@@ -14,34 +14,58 @@ else()
     message(STATUS "ThirdParty: EnTT not found (submodule not initialized)")
 endif()
 
-# Dear ImGui (Windows only - requires DX11/Win32 backends)
+# Dear ImGui - Cross-platform with platform-specific backends
 set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/UI/imgui")
-if(WIN32 AND EXISTS "${IMGUI_DIR}/imgui.cpp")
-    add_library(imgui STATIC
+if(EXISTS "${IMGUI_DIR}/imgui.cpp")
+    set(IMGUI_CORE_SOURCES
         ${IMGUI_DIR}/imgui.cpp
         ${IMGUI_DIR}/imgui_demo.cpp
         ${IMGUI_DIR}/imgui_draw.cpp
         ${IMGUI_DIR}/imgui_tables.cpp
         ${IMGUI_DIR}/imgui_widgets.cpp
-        ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
-        ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
     )
-    target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
-    if(MSVC)
-        set_property(TARGET imgui PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+
+    if(WIN32)
+        # Windows: Win32 + DX11 backends
+        add_library(imgui STATIC
+            ${IMGUI_CORE_SOURCES}
+            ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
+            ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
+        )
+        target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+        if(MSVC)
+            set_property(TARGET imgui PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        endif()
+        message(STATUS "ThirdParty: Dear ImGui configured (Win32+DX11)")
+    else()
+        # Linux: SDL2 + OpenGL3 backends
+        find_package(SDL2 QUIET)
+        find_package(OpenGL QUIET)
+        find_package(GLEW QUIET)
+
+        if(SDL2_FOUND AND OpenGL_FOUND AND GLEW_FOUND)
+            add_library(imgui STATIC
+                ${IMGUI_CORE_SOURCES}
+                ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
+                ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+            )
+            target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+
+            if(TARGET SDL2::SDL2)
+                target_link_libraries(imgui PUBLIC SDL2::SDL2)
+            else()
+                target_include_directories(imgui PUBLIC ${SDL2_INCLUDE_DIRS})
+                target_link_libraries(imgui PUBLIC ${SDL2_LIBRARIES})
+            endif()
+            target_link_libraries(imgui PUBLIC OpenGL::GL GLEW::GLEW)
+            message(STATUS "ThirdParty: Dear ImGui configured (SDL2+OpenGL3)")
+        else()
+            # Fallback: core only without platform backends
+            add_library(imgui STATIC ${IMGUI_CORE_SOURCES})
+            target_include_directories(imgui PUBLIC ${IMGUI_DIR})
+            message(STATUS "ThirdParty: Dear ImGui configured (core only, install SDL2/GLEW for full editor support)")
+        endif()
     endif()
-    message(STATUS "ThirdParty: Dear ImGui configured (Win32+DX11)")
-elseif(EXISTS "${IMGUI_DIR}/imgui.cpp")
-    # Non-Windows: build core ImGui without platform backends
-    add_library(imgui STATIC
-        ${IMGUI_DIR}/imgui.cpp
-        ${IMGUI_DIR}/imgui_demo.cpp
-        ${IMGUI_DIR}/imgui_draw.cpp
-        ${IMGUI_DIR}/imgui_tables.cpp
-        ${IMGUI_DIR}/imgui_widgets.cpp
-    )
-    target_include_directories(imgui PUBLIC ${IMGUI_DIR})
-    message(STATUS "ThirdParty: Dear ImGui configured (core only, no platform backend)")
 else()
     message(STATUS "ThirdParty: Dear ImGui not found (submodule not initialized)")
 endif()

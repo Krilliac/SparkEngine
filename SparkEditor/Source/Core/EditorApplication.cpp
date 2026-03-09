@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file EditorApplication.cpp
  * @brief Implementation of the enhanced editor application class
  * @author Spark Engine Team
@@ -16,23 +16,26 @@
 
 // Dear ImGui includes
 #include <imgui.h>
+
+#ifdef _WIN32
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
-
-// DirectX includes
 #include <d3d11.h>
 #include <dxgi.h>
-
-// Standard includes
-#include <iostream>
-#include <chrono>
-#include <filesystem>
 #include <Windows.h>
-
 using Microsoft::WRL::ComPtr;
 
 // External ImGui Win32 message handler
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#else
+#include <imgui_impl_sdl2.h>
+#include <imgui_impl_opengl3.h>
+#include <SDL.h>
+#include <GL/glew.h>
+#endif
+
+#include <chrono>
+#include <filesystem>
 
 namespace SparkEditor
 {
@@ -76,14 +79,14 @@ namespace SparkEditor
         console.LogSuccess("Main window created successfully (" + std::to_string(m_windowWidth) + "x" +
                            std::to_string(m_windowHeight) + ")");
 
-        // Initialize DirectX 11
-        console.LogInfo("Initializing DirectX 11...");
-        if (!InitializeDirectX())
+        // Initialize graphics backend
+        console.LogInfo("Initializing graphics backend...");
+        if (!InitializeGraphics())
         {
-            console.LogError("Failed to initialize DirectX 11");
+            console.LogError("Failed to initialize graphics backend");
             return false;
         }
-        console.LogSuccess("DirectX 11 initialized successfully");
+        console.LogSuccess("Graphics backend initialized successfully");
 
         // Initialize Dear ImGui
         console.LogInfo("Initializing Dear ImGui...");
@@ -113,6 +116,11 @@ namespace SparkEditor
 
         return true;
     }
+
+    // =========================================================================
+    // Windows platform implementation
+    // =========================================================================
+#ifdef _WIN32
 
     bool EditorApplication::CreateMainWindow(const EditorConfig& config)
     {
@@ -166,7 +174,7 @@ namespace SparkEditor
         return true;
     }
 
-    bool EditorApplication::InitializeDirectX()
+    bool EditorApplication::InitializeGraphics()
     {
         std::cout << "Initializing DirectX 11...\n";
 
@@ -333,15 +341,6 @@ namespace SparkEditor
         return true;
     }
 
-    void EditorApplication::Update(float deltaTime)
-    {
-        // Update UI system
-        if (m_ui)
-        {
-            m_ui->Update(deltaTime);
-        }
-    }
-
     void EditorApplication::Render()
     {
         // Clear render target
@@ -368,35 +367,38 @@ namespace SparkEditor
         m_swapChain->Present(1, 0); // VSync enabled
     }
 
-    void EditorApplication::UpdatePerformanceMetrics()
+    void EditorApplication::OnWindowResize(int width, int height)
     {
-        static float frameTimeAccumulator = 0.0f;
-        static int frameCount = 0;
-        static auto lastUpdateTime = std::chrono::high_resolution_clock::now();
+        if (width <= 0 || height <= 0)
+            return;
 
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        float frameTime = std::chrono::duration<float>(currentTime - m_lastFrameTime).count();
-        m_lastFrameTime = currentTime;
+        m_windowWidth = width;
+        m_windowHeight = height;
 
-        frameTimeAccumulator += frameTime;
-        frameCount++;
-
-        // Update metrics every 0.5 seconds
-        if (std::chrono::duration<float>(currentTime - lastUpdateTime).count() >= 0.5f)
+        if (m_swapChain && m_device && m_context)
         {
-            m_performanceMetrics.fps = frameCount / frameTimeAccumulator;
-            m_performanceMetrics.frameTime = (frameTimeAccumulator / frameCount) * 1000.0f;
+            m_rtv.Reset();
 
-            frameTimeAccumulator = 0.0f;
-            frameCount = 0;
-            lastUpdateTime = currentTime;
+            HRESULT hr = m_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+            if (SUCCEEDED(hr))
+            {
+                ComPtr<ID3D11Texture2D> backBuffer;
+                hr = m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
+                if (SUCCEEDED(hr))
+                {
+                    m_device->CreateRenderTargetView(backBuffer.Get(), nullptr, &m_rtv);
+                }
+            }
         }
     }
 
-    void EditorApplication::RequestExit()
+    void EditorApplication::SetWindowTitle(const std::string& title)
     {
-        std::cout << "Exit requested\n";
-        m_isRunning = false;
+        if (m_hwnd)
+        {
+            std::wstring wTitle(title.begin(), title.end());
+            SetWindowTextW(m_hwnd, wTitle.c_str());
+        }
     }
 
     void EditorApplication::Shutdown()
@@ -442,57 +444,6 @@ namespace SparkEditor
         console.LogSuccess("Enhanced editor shutdown complete");
     }
 
-    EditorApplication::PerformanceMetrics EditorApplication::GetPerformanceMetrics() const
-    {
-        return m_performanceMetrics;
-    }
-
-    void EditorApplication::OnWindowResize(int width, int height)
-    {
-        if (width <= 0 || height <= 0)
-            return;
-
-        m_windowWidth = width;
-        m_windowHeight = height;
-
-        if (m_swapChain && m_device && m_context)
-        {
-            m_rtv.Reset();
-
-            HRESULT hr = m_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
-            if (SUCCEEDED(hr))
-            {
-                ComPtr<ID3D11Texture2D> backBuffer;
-                hr = m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
-                if (SUCCEEDED(hr))
-                {
-                    m_device->CreateRenderTargetView(backBuffer.Get(), nullptr, &m_rtv);
-                }
-            }
-        }
-    }
-
-    bool EditorApplication::OnShutdownRequested()
-    {
-        // Use enhanced UI's recovery system to check for unsaved changes
-        if (m_ui && m_ui->HasRecoveryData())
-        {
-            // Could show a dialog asking if user wants to save
-            // For now, allow shutdown
-        }
-
-        return true;
-    }
-
-    void EditorApplication::SetWindowTitle(const std::string& title)
-    {
-        if (m_hwnd)
-        {
-            std::wstring wTitle(title.begin(), title.end());
-            SetWindowTextW(m_hwnd, wTitle.c_str());
-        }
-    }
-
     LRESULT CALLBACK EditorApplication::WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         // Forward messages to ImGui
@@ -530,6 +481,348 @@ namespace SparkEditor
         default:
             return DefWindowProcW(hwnd, msg, wParam, lParam);
         }
+    }
+
+    // =========================================================================
+    // Linux/SDL2+OpenGL platform implementation
+    // =========================================================================
+#else
+
+    bool EditorApplication::CreateMainWindow(const EditorConfig& config)
+    {
+        auto& console = Spark::SimpleConsole::GetInstance();
+
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0)
+        {
+            console.LogError("Failed to initialize SDL2: " + std::string(SDL_GetError()));
+            return false;
+        }
+        console.LogInfo("SDL2 initialized successfully");
+
+        // Set OpenGL attributes for OpenGL 3.3 Core Profile
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
+        Uint32 windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+        if (config.startMaximized)
+        {
+            windowFlags |= SDL_WINDOW_MAXIMIZED;
+        }
+
+        m_window = SDL_CreateWindow("Spark Engine Editor",
+                                    SDL_WINDOWPOS_CENTERED,
+                                    SDL_WINDOWPOS_CENTERED,
+                                    config.windowWidth,
+                                    config.windowHeight,
+                                    windowFlags);
+
+        if (!m_window)
+        {
+            console.LogError("Failed to create SDL2 window: " + std::string(SDL_GetError()));
+            return false;
+        }
+
+        console.LogInfo("SDL2 window created successfully");
+        console.LogInfo("Window is now visible and active");
+        return true;
+    }
+
+    bool EditorApplication::InitializeGraphics()
+    {
+        auto& console = Spark::SimpleConsole::GetInstance();
+        std::cout << "Initializing OpenGL 3.3...\n";
+
+        m_glContext = SDL_GL_CreateContext(m_window);
+        if (!m_glContext)
+        {
+            console.LogError("Failed to create OpenGL context: " + std::string(SDL_GetError()));
+            return false;
+        }
+
+        SDL_GL_MakeCurrent(m_window, m_glContext);
+        SDL_GL_SetSwapInterval(1); // VSync
+
+        // Initialize GLEW
+        GLenum glewErr = glewInit();
+        if (glewErr != GLEW_OK)
+        {
+            console.LogError("Failed to initialize GLEW: " +
+                             std::string(reinterpret_cast<const char*>(glewGetErrorString(glewErr))));
+            return false;
+        }
+
+        std::cout << "OpenGL initialized: " << glGetString(GL_VERSION) << "\n";
+        std::cout << "GLSL version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << "\n";
+        return true;
+    }
+
+    bool EditorApplication::InitializeImGui()
+    {
+        std::cout << "Initializing Dear ImGui...\n";
+
+        // Setup Dear ImGui context
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+
+        // Enable keyboard controls and docking
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+        // Docking configuration
+        io.ConfigDockingWithShift = false;
+        io.ConfigWindowsResizeFromEdges = true;
+
+        // Load custom fonts before backend initialization
+        EditorFonts::LoadFonts(15.0f);
+
+        // Setup Platform/Renderer backends
+        if (!ImGui_ImplSDL2_InitForOpenGL(m_window, m_glContext))
+        {
+            std::cerr << "Failed to initialize ImGui SDL2 backend\n";
+            return false;
+        }
+
+        const char* glslVersion = "#version 330 core";
+        if (!ImGui_ImplOpenGL3_Init(glslVersion))
+        {
+            std::cerr << "Failed to initialize ImGui OpenGL3 backend\n";
+            return false;
+        }
+
+        std::cout << "Dear ImGui initialized successfully\n";
+        return true;
+    }
+
+    int EditorApplication::Run()
+    {
+        auto& console = Spark::SimpleConsole::GetInstance();
+
+        if (!m_isInitialized)
+        {
+            console.LogCritical("EditorApplication::Run() called but editor not initialized!");
+            return -1;
+        }
+
+        console.LogInfo("Starting enhanced editor main loop...");
+
+        auto lastTime = std::chrono::high_resolution_clock::now();
+
+        while (m_isRunning)
+        {
+            // Calculate delta time
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
+            lastTime = currentTime;
+
+            // Update console
+            console.Update();
+
+            // Process events
+            if (!ProcessMessages())
+            {
+                m_isRunning = false;
+                break;
+            }
+
+            if (!m_isRunning)
+                break;
+
+            // Update editor
+            Update(deltaTime);
+
+            // Render frame
+            Render();
+
+            // Update performance metrics
+            UpdatePerformanceMetrics();
+        }
+
+        console.LogInfo("Enhanced editor main loop ended");
+        return 0;
+    }
+
+    bool EditorApplication::ProcessMessages()
+    {
+        SDL_Event event;
+        while (SDL_PollEvent(&event))
+        {
+            ImGui_ImplSDL2_ProcessEvent(&event);
+
+            switch (event.type)
+            {
+            case SDL_QUIT:
+                return false;
+
+            case SDL_WINDOWEVENT:
+                if (event.window.event == SDL_WINDOWEVENT_CLOSE &&
+                    event.window.windowID == SDL_GetWindowID(m_window))
+                {
+                    if (OnShutdownRequested())
+                    {
+                        return false;
+                    }
+                }
+                else if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+                {
+                    OnWindowResize(event.window.data1, event.window.data2);
+                }
+                break;
+            }
+        }
+        return true;
+    }
+
+    void EditorApplication::Render()
+    {
+        // Start ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL2_NewFrame();
+        ImGui::NewFrame();
+
+        // Render UI
+        if (m_ui)
+        {
+            m_ui->Render();
+        }
+
+        // Render ImGui
+        ImGui::Render();
+
+        ImGuiIO& io = ImGui::GetIO();
+        glViewport(0, 0, static_cast<int>(io.DisplaySize.x), static_cast<int>(io.DisplaySize.y));
+        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        SDL_GL_SwapWindow(m_window);
+    }
+
+    void EditorApplication::OnWindowResize(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        m_windowWidth = width;
+        m_windowHeight = height;
+        glViewport(0, 0, width, height);
+    }
+
+    void EditorApplication::SetWindowTitle(const std::string& title)
+    {
+        if (m_window)
+        {
+            SDL_SetWindowTitle(m_window, title.c_str());
+        }
+    }
+
+    void EditorApplication::Shutdown()
+    {
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("Shutting down enhanced editor...");
+
+        m_isRunning = false;
+
+        if (m_ui)
+        {
+            console.LogInfo("Shutting down EditorUI...");
+            m_ui->Shutdown();
+            m_ui.reset();
+            console.LogSuccess("EditorUI shutdown complete");
+        }
+
+        // Cleanup ImGui
+        console.LogInfo("Cleaning up Dear ImGui...");
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplSDL2_Shutdown();
+        ImGui::DestroyContext();
+        console.LogSuccess("Dear ImGui cleanup complete");
+
+        // Cleanup OpenGL and SDL
+        console.LogInfo("Cleaning up OpenGL and SDL2...");
+        if (m_glContext)
+        {
+            SDL_GL_DeleteContext(m_glContext);
+            m_glContext = nullptr;
+        }
+        if (m_window)
+        {
+            SDL_DestroyWindow(m_window);
+            m_window = nullptr;
+        }
+        SDL_Quit();
+        console.LogSuccess("OpenGL and SDL2 cleanup complete");
+
+        m_isInitialized = false;
+        console.LogSuccess("Enhanced editor shutdown complete");
+    }
+
+#endif // _WIN32
+
+    // =========================================================================
+    // Shared implementation (cross-platform)
+    // =========================================================================
+
+    void EditorApplication::Update(float deltaTime)
+    {
+        // Update UI system
+        if (m_ui)
+        {
+            m_ui->Update(deltaTime);
+        }
+    }
+
+    void EditorApplication::UpdatePerformanceMetrics()
+    {
+        static float frameTimeAccumulator = 0.0f;
+        static int frameCount = 0;
+        static auto lastUpdateTime = std::chrono::high_resolution_clock::now();
+
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float frameTime = std::chrono::duration<float>(currentTime - m_lastFrameTime).count();
+        m_lastFrameTime = currentTime;
+
+        frameTimeAccumulator += frameTime;
+        frameCount++;
+
+        // Update metrics every 0.5 seconds
+        if (std::chrono::duration<float>(currentTime - lastUpdateTime).count() >= 0.5f)
+        {
+            m_performanceMetrics.fps = frameCount / frameTimeAccumulator;
+            m_performanceMetrics.frameTime = (frameTimeAccumulator / frameCount) * 1000.0f;
+
+            frameTimeAccumulator = 0.0f;
+            frameCount = 0;
+            lastUpdateTime = currentTime;
+        }
+    }
+
+    void EditorApplication::RequestExit()
+    {
+        std::cout << "Exit requested\n";
+        m_isRunning = false;
+    }
+
+    EditorApplication::PerformanceMetrics EditorApplication::GetPerformanceMetrics() const
+    {
+        return m_performanceMetrics;
+    }
+
+    bool EditorApplication::OnShutdownRequested()
+    {
+        // Use enhanced UI's recovery system to check for unsaved changes
+        if (m_ui && m_ui->HasRecoveryData())
+        {
+            // Could show a dialog asking if user wants to save
+            // For now, allow shutdown
+        }
+
+        return true;
     }
 
 } // namespace SparkEditor

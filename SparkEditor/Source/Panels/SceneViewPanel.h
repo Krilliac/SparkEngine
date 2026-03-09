@@ -8,8 +8,12 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#ifdef _WIN32
 #include <d3d11.h>
 #include <wrl/client.h>
+#else
+#include "Core/Platform.h"
+#endif
 #include <memory>
 
 using Microsoft::WRL::ComPtr;
