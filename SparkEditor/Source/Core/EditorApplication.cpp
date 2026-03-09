@@ -514,12 +514,8 @@ namespace SparkEditor
             windowFlags |= SDL_WINDOW_MAXIMIZED;
         }
 
-        m_window = SDL_CreateWindow("Spark Engine Editor",
-                                    SDL_WINDOWPOS_CENTERED,
-                                    SDL_WINDOWPOS_CENTERED,
-                                    config.windowWidth,
-                                    config.windowHeight,
-                                    windowFlags);
+        m_window = SDL_CreateWindow("Spark Engine Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                    config.windowWidth, config.windowHeight, windowFlags);
 
         if (!m_window)
         {
@@ -660,8 +656,7 @@ namespace SparkEditor
                 return false;
 
             case SDL_WINDOWEVENT:
-                if (event.window.event == SDL_WINDOWEVENT_CLOSE &&
-                    event.window.windowID == SDL_GetWindowID(m_window))
+                if (event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(m_window))
                 {
                     if (OnShutdownRequested())
                     {
