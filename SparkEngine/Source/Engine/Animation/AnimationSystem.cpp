@@ -365,10 +365,11 @@ namespace Spark::Animation
         for (size_t i = 0; i < boneCount; ++i)
         {
             XMMATRIX local = XMLoadFloat4x4(&localTransforms[i]);
+            int32_t parentIdx = skeleton.bones[i].parentIndex;
 
-            if (skeleton.bones[i].parentIndex >= 0)
+            if (parentIdx >= 0 && parentIdx < static_cast<int32_t>(boneCount))
             {
-                globalTransforms[i] = local * globalTransforms[skeleton.bones[i].parentIndex];
+                globalTransforms[i] = local * globalTransforms[parentIdx];
             }
             else
             {
@@ -493,9 +494,11 @@ namespace Spark::Animation
         for (size_t i = 0; i < boneCount; ++i)
         {
             XMMATRIX local = XMLoadFloat4x4(&localTransforms[i]);
-            if (skeleton.bones[i].parentIndex >= 0)
+            int32_t parentIdx = skeleton.bones[i].parentIndex;
+
+            if (parentIdx >= 0 && parentIdx < static_cast<int32_t>(boneCount))
             {
-                globalTransforms[i] = local * globalTransforms[skeleton.bones[i].parentIndex];
+                globalTransforms[i] = local * globalTransforms[parentIdx];
             }
             else
             {
