@@ -42,6 +42,10 @@ Streamlined prompt system for AI-assisted development. 9 files (down from 34), z
 | Add console commands or scripts | `console-scripting` |
 | Optimize AI assistant token usage | `token-optimization` |
 
+## Directory Exclusion
+
+The `.promptignore` file at the repo root lists directories and file patterns that should be excluded from AI prompt context (ThirdParty/, build/, Shaders/Compiled/, etc.). Tools and scripts should read this file to automatically filter paths, similar to how `.gitignore` works.
+
 ## Contributing
 
 When adding prompts:

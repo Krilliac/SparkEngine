@@ -1,0 +1,43 @@
+# .promptignore — Directories and files excluded from AI prompt context
+# Similar to .gitignore syntax. These paths should not be included when
+# loading context for AI assistants to optimize token usage.
+#
+# Referenced by: .github/prompts/token-optimization.prompt.md
+
+# Third-party dependencies (large, not project code)
+ThirdParty/
+
+# Compiled/generated shader bytecode
+Shaders/Compiled/
+
+# Build output
+build/
+out/
+cmake-build-*/
+
+# IDE-specific files
+.vs/
+.vscode/
+.idea/
+
+# Git internals
+.git/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Binary assets (not useful as text context)
+*.cso
+*.spv
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.zip
+*.tar.gz
+
+# Auto-generated docs
+docs/html/
+docs/xml/

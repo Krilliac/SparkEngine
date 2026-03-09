@@ -66,6 +66,8 @@ Skeletal animation with bone hierarchies, keyframe clips, state machines with cr
 
 ### Networking
 
+> **Status: Experimental — disabled by default** (`ENABLE_NETWORKING=OFF`). See [Networking Configuration](#networking-configuration) below.
+
 UDP client/server architecture with entity replication, client-side prediction with server reconciliation, lag compensation (hitbox rewinding with 1-second history), reliable/unreliable/ordered message channels, and network statistics (ping, jitter, packet loss, bandwidth).
 
 ### Scripting
@@ -120,6 +122,23 @@ chmod +x generate.sh
 - **Linux packages**: `build-essential`, `ninja-build`, `cmake` (e.g. `sudo apt install build-essential ninja-build cmake`)
 - **Graphics**: DirectX 11 capable GPU (Windows), Vulkan SDK (optional), OpenGL 4.5 (optional)
 - **Platform**: Windows 10+ (primary), Linux (experimental)
+
+### Platform Support Matrix
+
+| Platform / Backend | Status | Notes |
+|---|:---:|---|
+| **Windows 10+ (MSVC v143)** | **Stable** | Primary development platform, fully tested in CI |
+| **Windows (MSVC v144 / VS 2026)** | Experimental | CI job included but skipped until runners ship v144 toolset |
+| **Linux (GCC 11+)** | Experimental | CI tested on ubuntu-24.04; pre-built binaries available |
+| **Linux (Clang 14+)** | Experimental | CI tested; some platform-specific features may be missing |
+| **macOS (Apple Clang)** | Experimental | Builds with C++20 support; no CI or pre-built binaries yet |
+| **DirectX 11** | **Stable** | Primary rendering backend |
+| **Vulkan** | Experimental | Via RHI abstraction layer; requires Vulkan SDK |
+| **OpenGL 4.5** | Experimental | Via RHI abstraction layer; GLSL shaders in `Shaders/GLSL/` |
+| **DirectX Raytracing (DXR)** | Experimental | Requires D3D12; disabled by default (`ENABLE_DXR=OFF`) |
+| **Networking (UDP)** | Experimental | Disabled by default (`ENABLE_NETWORKING=OFF`); see [Networking](#networking-configuration) |
+
+> **What does "Experimental" mean?** These platforms and backends compile and have basic functionality, but are not yet fully tested, may have missing features, and are not guaranteed to work in all configurations. Bug reports are welcome!
 
 ## Tools
 
@@ -307,8 +326,8 @@ All options are passed to CMake via `-D<OPTION>=ON/OFF`.
 | `ENABLE_PHYSX` | ON | Physics engine (Bullet) |
 | `ENABLE_LUA` | ON | Lua scripting support |
 | `ENABLE_PROFILING` | ON | Performance profiling |
-| `ENABLE_VULKAN` | ON | Vulkan graphics backend |
-| `ENABLE_OPENGL` | ON | OpenGL graphics backend |
+| `ENABLE_VULKAN` | ON | Vulkan graphics backend (experimental) |
+| `ENABLE_OPENGL` | ON | OpenGL graphics backend (experimental) |
 | `ENABLE_AI` | ON | AI and navigation systems |
 | `ENABLE_ANIMATION` | ON | Skeletal animation |
 | `ENABLE_SAVE_SYSTEM` | ON | Save/load system |
@@ -330,8 +349,8 @@ All options are passed to CMake via `-D<OPTION>=ON/OFF`.
 | `ENABLE_DAY_NIGHT` | ON | Day/night cycle |
 | `ENABLE_SCREEN_SPACE` | ON | Screen-space effects |
 | `ENABLE_FOG_SYSTEM` | ON | Volumetric fog |
-| `ENABLE_NETWORKING` | OFF | Networking (curl, disabled) |
-| `ENABLE_DXR` | OFF | DirectX Raytracing (needs D3D12) |
+| `ENABLE_NETWORKING` | OFF | UDP networking (experimental, disabled by default) |
+| `ENABLE_DXR` | OFF | DirectX Raytracing (experimental, needs D3D12) |
 | `ENABLE_SDL2` | OFF | SDL2 cross-platform input |
 
 ```bash
@@ -404,6 +423,48 @@ cmake --build build --config Release
 See **[Templates/README.md](Templates/README.md)** for full documentation on prerequisites, project structure, and creating new projects.
 
 For additional templates covering physics, AI, networking, procedural generation, and more, check out **[SparkTemplates](https://github.com/Krilliac/SparkTemplates)**.
+
+## Networking Configuration
+
+The networking system is **disabled by default** because it is experimental. Here is how to enable and configure it:
+
+```bash
+# Enable networking at configure time
+cmake -B build -DENABLE_NETWORKING=ON
+```
+
+### What you get
+
+| Feature | Details |
+|---|---|
+| **Protocol** | UDP client/server |
+| **Replication** | Entity state sync with dirty property tracking |
+| **Prediction** | Client-side prediction with server reconciliation |
+| **Lag compensation** | Hitbox rewinding with 1-second history |
+| **Message channels** | Unreliable, Reliable, ReliableOrdered |
+| **Statistics** | Ping, jitter, packet loss, bandwidth |
+
+### Platform support
+
+| Platform | Status | Dependencies |
+|---|:---:|---|
+| Windows | Experimental | `ws2_32`, `wsock32` (linked automatically) |
+| Linux | Experimental | POSIX sockets (no extra packages) |
+| macOS | Untested | Expected to work via POSIX sockets |
+
+### Troubleshooting
+
+- **CURL errors at build time** — The networking system uses raw UDP sockets, not CURL. If you see CURL-related errors, ensure no other option is pulling in the CURL submodule. CURL is an optional HTTP dependency and is not required for UDP networking.
+- **Connection refused** — Ensure the server is running and firewall rules allow UDP traffic on your chosen port.
+- **High packet loss** — Check `NetworkStats` via the console command `net_stats` for diagnostics.
+
+### Console commands
+
+`net_status`, `net_connect <host> <port>`, `net_disconnect`, `net_host <port>`, `net_stats`, `net_clients`
+
+### Source
+
+`SparkEngine/Source/Engine/Networking/NetworkManager.h` — Full API with message types, replication, and lag compensation.
 
 ## License
 

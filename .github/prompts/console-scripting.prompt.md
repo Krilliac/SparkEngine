@@ -79,8 +79,7 @@ Windows: `AllocConsole()`, input in separate thread. Linux: `STDOUT_FILENO`/`STD
 class PlayerController {
     void Start()       { /* once on spawn */ }
     void Update(float dt) { /* every frame */ }
-    void OnCollision(Entity other) { /* collision callback */ }
-    void OnDestroy()   { /* cleanup */ }
+    void OnCollision(uint otherId) { /* collision callback */ }
 }
 ```
 
@@ -88,14 +87,103 @@ class PlayerController {
 
 Hot-reload (save → detect → recompile → rebind), per-file module isolation, engine API bindings (Transform, Physics, Audio, Input), statically typed.
 
-### Adding Script Bindings
+### Engine API Available in Scripts
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `print` | `void print(const string& msg)` | Output to debug console |
+| `createEntity` | `uint createEntity(const string& name)` | Create a new ECS entity |
+| `getTransform` | `Transform@ getTransform(uint entityId)` | Get entity's Transform component |
+| `getKeyDown` | `bool getKeyDown(const string& key)` | Key just pressed this frame |
+| `getKey` | `bool getKey(const string& key)` | Key currently held down |
+
+Math types: `XMFLOAT3` (3D vector), `XMMATRIX` (4x4 matrix).
+
+### C++ Integration
 
 ```cpp
+// Initialize
+AngelScriptEngine& engine = *AngelScriptEngine::GetInstance();
+engine.Initialize();
+
+// Compile from file
+engine.CompileScriptFile("Assets/Scripts/EnemyAI.as");
+
+// Compile from string
+engine.CompileScriptFromString(
+    "class Test { void Start() { print(\"Hello!\"); } }", "InlineModule");
+
+// Attach to entity and drive lifecycle
+engine.AttachScript(entity, "EnemyBehavior", "EnemyAI");
+engine.CallStart(entity);
+engine.CallUpdate(entity, deltaTime);
+engine.CallOnCollision(entity, otherEntity);
+
+// Detach
+engine.DetachScript(entity);
+
+// Error handling
+if (!engine.CompileScriptFile("Broken.as")) {
+    std::string err = engine.GetLastError();
+}
+```
+
+### Adding Custom Script Bindings
+
+```cpp
+// Register a global function
 engine->RegisterGlobalFunction("void SpawnParticle(float x, float y, float z)",
     asFUNCTION(ScriptSpawnParticle), asCALL_CDECL);
+
+// Register a value type
 engine->RegisterObjectType("Vec3", sizeof(Vec3), asOBJ_VALUE);
 engine->RegisterObjectProperty("Vec3", "float x", offsetof(Vec3, x));
 ```
+
+### ECS Integration
+
+```cpp
+auto& script = world.AddComponent<Script>(entity);
+script.scriptFile = "EnemyAI";
+script.className  = "EnemyBehavior";
+script.moduleName = "EnemyAI";
+```
+
+### Example Script
+
+```angelscript
+// Assets/Scripts/EnemyAI.as
+class EnemyBehavior {
+    float health = 100.0f;
+    float speed = 5.0f;
+
+    void Start() {
+        print("Enemy spawned with " + health + " HP");
+    }
+
+    void Update(float dt) {
+        Transform@ t = getTransform(0);
+        if (getKey("W")) {
+            // Move forward
+        }
+        if (getKeyDown("F")) {
+            health -= 10.0f;
+            print("Hit! Health: " + health);
+        }
+    }
+
+    void OnCollision(uint otherId) {
+        print("Collided with entity " + otherId);
+    }
+}
+```
+
+### Setup & Configuration
+
+1. Ensure `ThirdParty/Scripting/angelscript-mirror/` submodule is cloned
+2. Hot-reload: enabled when `ENABLE_HOT_RELOAD=ON` (default) — modifying `.as` files triggers recompile
+3. Scripts go in `Assets/Scripts/` with `.as` extension
+4. Thread safety: all script calls must happen on the main thread
 
 ### Script Console Commands
 
