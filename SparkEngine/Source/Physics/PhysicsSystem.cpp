@@ -751,8 +751,7 @@ void PhysicsSystem::UpdateMetrics()
 
     // Count active rigid bodies
     m_metrics.activeRigidBodies = static_cast<uint32_t>(
-        std::count_if(m_bodies.begin(), m_bodies.end(),
-                      [](const auto& body) { return body && body->IsActive(); }));
+        std::count_if(m_bodies.begin(), m_bodies.end(), [](const auto& body) { return body && body->IsActive(); }));
 
     // Collision pairs from dispatcher
     if (m_dispatcher)

@@ -227,8 +227,7 @@ void ProjectilePool::SetPhysicsSystem(PhysicsSystem* ps)
 size_t ProjectilePool::GetActiveCount() const
 {
     return static_cast<size_t>(
-        std::count_if(m_projectiles.begin(), m_projectiles.end(),
-                      [](const auto& p) { return p->IsActive(); }));
+        std::count_if(m_projectiles.begin(), m_projectiles.end(), [](const auto& p) { return p->IsActive(); }));
 }
 
 size_t ProjectilePool::GetAvailableCount() const

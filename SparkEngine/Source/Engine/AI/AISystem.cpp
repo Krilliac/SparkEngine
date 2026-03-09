@@ -12,9 +12,9 @@ using namespace DirectX;
 namespace Spark::AI
 {
     // Named constants replacing magic numbers
-    static constexpr float kTargetLostTimeout = 10.0f;      // seconds before losing a target
-    static constexpr float kWaypointArrivalRadius = 0.5f;    // meters to consider waypoint reached
-    static constexpr float kMinMovementEpsilon = 0.001f;     // minimum distance to apply movement
+    static constexpr float kTargetLostTimeout = 10.0f;    // seconds before losing a target
+    static constexpr float kWaypointArrivalRadius = 0.5f; // meters to consider waypoint reached
+    static constexpr float kMinMovementEpsilon = 0.001f;  // minimum distance to apply movement
 
     // ============================================================================
     // AISystem

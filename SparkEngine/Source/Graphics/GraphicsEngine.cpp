@@ -398,9 +398,12 @@ void GraphicsEngine::Shutdown()
     m_hdrRTV.Reset();
     m_hdrTexture.Reset();
 
-    for (auto& srv : m_gBufferSRVs) srv.Reset();
-    for (auto& rtv : m_gBufferRTVs) rtv.Reset();
-    for (auto& tex : m_gBufferTextures) tex.Reset();
+    for (auto& srv : m_gBufferSRVs)
+        srv.Reset();
+    for (auto& rtv : m_gBufferRTVs)
+        rtv.Reset();
+    for (auto& tex : m_gBufferTextures)
+        tex.Reset();
 
     m_defaultBlendState.Reset();
     m_defaultDepthState.Reset();
