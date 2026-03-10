@@ -356,6 +356,11 @@ class AssetPipeline
     void SetStreamingThreadCount(int count);
     int GetStreamingThreadCount() const { return static_cast<int>(m_loadingThreads.size()); }
 
+    // Rendering helpers (bind asset for drawing via graphics context)
+    void BindMesh(const std::string& meshPath);
+    void BindMaterial(const std::string& materialPath);
+    void DrawBoundMesh();
+
     // Asset discovery
     std::vector<std::string> ScanDirectory(const std::string& directory, AssetType type = AssetType::Unknown);
     AssetType DetectAssetType(const std::string& path);

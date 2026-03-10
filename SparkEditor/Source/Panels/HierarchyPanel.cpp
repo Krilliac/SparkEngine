@@ -719,9 +719,9 @@ namespace SparkEditor
 
                 // Remove from objects
                 auto& objs = capturedScene->objects;
-                objs.erase(std::remove_if(objs.begin(), objs.end(),
-                                          [newID](const SceneObject& o) { return o.id == newID; }),
-                           objs.end());
+                objs.erase(
+                    std::remove_if(objs.begin(), objs.end(), [newID](const SceneObject& o) { return o.id == newID; }),
+                    objs.end());
             },
             "Create Object '" + name + "'"));
 
@@ -776,9 +776,9 @@ namespace SparkEditor
                 }
 
                 auto& objs = capturedScene->objects;
-                objs.erase(std::remove_if(objs.begin(), objs.end(),
-                                          [newID](const SceneObject& o) { return o.id == newID; }),
-                           objs.end());
+                objs.erase(
+                    std::remove_if(objs.begin(), objs.end(), [newID](const SceneObject& o) { return o.id == newID; }),
+                    objs.end());
             },
             "Duplicate '" + original->name + "'"));
 

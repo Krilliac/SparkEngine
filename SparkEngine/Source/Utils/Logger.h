@@ -282,7 +282,7 @@ namespace Spark
       private:
         bool OpenFile();
         void RotateFiles();
-        std::string FormatMessage(const LogMessage& msg) const;
+        std::string FormatLogEntry(const LogMessage& msg) const;
 
         Config m_config;
         std::ofstream m_file;
@@ -432,7 +432,7 @@ namespace Spark
         /**
          * @brief Format a log message into a human-readable string
          */
-        static std::string FormatMessage(const LogMessage& msg);
+        static std::string FormatLogEntry(const LogMessage& msg);
 
         // State
         std::atomic<bool> m_initialized{false};

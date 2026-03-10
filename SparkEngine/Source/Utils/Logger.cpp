@@ -81,7 +81,7 @@ namespace Spark
     // Logger (static helper)
     // ============================================================================
 
-    std::string Logger::FormatMessage(const LogMessage& msg)
+    std::string Logger::FormatLogEntry(const LogMessage& msg)
     {
         return FormatLogMessage(msg);
     }
@@ -485,7 +485,7 @@ namespace Spark
         }
     }
 
-    std::string FileSink::FormatMessage(const LogMessage& msg) const
+    std::string FileSink::FormatLogEntry(const LogMessage& msg) const
     {
         return FormatLogMessage(msg);
     }
@@ -503,7 +503,7 @@ namespace Spark
             RotateFiles();
         }
 
-        std::string formatted = FormatMessage(msg) + "\n";
+        std::string formatted = FormatLogEntry(msg) + "\n";
         m_file << formatted;
         m_currentFileSize += formatted.size();
 

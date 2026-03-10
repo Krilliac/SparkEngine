@@ -662,7 +662,7 @@ namespace Spark
         auto& registry = world.GetRegistry();
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
 
-        auto entityStorage = registry.storage<entt::entity>();
+        auto&& entityStorage = registry.storage<entt::entity>();
         for (auto&& [entity] : entityStorage.each())
         {
             SerializedEntity se;
@@ -781,7 +781,7 @@ namespace Spark
         // Clear all existing entities before restoring saved state
         auto& registry = world.GetRegistry();
         {
-            auto entityStorage = registry.storage<entt::entity>();
+            auto&& entityStorage = registry.storage<entt::entity>();
             std::vector<entt::entity> toDestroy;
             for (auto&& [entity] : entityStorage.each())
                 toDestroy.push_back(entity);
