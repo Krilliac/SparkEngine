@@ -26,6 +26,8 @@
 #include <mutex>
 #include <chrono>
 
+namespace Spark { class LocalFileCache; }
+
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
@@ -244,6 +246,8 @@ class Material
     bool SaveToFile(const std::string& filePath) const;
     bool LoadFromFile(const std::string& filePath, ID3D11Device* device);
 
+    void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
+
     // Console integration
     std::string GetDetailedInfo() const;
     void Console_SetProperty(const std::string& property, float value);
@@ -267,6 +271,7 @@ class Material
     ComPtr<ID3D11RasterizerState> m_rasterizerState;
     ComPtr<ID3D11Buffer> m_constantBuffer;
     bool m_compiled = false;
+    Spark::LocalFileCache* m_fileCache = nullptr;
 };
 
 /**

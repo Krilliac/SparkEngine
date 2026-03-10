@@ -51,6 +51,7 @@
 #include "Audio/AudioEngine.h"
 #include "Physics/PhysicsSystem.h"
 #include "Graphics/GraphicsConsoleCommands.h"
+#include "Utils/LocalFileCache.h"
 
 // -----------------------------------------------------------------------------
 // Missing module startup warnings
@@ -111,6 +112,7 @@ std::unique_ptr<ModuleManager> g_moduleManager;
 extern std::unique_ptr<EngineContext> g_engineContext; // defined in EngineContext.cpp
 std::unique_ptr<AudioEngine> g_audioEngine;
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
+std::unique_ptr<Spark::LocalFileCache> g_fileCache;
 
 #ifdef SPARK_HEADLESS_SUPPORT
 // g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
@@ -256,6 +258,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         g_eventBus = std::make_unique<Spark::EventBus>();
         g_engineContext = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
 
+        // File cache
+        g_fileCache = std::make_unique<Spark::LocalFileCache>();
+        g_engineContext->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
+
         // Physics
         {
             extern PhysicsSystem* g_physicsSystem;
@@ -327,6 +333,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             g_physicsOwned.reset();
         }
 
+        g_fileCache.reset();
         g_engineContext.reset();
         g_eventBus.reset();
         g_timer.reset();
@@ -360,7 +367,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_eventBus = std::make_unique<Spark::EventBus>();
     g_engineContext = std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
 
-    // 5b. Create PhysicsSystem (owned here, not by GraphicsEngine)
+    // 5b. File cache (registered via generic system registry)
+    g_fileCache = std::make_unique<Spark::LocalFileCache>();
+    g_engineContext->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
+
+    // 5c. Create PhysicsSystem (owned here, not by GraphicsEngine)
     {
         extern PhysicsSystem* g_physicsSystem; // raw global defined in PhysicsSystem.cpp
         g_physicsOwned = std::make_unique<PhysicsSystem>();
@@ -476,6 +487,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     }
 
     g_audioEngine.reset();
+    g_fileCache.reset();
 
     // Shut down physics before graphics (physics was extracted from GraphicsEngine)
     if (g_physicsOwned)

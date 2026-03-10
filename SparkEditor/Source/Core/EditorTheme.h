@@ -15,6 +15,8 @@
 struct ImVec4;
 struct ImGuiStyle;
 
+namespace Spark { class LocalFileCache; }
+
 namespace SparkEditor
 {
 
@@ -316,12 +318,14 @@ namespace SparkEditor
         /**
      * @brief Export theme to file
      */
-        static bool ExportTheme(const EditorThemeData& theme, const std::string& filepath);
+        static bool ExportTheme(const EditorThemeData& theme, const std::string& filepath,
+                                Spark::LocalFileCache* cache = nullptr);
 
         /**
      * @brief Import theme from file
      */
-        static bool ImportTheme(const std::string& filepath, EditorThemeData& outTheme);
+        static bool ImportTheme(const std::string& filepath, EditorThemeData& outTheme,
+                                Spark::LocalFileCache* cache = nullptr);
 
         /**
      * @brief Generate theme variations automatically

@@ -4,6 +4,8 @@
  */
 
 #include "SaveSystem.h"
+#include "Utils/LocalFileCache.h"
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -895,6 +897,12 @@ namespace Spark
                 file.write(value.c_str(), valLen);
             }
 
+            // Invalidate any cached copy so future reads see the new data
+            if (m_fileCache)
+            {
+                m_fileCache->Invalidate(filepath);
+            }
+
             return true;
         }
         catch (...)
@@ -907,25 +915,68 @@ namespace Spark
     {
         try
         {
-            std::ifstream file(filepath, std::ios::binary);
-            if (!file.is_open())
+            // Try reading via file cache for binary data
+            std::vector<uint8_t> fileData;
+            bool fromCache = false;
+
+            if (m_fileCache)
+            {
+                auto result = m_fileCache->ReadBinary(filepath);
+                if (result.IsOk())
+                {
+                    fileData = result.Value();
+                    fromCache = true;
+                }
+            }
+
+            if (!fromCache)
+            {
+                std::ifstream file(filepath, std::ios::binary);
+                if (!file.is_open())
+                    return false;
+
+                file.seekg(0, std::ios::end);
+                auto size = file.tellg();
+                file.seekg(0, std::ios::beg);
+                fileData.resize(static_cast<size_t>(size));
+                file.read(reinterpret_cast<char*>(fileData.data()), size);
+            }
+
+            if (fileData.size() < 8)
                 return false;
+
+            // Parse from the byte buffer using an offset cursor
+            size_t offset = 0;
+
+            auto readBytes = [&](void* dest, size_t count) -> bool
+            {
+                if (offset + count > fileData.size())
+                    return false;
+                std::memcpy(dest, fileData.data() + offset, count);
+                offset += count;
+                return true;
+            };
 
             // Read and verify header
             char magic[4];
-            file.read(magic, 4);
+            if (!readBytes(magic, 4))
+                return false;
             if (std::string(magic, 4) != "SPRK")
                 return false;
 
             uint32_t version;
-            file.read(reinterpret_cast<char*>(&version), sizeof(version));
+            if (!readBytes(&version, sizeof(version)))
+                return false;
             outData.metadata.version = version;
 
             // Read metadata
             uint32_t metaSize;
-            file.read(reinterpret_cast<char*>(&metaSize), sizeof(metaSize));
-            std::string metaStr(metaSize, '\0');
-            file.read(metaStr.data(), metaSize);
+            if (!readBytes(&metaSize, sizeof(metaSize)))
+                return false;
+            if (offset + metaSize > fileData.size())
+                return false;
+            std::string metaStr(reinterpret_cast<const char*>(fileData.data() + offset), metaSize);
+            offset += metaSize;
 
             std::istringstream metaStream(metaStr);
             std::getline(metaStream, outData.metadata.saveName);
@@ -942,43 +993,54 @@ namespace Spark
 
             // Read entities
             uint32_t entityCount;
-            file.read(reinterpret_cast<char*>(&entityCount), sizeof(entityCount));
+            if (!readBytes(&entityCount, sizeof(entityCount)))
+                return false;
 
             for (uint32_t i = 0; i < entityCount; ++i)
             {
                 SerializedEntity entity;
 
                 uint16_t nameLen;
-                file.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
+                if (!readBytes(&nameLen, sizeof(nameLen)))
+                    return false;
                 entity.name.resize(nameLen);
-                file.read(entity.name.data(), nameLen);
+                if (!readBytes(entity.name.data(), nameLen))
+                    return false;
 
                 uint16_t compCount;
-                file.read(reinterpret_cast<char*>(&compCount), sizeof(compCount));
+                if (!readBytes(&compCount, sizeof(compCount)))
+                    return false;
 
                 for (uint16_t c = 0; c < compCount; ++c)
                 {
                     SerializedComponent comp;
 
                     uint16_t typeLen;
-                    file.read(reinterpret_cast<char*>(&typeLen), sizeof(typeLen));
+                    if (!readBytes(&typeLen, sizeof(typeLen)))
+                        return false;
                     comp.typeName.resize(typeLen);
-                    file.read(comp.typeName.data(), typeLen);
+                    if (!readBytes(comp.typeName.data(), typeLen))
+                        return false;
 
                     uint16_t propCount;
-                    file.read(reinterpret_cast<char*>(&propCount), sizeof(propCount));
+                    if (!readBytes(&propCount, sizeof(propCount)))
+                        return false;
 
                     for (uint16_t p = 0; p < propCount; ++p)
                     {
                         uint16_t keyLen;
-                        file.read(reinterpret_cast<char*>(&keyLen), sizeof(keyLen));
+                        if (!readBytes(&keyLen, sizeof(keyLen)))
+                            return false;
                         std::string key(keyLen, '\0');
-                        file.read(key.data(), keyLen);
+                        if (!readBytes(key.data(), keyLen))
+                            return false;
 
                         uint16_t valLen;
-                        file.read(reinterpret_cast<char*>(&valLen), sizeof(valLen));
+                        if (!readBytes(&valLen, sizeof(valLen)))
+                            return false;
                         std::string val(valLen, '\0');
-                        file.read(val.data(), valLen);
+                        if (!readBytes(val.data(), valLen))
+                            return false;
 
                         comp.properties[key] = val;
                     }
@@ -991,20 +1053,23 @@ namespace Spark
 
             // Read custom state key-value pairs (if present in file)
             uint32_t customStateCount = 0;
-            file.read(reinterpret_cast<char*>(&customStateCount), sizeof(customStateCount));
-            if (file.good())
+            if (readBytes(&customStateCount, sizeof(customStateCount)))
             {
                 for (uint32_t i = 0; i < customStateCount; ++i)
                 {
                     uint16_t keyLen;
-                    file.read(reinterpret_cast<char*>(&keyLen), sizeof(keyLen));
+                    if (!readBytes(&keyLen, sizeof(keyLen)))
+                        break;
                     std::string key(keyLen, '\0');
-                    file.read(key.data(), keyLen);
+                    if (!readBytes(key.data(), keyLen))
+                        break;
 
                     uint16_t valLen;
-                    file.read(reinterpret_cast<char*>(&valLen), sizeof(valLen));
+                    if (!readBytes(&valLen, sizeof(valLen)))
+                        break;
                     std::string val(valLen, '\0');
-                    file.read(val.data(), valLen);
+                    if (!readBytes(val.data(), valLen))
+                        break;
 
                     outData.customState[key] = val;
                 }

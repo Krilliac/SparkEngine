@@ -6,6 +6,7 @@
  */
 
 #include "EditorTheme.h"
+#include "Utils/LocalFileCache.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
@@ -1063,7 +1064,8 @@ namespace SparkEditor
         ImGui::End();
     }
 
-    bool ThemeCustomizer::ExportTheme(const EditorThemeData& theme, const std::string& filepath)
+    bool ThemeCustomizer::ExportTheme(const EditorThemeData& theme, const std::string& filepath,
+                                      Spark::LocalFileCache* cache)
     {
         try
         {
@@ -1133,6 +1135,12 @@ namespace SparkEditor
 
             file << "  }\n}\n";
             file.close();
+
+            if (cache)
+            {
+                cache->Invalidate(filepath);
+            }
+
             return true;
         }
         catch (...)
@@ -1141,16 +1149,30 @@ namespace SparkEditor
         }
     }
 
-    bool ThemeCustomizer::ImportTheme(const std::string& filepath, EditorThemeData& outTheme)
+    bool ThemeCustomizer::ImportTheme(const std::string& filepath, EditorThemeData& outTheme,
+                                      Spark::LocalFileCache* cache)
     {
         try
         {
-            std::ifstream file(filepath);
-            if (!file.is_open())
-                return false;
+            std::string content;
 
-            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            file.close();
+            if (cache)
+            {
+                auto result = cache->ReadText(filepath);
+                if (result.IsOk())
+                {
+                    content = result.Value();
+                }
+            }
+
+            if (content.empty())
+            {
+                std::ifstream file(filepath);
+                if (!file.is_open())
+                    return false;
+                content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+                file.close();
+            }
 
             // Simple JSON-like parser for theme colors
             auto extractString = [&](const std::string& key) -> std::string

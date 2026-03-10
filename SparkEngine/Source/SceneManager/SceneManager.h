@@ -78,6 +78,7 @@
 class GraphicsEngine;
 class InputManager;
 class GameObject;
+namespace Spark { class LocalFileCache; }
 
 // =============================================================================
 // SceneNode
@@ -660,6 +661,9 @@ class SceneManager
      */
     bool Console_RenameNode(int index, const std::string& newName);
 
+    /** @brief Set the file cache for scene I/O (non-owning). */
+    void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
+
   private:
     /**
      * @brief Load a scene from the legacy binary `.scene` format.
@@ -769,4 +773,7 @@ class SceneManager
 
     /** @brief Background thread for async scene loading (joined in destructor). */
     std::thread m_asyncLoadThread;
+
+    /** @brief Optional file cache for scene I/O (non-owning). */
+    Spark::LocalFileCache* m_fileCache = nullptr;
 };

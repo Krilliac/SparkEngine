@@ -7,6 +7,7 @@
 #include "IGameModule.h"
 #include "Spark/Version.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LocalFileCache.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -249,15 +250,28 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    std::ifstream file(manifestPath);
-    if (!file.is_open())
+    std::string content;
+
+    if (m_fileCache)
     {
-        console.LogWarning("Could not open module manifest: " + manifestPath);
-        return false;
+        auto result = m_fileCache->ReadText(manifestPath);
+        if (result.IsOk())
+        {
+            content = result.Value();
+        }
     }
 
-    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    file.close();
+    if (content.empty())
+    {
+        std::ifstream file(manifestPath);
+        if (!file.is_open())
+        {
+            console.LogWarning("Could not open module manifest: " + manifestPath);
+            return false;
+        }
+        content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        file.close();
+    }
 
     // Simple JSON parsing for the modules array
     // Format: { "modules": [ { "name": "...", "path": "...", "loadOrder": N }, ... ] }

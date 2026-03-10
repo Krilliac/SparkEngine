@@ -24,6 +24,8 @@
 #include <functional>
 #include <mutex>
 
+namespace Spark { class LocalFileCache; }
+
 using Microsoft::WRL::ComPtr;
 
 /**
@@ -338,6 +340,12 @@ class Shader
      */
     int HotReloadShaders();
 
+    /**
+     * @brief Set the file cache used for shader source loading
+     * @param cache Non-owning pointer to a LocalFileCache instance
+     */
+    void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
+
     // ========================================================================
     // SHADER BINDING AND STATE
     // ========================================================================
@@ -582,4 +590,5 @@ class Shader
     ShaderType m_type = ShaderType::VERTEX_SHADER; ///< Current shader type
     bool m_isCompiled = false;                     ///< Compilation status
     ID3D11DeviceChild* m_shader = nullptr;         ///< Generic shader interface
+    Spark::LocalFileCache* m_fileCache = nullptr;  ///< Optional file cache for shader source reads
 };

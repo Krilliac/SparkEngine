@@ -10,6 +10,7 @@
 #endif // SPARK_PLATFORM_WINDOWS
 #include "RHI/RHIFactory.h"
 #include "RHI/RHITypes.h"
+#include "Utils/LocalFileCache.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -779,35 +780,64 @@ HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const
 {
     ASSERT_MSG(!filePath.empty(), "LoadFromFile: filePath is empty");
 
-    // Read the file contents
-    std::ifstream file(filePath);
-    if (!file.is_open())
+    // Try reading via LocalFileCache first, fall back to direct I/O
+    std::string source;
+    if (m_fileCache)
     {
-        // Try search paths
-        for (const auto& searchPath : m_searchPaths)
+        auto result = m_fileCache->ReadText(filePath);
+        if (result.IsOk())
         {
-            std::string fullPath = searchPath + filePath;
-            file.open(fullPath);
-            if (file.is_open())
+            source = result.Value();
+            m_filePath = filePath;
+        }
+        else
+        {
+            // Try search paths via cache
+            for (const auto& searchPath : m_searchPaths)
             {
-                m_filePath = fullPath;
-                break;
+                std::string fullPath = searchPath + filePath;
+                auto searchResult = m_fileCache->ReadText(fullPath);
+                if (searchResult.IsOk())
+                {
+                    source = searchResult.Value();
+                    m_filePath = fullPath;
+                    break;
+                }
             }
         }
-        if (!file.is_open())
-        {
-            std::wstring wPath(filePath.begin(), filePath.end());
-            LOG_TO_CONSOLE_IMMEDIATE(L"Shader file not found: " + wPath, L"ERROR");
-            return E_FAIL;
-        }
-    }
-    else
-    {
-        m_filePath = filePath;
     }
 
-    std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    file.close();
+    if (source.empty())
+    {
+        // Fallback: direct ifstream read
+        std::ifstream file(filePath);
+        if (!file.is_open())
+        {
+            for (const auto& searchPath : m_searchPaths)
+            {
+                std::string fullPath = searchPath + filePath;
+                file.open(fullPath);
+                if (file.is_open())
+                {
+                    m_filePath = fullPath;
+                    break;
+                }
+            }
+            if (!file.is_open())
+            {
+                std::wstring wPath(filePath.begin(), filePath.end());
+                LOG_TO_CONSOLE_IMMEDIATE(L"Shader file not found: " + wPath, L"ERROR");
+                return E_FAIL;
+            }
+        }
+        else
+        {
+            m_filePath = filePath;
+        }
+
+        source.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        file.close();
+    }
 
     m_type = type;
 
@@ -1677,7 +1707,21 @@ HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const
     }
 
     std::string sourceCode;
-    if (!ReadFileContents(filePath, sourceCode))
+    bool readOk = false;
+    if (m_fileCache)
+    {
+        auto cacheResult = m_fileCache->ReadText(filePath);
+        if (cacheResult.IsOk())
+        {
+            sourceCode = cacheResult.Value();
+            readOk = true;
+        }
+    }
+    if (!readOk)
+    {
+        readOk = ReadFileContents(filePath, sourceCode);
+    }
+    if (!readOk)
     {
         std::wstring wPath(filePath.begin(), filePath.end());
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to read shader file: " + wPath, L"ERROR");

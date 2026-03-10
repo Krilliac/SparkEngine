@@ -51,6 +51,8 @@
 namespace Spark
 {
 
+    class LocalFileCache;
+
     class ConfigParser
     {
       public:
@@ -69,6 +71,9 @@ namespace Spark
             std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             return LoadFromString(content);
         }
+
+        /// Load from file via LocalFileCache (avoids redundant disk reads)
+        bool Load(const std::string& path, LocalFileCache& cache);
 
         /// Parse from a string
         bool LoadFromString(const std::string& content)
@@ -120,6 +125,9 @@ namespace Spark
             file << SaveToString();
             return file.good();
         }
+
+        /// Save to file and update LocalFileCache
+        bool Save(const std::string& path, LocalFileCache& cache) const;
 
         /// Serialize to string
         std::string SaveToString() const

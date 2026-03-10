@@ -16,6 +16,8 @@
 #include <functional>
 #include <cstdint>
 
+namespace Spark { class LocalFileCache; }
+
 namespace SparkEditor
 {
 
@@ -102,6 +104,7 @@ namespace SparkEditor
         const ProjectInfo& GetCurrentProject() const { return m_currentProject; }
 
         void SetEngineRoot(const std::string& engineRoot) { m_engineRoot = engineRoot; }
+        void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
 
         // --- Recent projects ---
         const std::vector<RecentProject>& GetRecentProjects() const { return m_recentProjects; }
@@ -149,6 +152,8 @@ namespace SparkEditor
 
         ProjectCallback m_onProjectOpened;
         ProjectCallback m_onProjectClosed;
+
+        Spark::LocalFileCache* m_fileCache = nullptr;
     };
 
 } // namespace SparkEditor
