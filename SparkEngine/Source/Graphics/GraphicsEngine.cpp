@@ -320,6 +320,14 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         }
     }
 
+    // Initialize renderer integration systems
+    m_pipelineStateCache.Initialize(m_device.Get());
+    m_renderTargetPool.Initialize(m_device.Get());
+    m_gpuSceneBuffer.Initialize(m_device.Get(), 4096);
+    m_constantBufferRing.Initialize(m_device.Get());
+    m_gpuDebugMarkers.Initialize(m_context.Get());
+    m_gpuTimestampQuery.Initialize(m_device.Get());
+
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine initialization complete - rendering ready.", L"SUCCESS");
 
     // ✅ ADD: Initialize basic shaders for rendering
@@ -373,6 +381,14 @@ void GraphicsEngine::Shutdown()
 
     // PhysicsSystem lifecycle is now managed by SparkEngine.cpp / EngineContext
     m_physicsSystem = nullptr;
+
+    // Shutdown renderer integration systems
+    m_pipelineStateCache.Shutdown();
+    m_renderTargetPool.Shutdown();
+    m_gpuSceneBuffer.Shutdown();
+    m_constantBufferRing.Shutdown();
+    m_gpuDebugMarkers.Shutdown();
+    m_gpuTimestampQuery.Shutdown();
 
     // Shutdown legacy systems
     if (m_lightManager)
@@ -435,6 +451,12 @@ void GraphicsEngine::BeginFrame()
 
     m_frameStartTime = std::chrono::high_resolution_clock::now();
 
+    // Reset per-frame state tracking for new frame
+    m_pipelineStateCache.ResetBoundState();
+    m_sortedDrawList.clear();
+    m_constantBufferRing.BeginFrame(m_context.Get());
+    m_gpuTimestampQuery.BeginFrame(m_context.Get());
+
     ASSERT(m_context && m_renderTargetView && m_depthStencilView);
 
     if (!m_context || !m_renderTargetView || !m_depthStencilView)
@@ -473,6 +495,15 @@ void GraphicsEngine::EndFrame()
     }
 
     auto renderEndTime = std::chrono::high_resolution_clock::now();
+
+    // Flush GPU scene buffer and tick render target pool
+    if (m_gpuSceneBuffer.IsInitialized())
+    {
+        m_gpuSceneBuffer.FlushToGPU(m_context.Get());
+    }
+    m_constantBufferRing.EndFrame();
+    m_gpuTimestampQuery.EndFrame(m_context.Get());
+    m_renderTargetPool.Tick();
 
     if (!m_swapChain)
     {

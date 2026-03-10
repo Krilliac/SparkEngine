@@ -23,6 +23,15 @@
 #endif // SPARK_PLATFORM_WINDOWS
 #include "../Core/framework.h"
 #include "Shader.h" // ✅ ADD: Include for PerObjectConstants and PerFrameConstants
+#include "DrawSortKey.h"
+#include "PipelineStateCache.h"
+#include "RenderTargetPool.h"
+#include "BVHAccelerator.h"
+#include "GPUSceneBuffer.h"
+#include "ConstantBufferRing.h"
+#include "GPUDebugMarkers.h"
+#include "MakeDesc.h"
+#include "GPUTimestampQuery.h"
 #include <functional>
 #include <mutex>
 #include <chrono>
@@ -358,6 +367,33 @@ class GraphicsEngine
     PostProcessingSystem* GetPostProcessingSystem() const;
     AssetPipeline* GetAssetPipeline() const;
 
+    // ========================================================================
+    // RENDERER INTEGRATION SYSTEMS
+    // ========================================================================
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    /** @brief Get the pipeline state cache for hash-based D3D11 state deduplication. */
+    Spark::Graphics::PipelineStateCache* GetPipelineStateCache() { return &m_pipelineStateCache; }
+
+    /** @brief Get the render target pool for transient RT recycling. */
+    Spark::Graphics::RenderTargetPool* GetRenderTargetPool() { return &m_renderTargetPool; }
+
+    /** @brief Get the GPU scene buffer for persistent instance data. */
+    Spark::Graphics::GPUSceneBuffer* GetGPUSceneBuffer() { return &m_gpuSceneBuffer; }
+
+    /** @brief Get the BVH accelerator for hierarchical frustum culling. */
+    Spark::Graphics::BVHAccelerator* GetBVHAccelerator() { return &m_bvhAccelerator; }
+
+    /** @brief Get the constant buffer ring for dynamic CB sub-allocation. */
+    Spark::Graphics::ConstantBufferRing* GetConstantBufferRing() { return &m_constantBufferRing; }
+
+    /** @brief Get the GPU debug markers for PIX/RenderDoc annotations. */
+    Spark::Graphics::GPUDebugMarkers* GetGPUDebugMarkers() { return &m_gpuDebugMarkers; }
+
+    /** @brief Get the GPU timestamp query system for per-pass timing. */
+    Spark::Graphics::GPUTimestampQuery* GetGPUTimestampQuery() { return &m_gpuTimestampQuery; }
+#endif // SPARK_PLATFORM_WINDOWS
+
     /** @deprecated Physics is no longer owned by GraphicsEngine. Use EngineContext::GetPhysics(). */
     [[deprecated("Use EngineContext::GetPhysics() instead")]]
     PhysicsSystem* GetPhysicsSystem() const;
@@ -665,6 +701,21 @@ class GraphicsEngine
 
     // Per-frame ECS draw list populated by SubmitMeshForRendering(), consumed by ProcessDrawList()
     std::vector<MeshDrawCommand> m_drawList;
+
+    // ========================================================================
+    // RENDERER INTEGRATION SYSTEMS
+    // ========================================================================
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    Spark::Graphics::PipelineStateCache m_pipelineStateCache;     ///< Hash-based D3D11 state caching
+    Spark::Graphics::RenderTargetPool m_renderTargetPool;         ///< Pooled transient render targets
+    Spark::Graphics::GPUSceneBuffer m_gpuSceneBuffer;             ///< Persistent GPU instance buffer
+    Spark::Graphics::BVHAccelerator m_bvhAccelerator;             ///< SAH-based BVH for culling
+    Spark::Graphics::ConstantBufferRing m_constantBufferRing;     ///< Ring-buffer CB sub-allocation
+    Spark::Graphics::GPUDebugMarkers m_gpuDebugMarkers;           ///< PIX/RenderDoc GPU annotations
+    Spark::Graphics::GPUTimestampQuery m_gpuTimestampQuery;       ///< Per-pass GPU timing queries
+#endif                                                            // SPARK_PLATFORM_WINDOWS
+    std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList; ///< Sorted draw list per frame
 
     // ✅ ADD: Basic shader system resources
     ComPtr<ID3D11VertexShader> m_basicVertexShader;
