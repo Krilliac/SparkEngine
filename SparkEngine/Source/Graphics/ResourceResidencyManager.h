@@ -252,11 +252,20 @@ public:
     // ========================================================================
 
     /**
+     * @brief Initialize with a reference to the VRAM budget monitor (default config)
+     */
+    void Initialize(VRAMBudgetMonitor* budgetMonitor)
+    {
+        Config defaultConfig;
+        Initialize(budgetMonitor, defaultConfig);
+    }
+
+    /**
      * @brief Initialize with a reference to the VRAM budget monitor
      * @param budgetMonitor  The engine's VRAM budget monitor (must outlive this object)
      * @param config         Configuration parameters
      */
-    void Initialize(VRAMBudgetMonitor* budgetMonitor, const Config& config = {})
+    void Initialize(VRAMBudgetMonitor* budgetMonitor, const Config& config)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
