@@ -10,6 +10,7 @@
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
+#include "Utils/LocalFileCache.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -499,6 +500,11 @@ bool Material::SaveToFile(const std::string& filePath) const
 
         file.close();
 
+        if (m_fileCache)
+        {
+            m_fileCache->Invalidate(filePath);
+        }
+
         Spark::SimpleConsole::GetInstance().LogSuccess("Material '" + m_name + "' saved to: " + filePath);
         return true;
     }
@@ -514,13 +520,29 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
 {
     try
     {
-        std::ifstream file(filePath);
-        if (!file.is_open())
+        std::string fileContent;
+
+        if (m_fileCache)
         {
-            Spark::SimpleConsole::GetInstance().LogError("Cannot open file for reading: " + filePath);
-            return false;
+            auto result = m_fileCache->ReadText(filePath);
+            if (result.IsOk())
+            {
+                fileContent = result.Value();
+            }
         }
 
+        if (fileContent.empty())
+        {
+            std::ifstream file(filePath);
+            if (!file.is_open())
+            {
+                Spark::SimpleConsole::GetInstance().LogError("Cannot open file for reading: " + filePath);
+                return false;
+            }
+            fileContent.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        }
+
+        std::istringstream fileStream(fileContent);
         std::string line;
         std::string currentSection = "";
         int lineNumber = 0;
@@ -559,7 +581,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
             return str.substr(start, end - start + 1);
         };
 
-        while (std::getline(file, line))
+        while (std::getline(fileStream, line))
         {
             lineNumber++;
             line = trim(line);
@@ -888,8 +910,6 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                 continue;
             }
         }
-
-        file.close();
 
         Spark::SimpleConsole::GetInstance().LogSuccess("Material '" + m_name + "' loaded from: " + filePath +
                                                        " (textures: " + std::to_string(m_textures.size()) +

@@ -62,6 +62,12 @@ using SparkEditor::PlayerClass;
  * @note The Game class does not own the graphics or input systems, but holds references
  * @warning Ensure Initialize() is called before any Update() or Render() operations
  */
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4251) // class needs dll-interface
+#pragma warning(disable : 4275) // non dll-interface class used as base
+#endif
+
 class SPARK_GAME_API Game
 {
   public:
@@ -503,3 +509,7 @@ class SPARK_GAME_API Game
     bool m_infiniteAmmoEnabled{false}; ///< Infinite ammo state for console debugging
     bool m_showFPS{false};             ///< Whether to display FPS counter
 };
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

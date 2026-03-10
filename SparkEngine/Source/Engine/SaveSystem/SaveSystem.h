@@ -88,6 +88,8 @@
 namespace Spark
 {
 
+    class LocalFileCache;
+
     // ============================================================================
     // Save Data Types
     // ============================================================================
@@ -764,6 +766,9 @@ namespace Spark
      */
         void SetSaveDirectory(const std::string& dir) { m_saveDirectory = dir; }
 
+        /** @brief Set the file cache for save I/O (non-owning). */
+        void SetFileCache(LocalFileCache* cache) { m_fileCache = cache; }
+
         // -------------------------------------------------------------------------
         // Console integration
         // -------------------------------------------------------------------------
@@ -854,6 +859,9 @@ namespace Spark
      * Hard-coded to `"__quicksave"`. Do not use this name for user-facing save slots.
      */
         std::string m_quickSaveSlot = "__quicksave";
+
+        /** @brief Optional file cache for save file I/O (non-owning). */
+        LocalFileCache* m_fileCache = nullptr;
     };
 
 } // namespace Spark

@@ -23,6 +23,11 @@
 #include <vector>
 #include <memory>
 
+namespace Spark
+{
+    class LocalFileCache;
+}
+
 // Forward declaration for legacy adapter
 class IGameModule;
 using CreateGameModuleFn = IGameModule* (*)();
@@ -114,6 +119,9 @@ class ModuleManager
     /** @brief Check if any modules are loaded */
     bool HasModules() const { return !m_modules.empty(); }
 
+    /** @brief Set the file cache for manifest loading (non-owning). */
+    void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
+
   private:
     struct LoadedModule
     {
@@ -135,4 +143,5 @@ class ModuleManager
     void UnloadEntry(LoadedModule& entry);
 
     std::vector<LoadedModule> m_modules;
+    Spark::LocalFileCache* m_fileCache = nullptr;
 };

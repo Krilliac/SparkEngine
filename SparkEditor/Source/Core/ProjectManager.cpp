@@ -6,6 +6,7 @@
  */
 
 #include "ProjectManager.h"
+#include "Utils/LocalFileCache.h"
 #include <iostream>
 #include <filesystem>
 #include <fstream>
@@ -537,15 +538,28 @@ namespace SparkEditor
     // ------------------------------------------------------------------
     bool ProjectManager::LoadProjectFile(const std::string& sparkprojectPath)
     {
-        std::ifstream file(sparkprojectPath);
-        if (!file.is_open())
+        std::string content;
+
+        if (m_fileCache)
         {
-            std::cerr << "Could not open project file: " << sparkprojectPath << "\n";
-            return false;
+            auto result = m_fileCache->ReadText(sparkprojectPath);
+            if (result.IsOk())
+            {
+                content = result.Value();
+            }
         }
 
-        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        file.close();
+        if (content.empty())
+        {
+            std::ifstream file(sparkprojectPath);
+            if (!file.is_open())
+            {
+                std::cerr << "Could not open project file: " << sparkprojectPath << "\n";
+                return false;
+            }
+            content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            file.close();
+        }
 
         std::string name = ExtractJsonString(content, "name");
         std::string version = ExtractJsonString(content, "version");
@@ -630,6 +644,12 @@ namespace SparkEditor
             file << "}\n";
 
             file.close();
+
+            if (m_fileCache)
+            {
+                m_fileCache->Invalidate(filePath);
+            }
+
             std::cout << "Project file saved: " << filePath << "\n";
             return true;
         }
@@ -874,12 +894,25 @@ namespace SparkEditor
         m_recentProjects.clear();
         std::string filePath = GetRecentProjectsFilePath();
 
-        std::ifstream file(filePath);
-        if (!file.is_open())
-            return;
+        std::string content;
 
-        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        file.close();
+        if (m_fileCache)
+        {
+            auto result = m_fileCache->ReadText(filePath);
+            if (result.IsOk())
+            {
+                content = result.Value();
+            }
+        }
+
+        if (content.empty())
+        {
+            std::ifstream file(filePath);
+            if (!file.is_open())
+                return;
+            content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            file.close();
+        }
 
         // Parse array of recent projects (simple parser)
         // Format: { "recentProjects": [ { "name": ..., "path": ..., ... }, ... ] }
@@ -954,6 +987,11 @@ namespace SparkEditor
             file << "  ]\n";
             file << "}\n";
             file.close();
+
+            if (m_fileCache)
+            {
+                m_fileCache->Invalidate(filePath);
+            }
         }
         catch (const std::exception& e)
         {

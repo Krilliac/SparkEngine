@@ -67,14 +67,11 @@ namespace Spark
      */
     class LocalFileCache
     {
-    public:
+      public:
         /// Default max cache size: 64 MB
         static constexpr size_t DEFAULT_MAX_SIZE = 64 * 1024 * 1024;
 
-        explicit LocalFileCache(size_t maxSizeBytes = DEFAULT_MAX_SIZE)
-            : m_maxSize(maxSizeBytes)
-        {
-        }
+        explicit LocalFileCache(size_t maxSizeBytes = DEFAULT_MAX_SIZE) : m_maxSize(maxSizeBytes) {}
 
         ~LocalFileCache() = default;
 
@@ -336,7 +333,7 @@ namespace Spark
             return m_entries.size();
         }
 
-    private:
+      private:
         struct CacheEntry
         {
             std::vector<uint8_t> data;
@@ -438,7 +435,7 @@ namespace Spark
 
         // Cache storage
         std::unordered_map<std::string, CacheEntry> m_entries;
-        std::list<std::string> m_accessOrder;                               // front = MRU, back = LRU
+        std::list<std::string> m_accessOrder; // front = MRU, back = LRU
         std::unordered_map<std::string, std::list<std::string>::iterator> m_accessIterators;
 
         // Limits and tracking

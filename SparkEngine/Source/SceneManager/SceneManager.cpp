@@ -11,6 +11,7 @@
 #include "Graphics/GraphicsEngine.h"
 #include "Utils/Assert.h"
 #include "../Utils/ConsoleProcessManager.h"
+#include "Utils/LocalFileCache.h"
 
 #include <fstream>
 #include <sstream>
@@ -355,16 +356,29 @@ std::vector<std::string> SceneManager::GetAvailableScenes(const std::wstring& di
 
 bool SceneManager::LoadJSON(const std::wstring& path)
 {
-    std::ifstream file(WideToNarrow(path));
-    if (!file.is_open())
+    std::string content;
+    std::string narrowPath = WideToNarrow(path);
+
+    if (m_fileCache)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot open JSON scene: " + path, L"ERROR");
-        return false;
+        auto result = m_fileCache->ReadText(narrowPath);
+        if (result.IsOk())
+        {
+            content = result.Value();
+        }
     }
 
-    // Read entire file
-    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    file.close();
+    if (content.empty())
+    {
+        std::ifstream file(narrowPath);
+        if (!file.is_open())
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot open JSON scene: " + path, L"ERROR");
+            return false;
+        }
+        content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        file.close();
+    }
 
     // Simple text-based scene format (not actual JSON despite the method name):
     //   Lines starting with # are comments/metadata
@@ -447,6 +461,12 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
     }
 
     file.close();
+
+    if (m_fileCache)
+    {
+        m_fileCache->Invalidate(WideToNarrow(path));
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: " + std::to_wstring(m_sceneNodes.size()) + L" nodes", L"SUCCESS");
     return true;
 }
