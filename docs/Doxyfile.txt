@@ -6,8 +6,8 @@
 #---------------------------------------------------------------------------
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NAME           = "Spark Engine"
-PROJECT_NUMBER         = "1.0.0"
-PROJECT_BRIEF          = "A modular, high-performance C++ game engine for 3D FPS titles"
+PROJECT_NUMBER         = "0.1.0-dev"
+PROJECT_BRIEF          = "A modular, high-performance C++20 open-source game engine for 3D FPS titles"
 PROJECT_LOGO           = 
 OUTPUT_DIRECTORY       = ./output
 CREATE_SUBDIRS         = NO
@@ -29,7 +29,7 @@ ABBREVIATE_BRIEF       = "The $name class" \
 ALWAYS_DETAILED_SEC    = NO
 INLINE_INHERITED_MEMB  = NO
 FULL_PATH_NAMES        = YES
-STRIP_FROM_PATH        = "../SparkEngine/Source/"
+STRIP_FROM_PATH        = "../"
 STRIP_FROM_INC_PATH    = 
 SHORT_NAMES            = NO
 JAVADOC_AUTOBRIEF      = YES
@@ -48,7 +48,7 @@ EXTENSION_MAPPING      =
 MARKDOWN_SUPPORT       = YES
 TOC_INCLUDE_HEADINGS   = 5
 AUTOLINK_SUPPORT       = YES
-BUILTIN_STL_SUPPORT    = NO
+BUILTIN_STL_SUPPORT    = YES
 CPP_CLI_SUPPORT        = NO
 SIP_SUPPORT            = NO
 IDL_PROPERTY_SUPPORT   = YES
@@ -119,7 +119,12 @@ WARN_LOGFILE           =
 #---------------------------------------------------------------------------
 INPUT                  = "../SparkEngine/Source" \
                          "../SparkEditor/Source" \
-                         "../README.md"
+                         "../SparkConsole/src" \
+                         "../SparkShaderCompiler/src" \
+                         "../SparkGame/Source" \
+                         "../SparkSDK" \
+                         "../README.md" \
+                         "../TROUBLESHOOTING.md"
 INPUT_ENCODING         = UTF-8
 FILE_PATTERNS          = *.c \
                          *.cc \
@@ -221,7 +226,7 @@ HTML_EXTRA_FILES       =
 HTML_COLORSTYLE_HUE    = 220
 HTML_COLORSTYLE_SAT    = 100
 HTML_COLORSTYLE_GAMMA  = 80
-HTML_TIMESTAMP         = NO
+HTML_TIMESTAMP         = YES
 HTML_DYNAMIC_MENUS     = YES
 HTML_DYNAMIC_SECTIONS  = NO
 HTML_INDEX_NUM_ENTRIES = 100
@@ -345,12 +350,12 @@ UML_LIMIT_NUM_FIELDS   = 10
 TEMPLATE_RELATIONS     = NO
 INCLUDE_GRAPH          = YES
 INCLUDED_BY_GRAPH      = YES
-CALL_GRAPH             = NO
-CALLER_GRAPH           = NO
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES
 GRAPHICAL_HIERARCHY    = YES
 DIRECTORY_GRAPH        = YES
-DOT_IMAGE_FORMAT       = png
-INTERACTIVE_SVG        = NO
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
 DOT_PATH               = 
 DOTFILE_DIRS           = 
 MSCFILE_DIRS           = 

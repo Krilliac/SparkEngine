@@ -10,6 +10,19 @@ See the [Wiki Home](../wiki/Home.md) for a full table of contents.
 
 This `docs/` directory contains tooling for auto-generated API documentation using Doxygen. It extracts documentation from C++ header files and produces a searchable, cross-referenced HTML site.
 
+### Covered Source Directories
+
+The Doxygen configuration indexes the following:
+
+| Directory | Description |
+|-----------|-------------|
+| `SparkEngine/Source/` | Core engine library (all subsystems) |
+| `SparkEditor/Source/` | ImGui visual editor (22 subsystems) |
+| `SparkConsole/src/` | Standalone debug console application |
+| `SparkShaderCompiler/src/` | Offline shader compilation tool |
+| `SparkGame/Source/` | Example FPS game module |
+| `SparkSDK/` | Public SDK headers |
+
 ### Quick Start
 
 ```bash
@@ -33,6 +46,7 @@ docs/
 |-- auto-update.sh         # Continuous monitoring script
 |-- output/
 |   |-- html/              # Full Doxygen HTML output
+|       |-- index.html     # Entry point — open in browser
 ```
 
 ### Writing Documentation
@@ -65,9 +79,10 @@ Supported tags: `@file`, `@brief`, `@param`, `@return`, `@note`, `@warning`, `@s
 ### Configuration
 
 **Doxygen (`Doxyfile.txt`)**
-- **Input**: `SparkEngine/Source/` and `SparkEditor/Source/`
-- **Output**: HTML with search, responsive design, source browser
-- **Diagrams**: Class hierarchies, collaboration graphs, include dependencies (requires GraphViz)
+- **Input**: All engine, editor, console, shader compiler, game, and SDK sources
+- **Output**: HTML with search, treeview navigation, source browser, timestamps
+- **Diagrams**: Class hierarchies, collaboration graphs, include dependencies, call/caller graphs (SVG, interactive)
+- **STL support**: Built-in STL type recognition enabled
 
 **Auto-Update (`auto-update.sh`)**
 - Watches `.h` and `.hpp` files in engine and editor source directories
@@ -78,7 +93,7 @@ Supported tags: `@file`, `@brief`, `@param`, `@return`, `@note`, `@warning`, `@s
 ### Dependencies
 
 - **Doxygen** 1.9+ — Documentation generator
-- **GraphViz** — Diagram rendering (optional but recommended)
+- **GraphViz** — Diagram rendering (required for class/call graphs)
 
 ```bash
 # Ubuntu/Debian

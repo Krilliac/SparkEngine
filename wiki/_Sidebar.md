@@ -35,3 +35,6 @@
 - [Testing](Testing)
 - [Troubleshooting](Troubleshooting)
 - [Contributing](Contributing)
+
+### Reference
+- [API Docs (Doxygen)](../docs/README.md)

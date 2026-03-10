@@ -113,14 +113,24 @@ ctest --test-dir build --output-on-failure
 ## CI Integration
 
 Tests run automatically on every push via GitHub Actions:
-- Windows (VS 2022) — Debug and Release
+- Windows (VS 2022, VS 2026) — Debug and Release
 - Linux (GCC, Clang) — Debug and Release
-- Sanitizer builds (ASan, TSan) for memory and thread safety
+- AddressSanitizer + UBSanitizer builds for memory safety
+- clang-format check (rejects PRs with formatting violations)
+- CodeQL security scanning
+
+### Running Sanitizer Builds Locally
+
+```bash
+cmake --preset ci-linux-asan
+cmake --build build
+cd build && ctest --output-on-failure
+```
 
 ---
 
 ## See Also
 
-- [Build System and CMake Modules](Build-System-and-CMake-Modules) — BUILD_TESTS flag
+- [Build System and CMake Modules](Build-System-and-CMake-Modules) — BUILD_TESTS flag and CI details
 - [Getting Started](Getting-Started) — Building the project
-- [Contributing](Contributing) — Contribution workflow and adding tests
+- [Contributing](Contributing) — Contribution workflow, pre-commit checks, and adding tests

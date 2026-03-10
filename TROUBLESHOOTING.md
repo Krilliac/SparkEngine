@@ -149,6 +149,50 @@ Ensure these exist in `build\bin\` after a successful build:
 
 ---
 
+## CI / Code Quality Issues
+
+### clang-format check fails in CI
+
+The `check-format` job in `build.yml` enforces `.clang-format` on every PR. To fix locally:
+
+```bash
+# See what needs fixing
+find SparkEngine/Source SparkEditor/Source -name '*.h' -o -name '*.cpp' \
+  | xargs clang-format --dry-run --Werror
+
+# Auto-fix all files
+find SparkEngine/Source SparkEditor/Source -name '*.h' -o -name '*.cpp' \
+  | xargs clang-format -i
+```
+
+Ensure you have clang-format 18+ installed to match CI.
+
+### Tests fail on Linux but pass on Windows
+
+- Check for Windows-only headers (`<windows.h>`, `<d3d11.h>`) leaking into cross-platform code
+- Ensure `#ifdef _WIN32` guards around platform-specific code
+- Run with AddressSanitizer locally: `cmake --preset ci-linux-asan && cmake --build build`
+
+---
+
+## Linux-Specific Issues
+
+### CMake can't find dependencies
+
+```bash
+# Install build essentials
+sudo apt install build-essential cmake libx11-dev libxrandr-dev libgl1-mesa-dev
+
+# Ensure submodules are initialized
+git submodule update --init --recursive
+```
+
+### Linker errors on Linux
+
+Graphics features require stub implementations on Linux. If you see unresolved DirectX symbols, ensure `ENABLE_GRAPHICS=OFF` or that Platform.h stubs are in place.
+
+---
+
 ## Last Resort
 
 1. **Clean rebuild:**

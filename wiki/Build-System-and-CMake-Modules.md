@@ -198,12 +198,27 @@ Enables `find_package(SparkEngine)` for standalone game projects.
 | `build.ps1` | Windows | PowerShell build script |
 | `build.sh` | Linux/macOS | Bash build script |
 
+## Documentation Generation
+
+```bash
+# Generate Doxygen API docs (requires doxygen + graphviz)
+cd docs && ./generate-docs.sh
+
+# Or via CMake custom target (if Doxygen is found)
+cmake --build build --target docs
+```
+
+See [docs/README.md](../docs/README.md) for full documentation tooling details.
+
 ## CI/CD (GitHub Actions)
 
 ### build.yml
 
 Runs on every push to `main`, `develop`, and `feature/*` branches:
-- **Platforms:** Windows (VS 2022), Linux (GCC, Clang)
+- **Format check:** clang-format enforcement (rejects PRs with violations)
+- **Prompt validation:** Anti-drift and overload checks for AI prompt files
+- **Sanitizers:** AddressSanitizer + UBSanitizer on Linux
+- **Platforms:** Windows (VS 2022, VS 2026), Linux (GCC, Clang)
 - **Configurations:** Debug and Release matrix
 - **Artifacts:** Retained for 7 days
 

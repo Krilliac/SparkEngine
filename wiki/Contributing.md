@@ -26,6 +26,44 @@ SparkEngine is licensed under the **MIT License**. All contributions are subject
    ```
 6. Push and open a Pull Request
 
+## Pre-Commit Quality Checks
+
+Before opening a PR, run these checks locally. CI enforces all of them automatically.
+
+### 1. Format with clang-format
+
+The repo ships a `.clang-format` (Microsoft-based, Allman braces, 4-space indent, 120-col limit). CI rejects PRs with formatting violations.
+
+```bash
+# Check formatting (dry run — reports violations without changing files)
+find SparkEngine/Source SparkEditor/Source -name '*.h' -o -name '*.cpp' \
+  | xargs clang-format --dry-run --Werror
+
+# Auto-fix formatting
+find SparkEngine/Source SparkEditor/Source -name '*.h' -o -name '*.cpp' \
+  | xargs clang-format -i
+```
+
+### 2. Static analysis with clang-tidy
+
+```bash
+# Generate compile_commands.json, then run clang-tidy
+cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+clang-tidy -p build SparkEngine/Source/**/*.cpp
+```
+
+### 3. Build and test
+
+```bash
+cmake --preset linux-gcc-release     # or windows-release
+cmake --build build --config Release
+cd build && ctest --output-on-failure
+```
+
+All checks must pass before submitting a PR.
+
+---
+
 ## Code Style
 
 ### Language Standard
