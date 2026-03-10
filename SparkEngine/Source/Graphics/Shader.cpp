@@ -1302,6 +1302,7 @@ bool Shader::CompileWithRHI(const std::string& sourceFile, ShaderType type, int 
 #include "Shader.h"
 #include "RHI/RHIFactory.h"
 #include "../Utils/SparkConsole.h"
+#include "Utils/LocalFileCache.h"
 #include <iostream>
 #include <fstream>
 #include <chrono>
