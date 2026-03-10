@@ -28,6 +28,10 @@
 #include "RenderTargetPool.h"
 #include "BVHAccelerator.h"
 #include "GPUSceneBuffer.h"
+#include "ConstantBufferRing.h"
+#include "GPUDebugMarkers.h"
+#include "MakeDesc.h"
+#include "GPUTimestampQuery.h"
 #include <functional>
 #include <mutex>
 #include <chrono>
@@ -379,6 +383,15 @@ class GraphicsEngine
 
     /** @brief Get the BVH accelerator for hierarchical frustum culling. */
     Spark::Graphics::BVHAccelerator* GetBVHAccelerator() { return &m_bvhAccelerator; }
+
+    /** @brief Get the constant buffer ring for dynamic CB sub-allocation. */
+    Spark::Graphics::ConstantBufferRing* GetConstantBufferRing() { return &m_constantBufferRing; }
+
+    /** @brief Get the GPU debug markers for PIX/RenderDoc annotations. */
+    Spark::Graphics::GPUDebugMarkers* GetGPUDebugMarkers() { return &m_gpuDebugMarkers; }
+
+    /** @brief Get the GPU timestamp query system for per-pass timing. */
+    Spark::Graphics::GPUTimestampQuery* GetGPUTimestampQuery() { return &m_gpuTimestampQuery; }
 #endif // SPARK_PLATFORM_WINDOWS
 
     /** @deprecated Physics is no longer owned by GraphicsEngine. Use EngineContext::GetPhysics(). */
@@ -698,6 +711,9 @@ class GraphicsEngine
     Spark::Graphics::RenderTargetPool m_renderTargetPool;         ///< Pooled transient render targets
     Spark::Graphics::GPUSceneBuffer m_gpuSceneBuffer;             ///< Persistent GPU instance buffer
     Spark::Graphics::BVHAccelerator m_bvhAccelerator;             ///< SAH-based BVH for culling
+    Spark::Graphics::ConstantBufferRing m_constantBufferRing;     ///< Ring-buffer CB sub-allocation
+    Spark::Graphics::GPUDebugMarkers m_gpuDebugMarkers;           ///< PIX/RenderDoc GPU annotations
+    Spark::Graphics::GPUTimestampQuery m_gpuTimestampQuery;       ///< Per-pass GPU timing queries
 #endif                                                            // SPARK_PLATFORM_WINDOWS
     std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList; ///< Sorted draw list per frame
 
