@@ -32,31 +32,7 @@ static std::string WideToNarrow(const std::wstring& wide)
     return narrow;
 }
 
-// Rate-limited logging macro to prevent console spam
-#define LOG_TO_CONSOLE_RATE_LIMITED(msg, type)                                                                         \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        static auto lastLogTime = std::chrono::steady_clock::now();                                                    \
-        static int logCounter = 0;                                                                                     \
-        auto now = std::chrono::steady_clock::now();                                                                   \
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count();                    \
-        if (elapsed >= 10 || logCounter < 1)                                                                           \
-        {                                                                                                              \
-            Spark::ConsoleProcessManager::GetInstance().Log(msg, type);                                                \
-            if (elapsed >= 10)                                                                                         \
-            {                                                                                                          \
-                lastLogTime = now;                                                                                     \
-                logCounter = 0;                                                                                        \
-            }                                                                                                          \
-            else                                                                                                       \
-            {                                                                                                          \
-                logCounter++;                                                                                          \
-            }                                                                                                          \
-        }                                                                                                              \
-    } while (0)
-
-#define LOG_TO_CONSOLE(msg, type) LOG_TO_CONSOLE_RATE_LIMITED(msg, type)
-#define LOG_TO_CONSOLE_IMMEDIATE(msg, type) Spark::ConsoleProcessManager::GetInstance().Log(msg, type)
+// Use logging macros from LogMacros.h (included transitively via headers)
 
 SceneManager::SceneManager(GraphicsEngine* graphics, InputManager* input) : m_graphics(graphics), m_input(input)
 {

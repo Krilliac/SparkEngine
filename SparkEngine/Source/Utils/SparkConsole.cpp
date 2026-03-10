@@ -1,5 +1,6 @@
 #include "../Core/Platform.h"
 #include "SparkConsole.h"
+#include "ConsoleVariable.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -12,6 +13,7 @@
 #include <fstream>
 #include <thread>
 #include <map>
+#include <numeric>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <psapi.h>
 #include <DirectXMath.h>
@@ -56,6 +58,112 @@ static Timer* GetTimer()
 
 namespace Spark
 {
+
+    // ============================================================================
+    // ConsoleSeverity helpers
+    // ============================================================================
+
+    const char* ConsoleSeverityToString(ConsoleSeverity severity)
+    {
+        switch (severity)
+        {
+        case ConsoleSeverity::Trace:
+            return "TRACE";
+        case ConsoleSeverity::Debug:
+            return "DEBUG";
+        case ConsoleSeverity::Info:
+            return "INFO";
+        case ConsoleSeverity::Success:
+            return "SUCCESS";
+        case ConsoleSeverity::Warning:
+            return "WARNING";
+        case ConsoleSeverity::Error:
+            return "ERROR";
+        case ConsoleSeverity::Critical:
+            return "CRITICAL";
+        default:
+            return "INFO";
+        }
+    }
+
+    ConsoleSeverity StringToConsoleSeverity(const std::string& str)
+    {
+        if (str == "TRACE")
+            return ConsoleSeverity::Trace;
+        if (str == "DEBUG")
+            return ConsoleSeverity::Debug;
+        if (str == "INFO")
+            return ConsoleSeverity::Info;
+        if (str == "SUCCESS")
+            return ConsoleSeverity::Success;
+        if (str == "WARNING")
+            return ConsoleSeverity::Warning;
+        if (str == "ERROR")
+            return ConsoleSeverity::Error;
+        if (str == "CRITICAL")
+            return ConsoleSeverity::Critical;
+        return ConsoleSeverity::Info;
+    }
+
+    // ============================================================================
+    // Color mapping helpers
+    // ============================================================================
+
+    SimpleConsole::Color SimpleConsole::SeverityToColor(ConsoleSeverity severity)
+    {
+        switch (severity)
+        {
+        case ConsoleSeverity::Trace:
+            return Color::DarkGray;
+        case ConsoleSeverity::Debug:
+            return Color::Cyan;
+        case ConsoleSeverity::Info:
+            return Color::Cyan;
+        case ConsoleSeverity::Success:
+            return Color::Green;
+        case ConsoleSeverity::Warning:
+            return Color::Yellow;
+        case ConsoleSeverity::Error:
+            return Color::Red;
+        case ConsoleSeverity::Critical:
+            return Color::Magenta;
+        default:
+            return Color::White;
+        }
+    }
+
+    SimpleConsole::Color SimpleConsole::TypeToColor(const std::string& type)
+    {
+        return SeverityToColor(StringToConsoleSeverity(type));
+    }
+
+    // ============================================================================
+    // Levenshtein distance for fuzzy command matching
+    // ============================================================================
+
+    static size_t LevenshteinDistance(const std::string& a, const std::string& b)
+    {
+        const size_t m = a.size();
+        const size_t n = b.size();
+
+        std::vector<size_t> prev(n + 1);
+        std::vector<size_t> curr(n + 1);
+
+        std::iota(prev.begin(), prev.end(), 0);
+
+        for (size_t i = 1; i <= m; ++i)
+        {
+            curr[0] = i;
+            for (size_t j = 1; j <= n; ++j)
+            {
+                size_t cost = (a[i - 1] == b[j - 1]) ? 0 : 1;
+                curr[j] = std::min({curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost});
+            }
+            std::swap(prev, curr);
+        }
+
+        return prev[n];
+    }
 
     // Performance tracking globals for live binding
     static struct PerformanceCounters
@@ -355,22 +463,40 @@ namespace Spark
             LogInfo("No existing configuration found, using defaults");
         }
 
+        // Set up persistent history file
+        m_historyFilePath = "spark_console_history.txt";
+
         RegisterDefaultCommands();
         RegisterAdvancedCommands();
+        RegisterCVarCommands();
+
+        // Load persistent command history
+        LoadHistory();
 
         Clear();
         PrintLine("==========================================", Color::Cyan);
-        PrintLine("    Spark Engine Development Console", Color::Cyan);
+        PrintLine("    Spark Engine Development Console v4.0", Color::Cyan);
         PrintLine("        Professional Debug Interface", Color::White);
         PrintLine("        LIVE SYSTEM INTEGRATION", Color::Yellow);
         PrintLine("==========================================", Color::Cyan);
-        PrintLine("Type 'help' for commands | 'help <cmd>' for details", Color::Yellow);
+        PrintLine("", Color::White);
+        PrintLine("Features: CVar system | Fuzzy matching | Quoted args", Color::DarkGray);
+        PrintLine("          Script execution | Persistent history", Color::DarkGray);
+        PrintLine("", Color::White);
+        PrintLine("Type 'help' for commands | 'cvar_list' for variables", Color::Yellow);
         PrintLine("", Color::White);
 
         m_initialized = true;
         LogSuccess("Development console initialized with live integration");
         LogInfo("Performance counters active - real-time monitoring enabled");
         LogInfo("Configuration system ready - auto-save: " + std::string(g_configSystem.autoSave ? "ON" : "OFF"));
+
+        auto cvarCount = CVarRegistry::Get().Count();
+        if (cvarCount > 0)
+        {
+            LogInfo(std::to_string(cvarCount) + " console variables registered");
+        }
+
         return true;
     }
 
@@ -383,6 +509,10 @@ namespace Spark
 
         LogInfo("Console shutdown initiated");
 
+        // Persist command history before shutdown
+        SaveHistory();
+
+#ifdef SPARK_PLATFORM_WINDOWS
         if (m_consoleWindow)
         {
             FreeConsole();
@@ -390,6 +520,10 @@ namespace Spark
             m_consoleOutput = nullptr;
             m_consoleInput = nullptr;
         }
+#elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+        m_consoleOutputFd = -1;
+        m_consoleInputFd = -1;
+#endif
 
         m_initialized = false;
     }
@@ -427,40 +561,36 @@ namespace Spark
         entry.message = message;
         entry.type = type;
         entry.timestamp = GetTimestamp();
+        entry.severity = StringToConsoleSeverity(type);
+        entry.sequenceNumber = m_logSequence.fetch_add(1, std::memory_order_relaxed);
 
         m_logHistory.push_back(entry);
 
-        if (m_logHistory.size() > 1000)
+        if (m_logHistory.size() > MaxLogHistory)
         {
             m_logHistory.pop_front();
         }
 
+        m_stats.totalLogsWritten++;
+
+#ifdef SPARK_PLATFORM_WINDOWS
         // Always output to debug console too
         std::string debugMsg = "[" + entry.timestamp + "] [" + type + "] " + message;
         OutputDebugStringA(debugMsg.c_str());
         OutputDebugStringA("\n");
+#endif
 
         if (m_initialized && m_visible)
         {
-            Color color = Color::White;
-            if (type == "ERROR")
-                color = Color::Red;
-            else if (type == "WARNING")
-                color = Color::Yellow;
-            else if (type == "SUCCESS")
-                color = Color::Green;
-            else if (type == "INFO")
-                color = Color::Cyan;
-            else if (type == "DEBUG")
-                color = Color::Magenta;
-            else if (type == "CRITICAL")
-                color = Color::Red;
-            else if (type == "TRACE")
-                color = Color::Blue;
-
+            Color color = TypeToColor(type);
             PrintLine("[" + entry.timestamp + "] [" + type + "] " + message, color);
             DisplayPrompt();
         }
+    }
+
+    void SimpleConsole::Log(ConsoleSeverity severity, const std::string& message)
+    {
+        Log(message, ConsoleSeverityToString(severity));
     }
 
     void SimpleConsole::LogInfo(const std::string& message)
@@ -494,10 +624,27 @@ namespace Spark
     }
 
     void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
-                                        const std::string& category)
+                                        const std::string& category, const std::string& usage)
     {
-        m_commands[name] = {handler, description, category};
-        LogTrace("Command registered: " + name);
+        m_commands[name] = {handler, description, category, usage};
+        m_stats.registeredCommands = static_cast<uint32_t>(m_commands.size());
+    }
+
+    bool SimpleConsole::UnregisterCommand(const std::string& name)
+    {
+        auto it = m_commands.find(name);
+        if (it != m_commands.end())
+        {
+            m_commands.erase(it);
+            m_stats.registeredCommands = static_cast<uint32_t>(m_commands.size());
+            return true;
+        }
+        return false;
+    }
+
+    bool SimpleConsole::HasCommand(const std::string& name) const
+    {
+        return m_commands.find(name) != m_commands.end();
     }
 
     void SimpleConsole::LogDebug(const std::string& message)
@@ -521,10 +668,77 @@ namespace Spark
         std::string command = args[0];
         args.erase(args.begin());
 
+        // Check CVars first: if the command matches a cvar name, handle get/set
+        auto* cvar = CVarRegistry::Get().Find(command);
+        if (cvar)
+        {
+            if (args.empty())
+            {
+                // Print current value
+                std::string info = command + " = " + cvar->GetValueString();
+                if (cvar->IsModified())
+                {
+                    info += " (default: " + cvar->GetDefaultString() + ")";
+                }
+                info += " [" + std::string(CVarTypeToString(cvar->GetType())) + "]";
+                if (!cvar->GetDescription().empty())
+                {
+                    info += "\n  " + cvar->GetDescription();
+                }
+                LogInfo(info);
+                m_stats.totalCommandsExecuted++;
+                return true;
+            }
+            else
+            {
+                // Set new value
+                std::string newVal = args[0];
+                if (cvar->GetFlags() & CVarFlags::ReadOnly)
+                {
+                    LogError(command + " is read-only");
+                    m_stats.totalCommandsFailed++;
+                    return false;
+                }
+                if ((cvar->GetFlags() & CVarFlags::Cheat) && !CVarRegistry::Get().AreCheatsEnabled())
+                {
+                    LogError(command + " requires cheats to be enabled");
+                    m_stats.totalCommandsFailed++;
+                    return false;
+                }
+                if (cvar->SetFromString(newVal))
+                {
+                    LogSuccess(command + " = " + cvar->GetValueString());
+                    if (cvar->GetFlags() & CVarFlags::RequiresRestart)
+                    {
+                        LogWarning("Change to " + command + " requires engine restart to take effect");
+                    }
+                    m_stats.totalCommandsExecuted++;
+                    return true;
+                }
+                else
+                {
+                    LogError("Invalid value '" + newVal + "' for " + command +
+                             " (type: " + CVarTypeToString(cvar->GetType()) + ")");
+                    m_stats.totalCommandsFailed++;
+                    return false;
+                }
+            }
+        }
+
+        // Look up registered command
         auto it = m_commands.find(command);
         if (it == m_commands.end())
         {
-            LogError("Unknown command: '" + command + "'. Type 'help' for available commands.");
+            // Fuzzy match: suggest closest command
+            std::string suggestion = FindClosestCommand(command);
+            std::string errorMsg = "Unknown command: '" + command + "'.";
+            if (!suggestion.empty())
+            {
+                errorMsg += " Did you mean '" + suggestion + "'?";
+            }
+            errorMsg += " Type 'help' for available commands.";
+            LogError(errorMsg);
+            m_stats.totalCommandsFailed++;
             return false;
         }
 
@@ -535,13 +749,45 @@ namespace Spark
             {
                 LogInfo(result);
             }
+            m_stats.totalCommandsExecuted++;
             return true;
         }
         catch (const std::exception& e)
         {
-            LogError("Command execution failed: " + std::string(e.what()));
+            LogError("Command '" + command + "' failed: " + std::string(e.what()));
+            m_stats.totalCommandsFailed++;
             return false;
         }
+    }
+
+    std::string SimpleConsole::FindClosestCommand(const std::string& input) const
+    {
+        std::string closest;
+        size_t bestDistance = 4; // Maximum edit distance threshold
+
+        for (const auto& pair : m_commands)
+        {
+            size_t dist = LevenshteinDistance(input, pair.first);
+            if (dist < bestDistance)
+            {
+                bestDistance = dist;
+                closest = pair.first;
+            }
+        }
+
+        // Also check CVars
+        auto allCvars = CVarRegistry::Get().GetAll();
+        for (const auto* cv : allCvars)
+        {
+            size_t dist = LevenshteinDistance(input, cv->GetName());
+            if (dist < bestDistance)
+            {
+                bestDistance = dist;
+                closest = cv->GetName();
+            }
+        }
+
+        return closest;
     }
 
     void SimpleConsole::Show()
@@ -594,16 +840,32 @@ namespace Spark
         }
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        system("cls");
-#else
-        system("clear");
+        // Clear console using Win32 API instead of system("cls")
+        if (m_consoleOutput)
+        {
+            CONSOLE_SCREEN_BUFFER_INFO csbi;
+            GetConsoleScreenBufferInfo(m_consoleOutput, &csbi);
+            DWORD cellCount = csbi.dwSize.X * csbi.dwSize.Y;
+            DWORD written;
+            COORD homeCoords = {0, 0};
+            FillConsoleOutputCharacterA(m_consoleOutput, ' ', cellCount, homeCoords, &written);
+            FillConsoleOutputAttribute(m_consoleOutput, csbi.wAttributes, cellCount, homeCoords, &written);
+            SetConsoleCursorPosition(m_consoleOutput, homeCoords);
+        }
+#elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+        // ANSI escape: clear screen and move cursor to top-left
+        if (m_consoleOutputFd >= 0)
+        {
+            const char* clear = "\033[2J\033[H";
+            write(m_consoleOutputFd, clear, strlen(clear));
+        }
 #endif
 
         PrintLine("==========================================", Color::Cyan);
-        PrintLine("    Spark Engine Development Console", Color::Cyan);
+        PrintLine("    Spark Engine Development Console v4.0", Color::Cyan);
         PrintLine("        Professional Debug Interface", Color::White);
         PrintLine("==========================================", Color::Cyan);
-        PrintLine("Type 'help' for commands | 'help <cmd>' for details", Color::Yellow);
+        PrintLine("Type 'help' for commands | 'cvar_list' for variables", Color::Yellow);
         PrintLine("", Color::White);
 
         DisplayPrompt();
@@ -617,19 +879,359 @@ namespace Spark
 
     std::vector<std::string> SimpleConsole::GetCommandHistory() const
     {
+        std::lock_guard<std::mutex> lock(m_historyMutex);
         return std::vector<std::string>(m_commandHistory.begin(), m_commandHistory.end());
+    }
+
+    SimpleConsole::ConsoleStats SimpleConsole::GetStats() const
+    {
+        ConsoleStats stats = m_stats;
+        stats.registeredCommands = static_cast<uint32_t>(m_commands.size());
+        stats.registeredAliases = static_cast<uint32_t>(m_aliases.size());
+
+        uint32_t activeWatches = 0;
+        for (const auto& w : m_watchEntries)
+        {
+            if (w.active)
+                activeWatches++;
+        }
+        stats.activeWatches = activeWatches;
+        return stats;
+    }
+
+    int SimpleConsole::ExecuteScriptFile(const std::string& filePath)
+    {
+        std::ifstream file(filePath);
+        if (!file.is_open())
+        {
+            LogError("Failed to open script file: " + filePath);
+            return 0;
+        }
+
+        int count = 0;
+        std::string line;
+        int lineNum = 0;
+
+        while (std::getline(file, line))
+        {
+            lineNum++;
+            // Trim whitespace
+            size_t start = line.find_first_not_of(" \t");
+            if (start == std::string::npos)
+            {
+                continue;
+            }
+            line = line.substr(start);
+            size_t end = line.find_last_not_of(" \t\r\n");
+            if (end != std::string::npos)
+            {
+                line = line.substr(0, end + 1);
+            }
+
+            // Skip empty lines and comments
+            if (line.empty() || line[0] == '#' || (line.size() >= 2 && line[0] == '/' && line[1] == '/'))
+            {
+                continue;
+            }
+
+            // Resolve aliases before execution
+            std::string resolved = ResolveAliases(line);
+            if (ExecuteCommand(resolved))
+            {
+                count++;
+            }
+            else
+            {
+                LogWarning("Script line " + std::to_string(lineNum) + " failed: " + line);
+            }
+        }
+
+        LogSuccess("Script '" + filePath + "' executed: " + std::to_string(count) + " commands");
+        return count;
+    }
+
+    void SimpleConsole::SaveHistory() const
+    {
+        if (m_historyFilePath.empty())
+        {
+            return;
+        }
+
+        try
+        {
+            std::ofstream file(m_historyFilePath);
+            if (file.is_open())
+            {
+                std::lock_guard<std::mutex> lock(m_historyMutex);
+                for (const auto& cmd : m_commandHistory)
+                {
+                    file << cmd << "\n";
+                }
+            }
+        }
+        catch (...)
+        {
+            // Best effort - don't disrupt shutdown
+        }
+    }
+
+    void SimpleConsole::LoadHistory()
+    {
+        if (m_historyFilePath.empty())
+        {
+            return;
+        }
+
+        try
+        {
+            std::ifstream file(m_historyFilePath);
+            if (file.is_open())
+            {
+                std::lock_guard<std::mutex> lock(m_historyMutex);
+                std::string line;
+                while (std::getline(file, line))
+                {
+                    if (!line.empty())
+                    {
+                        m_commandHistory.push_back(line);
+                    }
+                }
+                // Trim to max size
+                while (m_commandHistory.size() > MaxCommandHistory)
+                {
+                    m_commandHistory.pop_front();
+                }
+                m_historyIndex = static_cast<int>(m_commandHistory.size());
+            }
+        }
+        catch (...)
+        {
+            // Best effort
+        }
+    }
+
+    void SimpleConsole::RegisterCVarCommands()
+    {
+        // Register meta-commands for the CVar system
+        RegisterCommand(
+            "cvar_list",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                std::string prefix;
+                if (!args.empty())
+                {
+                    prefix = args[0];
+                }
+
+                auto cvars = prefix.empty() ? CVarRegistry::Get().GetAll() : CVarRegistry::Get().FindByPrefix(prefix);
+
+                if (cvars.empty())
+                {
+                    return prefix.empty() ? "No console variables registered"
+                                          : "No console variables matching '" + prefix + "'";
+                }
+
+                std::stringstream ss;
+                ss << "Console Variables";
+                if (!prefix.empty())
+                {
+                    ss << " matching '" << prefix << "'";
+                }
+                ss << " (" << cvars.size() << "):\n";
+                ss << "==========================================\n";
+
+                for (const auto* cv : cvars)
+                {
+                    if (cv->GetFlags() & CVarFlags::Hidden)
+                    {
+                        continue;
+                    }
+
+                    ss << "  " << std::left << std::setw(30) << cv->GetName() << " = " << std::setw(15)
+                       << cv->GetValueString() << " [" << CVarTypeToString(cv->GetType()) << "]";
+
+                    if (cv->IsModified())
+                    {
+                        ss << " *";
+                    }
+
+                    if (cv->GetFlags() & CVarFlags::ReadOnly)
+                    {
+                        ss << " (ro)";
+                    }
+                    if (cv->GetFlags() & CVarFlags::Cheat)
+                    {
+                        ss << " (cheat)";
+                    }
+
+                    ss << "\n";
+                }
+
+                return ss.str();
+            },
+            "List all console variables, optionally filtered by prefix", "CVar", "cvar_list [prefix]");
+
+        RegisterCommand(
+            "cvar_reset",
+            [this](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                {
+                    return "Usage: cvar_reset <name|all>";
+                }
+
+                if (args[0] == "all")
+                {
+                    CVarRegistry::Get().ResetAll();
+                    return "All console variables reset to defaults";
+                }
+
+                auto* cv = CVarRegistry::Get().Find(args[0]);
+                if (!cv)
+                {
+                    return "Unknown cvar: " + args[0];
+                }
+                if (cv->GetFlags() & CVarFlags::ReadOnly)
+                {
+                    return args[0] + " is read-only";
+                }
+
+                cv->ResetToDefault();
+                return args[0] + " reset to " + cv->GetValueString();
+            },
+            "Reset a console variable (or all) to default value", "CVar", "cvar_reset <name|all>");
+
+        RegisterCommand(
+            "cvar_modified",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                auto allCvars = CVarRegistry::Get().GetAll();
+                std::stringstream ss;
+                ss << "Modified Console Variables:\n";
+                ss << "==========================================\n";
+                int count = 0;
+                for (const auto* cv : allCvars)
+                {
+                    if (cv->IsModified())
+                    {
+                        ss << "  " << std::left << std::setw(30) << cv->GetName() << " = " << cv->GetValueString()
+                           << " (default: " << cv->GetDefaultString() << ")\n";
+                        count++;
+                    }
+                }
+                if (count == 0)
+                {
+                    ss << "  (none)\n";
+                }
+                return ss.str();
+            },
+            "List all console variables that differ from their defaults", "CVar");
+
+        RegisterCommand(
+            "cvar_cheats",
+            [this](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                {
+                    return "Cheats are currently " +
+                           std::string(CVarRegistry::Get().AreCheatsEnabled() ? "ENABLED" : "DISABLED") +
+                           "\nUsage: cvar_cheats <on|off>";
+                }
+
+                std::string value = args[0];
+                std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+                bool enable = (value == "on" || value == "true" || value == "1");
+
+                CVarRegistry::Get().SetCheatsEnabled(enable);
+                return "Cheats " + std::string(enable ? "enabled" : "disabled");
+            },
+            "Enable or disable cheat-flagged console variables", "CVar", "cvar_cheats <on|off>");
     }
 
     void SimpleConsole::SetColor(Color color)
     {
-        if (m_consoleOutput)
+#ifdef SPARK_PLATFORM_WINDOWS
+        if (!m_consoleOutput)
         {
-            SetConsoleTextAttribute(m_consoleOutput, static_cast<WORD>(color));
+            return;
         }
+
+        // Map abstract Color to Windows console attributes
+        WORD attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE; // White default
+        switch (color)
+        {
+        case Color::White:
+            attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+            break;
+        case Color::Red:
+            attr = FOREGROUND_RED | FOREGROUND_INTENSITY;
+            break;
+        case Color::Green:
+            attr = FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+            break;
+        case Color::Blue:
+            attr = FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+            break;
+        case Color::Yellow:
+            attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+            break;
+        case Color::Cyan:
+            attr = FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+            break;
+        case Color::Magenta:
+            attr = FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+            break;
+        case Color::DarkGray:
+            attr = FOREGROUND_INTENSITY;
+            break;
+        case Color::BrightWhite:
+            attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+            break;
+        }
+        SetConsoleTextAttribute(m_consoleOutput, attr);
+#elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+        // ANSI escape codes for terminal color
+        const char* ansi = "\033[0m"; // Reset default
+        switch (color)
+        {
+        case Color::White:
+            ansi = "\033[37m";
+            break;
+        case Color::Red:
+            ansi = "\033[91m";
+            break;
+        case Color::Green:
+            ansi = "\033[92m";
+            break;
+        case Color::Blue:
+            ansi = "\033[94m";
+            break;
+        case Color::Yellow:
+            ansi = "\033[93m";
+            break;
+        case Color::Cyan:
+            ansi = "\033[96m";
+            break;
+        case Color::Magenta:
+            ansi = "\033[95m";
+            break;
+        case Color::DarkGray:
+            ansi = "\033[90m";
+            break;
+        case Color::BrightWhite:
+            ansi = "\033[97m";
+            break;
+        }
+        if (m_consoleOutputFd >= 0)
+        {
+            write(m_consoleOutputFd, ansi, strlen(ansi));
+        }
+#endif
     }
 
     void SimpleConsole::Print(const std::string& text, Color color)
     {
+#ifdef SPARK_PLATFORM_WINDOWS
         if (!m_consoleOutput)
         {
             return;
@@ -639,6 +1241,16 @@ namespace Spark
         DWORD written;
         WriteConsoleA(m_consoleOutput, text.c_str(), static_cast<DWORD>(text.length()), &written, NULL);
         SetColor(Color::White);
+#elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+        if (m_consoleOutputFd < 0)
+        {
+            return;
+        }
+
+        SetColor(color);
+        write(m_consoleOutputFd, text.c_str(), text.length());
+        SetColor(Color::White);
+#endif
     }
 
     void SimpleConsole::PrintLine(const std::string& text, Color color)
@@ -723,12 +1335,19 @@ namespace Spark
                 // Resolve aliases before execution
                 std::string resolvedCommand = ResolveAliases(m_currentInput);
 
-                m_commandHistory.push_back(m_currentInput);
-                if (m_commandHistory.size() > 100)
                 {
-                    m_commandHistory.pop_front();
+                    std::lock_guard<std::mutex> lock(m_historyMutex);
+                    // Avoid duplicate consecutive entries
+                    if (m_commandHistory.empty() || m_commandHistory.back() != m_currentInput)
+                    {
+                        m_commandHistory.push_back(m_currentInput);
+                        if (m_commandHistory.size() > MaxCommandHistory)
+                        {
+                            m_commandHistory.pop_front();
+                        }
+                    }
+                    m_historyIndex = static_cast<int>(m_commandHistory.size());
                 }
-                m_historyIndex = static_cast<int>(m_commandHistory.size());
 
                 ExecuteCommand(resolvedCommand);
                 m_currentInput.clear();
@@ -878,7 +1497,7 @@ namespace Spark
         // Match commands
         for (const auto& pair : m_commands)
         {
-            if (pair.first.size() >= prefix.size() && pair.first.substr(0, prefix.size()) == prefix)
+            if (pair.first.size() >= prefix.size() && pair.first.compare(0, prefix.size(), prefix) == 0)
             {
                 completions.push_back(pair.first);
             }
@@ -887,13 +1506,22 @@ namespace Spark
         // Match aliases
         for (const auto& pair : m_aliases)
         {
-            if (pair.first.size() >= prefix.size() && pair.first.substr(0, prefix.size()) == prefix)
+            if (pair.first.size() >= prefix.size() && pair.first.compare(0, prefix.size(), prefix) == 0)
             {
                 completions.push_back(pair.first);
             }
         }
 
+        // Match CVar names
+        auto matchingCvars = CVarRegistry::Get().FindByPrefix(prefix);
+        for (const auto* cv : matchingCvars)
+        {
+            completions.push_back(cv->GetName());
+        }
+
         std::sort(completions.begin(), completions.end());
+        // Remove duplicates (in case a command and cvar share the same name)
+        completions.erase(std::unique(completions.begin(), completions.end()), completions.end());
         return completions;
     }
 
@@ -1061,22 +1689,7 @@ namespace Spark
         for (size_t i = startIndex; i < history.size(); ++i)
         {
             const auto& entry = history[i];
-            Color color = Color::White;
-            if (entry.type == "ERROR")
-                color = Color::Red;
-            else if (entry.type == "WARNING")
-                color = Color::Yellow;
-            else if (entry.type == "SUCCESS")
-                color = Color::Green;
-            else if (entry.type == "INFO")
-                color = Color::Cyan;
-            else if (entry.type == "DEBUG")
-                color = Color::Magenta;
-            else if (entry.type == "CRITICAL")
-                color = Color::Red;
-            else if (entry.type == "TRACE")
-                color = Color::Blue;
-
+            Color color = SeverityToColor(entry.severity);
             PrintLine("[" + entry.timestamp + "] [" + entry.type + "] " + entry.message, color);
         }
 
@@ -1086,12 +1699,49 @@ namespace Spark
     std::vector<std::string> SimpleConsole::ParseCommand(const std::string& commandLine)
     {
         std::vector<std::string> args;
-        std::istringstream iss(commandLine);
-        std::string arg;
+        std::string current;
+        bool inQuotes = false;
+        bool escaped = false;
 
-        while (iss >> arg)
+        for (size_t i = 0; i < commandLine.size(); ++i)
         {
-            args.push_back(arg);
+            char ch = commandLine[i];
+
+            if (escaped)
+            {
+                current += ch;
+                escaped = false;
+                continue;
+            }
+
+            if (ch == '\\' && inQuotes)
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (!inQuotes && (ch == ' ' || ch == '\t'))
+            {
+                if (!current.empty())
+                {
+                    args.push_back(std::move(current));
+                    current.clear();
+                }
+                continue;
+            }
+
+            current += ch;
+        }
+
+        if (!current.empty())
+        {
+            args.push_back(std::move(current));
         }
 
         return args;
@@ -1188,7 +1838,14 @@ namespace Spark
                         ss << "\n";
                     }
 
-                    ss << "Type 'help <command>' for detailed info | Tab for autocomplete | Up/Down for history";
+                    auto cvarCount = CVarRegistry::Get().Count();
+                    if (cvarCount > 0)
+                    {
+                        ss << "CONSOLE VARIABLES: " << cvarCount << " registered (use 'cvar_list' to browse)\n\n";
+                    }
+
+                    ss << "Type 'help <command>' for details | 'find <term>' to search\n";
+                    ss << "Tab for autocomplete | Up/Down for history | Quoted \"multi word\" args supported";
                     return ss.str();
                 }
                 else if (args[0] == "categories")
@@ -1218,6 +1875,30 @@ namespace Spark
                         ss << "Command: " << args[0] << "\n";
                         ss << "Category: " << it->second.category << "\n";
                         ss << "Description: " << it->second.description;
+                        if (!it->second.usage.empty())
+                        {
+                            ss << "\nUsage: " << it->second.usage;
+                        }
+                        return ss.str();
+                    }
+
+                    // Check if it's a CVar name
+                    auto* cvar = CVarRegistry::Get().Find(args[0]);
+                    if (cvar)
+                    {
+                        std::stringstream ss;
+                        ss << "Console Variable: " << cvar->GetName() << "\n";
+                        ss << "Type: " << CVarTypeToString(cvar->GetType()) << "\n";
+                        ss << "Value: " << cvar->GetValueString() << "\n";
+                        ss << "Default: " << cvar->GetDefaultString() << "\n";
+                        if (!cvar->GetDescription().empty())
+                        {
+                            ss << "Description: " << cvar->GetDescription();
+                        }
+                        if (cvar->GetFlags() & CVarFlags::ReadOnly)
+                            ss << "\nFlags: read-only";
+                        if (cvar->GetFlags() & CVarFlags::Cheat)
+                            ss << "\nFlags: cheat-protected";
                         return ss.str();
                     }
 
@@ -1307,8 +1988,10 @@ namespace Spark
             "version",
             [](const std::vector<std::string>& args) -> std::string
             {
-                return "Spark Engine v1.0.0 - Development Build\nConsole System v3.0 - Professional Interface\n"
-                       "Features: Tab completion, history nav, aliases, watches, log filtering";
+                return "Spark Engine v1.0.0 - Development Build\n"
+                       "Console System v4.0 - Redesigned Architecture\n"
+                       "Features: CVar system, fuzzy matching, quoted args, script execution,\n"
+                       "          persistent history, Logger bridge, cross-platform colors";
             },
             "Display engine version information", "System");
 
@@ -1406,7 +2089,107 @@ namespace Spark
                     return "Invalid count. Must be a number.";
                 }
             },
-            "Repeat a command N times (usage: repeat <count> <command>)", "System");
+            "Repeat a command N times", "System", "repeat <count> <command>");
+
+        RegisterCommand(
+            "exec_file",
+            [this](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                {
+                    return "Usage: exec_file <path>\n"
+                           "Execute a script file (one command per line, # for comments)";
+                }
+                int count = ExecuteScriptFile(args[0]);
+                return "Executed " + std::to_string(count) + " commands from " + args[0];
+            },
+            "Execute commands from a script file", "System", "exec_file <path>");
+
+        RegisterCommand(
+            "stats",
+            [this](const std::vector<std::string>& args) -> std::string
+            {
+                auto stats = GetStats();
+                std::stringstream ss;
+                ss << "Console Statistics:\n";
+                ss << "==========================================\n";
+                ss << "Total Logs Written:     " << stats.totalLogsWritten << "\n";
+                ss << "Commands Executed:      " << stats.totalCommandsExecuted << "\n";
+                ss << "Commands Failed:        " << stats.totalCommandsFailed << "\n";
+                ss << "Registered Commands:    " << stats.registeredCommands << "\n";
+                ss << "Registered Aliases:     " << stats.registeredAliases << "\n";
+                ss << "Active Watches:         " << stats.activeWatches << "\n";
+                ss << "Registered CVars:       " << CVarRegistry::Get().Count();
+                return ss.str();
+            },
+            "Display console usage statistics", "System");
+
+        RegisterCommand(
+            "find",
+            [this](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                {
+                    return "Usage: find <search_term>\n"
+                           "Search for commands and cvars containing the term";
+                }
+
+                std::string search = args[0];
+                std::transform(search.begin(), search.end(), search.begin(), ::tolower);
+
+                std::stringstream ss;
+                int count = 0;
+
+                // Search commands
+                for (const auto& pair : m_commands)
+                {
+                    std::string name = pair.first;
+                    std::string desc = pair.second.description;
+                    std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+                    std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
+
+                    if (name.find(search) != std::string::npos || desc.find(search) != std::string::npos)
+                    {
+                        ss << "  [cmd] " << std::left << std::setw(25) << pair.first << " - " << pair.second.description
+                           << "\n";
+                        count++;
+                    }
+                }
+
+                // Search CVars
+                auto allCvars = CVarRegistry::Get().GetAll();
+                for (const auto* cv : allCvars)
+                {
+                    std::string name = cv->GetName();
+                    std::string desc = cv->GetDescription();
+                    std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+                    std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
+
+                    if (name.find(search) != std::string::npos || desc.find(search) != std::string::npos)
+                    {
+                        ss << "  [var] " << std::left << std::setw(25) << cv->GetName() << " = " << cv->GetValueString()
+                           << "\n";
+                        count++;
+                    }
+                }
+
+                if (count == 0)
+                {
+                    return "No commands or cvars matching '" + args[0] + "'";
+                }
+
+                return "Found " + std::to_string(count) + " results for '" + args[0] + "':\n" + ss.str();
+            },
+            "Search commands and cvars by name or description", "System", "find <search_term>");
+
+        RegisterCommand(
+            "save_history",
+            [this](const std::vector<std::string>& args) -> std::string
+            {
+                SaveHistory();
+                return "Command history saved to " + m_historyFilePath;
+            },
+            "Save command history to disk", "System");
     }
 
     void SimpleConsole::RegisterAdvancedCommands()
@@ -5541,9 +6324,9 @@ namespace Spark
     }
 
     void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
-                                        const std::string& category)
+                                        const std::string& category, const std::string& usage)
     {
-        m_commands[name] = {handler, description, category};
+        m_commands[name] = {handler, description, category, usage};
     }
 
     bool SimpleConsole::ExecuteCommand(const std::string& commandLine)
