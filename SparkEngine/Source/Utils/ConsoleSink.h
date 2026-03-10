@@ -37,7 +37,7 @@ namespace Spark
      */
     class ConsoleSink : public ILogSink
     {
-    public:
+      public:
         /**
          * @brief Construct a ConsoleSink
          * @param includeSourceInfo If true, appends (file:line) to messages
@@ -47,7 +47,7 @@ namespace Spark
         void Write(const LogMessage& msg) override;
         void Flush() override;
 
-    private:
+      private:
         static const char* LogLevelToConsoleType(LogLevel level);
         bool m_includeSourceInfo;
     };

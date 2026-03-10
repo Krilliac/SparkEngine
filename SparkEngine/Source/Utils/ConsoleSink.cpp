@@ -13,10 +13,7 @@
 namespace Spark
 {
 
-    ConsoleSink::ConsoleSink(bool includeSourceInfo)
-        : m_includeSourceInfo(includeSourceInfo)
-    {
-    }
+    ConsoleSink::ConsoleSink(bool includeSourceInfo) : m_includeSourceInfo(includeSourceInfo) {}
 
     void ConsoleSink::Write(const LogMessage& msg)
     {
@@ -63,13 +60,20 @@ namespace Spark
     {
         switch (level)
         {
-        case LogLevel::Trace: return "TRACE";
-        case LogLevel::Debug: return "DEBUG";
-        case LogLevel::Info:  return "INFO";
-        case LogLevel::Warn:  return "WARNING";
-        case LogLevel::Error: return "ERROR";
-        case LogLevel::Fatal: return "CRITICAL";
-        default:              return "INFO";
+        case LogLevel::Trace:
+            return "TRACE";
+        case LogLevel::Debug:
+            return "DEBUG";
+        case LogLevel::Info:
+            return "INFO";
+        case LogLevel::Warn:
+            return "WARNING";
+        case LogLevel::Error:
+            return "ERROR";
+        case LogLevel::Fatal:
+            return "CRITICAL";
+        default:
+            return "INFO";
         }
     }
 
