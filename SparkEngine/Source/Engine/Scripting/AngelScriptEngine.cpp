@@ -9,10 +9,13 @@
  */
 
 #include "AngelScriptEngine.h"
+#include "../../Input/InputManager.h"
+#include "../../Core/SparkEngine.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -64,15 +67,108 @@ Transform* ASGetTransform([[maybe_unused]] EntityID entity)
     return nullptr;
 }
 
-bool ASGetKeyDown([[maybe_unused]] const std::string& key)
+/**
+ * @brief Convert a script key name string to a Windows virtual key code.
+ *
+ * Supports single-character keys ("W", "A", etc.), digits ("0"-"9"),
+ * and named keys ("Space", "Enter", "Escape", "Shift", "Ctrl", "Alt",
+ * "Tab", "F1"-"F12", "Up", "Down", "Left", "Right", "LeftShift", etc.).
+ */
+static int ScriptKeyNameToVK(const std::string& key)
 {
-    // Requires InputManager binding — stub for now.
-    return false;
+#ifdef SPARK_PLATFORM_WINDOWS
+    // Upper-case the key name for case-insensitive matching
+    std::string upper = key;
+    std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+
+    // Single character letter or digit
+    if (upper.size() == 1)
+    {
+        char ch = upper[0];
+        if (ch >= 'A' && ch <= 'Z')
+        {
+            return static_cast<int>(ch); // VK codes for A-Z match ASCII
+        }
+        if (ch >= '0' && ch <= '9')
+        {
+            return static_cast<int>(ch); // VK codes for 0-9 match ASCII
+        }
+    }
+
+    // Named keys
+    if (upper == "SPACE")       return VK_SPACE;
+    if (upper == "ENTER")       return VK_RETURN;
+    if (upper == "RETURN")      return VK_RETURN;
+    if (upper == "ESCAPE")      return VK_ESCAPE;
+    if (upper == "ESC")         return VK_ESCAPE;
+    if (upper == "TAB")         return VK_TAB;
+    if (upper == "SHIFT")       return VK_SHIFT;
+    if (upper == "LEFTSHIFT")   return VK_LSHIFT;
+    if (upper == "RIGHTSHIFT")  return VK_RSHIFT;
+    if (upper == "CTRL")        return VK_CONTROL;
+    if (upper == "CONTROL")     return VK_CONTROL;
+    if (upper == "LEFTCTRL")    return VK_LCONTROL;
+    if (upper == "RIGHTCTRL")   return VK_RCONTROL;
+    if (upper == "ALT")         return VK_MENU;
+    if (upper == "LEFTALT")     return VK_LMENU;
+    if (upper == "RIGHTALT")    return VK_RMENU;
+    if (upper == "UP")          return VK_UP;
+    if (upper == "DOWN")        return VK_DOWN;
+    if (upper == "LEFT")        return VK_LEFT;
+    if (upper == "RIGHT")       return VK_RIGHT;
+    if (upper == "BACKSPACE")   return VK_BACK;
+    if (upper == "DELETE")      return VK_DELETE;
+    if (upper == "INSERT")      return VK_INSERT;
+    if (upper == "HOME")        return VK_HOME;
+    if (upper == "END")         return VK_END;
+    if (upper == "PAGEUP")      return VK_PRIOR;
+    if (upper == "PAGEDOWN")    return VK_NEXT;
+
+    // Function keys F1-F12
+    if (upper.size() >= 2 && upper[0] == 'F')
+    {
+        int num = std::atoi(upper.c_str() + 1);
+        if (num >= 1 && num <= 12)
+        {
+            return VK_F1 + (num - 1);
+        }
+    }
+#else
+    (void)key;
+#endif
+    return 0;
 }
 
-bool ASGetKey([[maybe_unused]] const std::string& key)
+bool ASGetKeyDown(const std::string& key)
 {
-    return false;
+    if (!g_input)
+    {
+        return false;
+    }
+
+    int vk = ScriptKeyNameToVK(key);
+    if (vk == 0)
+    {
+        return false;
+    }
+
+    return g_input->WasKeyPressed(vk);
+}
+
+bool ASGetKey(const std::string& key)
+{
+    if (!g_input)
+    {
+        return false;
+    }
+
+    int vk = ScriptKeyNameToVK(key);
+    if (vk == 0)
+    {
+        return false;
+    }
+
+    return g_input->IsKeyDown(vk);
 }
 
 // ============================================================================

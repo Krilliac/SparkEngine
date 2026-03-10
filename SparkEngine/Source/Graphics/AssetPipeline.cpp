@@ -2446,17 +2446,98 @@ std::string LoadingPriorityToString(LoadingPriority priority)
 // RENDERING HELPERS (platform-independent stubs)
 // ============================================================================
 
-void AssetPipeline::BindMesh([[maybe_unused]] const std::string& meshPath)
+void AssetPipeline::BindMesh(const std::string& meshPath)
 {
-    // TODO: Bind mesh vertex/index buffers to the pipeline
+    if (!m_context)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+
+    auto it = m_assets.find(meshPath);
+    if (it == m_assets.end() || !it->second || !it->second->IsLoaded())
+    {
+        return;
+    }
+
+    auto* meshAsset = dynamic_cast<MeshAsset*>(it->second.get());
+    if (!meshAsset)
+    {
+        return;
+    }
+
+    ID3D11Buffer* vertexBuffer = meshAsset->GetVertexBuffer();
+    ID3D11Buffer* indexBuffer = meshAsset->GetIndexBuffer();
+    if (!vertexBuffer || !indexBuffer)
+    {
+        return;
+    }
+
+    constexpr UINT stride = sizeof(MeshAssetData::Vertex);
+    constexpr UINT offset = 0;
+    m_context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
+    m_context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+    m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
-void AssetPipeline::BindMaterial([[maybe_unused]] const std::string& materialPath)
+void AssetPipeline::BindMaterial(const std::string& materialPath)
 {
-    // TODO: Bind material textures and constants to the pipeline
+    if (!m_context)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+
+    auto it = m_assets.find(materialPath);
+    if (it == m_assets.end() || !it->second || !it->second->IsLoaded())
+    {
+        return;
+    }
+
+    // Materials are typically stored as textures in the asset map.
+    // Bind the shader resource view if this is a texture asset.
+    auto* textureAsset = dynamic_cast<TextureAsset*>(it->second.get());
+    if (!textureAsset)
+    {
+        return;
+    }
+
+    ID3D11ShaderResourceView* srv = textureAsset->GetSRV();
+    if (srv)
+    {
+        m_context->PSSetShaderResources(0, 1, &srv);
+    }
 }
 
 void AssetPipeline::DrawBoundMesh()
 {
-    // TODO: Issue draw call for the currently bound mesh
+    if (!m_context)
+    {
+        return;
+    }
+
+    // Retrieve the currently bound index buffer to determine the index count.
+    // The ID3D11DeviceContext does not expose a direct query for the bound
+    // index count, so we look up the most recently bound mesh from the
+    // asset map. As a simple approach, iterate the assets to find a loaded
+    // mesh and use its index count. In production this would be cached in a
+    // member variable set by BindMesh.
+    std::lock_guard<std::mutex> lock(m_assetsMutex);
+
+    for (const auto& [path, asset] : m_assets)
+    {
+        if (!asset || asset->GetType() != AssetType::Mesh || !asset->IsLoaded())
+        {
+            continue;
+        }
+
+        auto* meshAsset = dynamic_cast<MeshAsset*>(asset.get());
+        if (meshAsset && meshAsset->GetIndexCount() > 0)
+        {
+            m_context->DrawIndexed(meshAsset->GetIndexCount(), 0, 0);
+            return;
+        }
+    }
 }
