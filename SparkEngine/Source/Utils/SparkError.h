@@ -233,25 +233,9 @@ namespace SparkError
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-//  Logging macros -- always compiled in, filtered at runtime if needed
+//  Logging macros -- use LogMacros.h for the unified SPARK_LOG_* macros.
+//  SparkError.h no longer defines them to avoid macro redefinition warnings.
 // ---------------------------------------------------------------------------
-#define SPARK_LOG_TRACE(cat, fmt, ...)                                                                                 \
-    SparkError::LogMessage(SparkError::Severity::Trace, cat, __FILE__, __LINE__, __FUNCTION__, fmt, ##__VA_ARGS__)
-
-#define SPARK_LOG_DEBUG(cat, fmt, ...)                                                                                 \
-    SparkError::LogMessage(SparkError::Severity::Debug, cat, __FILE__, __LINE__, __FUNCTION__, fmt, ##__VA_ARGS__)
-
-#define SPARK_LOG_INFO(cat, fmt, ...)                                                                                  \
-    SparkError::LogMessage(SparkError::Severity::Info, cat, __FILE__, __LINE__, __FUNCTION__, fmt, ##__VA_ARGS__)
-
-#define SPARK_LOG_WARN(cat, fmt, ...)                                                                                  \
-    SparkError::LogMessage(SparkError::Severity::Warn, cat, __FILE__, __LINE__, __FUNCTION__, fmt, ##__VA_ARGS__)
-
-#define SPARK_LOG_ERROR(cat, fmt, ...)                                                                                 \
-    SparkError::LogMessage(SparkError::Severity::Error, cat, __FILE__, __LINE__, __FUNCTION__, fmt, ##__VA_ARGS__)
-
-#define SPARK_LOG_FATAL(cat, fmt, ...)                                                                                 \
-    SparkError::LogMessage(SparkError::Severity::Fatal, cat, __FILE__, __LINE__, __FUNCTION__, fmt, ##__VA_ARGS__)
 
 // ---------------------------------------------------------------------------
 //  Soft checks -- log and continue (return false / early-out)

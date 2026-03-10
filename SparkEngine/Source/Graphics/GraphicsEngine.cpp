@@ -2158,11 +2158,6 @@ AssetPipeline* GraphicsEngine::GetAssetPipeline() const
     return m_assetPipeline.get();
 }
 
-PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const
-{
-    return m_physicsSystem;
-}
-
 LightManager* GraphicsEngine::GetLightManager() const
 {
     return m_lightManager.get();
@@ -2453,11 +2448,6 @@ void GraphicsEngine::Console_SetWireframe(bool enabled)
     LOG_TO_CONSOLE_IMMEDIATE(enabled ? L"Wireframe mode enabled" : L"Wireframe mode disabled", L"INFO");
 }
 
-void GraphicsEngine::Console_SetWireframeMode(bool enabled)
-{
-    Console_SetWireframe(enabled);
-}
-
 void GraphicsEngine::Console_SetVSync(bool enabled)
 {
     m_settings.vsync = enabled;
@@ -2472,11 +2462,6 @@ void GraphicsEngine::Console_SetRenderingPipeline(RenderingPipeline pipeline)
 void GraphicsEngine::Console_SetHDR(bool enabled)
 {
     SetHDREnabled(enabled);
-}
-
-bool GraphicsEngine::Console_TakeScreenshot(const std::string& filename)
-{
-    return Console_Screenshot(filename);
 }
 
 void GraphicsEngine::Console_ForceGarbageCollection()
@@ -2511,11 +2496,6 @@ void GraphicsEngine::Console_ForceGarbageCollection()
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Garbage collection complete", L"SUCCESS");
-}
-
-RenderStatistics GraphicsEngine::Console_GetMetrics() const
-{
-    return Console_GetStatistics(); // Delegates to canonical method
 }
 
 void GraphicsEngine::Console_SetGPUTiming(bool enabled)
@@ -2575,12 +2555,6 @@ size_t GraphicsEngine::Console_GetVRAMUsage() const
     LOG_TO_CONSOLE_IMMEDIATE(L"VRAM usage retrieved: " + std::to_wstring(totalUsage / 1024 / 1024) + L" MB", L"INFO");
 
     return totalUsage;
-}
-
-GraphicsSettings GraphicsEngine::Console_GetSettings() const
-{
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    return m_settings;
 }
 
 void GraphicsEngine::Console_ApplySettings(const GraphicsSettings& settings)
@@ -3286,10 +3260,6 @@ AssetPipeline* GraphicsEngine::GetAssetPipeline() const
 {
     return m_assetPipeline.get();
 }
-PhysicsSystem* GraphicsEngine::GetPhysicsSystem() const
-{
-    return m_physicsSystem;
-}
 LightManager* GraphicsEngine::GetLightManager() const
 {
     return m_lightManager.get();
@@ -3607,11 +3577,6 @@ void GraphicsEngine::Console_SetWireframe(bool enabled)
     m_statistics.wireframeMode = enabled;
 }
 
-void GraphicsEngine::Console_SetWireframeMode(bool enabled)
-{
-    Console_SetWireframe(enabled);
-}
-
 void GraphicsEngine::Console_SetVSync(bool enabled)
 {
     m_settings.vsync = enabled;
@@ -3645,11 +3610,6 @@ void GraphicsEngine::Console_SetClearColor(float r, float g, float b, float a)
 void GraphicsEngine::Console_SetRenderScale(float scale)
 {
     m_settings.renderScale = (scale > 0.0f) ? scale : 1.0f;
-}
-
-bool GraphicsEngine::Console_TakeScreenshot(const std::string& filename)
-{
-    return Console_Screenshot(filename);
 }
 
 void GraphicsEngine::Console_ResetDevice()
@@ -3709,17 +3669,6 @@ size_t GraphicsEngine::Console_GetVRAMUsage() const
     if (!rhi.initialized)
         return 0;
     return rhi.bridge.GetFrameStatistics().gpuMemoryUsed;
-}
-
-GraphicsSettings GraphicsEngine::Console_GetSettings() const
-{
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    return m_settings;
-}
-
-RenderStatistics GraphicsEngine::Console_GetMetrics() const
-{
-    return Console_GetStatistics();
 }
 
 // ============================================================================

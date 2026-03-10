@@ -162,10 +162,11 @@
     } while (0)
 
 // ============================================================================
-// Legacy compatibility macros
+// In-game console logging macros
 // ============================================================================
-// These route through the unified logger and also forward to SimpleConsole
-// for backward compatibility with existing code.
+// These log directly to SimpleConsole for in-game debug output.
+// Use SPARK_LOG_* for system/file logging; use LOG_TO_CONSOLE for
+// in-game console display.
 
 /**
  * @brief Log a message to the SimpleConsole immediately (no rate limiting).
