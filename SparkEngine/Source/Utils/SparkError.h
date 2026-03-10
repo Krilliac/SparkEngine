@@ -233,9 +233,10 @@ namespace SparkError
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-//  Logging macros -- use LogMacros.h for the unified SPARK_LOG_* macros.
-//  SparkError.h no longer defines them to avoid macro redefinition warnings.
+//  Logging macros -- provided by LogMacros.h (unified SPARK_LOG_* macros).
+//  SparkError.h no longer defines them directly to avoid redefinition warnings.
 // ---------------------------------------------------------------------------
+#include "Utils/LogMacros.h"
 
 // ---------------------------------------------------------------------------
 //  Soft checks -- log and continue (return false / early-out)
