@@ -774,6 +774,9 @@ void PhysicsSystem::ProcessCollisions()
     if (!m_dynamicsWorld || !m_dispatcher)
         return;
 
+    // Build the set of trigger pairs active this frame
+    std::vector<std::pair<PhysicsBody*, PhysicsBody*>> currentTriggerPairs;
+
     int numManifolds = m_dispatcher->getNumManifolds();
     for (int i = 0; i < numManifolds; i++)
     {
@@ -796,9 +799,31 @@ void PhysicsSystem::ProcessCollisions()
             isTrigger = true;
 
         int numContacts = manifold->getNumContacts();
-        if (numContacts > 0 && isTrigger && m_triggerCallback)
+
+        if (isTrigger && bodyA && bodyB && numContacts > 0)
         {
-            m_triggerCallback(bodyA, bodyB, true);
+            // Canonical ordering to ensure consistent pair identity
+            PhysicsBody* first = (bodyA < bodyB) ? bodyA : bodyB;
+            PhysicsBody* second = (bodyA < bodyB) ? bodyB : bodyA;
+            currentTriggerPairs.push_back({first, second});
+
+            // Check if this pair is new (trigger enter)
+            if (m_triggerCallback)
+            {
+                bool wasActive = false;
+                for (const auto& prev : m_activeTriggerPairs)
+                {
+                    if (prev.first == first && prev.second == second)
+                    {
+                        wasActive = true;
+                        break;
+                    }
+                }
+                if (!wasActive)
+                {
+                    m_triggerCallback(bodyA, bodyB, true);
+                }
+            }
         }
 
         // Fire collision callbacks for each contact point
@@ -822,6 +847,30 @@ void PhysicsSystem::ProcessCollisions()
             }
         }
     }
+
+    // Detect trigger exit events: pairs that were active last frame but not this frame
+    if (m_triggerCallback)
+    {
+        for (const auto& prev : m_activeTriggerPairs)
+        {
+            bool stillActive = false;
+            for (const auto& curr : currentTriggerPairs)
+            {
+                if (curr.first == prev.first && curr.second == prev.second)
+                {
+                    stillActive = true;
+                    break;
+                }
+            }
+            if (!stillActive)
+            {
+                m_triggerCallback(prev.first, prev.second, false);
+            }
+        }
+    }
+
+    // Swap the current pairs into the tracking set for the next frame
+    m_activeTriggerPairs = std::move(currentTriggerPairs);
 }
 
 void PhysicsSystem::SetGravity(const XMFLOAT3& gravity)
@@ -1074,6 +1123,83 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateFixedConstraint(std::sha
     return constraint;
 }
 
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePoint2PointConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                              std::shared_ptr<PhysicsBody> bodyB,
+                                                                              const XMFLOAT3& pivotA,
+                                                                              const XMFLOAT3& pivotB)
+{
+    if (!m_dynamicsWorld || !bodyA)
+        return nullptr;
+    if (!bodyA->GetBulletBody())
+        return nullptr;
+
+    btPoint2PointConstraint* p2pConstraint = nullptr;
+
+    if (bodyB && bodyB->GetBulletBody())
+    {
+        // Two-body constraint
+        p2pConstraint = new btPoint2PointConstraint(*bodyA->GetBulletBody(), *bodyB->GetBulletBody(), ToBullet(pivotA),
+                                                    ToBullet(pivotB));
+    }
+    else
+    {
+        // Single-body constraint anchored to world
+        p2pConstraint = new btPoint2PointConstraint(*bodyA->GetBulletBody(), ToBullet(pivotA));
+    }
+
+    m_dynamicsWorld->addConstraint(p2pConstraint, true);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Point2Point, p2pConstraint);
+    m_constraints.push_back(constraint);
+
+    return constraint;
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateConeTwistConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                            std::shared_ptr<PhysicsBody> bodyB,
+                                                                            const XMMATRIX& frameA,
+                                                                            const XMMATRIX& frameB, float swingSpan1,
+                                                                            float swingSpan2, float twistSpan)
+{
+    if (!m_dynamicsWorld || !bodyA || !bodyB)
+        return nullptr;
+    if (!bodyA->GetBulletBody() || !bodyB->GetBulletBody())
+        return nullptr;
+
+    // Convert XMMATRIX frames to btTransform
+    btTransform btFrameA, btFrameB;
+
+    XMVECTOR scaleA, rotA, transA;
+    XMMatrixDecompose(&scaleA, &rotA, &transA, frameA);
+    XMFLOAT3 posA;
+    XMStoreFloat3(&posA, transA);
+    XMFLOAT4 quatA;
+    XMStoreFloat4(&quatA, rotA);
+    btFrameA.setOrigin(btVector3(posA.x, posA.y, posA.z));
+    btFrameA.setRotation(btQuaternion(quatA.x, quatA.y, quatA.z, quatA.w));
+
+    XMVECTOR scaleB, rotB, transB;
+    XMMatrixDecompose(&scaleB, &rotB, &transB, frameB);
+    XMFLOAT3 posB;
+    XMStoreFloat3(&posB, transB);
+    XMFLOAT4 quatB;
+    XMStoreFloat4(&quatB, rotB);
+    btFrameB.setOrigin(btVector3(posB.x, posB.y, posB.z));
+    btFrameB.setRotation(btQuaternion(quatB.x, quatB.y, quatB.z, quatB.w));
+
+    btConeTwistConstraint* coneTwist =
+        new btConeTwistConstraint(*bodyA->GetBulletBody(), *bodyB->GetBulletBody(), btFrameA, btFrameB);
+
+    coneTwist->setLimit(swingSpan1, swingSpan2, twistSpan);
+
+    m_dynamicsWorld->addConstraint(coneTwist, true);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::ConeTwist, coneTwist);
+    m_constraints.push_back(constraint);
+
+    return constraint;
+}
+
 void PhysicsSystem::RemoveConstraint(std::shared_ptr<PhysicsConstraint> constraint)
 {
     if (!constraint)
@@ -1281,6 +1407,151 @@ bool PhysicsSystem::BoxOverlap(const XMFLOAT3& center, const XMFLOAT3& halfExten
     m_dynamicsWorld->contactTest(&ghostObject, callback);
 
     return !results.empty();
+}
+
+// ============================================================================
+// SHAPE CASTING (SWEEP TESTS)
+// ============================================================================
+
+RaycastHit PhysicsSystem::SphereCast(float radius, const XMFLOAT3& from, const XMFLOAT3& to)
+{
+    RaycastHit hit;
+    hit.hasHit = false;
+
+    if (!m_dynamicsWorld)
+        return hit;
+
+    btSphereShape sphereShape(radius);
+
+    btTransform fromTransform;
+    fromTransform.setIdentity();
+    fromTransform.setOrigin(ToBullet(from));
+
+    btTransform toTransform;
+    toTransform.setIdentity();
+    toTransform.setOrigin(ToBullet(to));
+
+    btCollisionWorld::ClosestConvexResultCallback callback(ToBullet(from), ToBullet(to));
+    callback.m_collisionFilterGroup = 1;
+    callback.m_collisionFilterMask = 0xFFFF;
+
+    m_dynamicsWorld->convexSweepTest(&sphereShape, fromTransform, toTransform, callback);
+
+    if (callback.hasHit())
+    {
+        hit.hasHit = true;
+        hit.point = FromBullet(callback.m_hitPointWorld);
+        hit.normal = FromBullet(callback.m_hitNormalWorld);
+
+        btVector3 diff = callback.m_hitPointWorld - ToBullet(from);
+        hit.distance = diff.length();
+
+        const btCollisionObject* hitObj = callback.m_hitCollisionObject;
+        if (hitObj)
+        {
+            hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
+            if (hit.body)
+            {
+                hit.userData = hit.body->GetUserData();
+            }
+        }
+    }
+
+    return hit;
+}
+
+RaycastHit PhysicsSystem::BoxCast(const XMFLOAT3& halfExtents, const XMFLOAT3& from, const XMFLOAT3& to)
+{
+    RaycastHit hit;
+    hit.hasHit = false;
+
+    if (!m_dynamicsWorld)
+        return hit;
+
+    btBoxShape boxShape(ToBullet(halfExtents));
+
+    btTransform fromTransform;
+    fromTransform.setIdentity();
+    fromTransform.setOrigin(ToBullet(from));
+
+    btTransform toTransform;
+    toTransform.setIdentity();
+    toTransform.setOrigin(ToBullet(to));
+
+    btCollisionWorld::ClosestConvexResultCallback callback(ToBullet(from), ToBullet(to));
+    callback.m_collisionFilterGroup = 1;
+    callback.m_collisionFilterMask = 0xFFFF;
+
+    m_dynamicsWorld->convexSweepTest(&boxShape, fromTransform, toTransform, callback);
+
+    if (callback.hasHit())
+    {
+        hit.hasHit = true;
+        hit.point = FromBullet(callback.m_hitPointWorld);
+        hit.normal = FromBullet(callback.m_hitNormalWorld);
+
+        btVector3 diff = callback.m_hitPointWorld - ToBullet(from);
+        hit.distance = diff.length();
+
+        const btCollisionObject* hitObj = callback.m_hitCollisionObject;
+        if (hitObj)
+        {
+            hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
+            if (hit.body)
+            {
+                hit.userData = hit.body->GetUserData();
+            }
+        }
+    }
+
+    return hit;
+}
+
+RaycastHit PhysicsSystem::CapsuleCast(float radius, float height, const XMFLOAT3& from, const XMFLOAT3& to)
+{
+    RaycastHit hit;
+    hit.hasHit = false;
+
+    if (!m_dynamicsWorld)
+        return hit;
+
+    btCapsuleShape capsuleShape(radius, height);
+
+    btTransform fromTransform;
+    fromTransform.setIdentity();
+    fromTransform.setOrigin(ToBullet(from));
+
+    btTransform toTransform;
+    toTransform.setIdentity();
+    toTransform.setOrigin(ToBullet(to));
+
+    btCollisionWorld::ClosestConvexResultCallback callback(ToBullet(from), ToBullet(to));
+    callback.m_collisionFilterGroup = 1;
+    callback.m_collisionFilterMask = 0xFFFF;
+
+    m_dynamicsWorld->convexSweepTest(&capsuleShape, fromTransform, toTransform, callback);
+
+    if (callback.hasHit())
+    {
+        hit.hasHit = true;
+        hit.point = FromBullet(callback.m_hitPointWorld);
+        hit.normal = FromBullet(callback.m_hitNormalWorld);
+
+        btVector3 diff = callback.m_hitPointWorld - ToBullet(from);
+        hit.distance = diff.length();
+
+        const btCollisionObject* hitObj = callback.m_hitCollisionObject;
+        if (hitObj)
+        {
+            hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
+            if (hit.body)
+            {
+                hit.userData = hit.body->GetUserData();
+            }
+        }
+    }
+
+    return hit;
 }
 
 // ============================================================================

@@ -125,17 +125,18 @@ namespace Spark::AI
             closed[current.triIndex] = true;
 
             const auto& tri = m_navMesh->triangles[current.triIndex];
-            for (int e = 0; e < 3; ++e)
+
+            // Helper lambda to process a neighbor triangle
+            auto processNeighbor = [&](uint32_t neighbor)
             {
-                uint32_t neighbor = tri.neighborTriangles[e];
-                if (neighbor == UINT32_MAX || closed[neighbor])
-                    continue;
+                if (neighbor == UINT32_MAX || neighbor >= triCount || closed[neighbor])
+                    return;
 
                 // Check flags
                 if ((m_navMesh->triangles[neighbor].flags & request.includeFlags) == 0)
-                    continue;
+                    return;
                 if ((m_navMesh->triangles[neighbor].flags & request.excludeFlags) != 0)
-                    continue;
+                    return;
 
                 float edgeCost = HeuristicCost(tri.centroid, m_navMesh->triangles[neighbor].centroid);
                 float newG = gCosts[current.triIndex] + edgeCost;
@@ -148,6 +149,18 @@ namespace Spark::AI
                         HeuristicCost(m_navMesh->triangles[neighbor].centroid, m_navMesh->triangles[endTri].centroid);
                     openSet.push({neighbor, newG, newG + newH, current.triIndex});
                 }
+            };
+
+            // Traverse fixed adjacency (shared edges)
+            for (int e = 0; e < 3; ++e)
+            {
+                processNeighbor(tri.neighborTriangles[e]);
+            }
+
+            // Traverse dynamic adjacency (off-mesh connections, jump links)
+            for (uint32_t dynNeighbor : tri.adjacency)
+            {
+                processNeighbor(dynNeighbor);
             }
         }
 
@@ -157,16 +170,164 @@ namespace Spark::AI
     NavMeshHit NavMeshQuery::Raycast(const XMFLOAT3& start, const XMFLOAT3& end) const
     {
         NavMeshHit hit{};
-        if (!m_navMesh)
+        if (!m_navMesh || m_navMesh->triangles.empty())
             return hit;
 
-        // Simple raycast through triangle centroids
-        uint32_t startTri = FindContainingTriangle(start);
-        if (startTri == UINT32_MAX)
+        uint32_t currentTri = FindContainingTriangle(start);
+        if (currentTri == UINT32_MAX)
             return hit;
 
-        hit.position = end;
-        hit.hit = IsPointOnNavMesh(end);
+        // Ray direction on XZ plane
+        float rayDirX = end.x - start.x;
+        float rayDirZ = end.z - start.z;
+        float rayLength = std::sqrt(rayDirX * rayDirX + rayDirZ * rayDirZ);
+
+        if (rayLength < 1e-6f)
+        {
+            // Start and end are the same point; trivially on the navmesh
+            hit.position = start;
+            hit.normal = m_navMesh->triangles[currentTri].normal;
+            hit.triangleIndex = currentTri;
+            hit.distance = 0.0f;
+            hit.hit = false; // No obstacle hit; entire segment is on navmesh
+            return hit;
+        }
+
+        // Walk through triangles along the ray using edge crossing detection.
+        // We parametrize the ray as P(t) = start + t * (end - start), t in [0, 1].
+        // At each triangle, find which edge the ray exits through and step to the neighbor.
+        constexpr int kMaxIterations = 512;
+        std::vector<bool> visited(m_navMesh->triangles.size(), false);
+
+        float tProgress = 0.0f;
+
+        for (int iter = 0; iter < kMaxIterations; ++iter)
+        {
+            if (currentTri == UINT32_MAX || currentTri >= m_navMesh->triangles.size())
+                break;
+
+            if (visited[currentTri])
+                break;
+            visited[currentTri] = true;
+
+            const auto& tri = m_navMesh->triangles[currentTri];
+
+            // Check if end point is within this triangle
+            const auto& v0 = m_navMesh->vertices[tri.indices[0]].position;
+            const auto& v1 = m_navMesh->vertices[tri.indices[1]].position;
+            const auto& v2 = m_navMesh->vertices[tri.indices[2]].position;
+
+            // Test if end point is inside this triangle (XZ plane)
+            {
+                float dx0 = v1.x - v0.x, dz0 = v1.z - v0.z;
+                float dx1 = v2.x - v0.x, dz1 = v2.z - v0.z;
+                float dxP = end.x - v0.x, dzP = end.z - v0.z;
+                float denom = dx0 * dz1 - dx1 * dz0;
+                if (std::abs(denom) > 1e-10f)
+                {
+                    float invD = 1.0f / denom;
+                    float u = (dxP * dz1 - dx1 * dzP) * invD;
+                    float v = (dx0 * dzP - dxP * dz0) * invD;
+                    constexpr float kEps = -0.01f;
+                    if (u >= kEps && v >= kEps && (u + v) <= (1.0f - kEps))
+                    {
+                        // End point is in this triangle; entire segment is on navmesh
+                        hit.position = end;
+                        hit.normal = tri.normal;
+                        hit.triangleIndex = currentTri;
+                        hit.distance = rayLength;
+                        hit.hit = false; // No obstacle; ray stays on navmesh
+                        return hit;
+                    }
+                }
+            }
+
+            // Find which edge the ray exits through.
+            // Edges: (v0,v1), (v1,v2), (v2,v0)
+            const XMFLOAT3* edgeVerts[3][2] = {{&v0, &v1}, {&v1, &v2}, {&v2, &v0}};
+            float bestT = 2.0f; // parameter along the ray, looking for smallest t > tProgress
+            int bestEdge = -1;
+
+            for (int e = 0; e < 3; ++e)
+            {
+                const XMFLOAT3& ea = *edgeVerts[e][0];
+                const XMFLOAT3& eb = *edgeVerts[e][1];
+
+                // Intersect ray (start -> end) with edge (ea -> eb) in 2D (XZ plane)
+                float edgeDirX = eb.x - ea.x;
+                float edgeDirZ = eb.z - ea.z;
+
+                float det = rayDirX * edgeDirZ - rayDirZ * edgeDirX;
+                if (std::abs(det) < 1e-10f)
+                    continue; // Parallel
+
+                float invDet = 1.0f / det;
+                float diffX = ea.x - start.x;
+                float diffZ = ea.z - start.z;
+
+                float tRay = (diffX * edgeDirZ - diffZ * edgeDirX) * invDet;
+                float tEdge = (diffX * rayDirZ - diffZ * rayDirX) * invDet;
+
+                // tRay must be ahead of current progress, tEdge must be within [0,1]
+                constexpr float kEdgeEps = -1e-4f;
+                if (tRay > (tProgress - 1e-4f) && tEdge >= kEdgeEps && tEdge <= (1.0f - kEdgeEps))
+                {
+                    if (tRay < bestT)
+                    {
+                        bestT = tRay;
+                        bestEdge = e;
+                    }
+                }
+            }
+
+            if (bestEdge < 0)
+                break; // Could not find exit edge
+
+            // Check if the ray exits the navmesh at this edge (no neighbor)
+            uint32_t neighborTri = tri.neighborTriangles[bestEdge];
+            if (neighborTri == UINT32_MAX)
+            {
+                // Ray hit the navmesh boundary
+                float hitX = start.x + bestT * rayDirX;
+                float hitZ = start.z + bestT * rayDirZ;
+                // Interpolate Y from the edge vertices
+                const XMFLOAT3& ea = *edgeVerts[bestEdge][0];
+                const XMFLOAT3& eb = *edgeVerts[bestEdge][1];
+                float edgeDirX = eb.x - ea.x;
+                float edgeDirZ = eb.z - ea.z;
+                float edgeLen = std::sqrt(edgeDirX * edgeDirX + edgeDirZ * edgeDirZ);
+                float projDist = 0.0f;
+                if (edgeLen > 1e-6f)
+                {
+                    projDist = ((hitX - ea.x) * edgeDirX + (hitZ - ea.z) * edgeDirZ) / (edgeLen * edgeLen);
+                    projDist = (std::max)(0.0f, (std::min)(1.0f, projDist));
+                }
+                float hitY = ea.y + projDist * (eb.y - ea.y);
+
+                hit.position = {hitX, hitY, hitZ};
+                hit.normal = tri.normal;
+                hit.triangleIndex = currentTri;
+                float dx = hitX - start.x;
+                float dz = hitZ - start.z;
+                hit.distance = std::sqrt(dx * dx + dz * dz);
+                hit.hit = true; // Ray left the navmesh
+                return hit;
+            }
+
+            // Move to the neighbor triangle
+            tProgress = bestT;
+            currentTri = neighborTri;
+        }
+
+        // Fallback: could not resolve ray traversal within iteration limit
+        // Report the boundary of the last known triangle
+        hit.position = m_navMesh->triangles[currentTri].centroid;
+        hit.normal = m_navMesh->triangles[currentTri].normal;
+        hit.triangleIndex = currentTri;
+        float dx = hit.position.x - start.x;
+        float dz = hit.position.z - start.z;
+        hit.distance = std::sqrt(dx * dx + dz * dz);
+        hit.hit = true;
         return hit;
     }
 
@@ -180,8 +341,60 @@ namespace Spark::AI
         if (!m_navMesh || m_navMesh->triangles.empty())
             return {0, 0, 0};
 
-        uint32_t idx = static_cast<uint32_t>(rand() % m_navMesh->triangles.size());
-        return m_navMesh->triangles[idx].centroid;
+        // Build a cumulative area distribution for weighted triangle selection
+        const auto& triangles = m_navMesh->triangles;
+        float totalArea = 0.0f;
+        for (const auto& tri : triangles)
+        {
+            totalArea += tri.area;
+        }
+
+        if (totalArea < 1e-10f)
+        {
+            // Degenerate mesh; fall back to uniform selection
+            static thread_local std::mt19937 fallbackRng{std::random_device{}()};
+            std::uniform_int_distribution<uint32_t> dist(0, static_cast<uint32_t>(triangles.size()) - 1);
+            return triangles[dist(fallbackRng)].centroid;
+        }
+
+        // Select a triangle weighted by area
+        static thread_local std::mt19937 rng{std::random_device{}()};
+        std::uniform_real_distribution<float> areaDist(0.0f, totalArea);
+        float sample = areaDist(rng);
+
+        uint32_t selectedTri = 0;
+        float cumulative = 0.0f;
+        for (uint32_t i = 0; i < static_cast<uint32_t>(triangles.size()); ++i)
+        {
+            cumulative += triangles[i].area;
+            if (sample <= cumulative)
+            {
+                selectedTri = i;
+                break;
+            }
+        }
+
+        // Generate a uniformly random point within the selected triangle
+        // using the square-root parameterization: P = (1-sqrt(r1))*A + sqrt(r1)*(1-r2)*B + sqrt(r1)*r2*C
+        const auto& tri = triangles[selectedTri];
+        const auto& a = m_navMesh->vertices[tri.indices[0]].position;
+        const auto& b = m_navMesh->vertices[tri.indices[1]].position;
+        const auto& c = m_navMesh->vertices[tri.indices[2]].position;
+
+        std::uniform_real_distribution<float> unitDist(0.0f, 1.0f);
+        float r1 = unitDist(rng);
+        float r2 = unitDist(rng);
+        float sqrtR1 = std::sqrt(r1);
+
+        float u = 1.0f - sqrtR1;
+        float v = sqrtR1 * (1.0f - r2);
+        float w = sqrtR1 * r2;
+
+        XMFLOAT3 result;
+        result.x = u * a.x + v * b.x + w * c.x;
+        result.y = u * a.y + v * b.y + w * c.y;
+        result.z = u * a.z + v * b.z + w * c.z;
+        return result;
     }
 
     XMFLOAT3 NavMeshQuery::GetRandomPointInCircle(const XMFLOAT3& center, float radius) const
@@ -204,12 +417,59 @@ namespace Spark::AI
 
     uint32_t NavMeshQuery::FindContainingTriangle(const XMFLOAT3& point) const
     {
-        if (!m_navMesh)
+        if (!m_navMesh || m_navMesh->triangles.empty())
             return UINT32_MAX;
 
-        float bestDistSq = 1e30f;
+        // First pass: exact point-in-triangle test using barycentric coordinates
+        // projected onto the XZ plane, with a vertical tolerance check.
+        constexpr float kVerticalTolerance = 2.0f; // metres
         uint32_t bestTri = UINT32_MAX;
+        float bestVerticalDist = kVerticalTolerance;
 
+        for (uint32_t i = 0; i < static_cast<uint32_t>(m_navMesh->triangles.size()); ++i)
+        {
+            const auto& tri = m_navMesh->triangles[i];
+            const auto& v0 = m_navMesh->vertices[tri.indices[0]].position;
+            const auto& v1 = m_navMesh->vertices[tri.indices[1]].position;
+            const auto& v2 = m_navMesh->vertices[tri.indices[2]].position;
+
+            // 2D barycentric test on XZ plane
+            float dx0 = v1.x - v0.x;
+            float dz0 = v1.z - v0.z;
+            float dx1 = v2.x - v0.x;
+            float dz1 = v2.z - v0.z;
+            float dxP = point.x - v0.x;
+            float dzP = point.z - v0.z;
+
+            float denom = dx0 * dz1 - dx1 * dz0;
+            if (std::abs(denom) < 1e-10f)
+                continue;
+
+            float invDenom = 1.0f / denom;
+            float u = (dxP * dz1 - dx1 * dzP) * invDenom;
+            float v = (dx0 * dzP - dxP * dz0) * invDenom;
+
+            // Point is inside the triangle if u >= 0, v >= 0, u + v <= 1
+            constexpr float kEpsilon = -0.01f; // small tolerance for edge cases
+            if (u >= kEpsilon && v >= kEpsilon && (u + v) <= (1.0f - kEpsilon))
+            {
+                // Compute the Y coordinate on the triangle surface at this XZ position
+                float surfaceY = v0.y + u * (v1.y - v0.y) + v * (v2.y - v0.y);
+                float vertDist = std::abs(point.y - surfaceY);
+
+                if (vertDist < bestVerticalDist)
+                {
+                    bestVerticalDist = vertDist;
+                    bestTri = i;
+                }
+            }
+        }
+
+        if (bestTri != UINT32_MAX)
+            return bestTri;
+
+        // Fallback: find nearest triangle centroid within a reasonable range
+        float bestDistSq = m_navMesh->cellSize * m_navMesh->cellSize * 16.0f;
         for (uint32_t i = 0; i < static_cast<uint32_t>(m_navMesh->triangles.size()); ++i)
         {
             const auto& tri = m_navMesh->triangles[i];
@@ -224,11 +484,7 @@ namespace Spark::AI
             }
         }
 
-        // Check if point is close enough to be considered "on" the navmesh
-        if (bestDistSq < m_navMesh->cellSize * m_navMesh->cellSize * 4.0f)
-            return bestTri;
-
-        return UINT32_MAX;
+        return bestTri;
     }
 
     float NavMeshQuery::HeuristicCost(const XMFLOAT3& a, const XMFLOAT3& b) const
@@ -243,9 +499,61 @@ namespace Spark::AI
     {
         if (!m_navMesh || triIndex >= static_cast<uint32_t>(m_navMesh->triangles.size()))
             return point;
+
         const auto& tri = m_navMesh->triangles[triIndex];
-        // Simplified — project to centroid
-        return tri.centroid;
+        const auto& v0 = m_navMesh->vertices[tri.indices[0]].position;
+        const auto& v1 = m_navMesh->vertices[tri.indices[1]].position;
+        const auto& v2 = m_navMesh->vertices[tri.indices[2]].position;
+
+        // Compute vectors from v0
+        XMVECTOR a = XMLoadFloat3(&v0);
+        XMVECTOR b = XMLoadFloat3(&v1);
+        XMVECTOR c = XMLoadFloat3(&v2);
+        XMVECTOR p = XMLoadFloat3(&point);
+
+        XMVECTOR ab = XMVectorSubtract(b, a);
+        XMVECTOR ac = XMVectorSubtract(c, a);
+        XMVECTOR ap = XMVectorSubtract(p, a);
+
+        // Compute barycentric coordinates via dot products
+        float d00 = XMVectorGetX(XMVector3Dot(ab, ab));
+        float d01 = XMVectorGetX(XMVector3Dot(ab, ac));
+        float d11 = XMVectorGetX(XMVector3Dot(ac, ac));
+        float d20 = XMVectorGetX(XMVector3Dot(ap, ab));
+        float d21 = XMVectorGetX(XMVector3Dot(ap, ac));
+
+        float denom = d00 * d11 - d01 * d01;
+        if (std::abs(denom) < 1e-10f)
+        {
+            return tri.centroid;
+        }
+
+        float invDenom = 1.0f / denom;
+        float baryV = (d11 * d20 - d01 * d21) * invDenom;
+        float baryW = (d00 * d21 - d01 * d20) * invDenom;
+        float baryU = 1.0f - baryV - baryW;
+
+        // Clamp barycentric coordinates to triangle bounds
+        baryU = (std::max)(0.0f, (std::min)(1.0f, baryU));
+        baryV = (std::max)(0.0f, (std::min)(1.0f, baryV));
+        baryW = (std::max)(0.0f, (std::min)(1.0f, baryW));
+
+        // Re-normalize after clamping
+        float sum = baryU + baryV + baryW;
+        if (sum > 1e-6f)
+        {
+            float invSum = 1.0f / sum;
+            baryU *= invSum;
+            baryV *= invSum;
+            baryW *= invSum;
+        }
+
+        // Compute projected point on triangle plane
+        XMFLOAT3 result;
+        result.x = v0.x * baryU + v1.x * baryV + v2.x * baryW;
+        result.y = v0.y * baryU + v1.y * baryV + v2.y * baryW;
+        result.z = v0.z * baryU + v1.z * baryV + v2.z * baryW;
+        return result;
     }
 
     // ============================================================================
@@ -303,6 +611,7 @@ namespace Spark::AI
             tri.centroid.x = (v0.x + v1.x + v2.x) / 3.0f;
             tri.centroid.y = (v0.y + v1.y + v2.y) / 3.0f;
             tri.centroid.z = (v0.z + v1.z + v2.z) / 3.0f;
+            XMStoreFloat3(&tri.normal, normal);
             tri.flags = 0xFFFF; // All walkable by default
 
             // Compute area via cross product
@@ -318,9 +627,8 @@ namespace Spark::AI
         {
             for (size_t j = i + 1; j < navMesh->triangles.size(); ++j)
             {
-                // Count shared vertices
+                // Count shared vertices between triangles i and j
                 int shared = 0;
-                int sharedEdgeI = -1, sharedEdgeJ = -1;
                 for (int ei = 0; ei < 3; ++ei)
                 {
                     for (int ej = 0; ej < 3; ++ej)
@@ -331,8 +639,6 @@ namespace Spark::AI
                         if (dx * dx + dy * dy + dz * dz < 0.001f)
                         {
                             shared++;
-                            sharedEdgeI = ei;
-                            sharedEdgeJ = ej;
                         }
                     }
                 }

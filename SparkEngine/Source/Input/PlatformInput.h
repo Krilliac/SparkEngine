@@ -711,6 +711,70 @@ namespace Spark::Input
         bool IsActionActive(const std::string& name) const;
 
         /**
+     * @brief Register a named action with a keyboard key binding.
+     *
+     * Convenience alias for BindAction(). Preferred in game setup code for
+     * readability when declaring the initial set of bindings.
+     *
+     * @param name    Action name (case-sensitive)
+     * @param key     Key to bind
+     * @param trigger When the action should fire (default: Pressed)
+     */
+        void RegisterAction(const std::string& name, KeyCode key, ActionTrigger trigger = ActionTrigger::Pressed);
+
+        /**
+     * @brief Register a named action with a gamepad button binding.
+     * @param name    Action name
+     * @param button  Gamepad button to bind
+     * @param trigger When the action should fire (default: Pressed)
+     */
+        void RegisterAction(const std::string& name, GamepadBtn button, ActionTrigger trigger = ActionTrigger::Pressed);
+
+        /**
+     * @brief Check if a named action was pressed this frame (rising edge).
+     *
+     * Unlike IsActionActive() which respects the ActionTrigger mode, this
+     * method always checks for the pressed-this-frame edge, regardless of
+     * the trigger setting on the binding.
+     *
+     * @param name Action name
+     * @return true if any binding for this action was pressed this frame
+     */
+        bool IsActionPressed(const std::string& name) const;
+
+        /**
+     * @brief Get the analog value of a named action (0.0 or 1.0 for digital inputs).
+     *
+     * Returns 1.0 when the action is active, 0.0 otherwise. For gamepad
+     * trigger-based actions, returns the trigger axis value [0, 1].
+     *
+     * @param name Action name
+     * @return Action value: 0.0 (inactive) or 1.0 (active)
+     */
+        float GetActionValue(const std::string& name) const;
+
+        /**
+     * @brief Register a named axis with a pair of keyboard keys.
+     *
+     * Convenience alias for BindAxis(). Preferred in game setup code.
+     *
+     * @param name        Axis name
+     * @param positiveKey Key that produces +1
+     * @param negativeKey Key that produces -1
+     * @param scale       Multiplier applied to the output
+     */
+        void RegisterAxis(const std::string& name, KeyCode positiveKey, KeyCode negativeKey, float scale = 1.0f);
+
+        /**
+     * @brief Register a named axis with a gamepad analog axis.
+     * @param name      Axis name
+     * @param axis      Gamepad axis to bind
+     * @param scale     Multiplier applied to the output
+     * @param deadZone  Minimum axis value to register (default: 0.15)
+     */
+        void RegisterAxis(const std::string& name, GamepadAxis axis, float scale = 1.0f, float deadZone = 0.15f);
+
+        /**
      * @brief Get the current value of a named axis
      * @param name Axis name
      * @return Axis value in [-1, 1] (or [-scale, +scale])
@@ -722,6 +786,43 @@ namespace Spark::Input
 
         /** @brief Remove a specific action binding @param name Action name to remove */
         void RemoveAction(const std::string& name);
+
+        /**
+     * @brief Rebind an existing action to a new keyboard key.
+     *
+     * Finds the first keyboard binding for the named action and changes
+     * its key. If no keyboard binding exists, a new one is created.
+     *
+     * @param name   Action name to rebind
+     * @param newKey New key to bind the action to
+     * @return true if the binding was updated or created
+     */
+        bool RebindAction(const std::string& name, KeyCode newKey);
+
+        /**
+     * @brief Rebind an existing action to a new gamepad button.
+     *
+     * Finds the first gamepad binding for the named action and changes
+     * its button. If no gamepad binding exists, a new one is created.
+     *
+     * @param name      Action name to rebind
+     * @param newButton New gamepad button to bind the action to
+     * @return true if the binding was updated or created
+     */
+        bool RebindAction(const std::string& name, GamepadBtn newButton);
+
+        /**
+     * @brief Rebind an existing axis to new keyboard keys.
+     *
+     * Finds the first keyboard binding for the named axis and changes
+     * its positive/negative keys. If none exists, a new one is created.
+     *
+     * @param name           Axis name to rebind
+     * @param newPositiveKey New key that produces +1
+     * @param newNegativeKey New key that produces -1
+     * @return true if the binding was updated or created
+     */
+        bool RebindAxis(const std::string& name, KeyCode newPositiveKey, KeyCode newNegativeKey);
 
         // ===== Event Callbacks =====
 

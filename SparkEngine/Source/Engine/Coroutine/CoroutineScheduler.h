@@ -1,47 +1,42 @@
 /**
  * @file CoroutineScheduler.h
- * @brief Gameplay coroutine system — delayed, yielding, and repeating tasks
+ * @brief Gameplay coroutine system -- delayed, yielding, and repeating tasks
  * @author Spark Engine Team
  * @date 2025
  *
- * Provides a lightweight coroutine-like task scheduler for gameplay code,
- * inspired by Unity's Coroutine system and Unreal's latent actions. Coroutines
- * are cooperative: they run on the main thread and yield control back to the
- * scheduler each frame using Yield instructions.
+ * Provides both a builder-pattern coroutine scheduler and C++20 coroutine
+ * integration for gameplay code. Coroutines are cooperative: they run on the
+ * main thread and yield control back to the scheduler each frame.
  *
- * ## Features
- * - **WaitForSeconds(t)** — pause for t seconds of game time
- * - **WaitForFrames(n)** — pause for n frames
- * - **WaitUntil(pred)** — pause until a predicate returns true
- * - **Sequences** — chain multiple steps in a builder pattern
- * - **Named coroutines** — cancel by name or tag
- * - **Entity binding** — auto-cancel when an entity is destroyed
- *
- * ## Usage
+ * ## Builder-pattern API
  * @code
  *   auto& scheduler = CoroutineScheduler::GetInstance();
  *
- *   // Flash damage indicator for 0.2s, then fade out over 1s
  *   scheduler.StartCoroutine("damage_flash")
  *       .Do([&]() { hud.SetDamageFlash(1.0f); })
  *       .WaitForSeconds(0.2f)
  *       .Do([&]() { hud.FadeDamageFlash(1.0f); })
  *       .WaitForSeconds(1.0f)
  *       .Do([&]() { hud.SetDamageFlash(0.0f); });
- *
- *   // Spawn enemies in waves
- *   scheduler.StartCoroutine("wave_spawner")
- *       .Repeat(5, [&](int wave) {
- *           SpawnWave(wave);
- *       })
- *       .WithInterval(10.0f);
- *
- *   // Cancel by name
- *   scheduler.StopCoroutine("damage_flash");
- *   scheduler.StopAll();
  * @endcode
  *
- * @see ECSystems.h, Game.cpp
+ * ## C++20 coroutine API
+ * @code
+ *   GameCoroutine SpawnWaves(int count)
+ *   {
+ *       for (int i = 0; i < count; ++i)
+ *       {
+ *           SpawnWave(i);
+ *           co_await Spark::WaitForSeconds(10.0f);
+ *       }
+ *       co_return;
+ *   }
+ *
+ *   // Schedule on the global scheduler:
+ *   CoroutineScheduler::GetInstance().Schedule("waves", SpawnWaves(5));
+ * @endcode
+ *
+ * @see EventSystem.h, ECSystems.h, Game.cpp
  */
 
 #pragma once
@@ -50,27 +45,32 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <atomic>
+#include <coroutine>
 
 namespace Spark
 {
 
+    // Forward declaration for WaitForEvent
+    class EventBus;
+
     // ============================================================================
-    // Yield Instructions — tell the scheduler when to resume a coroutine step
+    // Yield Instructions -- tell the scheduler when to resume a coroutine step
     // ============================================================================
 
     /**
- * @brief Base class for yield instructions that pause coroutine execution.
- */
+     * @brief Base class for yield instructions that pause coroutine execution.
+     */
     class YieldInstruction
     {
       public:
         virtual ~YieldInstruction() = default;
 
         /**
-     * @brief Called each frame to check if the yield condition is satisfied.
-     * @param deltaTime  Frame delta time in seconds.
-     * @return True when the coroutine should resume.
-     */
+         * @brief Called each frame to check if the yield condition is satisfied.
+         * @param deltaTime  Frame delta time in seconds.
+         * @return True when the coroutine should resume.
+         */
         virtual bool IsReady(float deltaTime) = 0;
 
         /** @brief Reset the instruction for reuse (e.g., in repeating coroutines). */
@@ -78,8 +78,8 @@ namespace Spark
     };
 
     /**
- * @brief Yield for a specified duration in seconds.
- */
+     * @brief Yield for a specified duration in seconds.
+     */
     class WaitForSeconds : public YieldInstruction
     {
       public:
@@ -99,8 +99,8 @@ namespace Spark
     };
 
     /**
- * @brief Yield for a specified number of frames.
- */
+     * @brief Yield for a specified number of frames.
+     */
     class WaitForFrames : public YieldInstruction
     {
       public:
@@ -116,8 +116,8 @@ namespace Spark
     };
 
     /**
- * @brief Yield until a predicate returns true.
- */
+     * @brief Yield until a predicate returns true.
+     */
     class WaitUntil : public YieldInstruction
     {
       public:
@@ -130,8 +130,8 @@ namespace Spark
     };
 
     /**
- * @brief Yield for one frame (resume next frame).
- */
+     * @brief Yield for one frame (resume next frame).
+     */
     class WaitForEndOfFrame : public YieldInstruction
     {
       public:
@@ -149,13 +149,212 @@ namespace Spark
         bool m_waited = false;
     };
 
+    /**
+     * @brief Yield until a named event is fired on a shared flag.
+     *
+     * The caller sets a shared atomic bool to true when the event fires.
+     * This decouples the coroutine from EventBus include dependencies.
+     *
+     * Usage with EventBus:
+     * @code
+     *   auto flag = std::make_shared<std::atomic<bool>>(false);
+     *   auto subID = eventBus.Subscribe<MyEvent>([flag](const MyEvent&) {
+     *       flag->store(true);
+     *   });
+     *   // In builder coroutine:
+     *   scheduler.StartCoroutine("wait_event")
+     *       .WaitForEvent(flag)
+     *       .Do([&]() { OnEventReceived(); });
+     * @endcode
+     */
+    class WaitForEvent : public YieldInstruction
+    {
+      public:
+        explicit WaitForEvent(std::shared_ptr<std::atomic<bool>> eventFlag) : m_eventFlag(std::move(eventFlag)) {}
+
+        bool IsReady(float /*deltaTime*/) override
+        {
+            return m_eventFlag && m_eventFlag->load(std::memory_order_acquire);
+        }
+
+        void Reset() override
+        {
+            if (m_eventFlag)
+                m_eventFlag->store(false, std::memory_order_release);
+        }
+
+      private:
+        std::shared_ptr<std::atomic<bool>> m_eventFlag;
+    };
+
     // ============================================================================
-    // Coroutine — a sequence of action/yield steps
+    // C++20 Coroutine Types
     // ============================================================================
 
     /**
- * @brief A single coroutine: a named sequence of action steps separated by yields.
- */
+     * @brief Return type for C++20 coroutine functions that yield to the scheduler.
+     *
+     * A GameCoroutine function can use co_await with any YieldInstruction,
+     * co_yield to pause for one frame, and co_return to complete.
+     */
+    class GameCoroutine
+    {
+      public:
+        struct promise_type;
+        using handle_type = std::coroutine_handle<promise_type>;
+
+        /**
+         * @brief Promise type that drives the C++20 coroutine machinery.
+         */
+        struct promise_type
+        {
+            /// The currently active yield instruction (set by co_await)
+            std::unique_ptr<YieldInstruction> currentYield;
+
+            /// Whether the coroutine has finished
+            bool finished = false;
+
+            GameCoroutine get_return_object() { return GameCoroutine{handle_type::from_promise(*this)}; }
+
+            std::suspend_always initial_suspend() noexcept { return {}; }
+            std::suspend_always final_suspend() noexcept
+            {
+                finished = true;
+                return {};
+            }
+
+            void return_void() { finished = true; }
+            void unhandled_exception() { finished = true; }
+
+            /// Supports co_yield for yielding one frame
+            std::suspend_always yield_value([[maybe_unused]] std::nullptr_t)
+            {
+                currentYield = std::make_unique<WaitForEndOfFrame>();
+                return {};
+            }
+        };
+
+        GameCoroutine() = default;
+        explicit GameCoroutine(handle_type h) : m_handle(h) {}
+
+        // Move-only
+        GameCoroutine(const GameCoroutine&) = delete;
+        GameCoroutine& operator=(const GameCoroutine&) = delete;
+        GameCoroutine(GameCoroutine&& other) noexcept : m_handle(other.m_handle) { other.m_handle = nullptr; }
+        GameCoroutine& operator=(GameCoroutine&& other) noexcept
+        {
+            if (this != &other)
+            {
+                if (m_handle)
+                    m_handle.destroy();
+                m_handle = other.m_handle;
+                other.m_handle = nullptr;
+            }
+            return *this;
+        }
+
+        ~GameCoroutine()
+        {
+            if (m_handle)
+                m_handle.destroy();
+        }
+
+        /**
+         * @brief Check if the coroutine has completed execution.
+         */
+        bool IsFinished() const { return !m_handle || m_handle.done() || m_handle.promise().finished; }
+
+        /**
+         * @brief Tick the coroutine forward. Returns true if still running.
+         * @param deltaTime  Frame delta time in seconds.
+         */
+        bool Update(float deltaTime)
+        {
+            if (IsFinished())
+                return false;
+
+            auto& promise = m_handle.promise();
+
+            // If we have an active yield, check if it is ready
+            if (promise.currentYield)
+            {
+                if (!promise.currentYield->IsReady(deltaTime))
+                    return true; // Still waiting
+
+                // Yield is satisfied, clear it and resume
+                promise.currentYield.reset();
+            }
+
+            if (!m_handle.done())
+            {
+                m_handle.resume();
+            }
+
+            return !IsFinished();
+        }
+
+        handle_type GetHandle() const { return m_handle; }
+
+      private:
+        handle_type m_handle = nullptr;
+    };
+
+    /**
+     * @brief Awaiter that bridges YieldInstruction to C++20 co_await.
+     *
+     * Allows: co_await WaitForSeconds(2.0f);
+     */
+    template <typename T>
+        requires std::derived_from<T, YieldInstruction>
+    struct YieldAwaiter
+    {
+        T instruction;
+
+        explicit YieldAwaiter(T inst) : instruction(std::move(inst)) {}
+
+        bool await_ready() const noexcept { return false; }
+
+        void await_suspend(std::coroutine_handle<GameCoroutine::promise_type> handle) const
+        {
+            handle.promise().currentYield = std::make_unique<T>(std::move(instruction));
+        }
+
+        void await_resume() const noexcept {}
+    };
+
+    // Enable co_await for all YieldInstruction-derived types
+    inline YieldAwaiter<WaitForSeconds> operator co_await(WaitForSeconds w)
+    {
+        return YieldAwaiter<WaitForSeconds>{std::move(w)};
+    }
+
+    inline YieldAwaiter<WaitForFrames> operator co_await(WaitForFrames w)
+    {
+        return YieldAwaiter<WaitForFrames>{std::move(w)};
+    }
+
+    inline YieldAwaiter<WaitUntil> operator co_await(WaitUntil w)
+    {
+        return YieldAwaiter<WaitUntil>{std::move(w)};
+    }
+
+    inline YieldAwaiter<WaitForEndOfFrame> operator co_await(WaitForEndOfFrame w)
+    {
+        return YieldAwaiter<WaitForEndOfFrame>{std::move(w)};
+    }
+
+    inline YieldAwaiter<WaitForEvent> operator co_await(WaitForEvent w)
+    {
+        return YieldAwaiter<WaitForEvent>{std::move(w)};
+    }
+
+    // ============================================================================
+    // Coroutine -- a sequence of action/yield steps (builder pattern)
+    // ============================================================================
+
+    /**
+     * @brief A single coroutine: a named sequence of action steps separated by yields.
+     */
     class Coroutine
     {
       public:
@@ -176,8 +375,8 @@ namespace Spark
         // ---- Builder API -------------------------------------------------------
 
         /**
-     * @brief Add an action step (runs immediately when reached).
-     */
+         * @brief Add an action step (runs immediately when reached).
+         */
         Coroutine& Do(std::function<void()> action)
         {
             m_steps.push_back({Step::Type::Action, std::move(action), nullptr});
@@ -185,8 +384,8 @@ namespace Spark
         }
 
         /**
-     * @brief Add a wait-for-seconds yield step.
-     */
+         * @brief Add a wait-for-seconds yield step.
+         */
         Coroutine& WaitForSeconds(float seconds)
         {
             m_steps.push_back({Step::Type::Yield, nullptr, std::make_unique<Spark::WaitForSeconds>(seconds)});
@@ -194,8 +393,8 @@ namespace Spark
         }
 
         /**
-     * @brief Add a wait-for-frames yield step.
-     */
+         * @brief Add a wait-for-frames yield step.
+         */
         Coroutine& WaitForFrames(int frames)
         {
             m_steps.push_back({Step::Type::Yield, nullptr, std::make_unique<Spark::WaitForFrames>(frames)});
@@ -203,8 +402,8 @@ namespace Spark
         }
 
         /**
-     * @brief Add a wait-until-predicate yield step.
-     */
+         * @brief Add a wait-until-predicate yield step.
+         */
         Coroutine& WaitUntil(std::function<bool()> predicate)
         {
             m_steps.push_back({Step::Type::Yield, nullptr, std::make_unique<Spark::WaitUntil>(std::move(predicate))});
@@ -212,8 +411,18 @@ namespace Spark
         }
 
         /**
-     * @brief Add a yield-one-frame step.
-     */
+         * @brief Add a wait-for-event yield step using a shared flag.
+         */
+        Coroutine& WaitForEvent(std::shared_ptr<std::atomic<bool>> eventFlag)
+        {
+            m_steps.push_back(
+                {Step::Type::Yield, nullptr, std::make_unique<Spark::WaitForEvent>(std::move(eventFlag))});
+            return *this;
+        }
+
+        /**
+         * @brief Add a yield-one-frame step.
+         */
         Coroutine& YieldFrame()
         {
             m_steps.push_back({Step::Type::Yield, nullptr, std::make_unique<WaitForEndOfFrame>()});
@@ -221,11 +430,11 @@ namespace Spark
         }
 
         /**
-     * @brief Tick the coroutine forward by one frame.
-     *
-     * Executes action steps immediately and checks yield conditions.
-     * @param deltaTime  Frame delta time in seconds.
-     */
+         * @brief Tick the coroutine forward by one frame.
+         *
+         * Executes action steps immediately and checks yield conditions.
+         * @param deltaTime  Frame delta time in seconds.
+         */
         void Update(float deltaTime)
         {
             if (m_cancelled || IsFinished())
@@ -243,14 +452,14 @@ namespace Spark
                     continue;
                 }
 
-                // Yield step — check if ready
+                // Yield step -- check if ready
                 if (step.yield && step.yield->IsReady(deltaTime))
                 {
                     m_currentStep++;
                     continue;
                 }
 
-                // Not ready — stop processing until next frame
+                // Not ready -- stop processing until next frame
                 break;
             }
         }
@@ -275,15 +484,52 @@ namespace Spark
     };
 
     // ============================================================================
-    // CoroutineScheduler — manages all active coroutines
+    // NativeCoroutineWrapper -- adapts a GameCoroutine for the scheduler
     // ============================================================================
 
     /**
- * @brief Central scheduler that ticks all active coroutines each frame.
- *
- * Singleton pattern — access via `CoroutineScheduler::GetInstance()`.
- * Call `Update(deltaTime)` once per frame from the game loop.
- */
+     * @brief Wraps a C++20 GameCoroutine so the scheduler can manage it
+     *        alongside builder-pattern coroutines.
+     */
+    class NativeCoroutineWrapper
+    {
+      public:
+        NativeCoroutineWrapper(const std::string& name, GameCoroutine coroutine)
+            : m_name(name), m_coroutine(std::move(coroutine))
+        {
+        }
+
+        const std::string& GetName() const { return m_name; }
+        bool IsFinished() const { return m_coroutine.IsFinished(); }
+        bool IsCancelled() const { return m_cancelled; }
+
+        void Cancel() { m_cancelled = true; }
+
+        void Update(float deltaTime)
+        {
+            if (m_cancelled || m_coroutine.IsFinished())
+                return;
+            m_coroutine.Update(deltaTime);
+        }
+
+      private:
+        std::string m_name;
+        GameCoroutine m_coroutine;
+        bool m_cancelled = false;
+    };
+
+    // ============================================================================
+    // CoroutineScheduler -- manages all active coroutines
+    // ============================================================================
+
+    /**
+     * @brief Central scheduler that ticks all active coroutines each frame.
+     *
+     * Singleton pattern -- access via `CoroutineScheduler::GetInstance()`.
+     * Call `Update(deltaTime)` once per frame from the game loop.
+     *
+     * Supports both builder-pattern coroutines and C++20 native coroutines.
+     */
     class CoroutineScheduler
     {
       public:
@@ -294,11 +540,11 @@ namespace Spark
         }
 
         /**
-     * @brief Start a new named coroutine and return it for builder-pattern setup.
-     *
-     * @param name  Unique name for this coroutine (used for cancellation).
-     * @return Reference to the new Coroutine for chaining Do/Wait calls.
-     */
+         * @brief Start a new named coroutine and return it for builder-pattern setup.
+         *
+         * @param name  Unique name for this coroutine (used for cancellation).
+         * @return Reference to the new Coroutine for chaining Do/Wait calls.
+         */
         Coroutine& StartCoroutine(const std::string& name)
         {
             m_coroutines.push_back(std::make_unique<Coroutine>(name));
@@ -306,8 +552,19 @@ namespace Spark
         }
 
         /**
-     * @brief Cancel and remove all coroutines with the given name.
-     */
+         * @brief Schedule a C++20 GameCoroutine on the scheduler.
+         *
+         * @param name       Name for cancellation and debugging.
+         * @param coroutine  A GameCoroutine returned from a coroutine function.
+         */
+        void Schedule(const std::string& name, GameCoroutine coroutine)
+        {
+            m_nativeCoroutines.push_back(std::make_unique<NativeCoroutineWrapper>(name, std::move(coroutine)));
+        }
+
+        /**
+         * @brief Cancel and remove all coroutines with the given name.
+         */
         void StopCoroutine(const std::string& name)
         {
             for (auto& co : m_coroutines)
@@ -317,11 +574,18 @@ namespace Spark
                     co->Cancel();
                 }
             }
+            for (auto& co : m_nativeCoroutines)
+            {
+                if (co && co->GetName() == name)
+                {
+                    co->Cancel();
+                }
+            }
         }
 
         /**
-     * @brief Cancel all running coroutines.
-     */
+         * @brief Cancel all running coroutines.
+         */
         void StopAll()
         {
             for (auto& co : m_coroutines)
@@ -329,14 +593,26 @@ namespace Spark
                 if (co)
                     co->Cancel();
             }
+            for (auto& co : m_nativeCoroutines)
+            {
+                if (co)
+                    co->Cancel();
+            }
         }
 
         /**
-     * @brief Check if any coroutine with the given name is still running.
-     */
+         * @brief Check if any coroutine with the given name is still running.
+         */
         bool IsRunning(const std::string& name) const
         {
             for (const auto& co : m_coroutines)
+            {
+                if (co && co->GetName() == name && !co->IsFinished() && !co->IsCancelled())
+                {
+                    return true;
+                }
+            }
+            for (const auto& co : m_nativeCoroutines)
             {
                 if (co && co->GetName() == name && !co->IsFinished() && !co->IsCancelled())
                 {
@@ -347,13 +623,13 @@ namespace Spark
         }
 
         /**
-     * @brief Tick all active coroutines. Call once per frame from the game loop.
-     *
-     * @param deltaTime  Frame delta time in seconds.
-     */
+         * @brief Tick all active coroutines. Call once per frame from the game loop.
+         *
+         * @param deltaTime  Frame delta time in seconds.
+         */
         void Update(float deltaTime)
         {
-            // Tick each coroutine
+            // Tick builder-pattern coroutines
             for (auto& co : m_coroutines)
             {
                 if (co && !co->IsCancelled() && !co->IsFinished())
@@ -362,26 +638,42 @@ namespace Spark
                 }
             }
 
-            // Remove finished and cancelled coroutines
+            // Tick C++20 native coroutines
+            for (auto& co : m_nativeCoroutines)
+            {
+                if (co && !co->IsCancelled() && !co->IsFinished())
+                {
+                    co->Update(deltaTime);
+                }
+            }
+
+            // Remove finished and cancelled builder coroutines
             m_coroutines.erase(std::remove_if(m_coroutines.begin(), m_coroutines.end(),
                                               [](const std::unique_ptr<Coroutine>& co)
                                               { return !co || co->IsCancelled() || co->IsFinished(); }),
                                m_coroutines.end());
+
+            // Remove finished and cancelled native coroutines
+            m_nativeCoroutines.erase(std::remove_if(m_nativeCoroutines.begin(), m_nativeCoroutines.end(),
+                                                    [](const std::unique_ptr<NativeCoroutineWrapper>& co)
+                                                    { return !co || co->IsCancelled() || co->IsFinished(); }),
+                                     m_nativeCoroutines.end());
         }
 
-        /** @brief Number of active coroutines. */
-        size_t ActiveCount() const { return m_coroutines.size(); }
+        /** @brief Number of active coroutines (builder + native). */
+        size_t ActiveCount() const { return m_coroutines.size() + m_nativeCoroutines.size(); }
 
       private:
         CoroutineScheduler() = default;
         std::vector<std::unique_ptr<Coroutine>> m_coroutines;
+        std::vector<std::unique_ptr<NativeCoroutineWrapper>> m_nativeCoroutines;
     };
 
     // ============================================================================
     // Convenience free functions
     // ============================================================================
 
-    /** @brief Shorthand to start a coroutine on the global scheduler. */
+    /** @brief Shorthand to start a builder-pattern coroutine on the global scheduler. */
     inline Coroutine& StartCoroutine(const std::string& name)
     {
         return CoroutineScheduler::GetInstance().StartCoroutine(name);
@@ -391,6 +683,12 @@ namespace Spark
     inline void StopCoroutine(const std::string& name)
     {
         CoroutineScheduler::GetInstance().StopCoroutine(name);
+    }
+
+    /** @brief Shorthand to schedule a C++20 coroutine on the global scheduler. */
+    inline void ScheduleCoroutine(const std::string& name, GameCoroutine coroutine)
+    {
+        CoroutineScheduler::GetInstance().Schedule(name, std::move(coroutine));
     }
 
 } // namespace Spark

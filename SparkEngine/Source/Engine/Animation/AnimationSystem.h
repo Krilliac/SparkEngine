@@ -618,6 +618,24 @@ namespace Spark::Animation
         const std::string& GetTargetStateName() const { return m_targetState; }
 
         /**
+     * @brief Get the playback time within the target state's clip during a crossfade.
+     * @return  Elapsed time within the target clip.
+     */
+        float GetTargetTime() const { return m_targetTime; }
+
+        /**
+     * @brief Get the clip name for the current state.
+     * @return  Clip name, or empty string if the state is not found.
+     */
+        std::string GetCurrentClipName() const;
+
+        /**
+     * @brief Get the clip name for the target state during a crossfade.
+     * @return  Clip name, or empty string if no transition is active.
+     */
+        std::string GetTargetClipName() const;
+
+        /**
      * @brief Immediately switch to a state without crossfade blending.
      *
      * Use for abrupt changes: respawn, teleport, or initial state setup.
@@ -644,6 +662,7 @@ namespace Spark::Animation
         std::string m_defaultState; ///< The entry state on first run.
 
         float m_currentTime = 0.0f;        ///< Playback time within the current state's clip.
+        float m_targetTime = 0.0f;         ///< Playback time within the target state's clip during crossfade.
         float m_blendFactor = 0.0f;        ///< Crossfade progress (0 = source, 1 = target).
         float m_transitionDuration = 0.0f; ///< Total duration of the current crossfade.
         float m_transitionElapsed = 0.0f;  ///< Elapsed time within the current crossfade.
@@ -803,6 +822,32 @@ namespace Spark::Animation
      * applied to the skeleton, preventing locomotion mismatch.
      */
         bool enableRootMotion = false;
+
+        /**
+     * @brief Advance the animation instance by one frame.
+     *
+     * Executes the full per-entity animation pipeline:
+     * 1. Update the state machine (transition evaluation, crossfade blending).
+     * 2. Advance layer playback times.
+     * 3. Sample clips for each layer and blend them together.
+     * 4. Compute final skinning matrices from the blended local transforms.
+     * 5. Solve IK chains as a post-process pass.
+     * 6. Extract root motion if enabled.
+     *
+     * @param deltaTime  Time elapsed since the last frame (seconds).
+     */
+        void Update(float deltaTime);
+
+        /**
+     * @brief Advance layer playback times and sample/blend all layers.
+     *
+     * Processes the layer stack bottom-to-top. Each layer's clip is sampled at
+     * its current time, then blended into the result based on blend mode, weight,
+     * and optional bone mask.
+     *
+     * @param deltaTime  Time elapsed since the last frame (seconds).
+     */
+        void UpdateLayers(float deltaTime);
     };
 
     // =============================================================================

@@ -525,6 +525,50 @@ void GraphicsEngine::EndFrame()
 }
 
 // ============================================================================
+// ECS MESH DRAW SUBMISSION
+// ============================================================================
+
+void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath, const std::string& materialPath,
+                                            const DirectX::XMMATRIX& worldMatrix, bool castShadows)
+{
+    MeshDrawCommand cmd;
+    cmd.meshPath = meshPath;
+    cmd.materialPath = materialPath;
+    XMStoreFloat4x4(&cmd.worldMatrix, worldMatrix);
+    cmd.castShadows = castShadows;
+    m_drawList.push_back(std::move(cmd));
+}
+
+void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
+{
+    if (m_drawList.empty())
+        return;
+
+    // Set up shaders for ECS mesh rendering
+    SetBasicShaders();
+
+    for (const auto& cmd : m_drawList)
+    {
+        XMMATRIX world = XMLoadFloat4x4(&cmd.worldMatrix);
+
+        // Update per-object constant buffer with world/view/proj matrices
+        UpdateBasicConstants(world, viewMatrix, projMatrix);
+
+        // Bind mesh and material through the asset pipeline, then draw
+        if (m_assetPipeline)
+        {
+            m_assetPipeline->BindMesh(cmd.meshPath);
+            m_assetPipeline->BindMaterial(cmd.materialPath);
+            m_assetPipeline->DrawBoundMesh();
+        }
+
+        m_statistics.drawCalls++;
+    }
+
+    m_drawList.clear();
+}
+
+// ============================================================================
 // SCENE RENDERING
 // ============================================================================
 

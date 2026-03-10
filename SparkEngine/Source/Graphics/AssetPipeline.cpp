@@ -2441,3 +2441,22 @@ std::string LoadingPriorityToString(LoadingPriority priority)
 }
 
 #endif // SPARK_PLATFORM_WINDOWS
+
+// ============================================================================
+// RENDERING HELPERS (platform-independent stubs)
+// ============================================================================
+
+void AssetPipeline::BindMesh([[maybe_unused]] const std::string& meshPath)
+{
+    // TODO: Bind mesh vertex/index buffers to the pipeline
+}
+
+void AssetPipeline::BindMaterial([[maybe_unused]] const std::string& materialPath)
+{
+    // TODO: Bind material textures and constants to the pipeline
+}
+
+void AssetPipeline::DrawBoundMesh()
+{
+    // TODO: Issue draw call for the currently bound mesh
+}

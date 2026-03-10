@@ -27,6 +27,76 @@ namespace Spark::Cinematic
     }
 
     // ============================================================================
+    // Helper: Cubic Bezier ease curve
+    // ============================================================================
+
+    /**
+     * @brief Evaluate a cubic bezier ease curve defined by control points
+     *        (0,0), (cx1,cy1), (cx2,cy2), (1,1).
+     *
+     * Uses a standard ease-in-out curve: P1=(0.42, 0), P2=(0.58, 1).
+     * The input t in [0,1] is remapped through the bezier curve to produce
+     * a smoothly eased parameter.
+     *
+     * We solve for the bezier parameter u such that Bx(u) = t using
+     * Newton-Raphson iteration, then return By(u).
+     */
+    static float CubicBezierEase(float t)
+    {
+        // Control points for a smooth ease-in-out
+        constexpr float cx1 = 0.42f;
+        constexpr float cy1 = 0.0f;
+        constexpr float cx2 = 0.58f;
+        constexpr float cy2 = 1.0f;
+
+        if (t <= 0.0f)
+            return 0.0f;
+        if (t >= 1.0f)
+            return 1.0f;
+
+        // Bezier coefficients for the x component: B(u) = 3(1-u)^2*u*cx1 + 3(1-u)*u^2*cx2 + u^3
+        // Expanded: B(u) = (3*cx1)*u - (6*cx1 - 3*cx2)*u^2 + (3*cx1 - 3*cx2 + 1)*u^3
+        float ax = 3.0f * cx1;
+        float bx = 3.0f * (cx2 - cx1) - 3.0f * cx1;
+        float cxCoeff = 1.0f - 3.0f * cx2 + 3.0f * cx1;
+
+        // Newton-Raphson: find u where x(u) = t
+        float u = t; // Initial guess
+        for (int i = 0; i < 8; ++i)
+        {
+            float xVal = ((cxCoeff * u + bx) * u + ax) * u - t;
+            float dxVal = (3.0f * cxCoeff * u + 2.0f * bx) * u + ax;
+            if (std::abs(dxVal) < 1e-7f)
+                break;
+            u -= xVal / dxVal;
+            u = (std::max)(0.0f, (std::min)(1.0f, u));
+        }
+
+        // Evaluate y(u) with the same bezier formula using cy control points
+        float ay = 3.0f * cy1;
+        float by = 3.0f * (cy2 - cy1) - 3.0f * cy1;
+        float cyCoeff = 1.0f - 3.0f * cy2 + 3.0f * cy1;
+        return ((cyCoeff * u + by) * u + ay) * u;
+    }
+
+    /**
+     * @brief Apply cubic bezier easing to a float interpolation.
+     */
+    static float CubicBezierLerpF(float a, float b, float t)
+    {
+        return LerpF(a, b, CubicBezierEase(t));
+    }
+
+    /**
+     * @brief Apply cubic bezier easing to a vector interpolation.
+     */
+    static XMFLOAT3 CubicBezierLerpFloat3(const XMFLOAT3& a, const XMFLOAT3& b, float t)
+    {
+        float eased = CubicBezierEase(t);
+        return LerpFloat3(a, b, eased);
+    }
+
+    // ============================================================================
     // CameraPathTrack
     // ============================================================================
 
@@ -86,7 +156,21 @@ namespace Spark::Cinematic
         CameraKeyframe result;
         result.time = time;
 
-        if (kf0.interpolation == InterpolationMode::CatmullRom && m_keyframes.size() >= 4)
+        if (kf0.interpolation == InterpolationMode::Step)
+        {
+            result.position = kf0.position;
+            result.lookAt = kf0.lookAt;
+            result.fov = kf0.fov;
+            result.roll = kf0.roll;
+            result.interpolation = kf0.interpolation;
+            return result;
+        }
+        else if (kf0.interpolation == InterpolationMode::CubicBezier)
+        {
+            result.position = CubicBezierLerpFloat3(kf0.position, kf1.position, t);
+            result.lookAt = CubicBezierLerpFloat3(kf0.lookAt, kf1.lookAt, t);
+        }
+        else if (kf0.interpolation == InterpolationMode::CatmullRom && m_keyframes.size() >= 4)
         {
             // Catmull-Rom needs 4 points
             int i0 = (std::max)(idx - 1, 0);
@@ -98,13 +182,21 @@ namespace Spark::Cinematic
         }
         else
         {
-            // Linear interpolation
+            // Linear interpolation (default)
             result.position = LerpFloat3(kf0.position, kf1.position, t);
             result.lookAt = LerpFloat3(kf0.lookAt, kf1.lookAt, t);
         }
 
-        result.fov = LerpF(kf0.fov, kf1.fov, t);
-        result.roll = LerpF(kf0.roll, kf1.roll, t);
+        if (kf0.interpolation == InterpolationMode::CubicBezier)
+        {
+            result.fov = CubicBezierLerpF(kf0.fov, kf1.fov, t);
+            result.roll = CubicBezierLerpF(kf0.roll, kf1.roll, t);
+        }
+        else
+        {
+            result.fov = LerpF(kf0.fov, kf1.fov, t);
+            result.roll = LerpF(kf0.roll, kf1.roll, t);
+        }
         result.interpolation = kf0.interpolation;
 
         return result;
@@ -205,6 +297,10 @@ namespace Spark::Cinematic
                 {
                     return keys[i].value;
                 }
+                if (keys[i].interpolation == InterpolationMode::CubicBezier)
+                {
+                    return CubicBezierLerpFloat3(keys[i].value, keys[i + 1].value, t);
+                }
                 return LerpFloat3(keys[i].value, keys[i + 1].value, t);
             }
         }
@@ -248,6 +344,10 @@ namespace Spark::Cinematic
                 if (m_keyframes[i].interpolation == InterpolationMode::Step)
                 {
                     return m_keyframes[i].value;
+                }
+                if (m_keyframes[i].interpolation == InterpolationMode::CubicBezier)
+                {
+                    return CubicBezierLerpF(m_keyframes[i].value, m_keyframes[i + 1].value, t);
                 }
                 return LerpF(m_keyframes[i].value, m_keyframes[i + 1].value, t);
             }
@@ -381,8 +481,22 @@ namespace Spark::Cinematic
 
                 FadeKeyframe result;
                 result.time = time;
-                result.opacity = LerpF(m_keyframes[i].opacity, m_keyframes[i + 1].opacity, t);
-                result.color = LerpFloat3(m_keyframes[i].color, m_keyframes[i + 1].color, t);
+
+                if (m_keyframes[i].interpolation == InterpolationMode::Step)
+                {
+                    result.opacity = m_keyframes[i].opacity;
+                    result.color = m_keyframes[i].color;
+                }
+                else if (m_keyframes[i].interpolation == InterpolationMode::CubicBezier)
+                {
+                    result.opacity = CubicBezierLerpF(m_keyframes[i].opacity, m_keyframes[i + 1].opacity, t);
+                    result.color = CubicBezierLerpFloat3(m_keyframes[i].color, m_keyframes[i + 1].color, t);
+                }
+                else
+                {
+                    result.opacity = LerpF(m_keyframes[i].opacity, m_keyframes[i + 1].opacity, t);
+                    result.color = LerpFloat3(m_keyframes[i].color, m_keyframes[i + 1].color, t);
+                }
                 return result;
             }
         }
@@ -627,6 +741,20 @@ namespace Spark::Cinematic
             return false;
         seq->Play();
         return true;
+    }
+
+    void SequencerManager::StopSequence(const std::string& name)
+    {
+        auto* seq = GetSequence(name);
+        if (seq)
+            seq->Stop();
+    }
+
+    void SequencerManager::PauseSequence(const std::string& name)
+    {
+        auto* seq = GetSequence(name);
+        if (seq)
+            seq->Pause();
     }
 
     void SequencerManager::StopAll()

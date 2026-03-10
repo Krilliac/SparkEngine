@@ -51,6 +51,7 @@
 #define ICON_FA_IMAGE "\xef\x80\xbe"       // U+F03E
 
 // === Actions ===
+#define ICON_FA_EDIT "\xef\x81\x84"     // U+F044 (pen-to-square)
 #define ICON_FA_SAVE "\xef\x83\x87"     // U+F0C7
 #define ICON_FA_UNDO "\xef\x83\xa2"     // U+F0E2
 #define ICON_FA_REDO "\xef\x80\x9e"     // U+F01E
@@ -105,6 +106,7 @@
 #define ICON_FA_LOCATION_ARROW "\xef\x84\xa4" // U+F124
 
 // === Arrows / Navigation ===
+#define ICON_FA_LEVEL_UP_ALT "\xef\x8e\xbf"  // U+F3BF (turn-up)
 #define ICON_FA_CHEVRON_RIGHT "\xef\x81\x94" // U+F054
 #define ICON_FA_CHEVRON_DOWN "\xef\x81\xb8"  // U+F078
 #define ICON_FA_CHEVRON_LEFT "\xef\x81\x93"  // U+F053
@@ -118,6 +120,7 @@
 #define ICON_FA_COMPRESS "\xef\x81\xa6"        // U+F066
 
 // === Additional Icons ===
+#define ICON_FA_RUNNING "\xef\x9c\x8c"       // U+F70C (person-running)
 #define ICON_FA_CODE "\xef\x84\xa1"          // U+F121
 #define ICON_FA_FONT "\xef\x80\xb1"          // U+F031
 #define ICON_FA_GRID "\xef\x80\x8a"          // U+F00A (alias for TH/grid)

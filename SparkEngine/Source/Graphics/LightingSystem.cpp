@@ -243,6 +243,12 @@ void LightingSystem::Update(float deltaTime, const XMMATRIX& viewMatrix, const X
         }
     }
 
+    // Perform frustum-based light culling if enabled
+    if (m_lightCullingEnabled)
+    {
+        CullLights(viewMatrix, projMatrix);
+    }
+
     // Update light buffer
     UpdateLightBuffer();
 
@@ -331,67 +337,189 @@ std::string LightingSystem::Console_ListLights() const
 
 void LightingSystem::BindLightingData(ID3D11DeviceContext* context)
 {
-    if (context && m_lightDataBuffer)
+    if (!context || !m_lightDataBuffer)
     {
-        // Update light data buffer with current light array
-        if (!m_lightDataArray.empty())
+        return;
+    }
+
+    // Update light data buffer with current light array
+    if (!m_lightDataArray.empty())
+    {
+        D3D11_MAPPED_SUBRESOURCE mapped;
+        HRESULT hr = context->Map(m_lightDataBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        if (SUCCEEDED(hr))
         {
-            D3D11_MAPPED_SUBRESOURCE mapped;
-            HRESULT hr = context->Map(m_lightDataBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-            if (SUCCEEDED(hr))
+            size_t copySize =
+                std::min(m_lightDataArray.size() * sizeof(LightData), static_cast<size_t>(64 * sizeof(LightData)));
+            memcpy(mapped.pData, m_lightDataArray.data(), copySize);
+            context->Unmap(m_lightDataBuffer.Get(), 0);
+        }
+    }
+
+    // Bind constant buffers to vertex and pixel shader stages
+    // Slot 1: light data, Slot 2: environment, Slot 3: shadow matrices
+    ID3D11Buffer* buffers[] = {m_lightDataBuffer.Get(), m_environmentBuffer.Get(), m_shadowDataBuffer.Get()};
+    context->VSSetConstantBuffers(1, 3, buffers);
+    context->PSSetConstantBuffers(1, 3, buffers);
+
+    // Bind shadow map SRVs to pixel shader (starting at texture slot 4)
+    constexpr UINT shadowMapStartSlot = 4;
+    std::vector<ID3D11ShaderResourceView*> shadowSRVs;
+    shadowSRVs.reserve(m_shadowMaps.size());
+
+    for (const auto& pair : m_shadowMaps)
+    {
+        if (pair.second && pair.second->srv)
+        {
+            shadowSRVs.push_back(pair.second->srv.Get());
+        }
+    }
+
+    if (!shadowSRVs.empty())
+    {
+        context->PSSetShaderResources(shadowMapStartSlot, static_cast<UINT>(shadowSRVs.size()), shadowSRVs.data());
+    }
+
+    // Bind CSM shadow map SRVs if available
+    if (m_csmShadowMap)
+    {
+        UINT csmStartSlot = shadowMapStartSlot + static_cast<UINT>(shadowSRVs.size());
+        std::vector<ID3D11ShaderResourceView*> csmSRVs;
+        csmSRVs.reserve(m_csmShadowMap->cascades.size());
+
+        for (const auto& cascade : m_csmShadowMap->cascades)
+        {
+            if (cascade.srv)
             {
-                size_t copySize =
-                    std::min(m_lightDataArray.size() * sizeof(LightData), static_cast<size_t>(64 * sizeof(LightData)));
-                memcpy(mapped.pData, m_lightDataArray.data(), copySize);
-                context->Unmap(m_lightDataBuffer.Get(), 0);
+                csmSRVs.push_back(cascade.srv.Get());
             }
         }
 
-        // Bind constant buffers
-        ID3D11Buffer* buffers[] = {m_lightDataBuffer.Get(), m_environmentBuffer.Get(), m_shadowDataBuffer.Get()};
-        context->VSSetConstantBuffers(1, 3, buffers);
-        context->PSSetConstantBuffers(1, 3, buffers);
-
-        Spark::SimpleConsole::GetInstance().LogInfo("Lighting data bound to shaders");
+        if (!csmSRVs.empty())
+        {
+            context->PSSetShaderResources(csmStartSlot, static_cast<UINT>(csmSRVs.size()), csmSRVs.data());
+        }
     }
+
+    // Bind IBL textures to pixel shader (slots 8-11)
+    constexpr UINT iblStartSlot = 8;
+    ID3D11ShaderResourceView* iblSRVs[4] = {
+        m_environmentLighting.irradianceMap.Get(), m_environmentLighting.prefilterMap.Get(),
+        m_environmentLighting.brdfLUT.Get(), m_environmentLighting.environmentMap.Get()};
+    context->PSSetShaderResources(iblStartSlot, 4, iblSRVs);
 }
 
 void LightingSystem::RenderShadowMaps(std::function<void(const XMMATRIX&, const XMMATRIX&)> renderCallback)
 {
-    if (!renderCallback || !m_shadowsEnabled)
+    if (!renderCallback || !m_shadowsEnabled || !m_context)
+    {
         return;
+    }
 
     m_metrics.shadowMapUpdates = 0;
 
+    // Save the current viewport to restore after shadow rendering
+    UINT numViewports = 1;
+    D3D11_VIEWPORT originalViewport;
+    m_context->RSGetViewports(&numViewports, &originalViewport);
+
+    // Save the current render targets
+    ComPtr<ID3D11RenderTargetView> originalRTV;
+    ComPtr<ID3D11DepthStencilView> originalDSV;
+    m_context->OMGetRenderTargets(1, &originalRTV, &originalDSV);
+
+    // Render standard shadow maps for each shadow-casting light
     for (const auto& light : m_lights)
     {
-        if (light && light->IsEnabled() && light->GetCastShadows())
+        if (!light || !light->IsEnabled() || !light->GetCastShadows())
         {
-            try
+            continue;
+        }
+
+        auto it = m_shadowMaps.find(light.get());
+        if (it == m_shadowMaps.end() || !it->second || !it->second->dsv)
+        {
+            continue;
+        }
+
+        try
+        {
+            const ShadowMap& shadowMap = *it->second;
+
+            // Set shadow map viewport
+            D3D11_VIEWPORT shadowViewport = {};
+            shadowViewport.TopLeftX = 0.0f;
+            shadowViewport.TopLeftY = 0.0f;
+            shadowViewport.Width = static_cast<float>(shadowMap.size);
+            shadowViewport.Height = static_cast<float>(shadowMap.size);
+            shadowViewport.MinDepth = 0.0f;
+            shadowViewport.MaxDepth = 1.0f;
+            m_context->RSSetViewports(1, &shadowViewport);
+
+            // Unbind any render targets; only depth writing
+            ID3D11RenderTargetView* nullRTV = nullptr;
+            m_context->OMSetRenderTargets(1, &nullRTV, shadowMap.dsv.Get());
+
+            // Clear shadow map depth buffer
+            m_context->ClearDepthStencilView(shadowMap.dsv.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+            // For directional lights with CSM, render each cascade
+            if (light->GetType() == LightType::Directional && light->GetShadowTechnique() == ShadowTechnique::CSM &&
+                m_csmShadowMap)
             {
-                XMMATRIX lightView = light->GetLightMatrix();
-                XMMATRIX lightProj = light->GetShadowMatrix();
-
-                // Set up shadow map render target if it exists
-                auto it = m_shadowMaps.find(light.get());
-                if (it != m_shadowMaps.end() && it->second)
+                for (uint32_t cascade = 0; cascade < m_csmShadowMap->cascadeCount; ++cascade)
                 {
-                    m_context->OMSetRenderTargets(0, nullptr, it->second->dsv.Get());
-                    m_context->ClearDepthStencilView(it->second->dsv.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
-                }
+                    if (cascade >= m_csmShadowMap->cascades.size())
+                    {
+                        break;
+                    }
 
-                renderCallback(lightView, lightProj);
+                    const ShadowMap& csmCascade = m_csmShadowMap->cascades[cascade];
+                    if (!csmCascade.dsv)
+                    {
+                        continue;
+                    }
+
+                    // Set cascade viewport
+                    D3D11_VIEWPORT cascadeViewport = {};
+                    cascadeViewport.TopLeftX = 0.0f;
+                    cascadeViewport.TopLeftY = 0.0f;
+                    cascadeViewport.Width = static_cast<float>(csmCascade.size);
+                    cascadeViewport.Height = static_cast<float>(csmCascade.size);
+                    cascadeViewport.MinDepth = 0.0f;
+                    cascadeViewport.MaxDepth = 1.0f;
+                    m_context->RSSetViewports(1, &cascadeViewport);
+
+                    m_context->OMSetRenderTargets(1, &nullRTV, csmCascade.dsv.Get());
+                    m_context->ClearDepthStencilView(csmCascade.dsv.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+                    // Use the precomputed cascade light matrix
+                    XMMATRIX cascadeMatrix = (cascade < m_csmShadowMap->lightMatrices.size())
+                                                 ? m_csmShadowMap->lightMatrices[cascade]
+                                                 : csmCascade.lightMatrix;
+                    XMMATRIX cascadeProj = XMMatrixIdentity(); // Already baked into cascadeMatrix
+
+                    renderCallback(cascadeMatrix, cascadeProj);
+                    m_metrics.shadowMapUpdates++;
+                }
+            }
+            else
+            {
+                // Standard shadow map: use the stored light/shadow matrices
+                renderCallback(shadowMap.lightMatrix, shadowMap.shadowMatrix);
                 m_metrics.shadowMapUpdates++;
             }
-            catch (...)
-            {
-                Spark::SimpleConsole::GetInstance().LogWarning("Error in shadow map render callback for light");
-            }
+        }
+        catch (...)
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning("Error in shadow map render callback for light");
         }
     }
 
-    Spark::SimpleConsole::GetInstance().LogInfo("Shadow maps rendered: " + std::to_string(m_metrics.shadowMapUpdates) +
-                                                " updates");
+    // Restore original render targets and viewport
+    ID3D11RenderTargetView* rtvRestore = originalRTV.Get();
+    m_context->OMSetRenderTargets(1, &rtvRestore, originalDSV.Get());
+    m_context->RSSetViewports(1, &originalViewport);
 }
 
 LightingSystem::LightingMetrics LightingSystem::Console_GetMetrics() const
@@ -759,43 +887,250 @@ void LightingSystem::UpdateLightBuffer()
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate);
 
     if (elapsed.count() >= 100)
-    { // Update every 100ms
+    {
         m_metrics.lightCullingTime = elapsed.count() / 1000.0f;
-        m_metrics.shadowRenderTime = m_metrics.shadowMapUpdates * 0.5f; // Estimate
+        m_metrics.shadowRenderTime = m_metrics.shadowMapUpdates * 0.5f;
         m_metrics.shadowMapMemory = m_shadowMaps.size() * (m_shadowMapSize * m_shadowMapSize * 4) / (1024.0f * 1024.0f);
         lastUpdate = now;
+    }
+
+    // Upload light data array to the GPU constant buffer
+    if (!m_context || !m_lightDataBuffer || m_lightDataArray.empty())
+    {
+        return;
+    }
+
+    D3D11_MAPPED_SUBRESOURCE mapped = {};
+    HRESULT hr = m_context->Map(m_lightDataBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (SUCCEEDED(hr))
+    {
+        const size_t maxLights = 64;
+        size_t lightCount = std::min(m_lightDataArray.size(), maxLights);
+        size_t copySize = lightCount * sizeof(LightData);
+        memcpy(mapped.pData, m_lightDataArray.data(), copySize);
+        m_context->Unmap(m_lightDataBuffer.Get(), 0);
+    }
+    else
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("Failed to map light data buffer for update");
+    }
+
+    // Upload environment data to the environment constant buffer
+    if (m_environmentBuffer)
+    {
+        D3D11_MAPPED_SUBRESOURCE envMapped = {};
+        hr = m_context->Map(m_environmentBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &envMapped);
+        if (SUCCEEDED(hr))
+        {
+            memcpy(envMapped.pData, &m_environmentLighting, sizeof(EnvironmentLighting));
+            m_context->Unmap(m_environmentBuffer.Get(), 0);
+        }
+    }
+
+    // Upload shadow matrices to the shadow data constant buffer
+    if (m_shadowDataBuffer && !m_shadowMaps.empty())
+    {
+        D3D11_MAPPED_SUBRESOURCE shadowMapped = {};
+        hr = m_context->Map(m_shadowDataBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &shadowMapped);
+        if (SUCCEEDED(hr))
+        {
+            const size_t maxShadowMatrices = 16;
+            std::vector<XMMATRIX> shadowMatrices;
+            shadowMatrices.reserve(maxShadowMatrices);
+
+            for (const auto& pair : m_shadowMaps)
+            {
+                if (pair.second && shadowMatrices.size() < maxShadowMatrices)
+                {
+                    XMMATRIX lightViewProj = XMMatrixMultiply(pair.second->lightMatrix, pair.second->shadowMatrix);
+                    shadowMatrices.push_back(lightViewProj);
+                }
+            }
+
+            if (!shadowMatrices.empty())
+            {
+                memcpy(shadowMapped.pData, shadowMatrices.data(), shadowMatrices.size() * sizeof(XMMATRIX));
+            }
+            m_context->Unmap(m_shadowDataBuffer.Get(), 0);
+        }
     }
 }
 
 void LightingSystem::UpdateShadowMaps(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
 {
-    // Update shadow map matrices and culling
+    if (!m_device)
+    {
+        return;
+    }
+
+    // Extract near and far planes from the projection matrix
+    // For LH perspective projection: projMatrix._33 = far/(far-near), projMatrix._43 = -near*far/(far-near)
+    float projNear = -projMatrix.r[3].m128_f32[2] / projMatrix.r[2].m128_f32[2];
+    float projFar = projMatrix.r[3].m128_f32[2] / (1.0f - projMatrix.r[2].m128_f32[2]);
+
+    // Clamp to reasonable defaults if extraction fails
+    if (projNear <= 0.0f || projNear != projNear)
+    {
+        projNear = 0.1f;
+    }
+    if (projFar <= projNear || projFar != projFar)
+    {
+        projFar = 1000.0f;
+    }
+
     for (const auto& light : m_lights)
     {
-        if (light && light->IsEnabled() && light->GetCastShadows())
+        if (!light || !light->IsEnabled() || !light->GetCastShadows())
         {
-            auto it = m_shadowMaps.find(light.get());
-            if (it != m_shadowMaps.end() && it->second)
+            continue;
+        }
+
+        // Ensure a shadow map exists for this light
+        auto it = m_shadowMaps.find(light.get());
+        if (it == m_shadowMaps.end())
+        {
+            auto shadowMap = std::make_unique<ShadowMap>();
+            if (SUCCEEDED(CreateShadowMap(light->GetShadowMapSize(), *shadowMap)))
             {
-                it->second->lightMatrix = light->GetLightMatrix();
-                it->second->shadowMatrix = light->GetShadowMatrix();
+                m_shadowMaps[light.get()] = std::move(shadowMap);
+                it = m_shadowMaps.find(light.get());
             }
+            else
+            {
+                continue;
+            }
+        }
+
+        if (!it->second)
+        {
+            continue;
+        }
+
+        // For directional lights with CSM technique, update cascaded shadow maps
+        if (light->GetType() == LightType::Directional && light->GetShadowTechnique() == ShadowTechnique::CSM)
+        {
+            if (!m_csmShadowMap)
+            {
+                if (FAILED(CreateCascadedShadowMap()))
+                {
+                    Spark::SimpleConsole::GetInstance().LogWarning("Failed to create cascaded shadow map");
+                    continue;
+                }
+            }
+
+            // Recalculate cascade split distances
+            CalculateCSMSplits(projNear, projFar, *m_csmShadowMap);
+
+            // Update each cascade's light matrix
+            m_csmShadowMap->lightMatrices.resize(m_csmShadowMap->cascadeCount);
+            for (uint32_t cascade = 0; cascade < m_csmShadowMap->cascadeCount; ++cascade)
+            {
+                float cascadeNear = m_csmShadowMap->splitDistances[cascade];
+                float cascadeFar = m_csmShadowMap->splitDistances[cascade + 1];
+
+                XMMATRIX cascadeLightMatrix = CalculateLightMatrix(*light, viewMatrix, cascadeNear, cascadeFar);
+                m_csmShadowMap->lightMatrices[cascade] = cascadeLightMatrix;
+
+                if (cascade < m_csmShadowMap->cascades.size())
+                {
+                    m_csmShadowMap->cascades[cascade].lightMatrix = cascadeLightMatrix;
+                    m_csmShadowMap->cascades[cascade].shadowMatrix = light->GetShadowMatrix();
+                }
+            }
+        }
+        else
+        {
+            // Standard shadow map: calculate tight-fitting light matrix
+            it->second->lightMatrix = CalculateLightMatrix(*light, viewMatrix, projNear, projFar);
+            it->second->shadowMatrix = light->GetShadowMatrix();
         }
     }
 }
 
 void LightingSystem::CullLights(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
 {
-    // Simple frustum culling for lights
-    // This is a simplified implementation
+    // Build the six frustum planes from the view-projection matrix
+    // Planes are extracted from the combined VP matrix in clip space
+    XMMATRIX viewProj = XMMatrixMultiply(viewMatrix, projMatrix);
+
+    XMFLOAT4X4 vp;
+    XMStoreFloat4x4(&vp, viewProj);
+
+    // Extract frustum planes (Gribb/Hartmann method)
+    // Each plane as (A, B, C, D) where Ax + By + Cz + D >= 0 means inside
+    XMFLOAT4 planes[6];
+
+    // Left plane
+    planes[0] = XMFLOAT4(vp._14 + vp._11, vp._24 + vp._21, vp._34 + vp._31, vp._44 + vp._41);
+
+    // Right plane
+    planes[1] = XMFLOAT4(vp._14 - vp._11, vp._24 - vp._21, vp._34 - vp._31, vp._44 - vp._41);
+
+    // Bottom plane
+    planes[2] = XMFLOAT4(vp._14 + vp._12, vp._24 + vp._22, vp._34 + vp._32, vp._44 + vp._42);
+
+    // Top plane
+    planes[3] = XMFLOAT4(vp._14 - vp._12, vp._24 - vp._22, vp._34 - vp._32, vp._44 - vp._42);
+
+    // Near plane
+    planes[4] = XMFLOAT4(vp._13, vp._23, vp._33, vp._43);
+
+    // Far plane
+    planes[5] = XMFLOAT4(vp._14 - vp._13, vp._24 - vp._23, vp._34 - vp._33, vp._44 - vp._43);
+
+    // Normalize all planes
+    for (int i = 0; i < 6; ++i)
+    {
+        XMVECTOR planeVec = XMLoadFloat4(&planes[i]);
+        XMVECTOR normalLength = XMVector3Length(XMVectorSet(planes[i].x, planes[i].y, planes[i].z, 0.0f));
+        float len = XMVectorGetX(normalLength);
+        if (len > 0.0f)
+        {
+            planes[i].x /= len;
+            planes[i].y /= len;
+            planes[i].z /= len;
+            planes[i].w /= len;
+        }
+    }
+
+    // Rebuild light data array with only visible lights
+    m_lightDataArray.clear();
+    m_lightDataArray.reserve(m_lights.size());
     uint32_t visibleCount = 0;
 
     for (const auto& light : m_lights)
     {
-        if (light && light->IsEnabled())
+        if (!light || !light->IsEnabled())
         {
-            // For now, consider all lights visible
-            // In a real implementation, this would test against view frustum
+            continue;
+        }
+
+        bool visible = true;
+
+        // Directional and environment lights are always visible
+        if (light->GetType() == LightType::Point || light->GetType() == LightType::Spot ||
+            light->GetType() == LightType::Area)
+        {
+            const XMFLOAT3& pos = light->GetPosition();
+            float range = light->GetRange();
+
+            // Test the light's bounding sphere against each frustum plane
+            for (int i = 0; i < 6; ++i)
+            {
+                float distance = planes[i].x * pos.x + planes[i].y * pos.y + planes[i].z * pos.z + planes[i].w;
+
+                // If the sphere is entirely behind any plane, cull it
+                if (distance < -range)
+                {
+                    visible = false;
+                    break;
+                }
+            }
+        }
+
+        if (visible)
+        {
+            m_lightDataArray.push_back(light->GetShaderData());
             visibleCount++;
         }
     }
@@ -824,7 +1159,118 @@ void LightingSystem::CalculateCSMSplits(float nearPlane, float farPlane, Cascade
 XMMATRIX LightingSystem::CalculateLightMatrix(const Light& light, const XMMATRIX& viewMatrix, float nearPlane,
                                               float farPlane)
 {
-    return light.GetLightMatrix();
+    // For non-directional lights, use the basic light matrix
+    if (light.GetType() != LightType::Directional)
+    {
+        return light.GetLightMatrix();
+    }
+
+    // For directional lights, compute a tight-fitting orthographic projection
+    // that encompasses the view frustum slice [nearPlane, farPlane].
+
+    // Step 1: Build the inverse view-projection for the frustum slice
+    // Use a temporary projection matrix matching the slice
+    // We assume a symmetric perspective projection; extract aspect and fov
+    // from the current projection indirectly, but we only need the 8 frustum
+    // corners in world space. We reconstruct them from the inverse view matrix
+    // and the near/far distances with a standard FPS FOV.
+
+    // Compute the 8 corners of the frustum slice in world space
+    // NDC corners: x,y in {-1,+1}, z in {0,1} (LH)
+    XMMATRIX invView = XMMatrixInverse(nullptr, viewMatrix);
+
+    // Extract forward, right, up from the inverse view matrix
+    XMVECTOR camRight = invView.r[0];
+    XMVECTOR camUp = invView.r[1];
+    XMVECTOR camForward = invView.r[2];
+    XMVECTOR camPos = invView.r[3];
+
+    // Use a default FOV of 60 degrees and 16:9 aspect if we cannot extract them
+    float fovY = XM_PI / 3.0f;
+    float aspect = 16.0f / 9.0f;
+
+    float nearHeight = 2.0f * nearPlane * std::tan(fovY * 0.5f);
+    float nearWidth = nearHeight * aspect;
+    float farHeight = 2.0f * farPlane * std::tan(fovY * 0.5f);
+    float farWidth = farHeight * aspect;
+
+    XMVECTOR nearCenter = XMVectorAdd(camPos, XMVectorScale(camForward, nearPlane));
+    XMVECTOR farCenter = XMVectorAdd(camPos, XMVectorScale(camForward, farPlane));
+
+    // Compute the 8 frustum corners
+    XMVECTOR frustumCorners[8];
+    // Near plane corners
+    frustumCorners[0] = XMVectorAdd(
+        nearCenter, XMVectorAdd(XMVectorScale(camUp, nearHeight * 0.5f), XMVectorScale(camRight, -nearWidth * 0.5f)));
+    frustumCorners[1] = XMVectorAdd(
+        nearCenter, XMVectorAdd(XMVectorScale(camUp, nearHeight * 0.5f), XMVectorScale(camRight, nearWidth * 0.5f)));
+    frustumCorners[2] = XMVectorAdd(
+        nearCenter, XMVectorAdd(XMVectorScale(camUp, -nearHeight * 0.5f), XMVectorScale(camRight, -nearWidth * 0.5f)));
+    frustumCorners[3] = XMVectorAdd(
+        nearCenter, XMVectorAdd(XMVectorScale(camUp, -nearHeight * 0.5f), XMVectorScale(camRight, nearWidth * 0.5f)));
+    // Far plane corners
+    frustumCorners[4] = XMVectorAdd(
+        farCenter, XMVectorAdd(XMVectorScale(camUp, farHeight * 0.5f), XMVectorScale(camRight, -farWidth * 0.5f)));
+    frustumCorners[5] = XMVectorAdd(
+        farCenter, XMVectorAdd(XMVectorScale(camUp, farHeight * 0.5f), XMVectorScale(camRight, farWidth * 0.5f)));
+    frustumCorners[6] = XMVectorAdd(
+        farCenter, XMVectorAdd(XMVectorScale(camUp, -farHeight * 0.5f), XMVectorScale(camRight, -farWidth * 0.5f)));
+    frustumCorners[7] = XMVectorAdd(
+        farCenter, XMVectorAdd(XMVectorScale(camUp, -farHeight * 0.5f), XMVectorScale(camRight, farWidth * 0.5f)));
+
+    // Step 2: Compute the frustum centroid
+    XMVECTOR centroid = XMVectorZero();
+    for (int i = 0; i < 8; ++i)
+    {
+        centroid = XMVectorAdd(centroid, frustumCorners[i]);
+    }
+    centroid = XMVectorScale(centroid, 1.0f / 8.0f);
+
+    // Step 3: Build the light view matrix looking at the centroid
+    const XMFLOAT3& lightDir = light.GetDirection();
+    XMVECTOR lightDirVec = XMVector3Normalize(XMLoadFloat3(&lightDir));
+
+    // Place the light far enough back along the light direction
+    XMVECTOR lightPos = XMVectorSubtract(centroid, XMVectorScale(lightDirVec, farPlane));
+
+    XMVECTOR lightUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    // If light direction is nearly parallel to up, choose a different up vector
+    if (std::abs(XMVectorGetX(XMVector3Dot(lightDirVec, lightUp))) > 0.99f)
+    {
+        lightUp = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    XMVECTOR lightTarget = XMVectorAdd(lightPos, lightDirVec);
+    XMMATRIX lightView = XMMatrixLookAtLH(lightPos, lightTarget, lightUp);
+
+    // Step 4: Transform frustum corners into light space and find AABB
+    float minX = FLT_MAX, maxX = -FLT_MAX;
+    float minY = FLT_MAX, maxY = -FLT_MAX;
+    float minZ = FLT_MAX, maxZ = -FLT_MAX;
+
+    for (int i = 0; i < 8; ++i)
+    {
+        XMVECTOR transformed = XMVector3TransformCoord(frustumCorners[i], lightView);
+        float tx = XMVectorGetX(transformed);
+        float ty = XMVectorGetY(transformed);
+        float tz = XMVectorGetZ(transformed);
+
+        minX = std::min(minX, tx);
+        maxX = std::max(maxX, tx);
+        minY = std::min(minY, ty);
+        maxY = std::max(maxY, ty);
+        minZ = std::min(minZ, tz);
+        maxZ = std::max(maxZ, tz);
+    }
+
+    // Expand the Z range to capture shadow casters behind the camera frustum
+    float zRange = maxZ - minZ;
+    minZ -= zRange * 0.5f;
+
+    // Step 5: Build an orthographic projection from the light-space AABB
+    XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(minX, maxX, minY, maxY, minZ, maxZ);
+
+    return XMMatrixMultiply(lightView, lightProj);
 }
 
 HRESULT LightingSystem::GenerateIrradianceMap(ID3D11ShaderResourceView* environmentMap)
@@ -1129,7 +1575,7 @@ HRESULT LightingSystem::GenerateBRDFLUT()
 
 HRESULT LightingSystem::CreateDefaultEnvironment()
 {
-    // Set up default environment lighting
+    // Set up default environment lighting parameters
     m_environmentLighting.skyColor = {0.5f, 0.7f, 1.0f};
     m_environmentLighting.skyIntensity = 1.0f;
     m_environmentLighting.skyTurbidity = 2.0f;
@@ -1137,7 +1583,36 @@ HRESULT LightingSystem::CreateDefaultEnvironment()
     m_environmentLighting.sunSize = 0.04f;
     m_environmentLighting.sunIntensity = 5.0f;
 
-    Spark::SimpleConsole::GetInstance().LogInfo("Default environment created");
+    // Default fog settings (disabled)
+    m_environmentLighting.fogEnabled = false;
+    m_environmentLighting.fogColor = {0.5f, 0.6f, 0.7f};
+    m_environmentLighting.fogDensity = 0.01f;
+    m_environmentLighting.fogStart = 10.0f;
+    m_environmentLighting.fogEnd = 100.0f;
+
+    // Generate default IBL textures from the sky color
+    HRESULT hr = GenerateIrradianceMap(nullptr);
+    if (FAILED(hr))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("Failed to generate default irradiance map");
+        return hr;
+    }
+
+    hr = GeneratePrefilterMap(nullptr);
+    if (FAILED(hr))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("Failed to generate default prefilter map");
+        return hr;
+    }
+
+    hr = GenerateBRDFLUT();
+    if (FAILED(hr))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("Failed to generate default BRDF LUT");
+        return hr;
+    }
+
+    Spark::SimpleConsole::GetInstance().LogSuccess("Default environment created with IBL textures");
     return S_OK;
 }
 

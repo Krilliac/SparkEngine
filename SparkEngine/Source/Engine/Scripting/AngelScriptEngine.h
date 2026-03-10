@@ -46,10 +46,23 @@
  */
 
 #pragma once
+
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
 #include <angelscript.h>
 #include <scriptstdstring/scriptstdstring.h>
 #include <scriptbuilder/scriptbuilder.h>
 #include <scriptarray/scriptarray.h>
+#else
+// Forward-declare / stub AngelScript types so the header compiles without the SDK.
+struct asIScriptEngine;
+struct asIScriptModule;
+struct asIScriptObject;
+struct asITypeInfo;
+struct asIScriptContext;
+struct asIScriptFunction;
+struct asSMessageInfo;
+#endif // SPARK_ANGELSCRIPT_SUPPORT
+
 #include <unordered_map>
 #include <string>
 #include "../ECS/Components.h"

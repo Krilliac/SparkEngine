@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <chrono>
+#include <cstring>
 
 // Direct3D texture loading
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -277,9 +278,50 @@ void Material::BindToShader(ID3D11DeviceContext* context) const
         // context->PSSetSamplers(0, 18, samplerArray.data());
     }
 
-// Bind material constants (would typically be done through a constant buffer)
-// This is a simplified approach - in practice you'd update a constant buffer
-// with all material properties and bind it to the shader
+    // Bind the material constant buffer if compiled
+    if (m_constantBuffer)
+    {
+        // Update constant buffer contents
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        HRESULT hr = context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        if (SUCCEEDED(hr))
+        {
+            MaterialConstants constants = {};
+            constants.albedoColor = m_pbrProperties.albedoColor;
+            constants.metallicFactor = m_pbrProperties.metallicFactor;
+            constants.roughnessFactor = m_pbrProperties.roughnessFactor;
+            constants.normalScale = m_pbrProperties.normalScale;
+            constants.occlusionStrength = m_pbrProperties.occlusionStrength;
+            constants.emissiveColor = m_pbrProperties.emissiveColor;
+            constants.emissiveFactor = m_pbrProperties.emissiveFactor;
+            constants.alphaCutoff = m_pbrProperties.alphaCutoff;
+            constants.indexOfRefraction = m_pbrProperties.indexOfRefraction;
+            constants.pad0 = 0.0f;
+            constants.pad1 = 0.0f;
+            std::memcpy(mapped.pData, &constants, sizeof(MaterialConstants));
+            context->Unmap(m_constantBuffer.Get(), 0);
+        }
+
+        ID3D11Buffer* cbuffers[] = {m_constantBuffer.Get()};
+        context->PSSetConstantBuffers(1, 1, cbuffers);
+    }
+
+    // Set pipeline states if compiled
+    if (m_blendState)
+    {
+        const FLOAT blendFactor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        context->OMSetBlendState(m_blendState.Get(), blendFactor, 0xFFFFFFFF);
+    }
+
+    if (m_depthStencilState)
+    {
+        context->OMSetDepthStencilState(m_depthStencilState.Get(), 0);
+    }
+
+    if (m_rasterizerState)
+    {
+        context->RSSetState(m_rasterizerState.Get());
+    }
 
 // Log binding for debugging in debug builds
 #ifdef _DEBUG
@@ -979,6 +1021,336 @@ std::vector<std::string> Material::GetAvailableVariants() const
     return variants;
 }
 
+HRESULT Material::CompileMaterial(ID3D11Device* device)
+{
+    if (!device)
+    {
+        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: device is null for material '" + m_name + "'");
+        return E_INVALIDARG;
+    }
+
+    HRESULT hr = S_OK;
+
+    // ---- Blend state ----
+    D3D11_BLEND_DESC blendDesc = {};
+    blendDesc.AlphaToCoverageEnable = FALSE;
+    blendDesc.IndependentBlendEnable = FALSE;
+    auto& rt = blendDesc.RenderTarget[0];
+    rt.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+    switch (m_renderState.blendMode)
+    {
+    case BlendMode::Opaque:
+        rt.BlendEnable = FALSE;
+        break;
+    case BlendMode::AlphaTest:
+        rt.BlendEnable = FALSE; // Alpha test handled in pixel shader via alphaCutoff
+        break;
+    case BlendMode::Transparent:
+        rt.BlendEnable = TRUE;
+        rt.SrcBlend = D3D11_BLEND_SRC_ALPHA;
+        rt.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+        rt.BlendOp = D3D11_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D11_BLEND_ONE;
+        rt.DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+        rt.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        break;
+    case BlendMode::Additive:
+        rt.BlendEnable = TRUE;
+        rt.SrcBlend = D3D11_BLEND_SRC_ALPHA;
+        rt.DestBlend = D3D11_BLEND_ONE;
+        rt.BlendOp = D3D11_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D11_BLEND_ONE;
+        rt.DestBlendAlpha = D3D11_BLEND_ONE;
+        rt.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        break;
+    case BlendMode::Multiply:
+        rt.BlendEnable = TRUE;
+        rt.SrcBlend = D3D11_BLEND_DEST_COLOR;
+        rt.DestBlend = D3D11_BLEND_ZERO;
+        rt.BlendOp = D3D11_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+        rt.DestBlendAlpha = D3D11_BLEND_ZERO;
+        rt.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        break;
+    case BlendMode::Screen:
+        rt.BlendEnable = TRUE;
+        rt.SrcBlend = D3D11_BLEND_ONE;
+        rt.DestBlend = D3D11_BLEND_INV_SRC_COLOR;
+        rt.BlendOp = D3D11_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D11_BLEND_ONE;
+        rt.DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+        rt.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        break;
+    }
+
+    hr = device->CreateBlendState(&blendDesc, &m_blendState);
+    if (FAILED(hr))
+    {
+        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create blend state for '" + m_name +
+                                                     "'");
+        return hr;
+    }
+
+    // ---- Depth stencil state ----
+    D3D11_DEPTH_STENCIL_DESC dsDesc = {};
+    dsDesc.DepthEnable = m_renderState.depthTest ? TRUE : FALSE;
+    dsDesc.DepthWriteMask = m_renderState.depthWrite ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
+    dsDesc.DepthFunc = D3D11_COMPARISON_LESS;
+    dsDesc.StencilEnable = FALSE;
+
+    hr = device->CreateDepthStencilState(&dsDesc, &m_depthStencilState);
+    if (FAILED(hr))
+    {
+        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create depth stencil state for '" +
+                                                     m_name + "'");
+        return hr;
+    }
+
+    // ---- Rasterizer state ----
+    D3D11_RASTERIZER_DESC rsDesc = {};
+    rsDesc.FillMode = D3D11_FILL_SOLID;
+    rsDesc.FrontCounterClockwise = FALSE;
+    rsDesc.DepthBias = 0;
+    rsDesc.DepthBiasClamp = 0.0f;
+    rsDesc.SlopeScaledDepthBias = 0.0f;
+    rsDesc.DepthClipEnable = TRUE;
+    rsDesc.ScissorEnable = FALSE;
+    rsDesc.MultisampleEnable = FALSE;
+    rsDesc.AntialiasedLineEnable = FALSE;
+
+    if (m_renderState.doubleSided || m_renderState.cullMode == CullMode::None)
+    {
+        rsDesc.CullMode = D3D11_CULL_NONE;
+    }
+    else if (m_renderState.cullMode == CullMode::Front)
+    {
+        rsDesc.CullMode = D3D11_CULL_FRONT;
+    }
+    else
+    {
+        rsDesc.CullMode = D3D11_CULL_BACK;
+    }
+
+    hr = device->CreateRasterizerState(&rsDesc, &m_rasterizerState);
+    if (FAILED(hr))
+    {
+        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create rasterizer state for '" +
+                                                     m_name + "'");
+        return hr;
+    }
+
+    // ---- Material constant buffer ----
+    D3D11_BUFFER_DESC cbDesc = {};
+    cbDesc.ByteWidth = sizeof(MaterialConstants);
+    cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+    cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    MaterialConstants constants = {};
+    constants.albedoColor = m_pbrProperties.albedoColor;
+    constants.metallicFactor = m_pbrProperties.metallicFactor;
+    constants.roughnessFactor = m_pbrProperties.roughnessFactor;
+    constants.normalScale = m_pbrProperties.normalScale;
+    constants.occlusionStrength = m_pbrProperties.occlusionStrength;
+    constants.emissiveColor = m_pbrProperties.emissiveColor;
+    constants.emissiveFactor = m_pbrProperties.emissiveFactor;
+    constants.alphaCutoff = m_pbrProperties.alphaCutoff;
+    constants.indexOfRefraction = m_pbrProperties.indexOfRefraction;
+    constants.pad0 = 0.0f;
+    constants.pad1 = 0.0f;
+
+    D3D11_SUBRESOURCE_DATA initData = {};
+    initData.pSysMem = &constants;
+
+    hr = device->CreateBuffer(&cbDesc, &initData, &m_constantBuffer);
+    if (FAILED(hr))
+    {
+        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create constant buffer for '" +
+                                                     m_name + "'");
+        return hr;
+    }
+
+    m_compiled = true;
+    Spark::SimpleConsole::GetInstance().LogInfo("Material '" + m_name + "' compiled successfully");
+    return S_OK;
+}
+
+std::vector<std::string> Material::GetShaderPermutation() const
+{
+    std::vector<std::string> defines;
+
+    // Texture-based defines
+    if (HasTexture(MaterialTextureType::Albedo))
+        defines.push_back("HAS_ALBEDO_MAP");
+    if (HasTexture(MaterialTextureType::Normal))
+        defines.push_back("HAS_NORMAL_MAP");
+    if (HasTexture(MaterialTextureType::Metallic))
+        defines.push_back("HAS_METALLIC_MAP");
+    if (HasTexture(MaterialTextureType::Roughness))
+        defines.push_back("HAS_ROUGHNESS_MAP");
+    if (HasTexture(MaterialTextureType::Occlusion))
+        defines.push_back("HAS_OCCLUSION_MAP");
+    if (HasTexture(MaterialTextureType::Emissive))
+        defines.push_back("HAS_EMISSIVE_MAP");
+    if (HasTexture(MaterialTextureType::Height))
+        defines.push_back("HAS_HEIGHT_MAP");
+    if (HasTexture(MaterialTextureType::DetailAlbedo))
+        defines.push_back("HAS_DETAIL_ALBEDO_MAP");
+    if (HasTexture(MaterialTextureType::DetailNormal))
+        defines.push_back("HAS_DETAIL_NORMAL_MAP");
+    if (HasTexture(MaterialTextureType::Subsurface))
+        defines.push_back("HAS_SUBSURFACE_MAP");
+    if (HasTexture(MaterialTextureType::Transmission))
+        defines.push_back("HAS_TRANSMISSION_MAP");
+    if (HasTexture(MaterialTextureType::Clearcoat))
+        defines.push_back("HAS_CLEARCOAT_MAP");
+    if (HasTexture(MaterialTextureType::ClearcoatRoughness))
+        defines.push_back("HAS_CLEARCOAT_ROUGHNESS_MAP");
+    if (HasTexture(MaterialTextureType::Anisotropy))
+        defines.push_back("HAS_ANISOTROPY_MAP");
+
+    // Blend mode defines
+    switch (m_renderState.blendMode)
+    {
+    case BlendMode::AlphaTest:
+        defines.push_back("ALPHA_TEST");
+        break;
+    case BlendMode::Transparent:
+        defines.push_back("ALPHA_BLEND");
+        break;
+    case BlendMode::Additive:
+        defines.push_back("BLEND_ADDITIVE");
+        break;
+    case BlendMode::Multiply:
+        defines.push_back("BLEND_MULTIPLY");
+        break;
+    case BlendMode::Screen:
+        defines.push_back("BLEND_SCREEN");
+        break;
+    default:
+        break;
+    }
+
+    // Advanced feature defines
+    if (m_advancedProperties.subsurfaceEnabled)
+        defines.push_back("ENABLE_SUBSURFACE");
+    if (m_advancedProperties.clearcoatEnabled)
+        defines.push_back("ENABLE_CLEARCOAT");
+    if (m_advancedProperties.anisotropyEnabled)
+        defines.push_back("ENABLE_ANISOTROPY");
+    if (m_advancedProperties.transmissionEnabled)
+        defines.push_back("ENABLE_TRANSMISSION");
+    if (m_advancedProperties.sheenEnabled)
+        defines.push_back("ENABLE_SHEEN");
+    if (m_advancedProperties.iridescenceEnabled)
+        defines.push_back("ENABLE_IRIDESCENCE");
+
+    // Double-sided rendering
+    if (m_renderState.doubleSided)
+        defines.push_back("DOUBLE_SIDED");
+
+    // If active variant has additional defines, append them
+    if (!m_activeVariant.empty())
+    {
+        auto it = m_variants.find(m_activeVariant);
+        if (it != m_variants.end())
+        {
+            for (const auto& define : it->second)
+            {
+                defines.push_back(define);
+            }
+        }
+    }
+
+    return defines;
+}
+
+std::shared_ptr<Material> Material::CreateInstance(const std::string& instanceName) const
+{
+    auto instance = std::make_shared<Material>(instanceName);
+    instance->m_pbrProperties = m_pbrProperties;
+    instance->m_advancedProperties = m_advancedProperties;
+    instance->m_renderState = m_renderState;
+    instance->m_textures = m_textures;
+    instance->m_variants = m_variants;
+    instance->m_activeVariant = m_activeVariant;
+
+    // Share compiled pipeline states from the template (read-only, safe to share)
+    instance->m_blendState = m_blendState;
+    instance->m_depthStencilState = m_depthStencilState;
+    instance->m_rasterizerState = m_rasterizerState;
+    // Constant buffer is NOT shared; the instance gets its own so properties can diverge
+    instance->m_compiled = false;
+
+    Spark::SimpleConsole::GetInstance().LogInfo("Created material instance '" + instanceName + "' from template '" +
+                                                m_name + "'");
+    return instance;
+}
+
+bool Material::ReloadMaterial(ID3D11Device* device)
+{
+    if (!device)
+    {
+        Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: device is null for material '" + m_name + "'");
+        return false;
+    }
+
+    bool allSucceeded = true;
+
+    // Collect texture entries to reload (cannot erase while iterating)
+    std::vector<std::pair<MaterialTextureType, std::string>> texturesToReload;
+    for (const auto& [type, matTexture] : m_textures)
+    {
+        if (!matTexture.filePath.empty())
+        {
+            texturesToReload.emplace_back(type, matTexture.filePath);
+        }
+    }
+
+    // Clear all existing textures, then reload from disk
+    m_textures.clear();
+
+    for (const auto& [type, filePath] : texturesToReload)
+    {
+        if (!std::filesystem::exists(filePath))
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning("ReloadMaterial: texture file missing for '" + m_name +
+                                                           "': " + filePath);
+            allSucceeded = false;
+            continue;
+        }
+
+        if (!LoadTexture(type, filePath, device))
+        {
+            Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: failed to reload texture '" + filePath +
+                                                         "' for material '" + m_name + "'");
+            allSucceeded = false;
+        }
+    }
+
+    // Recompile pipeline state
+    m_blendState.Reset();
+    m_depthStencilState.Reset();
+    m_rasterizerState.Reset();
+    m_constantBuffer.Reset();
+    m_compiled = false;
+
+    HRESULT hr = CompileMaterial(device);
+    if (FAILED(hr))
+    {
+        Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: failed to recompile material '" + m_name + "'");
+        allSucceeded = false;
+    }
+
+    if (allSucceeded)
+    {
+        Spark::SimpleConsole::GetInstance().LogSuccess("Material '" + m_name + "' reloaded successfully");
+    }
+
+    return allSucceeded;
+}
+
 // ============================================================================
 // MATERIAL SYSTEM IMPLEMENTATION
 // ============================================================================
@@ -1193,6 +1565,206 @@ void MaterialSystem::EndFrame()
     auto frameDuration = std::chrono::duration_cast<std::chrono::microseconds>(frameEndTime - m_frameStartTime);
 
     // Update frame time metrics if needed
+}
+
+std::shared_ptr<Material> MaterialSystem::CreateMaterialInstance(const std::string& templateName,
+                                                                 const std::string& instanceName)
+{
+    auto templateMat = GetMaterial(templateName);
+    if (!templateMat || templateMat == m_defaultMaterial)
+    {
+        Spark::SimpleConsole::GetInstance().LogError("CreateMaterialInstance: template material not found: " +
+                                                     templateName);
+        return m_errorMaterial;
+    }
+
+    auto instance = templateMat->CreateInstance(instanceName);
+    if (instance)
+    {
+        // Compile the instance so it has its own constant buffer
+        if (m_device)
+        {
+            instance->CompileMaterial(m_device);
+        }
+        m_materials[instanceName] = instance;
+    }
+
+    return instance;
+}
+
+void MaterialSystem::BindMaterial(const std::string& name)
+{
+    auto material = GetMaterial(name);
+    BindMaterial(material);
+}
+
+void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
+{
+    if (!material || !m_context)
+    {
+        return;
+    }
+
+    // Auto-compile if needed
+    if (!material->m_compiled && m_device)
+    {
+        material->CompileMaterial(m_device);
+    }
+
+    // Update the constant buffer with current PBR properties
+    if (material->m_constantBuffer)
+    {
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        HRESULT hr = m_context->Map(material->m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        if (SUCCEEDED(hr))
+        {
+            const auto& pbr = material->GetPBRProperties();
+            MaterialConstants constants = {};
+            constants.albedoColor = pbr.albedoColor;
+            constants.metallicFactor = pbr.metallicFactor;
+            constants.roughnessFactor = pbr.roughnessFactor;
+            constants.normalScale = pbr.normalScale;
+            constants.occlusionStrength = pbr.occlusionStrength;
+            constants.emissiveColor = pbr.emissiveColor;
+            constants.emissiveFactor = pbr.emissiveFactor;
+            constants.alphaCutoff = pbr.alphaCutoff;
+            constants.indexOfRefraction = pbr.indexOfRefraction;
+            constants.pad0 = 0.0f;
+            constants.pad1 = 0.0f;
+            std::memcpy(mapped.pData, &constants, sizeof(MaterialConstants));
+            m_context->Unmap(material->m_constantBuffer.Get(), 0);
+        }
+
+        // Bind constant buffer to pixel shader slot 1 (slot 0 is often per-frame/camera)
+        ID3D11Buffer* cbuffers[] = {material->m_constantBuffer.Get()};
+        m_context->PSSetConstantBuffers(1, 1, cbuffers);
+    }
+
+    // Bind texture SRVs for each active texture slot
+    static const std::pair<MaterialTextureType, UINT> textureSlots[] = {
+        {MaterialTextureType::Albedo, 0},    {MaterialTextureType::Normal, 1},    {MaterialTextureType::Metallic, 2},
+        {MaterialTextureType::Roughness, 3}, {MaterialTextureType::Occlusion, 4}, {MaterialTextureType::Emissive, 5},
+    };
+
+    int boundTextures = 0;
+    for (const auto& [texType, slot] : textureSlots)
+    {
+        if (material->HasTexture(texType))
+        {
+            const auto& matTex = material->GetTexture(texType);
+            if (matTex.enabled && matTex.texture)
+            {
+                ID3D11ShaderResourceView* srv = matTex.texture.Get();
+                m_context->PSSetShaderResources(slot, 1, &srv);
+                boundTextures++;
+            }
+            else
+            {
+                ID3D11ShaderResourceView* nullSrv = nullptr;
+                m_context->PSSetShaderResources(slot, 1, &nullSrv);
+            }
+        }
+        else
+        {
+            ID3D11ShaderResourceView* nullSrv = nullptr;
+            m_context->PSSetShaderResources(slot, 1, &nullSrv);
+        }
+    }
+
+    // Set blend state
+    if (material->m_blendState)
+    {
+        const FLOAT blendFactor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        m_context->OMSetBlendState(material->m_blendState.Get(), blendFactor, 0xFFFFFFFF);
+    }
+
+    // Set depth stencil state
+    if (material->m_depthStencilState)
+    {
+        m_context->OMSetDepthStencilState(material->m_depthStencilState.Get(), 0);
+    }
+
+    // Set rasterizer state
+    if (material->m_rasterizerState)
+    {
+        m_context->RSSetState(material->m_rasterizerState.Get());
+    }
+
+    // Update per-frame metrics
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.materialSwitches++;
+        m_metrics.textureBinds += boundTextures;
+    }
+}
+
+std::vector<std::string> MaterialSystem::GetShaderPermutation(const std::string& name) const
+{
+    auto material = GetMaterial(name);
+    if (material && material != m_defaultMaterial)
+    {
+        return material->GetShaderPermutation();
+    }
+    return {};
+}
+
+bool MaterialSystem::ReloadMaterial(const std::string& name)
+{
+    auto it = m_materials.find(name);
+    if (it == m_materials.end() || !it->second)
+    {
+        Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: material not found: " + name);
+        return false;
+    }
+
+    bool result = it->second->ReloadMaterial(m_device);
+
+    // Update file timestamp if hot reload is enabled
+    if (result && m_hotReloadEnabled)
+    {
+        m_fileTimestamps[name] = GetFileTimestamp(name);
+    }
+
+    return result;
+}
+
+MaterialSystem::MaterialMetrics MaterialSystem::GetMetrics() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    MaterialMetrics metrics = m_metrics;
+    metrics.loadedMaterials = static_cast<int>(m_materials.size());
+    metrics.textureCount = static_cast<int>(m_textureCache.size());
+    metrics.hotReloadEnabled = m_hotReloadEnabled;
+
+    int totalVariants = 0;
+    for (const auto& materialPair : m_materials)
+    {
+        if (materialPair.second)
+        {
+            totalVariants += static_cast<int>(materialPair.second->GetAvailableVariants().size());
+        }
+    }
+    metrics.variantCount = totalVariants;
+
+    return metrics;
+}
+
+void MaterialSystem::EnableHotReloading(bool enabled)
+{
+    m_hotReloadEnabled = enabled;
+    if (enabled)
+    {
+        for (const auto& pair : m_materials)
+        {
+            m_fileTimestamps[pair.first] = GetFileTimestamp(pair.first);
+        }
+        Spark::SimpleConsole::GetInstance().LogSuccess("Hot reload enabled");
+    }
+    else
+    {
+        m_fileTimestamps.clear();
+        Spark::SimpleConsole::GetInstance().LogInfo("Hot reload disabled");
+    }
 }
 
 MaterialSystem::MaterialMetrics MaterialSystem::Console_GetMetrics() const
@@ -1727,6 +2299,13 @@ HRESULT MaterialSystem::CreateDefaultMaterials()
     errorPbr.emissiveColor = {0.2f, 0.0f, 0.2f};
     errorPbr.emissiveFactor = 0.5f;
     m_errorMaterial->SetPBRProperties(errorPbr);
+
+    // Compile default pipeline states for both materials
+    if (m_device)
+    {
+        m_defaultMaterial->CompileMaterial(m_device);
+        m_errorMaterial->CompileMaterial(m_device);
+    }
 
     return S_OK;
 }
@@ -2715,6 +3294,127 @@ void Material::Console_ReloadTextures(ID3D11Device* /*device*/)
     fprintf(stderr, "[Material] Console_ReloadTextures: No-op on Linux (no GPU textures)\n");
 }
 
+HRESULT Material::CompileMaterial(ID3D11Device* /*device*/)
+{
+    // No GPU pipeline state on Linux
+    m_compiled = true;
+    return S_OK;
+}
+
+std::vector<std::string> Material::GetShaderPermutation() const
+{
+    std::vector<std::string> defines;
+
+    if (HasTexture(MaterialTextureType::Albedo))
+        defines.push_back("HAS_ALBEDO_MAP");
+    if (HasTexture(MaterialTextureType::Normal))
+        defines.push_back("HAS_NORMAL_MAP");
+    if (HasTexture(MaterialTextureType::Metallic))
+        defines.push_back("HAS_METALLIC_MAP");
+    if (HasTexture(MaterialTextureType::Roughness))
+        defines.push_back("HAS_ROUGHNESS_MAP");
+    if (HasTexture(MaterialTextureType::Occlusion))
+        defines.push_back("HAS_OCCLUSION_MAP");
+    if (HasTexture(MaterialTextureType::Emissive))
+        defines.push_back("HAS_EMISSIVE_MAP");
+    if (HasTexture(MaterialTextureType::Height))
+        defines.push_back("HAS_HEIGHT_MAP");
+    if (HasTexture(MaterialTextureType::DetailAlbedo))
+        defines.push_back("HAS_DETAIL_ALBEDO_MAP");
+    if (HasTexture(MaterialTextureType::DetailNormal))
+        defines.push_back("HAS_DETAIL_NORMAL_MAP");
+    if (HasTexture(MaterialTextureType::Subsurface))
+        defines.push_back("HAS_SUBSURFACE_MAP");
+    if (HasTexture(MaterialTextureType::Transmission))
+        defines.push_back("HAS_TRANSMISSION_MAP");
+    if (HasTexture(MaterialTextureType::Clearcoat))
+        defines.push_back("HAS_CLEARCOAT_MAP");
+    if (HasTexture(MaterialTextureType::ClearcoatRoughness))
+        defines.push_back("HAS_CLEARCOAT_ROUGHNESS_MAP");
+    if (HasTexture(MaterialTextureType::Anisotropy))
+        defines.push_back("HAS_ANISOTROPY_MAP");
+
+    switch (m_renderState.blendMode)
+    {
+    case BlendMode::AlphaTest:
+        defines.push_back("ALPHA_TEST");
+        break;
+    case BlendMode::Transparent:
+        defines.push_back("ALPHA_BLEND");
+        break;
+    case BlendMode::Additive:
+        defines.push_back("BLEND_ADDITIVE");
+        break;
+    case BlendMode::Multiply:
+        defines.push_back("BLEND_MULTIPLY");
+        break;
+    case BlendMode::Screen:
+        defines.push_back("BLEND_SCREEN");
+        break;
+    default:
+        break;
+    }
+
+    if (m_advancedProperties.subsurfaceEnabled)
+        defines.push_back("ENABLE_SUBSURFACE");
+    if (m_advancedProperties.clearcoatEnabled)
+        defines.push_back("ENABLE_CLEARCOAT");
+    if (m_advancedProperties.anisotropyEnabled)
+        defines.push_back("ENABLE_ANISOTROPY");
+    if (m_advancedProperties.transmissionEnabled)
+        defines.push_back("ENABLE_TRANSMISSION");
+    if (m_advancedProperties.sheenEnabled)
+        defines.push_back("ENABLE_SHEEN");
+    if (m_advancedProperties.iridescenceEnabled)
+        defines.push_back("ENABLE_IRIDESCENCE");
+
+    if (m_renderState.doubleSided)
+        defines.push_back("DOUBLE_SIDED");
+
+    if (!m_activeVariant.empty())
+    {
+        auto it = m_variants.find(m_activeVariant);
+        if (it != m_variants.end())
+        {
+            for (const auto& define : it->second)
+            {
+                defines.push_back(define);
+            }
+        }
+    }
+
+    return defines;
+}
+
+std::shared_ptr<Material> Material::CreateInstance(const std::string& instanceName) const
+{
+    auto instance = std::make_shared<Material>(instanceName);
+    instance->m_pbrProperties = m_pbrProperties;
+    instance->m_advancedProperties = m_advancedProperties;
+    instance->m_renderState = m_renderState;
+    instance->m_textures = m_textures;
+    instance->m_variants = m_variants;
+    instance->m_activeVariant = m_activeVariant;
+    instance->m_compiled = false;
+    return instance;
+}
+
+bool Material::ReloadMaterial(ID3D11Device* device)
+{
+    // On Linux, re-load texture metadata from disk
+    for (auto& [type, matTexture] : m_textures)
+    {
+        if (!matTexture.filePath.empty())
+        {
+            LoadTexture(type, matTexture.filePath, device);
+        }
+    }
+
+    m_compiled = false;
+    CompileMaterial(device);
+    return true;
+}
+
 // ============================================================================
 // MaterialSystem (Linux full implementation)
 // ============================================================================
@@ -2909,6 +3609,93 @@ void MaterialSystem::EndFrame()
 
     UpdateMetrics();
     PerformPeriodicMaintenance();
+}
+
+std::shared_ptr<Material> MaterialSystem::CreateMaterialInstance(const std::string& templateName,
+                                                                 const std::string& instanceName)
+{
+    auto templateMat = GetMaterial(templateName);
+    if (!templateMat)
+    {
+        fprintf(stderr, "[MaterialSystem] CreateMaterialInstance: template '%s' not found\n", templateName.c_str());
+        return nullptr;
+    }
+
+    auto instance = templateMat->CreateInstance(instanceName);
+    if (instance)
+    {
+        instance->CompileMaterial(m_device);
+        m_materials[instanceName] = instance;
+    }
+    return instance;
+}
+
+void MaterialSystem::BindMaterial(const std::string& name)
+{
+    auto material = GetMaterial(name);
+    BindMaterial(material);
+}
+
+void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
+{
+    if (!material)
+        return;
+
+    // No-op on Linux - no GPU binding
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.materialSwitches++;
+    }
+}
+
+std::vector<std::string> MaterialSystem::GetShaderPermutation(const std::string& name) const
+{
+    auto material = GetMaterial(name);
+    if (material)
+    {
+        return material->GetShaderPermutation();
+    }
+    return {};
+}
+
+bool MaterialSystem::ReloadMaterial(const std::string& name)
+{
+    auto it = m_materials.find(name);
+    if (it == m_materials.end() || !it->second)
+    {
+        fprintf(stderr, "[MaterialSystem] ReloadMaterial: material '%s' not found\n", name.c_str());
+        return false;
+    }
+
+    bool result = it->second->ReloadMaterial(m_device);
+
+    if (result && m_hotReloadEnabled)
+    {
+        m_fileTimestamps[name] = GetFileTimestamp(name);
+    }
+
+    return result;
+}
+
+MaterialSystem::MaterialMetrics MaterialSystem::GetMetrics() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    MaterialMetrics metrics = m_metrics;
+    metrics.loadedMaterials = static_cast<int>(m_materials.size());
+    metrics.textureCount = static_cast<int>(m_textureCache.size());
+    metrics.hotReloadEnabled = m_hotReloadEnabled;
+
+    int totalVariants = 0;
+    for (const auto& pair : m_materials)
+    {
+        if (pair.second)
+        {
+            totalVariants += static_cast<int>(pair.second->GetAvailableVariants().size());
+        }
+    }
+    metrics.variantCount = totalVariants;
+
+    return metrics;
 }
 
 MaterialSystem::MaterialMetrics MaterialSystem::Console_GetMetrics() const

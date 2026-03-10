@@ -10,6 +10,10 @@
  * - Client-side prediction and server reconciliation
  * - Lag compensation (hitbox rewinding)
  * - Reliable and unreliable message channels
+ *
+ * All networking code is guarded by ENABLE_NETWORKING. When the flag is
+ * not defined, a minimal stub NetworkManager is provided so that the rest
+ * of the engine compiles without linker errors.
  */
 
 #pragma once
@@ -27,7 +31,29 @@
 #include <queue>
 #include <cstdint>
 #include <chrono>
+#include <atomic>
+#include <array>
 
+#ifdef ENABLE_NETWORKING
+
+// Platform socket headers
+#ifdef SPARK_PLATFORM_WINDOWS
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+using SOCKET = int;
+constexpr SOCKET INVALID_SOCKET = -1;
+constexpr int SOCKET_ERROR = -1;
+#endif // SPARK_PLATFORM_WINDOWS
+
+#endif // ENABLE_NETWORKING
 
 namespace Spark::Net
 {
@@ -275,8 +301,18 @@ namespace Spark::Net
       public:
         static NetworkManager& GetInstance();
 
+        /// Initialize the networking subsystem (platform sockets).
+        /// Must be called before StartServer() or Connect().
+        bool Initialize();
+
+        /// Shut down the networking subsystem and release all resources.
+        void Shutdown();
+
         /// Initialize as server
         bool StartServer(uint16_t port = DEFAULT_PORT, int maxClients = 32);
+
+        /// Stop the server and disconnect all clients
+        void StopServer();
 
         /// Initialize as client and connect to server
         bool Connect(const std::string& address, uint16_t port = DEFAULT_PORT,
@@ -288,11 +324,14 @@ namespace Spark::Net
         /// Process incoming messages and send outgoing
         void Update(float deltaTime);
 
-        /// Send a message
+        /// Send a message to the connected server (client) or broadcast (server)
         void SendMessage(const NetworkMessage& msg);
         void SendToClient(ClientID client, const NetworkMessage& msg);
         void SendToAll(const NetworkMessage& msg);
         void SendToAllExcept(ClientID excludeClient, const NetworkMessage& msg);
+
+        /// Broadcast a message to all connected clients (alias for SendToAll)
+        void BroadcastMessage(const NetworkMessage& msg);
 
         /// Register message handler
         using MessageHandler = std::function<void(const NetworkMessage&)>;
@@ -303,6 +342,15 @@ namespace Spark::Net
         void UnregisterReplicatedEntity(uint32_t networkID);
         void MarkPropertyDirty(uint32_t networkID, const std::string& propertyName);
         ReplicatedEntity* GetReplicatedEntity(uint32_t networkID);
+
+        /// Serialize and send full state for all replicated entities (server only)
+        void SendFullEntitySync(ClientID targetClient);
+
+        /// Serialize a single entity's replicated properties into a NetBuffer
+        void SerializeEntityState(uint32_t networkID, NetBuffer& outBuffer) const;
+
+        /// Deserialize an entity state update from a NetBuffer and apply it
+        void DeserializeEntityState(NetBuffer& inBuffer);
 
         // Client input (for server-side processing)
         void SendClientInput(const ClientInputState& input);
@@ -317,6 +365,7 @@ namespace Spark::Net
         ClientID GetLocalClientID() const { return m_localClientID; }
         float GetServerTime() const { return m_serverTime; }
         const NetworkStats& GetStats() const { return m_stats; }
+        bool IsInitialized() const { return m_initialized; }
 
         // Client management (server only)
         const std::unordered_map<ClientID, ClientInfo>& GetClients() const { return m_clients; }
@@ -329,6 +378,11 @@ namespace Spark::Net
 
       private:
         NetworkManager() = default;
+        ~NetworkManager();
+
+        // Non-copyable
+        NetworkManager(const NetworkManager&) = delete;
+        NetworkManager& operator=(const NetworkManager&) = delete;
 
         void ProcessIncoming();
         void ProcessOutgoing();
@@ -337,12 +391,40 @@ namespace Spark::Net
         void HandleConnect(const NetworkMessage& msg);
         void HandleDisconnect(const NetworkMessage& msg);
 
+#ifdef ENABLE_NETWORKING
+        /// Create, bind, and configure a non-blocking UDP socket
+        bool CreateSocket(uint16_t port);
+
+        /// Close the socket
+        void CloseSocket();
+
+        /// Serialize a NetworkMessage into raw bytes for the wire
+        std::vector<uint8_t> SerializeMessage(const NetworkMessage& msg) const;
+
+        /// Deserialize raw bytes into a NetworkMessage
+        bool DeserializeMessage(const uint8_t* data, size_t length, NetworkMessage& outMsg) const;
+
+        /// Send raw bytes to a specific address
+        bool SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr);
+
+        /// Receive raw data from socket (non-blocking)
+        int ReceiveRaw(std::vector<uint8_t>& outData, sockaddr_in& outSender);
+
+        SOCKET m_socket = INVALID_SOCKET;
+        sockaddr_in m_serverAddress{};
+
+        /// Map of client ID to their socket address (server-side)
+        std::unordered_map<ClientID, sockaddr_in> m_clientAddresses;
+#endif // ENABLE_NETWORKING
+
+        bool m_initialized = false;
         NetworkRole m_role = NetworkRole::None;
         ConnectionState m_connectionState = ConnectionState::Disconnected;
         ClientID m_localClientID = INVALID_CLIENT;
         float m_serverTime = 0.0f;
         float m_heartbeatInterval = 1.0f;
         float m_heartbeatTimer = 0.0f;
+        float m_connectionTimeout = 10.0f; ///< Seconds before a client is considered timed out
 
         NetworkStats m_stats;
         LagCompensator m_lagCompensator;
@@ -357,10 +439,18 @@ namespace Spark::Net
         std::queue<NetworkMessage> m_incomingQueue;
         std::unordered_map<uint16_t, MessageHandler> m_handlers;
         mutable std::mutex m_queueMutex;
+        mutable std::mutex m_handlerMutex;
+
+        // Reliable message tracking
+        SequenceNumber m_nextOutgoingSequence = 1;
+        std::unordered_map<SequenceNumber, NetworkMessage> m_unacknowledgedMessages;
+        float m_reliableRetransmitInterval = 0.5f;
 
         // Replication
         std::unordered_map<uint32_t, ReplicatedEntity> m_replicatedEntities;
         uint32_t m_nextNetworkID = 1;
+        float m_replicationInterval = 0.05f; ///< 20 Hz replication rate
+        float m_replicationTimer = 0.0f;
 
         // Client input
         std::vector<ClientInputState> m_pendingInputs;
@@ -368,6 +458,50 @@ namespace Spark::Net
 
         // Prediction
         std::vector<ClientInputState> m_inputHistory; ///< For client-side prediction
+
+        // Bandwidth tracking
+        std::chrono::steady_clock::time_point m_lastBandwidthSample;
+        uint64_t m_bytesSentSinceSample = 0;
+        uint64_t m_bytesReceivedSinceSample = 0;
     };
 
 } // namespace Spark::Net
+
+// =============================================================================
+// Stub NetworkManager when networking is disabled
+// =============================================================================
+
+#ifndef ENABLE_NETWORKING
+
+namespace Spark::Net
+{
+    /// Minimal no-op NetworkManager so the rest of the engine links without
+    /// requiring the full networking implementation.
+    class NetworkManagerStub
+    {
+      public:
+        static NetworkManagerStub& GetInstance()
+        {
+            static NetworkManagerStub instance;
+            return instance;
+        }
+
+        bool Initialize() { return false; }
+        void Shutdown() {}
+        bool StartServer(uint16_t /*port*/ = 27015, int /*maxClients*/ = 32) { return false; }
+        void StopServer() {}
+        bool Connect(const std::string& /*address*/, uint16_t /*port*/ = 27015,
+                     const std::string& /*playerName*/ = "Player")
+        {
+            return false;
+        }
+        void Disconnect() {}
+        void Update(float /*deltaTime*/) {}
+        NetworkRole GetRole() const { return NetworkRole::None; }
+        ConnectionState GetConnectionState() const { return ConnectionState::Disconnected; }
+        bool IsInitialized() const { return false; }
+    };
+
+} // namespace Spark::Net
+
+#endif // !ENABLE_NETWORKING

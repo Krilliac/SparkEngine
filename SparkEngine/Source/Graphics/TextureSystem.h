@@ -27,8 +27,40 @@
 #include <atomic>
 #include <queue>
 #include <condition_variable>
+#include <chrono>
 
 using Microsoft::WRL::ComPtr;
+
+// Forward declarations for VRAM budget integration
+class VRAMBudgetMonitor;
+
+/**
+ * @brief LRU tracking data attached to each cached texture
+ */
+struct TextureLRUData
+{
+    uint64_t lastUsedFrame = 0;                         ///< Frame number when last bound
+    std::chrono::steady_clock::time_point lastUsedTime; ///< Wall-clock time of last use
+    float screenCoverage = 0.0f;                        ///< Approximate screen-space coverage
+    float distanceToCamera = 0.0f;                      ///< Distance to active camera
+    uint8_t priority = 2;                               ///< 0=background, 1=low, 2=normal, 3=high, 4=critical, 5=pinned
+    bool pinned = false;                                ///< If true, never evict
+
+    /**
+     * @brief Compute eviction score (lower = evict first)
+     */
+    float GetEvictionScore(uint64_t currentFrame) const
+    {
+        if (pinned)
+        {
+            return std::numeric_limits<float>::max();
+        }
+        float priorityWeight = static_cast<float>(priority) * 1000.0f;
+        float recencyWeight = static_cast<float>(currentFrame - lastUsedFrame);
+        float coverageWeight = screenCoverage * 5000.0f;
+        return priorityWeight - recencyWeight + coverageWeight;
+    }
+};
 
 /**
  * @brief Texture formats supported by the system
@@ -237,6 +269,52 @@ class TextureSystem
     size_t GetMemoryUsage() const;
     void GarbageCollect();
 
+    // ========================================================================
+    // LRU / PRIORITY-BASED EVICTION (GAP-OFF02 integration)
+    // ========================================================================
+
+    /**
+     * @brief Set the VRAM budget monitor for pressure-driven eviction
+     */
+    void SetVRAMBudgetMonitor(VRAMBudgetMonitor* monitor) { m_vramBudgetMonitor = monitor; }
+
+    /**
+     * @brief Mark a texture as used this frame (updates LRU data)
+     * @param name            Texture name/path
+     * @param currentFrame    Current engine frame number
+     * @param screenCoverage  Approximate screen-space coverage (0..1)
+     * @param distanceToCamera Distance to the active camera
+     */
+    void TouchTexture(const std::string& name, uint64_t currentFrame, float screenCoverage = 0.0f,
+                      float distanceToCamera = 0.0f);
+
+    /**
+     * @brief Pin a texture so it is never evicted
+     */
+    void PinTexture(const std::string& name);
+
+    /**
+     * @brief Unpin a texture, making it eligible for eviction
+     */
+    void UnpinTexture(const std::string& name);
+
+    /**
+     * @brief Set priority for a texture (0=background .. 5=pinned)
+     */
+    void SetTexturePriority(const std::string& name, uint8_t priority);
+
+    /**
+     * @brief Priority-based LRU eviction — evicts lowest-score textures first
+     * @param targetFreeBytes  Number of bytes to free (0 = free until under budget)
+     * @return Number of textures evicted
+     */
+    uint32_t EvictByPriority(size_t targetFreeBytes = 0);
+
+    /**
+     * @brief Get LRU data for a texture (for diagnostics)
+     */
+    bool GetTextureLRUData(const std::string& name, TextureLRUData& outData) const;
+
     // Streaming
     void EnableStreaming(bool enabled) { m_streamingEnabled = enabled; }
     bool IsStreamingEnabled() const { return m_streamingEnabled; }
@@ -269,6 +347,13 @@ class TextureSystem
     // Settings
     TextureQuality m_quality = TextureQuality::High;
     size_t m_memoryBudget = 512 * 1024 * 1024; // 512MB default
+
+    // LRU tracking per texture (keyed by texture name)
+    std::unordered_map<std::string, TextureLRUData> m_lruData;
+    uint64_t m_currentFrame = 0;
+
+    // VRAM budget monitor integration (non-owning)
+    VRAMBudgetMonitor* m_vramBudgetMonitor = nullptr;
 
     // Streaming
     bool m_streamingEnabled = true;

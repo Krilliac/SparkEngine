@@ -27,6 +27,24 @@
 #include <chrono>
 
 using Microsoft::WRL::ComPtr;
+using namespace DirectX;
+
+/**
+ * @brief GPU-aligned constant buffer matching HLSL material layout
+ */
+struct alignas(16) MaterialConstants
+{
+    XMFLOAT4 albedoColor;    // rgba
+    float metallicFactor;    // metallic
+    float roughnessFactor;   // roughness
+    float normalScale;       // normal map intensity
+    float occlusionStrength; // AO strength
+    XMFLOAT3 emissiveColor;  // emissive RGB
+    float emissiveFactor;    // emissive intensity
+    float alphaCutoff;       // alpha test threshold
+    float indexOfRefraction; // IOR
+    float pad0, pad1;        // padding to 16-byte alignment
+};
 
 /**
  * @brief Material blend modes
@@ -206,6 +224,18 @@ class Material
     // Shader parameter binding
     void BindToShader(ID3D11DeviceContext* context) const;
 
+    // Pipeline state compilation
+    HRESULT CompileMaterial(ID3D11Device* device);
+
+    // Shader permutation generation
+    std::vector<std::string> GetShaderPermutation() const;
+
+    // Material instancing (clone with overridable properties)
+    std::shared_ptr<Material> CreateInstance(const std::string& instanceName) const;
+
+    // Hot-reload: reload textures from disk and recompile pipeline state
+    bool ReloadMaterial(ID3D11Device* device);
+
     // Material variants
     void CreateVariant(const std::string& variantName, const std::vector<std::string>& defines);
     void SetActiveVariant(const std::string& variantName);
@@ -220,6 +250,8 @@ class Material
     void Console_SetColor(const std::string& property, float r, float g, float b);
     void Console_ReloadTextures(ID3D11Device* device);
 
+    friend class MaterialSystem;
+
   private:
     std::string m_name;
     PBRProperties m_pbrProperties;
@@ -228,6 +260,13 @@ class Material
     std::unordered_map<MaterialTextureType, MaterialTexture> m_textures;
     std::unordered_map<std::string, std::vector<std::string>> m_variants;
     std::string m_activeVariant;
+
+    // Compiled D3D11 pipeline state objects
+    ComPtr<ID3D11BlendState> m_blendState;
+    ComPtr<ID3D11DepthStencilState> m_depthStencilState;
+    ComPtr<ID3D11RasterizerState> m_rasterizerState;
+    ComPtr<ID3D11Buffer> m_constantBuffer;
+    bool m_compiled = false;
 };
 
 /**
@@ -271,6 +310,22 @@ class MaterialSystem
     std::shared_ptr<Material> GetMaterial(const std::string& name) const;
     void UnloadMaterial(const std::string& name);
     void UnloadAllMaterials();
+
+    // Material instancing: clone a template material with overridable properties
+    std::shared_ptr<Material> CreateMaterialInstance(const std::string& templateName, const std::string& instanceName);
+
+    // Bind a material for rendering: sets SRVs, constant buffer, blend/rasterizer states
+    void BindMaterial(const std::string& name);
+    void BindMaterial(const std::shared_ptr<Material>& material);
+
+    // Get shader permutation defines for a material
+    std::vector<std::string> GetShaderPermutation(const std::string& name) const;
+
+    // Reload a material from disk (textures + recompile pipeline state)
+    bool ReloadMaterial(const std::string& name);
+
+    // Get material system metrics
+    MaterialMetrics GetMetrics() const;
 
     // Default materials
     std::shared_ptr<Material> GetDefaultMaterial() const { return m_defaultMaterial; }

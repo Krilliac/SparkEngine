@@ -423,6 +423,48 @@ class AudioEngine
     void Console_RegisterStateCallback(std::function<void()> callback);
 
     /**
+     * @brief Create a submix voice for audio bus/group routing
+     *
+     * Creates an XAudio2 submix voice that can be used as an intermediate
+     * mixing stage between source voices and the mastering voice.
+     *
+     * @param inputChannels Number of input channels (default: 2 for stereo)
+     * @param inputSampleRate Sample rate in Hz (default: 44100)
+     * @return Pointer to the created submix voice, or nullptr on failure
+     */
+    IXAudio2SubmixVoice* CreateSubmixVoice(uint32_t inputChannels = 2, uint32_t inputSampleRate = 44100);
+
+    /**
+     * @brief Get the master volume level
+     * @return Current master volume (0.0 to 1.0)
+     */
+    float GetMasterVolume() const { return m_masterVolume; }
+
+    /**
+     * @brief Get the SFX volume level
+     * @return Current SFX volume (0.0 to 1.0)
+     */
+    float GetSFXVolume() const { return m_sfxVolume; }
+
+    /**
+     * @brief Get the music volume level
+     * @return Current music volume (0.0 to 1.0)
+     */
+    float GetMusicVolume() const { return m_musicVolume; }
+
+    /**
+     * @brief Get the XAudio2 engine interface
+     * @return Pointer to the IXAudio2 engine, or nullptr if not initialized
+     */
+    IXAudio2* GetXAudio2() const { return m_xAudio2; }
+
+    /**
+     * @brief Get the mastering voice
+     * @return Pointer to the mastering voice, or nullptr if not initialized
+     */
+    IXAudio2MasteringVoice* GetMasteringVoice() const { return m_masterVoice; }
+
+    /**
      * @brief Force audio system refresh via console
      */
     void Console_RefreshAudio();
@@ -499,12 +541,13 @@ class AudioEngine
      */
     AudioMetrics GetMetricsThreadSafe() const;
 
-    IXAudio2* m_xAudio2;                   ///< Main XAudio2 engine interface
-    IXAudio2MasteringVoice* m_masterVoice; ///< XAudio2 mastering voice for final output
-    float m_masterVolume;                  ///< Current master volume level
-    float m_sfxVolume;                     ///< Current sound effects volume level
-    float m_musicVolume;                   ///< Current music volume level
-    size_t m_maxSources;                   ///< Maximum number of simultaneous sources
+    IXAudio2* m_xAudio2;                              ///< Main XAudio2 engine interface
+    IXAudio2MasteringVoice* m_masterVoice;            ///< XAudio2 mastering voice for final output
+    std::vector<IXAudio2SubmixVoice*> m_submixVoices; ///< Created submix voices for cleanup
+    float m_masterVolume;                             ///< Current master volume level
+    float m_sfxVolume;                                ///< Current sound effects volume level
+    float m_musicVolume;                              ///< Current music volume level
+    size_t m_maxSources;                              ///< Maximum number of simultaneous sources
 
     std::vector<std::unique_ptr<AudioSource>> m_audioSources;                     ///< Pool of all audio sources
     std::vector<AudioSource*> m_availableSources;                                 ///< Pool of available sources

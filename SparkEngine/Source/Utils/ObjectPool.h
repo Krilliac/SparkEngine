@@ -184,11 +184,31 @@ template <typename T> class ObjectPool
     /**
      * @brief Destroy the pool and all objects it owns.
      *
-     * All `unique_ptr<T>` elements in `m_objects` are destroyed, which in turn
-     * calls `~T()` for each pooled object. Any raw pointers previously returned
-     * by Acquire() become dangling after this point — do not use them.
+     * Drains the available queue, resets all objects that support Reset(),
+     * then destroys all `unique_ptr<T>` elements. Any raw pointers previously
+     * returned by Acquire() become dangling after this point -- do not use them.
      */
-    ~ObjectPool() = default;
+    ~ObjectPool()
+    {
+        // Drain the available queue to remove dangling raw pointers
+        std::queue<T*> empty;
+        std::swap(m_available, empty);
+
+        // Reset all objects (including in-use ones) before destruction
+        for (auto& obj : m_objects)
+        {
+            if (obj)
+            {
+                if constexpr (requires { obj->Reset(); })
+                {
+                    obj->Reset();
+                }
+            }
+        }
+
+        // unique_ptrs in m_objects are destroyed automatically, calling ~T()
+        m_objects.clear();
+    }
 
     /**
      * @brief Acquire a pooled object for use.
