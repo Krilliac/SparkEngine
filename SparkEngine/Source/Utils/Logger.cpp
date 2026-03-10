@@ -15,6 +15,7 @@
 #include "Logger.h"
 
 #include <iostream>
+#include <cstring>
 #include <filesystem>
 #include <iomanip>
 
@@ -36,10 +37,8 @@ namespace Spark
     {
         // Format: [HH:MM:SS.mmm] [TID:XXXX] [LEVEL] [Category] message  (file:line)
         auto timeT = std::chrono::system_clock::to_time_t(msg.timestamp);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      msg.timestamp.time_since_epoch())
-                      .count() %
-                  1000;
+        auto ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(msg.timestamp.time_since_epoch()).count() % 1000;
 
         char timeBuf[32];
         std::strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", std::localtime(&timeT));
@@ -53,13 +52,9 @@ namespace Spark
         char buf[4096];
         int offset = 0;
 
-        offset += snprintf(buf + offset, sizeof(buf) - offset,
-                           "[%s.%03d] [TID:%s] [%-5s] [%-10s] %s",
-                           timeBuf, static_cast<int>(ms),
-                           tidStr.c_str(),
-                           LogLevelToString(msg.level),
-                           LogCategoryToString(msg.category),
-                           msg.message.c_str());
+        offset += snprintf(buf + offset, sizeof(buf) - offset, "[%s.%03d] [TID:%s] [%-5s] [%-10s] %s", timeBuf,
+                           static_cast<int>(ms), tidStr.c_str(), LogLevelToString(msg.level),
+                           LogCategoryToString(msg.category), msg.message.c_str());
 
         // Append source location if available
         if (!msg.file.empty())
@@ -76,8 +71,7 @@ namespace Spark
                 shortFile = slash + 1;
             }
 
-            offset += snprintf(buf + offset, sizeof(buf) - offset,
-                               "  (%s:%d)", shortFile, msg.line);
+            offset += snprintf(buf + offset, sizeof(buf) - offset, "  (%s:%d)", shortFile, msg.line);
         }
 
         return std::string(buf, offset);
@@ -217,8 +211,8 @@ namespace Spark
     // Logging
     // ============================================================================
 
-    void Logger::Log(LogLevel level, LogCategory category, const char* file, int line,
-                     const char* func, const std::string& message)
+    void Logger::Log(LogLevel level, LogCategory category, const char* file, int line, const char* func,
+                     const std::string& message)
     {
         if (!m_initialized.load(std::memory_order_acquire))
         {
@@ -294,9 +288,7 @@ namespace Spark
             {
                 std::unique_lock<std::mutex> lock(m_queueMutex);
                 m_queueCV.wait(lock, [this]
-                {
-                    return !m_messageQueue.empty() || m_stopThread.load(std::memory_order_acquire);
-                });
+                               { return !m_messageQueue.empty() || m_stopThread.load(std::memory_order_acquire); });
 
                 // Drain the entire queue into a local batch
                 std::swap(batch, m_messageQueue);
@@ -361,8 +353,9 @@ namespace Spark
     // FileSink
     // ============================================================================
 
-    FileSink::FileSink(const Config& config)
-        : m_config(config)
+    FileSink::FileSink() : FileSink(Config{}) {}
+
+    FileSink::FileSink(const Config& config) : m_config(config)
     {
         OpenFile();
     }
@@ -407,14 +400,13 @@ namespace Spark
         m_initialized = true;
 
         // Write session header
-        std::string header =
-            "===============================================\n"
-            " Spark Engine Log\n"
-            "===============================================\n"
-            " Started: " +
-            std::string(timeBuf) +
-            "\n"
-            "===============================================\n\n";
+        std::string header = "===============================================\n"
+                             " Spark Engine Log\n"
+                             "===============================================\n"
+                             " Started: " +
+                             std::string(timeBuf) +
+                             "\n"
+                             "===============================================\n\n";
 
         m_file << header;
         m_currentFileSize += header.size();

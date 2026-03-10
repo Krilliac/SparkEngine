@@ -506,6 +506,14 @@ struct IXAudio2
             *pp = &stubSource;
         return 0;
     }
+    long CreateSubmixVoice(IXAudio2SubmixVoice** pp, uint32_t = 2, uint32_t = 44100, uint32_t = 0, uint32_t = 0,
+                           void* = nullptr, void* = nullptr)
+    {
+        static IXAudio2SubmixVoice stubSubmix;
+        if (pp)
+            *pp = &stubSubmix;
+        return 0;
+    }
     void Release() {}
 };
 

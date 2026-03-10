@@ -432,7 +432,7 @@ class AudioEngine
      * @param inputSampleRate Sample rate in Hz (default: 44100)
      * @return Pointer to the created submix voice, or nullptr on failure
      */
-    IXAudio2SubmixVoice* CreateSubmixVoice(UINT32 inputChannels = 2, UINT32 inputSampleRate = 44100);
+    IXAudio2SubmixVoice* CreateSubmixVoice(uint32_t inputChannels = 2, uint32_t inputSampleRate = 44100);
 
     /**
      * @brief Get the master volume level
@@ -544,10 +544,10 @@ class AudioEngine
     IXAudio2* m_xAudio2;                              ///< Main XAudio2 engine interface
     IXAudio2MasteringVoice* m_masterVoice;            ///< XAudio2 mastering voice for final output
     std::vector<IXAudio2SubmixVoice*> m_submixVoices; ///< Created submix voices for cleanup
-    float m_masterVolume;                  ///< Current master volume level
-    float m_sfxVolume;                     ///< Current sound effects volume level
-    float m_musicVolume;                   ///< Current music volume level
-    size_t m_maxSources;                   ///< Maximum number of simultaneous sources
+    float m_masterVolume;                             ///< Current master volume level
+    float m_sfxVolume;                                ///< Current sound effects volume level
+    float m_musicVolume;                              ///< Current music volume level
+    size_t m_maxSources;                              ///< Maximum number of simultaneous sources
 
     std::vector<std::unique_ptr<AudioSource>> m_audioSources;                     ///< Pool of all audio sources
     std::vector<AudioSource*> m_availableSources;                                 ///< Pool of available sources

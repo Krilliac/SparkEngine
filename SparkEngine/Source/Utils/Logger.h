@@ -153,6 +153,52 @@ namespace Spark
         }
     }
 
+    /**
+     * @brief Convert a string category name to LogCategory enum
+     *
+     * Allows SPARK_LOG macros to accept string literals like "Game" or "Audio"
+     * in addition to LogCategory enum values, for backward compatibility.
+     */
+    inline LogCategory StringToLogCategory(const char* str)
+    {
+        if (!str)
+            return LogCategory::Core;
+        // Simple comparison chain (case-sensitive)
+        if (str[0] == 'C' && str[1] == 'o')
+            return LogCategory::Core;
+        if (str[0] == 'G' && str[1] == 'r')
+            return LogCategory::Graphics;
+        if (str[0] == 'P' && str[1] == 'h')
+            return LogCategory::Physics;
+        if (str[0] == 'A' && str[1] == 'u')
+            return LogCategory::Audio;
+        if (str[0] == 'A' && str[1] == 'I')
+            return LogCategory::AI;
+        if (str[0] == 'A' && str[1] == 'n')
+            return LogCategory::Animation;
+        if (str[0] == 'E' && str[1] == 'C')
+            return LogCategory::ECS;
+        if (str[0] == 'N' && str[1] == 'e')
+            return LogCategory::Network;
+        if (str[0] == 'I' && str[1] == 'n')
+            return LogCategory::Input;
+        if (str[0] == 'S' && str[1] == 'c')
+            return LogCategory::Scripting;
+        if (str[0] == 'S' && str[1] == 'a')
+            return LogCategory::Save;
+        if (str[0] == 'C' && str[1] == 'i')
+            return LogCategory::Cinematic;
+        if (str[0] == 'P' && str[1] == 'r')
+            return LogCategory::Procedural;
+        if (str[0] == 'E' && str[1] == 'd')
+            return LogCategory::Editor;
+        if (str[0] == 'G' && str[1] == 'a')
+            return LogCategory::Game;
+        if (str[0] == 'S' && str[1] == 'e')
+            return LogCategory::Scene;
+        return LogCategory::Core;
+    }
+
     // ============================================================================
     // Log Message
     // ============================================================================
@@ -181,7 +227,7 @@ namespace Spark
      */
     class ILogSink
     {
-    public:
+      public:
         virtual ~ILogSink() = default;
 
         /**
@@ -204,7 +250,7 @@ namespace Spark
      */
     class StderrSink : public ILogSink
     {
-    public:
+      public:
         void Write(const LogMessage& msg) override;
         void Flush() override;
     };
@@ -214,7 +260,7 @@ namespace Spark
      */
     class FileSink : public ILogSink
     {
-    public:
+      public:
         struct Config
         {
             std::string directory = "Logs/";
@@ -223,7 +269,8 @@ namespace Spark
             int maxBackupFiles = 5;
         };
 
-        explicit FileSink(const Config& config = {});
+        FileSink();
+        explicit FileSink(const Config& config);
         ~FileSink();
 
         void Write(const LogMessage& msg) override;
@@ -232,7 +279,7 @@ namespace Spark
         std::string GetCurrentFilePath() const { return m_currentFilePath; }
         size_t GetCurrentFileSize() const { return m_currentFileSize; }
 
-    private:
+      private:
         bool OpenFile();
         void RotateFiles();
         std::string FormatMessage(const LogMessage& msg) const;
@@ -250,7 +297,7 @@ namespace Spark
      */
     class CallbackSink : public ILogSink
     {
-    public:
+      public:
         using Callback = std::function<void(const LogMessage&)>;
 
         explicit CallbackSink(Callback cb) : m_callback(std::move(cb)) {}
@@ -265,7 +312,7 @@ namespace Spark
 
         void Flush() override {}
 
-    private:
+      private:
         Callback m_callback;
     };
 
@@ -281,7 +328,7 @@ namespace Spark
      */
     class Logger
     {
-    public:
+      public:
         static Logger& Get()
         {
             static Logger instance;
@@ -338,13 +385,26 @@ namespace Spark
          */
         bool ShouldLog(LogLevel level, LogCategory category) const;
 
+        /** @brief ShouldLog overload accepting string category for backward compatibility */
+        bool ShouldLog(LogLevel level, const char* category) const
+        {
+            return ShouldLog(level, StringToLogCategory(category));
+        }
+
         // ---- Logging ----
 
         /**
          * @brief Log a message with full metadata
          */
-        void Log(LogLevel level, LogCategory category, const char* file, int line,
-                 const char* func, const std::string& message);
+        void Log(LogLevel level, LogCategory category, const char* file, int line, const char* func,
+                 const std::string& message);
+
+        /** @brief Log overload accepting string category for backward compatibility */
+        void Log(LogLevel level, const char* category, const char* file, int line, const char* func,
+                 const std::string& message)
+        {
+            Log(level, StringToLogCategory(category), file, line, func, message);
+        }
 
         /**
          * @brief Flush all sinks immediately (blocks until complete)
@@ -353,7 +413,7 @@ namespace Spark
 
         bool IsInitialized() const { return m_initialized.load(std::memory_order_acquire); }
 
-    private:
+      private:
         Logger() = default;
         ~Logger() { Shutdown(); }
         Logger(const Logger&) = delete;

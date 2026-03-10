@@ -855,7 +855,7 @@ HRESULT AudioEngine::CreateSourceVoice(const WAVEFORMATEX& format, IXAudio2Sourc
     return m_xAudio2->CreateSourceVoice(voice, &format);
 }
 
-IXAudio2SubmixVoice* AudioEngine::CreateSubmixVoice(UINT32 inputChannels, UINT32 inputSampleRate)
+IXAudio2SubmixVoice* AudioEngine::CreateSubmixVoice(uint32_t inputChannels, uint32_t inputSampleRate)
 {
     if (!m_xAudio2)
     {

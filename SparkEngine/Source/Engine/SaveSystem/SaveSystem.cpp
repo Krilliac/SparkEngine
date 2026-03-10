@@ -656,14 +656,14 @@ namespace Spark
         SaveData data;
         data.metadata = metadata;
         data.metadata.timestamp = static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now().time_since_epoch())
+            std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
                 .count());
 
         auto& registry = world.GetRegistry();
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
 
-        for (auto&& [entity] : registry.storage<entt::entity>().each())
+        auto entityStorage = registry.storage<entt::entity>();
+        for (auto&& [entity] : entityStorage.each())
         {
             SerializedEntity se;
             se.entityID = static_cast<uint32_t>(entity);
@@ -780,10 +780,14 @@ namespace Spark
     {
         // Clear all existing entities before restoring saved state
         auto& registry = world.GetRegistry();
-        registry.each([&](entt::entity entity)
         {
-            registry.destroy(entity);
-        });
+            auto entityStorage = registry.storage<entt::entity>();
+            std::vector<entt::entity> toDestroy;
+            for (auto&& [entity] : entityStorage.each())
+                toDestroy.push_back(entity);
+            for (auto e : toDestroy)
+                registry.destroy(e);
+        }
 
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
 
