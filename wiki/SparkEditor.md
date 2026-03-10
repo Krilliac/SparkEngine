@@ -126,3 +126,25 @@ cmake --build build --config Release
 - [Physics](Physics) — Physics simulation
 - [Terrain and Procedural Generation](Terrain-and-Procedural-Generation) — Terrain editing and procedural tools
 - [Gameplay Systems](Gameplay-Systems) — Weapons, inventory, and game mechanics
+
+## Editor Panels
+
+<!-- AUTO:panel_list -->
+| Panel | Header |
+|-------|--------|
+| `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
+| `ConsolePanel` | `SparkEditor/Source/Panels/ConsolePanel.h` |
+| `FPSToolsPanel` | `SparkEditor/Source/Panels/FPSToolsPanel.h` |
+| `GameViewPanel` | `SparkEditor/Source/Panels/GameViewPanel.h` |
+| `HierarchyPanel` | `SparkEditor/Source/Panels/HierarchyPanel.h` |
+| `InspectorPanel` | `SparkEditor/Source/Panels/InspectorPanel.h` |
+| `Physics2DPanel` | `SparkEditor/Source/Panels/Physics2DPanel.h` |
+| `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |
+| `SceneViewPanel` | `SparkEditor/Source/Panels/SceneViewPanel.h` |
+| `SimpleConsolePanel` | `SparkEditor/Source/Panels/SimpleConsolePanel.h` |
+| `SimpleHierarchyPanel` | `SparkEditor/Source/Panels/SimpleHierarchyPanel.h` |
+| `SpriteAnimationEditorPanel` | `SparkEditor/Source/Panels/SpriteAnimationEditorPanel.h` |
+| `SpriteEditorPanel` | `SparkEditor/Source/Panels/SpriteEditorPanel.h` |
+| `TilemapEditorPanel` | `SparkEditor/Source/Panels/TilemapEditorPanel.h` |
+| `WeaponEditorPanel` | `SparkEditor/Source/Panels/WeaponEditorPanel.h` |
+<!-- /AUTO:panel_list -->

@@ -134,3 +134,54 @@ cd build && ctest --output-on-failure
 - [Build System and CMake Modules](Build-System-and-CMake-Modules) — BUILD_TESTS flag and CI details
 - [Getting Started](Getting-Started) — Building the project
 - [Contributing](Contributing) — Contribution workflow, pre-commit checks, and adding tests
+
+## Test File Inventory
+
+<!-- AUTO:test_inventory -->
+*42 test files, 535+ test cases*
+
+| Test File | Test Cases |
+|-----------|------------|
+| `TestAIBehaviorTree` | 16 |
+| `TestAnimationSystem` | 17 |
+| `TestChromeTracing` | 5 |
+| `TestCommandHistory` | 10 |
+| `TestConfigParser` | 16 |
+| `TestCoroutineScheduler` | 10 |
+| `TestDayNightCycle` | 10 |
+| `TestDebugTools` | 31 |
+| `TestECSWorld` | 11 |
+| `TestEngineContext` | 9 |
+| `TestEventSystem` | 10 |
+| `TestFileUtils` | 15 |
+| `TestFogSystem` | 17 |
+| `TestFrameAllocator` | 8 |
+| `TestFrustumCulling` | 11 |
+| `TestGameMode` | 5 |
+| `TestInputSystem` | 11 |
+| `TestInventorySystem` | 11 |
+| `TestLightManager` | 13 |
+| `TestLocalFileCache` | 15 |
+| `TestMathUtils` | 11 |
+| `TestMeshLOD` | 8 |
+| `TestNavMesh` | 11 |
+| `TestNetBuffer` | 19 |
+| `TestNoiseGenerator` | 7 |
+| `TestObjectPool` | 6 |
+| `TestPerformanceStats` | 10 |
+| `TestPhysicsComponents` | 22 |
+| `TestPostProcessingPipeline` | 11 |
+| `TestQuestSystem` | 10 |
+| `TestResult` | 8 |
+| `TestRingBuffer` | 14 |
+| `TestSaveSystem` | 7 |
+| `TestScreenSpaceEffects` | 16 |
+| `TestSequencer` | 10 |
+| `TestSprite2DComponents` | 35 |
+| `TestSteeringBehaviors` | 15 |
+| `TestStringUtils` | 19 |
+| `TestTemporalEffects` | 11 |
+| `TestTween` | 14 |
+| `TestUUID` | 12 |
+| `TestWeatherSystem` | 8 |
+<!-- /AUTO:test_inventory -->

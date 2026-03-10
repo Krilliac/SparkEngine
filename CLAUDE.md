@@ -85,27 +85,55 @@ cmake --build build --config Release 2>&1 | tail -30
 
 # 5. Tests — run the test suite
 cd build && ctest --output-on-failure && cd ..
+
+# 6. Update documentation — regenerate API docs and sync wiki
+docs/generate-api-docs.sh check
+docs/sync-wiki.sh sync
 ```
 
 If any step fails, fix the issue before committing. CI enforces clang-format on every PR.
 
 ## Documentation generation
 
-```bash
-# Generate API docs (requires doxygen + graphviz)
-cd docs && ./generate-docs.sh
+Two custom scripts generate documentation without requiring Doxygen or Graphviz:
 
-# Auto-regenerate when headers change
-cd docs && ./auto-update.sh check
+```bash
+# 1. Generate markdown API reference from all headers (outputs to docs/api/)
+docs/generate-api-docs.sh generate    # Full generation (~250 headers → ~240 pages)
+docs/generate-api-docs.sh check       # Only regenerate if headers changed (checksum-based)
+docs/generate-api-docs.sh status      # Show generation status
+
+# 2. Sync wiki pages with current codebase inventory
+docs/sync-wiki.sh sync               # Update auto-generated sections in wiki pages
+docs/sync-wiki.sh check              # Dry-run: report what's out of date (exits 1 if stale)
+docs/sync-wiki.sh status             # Show codebase + wiki statistics
+```
+
+**What gets generated:**
+- `docs/api/README.md` — API index grouped by module
+- `docs/api/ComponentIndex.md` — All ECS components with source locations
+- `docs/api/SystemIndex.md` — All ECS systems with source locations
+- `docs/api/SparkEngine/...` — Per-header API pages (classes, methods, enums, members)
+- Wiki auto-sections (`<!-- AUTO:name -->` markers) in: `Entity-Component-System.md`, `Testing.md`, `SparkEditor.md`, `Home.md`
+
+**Legacy Doxygen (optional, requires doxygen + graphviz):**
+```bash
+cd docs && ./generate-docs.sh         # Full Doxygen HTML output
+cd docs && ./auto-update.sh check     # Auto-regenerate on header changes
 ```
 
 ## Documentation requirements
 
 Whenever code is **added**, **modified**, or **deleted**, update the corresponding documentation:
 
-1. **Wiki pages** (`wiki/`): Update the relevant wiki page for the subsystem affected. If a new subsystem is introduced, create a new wiki page and add it to `wiki/_Sidebar.md`. Existing pages cover: Architecture, ECS, Rendering, Physics, AI, Animation, Audio, Networking, Scripting, Editor, Input, Scene Management, Terrain, Gameplay Systems, Event System, Save System, Shader Pipeline, Asset Pipeline, Day-Night/Weather, Cinematic Sequencer, Testing, Build System, and more.
-2. **API docs** (`docs/`): Ensure new or changed public headers have Doxygen-style comments (`@brief`, `@param`, `@return`). Run `cd docs && ./auto-update.sh check` to verify. Gap analyses go in `docs/gap-analysis/`.
-3. **CLAUDE.md**: If the change affects architecture, build toggles, execution order, thread safety rules, or key directories, update this file to keep it accurate.
+1. **Run the doc scripts** — After any code change, run both:
+   ```bash
+   docs/generate-api-docs.sh check    # Regenerate API pages if headers changed
+   docs/sync-wiki.sh sync             # Update wiki inventories (components, systems, panels, tests)
+   ```
+2. **Wiki pages** (`wiki/`): Update the relevant wiki page for the subsystem affected. If a new subsystem is introduced, create a new wiki page and add it to `wiki/_Sidebar.md`. Existing pages cover: Architecture, ECS, Rendering, Physics, AI, Animation, Audio, Networking, Scripting, Editor, Input, Scene Management, Terrain, Gameplay Systems, Event System, Save System, Shader Pipeline, Asset Pipeline, Day-Night/Weather, Cinematic Sequencer, Testing, Build System, and more.
+3. **API docs** (`docs/`): Ensure new or changed public headers have Doxygen-style comments (`@brief`, `@param`, `@return`). The `generate-api-docs.sh` script extracts these automatically. Gap analyses go in `docs/gap-analysis/`.
+4. **CLAUDE.md**: If the change affects architecture, build toggles, execution order, thread safety rules, or key directories, update this file to keep it accurate.
 
 Skipping documentation is **not acceptable** — treat docs as part of the deliverable, not an afterthought.
 
