@@ -286,3 +286,77 @@ jobs:
         name: SparkEngine-Linux-Clang-${{ matrix.config }}
         path: SparkEngine-Linux-Clang-${{ matrix.config }}.tar.gz
         retention-days: 14
+
+  # ===========================================================================
+  # Code Coverage — GCC with lcov
+  # ===========================================================================
+  coverage:
+    name: "Code Coverage (GCC)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install lcov
+        run: sudo apt-get update && sudo apt-get install -y lcov
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_CXX_FLAGS="--coverage" -DCMAKE_C_FLAGS="--coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+            -DBUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --config Debug
+      - name: Test
+        run: cd build && ctest --output-on-failure
+      - name: Generate coverage
+        run: |
+          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
+          lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info
+          lcov --list coverage.info
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.info
+          retention-days: 14
+
+  # ===========================================================================
+  # Static Analysis — Clang-Tidy
+  # ===========================================================================
+  clang-tidy:
+    name: "Clang-Tidy Analysis"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install clang-tidy
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Run clang-tidy
+        run: |
+          find SparkEngine/Source -name '*.cpp' | head -30 | \
+            xargs clang-tidy -p build --warnings-as-errors="" 2>&1 | tail -100
+        continue-on-error: true
+
+  # ===========================================================================
+  # Code Hygiene — TODO/FIXME/HACK comment count
+  # ===========================================================================
+  todo-count:
+    name: "TODO/FIXME Count"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Count TODO/FIXME/HACK comments
+        run: |
+          count=$(grep -rn 'TODO\|FIXME\|HACK\|XXX' SparkEngine/Source SparkEditor/Source SparkGame/Source --include='*.h' --include='*.cpp' | wc -l)
+          echo "Found $count TODO/FIXME/HACK/XXX comments"
+          if [ "$count" -gt 20 ]; then
+            echo "::warning::TODO/FIXME count ($count) exceeds threshold of 20"
+          fi

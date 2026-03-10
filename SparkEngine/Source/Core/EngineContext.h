@@ -12,6 +12,8 @@
 
 #include "Spark/IEngineContext.h"
 
+#include <any>
+#include <memory>
 #include <typeindex>
 #include <unordered_map>
 
@@ -38,6 +40,17 @@ class EngineContext : public Spark::IEngineContext
     EngineContext() = default;
     EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer, Spark::EventBus* eventBus = nullptr);
     ~EngineContext() override = default;
+
+    /**
+     * @brief Global accessor for the singleton EngineContext instance
+     * @return Pointer to the global EngineContext, or nullptr if not yet created
+     */
+    static EngineContext* Get();
+
+    /**
+     * @brief Access the owning unique_ptr (for initialization/shutdown only)
+     */
+    static std::unique_ptr<EngineContext>& GetOwned();
 
     // --- Core subsystems (original 6) ---
 
@@ -100,21 +113,19 @@ class EngineContext : public Spark::IEngineContext
      * Allows registration of systems not covered by the named getters.
      * The pointer is non-owning; caller manages lifetime.
      */
-    template <typename T> void RegisterSystem(T* system)
-    {
-        m_systems[std::type_index(typeid(T))] = static_cast<void*>(system);
-    }
+    template <typename T> void RegisterSystem(T* system) { m_systems[std::type_index(typeid(T))] = system; }
 
     /**
      * @brief Retrieve a previously registered subsystem by type
-     * @return Pointer to the system, or nullptr if not registered
+     * @return Pointer to the system, or nullptr if not registered or type mismatch
      */
     template <typename T> T* GetSystem() const
     {
         auto it = m_systems.find(std::type_index(typeid(T)));
         if (it != m_systems.end())
         {
-            return static_cast<T*>(it->second);
+            auto* ptr = std::any_cast<T*>(&it->second);
+            return ptr ? *ptr : nullptr;
         }
         return nullptr;
     }
@@ -140,6 +151,6 @@ class EngineContext : public Spark::IEngineContext
     Spark::SaveSystem* m_saveSystem = nullptr;
     Spark::CoroutineScheduler* m_coroutineScheduler = nullptr;
 
-    // Generic system registry
-    std::unordered_map<std::type_index, void*> m_systems;
+    // Generic system registry (type-safe via std::any)
+    mutable std::unordered_map<std::type_index, std::any> m_systems;
 };

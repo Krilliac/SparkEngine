@@ -109,7 +109,7 @@ std::unique_ptr<InputManager> g_input;
 std::unique_ptr<Timer> g_timer;
 std::unique_ptr<Spark::EventBus> g_eventBus;
 std::unique_ptr<ModuleManager> g_moduleManager;
-extern std::unique_ptr<EngineContext> g_engineContext; // defined in EngineContext.cpp
+// EngineContext accessed via EngineContext::Get() / EngineContext::GetOwned()
 std::unique_ptr<AudioEngine> g_audioEngine;
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 std::unique_ptr<Spark::LocalFileCache> g_fileCache;
@@ -256,18 +256,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         // Initialize only the subsystems needed for headless operation
         g_timer = std::make_unique<Timer>();
         g_eventBus = std::make_unique<Spark::EventBus>();
-        g_engineContext = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
+        EngineContext::GetOwned() = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
 
         // File cache
         g_fileCache = std::make_unique<Spark::LocalFileCache>();
-        g_engineContext->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
+        EngineContext::Get()->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
 
         // Physics
         {
-            extern PhysicsSystem* g_physicsSystem;
             g_physicsOwned = std::make_unique<PhysicsSystem>();
-            g_physicsSystem = g_physicsOwned.get();
-            g_engineContext->SetPhysics(g_physicsOwned.get());
+            EngineContext::Get()->SetPhysics(g_physicsOwned.get());
         }
 
         // Module loading
@@ -279,7 +277,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
         if (LoadGameModules(*g_moduleManager, lpCmdLine))
         {
-            g_moduleManager->InitializeAll(g_engineContext.get());
+            g_moduleManager->InitializeAll(EngineContext::Get());
             console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
         }
         else
@@ -327,14 +325,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
         if (g_physicsOwned)
         {
-            extern PhysicsSystem* g_physicsSystem;
-            g_physicsSystem = nullptr;
+
             g_physicsOwned->Shutdown();
             g_physicsOwned.reset();
         }
 
         g_fileCache.reset();
-        g_engineContext.reset();
+        EngineContext::GetOwned().reset();
         g_eventBus.reset();
         g_timer.reset();
 
@@ -365,18 +362,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
     // 5. Create event bus and engine context (service locator for modules)
     g_eventBus = std::make_unique<Spark::EventBus>();
-    g_engineContext = std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
+    EngineContext::GetOwned() =
+        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
 
     // 5b. File cache (registered via generic system registry)
     g_fileCache = std::make_unique<Spark::LocalFileCache>();
-    g_engineContext->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
+    EngineContext::Get()->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
 
     // 5c. Create PhysicsSystem (owned here, not by GraphicsEngine)
     {
-        extern PhysicsSystem* g_physicsSystem; // raw global defined in PhysicsSystem.cpp
         g_physicsOwned = std::make_unique<PhysicsSystem>();
-        g_physicsSystem = g_physicsOwned.get();
-        g_engineContext->SetPhysics(g_physicsOwned.get());
+        EngineContext::Get()->SetPhysics(g_physicsOwned.get());
         if (g_graphics)
             g_graphics->SetPhysicsSystem(g_physicsOwned.get());
     }
@@ -388,7 +384,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
     if (LoadGameModules(*g_moduleManager, lpCmdLine))
     {
-        g_moduleManager->InitializeAll(g_engineContext.get());
+        g_moduleManager->InitializeAll(EngineContext::Get());
 
         // Update window title with primary module name
         auto* primary = g_moduleManager->GetPrimaryModule();
@@ -421,7 +417,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     if (SUCCEEDED(g_audioEngine->Initialize(32)))
     {
         console.LogInfo("AudioEngine initialized (32 sources)");
-        g_engineContext->SetAudio(g_audioEngine.get());
+        EngineContext::Get()->SetAudio(g_audioEngine.get());
     }
     else
     {
@@ -492,13 +488,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // Shut down physics before graphics (physics was extracted from GraphicsEngine)
     if (g_physicsOwned)
     {
-        extern PhysicsSystem* g_physicsSystem;
-        g_physicsSystem = nullptr;
+
         g_physicsOwned->Shutdown();
         g_physicsOwned.reset();
     }
 
-    g_engineContext.reset();
+    EngineContext::GetOwned().reset();
     g_eventBus.reset();
     g_input.reset();
     g_graphics.reset();
@@ -678,7 +673,7 @@ void RegisterEngineConsoleCommands()
         {
             if (!g_moduleManager || !g_moduleManager->HasModules())
                 return "No modules loaded";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
 
             std::string name;
@@ -695,7 +690,7 @@ void RegisterEngineConsoleCommands()
                 name = primary->GetModuleInfo().name;
             }
 
-            if (g_moduleManager->ReloadModule(name, g_engineContext.get()))
+            if (g_moduleManager->ReloadModule(name, EngineContext::Get()))
                 return "Module '" + name + "' reloaded successfully";
             return "Failed to reload module '" + name + "'";
         },
@@ -739,9 +734,9 @@ void RegisterEngineConsoleCommands()
         "physics_metrics",
         [](const std::vector<std::string>&) -> std::string
         {
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             auto m = physics->Console_GetMetrics();
@@ -760,9 +755,9 @@ void RegisterEngineConsoleCommands()
         "physics_list",
         [](const std::vector<std::string>&) -> std::string
         {
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             return physics->Console_ListBodies();
@@ -775,9 +770,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.empty())
                 return "Usage: physics_body_info <name>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             return physics->Console_GetBodyInfo(args[0]);
@@ -790,9 +785,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.size() < 3)
                 return "Usage: physics_gravity <x> <y> <z>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
@@ -807,9 +802,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.size() < 5)
                 return "Usage: physics_create <name> <type> <x> <y> <z>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             float x = std::stof(args[2]), y = std::stof(args[3]), z = std::stof(args[4]);
@@ -824,9 +819,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.empty())
                 return "Usage: physics_remove <name>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             bool ok = physics->Console_RemoveBody(args[0]);
@@ -840,9 +835,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.size() < 3)
                 return "Usage: physics_set <name> <property> <value>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             physics->Console_SetBodyProperty(args[0], args[1], std::stof(args[2]));
@@ -856,9 +851,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.size() < 4)
                 return "Usage: physics_force <name> <x> <y> <z>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             physics->Console_ApplyForce(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
@@ -872,9 +867,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.size() < 4)
                 return "Usage: physics_impulse <name> <x> <y> <z>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             physics->Console_ApplyImpulse(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
@@ -888,9 +883,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.empty())
                 return "Usage: physics_debug <on|off>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
@@ -905,9 +900,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.empty())
                 return "Usage: physics_pause <on|off>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             bool pause = (args[0] == "on" || args[0] == "true" || args[0] == "1");
@@ -922,9 +917,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.empty())
                 return "Usage: physics_timestep <seconds>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             float ts = std::stof(args[0]);
@@ -939,9 +934,9 @@ void RegisterEngineConsoleCommands()
         {
             if (args.size() < 7)
                 return "Usage: physics_raycast <ox> <oy> <oz> <dx> <dy> <dz> <maxDist>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             return physics->Console_Raycast(std::stof(args[0]), std::stof(args[1]), std::stof(args[2]),
@@ -954,9 +949,9 @@ void RegisterEngineConsoleCommands()
         "physics_reset",
         [](const std::vector<std::string>&) -> std::string
         {
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             physics->Console_Reset();
@@ -1169,7 +1164,7 @@ std::unique_ptr<InputManager> g_input;
 std::unique_ptr<Timer> g_timer;
 std::unique_ptr<Spark::EventBus> g_eventBus;
 std::unique_ptr<ModuleManager> g_moduleManager;
-extern std::unique_ptr<EngineContext> g_engineContext; // defined in EngineContext.cpp
+// EngineContext accessed via EngineContext::Get() / EngineContext::GetOwned()
 std::unique_ptr<AudioEngine> g_audioEngine;
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
@@ -1305,7 +1300,7 @@ static void RegisterEngineConsoleCommandsLinux()
         {
             if (!g_moduleManager || !g_moduleManager->HasModules())
                 return "No modules loaded";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
             std::string name;
             if (!args.empty())
@@ -1319,7 +1314,7 @@ static void RegisterEngineConsoleCommandsLinux()
                     return "No primary module to reload";
                 name = primary->GetModuleInfo().name;
             }
-            if (g_moduleManager->ReloadModule(name, g_engineContext.get()))
+            if (g_moduleManager->ReloadModule(name, EngineContext::Get()))
                 return "Module '" + name + "' reloaded successfully";
             return "Failed to reload module '" + name + "'";
         },
@@ -1347,9 +1342,9 @@ static void RegisterEngineConsoleCommandsLinux()
         "physics_metrics",
         [](const std::vector<std::string>&) -> std::string
         {
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             auto m = physics->Console_GetMetrics();
@@ -1370,9 +1365,9 @@ static void RegisterEngineConsoleCommandsLinux()
         {
             if (args.size() < 3)
                 return "Usage: physics_gravity <x> <y> <z>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
@@ -1387,9 +1382,9 @@ static void RegisterEngineConsoleCommandsLinux()
         {
             if (args.empty())
                 return "Usage: physics_debug <on|off>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
@@ -1404,9 +1399,9 @@ static void RegisterEngineConsoleCommandsLinux()
         {
             if (args.empty())
                 return "Usage: physics_pause <on|off>";
-            if (!g_engineContext)
+            if (!EngineContext::Get())
                 return "Engine context not available";
-            auto* physics = g_engineContext->GetPhysics();
+            auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
             bool pause = (args[0] == "on" || args[0] == "true" || args[0] == "1");
@@ -1450,14 +1445,12 @@ int main(int argc, char* argv[])
 
         g_eventBus = std::make_unique<Spark::EventBus>();
         g_timer = std::make_unique<Timer>();
-        g_engineContext = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
+        EngineContext::GetOwned() = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
 
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
         {
-            extern PhysicsSystem* g_physicsSystem;
             g_physicsOwned = std::make_unique<PhysicsSystem>();
-            g_physicsSystem = g_physicsOwned.get();
-            g_engineContext->SetPhysics(g_physicsOwned.get());
+            EngineContext::Get()->SetPhysics(g_physicsOwned.get());
         }
 #endif
 
@@ -1469,7 +1462,7 @@ int main(int argc, char* argv[])
 
         if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
         {
-            g_moduleManager->InitializeAll(g_engineContext.get());
+            g_moduleManager->InitializeAll(EngineContext::Get());
             console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
         }
         else
@@ -1512,14 +1505,13 @@ int main(int argc, char* argv[])
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
         if (g_physicsOwned)
         {
-            extern PhysicsSystem* g_physicsSystem;
-            g_physicsSystem = nullptr;
+
             g_physicsOwned->Shutdown();
             g_physicsOwned.reset();
         }
 #endif
 
-        g_engineContext.reset();
+        EngineContext::GetOwned().reset();
         g_eventBus.reset();
         g_timer.reset();
         console.Shutdown();
@@ -1579,15 +1571,14 @@ int main(int argc, char* argv[])
         std::cout << "Graphics engine initialization deferred (headless fallback)." << std::endl;
 
     // 4. Engine context (service locator)
-    g_engineContext = std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
+    EngineContext::GetOwned() =
+        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
 
     // 5. Physics
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     {
-        extern PhysicsSystem* g_physicsSystem;
         g_physicsOwned = std::make_unique<PhysicsSystem>();
-        g_physicsSystem = g_physicsOwned.get();
-        g_engineContext->SetPhysics(g_physicsOwned.get());
+        EngineContext::Get()->SetPhysics(g_physicsOwned.get());
         if (g_graphics)
             g_graphics->SetPhysicsSystem(g_physicsOwned.get());
     }
@@ -1605,7 +1596,7 @@ int main(int argc, char* argv[])
 
     if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
     {
-        g_moduleManager->InitializeAll(g_engineContext.get());
+        g_moduleManager->InitializeAll(EngineContext::Get());
 
         auto* primary = g_moduleManager->GetPrimaryModule();
         if (primary)
@@ -1633,7 +1624,7 @@ int main(int argc, char* argv[])
     if (SUCCEEDED(g_audioEngine->Initialize(32)))
     {
         console.LogInfo("AudioEngine initialized (32 sources)");
-        g_engineContext->SetAudio(g_audioEngine.get());
+        EngineContext::Get()->SetAudio(g_audioEngine.get());
     }
     else
     {
@@ -1792,14 +1783,13 @@ int main(int argc, char* argv[])
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     if (g_physicsOwned)
     {
-        extern PhysicsSystem* g_physicsSystem;
-        g_physicsSystem = nullptr;
+
         g_physicsOwned->Shutdown();
         g_physicsOwned.reset();
     }
 #endif
 
-    g_engineContext.reset();
+    EngineContext::GetOwned().reset();
     g_eventBus.reset();
     g_input.reset();
     g_graphics.reset();
@@ -1821,14 +1811,13 @@ int main(int argc, char* argv[])
     g_graphics = std::make_unique<GraphicsEngine>();
     g_graphics->Initialize(nullptr);
 
-    g_engineContext = std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
+    EngineContext::GetOwned() =
+        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
 
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     {
-        extern PhysicsSystem* g_physicsSystem;
         g_physicsOwned = std::make_unique<PhysicsSystem>();
-        g_physicsSystem = g_physicsOwned.get();
-        g_engineContext->SetPhysics(g_physicsOwned.get());
+        EngineContext::Get()->SetPhysics(g_physicsOwned.get());
     }
 #endif
 
@@ -1841,7 +1830,7 @@ int main(int argc, char* argv[])
 
     if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
     {
-        g_moduleManager->InitializeAll(g_engineContext.get());
+        g_moduleManager->InitializeAll(EngineContext::Get());
         console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
     }
 
@@ -1865,14 +1854,13 @@ int main(int argc, char* argv[])
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     if (g_physicsOwned)
     {
-        extern PhysicsSystem* g_physicsSystem;
-        g_physicsSystem = nullptr;
+
         g_physicsOwned->Shutdown();
         g_physicsOwned.reset();
     }
 #endif
 
-    g_engineContext.reset();
+    EngineContext::GetOwned().reset();
     g_graphics.reset();
     g_input.reset();
     g_timer.reset();

@@ -17,8 +17,7 @@
 #include <sstream>
 #include <algorithm>
 
-// Global physics system pointer used by projectiles for area damage queries
-PhysicsSystem* g_physicsSystem = nullptr;
+// Physics system is now accessed via EngineContext::Get()->GetPhysics()
 #include <chrono>
 
 using namespace DirectX;
@@ -79,10 +78,10 @@ btCollisionShape* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& 
         shape = CreateCapsuleShape(desc.radius, desc.height);
         break;
     case CollisionShapeType::Cylinder:
-        shape = new btCylinderShape(btVector3(desc.radius, desc.height / 2.0f, desc.radius));
+        shape = CreateCylinderShape(desc.radius, desc.height);
         break;
     case CollisionShapeType::Cone:
-        shape = new btConeShape(desc.radius, desc.height);
+        shape = CreateConeShape(desc.radius, desc.height);
         break;
     case CollisionShapeType::Mesh:
         shape = CreateMeshShape(desc.vertices, desc.indices);
@@ -117,6 +116,16 @@ btCollisionShape* PhysicsSystem::CreateSphereShape(float radius)
 btCollisionShape* PhysicsSystem::CreateCapsuleShape(float radius, float height)
 {
     return new btCapsuleShape(radius, height);
+}
+
+btCollisionShape* PhysicsSystem::CreateCylinderShape(float radius, float height)
+{
+    return new btCylinderShape(btVector3(radius, height / 2.0f, radius));
+}
+
+btCollisionShape* PhysicsSystem::CreateConeShape(float radius, float height)
+{
+    return new btConeShape(radius, height);
 }
 
 btCollisionShape* PhysicsSystem::CreateMeshShape(const std::vector<XMFLOAT3>& vertices,

@@ -12,6 +12,16 @@
 // can resolve this symbol at link time.
 std::unique_ptr<EngineContext> g_engineContext;
 
+EngineContext* EngineContext::Get()
+{
+    return g_engineContext.get();
+}
+
+std::unique_ptr<EngineContext>& EngineContext::GetOwned()
+{
+    return g_engineContext;
+}
+
 EngineContext::EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer, Spark::EventBus* eventBus)
     : m_graphics(graphics), m_input(input), m_timer(timer), m_eventBus(eventBus)
 {

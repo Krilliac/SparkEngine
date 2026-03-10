@@ -37,7 +37,6 @@
 
 // Engine subsystems accessed via EngineContext (preferred over globals)
 #include "../Core/EngineContext.h"
-extern std::unique_ptr<EngineContext> g_engineContext;
 
 // Game-specific global (owned by SparkGame module, not part of EngineContext)
 extern SPARK_GAME_API std::unique_ptr<Game> g_game;
@@ -45,15 +44,33 @@ extern SPARK_GAME_API std::unique_ptr<Game> g_game;
 // Convenience accessors — route through EngineContext instead of globals
 static GraphicsEngine* GetGfx()
 {
-    return g_engineContext ? g_engineContext->GetGraphics() : nullptr;
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        std::cerr << "[SparkConsole] EngineContext not initialized (GetGfx)\n";
+        return nullptr;
+    }
+    return ctx->GetGraphics();
 }
 static InputManager* GetInput()
 {
-    return g_engineContext ? g_engineContext->GetInput() : nullptr;
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        std::cerr << "[SparkConsole] EngineContext not initialized (GetInput)\n";
+        return nullptr;
+    }
+    return ctx->GetInput();
 }
 static Timer* GetTimer()
 {
-    return g_engineContext ? g_engineContext->GetTimer() : nullptr;
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        std::cerr << "[SparkConsole] EngineContext not initialized (GetTimer)\n";
+        return nullptr;
+    }
+    return ctx->GetTimer();
 }
 
 namespace Spark

@@ -83,6 +83,9 @@
 namespace Spark::Animation
 {
 
+    // Thread safety: Main thread only. Animation state machines, blending,
+    // and IK solving must be called from the main update thread.
+
     // =============================================================================
     // Bone & Skeleton
     // =============================================================================

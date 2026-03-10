@@ -65,13 +65,21 @@ namespace Spark::Net
 
     uint8_t NetBuffer::ReadUint8()
     {
-        return (m_readPos < m_data.size()) ? m_data[m_readPos++] : 0;
+        if (m_readPos >= m_data.size())
+        {
+            m_error = true;
+            return 0;
+        }
+        return m_data[m_readPos++];
     }
 
     uint16_t NetBuffer::ReadUint16()
     {
         if (m_readPos + 2 > m_data.size())
+        {
+            m_error = true;
             return 0;
+        }
         uint16_t val = 0;
         for (int i = 0; i < 2; ++i)
             val |= static_cast<uint16_t>(m_data[m_readPos++]) << (i * 8);
@@ -81,7 +89,10 @@ namespace Spark::Net
     uint32_t NetBuffer::ReadUint32()
     {
         if (m_readPos + 4 > m_data.size())
+        {
+            m_error = true;
             return 0;
+        }
         uint32_t val = 0;
         for (int i = 0; i < 4; ++i)
             val |= static_cast<uint32_t>(m_data[m_readPos++]) << (i * 8);
@@ -99,8 +110,15 @@ namespace Spark::Net
     std::string NetBuffer::ReadString()
     {
         uint16_t len = ReadUint16();
+        if (m_error)
+            return {};
+        if (m_readPos + len > m_data.size())
+        {
+            m_error = true;
+            return {};
+        }
         std::string result(len, '\0');
-        for (uint16_t i = 0; i < len && m_readPos < m_data.size(); ++i)
+        for (uint16_t i = 0; i < len; ++i)
             result[i] = static_cast<char>(m_data[m_readPos++]);
         return result;
     }
@@ -113,8 +131,13 @@ namespace Spark::Net
 
     void NetBuffer::ReadBytes(void* data, size_t size)
     {
+        if (m_readPos + size > m_data.size())
+        {
+            m_error = true;
+            return;
+        }
         auto* bytes = static_cast<uint8_t*>(data);
-        for (size_t i = 0; i < size && m_readPos < m_data.size(); ++i)
+        for (size_t i = 0; i < size; ++i)
             bytes[i] = m_data[m_readPos++];
     }
 

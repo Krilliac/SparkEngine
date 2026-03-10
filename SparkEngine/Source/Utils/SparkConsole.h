@@ -97,6 +97,8 @@ namespace Spark
      *
      * @note Initialize() must be called before any logging or command operations.
      */
+    // Thread safety: Thread-safe. All public methods are protected by an
+    // internal mutex. Safe to call Log() from any thread.
     class SimpleConsole
     {
       public:

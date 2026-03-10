@@ -37,7 +37,6 @@
 
 // Pull in game-specific globals defined in Main.cpp (SparkGame entry point)
 extern Console g_console;
-extern std::unique_ptr<EngineContext> g_engineContext;
 
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
 #include "Utils/LogMacros.h"
@@ -605,7 +604,7 @@ void Game::Update(float dt)
         {
             assetPipeline->Update(dt);
         }
-        if (auto physicsSystem = g_engineContext ? g_engineContext->GetPhysics() : nullptr)
+        if (auto physicsSystem = EngineContext::Get() ? EngineContext::Get()->GetPhysics() : nullptr)
         {
             physicsSystem->Update(dt);
         }
