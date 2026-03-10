@@ -162,15 +162,18 @@ namespace Spark::Net
         const std::vector<uint8_t>& GetData() const { return m_data; }
         size_t GetSize() const { return m_data.size(); }
         size_t GetReadPosition() const { return m_readPos; }
+        bool HasError() const { return m_error; }
         void Reset()
         {
             m_data.clear();
             m_readPos = 0;
+            m_error = false;
         }
 
       private:
         std::vector<uint8_t> m_data;
         size_t m_readPos = 0;
+        bool m_error = false;
     };
 
     // ============================================================================
@@ -296,6 +299,8 @@ namespace Spark::Net
     // NetworkManager
     // ============================================================================
 
+    // Thread safety: Queue mutex protects message I/O and handler registration.
+    // Socket operations run on a dedicated network thread when connected.
     class NetworkManager
     {
       public:

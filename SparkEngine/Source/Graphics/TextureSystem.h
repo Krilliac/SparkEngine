@@ -202,6 +202,9 @@ struct StreamingRequest
 /**
  * @brief Texture system manager
  */
+// Thread safety: Main thread for render operations. Background worker threads
+// for async texture loading and streaming. Uses std::mutex for cache access
+// and std::condition_variable for load completion signaling.
 class TextureSystem
 {
   public:

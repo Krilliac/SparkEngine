@@ -22,7 +22,7 @@
 #include "Core/EngineContext.h"
 #include <sstream>
 
-extern std::unique_ptr<EngineContext> g_engineContext;
+// EngineContext accessed via EngineContext::Get()
 
 namespace SparkConsole
 {
@@ -239,7 +239,7 @@ namespace SparkConsole
             "physics_list",
             [graphics](const std::vector<std::string>&) -> std::string
             {
-                if (auto physicsSystem = g_engineContext ? g_engineContext->GetPhysics() : nullptr)
+                if (auto physicsSystem = EngineContext::Get() ? EngineContext::Get()->GetPhysics() : nullptr)
                 {
                     return physicsSystem->Console_ListBodies();
                 }
@@ -253,7 +253,7 @@ namespace SparkConsole
             {
                 if (args.size() < 4)
                     return "Usage: gravity <x> <y> <z>";
-                if (auto physicsSystem = g_engineContext ? g_engineContext->GetPhysics() : nullptr)
+                if (auto physicsSystem = EngineContext::Get() ? EngineContext::Get()->GetPhysics() : nullptr)
                 {
                     physicsSystem->Console_SetGravity(std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
                     return "Gravity set to: (" + args[1] + ", " + args[2] + ", " + args[3] + ")";

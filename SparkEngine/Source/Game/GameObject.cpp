@@ -102,8 +102,7 @@ void GameObject::Render(const XMMATRIX& view, const XMMATRIX& projection)
                "Mesh has no vertices or indices to render");
 
     // Get graphics engine via EngineContext
-    extern std::unique_ptr<EngineContext> g_engineContext;
-    GraphicsEngine* graphics = g_engineContext ? g_engineContext->GetGraphics() : nullptr;
+    GraphicsEngine* graphics = EngineContext::Get() ? EngineContext::Get()->GetGraphics() : nullptr;
 
     if (graphics)
     {

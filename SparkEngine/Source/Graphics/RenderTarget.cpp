@@ -939,7 +939,7 @@ void RenderTargetManager::Console_SetClearColor(const std::string& name, float r
     auto rt = GetRenderTarget(name);
     if (rt)
     {
-        auto& desc = const_cast<RenderTargetDesc&>(rt->GetDesc());
+        auto& desc = rt->GetDesc();
         desc.clearColor = {r, g, b, a};
     }
 }
@@ -1454,7 +1454,7 @@ void RenderTargetManager::Console_SetClearColor(const std::string& name, float r
     auto rt = GetRenderTarget(name);
     if (rt)
     {
-        auto& desc = const_cast<RenderTargetDesc&>(rt->GetDesc());
+        auto& desc = rt->GetDesc();
         desc.clearColor = {r, g, b, a};
     }
 }

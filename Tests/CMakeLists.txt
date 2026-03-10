@@ -48,6 +48,8 @@ add_executable(SparkTests
     TestFrameAllocator.cpp
     TestChromeTracing.cpp
     TestLocalFileCache.cpp
+    TestEngineContext.cpp
+    TestNetBuffer.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

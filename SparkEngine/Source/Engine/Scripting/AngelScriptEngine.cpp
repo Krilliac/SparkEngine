@@ -169,8 +169,7 @@ static int ScriptKeyNameToVK(const std::string& key)
 
 bool ASGetKeyDown(const std::string& key)
 {
-    extern std::unique_ptr<EngineContext> g_engineContext;
-    auto* input = g_engineContext ? g_engineContext->GetInput() : nullptr;
+    auto* input = EngineContext::Get() ? EngineContext::Get()->GetInput() : nullptr;
     if (!input)
     {
         return false;
@@ -187,8 +186,7 @@ bool ASGetKeyDown(const std::string& key)
 
 bool ASGetKey(const std::string& key)
 {
-    extern std::unique_ptr<EngineContext> g_engineContext;
-    auto* input = g_engineContext ? g_engineContext->GetInput() : nullptr;
+    auto* input = EngineContext::Get() ? EngineContext::Get()->GetInput() : nullptr;
     if (!input)
     {
         return false;

@@ -30,16 +30,8 @@ bool FileExists(const std::wstring& filename)
     return (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-// Console logging integration
-#define LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype)                                                                          \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        std::wstring wstr = wmsg;                                                                                      \
-        std::wstring wtypestr = wtype;                                                                                 \
-        std::string msg(wstr.begin(), wstr.end());                                                                     \
-        std::string type(wtypestr.begin(), wtypestr.end());                                                            \
-        Spark::SimpleConsole::GetInstance().Log(msg, type);                                                            \
-    } while (0)
+// Console logging — use centralized macros from LogMacros.h
+#include "../Utils/LogMacros.h"
 
 // ============================================================================
 // SHADER RESOURCE IMPLEMENTATIONS

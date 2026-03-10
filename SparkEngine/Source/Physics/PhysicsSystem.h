@@ -986,6 +986,8 @@ class PhysicsConstraint
  * Default gravity is `{0, -9.81, 0}` m/s² (Earth). Change it via `SetGravity()`.
  * A zero-gravity world is useful for space or underwater environments.
  */
+// Thread safety: Main thread only. All physics simulation, raycasting,
+// and collision shape operations must be called from the main thread.
 class PhysicsSystem
 {
   public:
@@ -1792,6 +1794,8 @@ class PhysicsSystem
     btCollisionShape* CreateBoxShape(const XMFLOAT3& dimensions);
     btCollisionShape* CreateSphereShape(float radius);
     btCollisionShape* CreateCapsuleShape(float radius, float height);
+    btCollisionShape* CreateCylinderShape(float radius, float height);
+    btCollisionShape* CreateConeShape(float radius, float height);
     btCollisionShape* CreateMeshShape(const std::vector<XMFLOAT3>& vertices, const std::vector<uint32_t>& indices);
     btCollisionShape* CreateConvexHullShape(const std::vector<XMFLOAT3>& vertices);
     class btVector3 ToBullet(const XMFLOAT3& vec) const;

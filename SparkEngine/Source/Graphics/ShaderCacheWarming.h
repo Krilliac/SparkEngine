@@ -224,10 +224,10 @@ namespace Spark::Graphics
             auto it = m_cache.find(hash);
             if (it != m_cache.end() && it->second.compiled)
             {
-                const_cast<ShaderCacheMetrics&>(m_metrics).cacheHits++;
+                m_metrics.cacheHits++;
                 return &it->second;
             }
-            const_cast<ShaderCacheMetrics&>(m_metrics).cacheMisses++;
+            m_metrics.cacheMisses++;
             return nullptr;
         }
 
@@ -278,6 +278,8 @@ namespace Spark::Graphics
             }
 
             file.write(reinterpret_cast<const char*>(&entryCount), sizeof(entryCount));
+            if (!file.good())
+                return false;
 
             for (const auto& [hash, entry] : m_cache)
             {
@@ -290,6 +292,8 @@ namespace Spark::Graphics
                 uint32_t byteSize = static_cast<uint32_t>(entry.bytecode->GetBufferSize());
                 file.write(reinterpret_cast<const char*>(&byteSize), sizeof(byteSize));
                 file.write(reinterpret_cast<const char*>(entry.bytecode->GetBufferPointer()), byteSize);
+                if (!file.good())
+                    return false;
             }
 
             return true;
@@ -482,7 +486,7 @@ namespace Spark::Graphics
         std::thread m_warmingThread;
         ProgressCallback m_progressCallback;
 
-        ShaderCacheMetrics m_metrics;
+        mutable ShaderCacheMetrics m_metrics;
     };
 
 } // namespace Spark::Graphics
