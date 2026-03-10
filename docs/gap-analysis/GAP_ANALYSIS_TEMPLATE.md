@@ -52,6 +52,7 @@ The following gap analysis documents exist in this directory. Each covers a spec
 | `SAVE_SYSTEM_GAP_ANALYSIS.md` | GAP-SS | Save System | `Engine/SaveSystem/`, serialization, metadata |
 | `SCRIPTING_GAP_ANALYSIS.md` | GAP-SC | Scripting | `Engine/Scripting/`, AngelScript integration |
 | `STABILITY_GAP_ANALYSIS.md` | GAP-ST | Stability | Cross-cutting: smart pointers, error handling, thread safety |
+| `STUBBED_CODE_GAP_ANALYSIS.md` | GAP-STUB | Stubbed Code | Cross-cutting: all stubs, placeholders, empty implementations |
 
 ---
 
@@ -265,6 +266,7 @@ After implementation work:
 | SC | Scripting |
 | SS | Save System |
 | ST | Stability |
+| STUB | Stubbed Code (cross-cutting) |
 
 ---
 
