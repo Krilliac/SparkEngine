@@ -96,33 +96,60 @@ static int ScriptKeyNameToVK(const std::string& key)
     }
 
     // Named keys
-    if (upper == "SPACE")       return VK_SPACE;
-    if (upper == "ENTER")       return VK_RETURN;
-    if (upper == "RETURN")      return VK_RETURN;
-    if (upper == "ESCAPE")      return VK_ESCAPE;
-    if (upper == "ESC")         return VK_ESCAPE;
-    if (upper == "TAB")         return VK_TAB;
-    if (upper == "SHIFT")       return VK_SHIFT;
-    if (upper == "LEFTSHIFT")   return VK_LSHIFT;
-    if (upper == "RIGHTSHIFT")  return VK_RSHIFT;
-    if (upper == "CTRL")        return VK_CONTROL;
-    if (upper == "CONTROL")     return VK_CONTROL;
-    if (upper == "LEFTCTRL")    return VK_LCONTROL;
-    if (upper == "RIGHTCTRL")   return VK_RCONTROL;
-    if (upper == "ALT")         return VK_MENU;
-    if (upper == "LEFTALT")     return VK_LMENU;
-    if (upper == "RIGHTALT")    return VK_RMENU;
-    if (upper == "UP")          return VK_UP;
-    if (upper == "DOWN")        return VK_DOWN;
-    if (upper == "LEFT")        return VK_LEFT;
-    if (upper == "RIGHT")       return VK_RIGHT;
-    if (upper == "BACKSPACE")   return VK_BACK;
-    if (upper == "DELETE")      return VK_DELETE;
-    if (upper == "INSERT")      return VK_INSERT;
-    if (upper == "HOME")        return VK_HOME;
-    if (upper == "END")         return VK_END;
-    if (upper == "PAGEUP")      return VK_PRIOR;
-    if (upper == "PAGEDOWN")    return VK_NEXT;
+    if (upper == "SPACE")
+        return VK_SPACE;
+    if (upper == "ENTER")
+        return VK_RETURN;
+    if (upper == "RETURN")
+        return VK_RETURN;
+    if (upper == "ESCAPE")
+        return VK_ESCAPE;
+    if (upper == "ESC")
+        return VK_ESCAPE;
+    if (upper == "TAB")
+        return VK_TAB;
+    if (upper == "SHIFT")
+        return VK_SHIFT;
+    if (upper == "LEFTSHIFT")
+        return VK_LSHIFT;
+    if (upper == "RIGHTSHIFT")
+        return VK_RSHIFT;
+    if (upper == "CTRL")
+        return VK_CONTROL;
+    if (upper == "CONTROL")
+        return VK_CONTROL;
+    if (upper == "LEFTCTRL")
+        return VK_LCONTROL;
+    if (upper == "RIGHTCTRL")
+        return VK_RCONTROL;
+    if (upper == "ALT")
+        return VK_MENU;
+    if (upper == "LEFTALT")
+        return VK_LMENU;
+    if (upper == "RIGHTALT")
+        return VK_RMENU;
+    if (upper == "UP")
+        return VK_UP;
+    if (upper == "DOWN")
+        return VK_DOWN;
+    if (upper == "LEFT")
+        return VK_LEFT;
+    if (upper == "RIGHT")
+        return VK_RIGHT;
+    if (upper == "BACKSPACE")
+        return VK_BACK;
+    if (upper == "DELETE")
+        return VK_DELETE;
+    if (upper == "INSERT")
+        return VK_INSERT;
+    if (upper == "HOME")
+        return VK_HOME;
+    if (upper == "END")
+        return VK_END;
+    if (upper == "PAGEUP")
+        return VK_PRIOR;
+    if (upper == "PAGEDOWN")
+        return VK_NEXT;
 
     // Function keys F1-F12
     if (upper.size() >= 2 && upper[0] == 'F')

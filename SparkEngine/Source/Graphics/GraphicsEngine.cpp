@@ -3725,12 +3725,11 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
         return S_OK;
 
     Spark::RHI::GraphicsBackend backend = Spark::RHI::RHIBridge::GetRecommendedBackend();
-    bool ok = rhi.bridge.Initialize(
-        static_cast<void*>(hWnd), m_width, m_height, backend,
+    bool ok = rhi.bridge.Initialize(static_cast<void*>(hWnd), m_width, m_height, backend,
 #ifndef NDEBUG
-        true
+                                    true
 #else
-        false
+                                    false
 #endif
     );
 
@@ -3756,12 +3755,11 @@ HRESULT GraphicsEngine::CreateDevice(HWND hwnd, uint32_t width, uint32_t height,
         return S_OK;
 
     Spark::RHI::GraphicsBackend backend = Spark::RHI::RHIBridge::GetRecommendedBackend();
-    bool ok = rhi.bridge.Initialize(
-        static_cast<void*>(hwnd), width, height, backend,
+    bool ok = rhi.bridge.Initialize(static_cast<void*>(hwnd), width, height, backend,
 #ifndef NDEBUG
-        true
+                                    true
 #else
-        false
+                                    false
 #endif
     );
 
@@ -3805,8 +3803,8 @@ HRESULT GraphicsEngine::CreateRenderTargets()
         return E_FAIL;
 
     // Create the HDR render target through the RHI bridge
-    Spark::RHI::IRHITexture* hdrTarget = rhi.bridge.CreateRenderTarget(
-        rhi.width, rhi.height, Spark::RHI::PixelFormat::R16G16B16A16_FLOAT);
+    Spark::RHI::IRHITexture* hdrTarget =
+        rhi.bridge.CreateRenderTarget(rhi.width, rhi.height, Spark::RHI::PixelFormat::R16G16B16A16_FLOAT);
     if (!hdrTarget)
         return E_FAIL;
 
@@ -3826,15 +3824,14 @@ HRESULT GraphicsEngine::CreateAdvancedRenderTargets()
     // G-Buffer render targets for deferred rendering
     constexpr Spark::RHI::PixelFormat gBufferFormats[] = {
         Spark::RHI::PixelFormat::R8G8B8A8_UNORM,     // Albedo
-        Spark::RHI::PixelFormat::R16G16B16A16_FLOAT,  // Normals
-        Spark::RHI::PixelFormat::R8G8B8A8_UNORM,      // Material (metallic, roughness, AO)
-        Spark::RHI::PixelFormat::R16G16_FLOAT          // Motion vectors
+        Spark::RHI::PixelFormat::R16G16B16A16_FLOAT, // Normals
+        Spark::RHI::PixelFormat::R8G8B8A8_UNORM,     // Material (metallic, roughness, AO)
+        Spark::RHI::PixelFormat::R16G16_FLOAT        // Motion vectors
     };
 
     for (const auto& format : gBufferFormats)
     {
-        Spark::RHI::IRHITexture* gBufferRT = rhi.bridge.CreateRenderTarget(
-            rhi.width, rhi.height, format);
+        Spark::RHI::IRHITexture* gBufferRT = rhi.bridge.CreateRenderTarget(rhi.width, rhi.height, format);
         if (!gBufferRT)
             return E_FAIL;
     }
@@ -4034,17 +4031,13 @@ void GraphicsEngine::SetupDeferredPipeline()
 
     // Register deferred shaders with the shader cache
     rhi.bridge.RegisterShader("deferred_geometry_vs", Spark::RHI::RHIShaderStage::Vertex,
-                              "Shaders/Deferred/GeometryPass.hlsl",
-                              "Shaders/Deferred/GeometryPass.vert.glsl");
+                              "Shaders/Deferred/GeometryPass.hlsl", "Shaders/Deferred/GeometryPass.vert.glsl");
     rhi.bridge.RegisterShader("deferred_geometry_ps", Spark::RHI::RHIShaderStage::Pixel,
-                              "Shaders/Deferred/GeometryPass.hlsl",
-                              "Shaders/Deferred/GeometryPass.frag.glsl");
+                              "Shaders/Deferred/GeometryPass.hlsl", "Shaders/Deferred/GeometryPass.frag.glsl");
     rhi.bridge.RegisterShader("deferred_lighting_vs", Spark::RHI::RHIShaderStage::Vertex,
-                              "Shaders/Deferred/LightingPass.hlsl",
-                              "Shaders/Deferred/LightingPass.vert.glsl");
+                              "Shaders/Deferred/LightingPass.hlsl", "Shaders/Deferred/LightingPass.vert.glsl");
     rhi.bridge.RegisterShader("deferred_lighting_ps", Spark::RHI::RHIShaderStage::Pixel,
-                              "Shaders/Deferred/LightingPass.hlsl",
-                              "Shaders/Deferred/LightingPass.frag.glsl");
+                              "Shaders/Deferred/LightingPass.hlsl", "Shaders/Deferred/LightingPass.frag.glsl");
 
     // Create the G-Buffer render targets
     CreateAdvancedRenderTargets();
@@ -4058,17 +4051,13 @@ void GraphicsEngine::SetupForwardPlusPipeline()
 
     // Register forward+ shaders
     rhi.bridge.RegisterShader("forwardplus_depth_vs", Spark::RHI::RHIShaderStage::Vertex,
-                              "Shaders/ForwardPlus/DepthPrepass.hlsl",
-                              "Shaders/ForwardPlus/DepthPrepass.vert.glsl");
+                              "Shaders/ForwardPlus/DepthPrepass.hlsl", "Shaders/ForwardPlus/DepthPrepass.vert.glsl");
     rhi.bridge.RegisterShader("forwardplus_light_cull_cs", Spark::RHI::RHIShaderStage::Compute,
-                              "Shaders/ForwardPlus/LightCull.hlsl",
-                              "Shaders/ForwardPlus/LightCull.comp.glsl");
+                              "Shaders/ForwardPlus/LightCull.hlsl", "Shaders/ForwardPlus/LightCull.comp.glsl");
     rhi.bridge.RegisterShader("forwardplus_shading_vs", Spark::RHI::RHIShaderStage::Vertex,
-                              "Shaders/ForwardPlus/Shading.hlsl",
-                              "Shaders/ForwardPlus/Shading.vert.glsl");
+                              "Shaders/ForwardPlus/Shading.hlsl", "Shaders/ForwardPlus/Shading.vert.glsl");
     rhi.bridge.RegisterShader("forwardplus_shading_ps", Spark::RHI::RHIShaderStage::Pixel,
-                              "Shaders/ForwardPlus/Shading.hlsl",
-                              "Shaders/ForwardPlus/Shading.frag.glsl");
+                              "Shaders/ForwardPlus/Shading.hlsl", "Shaders/ForwardPlus/Shading.frag.glsl");
 
     // Create depth pre-pass render target
     rhi.bridge.CreateDepthBuffer(rhi.width, rhi.height);
@@ -4168,8 +4157,8 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
     cmd->EndEvent();
 }
 
-void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects,
-                                 const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
+void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix,
+                                 const XMMATRIX& projMatrix)
 {
     auto& rhi = GetRHI();
     if (!rhi.initialized)
@@ -4213,9 +4202,8 @@ void GraphicsEngine::LightingPass(const XMMATRIX& /*viewMatrix*/, const XMMATRIX
     cmd->EndEvent();
 }
 
-void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects,
-                                 const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
-                                 std::vector<GameObject*>& visibleObjects)
+void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix,
+                                 const XMMATRIX& projMatrix, std::vector<GameObject*>& visibleObjects)
 {
     auto startTime = std::chrono::high_resolution_clock::now();
     visibleObjects.clear();
@@ -4294,8 +4282,7 @@ void GraphicsEngine::RenderLightingPass()
     m_statistics.drawCalls++;
 
     auto endTime = std::chrono::high_resolution_clock::now();
-    m_statistics.lightCullingTime =
-        std::chrono::duration<float, std::milli>(endTime - m_lightingStartTime).count();
+    m_statistics.lightCullingTime = std::chrono::duration<float, std::milli>(endTime - m_lightingStartTime).count();
 
     cmd->EndEvent();
 }
@@ -4343,8 +4330,7 @@ void GraphicsEngine::RenderPostProcessing()
     }
 
     auto endTime = std::chrono::high_resolution_clock::now();
-    m_statistics.postProcessTime =
-        std::chrono::duration<float, std::milli>(endTime - m_postProcessStartTime).count();
+    m_statistics.postProcessTime = std::chrono::duration<float, std::milli>(endTime - m_postProcessStartTime).count();
     m_statistics.postProcessPasses = passCount;
 
     cmd->EndEvent();
@@ -4390,16 +4376,10 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
         return E_FAIL;
 
     // Register basic shader pairs (HLSL for Windows, GLSL for Linux)
-    rhi.bridge.RegisterShader("basic_vs", Spark::RHI::RHIShaderStage::Vertex,
-                              "Shaders/Basic.hlsl",
-                              "Shaders/Basic.vert.glsl",
-                              "Shaders/Basic.vert.spv",
-                              "main");
-    rhi.bridge.RegisterShader("basic_ps", Spark::RHI::RHIShaderStage::Pixel,
-                              "Shaders/Basic.hlsl",
-                              "Shaders/Basic.frag.glsl",
-                              "Shaders/Basic.frag.spv",
-                              "main");
+    rhi.bridge.RegisterShader("basic_vs", Spark::RHI::RHIShaderStage::Vertex, "Shaders/Basic.hlsl",
+                              "Shaders/Basic.vert.glsl", "Shaders/Basic.vert.spv", "main");
+    rhi.bridge.RegisterShader("basic_ps", Spark::RHI::RHIShaderStage::Pixel, "Shaders/Basic.hlsl",
+                              "Shaders/Basic.frag.glsl", "Shaders/Basic.frag.spv", "main");
 
     // Verify shaders can be loaded
     Spark::RHI::IRHIShader* vs = rhi.bridge.GetShader("basic_vs");
@@ -4490,9 +4470,7 @@ HRESULT GraphicsEngine::CreateDefaultTexture()
     // Create a 1x1 white texture as the default fallback
     const uint32_t whitePixel = 0xFFFFFFFF;
     Spark::RHI::IRHITexture* defaultTex = rhi.bridge.CreateTexture2D(
-        1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
-        Spark::RHI::RHITextureUsage::ShaderResource,
-        &whitePixel);
+        1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM, Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
 
     if (!defaultTex)
     {
