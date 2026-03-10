@@ -354,6 +354,8 @@ jobs:
   todo-count:
     name: "TODO/FIXME Count"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Count TODO/FIXME/HACK comments
