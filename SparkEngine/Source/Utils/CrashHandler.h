@@ -56,10 +56,10 @@ struct CrashConfig
     // GitHub Issue upload — creates an issue on the repo's Issues tab with the
     // crash log embedded as text and the zip/dump uploaded as a release asset
     // linked from the issue body. Requires NETWORKING_ENABLED.
-    std::string githubRepo = "";                  ///< GitHub repo in "owner/repo" format (empty = disabled)
-    std::string githubToken = "";                 ///< GitHub personal access token (PAT) with repo/issues scope
-    std::string githubLabels = "crash-report";    ///< Comma-separated labels to apply to the created issue
-    bool githubAttachDump = true;                 ///< Whether to upload the zip/dump as a release asset and link it
+    std::string githubRepo = "";               ///< GitHub repo in "owner/repo" format (empty = disabled)
+    std::string githubToken = "";              ///< GitHub personal access token (PAT) with repo/issues scope
+    std::string githubLabels = "crash-report"; ///< Comma-separated labels to apply to the created issue
+    bool githubAttachDump = true;              ///< Whether to upload the zip/dump as a release asset and link it
 };
 
 /**

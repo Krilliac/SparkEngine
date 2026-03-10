@@ -333,8 +333,8 @@ static bool UploadToGitHubIssue(const std::string& logContent, const std::string
     labelsJson += "]";
 
     // ---- Create the issue ----
-    std::string issueJson = "{\"title\":\"" + JsonEscape(title) + "\",\"body\":\"" + fullBody + "\",\"labels\":" +
-                            labelsJson + "}";
+    std::string issueJson =
+        "{\"title\":\"" + JsonEscape(title) + "\",\"body\":\"" + fullBody + "\",\"labels\":" + labelsJson + "}";
 
     std::string issueUrl = "https://api.github.com/repos/" + g_cfg.githubRepo + "/issues";
     std::string issueResponse;
