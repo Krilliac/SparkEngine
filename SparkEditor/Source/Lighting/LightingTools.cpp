@@ -304,8 +304,8 @@ namespace SparkEditor
                 m_bakeProgress = static_cast<float>(currentStep) / static_cast<float>(totalSteps);
 
                 std::ostringstream oss;
-                oss << "Bounce " << (bounce + 1) << "/" << m_giSettings.bounceCount
-                    << " - Light \"" << light->name << "\" (" << currentStep << "/" << totalSteps << ")";
+                oss << "Bounce " << (bounce + 1) << "/" << m_giSettings.bounceCount << " - Light \"" << light->name
+                    << "\" (" << currentStep << "/" << totalSteps << ")";
                 m_bakeStatus = oss.str();
 
                 if (progressCallback)
@@ -456,11 +456,9 @@ namespace SparkEditor
         file << "[Atmosphere]\n";
         file << "timeOfDay=" << m_atmosphereSettings.timeOfDay << "\n";
         file << "dayDuration=" << m_atmosphereSettings.dayDuration << "\n";
-        file << "sunDirection=" << m_atmosphereSettings.sunDirection.x << ","
-             << m_atmosphereSettings.sunDirection.y << ","
-             << m_atmosphereSettings.sunDirection.z << "\n";
-        file << "sunColor=" << m_atmosphereSettings.sunColor.x << ","
-             << m_atmosphereSettings.sunColor.y << ","
+        file << "sunDirection=" << m_atmosphereSettings.sunDirection.x << "," << m_atmosphereSettings.sunDirection.y
+             << "," << m_atmosphereSettings.sunDirection.z << "\n";
+        file << "sunColor=" << m_atmosphereSettings.sunColor.x << "," << m_atmosphereSettings.sunColor.y << ","
              << m_atmosphereSettings.sunColor.z << "\n";
         file << "sunIntensity=" << m_atmosphereSettings.sunIntensity << "\n";
         file << "enableAtmosphereScattering=" << (m_atmosphereSettings.enableAtmosphereScattering ? 1 : 0) << "\n";
@@ -469,8 +467,7 @@ namespace SparkEditor
         file << "fogDensity=" << m_atmosphereSettings.fogDensity << "\n";
         file << "fogStartDistance=" << m_atmosphereSettings.fogStartDistance << "\n";
         file << "fogEndDistance=" << m_atmosphereSettings.fogEndDistance << "\n";
-        file << "fogColor=" << m_atmosphereSettings.fogColor.x << ","
-             << m_atmosphereSettings.fogColor.y << ","
+        file << "fogColor=" << m_atmosphereSettings.fogColor.x << "," << m_atmosphereSettings.fogColor.y << ","
              << m_atmosphereSettings.fogColor.z << "\n";
 
         // Write GI settings
@@ -480,8 +477,7 @@ namespace SparkEditor
         file << "enableSSR=" << (m_giSettings.enableSSR ? 1 : 0) << "\n";
         file << "bounceCount=" << m_giSettings.bounceCount << "\n";
         file << "lightmapResolution=" << m_giSettings.lightmapResolution << "\n";
-        file << "ambientColor=" << m_giSettings.ambientColor.x << ","
-             << m_giSettings.ambientColor.y << ","
+        file << "ambientColor=" << m_giSettings.ambientColor.x << "," << m_giSettings.ambientColor.y << ","
              << m_giSettings.ambientColor.z << "\n";
         file << "ambientIntensity=" << m_giSettings.ambientIntensity << "\n";
         file << "skyboxExposure=" << m_giSettings.skyboxExposure << "\n";
@@ -507,12 +503,12 @@ namespace SparkEditor
         {
             file << "light" << index << ".name=" << light.name << "\n";
             file << "light" << index << ".type=" << static_cast<uint32_t>(light.type) << "\n";
-            file << "light" << index << ".position=" << light.position.x << ","
-                 << light.position.y << "," << light.position.z << "\n";
-            file << "light" << index << ".direction=" << light.direction.x << ","
-                 << light.direction.y << "," << light.direction.z << "\n";
-            file << "light" << index << ".color=" << light.color.x << ","
-                 << light.color.y << "," << light.color.z << "\n";
+            file << "light" << index << ".position=" << light.position.x << "," << light.position.y << ","
+                 << light.position.z << "\n";
+            file << "light" << index << ".direction=" << light.direction.x << "," << light.direction.y << ","
+                 << light.direction.z << "\n";
+            file << "light" << index << ".color=" << light.color.x << "," << light.color.y << "," << light.color.z
+                 << "\n";
             file << "light" << index << ".intensity=" << light.intensity << "\n";
             file << "light" << index << ".range=" << light.range << "\n";
             file << "light" << index << ".castShadows=" << (light.castShadows ? 1 : 0) << "\n";
@@ -593,42 +589,132 @@ namespace SparkEditor
 
             if (currentSection == "Atmosphere")
             {
-                if (key == "timeOfDay") { m_atmosphereSettings.timeOfDay = std::stof(value); }
-                else if (key == "dayDuration") { m_atmosphereSettings.dayDuration = std::stof(value); }
-                else if (key == "sunDirection") { m_atmosphereSettings.sunDirection = parseFloat3(value); }
-                else if (key == "sunColor") { m_atmosphereSettings.sunColor = parseFloat3(value); }
-                else if (key == "sunIntensity") { m_atmosphereSettings.sunIntensity = std::stof(value); }
-                else if (key == "enableAtmosphereScattering") { m_atmosphereSettings.enableAtmosphereScattering = (value == "1"); }
-                else if (key == "turbidity") { m_atmosphereSettings.turbidity = std::stof(value); }
-                else if (key == "enableFog") { m_atmosphereSettings.enableFog = (value == "1"); }
-                else if (key == "fogDensity") { m_atmosphereSettings.fogDensity = std::stof(value); }
-                else if (key == "fogStartDistance") { m_atmosphereSettings.fogStartDistance = std::stof(value); }
-                else if (key == "fogEndDistance") { m_atmosphereSettings.fogEndDistance = std::stof(value); }
-                else if (key == "fogColor") { m_atmosphereSettings.fogColor = parseFloat3(value); }
+                if (key == "timeOfDay")
+                {
+                    m_atmosphereSettings.timeOfDay = std::stof(value);
+                }
+                else if (key == "dayDuration")
+                {
+                    m_atmosphereSettings.dayDuration = std::stof(value);
+                }
+                else if (key == "sunDirection")
+                {
+                    m_atmosphereSettings.sunDirection = parseFloat3(value);
+                }
+                else if (key == "sunColor")
+                {
+                    m_atmosphereSettings.sunColor = parseFloat3(value);
+                }
+                else if (key == "sunIntensity")
+                {
+                    m_atmosphereSettings.sunIntensity = std::stof(value);
+                }
+                else if (key == "enableAtmosphereScattering")
+                {
+                    m_atmosphereSettings.enableAtmosphereScattering = (value == "1");
+                }
+                else if (key == "turbidity")
+                {
+                    m_atmosphereSettings.turbidity = std::stof(value);
+                }
+                else if (key == "enableFog")
+                {
+                    m_atmosphereSettings.enableFog = (value == "1");
+                }
+                else if (key == "fogDensity")
+                {
+                    m_atmosphereSettings.fogDensity = std::stof(value);
+                }
+                else if (key == "fogStartDistance")
+                {
+                    m_atmosphereSettings.fogStartDistance = std::stof(value);
+                }
+                else if (key == "fogEndDistance")
+                {
+                    m_atmosphereSettings.fogEndDistance = std::stof(value);
+                }
+                else if (key == "fogColor")
+                {
+                    m_atmosphereSettings.fogColor = parseFloat3(value);
+                }
             }
             else if (currentSection == "GlobalIllumination")
             {
-                if (key == "enableGI") { m_giSettings.enableGI = (value == "1"); }
-                else if (key == "enableSSAO") { m_giSettings.enableSSAO = (value == "1"); }
-                else if (key == "enableSSR") { m_giSettings.enableSSR = (value == "1"); }
-                else if (key == "bounceCount") { m_giSettings.bounceCount = std::stoi(value); }
-                else if (key == "lightmapResolution") { m_giSettings.lightmapResolution = std::stoi(value); }
-                else if (key == "ambientColor") { m_giSettings.ambientColor = parseFloat3(value); }
-                else if (key == "ambientIntensity") { m_giSettings.ambientIntensity = std::stof(value); }
-                else if (key == "skyboxExposure") { m_giSettings.skyboxExposure = std::stof(value); }
+                if (key == "enableGI")
+                {
+                    m_giSettings.enableGI = (value == "1");
+                }
+                else if (key == "enableSSAO")
+                {
+                    m_giSettings.enableSSAO = (value == "1");
+                }
+                else if (key == "enableSSR")
+                {
+                    m_giSettings.enableSSR = (value == "1");
+                }
+                else if (key == "bounceCount")
+                {
+                    m_giSettings.bounceCount = std::stoi(value);
+                }
+                else if (key == "lightmapResolution")
+                {
+                    m_giSettings.lightmapResolution = std::stoi(value);
+                }
+                else if (key == "ambientColor")
+                {
+                    m_giSettings.ambientColor = parseFloat3(value);
+                }
+                else if (key == "ambientIntensity")
+                {
+                    m_giSettings.ambientIntensity = std::stof(value);
+                }
+                else if (key == "skyboxExposure")
+                {
+                    m_giSettings.skyboxExposure = std::stof(value);
+                }
             }
             else if (currentSection == "PostProcessing")
             {
-                if (key == "enableTonemapping") { m_postProcessingSettings.enableTonemapping = (value == "1"); }
-                else if (key == "tonemappingOperator") { m_postProcessingSettings.tonemappingOperator = value; }
-                else if (key == "exposure") { m_postProcessingSettings.exposure = std::stof(value); }
-                else if (key == "gamma") { m_postProcessingSettings.gamma = std::stof(value); }
-                else if (key == "enableBloom") { m_postProcessingSettings.enableBloom = (value == "1"); }
-                else if (key == "bloomThreshold") { m_postProcessingSettings.bloomThreshold = std::stof(value); }
-                else if (key == "bloomIntensity") { m_postProcessingSettings.bloomIntensity = std::stof(value); }
-                else if (key == "contrast") { m_postProcessingSettings.contrast = std::stof(value); }
-                else if (key == "saturation") { m_postProcessingSettings.saturation = std::stof(value); }
-                else if (key == "brightness") { m_postProcessingSettings.brightness = std::stof(value); }
+                if (key == "enableTonemapping")
+                {
+                    m_postProcessingSettings.enableTonemapping = (value == "1");
+                }
+                else if (key == "tonemappingOperator")
+                {
+                    m_postProcessingSettings.tonemappingOperator = value;
+                }
+                else if (key == "exposure")
+                {
+                    m_postProcessingSettings.exposure = std::stof(value);
+                }
+                else if (key == "gamma")
+                {
+                    m_postProcessingSettings.gamma = std::stof(value);
+                }
+                else if (key == "enableBloom")
+                {
+                    m_postProcessingSettings.enableBloom = (value == "1");
+                }
+                else if (key == "bloomThreshold")
+                {
+                    m_postProcessingSettings.bloomThreshold = std::stof(value);
+                }
+                else if (key == "bloomIntensity")
+                {
+                    m_postProcessingSettings.bloomIntensity = std::stof(value);
+                }
+                else if (key == "contrast")
+                {
+                    m_postProcessingSettings.contrast = std::stof(value);
+                }
+                else if (key == "saturation")
+                {
+                    m_postProcessingSettings.saturation = std::stof(value);
+                }
+                else if (key == "brightness")
+                {
+                    m_postProcessingSettings.brightness = std::stof(value);
+                }
             }
             else if (currentSection == "Lights")
             {
@@ -657,20 +743,62 @@ namespace SparkEditor
 
                 auto& light = loadedLights[lightIndex];
 
-                if (property == "name") { light.name = value; }
-                else if (property == "type") { light.type = static_cast<SparkLightType>(std::stoul(value)); }
-                else if (property == "position") { light.position = parseFloat3(value); }
-                else if (property == "direction") { light.direction = parseFloat3(value); }
-                else if (property == "color") { light.color = parseFloat3(value); }
-                else if (property == "intensity") { light.intensity = std::stof(value); }
-                else if (property == "range") { light.range = std::stof(value); }
-                else if (property == "castShadows") { light.castShadows = (value == "1"); }
-                else if (property == "shadowQuality") { light.shadowQuality = static_cast<ShadowQuality>(std::stoul(value)); }
-                else if (property == "innerConeAngle") { light.innerConeAngle = std::stof(value); }
-                else if (property == "outerConeAngle") { light.outerConeAngle = std::stof(value); }
-                else if (property == "temperature") { light.temperature = std::stof(value); }
-                else if (property == "isActive") { light.isActive = (value == "1"); }
-                else if (property == "priority") { light.priority = std::stoi(value); }
+                if (property == "name")
+                {
+                    light.name = value;
+                }
+                else if (property == "type")
+                {
+                    light.type = static_cast<SparkLightType>(std::stoul(value));
+                }
+                else if (property == "position")
+                {
+                    light.position = parseFloat3(value);
+                }
+                else if (property == "direction")
+                {
+                    light.direction = parseFloat3(value);
+                }
+                else if (property == "color")
+                {
+                    light.color = parseFloat3(value);
+                }
+                else if (property == "intensity")
+                {
+                    light.intensity = std::stof(value);
+                }
+                else if (property == "range")
+                {
+                    light.range = std::stof(value);
+                }
+                else if (property == "castShadows")
+                {
+                    light.castShadows = (value == "1");
+                }
+                else if (property == "shadowQuality")
+                {
+                    light.shadowQuality = static_cast<ShadowQuality>(std::stoul(value));
+                }
+                else if (property == "innerConeAngle")
+                {
+                    light.innerConeAngle = std::stof(value);
+                }
+                else if (property == "outerConeAngle")
+                {
+                    light.outerConeAngle = std::stof(value);
+                }
+                else if (property == "temperature")
+                {
+                    light.temperature = std::stof(value);
+                }
+                else if (property == "isActive")
+                {
+                    light.isActive = (value == "1");
+                }
+                else if (property == "priority")
+                {
+                    light.priority = std::stoi(value);
+                }
             }
         }
 
@@ -904,12 +1032,23 @@ namespace SparkEditor
                     int resolution = 0;
                     switch (light.shadowQuality)
                     {
-                        case ShadowQuality::Low:    resolution = 512;  break;
-                        case ShadowQuality::Medium:  resolution = 1024; break;
-                        case ShadowQuality::High:    resolution = 2048; break;
-                        case ShadowQuality::Ultra:   resolution = 4096; break;
-                        case ShadowQuality::RTX:     resolution = 2048; break;
-                        default: break;
+                    case ShadowQuality::Low:
+                        resolution = 512;
+                        break;
+                    case ShadowQuality::Medium:
+                        resolution = 1024;
+                        break;
+                    case ShadowQuality::High:
+                        resolution = 2048;
+                        break;
+                    case ShadowQuality::Ultra:
+                        resolution = 4096;
+                        break;
+                    case ShadowQuality::RTX:
+                        resolution = 2048;
+                        break;
+                    default:
+                        break;
                     }
 
                     // 32-bit depth per texel, cascaded shadows multiply
@@ -924,7 +1063,7 @@ namespace SparkEditor
 
     void LightingTools::OptimizeLightingPerformance(float targetFPS)
     {
-        float frameTimeBudget = 1000.0f / targetFPS; // ms per frame
+        float frameTimeBudget = 1000.0f / targetFPS;   // ms per frame
         float lightingBudget = frameTimeBudget * 0.3f; // 30% budget for lighting
 
         // Sort lights by priority (lower priority = less important)
@@ -938,14 +1077,11 @@ namespace SparkEditor
         }
 
         std::sort(sortedLights.begin(), sortedLights.end(),
-            [](const auto& a, const auto& b)
-            {
-                return a.second->priority > b.second->priority;
-            });
+                  [](const auto& a, const auto& b) { return a.second->priority > b.second->priority; });
 
         // Estimate cost per shadow-casting light (rough heuristic)
         float estimatedCostPerShadowLight = 2.0f; // ms
-        float estimatedCostPerLight = 0.2f;        // ms
+        float estimatedCostPerLight = 0.2f;       // ms
 
         float currentCost = 0.0f;
         for (auto& [id, light] : sortedLights)
@@ -1029,12 +1165,24 @@ namespace SparkEditor
                 const char* typeIcon = "";
                 switch (light.type)
                 {
-                    case SparkLightType::Directional: typeIcon = "[D]"; break;
-                    case SparkLightType::Point:       typeIcon = "[P]"; break;
-                    case SparkLightType::Spot:        typeIcon = "[S]"; break;
-                    case SparkLightType::Area:        typeIcon = "[A]"; break;
-                    case SparkLightType::Environment:  typeIcon = "[E]"; break;
-                    case SparkLightType::Volumetric:  typeIcon = "[V]"; break;
+                case SparkLightType::Directional:
+                    typeIcon = "[D]";
+                    break;
+                case SparkLightType::Point:
+                    typeIcon = "[P]";
+                    break;
+                case SparkLightType::Spot:
+                    typeIcon = "[S]";
+                    break;
+                case SparkLightType::Area:
+                    typeIcon = "[A]";
+                    break;
+                case SparkLightType::Environment:
+                    typeIcon = "[E]";
+                    break;
+                case SparkLightType::Volumetric:
+                    typeIcon = "[V]";
+                    break;
                 }
 
                 std::string label = std::string(typeIcon) + " " + light.name;
@@ -1303,11 +1451,12 @@ namespace SparkEditor
             {
                 if (ImGui::Button("Bake Lightmaps"))
                 {
-                    BakeLightmaps([this](float progress, const std::string& status)
-                    {
-                        m_bakeProgress = progress;
-                        m_bakeStatus = status;
-                    });
+                    BakeLightmaps(
+                        [this](float progress, const std::string& status)
+                        {
+                            m_bakeProgress = progress;
+                            m_bakeStatus = status;
+                        });
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Clear Baked Data"))
@@ -1371,7 +1520,8 @@ namespace SparkEditor
         if (ImGui::TreeNode("Atmosphere Scattering"))
         {
             ImGui::Checkbox("Enable Scattering", &m_atmosphereSettings.enableAtmosphereScattering);
-            ImGui::DragFloat3("Rayleigh Scattering", &m_atmosphereSettings.rayleighScattering.x, 0.0001f, 0.0f, 0.1f, "%.4f");
+            ImGui::DragFloat3("Rayleigh Scattering", &m_atmosphereSettings.rayleighScattering.x, 0.0001f, 0.0f, 0.1f,
+                              "%.4f");
             ImGui::DragFloat("Mie Scattering", &m_atmosphereSettings.mieScattering, 0.0001f, 0.0f, 0.1f, "%.4f");
             ImGui::DragFloat("Turbidity", &m_atmosphereSettings.turbidity, 0.1f, 1.0f, 10.0f);
 
