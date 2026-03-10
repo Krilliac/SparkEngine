@@ -2443,11 +2443,12 @@ std::string LoadingPriorityToString(LoadingPriority priority)
 #endif // SPARK_PLATFORM_WINDOWS
 
 // ============================================================================
-// RENDERING HELPERS (platform-independent stubs)
+// RENDERING HELPERS
 // ============================================================================
 
 void AssetPipeline::BindMesh(const std::string& meshPath)
 {
+#ifdef SPARK_PLATFORM_WINDOWS
     if (!m_context)
     {
         return;
@@ -2479,10 +2480,14 @@ void AssetPipeline::BindMesh(const std::string& meshPath)
     m_context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
     m_context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
     m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+#else
+    (void)meshPath;
+#endif
 }
 
 void AssetPipeline::BindMaterial(const std::string& materialPath)
 {
+#ifdef SPARK_PLATFORM_WINDOWS
     if (!m_context)
     {
         return;
@@ -2496,8 +2501,6 @@ void AssetPipeline::BindMaterial(const std::string& materialPath)
         return;
     }
 
-    // Materials are typically stored as textures in the asset map.
-    // Bind the shader resource view if this is a texture asset.
     auto* textureAsset = dynamic_cast<TextureAsset*>(it->second.get());
     if (!textureAsset)
     {
@@ -2509,21 +2512,19 @@ void AssetPipeline::BindMaterial(const std::string& materialPath)
     {
         m_context->PSSetShaderResources(0, 1, &srv);
     }
+#else
+    (void)materialPath;
+#endif
 }
 
 void AssetPipeline::DrawBoundMesh()
 {
+#ifdef SPARK_PLATFORM_WINDOWS
     if (!m_context)
     {
         return;
     }
 
-    // Retrieve the currently bound index buffer to determine the index count.
-    // The ID3D11DeviceContext does not expose a direct query for the bound
-    // index count, so we look up the most recently bound mesh from the
-    // asset map. As a simple approach, iterate the assets to find a loaded
-    // mesh and use its index count. In production this would be cached in a
-    // member variable set by BindMesh.
     std::lock_guard<std::mutex> lock(m_assetsMutex);
 
     for (const auto& [path, asset] : m_assets)
@@ -2540,4 +2541,5 @@ void AssetPipeline::DrawBoundMesh()
             return;
         }
     }
+#endif
 }
