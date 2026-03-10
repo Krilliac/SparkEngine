@@ -99,7 +99,7 @@ namespace Spark
      */
     class SimpleConsole
     {
-    public:
+      public:
         /**
          * @brief Function signature for command handlers
          *
@@ -113,11 +113,11 @@ namespace Spark
          */
         struct LogEntry
         {
-            std::string message;        ///< The log message text
-            std::string type;           ///< Severity string: "INFO", "WARNING", "ERROR", etc.
-            std::string timestamp;      ///< Formatted timestamp when the message was logged
-            ConsoleSeverity severity;   ///< Enum severity for fast filtering
-            uint64_t sequenceNumber;    ///< Monotonic sequence number for ordering
+            std::string message;      ///< The log message text
+            std::string type;         ///< Severity string: "INFO", "WARNING", "ERROR", etc.
+            std::string timestamp;    ///< Formatted timestamp when the message was logged
+            ConsoleSeverity severity; ///< Enum severity for fast filtering
+            uint64_t sequenceNumber;  ///< Monotonic sequence number for ordering
         };
 
         /**
@@ -125,10 +125,10 @@ namespace Spark
          */
         struct CommandInfo
         {
-            CommandHandler handler;     ///< Function to invoke when the command is executed
-            std::string description;    ///< Human-readable description shown in help output
-            std::string category;       ///< Command category (e.g., "Graphics", "Physics")
-            std::string usage;          ///< Usage pattern (e.g., "player_heal [amount]")
+            CommandHandler handler;  ///< Function to invoke when the command is executed
+            std::string description; ///< Human-readable description shown in help output
+            std::string category;    ///< Command category (e.g., "Graphics", "Physics")
+            std::string usage;       ///< Usage pattern (e.g., "player_heal [amount]")
         };
 
         /**
@@ -136,10 +136,10 @@ namespace Spark
          */
         struct WatchEntry
         {
-            std::string name;                       ///< Display name of the watched variable
-            std::function<std::string()> getter;    ///< Callback returning current value as string
-            std::string lastValue;                  ///< Cached last known value for change detection
-            bool active = true;                     ///< Whether this watch is currently being polled
+            std::string name;                    ///< Display name of the watched variable
+            std::function<std::string()> getter; ///< Callback returning current value as string
+            std::string lastValue;               ///< Cached last known value for change detection
+            bool active = true;                  ///< Whether this watch is currently being polled
         };
 
         // ========================================================================
@@ -156,19 +156,19 @@ namespace Spark
             uint32_t activeWatches = 0;
         };
 
-    private:
+      private:
 #ifdef SPARK_PLATFORM_WINDOWS
-        HWND m_consoleWindow = nullptr;     ///< Handle to the Windows console window
-        HANDLE m_consoleOutput = nullptr;    ///< Handle to the console output stream
-        HANDLE m_consoleInput = nullptr;     ///< Handle to the console input stream
+        HWND m_consoleWindow = nullptr;   ///< Handle to the Windows console window
+        HANDLE m_consoleOutput = nullptr; ///< Handle to the console output stream
+        HANDLE m_consoleInput = nullptr;  ///< Handle to the console input stream
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
-        int m_consoleOutputFd = -1;         ///< File descriptor for console output
-        int m_consoleInputFd = -1;          ///< File descriptor for console input
+        int m_consoleOutputFd = -1; ///< File descriptor for console output
+        int m_consoleInputFd = -1;  ///< File descriptor for console input
 #endif
 
-        std::unordered_map<std::string, CommandInfo> m_commands;     ///< Command registry
-        std::deque<LogEntry> m_logHistory;                           ///< Rolling log history
-        std::deque<std::string> m_commandHistory;                    ///< Rolling command history
+        std::unordered_map<std::string, CommandInfo> m_commands; ///< Command registry
+        std::deque<LogEntry> m_logHistory;                       ///< Rolling log history
+        std::deque<std::string> m_commandHistory;                ///< Rolling command history
 
         bool m_initialized = false;
         bool m_visible = true;
@@ -176,9 +176,9 @@ namespace Spark
         int m_historyIndex = 0;
         int m_cursorPosition = 0;
 
-        mutable std::mutex m_logMutex;          ///< Protects m_logHistory
-        mutable std::mutex m_commandMutex;      ///< Protects m_commands
-        mutable std::mutex m_historyMutex;      ///< Protects m_commandHistory
+        mutable std::mutex m_logMutex;     ///< Protects m_logHistory
+        mutable std::mutex m_commandMutex; ///< Protects m_commands
+        mutable std::mutex m_historyMutex; ///< Protects m_commandHistory
 
         // Command alias system
         std::unordered_map<std::string, std::string> m_aliases;
@@ -226,7 +226,7 @@ namespace Spark
         /** @brief Map severity to display color */
         static Color SeverityToColor(ConsoleSeverity severity);
 
-    public:
+      public:
         static SimpleConsole& GetInstance();
 
         /**
@@ -281,10 +281,8 @@ namespace Spark
          * @param category    Category name (default: "General")
          * @param usage       Usage pattern string (default: empty)
          */
-        void RegisterCommand(const std::string& name, CommandHandler handler,
-                             const std::string& description = "",
-                             const std::string& category = "General",
-                             const std::string& usage = "");
+        void RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description = "",
+                             const std::string& category = "General", const std::string& usage = "");
 
         /**
          * @brief Unregister a previously registered command
@@ -363,7 +361,7 @@ namespace Spark
         /** @brief Load command history from disk */
         void LoadHistory();
 
-    private:
+      private:
         SimpleConsole() = default;
         ~SimpleConsole() = default;
         SimpleConsole(const SimpleConsole&) = delete;
