@@ -104,18 +104,18 @@ namespace SparkEditor
  */
     enum class ObjectLayer
     {
-        DEFAULT = 0,        ///< Default layer
-        UI = 1,             ///< UI layer
-        BACKGROUND = 2,     ///< Background layer
-        FOREGROUND = 3,     ///< Foreground layer
-        EFFECTS = 4,        ///< Effects layer
-        TRANSPARENT = 5,    ///< Transparent objects layer
-        IGNORE_RAYCAST = 6, ///< Ignore raycast layer
-        WATER = 7,          ///< Water layer
-        CUSTOM_1 = 8,       ///< Custom layer 1
-        CUSTOM_2 = 9,       ///< Custom layer 2
-        CUSTOM_3 = 10,      ///< Custom layer 3
-        CUSTOM_4 = 11       ///< Custom layer 4
+        DEFAULT = 0,         ///< Default layer
+        UI = 1,              ///< UI layer
+        BACKGROUND = 2,      ///< Background layer
+        FOREGROUND = 3,      ///< Foreground layer
+        EFFECTS = 4,         ///< Effects layer
+        TRANSPARENT_OBJ = 5, ///< Transparent objects layer
+        IGNORE_RAYCAST = 6,  ///< Ignore raycast layer
+        WATER = 7,           ///< Water layer
+        CUSTOM_1 = 8,        ///< Custom layer 1
+        CUSTOM_2 = 9,        ///< Custom layer 2
+        CUSTOM_3 = 10,       ///< Custom layer 3
+        CUSTOM_4 = 11        ///< Custom layer 4
     };
 
     /**
