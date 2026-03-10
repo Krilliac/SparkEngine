@@ -144,8 +144,7 @@ namespace SparkEditor
         if (!obj)
             return false;
 
-        return std::find(obj->componentTypes.begin(), obj->componentTypes.end(), type)
-               != obj->componentTypes.end();
+        return std::find(obj->componentTypes.begin(), obj->componentTypes.end(), type) != obj->componentTypes.end();
     }
 
     void InspectorPanel::AddComponent(ComponentType type)
@@ -234,8 +233,7 @@ namespace SparkEditor
 
                     // Remove component data
                     auto& comps = capturedScene->components;
-                    comps.erase(std::remove_if(comps.begin(), comps.end(),
-                                               [capturedID, type](const Component& c)
+                    comps.erase(std::remove_if(comps.begin(), comps.end(), [capturedID, type](const Component& c)
                                                { return c.objectID == capturedID && c.type == type; }),
                                 comps.end());
                 }
@@ -277,8 +275,7 @@ namespace SparkEditor
                     types.erase(std::remove(types.begin(), types.end(), type), types.end());
 
                     auto& comps = capturedScene->components;
-                    comps.erase(std::remove_if(comps.begin(), comps.end(),
-                                               [capturedID, type](const Component& c)
+                    comps.erase(std::remove_if(comps.begin(), comps.end(), [capturedID, type](const Component& c)
                                                { return c.objectID == capturedID && c.type == type; }),
                                 comps.end());
                 }
@@ -620,8 +617,7 @@ namespace SparkEditor
             if (obj)
             {
                 // Read actual transform data
-                float position[3] = {obj->transform.position.x, obj->transform.position.y,
-                                     obj->transform.position.z};
+                float position[3] = {obj->transform.position.x, obj->transform.position.y, obj->transform.position.z};
                 // Convert quaternion to Euler angles for display
                 // Simplified extraction (roll, pitch, yaw from quaternion)
                 const auto& q = obj->transform.rotation;
@@ -653,12 +649,9 @@ namespace SparkEditor
                 DrawVec3Control("Scale", scale, 1.0f, 0.1f);
 
                 // Write back if changed
-                bool posChanged = (position[0] != oldPos[0] || position[1] != oldPos[1]
-                                   || position[2] != oldPos[2]);
-                bool rotChanged = (rotation[0] != oldRot[0] || rotation[1] != oldRot[1]
-                                   || rotation[2] != oldRot[2]);
-                bool scaleChanged = (scale[0] != oldScale[0] || scale[1] != oldScale[1]
-                                     || scale[2] != oldScale[2]);
+                bool posChanged = (position[0] != oldPos[0] || position[1] != oldPos[1] || position[2] != oldPos[2]);
+                bool rotChanged = (rotation[0] != oldRot[0] || rotation[1] != oldRot[1] || rotation[2] != oldRot[2]);
+                bool scaleChanged = (scale[0] != oldScale[0] || scale[1] != oldScale[1] || scale[2] != oldScale[2]);
 
                 if (posChanged || rotChanged || scaleChanged)
                 {
@@ -673,12 +666,8 @@ namespace SparkEditor
                     float cy = std::cos(radY * 0.5f), sy = std::sin(radY * 0.5f);
                     float cz = std::cos(radZ * 0.5f), sz = std::sin(radZ * 0.5f);
 
-                    XMFLOAT4 newRot = {
-                        sx * cy * cz - cx * sy * sz,
-                        cx * sy * cz + sx * cy * sz,
-                        cx * cy * sz - sx * sy * cz,
-                        cx * cy * cz + sx * sy * sz
-                    };
+                    XMFLOAT4 newRot = {sx * cy * cz - cx * sy * sz, cx * sy * cz + sx * cy * sz,
+                                       cx * cy * sz - sx * sy * cz, cx * cy * cz + sx * sy * sz};
 
                     Transform oldTransform = obj->transform;
                     SceneFile* capturedScene = m_scene;
@@ -1132,8 +1121,7 @@ namespace SparkEditor
                 strncpy(clipBuf, audio->audioClipPath.c_str(), sizeof(clipBuf) - 1);
                 clipBuf[sizeof(clipBuf) - 1] = '\0';
                 ImGui::SetNextItemWidth(-1);
-                if (ImGui::InputText("Audio Clip", clipBuf, sizeof(clipBuf),
-                                     ImGuiInputTextFlags_EnterReturnsTrue))
+                if (ImGui::InputText("Audio Clip", clipBuf, sizeof(clipBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     audio->audioClipPath = clipBuf;
                 }

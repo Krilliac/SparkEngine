@@ -2440,8 +2440,10 @@ std::string LoadingPriorityToString(LoadingPriority priority)
     }
 }
 
+#endif // SPARK_PLATFORM_WINDOWS
+
 // ============================================================================
-// RENDERING HELPERS
+// RENDERING HELPERS (platform-independent stubs)
 // ============================================================================
 
 void AssetPipeline::BindMesh([[maybe_unused]] const std::string& meshPath)
@@ -2458,5 +2460,3 @@ void AssetPipeline::DrawBoundMesh()
 {
     // TODO: Issue draw call for the currently bound mesh
 }
-
-#endif // SPARK_PLATFORM_WINDOWS

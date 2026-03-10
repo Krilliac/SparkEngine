@@ -462,7 +462,7 @@ bool CollisionSystem::BoxVsBox(const BoundingBox& a, const BoundingBox& b, Conta
 // ============================================================================
 
 CollisionResult CollisionSystem::SweepSphereVsSphere(const BoundingSphere& moving, const XMFLOAT3& velocity,
-                                                      const BoundingSphere& target, float& hitTime)
+                                                     const BoundingSphere& target, float& hitTime)
 {
     CollisionResult result;
     hitTime = 0.0f;
@@ -530,10 +530,8 @@ CollisionResult CollisionSystem::SweepSphereVsSphere(const BoundingSphere& movin
     result.Hit = true;
 
     // Compute hit point: position of moving sphere center at time t
-    XMFLOAT3 hitCenter(
-        moving.Center.x + velocity.x * t,
-        moving.Center.y + velocity.y * t,
-        moving.Center.z + velocity.z * t);
+    XMFLOAT3 hitCenter(moving.Center.x + velocity.x * t, moving.Center.y + velocity.y * t,
+                       moving.Center.z + velocity.z * t);
 
     // Normal from target to hit center
     float nx = hitCenter.x - target.Center.x;
@@ -550,21 +548,19 @@ CollisionResult CollisionSystem::SweepSphereVsSphere(const BoundingSphere& movin
     }
 
     // Contact point on the target sphere surface
-    result.Point = XMFLOAT3(
-        target.Center.x + result.Normal.x * target.Radius,
-        target.Center.y + result.Normal.y * target.Radius,
-        target.Center.z + result.Normal.z * target.Radius);
+    result.Point =
+        XMFLOAT3(target.Center.x + result.Normal.x * target.Radius, target.Center.y + result.Normal.y * target.Radius,
+                 target.Center.z + result.Normal.z * target.Radius);
 
-    result.Distance = sqrtf(
-        (hitCenter.x - moving.Center.x) * (hitCenter.x - moving.Center.x) +
-        (hitCenter.y - moving.Center.y) * (hitCenter.y - moving.Center.y) +
-        (hitCenter.z - moving.Center.z) * (hitCenter.z - moving.Center.z));
+    result.Distance = sqrtf((hitCenter.x - moving.Center.x) * (hitCenter.x - moving.Center.x) +
+                            (hitCenter.y - moving.Center.y) * (hitCenter.y - moving.Center.y) +
+                            (hitCenter.z - moving.Center.z) * (hitCenter.z - moving.Center.z));
 
     return result;
 }
 
 CollisionResult CollisionSystem::SweepSphereVsBox(const BoundingSphere& moving, const XMFLOAT3& velocity,
-                                                    const BoundingBox& target, float& hitTime)
+                                                  const BoundingBox& target, float& hitTime)
 {
     CollisionResult result;
     hitTime = 0.0f;
@@ -607,10 +603,8 @@ CollisionResult CollisionSystem::SweepSphereVsBox(const BoundingSphere& moving, 
     result.Distance = rayHit.Distance;
 
     // Sphere center at hit time
-    XMFLOAT3 hitCenter(
-        moving.Center.x + velocity.x * t,
-        moving.Center.y + velocity.y * t,
-        moving.Center.z + velocity.z * t);
+    XMFLOAT3 hitCenter(moving.Center.x + velocity.x * t, moving.Center.y + velocity.y * t,
+                       moving.Center.z + velocity.z * t);
 
     // Closest point on the original (unexpanded) box to the sphere center at hit time
     result.Point = ClosestPointOnBox(hitCenter, target);
@@ -633,27 +627,26 @@ CollisionResult CollisionSystem::SweepSphereVsBox(const BoundingSphere& moving, 
 }
 
 CollisionResult CollisionSystem::SweepBoxVsBox(const BoundingBox& moving, const XMFLOAT3& velocity,
-                                                const BoundingBox& target, float& hitTime)
+                                               const BoundingBox& target, float& hitTime)
 {
     CollisionResult result;
     hitTime = 0.0f;
 
     // Minkowski sum: expand the target box by the moving box's half-extents
     XMFLOAT3 movExt = moving.GetExtents();
-    BoundingBox expanded(
-        XMFLOAT3(target.Min.x - movExt.x, target.Min.y - movExt.y, target.Min.z - movExt.z),
-        XMFLOAT3(target.Max.x + movExt.x, target.Max.y + movExt.y, target.Max.z + movExt.z));
+    BoundingBox expanded(XMFLOAT3(target.Min.x - movExt.x, target.Min.y - movExt.y, target.Min.z - movExt.z),
+                         XMFLOAT3(target.Max.x + movExt.x, target.Max.y + movExt.y, target.Max.z + movExt.z));
 
     // Ray from moving box center along velocity against expanded box
     XMFLOAT3 movCenter = moving.GetCenter();
 
     constexpr float epsilon = 1e-8f;
-    float invX = (std::abs(velocity.x) > epsilon) ? (1.0f / velocity.x) :
-                 ((velocity.x >= 0.0f) ? (1.0f / epsilon) : (-1.0f / epsilon));
-    float invY = (std::abs(velocity.y) > epsilon) ? (1.0f / velocity.y) :
-                 ((velocity.y >= 0.0f) ? (1.0f / epsilon) : (-1.0f / epsilon));
-    float invZ = (std::abs(velocity.z) > epsilon) ? (1.0f / velocity.z) :
-                 ((velocity.z >= 0.0f) ? (1.0f / epsilon) : (-1.0f / epsilon));
+    float invX = (std::abs(velocity.x) > epsilon) ? (1.0f / velocity.x)
+                                                  : ((velocity.x >= 0.0f) ? (1.0f / epsilon) : (-1.0f / epsilon));
+    float invY = (std::abs(velocity.y) > epsilon) ? (1.0f / velocity.y)
+                                                  : ((velocity.y >= 0.0f) ? (1.0f / epsilon) : (-1.0f / epsilon));
+    float invZ = (std::abs(velocity.z) > epsilon) ? (1.0f / velocity.z)
+                                                  : ((velocity.z >= 0.0f) ? (1.0f / epsilon) : (-1.0f / epsilon));
 
     float t1x = (expanded.Min.x - movCenter.x) * invX;
     float t2x = (expanded.Max.x - movCenter.x) * invX;
@@ -684,10 +677,7 @@ CollisionResult CollisionSystem::SweepBoxVsBox(const BoundingBox& moving, const 
     result.Hit = true;
 
     // Compute contact point: center of moving box at hit time
-    XMFLOAT3 hitCenter(
-        movCenter.x + velocity.x * t,
-        movCenter.y + velocity.y * t,
-        movCenter.z + velocity.z * t);
+    XMFLOAT3 hitCenter(movCenter.x + velocity.x * t, movCenter.y + velocity.y * t, movCenter.z + velocity.z * t);
 
     result.Point = hitCenter;
 
