@@ -972,6 +972,38 @@ namespace DirectX
         return result;
     }
 
+    inline XMVECTOR XMVector3Project(XMVECTOR v, float viewportX, float viewportY, float viewportWidth,
+                                     float viewportHeight, float minZ, float maxZ, const XMMATRIX& projection,
+                                     const XMMATRIX& view, const XMMATRIX& world)
+    {
+        XMVECTOR result = XMVector3TransformCoord(v, world);
+        result = XMVector3TransformCoord(result, view);
+        result = XMVector3TransformCoord(result, projection);
+        // Map from [-1,1] to viewport
+        XMVECTOR screen;
+        screen.x = (result.x * 0.5f + 0.5f) * viewportWidth + viewportX;
+        screen.y = (-result.y * 0.5f + 0.5f) * viewportHeight + viewportY;
+        screen.z = result.z * (maxZ - minZ) + minZ;
+        screen.w = 1.0f;
+        return screen;
+    }
+
+    inline XMVECTOR XMVector3Unproject(XMVECTOR v, float viewportX, float viewportY, float viewportWidth,
+                                       float viewportHeight, float minZ, float maxZ, const XMMATRIX& projection,
+                                       const XMMATRIX& view, const XMMATRIX& world)
+    {
+        // Reverse the projection: viewport -> NDC -> world
+        XMVECTOR ndc;
+        ndc.x = ((v.x - viewportX) / viewportWidth) * 2.0f - 1.0f;
+        ndc.y = -(((v.y - viewportY) / viewportHeight) * 2.0f - 1.0f);
+        ndc.z = (v.z - minZ) / (maxZ - minZ);
+        ndc.w = 1.0f;
+
+        XMMATRIX combined = XMMatrixMultiply(world, XMMatrixMultiply(view, projection));
+        XMMATRIX inv = XMMatrixInverse(nullptr, combined);
+        return XMVector3TransformCoord(ndc, inv);
+    }
+
     // Rotation matrices
     inline XMMATRIX XMMatrixRotationX(float angle)
     {

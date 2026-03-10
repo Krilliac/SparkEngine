@@ -134,8 +134,8 @@ namespace SparkEditor
         metadata.sourceFileSize = fs::file_size(sourcePath);
         metadata.processedFileSize = fs::file_size(outputPath);
         metadata.processedTime = std::chrono::system_clock::now();
-        metadata.sourceModifiedTime = std::chrono::clock_cast<std::chrono::system_clock>(
-            fs::last_write_time(sourcePath));
+        metadata.sourceModifiedTime =
+            std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(sourcePath));
         metadata.status = ProcessingStatus::COMPLETED;
         metadata.processorName = GetName();
         metadata.type = AssetType::TEXTURE;
@@ -299,8 +299,8 @@ namespace SparkEditor
         metadata.sourceFileSize = fs::file_size(sourcePath);
         metadata.processedFileSize = fs::file_size(outputPath);
         metadata.processedTime = std::chrono::system_clock::now();
-        metadata.sourceModifiedTime = std::chrono::clock_cast<std::chrono::system_clock>(
-            fs::last_write_time(sourcePath));
+        metadata.sourceModifiedTime =
+            std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(sourcePath));
         metadata.status = ProcessingStatus::COMPLETED;
         metadata.processorName = GetName();
         metadata.type = AssetType::MESH;
@@ -427,8 +427,8 @@ namespace SparkEditor
         metadata.sourceFileSize = fs::file_size(sourcePath);
         metadata.processedFileSize = fs::file_size(outputPath);
         metadata.processedTime = std::chrono::system_clock::now();
-        metadata.sourceModifiedTime = std::chrono::clock_cast<std::chrono::system_clock>(
-            fs::last_write_time(sourcePath));
+        metadata.sourceModifiedTime =
+            std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(sourcePath));
         metadata.status = ProcessingStatus::COMPLETED;
         metadata.processorName = GetName();
         metadata.type = AssetType::AUDIO;
@@ -568,8 +568,7 @@ namespace SparkEditor
         return {};
     }
 
-    std::vector<std::string> AssetDependencyGraph::GetProcessingOrder(
-        const std::vector<std::string>& assetPaths) const
+    std::vector<std::string> AssetDependencyGraph::GetProcessingOrder(const std::vector<std::string>& assetPaths) const
     {
         // Kahn's algorithm for topological sort
         std::unordered_set<std::string> assetSet(assetPaths.begin(), assetPaths.end());
@@ -753,10 +752,7 @@ namespace SparkEditor
     // AdvancedAssetPipeline
     // =========================================================================
 
-    AdvancedAssetPipeline::AdvancedAssetPipeline()
-        : EditorPanel("Asset Pipeline", "asset_pipeline")
-    {
-    }
+    AdvancedAssetPipeline::AdvancedAssetPipeline() : EditorPanel("Asset Pipeline", "asset_pipeline") {}
 
     AdvancedAssetPipeline::~AdvancedAssetPipeline()
     {
@@ -801,8 +797,7 @@ namespace SparkEditor
 
             if (batch.totalAssets > 0)
             {
-                batch.progress = static_cast<float>(batch.completedAssets) /
-                                 static_cast<float>(batch.totalAssets);
+                batch.progress = static_cast<float>(batch.completedAssets) / static_cast<float>(batch.totalAssets);
             }
 
             if (batch.completedAssets >= batch.totalAssets)
@@ -1042,8 +1037,7 @@ namespace SparkEditor
 
         // Remove pending jobs for this batch from the queue
         std::lock_guard<std::mutex> queueLock(m_queueMutex);
-        std::unordered_set<std::string> batchAssets(
-            it->second.assetPaths.begin(), it->second.assetPaths.end());
+        std::unordered_set<std::string> batchAssets(it->second.assetPaths.begin(), it->second.assetPaths.end());
 
         std::priority_queue<ProcessingJob> filteredQueue;
         while (!m_processingQueue.empty())
@@ -1083,8 +1077,7 @@ namespace SparkEditor
         auto& metadata = m_assetMetadata[assetPath];
         metadata.sourceFilePath = assetPath;
         metadata.sourceFileSize = fs::file_size(path);
-        metadata.sourceModifiedTime = std::chrono::clock_cast<std::chrono::system_clock>(
-            fs::last_write_time(path));
+        metadata.sourceModifiedTime = std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(path));
         metadata.checksum = CalculateChecksum(assetPath);
 
         return true;
@@ -1118,8 +1111,7 @@ namespace SparkEditor
             auto& metadata = m_assetMetadata[filePath];
             metadata.sourceFilePath = filePath;
             metadata.sourceFileSize = entry.file_size();
-            metadata.sourceModifiedTime = std::chrono::clock_cast<std::chrono::system_clock>(
-                entry.last_write_time());
+            metadata.sourceModifiedTime = std::chrono::clock_cast<std::chrono::system_clock>(entry.last_write_time());
             metadata.type = processor->GetAssetType();
             metadata.processorName = processor->GetName();
 
@@ -1191,8 +1183,7 @@ namespace SparkEditor
 
         if (totalSourceSize > 0 && stats.totalProcessedSize > 0)
         {
-            stats.compressionRatio = static_cast<float>(stats.totalProcessedSize) /
-                                     static_cast<float>(totalSourceSize);
+            stats.compressionRatio = static_cast<float>(stats.totalProcessedSize) / static_cast<float>(totalSourceSize);
         }
 
         m_statistics = stats;
@@ -1507,7 +1498,7 @@ namespace SparkEditor
         m_searchFilter = searchBuf;
 
         // Type filter combo
-        const char* typeNames[] = {"All", "Texture", "Mesh", "Material", "Shader",
+        const char* typeNames[] = {"All",   "Texture",   "Mesh",   "Material", "Shader",
                                    "Audio", "Animation", "Script", "Font"};
         int currentType = static_cast<int>(m_typeFilter);
         if (ImGui::Combo("Type Filter", &currentType, typeNames, IM_ARRAYSIZE(typeNames)))
@@ -1536,8 +1527,8 @@ namespace SparkEditor
         ImGui::Separator();
 
         // Asset table
-        if (ImGui::BeginTable("AssetTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable |
-                                                    ImGuiTableFlags_ScrollY))
+        if (ImGui::BeginTable("AssetTable", 4,
+                              ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY))
         {
             ImGui::TableSetupColumn("Name");
             ImGui::TableSetupColumn("Type");
@@ -1578,8 +1569,7 @@ namespace SparkEditor
                 ImGui::Text("%s", metadata.processorName.c_str());
 
                 ImGui::TableSetColumnIndex(2);
-                const char* statusNames[] = {"Pending", "Processing", "Completed", "Failed",
-                                             "Skipped", "Cancelled"};
+                const char* statusNames[] = {"Pending", "Processing", "Completed", "Failed", "Skipped", "Cancelled"};
                 int statusIdx = static_cast<int>(metadata.status);
                 if (statusIdx >= 0 && statusIdx < 6)
                 {
@@ -1589,13 +1579,11 @@ namespace SparkEditor
                 ImGui::TableSetColumnIndex(3);
                 if (metadata.sourceFileSize > 1024 * 1024)
                 {
-                    ImGui::Text("%.2f MB",
-                                static_cast<float>(metadata.sourceFileSize) / (1024.0f * 1024.0f));
+                    ImGui::Text("%.2f MB", static_cast<float>(metadata.sourceFileSize) / (1024.0f * 1024.0f));
                 }
                 else if (metadata.sourceFileSize > 1024)
                 {
-                    ImGui::Text("%.2f KB",
-                                static_cast<float>(metadata.sourceFileSize) / 1024.0f);
+                    ImGui::Text("%.2f KB", static_cast<float>(metadata.sourceFileSize) / 1024.0f);
                 }
                 else
                 {
@@ -1660,9 +1648,7 @@ namespace SparkEditor
             ImGui::PushID(static_cast<int>(id));
 
             ImGui::Text("%s (ID: %u)", batch.name.c_str(), id);
-            ImGui::ProgressBar(batch.progress,
-                               ImVec2(-1.0f, 0.0f),
-                               batch.isActive ? "Processing..." : "Complete");
+            ImGui::ProgressBar(batch.progress, ImVec2(-1.0f, 0.0f), batch.isActive ? "Processing..." : "Complete");
             ImGui::Text("Progress: %d / %d assets", batch.completedAssets, batch.totalAssets);
 
             if (batch.isActive)
@@ -1714,8 +1700,7 @@ namespace SparkEditor
         ImGui::Text("Processed size: %zu bytes", metadata.processedFileSize);
         ImGui::Text("Processing time: %.3f seconds", metadata.processingTime);
 
-        const char* statusNames[] = {"Pending", "Processing", "Completed", "Failed",
-                                     "Skipped", "Cancelled"};
+        const char* statusNames[] = {"Pending", "Processing", "Completed", "Failed", "Skipped", "Cancelled"};
         int statusIdx = static_cast<int>(metadata.status);
         if (statusIdx >= 0 && statusIdx < 6)
         {
@@ -1724,8 +1709,7 @@ namespace SparkEditor
 
         if (!metadata.errorMessage.empty())
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Error: %s",
-                               metadata.errorMessage.c_str());
+            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Error: %s", metadata.errorMessage.c_str());
         }
 
         ImGui::Text("Checksum: %s", metadata.checksum.c_str());
@@ -1869,8 +1853,7 @@ namespace SparkEditor
         float overallProgress = 0.0f;
         if (stats.totalAssets > 0)
         {
-            overallProgress = static_cast<float>(stats.processedAssets) /
-                              static_cast<float>(stats.totalAssets);
+            overallProgress = static_cast<float>(stats.processedAssets) / static_cast<float>(stats.totalAssets);
         }
         ImGui::ProgressBar(overallProgress, ImVec2(-1.0f, 0.0f), "Overall Progress");
 
@@ -1993,10 +1976,8 @@ namespace SparkEditor
         {
             {
                 std::unique_lock<std::mutex> lock(m_queueMutex);
-                m_queueCondition.wait(lock, [this]
-                {
-                    return m_shouldStopProcessing.load() || !m_processingQueue.empty();
-                });
+                m_queueCondition.wait(lock,
+                                      [this] { return m_shouldStopProcessing.load() || !m_processingQueue.empty(); });
             }
 
             if (m_shouldStopProcessing.load())
