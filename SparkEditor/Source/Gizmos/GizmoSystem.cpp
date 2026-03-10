@@ -24,30 +24,24 @@ namespace SparkEditor
     // Constants
     // ========================================================================
 
-    static constexpr float GIZMO_AXIS_LENGTH   = 100.0f;  // pixels
-    static constexpr float GIZMO_HIT_THRESHOLD = 10.0f;   // pixels
-    static constexpr float GIZMO_RING_RADIUS   = 80.0f;   // pixels
-    static constexpr int   GIZMO_RING_SEGMENTS = 64;
-    static constexpr float GIZMO_ARROW_SIZE    = 10.0f;   // pixels
-    static constexpr float GIZMO_CUBE_SIZE     = 6.0f;    // pixels
-    static constexpr float PI                  = 3.14159265358979323846f;
+    static constexpr float GIZMO_AXIS_LENGTH = 100.0f;  // pixels
+    static constexpr float GIZMO_HIT_THRESHOLD = 10.0f; // pixels
+    static constexpr float GIZMO_RING_RADIUS = 80.0f;   // pixels
+    static constexpr int GIZMO_RING_SEGMENTS = 64;
+    static constexpr float GIZMO_ARROW_SIZE = 10.0f; // pixels
+    static constexpr float GIZMO_CUBE_SIZE = 6.0f;   // pixels
+    static constexpr float PI = 3.14159265358979323846f;
 
     // ========================================================================
     // Helpers
     // ========================================================================
 
-    static XMFLOAT2 WorldToScreen(const XMFLOAT3& worldPos,
-                                  const XMMATRIX& viewMatrix,
-                                  const XMMATRIX& projMatrix,
+    static XMFLOAT2 WorldToScreen(const XMFLOAT3& worldPos, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
                                   const XMFLOAT4& viewport)
     {
         XMVECTOR pos = XMLoadFloat3(&worldPos);
-        XMVECTOR screen = XMVector3Project(pos,
-                                           viewport.x, viewport.y,
-                                           viewport.z, viewport.w,
-                                           0.0f, 1.0f,
-                                           projMatrix, viewMatrix,
-                                           XMMatrixIdentity());
+        XMVECTOR screen = XMVector3Project(pos, viewport.x, viewport.y, viewport.z, viewport.w, 0.0f, 1.0f, projMatrix,
+                                           viewMatrix, XMMatrixIdentity());
         XMFLOAT3 s;
         XMStoreFloat3(&s, screen);
         return {s.x, s.y};
@@ -55,15 +49,11 @@ namespace SparkEditor
 
     static ImU32 XMFloat4ToImU32(const XMFLOAT4& c)
     {
-        return IM_COL32(static_cast<int>(c.x * 255.0f),
-                        static_cast<int>(c.y * 255.0f),
-                        static_cast<int>(c.z * 255.0f),
+        return IM_COL32(static_cast<int>(c.x * 255.0f), static_cast<int>(c.y * 255.0f), static_cast<int>(c.z * 255.0f),
                         static_cast<int>(c.w * 255.0f));
     }
 
-    static float PointToLineDistance2D(const ImVec2& point,
-                                       const ImVec2& lineStart,
-                                       const ImVec2& lineEnd)
+    static float PointToLineDistance2D(const ImVec2& point, const ImVec2& lineStart, const ImVec2& lineEnd)
     {
         float dx = lineEnd.x - lineStart.x;
         float dy = lineEnd.y - lineStart.y;
@@ -74,8 +64,7 @@ namespace SparkEditor
             float ey = point.y - lineStart.y;
             return std::sqrt(ex * ex + ey * ey);
         }
-        float t = std::clamp(((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lenSq,
-                             0.0f, 1.0f);
+        float t = std::clamp(((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lenSq, 0.0f, 1.0f);
         float projX = lineStart.x + t * dx;
         float projY = lineStart.y + t * dy;
         float ex = point.x - projX;
@@ -83,9 +72,7 @@ namespace SparkEditor
         return std::sqrt(ex * ex + ey * ey);
     }
 
-    static float PointToCircleDistance2D(const ImVec2& point,
-                                         const ImVec2& center,
-                                         float radius)
+    static float PointToCircleDistance2D(const ImVec2& point, const ImVec2& center, float radius)
     {
         float dx = point.x - center.x;
         float dy = point.y - center.y;
@@ -97,23 +84,17 @@ namespace SparkEditor
     // Ray
     // ========================================================================
 
-    Ray Ray::ScreenToWorldRay(float screenX, float screenY,
-                              const XMMATRIX& viewMatrix,
-                              const XMMATRIX& projMatrix,
+    Ray Ray::ScreenToWorldRay(float screenX, float screenY, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
                               const XMFLOAT4& viewport)
     {
         // Unproject near and far points to build the ray
-        XMVECTOR nearPoint = XMVector3Unproject(
-            XMVectorSet(screenX, screenY, 0.0f, 1.0f),
-            viewport.x, viewport.y, viewport.z, viewport.w,
-            0.0f, 1.0f,
-            projMatrix, viewMatrix, XMMatrixIdentity());
+        XMVECTOR nearPoint =
+            XMVector3Unproject(XMVectorSet(screenX, screenY, 0.0f, 1.0f), viewport.x, viewport.y, viewport.z,
+                               viewport.w, 0.0f, 1.0f, projMatrix, viewMatrix, XMMatrixIdentity());
 
-        XMVECTOR farPoint = XMVector3Unproject(
-            XMVectorSet(screenX, screenY, 1.0f, 1.0f),
-            viewport.x, viewport.y, viewport.z, viewport.w,
-            0.0f, 1.0f,
-            projMatrix, viewMatrix, XMMatrixIdentity());
+        XMVECTOR farPoint =
+            XMVector3Unproject(XMVectorSet(screenX, screenY, 1.0f, 1.0f), viewport.x, viewport.y, viewport.z,
+                               viewport.w, 0.0f, 1.0f, projMatrix, viewMatrix, XMMatrixIdentity());
 
         XMVECTOR direction = XMVector3Normalize(XMVectorSubtract(farPoint, nearPoint));
 
@@ -168,10 +149,8 @@ namespace SparkEditor
     // Render
     // ========================================================================
 
-    void GizmoSystem::Render(const std::vector<Transform*>& selectedObjects,
-                             const XMMATRIX& viewMatrix,
-                             const XMMATRIX& projMatrix,
-                             const XMFLOAT4& viewport)
+    void GizmoSystem::Render(const std::vector<Transform*>& selectedObjects, const XMMATRIX& viewMatrix,
+                             const XMMATRIX& projMatrix, const XMFLOAT4& viewport)
     {
         if (!m_isVisible || selectedObjects.empty())
         {
@@ -210,10 +189,8 @@ namespace SparkEditor
     // HandleMouseInput
     // ========================================================================
 
-    bool GizmoSystem::HandleMouseInput(float mouseX, float mouseY, bool isMouseDown,
-                                       const XMMATRIX& viewMatrix,
-                                       const XMMATRIX& projMatrix,
-                                       const XMFLOAT4& viewport,
+    bool GizmoSystem::HandleMouseInput(float mouseX, float mouseY, bool isMouseDown, const XMMATRIX& viewMatrix,
+                                       const XMMATRIX& projMatrix, const XMFLOAT4& viewport,
                                        std::vector<Transform*>& selectedObjects)
     {
         if (!m_isVisible || selectedObjects.empty())
@@ -353,8 +330,7 @@ namespace SparkEditor
     // Render helpers (ImGui draw list based)
     // ========================================================================
 
-    void GizmoSystem::RenderTranslationGizmo(const Transform& transform,
-                                             const XMMATRIX& viewMatrix,
+    void GizmoSystem::RenderTranslationGizmo(const Transform& transform, const XMMATRIX& viewMatrix,
                                              const XMMATRIX& projMatrix)
     {
         ImDrawList* drawList = ImGui::GetForegroundDrawList();
@@ -363,9 +339,7 @@ namespace SparkEditor
             return;
         }
 
-        XMFLOAT4 vp = {0.0f, 0.0f,
-                        ImGui::GetIO().DisplaySize.x,
-                        ImGui::GetIO().DisplaySize.y};
+        XMFLOAT4 vp = {0.0f, 0.0f, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y};
 
         XMFLOAT2 center = WorldToScreen(transform.position, viewMatrix, projMatrix, vp);
         float size = CalculateAdaptiveSize(transform.position, viewMatrix) * GIZMO_AXIS_LENGTH;
@@ -383,9 +357,8 @@ namespace SparkEditor
                 end.x = center.x + (dx / len) * size;
                 end.y = center.y + (dy / len) * size;
             }
-            XMFLOAT4 color = GetAxisColor(GizmoAxis::X,
-                                           m_hoveredAxis == GizmoAxis::X,
-                                           m_interaction.activeAxis == GizmoAxis::X && m_isDragging);
+            XMFLOAT4 color = GetAxisColor(GizmoAxis::X, m_hoveredAxis == GizmoAxis::X,
+                                          m_interaction.activeAxis == GizmoAxis::X && m_isDragging);
             ImU32 col = XMFloat4ToImU32(color);
             drawList->AddLine(ImVec2(center.x, center.y), ImVec2(end.x, end.y), col, 2.0f);
             // Arrowhead
@@ -410,9 +383,8 @@ namespace SparkEditor
                 end.x = center.x + (dx / len) * size;
                 end.y = center.y + (dy / len) * size;
             }
-            XMFLOAT4 color = GetAxisColor(GizmoAxis::Y,
-                                           m_hoveredAxis == GizmoAxis::Y,
-                                           m_interaction.activeAxis == GizmoAxis::Y && m_isDragging);
+            XMFLOAT4 color = GetAxisColor(GizmoAxis::Y, m_hoveredAxis == GizmoAxis::Y,
+                                          m_interaction.activeAxis == GizmoAxis::Y && m_isDragging);
             ImU32 col = XMFloat4ToImU32(color);
             drawList->AddLine(ImVec2(center.x, center.y), ImVec2(end.x, end.y), col, 2.0f);
             float ndx = (end.x - center.x) / size;
@@ -436,9 +408,8 @@ namespace SparkEditor
                 end.x = center.x + (dx / len) * size;
                 end.y = center.y + (dy / len) * size;
             }
-            XMFLOAT4 color = GetAxisColor(GizmoAxis::Z,
-                                           m_hoveredAxis == GizmoAxis::Z,
-                                           m_interaction.activeAxis == GizmoAxis::Z && m_isDragging);
+            XMFLOAT4 color = GetAxisColor(GizmoAxis::Z, m_hoveredAxis == GizmoAxis::Z,
+                                          m_interaction.activeAxis == GizmoAxis::Z && m_isDragging);
             ImU32 col = XMFloat4ToImU32(color);
             drawList->AddLine(ImVec2(center.x, center.y), ImVec2(end.x, end.y), col, 2.0f);
             float ndx = (end.x - center.x) / size;
@@ -451,8 +422,7 @@ namespace SparkEditor
         }
     }
 
-    void GizmoSystem::RenderRotationGizmo(const Transform& transform,
-                                          const XMMATRIX& viewMatrix,
+    void GizmoSystem::RenderRotationGizmo(const Transform& transform, const XMMATRIX& viewMatrix,
                                           const XMMATRIX& projMatrix)
     {
         ImDrawList* drawList = ImGui::GetForegroundDrawList();
@@ -461,9 +431,7 @@ namespace SparkEditor
             return;
         }
 
-        XMFLOAT4 vp = {0.0f, 0.0f,
-                        ImGui::GetIO().DisplaySize.x,
-                        ImGui::GetIO().DisplaySize.y};
+        XMFLOAT4 vp = {0.0f, 0.0f, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y};
 
         XMFLOAT2 center = WorldToScreen(transform.position, viewMatrix, projMatrix, vp);
         float adaptiveSize = CalculateAdaptiveSize(transform.position, viewMatrix);
@@ -475,52 +443,44 @@ namespace SparkEditor
 
         // X-axis ring (rotate in YZ plane) -- draw as slightly squished circle
         {
-            XMFLOAT4 color = GetAxisColor(GizmoAxis::X,
-                                           m_hoveredAxis == GizmoAxis::X,
-                                           m_interaction.activeAxis == GizmoAxis::X && m_isDragging);
+            XMFLOAT4 color = GetAxisColor(GizmoAxis::X, m_hoveredAxis == GizmoAxis::X,
+                                          m_interaction.activeAxis == GizmoAxis::X && m_isDragging);
             ImU32 col = XMFloat4ToImU32(color);
             for (int i = 0; i < GIZMO_RING_SEGMENTS; ++i)
             {
                 float a0 = (static_cast<float>(i) / GIZMO_RING_SEGMENTS) * 2.0f * PI;
                 float a1 = (static_cast<float>(i + 1) / GIZMO_RING_SEGMENTS) * 2.0f * PI;
-                ImVec2 p0 = {center.x + std::cos(a0) * radius * 0.3f,
-                             center.y + std::sin(a0) * radius};
-                ImVec2 p1 = {center.x + std::cos(a1) * radius * 0.3f,
-                             center.y + std::sin(a1) * radius};
+                ImVec2 p0 = {center.x + std::cos(a0) * radius * 0.3f, center.y + std::sin(a0) * radius};
+                ImVec2 p1 = {center.x + std::cos(a1) * radius * 0.3f, center.y + std::sin(a1) * radius};
                 drawList->AddLine(p0, p1, col, 2.0f);
             }
         }
 
         // Y-axis ring (rotate in XZ plane)
         {
-            XMFLOAT4 color = GetAxisColor(GizmoAxis::Y,
-                                           m_hoveredAxis == GizmoAxis::Y,
-                                           m_interaction.activeAxis == GizmoAxis::Y && m_isDragging);
+            XMFLOAT4 color = GetAxisColor(GizmoAxis::Y, m_hoveredAxis == GizmoAxis::Y,
+                                          m_interaction.activeAxis == GizmoAxis::Y && m_isDragging);
             ImU32 col = XMFloat4ToImU32(color);
             for (int i = 0; i < GIZMO_RING_SEGMENTS; ++i)
             {
                 float a0 = (static_cast<float>(i) / GIZMO_RING_SEGMENTS) * 2.0f * PI;
                 float a1 = (static_cast<float>(i + 1) / GIZMO_RING_SEGMENTS) * 2.0f * PI;
-                ImVec2 p0 = {center.x + std::cos(a0) * radius,
-                             center.y + std::sin(a0) * radius * 0.3f};
-                ImVec2 p1 = {center.x + std::cos(a1) * radius,
-                             center.y + std::sin(a1) * radius * 0.3f};
+                ImVec2 p0 = {center.x + std::cos(a0) * radius, center.y + std::sin(a0) * radius * 0.3f};
+                ImVec2 p1 = {center.x + std::cos(a1) * radius, center.y + std::sin(a1) * radius * 0.3f};
                 drawList->AddLine(p0, p1, col, 2.0f);
             }
         }
 
         // Z-axis ring (rotate in XY plane) -- full circle
         {
-            XMFLOAT4 color = GetAxisColor(GizmoAxis::Z,
-                                           m_hoveredAxis == GizmoAxis::Z,
-                                           m_interaction.activeAxis == GizmoAxis::Z && m_isDragging);
+            XMFLOAT4 color = GetAxisColor(GizmoAxis::Z, m_hoveredAxis == GizmoAxis::Z,
+                                          m_interaction.activeAxis == GizmoAxis::Z && m_isDragging);
             ImU32 col = XMFloat4ToImU32(color);
             drawList->AddCircle(ImVec2(center.x, center.y), radius, col, GIZMO_RING_SEGMENTS, 2.0f);
         }
     }
 
-    void GizmoSystem::RenderScaleGizmo(const Transform& transform,
-                                       const XMMATRIX& viewMatrix,
+    void GizmoSystem::RenderScaleGizmo(const Transform& transform, const XMMATRIX& viewMatrix,
                                        const XMMATRIX& projMatrix)
     {
         ImDrawList* drawList = ImGui::GetForegroundDrawList();
@@ -529,9 +489,7 @@ namespace SparkEditor
             return;
         }
 
-        XMFLOAT4 vp = {0.0f, 0.0f,
-                        ImGui::GetIO().DisplaySize.x,
-                        ImGui::GetIO().DisplaySize.y};
+        XMFLOAT4 vp = {0.0f, 0.0f, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y};
 
         XMFLOAT2 center = WorldToScreen(transform.position, viewMatrix, projMatrix, vp);
         float size = CalculateAdaptiveSize(transform.position, viewMatrix) * GIZMO_AXIS_LENGTH;
@@ -547,15 +505,13 @@ namespace SparkEditor
                 end.x = center.x + (dx / len) * size;
                 end.y = center.y + (dy / len) * size;
             }
-            XMFLOAT4 color = GetAxisColor(axis,
-                                           m_hoveredAxis == axis,
-                                           m_interaction.activeAxis == axis && m_isDragging);
+            XMFLOAT4 color =
+                GetAxisColor(axis, m_hoveredAxis == axis, m_interaction.activeAxis == axis && m_isDragging);
             ImU32 col = XMFloat4ToImU32(color);
             drawList->AddLine(ImVec2(center.x, center.y), ImVec2(end.x, end.y), col, 2.0f);
             // Draw cube at end
             float half = GIZMO_CUBE_SIZE;
-            drawList->AddRectFilled(ImVec2(end.x - half, end.y - half),
-                                    ImVec2(end.x + half, end.y + half), col);
+            drawList->AddRectFilled(ImVec2(end.x - half, end.y - half), ImVec2(end.x + half, end.y + half), col);
         };
 
         drawAxisWithCube(GizmoAxis::X,
@@ -574,9 +530,7 @@ namespace SparkEditor
     {
         // Perform hit testing in screen space using the current ImGui mouse position
         ImVec2 mouse = ImGui::GetIO().MousePos;
-        XMFLOAT4 vp = {0.0f, 0.0f,
-                        ImGui::GetIO().DisplaySize.x,
-                        ImGui::GetIO().DisplaySize.y};
+        XMFLOAT4 vp = {0.0f, 0.0f, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y};
 
         // We need view/proj to project -- not available directly here.
         // Use a simple screen-space heuristic: test distance from mouse to
@@ -742,8 +696,7 @@ namespace SparkEditor
         return result;
     }
 
-    float GizmoSystem::CalculateAdaptiveSize(const XMFLOAT3& gizmoPosition,
-                                             const XMMATRIX& viewMatrix) const
+    float GizmoSystem::CalculateAdaptiveSize(const XMFLOAT3& gizmoPosition, const XMMATRIX& viewMatrix) const
     {
         // Transform the gizmo position into view space to get the distance from camera
         XMVECTOR pos = XMLoadFloat3(&gizmoPosition);

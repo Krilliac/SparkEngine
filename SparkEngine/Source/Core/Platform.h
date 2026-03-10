@@ -1068,6 +1068,31 @@ namespace DirectX
     }
 
     // Quaternion stubs
+    inline XMVECTOR XMQuaternionRotationAxis(XMVECTOR axis, float angle)
+    {
+        XMVECTOR n = XMVector3Normalize(axis);
+        float halfAngle = angle * 0.5f;
+        float s = sinf(halfAngle);
+        return {n.x * s, n.y * s, n.z * s, cosf(halfAngle)};
+    }
+
+    inline XMVECTOR XMQuaternionMultiply(XMVECTOR q1, XMVECTOR q2)
+    {
+        return {q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
+                q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
+                q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w,
+                q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z};
+    }
+
+    inline XMVECTOR XMQuaternionNormalize(XMVECTOR q)
+    {
+        float len = sqrtf(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+        if (len < 1e-8f)
+            return {0, 0, 0, 1};
+        float inv = 1.0f / len;
+        return {q.x * inv, q.y * inv, q.z * inv, q.w * inv};
+    }
+
     inline XMVECTOR XMQuaternionSlerp(XMVECTOR a, XMVECTOR b, float t)
     {
         return XMVectorLerp(a, b, t); // Simplified linear interpolation
