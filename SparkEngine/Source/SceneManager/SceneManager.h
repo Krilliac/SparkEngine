@@ -78,7 +78,10 @@
 class GraphicsEngine;
 class InputManager;
 class GameObject;
-namespace Spark { class LocalFileCache; }
+namespace Spark
+{
+    class LocalFileCache;
+}
 
 // =============================================================================
 // SceneNode

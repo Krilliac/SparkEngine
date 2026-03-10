@@ -23,7 +23,10 @@
 #include <vector>
 #include <memory>
 
-namespace Spark { class LocalFileCache; }
+namespace Spark
+{
+    class LocalFileCache;
+}
 
 // Forward declaration for legacy adapter
 class IGameModule;

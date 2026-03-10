@@ -15,7 +15,10 @@
 struct ImVec4;
 struct ImGuiStyle;
 
-namespace Spark { class LocalFileCache; }
+namespace Spark
+{
+    class LocalFileCache;
+}
 
 namespace SparkEditor
 {

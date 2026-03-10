@@ -16,7 +16,10 @@
 #include <functional>
 #include <cstdint>
 
-namespace Spark { class LocalFileCache; }
+namespace Spark
+{
+    class LocalFileCache;
+}
 
 namespace SparkEditor
 {

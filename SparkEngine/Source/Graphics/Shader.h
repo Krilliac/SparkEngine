@@ -24,7 +24,10 @@
 #include <functional>
 #include <mutex>
 
-namespace Spark { class LocalFileCache; }
+namespace Spark
+{
+    class LocalFileCache;
+}
 
 using Microsoft::WRL::ComPtr;
 

@@ -26,7 +26,10 @@
 #include <mutex>
 #include <chrono>
 
-namespace Spark { class LocalFileCache; }
+namespace Spark
+{
+    class LocalFileCache;
+}
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
