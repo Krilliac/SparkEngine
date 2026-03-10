@@ -911,8 +911,6 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
             }
         }
 
-        file.close();
-
         Spark::SimpleConsole::GetInstance().LogSuccess("Material '" + m_name + "' loaded from: " + filePath +
                                                        " (textures: " + std::to_string(m_textures.size()) +
                                                        ", variants: " + std::to_string(m_variants.size()) + ")");
