@@ -186,8 +186,7 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     return true;
 }
 
-bool AngelScriptEngine::CompileScriptFromString(const std::string& script,
-                                                 const std::string& moduleName)
+bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const std::string& moduleName)
 {
     if (!m_engine)
     {
@@ -204,8 +203,7 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script,
         return false;
     }
 
-    result = builder.AddSectionFromMemory("inline", script.c_str(),
-                                          static_cast<unsigned int>(script.size()));
+    result = builder.AddSectionFromMemory("inline", script.c_str(), static_cast<unsigned int>(script.size()));
     if (result < 0)
     {
         SetLastError("Failed to add inline script section for module '" + moduleName + "'.");
@@ -235,9 +233,7 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script,
 // Entity Script Binding
 // -------------------------------------------------------------------------
 
-bool AngelScriptEngine::AttachScript(EntityID entity,
-                                      const std::string& className,
-                                      const std::string& moduleName)
+bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& className, const std::string& moduleName)
 {
     if (!m_engine)
     {
@@ -323,8 +319,7 @@ bool AngelScriptEngine::AttachScript(EntityID entity,
     CacheScriptMethods(instance);
 
     m_entityScripts[entity] = instance;
-    LogInfo("Attached script '" + className + "' to entity " +
-            std::to_string(static_cast<uint32_t>(entity)) + ".");
+    LogInfo("Attached script '" + className + "' to entity " + std::to_string(static_cast<uint32_t>(entity)) + ".");
     return true;
 }
 
@@ -353,8 +348,7 @@ void AngelScriptEngine::CallStart(EntityID entity)
     int result = inst->context->Execute();
     if (result == asEXECUTION_EXCEPTION)
     {
-        SetLastError(std::string("Exception in Start(): ") +
-                     inst->context->GetExceptionString());
+        SetLastError(std::string("Exception in Start(): ") + inst->context->GetExceptionString());
         LogError(m_lastError);
     }
 }
@@ -371,8 +365,7 @@ void AngelScriptEngine::CallUpdate(EntityID entity, float deltaTime)
     int result = inst->context->Execute();
     if (result == asEXECUTION_EXCEPTION)
     {
-        SetLastError(std::string("Exception in Update(): ") +
-                     inst->context->GetExceptionString());
+        SetLastError(std::string("Exception in Update(): ") + inst->context->GetExceptionString());
         LogError(m_lastError);
     }
 }
@@ -389,8 +382,7 @@ void AngelScriptEngine::CallOnCollision(EntityID entity, EntityID other)
     int result = inst->context->Execute();
     if (result == asEXECUTION_EXCEPTION)
     {
-        SetLastError(std::string("Exception in OnCollision(): ") +
-                     inst->context->GetExceptionString());
+        SetLastError(std::string("Exception in OnCollision(): ") + inst->context->GetExceptionString());
         LogError(m_lastError);
     }
 }
@@ -427,12 +419,9 @@ void AngelScriptEngine::RegisterComponentTypes()
     // Register Transform as a reference type so scripts can manipulate it
     // through the pointer returned by getTransform().
     m_engine->RegisterObjectType("Transform", 0, asOBJ_REF | asOBJ_NOCOUNT);
-    m_engine->RegisterObjectProperty("Transform", "Vector3 position",
-                                     asOFFSET(Transform, position));
-    m_engine->RegisterObjectProperty("Transform", "Vector3 rotation",
-                                     asOFFSET(Transform, rotation));
-    m_engine->RegisterObjectProperty("Transform", "Vector3 scale",
-                                     asOFFSET(Transform, scale));
+    m_engine->RegisterObjectProperty("Transform", "Vector3 position", asOFFSET(Transform, position));
+    m_engine->RegisterObjectProperty("Transform", "Vector3 rotation", asOFFSET(Transform, rotation));
+    m_engine->RegisterObjectProperty("Transform", "Vector3 scale", asOFFSET(Transform, scale));
 
     // Register EntityID as a simple typedef (uint32).
     m_engine->RegisterTypedef("EntityID", "uint32");
@@ -440,25 +429,16 @@ void AngelScriptEngine::RegisterComponentTypes()
 
 void AngelScriptEngine::RegisterGlobalFunctions()
 {
-    m_engine->RegisterGlobalFunction(
-        "void print(const string &in)",
-        asFUNCTION(ASPrint), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("void print(const string &in)", asFUNCTION(ASPrint), asCALL_CDECL);
 
-    m_engine->RegisterGlobalFunction(
-        "EntityID createEntity(const string &in)",
-        asFUNCTION(ASCreateEntity), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("EntityID createEntity(const string &in)", asFUNCTION(ASCreateEntity),
+                                     asCALL_CDECL);
 
-    m_engine->RegisterGlobalFunction(
-        "Transform@ getTransform(EntityID)",
-        asFUNCTION(ASGetTransform), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("Transform@ getTransform(EntityID)", asFUNCTION(ASGetTransform), asCALL_CDECL);
 
-    m_engine->RegisterGlobalFunction(
-        "bool getKeyDown(const string &in)",
-        asFUNCTION(ASGetKeyDown), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("bool getKeyDown(const string &in)", asFUNCTION(ASGetKeyDown), asCALL_CDECL);
 
-    m_engine->RegisterGlobalFunction(
-        "bool getKey(const string &in)",
-        asFUNCTION(ASGetKey), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("bool getKey(const string &in)", asFUNCTION(ASGetKey), asCALL_CDECL);
 }
 
 // -------------------------------------------------------------------------
@@ -480,12 +460,9 @@ void AngelScriptEngine::CacheScriptMethods(ScriptInstance& instance)
     if (!instance.typeInfo)
         return;
 
-    instance.startMethod =
-        instance.typeInfo->GetMethodByDecl("void Start()");
-    instance.updateMethod =
-        instance.typeInfo->GetMethodByDecl("void Update(float)");
-    instance.onCollisionMethod =
-        instance.typeInfo->GetMethodByDecl("void OnCollision(EntityID)");
+    instance.startMethod = instance.typeInfo->GetMethodByDecl("void Start()");
+    instance.updateMethod = instance.typeInfo->GetMethodByDecl("void Update(float)");
+    instance.onCollisionMethod = instance.typeInfo->GetMethodByDecl("void OnCollision(EntityID)");
 }
 
 void AngelScriptEngine::CleanupScriptInstance(ScriptInstance& instance)
@@ -527,8 +504,7 @@ void AngelScriptEngine::MessageCallback(const asSMessageInfo* msg, void* param)
     }
 
     std::ostringstream oss;
-    oss << msg->section << " (" << msg->row << ", " << msg->col << ") : "
-        << prefix << " : " << msg->message;
+    oss << msg->section << " (" << msg->row << ", " << msg->col << ") : " << prefix << " : " << msg->message;
 
     std::string formatted = oss.str();
     if (msg->type == asMSGTYPE_ERROR)
@@ -576,17 +552,15 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     return false;
 }
 
-bool AngelScriptEngine::CompileScriptFromString(const std::string& /*script*/,
-                                                 const std::string& moduleName)
+bool AngelScriptEngine::CompileScriptFromString(const std::string& /*script*/, const std::string& moduleName)
 {
     LogWarning("Cannot compile module '" + moduleName + "': AngelScript support not compiled in.");
     SetLastError("AngelScript support not available.");
     return false;
 }
 
-bool AngelScriptEngine::AttachScript(EntityID /*entity*/,
-                                      const std::string& className,
-                                      const std::string& /*moduleName*/)
+bool AngelScriptEngine::AttachScript(EntityID /*entity*/, const std::string& className,
+                                     const std::string& /*moduleName*/)
 {
     LogWarning("Cannot attach script '" + className + "': AngelScript support not compiled in.");
     SetLastError("AngelScript support not available.");

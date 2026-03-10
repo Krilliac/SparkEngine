@@ -1124,9 +1124,9 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateFixedConstraint(std::sha
 }
 
 std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePoint2PointConstraint(std::shared_ptr<PhysicsBody> bodyA,
-                                                                               std::shared_ptr<PhysicsBody> bodyB,
-                                                                               const XMFLOAT3& pivotA,
-                                                                               const XMFLOAT3& pivotB)
+                                                                              std::shared_ptr<PhysicsBody> bodyB,
+                                                                              const XMFLOAT3& pivotA,
+                                                                              const XMFLOAT3& pivotB)
 {
     if (!m_dynamicsWorld || !bodyA)
         return nullptr;
@@ -1138,15 +1138,13 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePoint2PointConstraint(st
     if (bodyB && bodyB->GetBulletBody())
     {
         // Two-body constraint
-        p2pConstraint = new btPoint2PointConstraint(
-            *bodyA->GetBulletBody(), *bodyB->GetBulletBody(),
-            ToBullet(pivotA), ToBullet(pivotB));
+        p2pConstraint = new btPoint2PointConstraint(*bodyA->GetBulletBody(), *bodyB->GetBulletBody(), ToBullet(pivotA),
+                                                    ToBullet(pivotB));
     }
     else
     {
         // Single-body constraint anchored to world
-        p2pConstraint = new btPoint2PointConstraint(
-            *bodyA->GetBulletBody(), ToBullet(pivotA));
+        p2pConstraint = new btPoint2PointConstraint(*bodyA->GetBulletBody(), ToBullet(pivotA));
     }
 
     m_dynamicsWorld->addConstraint(p2pConstraint, true);
@@ -1158,12 +1156,10 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePoint2PointConstraint(st
 }
 
 std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateConeTwistConstraint(std::shared_ptr<PhysicsBody> bodyA,
-                                                                             std::shared_ptr<PhysicsBody> bodyB,
-                                                                             const XMMATRIX& frameA,
-                                                                             const XMMATRIX& frameB,
-                                                                             float swingSpan1,
-                                                                             float swingSpan2,
-                                                                             float twistSpan)
+                                                                            std::shared_ptr<PhysicsBody> bodyB,
+                                                                            const XMMATRIX& frameA,
+                                                                            const XMMATRIX& frameB, float swingSpan1,
+                                                                            float swingSpan2, float twistSpan)
 {
     if (!m_dynamicsWorld || !bodyA || !bodyB)
         return nullptr;
@@ -1191,9 +1187,8 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateConeTwistConstraint(std:
     btFrameB.setOrigin(btVector3(posB.x, posB.y, posB.z));
     btFrameB.setRotation(btQuaternion(quatB.x, quatB.y, quatB.z, quatB.w));
 
-    btConeTwistConstraint* coneTwist = new btConeTwistConstraint(
-        *bodyA->GetBulletBody(), *bodyB->GetBulletBody(),
-        btFrameA, btFrameB);
+    btConeTwistConstraint* coneTwist =
+        new btConeTwistConstraint(*bodyA->GetBulletBody(), *bodyB->GetBulletBody(), btFrameA, btFrameB);
 
     coneTwist->setLimit(swingSpan1, swingSpan2, twistSpan);
 

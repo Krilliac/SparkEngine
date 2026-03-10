@@ -377,9 +377,7 @@ void LightingSystem::BindLightingData(ID3D11DeviceContext* context)
 
     if (!shadowSRVs.empty())
     {
-        context->PSSetShaderResources(shadowMapStartSlot,
-                                       static_cast<UINT>(shadowSRVs.size()),
-                                       shadowSRVs.data());
+        context->PSSetShaderResources(shadowMapStartSlot, static_cast<UINT>(shadowSRVs.size()), shadowSRVs.data());
     }
 
     // Bind CSM shadow map SRVs if available
@@ -399,20 +397,15 @@ void LightingSystem::BindLightingData(ID3D11DeviceContext* context)
 
         if (!csmSRVs.empty())
         {
-            context->PSSetShaderResources(csmStartSlot,
-                                           static_cast<UINT>(csmSRVs.size()),
-                                           csmSRVs.data());
+            context->PSSetShaderResources(csmStartSlot, static_cast<UINT>(csmSRVs.size()), csmSRVs.data());
         }
     }
 
     // Bind IBL textures to pixel shader (slots 8-11)
     constexpr UINT iblStartSlot = 8;
     ID3D11ShaderResourceView* iblSRVs[4] = {
-        m_environmentLighting.irradianceMap.Get(),
-        m_environmentLighting.prefilterMap.Get(),
-        m_environmentLighting.brdfLUT.Get(),
-        m_environmentLighting.environmentMap.Get()
-    };
+        m_environmentLighting.irradianceMap.Get(), m_environmentLighting.prefilterMap.Get(),
+        m_environmentLighting.brdfLUT.Get(), m_environmentLighting.environmentMap.Get()};
     context->PSSetShaderResources(iblStartSlot, 4, iblSRVs);
 }
 
@@ -471,8 +464,7 @@ void LightingSystem::RenderShadowMaps(std::function<void(const XMMATRIX&, const 
             m_context->ClearDepthStencilView(shadowMap.dsv.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
             // For directional lights with CSM, render each cascade
-            if (light->GetType() == LightType::Directional &&
-                light->GetShadowTechnique() == ShadowTechnique::CSM &&
+            if (light->GetType() == LightType::Directional && light->GetShadowTechnique() == ShadowTechnique::CSM &&
                 m_csmShadowMap)
             {
                 for (uint32_t cascade = 0; cascade < m_csmShadowMap->cascadeCount; ++cascade)
@@ -898,8 +890,7 @@ void LightingSystem::UpdateLightBuffer()
     {
         m_metrics.lightCullingTime = elapsed.count() / 1000.0f;
         m_metrics.shadowRenderTime = m_metrics.shadowMapUpdates * 0.5f;
-        m_metrics.shadowMapMemory =
-            m_shadowMaps.size() * (m_shadowMapSize * m_shadowMapSize * 4) / (1024.0f * 1024.0f);
+        m_metrics.shadowMapMemory = m_shadowMaps.size() * (m_shadowMapSize * m_shadowMapSize * 4) / (1024.0f * 1024.0f);
         lastUpdate = now;
     }
 
@@ -951,16 +942,14 @@ void LightingSystem::UpdateLightBuffer()
             {
                 if (pair.second && shadowMatrices.size() < maxShadowMatrices)
                 {
-                    XMMATRIX lightViewProj = XMMatrixMultiply(
-                        pair.second->lightMatrix, pair.second->shadowMatrix);
+                    XMMATRIX lightViewProj = XMMatrixMultiply(pair.second->lightMatrix, pair.second->shadowMatrix);
                     shadowMatrices.push_back(lightViewProj);
                 }
             }
 
             if (!shadowMatrices.empty())
             {
-                memcpy(shadowMapped.pData, shadowMatrices.data(),
-                       shadowMatrices.size() * sizeof(XMMATRIX));
+                memcpy(shadowMapped.pData, shadowMatrices.data(), shadowMatrices.size() * sizeof(XMMATRIX));
             }
             m_context->Unmap(m_shadowDataBuffer.Get(), 0);
         }
@@ -1018,15 +1007,13 @@ void LightingSystem::UpdateShadowMaps(const XMMATRIX& viewMatrix, const XMMATRIX
         }
 
         // For directional lights with CSM technique, update cascaded shadow maps
-        if (light->GetType() == LightType::Directional &&
-            light->GetShadowTechnique() == ShadowTechnique::CSM)
+        if (light->GetType() == LightType::Directional && light->GetShadowTechnique() == ShadowTechnique::CSM)
         {
             if (!m_csmShadowMap)
             {
                 if (FAILED(CreateCascadedShadowMap()))
                 {
-                    Spark::SimpleConsole::GetInstance().LogWarning(
-                        "Failed to create cascaded shadow map");
+                    Spark::SimpleConsole::GetInstance().LogWarning("Failed to create cascaded shadow map");
                     continue;
                 }
             }
@@ -1041,8 +1028,7 @@ void LightingSystem::UpdateShadowMaps(const XMMATRIX& viewMatrix, const XMMATRIX
                 float cascadeNear = m_csmShadowMap->splitDistances[cascade];
                 float cascadeFar = m_csmShadowMap->splitDistances[cascade + 1];
 
-                XMMATRIX cascadeLightMatrix = CalculateLightMatrix(
-                    *light, viewMatrix, cascadeNear, cascadeFar);
+                XMMATRIX cascadeLightMatrix = CalculateLightMatrix(*light, viewMatrix, cascadeNear, cascadeFar);
                 m_csmShadowMap->lightMatrices[cascade] = cascadeLightMatrix;
 
                 if (cascade < m_csmShadowMap->cascades.size())
@@ -1055,8 +1041,7 @@ void LightingSystem::UpdateShadowMaps(const XMMATRIX& viewMatrix, const XMMATRIX
         else
         {
             // Standard shadow map: calculate tight-fitting light matrix
-            it->second->lightMatrix = CalculateLightMatrix(
-                *light, viewMatrix, projNear, projFar);
+            it->second->lightMatrix = CalculateLightMatrix(*light, viewMatrix, projNear, projFar);
             it->second->shadowMatrix = light->GetShadowMatrix();
         }
     }
@@ -1076,53 +1061,28 @@ void LightingSystem::CullLights(const XMMATRIX& viewMatrix, const XMMATRIX& proj
     XMFLOAT4 planes[6];
 
     // Left plane
-    planes[0] = XMFLOAT4(
-        vp._14 + vp._11,
-        vp._24 + vp._21,
-        vp._34 + vp._31,
-        vp._44 + vp._41);
+    planes[0] = XMFLOAT4(vp._14 + vp._11, vp._24 + vp._21, vp._34 + vp._31, vp._44 + vp._41);
 
     // Right plane
-    planes[1] = XMFLOAT4(
-        vp._14 - vp._11,
-        vp._24 - vp._21,
-        vp._34 - vp._31,
-        vp._44 - vp._41);
+    planes[1] = XMFLOAT4(vp._14 - vp._11, vp._24 - vp._21, vp._34 - vp._31, vp._44 - vp._41);
 
     // Bottom plane
-    planes[2] = XMFLOAT4(
-        vp._14 + vp._12,
-        vp._24 + vp._22,
-        vp._34 + vp._32,
-        vp._44 + vp._42);
+    planes[2] = XMFLOAT4(vp._14 + vp._12, vp._24 + vp._22, vp._34 + vp._32, vp._44 + vp._42);
 
     // Top plane
-    planes[3] = XMFLOAT4(
-        vp._14 - vp._12,
-        vp._24 - vp._22,
-        vp._34 - vp._32,
-        vp._44 - vp._42);
+    planes[3] = XMFLOAT4(vp._14 - vp._12, vp._24 - vp._22, vp._34 - vp._32, vp._44 - vp._42);
 
     // Near plane
-    planes[4] = XMFLOAT4(
-        vp._13,
-        vp._23,
-        vp._33,
-        vp._43);
+    planes[4] = XMFLOAT4(vp._13, vp._23, vp._33, vp._43);
 
     // Far plane
-    planes[5] = XMFLOAT4(
-        vp._14 - vp._13,
-        vp._24 - vp._23,
-        vp._34 - vp._33,
-        vp._44 - vp._43);
+    planes[5] = XMFLOAT4(vp._14 - vp._13, vp._24 - vp._23, vp._34 - vp._33, vp._44 - vp._43);
 
     // Normalize all planes
     for (int i = 0; i < 6; ++i)
     {
         XMVECTOR planeVec = XMLoadFloat4(&planes[i]);
-        XMVECTOR normalLength = XMVector3Length(
-            XMVectorSet(planes[i].x, planes[i].y, planes[i].z, 0.0f));
+        XMVECTOR normalLength = XMVector3Length(XMVectorSet(planes[i].x, planes[i].y, planes[i].z, 0.0f));
         float len = XMVectorGetX(normalLength);
         if (len > 0.0f)
         {
@@ -1148,8 +1108,7 @@ void LightingSystem::CullLights(const XMMATRIX& viewMatrix, const XMMATRIX& proj
         bool visible = true;
 
         // Directional and environment lights are always visible
-        if (light->GetType() == LightType::Point ||
-            light->GetType() == LightType::Spot ||
+        if (light->GetType() == LightType::Point || light->GetType() == LightType::Spot ||
             light->GetType() == LightType::Area)
         {
             const XMFLOAT3& pos = light->GetPosition();
@@ -1158,10 +1117,7 @@ void LightingSystem::CullLights(const XMMATRIX& viewMatrix, const XMMATRIX& proj
             // Test the light's bounding sphere against each frustum plane
             for (int i = 0; i < 6; ++i)
             {
-                float distance = planes[i].x * pos.x +
-                                 planes[i].y * pos.y +
-                                 planes[i].z * pos.z +
-                                 planes[i].w;
+                float distance = planes[i].x * pos.x + planes[i].y * pos.y + planes[i].z * pos.z + planes[i].w;
 
                 // If the sphere is entirely behind any plane, cull it
                 if (distance < -range)
@@ -1244,15 +1200,23 @@ XMMATRIX LightingSystem::CalculateLightMatrix(const Light& light, const XMMATRIX
     // Compute the 8 frustum corners
     XMVECTOR frustumCorners[8];
     // Near plane corners
-    frustumCorners[0] = XMVectorAdd(nearCenter, XMVectorAdd(XMVectorScale(camUp, nearHeight * 0.5f), XMVectorScale(camRight, -nearWidth * 0.5f)));
-    frustumCorners[1] = XMVectorAdd(nearCenter, XMVectorAdd(XMVectorScale(camUp, nearHeight * 0.5f), XMVectorScale(camRight, nearWidth * 0.5f)));
-    frustumCorners[2] = XMVectorAdd(nearCenter, XMVectorAdd(XMVectorScale(camUp, -nearHeight * 0.5f), XMVectorScale(camRight, -nearWidth * 0.5f)));
-    frustumCorners[3] = XMVectorAdd(nearCenter, XMVectorAdd(XMVectorScale(camUp, -nearHeight * 0.5f), XMVectorScale(camRight, nearWidth * 0.5f)));
+    frustumCorners[0] = XMVectorAdd(
+        nearCenter, XMVectorAdd(XMVectorScale(camUp, nearHeight * 0.5f), XMVectorScale(camRight, -nearWidth * 0.5f)));
+    frustumCorners[1] = XMVectorAdd(
+        nearCenter, XMVectorAdd(XMVectorScale(camUp, nearHeight * 0.5f), XMVectorScale(camRight, nearWidth * 0.5f)));
+    frustumCorners[2] = XMVectorAdd(
+        nearCenter, XMVectorAdd(XMVectorScale(camUp, -nearHeight * 0.5f), XMVectorScale(camRight, -nearWidth * 0.5f)));
+    frustumCorners[3] = XMVectorAdd(
+        nearCenter, XMVectorAdd(XMVectorScale(camUp, -nearHeight * 0.5f), XMVectorScale(camRight, nearWidth * 0.5f)));
     // Far plane corners
-    frustumCorners[4] = XMVectorAdd(farCenter, XMVectorAdd(XMVectorScale(camUp, farHeight * 0.5f), XMVectorScale(camRight, -farWidth * 0.5f)));
-    frustumCorners[5] = XMVectorAdd(farCenter, XMVectorAdd(XMVectorScale(camUp, farHeight * 0.5f), XMVectorScale(camRight, farWidth * 0.5f)));
-    frustumCorners[6] = XMVectorAdd(farCenter, XMVectorAdd(XMVectorScale(camUp, -farHeight * 0.5f), XMVectorScale(camRight, -farWidth * 0.5f)));
-    frustumCorners[7] = XMVectorAdd(farCenter, XMVectorAdd(XMVectorScale(camUp, -farHeight * 0.5f), XMVectorScale(camRight, farWidth * 0.5f)));
+    frustumCorners[4] = XMVectorAdd(
+        farCenter, XMVectorAdd(XMVectorScale(camUp, farHeight * 0.5f), XMVectorScale(camRight, -farWidth * 0.5f)));
+    frustumCorners[5] = XMVectorAdd(
+        farCenter, XMVectorAdd(XMVectorScale(camUp, farHeight * 0.5f), XMVectorScale(camRight, farWidth * 0.5f)));
+    frustumCorners[6] = XMVectorAdd(
+        farCenter, XMVectorAdd(XMVectorScale(camUp, -farHeight * 0.5f), XMVectorScale(camRight, -farWidth * 0.5f)));
+    frustumCorners[7] = XMVectorAdd(
+        farCenter, XMVectorAdd(XMVectorScale(camUp, -farHeight * 0.5f), XMVectorScale(camRight, farWidth * 0.5f)));
 
     // Step 2: Compute the frustum centroid
     XMVECTOR centroid = XMVectorZero();

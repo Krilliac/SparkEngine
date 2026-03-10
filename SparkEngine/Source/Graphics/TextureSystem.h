@@ -39,12 +39,12 @@ class VRAMBudgetMonitor;
  */
 struct TextureLRUData
 {
-    uint64_t lastUsedFrame = 0;                          ///< Frame number when last bound
-    std::chrono::steady_clock::time_point lastUsedTime;  ///< Wall-clock time of last use
-    float screenCoverage = 0.0f;                         ///< Approximate screen-space coverage
-    float distanceToCamera = 0.0f;                       ///< Distance to active camera
-    uint8_t priority = 2;                                ///< 0=background, 1=low, 2=normal, 3=high, 4=critical, 5=pinned
-    bool pinned = false;                                 ///< If true, never evict
+    uint64_t lastUsedFrame = 0;                         ///< Frame number when last bound
+    std::chrono::steady_clock::time_point lastUsedTime; ///< Wall-clock time of last use
+    float screenCoverage = 0.0f;                        ///< Approximate screen-space coverage
+    float distanceToCamera = 0.0f;                      ///< Distance to active camera
+    uint8_t priority = 2;                               ///< 0=background, 1=low, 2=normal, 3=high, 4=critical, 5=pinned
+    bool pinned = false;                                ///< If true, never evict
 
     /**
      * @brief Compute eviction score (lower = evict first)
@@ -285,8 +285,8 @@ class TextureSystem
      * @param screenCoverage  Approximate screen-space coverage (0..1)
      * @param distanceToCamera Distance to the active camera
      */
-    void TouchTexture(const std::string& name, uint64_t currentFrame,
-                      float screenCoverage = 0.0f, float distanceToCamera = 0.0f);
+    void TouchTexture(const std::string& name, uint64_t currentFrame, float screenCoverage = 0.0f,
+                      float distanceToCamera = 0.0f);
 
     /**
      * @brief Pin a texture so it is never evicted

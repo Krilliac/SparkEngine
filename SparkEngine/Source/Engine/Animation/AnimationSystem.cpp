@@ -622,8 +622,7 @@ namespace Spark::Animation
 
         if (rootIdx < 0 || midIdx < 0 || endIdx < 0)
             return;
-        if (static_cast<size_t>(rootIdx) >= boneCount ||
-            static_cast<size_t>(midIdx) >= boneCount ||
+        if (static_cast<size_t>(rootIdx) >= boneCount || static_cast<size_t>(midIdx) >= boneCount ||
             static_cast<size_t>(endIdx) >= boneCount)
             return;
 
@@ -671,8 +670,8 @@ namespace Spark::Animation
 
         // Step 2: Use the cosine law to find the angle at root and mid joints.
         // cos(angleAtRoot) = (upper^2 + dist^2 - lower^2) / (2 * upper * dist)
-        float cosAngleRoot = (upperLen * upperLen + clampedDist * clampedDist - lowerLen * lowerLen)
-                           / (2.0f * upperLen * clampedDist);
+        float cosAngleRoot =
+            (upperLen * upperLen + clampedDist * clampedDist - lowerLen * lowerLen) / (2.0f * upperLen * clampedDist);
         cosAngleRoot = (std::max)(-1.0f, (std::min)(1.0f, cosAngleRoot));
         float angleAtRoot = std::acos(cosAngleRoot);
 
@@ -1060,9 +1059,8 @@ namespace Spark::Animation
                     else
                     {
                         // Partial override: blend between current result and this layer
-                        AnimationEvaluator::BlendTransforms(
-                            blendResult.localTransforms, layerTransforms, layer.weight,
-                            blendResult.localTransforms);
+                        AnimationEvaluator::BlendTransforms(blendResult.localTransforms, layerTransforms, layer.weight,
+                                                            blendResult.localTransforms);
                     }
                 }
                 else
@@ -1090,9 +1088,8 @@ namespace Spark::Animation
                                 XMVECTOR r = XMQuaternionSlerp(rA, rB, layer.weight);
                                 XMVECTOR t = XMVectorLerp(tA, tB, layer.weight);
 
-                                XMMATRIX result = XMMatrixScalingFromVector(s)
-                                                * XMMatrixRotationQuaternion(r)
-                                                * XMMatrixTranslationFromVector(t);
+                                XMMATRIX result = XMMatrixScalingFromVector(s) * XMMatrixRotationQuaternion(r) *
+                                                  XMMatrixTranslationFromVector(t);
                                 XMStoreFloat4x4(&blendResult.localTransforms[boneIdx], result);
                             }
                         }
@@ -1131,9 +1128,9 @@ namespace Spark::Animation
                     XMVECTOR rWeighted = XMQuaternionSlerp(identityQuat, rDelta, layer.weight);
                     XMVECTOR tWeighted = XMVectorLerp(zeroTranslation, tDelta, layer.weight);
 
-                    XMMATRIX weightedDelta = XMMatrixScalingFromVector(sWeighted)
-                                           * XMMatrixRotationQuaternion(rWeighted)
-                                           * XMMatrixTranslationFromVector(tWeighted);
+                    XMMATRIX weightedDelta = XMMatrixScalingFromVector(sWeighted) *
+                                             XMMatrixRotationQuaternion(rWeighted) *
+                                             XMMatrixTranslationFromVector(tWeighted);
 
                     // Apply: result = current * weightedDelta
                     XMMATRIX currentMat = XMLoadFloat4x4(&blendResult.localTransforms[boneIdx]);
@@ -1163,9 +1160,8 @@ namespace Spark::Animation
                 // Layered blending: linearly blend with weight
                 if (layer.boneMask.empty())
                 {
-                    AnimationEvaluator::BlendTransforms(
-                        blendResult.localTransforms, layerTransforms, layer.weight,
-                        blendResult.localTransforms);
+                    AnimationEvaluator::BlendTransforms(blendResult.localTransforms, layerTransforms, layer.weight,
+                                                        blendResult.localTransforms);
                 }
                 else
                 {
@@ -1184,9 +1180,8 @@ namespace Spark::Animation
                             XMVECTOR r = XMQuaternionSlerp(rA, rB, layer.weight);
                             XMVECTOR t = XMVectorLerp(tA, tB, layer.weight);
 
-                            XMMATRIX result = XMMatrixScalingFromVector(s)
-                                            * XMMatrixRotationQuaternion(r)
-                                            * XMMatrixTranslationFromVector(t);
+                            XMMATRIX result = XMMatrixScalingFromVector(s) * XMMatrixRotationQuaternion(r) *
+                                              XMMatrixTranslationFromVector(t);
                             XMStoreFloat4x4(&blendResult.localTransforms[boneIdx], result);
                         }
                     }
@@ -1223,8 +1218,7 @@ namespace Spark::Animation
         auto currentClip = mgr.GetClip(currentClipName);
         if (currentClip)
         {
-            AnimationEvaluator::SampleClip(*currentClip, *skeleton,
-                                           stateMachine.GetCurrentTime(),
+            AnimationEvaluator::SampleClip(*currentClip, *skeleton, stateMachine.GetCurrentTime(),
                                            blendResult.localTransforms);
         }
 
@@ -1236,14 +1230,10 @@ namespace Spark::Animation
             if (targetClip)
             {
                 std::vector<XMFLOAT4X4> targetTransforms;
-                AnimationEvaluator::SampleClip(*targetClip, *skeleton,
-                                               stateMachine.GetTargetTime(),
-                                               targetTransforms);
+                AnimationEvaluator::SampleClip(*targetClip, *skeleton, stateMachine.GetTargetTime(), targetTransforms);
 
-                AnimationEvaluator::BlendTransforms(
-                    blendResult.localTransforms, targetTransforms,
-                    stateMachine.GetBlendFactor(),
-                    blendResult.localTransforms);
+                AnimationEvaluator::BlendTransforms(blendResult.localTransforms, targetTransforms,
+                                                    stateMachine.GetBlendFactor(), blendResult.localTransforms);
             }
         }
 
@@ -1292,9 +1282,8 @@ namespace Spark::Animation
             // (the character controller applies rootMotionDelta to the entity position)
             rootLocal.r[3] = bindPos;
             // Restore root bone to bind pose rotation (movement is extracted)
-            XMMATRIX rootCleaned = XMMatrixScalingFromVector(sAnim)
-                                 * XMMatrixRotationQuaternion(rBind)
-                                 * XMMatrixTranslationFromVector(bindPos);
+            XMMATRIX rootCleaned = XMMatrixScalingFromVector(sAnim) * XMMatrixRotationQuaternion(rBind) *
+                                   XMMatrixTranslationFromVector(bindPos);
             XMStoreFloat4x4(&blendResult.localTransforms[0], rootCleaned);
         }
         else
@@ -1304,9 +1293,8 @@ namespace Spark::Animation
         }
 
         // ---- Step 5: Compute final skinning matrices from blended local transforms ----
-        AnimationEvaluator::ComputeSkinningMatrices(*skeleton,
-                                                     blendResult.localTransforms,
-                                                     blendResult.finalTransforms);
+        AnimationEvaluator::ComputeSkinningMatrices(*skeleton, blendResult.localTransforms,
+                                                    blendResult.finalTransforms);
 
         // ---- Step 6: Solve IK chains as a post-processing pass ----
         // Save pre-IK local transforms for weight blending
@@ -1348,9 +1336,8 @@ namespace Spark::Animation
                         XMVECTOR r = XMQuaternionSlerp(rPre, rPost, chain.weight);
                         XMVECTOR t = XMVectorLerp(tPre, tPost, chain.weight);
 
-                        XMMATRIX blended = XMMatrixScalingFromVector(s)
-                                         * XMMatrixRotationQuaternion(r)
-                                         * XMMatrixTranslationFromVector(t);
+                        XMMATRIX blended = XMMatrixScalingFromVector(s) * XMMatrixRotationQuaternion(r) *
+                                           XMMatrixTranslationFromVector(t);
                         XMStoreFloat4x4(&blendResult.localTransforms[boneIdx], blended);
                     }
                 }
@@ -1372,9 +1359,8 @@ namespace Spark::Animation
 
             if (anyIKActive)
             {
-                AnimationEvaluator::ComputeSkinningMatrices(*skeleton,
-                                                             blendResult.localTransforms,
-                                                             blendResult.finalTransforms);
+                AnimationEvaluator::ComputeSkinningMatrices(*skeleton, blendResult.localTransforms,
+                                                            blendResult.finalTransforms);
             }
         }
     }

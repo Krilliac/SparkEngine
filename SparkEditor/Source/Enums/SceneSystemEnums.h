@@ -96,7 +96,7 @@ namespace SparkEditor
         LOADING = 1,   ///< Scene is loading
         LOADED = 2,    ///< Scene is fully loaded
         UNLOADING = 3, ///< Scene is unloading
-        ERROR = 4      ///< Error loading scene
+        LOAD_ERROR = 4 ///< Error loading scene
     };
 
     /**

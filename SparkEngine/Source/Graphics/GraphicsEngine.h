@@ -322,10 +322,8 @@ class GraphicsEngine
      * @param worldMatrix   World transformation matrix for the mesh instance.
      * @param castShadows   Whether this mesh should be included in the shadow pass.
      */
-    void SubmitMeshForRendering(const std::string& meshPath,
-                                const std::string& materialPath,
-                                const DirectX::XMMATRIX& worldMatrix,
-                                bool castShadows);
+    void SubmitMeshForRendering(const std::string& meshPath, const std::string& materialPath,
+                                const DirectX::XMMATRIX& worldMatrix, bool castShadows);
 
     /**
      * @brief Process and render all meshes submitted via SubmitMeshForRendering().
@@ -337,8 +335,7 @@ class GraphicsEngine
      * @param viewMatrix  Camera view matrix for the current frame.
      * @param projMatrix  Camera projection matrix for the current frame.
      */
-    void ProcessDrawList(const DirectX::XMMATRIX& viewMatrix,
-                         const DirectX::XMMATRIX& projMatrix);
+    void ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix);
 
     /**
      * @brief Return the per-frame draw list (read-only).

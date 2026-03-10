@@ -205,8 +205,8 @@ namespace Spark::Procedural
      * @param seed      Random seed
      * @return Vector of 2D sample positions
      */
-    std::vector<XMFLOAT2> PoissonDiskSampling(float width, float height, float minDist,
-                                               int maxAttempts = 30, uint32_t seed = 42);
+    std::vector<XMFLOAT2> PoissonDiskSampling(float width, float height, float minDist, int maxAttempts = 30,
+                                              uint32_t seed = 42);
 
     // ============================================================================
     // Dungeon Generation (BSP)
@@ -217,11 +217,11 @@ namespace Spark::Procedural
      */
     struct DungeonRoom
     {
-        int x = 0;         ///< Left column
-        int y = 0;         ///< Top row
-        int width = 0;     ///< Room width in cells
-        int height = 0;    ///< Room height in cells
-        int id = 0;        ///< Unique room ID
+        int x = 0;      ///< Left column
+        int y = 0;      ///< Top row
+        int width = 0;  ///< Room width in cells
+        int height = 0; ///< Room height in cells
+        int id = 0;     ///< Unique room ID
 
         int CenterX() const { return x + width / 2; }
         int CenterY() const { return y + height / 2; }
@@ -241,9 +241,9 @@ namespace Spark::Procedural
      */
     struct DungeonLayout
     {
-        int width = 0;              ///< Grid width in cells
-        int height = 0;             ///< Grid height in cells
-        std::vector<int> grid;      ///< 0 = wall, 1 = floor, 2 = corridor
+        int width = 0;         ///< Grid width in cells
+        int height = 0;        ///< Grid height in cells
+        std::vector<int> grid; ///< 0 = wall, 1 = floor, 2 = corridor
         std::vector<DungeonRoom> rooms;
         std::vector<DungeonCorridor> corridors;
     };
@@ -253,14 +253,14 @@ namespace Spark::Procedural
      */
     struct DungeonSettings
     {
-        int width = 64;             ///< Grid width
-        int height = 64;            ///< Grid height
-        int minRoomSize = 6;        ///< Minimum room dimension
-        int maxRoomSize = 15;       ///< Maximum room dimension
-        int minLeafSize = 10;       ///< Minimum BSP leaf size
-        int roomPadding = 1;        ///< Wall thickness between rooms
-        int corridorWidth = 2;      ///< Corridor width in cells
-        uint32_t seed = 42;         ///< Random seed
+        int width = 64;        ///< Grid width
+        int height = 64;       ///< Grid height
+        int minRoomSize = 6;   ///< Minimum room dimension
+        int maxRoomSize = 15;  ///< Maximum room dimension
+        int minLeafSize = 10;  ///< Minimum BSP leaf size
+        int roomPadding = 1;   ///< Wall thickness between rooms
+        int corridorWidth = 2; ///< Corridor width in cells
+        uint32_t seed = 42;    ///< Random seed
     };
 
     /**
@@ -271,7 +271,7 @@ namespace Spark::Procedural
      */
     class DungeonGenerator
     {
-    public:
+      public:
         /**
          * @brief Generate a dungeon layout using BSP
          */
@@ -285,10 +285,8 @@ namespace Spark::Procedural
          * @param iterations Number of smoothing iterations
          * @param seed      Random seed
          */
-        static DungeonLayout GenerateCellularAutomata(int width, int height,
-                                                       float fillProb = 0.45f,
-                                                       int iterations = 5,
-                                                       uint32_t seed = 42);
+        static DungeonLayout GenerateCellularAutomata(int width, int height, float fillProb = 0.45f, int iterations = 5,
+                                                      uint32_t seed = 42);
 
         /**
          * @brief Generate rooms with corridor connections
@@ -296,13 +294,10 @@ namespace Spark::Procedural
          * Places random non-overlapping rooms, then connects them
          * using minimum spanning tree + L-shaped corridors.
          */
-        static DungeonLayout GenerateRooms(int width, int height,
-                                            int roomCount = 10,
-                                            int minRoomSize = 5,
-                                            int maxRoomSize = 12,
-                                            uint32_t seed = 42);
+        static DungeonLayout GenerateRooms(int width, int height, int roomCount = 10, int minRoomSize = 5,
+                                           int maxRoomSize = 12, uint32_t seed = 42);
 
-    private:
+      private:
         struct BSPNode
         {
             int x, y, width, height;
@@ -315,8 +310,8 @@ namespace Spark::Procedural
         static void SplitBSP(BSPNode* node, int minLeafSize, std::mt19937& rng);
         static void CreateRooms(BSPNode* node, const DungeonSettings& settings, std::mt19937& rng);
         static void CollectRooms(const BSPNode* node, std::vector<DungeonRoom>& rooms);
-        static void ConnectRooms(DungeonLayout& layout, const DungeonRoom& a, const DungeonRoom& b,
-                                 int corridorWidth, std::mt19937& rng);
+        static void ConnectRooms(DungeonLayout& layout, const DungeonRoom& a, const DungeonRoom& b, int corridorWidth,
+                                 std::mt19937& rng);
         static void ConnectBSP(BSPNode* node, DungeonLayout& layout, int corridorWidth, std::mt19937& rng);
         static DungeonRoom GetAnyRoom(const BSPNode* node);
         static void CarveRoom(DungeonLayout& layout, const DungeonRoom& room);

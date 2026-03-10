@@ -17,16 +17,16 @@ using namespace DirectX;
 namespace Spark::AI
 {
     // Named constants replacing magic numbers
-    static constexpr float kTargetLostTimeout = 10.0f;        // seconds before losing a target
-    static constexpr float kWaypointArrivalRadius = 0.5f;     // metres to consider waypoint reached
-    static constexpr float kMinMovementEpsilon = 0.001f;      // minimum distance to apply movement
-    static constexpr float kPathStaleDistance = 5.0f;          // metres target must move before repath
-    static constexpr float kObstacleAvoidRadius = 1.2f;       // agent obstacle avoidance radius
-    static constexpr float kAlertSearchTimeout = 5.0f;        // seconds in alert before returning to patrol
-    static constexpr float kVisionFOV = 120.0f;               // default field-of-view in degrees
-    static constexpr float kHearingRadius = 20.0f;            // default hearing range in metres
-    static constexpr float kFleeHealthThreshold = 0.2f;       // flee when below 20% health
-    static constexpr float kCombatTransitionTime = 0.0f;      // alert-to-combat reaction threshold
+    static constexpr float kTargetLostTimeout = 10.0f;    // seconds before losing a target
+    static constexpr float kWaypointArrivalRadius = 0.5f; // metres to consider waypoint reached
+    static constexpr float kMinMovementEpsilon = 0.001f;  // minimum distance to apply movement
+    static constexpr float kPathStaleDistance = 5.0f;     // metres target must move before repath
+    static constexpr float kObstacleAvoidRadius = 1.2f;   // agent obstacle avoidance radius
+    static constexpr float kAlertSearchTimeout = 5.0f;    // seconds in alert before returning to patrol
+    static constexpr float kVisionFOV = 120.0f;           // default field-of-view in degrees
+    static constexpr float kHearingRadius = 20.0f;        // default hearing range in metres
+    static constexpr float kFleeHealthThreshold = 0.2f;   // flee when below 20% health
+    static constexpr float kCombatTransitionTime = 0.0f;  // alert-to-combat reaction threshold
 
     // ============================================================================
     // Helpers
@@ -58,8 +58,10 @@ namespace Spark::AI
     {
         float diff = targetYaw - currentYaw;
         // Wrap to [-180, 180]
-        while (diff > 180.0f) diff -= 360.0f;
-        while (diff < -180.0f) diff += 360.0f;
+        while (diff > 180.0f)
+            diff -= 360.0f;
+        while (diff < -180.0f)
+            diff += 360.0f;
 
         float maxTurn = turnSpeed * deltaTime;
         if (std::abs(diff) < maxTurn)
@@ -227,18 +229,11 @@ namespace Spark::AI
             float distSq = DistanceSq(transform.position, targetTransform.position);
 
             // Vision cone check using PerceptionSystem
-            bool canSee = Perception::CanSee(
-                transform.position,
-                agentForward,
-                targetTransform.position,
-                kVisionFOV,
-                ai.config.detectionRange);
+            bool canSee = Perception::CanSee(transform.position, agentForward, targetTransform.position, kVisionFOV,
+                                             ai.config.detectionRange);
 
             // Hearing check: detect targets within hearing range
-            bool canHear = Perception::CanHear(
-                transform.position,
-                targetTransform.position,
-                kHearingRadius);
+            bool canHear = Perception::CanHear(transform.position, targetTransform.position, kHearingRadius);
 
             if ((canSee || canHear) && distSq < closestThreatDistSq)
             {
@@ -345,8 +340,7 @@ namespace Spark::AI
         // Compute target distance if we have a target
         if (ai.targetEntity != entt::null)
         {
-            float targetDist = SteeringDetail::Length(
-                SteeringDetail::Sub(ai.lastKnownTargetPos, ai.moveTarget));
+            float targetDist = SteeringDetail::Length(SteeringDetail::Sub(ai.lastKnownTargetPos, ai.moveTarget));
             bb.Set("targetDistance", targetDist);
         }
         else
@@ -356,8 +350,7 @@ namespace Spark::AI
 
         // Compute distance from guard post if applicable
         XMFLOAT3 guardPos = bb.Get<XMFLOAT3>("guardPosition", XMFLOAT3{0, 0, 0});
-        float distFromPost = SteeringDetail::Length(
-            SteeringDetail::Sub(ai.moveTarget, guardPos));
+        float distFromPost = SteeringDetail::Length(SteeringDetail::Sub(ai.moveTarget, guardPos));
         bb.Set("distFromPost", distFromPost);
 
         // Tick the behavior tree
@@ -487,20 +480,14 @@ namespace Spark::AI
         XMFLOAT3 desiredVelocity;
         if (ai.state == AIComponent::State::Fleeing && ai.targetEntity != entt::null)
         {
-            desiredVelocity = SteeringBehaviors::Flee(
-                transform.position,
-                ai.lastKnownTargetPos,
-                ai.config.moveSpeed);
+            desiredVelocity = SteeringBehaviors::Flee(transform.position, ai.lastKnownTargetPos, ai.config.moveSpeed);
         }
         else
         {
             // Compute base desired velocity using Arrive behavior (decelerates near waypoint)
             float slowRadius = kWaypointArrivalRadius * 4.0f;
-            desiredVelocity = SteeringBehaviors::Arrive(
-                transform.position,
-                waypointTarget,
-                ai.config.moveSpeed,
-                slowRadius);
+            desiredVelocity =
+                SteeringBehaviors::Arrive(transform.position, waypointTarget, ai.config.moveSpeed, slowRadius);
         }
 
         // Apply obstacle avoidance by scanning nearby AI agents as obstacles
@@ -522,11 +509,8 @@ namespace Spark::AI
 
         if (!nearbyObstacles.empty())
         {
-            desiredVelocity = SteeringBehaviors::ObstacleAvoidance(
-                transform.position,
-                desiredVelocity,
-                nearbyObstacles,
-                kObstacleAvoidRadius);
+            desiredVelocity = SteeringBehaviors::ObstacleAvoidance(transform.position, desiredVelocity, nearbyObstacles,
+                                                                   kObstacleAvoidRadius);
         }
 
         // Truncate velocity to max speed
@@ -542,10 +526,8 @@ namespace Spark::AI
             transform.position.z += moveZ;
 
             // Smoothly rotate to face movement direction
-            float targetYaw = std::atan2(desiredVelocity.x, desiredVelocity.z)
-                              * (180.0f / std::numbers::pi_v<float>);
-            transform.rotation.y = SmoothTurnToward(
-                transform.rotation.y, targetYaw, ai.config.turnSpeed, deltaTime);
+            float targetYaw = std::atan2(desiredVelocity.x, desiredVelocity.z) * (180.0f / std::numbers::pi_v<float>);
+            transform.rotation.y = SmoothTurnToward(transform.rotation.y, targetYaw, ai.config.turnSpeed, deltaTime);
         }
 
         // Check if we reached the current waypoint
@@ -617,12 +599,24 @@ namespace Spark::AI
         ss << "State: ";
         switch (ai->state)
         {
-        case AIComponent::State::Idle:       ss << "Idle"; break;
-        case AIComponent::State::Patrolling: ss << "Patrolling"; break;
-        case AIComponent::State::Alert:      ss << "Alert"; break;
-        case AIComponent::State::Combat:     ss << "Combat"; break;
-        case AIComponent::State::Fleeing:    ss << "Fleeing"; break;
-        case AIComponent::State::Dead:       ss << "Dead"; break;
+        case AIComponent::State::Idle:
+            ss << "Idle";
+            break;
+        case AIComponent::State::Patrolling:
+            ss << "Patrolling";
+            break;
+        case AIComponent::State::Alert:
+            ss << "Alert";
+            break;
+        case AIComponent::State::Combat:
+            ss << "Combat";
+            break;
+        case AIComponent::State::Fleeing:
+            ss << "Fleeing";
+            break;
+        case AIComponent::State::Dead:
+            ss << "Dead";
+            break;
         }
         ss << "\n";
         ss << "Behavior: " << ai->behaviorTreeName << "\n";
@@ -632,15 +626,12 @@ namespace Spark::AI
         ss << "Turn Speed: " << ai->config.turnSpeed << "\n";
         ss << "Accuracy: " << ai->config.accuracy << "\n";
         ss << "Reaction Time: " << ai->config.reactionTime << "\n";
-        ss << "Path Points: " << ai->currentPath.size()
-           << " (index: " << ai->currentPathIndex << ")\n";
+        ss << "Path Points: " << ai->currentPath.size() << " (index: " << ai->currentPathIndex << ")\n";
         ss << "Has Target: " << (ai->targetEntity != entt::null ? "Yes" : "No") << "\n";
         if (ai->targetEntity != entt::null)
         {
             ss << "Target Entity: " << static_cast<uint32_t>(ai->targetEntity) << "\n";
-            ss << "Last Known Pos: ("
-               << ai->lastKnownTargetPos.x << ", "
-               << ai->lastKnownTargetPos.y << ", "
+            ss << "Last Known Pos: (" << ai->lastKnownTargetPos.x << ", " << ai->lastKnownTargetPos.y << ", "
                << ai->lastKnownTargetPos.z << ")\n";
             ss << "Time Since Seen: " << ai->timeSinceLastSeen << "s\n";
         }
@@ -664,33 +655,37 @@ namespace Spark::AI
             // Combat sub-tree: if enemy detected, engage
             auto combatSeq = std::make_unique<SequenceNode>("CombatSequence");
             combatSeq->AddChild(std::make_unique<ConditionNode>("HasTarget", [](const Blackboard& bb)
-                { return bb.Get<bool>("hasTarget", false); }));
-            combatSeq->AddChild(std::make_unique<ActionNode>("EngageTarget", [](float dt, Blackboard& bb)
-            {
-                // Request combat state
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Combat));
-                // Request path to target
-                bb.Set("newPathRequested", true);
-                bb.Set("pathGoal", bb.Get<XMFLOAT3>("targetPosition", XMFLOAT3{0, 0, 0}));
-                return NodeStatus::Running;
-            }));
+                                                                { return bb.Get<bool>("hasTarget", false); }));
+            combatSeq->AddChild(std::make_unique<ActionNode>(
+                "EngageTarget",
+                [](float dt, Blackboard& bb)
+                {
+                    // Request combat state
+                    bb.Set("requestedState", static_cast<int>(AIComponent::State::Combat));
+                    // Request path to target
+                    bb.Set("newPathRequested", true);
+                    bb.Set("pathGoal", bb.Get<XMFLOAT3>("targetPosition", XMFLOAT3{0, 0, 0}));
+                    return NodeStatus::Running;
+                }));
 
             // Patrol sub-tree: walk between waypoints
             auto patrolSeq = std::make_unique<SequenceNode>("PatrolSequence");
-            patrolSeq->AddChild(std::make_unique<ActionNode>("MoveToWaypoint", [](float dt, Blackboard& bb)
-            {
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Patrolling));
-                int patrolCount = bb.Get<int>("patrolCount", 0);
-                if (patrolCount <= 0)
-                    return NodeStatus::Failure;
+            patrolSeq->AddChild(std::make_unique<ActionNode>(
+                "MoveToWaypoint",
+                [](float dt, Blackboard& bb)
+                {
+                    bb.Set("requestedState", static_cast<int>(AIComponent::State::Patrolling));
+                    int patrolCount = bb.Get<int>("patrolCount", 0);
+                    if (patrolCount <= 0)
+                        return NodeStatus::Failure;
 
-                int idx = bb.Get<int>("currentPatrolIndex", 0);
-                std::string key = "patrol_" + std::to_string(idx);
-                XMFLOAT3 waypoint = bb.Get<XMFLOAT3>(key, XMFLOAT3{0, 0, 0});
-                bb.Set("newPathRequested", true);
-                bb.Set("pathGoal", waypoint);
-                return NodeStatus::Running;
-            }));
+                    int idx = bb.Get<int>("currentPatrolIndex", 0);
+                    std::string key = "patrol_" + std::to_string(idx);
+                    XMFLOAT3 waypoint = bb.Get<XMFLOAT3>(key, XMFLOAT3{0, 0, 0});
+                    bb.Set("newPathRequested", true);
+                    bb.Set("pathGoal", waypoint);
+                    return NodeStatus::Running;
+                }));
             patrolSeq->AddChild(std::make_unique<WaitNode>(2.0f));
 
             root->AddChild(std::move(combatSeq));
@@ -715,45 +710,54 @@ namespace Spark::AI
 
             // Flee if low health
             auto fleeSeq = std::make_unique<SequenceNode>("FleeSequence");
-            fleeSeq->AddChild(std::make_unique<ConditionNode>("LowHealth", [](const Blackboard& bb)
-                { return bb.Get<float>("healthPercent", 1.0f) < kFleeHealthThreshold; }));
-            fleeSeq->AddChild(std::make_unique<ActionNode>("Flee", [](float dt, Blackboard& bb)
-            {
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Fleeing));
-                return NodeStatus::Running;
-            }));
+            fleeSeq->AddChild(std::make_unique<ConditionNode>(
+                "LowHealth",
+                [](const Blackboard& bb) { return bb.Get<float>("healthPercent", 1.0f) < kFleeHealthThreshold; }));
+            fleeSeq->AddChild(std::make_unique<ActionNode>("Flee",
+                                                           [](float dt, Blackboard& bb)
+                                                           {
+                                                               bb.Set("requestedState",
+                                                                      static_cast<int>(AIComponent::State::Fleeing));
+                                                               return NodeStatus::Running;
+                                                           }));
 
             // Take cover if under fire
             auto coverSeq = std::make_unique<SequenceNode>("CoverSequence");
             coverSeq->AddChild(std::make_unique<ConditionNode>("UnderFire", [](const Blackboard& bb)
-                { return bb.Get<bool>("underFire", false); }));
-            coverSeq->AddChild(std::make_unique<ActionNode>("FindCover", [](float dt, Blackboard& bb)
-            {
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Alert));
-                bb.Set("newPathRequested", true);
-                // In a full implementation, would query navmesh for cover points
-                return NodeStatus::Running;
-            }));
+                                                               { return bb.Get<bool>("underFire", false); }));
+            coverSeq->AddChild(std::make_unique<ActionNode>("FindCover",
+                                                            [](float dt, Blackboard& bb)
+                                                            {
+                                                                bb.Set("requestedState",
+                                                                       static_cast<int>(AIComponent::State::Alert));
+                                                                bb.Set("newPathRequested", true);
+                                                                // In a full implementation, would query navmesh for cover points
+                                                                return NodeStatus::Running;
+                                                            }));
 
             // Attack if in range
             auto attackSeq = std::make_unique<SequenceNode>("AttackSequence");
             attackSeq->AddChild(std::make_unique<ConditionNode>(
                 "InAttackRange", [attackRange = config.attackRange](const Blackboard& bb)
                 { return bb.Get<float>("targetDistance", 999.0f) < attackRange; }));
-            attackSeq->AddChild(std::make_unique<ActionNode>("Attack", [](float dt, Blackboard& bb)
-            {
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Combat));
-                return NodeStatus::Running;
-            }));
+            attackSeq->AddChild(std::make_unique<ActionNode>("Attack",
+                                                             [](float dt, Blackboard& bb)
+                                                             {
+                                                                 bb.Set("requestedState",
+                                                                        static_cast<int>(AIComponent::State::Combat));
+                                                                 return NodeStatus::Running;
+                                                             }));
 
             // Chase target
-            auto chaseAction = std::make_unique<ActionNode>("ChaseTarget", [](float dt, Blackboard& bb)
-            {
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Combat));
-                bb.Set("newPathRequested", true);
-                bb.Set("pathGoal", bb.Get<XMFLOAT3>("targetPosition", XMFLOAT3{0, 0, 0}));
-                return NodeStatus::Running;
-            });
+            auto chaseAction = std::make_unique<ActionNode>(
+                "ChaseTarget",
+                [](float dt, Blackboard& bb)
+                {
+                    bb.Set("requestedState", static_cast<int>(AIComponent::State::Combat));
+                    bb.Set("newPathRequested", true);
+                    bb.Set("pathGoal", bb.Get<XMFLOAT3>("targetPosition", XMFLOAT3{0, 0, 0}));
+                    return NodeStatus::Running;
+                });
 
             root->AddChild(std::move(fleeSeq));
             root->AddChild(std::move(coverSeq));
@@ -772,34 +776,40 @@ namespace Spark::AI
             // Combat if enemy in range
             auto combatSeq = std::make_unique<SequenceNode>("CombatSequence");
             combatSeq->AddChild(std::make_unique<ConditionNode>("EnemyDetected", [](const Blackboard& bb)
-                { return bb.Get<bool>("hasTarget", false); }));
-            combatSeq->AddChild(std::make_unique<ActionNode>("Engage", [](float dt, Blackboard& bb)
-            {
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Combat));
-                bb.Set("newPathRequested", true);
-                bb.Set("pathGoal", bb.Get<XMFLOAT3>("targetPosition", XMFLOAT3{0, 0, 0}));
-                return NodeStatus::Running;
-            }));
+                                                                { return bb.Get<bool>("hasTarget", false); }));
+            combatSeq->AddChild(std::make_unique<ActionNode>(
+                "Engage",
+                [](float dt, Blackboard& bb)
+                {
+                    bb.Set("requestedState", static_cast<int>(AIComponent::State::Combat));
+                    bb.Set("newPathRequested", true);
+                    bb.Set("pathGoal", bb.Get<XMFLOAT3>("targetPosition", XMFLOAT3{0, 0, 0}));
+                    return NodeStatus::Running;
+                }));
 
             // Return to guard position if far
             auto returnSeq = std::make_unique<SequenceNode>("ReturnToPost");
             returnSeq->AddChild(
                 std::make_unique<ConditionNode>("FarFromPost", [guardRadius](const Blackboard& bb)
-                    { return bb.Get<float>("distFromPost", 0.0f) > guardRadius; }));
-            returnSeq->AddChild(std::make_unique<ActionNode>("MoveToPost", [](float dt, Blackboard& bb)
-            {
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Patrolling));
-                bb.Set("newPathRequested", true);
-                bb.Set("pathGoal", bb.Get<XMFLOAT3>("guardPosition", XMFLOAT3{0, 0, 0}));
-                return NodeStatus::Running;
-            }));
+                                                { return bb.Get<float>("distFromPost", 0.0f) > guardRadius; }));
+            returnSeq->AddChild(std::make_unique<ActionNode>(
+                "MoveToPost",
+                [](float dt, Blackboard& bb)
+                {
+                    bb.Set("requestedState", static_cast<int>(AIComponent::State::Patrolling));
+                    bb.Set("newPathRequested", true);
+                    bb.Set("pathGoal", bb.Get<XMFLOAT3>("guardPosition", XMFLOAT3{0, 0, 0}));
+                    return NodeStatus::Running;
+                }));
 
             // Idle at post
-            auto idle = std::make_unique<ActionNode>("Idle", [](float dt, Blackboard& bb)
-            {
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Idle));
-                return NodeStatus::Running;
-            });
+            auto idle =
+                std::make_unique<ActionNode>("Idle",
+                                             [](float dt, Blackboard& bb)
+                                             {
+                                                 bb.Set("requestedState", static_cast<int>(AIComponent::State::Idle));
+                                                 return NodeStatus::Running;
+                                             });
 
             root->AddChild(std::move(combatSeq));
             root->AddChild(std::move(returnSeq));
@@ -815,11 +825,13 @@ namespace Spark::AI
             auto tree = std::make_unique<BehaviorTree>("FleeBehavior");
 
             auto root = std::make_unique<SequenceNode>("FleeSequence");
-            root->AddChild(std::make_unique<ActionNode>("RunAway", [](float dt, Blackboard& bb)
-            {
-                bb.Set("requestedState", static_cast<int>(AIComponent::State::Fleeing));
-                return NodeStatus::Running;
-            }));
+            root->AddChild(std::make_unique<ActionNode>("RunAway",
+                                                        [](float dt, Blackboard& bb)
+                                                        {
+                                                            bb.Set("requestedState",
+                                                                   static_cast<int>(AIComponent::State::Fleeing));
+                                                            return NodeStatus::Running;
+                                                        }));
 
             tree->SetRoot(std::move(root));
             tree->GetBlackboard().Set("fleeDistance", fleeDistance);

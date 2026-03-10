@@ -253,10 +253,8 @@ namespace Spark::Net
         m_stats = {};
 
         // Register built-in message handlers
-        RegisterHandler(MessageType::Connect,
-                        [this](const NetworkMessage& msg) { HandleConnect(msg); });
-        RegisterHandler(MessageType::Disconnect,
-                        [this](const NetworkMessage& msg) { HandleDisconnect(msg); });
+        RegisterHandler(MessageType::Connect, [this](const NetworkMessage& msg) { HandleConnect(msg); });
+        RegisterHandler(MessageType::Disconnect, [this](const NetworkMessage& msg) { HandleDisconnect(msg); });
         RegisterHandler(MessageType::ConnectAccepted,
                         [this](const NetworkMessage& msg)
                         {
@@ -384,7 +382,7 @@ namespace Spark::Net
         if (m_socket == INVALID_SOCKET)
             return false;
 
-        // Set non-blocking mode
+            // Set non-blocking mode
 #ifdef SPARK_PLATFORM_WINDOWS
         u_long nonBlocking = 1;
         if (ioctlsocket(m_socket, FIONBIO, &nonBlocking) == SOCKET_ERROR)
@@ -404,10 +402,8 @@ namespace Spark::Net
         // Set socket buffer sizes for game traffic
         int sendBufSize = 65536;
         int recvBufSize = 65536;
-        setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF,
-                   reinterpret_cast<const char*>(&sendBufSize), sizeof(sendBufSize));
-        setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF,
-                   reinterpret_cast<const char*>(&recvBufSize), sizeof(recvBufSize));
+        setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&sendBufSize), sizeof(sendBufSize));
+        setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&recvBufSize), sizeof(recvBufSize));
 
         // Bind to the specified port (0 = OS-assigned ephemeral port for clients)
         sockaddr_in localAddr{};
@@ -501,12 +497,8 @@ namespace Spark::Net
         if (m_socket == INVALID_SOCKET || data.empty())
             return false;
 
-        int sent = sendto(m_socket,
-                          reinterpret_cast<const char*>(data.data()),
-                          static_cast<int>(data.size()),
-                          0,
-                          reinterpret_cast<const sockaddr*>(&addr),
-                          sizeof(addr));
+        int sent = sendto(m_socket, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()), 0,
+                          reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
 
         if (sent == SOCKET_ERROR)
         {
@@ -528,12 +520,8 @@ namespace Spark::Net
         outData.resize(MAX_PACKET_SIZE);
 
         socklen_t senderLen = sizeof(outSender);
-        int received = recvfrom(m_socket,
-                                reinterpret_cast<char*>(outData.data()),
-                                MAX_PACKET_SIZE,
-                                0,
-                                reinterpret_cast<sockaddr*>(&outSender),
-                                &senderLen);
+        int received = recvfrom(m_socket, reinterpret_cast<char*>(outData.data()), MAX_PACKET_SIZE, 0,
+                                reinterpret_cast<sockaddr*>(&outSender), &senderLen);
 
         if (received <= 0)
         {
@@ -1074,12 +1062,9 @@ namespace Spark::Net
         buf.WriteFloat(timestamped.moveRight);
         buf.WriteFloat(timestamped.lookYaw);
         buf.WriteFloat(timestamped.lookPitch);
-        buf.WriteUint8(static_cast<uint8_t>(
-            (timestamped.jump ? 1 : 0) |
-            (timestamped.fire ? 2 : 0) |
-            (timestamped.reload ? 4 : 0) |
-            (timestamped.sprint ? 8 : 0) |
-            (timestamped.crouch ? 16 : 0)));
+        buf.WriteUint8(static_cast<uint8_t>((timestamped.jump ? 1 : 0) | (timestamped.fire ? 2 : 0) |
+                                            (timestamped.reload ? 4 : 0) | (timestamped.sprint ? 8 : 0) |
+                                            (timestamped.crouch ? 16 : 0)));
         buf.WriteFloat(timestamped.deltaTime);
         msg.payload = buf.GetData();
         SendMessage(msg);
@@ -1158,8 +1143,7 @@ namespace Spark::Net
                 ClientID foundID = INVALID_CLIENT;
                 for (const auto& [id, addr] : m_clientAddresses)
                 {
-                    if (addr.sin_addr.s_addr == senderAddr.sin_addr.s_addr &&
-                        addr.sin_port == senderAddr.sin_port)
+                    if (addr.sin_addr.s_addr == senderAddr.sin_addr.s_addr && addr.sin_port == senderAddr.sin_port)
                     {
                         foundID = id;
                         break;
@@ -1464,8 +1448,7 @@ namespace Spark::Net
         ss << "=== Connected Clients (" << m_clients.size() << ") ===\n";
         for (const auto& [id, info] : m_clients)
         {
-            ss << "  Client " << id << ": " << info.name
-               << " [Ping: " << info.stats.ping << "ms]"
+            ss << "  Client " << id << ": " << info.name << " [Ping: " << info.stats.ping << "ms]"
                << " [Last heartbeat: " << info.lastHeartbeatTime << "s]\n";
         }
         return ss.str();

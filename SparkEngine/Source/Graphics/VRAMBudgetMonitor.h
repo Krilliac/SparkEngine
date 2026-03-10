@@ -36,10 +36,10 @@
  */
 enum class MemoryPressureLevel
 {
-    None,      ///< Usage < 75% — no action needed
-    Warning,   ///< Usage 75%-85% — begin proactive eviction of low-priority resources
-    Critical,  ///< Usage 85%-95% — aggressive eviction, quality reduction
-    Emergency  ///< Usage > 95% — emergency eviction, disable optional features
+    None,     ///< Usage < 75% — no action needed
+    Warning,  ///< Usage 75%-85% — begin proactive eviction of low-priority resources
+    Critical, ///< Usage 85%-95% — aggressive eviction, quality reduction
+    Emergency ///< Usage > 95% — emergency eviction, disable optional features
 };
 
 /**
@@ -71,10 +71,10 @@ inline const char* MemoryPressureLevelToString(MemoryPressureLevel level)
  */
 struct GPUMemoryInfo
 {
-    uint64_t budgetBytes = 0;        ///< OS-provided VRAM budget (may change at runtime)
-    uint64_t currentUsageBytes = 0;  ///< Current VRAM consumption (including driver overhead)
-    uint64_t availableBytes = 0;     ///< Remaining budget before the OS starts paging
-    float usagePercent = 0.0f;       ///< currentUsageBytes / budgetBytes * 100
+    uint64_t budgetBytes = 0;       ///< OS-provided VRAM budget (may change at runtime)
+    uint64_t currentUsageBytes = 0; ///< Current VRAM consumption (including driver overhead)
+    uint64_t availableBytes = 0;    ///< Remaining budget before the OS starts paging
+    float usagePercent = 0.0f;      ///< currentUsageBytes / budgetBytes * 100
     MemoryPressureLevel pressureLevel = MemoryPressureLevel::None;
 
     /// Non-local (shared system RAM) segment info
@@ -92,12 +92,12 @@ struct GPUMemoryInfo
  */
 enum class GPUResourcePriority : uint8_t
 {
-    Background = 0,   ///< Distant textures, low-impact resources — evict first
-    Low = 1,          ///< Scene textures not in immediate view
-    Normal = 2,       ///< Standard scene textures, meshes
-    High = 3,         ///< Shadow maps, frequently used materials
-    Critical = 4,     ///< Render targets, G-buffers — evict last
-    Pinned = 5        ///< Never evict (back buffer, depth buffer, essential RT)
+    Background = 0, ///< Distant textures, low-impact resources — evict first
+    Low = 1,        ///< Scene textures not in immediate view
+    Normal = 2,     ///< Standard scene textures, meshes
+    High = 3,       ///< Shadow maps, frequently used materials
+    Critical = 4,   ///< Render targets, G-buffers — evict last
+    Pinned = 5      ///< Never evict (back buffer, depth buffer, essential RT)
 };
 
 // ============================================================================
@@ -109,13 +109,13 @@ enum class GPUResourcePriority : uint8_t
  */
 struct GPUResourceEntry
 {
-    uint64_t resourceId = 0;                             ///< Unique identifier
-    std::string name;                                    ///< Debug name
-    uint64_t sizeBytes = 0;                              ///< Allocation size in bytes
+    uint64_t resourceId = 0; ///< Unique identifier
+    std::string name;        ///< Debug name
+    uint64_t sizeBytes = 0;  ///< Allocation size in bytes
     GPUResourcePriority priority = GPUResourcePriority::Normal;
-    uint64_t lastUsedFrame = 0;                          ///< Frame number when last bound/used
-    std::chrono::steady_clock::time_point lastUsedTime;  ///< Wall-clock time of last use
-    bool isResident = true;                              ///< Currently in VRAM
+    uint64_t lastUsedFrame = 0;                         ///< Frame number when last bound/used
+    std::chrono::steady_clock::time_point lastUsedTime; ///< Wall-clock time of last use
+    bool isResident = true;                             ///< Currently in VRAM
 
     /**
      * @brief Compute eviction score — lower score = evict first
@@ -162,7 +162,7 @@ using MemoryPressureCallback = std::function<void(MemoryPressureLevel level, con
  */
 class VRAMBudgetMonitor
 {
-public:
+  public:
     // ========================================================================
     // CONFIGURATION
     // ========================================================================
@@ -172,9 +172,9 @@ public:
      */
     struct PressureThresholds
     {
-        float warningPercent = 75.0f;    ///< Transition to Warning above this
-        float criticalPercent = 85.0f;   ///< Transition to Critical above this
-        float emergencyPercent = 95.0f;  ///< Transition to Emergency above this
+        float warningPercent = 75.0f;   ///< Transition to Warning above this
+        float criticalPercent = 85.0f;  ///< Transition to Critical above this
+        float emergencyPercent = 95.0f; ///< Transition to Emergency above this
     };
 
     // ========================================================================
@@ -213,8 +213,7 @@ public:
 
         // Get DXGI device -> adapter -> adapter3
         Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
-        HRESULT hr = device->QueryInterface(__uuidof(IDXGIDevice),
-                                            reinterpret_cast<void**>(dxgiDevice.GetAddressOf()));
+        HRESULT hr = device->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(dxgiDevice.GetAddressOf()));
         if (FAILED(hr))
         {
             return false;
@@ -227,8 +226,7 @@ public:
             return false;
         }
 
-        hr = adapter->QueryInterface(__uuidof(IDXGIAdapter3),
-                                     reinterpret_cast<void**>(m_adapter3.GetAddressOf()));
+        hr = adapter->QueryInterface(__uuidof(IDXGIAdapter3), reinterpret_cast<void**>(m_adapter3.GetAddressOf()));
         if (FAILED(hr))
         {
             // DXGI 1.4 not available — fall back to internal tracking
@@ -381,8 +379,8 @@ public:
      * @param sizeBytes   Allocation size
      * @param priority    Eviction priority
      */
-    void RegisterResource(uint64_t resourceId, const std::string& name,
-                          uint64_t sizeBytes, GPUResourcePriority priority = GPUResourcePriority::Normal)
+    void RegisterResource(uint64_t resourceId, const std::string& name, uint64_t sizeBytes,
+                          GPUResourcePriority priority = GPUResourcePriority::Normal)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -497,11 +495,8 @@ public:
         }
 
         // Sort by eviction score ascending — lowest score = evict first
-        std::sort(candidates.begin(), candidates.end(),
-                  [this](const GPUResourceEntry& a, const GPUResourceEntry& b)
-                  {
-                      return a.GetEvictionScore(m_currentFrame) < b.GetEvictionScore(m_currentFrame);
-                  });
+        std::sort(candidates.begin(), candidates.end(), [this](const GPUResourceEntry& a, const GPUResourceEntry& b)
+                  { return a.GetEvictionScore(m_currentFrame) < b.GetEvictionScore(m_currentFrame); });
 
         if (candidates.size() > maxCount)
         {
@@ -571,10 +566,9 @@ public:
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
-        m_listeners.erase(
-            std::remove_if(m_listeners.begin(), m_listeners.end(),
-                           [listenerId](const PressureListener& l) { return l.id == listenerId; }),
-            m_listeners.end());
+        m_listeners.erase(std::remove_if(m_listeners.begin(), m_listeners.end(),
+                                         [listenerId](const PressureListener& l) { return l.id == listenerId; }),
+                          m_listeners.end());
     }
 
     // ========================================================================
@@ -612,7 +606,7 @@ public:
 #endif
     }
 
-private:
+  private:
     // ========================================================================
     // INTERNAL HELPERS
     // ========================================================================
@@ -631,35 +625,31 @@ private:
         {
             // Query local (dedicated VRAM) segment
             DXGI_QUERY_VIDEO_MEMORY_INFO localInfo = {};
-            HRESULT hr = m_adapter3->QueryVideoMemoryInfo(
-                0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &localInfo);
+            HRESULT hr = m_adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &localInfo);
 
             if (SUCCEEDED(hr))
             {
                 info.budgetBytes = localInfo.Budget;
                 info.currentUsageBytes = localInfo.CurrentUsage;
-                info.availableBytes = (localInfo.Budget > localInfo.CurrentUsage)
-                                          ? (localInfo.Budget - localInfo.CurrentUsage)
-                                          : 0;
-                info.usagePercent = (info.budgetBytes > 0)
-                                       ? (static_cast<float>(info.currentUsageBytes) /
-                                          static_cast<float>(info.budgetBytes) * 100.0f)
-                                       : 0.0f;
+                info.availableBytes =
+                    (localInfo.Budget > localInfo.CurrentUsage) ? (localInfo.Budget - localInfo.CurrentUsage) : 0;
+                info.usagePercent =
+                    (info.budgetBytes > 0)
+                        ? (static_cast<float>(info.currentUsageBytes) / static_cast<float>(info.budgetBytes) * 100.0f)
+                        : 0.0f;
             }
 
             // Query non-local (shared system RAM) segment
             DXGI_QUERY_VIDEO_MEMORY_INFO nonLocalInfo = {};
-            hr = m_adapter3->QueryVideoMemoryInfo(
-                0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &nonLocalInfo);
+            hr = m_adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &nonLocalInfo);
 
             if (SUCCEEDED(hr))
             {
                 info.sharedBudgetBytes = nonLocalInfo.Budget;
                 info.sharedUsageBytes = nonLocalInfo.CurrentUsage;
-                info.sharedUsagePercent = (nonLocalInfo.Budget > 0)
-                                              ? (static_cast<float>(nonLocalInfo.CurrentUsage) /
-                                                 static_cast<float>(nonLocalInfo.Budget) * 100.0f)
-                                              : 0.0f;
+                info.sharedUsagePercent = (nonLocalInfo.Budget > 0) ? (static_cast<float>(nonLocalInfo.CurrentUsage) /
+                                                                       static_cast<float>(nonLocalInfo.Budget) * 100.0f)
+                                                                    : 0.0f;
             }
 
             return info;
@@ -667,16 +657,14 @@ private:
 #endif
 
         // Fallback: use internal tracking + static adapter memory
-        info.budgetBytes = (m_dedicatedVideoMemory > 0) ? m_dedicatedVideoMemory
-                                                        : (512ULL * 1024ULL * 1024ULL);
+        info.budgetBytes = (m_dedicatedVideoMemory > 0) ? m_dedicatedVideoMemory : (512ULL * 1024ULL * 1024ULL);
         info.currentUsageBytes = m_trackedMemoryBytes;
-        info.availableBytes = (info.budgetBytes > info.currentUsageBytes)
-                                  ? (info.budgetBytes - info.currentUsageBytes)
-                                  : 0;
-        info.usagePercent = (info.budgetBytes > 0)
-                               ? (static_cast<float>(info.currentUsageBytes) /
-                                  static_cast<float>(info.budgetBytes) * 100.0f)
-                               : 0.0f;
+        info.availableBytes =
+            (info.budgetBytes > info.currentUsageBytes) ? (info.budgetBytes - info.currentUsageBytes) : 0;
+        info.usagePercent =
+            (info.budgetBytes > 0)
+                ? (static_cast<float>(info.currentUsageBytes) / static_cast<float>(info.budgetBytes) * 100.0f)
+                : 0.0f;
 
         return info;
     }

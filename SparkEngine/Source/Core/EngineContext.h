@@ -100,8 +100,7 @@ class EngineContext : public Spark::IEngineContext
      * Allows registration of systems not covered by the named getters.
      * The pointer is non-owning; caller manages lifetime.
      */
-    template <typename T>
-    void RegisterSystem(T* system)
+    template <typename T> void RegisterSystem(T* system)
     {
         m_systems[std::type_index(typeid(T))] = static_cast<void*>(system);
     }
@@ -110,8 +109,7 @@ class EngineContext : public Spark::IEngineContext
      * @brief Retrieve a previously registered subsystem by type
      * @return Pointer to the system, or nullptr if not registered
      */
-    template <typename T>
-    T* GetSystem() const
+    template <typename T> T* GetSystem() const
     {
         auto it = m_systems.find(std::type_index(typeid(T)));
         if (it != m_systems.end())

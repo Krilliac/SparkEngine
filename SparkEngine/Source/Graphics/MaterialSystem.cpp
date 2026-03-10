@@ -1087,7 +1087,8 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
     hr = device->CreateBlendState(&blendDesc, &m_blendState);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create blend state for '" + m_name + "'");
+        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create blend state for '" + m_name +
+                                                     "'");
         return hr;
     }
 
@@ -1101,7 +1102,8 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
     hr = device->CreateDepthStencilState(&dsDesc, &m_depthStencilState);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create depth stencil state for '" + m_name + "'");
+        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create depth stencil state for '" +
+                                                     m_name + "'");
         return hr;
     }
 
@@ -1133,7 +1135,8 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
     hr = device->CreateRasterizerState(&rsDesc, &m_rasterizerState);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create rasterizer state for '" + m_name + "'");
+        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create rasterizer state for '" +
+                                                     m_name + "'");
         return hr;
     }
 
@@ -1163,7 +1166,8 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
     hr = device->CreateBuffer(&cbDesc, &initData, &m_constantBuffer);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create constant buffer for '" + m_name + "'");
+        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create constant buffer for '" +
+                                                     m_name + "'");
         return hr;
     }
 
@@ -1279,7 +1283,8 @@ std::shared_ptr<Material> Material::CreateInstance(const std::string& instanceNa
     // Constant buffer is NOT shared; the instance gets its own so properties can diverge
     instance->m_compiled = false;
 
-    Spark::SimpleConsole::GetInstance().LogInfo("Created material instance '" + instanceName + "' from template '" + m_name + "'");
+    Spark::SimpleConsole::GetInstance().LogInfo("Created material instance '" + instanceName + "' from template '" +
+                                                m_name + "'");
     return instance;
 }
 
@@ -1310,14 +1315,16 @@ bool Material::ReloadMaterial(ID3D11Device* device)
     {
         if (!std::filesystem::exists(filePath))
         {
-            Spark::SimpleConsole::GetInstance().LogWarning("ReloadMaterial: texture file missing for '" + m_name + "': " + filePath);
+            Spark::SimpleConsole::GetInstance().LogWarning("ReloadMaterial: texture file missing for '" + m_name +
+                                                           "': " + filePath);
             allSucceeded = false;
             continue;
         }
 
         if (!LoadTexture(type, filePath, device))
         {
-            Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: failed to reload texture '" + filePath + "' for material '" + m_name + "'");
+            Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: failed to reload texture '" + filePath +
+                                                         "' for material '" + m_name + "'");
             allSucceeded = false;
         }
     }
@@ -1566,7 +1573,8 @@ std::shared_ptr<Material> MaterialSystem::CreateMaterialInstance(const std::stri
     auto templateMat = GetMaterial(templateName);
     if (!templateMat || templateMat == m_defaultMaterial)
     {
-        Spark::SimpleConsole::GetInstance().LogError("CreateMaterialInstance: template material not found: " + templateName);
+        Spark::SimpleConsole::GetInstance().LogError("CreateMaterialInstance: template material not found: " +
+                                                     templateName);
         return m_errorMaterial;
     }
 
@@ -1634,12 +1642,8 @@ void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
 
     // Bind texture SRVs for each active texture slot
     static const std::pair<MaterialTextureType, UINT> textureSlots[] = {
-        {MaterialTextureType::Albedo, 0},
-        {MaterialTextureType::Normal, 1},
-        {MaterialTextureType::Metallic, 2},
-        {MaterialTextureType::Roughness, 3},
-        {MaterialTextureType::Occlusion, 4},
-        {MaterialTextureType::Emissive, 5},
+        {MaterialTextureType::Albedo, 0},    {MaterialTextureType::Normal, 1},    {MaterialTextureType::Metallic, 2},
+        {MaterialTextureType::Roughness, 3}, {MaterialTextureType::Occlusion, 4}, {MaterialTextureType::Emissive, 5},
     };
 
     int boundTextures = 0;

@@ -1106,10 +1106,7 @@ namespace PPInternal
         ComPtr<ID3D11DepthStencilView> originalDSV;
 
         // Helper: get the "other" full-res target for ping-pong
-        MipTarget* GetPingPongDest()
-        {
-            return (currentSource == &fullResA) ? &fullResB : &fullResA;
-        }
+        MipTarget* GetPingPongDest() { return (currentSource == &fullResA) ? &fullResB : &fullResA; }
     };
 
 // Global map of instance -> internal data
@@ -1768,8 +1765,7 @@ void PostProcessingSystem::RenderBloom()
     {
         UINT mw = d->bloomMipsA[0].width;
         UINT mh = d->bloomMipsA[0].height;
-        PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(mw),
-                                         1.0f / static_cast<float>(mh));
+        PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(mw), 1.0f / static_cast<float>(mh));
         PPInternal::RenderPass(m_context, d, d->brightnessExtractPS.Get(), d->bloomMipsA[0].rtv.Get(), mw, mh,
                                d->currentSource->srv.Get());
     }
@@ -1847,8 +1843,8 @@ void PostProcessingSystem::RenderToneMapping()
     PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
                                      1.0f / static_cast<float>(d->screenHeight));
 
-    PPInternal::RenderPass(m_context, d, d->toneMapColorGradePS.Get(), dest->rtv.Get(), d->screenWidth,
-                           d->screenHeight, d->currentSource->srv.Get());
+    PPInternal::RenderPass(m_context, d, d->toneMapColorGradePS.Get(), dest->rtv.Get(), d->screenWidth, d->screenHeight,
+                           d->currentSource->srv.Get());
     d->currentSource = dest;
 }
 
@@ -1900,8 +1896,8 @@ void PostProcessingSystem::RenderExposureAdaptation(float deltaTime)
 
             PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
                                              1.0f / static_cast<float>(d->screenHeight));
-            PPInternal::RenderPass(m_context, d, d->luminanceDownsamplePS.Get(), d->luminanceMips[0].rtv.Get(),
-                                   mw, mh, d->currentSource->srv.Get());
+            PPInternal::RenderPass(m_context, d, d->luminanceDownsamplePS.Get(), d->luminanceMips[0].rtv.Get(), mw, mh,
+                                   d->currentSource->srv.Get());
         }
 
         // Successive downsample to 1x1
@@ -1914,8 +1910,8 @@ void PostProcessingSystem::RenderExposureAdaptation(float deltaTime)
 
             PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(prevW),
                                              1.0f / static_cast<float>(prevH));
-            PPInternal::RenderPass(m_context, d, d->luminanceDownsamplePS.Get(), d->luminanceMips[i].rtv.Get(),
-                                   mw, mh, d->luminanceMips[i - 1].srv.Get());
+            PPInternal::RenderPass(m_context, d, d->luminanceDownsamplePS.Get(), d->luminanceMips[i].rtv.Get(), mw, mh,
+                                   d->luminanceMips[i - 1].srv.Get());
         }
 
         // Step 2: Read back the 1x1 luminance value via staging texture
@@ -1927,8 +1923,8 @@ void PostProcessingSystem::RenderExposureAdaptation(float deltaTime)
         // the exposure from the previous frame's adapted value and smooth it.
         float targetExposure = d->exposureAdaptation.targetLuminance /
                                std::max(0.001f, d->exposureAdaptation.currentAdaptedExposure * 0.18f);
-        targetExposure = std::clamp(targetExposure, d->exposureAdaptation.minExposure,
-                                    d->exposureAdaptation.maxExposure);
+        targetExposure =
+            std::clamp(targetExposure, d->exposureAdaptation.minExposure, d->exposureAdaptation.maxExposure);
 
         float speed = d->exposureAdaptation.adaptationSpeed * deltaTime;
         speed = std::clamp(speed, 0.0f, 1.0f);
@@ -1937,8 +1933,8 @@ void PostProcessingSystem::RenderExposureAdaptation(float deltaTime)
             (targetExposure - d->exposureAdaptation.currentAdaptedExposure) * speed;
 
         d->exposureAdaptation.currentAdaptedExposure =
-            std::clamp(d->exposureAdaptation.currentAdaptedExposure,
-                        d->exposureAdaptation.minExposure, d->exposureAdaptation.maxExposure);
+            std::clamp(d->exposureAdaptation.currentAdaptedExposure, d->exposureAdaptation.minExposure,
+                       d->exposureAdaptation.maxExposure);
     }
 
     // Step 3: Apply the adapted exposure to the scene
@@ -1948,8 +1944,8 @@ void PostProcessingSystem::RenderExposureAdaptation(float deltaTime)
         PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
                                          1.0f / static_cast<float>(d->screenHeight));
 
-        PPInternal::RenderPass(m_context, d, d->exposureApplyPS.Get(), dest->rtv.Get(), d->screenWidth,
-                               d->screenHeight, d->currentSource->srv.Get());
+        PPInternal::RenderPass(m_context, d, d->exposureApplyPS.Get(), dest->rtv.Get(), d->screenWidth, d->screenHeight,
+                               d->currentSource->srv.Get());
         d->currentSource = dest;
     }
 }
@@ -2036,8 +2032,7 @@ void PostProcessingSystem::Console_ToggleEffect(const std::string& effectName, b
         return;
     }
 
-    Spark::SimpleConsole::GetInstance().LogInfo(
-        "Effect '" + effectName + "' " + (enabled ? "enabled" : "disabled"));
+    Spark::SimpleConsole::GetInstance().LogInfo("Effect '" + effectName + "' " + (enabled ? "enabled" : "disabled"));
 }
 
 void PostProcessingSystem::Console_SetVignetteIntensity(float intensity)
@@ -2048,8 +2043,7 @@ void PostProcessingSystem::Console_SetVignetteIntensity(float intensity)
         d->vignette.intensity = std::clamp(intensity, 0.0f, 1.0f);
     }
 
-    Spark::SimpleConsole::GetInstance().LogInfo(
-        "Set vignette intensity to: " + std::to_string(intensity));
+    Spark::SimpleConsole::GetInstance().LogInfo("Set vignette intensity to: " + std::to_string(intensity));
 }
 
 void PostProcessingSystem::Console_SetChromaticAberrationIntensity(float intensity)
@@ -2060,8 +2054,7 @@ void PostProcessingSystem::Console_SetChromaticAberrationIntensity(float intensi
         d->chromaticAberration.intensity = std::clamp(intensity, 0.0f, 0.1f);
     }
 
-    Spark::SimpleConsole::GetInstance().LogInfo(
-        "Set chromatic aberration intensity to: " + std::to_string(intensity));
+    Spark::SimpleConsole::GetInstance().LogInfo("Set chromatic aberration intensity to: " + std::to_string(intensity));
 }
 
 void PostProcessingSystem::Console_SetAutoExposure(bool enabled)
@@ -2073,8 +2066,7 @@ void PostProcessingSystem::Console_SetAutoExposure(bool enabled)
         d->exposureAdaptation.enabled = enabled;
     }
 
-    Spark::SimpleConsole::GetInstance().LogInfo(
-        std::string("Auto-exposure ") + (enabled ? "enabled" : "disabled"));
+    Spark::SimpleConsole::GetInstance().LogInfo(std::string("Auto-exposure ") + (enabled ? "enabled" : "disabled"));
 }
 
 std::string PostProcessingSystem::Console_ListEffects() const
@@ -2092,8 +2084,8 @@ std::string PostProcessingSystem::Console_ListEffects() const
     ss << "   Auto-Exposure: " << (d->exposureAdaptation.autoExposure ? "ON" : "OFF") << "\n";
     ss << "   Adapted Exp:   " << d->exposureAdaptation.currentAdaptedExposure << "\n";
     ss << "   Speed:         " << d->exposureAdaptation.adaptationSpeed << "\n";
-    ss << "   Range:         [" << d->exposureAdaptation.minExposure << ", "
-       << d->exposureAdaptation.maxExposure << "]\n\n";
+    ss << "   Range:         [" << d->exposureAdaptation.minExposure << ", " << d->exposureAdaptation.maxExposure
+       << "]\n\n";
 
     ss << "2. Bloom          [" << (d->bloom.enabled ? "ON" : "OFF") << "]\n";
     ss << "   Threshold:     " << d->bloom.threshold << "\n";

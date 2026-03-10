@@ -170,10 +170,7 @@ namespace Spark
     class WaitForEvent : public YieldInstruction
     {
       public:
-        explicit WaitForEvent(std::shared_ptr<std::atomic<bool>> eventFlag)
-            : m_eventFlag(std::move(eventFlag))
-        {
-        }
+        explicit WaitForEvent(std::shared_ptr<std::atomic<bool>> eventFlag) : m_eventFlag(std::move(eventFlag)) {}
 
         bool IsReady(float /*deltaTime*/) override
         {
@@ -217,10 +214,7 @@ namespace Spark
             /// Whether the coroutine has finished
             bool finished = false;
 
-            GameCoroutine get_return_object()
-            {
-                return GameCoroutine{handle_type::from_promise(*this)};
-            }
+            GameCoroutine get_return_object() { return GameCoroutine{handle_type::from_promise(*this)}; }
 
             std::suspend_always initial_suspend() noexcept { return {}; }
             std::suspend_always final_suspend() noexcept
@@ -246,10 +240,7 @@ namespace Spark
         // Move-only
         GameCoroutine(const GameCoroutine&) = delete;
         GameCoroutine& operator=(const GameCoroutine&) = delete;
-        GameCoroutine(GameCoroutine&& other) noexcept : m_handle(other.m_handle)
-        {
-            other.m_handle = nullptr;
-        }
+        GameCoroutine(GameCoroutine&& other) noexcept : m_handle(other.m_handle) { other.m_handle = nullptr; }
         GameCoroutine& operator=(GameCoroutine&& other) noexcept
         {
             if (this != &other)
@@ -271,10 +262,7 @@ namespace Spark
         /**
          * @brief Check if the coroutine has completed execution.
          */
-        bool IsFinished() const
-        {
-            return !m_handle || m_handle.done() || m_handle.promise().finished;
-        }
+        bool IsFinished() const { return !m_handle || m_handle.done() || m_handle.promise().finished; }
 
         /**
          * @brief Tick the coroutine forward. Returns true if still running.
@@ -317,7 +305,7 @@ namespace Spark
      * Allows: co_await WaitForSeconds(2.0f);
      */
     template <typename T>
-    requires std::derived_from<T, YieldInstruction>
+        requires std::derived_from<T, YieldInstruction>
     struct YieldAwaiter
     {
         T instruction;
@@ -427,7 +415,8 @@ namespace Spark
          */
         Coroutine& WaitForEvent(std::shared_ptr<std::atomic<bool>> eventFlag)
         {
-            m_steps.push_back({Step::Type::Yield, nullptr, std::make_unique<Spark::WaitForEvent>(std::move(eventFlag))});
+            m_steps.push_back(
+                {Step::Type::Yield, nullptr, std::make_unique<Spark::WaitForEvent>(std::move(eventFlag))});
             return *this;
         }
 
@@ -570,8 +559,7 @@ namespace Spark
          */
         void Schedule(const std::string& name, GameCoroutine coroutine)
         {
-            m_nativeCoroutines.push_back(
-                std::make_unique<NativeCoroutineWrapper>(name, std::move(coroutine)));
+            m_nativeCoroutines.push_back(std::make_unique<NativeCoroutineWrapper>(name, std::move(coroutine)));
         }
 
         /**

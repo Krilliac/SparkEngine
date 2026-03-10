@@ -49,8 +49,10 @@ namespace Spark::Cinematic
         constexpr float cx2 = 0.58f;
         constexpr float cy2 = 1.0f;
 
-        if (t <= 0.0f) return 0.0f;
-        if (t >= 1.0f) return 1.0f;
+        if (t <= 0.0f)
+            return 0.0f;
+        if (t >= 1.0f)
+            return 1.0f;
 
         // Bezier coefficients for the x component: B(u) = 3(1-u)^2*u*cx1 + 3(1-u)*u^2*cx2 + u^3
         // Expanded: B(u) = (3*cx1)*u - (6*cx1 - 3*cx2)*u^2 + (3*cx1 - 3*cx2 + 1)*u^3

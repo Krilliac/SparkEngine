@@ -41,10 +41,10 @@
  */
 enum class ResidencyState : uint8_t
 {
-    Resident,   ///< Data is in VRAM, GPU handle is valid
-    Evicted,    ///< Data is in system RAM staging pool, GPU handle released
-    Streaming,  ///< Transfer in progress (evicting or re-uploading)
-    Pinned      ///< Never evict — render targets, G-buffers, back buffer
+    Resident,  ///< Data is in VRAM, GPU handle is valid
+    Evicted,   ///< Data is in system RAM staging pool, GPU handle released
+    Streaming, ///< Transfer in progress (evicting or re-uploading)
+    Pinned     ///< Never evict — render targets, G-buffers, back buffer
 };
 
 /**
@@ -79,12 +79,12 @@ inline const char* ResidencyStateToString(ResidencyState state)
  */
 enum class GPUResourceType : uint8_t
 {
-    DistantTexture,   ///< Textures far from camera — evict first
-    SceneTexture,     ///< Standard scene textures
-    MeshBuffer,       ///< Vertex/index buffers
-    ShadowMap,        ///< Shadow map textures
-    ConstantBuffer,   ///< Per-frame / per-object constant buffers
-    RenderTarget      ///< Intermediate render targets — evict last (prefer Pinned)
+    DistantTexture, ///< Textures far from camera — evict first
+    SceneTexture,   ///< Standard scene textures
+    MeshBuffer,     ///< Vertex/index buffers
+    ShadowMap,      ///< Shadow map textures
+    ConstantBuffer, ///< Per-frame / per-object constant buffers
+    RenderTarget    ///< Intermediate render targets — evict last (prefer Pinned)
 };
 
 // ============================================================================
@@ -96,12 +96,12 @@ enum class GPUResourceType : uint8_t
  */
 struct StagingBuffer
 {
-    std::vector<uint8_t> data;          ///< Raw pixel/vertex data
-    uint32_t width = 0;                 ///< Texture width (0 for buffers)
-    uint32_t height = 0;               ///< Texture height (0 for buffers)
-    uint32_t rowPitch = 0;             ///< Bytes per row (for textures)
-    uint32_t mipLevels = 1;            ///< Number of mip levels stored
-    uint32_t format = 0;               ///< DXGI_FORMAT cast to uint32_t
+    std::vector<uint8_t> data; ///< Raw pixel/vertex data
+    uint32_t width = 0;        ///< Texture width (0 for buffers)
+    uint32_t height = 0;       ///< Texture height (0 for buffers)
+    uint32_t rowPitch = 0;     ///< Bytes per row (for textures)
+    uint32_t mipLevels = 1;    ///< Number of mip levels stored
+    uint32_t format = 0;       ///< DXGI_FORMAT cast to uint32_t
     GPUResourceType resourceType = GPUResourceType::SceneTexture;
 
     bool IsValid() const { return !data.empty(); }
@@ -126,8 +126,8 @@ struct ResidencyRecord
 
     /// LRU tracking
     uint64_t lastUsedFrame = 0;
-    float screenCoverage = 0.0f;     ///< Approximate screen-space coverage (0..1)
-    float distanceToCamera = 0.0f;   ///< Distance to the active camera
+    float screenCoverage = 0.0f;   ///< Approximate screen-space coverage (0..1)
+    float distanceToCamera = 0.0f; ///< Distance to the active camera
 
     /// CPU staging data (populated when evicted, cleared when re-uploaded)
     std::shared_ptr<StagingBuffer> stagingData;
@@ -184,14 +184,14 @@ struct ReuploadRequest
 {
     uint64_t resourceId = 0;
     GPUResourcePriority priority = GPUResourcePriority::Normal;
-    bool urgent = false;  ///< Skip queue and upload immediately
+    bool urgent = false; ///< Skip queue and upload immediately
 
     /// Ordering: higher priority and urgent requests first
     bool operator<(const ReuploadRequest& other) const
     {
         if (urgent != other.urgent)
         {
-            return !urgent;  // urgent items have higher priority in a max-heap
+            return !urgent; // urgent items have higher priority in a max-heap
         }
         return priority < other.priority;
     }
@@ -212,7 +212,7 @@ struct ReuploadRequest
  */
 class ResourceResidencyManager
 {
-public:
+  public:
     // ========================================================================
     // CONFIGURATION
     // ========================================================================
@@ -238,10 +238,7 @@ public:
 
     ResourceResidencyManager() = default;
 
-    ~ResourceResidencyManager()
-    {
-        Shutdown();
-    }
+    ~ResourceResidencyManager() { Shutdown(); }
 
     // Non-copyable
     ResourceResidencyManager(const ResourceResidencyManager&) = delete;
@@ -278,10 +275,7 @@ public:
         {
             m_pressureListenerId = m_budgetMonitor->AddPressureListener(
                 "ResourceResidencyManager",
-                [this](MemoryPressureLevel level, const GPUMemoryInfo& info)
-                {
-                    OnMemoryPressure(level, info);
-                });
+                [this](MemoryPressureLevel level, const GPUMemoryInfo& info) { OnMemoryPressure(level, info); });
         }
     }
 
@@ -315,8 +309,7 @@ public:
     /**
      * @brief Register a GPU resource for residency management
      */
-    void RegisterResource(uint64_t resourceId, const std::string& name,
-                          uint64_t sizeBytes, GPUResourceType type,
+    void RegisterResource(uint64_t resourceId, const std::string& name, uint64_t sizeBytes, GPUResourceType type,
                           GPUResourcePriority priority = GPUResourcePriority::Normal)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -385,8 +378,7 @@ public:
     /**
      * @brief Set readback callback for a resource (used during eviction to save data)
      */
-    void SetReadbackCallback(uint64_t resourceId,
-                             std::function<std::shared_ptr<StagingBuffer>()> callback)
+    void SetReadbackCallback(uint64_t resourceId, std::function<std::shared_ptr<StagingBuffer>()> callback)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -400,8 +392,7 @@ public:
     /**
      * @brief Set re-upload callback for a resource (used to restore from staging)
      */
-    void SetReuploadCallback(uint64_t resourceId,
-                             std::function<bool(const StagingBuffer&)> callback)
+    void SetReuploadCallback(uint64_t resourceId, std::function<bool(const StagingBuffer&)> callback)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -419,8 +410,7 @@ public:
     /**
      * @brief Mark a resource as used this frame
      */
-    void TouchResource(uint64_t resourceId, float screenCoverage = 0.0f,
-                       float distanceToCamera = 0.0f)
+    void TouchResource(uint64_t resourceId, float screenCoverage = 0.0f, float distanceToCamera = 0.0f)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -452,8 +442,7 @@ public:
             return false;
         }
 
-        if (it->second.state == ResidencyState::Resident ||
-            it->second.state == ResidencyState::Pinned)
+        if (it->second.state == ResidencyState::Resident || it->second.state == ResidencyState::Pinned)
         {
             return true;
         }
@@ -572,7 +561,7 @@ public:
         {
             return it->second.state;
         }
-        return ResidencyState::Evicted;  // Unknown resource treated as evicted
+        return ResidencyState::Evicted; // Unknown resource treated as evicted
     }
 
     /**
@@ -610,8 +599,7 @@ public:
         uint64_t total = 0;
         for (const auto& [id, record] : m_records)
         {
-            if (record.state == ResidencyState::Resident ||
-                record.state == ResidencyState::Pinned)
+            if (record.state == ResidencyState::Resident || record.state == ResidencyState::Pinned)
             {
                 total += record.sizeBytes;
             }
@@ -690,7 +678,7 @@ public:
         m_config = config;
     }
 
-private:
+  private:
     // ========================================================================
     // INTERNAL METHODS
     // ========================================================================
@@ -716,7 +704,7 @@ private:
         int pressureInt = m_pendingPressureLevel.exchange(-1, std::memory_order_acquire);
         if (pressureInt < 0)
         {
-            return;  // No pending pressure event
+            return; // No pending pressure event
         }
 
         auto level = static_cast<MemoryPressureLevel>(pressureInt);
@@ -757,13 +745,12 @@ private:
         uint64_t currentFrame = (m_budgetMonitor) ? m_budgetMonitor->GetCurrentFrame() : 0;
 
         // Build sorted eviction candidate list
-        std::vector<std::pair<uint64_t, float>> candidates;  // {resourceId, score}
+        std::vector<std::pair<uint64_t, float>> candidates; // {resourceId, score}
         candidates.reserve(m_records.size());
 
         for (const auto& [id, record] : m_records)
         {
-            if (record.state == ResidencyState::Resident &&
-                record.priority != GPUResourcePriority::Pinned)
+            if (record.state == ResidencyState::Resident && record.priority != GPUResourcePriority::Pinned)
             {
                 // Check minimum age
                 if (currentFrame - record.lastUsedFrame >= m_config.minEvictionAge)
@@ -803,7 +790,7 @@ private:
                 TrimStagingPool(record.sizeBytes);
                 if (m_stagingPoolBytes + record.sizeBytes > m_config.maxStagingPoolBytes)
                 {
-                    continue;  // Cannot stage this resource
+                    continue; // Cannot stage this resource
                 }
             }
 
@@ -841,8 +828,7 @@ private:
         uint64_t total = 0;
         for (const auto& [id, record] : m_records)
         {
-            if (record.state == ResidencyState::Resident ||
-                record.state == ResidencyState::Pinned)
+            if (record.state == ResidencyState::Resident || record.state == ResidencyState::Pinned)
             {
                 total += record.sizeBytes;
             }
@@ -870,11 +856,8 @@ private:
         }
 
         // Sort by last used frame ascending (oldest first)
-        std::sort(trimCandidates.begin(), trimCandidates.end(),
-                  [this](uint64_t a, uint64_t b)
-                  {
-                      return m_records.at(a).lastUsedFrame < m_records.at(b).lastUsedFrame;
-                  });
+        std::sort(trimCandidates.begin(), trimCandidates.end(), [this](uint64_t a, uint64_t b)
+                  { return m_records.at(a).lastUsedFrame < m_records.at(b).lastUsedFrame; });
 
         uint64_t freedBytes = 0;
         for (uint64_t candidateId : trimCandidates)

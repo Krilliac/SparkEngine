@@ -41,11 +41,11 @@
  */
 enum class QualityDimension : uint8_t
 {
-    ResolutionScale = 0,  ///< Render resolution multiplier (0.5 .. 1.0)
-    ShadowQuality,        ///< Shadow map resolution and cascade count
-    LODBias,              ///< Mesh level-of-detail distance bias
-    TextureQuality,       ///< Texture mip bias / quality tier
-    PostProcessing,       ///< Optional post-processing effects on/off
+    ResolutionScale = 0, ///< Render resolution multiplier (0.5 .. 1.0)
+    ShadowQuality,       ///< Shadow map resolution and cascade count
+    LODBias,             ///< Mesh level-of-detail distance bias
+    TextureQuality,      ///< Texture mip bias / quality tier
+    PostProcessing,      ///< Optional post-processing effects on/off
 
     Count
 };
@@ -109,17 +109,17 @@ struct QualityState
     float GetAggregateQuality() const
     {
         float quality = 0.0f;
-        quality += renderScale;                                    // 0.5 .. 1.0
-        quality += shadowResolutionScale;                          // 0.25 .. 1.0
+        quality += renderScale;                                   // 0.5 .. 1.0
+        quality += shadowResolutionScale;                         // 0.25 .. 1.0
         quality += static_cast<float>(shadowCascadeCount) / 4.0f; // 0.25 .. 1.0
-        quality += lodBias;                                        // 0.5 .. 1.0
+        quality += lodBias;                                       // 0.5 .. 1.0
         quality += (1.0f - textureMipBias / 4.0f);                // 0.0 .. 1.0
         quality += bloomEnabled ? 0.2f : 0.0f;
         quality += ssaoEnabled ? 0.2f : 0.0f;
         quality += motionBlurEnabled ? 0.1f : 0.0f;
         quality += ssrEnabled ? 0.2f : 0.0f;
         quality += volumetricsEnabled ? 0.1f : 0.0f;
-        return quality / 5.8f;  // Normalize to 0..1 range
+        return quality / 5.8f; // Normalize to 0..1 range
     }
 };
 
@@ -133,9 +133,8 @@ struct QualityState
  * @param dimension The dimension that was just changed
  * @param direction +1 if quality was increased, -1 if decreased
  */
-using QualityChangeCallback = std::function<void(const QualityState& newState,
-                                                  QualityDimension dimension,
-                                                  int direction)>;
+using QualityChangeCallback =
+    std::function<void(const QualityState& newState, QualityDimension dimension, int direction)>;
 
 // ============================================================================
 // PID CONTROLLER
@@ -149,20 +148,17 @@ using QualityChangeCallback = std::function<void(const QualityState& newState,
  */
 class PIDController
 {
-public:
+  public:
     struct Gains
     {
-        float kP = 0.5f;   ///< Proportional gain
-        float kI = 0.05f;  ///< Integral gain
-        float kD = 0.1f;   ///< Derivative gain
+        float kP = 0.5f;  ///< Proportional gain
+        float kI = 0.05f; ///< Integral gain
+        float kD = 0.1f;  ///< Derivative gain
     };
 
     PIDController() = default;
 
-    explicit PIDController(const Gains& gains)
-        : m_gains(gains)
-    {
-    }
+    explicit PIDController(const Gains& gains) : m_gains(gains) {}
 
     /**
      * @brief Compute the PID output for the current frame
@@ -218,7 +214,7 @@ public:
      */
     void SetIntegralLimit(float limit) { m_integralLimit = limit; }
 
-private:
+  private:
     Gains m_gains;
     float m_integral = 0.0f;
     float m_previousError = 0.0f;
@@ -241,7 +237,7 @@ private:
  */
 class DynamicQualityScaler
 {
-public:
+  public:
     // ========================================================================
     // CONFIGURATION
     // ========================================================================
@@ -331,12 +327,8 @@ public:
         if (m_budgetMonitor)
         {
             m_pressureListenerId = m_budgetMonitor->AddPressureListener(
-                "DynamicQualityScaler",
-                [this](MemoryPressureLevel level, const GPUMemoryInfo& /*info*/)
-                {
-                    m_pendingPressureLevel.store(static_cast<int>(level),
-                                                 std::memory_order_release);
-                });
+                "DynamicQualityScaler", [this](MemoryPressureLevel level, const GPUMemoryInfo& /*info*/)
+                { m_pendingPressureLevel.store(static_cast<int>(level), std::memory_order_release); });
         }
     }
 
@@ -484,10 +476,9 @@ public:
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
-        m_callbacks.erase(
-            std::remove_if(m_callbacks.begin(), m_callbacks.end(),
-                           [callbackId](const auto& pair) { return pair.first == callbackId; }),
-            m_callbacks.end());
+        m_callbacks.erase(std::remove_if(m_callbacks.begin(), m_callbacks.end(),
+                                         [callbackId](const auto& pair) { return pair.first == callbackId; }),
+                          m_callbacks.end());
     }
 
     // ========================================================================
@@ -562,7 +553,7 @@ public:
         return m_currentCascadeStep;
     }
 
-private:
+  private:
     // ========================================================================
     // QUALITY CASCADE — REDUCE
     // ========================================================================
@@ -580,18 +571,16 @@ private:
         // Step 1: Reduce render scale
         if (m_qualityState.renderScale > m_config.minRenderScale)
         {
-            m_qualityState.renderScale = std::max(
-                m_config.minRenderScale,
-                m_qualityState.renderScale - m_config.renderScaleStep);
+            m_qualityState.renderScale =
+                std::max(m_config.minRenderScale, m_qualityState.renderScale - m_config.renderScaleStep);
             changed = true;
             changedDimension = QualityDimension::ResolutionScale;
         }
         // Step 2: Reduce shadow quality
         else if (m_qualityState.shadowResolutionScale > m_config.minShadowScale)
         {
-            m_qualityState.shadowResolutionScale = std::max(
-                m_config.minShadowScale,
-                m_qualityState.shadowResolutionScale - m_config.shadowScaleStep);
+            m_qualityState.shadowResolutionScale =
+                std::max(m_config.minShadowScale, m_qualityState.shadowResolutionScale - m_config.shadowScaleStep);
             changed = true;
             changedDimension = QualityDimension::ShadowQuality;
         }
@@ -604,18 +593,15 @@ private:
         // Step 3: Reduce LOD bias
         else if (m_qualityState.lodBias > m_config.minLodBias)
         {
-            m_qualityState.lodBias = std::max(
-                m_config.minLodBias,
-                m_qualityState.lodBias - m_config.lodBiasStep);
+            m_qualityState.lodBias = std::max(m_config.minLodBias, m_qualityState.lodBias - m_config.lodBiasStep);
             changed = true;
             changedDimension = QualityDimension::LODBias;
         }
         // Step 4: Increase texture mip bias (lower quality)
         else if (m_qualityState.textureMipBias < m_config.maxTextureMipBias)
         {
-            m_qualityState.textureMipBias = std::min(
-                m_config.maxTextureMipBias,
-                m_qualityState.textureMipBias + m_config.textureMipBiasStep);
+            m_qualityState.textureMipBias =
+                std::min(m_config.maxTextureMipBias, m_qualityState.textureMipBias + m_config.textureMipBiasStep);
             changed = true;
             changedDimension = QualityDimension::TextureQuality;
         }
@@ -683,18 +669,15 @@ private:
         // Step 2: Decrease texture mip bias (higher quality)
         else if (m_qualityState.textureMipBias > m_config.minTextureMipBias)
         {
-            m_qualityState.textureMipBias = std::max(
-                m_config.minTextureMipBias,
-                m_qualityState.textureMipBias - m_config.textureMipBiasStep);
+            m_qualityState.textureMipBias =
+                std::max(m_config.minTextureMipBias, m_qualityState.textureMipBias - m_config.textureMipBiasStep);
             changed = true;
             changedDimension = QualityDimension::TextureQuality;
         }
         // Step 3: Increase LOD bias
         else if (m_qualityState.lodBias < m_config.maxLodBias)
         {
-            m_qualityState.lodBias = std::min(
-                m_config.maxLodBias,
-                m_qualityState.lodBias + m_config.lodBiasStep);
+            m_qualityState.lodBias = std::min(m_config.maxLodBias, m_qualityState.lodBias + m_config.lodBiasStep);
             changed = true;
             changedDimension = QualityDimension::LODBias;
         }
@@ -707,18 +690,16 @@ private:
         }
         else if (m_qualityState.shadowResolutionScale < m_config.maxShadowScale)
         {
-            m_qualityState.shadowResolutionScale = std::min(
-                m_config.maxShadowScale,
-                m_qualityState.shadowResolutionScale + m_config.shadowScaleStep);
+            m_qualityState.shadowResolutionScale =
+                std::min(m_config.maxShadowScale, m_qualityState.shadowResolutionScale + m_config.shadowScaleStep);
             changed = true;
             changedDimension = QualityDimension::ShadowQuality;
         }
         // Step 5: Increase render scale
         else if (m_qualityState.renderScale < m_config.maxRenderScale)
         {
-            m_qualityState.renderScale = std::min(
-                m_config.maxRenderScale,
-                m_qualityState.renderScale + m_config.renderScaleStep);
+            m_qualityState.renderScale =
+                std::min(m_config.maxRenderScale, m_qualityState.renderScale + m_config.renderScaleStep);
             changed = true;
             changedDimension = QualityDimension::ResolutionScale;
         }
@@ -760,9 +741,8 @@ private:
             // Increase texture mip bias by 1 step
             if (m_qualityState.textureMipBias < m_config.maxTextureMipBias)
             {
-                m_qualityState.textureMipBias = std::min(
-                    m_config.maxTextureMipBias,
-                    m_qualityState.textureMipBias + m_config.textureMipBiasStep);
+                m_qualityState.textureMipBias =
+                    std::min(m_config.maxTextureMipBias, m_qualityState.textureMipBias + m_config.textureMipBiasStep);
                 NotifyCallbacks(QualityDimension::TextureQuality, -1);
             }
             break;
@@ -771,17 +751,15 @@ private:
             // Reduce shadow resolution
             if (m_qualityState.shadowResolutionScale > m_config.minShadowScale)
             {
-                m_qualityState.shadowResolutionScale = std::max(
-                    m_config.minShadowScale,
-                    m_qualityState.shadowResolutionScale - m_config.shadowScaleStep);
+                m_qualityState.shadowResolutionScale =
+                    std::max(m_config.minShadowScale, m_qualityState.shadowResolutionScale - m_config.shadowScaleStep);
                 NotifyCallbacks(QualityDimension::ShadowQuality, -1);
             }
             // Also increase texture mip bias
             if (m_qualityState.textureMipBias < m_config.maxTextureMipBias)
             {
-                m_qualityState.textureMipBias = std::min(
-                    m_config.maxTextureMipBias,
-                    m_qualityState.textureMipBias + m_config.textureMipBiasStep);
+                m_qualityState.textureMipBias =
+                    std::min(m_config.maxTextureMipBias, m_qualityState.textureMipBias + m_config.textureMipBiasStep);
                 NotifyCallbacks(QualityDimension::TextureQuality, -1);
             }
             break;

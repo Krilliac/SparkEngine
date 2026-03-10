@@ -77,9 +77,8 @@ void Profiler::BeginSection(const std::string& name, ProfileCategory category)
     sample.name = name;
     sample.category = category;
     sample.depth = 0; // Depth tracking could be enhanced with a stack
-    sample.startTimeMs = std::chrono::duration<double, std::milli>(
-        std::chrono::high_resolution_clock::now().time_since_epoch())
-                             .count();
+    sample.startTimeMs =
+        std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
     m_currentFrameSamples.push_back(sample);
 }
 
@@ -210,8 +209,8 @@ void Profiler::ResolveGPUQueries()
         }
 
         D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjointData;
-        if (m_context->GetData(timer.disjointQuery.Get(), &disjointData,
-                               sizeof(disjointData), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK)
+        if (m_context->GetData(timer.disjointQuery.Get(), &disjointData, sizeof(disjointData),
+                               D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK)
         {
             continue;
         }
@@ -223,19 +222,18 @@ void Profiler::ResolveGPUQueries()
         }
 
         UINT64 beginTime = 0, endTime = 0;
-        if (m_context->GetData(timer.beginQuery.Get(), &beginTime,
-                               sizeof(UINT64), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK)
+        if (m_context->GetData(timer.beginQuery.Get(), &beginTime, sizeof(UINT64), D3D11_ASYNC_GETDATA_DONOTFLUSH) !=
+            S_OK)
         {
             continue;
         }
-        if (m_context->GetData(timer.endQuery.Get(), &endTime,
-                               sizeof(UINT64), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK)
+        if (m_context->GetData(timer.endQuery.Get(), &endTime, sizeof(UINT64), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK)
         {
             continue;
         }
 
-        timer.resultMs = static_cast<double>(endTime - beginTime) /
-                         static_cast<double>(disjointData.Frequency) * 1000.0;
+        timer.resultMs =
+            static_cast<double>(endTime - beginTime) / static_cast<double>(disjointData.Frequency) * 1000.0;
         timer.pending = false;
     }
 }
@@ -326,8 +324,7 @@ std::string Profiler::Console_GetReport() const
     }
 
     ss << "\n--- Category Totals ---\n";
-    const char* catNames[] = {"Frame", "Render", "Physics", "Audio",
-                              "GameLogic", "Input", "Particles", "UI", "Custom"};
+    const char* catNames[] = {"Frame", "Render", "Physics", "Audio", "GameLogic", "Input", "Particles", "UI", "Custom"};
     for (size_t i = 0; i < m_categoryTotals.size(); ++i)
     {
         if (m_categoryTotals[i] > 0.001)
@@ -363,10 +360,8 @@ std::string Profiler::Console_GetMemoryReport() const
     ss << "=== Memory Report ===\n";
     for (const auto& [name, cat] : m_memoryCategories)
     {
-        ss << "  " << name << ": "
-           << (cat.currentBytes / 1024) << " KB current, "
-           << (cat.peakBytes / 1024) << " KB peak, "
-           << cat.totalAllocations << " allocations\n";
+        ss << "  " << name << ": " << (cat.currentBytes / 1024) << " KB current, " << (cat.peakBytes / 1024)
+           << " KB peak, " << cat.totalAllocations << " allocations\n";
     }
     return ss.str();
 }
@@ -386,8 +381,7 @@ void Profiler::Console_ExportCSV(const std::string& filepath) const
     }
 
     file << "\nCategory,TimeMs\n";
-    const char* catNames[] = {"Frame", "Render", "Physics", "Audio",
-                              "GameLogic", "Input", "Particles", "UI", "Custom"};
+    const char* catNames[] = {"Frame", "Render", "Physics", "Audio", "GameLogic", "Input", "Particles", "UI", "Custom"};
     for (size_t i = 0; i < m_categoryTotals.size(); ++i)
     {
         file << catNames[i] << "," << m_categoryTotals[i] << "\n";
@@ -396,9 +390,7 @@ void Profiler::Console_ExportCSV(const std::string& filepath) const
     file << "\nMemoryCategory,CurrentKB,PeakKB,Allocations\n";
     for (const auto& [name, cat] : m_memoryCategories)
     {
-        file << name << ","
-             << (cat.currentBytes / 1024) << ","
-             << (cat.peakBytes / 1024) << ","
-             << cat.totalAllocations << "\n";
+        file << name << "," << (cat.currentBytes / 1024) << "," << (cat.peakBytes / 1024) << "," << cat.totalAllocations
+             << "\n";
     }
 }

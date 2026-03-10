@@ -11,10 +11,8 @@ using namespace DirectX;
 XMMATRIX Transform::GetLocalMatrix() const
 {
     XMMATRIX scaleMtx = XMMatrixScaling(scale.x, scale.y, scale.z);
-    XMMATRIX rotMtx = XMMatrixRotationRollPitchYaw(
-        XMConvertToRadians(rotation.x),
-        XMConvertToRadians(rotation.y),
-        XMConvertToRadians(rotation.z));
+    XMMATRIX rotMtx = XMMatrixRotationRollPitchYaw(XMConvertToRadians(rotation.x), XMConvertToRadians(rotation.y),
+                                                   XMConvertToRadians(rotation.z));
     XMMATRIX transMtx = XMMatrixTranslation(position.x, position.y, position.z);
     return scaleMtx * rotMtx * transMtx;
 }

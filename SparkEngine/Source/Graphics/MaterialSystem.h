@@ -34,16 +34,16 @@ using namespace DirectX;
  */
 struct alignas(16) MaterialConstants
 {
-    XMFLOAT4 albedoColor;       // rgba
-    float metallicFactor;        // metallic
-    float roughnessFactor;       // roughness
-    float normalScale;           // normal map intensity
-    float occlusionStrength;     // AO strength
-    XMFLOAT3 emissiveColor;     // emissive RGB
-    float emissiveFactor;        // emissive intensity
-    float alphaCutoff;           // alpha test threshold
-    float indexOfRefraction;     // IOR
-    float pad0, pad1;            // padding to 16-byte alignment
+    XMFLOAT4 albedoColor;    // rgba
+    float metallicFactor;    // metallic
+    float roughnessFactor;   // roughness
+    float normalScale;       // normal map intensity
+    float occlusionStrength; // AO strength
+    XMFLOAT3 emissiveColor;  // emissive RGB
+    float emissiveFactor;    // emissive intensity
+    float alphaCutoff;       // alpha test threshold
+    float indexOfRefraction; // IOR
+    float pad0, pad1;        // padding to 16-byte alignment
 };
 
 /**
@@ -312,8 +312,7 @@ class MaterialSystem
     void UnloadAllMaterials();
 
     // Material instancing: clone a template material with overridable properties
-    std::shared_ptr<Material> CreateMaterialInstance(const std::string& templateName,
-                                                     const std::string& instanceName);
+    std::shared_ptr<Material> CreateMaterialInstance(const std::string& templateName, const std::string& instanceName);
 
     // Bind a material for rendering: sets SRVs, constant buffer, blend/rasterizer states
     void BindMaterial(const std::string& name);

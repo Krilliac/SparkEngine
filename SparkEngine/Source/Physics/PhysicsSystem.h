@@ -1193,9 +1193,8 @@ class PhysicsSystem
      * @return        Shared pointer to the new PhysicsConstraint.
      */
     std::shared_ptr<PhysicsConstraint> CreatePoint2PointConstraint(std::shared_ptr<PhysicsBody> bodyA,
-                                                                    std::shared_ptr<PhysicsBody> bodyB,
-                                                                    const XMFLOAT3& pivotA,
-                                                                    const XMFLOAT3& pivotB);
+                                                                   std::shared_ptr<PhysicsBody> bodyB,
+                                                                   const XMFLOAT3& pivotA, const XMFLOAT3& pivotB);
 
     /**
      * @brief Create a cone-twist constraint between two bodies.
@@ -1213,12 +1212,10 @@ class PhysicsSystem
      * @return           Shared pointer to the new PhysicsConstraint.
      */
     std::shared_ptr<PhysicsConstraint> CreateConeTwistConstraint(std::shared_ptr<PhysicsBody> bodyA,
-                                                                  std::shared_ptr<PhysicsBody> bodyB,
-                                                                  const XMMATRIX& frameA,
-                                                                  const XMMATRIX& frameB,
-                                                                  float swingSpan1 = 0.5f,
-                                                                  float swingSpan2 = 0.5f,
-                                                                  float twistSpan = 0.5f);
+                                                                 std::shared_ptr<PhysicsBody> bodyB,
+                                                                 const XMMATRIX& frameA, const XMMATRIX& frameB,
+                                                                 float swingSpan1 = 0.5f, float swingSpan2 = 0.5f,
+                                                                 float twistSpan = 0.5f);
 
     /**
      * @brief Create a fixed (weld) constraint that locks two bodies together.

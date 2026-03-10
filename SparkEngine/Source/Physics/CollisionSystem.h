@@ -404,7 +404,7 @@ class CollisionSystem
      * @return CollisionResult with hit information
      */
     static CollisionResult SweepSphereVsSphere(const BoundingSphere& moving, const XMFLOAT3& velocity,
-                                                const BoundingSphere& target, float& hitTime);
+                                               const BoundingSphere& target, float& hitTime);
 
     /**
      * @brief Sweep a sphere along a direction and test against a box
@@ -419,7 +419,7 @@ class CollisionSystem
      * @return CollisionResult with hit information
      */
     static CollisionResult SweepSphereVsBox(const BoundingSphere& moving, const XMFLOAT3& velocity,
-                                             const BoundingBox& target, float& hitTime);
+                                            const BoundingBox& target, float& hitTime);
 
     /**
      * @brief Sweep a box along a direction and test against another box
@@ -433,6 +433,6 @@ class CollisionSystem
      * @param hitTime  [out] Parametric time of first contact [0, 1]
      * @return CollisionResult with hit information
      */
-    static CollisionResult SweepBoxVsBox(const BoundingBox& moving, const XMFLOAT3& velocity,
-                                          const BoundingBox& target, float& hitTime);
+    static CollisionResult SweepBoxVsBox(const BoundingBox& moving, const XMFLOAT3& velocity, const BoundingBox& target,
+                                         float& hitTime);
 };

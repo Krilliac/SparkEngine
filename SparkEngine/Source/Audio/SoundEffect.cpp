@@ -10,8 +10,7 @@
 //------------------------------------------------------------------------------
 //  SoundEffect implementation
 //------------------------------------------------------------------------------
-SoundEffect::SoundEffect()
-    : m_audioDataSize(0)
+SoundEffect::SoundEffect() : m_audioDataSize(0)
 {
     ZeroMemory(&m_format, sizeof(m_format));
 }

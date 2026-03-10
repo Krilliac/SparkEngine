@@ -384,8 +384,8 @@ namespace Spark
     /** @brief Fired when system memory usage exceeds a threshold. */
     struct MemoryPressureEvent
     {
-        float usagePercent = 0.0f;   ///< Current memory usage as a percentage [0, 100]
-        size_t availableBytes = 0;   ///< Remaining available memory in bytes
+        float usagePercent = 0.0f; ///< Current memory usage as a percentage [0, 100]
+        size_t availableBytes = 0; ///< Remaining available memory in bytes
     };
 
     // =============================================================================
@@ -438,15 +438,10 @@ namespace Spark
          * @tparam T     Event type.
          * @param event  Event data to queue.
          */
-        template <typename T>
-        void QueueEvent(T event)
+        template <typename T> void QueueEvent(T event)
         {
             std::lock_guard<std::mutex> lock(m_mutex);
-            m_pendingEvents.push_back(
-                [evt = std::move(event)](EventBus& bus)
-                {
-                    bus.Publish(evt);
-                });
+            m_pendingEvents.push_back([evt = std::move(event)](EventBus& bus) { bus.Publish(evt); });
         }
 
         /**

@@ -636,8 +636,7 @@ namespace Spark::Procedural
     // Poisson Disk Sampling (Bridson's algorithm)
     // ============================================================================
 
-    std::vector<XMFLOAT2> PoissonDiskSampling(float width, float height, float minDist,
-                                               int maxAttempts, uint32_t seed)
+    std::vector<XMFLOAT2> PoissonDiskSampling(float width, float height, float minDist, int maxAttempts, uint32_t seed)
     {
         std::mt19937 rng(seed);
         std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
@@ -653,9 +652,7 @@ namespace Spark::Procedural
 
         // Helper to get grid cell for a point
         auto toGrid = [cellSize](float px, float py) -> std::pair<int, int>
-        {
-            return {static_cast<int>(px / cellSize), static_cast<int>(py / cellSize)};
-        };
+        { return {static_cast<int>(px / cellSize), static_cast<int>(py / cellSize)}; };
 
         // Seed with first point
         float startX = width * dist01(rng);
@@ -953,7 +950,7 @@ namespace Spark::Procedural
     }
 
     void DungeonGenerator::ConnectRooms(DungeonLayout& layout, const DungeonRoom& a, const DungeonRoom& b,
-                                         int corridorWidth, std::mt19937& rng)
+                                        int corridorWidth, std::mt19937& rng)
     {
         int ax = a.CenterX(), ay = a.CenterY();
         int bx = b.CenterX(), by = b.CenterY();
@@ -1034,9 +1031,7 @@ namespace Spark::Procedural
     // DungeonGenerator — Cellular Automata
     // ============================================================================
 
-    DungeonLayout DungeonGenerator::GenerateCellularAutomata(int width, int height,
-                                                             float fillProb,
-                                                             int iterations,
+    DungeonLayout DungeonGenerator::GenerateCellularAutomata(int width, int height, float fillProb, int iterations,
                                                              uint32_t seed)
     {
         DungeonLayout layout;
@@ -1130,8 +1125,8 @@ namespace Spark::Procedural
                         {
                             int nx = cx + neighbors[i];
                             int ny = cy + neighbors[i + 1];
-                            if (nx >= 0 && nx < width && ny >= 0 && ny < height &&
-                                !visited[ny * width + nx] && layout.grid[ny * width + nx] == 1)
+                            if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited[ny * width + nx] &&
+                                layout.grid[ny * width + nx] == 1)
                             {
                                 visited[ny * width + nx] = true;
                                 q.push({nx, ny});
@@ -1155,11 +1150,8 @@ namespace Spark::Procedural
     // DungeonGenerator — Room Placement with Corridors
     // ============================================================================
 
-    DungeonLayout DungeonGenerator::GenerateRooms(int width, int height,
-                                                   int roomCount,
-                                                   int minRoomSize,
-                                                   int maxRoomSize,
-                                                   uint32_t seed)
+    DungeonLayout DungeonGenerator::GenerateRooms(int width, int height, int roomCount, int minRoomSize,
+                                                  int maxRoomSize, uint32_t seed)
     {
         DungeonLayout layout;
         layout.width = width;
@@ -1186,10 +1178,8 @@ namespace Spark::Procedural
             bool overlaps = false;
             for (const auto& existing : layout.rooms)
             {
-                if (rx - 1 < existing.x + existing.width &&
-                    rx + rw + 1 > existing.x &&
-                    ry - 1 < existing.y + existing.height &&
-                    ry + rh + 1 > existing.y)
+                if (rx - 1 < existing.x + existing.width && rx + rw + 1 > existing.x &&
+                    ry - 1 < existing.y + existing.height && ry + rh + 1 > existing.y)
                 {
                     overlaps = true;
                     break;

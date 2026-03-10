@@ -101,10 +101,7 @@ namespace Spark
      *
      * @return Pointer to allocated memory, or nullptr if out of space
      */
-        void* Allocate(size_t size, size_t alignment = 16)
-        {
-            return AllocRaw(size, alignment);
-        }
+        void* Allocate(size_t size, size_t alignment = 16) { return AllocRaw(size, alignment); }
 
         /**
      * @brief Allocate space for N objects of type T (uninitialized)

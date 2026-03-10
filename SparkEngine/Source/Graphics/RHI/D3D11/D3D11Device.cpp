@@ -667,7 +667,8 @@ namespace Spark
                     m_device->CreateDepthStencilView(texture.Get(), &dsvDesc, &dsv);
                 }
 
-                return std::make_unique<D3D11Texture>(desc, texture, std::move(srv), std::move(rtv), std::move(dsv)).release();
+                return std::make_unique<D3D11Texture>(desc, texture, std::move(srv), std::move(rtv), std::move(dsv))
+                    .release();
             }
 
             IRHIShader* D3D11Device::CreateShader(const RHIShaderDesc& desc)
@@ -902,8 +903,9 @@ namespace Spark
                 m_device->CreateBlendState(&blendDesc, &blendState);
 
                 return std::make_unique<D3D11PipelineState>(desc, std::move(inputLayout), std::move(rasterizerState),
-                                                              std::move(depthStencilState), std::move(blendState),
-                                                              d3dVS, d3dPS).release();
+                                                            std::move(depthStencilState), std::move(blendState), d3dVS,
+                                                            d3dPS)
+                    .release();
             }
 
             void D3D11Device::DestroyBuffer(IRHIBuffer* buffer)

@@ -50,7 +50,7 @@ namespace Spark
      */
     class JobSystem
     {
-    public:
+      public:
         static JobSystem& Get()
         {
             static JobSystem instance;
@@ -128,10 +128,7 @@ namespace Spark
 
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
-                m_jobQueue.emplace([task]()
-                {
-                    (*task)();
-                });
+                m_jobQueue.emplace([task]() { (*task)(); });
             }
             m_condition.notify_one();
 
@@ -149,8 +146,7 @@ namespace Spark
          * @param body Callable taking (int index)
          * @param minBatchSize Minimum items per batch
          */
-        template <typename Func>
-        void ParallelFor(int begin, int end, Func&& body, int minBatchSize = 1)
+        template <typename Func> void ParallelFor(int begin, int end, Func&& body, int minBatchSize = 1)
         {
             int totalItems = end - begin;
             if (totalItems <= 0)
@@ -175,13 +171,14 @@ namespace Spark
             for (int batchStart = begin; batchStart < end; batchStart += batchSize)
             {
                 int batchEnd = std::min(batchStart + batchSize, end);
-                futures.push_back(Submit([batchStart, batchEnd, &body]()
-                {
-                    for (int i = batchStart; i < batchEnd; ++i)
+                futures.push_back(Submit(
+                    [batchStart, batchEnd, &body]()
                     {
-                        body(i);
-                    }
-                }));
+                        for (int i = batchStart; i < batchEnd; ++i)
+                        {
+                            body(i);
+                        }
+                    }));
             }
 
             // Wait for all batches
@@ -202,16 +199,10 @@ namespace Spark
         }
 
         /** @brief Get number of worker threads */
-        uint32_t GetWorkerCount() const
-        {
-            return static_cast<uint32_t>(m_workers.size());
-        }
+        uint32_t GetWorkerCount() const { return static_cast<uint32_t>(m_workers.size()); }
 
         /** @brief Check if the job system is initialized */
-        bool IsInitialized() const
-        {
-            return m_initialized.load(std::memory_order_acquire);
-        }
+        bool IsInitialized() const { return m_initialized.load(std::memory_order_acquire); }
 
         /** @brief Get the number of pending jobs in the queue */
         size_t GetPendingJobCount() const
@@ -220,7 +211,7 @@ namespace Spark
             return m_jobQueue.size();
         }
 
-    private:
+      private:
         JobSystem() = default;
         ~JobSystem() { Shutdown(); }
         JobSystem(const JobSystem&) = delete;
@@ -234,10 +225,8 @@ namespace Spark
 
                 {
                     std::unique_lock<std::mutex> lock(m_queueMutex);
-                    m_condition.wait(lock, [this]
-                    {
-                        return m_stop.load(std::memory_order_acquire) || !m_jobQueue.empty();
-                    });
+                    m_condition.wait(lock,
+                                     [this] { return m_stop.load(std::memory_order_acquire) || !m_jobQueue.empty(); });
 
                     if (m_stop.load(std::memory_order_acquire) && m_jobQueue.empty())
                     {

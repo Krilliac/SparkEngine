@@ -459,8 +459,8 @@ void TextureSystem::Update(float deltaTime)
     }
 }
 
-void TextureSystem::TouchTexture(const std::string& name, uint64_t currentFrame,
-                                  float screenCoverage, float distanceToCamera)
+void TextureSystem::TouchTexture(const std::string& name, uint64_t currentFrame, float screenCoverage,
+                                 float distanceToCamera)
 {
     std::lock_guard<std::mutex> lock(m_texturesMutex);
 
@@ -485,7 +485,7 @@ void TextureSystem::UnpinTexture(const std::string& name)
     if (it != m_lruData.end())
     {
         it->second.pinned = false;
-        it->second.priority = 2;  // Reset to Normal
+        it->second.priority = 2; // Reset to Normal
     }
 }
 
@@ -548,10 +548,7 @@ uint32_t TextureSystem::EvictByPriority(size_t targetFreeBytes)
 
     // Sort by eviction score ascending — lowest score = evict first
     std::sort(candidates.begin(), candidates.end(),
-              [](const EvictionCandidate& a, const EvictionCandidate& b)
-              {
-                  return a.score < b.score;
-              });
+              [](const EvictionCandidate& a, const EvictionCandidate& b) { return a.score < b.score; });
 
     size_t freedBytes = 0;
     uint32_t evictedCount = 0;
@@ -626,7 +623,7 @@ std::shared_ptr<Texture> TextureSystem::LoadTexture(const std::string& filePath,
             auto& lru = m_lruData[filePath];
             lru.lastUsedFrame = m_currentFrame;
             lru.lastUsedTime = std::chrono::steady_clock::now();
-            lru.priority = 2;  // Normal priority
+            lru.priority = 2; // Normal priority
         }
         {
             std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
@@ -1284,8 +1281,8 @@ void TextureSystem::Update(float /*deltaTime*/)
     }
 }
 
-void TextureSystem::TouchTexture(const std::string& name, uint64_t currentFrame,
-                                  float screenCoverage, float distanceToCamera)
+void TextureSystem::TouchTexture(const std::string& name, uint64_t currentFrame, float screenCoverage,
+                                 float distanceToCamera)
 {
     std::lock_guard<std::mutex> lock(m_texturesMutex);
     auto& lru = m_lruData[name];
@@ -1366,10 +1363,7 @@ uint32_t TextureSystem::EvictByPriority(size_t targetFreeBytes)
     }
 
     std::sort(candidates.begin(), candidates.end(),
-              [](const EvictionCandidate& a, const EvictionCandidate& b)
-              {
-                  return a.score < b.score;
-              });
+              [](const EvictionCandidate& a, const EvictionCandidate& b) { return a.score < b.score; });
 
     size_t freedBytes = 0;
     uint32_t evictedCount = 0;

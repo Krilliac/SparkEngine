@@ -43,8 +43,8 @@ namespace Spark::ECS
             renderer.worldMatrixDirty = false;
 
             // Submit draw call to GraphicsEngine
-            m_graphics->SubmitMeshForRendering(
-                renderer.meshPath, renderer.materialPath, worldMtx, renderer.castShadows);
+            m_graphics->SubmitMeshForRendering(renderer.meshPath, renderer.materialPath, worldMtx,
+                                               renderer.castShadows);
 
             m_renderedCount++;
         }

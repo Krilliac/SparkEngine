@@ -528,10 +528,8 @@ void GraphicsEngine::EndFrame()
 // ECS MESH DRAW SUBMISSION
 // ============================================================================
 
-void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath,
-                                            const std::string& materialPath,
-                                            const DirectX::XMMATRIX& worldMatrix,
-                                            bool castShadows)
+void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath, const std::string& materialPath,
+                                            const DirectX::XMMATRIX& worldMatrix, bool castShadows)
 {
     MeshDrawCommand cmd;
     cmd.meshPath = meshPath;
@@ -541,8 +539,7 @@ void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath,
     m_drawList.push_back(std::move(cmd));
 }
 
-void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix,
-                                     const DirectX::XMMATRIX& projMatrix)
+void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
 {
     if (m_drawList.empty())
         return;
