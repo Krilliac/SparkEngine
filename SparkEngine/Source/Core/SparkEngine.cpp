@@ -31,6 +31,7 @@
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <cstdio>
+#include <cstdlib>
 #include <algorithm>
 #include <sstream>
 #include <chrono>
@@ -221,6 +222,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     crashCfg.captureAllThreads = true;
     crashCfg.zipBeforeUpload = true;
     crashCfg.triggerCrashOnAssert = false;
+
+    // GitHub Issue upload — reads token from SPARK_GITHUB_TOKEN env var
+    const char* ghRepo = std::getenv("SPARK_GITHUB_REPO");
+    const char* ghToken = std::getenv("SPARK_GITHUB_TOKEN");
+    if (ghRepo && ghToken)
+    {
+        crashCfg.githubRepo = ghRepo;
+        crashCfg.githubToken = ghToken;
+    }
+
     InstallCrashHandler(crashCfg);
 
     // 2. Check for headless/dedicated server mode
