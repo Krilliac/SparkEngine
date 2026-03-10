@@ -99,6 +99,16 @@ cd docs && ./generate-docs.sh
 cd docs && ./auto-update.sh check
 ```
 
+## Documentation requirements
+
+Whenever code is **added**, **modified**, or **deleted**, update the corresponding documentation:
+
+1. **Wiki pages** (`wiki/`): Update the relevant wiki page for the subsystem affected. If a new subsystem is introduced, create a new wiki page and add it to `wiki/_Sidebar.md`. Existing pages cover: Architecture, ECS, Rendering, Physics, AI, Animation, Audio, Networking, Scripting, Editor, Input, Scene Management, Terrain, Gameplay Systems, Event System, Save System, Shader Pipeline, Asset Pipeline, Day-Night/Weather, Cinematic Sequencer, Testing, Build System, and more.
+2. **API docs** (`docs/`): Ensure new or changed public headers have Doxygen-style comments (`@brief`, `@param`, `@return`). Run `cd docs && ./auto-update.sh check` to verify. Gap analyses go in `docs/gap-analysis/`.
+3. **CLAUDE.md**: If the change affects architecture, build toggles, execution order, thread safety rules, or key directories, update this file to keep it accurate.
+
+Skipping documentation is **not acceptable** — treat docs as part of the deliverable, not an afterthought.
+
 ## Things to know
 
 - Use `EngineContext` service locator, not deprecated `g_graphics`/`g_input` globals
