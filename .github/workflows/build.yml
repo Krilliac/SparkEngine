@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main, develop, Working ]
 
+permissions:
+  contents: read
+
 jobs:
   # ===========================================================================
   # Code Quality — clang-format enforcement
@@ -297,8 +300,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install lcov
-        run: sudo apt-get update && sudo apt-get install -y lcov
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y lcov libgl-dev libsdl2-dev libglew-dev
       - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
@@ -332,8 +335,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install clang-tidy
-        run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy libgl-dev libsdl2-dev libglew-dev
       - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
