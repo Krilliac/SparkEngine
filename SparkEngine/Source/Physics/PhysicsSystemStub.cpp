@@ -125,8 +125,7 @@ ConstraintType StringToConstraintType(const std::string& str)
 // PhysicsBody — stub
 // ============================================================================
 
-PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, btRigidBody* /*bulletBody*/)
-    : m_desc(desc), m_bulletBody(nullptr)
+PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, btRigidBody* /*bulletBody*/) : m_desc(desc), m_bulletBody(nullptr)
 {
 }
 
@@ -157,9 +156,7 @@ XMMATRIX PhysicsBody::GetTransform() const
     return XMMatrixTranslation(m_desc.position.x, m_desc.position.y, m_desc.position.z);
 }
 
-void PhysicsBody::SetTransform(const XMMATRIX& /*transform*/)
-{
-}
+void PhysicsBody::SetTransform(const XMMATRIX& /*transform*/) {}
 
 XMFLOAT3 PhysicsBody::GetLinearVelocity() const
 {
@@ -181,21 +178,13 @@ void PhysicsBody::SetAngularVelocity(const XMFLOAT3& velocity)
     m_desc.angularVelocity = velocity;
 }
 
-void PhysicsBody::ApplyForce(const XMFLOAT3& /*force*/, const XMFLOAT3& /*relativePos*/)
-{
-}
+void PhysicsBody::ApplyForce(const XMFLOAT3& /*force*/, const XMFLOAT3& /*relativePos*/) {}
 
-void PhysicsBody::ApplyImpulse(const XMFLOAT3& /*impulse*/, const XMFLOAT3& /*relativePos*/)
-{
-}
+void PhysicsBody::ApplyImpulse(const XMFLOAT3& /*impulse*/, const XMFLOAT3& /*relativePos*/) {}
 
-void PhysicsBody::ApplyTorque(const XMFLOAT3& /*torque*/)
-{
-}
+void PhysicsBody::ApplyTorque(const XMFLOAT3& /*torque*/) {}
 
-void PhysicsBody::ApplyTorqueImpulse(const XMFLOAT3& /*torque*/)
-{
-}
+void PhysicsBody::ApplyTorqueImpulse(const XMFLOAT3& /*torque*/) {}
 
 float PhysicsBody::GetMass() const
 {
@@ -212,9 +201,7 @@ void PhysicsBody::SetMaterial(const PhysicsMaterial& material)
     m_desc.material = material;
 }
 
-void PhysicsBody::SetActive(bool /*active*/)
-{
-}
+void PhysicsBody::SetActive(bool /*active*/) {}
 
 bool PhysicsBody::IsActive() const
 {
@@ -277,9 +264,7 @@ void PhysicsBody::Console_SetProperty(const std::string& property, float value)
         m_desc.material.angularDamping = value;
 }
 
-void PhysicsBody::Console_ApplyForce(float /*x*/, float /*y*/, float /*z*/)
-{
-}
+void PhysicsBody::Console_ApplyForce(float /*x*/, float /*y*/, float /*z*/) {}
 
 // ============================================================================
 // PhysicsConstraint — stub
@@ -292,18 +277,14 @@ PhysicsConstraint::PhysicsConstraint(ConstraintType type, btTypedConstraint* /*b
 
 PhysicsConstraint::~PhysicsConstraint() = default;
 
-void PhysicsConstraint::SetEnabled(bool /*enabled*/)
-{
-}
+void PhysicsConstraint::SetEnabled(bool /*enabled*/) {}
 
 bool PhysicsConstraint::IsEnabled() const
 {
     return false;
 }
 
-void PhysicsConstraint::SetBreakingThreshold(float /*threshold*/)
-{
-}
+void PhysicsConstraint::SetBreakingThreshold(float /*threshold*/) {}
 
 float PhysicsConstraint::GetBreakingThreshold() const
 {
@@ -315,12 +296,8 @@ float PhysicsConstraint::GetBreakingThreshold() const
 // ============================================================================
 
 PhysicsSystem::PhysicsSystem()
-    : m_dynamicsWorld(nullptr),
-      m_collisionConfig(nullptr),
-      m_dispatcher(nullptr),
-      m_broadphase(nullptr),
-      m_solver(nullptr),
-      m_debugDrawer(nullptr)
+    : m_dynamicsWorld(nullptr), m_collisionConfig(nullptr), m_dispatcher(nullptr), m_broadphase(nullptr),
+      m_solver(nullptr), m_debugDrawer(nullptr)
 {
     m_metrics = {};
 }
@@ -345,13 +322,9 @@ void PhysicsSystem::Shutdown()
     m_materials.clear();
 }
 
-void PhysicsSystem::Update(float /*deltaTime*/)
-{
-}
+void PhysicsSystem::Update(float /*deltaTime*/) {}
 
-void PhysicsSystem::SetGravity(const XMFLOAT3& /*gravity*/)
-{
-}
+void PhysicsSystem::SetGravity(const XMFLOAT3& /*gravity*/) {}
 
 XMFLOAT3 PhysicsSystem::GetGravity() const
 {
@@ -387,27 +360,28 @@ void PhysicsSystem::RemoveAllBodies()
 }
 
 std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateHingeConstraint(
-    std::shared_ptr<PhysicsBody> /*bodyA*/, std::shared_ptr<PhysicsBody> /*bodyB*/,
-    const XMFLOAT3& /*pivotA*/, const XMFLOAT3& /*pivotB*/,
-    const XMFLOAT3& /*axisA*/, const XMFLOAT3& /*axisB*/)
+    std::shared_ptr<PhysicsBody> /*bodyA*/, std::shared_ptr<PhysicsBody> /*bodyB*/, const XMFLOAT3& /*pivotA*/,
+    const XMFLOAT3& /*pivotB*/, const XMFLOAT3& /*axisA*/, const XMFLOAT3& /*axisB*/)
 {
     auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Hinge, nullptr);
     m_constraints.push_back(constraint);
     return constraint;
 }
 
-std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateSliderConstraint(
-    std::shared_ptr<PhysicsBody> /*bodyA*/, std::shared_ptr<PhysicsBody> /*bodyB*/,
-    const XMMATRIX& /*frameA*/, const XMMATRIX& /*frameB*/)
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateSliderConstraint(std::shared_ptr<PhysicsBody> /*bodyA*/,
+                                                                         std::shared_ptr<PhysicsBody> /*bodyB*/,
+                                                                         const XMMATRIX& /*frameA*/,
+                                                                         const XMMATRIX& /*frameB*/)
 {
     auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Slider, nullptr);
     m_constraints.push_back(constraint);
     return constraint;
 }
 
-std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePoint2PointConstraint(
-    std::shared_ptr<PhysicsBody> /*bodyA*/, std::shared_ptr<PhysicsBody> /*bodyB*/,
-    const XMFLOAT3& /*pivotA*/, const XMFLOAT3& /*pivotB*/)
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePoint2PointConstraint(std::shared_ptr<PhysicsBody> /*bodyA*/,
+                                                                              std::shared_ptr<PhysicsBody> /*bodyB*/,
+                                                                              const XMFLOAT3& /*pivotA*/,
+                                                                              const XMFLOAT3& /*pivotB*/)
 {
     auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Point2Point, nullptr);
     m_constraints.push_back(constraint);
@@ -415,18 +389,18 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePoint2PointConstraint(
 }
 
 std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateConeTwistConstraint(
-    std::shared_ptr<PhysicsBody> /*bodyA*/, std::shared_ptr<PhysicsBody> /*bodyB*/,
-    const XMMATRIX& /*frameA*/, const XMMATRIX& /*frameB*/,
-    float /*swingSpan1*/, float /*swingSpan2*/, float /*twistSpan*/)
+    std::shared_ptr<PhysicsBody> /*bodyA*/, std::shared_ptr<PhysicsBody> /*bodyB*/, const XMMATRIX& /*frameA*/,
+    const XMMATRIX& /*frameB*/, float /*swingSpan1*/, float /*swingSpan2*/, float /*twistSpan*/)
 {
     auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::ConeTwist, nullptr);
     m_constraints.push_back(constraint);
     return constraint;
 }
 
-std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateFixedConstraint(
-    std::shared_ptr<PhysicsBody> /*bodyA*/, std::shared_ptr<PhysicsBody> /*bodyB*/,
-    const XMMATRIX& /*frameA*/, const XMMATRIX& /*frameB*/)
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateFixedConstraint(std::shared_ptr<PhysicsBody> /*bodyA*/,
+                                                                        std::shared_ptr<PhysicsBody> /*bodyB*/,
+                                                                        const XMMATRIX& /*frameA*/,
+                                                                        const XMMATRIX& /*frameB*/)
 {
     auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Fixed, nullptr);
     m_constraints.push_back(constraint);
@@ -444,7 +418,7 @@ RaycastHit PhysicsSystem::Raycast(const XMFLOAT3& /*origin*/, const XMFLOAT3& /*
 }
 
 std::vector<RaycastHit> PhysicsSystem::RaycastAll(const XMFLOAT3& /*origin*/, const XMFLOAT3& /*direction*/,
-                                                   float /*maxDistance*/)
+                                                  float /*maxDistance*/)
 {
     return {};
 }
@@ -456,7 +430,7 @@ bool PhysicsSystem::SphereOverlap(const XMFLOAT3& /*center*/, float /*radius*/, 
 }
 
 bool PhysicsSystem::BoxOverlap(const XMFLOAT3& /*center*/, const XMFLOAT3& /*halfExtents*/,
-                                std::vector<PhysicsBody*>& results)
+                               std::vector<PhysicsBody*>& results)
 {
     results.clear();
     return false;
@@ -473,18 +447,14 @@ RaycastHit PhysicsSystem::BoxCast(const XMFLOAT3& /*halfExtents*/, const XMFLOAT
 }
 
 RaycastHit PhysicsSystem::CapsuleCast(float /*radius*/, float /*height*/, const XMFLOAT3& /*from*/,
-                                       const XMFLOAT3& /*to*/)
+                                      const XMFLOAT3& /*to*/)
 {
     return RaycastHit{};
 }
 
-void PhysicsSystem::SetDebugDrawMode(int /*mode*/)
-{
-}
+void PhysicsSystem::SetDebugDrawMode(int /*mode*/) {}
 
-void PhysicsSystem::RenderDebug()
-{
-}
+void PhysicsSystem::RenderDebug() {}
 
 void PhysicsSystem::RegisterMaterial(const std::string& name, const PhysicsMaterial& material)
 {
@@ -606,7 +576,7 @@ void PhysicsSystem::Console_SetTimeStep(float timeStep)
 }
 
 std::string PhysicsSystem::Console_Raycast(float originX, float originY, float originZ, float dirX, float dirY,
-                                            float dirZ, float maxDistance)
+                                           float dirZ, float maxDistance)
 {
     auto hit = Raycast(XMFLOAT3(originX, originY, originZ), XMFLOAT3(dirX, dirY, dirZ), maxDistance);
     if (hit.hasHit)
@@ -643,9 +613,7 @@ void PhysicsSystem::UpdateMetrics()
     m_metrics.timeStep = m_timeStep;
 }
 
-void PhysicsSystem::ProcessCollisions()
-{
-}
+void PhysicsSystem::ProcessCollisions() {}
 
 size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc)
 {
