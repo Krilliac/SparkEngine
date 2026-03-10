@@ -15,8 +15,8 @@ SparkEngine is a C++20 open-source 3D game engine targeting first-person shooter
 
 ```bash
 # Generate (pick one)
-cmake --preset windows-release   # Windows MSVC
-cmake --preset linux-release     # Linux GCC
+cmake --preset windows-release       # Windows MSVC
+cmake --preset linux-gcc-release     # Linux GCC
 
 # Build
 cmake --build build --config Release
@@ -64,9 +64,48 @@ Physics → Animation → AI → Audio → Lifecycle → Render
 - `GraphicsEngine` — main thread render, `std::atomic` frame state
 - `NetworkManager` — queue mutex for message I/O and handler registration
 
+## Pre-commit checks (run before every commit)
+
+After finishing any code change, **always** run these checks in order:
+
+```bash
+# 1. Format check — ensure code matches .clang-format
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+  -name '*.h' -o -name '*.cpp' | head -50 | xargs clang-format --dry-run --Werror 2>&1
+
+# 2. Fix formatting automatically (if step 1 fails)
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+  -name '*.h' -o -name '*.cpp' | xargs clang-format -i
+
+# 3. Sanity check — CMake configure (Linux)
+cmake --preset linux-gcc-release 2>&1 | tail -20
+
+# 4. Compile — build and verify zero errors
+cmake --build build --config Release 2>&1 | tail -30
+
+# 5. Tests — run the test suite
+cd build && ctest --output-on-failure && cd ..
+```
+
+If any step fails, fix the issue before committing. CI enforces clang-format on every PR.
+
+## Documentation generation
+
+```bash
+# Generate API docs (requires doxygen + graphviz)
+cd docs && ./generate-docs.sh
+
+# Auto-regenerate when headers change
+cd docs && ./auto-update.sh check
+```
+
 ## Things to know
 
 - Use `EngineContext` service locator, not deprecated `g_graphics`/`g_input` globals
 - Cross-platform types live in `Core/Platform.h` (DirectXMath stubs on Linux)
 - Networking is disabled in default builds (`ENABLE_NETWORKING=OFF`)
 - VR/AR, DXR, DLSS/FSR are not implemented
+- `.clang-format` enforces Microsoft-based style (Allman braces, 120-col, 4-space indent)
+- `.clang-tidy` checks for bugprone, modernize, performance, and readability issues
+- Doxygen config lives in `docs/Doxyfile.txt`; wiki pages in `wiki/`
+- 35+ unit tests in `Tests/`; always run `ctest` after changes

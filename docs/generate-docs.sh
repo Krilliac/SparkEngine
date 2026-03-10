@@ -75,8 +75,9 @@ generate_doxygen() {
     
     cd "$DOCS_DIR"
     
-    # Run Doxygen
-    if doxygen Doxyfile; then
+    # Run Doxygen (uses Doxyfile.txt which indexes SparkEngine, SparkEditor,
+    # SparkConsole, SparkShaderCompiler, SparkGame, and SparkSDK sources)
+    if doxygen Doxyfile.txt; then
         log_success "Doxygen documentation generated successfully"
     else
         log_error "Doxygen generation failed"
@@ -308,7 +309,7 @@ enhance_documentation() {
 generate_module_pages() {
     log_info "Generating module-specific documentation..."
     
-    local modules=("Audio" "Graphics" "Core" "Input" "Physics" "Camera" "Utils" "Game" "Engine")
+    local modules=("Audio" "Graphics" "Core" "Input" "Physics" "Camera" "Utils" "Game" "Engine" "AI" "Animation" "Networking" "Scripting" "ECS" "SaveSystem")
     
     for module in "${modules[@]}"; do
         local module_file="$WIKI_DIR/${module,,}.html"

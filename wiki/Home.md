@@ -68,7 +68,22 @@ Pre-built binaries are published on every commit to `master`:
 - [Build System and CMake Modules](Build-System-and-CMake-Modules) — CMake configuration and CI/CD
 - [Testing](Testing) — Unit tests and test framework
 - [Troubleshooting](Troubleshooting) — Common issues and solutions
-- [Contributing](Contributing) — How to contribute
+- [Contributing](Contributing) — How to contribute (includes pre-commit checks)
+
+### Reference
+- [API Documentation](../docs/README.md) — Doxygen-generated API reference (class diagrams, call graphs, source browser)
+
+## Code Quality
+
+SparkEngine enforces code quality automatically:
+
+- **clang-format** — Enforced in CI on every PR (Microsoft-based style, Allman braces, 120-col, 4-space indent)
+- **clang-tidy** — Static analysis for bugprone, modernize, performance, and readability checks
+- **35+ unit tests** — CTest suite covering all major subsystems
+- **AddressSanitizer / UBSanitizer** — Memory safety checks in CI
+- **CodeQL** — GitHub security scanning
+
+See [Contributing](Contributing) for the full pre-commit checklist.
 
 ## License
 
