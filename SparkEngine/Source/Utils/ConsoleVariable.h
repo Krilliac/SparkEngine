@@ -49,11 +49,11 @@ namespace Spark
     enum class CVarFlags : uint32_t
     {
         None = 0,
-        ReadOnly = 1 << 0,  ///< Cannot be modified at runtime via console
-        Save = 1 << 1,      ///< Persisted to config file
-        Cheat = 1 << 2,     ///< Only modifiable when cheats are enabled
-        Hidden = 1 << 3,    ///< Not shown in cvar_list output
-        RequiresRestart = 1 << 4  ///< Change takes effect after engine restart
+        ReadOnly = 1 << 0,       ///< Cannot be modified at runtime via console
+        Save = 1 << 1,           ///< Persisted to config file
+        Cheat = 1 << 2,          ///< Only modifiable when cheats are enabled
+        Hidden = 1 << 3,         ///< Not shown in cvar_list output
+        RequiresRestart = 1 << 4 ///< Change takes effect after engine restart
     };
 
     inline CVarFlags operator|(CVarFlags a, CVarFlags b)
@@ -82,11 +82,16 @@ namespace Spark
     {
         switch (type)
         {
-        case CVarType::Int:    return "int";
-        case CVarType::Float:  return "float";
-        case CVarType::Bool:   return "bool";
-        case CVarType::String: return "string";
-        default:               return "unknown";
+        case CVarType::Int:
+            return "int";
+        case CVarType::Float:
+            return "float";
+        case CVarType::Bool:
+            return "bool";
+        case CVarType::String:
+            return "string";
+        default:
+            return "unknown";
         }
     }
 
@@ -96,7 +101,7 @@ namespace Spark
 
     class ICVar
     {
-    public:
+      public:
         virtual ~ICVar() = default;
 
         virtual const std::string& GetName() const = 0;
@@ -126,7 +131,7 @@ namespace Spark
 
     class CVarRegistry
     {
-    public:
+      public:
         static CVarRegistry& Get()
         {
             static CVarRegistry instance;
@@ -174,8 +179,7 @@ namespace Spark
             std::vector<ICVar*> result;
             for (const auto& pair : m_cvars)
             {
-                if (pair.first.size() >= prefix.size() &&
-                    pair.first.compare(0, prefix.size(), prefix) == 0)
+                if (pair.first.size() >= prefix.size() && pair.first.compare(0, prefix.size(), prefix) == 0)
                 {
                     result.push_back(pair.second);
                 }
@@ -209,7 +213,7 @@ namespace Spark
         bool AreCheatsEnabled() const { return m_cheatsEnabled; }
         void SetCheatsEnabled(bool enabled) { m_cheatsEnabled = enabled; }
 
-    private:
+      private:
         CVarRegistry() = default;
         ~CVarRegistry() = default;
 
@@ -222,10 +226,9 @@ namespace Spark
     // CVar<T> - Typed console variable
     // ============================================================================
 
-    template <typename T>
-    class CVar : public ICVar
+    template <typename T> class CVar : public ICVar
     {
-    public:
+      public:
         using ChangeCallback = std::function<void(const T& oldValue, const T& newValue)>;
 
         /**
@@ -235,16 +238,9 @@ namespace Spark
          * @param flags       Behavioral flags
          * @param description Human-readable description
          */
-        CVar(std::string name, T defaultVal, CVarFlags flags = CVarFlags::None,
-             std::string description = "")
-            : m_name(std::move(name))
-            , m_description(std::move(description))
-            , m_flags(flags)
-            , m_value(defaultVal)
-            , m_defaultValue(defaultVal)
-            , m_hasRange(false)
-            , m_min{}
-            , m_max{}
+        CVar(std::string name, T defaultVal, CVarFlags flags = CVarFlags::None, std::string description = "")
+            : m_name(std::move(name)), m_description(std::move(description)), m_flags(flags), m_value(defaultVal),
+              m_defaultValue(defaultVal), m_hasRange(false), m_min{}, m_max{}
         {
             CVarRegistry::Get().Register(this);
         }
@@ -253,24 +249,14 @@ namespace Spark
          * @brief Construct with range clamping (numeric types only)
          */
         template <typename U = T, typename = std::enable_if_t<std::is_arithmetic_v<U>>>
-        CVar(std::string name, T defaultVal, CVarFlags flags,
-             std::string description, T minVal, T maxVal)
-            : m_name(std::move(name))
-            , m_description(std::move(description))
-            , m_flags(flags)
-            , m_value(defaultVal)
-            , m_defaultValue(defaultVal)
-            , m_hasRange(true)
-            , m_min(minVal)
-            , m_max(maxVal)
+        CVar(std::string name, T defaultVal, CVarFlags flags, std::string description, T minVal, T maxVal)
+            : m_name(std::move(name)), m_description(std::move(description)), m_flags(flags), m_value(defaultVal),
+              m_defaultValue(defaultVal), m_hasRange(true), m_min(minVal), m_max(maxVal)
         {
             CVarRegistry::Get().Register(this);
         }
 
-        ~CVar() override
-        {
-            CVarRegistry::Get().Unregister(m_name);
-        }
+        ~CVar() override { CVarRegistry::Get().Unregister(m_name); }
 
         // Non-copyable, non-movable (registered by pointer)
         CVar(const CVar&) = delete;
@@ -318,21 +304,19 @@ namespace Spark
 
         CVarType GetType() const override
         {
-            if constexpr (std::is_same_v<T, int>)         return CVarType::Int;
-            else if constexpr (std::is_same_v<T, float>)  return CVarType::Float;
-            else if constexpr (std::is_same_v<T, bool>)   return CVarType::Bool;
-            else                                           return CVarType::String;
+            if constexpr (std::is_same_v<T, int>)
+                return CVarType::Int;
+            else if constexpr (std::is_same_v<T, float>)
+                return CVarType::Float;
+            else if constexpr (std::is_same_v<T, bool>)
+                return CVarType::Bool;
+            else
+                return CVarType::String;
         }
 
-        std::string GetValueString() const override
-        {
-            return ToString(m_value);
-        }
+        std::string GetValueString() const override { return ToString(m_value); }
 
-        std::string GetDefaultString() const override
-        {
-            return ToString(m_defaultValue);
-        }
+        std::string GetDefaultString() const override { return ToString(m_defaultValue); }
 
         bool SetFromString(const std::string& str) override
         {
@@ -356,15 +340,9 @@ namespace Spark
             return true;
         }
 
-        void ResetToDefault() override
-        {
-            m_value = m_defaultValue;
-        }
+        void ResetToDefault() override { m_value = m_defaultValue; }
 
-        bool IsModified() const override
-        {
-            return !(m_value == m_defaultValue);
-        }
+        bool IsModified() const override { return !(m_value == m_defaultValue); }
 
         /** @brief Get range info string (empty if no range) */
         std::string GetRangeString() const
@@ -379,7 +357,7 @@ namespace Spark
             return "";
         }
 
-    private:
+      private:
         static std::string ToString(const T& val)
         {
             if constexpr (std::is_same_v<T, bool>)
@@ -422,13 +400,27 @@ namespace Spark
             }
             else if constexpr (std::is_same_v<T, int>)
             {
-                try { out = std::stoi(str); return true; }
-                catch (...) { return false; }
+                try
+                {
+                    out = std::stoi(str);
+                    return true;
+                }
+                catch (...)
+                {
+                    return false;
+                }
             }
             else if constexpr (std::is_same_v<T, float>)
             {
-                try { out = std::stof(str); return true; }
-                catch (...) { return false; }
+                try
+                {
+                    out = std::stof(str);
+                    return true;
+                }
+                catch (...)
+                {
+                    return false;
+                }
             }
             else if constexpr (std::is_same_v<T, std::string>)
             {
