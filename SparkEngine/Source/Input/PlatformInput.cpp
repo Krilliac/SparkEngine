@@ -822,6 +822,111 @@ namespace Spark::Input
         if (!m_backend)
             return;
         m_backend->PollEvents();
+
+        // Dispatch input events to registered callbacks
+        if (!m_eventCallbacks.empty())
+        {
+            // Key events: scan all key codes for state changes
+            for (uint16_t k = 0; k < static_cast<uint16_t>(KeyCode::MaxKeyCode); ++k)
+            {
+                auto kc = static_cast<KeyCode>(k);
+                if (m_backend->WasKeyPressed(kc))
+                {
+                    InputEvent evt{};
+                    evt.type = InputEvent::Type::KeyDown;
+                    evt.key = kc;
+                    for (const auto& cb : m_eventCallbacks)
+                    {
+                        cb(evt);
+                    }
+                }
+                else if (m_backend->WasKeyReleased(kc))
+                {
+                    InputEvent evt{};
+                    evt.type = InputEvent::Type::KeyUp;
+                    evt.key = kc;
+                    for (const auto& cb : m_eventCallbacks)
+                    {
+                        cb(evt);
+                    }
+                }
+            }
+
+            // Mouse movement events
+            int dx = 0, dy = 0;
+            m_backend->GetMouseDelta(dx, dy);
+            if (dx != 0 || dy != 0)
+            {
+                InputEvent evt{};
+                evt.type = InputEvent::Type::MouseMove;
+                m_backend->GetMousePosition(evt.mouseX, evt.mouseY);
+                evt.mouseDeltaX = dx;
+                evt.mouseDeltaY = dy;
+                for (const auto& cb : m_eventCallbacks)
+                {
+                    cb(evt);
+                }
+            }
+
+            // Mouse scroll events
+            float scroll = m_backend->GetMouseScroll();
+            if (scroll != 0.0f)
+            {
+                InputEvent evt{};
+                evt.type = InputEvent::Type::MouseScroll;
+                evt.scrollDelta = scroll;
+                for (const auto& cb : m_eventCallbacks)
+                {
+                    cb(evt);
+                }
+            }
+
+            // Gamepad button events
+            for (int gi = 0; gi < m_backend->GetGamepadCount(); ++gi)
+            {
+                const GamepadState* gp = m_backend->GetGamepadState(gi);
+                if (!gp || !gp->connected)
+                    continue;
+
+                for (uint8_t bi = 0; bi < static_cast<uint8_t>(GamepadBtn::Count); ++bi)
+                {
+                    bool curr = gp->buttons[bi];
+                    bool prev = gp->prevButtons[bi];
+                    if (curr != prev)
+                    {
+                        InputEvent evt{};
+                        evt.type = InputEvent::Type::GamepadButton;
+                        evt.gamepadIndex = gi;
+                        evt.gamepadButton = static_cast<GamepadBtn>(bi);
+                        // Encode press/release: for GamepadButton events, axisValue
+                        // carries 1.0 for press, 0.0 for release
+                        evt.axisValue = curr ? 1.0f : 0.0f;
+                        for (const auto& cb : m_eventCallbacks)
+                        {
+                            cb(evt);
+                        }
+                    }
+                }
+
+                // Gamepad axis change events (only fire if axis moved past dead zone)
+                for (uint8_t ai = 0; ai < static_cast<uint8_t>(GamepadAxis::Count); ++ai)
+                {
+                    float val = gp->axes[ai];
+                    if (std::abs(val) > m_globalDeadZone)
+                    {
+                        InputEvent evt{};
+                        evt.type = InputEvent::Type::GamepadAxis;
+                        evt.gamepadIndex = gi;
+                        evt.gamepadAxis = static_cast<GamepadAxis>(ai);
+                        evt.axisValue = val;
+                        for (const auto& cb : m_eventCallbacks)
+                        {
+                            cb(evt);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     bool PlatformInputManager::IsKeyDown(KeyCode key) const
@@ -1080,6 +1185,124 @@ namespace Spark::Input
                                             [&](const AxisBinding& b) { return b.axisName == name; }),
                              m_axisBindings.end());
     }
+
+    // ===== Registration Aliases =====
+
+    void PlatformInputManager::RegisterAction(const std::string& name, KeyCode key, ActionTrigger trigger)
+    {
+        BindAction(name, key, trigger);
+    }
+
+    void PlatformInputManager::RegisterAction(const std::string& name, GamepadBtn button, ActionTrigger trigger)
+    {
+        BindAction(name, button, trigger);
+    }
+
+    bool PlatformInputManager::IsActionPressed(const std::string& name) const
+    {
+        for (const auto& binding : m_actionBindings)
+        {
+            if (binding.actionName != name)
+                continue;
+
+            if (!binding.useGamepad)
+            {
+                if (WasKeyPressed(binding.key))
+                    return true;
+            }
+            else
+            {
+                if (WasGamepadButtonPressed(binding.gamepadButton))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    float PlatformInputManager::GetActionValue(const std::string& name) const
+    {
+        for (const auto& binding : m_actionBindings)
+        {
+            if (binding.actionName != name)
+                continue;
+
+            if (!binding.useGamepad)
+            {
+                if (IsKeyDown(binding.key))
+                    return 1.0f;
+            }
+            else
+            {
+                if (IsGamepadButtonDown(binding.gamepadButton))
+                    return 1.0f;
+            }
+        }
+        return 0.0f;
+    }
+
+    void PlatformInputManager::RegisterAxis(const std::string& name, KeyCode positiveKey, KeyCode negativeKey,
+                                            float scale)
+    {
+        BindAxis(name, positiveKey, negativeKey, scale);
+    }
+
+    void PlatformInputManager::RegisterAxis(const std::string& name, GamepadAxis axis, float scale, float deadZone)
+    {
+        BindAxis(name, axis, scale, deadZone);
+    }
+
+    // ===== Input Rebinding =====
+
+    bool PlatformInputManager::RebindAction(const std::string& name, KeyCode newKey)
+    {
+        for (auto& binding : m_actionBindings)
+        {
+            if (binding.actionName == name && !binding.useGamepad)
+            {
+                binding.key = newKey;
+                return true;
+            }
+        }
+
+        // No existing keyboard binding found; create a new one
+        BindAction(name, newKey);
+        return true;
+    }
+
+    bool PlatformInputManager::RebindAction(const std::string& name, GamepadBtn newButton)
+    {
+        for (auto& binding : m_actionBindings)
+        {
+            if (binding.actionName == name && binding.useGamepad)
+            {
+                binding.gamepadButton = newButton;
+                return true;
+            }
+        }
+
+        // No existing gamepad binding found; create a new one
+        BindAction(name, newButton);
+        return true;
+    }
+
+    bool PlatformInputManager::RebindAxis(const std::string& name, KeyCode newPositiveKey, KeyCode newNegativeKey)
+    {
+        for (auto& binding : m_axisBindings)
+        {
+            if (binding.axisName == name && !binding.useGamepad)
+            {
+                binding.positiveKey = newPositiveKey;
+                binding.negativeKey = newNegativeKey;
+                return true;
+            }
+        }
+
+        // No existing keyboard axis binding found; create a new one
+        BindAxis(name, newPositiveKey, newNegativeKey);
+        return true;
+    }
+
+    // ===== Event Callbacks =====
 
     void PlatformInputManager::RegisterEventCallback(InputEventCallback callback)
     {

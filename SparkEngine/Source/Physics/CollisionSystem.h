@@ -355,4 +355,84 @@ class CollisionSystem
      * @return Interpolated vector
      */
     static XMFLOAT3 Vector3Lerp(const XMFLOAT3& a, const XMFLOAT3& b, float t);
+
+    // =========================================================================
+    // Contact manifold generators
+    // =========================================================================
+
+    /**
+     * @brief Test collision between a sphere and an axis-aligned box with contact manifold
+     *
+     * Generates a full contact manifold with contact point, normal, and
+     * penetration depth, suitable for physics collision response.
+     *
+     * @param sphere Bounding sphere to test
+     * @param box    Bounding box to test
+     * @param m      Output contact manifold with collision details
+     * @return true if sphere and box are overlapping, false otherwise
+     */
+    static bool SphereVsBox(const BoundingSphere& sphere, const BoundingBox& box, ContactManifold& m);
+
+    /**
+     * @brief Test collision between two axis-aligned boxes with contact manifold
+     *
+     * Generates a contact manifold using the separating axis theorem. The
+     * contact normal points from box A to box B along the axis of minimum
+     * penetration.
+     *
+     * @param a First bounding box
+     * @param b Second bounding box
+     * @param m Output contact manifold with collision details
+     * @return true if boxes are overlapping, false otherwise
+     */
+    static bool BoxVsBox(const BoundingBox& a, const BoundingBox& b, ContactManifold& m);
+
+    // =========================================================================
+    // Sweep (shape-cast) tests
+    // =========================================================================
+
+    /**
+     * @brief Sweep a sphere along a direction and test against another sphere
+     *
+     * Determines whether a sphere moving from its current position along
+     * `velocity` will intersect the target sphere, and if so at what time.
+     *
+     * @param moving   The moving sphere (at its start position)
+     * @param velocity Movement direction and distance vector
+     * @param target   The stationary target sphere
+     * @param hitTime  [out] Parametric time of first contact [0, 1]
+     * @return CollisionResult with hit information
+     */
+    static CollisionResult SweepSphereVsSphere(const BoundingSphere& moving, const XMFLOAT3& velocity,
+                                                const BoundingSphere& target, float& hitTime);
+
+    /**
+     * @brief Sweep a sphere along a direction and test against a box
+     *
+     * Tests whether a sphere moving from its current position along
+     * `velocity` will intersect the target AABB.
+     *
+     * @param moving   The moving sphere (at its start position)
+     * @param velocity Movement direction and distance vector
+     * @param target   The stationary target box
+     * @param hitTime  [out] Parametric time of first contact [0, 1]
+     * @return CollisionResult with hit information
+     */
+    static CollisionResult SweepSphereVsBox(const BoundingSphere& moving, const XMFLOAT3& velocity,
+                                             const BoundingBox& target, float& hitTime);
+
+    /**
+     * @brief Sweep a box along a direction and test against another box
+     *
+     * Determines whether an AABB moving along `velocity` will intersect
+     * a stationary AABB, using the Minkowski sum approach.
+     *
+     * @param moving   The moving box (at its start position)
+     * @param velocity Movement direction and distance vector
+     * @param target   The stationary target box
+     * @param hitTime  [out] Parametric time of first contact [0, 1]
+     * @return CollisionResult with hit information
+     */
+    static CollisionResult SweepBoxVsBox(const BoundingBox& moving, const XMFLOAT3& velocity,
+                                          const BoundingBox& target, float& hitTime);
 };

@@ -22,6 +22,7 @@ namespace Spark::ECS
         if (!m_graphics)
             return;
 
+        const auto& registry = world.GetRegistry();
         auto view = world.GetEntitiesWith<Transform, MeshRenderer>();
         for (auto entity : view)
         {
@@ -36,16 +37,14 @@ namespace Spark::ECS
             if (active && !active->active)
                 continue;
 
-            // Build world matrix from Transform components
-            XMMATRIX scaleMtx = XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z);
-            XMMATRIX rotMtx = XMMatrixRotationRollPitchYaw(XMConvertToRadians(transform.rotation.x),
-                                                           XMConvertToRadians(transform.rotation.y),
-                                                           XMConvertToRadians(transform.rotation.z));
-            XMMATRIX transMtx = XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z);
-
-            XMMATRIX worldMtx = scaleMtx * rotMtx * transMtx;
+            // Compute the world matrix, walking the parent hierarchy if present
+            XMMATRIX worldMtx = transform.GetWorldMatrix(registry);
             XMStoreFloat4x4(&renderer.cachedWorldMatrix, worldMtx);
             renderer.worldMatrixDirty = false;
+
+            // Submit draw call to GraphicsEngine
+            m_graphics->SubmitMeshForRendering(
+                renderer.meshPath, renderer.materialPath, worldMtx, renderer.castShadows);
 
             m_renderedCount++;
         }

@@ -294,6 +294,64 @@ class GraphicsEngine
     void OnResize(unsigned int width, unsigned int height);
 
     // ========================================================================
+    // ECS MESH DRAW SUBMISSION
+    // ========================================================================
+
+    /**
+     * @brief Data for a single mesh draw command submitted by the ECS RenderSystem.
+     *
+     * Accumulated each frame via SubmitMeshForRendering() and consumed by
+     * ProcessDrawList() during the render pass.
+     */
+    struct MeshDrawCommand
+    {
+        std::string meshPath;
+        std::string materialPath;
+        DirectX::XMFLOAT4X4 worldMatrix;
+        bool castShadows = true;
+    };
+
+    /**
+     * @brief Submit a mesh for deferred rendering during the current frame.
+     *
+     * Called by RenderSystem::Update() for each visible entity. The command is
+     * stored in a per-frame draw list that is consumed by ProcessDrawList().
+     *
+     * @param meshPath      Asset path to the mesh resource.
+     * @param materialPath  Asset path to the material resource.
+     * @param worldMatrix   World transformation matrix for the mesh instance.
+     * @param castShadows   Whether this mesh should be included in the shadow pass.
+     */
+    void SubmitMeshForRendering(const std::string& meshPath,
+                                const std::string& materialPath,
+                                const DirectX::XMMATRIX& worldMatrix,
+                                bool castShadows);
+
+    /**
+     * @brief Process and render all meshes submitted via SubmitMeshForRendering().
+     *
+     * Iterates the per-frame draw list, binds meshes and materials through the
+     * AssetPipeline, updates per-object constants, and issues draw calls. The
+     * draw list is cleared after processing.
+     *
+     * @param viewMatrix  Camera view matrix for the current frame.
+     * @param projMatrix  Camera projection matrix for the current frame.
+     */
+    void ProcessDrawList(const DirectX::XMMATRIX& viewMatrix,
+                         const DirectX::XMMATRIX& projMatrix);
+
+    /**
+     * @brief Return the per-frame draw list (read-only).
+     * @return  Const reference to the current frame's draw commands.
+     */
+    const std::vector<MeshDrawCommand>& GetDrawList() const { return m_drawList; }
+
+    /**
+     * @brief Clear all pending draw commands without processing them.
+     */
+    void ClearDrawList() { m_drawList.clear(); }
+
+    // ========================================================================
     // ADVANCED SYSTEM ACCESSORS
     // ========================================================================
 
@@ -607,6 +665,9 @@ class GraphicsEngine
     // Resource tracking
     size_t m_textureMemoryUsage;
     size_t m_bufferMemoryUsage;
+
+    // Per-frame ECS draw list populated by SubmitMeshForRendering(), consumed by ProcessDrawList()
+    std::vector<MeshDrawCommand> m_drawList;
 
     // ✅ ADD: Basic shader system resources
     ComPtr<ID3D11VertexShader> m_basicVertexShader;

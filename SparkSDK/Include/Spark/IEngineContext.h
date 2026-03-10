@@ -22,11 +22,27 @@ class InputManager;
 class Timer;
 class AudioEngine;
 class PhysicsSystem;
+class SceneManager;
+class AngelScriptEngine;
 
 namespace Spark
 {
 
     class EventBus;
+
+    namespace Animation
+    {
+        class AnimationSystem;
+    }
+
+    namespace AI
+    {
+        class AISystem;
+    }
+
+    class NetworkManager;
+    class SaveSystem;
+    class CoroutineScheduler;
 
     /**
  * @brief Service locator providing access to all engine subsystems
@@ -67,6 +83,34 @@ namespace Spark
         /** @brief Get the physics system (may return nullptr if not initialized) */
         virtual PhysicsSystem* GetPhysics() = 0;
         virtual const PhysicsSystem* GetPhysics() const = 0;
+
+        /** @brief Get the animation system (may return nullptr if not initialized) */
+        virtual Animation::AnimationSystem* GetAnimation() { return nullptr; }
+        virtual const Animation::AnimationSystem* GetAnimation() const { return nullptr; }
+
+        /** @brief Get the AI system (may return nullptr if not initialized) */
+        virtual AI::AISystem* GetAI() { return nullptr; }
+        virtual const AI::AISystem* GetAI() const { return nullptr; }
+
+        /** @brief Get the network manager (may return nullptr if networking is disabled) */
+        virtual NetworkManager* GetNetwork() { return nullptr; }
+        virtual const NetworkManager* GetNetwork() const { return nullptr; }
+
+        /** @brief Get the scene manager (may return nullptr if not initialized) */
+        virtual SceneManager* GetSceneManager() { return nullptr; }
+        virtual const SceneManager* GetSceneManager() const { return nullptr; }
+
+        /** @brief Get the AngelScript engine (may return nullptr if scripting is disabled) */
+        virtual AngelScriptEngine* GetScriptEngine() { return nullptr; }
+        virtual const AngelScriptEngine* GetScriptEngine() const { return nullptr; }
+
+        /** @brief Get the save system (may return nullptr if not initialized) */
+        virtual SaveSystem* GetSaveSystem() { return nullptr; }
+        virtual const SaveSystem* GetSaveSystem() const { return nullptr; }
+
+        /** @brief Get the coroutine scheduler (may return nullptr if not initialized) */
+        virtual CoroutineScheduler* GetCoroutineScheduler() { return nullptr; }
+        virtual const CoroutineScheduler* GetCoroutineScheduler() const { return nullptr; }
 
         /** @brief Check if the engine is running in headless/dedicated server mode */
         virtual bool IsHeadless() const { return false; }

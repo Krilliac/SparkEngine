@@ -577,7 +577,10 @@ namespace Spark
 
     bool SaveSystem::QuickSave(World& world, const SaveMetadata& metadata)
     {
-        return Save(m_quickSaveSlot, world, metadata);
+        SaveMetadata meta = metadata;
+        if (meta.saveName.empty())
+            meta.saveName = "Quick Save";
+        return Save(m_quickSaveSlot, world, meta);
     }
 
     bool SaveSystem::QuickLoad(World& world)
@@ -596,7 +599,10 @@ namespace Spark
     {
         try
         {
-            return fs::remove(GetSavePath(slotName));
+            std::string path = GetSavePath(slotName);
+            if (!fs::exists(path))
+                return true;
+            return fs::remove(path);
         }
         catch (...)
         {
@@ -649,7 +655,10 @@ namespace Spark
     {
         SaveData data;
         data.metadata = metadata;
-        data.metadata.timestamp = static_cast<uint64_t>(std::chrono::system_clock::now().time_since_epoch().count());
+        data.metadata.timestamp = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch())
+                .count());
 
         auto& registry = world.GetRegistry();
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
@@ -769,6 +778,13 @@ namespace Spark
 
     bool SaveSystem::DeserializeWorld(const SaveData& data, World& world) const
     {
+        // Clear all existing entities before restoring saved state
+        auto& registry = world.GetRegistry();
+        registry.each([&](entt::entity entity)
+        {
+            registry.destroy(entity);
+        });
+
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
 
         for (const auto& se : data.entities)
@@ -858,6 +874,21 @@ namespace Spark
                         file.write(value.c_str(), valLen);
                     }
                 }
+            }
+
+            // Write custom state key-value pairs
+            uint32_t customStateCount = static_cast<uint32_t>(data.customState.size());
+            file.write(reinterpret_cast<const char*>(&customStateCount), sizeof(customStateCount));
+
+            for (const auto& [key, value] : data.customState)
+            {
+                uint16_t keyLen = static_cast<uint16_t>(key.size());
+                file.write(reinterpret_cast<const char*>(&keyLen), sizeof(keyLen));
+                file.write(key.c_str(), keyLen);
+
+                uint16_t valLen = static_cast<uint16_t>(value.size());
+                file.write(reinterpret_cast<const char*>(&valLen), sizeof(valLen));
+                file.write(value.c_str(), valLen);
             }
 
             return true;
@@ -952,6 +983,27 @@ namespace Spark
                 }
 
                 outData.entities.push_back(entity);
+            }
+
+            // Read custom state key-value pairs (if present in file)
+            uint32_t customStateCount = 0;
+            file.read(reinterpret_cast<char*>(&customStateCount), sizeof(customStateCount));
+            if (file.good())
+            {
+                for (uint32_t i = 0; i < customStateCount; ++i)
+                {
+                    uint16_t keyLen;
+                    file.read(reinterpret_cast<char*>(&keyLen), sizeof(keyLen));
+                    std::string key(keyLen, '\0');
+                    file.read(key.data(), keyLen);
+
+                    uint16_t valLen;
+                    file.read(reinterpret_cast<char*>(&valLen), sizeof(valLen));
+                    std::string val(valLen, '\0');
+                    file.read(val.data(), valLen);
+
+                    outData.customState[key] = val;
+                }
             }
 
             return true;

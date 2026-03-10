@@ -112,6 +112,16 @@ void AudioEngine::Shutdown()
     m_audioSources.clear();
     m_availableSources.clear();
 
+    // Destroy all submix voices before the mastering voice
+    for (auto* submix : m_submixVoices)
+    {
+        if (submix)
+        {
+            submix->DestroyVoice();
+        }
+    }
+    m_submixVoices.clear();
+
     if (m_masterVoice)
     {
         m_masterVoice->DestroyVoice();
@@ -843,6 +853,32 @@ HRESULT AudioEngine::CreateSourceVoice(const WAVEFORMATEX& format, IXAudio2Sourc
 {
     ASSERT_MSG(m_xAudio2 != nullptr, "XAudio2 not initialized");
     return m_xAudio2->CreateSourceVoice(voice, &format);
+}
+
+IXAudio2SubmixVoice* AudioEngine::CreateSubmixVoice(UINT32 inputChannels, UINT32 inputSampleRate)
+{
+    if (!m_xAudio2)
+    {
+        Spark::SimpleConsole::GetInstance().Log("CreateSubmixVoice failed: XAudio2 not initialized", "ERROR");
+        return nullptr;
+    }
+
+    IXAudio2SubmixVoice* submixVoice = nullptr;
+    HRESULT hr = m_xAudio2->CreateSubmixVoice(&submixVoice, inputChannels, inputSampleRate);
+    if (FAILED(hr))
+    {
+        SPARK_LOG_ERROR("Audio", "CreateSubmixVoice failed HR=0x%08lX", static_cast<long>(hr));
+        Spark::SimpleConsole::GetInstance().Log("CreateSubmixVoice failed", "ERROR");
+        return nullptr;
+    }
+
+    m_submixVoices.push_back(submixVoice);
+
+    std::stringstream ss;
+    ss << "Submix voice created: " << inputChannels << " channels, " << inputSampleRate << " Hz";
+    Spark::SimpleConsole::GetInstance().Log(ss.str(), "SUCCESS");
+
+    return submixVoice;
 }
 
 void AudioEngine::NotifyStateChange()

@@ -383,6 +383,12 @@ namespace Spark::Cinematic
         /// Play a sequence by name
         bool PlaySequence(const std::string& name);
 
+        /// Stop a specific sequence by name
+        void StopSequence(const std::string& name);
+
+        /// Pause a specific sequence by name
+        void PauseSequence(const std::string& name);
+
         /// Stop all playing sequences
         void StopAll();
 

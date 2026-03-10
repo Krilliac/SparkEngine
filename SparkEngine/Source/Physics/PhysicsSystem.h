@@ -1181,6 +1181,46 @@ class PhysicsSystem
                                                               const XMMATRIX& frameA, const XMMATRIX& frameB);
 
     /**
+     * @brief Create a point-to-point (ball socket) constraint between two bodies.
+     *
+     * A point-to-point constraint anchors a point in bodyA to a point in bodyB,
+     * allowing free rotation around the anchor. Like a ball-and-socket joint.
+     *
+     * @param bodyA   First body. Must not be nullptr.
+     * @param bodyB   Second body. Pass nullptr to anchor bodyA to a world-space point.
+     * @param pivotA  Pivot point in bodyA's local space.
+     * @param pivotB  Pivot point in bodyB's local space (or world space if bodyB is nullptr).
+     * @return        Shared pointer to the new PhysicsConstraint.
+     */
+    std::shared_ptr<PhysicsConstraint> CreatePoint2PointConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                    std::shared_ptr<PhysicsBody> bodyB,
+                                                                    const XMFLOAT3& pivotA,
+                                                                    const XMFLOAT3& pivotB);
+
+    /**
+     * @brief Create a cone-twist constraint between two bodies.
+     *
+     * A cone-twist constraint allows rotation within a cone-shaped range of motion
+     * and a twist limit around the main axis. Suitable for ragdoll shoulder/hip joints.
+     *
+     * @param bodyA      First body. Must not be nullptr.
+     * @param bodyB      Second body.
+     * @param frameA     Constraint frame in bodyA's local space.
+     * @param frameB     Constraint frame in bodyB's local space.
+     * @param swingSpan1 Maximum swing angle on the first axis (radians).
+     * @param swingSpan2 Maximum swing angle on the second axis (radians).
+     * @param twistSpan  Maximum twist angle around the main axis (radians).
+     * @return           Shared pointer to the new PhysicsConstraint.
+     */
+    std::shared_ptr<PhysicsConstraint> CreateConeTwistConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                  std::shared_ptr<PhysicsBody> bodyB,
+                                                                  const XMMATRIX& frameA,
+                                                                  const XMMATRIX& frameB,
+                                                                  float swingSpan1 = 0.5f,
+                                                                  float swingSpan2 = 0.5f,
+                                                                  float twistSpan = 0.5f);
+
+    /**
      * @brief Create a fixed (weld) constraint that locks two bodies together.
      *
      * Both translation and rotation between the two bodies are fully constrained.
@@ -1258,6 +1298,49 @@ class PhysicsSystem
      * @return             `true` if at least one body was found; `false` otherwise.
      */
     bool BoxOverlap(const XMFLOAT3& center, const XMFLOAT3& halfExtents, std::vector<PhysicsBody*>& results);
+
+    /**
+     * @brief Perform a convex sphere sweep (shape cast) from one position to another.
+     *
+     * Uses Bullet's `btCollisionWorld::convexSweepTest` with a sphere shape to detect
+     * the first body the swept shape contacts along the path. This is more accurate than
+     * a ray for testing movement of objects with volume (e.g., player capsule movement,
+     * projectile paths for fat projectiles).
+     *
+     * @param radius       Radius of the swept sphere (metres).
+     * @param from         Start position of the sweep (world space).
+     * @param to           End position of the sweep (world space).
+     * @return             RaycastHit with `hasHit = false` if no collision along the path.
+     */
+    RaycastHit SphereCast(float radius, const XMFLOAT3& from, const XMFLOAT3& to);
+
+    /**
+     * @brief Perform a convex box sweep (shape cast) from one position to another.
+     *
+     * Sweeps a box shape from `from` to `to` and returns the first hit. Useful for
+     * testing whether a box-shaped object can move between two positions without
+     * colliding with obstacles.
+     *
+     * @param halfExtents  Half-extents of the swept box (metres).
+     * @param from         Start position of the sweep (world space).
+     * @param to           End position of the sweep (world space).
+     * @return             RaycastHit describing the first contact, or hasHit=false if clear.
+     */
+    RaycastHit BoxCast(const XMFLOAT3& halfExtents, const XMFLOAT3& from, const XMFLOAT3& to);
+
+    /**
+     * @brief Perform a convex capsule sweep (shape cast) from one position to another.
+     *
+     * Sweeps a capsule shape from `from` to `to`. Commonly used for character controller
+     * movement queries to detect whether the player capsule would collide with geometry.
+     *
+     * @param radius  Capsule hemisphere radius (metres).
+     * @param height  Capsule cylindrical section height (metres).
+     * @param from    Start position of the sweep (world space).
+     * @param to      End position of the sweep (world space).
+     * @return        RaycastHit describing the first contact, or hasHit=false if clear.
+     */
+    RaycastHit CapsuleCast(float radius, float height, const XMFLOAT3& from, const XMFLOAT3& to);
 
     // =========================================================================
     // Collision callbacks
@@ -1670,6 +1753,15 @@ class PhysicsSystem
      * `true` on enter, `false` on exit.
      */
     std::function<void(PhysicsBody*, PhysicsBody*, bool)> m_triggerCallback;
+
+    /**
+     * @brief Set of active trigger overlap pairs from the previous frame.
+     *
+     * Used by ProcessCollisions() to detect trigger exit events: pairs present
+     * in the previous frame but absent in the current frame have exited.
+     * Each pair is stored as (min_ptr, max_ptr) to ensure canonical ordering.
+     */
+    std::vector<std::pair<PhysicsBody*, PhysicsBody*>> m_activeTriggerPairs;
 
     // =========================================================================
     // Metrics

@@ -188,6 +188,142 @@ namespace Spark::Procedural
     };
 
     // ============================================================================
+    // Poisson Disk Sampling
+    // ============================================================================
+
+    /**
+     * @brief Generate 2D Poisson disk sample points with minimum distance constraint
+     *
+     * Uses Bridson's fast Poisson disk sampling algorithm. Points are generated
+     * within a [0, width] x [0, height] rectangle with guaranteed minimum
+     * distance between any two points.
+     *
+     * @param width     Width of the sampling area
+     * @param height    Height of the sampling area
+     * @param minDist   Minimum distance between any two samples
+     * @param maxAttempts  Attempts per active sample before rejection (default 30)
+     * @param seed      Random seed
+     * @return Vector of 2D sample positions
+     */
+    std::vector<XMFLOAT2> PoissonDiskSampling(float width, float height, float minDist,
+                                               int maxAttempts = 30, uint32_t seed = 42);
+
+    // ============================================================================
+    // Dungeon Generation (BSP)
+    // ============================================================================
+
+    /**
+     * @brief A single room in a procedurally generated dungeon
+     */
+    struct DungeonRoom
+    {
+        int x = 0;         ///< Left column
+        int y = 0;         ///< Top row
+        int width = 0;     ///< Room width in cells
+        int height = 0;    ///< Room height in cells
+        int id = 0;        ///< Unique room ID
+
+        int CenterX() const { return x + width / 2; }
+        int CenterY() const { return y + height / 2; }
+    };
+
+    /**
+     * @brief A corridor connecting two rooms
+     */
+    struct DungeonCorridor
+    {
+        int x1, y1; ///< Start point
+        int x2, y2; ///< End point
+    };
+
+    /**
+     * @brief Result of dungeon generation
+     */
+    struct DungeonLayout
+    {
+        int width = 0;              ///< Grid width in cells
+        int height = 0;             ///< Grid height in cells
+        std::vector<int> grid;      ///< 0 = wall, 1 = floor, 2 = corridor
+        std::vector<DungeonRoom> rooms;
+        std::vector<DungeonCorridor> corridors;
+    };
+
+    /**
+     * @brief Settings for BSP dungeon generation
+     */
+    struct DungeonSettings
+    {
+        int width = 64;             ///< Grid width
+        int height = 64;            ///< Grid height
+        int minRoomSize = 6;        ///< Minimum room dimension
+        int maxRoomSize = 15;       ///< Maximum room dimension
+        int minLeafSize = 10;       ///< Minimum BSP leaf size
+        int roomPadding = 1;        ///< Wall thickness between rooms
+        int corridorWidth = 2;      ///< Corridor width in cells
+        uint32_t seed = 42;         ///< Random seed
+    };
+
+    /**
+     * @brief BSP-based dungeon generator
+     *
+     * Uses binary space partitioning to subdivide the grid, then places
+     * rooms within each leaf and connects them with L-shaped corridors.
+     */
+    class DungeonGenerator
+    {
+    public:
+        /**
+         * @brief Generate a dungeon layout using BSP
+         */
+        static DungeonLayout GenerateBSP(const DungeonSettings& settings);
+
+        /**
+         * @brief Generate a dungeon layout using cellular automata (cave-like)
+         * @param width     Grid width
+         * @param height    Grid height
+         * @param fillProb  Initial fill probability (0-1)
+         * @param iterations Number of smoothing iterations
+         * @param seed      Random seed
+         */
+        static DungeonLayout GenerateCellularAutomata(int width, int height,
+                                                       float fillProb = 0.45f,
+                                                       int iterations = 5,
+                                                       uint32_t seed = 42);
+
+        /**
+         * @brief Generate rooms with corridor connections
+         *
+         * Places random non-overlapping rooms, then connects them
+         * using minimum spanning tree + L-shaped corridors.
+         */
+        static DungeonLayout GenerateRooms(int width, int height,
+                                            int roomCount = 10,
+                                            int minRoomSize = 5,
+                                            int maxRoomSize = 12,
+                                            uint32_t seed = 42);
+
+    private:
+        struct BSPNode
+        {
+            int x, y, width, height;
+            std::unique_ptr<BSPNode> left;
+            std::unique_ptr<BSPNode> right;
+            DungeonRoom room;
+            bool hasRoom = false;
+        };
+
+        static void SplitBSP(BSPNode* node, int minLeafSize, std::mt19937& rng);
+        static void CreateRooms(BSPNode* node, const DungeonSettings& settings, std::mt19937& rng);
+        static void CollectRooms(const BSPNode* node, std::vector<DungeonRoom>& rooms);
+        static void ConnectRooms(DungeonLayout& layout, const DungeonRoom& a, const DungeonRoom& b,
+                                 int corridorWidth, std::mt19937& rng);
+        static void ConnectBSP(BSPNode* node, DungeonLayout& layout, int corridorWidth, std::mt19937& rng);
+        static DungeonRoom GetAnyRoom(const BSPNode* node);
+        static void CarveRoom(DungeonLayout& layout, const DungeonRoom& room);
+        static void CarveCorridor(DungeonLayout& layout, int x1, int y1, int x2, int y2, int width);
+    };
+
+    // ============================================================================
     // Wave Function Collapse (WFC) for Room Layouts
     // ============================================================================
 

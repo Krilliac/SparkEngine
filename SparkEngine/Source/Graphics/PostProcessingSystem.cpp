@@ -52,6 +52,14 @@ namespace
     static constexpr float kDefaultContrast = 1.0f;
     static constexpr float kDefaultSaturation = 1.0f;
     static constexpr float kDefaultGamma = 2.2f;
+    static constexpr float kDefaultVignetteIntensity = 0.4f;
+    static constexpr float kDefaultVignetteRadius = 0.75f;
+    static constexpr float kDefaultVignetteSoftness = 0.45f;
+    static constexpr float kDefaultChromaticAberrationIntensity = 0.005f;
+    static constexpr float kDefaultAdaptationSpeed = 1.5f;
+    static constexpr float kDefaultMinExposure = 0.1f;
+    static constexpr float kDefaultMaxExposure = 10.0f;
+    static constexpr float kDefaultTargetLuminance = 0.18f;
 
     // Tone-mapping operator IDs
     enum class ToneMapOperator : int
@@ -96,6 +104,24 @@ namespace
         float ScreenHeightInv;
         float _pad4;
         float _pad5;
+
+        // Vignette
+        float VignetteIntensity;
+        float VignetteRadius;
+        float VignetteSoftness;
+        float _pad6;
+
+        // Chromatic aberration
+        float ChromaticAberrationIntensity;
+        float _pad7;
+        float _pad8;
+        float _pad9;
+
+        // Exposure adaptation
+        float AdaptedExposure;
+        float _pad10;
+        float _pad11;
+        float _pad12;
     };
 
     // -----------------------------------------------------------------
@@ -634,6 +660,269 @@ float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
 )";
 
     // -----------------------------------------------------------------
+    // Vignette effect pixel shader
+    // -----------------------------------------------------------------
+    static const char* kVignettePS = R"(
+cbuffer PostProcessCB : register(b0)
+{
+    float BloomThreshold;
+    float BloomIntensity;
+    float TexelSizeX;
+    float TexelSizeY;
+
+    int   ToneMapOp;
+    float Exposure;
+    float Gamma;
+    float _pad0;
+
+    float Contrast;
+    float Saturation;
+    float _pad1;
+    float _pad2;
+
+    float FXAAQualitySubpix;
+    float FXAAQualityEdgeThreshold;
+    float FXAAQualityEdgeThresholdMin;
+    float _pad3;
+
+    float ScreenWidthInv;
+    float ScreenHeightInv;
+    float _pad4;
+    float _pad5;
+
+    float VignetteIntensity;
+    float VignetteRadius;
+    float VignetteSoftness;
+    float _pad6;
+
+    float ChromaticAberrationIntensity;
+    float _pad7;
+    float _pad8;
+    float _pad9;
+
+    float AdaptedExposure;
+    float _pad10;
+    float _pad11;
+    float _pad12;
+};
+
+Texture2D    SceneTexture : register(t0);
+SamplerState LinearSampler : register(s0);
+
+float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
+{
+    float3 color = SceneTexture.Sample(LinearSampler, uv).rgb;
+    float2 center = uv - float2(0.5, 0.5);
+    float dist = length(center);
+    float vignette = smoothstep(VignetteRadius, VignetteRadius - VignetteSoftness, dist);
+    color *= lerp(1.0, vignette, VignetteIntensity);
+    return float4(color, 1.0);
+}
+)";
+
+    // -----------------------------------------------------------------
+    // Chromatic aberration pixel shader
+    // -----------------------------------------------------------------
+    static const char* kChromaticAberrationPS = R"(
+cbuffer PostProcessCB : register(b0)
+{
+    float BloomThreshold;
+    float BloomIntensity;
+    float TexelSizeX;
+    float TexelSizeY;
+
+    int   ToneMapOp;
+    float Exposure;
+    float Gamma;
+    float _pad0;
+
+    float Contrast;
+    float Saturation;
+    float _pad1;
+    float _pad2;
+
+    float FXAAQualitySubpix;
+    float FXAAQualityEdgeThreshold;
+    float FXAAQualityEdgeThresholdMin;
+    float _pad3;
+
+    float ScreenWidthInv;
+    float ScreenHeightInv;
+    float _pad4;
+    float _pad5;
+
+    float VignetteIntensity;
+    float VignetteRadius;
+    float VignetteSoftness;
+    float _pad6;
+
+    float ChromaticAberrationIntensity;
+    float _pad7;
+    float _pad8;
+    float _pad9;
+
+    float AdaptedExposure;
+    float _pad10;
+    float _pad11;
+    float _pad12;
+};
+
+Texture2D    SceneTexture : register(t0);
+SamplerState LinearSampler : register(s0);
+
+float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
+{
+    float2 center = uv - float2(0.5, 0.5);
+    float dist = length(center);
+    float2 dir = normalize(center + 0.0001);
+    float2 offset = dir * dist * ChromaticAberrationIntensity;
+
+    float r = SceneTexture.Sample(LinearSampler, uv + offset).r;
+    float g = SceneTexture.Sample(LinearSampler, uv).g;
+    float b = SceneTexture.Sample(LinearSampler, uv - offset).b;
+
+    return float4(r, g, b, 1.0);
+}
+)";
+
+    // -----------------------------------------------------------------
+    // Luminance downsampling pixel shader (for exposure adaptation)
+    // Computes average luminance of a 2x2 texel region
+    // -----------------------------------------------------------------
+    static const char* kLuminanceDownsamplePS = R"(
+cbuffer PostProcessCB : register(b0)
+{
+    float BloomThreshold;
+    float BloomIntensity;
+    float TexelSizeX;
+    float TexelSizeY;
+
+    int   ToneMapOp;
+    float Exposure;
+    float Gamma;
+    float _pad0;
+
+    float Contrast;
+    float Saturation;
+    float _pad1;
+    float _pad2;
+
+    float FXAAQualitySubpix;
+    float FXAAQualityEdgeThreshold;
+    float FXAAQualityEdgeThresholdMin;
+    float _pad3;
+
+    float ScreenWidthInv;
+    float ScreenHeightInv;
+    float _pad4;
+    float _pad5;
+
+    float VignetteIntensity;
+    float VignetteRadius;
+    float VignetteSoftness;
+    float _pad6;
+
+    float ChromaticAberrationIntensity;
+    float _pad7;
+    float _pad8;
+    float _pad9;
+
+    float AdaptedExposure;
+    float _pad10;
+    float _pad11;
+    float _pad12;
+};
+
+Texture2D    SceneTexture : register(t0);
+SamplerState LinearSampler : register(s0);
+
+float Luminance(float3 c)
+{
+    return dot(c, float3(0.2126, 0.7152, 0.0722));
+}
+
+float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
+{
+    // Sample 4 texels and average their log-luminance
+    float2 offsets[4] = {
+        float2(-0.5, -0.5) * float2(TexelSizeX, TexelSizeY),
+        float2( 0.5, -0.5) * float2(TexelSizeX, TexelSizeY),
+        float2(-0.5,  0.5) * float2(TexelSizeX, TexelSizeY),
+        float2( 0.5,  0.5) * float2(TexelSizeX, TexelSizeY)
+    };
+
+    float avgLogLum = 0.0;
+    for (int i = 0; i < 4; i++)
+    {
+        float3 color = SceneTexture.Sample(LinearSampler, uv + offsets[i]).rgb;
+        float lum = Luminance(color);
+        avgLogLum += log(max(lum, 0.0001));
+    }
+    avgLogLum *= 0.25;
+
+    return float4(avgLogLum, avgLogLum, avgLogLum, 1.0);
+}
+)";
+
+    // -----------------------------------------------------------------
+    // Exposure application pixel shader
+    // -----------------------------------------------------------------
+    static const char* kExposureApplyPS = R"(
+cbuffer PostProcessCB : register(b0)
+{
+    float BloomThreshold;
+    float BloomIntensity;
+    float TexelSizeX;
+    float TexelSizeY;
+
+    int   ToneMapOp;
+    float Exposure;
+    float Gamma;
+    float _pad0;
+
+    float Contrast;
+    float Saturation;
+    float _pad1;
+    float _pad2;
+
+    float FXAAQualitySubpix;
+    float FXAAQualityEdgeThreshold;
+    float FXAAQualityEdgeThresholdMin;
+    float _pad3;
+
+    float ScreenWidthInv;
+    float ScreenHeightInv;
+    float _pad4;
+    float _pad5;
+
+    float VignetteIntensity;
+    float VignetteRadius;
+    float VignetteSoftness;
+    float _pad6;
+
+    float ChromaticAberrationIntensity;
+    float _pad7;
+    float _pad8;
+    float _pad9;
+
+    float AdaptedExposure;
+    float _pad10;
+    float _pad11;
+    float _pad12;
+};
+
+Texture2D    SceneTexture : register(t0);
+SamplerState LinearSampler : register(s0);
+
+float4 PSMain(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
+{
+    float3 color = SceneTexture.Sample(LinearSampler, uv).rgb;
+    color *= AdaptedExposure;
+    return float4(color, 1.0);
+}
+)";
+
+    // -----------------------------------------------------------------
     // Helper: compile an HLSL shader from an inline source string
     // -----------------------------------------------------------------
     HRESULT CompileShaderFromString(const char* source, const char* entryPoint, const char* target, ID3DBlob** blobOut)
@@ -711,6 +1000,28 @@ namespace PPInternal
         float qualityEdgeThresholdMin = 0.0833f;
     };
 
+    struct VignetteState : EffectState
+    {
+        float intensity = kDefaultVignetteIntensity;
+        float radius = kDefaultVignetteRadius;
+        float softness = kDefaultVignetteSoftness;
+    };
+
+    struct ChromaticAberrationState : EffectState
+    {
+        float intensity = kDefaultChromaticAberrationIntensity;
+    };
+
+    struct ExposureAdaptationState : EffectState
+    {
+        bool autoExposure = true;
+        float adaptationSpeed = kDefaultAdaptationSpeed;
+        float minExposure = kDefaultMinExposure;
+        float maxExposure = kDefaultMaxExposure;
+        float targetLuminance = kDefaultTargetLuminance;
+        float currentAdaptedExposure = kDefaultExposure;
+    };
+
     // Per-mip render target pair (for bloom ping-pong)
     struct MipTarget
     {
@@ -733,6 +1044,9 @@ namespace PPInternal
         ToneMapState toneMap;
         ColorGradeState colorGrade;
         FXAAState fxaa;
+        VignetteState vignette;
+        ChromaticAberrationState chromaticAberration;
+        ExposureAdaptationState exposureAdaptation;
 
         // ------ GPU resources ------
 
@@ -747,6 +1061,10 @@ namespace PPInternal
         ComPtr<ID3D11PixelShader> toneMapColorGradePS;
         ComPtr<ID3D11PixelShader> fxaaPS;
         ComPtr<ID3D11PixelShader> copyPS;
+        ComPtr<ID3D11PixelShader> vignettePS;
+        ComPtr<ID3D11PixelShader> chromaticAberrationPS;
+        ComPtr<ID3D11PixelShader> luminanceDownsamplePS;
+        ComPtr<ID3D11PixelShader> exposureApplyPS;
 
         // Constant buffer
         ComPtr<ID3D11Buffer> constantBuffer;
@@ -772,9 +1090,26 @@ namespace PPInternal
         MipTarget bloomMipsA[kBloomMipCount];
         MipTarget bloomMipsB[kBloomMipCount];
 
+        // Luminance chain for auto-exposure (successively downsampled to 1x1)
+        static constexpr int kLuminanceMipCount = 10; // covers up to 1024x1024 downsample
+        MipTarget luminanceMips[kLuminanceMipCount];
+        int luminanceMipCountUsed = 0;
+
         // Back-buffer reference (we need to capture and restore it)
         ComPtr<ID3D11RenderTargetView> backBufferRTV;
         ComPtr<ID3D11DepthStencilView> backBufferDSV;
+
+        // Pipeline state: tracks current source for ping-pong rendering
+        // Set during Execute() and used by individual render methods
+        MipTarget* currentSource = nullptr;
+        ComPtr<ID3D11RenderTargetView> originalRTV;
+        ComPtr<ID3D11DepthStencilView> originalDSV;
+
+        // Helper: get the "other" full-res target for ping-pong
+        MipTarget* GetPingPongDest()
+        {
+            return (currentSource == &fullResA) ? &fullResB : &fullResA;
+        }
     };
 
 // Global map of instance -> internal data
@@ -872,6 +1207,28 @@ namespace PPInternal
                 return hr;
         }
 
+        // Luminance chain for auto-exposure: successive 2x downsample to 1x1
+        {
+            UINT lumW = std::max<UINT>(1u, d->screenWidth >> 2);
+            UINT lumH = std::max<UINT>(1u, d->screenHeight >> 2);
+            d->luminanceMipCountUsed = 0;
+
+            for (int i = 0; i < PPData::kLuminanceMipCount && (lumW > 0 && lumH > 0); ++i)
+            {
+                hr = CreateRenderTargetPair(device, lumW, lumH, DXGI_FORMAT_R16_FLOAT, d->luminanceMips[i]);
+                if (FAILED(hr))
+                    return hr;
+
+                d->luminanceMipCountUsed = i + 1;
+
+                if (lumW == 1 && lumH == 1)
+                    break;
+
+                lumW = std::max<UINT>(1u, lumW >> 1);
+                lumH = std::max<UINT>(1u, lumH >> 1);
+            }
+        }
+
         return S_OK;
     }
 
@@ -946,6 +1303,40 @@ namespace PPInternal
         if (FAILED(hr))
             return hr;
         hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->copyPS);
+        if (FAILED(hr))
+            return hr;
+
+        // Vignette PS
+        hr = CompileShaderFromString(kVignettePS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->vignettePS);
+        if (FAILED(hr))
+            return hr;
+
+        // Chromatic Aberration PS
+        hr = CompileShaderFromString(kChromaticAberrationPS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr,
+                                       &d->chromaticAberrationPS);
+        if (FAILED(hr))
+            return hr;
+
+        // Luminance downsample PS
+        hr = CompileShaderFromString(kLuminanceDownsamplePS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr,
+                                       &d->luminanceDownsamplePS);
+        if (FAILED(hr))
+            return hr;
+
+        // Exposure application PS
+        hr = CompileShaderFromString(kExposureApplyPS, "PSMain", "ps_5_0", &blob);
+        if (FAILED(hr))
+            return hr;
+        hr = device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &d->exposureApplyPS);
         if (FAILED(hr))
             return hr;
 
@@ -1046,6 +1437,21 @@ namespace PPInternal
         cb->ScreenHeightInv = 1.0f / static_cast<float>(d->screenHeight);
         cb->_pad4 = 0.0f;
         cb->_pad5 = 0.0f;
+
+        cb->VignetteIntensity = d->vignette.intensity;
+        cb->VignetteRadius = d->vignette.radius;
+        cb->VignetteSoftness = d->vignette.softness;
+        cb->_pad6 = 0.0f;
+
+        cb->ChromaticAberrationIntensity = d->chromaticAberration.intensity;
+        cb->_pad7 = 0.0f;
+        cb->_pad8 = 0.0f;
+        cb->_pad9 = 0.0f;
+
+        cb->AdaptedExposure = d->exposureAdaptation.currentAdaptedExposure;
+        cb->_pad10 = 0.0f;
+        cb->_pad11 = 0.0f;
+        cb->_pad12 = 0.0f;
 
         context->Unmap(d->constantBuffer.Get(), 0);
     }

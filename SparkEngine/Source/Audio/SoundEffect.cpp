@@ -11,19 +11,19 @@
 //  SoundEffect implementation
 //------------------------------------------------------------------------------
 SoundEffect::SoundEffect()
+    : m_audioDataSize(0)
 {
-    std::wcout << L"[INFO] SoundEffect constructed." << std::endl;
+    ZeroMemory(&m_format, sizeof(m_format));
 }
+
 SoundEffect::~SoundEffect()
 {
-    std::wcout << L"[INFO] SoundEffect destructor called." << std::endl;
+    Unload();
 }
 
 HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
 {
     ASSERT_ALWAYS_MSG(!filename.empty(), "SoundEffect::LoadFromFile - empty filename");
-
-    std::wcout << L"[OPERATION] SoundEffect::LoadFromFile called. filename=" << filename << std::endl;
 
 #ifdef SPARK_PLATFORM_WINDOWS
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
@@ -57,7 +57,6 @@ void SoundEffect::Unload()
     m_audioData.clear();
     m_audioDataSize = 0;
     ZeroMemory(&m_format, sizeof(m_format));
-    std::wcout << L"[INFO] SoundEffect resources unloaded." << std::endl;
 }
 
 float SoundEffect::GetDuration() const
@@ -88,7 +87,6 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
         return E_FAIL;
 
     m_audioDataSize = dataSize;
-    std::wcout << L"[INFO] WAV file parsed successfully. Audio data size: " << m_audioDataSize << std::endl;
     return S_OK;
 }
 
@@ -145,18 +143,22 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateFromSamples(const std::ve
     ASSERT_ALWAYS(!samples.empty());
 
     auto se = std::make_unique<SoundEffect>();
-    const BYTE* bytes = reinterpret_cast<const BYTE*>(samples.data());
-    DWORD size = static_cast<DWORD>(samples.size() * sizeof(short));
-    if (FAILED(se->LoadFromMemory(bytes, size)))
-        return nullptr;
-    // patch the format to 44.1 kHz / mono / 16-bit
+
+    // Set up the PCM format directly (mono, 16-bit)
     se->m_format.wFormatTag = WAVE_FORMAT_PCM;
     se->m_format.nChannels = 1;
     se->m_format.nSamplesPerSec = SR;
     se->m_format.wBitsPerSample = 16;
     se->m_format.nBlockAlign = se->m_format.nChannels * se->m_format.wBitsPerSample / 8;
     se->m_format.nAvgBytesPerSec = se->m_format.nSamplesPerSec * se->m_format.nBlockAlign;
-    std::wcout << L"[INFO] SoundEffectFactory::CreateFromSamples completed." << std::endl;
+    se->m_format.cbSize = 0;
+
+    // Copy raw PCM sample data directly into the audio buffer
+    DWORD dataSize = static_cast<DWORD>(samples.size() * sizeof(short));
+    se->m_audioData.resize(dataSize);
+    std::memcpy(se->m_audioData.data(), samples.data(), dataSize);
+    se->m_audioDataSize = dataSize;
+
     return se;
 }
 
