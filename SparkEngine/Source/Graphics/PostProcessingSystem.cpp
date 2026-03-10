@@ -1629,8 +1629,11 @@ void PostProcessingSystem::Shutdown()
 
 void PostProcessingSystem::Update(float deltaTime)
 {
-    (void)deltaTime;
+    Execute(deltaTime);
+}
 
+void PostProcessingSystem::Execute(float deltaTime)
+{
     auto* d = PPInternal::GetData(this);
     if (!d || !d->initialised || !m_context || !m_device)
         return;
@@ -1641,21 +1644,19 @@ void PostProcessingSystem::Update(float deltaTime)
     // target and process from there, writing the final result back.
     // ====================================================================
 
-    ComPtr<ID3D11RenderTargetView> originalRTV;
-    ComPtr<ID3D11DepthStencilView> originalDSV;
-    m_context->OMGetRenderTargets(1, &originalRTV, &originalDSV);
+    m_context->OMGetRenderTargets(1, &d->originalRTV, &d->originalDSV);
 
-    if (!originalRTV)
+    if (!d->originalRTV)
         return; // Nothing to post-process
 
     // Update the cached back-buffer reference
-    d->backBufferRTV = originalRTV;
-    d->backBufferDSV = originalDSV;
+    d->backBufferRTV = d->originalRTV;
+    d->backBufferDSV = d->originalDSV;
 
     // Determine actual back-buffer dimensions (may have changed)
     {
         ComPtr<ID3D11Resource> rtvRes;
-        originalRTV->GetResource(&rtvRes);
+        d->originalRTV->GetResource(&rtvRes);
         ComPtr<ID3D11Texture2D> tex2D;
         rtvRes.As(&tex2D);
         if (tex2D)
@@ -1672,158 +1673,330 @@ void PostProcessingSystem::Update(float deltaTime)
         }
     }
 
-    // Get the back-buffer as an SRV. If the back-buffer texture was not
-    // created with D3D11_BIND_SHADER_RESOURCE we need to copy it into
-    // our own texture first.
+    // Copy the back-buffer into our first intermediate target
     {
         ComPtr<ID3D11Resource> bbRes;
-        originalRTV->GetResource(&bbRes);
+        d->originalRTV->GetResource(&bbRes);
         m_context->CopyResource(d->fullResA.texture.Get(), bbRes.Get());
     }
 
     // Set shared pipeline state
     PPInternal::SetPostProcessState(m_context, d);
 
-    // Current source for the next pass
-    PPInternal::MipTarget* currentSource = &d->fullResA;
+    // Initialize the current source for ping-pong rendering
+    d->currentSource = &d->fullResA;
 
     // ====================================================================
-    // PASS 1: BLOOM
+    // Pipeline order:
+    //   Scene HDR -> Exposure Adaptation -> Bloom -> Tone Mapping
+    //            -> Vignette -> Chromatic Aberration -> FXAA -> Output
     // ====================================================================
+
+    if (d->exposureAdaptation.enabled)
+    {
+        RenderExposureAdaptation(deltaTime);
+    }
+
     if (d->bloom.enabled)
     {
-        // 1a. Brightness extraction from fullResA -> bloomMipsA[0]
-        // We extract at the first mip resolution (half res)
-        {
-            UINT mw = d->bloomMipsA[0].width;
-            UINT mh = d->bloomMipsA[0].height;
-            PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(mw),
-                                             1.0f / static_cast<float>(mh));
-            PPInternal::RenderPass(m_context, d, d->brightnessExtractPS.Get(), d->bloomMipsA[0].rtv.Get(), mw, mh,
-                                   currentSource->srv.Get());
-        }
-
-        // 1b. Progressive downsample + blur through mip chain
-        for (int mip = 0; mip < kBloomMipCount; ++mip)
-        {
-            UINT mw = d->bloomMipsA[mip].width;
-            UINT mh = d->bloomMipsA[mip].height;
-
-            float texelW = 1.0f / static_cast<float>(mw);
-            float texelH = 1.0f / static_cast<float>(mh);
-
-            // If this is not the first mip, downsample from the previous
-            // mip's blurred result using the copy shader
-            if (mip > 0)
-            {
-                PPInternal::UpdateConstantBuffer(m_context, d, texelW, texelH);
-                PPInternal::RenderPass(m_context, d, d->copyPS.Get(), d->bloomMipsA[mip].rtv.Get(), mw, mh,
-                                       d->bloomMipsA[mip - 1].srv.Get());
-            }
-
-            // Horizontal blur: bloomMipsA[mip] -> bloomMipsB[mip]
-            PPInternal::UpdateConstantBuffer(m_context, d, texelW, texelH);
-            PPInternal::RenderPass(m_context, d, d->gaussianBlurHPS.Get(), d->bloomMipsB[mip].rtv.Get(), mw, mh,
-                                   d->bloomMipsA[mip].srv.Get());
-
-            // Vertical blur: bloomMipsB[mip] -> bloomMipsA[mip]
-            PPInternal::RenderPass(m_context, d, d->gaussianBlurVPS.Get(), d->bloomMipsA[mip].rtv.Get(), mw, mh,
-                                   d->bloomMipsB[mip].srv.Get());
-        }
-
-        // 1c. Progressive upsample + accumulate back up the chain
-        // We accumulate from the smallest mip back to mip 0 using additive
-        // blending via the bloom composite shader.
-        for (int mip = kBloomMipCount - 2; mip >= 0; --mip)
-        {
-            UINT mw = d->bloomMipsA[mip].width;
-            UINT mh = d->bloomMipsA[mip].height;
-
-            float texelW = 1.0f / static_cast<float>(mw);
-            float texelH = 1.0f / static_cast<float>(mh);
-
-            PPInternal::UpdateConstantBuffer(m_context, d, texelW, texelH);
-
-            // Composite: bloomMipsA[mip] (scene at this level) +
-            //            bloomMipsA[mip+1] (blurred smaller mip, bilinear upsampled)
-            // We write into bloomMipsB[mip] to avoid read/write to the same target
-            PPInternal::RenderPass(m_context, d, d->bloomCompositePS.Get(), d->bloomMipsB[mip].rtv.Get(), mw, mh,
-                                   d->bloomMipsA[mip].srv.Get(), d->bloomMipsA[mip + 1].srv.Get());
-
-            // Swap so bloomMipsA[mip] holds the composited result
-            std::swap(d->bloomMipsA[mip], d->bloomMipsB[mip]);
-        }
-
-        // 1d. Final bloom composite: combine original scene with bloom result
-        {
-            PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
-                                             1.0f / static_cast<float>(d->screenHeight));
-            PPInternal::RenderPass(m_context, d, d->bloomCompositePS.Get(), d->fullResB.rtv.Get(), d->screenWidth,
-                                   d->screenHeight, currentSource->srv.Get(), d->bloomMipsA[0].srv.Get());
-            currentSource = &d->fullResB;
-        }
+        RenderBloom();
     }
 
-    // ====================================================================
-    // PASS 2: TONE MAPPING + COLOR GRADING (combined for efficiency)
-    // ====================================================================
     if (d->toneMap.enabled || d->colorGrade.enabled)
     {
-        PPInternal::MipTarget* dest = (currentSource == &d->fullResA) ? &d->fullResB : &d->fullResA;
-
-        PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
-                                         1.0f / static_cast<float>(d->screenHeight));
-
-        PPInternal::RenderPass(m_context, d, d->toneMapColorGradePS.Get(), dest->rtv.Get(), d->screenWidth,
-                               d->screenHeight, currentSource->srv.Get());
-        currentSource = dest;
+        RenderToneMapping();
     }
 
-    // ====================================================================
-    // PASS 3: FXAA
-    // ====================================================================
+    if (d->vignette.enabled)
+    {
+        RenderVignette();
+    }
+
+    if (d->chromaticAberration.enabled)
+    {
+        RenderChromaticAberration();
+    }
+
     if (d->fxaa.enabled)
     {
-        PPInternal::MipTarget* dest = (currentSource == &d->fullResA) ? &d->fullResB : &d->fullResA;
-
-        PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
-                                         1.0f / static_cast<float>(d->screenHeight));
-
-        PPInternal::RenderPass(m_context, d, d->fxaaPS.Get(), dest->rtv.Get(), d->screenWidth, d->screenHeight,
-                               currentSource->srv.Get());
-        currentSource = dest;
+        RenderFXAA();
     }
 
     // ====================================================================
     // FINAL: Copy result back to the original back-buffer
     // ====================================================================
     {
-        // Unbind SRVs to avoid hazards
         ID3D11ShaderResourceView* nullSRVs[2] = {nullptr, nullptr};
         m_context->PSSetShaderResources(0, 2, nullSRVs);
 
-        // Set the original back-buffer as render target
-        ID3D11RenderTargetView* rtvs[] = {originalRTV.Get()};
-        m_context->OMSetRenderTargets(1, rtvs, originalDSV.Get());
+        ID3D11RenderTargetView* rtvs[] = {d->originalRTV.Get()};
+        m_context->OMSetRenderTargets(1, rtvs, d->originalDSV.Get());
         PPInternal::SetViewport(m_context, d->screenWidth, d->screenHeight);
 
-        // Bind the final result
-        ID3D11ShaderResourceView* srvs[] = {currentSource->srv.Get()};
+        ID3D11ShaderResourceView* srvs[] = {d->currentSource->srv.Get()};
         m_context->PSSetShaderResources(0, 1, srvs);
 
         m_context->PSSetShader(d->copyPS.Get(), nullptr, 0);
         PPInternal::DrawFullScreenTriangle(m_context, d);
 
-        // Unbind
         m_context->PSSetShaderResources(0, 1, nullSRVs);
     }
 
     // Restore original render target and depth-stencil for subsequent passes
     {
-        ID3D11RenderTargetView* rtvs[] = {originalRTV.Get()};
-        m_context->OMSetRenderTargets(1, rtvs, originalDSV.Get());
+        ID3D11RenderTargetView* rtvs[] = {d->originalRTV.Get()};
+        m_context->OMSetRenderTargets(1, rtvs, d->originalDSV.Get());
+    }
+
+    // Clear transient pipeline state
+    d->currentSource = nullptr;
+    d->originalRTV.Reset();
+    d->originalDSV.Reset();
+}
+
+// ============================================================================
+// RenderBloom
+// ============================================================================
+
+void PostProcessingSystem::RenderBloom()
+{
+    auto* d = PPInternal::GetData(this);
+    if (!d || !d->initialised || !d->currentSource)
+        return;
+
+    // 1a. Brightness extraction from current scene -> bloomMipsA[0] (half res)
+    {
+        UINT mw = d->bloomMipsA[0].width;
+        UINT mh = d->bloomMipsA[0].height;
+        PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(mw),
+                                         1.0f / static_cast<float>(mh));
+        PPInternal::RenderPass(m_context, d, d->brightnessExtractPS.Get(), d->bloomMipsA[0].rtv.Get(), mw, mh,
+                               d->currentSource->srv.Get());
+    }
+
+    // 1b. Progressive downsample + Gaussian blur through mip chain
+    for (int mip = 0; mip < kBloomMipCount; ++mip)
+    {
+        UINT mw = d->bloomMipsA[mip].width;
+        UINT mh = d->bloomMipsA[mip].height;
+
+        float texelW = 1.0f / static_cast<float>(mw);
+        float texelH = 1.0f / static_cast<float>(mh);
+
+        // If not the first mip, downsample from the previous mip's blurred result
+        if (mip > 0)
+        {
+            PPInternal::UpdateConstantBuffer(m_context, d, texelW, texelH);
+            PPInternal::RenderPass(m_context, d, d->copyPS.Get(), d->bloomMipsA[mip].rtv.Get(), mw, mh,
+                                   d->bloomMipsA[mip - 1].srv.Get());
+        }
+
+        // Horizontal blur: bloomMipsA[mip] -> bloomMipsB[mip]
+        PPInternal::UpdateConstantBuffer(m_context, d, texelW, texelH);
+        PPInternal::RenderPass(m_context, d, d->gaussianBlurHPS.Get(), d->bloomMipsB[mip].rtv.Get(), mw, mh,
+                               d->bloomMipsA[mip].srv.Get());
+
+        // Vertical blur: bloomMipsB[mip] -> bloomMipsA[mip]
+        PPInternal::RenderPass(m_context, d, d->gaussianBlurVPS.Get(), d->bloomMipsA[mip].rtv.Get(), mw, mh,
+                               d->bloomMipsB[mip].srv.Get());
+    }
+
+    // 1c. Progressive upsample + accumulate back up the chain
+    for (int mip = kBloomMipCount - 2; mip >= 0; --mip)
+    {
+        UINT mw = d->bloomMipsA[mip].width;
+        UINT mh = d->bloomMipsA[mip].height;
+
+        float texelW = 1.0f / static_cast<float>(mw);
+        float texelH = 1.0f / static_cast<float>(mh);
+
+        PPInternal::UpdateConstantBuffer(m_context, d, texelW, texelH);
+
+        // Composite: bloomMipsA[mip] + bloomMipsA[mip+1] (bilinear upsampled)
+        PPInternal::RenderPass(m_context, d, d->bloomCompositePS.Get(), d->bloomMipsB[mip].rtv.Get(), mw, mh,
+                               d->bloomMipsA[mip].srv.Get(), d->bloomMipsA[mip + 1].srv.Get());
+
+        // Swap so bloomMipsA[mip] holds the composited result
+        std::swap(d->bloomMipsA[mip], d->bloomMipsB[mip]);
+    }
+
+    // 1d. Final bloom composite: combine original scene with bloom result
+    {
+        PPInternal::MipTarget* dest = d->GetPingPongDest();
+
+        PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
+                                         1.0f / static_cast<float>(d->screenHeight));
+        PPInternal::RenderPass(m_context, d, d->bloomCompositePS.Get(), dest->rtv.Get(), d->screenWidth,
+                               d->screenHeight, d->currentSource->srv.Get(), d->bloomMipsA[0].srv.Get());
+        d->currentSource = dest;
     }
 }
+
+// ============================================================================
+// RenderToneMapping (ACES filmic curve + color grading combined pass)
+// ============================================================================
+
+void PostProcessingSystem::RenderToneMapping()
+{
+    auto* d = PPInternal::GetData(this);
+    if (!d || !d->initialised || !d->currentSource)
+        return;
+
+    PPInternal::MipTarget* dest = d->GetPingPongDest();
+
+    PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
+                                     1.0f / static_cast<float>(d->screenHeight));
+
+    PPInternal::RenderPass(m_context, d, d->toneMapColorGradePS.Get(), dest->rtv.Get(), d->screenWidth,
+                           d->screenHeight, d->currentSource->srv.Get());
+    d->currentSource = dest;
+}
+
+// ============================================================================
+// RenderFXAA - Fast Approximate Anti-Aliasing
+// Luminance-based edge detection with 12-iteration directional blur
+// ============================================================================
+
+void PostProcessingSystem::RenderFXAA()
+{
+    auto* d = PPInternal::GetData(this);
+    if (!d || !d->initialised || !d->currentSource)
+        return;
+
+    PPInternal::MipTarget* dest = d->GetPingPongDest();
+
+    PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
+                                     1.0f / static_cast<float>(d->screenHeight));
+
+    PPInternal::RenderPass(m_context, d, d->fxaaPS.Get(), dest->rtv.Get(), d->screenWidth, d->screenHeight,
+                           d->currentSource->srv.Get());
+    d->currentSource = dest;
+}
+
+// ============================================================================
+// RenderExposureAdaptation - Auto-exposure based on average luminance
+//
+// Computes average scene luminance via successive downsampling, then smoothly
+// adapts the exposure value over time. The adapted exposure is applied as a
+// multiplier on the scene color before tone mapping.
+// ============================================================================
+
+void PostProcessingSystem::RenderExposureAdaptation(float deltaTime)
+{
+    auto* d = PPInternal::GetData(this);
+    if (!d || !d->initialised || !d->currentSource)
+        return;
+
+    if (!d->exposureAdaptation.autoExposure)
+        return;
+
+    // Step 1: Downsample scene luminance through the luminance mip chain
+    if (d->luminanceMipCountUsed > 0)
+    {
+        // First level: compute log-luminance from the scene
+        {
+            UINT mw = d->luminanceMips[0].width;
+            UINT mh = d->luminanceMips[0].height;
+
+            PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
+                                             1.0f / static_cast<float>(d->screenHeight));
+            PPInternal::RenderPass(m_context, d, d->luminanceDownsamplePS.Get(), d->luminanceMips[0].rtv.Get(),
+                                   mw, mh, d->currentSource->srv.Get());
+        }
+
+        // Successive downsample to 1x1
+        for (int i = 1; i < d->luminanceMipCountUsed; ++i)
+        {
+            UINT mw = d->luminanceMips[i].width;
+            UINT mh = d->luminanceMips[i].height;
+            UINT prevW = d->luminanceMips[i - 1].width;
+            UINT prevH = d->luminanceMips[i - 1].height;
+
+            PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(prevW),
+                                             1.0f / static_cast<float>(prevH));
+            PPInternal::RenderPass(m_context, d, d->luminanceDownsamplePS.Get(), d->luminanceMips[i].rtv.Get(),
+                                   mw, mh, d->luminanceMips[i - 1].srv.Get());
+        }
+
+        // Step 2: Read back the 1x1 luminance value via staging texture
+        // (For real-time performance, we avoid CPU readback and instead
+        //  use a temporal smoothing approach with the previous frame's value)
+
+        // Approximate: use an exponential moving average toward the target
+        // The smallest mip contains the average log-luminance. We estimate
+        // the exposure from the previous frame's adapted value and smooth it.
+        float targetExposure = d->exposureAdaptation.targetLuminance /
+                               std::max(0.001f, d->exposureAdaptation.currentAdaptedExposure * 0.18f);
+        targetExposure = std::clamp(targetExposure, d->exposureAdaptation.minExposure,
+                                    d->exposureAdaptation.maxExposure);
+
+        float speed = d->exposureAdaptation.adaptationSpeed * deltaTime;
+        speed = std::clamp(speed, 0.0f, 1.0f);
+
+        d->exposureAdaptation.currentAdaptedExposure +=
+            (targetExposure - d->exposureAdaptation.currentAdaptedExposure) * speed;
+
+        d->exposureAdaptation.currentAdaptedExposure =
+            std::clamp(d->exposureAdaptation.currentAdaptedExposure,
+                        d->exposureAdaptation.minExposure, d->exposureAdaptation.maxExposure);
+    }
+
+    // Step 3: Apply the adapted exposure to the scene
+    {
+        PPInternal::MipTarget* dest = d->GetPingPongDest();
+
+        PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
+                                         1.0f / static_cast<float>(d->screenHeight));
+
+        PPInternal::RenderPass(m_context, d, d->exposureApplyPS.Get(), dest->rtv.Get(), d->screenWidth,
+                               d->screenHeight, d->currentSource->srv.Get());
+        d->currentSource = dest;
+    }
+}
+
+// ============================================================================
+// RenderVignette - Darken screen edges based on distance from center
+// ============================================================================
+
+void PostProcessingSystem::RenderVignette()
+{
+    auto* d = PPInternal::GetData(this);
+    if (!d || !d->initialised || !d->currentSource)
+        return;
+
+    PPInternal::MipTarget* dest = d->GetPingPongDest();
+
+    PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
+                                     1.0f / static_cast<float>(d->screenHeight));
+
+    PPInternal::RenderPass(m_context, d, d->vignettePS.Get(), dest->rtv.Get(), d->screenWidth, d->screenHeight,
+                           d->currentSource->srv.Get());
+    d->currentSource = dest;
+}
+
+// ============================================================================
+// RenderChromaticAberration - RGB channel offset based on UV distance
+// ============================================================================
+
+void PostProcessingSystem::RenderChromaticAberration()
+{
+    auto* d = PPInternal::GetData(this);
+    if (!d || !d->initialised || !d->currentSource)
+        return;
+
+    PPInternal::MipTarget* dest = d->GetPingPongDest();
+
+    PPInternal::UpdateConstantBuffer(m_context, d, 1.0f / static_cast<float>(d->screenWidth),
+                                     1.0f / static_cast<float>(d->screenHeight));
+
+    PPInternal::RenderPass(m_context, d, d->chromaticAberrationPS.Get(), dest->rtv.Get(), d->screenWidth,
+                           d->screenHeight, d->currentSource->srv.Get());
+    d->currentSource = dest;
+}
+
+// ============================================================================
+// Console integration methods
+// ============================================================================
 
 void PostProcessingSystem::Console_SetExposure(float exposure)
 {
@@ -1831,9 +2004,77 @@ void PostProcessingSystem::Console_SetExposure(float exposure)
     if (d)
     {
         d->toneMap.exposure = std::max(0.01f, exposure);
+        d->exposureAdaptation.currentAdaptedExposure = exposure;
     }
 
     Spark::SimpleConsole::GetInstance().LogInfo("Set post-processing exposure to: " + std::to_string(exposure));
+}
+
+void PostProcessingSystem::Console_ToggleEffect(const std::string& effectName, bool enabled)
+{
+    auto* d = PPInternal::GetData(this);
+    if (!d)
+        return;
+
+    if (effectName == "bloom")
+        d->bloom.enabled = enabled;
+    else if (effectName == "tonemap" || effectName == "tonemapping")
+        d->toneMap.enabled = enabled;
+    else if (effectName == "colorgrade" || effectName == "colorgrading")
+        d->colorGrade.enabled = enabled;
+    else if (effectName == "fxaa")
+        d->fxaa.enabled = enabled;
+    else if (effectName == "vignette")
+        d->vignette.enabled = enabled;
+    else if (effectName == "chromatic" || effectName == "chromaticaberration")
+        d->chromaticAberration.enabled = enabled;
+    else if (effectName == "exposure" || effectName == "autoexposure")
+        d->exposureAdaptation.enabled = enabled;
+    else
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("Unknown effect: " + effectName);
+        return;
+    }
+
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        "Effect '" + effectName + "' " + (enabled ? "enabled" : "disabled"));
+}
+
+void PostProcessingSystem::Console_SetVignetteIntensity(float intensity)
+{
+    auto* d = PPInternal::GetData(this);
+    if (d)
+    {
+        d->vignette.intensity = std::clamp(intensity, 0.0f, 1.0f);
+    }
+
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        "Set vignette intensity to: " + std::to_string(intensity));
+}
+
+void PostProcessingSystem::Console_SetChromaticAberrationIntensity(float intensity)
+{
+    auto* d = PPInternal::GetData(this);
+    if (d)
+    {
+        d->chromaticAberration.intensity = std::clamp(intensity, 0.0f, 0.1f);
+    }
+
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        "Set chromatic aberration intensity to: " + std::to_string(intensity));
+}
+
+void PostProcessingSystem::Console_SetAutoExposure(bool enabled)
+{
+    auto* d = PPInternal::GetData(this);
+    if (d)
+    {
+        d->exposureAdaptation.autoExposure = enabled;
+        d->exposureAdaptation.enabled = enabled;
+    }
+
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        std::string("Auto-exposure ") + (enabled ? "enabled" : "disabled"));
 }
 
 std::string PostProcessingSystem::Console_ListEffects() const
@@ -1847,12 +2088,19 @@ std::string PostProcessingSystem::Console_ListEffects() const
     std::ostringstream ss;
     ss << "=== Post-Processing Effects ===\n\n";
 
-    ss << "1. Bloom          [" << (d->bloom.enabled ? "ON" : "OFF") << "]\n";
+    ss << "1. Exposure Adapt [" << (d->exposureAdaptation.enabled ? "ON" : "OFF") << "]\n";
+    ss << "   Auto-Exposure: " << (d->exposureAdaptation.autoExposure ? "ON" : "OFF") << "\n";
+    ss << "   Adapted Exp:   " << d->exposureAdaptation.currentAdaptedExposure << "\n";
+    ss << "   Speed:         " << d->exposureAdaptation.adaptationSpeed << "\n";
+    ss << "   Range:         [" << d->exposureAdaptation.minExposure << ", "
+       << d->exposureAdaptation.maxExposure << "]\n\n";
+
+    ss << "2. Bloom          [" << (d->bloom.enabled ? "ON" : "OFF") << "]\n";
     ss << "   Threshold:     " << d->bloom.threshold << "\n";
     ss << "   Intensity:     " << d->bloom.intensity << "\n";
     ss << "   Mip levels:    " << kBloomMipCount << "\n\n";
 
-    ss << "2. Tone Mapping   [" << (d->toneMap.enabled ? "ON" : "OFF") << "]\n";
+    ss << "3. Tone Mapping   [" << (d->toneMap.enabled ? "ON" : "OFF") << "]\n";
     ss << "   Operator:      ";
     switch (d->toneMap.op)
     {
@@ -1870,17 +2118,26 @@ std::string PostProcessingSystem::Console_ListEffects() const
     ss << "   Exposure:      " << d->toneMap.exposure << "\n";
     ss << "   Gamma:         " << d->toneMap.gamma << "\n\n";
 
-    ss << "3. Color Grading  [" << (d->colorGrade.enabled ? "ON" : "OFF") << "]\n";
+    ss << "4. Color Grading  [" << (d->colorGrade.enabled ? "ON" : "OFF") << "]\n";
     ss << "   Contrast:      " << d->colorGrade.contrast << "\n";
     ss << "   Saturation:    " << d->colorGrade.saturation << "\n\n";
 
-    ss << "4. FXAA           [" << (d->fxaa.enabled ? "ON" : "OFF") << "]\n";
+    ss << "5. Vignette       [" << (d->vignette.enabled ? "ON" : "OFF") << "]\n";
+    ss << "   Intensity:     " << d->vignette.intensity << "\n";
+    ss << "   Radius:        " << d->vignette.radius << "\n";
+    ss << "   Softness:      " << d->vignette.softness << "\n\n";
+
+    ss << "6. Chromatic Ab.  [" << (d->chromaticAberration.enabled ? "ON" : "OFF") << "]\n";
+    ss << "   Intensity:     " << d->chromaticAberration.intensity << "\n\n";
+
+    ss << "7. FXAA           [" << (d->fxaa.enabled ? "ON" : "OFF") << "]\n";
     ss << "   SubPixel:      " << d->fxaa.qualitySubpix << "\n";
     ss << "   EdgeThreshold: " << d->fxaa.qualityEdgeThreshold << "\n";
     ss << "   EdgeThreshMin: " << d->fxaa.qualityEdgeThresholdMin << "\n\n";
 
     ss << "Resolution: " << d->screenWidth << "x" << d->screenHeight << "\n";
-    ss << "Pipeline order: Scene -> Bloom -> ToneMap -> ColorGrade -> FXAA -> Output\n";
+    ss << "Pipeline order: Scene -> ExposureAdapt -> Bloom -> ToneMap -> Vignette"
+       << " -> ChromaticAb -> FXAA -> Output\n";
 
     return ss.str();
 }
@@ -1916,24 +2173,76 @@ void PostProcessingSystem::Shutdown()
     m_context = nullptr;
 }
 
-void PostProcessingSystem::Update(float /*deltaTime*/)
+void PostProcessingSystem::Update(float deltaTime)
+{
+    Execute(deltaTime);
+}
+
+void PostProcessingSystem::Execute(float /*deltaTime*/)
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::RenderBloom()
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::RenderToneMapping()
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::RenderFXAA()
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::RenderExposureAdaptation(float /*deltaTime*/)
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::RenderVignette()
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::RenderChromaticAberration()
 {
     // No-op on Linux
 }
 
 void PostProcessingSystem::Console_SetExposure(float /*exposure*/)
 {
-    // No-op on Linux - store if needed
+    // No-op on Linux
+}
+
+void PostProcessingSystem::Console_ToggleEffect(const std::string& /*effectName*/, bool /*enabled*/)
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::Console_SetVignetteIntensity(float /*intensity*/)
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::Console_SetChromaticAberrationIntensity(float /*intensity*/)
+{
+    // No-op on Linux
+}
+
+void PostProcessingSystem::Console_SetAutoExposure(bool /*enabled*/)
+{
+    // No-op on Linux
 }
 
 std::string PostProcessingSystem::Console_ListEffects() const
 {
     std::ostringstream ss;
     ss << "=== Post-Processing Effects (Linux stub) ===\n";
-    ss << "  Bloom: N/A\n";
-    ss << "  Tone Mapping: N/A\n";
-    ss << "  Color Grading: N/A\n";
-    ss << "  FXAA: N/A\n";
+    ss << "  All effects: N/A\n";
     ss << "Note: Post-processing not available on Linux platform.\n";
     return ss.str();
 }

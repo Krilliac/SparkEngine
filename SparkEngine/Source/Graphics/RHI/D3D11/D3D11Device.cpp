@@ -611,7 +611,7 @@ namespace Spark
                 if (FAILED(hr))
                     return nullptr;
 
-                return new D3D11Buffer(desc, std::move(buffer));
+                return std::make_unique<D3D11Buffer>(desc, std::move(buffer)).release();
             }
 
             IRHITexture* D3D11Device::CreateTexture(const RHITextureDesc& desc)
@@ -667,7 +667,7 @@ namespace Spark
                     m_device->CreateDepthStencilView(texture.Get(), &dsvDesc, &dsv);
                 }
 
-                return new D3D11Texture(desc, texture, std::move(srv), std::move(rtv), std::move(dsv));
+                return std::make_unique<D3D11Texture>(desc, texture, std::move(srv), std::move(rtv), std::move(dsv)).release();
             }
 
             IRHIShader* D3D11Device::CreateShader(const RHIShaderDesc& desc)
@@ -783,7 +783,7 @@ namespace Spark
                 if (FAILED(hr) || !shaderObj)
                     return nullptr;
 
-                return new D3D11Shader(desc, std::move(shaderObj), std::move(bytecodeBlob));
+                return std::make_unique<D3D11Shader>(desc, std::move(shaderObj), std::move(bytecodeBlob)).release();
             }
 
             IRHISampler* D3D11Device::CreateSampler(const RHISamplerDesc& desc)
@@ -805,7 +805,7 @@ namespace Spark
                 if (FAILED(hr))
                     return nullptr;
 
-                return new D3D11Sampler(desc, std::move(sampler));
+                return std::make_unique<D3D11Sampler>(desc, std::move(sampler)).release();
             }
 
             IRHIPipelineState* D3D11Device::CreatePipelineState(const RHIPipelineStateDesc& desc,
@@ -901,8 +901,9 @@ namespace Spark
                 ComPtr<ID3D11BlendState> blendState;
                 m_device->CreateBlendState(&blendDesc, &blendState);
 
-                return new D3D11PipelineState(desc, std::move(inputLayout), std::move(rasterizerState),
-                                              std::move(depthStencilState), std::move(blendState), d3dVS, d3dPS);
+                return std::make_unique<D3D11PipelineState>(desc, std::move(inputLayout), std::move(rasterizerState),
+                                                              std::move(depthStencilState), std::move(blendState),
+                                                              d3dVS, d3dPS).release();
             }
 
             void D3D11Device::DestroyBuffer(IRHIBuffer* buffer)
@@ -979,7 +980,7 @@ namespace Spark
                 HRESULT hr = m_device->CreateDeferredContext(0, &deferredContext);
                 if (FAILED(hr))
                     return nullptr;
-                return new D3D11CommandList(deferredContext.Get(), false);
+                return std::make_unique<D3D11CommandList>(deferredContext.Get(), false).release();
             }
 
             void D3D11Device::ExecuteCommandList(IRHICommandList*) {}

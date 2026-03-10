@@ -633,6 +633,645 @@ namespace Spark::Procedural
     }
 
     // ============================================================================
+    // Poisson Disk Sampling (Bridson's algorithm)
+    // ============================================================================
+
+    std::vector<XMFLOAT2> PoissonDiskSampling(float width, float height, float minDist,
+                                               int maxAttempts, uint32_t seed)
+    {
+        std::mt19937 rng(seed);
+        std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+
+        float cellSize = minDist / std::sqrt(2.0f);
+        int gridW = static_cast<int>(std::ceil(width / cellSize));
+        int gridH = static_cast<int>(std::ceil(height / cellSize));
+
+        // Background grid: -1 means empty, otherwise index into points
+        std::vector<int> grid(gridW * gridH, -1);
+        std::vector<XMFLOAT2> points;
+        std::vector<int> activeList;
+
+        // Helper to get grid cell for a point
+        auto toGrid = [cellSize](float px, float py) -> std::pair<int, int>
+        {
+            return {static_cast<int>(px / cellSize), static_cast<int>(py / cellSize)};
+        };
+
+        // Seed with first point
+        float startX = width * dist01(rng);
+        float startY = height * dist01(rng);
+        points.push_back({startX, startY});
+        activeList.push_back(0);
+        auto [gx0, gy0] = toGrid(startX, startY);
+        grid[gy0 * gridW + gx0] = 0;
+
+        float minDistSq = minDist * minDist;
+
+        while (!activeList.empty())
+        {
+            // Pick a random active point
+            std::uniform_int_distribution<int> activeDist(0, static_cast<int>(activeList.size()) - 1);
+            int activeIdx = activeDist(rng);
+            int pointIdx = activeList[activeIdx];
+            const auto& activePoint = points[pointIdx];
+
+            bool found = false;
+            for (int attempt = 0; attempt < maxAttempts; ++attempt)
+            {
+                // Generate candidate in annulus [minDist, 2*minDist]
+                float angle = dist01(rng) * 2.0f * 3.14159265f;
+                float radius = minDist + dist01(rng) * minDist;
+                float cx = activePoint.x + radius * std::cos(angle);
+                float cy = activePoint.y + radius * std::sin(angle);
+
+                // Bounds check
+                if (cx < 0 || cx >= width || cy < 0 || cy >= height)
+                {
+                    continue;
+                }
+
+                auto [gcx, gcy] = toGrid(cx, cy);
+
+                // Check neighbors in a 5x5 grid window
+                bool tooClose = false;
+                for (int dy = -2; dy <= 2 && !tooClose; ++dy)
+                {
+                    for (int dx = -2; dx <= 2 && !tooClose; ++dx)
+                    {
+                        int nx = gcx + dx;
+                        int ny = gcy + dy;
+                        if (nx < 0 || nx >= gridW || ny < 0 || ny >= gridH)
+                        {
+                            continue;
+                        }
+                        int neighborIdx = grid[ny * gridW + nx];
+                        if (neighborIdx >= 0)
+                        {
+                            float ddx = points[neighborIdx].x - cx;
+                            float ddy = points[neighborIdx].y - cy;
+                            if (ddx * ddx + ddy * ddy < minDistSq)
+                            {
+                                tooClose = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!tooClose)
+                {
+                    int newIdx = static_cast<int>(points.size());
+                    points.push_back({cx, cy});
+                    activeList.push_back(newIdx);
+                    grid[gcy * gridW + gcx] = newIdx;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                // Remove from active list (swap with last)
+                activeList[activeIdx] = activeList.back();
+                activeList.pop_back();
+            }
+        }
+
+        return points;
+    }
+
+    // ============================================================================
+    // DungeonGenerator — BSP
+    // ============================================================================
+
+    void DungeonGenerator::SplitBSP(BSPNode* node, int minLeafSize, std::mt19937& rng)
+    {
+        if (node->width <= minLeafSize * 2 && node->height <= minLeafSize * 2)
+        {
+            return;
+        }
+
+        // Decide split direction based on aspect ratio
+        bool splitHorizontal;
+        if (node->width > node->height && node->width > minLeafSize * 2)
+        {
+            splitHorizontal = false; // Split vertically
+        }
+        else if (node->height > node->width && node->height > minLeafSize * 2)
+        {
+            splitHorizontal = true;
+        }
+        else
+        {
+            std::uniform_int_distribution<int> coinFlip(0, 1);
+            splitHorizontal = coinFlip(rng) == 0;
+        }
+
+        int maxSplit = (splitHorizontal ? node->height : node->width) - minLeafSize;
+        if (maxSplit <= minLeafSize)
+        {
+            return;
+        }
+
+        std::uniform_int_distribution<int> splitDist(minLeafSize, maxSplit);
+        int splitPos = splitDist(rng);
+
+        if (splitHorizontal)
+        {
+            node->left = std::make_unique<BSPNode>();
+            node->left->x = node->x;
+            node->left->y = node->y;
+            node->left->width = node->width;
+            node->left->height = splitPos;
+
+            node->right = std::make_unique<BSPNode>();
+            node->right->x = node->x;
+            node->right->y = node->y + splitPos;
+            node->right->width = node->width;
+            node->right->height = node->height - splitPos;
+        }
+        else
+        {
+            node->left = std::make_unique<BSPNode>();
+            node->left->x = node->x;
+            node->left->y = node->y;
+            node->left->width = splitPos;
+            node->left->height = node->height;
+
+            node->right = std::make_unique<BSPNode>();
+            node->right->x = node->x + splitPos;
+            node->right->y = node->y;
+            node->right->width = node->width - splitPos;
+            node->right->height = node->height;
+        }
+
+        SplitBSP(node->left.get(), minLeafSize, rng);
+        SplitBSP(node->right.get(), minLeafSize, rng);
+    }
+
+    void DungeonGenerator::CreateRooms(BSPNode* node, const DungeonSettings& settings, std::mt19937& rng)
+    {
+        if (node->left || node->right)
+        {
+            if (node->left)
+            {
+                CreateRooms(node->left.get(), settings, rng);
+            }
+            if (node->right)
+            {
+                CreateRooms(node->right.get(), settings, rng);
+            }
+            return;
+        }
+
+        // Leaf node: create a room within it
+        int pad = settings.roomPadding;
+        int maxW = std::min(settings.maxRoomSize, node->width - 2 * pad);
+        int maxH = std::min(settings.maxRoomSize, node->height - 2 * pad);
+        int minW = std::min(settings.minRoomSize, maxW);
+        int minH = std::min(settings.minRoomSize, maxH);
+
+        if (minW < 3 || minH < 3 || maxW < minW || maxH < minH)
+        {
+            return;
+        }
+
+        std::uniform_int_distribution<int> wDist(minW, maxW);
+        std::uniform_int_distribution<int> hDist(minH, maxH);
+        int roomW = wDist(rng);
+        int roomH = hDist(rng);
+
+        int maxX = node->x + node->width - roomW - pad;
+        int maxY = node->y + node->height - roomH - pad;
+        int minX = node->x + pad;
+        int minY = node->y + pad;
+
+        if (maxX < minX)
+        {
+            maxX = minX;
+        }
+        if (maxY < minY)
+        {
+            maxY = minY;
+        }
+
+        std::uniform_int_distribution<int> xDist(minX, maxX);
+        std::uniform_int_distribution<int> yDist(minY, maxY);
+
+        node->room.x = xDist(rng);
+        node->room.y = yDist(rng);
+        node->room.width = roomW;
+        node->room.height = roomH;
+        node->hasRoom = true;
+    }
+
+    void DungeonGenerator::CollectRooms(const BSPNode* node, std::vector<DungeonRoom>& rooms)
+    {
+        if (!node)
+        {
+            return;
+        }
+        if (node->hasRoom)
+        {
+            DungeonRoom room = node->room;
+            room.id = static_cast<int>(rooms.size());
+            rooms.push_back(room);
+        }
+        CollectRooms(node->left.get(), rooms);
+        CollectRooms(node->right.get(), rooms);
+    }
+
+    DungeonRoom DungeonGenerator::GetAnyRoom(const BSPNode* node)
+    {
+        if (node->hasRoom)
+        {
+            return node->room;
+        }
+        if (node->left)
+        {
+            return GetAnyRoom(node->left.get());
+        }
+        if (node->right)
+        {
+            return GetAnyRoom(node->right.get());
+        }
+        return {}; // Should not happen with valid tree
+    }
+
+    void DungeonGenerator::CarveRoom(DungeonLayout& layout, const DungeonRoom& room)
+    {
+        for (int ry = room.y; ry < room.y + room.height; ++ry)
+        {
+            for (int rx = room.x; rx < room.x + room.width; ++rx)
+            {
+                if (rx >= 0 && rx < layout.width && ry >= 0 && ry < layout.height)
+                {
+                    layout.grid[ry * layout.width + rx] = 1; // Floor
+                }
+            }
+        }
+    }
+
+    void DungeonGenerator::CarveCorridor(DungeonLayout& layout, int x1, int y1, int x2, int y2, int corridorWidth)
+    {
+        int halfW = corridorWidth / 2;
+
+        // Carve horizontal segment
+        int startX = std::min(x1, x2);
+        int endX = std::max(x1, x2);
+        for (int x = startX; x <= endX; ++x)
+        {
+            for (int w = -halfW; w <= halfW; ++w)
+            {
+                int cy = y1 + w;
+                if (x >= 0 && x < layout.width && cy >= 0 && cy < layout.height)
+                {
+                    if (layout.grid[cy * layout.width + x] == 0)
+                    {
+                        layout.grid[cy * layout.width + x] = 2; // Corridor
+                    }
+                }
+            }
+        }
+
+        // Carve vertical segment
+        int startY = std::min(y1, y2);
+        int endY = std::max(y1, y2);
+        for (int y = startY; y <= endY; ++y)
+        {
+            for (int w = -halfW; w <= halfW; ++w)
+            {
+                int cx = x2 + w;
+                if (cx >= 0 && cx < layout.width && y >= 0 && y < layout.height)
+                {
+                    if (layout.grid[y * layout.width + cx] == 0)
+                    {
+                        layout.grid[y * layout.width + cx] = 2; // Corridor
+                    }
+                }
+            }
+        }
+    }
+
+    void DungeonGenerator::ConnectRooms(DungeonLayout& layout, const DungeonRoom& a, const DungeonRoom& b,
+                                         int corridorWidth, std::mt19937& rng)
+    {
+        int ax = a.CenterX(), ay = a.CenterY();
+        int bx = b.CenterX(), by = b.CenterY();
+
+        // L-shaped corridor: random whether horizontal-first or vertical-first
+        std::uniform_int_distribution<int> coinFlip(0, 1);
+
+        DungeonCorridor corridor;
+        corridor.x1 = ax;
+        corridor.y1 = ay;
+        corridor.x2 = bx;
+        corridor.y2 = by;
+        layout.corridors.push_back(corridor);
+
+        if (coinFlip(rng) == 0)
+        {
+            // Horizontal then vertical
+            CarveCorridor(layout, ax, ay, bx, ay, corridorWidth);
+            CarveCorridor(layout, bx, ay, bx, by, corridorWidth);
+        }
+        else
+        {
+            // Vertical then horizontal
+            CarveCorridor(layout, ax, ay, ax, by, corridorWidth);
+            CarveCorridor(layout, ax, by, bx, by, corridorWidth);
+        }
+    }
+
+    void DungeonGenerator::ConnectBSP(BSPNode* node, DungeonLayout& layout, int corridorWidth, std::mt19937& rng)
+    {
+        if (!node || !node->left || !node->right)
+        {
+            return;
+        }
+
+        ConnectBSP(node->left.get(), layout, corridorWidth, rng);
+        ConnectBSP(node->right.get(), layout, corridorWidth, rng);
+
+        // Connect a room from left subtree to a room from right subtree
+        DungeonRoom leftRoom = GetAnyRoom(node->left.get());
+        DungeonRoom rightRoom = GetAnyRoom(node->right.get());
+        ConnectRooms(layout, leftRoom, rightRoom, corridorWidth, rng);
+    }
+
+    DungeonLayout DungeonGenerator::GenerateBSP(const DungeonSettings& settings)
+    {
+        DungeonLayout layout;
+        layout.width = settings.width;
+        layout.height = settings.height;
+        layout.grid.resize(settings.width * settings.height, 0); // All walls
+
+        std::mt19937 rng(settings.seed);
+
+        // Build BSP tree
+        auto root = std::make_unique<BSPNode>();
+        root->x = 0;
+        root->y = 0;
+        root->width = settings.width;
+        root->height = settings.height;
+
+        SplitBSP(root.get(), settings.minLeafSize, rng);
+        CreateRooms(root.get(), settings, rng);
+        CollectRooms(root.get(), layout.rooms);
+
+        // Carve rooms into grid
+        for (const auto& room : layout.rooms)
+        {
+            CarveRoom(layout, room);
+        }
+
+        // Connect rooms via BSP tree
+        ConnectBSP(root.get(), layout, settings.corridorWidth, rng);
+
+        return layout;
+    }
+
+    // ============================================================================
+    // DungeonGenerator — Cellular Automata
+    // ============================================================================
+
+    DungeonLayout DungeonGenerator::GenerateCellularAutomata(int width, int height,
+                                                             float fillProb,
+                                                             int iterations,
+                                                             uint32_t seed)
+    {
+        DungeonLayout layout;
+        layout.width = width;
+        layout.height = height;
+        layout.grid.resize(width * height, 0);
+
+        std::mt19937 rng(seed);
+        std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+        // Initial random fill
+        for (int y = 0; y < height; ++y)
+        {
+            for (int x = 0; x < width; ++x)
+            {
+                // Keep borders as walls
+                if (x == 0 || x == width - 1 || y == 0 || y == height - 1)
+                {
+                    layout.grid[y * width + x] = 0;
+                }
+                else
+                {
+                    layout.grid[y * width + x] = (dist(rng) < fillProb) ? 0 : 1;
+                }
+            }
+        }
+
+        // Cellular automata smoothing
+        std::vector<int> temp(width * height, 0);
+        for (int iter = 0; iter < iterations; ++iter)
+        {
+            for (int y = 1; y < height - 1; ++y)
+            {
+                for (int x = 1; x < width - 1; ++x)
+                {
+                    int walls = 0;
+                    for (int dy = -1; dy <= 1; ++dy)
+                    {
+                        for (int dx = -1; dx <= 1; ++dx)
+                        {
+                            if (layout.grid[(y + dy) * width + (x + dx)] == 0)
+                            {
+                                walls++;
+                            }
+                        }
+                    }
+                    // 4-5 rule: become wall if >= 5 neighbors are walls
+                    temp[y * width + x] = (walls >= 5) ? 0 : 1;
+                }
+            }
+            // Copy back, keeping borders
+            for (int y = 1; y < height - 1; ++y)
+            {
+                for (int x = 1; x < width - 1; ++x)
+                {
+                    layout.grid[y * width + x] = temp[y * width + x];
+                }
+            }
+        }
+
+        // Identify "rooms" as connected floor regions using flood fill
+        std::vector<bool> visited(width * height, false);
+        int roomId = 0;
+        for (int y = 1; y < height - 1; ++y)
+        {
+            for (int x = 1; x < width - 1; ++x)
+            {
+                if (layout.grid[y * width + x] == 1 && !visited[y * width + x])
+                {
+                    // Flood fill to find room bounds
+                    DungeonRoom room;
+                    room.id = roomId++;
+                    int minX = x, maxX = x, minY = y, maxY = y;
+
+                    std::queue<std::pair<int, int>> q;
+                    q.push({x, y});
+                    visited[y * width + x] = true;
+
+                    while (!q.empty())
+                    {
+                        auto [cx, cy] = q.front();
+                        q.pop();
+
+                        minX = std::min(minX, cx);
+                        maxX = std::max(maxX, cx);
+                        minY = std::min(minY, cy);
+                        maxY = std::max(maxY, cy);
+
+                        int neighbors[] = {-1, 0, 1, 0, 0, -1, 0, 1};
+                        for (int i = 0; i < 8; i += 2)
+                        {
+                            int nx = cx + neighbors[i];
+                            int ny = cy + neighbors[i + 1];
+                            if (nx >= 0 && nx < width && ny >= 0 && ny < height &&
+                                !visited[ny * width + nx] && layout.grid[ny * width + nx] == 1)
+                            {
+                                visited[ny * width + nx] = true;
+                                q.push({nx, ny});
+                            }
+                        }
+                    }
+
+                    room.x = minX;
+                    room.y = minY;
+                    room.width = maxX - minX + 1;
+                    room.height = maxY - minY + 1;
+                    layout.rooms.push_back(room);
+                }
+            }
+        }
+
+        return layout;
+    }
+
+    // ============================================================================
+    // DungeonGenerator — Room Placement with Corridors
+    // ============================================================================
+
+    DungeonLayout DungeonGenerator::GenerateRooms(int width, int height,
+                                                   int roomCount,
+                                                   int minRoomSize,
+                                                   int maxRoomSize,
+                                                   uint32_t seed)
+    {
+        DungeonLayout layout;
+        layout.width = width;
+        layout.height = height;
+        layout.grid.resize(width * height, 0);
+
+        std::mt19937 rng(seed);
+
+        // Place rooms with overlap rejection
+        int maxAttempts = roomCount * 10;
+        for (int attempt = 0; attempt < maxAttempts && static_cast<int>(layout.rooms.size()) < roomCount; ++attempt)
+        {
+            std::uniform_int_distribution<int> wDist(minRoomSize, maxRoomSize);
+            std::uniform_int_distribution<int> hDist(minRoomSize, maxRoomSize);
+            int rw = wDist(rng);
+            int rh = hDist(rng);
+
+            std::uniform_int_distribution<int> xDist(1, width - rw - 1);
+            std::uniform_int_distribution<int> yDist(1, height - rh - 1);
+            int rx = xDist(rng);
+            int ry = yDist(rng);
+
+            // Check for overlap with existing rooms (with padding)
+            bool overlaps = false;
+            for (const auto& existing : layout.rooms)
+            {
+                if (rx - 1 < existing.x + existing.width &&
+                    rx + rw + 1 > existing.x &&
+                    ry - 1 < existing.y + existing.height &&
+                    ry + rh + 1 > existing.y)
+                {
+                    overlaps = true;
+                    break;
+                }
+            }
+
+            if (!overlaps)
+            {
+                DungeonRoom room;
+                room.id = static_cast<int>(layout.rooms.size());
+                room.x = rx;
+                room.y = ry;
+                room.width = rw;
+                room.height = rh;
+                layout.rooms.push_back(room);
+                CarveRoom(layout, room);
+            }
+        }
+
+        // Connect rooms using a minimum spanning tree (Prim's algorithm)
+        if (layout.rooms.size() < 2)
+        {
+            return layout;
+        }
+
+        int numRooms = static_cast<int>(layout.rooms.size());
+        std::vector<bool> inTree(numRooms, false);
+        std::vector<float> minCost(numRooms, 1e30f);
+        std::vector<int> closestInTree(numRooms, -1);
+
+        inTree[0] = true;
+        for (int i = 1; i < numRooms; ++i)
+        {
+            float dx = static_cast<float>(layout.rooms[0].CenterX() - layout.rooms[i].CenterX());
+            float dy = static_cast<float>(layout.rooms[0].CenterY() - layout.rooms[i].CenterY());
+            minCost[i] = dx * dx + dy * dy;
+            closestInTree[i] = 0;
+        }
+
+        for (int added = 1; added < numRooms; ++added)
+        {
+            // Find cheapest room not yet in tree
+            int best = -1;
+            float bestCost = 1e30f;
+            for (int i = 0; i < numRooms; ++i)
+            {
+                if (!inTree[i] && minCost[i] < bestCost)
+                {
+                    bestCost = minCost[i];
+                    best = i;
+                }
+            }
+
+            if (best < 0)
+            {
+                break;
+            }
+
+            inTree[best] = true;
+            ConnectRooms(layout, layout.rooms[closestInTree[best]], layout.rooms[best], 2, rng);
+
+            // Update costs for remaining rooms
+            for (int i = 0; i < numRooms; ++i)
+            {
+                if (!inTree[i])
+                {
+                    float dx = static_cast<float>(layout.rooms[best].CenterX() - layout.rooms[i].CenterX());
+                    float dy = static_cast<float>(layout.rooms[best].CenterY() - layout.rooms[i].CenterY());
+                    float cost = dx * dx + dy * dy;
+                    if (cost < minCost[i])
+                    {
+                        minCost[i] = cost;
+                        closestInTree[i] = best;
+                    }
+                }
+            }
+        }
+
+        return layout;
+    }
+
+    // ============================================================================
     // WaveFunctionCollapse
     // ============================================================================
 

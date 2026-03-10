@@ -94,6 +94,19 @@ namespace Spark
         }
 
         /**
+     * @brief Allocate raw bytes with specified alignment (convenience alias)
+     *
+     * Matches the standard interface:
+     *   void* Allocate(size_t size, size_t alignment = 16);
+     *
+     * @return Pointer to allocated memory, or nullptr if out of space
+     */
+        void* Allocate(size_t size, size_t alignment = 16)
+        {
+            return AllocRaw(size, alignment);
+        }
+
+        /**
      * @brief Allocate space for N objects of type T (uninitialized)
      * @return Pointer to uninitialized memory for count T objects
      */
@@ -125,8 +138,14 @@ namespace Spark
         /// Current bytes used this frame
         size_t Used() const { return m_offset; }
 
+        /// Convenience alias matching the standard interface
+        size_t GetUsed() const { return m_offset; }
+
         /// Total capacity in bytes
         size_t Capacity() const { return m_capacity; }
+
+        /// Convenience alias matching the standard interface
+        size_t GetCapacity() const { return m_capacity; }
 
         /// Remaining bytes available
         size_t Remaining() const { return m_capacity > m_offset ? m_capacity - m_offset : 0; }
