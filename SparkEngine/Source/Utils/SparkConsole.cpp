@@ -2739,8 +2739,8 @@ namespace Spark
             {
                 if (GetGfx())
                 {
-                    auto metrics = GetGfx()->Console_GetMetrics();
-                    auto settings = GetGfx()->Console_GetSettings();
+                    auto metrics = GetGfx()->Console_GetStatistics();
+                    auto settings = GetGfx()->GetGraphicsSettings();
 
                     std::stringstream ss;
                     ss << "Graphics Engine Status (LIVE DATA):\n";
@@ -2786,7 +2786,7 @@ namespace Spark
 
                 if (args.empty())
                 {
-                    auto settings = GetGfx()->Console_GetSettings();
+                    auto settings = GetGfx()->GetGraphicsSettings();
                     return "VSync is currently " + std::string(settings.vsync ? "ENABLED" : "DISABLED") +
                            "\nWireframe: " + std::string(settings.wireframeMode ? "ENABLED" : "DISABLED") +
                            "\nDebug Mode: " + std::string(settings.debugMode ? "ENABLED" : "DISABLED") +
@@ -2813,7 +2813,7 @@ namespace Spark
 
                 if (args.empty())
                 {
-                    auto settings = GetGfx()->Console_GetSettings();
+                    auto settings = GetGfx()->GetGraphicsSettings();
                     return "Wireframe mode is currently " +
                            std::string(settings.wireframeMode ? "ENABLED" : "DISABLED") +
                            "\nUsage: graphics_wireframe <on|off>";
@@ -2823,7 +2823,7 @@ namespace Spark
                 std::transform(value.begin(), value.end(), value.begin(), ::tolower);
                 bool enable = (value == "on" || value == "true" || value == "1");
 
-                GetGfx()->Console_SetWireframeMode(enable);
+                GetGfx()->Console_SetWireframe(enable);
                 return "Wireframe mode " + std::string(enable ? "enabled" : "disabled") +
                        " via live graphics integration";
             },
@@ -2840,7 +2840,7 @@ namespace Spark
 
                 if (args.empty())
                 {
-                    auto settings = GetGfx()->Console_GetSettings();
+                    auto settings = GetGfx()->GetGraphicsSettings();
                     std::stringstream ss;
                     ss << "Current clear color: (" << std::fixed << std::setprecision(3) << settings.clearColor[0]
                        << ", " << settings.clearColor[1] << ", " << settings.clearColor[2] << ", "
@@ -2886,7 +2886,7 @@ namespace Spark
 
                 if (args.empty())
                 {
-                    auto settings = GetGfx()->Console_GetSettings();
+                    auto settings = GetGfx()->GetGraphicsSettings();
                     return "Graphics debug mode is currently " +
                            std::string(settings.debugMode ? "ENABLED" : "DISABLED") +
                            "\nUsage: graphics_debug <on|off>";
@@ -2912,7 +2912,7 @@ namespace Spark
                 }
 
                 std::string filename = args.empty() ? "" : args[0];
-                bool success = GetGfx()->Console_TakeScreenshot(filename);
+                bool success = GetGfx()->Console_Screenshot(filename);
 
                 if (success)
                 {
@@ -2937,7 +2937,7 @@ namespace Spark
 
                 if (args.empty())
                 {
-                    auto settings = GetGfx()->Console_GetSettings();
+                    auto settings = GetGfx()->GetGraphicsSettings();
                     return "Current render scale: " + std::to_string(settings.renderScale) +
                            "x\n"
                            "Usage: graphics_scale <scale> (0.5-2.0)";
@@ -2981,7 +2981,7 @@ namespace Spark
 
                 if (args.empty())
                 {
-                    auto settings = GetGfx()->Console_GetSettings();
+                    auto settings = GetGfx()->GetGraphicsSettings();
                     return "GPU timing is currently " + std::string(settings.enableGPUTiming ? "ENABLED" : "DISABLED") +
                            "\nUsage: graphics_gputiming <on|off>";
                 }
@@ -3540,7 +3540,7 @@ namespace Spark
                 {
                     g_gameState.wireframe = !g_gameState.wireframe;
                     if (GetGfx())
-                        GetGfx()->Console_SetWireframeMode(g_gameState.wireframe);
+                        GetGfx()->Console_SetWireframe(g_gameState.wireframe);
                     return "Wireframe " + std::string(g_gameState.wireframe ? "enabled" : "disabled");
                 }
                 else if (setting == "vsync")
@@ -3906,14 +3906,14 @@ namespace Spark
                 {
                     g_gameState.wireframe = false;
                     if (GetGfx())
-                        GetGfx()->Console_SetWireframeMode(false);
+                        GetGfx()->Console_SetWireframe(false);
                     return "Render mode: solid";
                 }
                 else if (mode == "wireframe")
                 {
                     g_gameState.wireframe = true;
                     if (GetGfx())
-                        GetGfx()->Console_SetWireframeMode(true);
+                        GetGfx()->Console_SetWireframe(true);
                     return "Render mode: wireframe";
                 }
                 else if (mode == "points")
@@ -5300,8 +5300,8 @@ namespace Spark
                 ss << "GPU Health Check:\n";
                 ss << "==========================================\n";
 
-                auto metrics = GetGfx()->Console_GetMetrics();
-                auto settings = GetGfx()->Console_GetSettings();
+                auto metrics = GetGfx()->Console_GetStatistics();
+                auto settings = GetGfx()->GetGraphicsSettings();
 
                 ss << "  Draw Calls:      " << metrics.drawCalls;
                 if (metrics.drawCalls > 5000)

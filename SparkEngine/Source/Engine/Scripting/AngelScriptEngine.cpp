@@ -11,6 +11,7 @@
 #include "AngelScriptEngine.h"
 #include "../../Input/InputManager.h"
 #include "../../Core/SparkEngine.h"
+#include "../../Core/EngineContext.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -168,7 +169,9 @@ static int ScriptKeyNameToVK(const std::string& key)
 
 bool ASGetKeyDown(const std::string& key)
 {
-    if (!g_input)
+    extern std::unique_ptr<EngineContext> g_engineContext;
+    auto* input = g_engineContext ? g_engineContext->GetInput() : nullptr;
+    if (!input)
     {
         return false;
     }
@@ -179,12 +182,14 @@ bool ASGetKeyDown(const std::string& key)
         return false;
     }
 
-    return g_input->WasKeyPressed(vk);
+    return input->WasKeyPressed(vk);
 }
 
 bool ASGetKey(const std::string& key)
 {
-    if (!g_input)
+    extern std::unique_ptr<EngineContext> g_engineContext;
+    auto* input = g_engineContext ? g_engineContext->GetInput() : nullptr;
+    if (!input)
     {
         return false;
     }
@@ -195,7 +200,7 @@ bool ASGetKey(const std::string& key)
         return false;
     }
 
-    return g_input->IsKeyDown(vk);
+    return input->IsKeyDown(vk);
 }
 
 // ============================================================================

@@ -59,6 +59,14 @@
 // Convenience macros by severity level
 // ============================================================================
 
+// Undefine any prior definitions (e.g. from SparkError.h) to avoid -Wmacro-redefined
+#undef SPARK_LOG_TRACE
+#undef SPARK_LOG_DEBUG
+#undef SPARK_LOG_INFO
+#undef SPARK_LOG_WARN
+#undef SPARK_LOG_ERROR
+#undef SPARK_LOG_FATAL
+
 #define SPARK_LOG_TRACE(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Trace, cat, fmt, ##__VA_ARGS__)
 #define SPARK_LOG_DEBUG(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Debug, cat, fmt, ##__VA_ARGS__)
 #define SPARK_LOG_INFO(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Info, cat, fmt, ##__VA_ARGS__)
@@ -154,10 +162,11 @@
     } while (0)
 
 // ============================================================================
-// Legacy compatibility macros
+// In-game console logging macros
 // ============================================================================
-// These route through the unified logger and also forward to SimpleConsole
-// for backward compatibility with existing code.
+// These log directly to SimpleConsole for in-game debug output.
+// Use SPARK_LOG_* for system/file logging; use LOG_TO_CONSOLE for
+// in-game console display.
 
 /**
  * @brief Log a message to the SimpleConsole immediately (no rate limiting).

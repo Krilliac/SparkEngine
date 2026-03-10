@@ -19,7 +19,10 @@
 #include "Graphics/PostProcessingSystem.h"
 #include "Graphics/AssetPipeline.h"
 #include "Physics/PhysicsSystem.h"
+#include "Core/EngineContext.h"
 #include <sstream>
+
+extern std::unique_ptr<EngineContext> g_engineContext;
 
 namespace SparkConsole
 {
@@ -236,7 +239,7 @@ namespace SparkConsole
             "physics_list",
             [graphics](const std::vector<std::string>&) -> std::string
             {
-                if (auto physicsSystem = graphics->GetPhysicsSystem())
+                if (auto physicsSystem = g_engineContext ? g_engineContext->GetPhysics() : nullptr)
                 {
                     return physicsSystem->Console_ListBodies();
                 }
@@ -250,7 +253,7 @@ namespace SparkConsole
             {
                 if (args.size() < 4)
                     return "Usage: gravity <x> <y> <z>";
-                if (auto physicsSystem = graphics->GetPhysicsSystem())
+                if (auto physicsSystem = g_engineContext ? g_engineContext->GetPhysics() : nullptr)
                 {
                     physicsSystem->Console_SetGravity(std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
                     return "Gravity set to: (" + args[1] + ", " + args[2] + ", " + args[3] + ")";
@@ -352,7 +355,7 @@ namespace SparkConsole
                     return "Usage: shader_debug <on/off>";
                 bool enabled = (args[1] == "on" || args[1] == "true" || args[1] == "1");
                 // Toggle debug compilation through graphics engine settings
-                auto settings = graphics->Console_GetSettings();
+                auto settings = graphics->GetGraphicsSettings();
                 settings.debugMode = enabled;
                 graphics->Console_ApplySettings(settings);
                 return std::string("Shader debug mode ") + (enabled ? "enabled" : "disabled");

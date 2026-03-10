@@ -173,7 +173,7 @@ struct GraphicsSettings
     bool levelOfDetail = true;
     uint32_t maxDrawCalls = 1000;
 
-    // Legacy compatibility
+    // Debug / display
     bool wireframeMode = false;
     bool debugMode = false;
     bool showFPS = false;
@@ -220,14 +220,14 @@ struct RenderStatistics
     float postProcessTime = 0.0f;   ///< Post-processing time (ms)
     uint32_t postProcessPasses = 0; ///< Post-processing passes
 
-    // Legacy compatibility
-    float renderTime = 0.0f;    ///< Legacy render time
-    float presentTime = 0.0f;   ///< Legacy present time
-    size_t bufferMemory = 0;    ///< Legacy buffer memory
-    float gpuUsage = 0.0f;      ///< Legacy GPU usage
-    bool vsyncEnabled = false;  ///< Legacy VSync state
-    bool wireframeMode = false; ///< Legacy wireframe state
-    bool debugMode = false;     ///< Legacy debug state
+    // Timing breakdown
+    float renderTime = 0.0f;    ///< Render time (ms)
+    float presentTime = 0.0f;   ///< Present/swap time (ms)
+    size_t bufferMemory = 0;    ///< Buffer memory usage (bytes)
+    float gpuUsage = 0.0f;      ///< GPU utilization (%)
+    bool vsyncEnabled = false;  ///< VSync state
+    bool wireframeMode = false; ///< Wireframe state
+    bool debugMode = false;     ///< Debug mode state
 };
 
 /**
@@ -394,14 +394,9 @@ class GraphicsEngine
     Spark::Graphics::GPUTimestampQuery* GetGPUTimestampQuery() { return &m_gpuTimestampQuery; }
 #endif // SPARK_PLATFORM_WINDOWS
 
-    /** @deprecated Physics is no longer owned by GraphicsEngine. Use EngineContext::GetPhysics(). */
-    [[deprecated("Use EngineContext::GetPhysics() instead")]]
-    PhysicsSystem* GetPhysicsSystem() const;
-
     /** @brief Set non-owning physics pointer (called by engine during init) */
     void SetPhysicsSystem(PhysicsSystem* physics) { m_physicsSystem = physics; }
 
-    // Legacy compatibility accessors
     LightManager* GetLightManager() const;
 
     // ========================================================================
@@ -551,18 +546,6 @@ class GraphicsEngine
     void Console_SetGPUTiming(bool enabled);
     size_t Console_GetVRAMUsage() const;
 
-    /** @deprecated Use Console_SetWireframe() */
-    [[deprecated("Use Console_SetWireframe()")]]
-    void Console_SetWireframeMode(bool enabled);
-    /** @deprecated Use Console_Screenshot() */
-    [[deprecated("Use Console_Screenshot()")]]
-    bool Console_TakeScreenshot(const std::string& filename = "");
-    /** @deprecated Use GetGraphicsSettings() */
-    [[deprecated("Use GetGraphicsSettings()")]]
-    GraphicsSettings Console_GetSettings() const;
-    /** @deprecated Use Console_GetStatistics() */
-    [[deprecated("Use Console_GetStatistics()")]]
-    RenderStatistics Console_GetMetrics() const;
 
     // ========================================================================
     // BASIC SHADER SYSTEM (for rendering pipeline)

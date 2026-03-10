@@ -1787,107 +1787,22 @@ class PhysicsSystem
      * @param desc  Shape descriptor to create.
      * @return      Non-owning pointer to the Bullet collision shape (owned by m_shapeCache).
      */
+#if SPARK_BULLET_PHYSICS_AVAILABLE
     btCollisionShape* CreateCollisionShape(const CollisionShapeDesc& desc);
-
-    /**
-     * @brief Create a `btBoxShape` from half-extent dimensions.
-     * @param dimensions  Half-extents on each axis (metres).
-     * @return            Newly allocated `btBoxShape`.
-     */
     btCollisionShape* CreateBoxShape(const XMFLOAT3& dimensions);
-
-    /**
-     * @brief Create a `btSphereShape` with the given radius.
-     * @param radius  Sphere radius (metres).
-     * @return        Newly allocated `btSphereShape`.
-     */
     btCollisionShape* CreateSphereShape(float radius);
-
-    /**
-     * @brief Create a `btCapsuleShape` with the given radius and cylindrical height.
-     * @param radius  Radius of the end-cap hemispheres (metres).
-     * @param height  Height of the cylindrical section, excluding end-caps (metres).
-     * @return        Newly allocated `btCapsuleShape`.
-     */
     btCollisionShape* CreateCapsuleShape(float radius, float height);
-
-    /**
-     * @brief Create a `btBvhTriangleMeshShape` from raw vertex/index data.
-     *
-     * Triangle mesh shapes are static-only; they do not generate responses when
-     * used on Dynamic bodies. Ideal for level geometry.
-     *
-     * @param vertices  Array of vertex positions.
-     * @param indices   Triangle index list (groups of 3).
-     * @return          Newly allocated `btBvhTriangleMeshShape`.
-     */
     btCollisionShape* CreateMeshShape(const std::vector<XMFLOAT3>& vertices, const std::vector<uint32_t>& indices);
-
-    /**
-     * @brief Create a `btConvexHullShape` from raw vertex data.
-     *
-     * Suitable for Dynamic bodies that need approximate mesh-like collision.
-     * Bullet internally computes the convex hull.
-     *
-     * @param vertices  Input point cloud (duplicates are acceptable).
-     * @return          Newly allocated `btConvexHullShape`.
-     */
     btCollisionShape* CreateConvexHullShape(const std::vector<XMFLOAT3>& vertices);
-
-    /**
-     * @brief Refresh m_metrics from the current Bullet world state.
-     *
-     * Called at the end of each Update() to capture body counts, timing, and
-     * raycast statistics for the just-completed simulation step.
-     */
-    void UpdateMetrics();
-
-    /**
-     * @brief Iterate Bullet's contact manifolds and fire collision/trigger callbacks.
-     *
-     * Called from Update() after stepSimulation(). For each manifold pair, checks
-     * whether either body is a trigger and dispatches the appropriate callback.
-     */
-    void ProcessCollisions();
-
-    /**
-     * @brief Compute a hash for a CollisionShapeDesc to use as a cache key.
-     *
-     * The hash covers all fields that affect the shape geometry (type, dimensions,
-     * radius, height). Vertex/index data for Mesh shapes is hashed by content.
-     *
-     * @param desc  Shape descriptor to hash.
-     * @return      64-bit hash value.
-     */
-    size_t HashShape(const CollisionShapeDesc& desc);
-
-    /**
-     * @brief Convert an XMFLOAT3 to a Bullet btVector3.
-     * @param vec  Source DirectX Math vector.
-     * @return     Equivalent Bullet vector.
-     */
     class btVector3 ToBullet(const XMFLOAT3& vec) const;
-
-    /**
-     * @brief Convert a Bullet btVector3 to an XMFLOAT3.
-     * @param vec  Source Bullet vector.
-     * @return     Equivalent DirectX Math float3.
-     */
     XMFLOAT3 FromBullet(const class btVector3& vec) const;
-
-    /**
-     * @brief Convert Euler angles (degrees) to a Bullet quaternion.
-     * @param euler  Rotation in degrees (X=pitch, Y=yaw, Z=roll).
-     * @return       Equivalent Bullet quaternion.
-     */
     class btQuaternion ToBulletQuaternion(const XMFLOAT3& euler) const;
-
-    /**
-     * @brief Convert a Bullet quaternion to Euler angles in degrees.
-     * @param quat  Source Bullet quaternion.
-     * @return      Rotation in degrees (X=pitch, Y=yaw, Z=roll).
-     */
     XMFLOAT3 FromBullet(const class btQuaternion& quat) const;
+#endif // SPARK_BULLET_PHYSICS_AVAILABLE
+
+    void UpdateMetrics();
+    void ProcessCollisions();
+    size_t HashShape(const CollisionShapeDesc& desc);
 };
 
 // Utility functions
