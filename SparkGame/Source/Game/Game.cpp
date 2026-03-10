@@ -32,10 +32,12 @@
 #include "Utils/SparkConsole.h"
 #include "Console/AdvancedConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
+#include "Core/EngineContext.h"
 #include <filesystem>
 
 // Pull in game-specific globals defined in Main.cpp (SparkGame entry point)
 extern Console g_console;
+extern std::unique_ptr<EngineContext> g_engineContext;
 
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
 #include "Utils/LogMacros.h"
@@ -603,7 +605,7 @@ void Game::Update(float dt)
         {
             assetPipeline->Update(dt);
         }
-        if (auto physicsSystem = m_graphics->GetPhysicsSystem())
+        if (auto physicsSystem = g_engineContext ? g_engineContext->GetPhysics() : nullptr)
         {
             physicsSystem->Update(dt);
         }
@@ -1072,7 +1074,7 @@ void Game::GetPerformanceStats(int& outDrawCalls, int& outTriangles, int& outAct
     {
         try
         {
-            auto metrics = m_graphics->Console_GetMetrics();
+            auto metrics = m_graphics->Console_GetStatistics();
             outDrawCalls = static_cast<int>(metrics.drawCalls);
             outTriangles = static_cast<int>(metrics.triangles);
         }
@@ -1209,7 +1211,7 @@ void Game::ApplyGraphicsSettings(bool wireframe, bool vsync, bool showFPS)
     {
         try
         {
-            m_graphics->Console_SetWireframeMode(wireframe);
+            m_graphics->Console_SetWireframe(wireframe);
             m_graphics->Console_SetVSync(vsync);
             m_showFPS = showFPS;
 
@@ -1240,7 +1242,7 @@ void Game::GetGraphicsPerformance(float& outFrameTime, float& outRenderTime, flo
     {
         try
         {
-            auto metrics = m_graphics->Console_GetMetrics();
+            auto metrics = m_graphics->Console_GetStatistics();
             outFrameTime = metrics.frameTime;
             outRenderTime = metrics.renderTime;
             outUpdateTime = metrics.presentTime; // Use present time as update time approximation

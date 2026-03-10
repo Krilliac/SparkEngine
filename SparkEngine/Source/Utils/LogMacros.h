@@ -59,6 +59,14 @@
 // Convenience macros by severity level
 // ============================================================================
 
+// Undefine any prior definitions (e.g. from SparkError.h) to avoid -Wmacro-redefined
+#undef SPARK_LOG_TRACE
+#undef SPARK_LOG_DEBUG
+#undef SPARK_LOG_INFO
+#undef SPARK_LOG_WARN
+#undef SPARK_LOG_ERROR
+#undef SPARK_LOG_FATAL
+
 #define SPARK_LOG_TRACE(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Trace, cat, fmt, ##__VA_ARGS__)
 #define SPARK_LOG_DEBUG(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Debug, cat, fmt, ##__VA_ARGS__)
 #define SPARK_LOG_INFO(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Info, cat, fmt, ##__VA_ARGS__)
