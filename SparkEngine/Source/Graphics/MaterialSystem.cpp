@@ -2940,6 +2940,7 @@ std::string MaterialSystem::Console_ListMaterialVariants(const std::string& mate
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "MaterialSystem.h"
+#include "RHI/RHI.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>
@@ -4042,10 +4043,81 @@ HRESULT MaterialSystem::CreateDefaultMaterials()
     return S_OK;
 }
 
-HRESULT MaterialSystem::CreateSampler(const TextureSampling& /*sampling*/, ID3D11SamplerState** /*sampler*/)
+HRESULT MaterialSystem::CreateSampler(const TextureSampling& sampling, ID3D11SamplerState** /*sampler*/)
 {
-    // Cannot create GPU sampler states on Linux
-    return E_NOTIMPL;
+    // On Linux, create the sampler state through the RHI abstraction layer.
+    // The ID3D11SamplerState** output is unused; the RHI manages sampler lifetime.
+    auto rhiDevice = Spark::RHI::CreateDevice(Spark::RHI::GraphicsBackend::Auto);
+    if (!rhiDevice)
+        return E_FAIL;
+
+    // Map D3D11 filter enum to RHI filter mode
+    Spark::RHI::RHISamplerDesc desc;
+
+    // D3D11_FILTER_ANISOTROPIC = 0x55
+    if (sampling.filter == D3D11_FILTER_ANISOTROPIC)
+    {
+        desc.minFilter = Spark::RHI::RHIFilterMode::Anisotropic;
+        desc.magFilter = Spark::RHI::RHIFilterMode::Anisotropic;
+        desc.mipFilter = Spark::RHI::RHIFilterMode::Anisotropic;
+    }
+    else if (sampling.filter == D3D11_FILTER_MIN_MAG_MIP_LINEAR)
+    {
+        desc.minFilter = Spark::RHI::RHIFilterMode::Linear;
+        desc.magFilter = Spark::RHI::RHIFilterMode::Linear;
+        desc.mipFilter = Spark::RHI::RHIFilterMode::Linear;
+    }
+    else if (sampling.filter == D3D11_FILTER_MIN_MAG_MIP_POINT)
+    {
+        desc.minFilter = Spark::RHI::RHIFilterMode::Nearest;
+        desc.magFilter = Spark::RHI::RHIFilterMode::Nearest;
+        desc.mipFilter = Spark::RHI::RHIFilterMode::Nearest;
+    }
+    else
+    {
+        // Default to linear filtering for other filter combinations
+        desc.minFilter = Spark::RHI::RHIFilterMode::Linear;
+        desc.magFilter = Spark::RHI::RHIFilterMode::Linear;
+        desc.mipFilter = Spark::RHI::RHIFilterMode::Linear;
+    }
+
+    // Map D3D11 address modes to RHI address modes
+    auto mapAddressMode = [](D3D11_TEXTURE_ADDRESS_MODE mode) -> Spark::RHI::RHIAddressMode
+    {
+        switch (mode)
+        {
+        case D3D11_TEXTURE_ADDRESS_WRAP:
+            return Spark::RHI::RHIAddressMode::Wrap;
+        case D3D11_TEXTURE_ADDRESS_CLAMP:
+            return Spark::RHI::RHIAddressMode::Clamp;
+        case D3D11_TEXTURE_ADDRESS_MIRROR:
+            return Spark::RHI::RHIAddressMode::Mirror;
+        case D3D11_TEXTURE_ADDRESS_BORDER:
+            return Spark::RHI::RHIAddressMode::Border;
+        case D3D11_TEXTURE_ADDRESS_MIRROR_ONCE:
+            return Spark::RHI::RHIAddressMode::MirrorOnce;
+        default:
+            return Spark::RHI::RHIAddressMode::Wrap;
+        }
+    };
+
+    desc.addressU = mapAddressMode(sampling.addressU);
+    desc.addressV = mapAddressMode(sampling.addressV);
+    desc.addressW = mapAddressMode(sampling.addressW);
+    desc.maxAnisotropy = sampling.maxAnisotropy;
+    desc.mipLodBias = sampling.mipLODBias;
+    desc.minLod = sampling.minLOD;
+    desc.maxLod = sampling.maxLOD;
+    desc.borderColor[0] = sampling.borderColor.x;
+    desc.borderColor[1] = sampling.borderColor.y;
+    desc.borderColor[2] = sampling.borderColor.z;
+    desc.borderColor[3] = sampling.borderColor.w;
+
+    Spark::RHI::IRHISampler* rhiSampler = rhiDevice->CreateSampler(desc);
+    if (!rhiSampler)
+        return E_FAIL;
+
+    return S_OK;
 }
 
 size_t MaterialSystem::HashSampling(const TextureSampling& sampling) const

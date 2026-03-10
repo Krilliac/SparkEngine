@@ -972,6 +972,38 @@ namespace DirectX
         return result;
     }
 
+    inline XMVECTOR XMVector3Project(XMVECTOR v, float viewportX, float viewportY, float viewportWidth,
+                                     float viewportHeight, float minZ, float maxZ, const XMMATRIX& projection,
+                                     const XMMATRIX& view, const XMMATRIX& world)
+    {
+        XMVECTOR result = XMVector3TransformCoord(v, world);
+        result = XMVector3TransformCoord(result, view);
+        result = XMVector3TransformCoord(result, projection);
+        // Map from [-1,1] to viewport
+        XMVECTOR screen;
+        screen.x = (result.x * 0.5f + 0.5f) * viewportWidth + viewportX;
+        screen.y = (-result.y * 0.5f + 0.5f) * viewportHeight + viewportY;
+        screen.z = result.z * (maxZ - minZ) + minZ;
+        screen.w = 1.0f;
+        return screen;
+    }
+
+    inline XMVECTOR XMVector3Unproject(XMVECTOR v, float viewportX, float viewportY, float viewportWidth,
+                                       float viewportHeight, float minZ, float maxZ, const XMMATRIX& projection,
+                                       const XMMATRIX& view, const XMMATRIX& world)
+    {
+        // Reverse the projection: viewport -> NDC -> world
+        XMVECTOR ndc;
+        ndc.x = ((v.x - viewportX) / viewportWidth) * 2.0f - 1.0f;
+        ndc.y = -(((v.y - viewportY) / viewportHeight) * 2.0f - 1.0f);
+        ndc.z = (v.z - minZ) / (maxZ - minZ);
+        ndc.w = 1.0f;
+
+        XMMATRIX combined = XMMatrixMultiply(world, XMMatrixMultiply(view, projection));
+        XMMATRIX inv = XMMatrixInverse(nullptr, combined);
+        return XMVector3TransformCoord(ndc, inv);
+    }
+
     // Rotation matrices
     inline XMMATRIX XMMatrixRotationX(float angle)
     {
@@ -1068,6 +1100,31 @@ namespace DirectX
     }
 
     // Quaternion stubs
+    inline XMVECTOR XMQuaternionRotationAxis(XMVECTOR axis, float angle)
+    {
+        XMVECTOR n = XMVector3Normalize(axis);
+        float halfAngle = angle * 0.5f;
+        float s = sinf(halfAngle);
+        return {n.x * s, n.y * s, n.z * s, cosf(halfAngle)};
+    }
+
+    inline XMVECTOR XMQuaternionMultiply(XMVECTOR q1, XMVECTOR q2)
+    {
+        return {q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
+                q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
+                q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w,
+                q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z};
+    }
+
+    inline XMVECTOR XMQuaternionNormalize(XMVECTOR q)
+    {
+        float len = sqrtf(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+        if (len < 1e-8f)
+            return {0, 0, 0, 1};
+        float inv = 1.0f / len;
+        return {q.x * inv, q.y * inv, q.z * inv, q.w * inv};
+    }
+
     inline XMVECTOR XMQuaternionSlerp(XMVECTOR a, XMVECTOR b, float t)
     {
         return XMVectorLerp(a, b, t); // Simplified linear interpolation
@@ -1300,6 +1357,7 @@ enum D3D11_TEXTURE_ADDRESS_MODE
     D3D11_TEXTURE_ADDRESS_MIRROR = 2,
     D3D11_TEXTURE_ADDRESS_CLAMP = 3,
     D3D11_TEXTURE_ADDRESS_BORDER = 4,
+    D3D11_TEXTURE_ADDRESS_MIRROR_ONCE = 5,
 };
 constexpr float D3D11_FLOAT32_MAX = 3.402823466e+38F;
 #endif

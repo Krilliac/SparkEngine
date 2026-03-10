@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Last Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine)](https://github.com/Krilliac/SparkEngine/commits/master)
+[![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/loc.json)](https://github.com/Krilliac/SparkEngine)
+[![Source Files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/files.json)](https://github.com/Krilliac/SparkEngine)
 
 **Spark Engine** is a free, open-source 3D game engine written in C++20. It is designed for first-person shooters and other 3D games, with built-in support for DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Cross-platform (Windows and Linux), modular, and MIT-licensed.
 

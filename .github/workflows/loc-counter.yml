@@ -1,0 +1,126 @@
+name: Lines of Code Counter
+
+on:
+  push:
+    branches: [ main, master, develop, Working ]
+    paths:
+      - '**.cpp'
+      - '**.h'
+      - '**.hpp'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  count-loc:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Count lines of code
+      id: loc
+      run: |
+        # Count C++ source lines (excluding ThirdParty, build, .git)
+        CPP_LINES=$(find SparkEngine/Source SparkEditor/Source SparkGame/Source \
+          SparkConsole/src SparkShaderCompiler/src Tests \
+          -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
+          xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+
+        # Count by category
+        ENGINE_LINES=$(find SparkEngine/Source -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
+          xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+        EDITOR_LINES=$(find SparkEditor/Source -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
+          xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+        GAME_LINES=$(find SparkGame/Source -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
+          xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+        TEST_LINES=$(find Tests -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
+          xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+        TOOL_LINES=$(find SparkConsole/src SparkShaderCompiler/src -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
+          xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+
+        # Count files
+        FILE_COUNT=$(find SparkEngine/Source SparkEditor/Source SparkGame/Source \
+          SparkConsole/src SparkShaderCompiler/src Tests \
+          -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | wc -l)
+
+        # Format with commas for display
+        format_number() {
+          echo "$1" | sed ':a;s/\B[0-9]\{3\}\>/.&/;ta' | sed 's/\./, /g' | sed 's/, /,/g'
+        }
+
+        FORMATTED_LOC=$(printf "%'d" "$CPP_LINES" 2>/dev/null || echo "$CPP_LINES")
+        FORMATTED_FILES=$(printf "%'d" "$FILE_COUNT" 2>/dev/null || echo "$FILE_COUNT")
+
+        echo "total_lines=$CPP_LINES" >> "$GITHUB_OUTPUT"
+        echo "formatted_lines=$FORMATTED_LOC" >> "$GITHUB_OUTPUT"
+        echo "file_count=$FILE_COUNT" >> "$GITHUB_OUTPUT"
+        echo "formatted_files=$FORMATTED_FILES" >> "$GITHUB_OUTPUT"
+        echo "engine_lines=$ENGINE_LINES" >> "$GITHUB_OUTPUT"
+        echo "editor_lines=$EDITOR_LINES" >> "$GITHUB_OUTPUT"
+        echo "game_lines=$GAME_LINES" >> "$GITHUB_OUTPUT"
+        echo "test_lines=$TEST_LINES" >> "$GITHUB_OUTPUT"
+        echo "tool_lines=$TOOL_LINES" >> "$GITHUB_OUTPUT"
+
+        echo "### Lines of Code Summary" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Module | Lines |" >> "$GITHUB_STEP_SUMMARY"
+        echo "|--------|------:|" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Engine | $(printf '%'"'"'d' $ENGINE_LINES) |" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Editor | $(printf '%'"'"'d' $EDITOR_LINES) |" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Game   | $(printf '%'"'"'d' $GAME_LINES) |" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Tests  | $(printf '%'"'"'d' $TEST_LINES) |" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Tools  | $(printf '%'"'"'d' $TOOL_LINES) |" >> "$GITHUB_STEP_SUMMARY"
+        echo "| **Total** | **$(printf '%'"'"'d' $CPP_LINES)** |" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "**$FILE_COUNT source files**" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Generate badge JSON
+      run: |
+        mkdir -p .github/badges
+
+        # Total LOC badge
+        cat > .github/badges/loc.json << EOF
+        {
+          "schemaVersion": 1,
+          "label": "C++ lines of code",
+          "message": "${{ steps.loc.outputs.formatted_lines }}",
+          "color": "blue",
+          "namedLogo": "cplusplus",
+          "logoColor": "white"
+        }
+        EOF
+
+        # File count badge
+        cat > .github/badges/files.json << EOF
+        {
+          "schemaVersion": 1,
+          "label": "source files",
+          "message": "${{ steps.loc.outputs.formatted_files }}",
+          "color": "green"
+        }
+        EOF
+
+        # Per-module breakdown
+        cat > .github/badges/loc-breakdown.json << EOF
+        {
+          "schemaVersion": 1,
+          "total": ${{ steps.loc.outputs.total_lines }},
+          "files": ${{ steps.loc.outputs.file_count }},
+          "engine": ${{ steps.loc.outputs.engine_lines }},
+          "editor": ${{ steps.loc.outputs.editor_lines }},
+          "game": ${{ steps.loc.outputs.game_lines }},
+          "tests": ${{ steps.loc.outputs.test_lines }},
+          "tools": ${{ steps.loc.outputs.tool_lines }},
+          "updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        }
+        EOF
+
+    - name: Commit badge data
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .github/badges/
+        git diff --cached --quiet && echo "No changes to commit" && exit 0
+        git commit -m "chore: update lines of code counter [skip ci]"
+        git push
