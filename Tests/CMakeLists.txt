@@ -50,6 +50,7 @@ add_executable(SparkTests
     TestLocalFileCache.cpp
     TestEngineContext.cpp
     TestNetBuffer.cpp
+    TestSprite2DComponents.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

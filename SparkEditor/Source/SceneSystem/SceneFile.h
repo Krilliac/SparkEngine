@@ -217,6 +217,101 @@ namespace SparkEditor
         int priority = 128;         ///< Audio priority (0-255)
     };
 
+    // =========================================================================
+    // 2D/2.5D Scene Component Data
+    // =========================================================================
+
+    /**
+     * @brief 2D Sprite renderer scene data
+     */
+    struct SpriteRendererData
+    {
+        std::string texturePath;
+        XMFLOAT4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+        XMFLOAT4 sourceRect = {0.0f, 0.0f, 1.0f, 1.0f};
+        XMFLOAT2 pivot = {0.5f, 0.5f};
+        float pixelsPerUnit = 100.0f;
+        int sortingLayer = 0;
+        int orderInLayer = 0;
+        bool flipX = false;
+        bool flipY = false;
+    };
+
+    /**
+     * @brief 2D Camera scene data
+     */
+    struct Camera2DData
+    {
+        float orthoSize = 5.0f;
+        float zoom = 1.0f;
+        float nearPlane = -100.0f;
+        float farPlane = 100.0f;
+        float followSmoothing = 0.1f;
+        XMFLOAT2 deadZone = {0.5f, 0.5f};
+        XMFLOAT4 clearColor = {0.2f, 0.2f, 0.3f, 1.0f};
+        bool isMain2DCamera = false;
+    };
+
+    /**
+     * @brief 2D Physics rigid body scene data
+     */
+    struct RigidBody2DData
+    {
+        int bodyType = 2; ///< 0=Static, 1=Kinematic, 2=Dynamic
+        float mass = 1.0f;
+        float gravityScale = 1.0f;
+        float linearDamping = 0.0f;
+        float angularDamping = 0.05f;
+        float friction = 0.3f;
+        float restitution = 0.0f;
+        bool fixedRotation = false;
+        bool isBullet = false;
+    };
+
+    /**
+     * @brief 2D Collider scene data
+     */
+    struct Collider2DData
+    {
+        int shape = 0; ///< 0=Box, 1=Circle, 2=Capsule, 3=Polygon, 4=Edge
+        XMFLOAT2 halfExtents = {0.5f, 0.5f};
+        float radius = 0.5f;
+        float height = 1.0f;
+        XMFLOAT2 offset = {0.0f, 0.0f};
+        bool isTrigger = false;
+        uint32_t layerMask = 0xFFFFFFFF;
+    };
+
+    /**
+     * @brief Tilemap scene data (header; tile data stored separately)
+     */
+    struct TilemapData
+    {
+        std::string tilesetTexturePath;
+        int tileWidth = 16;
+        int tileHeight = 16;
+        int columns = 0;
+        int rows = 0;
+        int mapWidth = 0;
+        int mapHeight = 0;
+        int sortingLayer = 0;
+        float pixelsPerUnit = 100.0f;
+        bool generateCollision = true;
+    };
+
+    /**
+     * @brief Parallax background scene data
+     */
+    struct ParallaxLayerData
+    {
+        std::string texturePath;
+        XMFLOAT2 scrollSpeed = {0.5f, 0.5f};
+        bool tileX = true;
+        bool tileY = false;
+        XMFLOAT4 tint = {1.0f, 1.0f, 1.0f, 1.0f};
+        int sortOrder = -100;
+    };
+
     // ComponentType is defined in ../Enums/SceneSystemEnums.h to avoid ODR violations
 
     /**

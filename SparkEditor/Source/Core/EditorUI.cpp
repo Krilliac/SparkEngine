@@ -19,6 +19,10 @@
 #include "../Panels/WeaponEditorPanel.h"
 #include "../Panels/FPSToolsPanel.h"
 #include "../Panels/ProjectBrowserPanel.h"
+#include "../Panels/SpriteEditorPanel.h"
+#include "../Panels/TilemapEditorPanel.h"
+#include "../Panels/SpriteAnimationEditorPanel.h"
+#include "../Panels/Physics2DPanel.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
 #include "EditorApplication.h"
@@ -471,6 +475,55 @@ namespace SparkEditor
             console.LogError("Failed to create FPS Tools panel: " + std::string(e.what()));
         }
 
+        // Create 2D/2.5D Editor Panels
+        try
+        {
+            console.LogInfo("Creating Sprite Editor panel...");
+            auto spriteEditorPanel = std::shared_ptr<SpriteEditorPanel>(new SpriteEditorPanel());
+            m_panels["SpriteEditor"] = spriteEditorPanel;
+            console.LogSuccess("Created Sprite Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Sprite Editor panel: " + std::string(e.what()));
+        }
+
+        try
+        {
+            console.LogInfo("Creating Tilemap Editor panel...");
+            auto tilemapEditorPanel = std::shared_ptr<TilemapEditorPanel>(new TilemapEditorPanel());
+            m_panels["TilemapEditor"] = tilemapEditorPanel;
+            console.LogSuccess("Created Tilemap Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Tilemap Editor panel: " + std::string(e.what()));
+        }
+
+        try
+        {
+            console.LogInfo("Creating Sprite Animation Editor panel...");
+            auto spriteAnimEditorPanel = std::shared_ptr<SpriteAnimationEditorPanel>(new SpriteAnimationEditorPanel());
+            m_panels["SpriteAnimEditor"] = spriteAnimEditorPanel;
+            console.LogSuccess("Created Sprite Animation Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Sprite Animation Editor panel: " + std::string(e.what()));
+        }
+
+        try
+        {
+            console.LogInfo("Creating Physics 2D panel...");
+            auto physics2DPanel = std::shared_ptr<Physics2DPanel>(new Physics2DPanel());
+            m_panels["Physics2D"] = physics2DPanel;
+            console.LogSuccess("Created Physics 2D panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Physics 2D panel: " + std::string(e.what()));
+        }
+
         // SKIP SimpleBuildSystem in all modes since it's causing the hang
         console.LogWarning("SKIPPING Simple Build System panel (known to cause hangs)");
 
@@ -672,6 +725,34 @@ namespace SparkEditor
                     }
                     ImGui::EndMenu();
                 }
+                if (ImGui::BeginMenu("2D Object"))
+                {
+                    if (ImGui::MenuItem("Sprite"))
+                    {
+                        ShowNotification("Created Sprite!", "success");
+                    }
+                    if (ImGui::MenuItem("Animated Sprite"))
+                    {
+                        ShowNotification("Created Animated Sprite!", "success");
+                    }
+                    if (ImGui::MenuItem("Tilemap"))
+                    {
+                        ShowNotification("Created Tilemap!", "success");
+                    }
+                    if (ImGui::MenuItem("Camera 2D"))
+                    {
+                        ShowNotification("Created 2D Camera!", "success");
+                    }
+                    if (ImGui::MenuItem("Parallax Background"))
+                    {
+                        ShowNotification("Created Parallax Background!", "success");
+                    }
+                    if (ImGui::MenuItem("Nine-Slice Sprite"))
+                    {
+                        ShowNotification("Created Nine-Slice Sprite!", "success");
+                    }
+                    ImGui::EndMenu();
+                }
                 if (ImGui::BeginMenu("Light"))
                 {
                     if (ImGui::MenuItem("Directional Light"))
@@ -728,6 +809,24 @@ namespace SparkEditor
                 if (ImGui::MenuItem("Profiler", nullptr, IsPanelVisible("Profiler")))
                 {
                     SetPanelVisible("Profiler", !IsPanelVisible("Profiler"));
+                }
+                ImGui::Separator();
+                ImGui::TextDisabled("2D / 2.5D Panels");
+                if (ImGui::MenuItem("Sprite Editor", nullptr, IsPanelVisible("SpriteEditor")))
+                {
+                    SetPanelVisible("SpriteEditor", !IsPanelVisible("SpriteEditor"));
+                }
+                if (ImGui::MenuItem("Tilemap Editor", nullptr, IsPanelVisible("TilemapEditor")))
+                {
+                    SetPanelVisible("TilemapEditor", !IsPanelVisible("TilemapEditor"));
+                }
+                if (ImGui::MenuItem("Sprite Animation", nullptr, IsPanelVisible("SpriteAnimEditor")))
+                {
+                    SetPanelVisible("SpriteAnimEditor", !IsPanelVisible("SpriteAnimEditor"));
+                }
+                if (ImGui::MenuItem("Physics 2D", nullptr, IsPanelVisible("Physics2D")))
+                {
+                    SetPanelVisible("Physics2D", !IsPanelVisible("Physics2D"));
                 }
                 ImGui::Separator();
                 ImGui::TextDisabled("FPS Panels");
