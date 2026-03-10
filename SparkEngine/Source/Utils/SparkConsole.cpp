@@ -67,26 +67,41 @@ namespace Spark
     {
         switch (severity)
         {
-        case ConsoleSeverity::Trace:    return "TRACE";
-        case ConsoleSeverity::Debug:    return "DEBUG";
-        case ConsoleSeverity::Info:     return "INFO";
-        case ConsoleSeverity::Success:  return "SUCCESS";
-        case ConsoleSeverity::Warning:  return "WARNING";
-        case ConsoleSeverity::Error:    return "ERROR";
-        case ConsoleSeverity::Critical: return "CRITICAL";
-        default:                        return "INFO";
+        case ConsoleSeverity::Trace:
+            return "TRACE";
+        case ConsoleSeverity::Debug:
+            return "DEBUG";
+        case ConsoleSeverity::Info:
+            return "INFO";
+        case ConsoleSeverity::Success:
+            return "SUCCESS";
+        case ConsoleSeverity::Warning:
+            return "WARNING";
+        case ConsoleSeverity::Error:
+            return "ERROR";
+        case ConsoleSeverity::Critical:
+            return "CRITICAL";
+        default:
+            return "INFO";
         }
     }
 
     ConsoleSeverity StringToConsoleSeverity(const std::string& str)
     {
-        if (str == "TRACE")    return ConsoleSeverity::Trace;
-        if (str == "DEBUG")    return ConsoleSeverity::Debug;
-        if (str == "INFO")     return ConsoleSeverity::Info;
-        if (str == "SUCCESS")  return ConsoleSeverity::Success;
-        if (str == "WARNING")  return ConsoleSeverity::Warning;
-        if (str == "ERROR")    return ConsoleSeverity::Error;
-        if (str == "CRITICAL") return ConsoleSeverity::Critical;
+        if (str == "TRACE")
+            return ConsoleSeverity::Trace;
+        if (str == "DEBUG")
+            return ConsoleSeverity::Debug;
+        if (str == "INFO")
+            return ConsoleSeverity::Info;
+        if (str == "SUCCESS")
+            return ConsoleSeverity::Success;
+        if (str == "WARNING")
+            return ConsoleSeverity::Warning;
+        if (str == "ERROR")
+            return ConsoleSeverity::Error;
+        if (str == "CRITICAL")
+            return ConsoleSeverity::Critical;
         return ConsoleSeverity::Info;
     }
 
@@ -98,14 +113,22 @@ namespace Spark
     {
         switch (severity)
         {
-        case ConsoleSeverity::Trace:    return Color::DarkGray;
-        case ConsoleSeverity::Debug:    return Color::Cyan;
-        case ConsoleSeverity::Info:     return Color::Cyan;
-        case ConsoleSeverity::Success:  return Color::Green;
-        case ConsoleSeverity::Warning:  return Color::Yellow;
-        case ConsoleSeverity::Error:    return Color::Red;
-        case ConsoleSeverity::Critical: return Color::Magenta;
-        default:                        return Color::White;
+        case ConsoleSeverity::Trace:
+            return Color::DarkGray;
+        case ConsoleSeverity::Debug:
+            return Color::Cyan;
+        case ConsoleSeverity::Info:
+            return Color::Cyan;
+        case ConsoleSeverity::Success:
+            return Color::Green;
+        case ConsoleSeverity::Warning:
+            return Color::Yellow;
+        case ConsoleSeverity::Error:
+            return Color::Red;
+        case ConsoleSeverity::Critical:
+            return Color::Magenta;
+        default:
+            return Color::White;
         }
     }
 
@@ -869,7 +892,8 @@ namespace Spark
         uint32_t activeWatches = 0;
         for (const auto& w : m_watchEntries)
         {
-            if (w.active) activeWatches++;
+            if (w.active)
+                activeWatches++;
         }
         stats.activeWatches = activeWatches;
         return stats;
@@ -999,15 +1023,12 @@ namespace Spark
                     prefix = args[0];
                 }
 
-                auto cvars = prefix.empty()
-                    ? CVarRegistry::Get().GetAll()
-                    : CVarRegistry::Get().FindByPrefix(prefix);
+                auto cvars = prefix.empty() ? CVarRegistry::Get().GetAll() : CVarRegistry::Get().FindByPrefix(prefix);
 
                 if (cvars.empty())
                 {
-                    return prefix.empty()
-                        ? "No console variables registered"
-                        : "No console variables matching '" + prefix + "'";
+                    return prefix.empty() ? "No console variables registered"
+                                          : "No console variables matching '" + prefix + "'";
                 }
 
                 std::stringstream ss;
@@ -1026,9 +1047,8 @@ namespace Spark
                         continue;
                     }
 
-                    ss << "  " << std::left << std::setw(30) << cv->GetName()
-                       << " = " << std::setw(15) << cv->GetValueString()
-                       << " [" << CVarTypeToString(cv->GetType()) << "]";
+                    ss << "  " << std::left << std::setw(30) << cv->GetName() << " = " << std::setw(15)
+                       << cv->GetValueString() << " [" << CVarTypeToString(cv->GetType()) << "]";
 
                     if (cv->IsModified())
                     {
@@ -1049,8 +1069,7 @@ namespace Spark
 
                 return ss.str();
             },
-            "List all console variables, optionally filtered by prefix",
-            "CVar", "cvar_list [prefix]");
+            "List all console variables, optionally filtered by prefix", "CVar", "cvar_list [prefix]");
 
         RegisterCommand(
             "cvar_reset",
@@ -1080,8 +1099,7 @@ namespace Spark
                 cv->ResetToDefault();
                 return args[0] + " reset to " + cv->GetValueString();
             },
-            "Reset a console variable (or all) to default value",
-            "CVar", "cvar_reset <name|all>");
+            "Reset a console variable (or all) to default value", "CVar", "cvar_reset <name|all>");
 
         RegisterCommand(
             "cvar_modified",
@@ -1096,8 +1114,7 @@ namespace Spark
                 {
                     if (cv->IsModified())
                     {
-                        ss << "  " << std::left << std::setw(30) << cv->GetName()
-                           << " = " << cv->GetValueString()
+                        ss << "  " << std::left << std::setw(30) << cv->GetName() << " = " << cv->GetValueString()
                            << " (default: " << cv->GetDefaultString() << ")\n";
                         count++;
                     }
@@ -1108,8 +1125,7 @@ namespace Spark
                 }
                 return ss.str();
             },
-            "List all console variables that differ from their defaults",
-            "CVar");
+            "List all console variables that differ from their defaults", "CVar");
 
         RegisterCommand(
             "cvar_cheats",
@@ -1129,8 +1145,7 @@ namespace Spark
                 CVarRegistry::Get().SetCheatsEnabled(enable);
                 return "Cheats " + std::string(enable ? "enabled" : "disabled");
             },
-            "Enable or disable cheat-flagged console variables",
-            "CVar", "cvar_cheats <on|off>");
+            "Enable or disable cheat-flagged console variables", "CVar", "cvar_cheats <on|off>");
     }
 
     void SimpleConsole::SetColor(Color color)
@@ -1145,15 +1160,33 @@ namespace Spark
         WORD attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE; // White default
         switch (color)
         {
-        case Color::White:       attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE; break;
-        case Color::Red:         attr = FOREGROUND_RED | FOREGROUND_INTENSITY; break;
-        case Color::Green:       attr = FOREGROUND_GREEN | FOREGROUND_INTENSITY; break;
-        case Color::Blue:        attr = FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
-        case Color::Yellow:      attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY; break;
-        case Color::Cyan:        attr = FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
-        case Color::Magenta:     attr = FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
-        case Color::DarkGray:    attr = FOREGROUND_INTENSITY; break;
-        case Color::BrightWhite: attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
+        case Color::White:
+            attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+            break;
+        case Color::Red:
+            attr = FOREGROUND_RED | FOREGROUND_INTENSITY;
+            break;
+        case Color::Green:
+            attr = FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+            break;
+        case Color::Blue:
+            attr = FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+            break;
+        case Color::Yellow:
+            attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+            break;
+        case Color::Cyan:
+            attr = FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+            break;
+        case Color::Magenta:
+            attr = FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+            break;
+        case Color::DarkGray:
+            attr = FOREGROUND_INTENSITY;
+            break;
+        case Color::BrightWhite:
+            attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+            break;
         }
         SetConsoleTextAttribute(m_consoleOutput, attr);
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
@@ -1161,15 +1194,33 @@ namespace Spark
         const char* ansi = "\033[0m"; // Reset default
         switch (color)
         {
-        case Color::White:       ansi = "\033[37m"; break;
-        case Color::Red:         ansi = "\033[91m"; break;
-        case Color::Green:       ansi = "\033[92m"; break;
-        case Color::Blue:        ansi = "\033[94m"; break;
-        case Color::Yellow:      ansi = "\033[93m"; break;
-        case Color::Cyan:        ansi = "\033[96m"; break;
-        case Color::Magenta:     ansi = "\033[95m"; break;
-        case Color::DarkGray:    ansi = "\033[90m"; break;
-        case Color::BrightWhite: ansi = "\033[97m"; break;
+        case Color::White:
+            ansi = "\033[37m";
+            break;
+        case Color::Red:
+            ansi = "\033[91m";
+            break;
+        case Color::Green:
+            ansi = "\033[92m";
+            break;
+        case Color::Blue:
+            ansi = "\033[94m";
+            break;
+        case Color::Yellow:
+            ansi = "\033[93m";
+            break;
+        case Color::Cyan:
+            ansi = "\033[96m";
+            break;
+        case Color::Magenta:
+            ansi = "\033[95m";
+            break;
+        case Color::DarkGray:
+            ansi = "\033[90m";
+            break;
+        case Color::BrightWhite:
+            ansi = "\033[97m";
+            break;
         }
         if (m_consoleOutputFd >= 0)
         {
@@ -1446,8 +1497,7 @@ namespace Spark
         // Match commands
         for (const auto& pair : m_commands)
         {
-            if (pair.first.size() >= prefix.size() &&
-                pair.first.compare(0, prefix.size(), prefix) == 0)
+            if (pair.first.size() >= prefix.size() && pair.first.compare(0, prefix.size(), prefix) == 0)
             {
                 completions.push_back(pair.first);
             }
@@ -1456,8 +1506,7 @@ namespace Spark
         // Match aliases
         for (const auto& pair : m_aliases)
         {
-            if (pair.first.size() >= prefix.size() &&
-                pair.first.compare(0, prefix.size(), prefix) == 0)
+            if (pair.first.size() >= prefix.size() && pair.first.compare(0, prefix.size(), prefix) == 0)
             {
                 completions.push_back(pair.first);
             }
@@ -2099,11 +2148,10 @@ namespace Spark
                     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
                     std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
 
-                    if (name.find(search) != std::string::npos ||
-                        desc.find(search) != std::string::npos)
+                    if (name.find(search) != std::string::npos || desc.find(search) != std::string::npos)
                     {
-                        ss << "  [cmd] " << std::left << std::setw(25)
-                           << pair.first << " - " << pair.second.description << "\n";
+                        ss << "  [cmd] " << std::left << std::setw(25) << pair.first << " - " << pair.second.description
+                           << "\n";
                         count++;
                     }
                 }
@@ -2117,11 +2165,10 @@ namespace Spark
                     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
                     std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
 
-                    if (name.find(search) != std::string::npos ||
-                        desc.find(search) != std::string::npos)
+                    if (name.find(search) != std::string::npos || desc.find(search) != std::string::npos)
                     {
-                        ss << "  [var] " << std::left << std::setw(25)
-                           << cv->GetName() << " = " << cv->GetValueString() << "\n";
+                        ss << "  [var] " << std::left << std::setw(25) << cv->GetName() << " = " << cv->GetValueString()
+                           << "\n";
                         count++;
                     }
                 }
