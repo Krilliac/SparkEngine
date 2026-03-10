@@ -94,6 +94,21 @@ void EngineSettings::ResetToDefaults()
     m_audio = AudioSettings{};
     m_controls = ControlsSettings{};
     m_game = GameSettings{};
+    m_rendering = RenderingSettings{};
+    m_postProcess = PostProcessSettings{};
+    m_ssao = SSAOSettings{};
+    m_ssr = SSRSettings{};
+    m_volumetric = VolumetricSettings{};
+    m_taa = TAASettings{};
+    m_motionBlur = MotionBlurSettings{};
+    m_dynamicQuality = DynamicQualitySettings{};
+    m_audioExtended = AudioExtendedSettings{};
+    m_physics = PhysicsSettings{};
+    m_ai = AISettings{};
+    m_player = PlayerSettings{};
+    m_gameMode = GameModeSettings{};
+    m_camera = CameraSettings{};
+    m_editor = EditorSettings{};
     PopulateDefaults();
 }
 
@@ -131,6 +146,205 @@ void EngineSettings::ReadFromConfig()
     m_game.showFPS = m_config.GetBool("Game", "ShowFPS", true);
     m_game.showDebugInfo = m_config.GetBool("Game", "ShowDebugInfo", false);
     m_game.fieldOfView = m_config.GetFloat("Game", "FieldOfView", 90.0f);
+
+    // Rendering
+    m_rendering.renderPath = m_config.GetInt("Rendering", "RenderPath", 1);
+    m_rendering.qualityPreset = m_config.GetInt("Rendering", "QualityPreset", 2);
+    m_rendering.maxTextureSize = m_config.GetInt("Rendering", "MaxTextureSize", 2048);
+    m_rendering.anisotropicFiltering = m_config.GetBool("Rendering", "AnisotropicFiltering", true);
+    m_rendering.anisotropyLevel = m_config.GetInt("Rendering", "AnisotropyLevel", 16);
+    m_rendering.shadows = m_config.GetBool("Rendering", "Shadows", true);
+    m_rendering.shadowMapSize = m_config.GetInt("Rendering", "ShadowMapSize", 2048);
+    m_rendering.cascadeCount = m_config.GetInt("Rendering", "CascadeCount", 3);
+    m_rendering.bloom = m_config.GetBool("Rendering", "Bloom", true);
+    m_rendering.ssao = m_config.GetBool("Rendering", "SSAO", false);
+    m_rendering.taa = m_config.GetBool("Rendering", "TAA", false);
+    m_rendering.motionBlur = m_config.GetBool("Rendering", "MotionBlur", false);
+    m_rendering.frustumCulling = m_config.GetBool("Rendering", "FrustumCulling", true);
+    m_rendering.occlusionCulling = m_config.GetBool("Rendering", "OcclusionCulling", false);
+    m_rendering.levelOfDetail = m_config.GetBool("Rendering", "LevelOfDetail", true);
+    m_rendering.maxDrawCalls = m_config.GetInt("Rendering", "MaxDrawCalls", 1000);
+    m_rendering.wireframeMode = m_config.GetBool("Rendering", "WireframeMode", false);
+    m_rendering.debugMode = m_config.GetBool("Rendering", "DebugMode", false);
+    m_rendering.enableGPUTiming = m_config.GetBool("Rendering", "EnableGPUTiming", false);
+
+    // PostProcess
+    m_postProcess.bloomEnabled = m_config.GetBool("PostProcess", "BloomEnabled", true);
+    m_postProcess.bloomThreshold = m_config.GetFloat("PostProcess", "BloomThreshold", 1.0f);
+    m_postProcess.bloomIntensity = m_config.GetFloat("PostProcess", "BloomIntensity", 1.0f);
+    m_postProcess.bloomRadius = m_config.GetFloat("PostProcess", "BloomRadius", 1.0f);
+    m_postProcess.bloomSoftKnee = m_config.GetFloat("PostProcess", "BloomSoftKnee", 0.5f);
+    m_postProcess.bloomIterations = m_config.GetInt("PostProcess", "BloomIterations", 6);
+    m_postProcess.toneMappingOperator = m_config.GetInt("PostProcess", "ToneMappingOperator", 4);
+    m_postProcess.exposure = m_config.GetFloat("PostProcess", "Exposure", 1.0f);
+    m_postProcess.gamma = m_config.GetFloat("PostProcess", "Gamma", 2.2f);
+    m_postProcess.whitePoint = m_config.GetFloat("PostProcess", "WhitePoint", 11.2f);
+    m_postProcess.colorGradingEnabled = m_config.GetBool("PostProcess", "ColorGradingEnabled", false);
+    m_postProcess.temperature = m_config.GetFloat("PostProcess", "Temperature", 0.0f);
+    m_postProcess.tint = m_config.GetFloat("PostProcess", "Tint", 0.0f);
+    m_postProcess.contrast = m_config.GetFloat("PostProcess", "Contrast", 1.0f);
+    m_postProcess.brightness = m_config.GetFloat("PostProcess", "Brightness", 0.0f);
+    m_postProcess.saturation = m_config.GetFloat("PostProcess", "Saturation", 1.0f);
+
+    // SSAO
+    m_ssao.enabled = m_config.GetBool("SSAO", "Enabled", false);
+    m_ssao.radius = m_config.GetFloat("SSAO", "Radius", 0.5f);
+    m_ssao.intensity = m_config.GetFloat("SSAO", "Intensity", 1.0f);
+    m_ssao.sampleCount = m_config.GetInt("SSAO", "SampleCount", 16);
+    m_ssao.bias = m_config.GetFloat("SSAO", "Bias", 0.025f);
+    m_ssao.blur = m_config.GetBool("SSAO", "Blur", true);
+
+    // SSR
+    m_ssr.enabled = m_config.GetBool("SSR", "Enabled", false);
+    m_ssr.maxDistance = m_config.GetFloat("SSR", "MaxDistance", 100.0f);
+    m_ssr.maxSteps = m_config.GetInt("SSR", "MaxSteps", 32);
+    m_ssr.thickness = m_config.GetFloat("SSR", "Thickness", 0.5f);
+    m_ssr.fadeStart = m_config.GetFloat("SSR", "FadeStart", 80.0f);
+    m_ssr.fadeEnd = m_config.GetFloat("SSR", "FadeEnd", 100.0f);
+
+    // Volumetric
+    m_volumetric.enabled = m_config.GetBool("Volumetric", "Enabled", false);
+    m_volumetric.sampleCount = m_config.GetInt("Volumetric", "SampleCount", 32);
+    m_volumetric.scattering = m_config.GetFloat("Volumetric", "Scattering", 0.1f);
+    m_volumetric.extinction = m_config.GetFloat("Volumetric", "Extinction", 0.01f);
+    m_volumetric.anisotropy = m_config.GetFloat("Volumetric", "Anisotropy", 0.3f);
+
+    // TAA
+    m_taa.enabled = m_config.GetBool("TAA", "Enabled", true);
+    m_taa.quality = m_config.GetInt("TAA", "Quality", 2);
+    m_taa.jitterPattern = m_config.GetInt("TAA", "JitterPattern", 0);
+    m_taa.jitterSequenceLength = m_config.GetInt("TAA", "JitterSequenceLength", 16);
+    m_taa.historyBlendFactor = m_config.GetFloat("TAA", "HistoryBlendFactor", 0.9f);
+    m_taa.varianceClipGamma = m_config.GetFloat("TAA", "VarianceClipGamma", 1.0f);
+    m_taa.useMotionVectors = m_config.GetBool("TAA", "UseMotionVectors", true);
+    m_taa.useYCoCg = m_config.GetBool("TAA", "UseYCoCg", true);
+    m_taa.sharpness = m_config.GetFloat("TAA", "Sharpness", 0.0f);
+    m_taa.ghostingRejectionStrength = m_config.GetFloat("TAA", "GhostingRejectionStrength", 0.8f);
+    m_taa.flickerReduction = m_config.GetFloat("TAA", "FlickerReduction", 0.5f);
+
+    // MotionBlur
+    m_motionBlur.enabled = m_config.GetBool("MotionBlur", "Enabled", false);
+    m_motionBlur.type = m_config.GetInt("MotionBlur", "Type", 2);
+    m_motionBlur.intensity = m_config.GetFloat("MotionBlur", "Intensity", 0.5f);
+    m_motionBlur.sampleCount = m_config.GetInt("MotionBlur", "SampleCount", 8);
+    m_motionBlur.maxBlurRadius = m_config.GetFloat("MotionBlur", "MaxBlurRadius", 32.0f);
+    m_motionBlur.velocityScale = m_config.GetFloat("MotionBlur", "VelocityScale", 1.0f);
+    m_motionBlur.minVelocityThreshold = m_config.GetFloat("MotionBlur", "MinVelocityThreshold", 0.5f);
+    m_motionBlur.cameraRotationScale = m_config.GetFloat("MotionBlur", "CameraRotationScale", 0.5f);
+    m_motionBlur.cameraTranslationScale = m_config.GetFloat("MotionBlur", "CameraTranslationScale", 1.0f);
+    m_motionBlur.tileSize = m_config.GetInt("MotionBlur", "TileSize", 20);
+
+    // DynamicQuality
+    m_dynamicQuality.enabled = m_config.GetBool("DynamicQuality", "Enabled", true);
+    m_dynamicQuality.targetFrameTimeMs = m_config.GetFloat("DynamicQuality", "TargetFrameTimeMs", 16.67f);
+    m_dynamicQuality.minRenderScale = m_config.GetFloat("DynamicQuality", "MinRenderScale", 0.5f);
+    m_dynamicQuality.maxRenderScale = m_config.GetFloat("DynamicQuality", "MaxRenderScale", 1.0f);
+    m_dynamicQuality.renderScaleStep = m_config.GetFloat("DynamicQuality", "RenderScaleStep", 0.05f);
+    m_dynamicQuality.minShadowScale = m_config.GetFloat("DynamicQuality", "MinShadowScale", 0.25f);
+    m_dynamicQuality.maxShadowScale = m_config.GetFloat("DynamicQuality", "MaxShadowScale", 1.0f);
+    m_dynamicQuality.shadowScaleStep = m_config.GetFloat("DynamicQuality", "ShadowScaleStep", 0.25f);
+    m_dynamicQuality.minLodBias = m_config.GetFloat("DynamicQuality", "MinLodBias", 0.5f);
+    m_dynamicQuality.maxLodBias = m_config.GetFloat("DynamicQuality", "MaxLodBias", 1.0f);
+    m_dynamicQuality.lodBiasStep = m_config.GetFloat("DynamicQuality", "LodBiasStep", 0.1f);
+    m_dynamicQuality.minTextureMipBias = m_config.GetFloat("DynamicQuality", "MinTextureMipBias", 0.0f);
+    m_dynamicQuality.maxTextureMipBias = m_config.GetFloat("DynamicQuality", "MaxTextureMipBias", 4.0f);
+    m_dynamicQuality.textureMipBiasStep = m_config.GetFloat("DynamicQuality", "TextureMipBiasStep", 1.0f);
+    m_dynamicQuality.frameTimeWindowSize = m_config.GetInt("DynamicQuality", "FrameTimeWindowSize", 30);
+    m_dynamicQuality.minChangeIntervalFrames = m_config.GetInt("DynamicQuality", "MinChangeIntervalFrames", 15);
+    m_dynamicQuality.increaseThresholdMs = m_config.GetFloat("DynamicQuality", "IncreaseThresholdMs", 2.0f);
+    m_dynamicQuality.pidKP = m_config.GetFloat("DynamicQuality", "PID_KP", 0.5f);
+    m_dynamicQuality.pidKI = m_config.GetFloat("DynamicQuality", "PID_KI", 0.05f);
+    m_dynamicQuality.pidKD = m_config.GetFloat("DynamicQuality", "PID_KD", 0.1f);
+
+    // AudioExtended
+    m_audioExtended.dopplerScale = m_config.GetFloat("AudioExtended", "DopplerScale", 1.0f);
+    m_audioExtended.distanceScale = m_config.GetFloat("AudioExtended", "DistanceScale", 1.0f);
+    m_audioExtended.enable3D = m_config.GetBool("AudioExtended", "Enable3D", true);
+    m_audioExtended.enableReverb = m_config.GetBool("AudioExtended", "EnableReverb", false);
+    m_audioExtended.enableEAX = m_config.GetBool("AudioExtended", "EnableEAX", false);
+    m_audioExtended.maxSources = m_config.GetInt("AudioExtended", "MaxSources", 32);
+
+    // Physics
+    m_physics.gravityX = m_config.GetFloat("Physics", "GravityX", 0.0f);
+    m_physics.gravityY = m_config.GetFloat("Physics", "GravityY", -20.0f);
+    m_physics.gravityZ = m_config.GetFloat("Physics", "GravityZ", 0.0f);
+    m_physics.fixedTimestep = m_config.GetFloat("Physics", "FixedTimestep", 0.016667f);
+    m_physics.maxSubSteps = m_config.GetInt("Physics", "MaxSubSteps", 4);
+    m_physics.defaultFriction = m_config.GetFloat("Physics", "DefaultFriction", 0.5f);
+    m_physics.defaultRestitution = m_config.GetFloat("Physics", "DefaultRestitution", 0.3f);
+    m_physics.defaultLinearDamping = m_config.GetFloat("Physics", "DefaultLinearDamping", 0.0f);
+    m_physics.defaultAngularDamping = m_config.GetFloat("Physics", "DefaultAngularDamping", 0.05f);
+    m_physics.debugDraw = m_config.GetBool("Physics", "DebugDraw", false);
+
+    // AI
+    m_ai.detectionRange = m_config.GetFloat("AI", "DetectionRange", 30.0f);
+    m_ai.attackRange = m_config.GetFloat("AI", "AttackRange", 15.0f);
+    m_ai.meleeRange = m_config.GetFloat("AI", "MeleeRange", 2.0f);
+    m_ai.moveSpeed = m_config.GetFloat("AI", "MoveSpeed", 5.0f);
+    m_ai.turnSpeed = m_config.GetFloat("AI", "TurnSpeed", 180.0f);
+    m_ai.accuracy = m_config.GetFloat("AI", "Accuracy", 0.7f);
+    m_ai.reactionTime = m_config.GetFloat("AI", "ReactionTime", 0.3f);
+    m_ai.coverSearchRadius = m_config.GetFloat("AI", "CoverSearchRadius", 20.0f);
+    m_ai.canStrafe = m_config.GetBool("AI", "CanStrafe", true);
+    m_ai.canSprint = m_config.GetBool("AI", "CanSprint", true);
+    m_ai.canUseCover = m_config.GetBool("AI", "CanUseCover", true);
+
+    // Player
+    m_player.maxHealth = m_config.GetFloat("Player", "MaxHealth", 100.0f);
+    m_player.maxArmor = m_config.GetFloat("Player", "MaxArmor", 100.0f);
+    m_player.moveSpeed = m_config.GetFloat("Player", "MoveSpeed", 5.0f);
+    m_player.jumpHeight = m_config.GetFloat("Player", "JumpHeight", 3.0f);
+    m_player.gravityForce = m_config.GetFloat("Player", "GravityForce", 20.0f);
+    m_player.friction = m_config.GetFloat("Player", "Friction", 0.9f);
+    m_player.sprintMultiplier = m_config.GetFloat("Player", "SprintMultiplier", 2.0f);
+    m_player.crouchMultiplier = m_config.GetFloat("Player", "CrouchMultiplier", 0.5f);
+    m_player.adsSpeedMultiplier = m_config.GetFloat("Player", "ADSSpeedMultiplier", 0.5f);
+    m_player.maxShield = m_config.GetFloat("Player", "MaxShield", 50.0f);
+    m_player.shieldRechargeRate = m_config.GetFloat("Player", "ShieldRechargeRate", 10.0f);
+    m_player.shieldRechargeDelay = m_config.GetFloat("Player", "ShieldRechargeDelay", 6.0f);
+    m_player.maxEnergy = m_config.GetFloat("Player", "MaxEnergy", 100.0f);
+    m_player.energyRegenRate = m_config.GetFloat("Player", "EnergyRegenRate", 10.0f);
+
+    // GameMode
+    m_gameMode.scoreLimit = m_config.GetInt("GameMode", "ScoreLimit", 50);
+    m_gameMode.roundLimit = m_config.GetInt("GameMode", "RoundLimit", 1);
+    m_gameMode.timeLimit = m_config.GetFloat("GameMode", "TimeLimit", 600.0f);
+    m_gameMode.respawnDelay = m_config.GetFloat("GameMode", "RespawnDelay", 3.0f);
+    m_gameMode.autoRespawn = m_config.GetBool("GameMode", "AutoRespawn", true);
+    m_gameMode.maxLives = m_config.GetInt("GameMode", "MaxLives", 0);
+    m_gameMode.damageMultiplier = m_config.GetFloat("GameMode", "DamageMultiplier", 1.0f);
+    m_gameMode.healthMultiplier = m_config.GetFloat("GameMode", "HealthMultiplier", 1.0f);
+    m_gameMode.speedMultiplier = m_config.GetFloat("GameMode", "SpeedMultiplier", 1.0f);
+    m_gameMode.friendlyFire = m_config.GetBool("GameMode", "FriendlyFire", false);
+    m_gameMode.headshots = m_config.GetBool("GameMode", "Headshots", true);
+    m_gameMode.headshotMultiplier = m_config.GetFloat("GameMode", "HeadshotMultiplier", 2.0f);
+    m_gameMode.allWeaponsAvailable = m_config.GetBool("GameMode", "AllWeaponsAvailable", true);
+    m_gameMode.teamsEnabled = m_config.GetBool("GameMode", "TeamsEnabled", false);
+    m_gameMode.maxTeamSize = m_config.GetInt("GameMode", "MaxTeamSize", 8);
+    m_gameMode.autoBalance = m_config.GetBool("GameMode", "AutoBalance", true);
+    m_gameMode.killPoints = m_config.GetInt("GameMode", "KillPoints", 100);
+    m_gameMode.deathPenalty = m_config.GetInt("GameMode", "DeathPenalty", 0);
+    m_gameMode.assistPoints = m_config.GetInt("GameMode", "AssistPoints", 25);
+    m_gameMode.objectivePoints = m_config.GetInt("GameMode", "ObjectivePoints", 200);
+    m_gameMode.headshotBonus = m_config.GetInt("GameMode", "HeadshotBonus", 50);
+
+    // Camera
+    m_camera.moveSpeed = m_config.GetFloat("Camera", "MoveSpeed", 10.0f);
+    m_camera.rotationSpeed = m_config.GetFloat("Camera", "RotationSpeed", 2.0f);
+    m_camera.defaultFov = m_config.GetFloat("Camera", "DefaultFov", 90.0f);
+    m_camera.zoomedFov = m_config.GetFloat("Camera", "ZoomedFov", 45.0f);
+    m_camera.smoothMovement = m_config.GetBool("Camera", "SmoothMovement", true);
+    m_camera.nearPlane = m_config.GetFloat("Camera", "NearPlane", 0.1f);
+    m_camera.farPlane = m_config.GetFloat("Camera", "FarPlane", 1000.0f);
+
+    // Editor
+    m_editor.gridSize = m_config.GetFloat("Editor", "GridSize", 1.0f);
+    m_editor.snapToGrid = m_config.GetBool("Editor", "SnapToGrid", true);
+    m_editor.showGrid = m_config.GetBool("Editor", "ShowGrid", true);
+    m_editor.gizmoScale = m_config.GetFloat("Editor", "GizmoScale", 1.0f);
+    m_editor.autosaveEnabled = m_config.GetBool("Editor", "AutosaveEnabled", true);
+    m_editor.autosaveIntervalSeconds = m_config.GetFloat("Editor", "AutosaveIntervalSeconds", 300.0f);
+    m_editor.undoHistorySize = m_config.GetInt("Editor", "UndoHistorySize", 100);
 }
 
 // =============================================================================
@@ -167,6 +381,205 @@ void EngineSettings::WriteToConfig() const
     m_config.SetBool("Game", "ShowFPS", m_game.showFPS);
     m_config.SetBool("Game", "ShowDebugInfo", m_game.showDebugInfo);
     m_config.SetFloat("Game", "FieldOfView", m_game.fieldOfView);
+
+    // Rendering
+    m_config.SetInt("Rendering", "RenderPath", m_rendering.renderPath);
+    m_config.SetInt("Rendering", "QualityPreset", m_rendering.qualityPreset);
+    m_config.SetInt("Rendering", "MaxTextureSize", m_rendering.maxTextureSize);
+    m_config.SetBool("Rendering", "AnisotropicFiltering", m_rendering.anisotropicFiltering);
+    m_config.SetInt("Rendering", "AnisotropyLevel", m_rendering.anisotropyLevel);
+    m_config.SetBool("Rendering", "Shadows", m_rendering.shadows);
+    m_config.SetInt("Rendering", "ShadowMapSize", m_rendering.shadowMapSize);
+    m_config.SetInt("Rendering", "CascadeCount", m_rendering.cascadeCount);
+    m_config.SetBool("Rendering", "Bloom", m_rendering.bloom);
+    m_config.SetBool("Rendering", "SSAO", m_rendering.ssao);
+    m_config.SetBool("Rendering", "TAA", m_rendering.taa);
+    m_config.SetBool("Rendering", "MotionBlur", m_rendering.motionBlur);
+    m_config.SetBool("Rendering", "FrustumCulling", m_rendering.frustumCulling);
+    m_config.SetBool("Rendering", "OcclusionCulling", m_rendering.occlusionCulling);
+    m_config.SetBool("Rendering", "LevelOfDetail", m_rendering.levelOfDetail);
+    m_config.SetInt("Rendering", "MaxDrawCalls", m_rendering.maxDrawCalls);
+    m_config.SetBool("Rendering", "WireframeMode", m_rendering.wireframeMode);
+    m_config.SetBool("Rendering", "DebugMode", m_rendering.debugMode);
+    m_config.SetBool("Rendering", "EnableGPUTiming", m_rendering.enableGPUTiming);
+
+    // PostProcess
+    m_config.SetBool("PostProcess", "BloomEnabled", m_postProcess.bloomEnabled);
+    m_config.SetFloat("PostProcess", "BloomThreshold", m_postProcess.bloomThreshold);
+    m_config.SetFloat("PostProcess", "BloomIntensity", m_postProcess.bloomIntensity);
+    m_config.SetFloat("PostProcess", "BloomRadius", m_postProcess.bloomRadius);
+    m_config.SetFloat("PostProcess", "BloomSoftKnee", m_postProcess.bloomSoftKnee);
+    m_config.SetInt("PostProcess", "BloomIterations", m_postProcess.bloomIterations);
+    m_config.SetInt("PostProcess", "ToneMappingOperator", m_postProcess.toneMappingOperator);
+    m_config.SetFloat("PostProcess", "Exposure", m_postProcess.exposure);
+    m_config.SetFloat("PostProcess", "Gamma", m_postProcess.gamma);
+    m_config.SetFloat("PostProcess", "WhitePoint", m_postProcess.whitePoint);
+    m_config.SetBool("PostProcess", "ColorGradingEnabled", m_postProcess.colorGradingEnabled);
+    m_config.SetFloat("PostProcess", "Temperature", m_postProcess.temperature);
+    m_config.SetFloat("PostProcess", "Tint", m_postProcess.tint);
+    m_config.SetFloat("PostProcess", "Contrast", m_postProcess.contrast);
+    m_config.SetFloat("PostProcess", "Brightness", m_postProcess.brightness);
+    m_config.SetFloat("PostProcess", "Saturation", m_postProcess.saturation);
+
+    // SSAO
+    m_config.SetBool("SSAO", "Enabled", m_ssao.enabled);
+    m_config.SetFloat("SSAO", "Radius", m_ssao.radius);
+    m_config.SetFloat("SSAO", "Intensity", m_ssao.intensity);
+    m_config.SetInt("SSAO", "SampleCount", m_ssao.sampleCount);
+    m_config.SetFloat("SSAO", "Bias", m_ssao.bias);
+    m_config.SetBool("SSAO", "Blur", m_ssao.blur);
+
+    // SSR
+    m_config.SetBool("SSR", "Enabled", m_ssr.enabled);
+    m_config.SetFloat("SSR", "MaxDistance", m_ssr.maxDistance);
+    m_config.SetInt("SSR", "MaxSteps", m_ssr.maxSteps);
+    m_config.SetFloat("SSR", "Thickness", m_ssr.thickness);
+    m_config.SetFloat("SSR", "FadeStart", m_ssr.fadeStart);
+    m_config.SetFloat("SSR", "FadeEnd", m_ssr.fadeEnd);
+
+    // Volumetric
+    m_config.SetBool("Volumetric", "Enabled", m_volumetric.enabled);
+    m_config.SetInt("Volumetric", "SampleCount", m_volumetric.sampleCount);
+    m_config.SetFloat("Volumetric", "Scattering", m_volumetric.scattering);
+    m_config.SetFloat("Volumetric", "Extinction", m_volumetric.extinction);
+    m_config.SetFloat("Volumetric", "Anisotropy", m_volumetric.anisotropy);
+
+    // TAA
+    m_config.SetBool("TAA", "Enabled", m_taa.enabled);
+    m_config.SetInt("TAA", "Quality", m_taa.quality);
+    m_config.SetInt("TAA", "JitterPattern", m_taa.jitterPattern);
+    m_config.SetInt("TAA", "JitterSequenceLength", m_taa.jitterSequenceLength);
+    m_config.SetFloat("TAA", "HistoryBlendFactor", m_taa.historyBlendFactor);
+    m_config.SetFloat("TAA", "VarianceClipGamma", m_taa.varianceClipGamma);
+    m_config.SetBool("TAA", "UseMotionVectors", m_taa.useMotionVectors);
+    m_config.SetBool("TAA", "UseYCoCg", m_taa.useYCoCg);
+    m_config.SetFloat("TAA", "Sharpness", m_taa.sharpness);
+    m_config.SetFloat("TAA", "GhostingRejectionStrength", m_taa.ghostingRejectionStrength);
+    m_config.SetFloat("TAA", "FlickerReduction", m_taa.flickerReduction);
+
+    // MotionBlur
+    m_config.SetBool("MotionBlur", "Enabled", m_motionBlur.enabled);
+    m_config.SetInt("MotionBlur", "Type", m_motionBlur.type);
+    m_config.SetFloat("MotionBlur", "Intensity", m_motionBlur.intensity);
+    m_config.SetInt("MotionBlur", "SampleCount", m_motionBlur.sampleCount);
+    m_config.SetFloat("MotionBlur", "MaxBlurRadius", m_motionBlur.maxBlurRadius);
+    m_config.SetFloat("MotionBlur", "VelocityScale", m_motionBlur.velocityScale);
+    m_config.SetFloat("MotionBlur", "MinVelocityThreshold", m_motionBlur.minVelocityThreshold);
+    m_config.SetFloat("MotionBlur", "CameraRotationScale", m_motionBlur.cameraRotationScale);
+    m_config.SetFloat("MotionBlur", "CameraTranslationScale", m_motionBlur.cameraTranslationScale);
+    m_config.SetInt("MotionBlur", "TileSize", m_motionBlur.tileSize);
+
+    // DynamicQuality
+    m_config.SetBool("DynamicQuality", "Enabled", m_dynamicQuality.enabled);
+    m_config.SetFloat("DynamicQuality", "TargetFrameTimeMs", m_dynamicQuality.targetFrameTimeMs);
+    m_config.SetFloat("DynamicQuality", "MinRenderScale", m_dynamicQuality.minRenderScale);
+    m_config.SetFloat("DynamicQuality", "MaxRenderScale", m_dynamicQuality.maxRenderScale);
+    m_config.SetFloat("DynamicQuality", "RenderScaleStep", m_dynamicQuality.renderScaleStep);
+    m_config.SetFloat("DynamicQuality", "MinShadowScale", m_dynamicQuality.minShadowScale);
+    m_config.SetFloat("DynamicQuality", "MaxShadowScale", m_dynamicQuality.maxShadowScale);
+    m_config.SetFloat("DynamicQuality", "ShadowScaleStep", m_dynamicQuality.shadowScaleStep);
+    m_config.SetFloat("DynamicQuality", "MinLodBias", m_dynamicQuality.minLodBias);
+    m_config.SetFloat("DynamicQuality", "MaxLodBias", m_dynamicQuality.maxLodBias);
+    m_config.SetFloat("DynamicQuality", "LodBiasStep", m_dynamicQuality.lodBiasStep);
+    m_config.SetFloat("DynamicQuality", "MinTextureMipBias", m_dynamicQuality.minTextureMipBias);
+    m_config.SetFloat("DynamicQuality", "MaxTextureMipBias", m_dynamicQuality.maxTextureMipBias);
+    m_config.SetFloat("DynamicQuality", "TextureMipBiasStep", m_dynamicQuality.textureMipBiasStep);
+    m_config.SetInt("DynamicQuality", "FrameTimeWindowSize", m_dynamicQuality.frameTimeWindowSize);
+    m_config.SetInt("DynamicQuality", "MinChangeIntervalFrames", m_dynamicQuality.minChangeIntervalFrames);
+    m_config.SetFloat("DynamicQuality", "IncreaseThresholdMs", m_dynamicQuality.increaseThresholdMs);
+    m_config.SetFloat("DynamicQuality", "PID_KP", m_dynamicQuality.pidKP);
+    m_config.SetFloat("DynamicQuality", "PID_KI", m_dynamicQuality.pidKI);
+    m_config.SetFloat("DynamicQuality", "PID_KD", m_dynamicQuality.pidKD);
+
+    // AudioExtended
+    m_config.SetFloat("AudioExtended", "DopplerScale", m_audioExtended.dopplerScale);
+    m_config.SetFloat("AudioExtended", "DistanceScale", m_audioExtended.distanceScale);
+    m_config.SetBool("AudioExtended", "Enable3D", m_audioExtended.enable3D);
+    m_config.SetBool("AudioExtended", "EnableReverb", m_audioExtended.enableReverb);
+    m_config.SetBool("AudioExtended", "EnableEAX", m_audioExtended.enableEAX);
+    m_config.SetInt("AudioExtended", "MaxSources", m_audioExtended.maxSources);
+
+    // Physics
+    m_config.SetFloat("Physics", "GravityX", m_physics.gravityX);
+    m_config.SetFloat("Physics", "GravityY", m_physics.gravityY);
+    m_config.SetFloat("Physics", "GravityZ", m_physics.gravityZ);
+    m_config.SetFloat("Physics", "FixedTimestep", m_physics.fixedTimestep);
+    m_config.SetInt("Physics", "MaxSubSteps", m_physics.maxSubSteps);
+    m_config.SetFloat("Physics", "DefaultFriction", m_physics.defaultFriction);
+    m_config.SetFloat("Physics", "DefaultRestitution", m_physics.defaultRestitution);
+    m_config.SetFloat("Physics", "DefaultLinearDamping", m_physics.defaultLinearDamping);
+    m_config.SetFloat("Physics", "DefaultAngularDamping", m_physics.defaultAngularDamping);
+    m_config.SetBool("Physics", "DebugDraw", m_physics.debugDraw);
+
+    // AI
+    m_config.SetFloat("AI", "DetectionRange", m_ai.detectionRange);
+    m_config.SetFloat("AI", "AttackRange", m_ai.attackRange);
+    m_config.SetFloat("AI", "MeleeRange", m_ai.meleeRange);
+    m_config.SetFloat("AI", "MoveSpeed", m_ai.moveSpeed);
+    m_config.SetFloat("AI", "TurnSpeed", m_ai.turnSpeed);
+    m_config.SetFloat("AI", "Accuracy", m_ai.accuracy);
+    m_config.SetFloat("AI", "ReactionTime", m_ai.reactionTime);
+    m_config.SetFloat("AI", "CoverSearchRadius", m_ai.coverSearchRadius);
+    m_config.SetBool("AI", "CanStrafe", m_ai.canStrafe);
+    m_config.SetBool("AI", "CanSprint", m_ai.canSprint);
+    m_config.SetBool("AI", "CanUseCover", m_ai.canUseCover);
+
+    // Player
+    m_config.SetFloat("Player", "MaxHealth", m_player.maxHealth);
+    m_config.SetFloat("Player", "MaxArmor", m_player.maxArmor);
+    m_config.SetFloat("Player", "MoveSpeed", m_player.moveSpeed);
+    m_config.SetFloat("Player", "JumpHeight", m_player.jumpHeight);
+    m_config.SetFloat("Player", "GravityForce", m_player.gravityForce);
+    m_config.SetFloat("Player", "Friction", m_player.friction);
+    m_config.SetFloat("Player", "SprintMultiplier", m_player.sprintMultiplier);
+    m_config.SetFloat("Player", "CrouchMultiplier", m_player.crouchMultiplier);
+    m_config.SetFloat("Player", "ADSSpeedMultiplier", m_player.adsSpeedMultiplier);
+    m_config.SetFloat("Player", "MaxShield", m_player.maxShield);
+    m_config.SetFloat("Player", "ShieldRechargeRate", m_player.shieldRechargeRate);
+    m_config.SetFloat("Player", "ShieldRechargeDelay", m_player.shieldRechargeDelay);
+    m_config.SetFloat("Player", "MaxEnergy", m_player.maxEnergy);
+    m_config.SetFloat("Player", "EnergyRegenRate", m_player.energyRegenRate);
+
+    // GameMode
+    m_config.SetInt("GameMode", "ScoreLimit", m_gameMode.scoreLimit);
+    m_config.SetInt("GameMode", "RoundLimit", m_gameMode.roundLimit);
+    m_config.SetFloat("GameMode", "TimeLimit", m_gameMode.timeLimit);
+    m_config.SetFloat("GameMode", "RespawnDelay", m_gameMode.respawnDelay);
+    m_config.SetBool("GameMode", "AutoRespawn", m_gameMode.autoRespawn);
+    m_config.SetInt("GameMode", "MaxLives", m_gameMode.maxLives);
+    m_config.SetFloat("GameMode", "DamageMultiplier", m_gameMode.damageMultiplier);
+    m_config.SetFloat("GameMode", "HealthMultiplier", m_gameMode.healthMultiplier);
+    m_config.SetFloat("GameMode", "SpeedMultiplier", m_gameMode.speedMultiplier);
+    m_config.SetBool("GameMode", "FriendlyFire", m_gameMode.friendlyFire);
+    m_config.SetBool("GameMode", "Headshots", m_gameMode.headshots);
+    m_config.SetFloat("GameMode", "HeadshotMultiplier", m_gameMode.headshotMultiplier);
+    m_config.SetBool("GameMode", "AllWeaponsAvailable", m_gameMode.allWeaponsAvailable);
+    m_config.SetBool("GameMode", "TeamsEnabled", m_gameMode.teamsEnabled);
+    m_config.SetInt("GameMode", "MaxTeamSize", m_gameMode.maxTeamSize);
+    m_config.SetBool("GameMode", "AutoBalance", m_gameMode.autoBalance);
+    m_config.SetInt("GameMode", "KillPoints", m_gameMode.killPoints);
+    m_config.SetInt("GameMode", "DeathPenalty", m_gameMode.deathPenalty);
+    m_config.SetInt("GameMode", "AssistPoints", m_gameMode.assistPoints);
+    m_config.SetInt("GameMode", "ObjectivePoints", m_gameMode.objectivePoints);
+    m_config.SetInt("GameMode", "HeadshotBonus", m_gameMode.headshotBonus);
+
+    // Camera
+    m_config.SetFloat("Camera", "MoveSpeed", m_camera.moveSpeed);
+    m_config.SetFloat("Camera", "RotationSpeed", m_camera.rotationSpeed);
+    m_config.SetFloat("Camera", "DefaultFov", m_camera.defaultFov);
+    m_config.SetFloat("Camera", "ZoomedFov", m_camera.zoomedFov);
+    m_config.SetBool("Camera", "SmoothMovement", m_camera.smoothMovement);
+    m_config.SetFloat("Camera", "NearPlane", m_camera.nearPlane);
+    m_config.SetFloat("Camera", "FarPlane", m_camera.farPlane);
+
+    // Editor
+    m_config.SetFloat("Editor", "GridSize", m_editor.gridSize);
+    m_config.SetBool("Editor", "SnapToGrid", m_editor.snapToGrid);
+    m_config.SetBool("Editor", "ShowGrid", m_editor.showGrid);
+    m_config.SetFloat("Editor", "GizmoScale", m_editor.gizmoScale);
+    m_config.SetBool("Editor", "AutosaveEnabled", m_editor.autosaveEnabled);
+    m_config.SetFloat("Editor", "AutosaveIntervalSeconds", m_editor.autosaveIntervalSeconds);
+    m_config.SetInt("Editor", "UndoHistorySize", m_editor.undoHistorySize);
 }
 
 // =============================================================================
@@ -192,26 +605,55 @@ std::string EngineSettings::GetValue(const std::string& section, const std::stri
 
 bool EngineSettings::SetValue(const std::string& section, const std::string& key, const std::string& value)
 {
-    if (!m_config.HasSection(section) && section != "Graphics" && section != "Audio" && section != "Controls" &&
-        section != "Game")
+    // Allow any known section
+    auto sections = GetSections();
+    bool validSection = false;
+    for (const auto& s : sections)
+    {
+        if (s == section)
+        {
+            validSection = true;
+            break;
+        }
+    }
+    if (!validSection)
     {
         return false;
     }
 
     m_config.SetString(section, key, value);
     ReadFromConfig(); // Sync back to structs
+    NotifyChanged(section, key);
     return true;
 }
 
 std::vector<std::string> EngineSettings::GetSections() const
 {
-    return {"Graphics", "Audio", "Controls", "Game"};
+    return {"Graphics", "Audio",      "Controls", "Game",       "Rendering",      "PostProcess",   "SSAO",
+            "SSR",      "Volumetric", "TAA",      "MotionBlur", "DynamicQuality", "AudioExtended", "Physics",
+            "AI",       "Player",     "GameMode", "Camera",     "Editor"};
 }
 
 std::vector<std::string> EngineSettings::GetKeys(const std::string& section) const
 {
     WriteToConfig();
     return m_config.GetKeys(section);
+}
+
+// =============================================================================
+// Change notification
+// =============================================================================
+void EngineSettings::OnSettingsChanged(SettingsChangedCallback callback)
+{
+    m_changeCallbacks.push_back(std::move(callback));
+}
+
+void EngineSettings::NotifyChanged(const std::string& section, const std::string& key) const
+{
+    for (const auto& cb : m_changeCallbacks)
+    {
+        cb(section, key);
+    }
 }
 
 // =============================================================================
@@ -248,7 +690,7 @@ void EngineSettings::RegisterConsoleCommands()
             }
             return "Failed to set " + args[0] + "." + args[1];
         },
-        "Set a settings value", "Settings");
+        "Set a settings value (runtime editable)", "Settings");
 
     console.RegisterCommand(
         "settings_save",
@@ -274,7 +716,7 @@ void EngineSettings::RegisterConsoleCommands()
             }
             return "Failed to reload settings";
         },
-        "Reload settings from disk", "Settings");
+        "Reload settings from disk (applies changes at runtime)", "Settings");
 
     console.RegisterCommand(
         "settings_reset",
@@ -315,4 +757,58 @@ void EngineSettings::RegisterConsoleCommands()
             return ss.str();
         },
         "List all settings (or settings in a section)", "Settings");
+
+    console.RegisterCommand(
+        "settings_sections",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            auto& settings = EngineSettings::GetInstance();
+            std::stringstream ss;
+            ss << "Available sections:\n";
+            for (const auto& section : settings.GetSections())
+            {
+                auto keys = settings.GetKeys(section);
+                ss << "  [" << section << "] (" << keys.size() << " keys)\n";
+            }
+            return ss.str();
+        },
+        "List all settings sections", "Settings");
+
+    console.RegisterCommand(
+        "settings_search",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: settings_search <pattern>";
+            auto& settings = EngineSettings::GetInstance();
+            std::string pattern = args[0];
+            // Convert to lowercase for case-insensitive search
+            std::string lowerPattern = pattern;
+            std::transform(lowerPattern.begin(), lowerPattern.end(), lowerPattern.begin(), ::tolower);
+
+            std::stringstream ss;
+            int count = 0;
+            for (const auto& section : settings.GetSections())
+            {
+                auto keys = settings.GetKeys(section);
+                for (const auto& key : keys)
+                {
+                    std::string lowerSection = section;
+                    std::transform(lowerSection.begin(), lowerSection.end(), lowerSection.begin(), ::tolower);
+                    std::string lowerKey = key;
+                    std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+
+                    if (lowerSection.find(lowerPattern) != std::string::npos ||
+                        lowerKey.find(lowerPattern) != std::string::npos)
+                    {
+                        ss << "  " << section << "." << key << " = " << settings.GetValue(section, key) << "\n";
+                        count++;
+                    }
+                }
+            }
+            if (count == 0)
+                return "No settings matching '" + pattern + "'";
+            return "Found " + std::to_string(count) + " matching settings:\n" + ss.str();
+        },
+        "Search settings by name pattern", "Settings");
 }
