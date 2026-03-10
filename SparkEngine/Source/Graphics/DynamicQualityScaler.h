@@ -15,6 +15,7 @@
 #include "../Core/Platform.h"
 #include "VRAMBudgetMonitor.h"
 
+#include <atomic>
 #include <cstdint>
 #include <algorithm>
 #include <cmath>
@@ -304,11 +305,20 @@ public:
     // ========================================================================
 
     /**
+     * @brief Initialize the scaler with default config
+     */
+    void Initialize()
+    {
+        Config defaultConfig;
+        Initialize(defaultConfig, nullptr);
+    }
+
+    /**
      * @brief Initialize the scaler
      * @param config         Configuration
      * @param budgetMonitor  Optional VRAM budget monitor for memory-driven scaling
      */
-    void Initialize(const Config& config = {}, VRAMBudgetMonitor* budgetMonitor = nullptr)
+    void Initialize(const Config& config, VRAMBudgetMonitor* budgetMonitor = nullptr)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
