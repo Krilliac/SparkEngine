@@ -20,17 +20,26 @@ namespace SparkEditor
  */
     enum class ComponentType : uint32_t
     {
-        TRANSFORM = 0,       ///< Transform component
-        MESH_RENDERER = 1,   ///< Mesh renderer component
-        LIGHT = 2,           ///< Light component
-        CAMERA = 3,          ///< Camera component
-        RIGID_BODY = 4,      ///< Rigid body component
-        COLLIDER = 5,        ///< Collider component
-        AUDIO_SOURCE = 6,    ///< Audio source component
-        SCRIPT = 7,          ///< Script component
-        PARTICLE_SYSTEM = 8, ///< Particle system component
-        ANIMATION = 9,       ///< Animation component
-        CUSTOM = 1000        ///< Custom components start at 1000
+        TRANSFORM = 0,        ///< Transform component
+        MESH_RENDERER = 1,    ///< Mesh renderer component
+        LIGHT = 2,            ///< Light component
+        CAMERA = 3,           ///< Camera component
+        RIGID_BODY = 4,       ///< Rigid body component
+        COLLIDER = 5,         ///< Collider component
+        AUDIO_SOURCE = 6,     ///< Audio source component
+        SCRIPT = 7,           ///< Script component
+        PARTICLE_SYSTEM = 8,  ///< Particle system component
+        ANIMATION = 9,        ///< Animation component
+        SPRITE_RENDERER = 10, ///< 2D sprite renderer component
+        SPRITE_ANIMATOR = 11, ///< 2D sprite animation component
+        CAMERA_2D = 12,       ///< 2D orthographic camera component
+        TILEMAP = 13,         ///< 2D tilemap component
+        RIGID_BODY_2D = 14,   ///< 2D physics rigid body
+        COLLIDER_2D = 15,     ///< 2D collision shape
+        PARALLAX_BG = 16,     ///< Parallax scrolling background
+        NINE_SLICE = 17,      ///< Nine-slice sprite for UI
+        PIXEL_PERFECT = 18,   ///< Pixel-perfect rendering constraint
+        CUSTOM = 1000         ///< Custom components start at 1000
     };
 
     /**

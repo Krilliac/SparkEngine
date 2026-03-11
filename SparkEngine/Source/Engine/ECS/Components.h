@@ -55,6 +55,9 @@
 // Gameplay: TagComponent, ActiveComponent, HealthComponent, Weather, Inventory, Quests
 #include "Components/GameplayComponents.h"
 
+// 2D/2.5D: SpriteRenderer, SpriteAnimator, Camera2D, TilemapComponent, RigidBody2D, Collider2D, Parallax
+#include "Components/Sprite2DComponents.h"
+
 // =============================================================================
 // World
 // =============================================================================
