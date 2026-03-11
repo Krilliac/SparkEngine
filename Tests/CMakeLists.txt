@@ -58,6 +58,7 @@ add_executable(SparkTests
     TestBitFlags.cpp
     TestThreadSafeQueue.cpp
     TestDeltaSmoother.cpp
+    TestFPSComponents.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

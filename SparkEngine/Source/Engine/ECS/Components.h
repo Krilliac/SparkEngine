@@ -16,6 +16,7 @@
  *   #include "Components/AnimationComponents.h"   // Animation, Particles
  *   #include "Components/AIComponents.h"          // AI, NetworkIdentity
  *   #include "Components/GameplayComponents.h"    // Tags, Health, Weather, etc.
+ *   #include "Components/FPSComponents.h"         // Decals, Projectiles, Interactions
  *
  * ## Component categories
  *
@@ -30,6 +31,7 @@
  * | AI             | AIComponent                                              |
  * | Networking     | NetworkIdentity                                          |
  * | Tags/Metadata  | TagComponent, ActiveComponent, HealthComponent           |
+ * | FPS            | DecalComponent, ProjectileComponent, InteractionComponent|
  */
 
 #pragma once
@@ -60,6 +62,9 @@
 
 // 2D/2.5D: SpriteRenderer, SpriteAnimator, Camera2D, TilemapComponent, RigidBody2D, Collider2D, Parallax
 #include "Components/Sprite2DComponents.h"
+
+// FPS: DecalComponent, ProjectileComponent, InteractionComponent
+#include "Components/FPSComponents.h"
 
 // =============================================================================
 // World

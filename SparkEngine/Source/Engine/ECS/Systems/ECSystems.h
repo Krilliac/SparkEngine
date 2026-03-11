@@ -520,6 +520,180 @@ namespace Spark::ECS
     };
 
     // =============================================================================
+    // Particle Update System
+    // =============================================================================
+
+    /**
+     * @class ParticleUpdateSystem
+     * @brief Updates particle emitters and advances particle simulation each frame.
+     *
+     * The ParticleUpdateSystem iterates all entities with a `ParticleEmitterComponent`
+     * and `Transform` and performs:
+     *
+     * 1. **Emission** – Spawns new particles based on `emissionRate` and burst events.
+     * 2. **Simulation** – Advances particle positions, velocities, sizes, colors,
+     *    and rotations based on the emitter configuration and delta time.
+     * 3. **Lifetime** – Removes dead particles whose age exceeds their lifetime.
+     * 4. **Transform sync** – Updates emitter world position from the entity's Transform
+     *    so particles spawn at the correct location.
+     *
+     * ### Execution order
+     * Should run AFTER PhysicsUpdateSystem and AnimationUpdateSystem (so particles
+     * attached to animated meshes use up-to-date positions) and BEFORE RenderSystem
+     * (so the GPU particle buffer is ready for rendering).
+     *
+     * @note Entities with `ParticleEmitterComponent::isPlaying == false` are skipped.
+     *       Use `autoPlay` to start emission automatically when the entity is created.
+     */
+    class ParticleUpdateSystem : public ISystem
+    {
+      public:
+        /**
+         * @brief Advance all particle emitters for one simulation frame.
+         *
+         * Iterates entities with ParticleEmitterComponent + Transform,
+         * spawns new particles, advances simulation, and culls dead particles.
+         *
+         * @param world      The ECS World to query.
+         * @param deltaTime  Frame time in seconds for particle simulation.
+         */
+        void Update(World& world, float deltaTime) override;
+
+        const char* GetName() const override { return "ParticleUpdateSystem"; }
+
+        /**
+         * @brief Get the total number of active particles across all emitters.
+         * @return Total alive particle count.
+         */
+        int GetActiveParticleCount() const { return m_activeParticleCount; }
+
+        /**
+         * @brief Get the number of active emitter entities.
+         * @return Count of entities with playing particle emitters.
+         */
+        int GetActiveEmitterCount() const { return m_activeEmitterCount; }
+
+      private:
+        int m_activeParticleCount = 0;
+        int m_activeEmitterCount = 0;
+    };
+
+    // =============================================================================
+    // Decal System
+    // =============================================================================
+
+    /**
+     * @class DecalSystem
+     * @brief Manages projected decal lifetimes and fade-out.
+     *
+     * The DecalSystem iterates all entities with a `DecalComponent` and:
+     *
+     * 1. **Lifetime countdown** – Decrements `remainingLifetime` each frame.
+     * 2. **Fade-out** – Computes opacity based on remaining lifetime and fade duration.
+     * 3. **Cleanup** – Marks expired decals for destruction (lifetime <= 0 and not permanent).
+     *
+     * ### Execution order
+     * Should run BEFORE RenderSystem so that faded/expired decals are removed
+     * before the render pass.
+     *
+     * @note Decals with `lifetime == 0` are permanent and never expire.
+     */
+    class DecalSystem : public ISystem
+    {
+      public:
+        /**
+         * @brief Callback invoked when a decal expires.
+         * @param entityID The EntityID of the expired decal entity.
+         */
+        using DecalExpiredCallback = std::function<void(EntityID)>;
+
+        /**
+         * @brief Update all decal lifetimes and mark expired decals.
+         *
+         * @param world      The ECS World to query.
+         * @param deltaTime  Frame time in seconds.
+         */
+        void Update(World& world, float deltaTime) override;
+
+        const char* GetName() const override { return "DecalSystem"; }
+
+        /**
+         * @brief Register a callback for when decals expire.
+         * @param cb Callback receiving the EntityID of the expired decal.
+         */
+        void SetExpiredCallback(DecalExpiredCallback cb) { m_onExpired = cb; }
+
+        /**
+         * @brief Get the number of active (non-expired) decals.
+         * @return Active decal count.
+         */
+        int GetActiveDecalCount() const { return m_activeDecalCount; }
+
+      private:
+        DecalExpiredCallback m_onExpired;
+        int m_activeDecalCount = 0;
+    };
+
+    // =============================================================================
+    // Projectile System
+    // =============================================================================
+
+    /**
+     * @class ProjectileSystem
+     * @brief Advances projectile movement, applies gravity, and detects expiration.
+     *
+     * The ProjectileSystem iterates all entities with `ProjectileComponent` and
+     * `Transform` and:
+     *
+     * 1. **Movement** – Advances position along the projectile's direction vector,
+     *    applying gravity for ballistic projectiles.
+     * 2. **Distance/age tracking** – Accumulates distance traveled and age.
+     * 3. **Expiration** – Marks projectiles that exceed max range or lifetime.
+     *
+     * ### Execution order
+     * Should run AFTER PhysicsUpdateSystem (for collision detection integration)
+     * and BEFORE RenderSystem.
+     *
+     * @note Hitscan projectiles resolve instantly on spawn and are typically
+     *       destroyed on the same frame. Ballistic projectiles persist across frames.
+     */
+    class ProjectileSystem : public ISystem
+    {
+      public:
+        /**
+         * @brief Callback invoked when a projectile expires or impacts.
+         * @param entityID The EntityID of the projectile entity.
+         */
+        using ProjectileExpiredCallback = std::function<void(EntityID)>;
+
+        /**
+         * @brief Update all projectile positions and check for expiration.
+         *
+         * @param world      The ECS World to query.
+         * @param deltaTime  Frame time in seconds.
+         */
+        void Update(World& world, float deltaTime) override;
+
+        const char* GetName() const override { return "ProjectileSystem"; }
+
+        /**
+         * @brief Register a callback for when projectiles expire.
+         * @param cb Callback receiving the EntityID of the expired projectile.
+         */
+        void SetExpiredCallback(ProjectileExpiredCallback cb) { m_onExpired = cb; }
+
+        /**
+         * @brief Get the number of active projectiles.
+         * @return Active projectile count.
+         */
+        int GetActiveProjectileCount() const { return m_activeProjectileCount; }
+
+      private:
+        ProjectileExpiredCallback m_onExpired;
+        int m_activeProjectileCount = 0;
+    };
+
+    // =============================================================================
     // System Manager
     // =============================================================================
 
