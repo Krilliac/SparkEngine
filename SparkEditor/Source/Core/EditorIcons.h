@@ -141,6 +141,13 @@
 #define ICON_FA_LAYER_GROUP "\xef\x97\x82"  // U+F5FD
 #define ICON_FA_CROP "\xef\x84\xa5"         // U+F125
 
+// === Prefab & History Icons ===
+#define ICON_FA_HISTORY "\xef\x87\x9a"  // U+F1DA
+#define ICON_FA_BOX "\xef\x91\xa6"      // U+F466
+#define ICON_FA_BOXES "\xef\x91\xa8"    // U+F468
+#define ICON_FA_CLOCK "\xef\x80\x97"    // U+F017
+#define ICON_FA_LIST_ALT "\xef\x80\xa2" // U+F022
+
 // === Animation Editor Icons ===
 #define ICON_FA_FILM "\xef\x80\x88"        // U+F008
 #define ICON_FA_STREAM "\xef\x95\x90"      // U+F550

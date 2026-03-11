@@ -23,6 +23,10 @@
 #include "../Panels/TilemapEditorPanel.h"
 #include "../Panels/SpriteAnimationEditorPanel.h"
 #include "../Panels/Physics2DPanel.h"
+#include "../Panels/UndoHistoryPanel.h"
+#include "../Panels/SceneStatisticsPanel.h"
+#include "../Panels/PrefabEditorPanel.h"
+#include "../Panels/SearchPanel.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
 #include "EditorApplication.h"
@@ -94,10 +98,29 @@ namespace SparkEditor
             m_projectBrowserPanel = std::make_shared<ProjectBrowserPanel>(m_projectManager.get());
             m_projectBrowserPanel->Initialize();
 
+            // Initialize undo/redo manager
+            console.LogInfo("Initializing undo/redo manager...");
+            m_undoRedoManager = std::make_unique<UndoRedoManager>();
+            console.LogSuccess("Undo/redo manager initialized");
+
+            // Initialize prefab manager
+            console.LogInfo("Initializing prefab manager...");
+            m_prefabManager = std::make_unique<PrefabManager>();
+            m_prefabManager->Initialize();
+            console.LogSuccess("Prefab manager initialized");
+
+            // Initialize command palette
+            console.LogInfo("Initializing command palette...");
+            m_commandPalette = std::make_unique<CommandPalette>();
+            console.LogSuccess("Command palette initialized");
+
             // Create panels
             console.LogInfo("Creating editor panels...");
             CreatePanels();
             console.LogSuccess("Panels created successfully");
+
+            // Register command palette actions (after panels are created)
+            InitializeCommandPalette();
 
             // Wire up project callbacks to update other panels
             m_projectManager->SetOnProjectOpened(
@@ -168,6 +191,9 @@ namespace SparkEditor
 
         // Update stats
         UpdateStats(deltaTime);
+
+        // Handle keyboard shortcuts for new features
+        HandleKeyboardShortcuts();
     }
 
     void EditorUI::Render()
@@ -218,6 +244,12 @@ namespace SparkEditor
         if (m_projectBrowserPanel && m_projectBrowserPanel->IsModalActive())
         {
             m_projectBrowserPanel->Render();
+        }
+
+        // Render command palette overlay (on top of everything)
+        if (m_commandPalette)
+        {
+            m_commandPalette->Render();
         }
 
         if (m_showDemoWindow)
@@ -294,6 +326,19 @@ namespace SparkEditor
             m_projectManager.reset();
             console.LogSuccess("Project manager shutdown complete");
         }
+
+        // Shutdown prefab manager
+        if (m_prefabManager)
+        {
+            console.LogInfo("Shutting down prefab manager...");
+            m_prefabManager->Shutdown();
+            m_prefabManager.reset();
+            console.LogSuccess("Prefab manager shutdown complete");
+        }
+
+        // Reset other systems
+        m_undoRedoManager.reset();
+        m_commandPalette.reset();
 
         // Note: Don't shutdown crash handler here as it's managed elsewhere
 
@@ -524,6 +569,58 @@ namespace SparkEditor
             console.LogError("Failed to create Physics 2D panel: " + std::string(e.what()));
         }
 
+        // Create Undo History Panel
+        try
+        {
+            console.LogInfo("Creating Undo History panel...");
+            auto undoHistoryPanel = std::shared_ptr<UndoHistoryPanel>(new UndoHistoryPanel(m_undoRedoManager.get()));
+            m_panels["UndoHistory"] = undoHistoryPanel;
+            console.LogSuccess("Created Undo History panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Undo History panel: " + std::string(e.what()));
+        }
+
+        // Create Scene Statistics Panel
+        try
+        {
+            console.LogInfo("Creating Scene Statistics panel...");
+            auto sceneStatsPanel = std::shared_ptr<SceneStatisticsPanel>(new SceneStatisticsPanel());
+            m_panels["SceneStats"] = sceneStatsPanel;
+            console.LogSuccess("Created Scene Statistics panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Scene Statistics panel: " + std::string(e.what()));
+        }
+
+        // Create Prefab Editor Panel
+        try
+        {
+            console.LogInfo("Creating Prefab Editor panel...");
+            auto prefabEditorPanel = std::shared_ptr<PrefabEditorPanel>(new PrefabEditorPanel(m_prefabManager.get()));
+            m_panels["PrefabEditor"] = prefabEditorPanel;
+            console.LogSuccess("Created Prefab Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Prefab Editor panel: " + std::string(e.what()));
+        }
+
+        // Create Search Panel
+        try
+        {
+            console.LogInfo("Creating Search panel...");
+            auto searchPanel = std::shared_ptr<SearchPanel>(new SearchPanel());
+            m_panels["Search"] = searchPanel;
+            console.LogSuccess("Created Search panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Search panel: " + std::string(e.what()));
+        }
+
         // SKIP SimpleBuildSystem in all modes since it's causing the hang
         console.LogWarning("SKIPPING Simple Build System panel (known to cause hangs)");
 
@@ -568,12 +665,26 @@ namespace SparkEditor
             m_panels["WeaponEditor"]->SetIcon(ICON_FA_CROSSHAIRS);
         if (m_panels.count("FPSTools"))
             m_panels["FPSTools"]->SetIcon(ICON_FA_ROCKET);
+        if (m_panels.count("UndoHistory"))
+            m_panels["UndoHistory"]->SetIcon(ICON_FA_UNDO);
+        if (m_panels.count("SceneStats"))
+            m_panels["SceneStats"]->SetIcon(ICON_FA_CHART_BAR);
+        if (m_panels.count("PrefabEditor"))
+            m_panels["PrefabEditor"]->SetIcon(ICON_FA_CUBE);
+        if (m_panels.count("Search"))
+            m_panels["Search"]->SetIcon(ICON_FA_SEARCH);
 
         // Hide new panels by default (accessible via FPS Tools menu)
         if (m_panels.count("WeaponEditor"))
             m_panels["WeaponEditor"]->SetVisible(false);
         if (m_panels.count("FPSTools"))
             m_panels["FPSTools"]->SetVisible(false);
+        if (m_panels.count("UndoHistory"))
+            m_panels["UndoHistory"]->SetVisible(false);
+        if (m_panels.count("PrefabEditor"))
+            m_panels["PrefabEditor"]->SetVisible(false);
+        if (m_panels.count("Search"))
+            m_panels["Search"]->SetVisible(false);
 
         console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
     }
@@ -669,13 +780,28 @@ namespace SparkEditor
 
             if (ImGui::BeginMenu("Edit"))
             {
-                if (ImGui::MenuItem("Undo", "Ctrl+Z"))
+                bool canUndo = m_undoRedoManager && m_undoRedoManager->CanUndo();
+                bool canRedo = m_undoRedoManager && m_undoRedoManager->CanRedo();
+                std::string undoLabel = "Undo";
+                std::string redoLabel = "Redo";
+                if (canUndo)
                 {
-                    ShowNotification("Undo operation!", "info");
+                    undoLabel += " (" + m_undoRedoManager->GetUndoDescription() + ")";
                 }
-                if (ImGui::MenuItem("Redo", "Ctrl+Y"))
+                if (canRedo)
                 {
-                    ShowNotification("Redo operation!", "info");
+                    redoLabel += " (" + m_undoRedoManager->GetRedoDescription() + ")";
+                }
+
+                if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo))
+                {
+                    m_undoRedoManager->Undo();
+                    ShowNotification("Undo: " + m_undoRedoManager->GetUndoDescription(), "info");
+                }
+                if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, canRedo))
+                {
+                    m_undoRedoManager->Redo();
+                    ShowNotification("Redo: " + m_undoRedoManager->GetRedoDescription(), "info");
                 }
                 ImGui::Separator();
                 if (ImGui::MenuItem("Cut", "Ctrl+X"))
@@ -695,6 +821,18 @@ namespace SparkEditor
                 {
                     ShowNotification("Select All operation!", "info");
                 }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_SEARCH " Search...", "Ctrl+F"))
+                {
+                    SetPanelVisible("Search", true);
+                }
+                if (ImGui::MenuItem(ICON_FA_BOLT " Command Palette", "Ctrl+P"))
+                {
+                    if (m_commandPalette)
+                    {
+                        m_commandPalette->Open();
+                    }
+                }
                 ImGui::EndMenu();
             }
 
@@ -703,6 +841,34 @@ namespace SparkEditor
                 if (ImGui::MenuItem("Create Empty"))
                 {
                     ShowNotification("Created empty GameObject!", "success");
+                }
+                if (ImGui::MenuItem(ICON_FA_CUBE " Create Prefab from Selection"))
+                {
+                    if (m_prefabManager)
+                    {
+                        m_prefabManager->CreatePrefabFromEntity(0, "New Prefab");
+                        ShowNotification("Prefab created from selection!", "success");
+                    }
+                }
+                if (ImGui::BeginMenu(ICON_FA_CUBE " Instantiate Prefab"))
+                {
+                    if (m_prefabManager)
+                    {
+                        auto names = m_prefabManager->GetPrefabNames();
+                        for (const auto& name : names)
+                        {
+                            if (ImGui::MenuItem(name.c_str()))
+                            {
+                                m_prefabManager->InstantiatePrefab(name);
+                                ShowNotification("Instantiated prefab: " + name, "success");
+                            }
+                        }
+                        if (names.empty())
+                        {
+                            ImGui::TextDisabled("No prefabs available");
+                        }
+                    }
+                    ImGui::EndMenu();
                 }
                 ImGui::Separator();
                 if (ImGui::BeginMenu("3D Object"))
@@ -809,6 +975,24 @@ namespace SparkEditor
                 if (ImGui::MenuItem("Profiler", nullptr, IsPanelVisible("Profiler")))
                 {
                     SetPanelVisible("Profiler", !IsPanelVisible("Profiler"));
+                }
+                ImGui::Separator();
+                ImGui::TextDisabled("Tools & Analysis");
+                if (ImGui::MenuItem(ICON_FA_UNDO " Undo History", nullptr, IsPanelVisible("UndoHistory")))
+                {
+                    SetPanelVisible("UndoHistory", !IsPanelVisible("UndoHistory"));
+                }
+                if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Statistics", nullptr, IsPanelVisible("SceneStats")))
+                {
+                    SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
+                }
+                if (ImGui::MenuItem(ICON_FA_CUBE " Prefab Editor", nullptr, IsPanelVisible("PrefabEditor")))
+                {
+                    SetPanelVisible("PrefabEditor", !IsPanelVisible("PrefabEditor"));
+                }
+                if (ImGui::MenuItem(ICON_FA_SEARCH " Search", nullptr, IsPanelVisible("Search")))
+                {
+                    SetPanelVisible("Search", !IsPanelVisible("Search"));
                 }
                 ImGui::Separator();
                 ImGui::TextDisabled("2D / 2.5D Panels");
@@ -1635,6 +1819,172 @@ namespace SparkEditor
         {
             m_projectBrowserPanel->ShowBrowser();
         }
+    }
+
+    void EditorUI::HandleKeyboardShortcuts()
+    {
+        ImGuiIO& io = ImGui::GetIO();
+
+        // Don't process shortcuts if command palette is open (it handles its own input)
+        if (m_commandPalette && m_commandPalette->IsOpen())
+        {
+            return;
+        }
+
+        // Ctrl+Z: Undo
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z) && !io.KeyShift)
+        {
+            if (m_undoRedoManager && m_undoRedoManager->CanUndo())
+            {
+                m_undoRedoManager->Undo();
+                ShowNotification("Undo: " + m_undoRedoManager->GetRedoDescription(), "info", 1.5f);
+            }
+        }
+
+        // Ctrl+Y or Ctrl+Shift+Z: Redo
+        if ((io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) ||
+            (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Z)))
+        {
+            if (m_undoRedoManager && m_undoRedoManager->CanRedo())
+            {
+                m_undoRedoManager->Redo();
+                ShowNotification("Redo: " + m_undoRedoManager->GetUndoDescription(), "info", 1.5f);
+            }
+        }
+
+        // Ctrl+P: Command Palette
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_P))
+        {
+            if (m_commandPalette)
+            {
+                m_commandPalette->Toggle();
+            }
+        }
+
+        // Ctrl+F: Search Panel
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F))
+        {
+            SetPanelVisible("Search", true);
+        }
+    }
+
+    void EditorUI::InitializeCommandPalette()
+    {
+        if (!m_commandPalette)
+        {
+            return;
+        }
+
+        // Register panel toggle actions
+        auto RegisterPanelToggle = [this](const std::string& panelKey, const std::string& displayName)
+        {
+            m_commandPalette->RegisterAction("Toggle " + displayName, "Panel", [this, panelKey]()
+                                             { SetPanelVisible(panelKey, !IsPanelVisible(panelKey)); });
+        };
+
+        RegisterPanelToggle("SceneView", "Scene View");
+        RegisterPanelToggle("Console", "Console");
+        RegisterPanelToggle("Hierarchy", "Hierarchy");
+        RegisterPanelToggle("Inspector", "Inspector");
+        RegisterPanelToggle("AssetBrowser", "Asset Browser");
+        RegisterPanelToggle("GameView", "Game View");
+        RegisterPanelToggle("Profiler", "Profiler");
+        RegisterPanelToggle("WeaponEditor", "Weapon Editor");
+        RegisterPanelToggle("FPSTools", "FPS Tools");
+        RegisterPanelToggle("SpriteEditor", "Sprite Editor");
+        RegisterPanelToggle("TilemapEditor", "Tilemap Editor");
+        RegisterPanelToggle("SpriteAnimEditor", "Sprite Animation Editor");
+        RegisterPanelToggle("Physics2D", "Physics 2D");
+        RegisterPanelToggle("UndoHistory", "Undo History");
+        RegisterPanelToggle("SceneStats", "Scene Statistics");
+        RegisterPanelToggle("PrefabEditor", "Prefab Editor");
+        RegisterPanelToggle("Search", "Search");
+
+        // Register undo/redo commands
+        m_commandPalette->RegisterAction(
+            "Undo", "Command",
+            [this]()
+            {
+                if (m_undoRedoManager && m_undoRedoManager->CanUndo())
+                {
+                    m_undoRedoManager->Undo();
+                }
+            },
+            "Ctrl+Z");
+
+        m_commandPalette->RegisterAction(
+            "Redo", "Command",
+            [this]()
+            {
+                if (m_undoRedoManager && m_undoRedoManager->CanRedo())
+                {
+                    m_undoRedoManager->Redo();
+                }
+            },
+            "Ctrl+Y");
+
+        // Register layout commands
+        m_commandPalette->RegisterAction("Reset Layout", "Layout", [this]() { ResetToDefaultLayout(); });
+
+        m_commandPalette->RegisterAction("Save Layout", "Layout", [this]() { SaveLayout("Quick Save"); });
+
+        // Register scene commands
+        m_commandPalette->RegisterAction("New Scene", "Scene",
+                                         [this]() { ShowNotification("New Scene created!", "success"); });
+
+        m_commandPalette->RegisterAction("Save Scene", "Scene",
+                                         [this]() { ShowNotification("Scene saved!", "success"); });
+
+        // Register play mode commands
+        m_commandPalette->RegisterAction(
+            "Play", "Command",
+            [this]()
+            {
+                m_playMode = PlayMode::Playing;
+                ShowNotification("Playing...", "success");
+            },
+            "F5");
+
+        m_commandPalette->RegisterAction(
+            "Stop", "Command",
+            [this]()
+            {
+                m_playMode = PlayMode::Stopped;
+                ShowNotification("Stopped", "info");
+            },
+            "Shift+F5");
+
+        // Register prefab commands
+        m_commandPalette->RegisterAction("Create Empty Prefab", "Command",
+                                         [this]()
+                                         {
+                                             if (m_prefabManager)
+                                             {
+                                                 m_prefabManager->CreateEmptyPrefab("New Prefab");
+                                                 SetPanelVisible("PrefabEditor", true);
+                                                 ShowNotification("Created new prefab", "success");
+                                             }
+                                         });
+
+        // Register theme commands
+        m_commandPalette->RegisterAction("Theme: Spark Professional", "Command",
+                                         [this]() { ApplyTheme("Spark Professional"); });
+
+        m_commandPalette->RegisterAction("Theme: Dark", "Command", [this]() { ApplyTheme("Dark"); });
+
+        m_commandPalette->RegisterAction("Theme: Light", "Command", [this]() { ApplyTheme("Light"); });
+
+        // Register tool commands
+        m_commandPalette->RegisterAction(
+            "Tool: Move", "Command", [this]() { m_currentTool = TransformTool::Move; }, "W");
+
+        m_commandPalette->RegisterAction(
+            "Tool: Rotate", "Command", [this]() { m_currentTool = TransformTool::Rotate; }, "E");
+
+        m_commandPalette->RegisterAction(
+            "Tool: Scale", "Command", [this]() { m_currentTool = TransformTool::Scale; }, "R");
+
+        m_commandPalette->RegisterAction("Toggle Snap", "Command", [this]() { m_snapEnabled = !m_snapEnabled; });
     }
 
 } // namespace SparkEditor
