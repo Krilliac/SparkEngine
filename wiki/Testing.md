@@ -138,7 +138,7 @@ cd build && ctest --output-on-failure
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*62 test files, 681+ test cases*
+*63 test files, 704+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -163,6 +163,7 @@ cd build && ctest --output-on-failure
 | `TestECSWorld` | 11 |
 | `TestEngineContext` | 18 |
 | `TestEventSystem` | 10 |
+| `TestFPSComponents` | 23 |
 | `TestFileUtils` | 15 |
 | `TestFogSystem` | 17 |
 | `TestFrameAllocator` | 8 |

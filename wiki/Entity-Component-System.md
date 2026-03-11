@@ -172,7 +172,9 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `Collider2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ColliderComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
 | `Config` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
+| `DecalComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `HealthComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `InteractionComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `InventoryTag` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `LightComponent` | `SparkEngine/Source/Engine/ECS/Components/LightComponents.h` |
 | `MeshRenderer` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
@@ -183,6 +185,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `ParallaxLayer` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ParticleEmitterComponent` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
 | `PixelPerfectComponent` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `ProjectileComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `QuestTrackerTag` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `RigidBody2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `RigidBodyComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
@@ -210,6 +213,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `AudioUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Camera2DFollowSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `CollisionSystem` | `SparkEngine/Source/Physics/CollisionSystem.h` |
+| `DecalSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `DecalSystem` | `SparkEngine/Source/Graphics/DecalSystem.h` |
 | `DestructionSystem` | `SparkEngine/Source/Engine/Destruction/DestructionSystem.h` |
 | `DialogueSystem` | `SparkEngine/Source/Engine/Dialogue/DialogueSystem.h` |
@@ -227,11 +231,13 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `ParallaxSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `ParticleSystem` | `SparkEngine/Source/Graphics/GPUParticleSystem.h` |
 | `ParticleSystem` | `SparkEngine/Source/Graphics/ParticleSystem.h` |
+| `ParticleUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Physics2DUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `PhysicsSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `PhysicsSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
 | `PhysicsUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `PostProcessingSystem` | `SparkEngine/Source/Graphics/PostProcessingSystem.h` |
+| `ProjectileSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `RagdollSystem` | `SparkEngine/Source/Engine/Animation/RagdollSystem.h` |
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ReplaySystem` | `SparkEngine/Source/Engine/Replay/ReplaySystem.h` |
