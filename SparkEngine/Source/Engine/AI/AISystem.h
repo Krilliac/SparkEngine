@@ -363,18 +363,22 @@ namespace Spark::AI
      *
      * Computes the direction to the next waypoint in `AIComponent::currentPath`,
      * scales it by `AIComponent::config.moveSpeed * deltaTime`, and applies the
-     * delta to `Transform::position`. Advances `currentPathIndex` when the agent
-     * is within stopping distance of the current waypoint.
+     * result. When the entity has a `RigidBodyComponent`, the desired velocity is
+     * written to `RigidBodyComponent::linearVelocity` so that the physics system
+     * resolves the final position with collision. Otherwise, the transform is
+     * updated directly.
      *
      * If the path becomes stale (target moved significantly) a new path query is
      * issued via the agent's `navQueryHandle`.
      *
-     * @param world      The ECS World (used to check for physics integration).
+     * @param world      The ECS World (used for physics component lookup).
+     * @param entity     The entity ID for component queries.
      * @param ai         The AIComponent with current path and configuration.
-     * @param transform  The agent's transform; position is modified directly.
+     * @param transform  The agent's transform; position is modified directly when
+     *                   no RigidBodyComponent is present.
      * @param deltaTime  Frame time for speed-independent movement.
      */
-        void UpdateMovement(World& world, AIComponent& ai, Transform& transform, float deltaTime);
+        void UpdateMovement(World& world, EntityID entity, AIComponent& ai, Transform& transform, float deltaTime);
 
         /**
      * @brief Tick the agent's behavior tree and update high-level state.

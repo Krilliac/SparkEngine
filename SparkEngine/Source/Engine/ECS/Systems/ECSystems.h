@@ -265,25 +265,30 @@ namespace Spark::ECS
      * @param physics  Non-owning pointer to the PhysicsSystem. Must not be null.
      *                 The physics system must remain alive for the lifetime of this object.
      */
-        PhysicsUpdateSystem(PhysicsSystem* physics) : m_physics(physics) {}
+        explicit PhysicsUpdateSystem(PhysicsSystem* physics, float fixedTimestep = 1.0f / 60.0f)
+            : m_physics(physics), m_fixedTimestep(fixedTimestep)
+        {
+        }
 
         /**
-     * @brief Sync transforms between the ECS world and the physics simulation.
+     * @brief Sync transforms using fixed-timestep accumulator (R2.2).
      *
-     * - Kinematic entities: writes ECS Transform → Bullet rigid body.
-     * - Dynamic entities: reads Bullet rigid body → ECS Transform.
-     * - Static entities: no-op.
-     *
-     * @param world      The ECS World containing RigidBodyComponent and Transform.
-     * @param deltaTime  Physics time step (seconds), forwarded to PhysicsSystem::Update().
+     * Accumulates deltaTime and steps physics in fixed increments.
+     * Computes interpolation alpha for smooth rendering between steps.
      */
         void Update(World& world, float deltaTime) override;
 
         const char* GetName() const override { return "PhysicsUpdateSystem"; }
 
+        float GetInterpolationAlpha() const { return m_interpolationAlpha; }
+        float GetFixedTimestep() const { return m_fixedTimestep; }
+
       private:
-        /** @brief Non-owning pointer to the Bullet Physics simulation world. */
         PhysicsSystem* m_physics;
+        float m_fixedTimestep = 1.0f / 60.0f;
+        float m_accumulator = 0.0f;
+        float m_maxAccumulator = 0.25f;
+        float m_interpolationAlpha = 0.0f;
     };
 
     // =============================================================================

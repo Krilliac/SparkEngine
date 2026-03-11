@@ -45,16 +45,16 @@ namespace Spark
     class CoroutineScheduler;
 
     /**
- * @brief Service locator providing access to all engine subsystems
- *
- * Game modules receive an IEngineContext* during OnLoad() and use it
- * to query for engine services. This decouples modules from the engine's
- * internal structure and allows the engine to evolve without breaking
- * the module API.
- *
- * Prefer using IEngineContext over global variables (g_graphics, g_input, etc.)
- * which are deprecated and will be removed in a future release.
- */
+     * @brief Service locator providing access to all engine subsystems
+     *
+     * Game modules receive an IEngineContext* during OnLoad() and use it
+     * to query for engine services. This decouples modules from the engine's
+     * internal structure and allows the engine to evolve without breaking
+     * the module API.
+     *
+     * Prefer using IEngineContext over global variables (g_graphics, g_input, etc.)
+     * which are deprecated and will be removed in a future release.
+     */
     class IEngineContext
     {
       public:
@@ -120,6 +120,24 @@ namespace Spark
 
         /** @brief Get the SDK ABI version */
         virtual uint32_t GetSDKVersion() const = 0;
+
+        /**
+         * @brief Initialize all registered subsystems in dependency order
+         *
+         * Performs a topological sort of subsystems based on declared dependencies
+         * and calls Initialize() on each in the correct order.
+         *
+         * @return true if all subsystems initialized successfully
+         */
+        virtual bool InitializeAll() { return true; }
+
+        /**
+         * @brief Shut down all subsystems in reverse dependency order
+         *
+         * Calls Shutdown() on each subsystem in reverse topological order,
+         * ensuring dependents are shut down before their dependencies.
+         */
+        virtual void ShutdownAll() {}
     };
 
 } // namespace Spark

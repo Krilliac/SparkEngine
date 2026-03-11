@@ -17,6 +17,10 @@
 #include "../../Core/Platform.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
+#include "../../Utils/Octree.h"
+#endif // SPARK_PLATFORM_WINDOWS
+
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
 
@@ -345,6 +349,129 @@ namespace Spark::AI
             // --- Memory decay and pruning ---
             component.DecayAndPrune(currentTime);
         }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        // ====================================================================
+        // Octree-accelerated spatial index for perception queries
+        // ====================================================================
+
+        /// @brief Spatial index that uses an Octree to accelerate perception queries.
+        ///
+        /// Rebuild the index each frame from all potential target positions, then
+        /// call `UpdatePerceptionSpatial()` per agent to query the octree instead
+        /// of iterating over every target (O(N) per agent -> O(log N) per agent).
+        ///
+        /// Thread-safe for concurrent reads after `Rebuild()` completes.
+        class SpatialPerceptionIndex
+        {
+          public:
+            /// Construct with world bounds. Choose bounds large enough to contain
+            /// all entities that could ever be perceived.
+            SpatialPerceptionIndex(const DirectX::XMFLOAT3& worldMin, const DirectX::XMFLOAT3& worldMax)
+                : m_octree(worldMin, worldMax, 6 /* maxDepth */, 8 /* maxPerNode */, 2.0f /* looseness */)
+            {
+            }
+
+            /// Default constructor with generous world bounds (1000 m cube).
+            SpatialPerceptionIndex()
+                : m_octree(DirectX::XMFLOAT3{-500.0f, -500.0f, -500.0f}, DirectX::XMFLOAT3{500.0f, 500.0f, 500.0f})
+            {
+            }
+
+            /// Rebuild the octree from a set of entity positions.
+            /// Call once per frame before any perception queries.
+            ///
+            /// @param ids        Entity IDs of potential targets.
+            /// @param positions  World positions parallel with @p ids.
+            /// @param halfExtent Half-size used to create a point-like AABB for each entity.
+            void Rebuild(const std::vector<PerceptionEntityID>& ids, const std::vector<DirectX::XMFLOAT3>& positions,
+                         float halfExtent = 0.5f)
+            {
+                m_octree.Clear();
+                m_positions.clear();
+
+                size_t count = (ids.size() < positions.size()) ? ids.size() : positions.size();
+                for (size_t i = 0; i < count; ++i)
+                {
+                    Graphics::AABB aabb;
+                    aabb.min = {positions[i].x - halfExtent, positions[i].y - halfExtent, positions[i].z - halfExtent};
+                    aabb.max = {positions[i].x + halfExtent, positions[i].y + halfExtent, positions[i].z + halfExtent};
+                    m_octree.Insert(ids[i], aabb);
+                    m_positions[ids[i]] = positions[i];
+                }
+            }
+
+            /// Query entities within a sphere (used for hearing range checks).
+            std::vector<PerceptionEntityID> QuerySphere(const DirectX::XMFLOAT3& center, float radius) const
+            {
+                return m_octree.QuerySphere(center, radius);
+            }
+
+            /// Look up the stored position for an entity.
+            /// @return True if found, with position written to @p outPos.
+            bool GetPosition(PerceptionEntityID id, DirectX::XMFLOAT3& outPos) const
+            {
+                auto it = m_positions.find(id);
+                if (it != m_positions.end())
+                {
+                    outPos = it->second;
+                    return true;
+                }
+                return false;
+            }
+
+          private:
+            Spark::Octree<PerceptionEntityID> m_octree;
+            std::unordered_map<PerceptionEntityID, DirectX::XMFLOAT3> m_positions;
+        };
+
+        /// Octree-accelerated perception update for a single entity.
+        ///
+        /// Uses the spatial index to find nearby entities via sphere query
+        /// (hearing range as the outer radius), then applies vision-cone
+        /// filtering on the candidates. This replaces the O(N^2) loop with
+        /// O(N * log N) total work when called once per agent.
+        ///
+        /// @param component         The perceiver's PerceptionComponent (modified in place).
+        /// @param observerPos       Position of the perceiving entity.
+        /// @param observerForward   Normalized forward direction of the perceiver.
+        /// @param currentTime       Current world time (seconds).
+        /// @param spatialIndex      Pre-built octree spatial index for the current frame.
+        inline void UpdatePerceptionSpatial(PerceptionComponent& component, const DirectX::XMFLOAT3& observerPos,
+                                            const DirectX::XMFLOAT3& observerForward, float currentTime,
+                                            const SpatialPerceptionIndex& spatialIndex)
+        {
+            // Use the larger of sight range and hearing range as the query radius
+            // to capture all potentially perceivable entities in one query.
+            float queryRadius =
+                (component.sightRange > component.hearingRange) ? component.sightRange : component.hearingRange;
+
+            // Broad-phase: query the octree for entities within the query sphere
+            auto candidates = spatialIndex.QuerySphere(observerPos, queryRadius);
+
+            for (const auto& candidateId : candidates)
+            {
+                DirectX::XMFLOAT3 targetPos;
+                if (!spatialIndex.GetPosition(candidateId, targetPos))
+                    continue;
+
+                // Hearing check (sphere test — candidate is already within queryRadius,
+                // but we need to verify against the actual hearing range)
+                bool heard = CanHear(observerPos, targetPos, component.hearingRange);
+
+                // Vision cone check
+                bool seen = CanSee(observerPos, observerForward, targetPos, component.sightFOV, component.sightRange);
+
+                if (seen || heard)
+                {
+                    component.Remember(candidateId, targetPos, currentTime);
+                }
+            }
+
+            // Decay and prune stale memories
+            component.DecayAndPrune(currentTime);
+        }
+#endif // SPARK_PLATFORM_WINDOWS
 
     } // namespace Perception
 
