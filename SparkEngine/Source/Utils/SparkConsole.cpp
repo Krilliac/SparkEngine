@@ -6226,9 +6226,11 @@ namespace Spark
 #include "SparkConsole.h"
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include <chrono>
 #include <ctime>
 #include <algorithm>
+#include <vector>
 #ifdef SPARK_PLATFORM_LINUX
 #include <unistd.h>
 #include <termios.h>
@@ -6238,6 +6240,196 @@ namespace Spark
 
 namespace Spark
 {
+
+    // ============================================================================
+    // ConsoleSeverity helpers (Linux)
+    // ============================================================================
+
+    const char* ConsoleSeverityToString(ConsoleSeverity severity)
+    {
+        switch (severity)
+        {
+        case ConsoleSeverity::Trace:
+            return "TRACE";
+        case ConsoleSeverity::Debug:
+            return "DEBUG";
+        case ConsoleSeverity::Info:
+            return "INFO";
+        case ConsoleSeverity::Success:
+            return "SUCCESS";
+        case ConsoleSeverity::Warning:
+            return "WARNING";
+        case ConsoleSeverity::Error:
+            return "ERROR";
+        case ConsoleSeverity::Critical:
+            return "CRITICAL";
+        default:
+            return "INFO";
+        }
+    }
+
+    ConsoleSeverity StringToConsoleSeverity(const std::string& str)
+    {
+        if (str == "TRACE")
+            return ConsoleSeverity::Trace;
+        if (str == "DEBUG")
+            return ConsoleSeverity::Debug;
+        if (str == "INFO")
+            return ConsoleSeverity::Info;
+        if (str == "SUCCESS")
+            return ConsoleSeverity::Success;
+        if (str == "WARNING")
+            return ConsoleSeverity::Warning;
+        if (str == "ERROR")
+            return ConsoleSeverity::Error;
+        if (str == "CRITICAL")
+            return ConsoleSeverity::Critical;
+        return ConsoleSeverity::Info;
+    }
+
+    SimpleConsole::Color SimpleConsole::SeverityToColor(ConsoleSeverity severity)
+    {
+        switch (severity)
+        {
+        case ConsoleSeverity::Trace:
+            return Color::DarkGray;
+        case ConsoleSeverity::Debug:
+            return Color::Cyan;
+        case ConsoleSeverity::Info:
+            return Color::Cyan;
+        case ConsoleSeverity::Success:
+            return Color::Green;
+        case ConsoleSeverity::Warning:
+            return Color::Yellow;
+        case ConsoleSeverity::Error:
+            return Color::Red;
+        case ConsoleSeverity::Critical:
+            return Color::Magenta;
+        default:
+            return Color::White;
+        }
+    }
+
+    SimpleConsole::Color SimpleConsole::TypeToColor(const std::string& type)
+    {
+        return SeverityToColor(StringToConsoleSeverity(type));
+    }
+
+    // Levenshtein distance for fuzzy command matching (Linux)
+    static size_t LevenshteinDistance(const std::string& a, const std::string& b)
+    {
+        const size_t m = a.size();
+        const size_t n = b.size();
+        std::vector<std::vector<size_t>> dp(m + 1, std::vector<size_t>(n + 1));
+        for (size_t i = 0; i <= m; ++i)
+            dp[i][0] = i;
+        for (size_t j = 0; j <= n; ++j)
+            dp[0][j] = j;
+        for (size_t i = 1; i <= m; ++i)
+            for (size_t j = 1; j <= n; ++j)
+            {
+                size_t cost = (a[i - 1] == b[j - 1]) ? 0 : 1;
+                dp[i][j] = (std::min)({dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost});
+            }
+        return dp[m][n];
+    }
+
+    std::string SimpleConsole::FindClosestCommand(const std::string& input) const
+    {
+        constexpr size_t kMaxEditDistance = 3;
+        std::string bestMatch;
+        size_t bestDist = kMaxEditDistance + 1;
+
+        for (const auto& [name, info] : m_commands)
+        {
+            size_t dist = LevenshteinDistance(input, name);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestMatch = name;
+            }
+        }
+        return bestMatch;
+    }
+
+    // ============================================================================
+    // Missing method implementations (Linux)
+    // ============================================================================
+
+    void SimpleConsole::Log(ConsoleSeverity severity, const std::string& message)
+    {
+        Log(message, ConsoleSeverityToString(severity));
+    }
+
+    bool SimpleConsole::UnregisterCommand(const std::string& name)
+    {
+        return m_commands.erase(name) > 0;
+    }
+
+    bool SimpleConsole::HasCommand(const std::string& name) const
+    {
+        return m_commands.contains(name);
+    }
+
+    int SimpleConsole::ExecuteScriptFile(const std::string& filePath)
+    {
+        std::ifstream file(filePath);
+        if (!file.is_open())
+        {
+            LogError("Cannot open script file: " + filePath);
+            return 0;
+        }
+        int count = 0;
+        std::string line;
+        while (std::getline(file, line))
+        {
+            // Skip empty lines and comments
+            if (line.empty() || line[0] == '#')
+                continue;
+            if (ExecuteCommand(line))
+                ++count;
+        }
+        return count;
+    }
+
+    SimpleConsole::ConsoleStats SimpleConsole::GetStats() const
+    {
+        return m_stats;
+    }
+
+    void SimpleConsole::RegisterCVarCommands() {}
+
+    void SimpleConsole::SaveHistory() const
+    {
+        if (m_historyFilePath.empty() || m_commandHistory.empty())
+            return;
+        std::ofstream file(m_historyFilePath);
+        if (!file.is_open())
+            return;
+        for (const auto& cmd : m_commandHistory)
+            file << cmd << "\n";
+    }
+
+    void SimpleConsole::LoadHistory()
+    {
+        if (m_historyFilePath.empty())
+            return;
+        std::ifstream file(m_historyFilePath);
+        if (!file.is_open())
+            return;
+        std::string line;
+        while (std::getline(file, line))
+        {
+            if (!line.empty())
+            {
+                m_commandHistory.push_back(line);
+                if (m_commandHistory.size() > MaxCommandHistory)
+                    m_commandHistory.pop_front();
+            }
+        }
+    }
+
+    // ============================================================================
 
     SimpleConsole& SimpleConsole::GetInstance()
     {
@@ -6251,6 +6443,7 @@ namespace Spark
             return true;
         CreateConsoleWindow();
         SetupConsoleHandles();
+        RegisterDefaultCommands();
         m_initialized = true;
         PrintLine("Spark Engine Console (Linux)", Color::Cyan);
         PrintLine("Type 'help' for available commands.", Color::DarkGray);
@@ -6277,10 +6470,19 @@ namespace Spark
     void SimpleConsole::Log(const std::string& message, const std::string& type)
     {
         std::lock_guard<std::mutex> lock(m_logMutex);
-        LogEntry entry{message, type, GetTimestamp()};
+
+        LogEntry entry;
+        entry.message = message;
+        entry.type = type;
+        entry.timestamp = GetTimestamp();
+        entry.severity = StringToConsoleSeverity(type);
+        entry.sequenceNumber = m_logSequence.fetch_add(1, std::memory_order_relaxed);
+
         m_logHistory.push_back(entry);
-        if (m_logHistory.size() > 1000)
+        if (m_logHistory.size() > MaxLogHistory)
             m_logHistory.pop_front();
+
+        m_stats.totalLogsWritten++;
 
         // Apply log filter
         if (!m_logFilter.empty() && type != m_logFilter)
@@ -6289,19 +6491,7 @@ namespace Spark
             return;
 
         // Determine color based on log type
-        Color color = Color::White;
-        if (type == "ERROR")
-            color = Color::Red;
-        else if (type == "WARNING")
-            color = Color::Yellow;
-        else if (type == "SUCCESS")
-            color = Color::Green;
-        else if (type == "CRITICAL")
-            color = Color::Magenta;
-        else if (type == "TRACE")
-            color = Color::DarkGray;
-        else if (type == "DEBUG")
-            color = Color::Cyan;
+        Color color = TypeToColor(type);
 
         SetColor(Color::DarkGray);
         std::cout << "[" << entry.timestamp << "] ";
@@ -6348,15 +6538,54 @@ namespace Spark
 
     bool SimpleConsole::ExecuteCommand(const std::string& commandLine)
     {
-        auto args = ParseCommand(commandLine);
+        if (commandLine.empty())
+            return false;
+
+        // Resolve aliases before parsing
+        std::string resolved = ResolveAliases(commandLine);
+
+        auto args = ParseCommand(resolved);
         if (args.empty())
             return false;
-        auto it = m_commands.find(args[0]);
+
+        std::string command = args[0];
+        args.erase(args.begin());
+
+        // Record in command history
+        {
+            std::lock_guard<std::mutex> lock(m_historyMutex);
+            m_commandHistory.push_back(commandLine);
+            if (m_commandHistory.size() > MaxCommandHistory)
+                m_commandHistory.pop_front();
+        }
+
+        // Look up registered command
+        auto it = m_commands.find(command);
         if (it == m_commands.end())
+        {
+            std::string suggestion = FindClosestCommand(command);
+            std::string errorMsg = "Unknown command: '" + command + "'.";
+            if (!suggestion.empty())
+                errorMsg += " Did you mean '" + suggestion + "'?";
+            LogError(errorMsg);
+            m_stats.totalCommandsFailed++;
             return false;
-        std::vector<std::string> cmdArgs(args.begin() + 1, args.end());
-        it->second.handler(cmdArgs);
-        return true;
+        }
+
+        try
+        {
+            std::string result = it->second.handler(args);
+            if (!result.empty())
+                LogInfo(result);
+            m_stats.totalCommandsExecuted++;
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            LogError("Command '" + command + "' failed: " + std::string(e.what()));
+            m_stats.totalCommandsFailed++;
+            return false;
+        }
     }
 
     void SimpleConsole::Show()
@@ -6487,12 +6716,11 @@ namespace Spark
                 std::cout << std::endl;
                 if (!m_currentInput.empty())
                 {
-                    m_commandHistory.push_back(m_currentInput);
-                    if (m_commandHistory.size() > 100)
-                        m_commandHistory.pop_front();
+                    // ExecuteCommand handles history recording
                     ExecuteCommand(m_currentInput);
                     m_currentInput.clear();
                     m_cursorPosition = 0;
+                    m_historyIndex = 0;
                 }
                 DisplayPrompt();
             }
@@ -6566,15 +6794,37 @@ namespace Spark
     {
         std::vector<std::string> args;
         std::string current;
+        bool inQuotes = false;
+        bool escaped = false;
+
         for (char c : commandLine)
         {
-            if (c == ' ' && !current.empty())
+            if (escaped)
             {
-                args.push_back(current);
-                current.clear();
-            }
-            else if (c != ' ')
                 current += c;
+                escaped = false;
+                continue;
+            }
+            if (c == '\\' && inQuotes)
+            {
+                escaped = true;
+                continue;
+            }
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+            if (c == ' ' && !inQuotes)
+            {
+                if (!current.empty())
+                {
+                    args.push_back(current);
+                    current.clear();
+                }
+                continue;
+            }
+            current += c;
         }
         if (!current.empty())
             args.push_back(current);
@@ -6604,16 +6854,95 @@ namespace Spark
         m_consoleInputFd = STDIN_FILENO;
 #endif
     }
-    void SimpleConsole::HandleTabCompletion() {}
-    std::vector<std::string> SimpleConsole::GetCompletions(const std::string&)
+    void SimpleConsole::HandleTabCompletion()
     {
-        return {};
+        auto completions = GetCompletions(m_currentInput);
+        if (completions.empty())
+            return;
+        if (completions.size() == 1)
+        {
+            m_currentInput = completions[0] + " ";
+            m_cursorPosition = static_cast<int>(m_currentInput.size());
+            RedrawInputLine();
+        }
+        else
+        {
+            // Show all matches
+            std::cout << std::endl;
+            for (const auto& c : completions)
+                std::cout << "  " << c;
+            std::cout << std::endl;
+            DisplayPrompt();
+        }
     }
-    void SimpleConsole::NavigateHistoryUp() {}
-    void SimpleConsole::NavigateHistoryDown() {}
+    std::vector<std::string> SimpleConsole::GetCompletions(const std::string& prefix)
+    {
+        std::vector<std::string> results;
+        if (prefix.empty())
+            return results;
+        for (const auto& [name, info] : m_commands)
+        {
+            if (name.size() >= prefix.size() && name.compare(0, prefix.size(), prefix) == 0)
+                results.push_back(name);
+        }
+        for (const auto& [alias, cmd] : m_aliases)
+        {
+            if (alias.size() >= prefix.size() && alias.compare(0, prefix.size(), prefix) == 0)
+                results.push_back(alias);
+        }
+        std::sort(results.begin(), results.end());
+        return results;
+    }
+    void SimpleConsole::NavigateHistoryUp()
+    {
+        std::lock_guard<std::mutex> lock(m_historyMutex);
+        if (m_commandHistory.empty())
+            return;
+        if (m_historyIndex < static_cast<int>(m_commandHistory.size()))
+            m_historyIndex++;
+        int idx = static_cast<int>(m_commandHistory.size()) - m_historyIndex;
+        if (idx >= 0 && idx < static_cast<int>(m_commandHistory.size()))
+        {
+            m_currentInput = m_commandHistory[idx];
+            m_cursorPosition = static_cast<int>(m_currentInput.size());
+            RedrawInputLine();
+        }
+    }
+    void SimpleConsole::NavigateHistoryDown()
+    {
+        std::lock_guard<std::mutex> lock(m_historyMutex);
+        if (m_historyIndex > 0)
+            m_historyIndex--;
+        if (m_historyIndex == 0)
+        {
+            m_currentInput.clear();
+            m_cursorPosition = 0;
+            RedrawInputLine();
+            return;
+        }
+        int idx = static_cast<int>(m_commandHistory.size()) - m_historyIndex;
+        if (idx >= 0 && idx < static_cast<int>(m_commandHistory.size()))
+        {
+            m_currentInput = m_commandHistory[idx];
+            m_cursorPosition = static_cast<int>(m_currentInput.size());
+            RedrawInputLine();
+        }
+    }
     std::string SimpleConsole::ResolveAliases(const std::string& cmd)
     {
-        return cmd;
+        // Resolve the first word as an alias (prevent infinite recursion with depth limit)
+        std::string resolved = cmd;
+        for (int depth = 0; depth < 10; ++depth)
+        {
+            auto spacePos = resolved.find(' ');
+            std::string firstWord = (spacePos != std::string::npos) ? resolved.substr(0, spacePos) : resolved;
+            auto it = m_aliases.find(firstWord);
+            if (it == m_aliases.end())
+                break;
+            std::string rest = (spacePos != std::string::npos) ? resolved.substr(spacePos) : "";
+            resolved = it->second + rest;
+        }
+        return resolved;
     }
     void SimpleConsole::RegisterEngineCommands() {}
     void SimpleConsole::RegisterGraphicsCommands() {}

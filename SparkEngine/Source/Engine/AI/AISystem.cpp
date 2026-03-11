@@ -136,7 +136,7 @@ namespace Spark::AI
                 bt->GetBlackboard().Set("healthPercent", healthPct);
             }
 
-            UpdatePerception(world, ai, transform, deltaTime);
+            UpdatePerception(world, entity, ai, transform, deltaTime);
             UpdateBehavior(ai, deltaTime);
             UpdateMovement(world, ai, transform, deltaTime);
         }
@@ -193,7 +193,8 @@ namespace Spark::AI
         return ptr;
     }
 
-    void AISystem::UpdatePerception(World& world, AIComponent& ai, const Transform& transform, float deltaTime)
+    void AISystem::UpdatePerception(World& world, EntityID selfEntity, AIComponent& ai, const Transform& transform,
+                                    float deltaTime)
     {
         // Compute agent forward direction from yaw rotation
         XMFLOAT3 agentForward = ForwardFromYaw(transform.rotation.y);
@@ -208,11 +209,9 @@ namespace Spark::AI
         auto potentialTargets = world.GetEntitiesWith<Transform, HealthComponent>();
         for (auto targetEntity : potentialTargets)
         {
-            // Skip self
-            if (targetEntity == ai.targetEntity && ai.targetEntity != entt::null)
-            {
-                // Re-check the existing target specifically
-            }
+            // Skip self — do not target our own entity
+            if (targetEntity == selfEntity)
+                continue;
 
             auto& targetTransform = potentialTargets.get<Transform>(targetEntity);
             const auto& targetHealth = potentialTargets.get<HealthComponent>(targetEntity);
@@ -276,11 +275,16 @@ namespace Spark::AI
                     ai.state = AIComponent::State::Combat;
                 }
 
-                // Check for flee condition based on health
-                auto* agentHealth = world.GetComponent<HealthComponent>(ai.targetEntity);
-                // Actually check the agent's own health from the parent entity
-                // We need to find the entity for this ai component, but we don't have it here.
-                // The health check is done in Update() loop before calling this function.
+                // Check for flee condition based on the agent's own health
+                auto* agentHealth = world.GetComponent<HealthComponent>(selfEntity);
+                if (agentHealth && agentHealth->maxHealth > 0.0f)
+                {
+                    float healthPct = agentHealth->health / agentHealth->maxHealth;
+                    if (healthPct < kFleeHealthThreshold)
+                    {
+                        ai.state = AIComponent::State::Fleeing;
+                    }
+                }
             }
         }
         else if (ai.targetEntity != entt::null)

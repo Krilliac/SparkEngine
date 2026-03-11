@@ -45,9 +45,11 @@ namespace Spark::Net
 
     void NetBuffer::WriteString(const std::string& val)
     {
-        WriteUint16(static_cast<uint16_t>(val.size()));
-        for (char c : val)
-            m_data.push_back(static_cast<uint8_t>(c));
+        // Clamp string length to uint16_t max to prevent truncation bugs
+        uint16_t len = static_cast<uint16_t>((std::min)(val.size(), static_cast<size_t>(UINT16_MAX)));
+        WriteUint16(len);
+        for (uint16_t i = 0; i < len; ++i)
+            m_data.push_back(static_cast<uint8_t>(val[i]));
     }
 
     void NetBuffer::WriteVector3(const XMFLOAT3& val)
@@ -504,6 +506,11 @@ namespace Spark::Net
         uint32_t payloadLen = buf.ReadUint32();
 
         if (buf.GetReadPosition() + payloadLen > length)
+            return false;
+
+        // Reject unreasonably large payloads to prevent memory exhaustion attacks
+        constexpr uint32_t kMaxPayloadSize = 64 * 1024; // 64 KB
+        if (payloadLen > kMaxPayloadSize)
             return false;
 
         outMsg.payload.resize(payloadLen);

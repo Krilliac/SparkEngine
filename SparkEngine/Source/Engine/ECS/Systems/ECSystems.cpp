@@ -69,6 +69,8 @@ namespace Spark::ECS
                 continue;
 
             auto* physBody = rb.physicsBodyHandle.As<PhysicsBody>();
+            if (!physBody)
+                continue;
 
             if (rb.type == RigidBodyComponent::Type::Dynamic)
             {
@@ -110,6 +112,8 @@ namespace Spark::ECS
                 continue;
 
             auto* source = audio.audioSourceHandle.As<AudioSource>();
+            if (!source)
+                continue;
 
             // Compute velocity from position delta for Doppler effects
             if (deltaTime > 0.0f)
@@ -131,14 +135,25 @@ namespace Spark::ECS
 
     void LifecycleSystem::Update(World& world, float deltaTime)
     {
-        // Process health/death - only fire callback once per death event
+        // Collect dead entities first, then fire callbacks to avoid
+        // iterator invalidation if the callback destroys the entity.
+        std::vector<entt::entity> deadEntities;
+
         auto healthView = world.GetEntitiesWith<HealthComponent>();
         for (auto entity : healthView)
         {
             auto& health = healthView.get<HealthComponent>(entity);
-            if (health.isDead && !health.deathProcessed && m_onDeath)
+            if (health.isDead && !health.deathProcessed)
             {
                 health.deathProcessed = true;
+                deadEntities.push_back(entity);
+            }
+        }
+
+        if (m_onDeath)
+        {
+            for (auto entity : deadEntities)
+            {
                 m_onDeath(entity);
             }
         }
