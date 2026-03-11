@@ -5,8 +5,8 @@
 
 #include "EditorConsoleBridge.h"
 
-// Include the engine's authoritative console header
-#include "../../../SparkEngine/Source/Utils/SparkConsole.h"
+// Include the editor's local SimpleConsole header (links within SparkEditor)
+#include "SparkConsole.h"
 
 #include <sstream>
 

@@ -122,12 +122,12 @@ namespace Spark::Graphics
                      [](RenderGraph& graph)
                      {
                          graph.AddPass(
-                             "ShadowPass",
+                             "ShadowPass", RenderGraphPassType::Graphics,
                              [](RenderGraphBuilder& builder)
                              {
                                  // Shadow map generation
                              },
-                             [](const RenderGraphResources& /*resources*/)
+                             [](const RenderGraphResourceRegistry& /*resources*/)
                              {
                                  // Execute shadow rendering
                              });
@@ -137,12 +137,12 @@ namespace Spark::Graphics
                      [](RenderGraph& graph)
                      {
                          graph.AddPass(
-                             "GeometryPass",
+                             "GeometryPass", RenderGraphPassType::Graphics,
                              [](RenderGraphBuilder& builder)
                              {
                                  // G-buffer fill or forward geometry
                              },
-                             [](const RenderGraphResources& /*resources*/)
+                             [](const RenderGraphResourceRegistry& /*resources*/)
                              {
                                  // Execute geometry rendering
                              });
@@ -152,12 +152,12 @@ namespace Spark::Graphics
                      [](RenderGraph& graph)
                      {
                          graph.AddPass(
-                             "LightingPass",
+                             "LightingPass", RenderGraphPassType::Graphics,
                              [](RenderGraphBuilder& builder)
                              {
                                  // Deferred lighting resolve
                              },
-                             [](const RenderGraphResources& /*resources*/)
+                             [](const RenderGraphResourceRegistry& /*resources*/)
                              {
                                  // Execute lighting
                              });
@@ -167,12 +167,12 @@ namespace Spark::Graphics
                      [](RenderGraph& graph)
                      {
                          graph.AddPass(
-                             "PostProcessPass",
+                             "PostProcessPass", RenderGraphPassType::Graphics,
                              [](RenderGraphBuilder& builder)
                              {
                                  // HDR, bloom, SSAO, TAA
                              },
-                             [](const RenderGraphResources& /*resources*/)
+                             [](const RenderGraphResourceRegistry& /*resources*/)
                              {
                                  // Execute post-processing
                              });

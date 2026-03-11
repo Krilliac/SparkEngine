@@ -133,14 +133,18 @@ cmake --build build --config Release
 | Panel | Header |
 |-------|--------|
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
+| `AssetDependencyPanel` | `SparkEditor/Source/Panels/AssetDependencyPanel.h` |
+| `AudioMixerPanel` | `SparkEditor/Source/Panels/AudioMixerPanel.h` |
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
 | `ConsolePanel` | `SparkEditor/Source/Panels/ConsolePanel.h` |
 | `DebugVisualizerPanel` | `SparkEditor/Source/Panels/DebugVisualizerPanel.h` |
+| `DialogueEditorPanel` | `SparkEditor/Source/Panels/DialogueEditorPanel.h` |
 | `FPSToolsPanel` | `SparkEditor/Source/Panels/FPSToolsPanel.h` |
 | `GameViewPanel` | `SparkEditor/Source/Panels/GameViewPanel.h` |
 | `HierarchyPanel` | `SparkEditor/Source/Panels/HierarchyPanel.h` |
 | `InspectorPanel` | `SparkEditor/Source/Panels/InspectorPanel.h` |
 | `ObjectPlacementPanel` | `SparkEditor/Source/Panels/ObjectPlacementPanel.h` |
+| `ParticleEditorPanel` | `SparkEditor/Source/Panels/ParticleEditorPanel.h` |
 | `Physics2DPanel` | `SparkEditor/Source/Panels/Physics2DPanel.h` |
 | `PrefabEditorPanel` | `SparkEditor/Source/Panels/PrefabEditorPanel.h` |
 | `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |

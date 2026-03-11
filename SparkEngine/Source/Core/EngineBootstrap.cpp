@@ -9,7 +9,6 @@
 #include "../Utils/Logger.h"
 
 #include <algorithm>
-#include <format>
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
@@ -37,8 +36,8 @@ namespace Spark
     {
         if (m_initialized)
         {
-            SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap::Register called after Initialize() — ignoring '{}'",
-                            descriptor.Name);
+            SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap::Register called after Initialize() — ignoring '%s'",
+                            descriptor.Name.c_str());
             return false;
         }
 
@@ -51,8 +50,8 @@ namespace Spark
         // Reject duplicates
         if (FindEntry(descriptor.Name) != nullptr)
         {
-            SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap::Register — subsystem '{}' is already registered",
-                            descriptor.Name);
+            SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap::Register — subsystem '%s' is already registered",
+                            descriptor.Name.c_str());
             return false;
         }
 
@@ -85,7 +84,7 @@ namespace Spark
             return true;
         }
 
-        SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: beginning initialization of {} subsystems",
+        SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: beginning initialization of %zu subsystems",
                        m_entries.size());
 
         // 1. Topological sort
@@ -108,7 +107,8 @@ namespace Spark
             if (entry == nullptr)
             {
                 // Should not happen after a successful sort, but guard anyway
-                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: internal error — '{}' not found after sort", name);
+                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: internal error — '%s' not found after sort",
+                                name.c_str());
                 allSucceeded = false;
                 continue;
             }
@@ -121,7 +121,8 @@ namespace Spark
                 if (depEntry == nullptr || depEntry->State != SubsystemState::Initialized)
                 {
                     SPARK_LOG_ERROR(LogCategory::Core,
-                                    "EngineBootstrap: skipping '{}' — dependency '{}' is not initialized", name, dep);
+                                    "EngineBootstrap: skipping '%s' — dependency '%s' is not initialized", name.c_str(),
+                                    dep.c_str());
                     dependenciesMet = false;
                     break;
                 }
@@ -138,14 +139,14 @@ namespace Spark
             if (!entry->Descriptor.InitFunction)
             {
                 // No init function means the subsystem is a sentinel/grouping node
-                SPARK_LOG_DEBUG(LogCategory::Core, "EngineBootstrap: '{}' has no init function — marking initialized",
-                                name);
+                SPARK_LOG_DEBUG(LogCategory::Core, "EngineBootstrap: '%s' has no init function — marking initialized",
+                                name.c_str());
                 entry->State = SubsystemState::Initialized;
                 m_initializedSubsystems.push_back(name);
                 continue;
             }
 
-            SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: initializing '{}'", name);
+            SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: initializing '%s'", name.c_str());
 
             bool success = false;
             try
@@ -154,12 +155,13 @@ namespace Spark
             }
             catch (const std::exception& ex)
             {
-                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '{}' init threw exception: {}", name, ex.what());
+                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '%s' init threw exception: %s", name.c_str(),
+                                ex.what());
                 success = false;
             }
             catch (...)
             {
-                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '{}' init threw unknown exception", name);
+                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '%s' init threw unknown exception", name.c_str());
                 success = false;
             }
 
@@ -167,25 +169,25 @@ namespace Spark
             {
                 entry->State = SubsystemState::Initialized;
                 m_initializedSubsystems.push_back(name);
-                SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: '{}' initialized successfully", name);
+                SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: '%s' initialized successfully", name.c_str());
             }
             else
             {
                 entry->State = SubsystemState::Failed;
                 allSucceeded = false;
-                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '{}' initialization FAILED", name);
+                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '%s' initialization FAILED", name.c_str());
             }
         }
 
         if (allSucceeded)
         {
-            SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: all {} subsystems initialized successfully",
+            SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: all %zu subsystems initialized successfully",
                            m_initializedSubsystems.size());
         }
         else
         {
             SPARK_LOG_WARN(LogCategory::Core,
-                           "EngineBootstrap: initialization completed with failures ({}/{} succeeded)",
+                           "EngineBootstrap: initialization completed with failures (%zu/%zu succeeded)",
                            m_initializedSubsystems.size(), sortedNames.size());
         }
 
@@ -204,7 +206,7 @@ namespace Spark
         }
         m_shutDown = true;
 
-        SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: shutting down {} subsystems",
+        SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: shutting down %zu subsystems",
                        m_initializedSubsystems.size());
 
         // Walk initialized subsystems in reverse order
@@ -218,12 +220,13 @@ namespace Spark
 
             if (!entry->Descriptor.ShutdownFunction)
             {
-                SPARK_LOG_DEBUG(LogCategory::Core, "EngineBootstrap: '{}' has no shutdown function — skipping", *it);
+                SPARK_LOG_DEBUG(LogCategory::Core, "EngineBootstrap: '%s' has no shutdown function — skipping",
+                                it->c_str());
                 entry->State = SubsystemState::ShutDown;
                 continue;
             }
 
-            SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: shutting down '{}'", *it);
+            SPARK_LOG_INFO(LogCategory::Core, "EngineBootstrap: shutting down '%s'", it->c_str());
 
             try
             {
@@ -231,12 +234,13 @@ namespace Spark
             }
             catch (const std::exception& ex)
             {
-                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '{}' shutdown threw exception: {}", *it,
+                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '%s' shutdown threw exception: %s", it->c_str(),
                                 ex.what());
             }
             catch (...)
             {
-                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '{}' shutdown threw unknown exception", *it);
+                SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: '%s' shutdown threw unknown exception",
+                                it->c_str());
             }
 
             entry->State = SubsystemState::ShutDown;
@@ -310,8 +314,8 @@ namespace Spark
                     // The subsystem will be skipped during init because its dependency
                     // won't be in Initialized state.
                     SPARK_LOG_WARN(LogCategory::Core,
-                                   "EngineBootstrap: subsystem '{}' depends on '{}' which is not registered",
-                                   m_entries[i].Descriptor.Name, dep);
+                                   "EngineBootstrap: subsystem '%s' depends on '%s' which is not registered",
+                                   m_entries[i].Descriptor.Name.c_str(), dep.c_str());
                     continue;
                 }
 
@@ -352,7 +356,7 @@ namespace Spark
         if (sortedNames.size() != n)
         {
             // Cycle detected — report which subsystems are involved
-            SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: dependency cycle detected among {} subsystem(s):",
+            SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap: dependency cycle detected among %zu subsystem(s):",
                             n - sortedNames.size());
 
             std::unordered_set<std::string> sorted(sortedNames.begin(), sortedNames.end());
@@ -360,7 +364,7 @@ namespace Spark
             {
                 if (!sorted.contains(entry.Descriptor.Name))
                 {
-                    SPARK_LOG_ERROR(LogCategory::Core, "  - '{}'", entry.Descriptor.Name);
+                    SPARK_LOG_ERROR(LogCategory::Core, "  - '%s'", entry.Descriptor.Name.c_str());
                 }
             }
             return false;
