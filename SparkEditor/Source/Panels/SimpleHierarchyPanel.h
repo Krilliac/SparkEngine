@@ -51,6 +51,16 @@ namespace SparkEditor
      */
         void SetSelectedObject(const std::string& objectName);
 
+        /**
+     * @brief Reset hierarchy to default objects for a new scene
+     */
+        void ResetToDefault();
+
+        /**
+     * @brief Get all scene objects
+     */
+        const std::vector<std::string>& GetSceneObjects() const { return m_sceneObjects; }
+
       private:
         std::vector<std::string> m_sceneObjects;
         std::string m_selectedObject;

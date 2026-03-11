@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.16)
 
 project(SparkConsole)
 
@@ -49,6 +49,17 @@ if(CONSOLE_SOURCES)
         )
     endif()
 
+    # Per-configuration definitions so console compiles in both Debug and Release
+    target_compile_definitions(SparkConsole PRIVATE
+        $<$<CONFIG:Debug>:SPARK_DEBUG=1>
+        $<$<CONFIG:Debug>:SPARK_CONSOLE_DEBUG=1>
+        $<$<CONFIG:RelWithDebInfo>:SPARK_DEVELOPMENT=1>
+        $<$<CONFIG:Release>:SPARK_RELEASE=1>
+        $<$<CONFIG:Release>:NDEBUG>
+        $<$<CONFIG:MinSizeRel>:SPARK_SHIPPING=1>
+        $<$<CONFIG:MinSizeRel>:NDEBUG>
+    )
+
     # System libraries - platform-specific
     if(WIN32)
         target_link_libraries(SparkConsole PRIVATE
@@ -66,11 +77,25 @@ if(CONSOLE_SOURCES)
         endif()
     endif()
 
-    # MSVC specific settings
+    # MSVC specific settings - works for both Debug and Release
     if(MSVC)
         target_compile_options(SparkConsole PRIVATE
             /W3 /MP
-            /wd4996  # Deprecated functions
+            /wd4996
+            # Debug: full debug info; Release: optimize for speed
+            $<$<CONFIG:Debug>:/Zi /Od /RTC1>
+            $<$<CONFIG:Release>:/O2 /Oi /GL>
+            $<$<CONFIG:RelWithDebInfo>:/Zi /O2>
+            $<$<CONFIG:MinSizeRel>:/O1 /Os>
+        )
+        # Enable whole-program optimization for Release
+        target_link_options(SparkConsole PRIVATE
+            $<$<CONFIG:Release>:/LTCG>
+        )
+        # Generate PDB for RelWithDebInfo and Debug
+        set_target_properties(SparkConsole PROPERTIES
+            COMPILE_PDB_NAME_DEBUG "SparkConsole"
+            COMPILE_PDB_NAME_RELWITHDEBINFO "SparkConsole"
         )
         set_property(TARGET SparkConsole PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
@@ -87,9 +112,19 @@ if(CONSOLE_SOURCES)
         endforeach()
     endif()
 
-    message(STATUS "SparkConsole configured successfully")
+    # GCC/Clang per-configuration flags
+    if(NOT MSVC)
+        target_compile_options(SparkConsole PRIVATE
+            -Wall -Wextra -Wno-unused-parameter
+            $<$<CONFIG:Debug>:-g -O0>
+            $<$<CONFIG:Release>:-O2 -DNDEBUG>
+            $<$<CONFIG:RelWithDebInfo>:-g -O2>
+            $<$<CONFIG:MinSizeRel>:-Os -DNDEBUG>
+        )
+    endif()
+
+    message(STATUS "SparkConsole configured successfully (all configurations: Debug, Release, RelWithDebInfo, MinSizeRel)")
     message(STATUS "SparkConsole output directory: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 else()
     message(STATUS "No SparkConsole source files found - skipping SparkConsole build")
 endif()
-

@@ -231,4 +231,18 @@ namespace SparkEditor
         m_selectedObject = objectName;
     }
 
+    void SimpleHierarchyPanel::ResetToDefault()
+    {
+        m_sceneObjects.clear();
+        m_selectedObject.clear();
+        m_searchFilter[0] = '\0';
+
+        // Populate with the standard default objects
+        m_sceneObjects.push_back("Main Camera");
+        m_sceneObjects.push_back("Directional Light");
+        m_sceneObjects.push_back("Ground Plane");
+
+        std::cout << "Scene hierarchy reset to default\n";
+    }
+
 } // namespace SparkEditor

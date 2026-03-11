@@ -16,12 +16,14 @@
 #include <iomanip>
 #include <cstdio>
 #include <fstream>
+#include <filesystem>
 
 // External function to connect SparkConsole to external console
 extern "C" void SetSparkConsoleExternalConsole(SparkEditor::ExternalConsoleIntegration* console);
 
 #ifdef _WIN32
 #include <windows.h>
+#include <ShlObj.h>
 #endif
 
 namespace SparkEditor
@@ -790,11 +792,46 @@ namespace SparkEditor
         };
     }
 
+    static std::string GetConsoleSettingsPath()
+    {
+        std::string dir;
+#ifdef _WIN32
+        char appDataPath[MAX_PATH];
+        if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, 0, appDataPath)))
+        {
+            dir = std::string(appDataPath) + "\\SparkEngine\\Editor";
+        }
+        else
+        {
+            dir = ".";
+        }
+#else
+        const char* home = getenv("HOME");
+        if (home)
+        {
+            dir = std::string(home) + "/.sparkengine/editor";
+        }
+        else
+        {
+            dir = ".";
+        }
+#endif
+        try
+        {
+            std::filesystem::create_directories(dir);
+        }
+        catch (...)
+        {
+        }
+        return dir + "/console_settings.txt";
+    }
+
     void SimpleConsolePanel::SaveSettings()
     {
         try
         {
-            std::ofstream file("editor_console_settings.txt");
+            std::string settingsPath = GetConsoleSettingsPath();
+            std::ofstream file(settingsPath);
             if (file.is_open())
             {
                 file << "auto_connect=" << (m_autoConnect ? "1" : "0") << std::endl;
@@ -811,7 +848,8 @@ namespace SparkEditor
     {
         try
         {
-            std::ifstream file("editor_console_settings.txt");
+            std::string settingsPath = GetConsoleSettingsPath();
+            std::ifstream file(settingsPath);
             if (file.is_open())
             {
                 std::string line;

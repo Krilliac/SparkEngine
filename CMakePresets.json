@@ -127,6 +127,69 @@
             }
         },
         {
+            "name": "windows-shipping",
+            "displayName": "Windows Shipping (no dev tools)",
+            "inherits": "default",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "SPARK_MSVC_TOOLSET": "v143",
+                "ENABLE_EDITOR": "OFF",
+                "ENABLE_PROFILING": "OFF",
+                "ENABLE_HOT_RELOAD": "OFF",
+                "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
+                "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
+                "STRIP_DEBUG_SYMBOLS": "ON",
+                "BUILD_TESTS": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-development",
+            "displayName": "Windows Development (symbols + console)",
+            "inherits": "default",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "SPARK_MSVC_TOOLSET": "v143",
+                "ENABLE_CONSOLE_IN_SHIPPING": "ON",
+                "ENABLE_DEVCOMMANDS_IN_SHIPPING": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "linux-shipping",
+            "displayName": "Linux Shipping (no dev tools)",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "ENABLE_EDITOR": "OFF",
+                "ENABLE_PROFILING": "OFF",
+                "ENABLE_HOT_RELOAD": "OFF",
+                "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
+                "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
+                "STRIP_DEBUG_SYMBOLS": "ON",
+                "BUILD_TESTS": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
             "name": "minimal",
             "displayName": "Minimal Build (core only)",
             "inherits": "default",
@@ -170,6 +233,20 @@
         {
             "name": "linux-clang-release",
             "configurePreset": "linux-clang-release"
+        },
+        {
+            "name": "windows-shipping",
+            "configurePreset": "windows-shipping",
+            "configuration": "MinSizeRel"
+        },
+        {
+            "name": "windows-development",
+            "configurePreset": "windows-development",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "linux-shipping",
+            "configurePreset": "linux-shipping"
         }
     ],
     "testPresets": [

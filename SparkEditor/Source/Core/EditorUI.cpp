@@ -19,6 +19,10 @@
 #include "../Panels/WeaponEditorPanel.h"
 #include "../Panels/FPSToolsPanel.h"
 #include "../Panels/ProjectBrowserPanel.h"
+#include "../Panels/DebugVisualizerPanel.h"
+#include "../Panels/SceneStatsPanel.h"
+#include "../Panels/ObjectPlacementPanel.h"
+#include "../Panels/BuildCookPanel.h"
 #include "../Panels/SpriteEditorPanel.h"
 #include "../Panels/TilemapEditorPanel.h"
 #include "../Panels/SpriteAnimationEditorPanel.h"
@@ -41,6 +45,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <shellapi.h>
 #endif
 
 namespace SparkEditor
@@ -136,6 +141,32 @@ namespace SparkEditor
                             assetBrowser->SetProjectPath(m_projectManager->GetProjectAssetsPath());
                         }
                     }
+
+                    // Reset hierarchy for new project and set scene name
+                    auto hierIt = m_panels.find("Hierarchy");
+                    if (hierIt != m_panels.end())
+                    {
+                        auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(hierIt->second.get());
+                        if (hierarchy)
+                        {
+                            hierarchy->ResetToDefault();
+                        }
+                    }
+
+                    // Set scene name from project's default scene
+                    if (!project.defaultScene.empty())
+                    {
+                        std::filesystem::path scenePath(project.defaultScene);
+                        m_currentSceneName = scenePath.stem().string();
+                        m_currentScenePath = (std::filesystem::path(project.path) / project.defaultScene).string();
+                    }
+                    else
+                    {
+                        m_currentSceneName = "Default";
+                        m_currentScenePath.clear();
+                    }
+                    m_sceneModified = false;
+
                     ShowNotification("Project opened: " + project.name, "success");
                 });
 
@@ -173,6 +204,82 @@ namespace SparkEditor
     {
         if (!m_isInitialized)
             return;
+
+        // Process global keyboard shortcuts
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.KeyCtrl && !io.WantTextInput)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_N))
+            {
+                // Ctrl+N: New Scene
+                auto it = m_panels.find("Hierarchy");
+                if (it != m_panels.end())
+                {
+                    auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(it->second.get());
+                    if (hierarchy)
+                    {
+                        hierarchy->ResetToDefault();
+                    }
+                }
+                m_currentScenePath.clear();
+                m_currentSceneName = "Untitled";
+                m_sceneModified = false;
+                ShowNotification("New scene created", "success");
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_S))
+            {
+                // Ctrl+S: Save Scene
+                if (m_projectManager && m_projectManager->HasOpenProject())
+                {
+                    if (m_currentScenePath.empty())
+                    {
+                        m_currentScenePath =
+                            m_projectManager->GetProjectScenesPath() + "/" + m_currentSceneName + ".sparkscene";
+                    }
+                    if (SaveCurrentScene(m_currentScenePath))
+                    {
+                        m_sceneModified = false;
+                        ShowNotification("Scene saved: " + m_currentSceneName, "success");
+                    }
+                }
+                else
+                {
+                    ShowNotification("Open a project first before saving", "warning");
+                }
+            }
+        }
+
+        // F5: Toggle play mode
+        if (ImGui::IsKeyPressed(ImGuiKey_F5) && !io.WantTextInput)
+        {
+            if (io.KeyShift)
+            {
+                m_playMode = PlayMode::Stopped;
+                ShowNotification("Stopped", "info", 2.0f);
+            }
+            else
+            {
+                m_playMode = (m_playMode == PlayMode::Playing) ? PlayMode::Stopped : PlayMode::Playing;
+                ShowNotification(m_playMode == PlayMode::Playing ? "Playing..." : "Stopped", "info", 2.0f);
+            }
+        }
+
+        // W/E/R: Transform tool shortcuts (only when not typing in a text field)
+        if (!io.WantTextInput && !io.WantCaptureKeyboard)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_W) && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
+            {
+                m_currentTool = TransformTool::Move;
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_E) && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
+            {
+                m_currentTool = TransformTool::Rotate;
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_R) && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
+            {
+                m_currentTool = TransformTool::Scale;
+            }
+        }
 
         // Update notifications
         auto it = m_notifications.begin();
@@ -665,6 +772,16 @@ namespace SparkEditor
             m_panels["WeaponEditor"]->SetIcon(ICON_FA_CROSSHAIRS);
         if (m_panels.count("FPSTools"))
             m_panels["FPSTools"]->SetIcon(ICON_FA_ROCKET);
+        if (m_panels.count("DebugVisualizer"))
+            m_panels["DebugVisualizer"]->SetIcon(ICON_FA_BUG);
+        if (m_panels.count("SceneStats"))
+            m_panels["SceneStats"]->SetIcon(ICON_FA_CHART_BAR);
+        if (m_panels.count("ObjectPlacement"))
+            m_panels["ObjectPlacement"]->SetIcon(ICON_FA_CUBE);
+        if (m_panels.count("BuildCook"))
+            m_panels["BuildCook"]->SetIcon(ICON_FA_HAMMER);
+
+        // Hide secondary panels by default (accessible via menus)
         if (m_panels.count("UndoHistory"))
             m_panels["UndoHistory"]->SetIcon(ICON_FA_UNDO);
         if (m_panels.count("SceneStats"))
@@ -679,6 +796,14 @@ namespace SparkEditor
             m_panels["WeaponEditor"]->SetVisible(false);
         if (m_panels.count("FPSTools"))
             m_panels["FPSTools"]->SetVisible(false);
+        if (m_panels.count("DebugVisualizer"))
+            m_panels["DebugVisualizer"]->SetVisible(false);
+        if (m_panels.count("SceneStats"))
+            m_panels["SceneStats"]->SetVisible(false);
+        if (m_panels.count("ObjectPlacement"))
+            m_panels["ObjectPlacement"]->SetVisible(false);
+        if (m_panels.count("BuildCook"))
+            m_panels["BuildCook"]->SetVisible(false);
         if (m_panels.count("UndoHistory"))
             m_panels["UndoHistory"]->SetVisible(false);
         if (m_panels.count("PrefabEditor"))
@@ -695,17 +820,47 @@ namespace SparkEditor
         {
             if (ImGui::BeginMenu("File"))
             {
-                if (ImGui::MenuItem("New Scene"))
+                if (ImGui::MenuItem("New Scene", "Ctrl+N"))
                 {
-                    ShowNotification("New Scene created!", "success");
+                    // Reset hierarchy to default objects for a fresh scene
+                    auto it = m_panels.find("Hierarchy");
+                    if (it != m_panels.end())
+                    {
+                        auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(it->second.get());
+                        if (hierarchy)
+                        {
+                            hierarchy->ResetToDefault();
+                        }
+                    }
+                    m_currentScenePath.clear();
+                    m_currentSceneName = "Untitled";
+                    m_sceneModified = false;
+                    ShowNotification("New scene created", "success");
                 }
-                if (ImGui::MenuItem("Open Scene"))
+                if (ImGui::MenuItem("Save Scene", "Ctrl+S"))
                 {
-                    ShowNotification("Open Scene dialog coming soon!", "info");
-                }
-                if (ImGui::MenuItem("Save Scene"))
-                {
-                    ShowNotification("Scene saved!", "success");
+                    if (m_projectManager && m_projectManager->HasOpenProject())
+                    {
+                        if (m_currentScenePath.empty())
+                        {
+                            // Default to project Scenes folder
+                            m_currentScenePath =
+                                m_projectManager->GetProjectScenesPath() + "/" + m_currentSceneName + ".sparkscene";
+                        }
+                        if (SaveCurrentScene(m_currentScenePath))
+                        {
+                            m_sceneModified = false;
+                            ShowNotification("Scene saved: " + m_currentSceneName, "success");
+                        }
+                        else
+                        {
+                            ShowNotification("Failed to save scene", "error");
+                        }
+                    }
+                    else
+                    {
+                        ShowNotification("Open a project first before saving a scene", "warning");
+                    }
                 }
                 ImGui::Separator();
                 if (ImGui::MenuItem("New Project..."))
@@ -763,17 +918,20 @@ namespace SparkEditor
                 ImGui::Separator();
                 if (ImGui::MenuItem("Import Asset"))
                 {
-                    ShowNotification("Import Asset feature coming soon!", "info");
+                    // Show the Asset Browser and focus it for importing
+                    SetPanelVisible("AssetBrowser", true);
+                    ShowNotification("Use the Asset Browser Import button to add assets", "info");
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Build Settings"))
+                if (ImGui::MenuItem("Build Settings..."))
                 {
-                    ShowNotification("Build Settings coming soon!", "info");
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Build & Cook settings opened", "info");
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Exit"))
+                if (ImGui::MenuItem("Exit", "Alt+F4"))
                 {
-                    ShowNotification("Exit feature coming soon!", "info");
+                    m_exitRequested = true;
                 }
                 ImGui::EndMenu();
             }
@@ -838,9 +996,24 @@ namespace SparkEditor
 
             if (ImGui::BeginMenu("GameObject"))
             {
+                auto createObject = [this](const std::string& name)
+                {
+                    auto it = m_panels.find("Hierarchy");
+                    if (it != m_panels.end())
+                    {
+                        auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(it->second.get());
+                        if (hierarchy)
+                        {
+                            hierarchy->CreateObject(name);
+                            m_sceneModified = true;
+                        }
+                    }
+                    ShowNotification("Created " + name, "success", 2.0f);
+                };
+
                 if (ImGui::MenuItem("Create Empty"))
                 {
-                    ShowNotification("Created empty GameObject!", "success");
+                    createObject("Empty GameObject");
                 }
                 if (ImGui::MenuItem(ICON_FA_CUBE " Create Prefab from Selection"))
                 {
@@ -874,21 +1047,13 @@ namespace SparkEditor
                 if (ImGui::BeginMenu("3D Object"))
                 {
                     if (ImGui::MenuItem("Cube"))
-                    {
-                        ShowNotification("Created Cube!", "success");
-                    }
+                        createObject("Cube");
                     if (ImGui::MenuItem("Sphere"))
-                    {
-                        ShowNotification("Created Sphere!", "success");
-                    }
+                        createObject("Sphere");
                     if (ImGui::MenuItem("Cylinder"))
-                    {
-                        ShowNotification("Created Cylinder!", "success");
-                    }
+                        createObject("Cylinder");
                     if (ImGui::MenuItem("Plane"))
-                    {
-                        ShowNotification("Created Plane!", "success");
-                    }
+                        createObject("Plane");
                     ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("2D Object"))
@@ -922,25 +1087,17 @@ namespace SparkEditor
                 if (ImGui::BeginMenu("Light"))
                 {
                     if (ImGui::MenuItem("Directional Light"))
-                    {
-                        ShowNotification("Created Directional Light!", "success");
-                    }
+                        createObject("Directional Light");
                     if (ImGui::MenuItem("Point Light"))
-                    {
-                        ShowNotification("Created Point Light!", "success");
-                    }
+                        createObject("Point Light");
                     if (ImGui::MenuItem("Spot Light"))
-                    {
-                        ShowNotification("Created Spot Light!", "success");
-                    }
+                        createObject("Spot Light");
                     ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("Camera"))
                 {
                     if (ImGui::MenuItem("Camera"))
-                    {
-                        ShowNotification("Created Camera!", "success");
-                    }
+                        createObject("Camera");
                     ImGui::EndMenu();
                 }
                 ImGui::EndMenu();
@@ -977,6 +1134,22 @@ namespace SparkEditor
                     SetPanelVisible("Profiler", !IsPanelVisible("Profiler"));
                 }
                 ImGui::Separator();
+                ImGui::TextDisabled("Tools & Debug");
+                if (ImGui::MenuItem(ICON_FA_BUG " Debug Visualizer", nullptr, IsPanelVisible("DebugVisualizer")))
+                {
+                    SetPanelVisible("DebugVisualizer", !IsPanelVisible("DebugVisualizer"));
+                }
+                if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Stats", nullptr, IsPanelVisible("SceneStats")))
+                {
+                    SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
+                }
+                if (ImGui::MenuItem(ICON_FA_CUBE " Object Placement", nullptr, IsPanelVisible("ObjectPlacement")))
+                {
+                    SetPanelVisible("ObjectPlacement", !IsPanelVisible("ObjectPlacement"));
+                }
+                if (ImGui::MenuItem(ICON_FA_HAMMER " Build & Cook", nullptr, IsPanelVisible("BuildCook")))
+                {
+                    SetPanelVisible("BuildCook", !IsPanelVisible("BuildCook"));
                 ImGui::TextDisabled("Tools & Analysis");
                 if (ImGui::MenuItem(ICON_FA_UNDO " Undo History", nullptr, IsPanelVisible("UndoHistory")))
                 {
@@ -1081,6 +1254,12 @@ namespace SparkEditor
 
             if (ImGui::BeginMenu("Build"))
             {
+                if (ImGui::MenuItem(ICON_FA_COG " Build Settings..."))
+                {
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Build & Cook panel opened", "info");
+                }
+                ImGui::Separator();
                 if (ImGui::MenuItem(ICON_FA_LIGHTBULB " Build Lighting"))
                 {
                     ShowNotification("Build Lighting started...", "info");
@@ -1094,9 +1273,16 @@ namespace SparkEditor
                 {
                     ShowNotification("Build All started...", "info");
                 }
-                if (ImGui::MenuItem(ICON_FA_ROCKET " Deploy"))
+                if (ImGui::MenuItem(ICON_FA_FIRE " Cook Content"))
                 {
-                    ShowNotification("Deploy pipeline coming soon!", "info");
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Open Build & Cook panel to configure cooking", "info");
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_ROCKET " Package Project..."))
+                {
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Configure packaging in Build & Cook panel", "info");
                 }
                 ImGui::EndMenu();
             }
@@ -1128,7 +1314,13 @@ namespace SparkEditor
                 }
                 if (ImGui::MenuItem("Documentation"))
                 {
-                    ShowNotification("Documentation coming soon!", "info");
+                    // Open the wiki/docs in the default browser or file explorer
+#ifdef _WIN32
+                    ShellExecuteA(nullptr, "open", "docs", nullptr, nullptr, SW_SHOWNORMAL);
+#else
+                    system("xdg-open docs/ &");
+#endif
+                    ShowNotification("Opening documentation...", "info", 2.0f);
                 }
                 ImGui::EndMenu();
             }
@@ -1289,6 +1481,12 @@ namespace SparkEditor
                 ImGui::SameLine();
                 ImGui::Text("Project: %s", m_projectManager->GetCurrentProject().name.c_str());
             }
+
+            // Scene name
+            ImGui::SameLine();
+            ImGui::Text("|");
+            ImGui::SameLine();
+            ImGui::Text("Scene: %s%s", m_currentSceneName.c_str(), m_sceneModified ? "*" : "");
 
             ImGui::SameLine();
             ImGui::Text("|");
@@ -1546,26 +1744,30 @@ namespace SparkEditor
 
     void EditorUI::ResetToDefaultLayout()
     {
-        // Implementation for resetting to default layout
-        // Instead of ClearIniSettings, we'll load default settings
-
-        // Reset all panels to default visibility
+        // Reset all panels to default visibility using the actual panel map keys
         for (auto& [name, panel] : m_panels)
         {
-            // Set sensible defaults based on panel type
-            if (name == "Scene View" || name == "Console" || name == "Hierarchy")
+            if (name == "SceneView" || name == "Console" || name == "Hierarchy" || name == "Inspector" ||
+                name == "AssetBrowser")
+            {
+                panel->SetVisible(true);
+            }
+            else if (name == "GameView" || name == "Profiler")
             {
                 panel->SetVisible(true);
             }
             else
             {
+                // FPS-specific panels stay hidden by default
                 panel->SetVisible(false);
             }
         }
 
-        // Reset ImGui style to default
-        ImGuiStyle& style = ImGui::GetStyle();
-        style = ImGuiStyle(); // Reset to default constructor values
+        // Re-apply the current theme instead of resetting to bare defaults
+        ApplyTheme(m_currentTheme);
+
+        // Force dock layout rebuild on next frame
+        m_firstFrame = true;
     }
 
     void EditorUI::ApplyTheme(const std::string& themeName)
@@ -1821,6 +2023,86 @@ namespace SparkEditor
         }
     }
 
+    bool EditorUI::SaveCurrentScene(const std::string& path)
+    {
+        try
+        {
+            // Ensure parent directory exists
+            std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+
+            std::ofstream file(path);
+            if (!file.is_open())
+            {
+                return false;
+            }
+
+            file << "{\n";
+            file << "  \"sceneVersion\": 1,\n";
+            file << "  \"name\": \"" << m_currentSceneName << "\",\n";
+            file << "  \"entities\": [\n";
+
+            // Serialize hierarchy objects
+            auto it = m_panels.find("Hierarchy");
+            if (it != m_panels.end())
+            {
+                auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(it->second.get());
+                if (hierarchy)
+                {
+                    const auto& objects = hierarchy->GetSceneObjects();
+                    for (size_t i = 0; i < objects.size(); ++i)
+                    {
+                        file << "    {\n";
+                        file << "      \"name\": \"" << objects[i] << "\",\n";
+                        file << "      \"components\": [\n";
+                        file << "        {\n";
+                        file << "          \"type\": \"Transform\",\n";
+                        file << "          \"position\": [0, 0, 0],\n";
+                        file << "          \"rotation\": [0, 0, 0],\n";
+                        file << "          \"scale\": [1, 1, 1]\n";
+                        file << "        }\n";
+                        file << "      ]\n";
+                        file << "    }";
+                        if (i + 1 < objects.size())
+                        {
+                            file << ",";
+                        }
+                        file << "\n";
+                    }
+                }
+            }
+
+            file << "  ]\n";
+            file << "}\n";
+            file.close();
+
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.LogSuccess("Scene saved to: " + path);
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.LogError("Failed to save scene: " + std::string(e.what()));
+            return false;
+        }
+    }
+
+#ifdef _WIN32
+    void EditorUI::SetGraphicsDevice(ID3D11Device* device, ID3D11DeviceContext* context)
+    {
+        auto it = m_panels.find("SceneView");
+        if (it != m_panels.end())
+        {
+            auto* sceneView = dynamic_cast<SceneViewPanel*>(it->second.get());
+            if (sceneView)
+            {
+                sceneView->SetDevice(device, context);
+                auto& console = Spark::SimpleConsole::GetInstance();
+                console.LogSuccess("Graphics device passed to Scene View panel");
+            }
+        }
+    }
+#endif
     void EditorUI::HandleKeyboardShortcuts()
     {
         ImGuiIO& io = ImGui::GetIO();
