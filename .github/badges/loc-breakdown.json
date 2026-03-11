@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "total": 254530,
-  "files": 557,
-  "engine": 159219,
+  "total": 256692,
+  "files": 571,
+  "engine": 160594,
   "editor": 60731,
   "game": 17808,
-  "tests": 14567,
+  "tests": 15354,
   "tools": 2205,
-  "updated": "2026-03-11T16:08:11Z"
+  "updated": "2026-03-11T16:34:23Z"
 }
