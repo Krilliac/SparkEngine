@@ -780,6 +780,16 @@ namespace SparkEditor
         void HandleNodeSelection();
 
         /**
+     * @brief Handle canvas panning and zooming
+     */
+        void HandleCanvasNavigation();
+
+        /**
+     * @brief Render graph overview minimap
+     */
+        void RenderGraphOverview();
+
+        /**
      * @brief Create node of specified type
      * @param nodeType Type of node to create
      * @return Unique pointer to created node

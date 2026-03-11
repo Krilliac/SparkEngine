@@ -129,3 +129,27 @@
 #define ICON_FA_PAINT_BRUSH "\xef\x87\xbc"   // U+F1FC
 #define ICON_FA_SHAPES "\xef\x98\x9f"        // U+F61F
 #define ICON_FA_VOLUME_UP "\xef\x80\xa8"     // U+F028
+
+// === 2D Editor Icons ===
+#define ICON_FA_ERASER "\xef\x84\xad"       // U+F12D
+#define ICON_FA_FILL_DRIP "\xef\x95\xb6"    // U+F576
+#define ICON_FA_EYE_DROPPER "\xef\x87\xbb"  // U+F1FB
+#define ICON_FA_SHIELD_ALT "\xef\x8f\xad"   // U+F3ED
+#define ICON_FA_SEARCH_PLUS "\xef\x80\x8e"  // U+F00E
+#define ICON_FA_SEARCH_MINUS "\xef\x80\x90" // U+F010
+#define ICON_FA_MAGIC "\xef\x83\x90"        // U+F0D0
+#define ICON_FA_LAYER_GROUP "\xef\x97\x82"  // U+F5FD
+#define ICON_FA_CROP "\xef\x84\xa5"         // U+F125
+
+// === Prefab & History Icons ===
+#define ICON_FA_HISTORY "\xef\x87\x9a"  // U+F1DA
+#define ICON_FA_BOX "\xef\x91\xa6"      // U+F466
+#define ICON_FA_BOXES "\xef\x91\xa8"    // U+F468
+#define ICON_FA_CLOCK "\xef\x80\x97"    // U+F017
+#define ICON_FA_LIST_ALT "\xef\x80\xa2" // U+F022
+
+// === Animation Editor Icons ===
+#define ICON_FA_FILM "\xef\x80\x88"        // U+F008
+#define ICON_FA_STREAM "\xef\x95\x90"      // U+F550
+#define ICON_FA_PLUS_SQUARE "\xef\x83\xbe" // U+F0FE
+#define ICON_FA_SLIDERS_H "\xef\x87\x9e"   // U+F1DE (horizontal sliders)

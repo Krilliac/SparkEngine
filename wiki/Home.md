@@ -88,3 +88,18 @@ See [Contributing](Contributing) for the full pre-commit checklist.
 ## License
 
 SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/SparkEngine/blob/master/LICENSE) — no royalties, no strings attached.
+
+## Project Statistics
+
+<!-- AUTO:stats -->
+| Metric | Count |
+|--------|-------|
+| Header files | 271 |
+| ECS Components | 33 |
+| ECS Systems | 41 |
+| Editor Panels | 19 |
+| Test files | 52 |
+| Test cases | 583+ |
+| Wiki pages | 40 |
+| *Last synced* | *2026-03-11 06:51* |
+<!-- /AUTO:stats -->
