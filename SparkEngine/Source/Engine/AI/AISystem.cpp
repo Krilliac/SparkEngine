@@ -156,7 +156,7 @@ namespace Spark::AI
                 auto& transform = view.get<Transform>(entity);
                 auto& ai = view.get<AIComponent>(entity);
 
-                UpdatePerception(world, ai, transform, deltaTime);
+                UpdatePerception(world, entity, ai, transform, deltaTime);
                 UpdateBehavior(ai, deltaTime);
                 UpdateMovement(world, entity, ai, transform, deltaTime);
             },
