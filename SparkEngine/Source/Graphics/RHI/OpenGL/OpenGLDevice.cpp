@@ -50,8 +50,8 @@ namespace Spark
             // GL TEXTURE
             // ============================================================================
 
-            GLTexture::GLTexture(const RHITextureDesc& desc, GLuint texture, GLuint framebuffer)
-                : m_desc(desc), m_texture(texture), m_framebuffer(framebuffer)
+            GLTexture::GLTexture(const RHITextureDesc& desc, GLuint texture, GLuint framebuffer, GLenum target)
+                : m_desc(desc), m_texture(texture), m_target(target), m_framebuffer(framebuffer)
             {
             }
 
@@ -397,6 +397,11 @@ namespace Spark
                 for (uint32_t i = 0; i < count; ++i)
                     drawBuffers[i] = GL_COLOR_ATTACHMENT0 + i;
                 glDrawBuffers(count, drawBuffers.data());
+
+                if (m_statistics)
+                {
+                    m_statistics->renderTargetChanges++;
+                }
             }
 
             void GLCommandList::ClearRenderTarget(IRHITexture*, const float color[4])
@@ -439,6 +444,11 @@ namespace Spark
                 glPSO->ApplyRasterizerState();
                 glPSO->ApplyDepthStencilState();
                 glPSO->ApplyBlendState();
+
+                if (m_statistics)
+                {
+                    m_statistics->pipelineChanges++;
+                }
             }
 
             void GLCommandList::SetPrimitiveTopology(RHIPrimitiveTopology topology)
@@ -490,6 +500,10 @@ namespace Spark
                     return;
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
                 glBindBufferBase(GL_UNIFORM_BUFFER, slot, glBuf->GetGLBuffer());
+                if (m_statistics)
+                {
+                    m_statistics->bufferBinds++;
+                }
             }
 
             void GLCommandList::SetShaderResource(RHIShaderStage, uint32_t slot, IRHITexture* texture)
@@ -497,13 +511,15 @@ namespace Spark
                 if (texture)
                 {
                     auto* glTex = static_cast<GLTexture*>(texture);
-                    glActiveTexture(GL_TEXTURE0 + slot);
-                    glBindTexture(GL_TEXTURE_2D, glTex->GetGLTexture());
+                    glBindTextureUnit(slot, glTex->GetGLTexture());
                 }
                 else
                 {
-                    glActiveTexture(GL_TEXTURE0 + slot);
-                    glBindTexture(GL_TEXTURE_2D, 0);
+                    glBindTextureUnit(slot, 0);
+                }
+                if (m_statistics)
+                {
+                    m_statistics->textureBinds++;
                 }
             }
 
@@ -645,7 +661,7 @@ namespace Spark
 
                 QueryCapabilities();
 
-                m_immediateCommandList = std::make_unique<GLCommandList>(true);
+                m_immediateCommandList = std::make_unique<GLCommandList>(true, &m_statistics);
 
                 return true;
             }
@@ -726,27 +742,70 @@ namespace Spark
 
             IRHITexture* GLDevice::CreateTexture(const RHITextureDesc& desc)
             {
+                GLenum target = GetTextureTarget(desc);
+
                 GLuint texture;
-                glCreateTextures(GL_TEXTURE_2D, 1, &texture);
+                glCreateTextures(target, 1, &texture);
 
                 GLenum internalFormat = ConvertInternalFormat(desc.format);
 
-                glTextureStorage2D(texture, desc.mipLevels, internalFormat, desc.width, desc.height);
+                switch (desc.type)
+                {
+                case RHITextureType::Texture1D:
+                    glTextureStorage1D(texture, desc.mipLevels, internalFormat, desc.width);
+                    break;
+                case RHITextureType::Texture3D:
+                    glTextureStorage3D(texture, desc.mipLevels, internalFormat, desc.width, desc.height, desc.depth);
+                    break;
+                case RHITextureType::TextureCube:
+                    glTextureStorage2D(texture, desc.mipLevels, internalFormat, desc.width, desc.height);
+                    break;
+                case RHITextureType::Texture2DArray:
+                    glTextureStorage3D(texture, desc.mipLevels, internalFormat, desc.width, desc.height,
+                                       desc.arraySize);
+                    break;
+                case RHITextureType::TextureCubeArray:
+                    glTextureStorage3D(texture, desc.mipLevels, internalFormat, desc.width, desc.height,
+                                       desc.arraySize * 6);
+                    break;
+                case RHITextureType::Texture2D:
+                default:
+                    if (desc.sampleCount > 1)
+                    {
+                        glTextureStorage2DMultisample(texture, desc.sampleCount, internalFormat, desc.width,
+                                                      desc.height, GL_TRUE);
+                    }
+                    else
+                    {
+                        glTextureStorage2D(texture, desc.mipLevels, internalFormat, desc.width, desc.height);
+                    }
+                    break;
+                }
 
-                // Create framebuffer if render target
+                // Create framebuffer if render target or depth stencil
                 GLuint fbo = 0;
                 if (desc.usage & RHITextureUsage::RenderTarget)
                 {
                     glCreateFramebuffers(1, &fbo);
                     glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, texture, 0);
+
+                    GLenum drawBuffers[] = {GL_COLOR_ATTACHMENT0};
+                    glNamedFramebufferDrawBuffers(fbo, 1, drawBuffers);
+
+                    if (glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+                    {
+                        std::cerr << "[OpenGL] Framebuffer incomplete for render target: " << desc.debugName
+                                  << std::endl;
+                    }
                 }
                 else if (desc.usage & RHITextureUsage::DepthStencil)
                 {
                     glCreateFramebuffers(1, &fbo);
-                    glNamedFramebufferTexture(fbo, GL_DEPTH_STENCIL_ATTACHMENT, texture, 0);
+                    GLenum attachment = GetDepthAttachmentType(desc.format);
+                    glNamedFramebufferTexture(fbo, attachment, texture, 0);
                 }
 
-                return new GLTexture(desc, texture, fbo);
+                return new GLTexture(desc, texture, fbo, target);
             }
 
             IRHIShader* GLDevice::CreateShader(const RHIShaderDesc& desc)
@@ -882,16 +941,28 @@ namespace Spark
                     switch (elem.format)
                     {
                     case RHIVertexFormat::Float1:
+                    case RHIVertexFormat::Int1:
+                    case RHIVertexFormat::UInt1:
                         elemSize = 4;
                         break;
                     case RHIVertexFormat::Float2:
+                    case RHIVertexFormat::Int2:
+                    case RHIVertexFormat::UInt2:
                         elemSize = 8;
                         break;
                     case RHIVertexFormat::Float3:
+                    case RHIVertexFormat::Int3:
+                    case RHIVertexFormat::UInt3:
                         elemSize = 12;
                         break;
                     case RHIVertexFormat::Float4:
+                    case RHIVertexFormat::Int4:
+                    case RHIVertexFormat::UInt4:
                         elemSize = 16;
+                        break;
+                    case RHIVertexFormat::UNorm8x4:
+                    case RHIVertexFormat::SNorm8x4:
+                        elemSize = 4;
                         break;
                     default:
                         elemSize = 4;
@@ -937,6 +1008,10 @@ namespace Spark
                         numComponents = 2;
                         type = GL_INT;
                         break;
+                    case RHIVertexFormat::Int3:
+                        numComponents = 3;
+                        type = GL_INT;
+                        break;
                     case RHIVertexFormat::Int4:
                         numComponents = 4;
                         type = GL_INT;
@@ -945,9 +1020,25 @@ namespace Spark
                         numComponents = 1;
                         type = GL_UNSIGNED_INT;
                         break;
+                    case RHIVertexFormat::UInt2:
+                        numComponents = 2;
+                        type = GL_UNSIGNED_INT;
+                        break;
+                    case RHIVertexFormat::UInt3:
+                        numComponents = 3;
+                        type = GL_UNSIGNED_INT;
+                        break;
+                    case RHIVertexFormat::UInt4:
+                        numComponents = 4;
+                        type = GL_UNSIGNED_INT;
+                        break;
                     case RHIVertexFormat::UNorm8x4:
                         numComponents = 4;
                         type = GL_UNSIGNED_BYTE;
+                        break;
+                    case RHIVertexFormat::SNorm8x4:
+                        numComponents = 4;
+                        type = GL_BYTE;
                         break;
                     default:
                         break;
@@ -1010,6 +1101,14 @@ namespace Spark
                 glTextureSubImage2D(glTex->GetGLTexture(), mipLevel, 0, 0, w, h, format, type, data);
             }
 
+            void GLDevice::GenerateMips(IRHITexture* texture)
+            {
+                if (!texture)
+                    return;
+                auto* glTex = static_cast<GLTexture*>(texture);
+                glGenerateTextureMipmap(glTex->GetGLTexture());
+            }
+
             IRHICommandList* GLDevice::GetImmediateCommandList()
             {
                 return m_immediateCommandList.get();
@@ -1062,21 +1161,35 @@ namespace Spark
                 switch (format)
                 {
                 case PixelFormat::R8_UNORM:
+                case PixelFormat::R8_SNORM:
                     return GL_RED;
+                case PixelFormat::R8_UINT:
+                    return GL_RED_INTEGER;
                 case PixelFormat::R8G8_UNORM:
                     return GL_RG;
                 case PixelFormat::R8G8B8A8_UNORM:
-                    return GL_RGBA;
                 case PixelFormat::R8G8B8A8_UNORM_SRGB:
+                case PixelFormat::R8G8B8A8_SNORM:
+                    return GL_RGBA;
+                case PixelFormat::B8G8R8A8_UNORM:
+                case PixelFormat::B8G8R8A8_UNORM_SRGB:
+                    return GL_BGRA;
+                case PixelFormat::R10G10B10A2_UNORM:
+                case PixelFormat::R11G11B10_FLOAT:
                     return GL_RGBA;
                 case PixelFormat::R16_FLOAT:
                     return GL_RED;
+                case PixelFormat::R16_UINT:
+                    return GL_RED_INTEGER;
                 case PixelFormat::R16G16_FLOAT:
                     return GL_RG;
                 case PixelFormat::R16G16B16A16_FLOAT:
+                case PixelFormat::R16G16B16A16_UNORM:
                     return GL_RGBA;
                 case PixelFormat::R32_FLOAT:
                     return GL_RED;
+                case PixelFormat::R32_UINT:
+                    return GL_RED_INTEGER;
                 case PixelFormat::R32G32_FLOAT:
                     return GL_RG;
                 case PixelFormat::R32G32B32_FLOAT:
@@ -1084,11 +1197,11 @@ namespace Spark
                 case PixelFormat::R32G32B32A32_FLOAT:
                     return GL_RGBA;
                 case PixelFormat::D16_UNORM:
-                    return GL_DEPTH_COMPONENT;
-                case PixelFormat::D24_UNORM_S8_UINT:
-                    return GL_DEPTH_STENCIL;
                 case PixelFormat::D32_FLOAT:
                     return GL_DEPTH_COMPONENT;
+                case PixelFormat::D24_UNORM_S8_UINT:
+                case PixelFormat::D32_FLOAT_S8_UINT:
+                    return GL_DEPTH_STENCIL;
                 default:
                     return GL_RGBA;
                 }
@@ -1100,11 +1213,21 @@ namespace Spark
                 {
                 case PixelFormat::R8_UNORM:
                     return GL_R8;
+                case PixelFormat::R8_SNORM:
+                    return GL_R8_SNORM;
+                case PixelFormat::R8_UINT:
+                    return GL_R8UI;
                 case PixelFormat::R8G8_UNORM:
                     return GL_RG8;
                 case PixelFormat::R8G8B8A8_UNORM:
                     return GL_RGBA8;
                 case PixelFormat::R8G8B8A8_UNORM_SRGB:
+                    return GL_SRGB8_ALPHA8;
+                case PixelFormat::R8G8B8A8_SNORM:
+                    return GL_RGBA8_SNORM;
+                case PixelFormat::B8G8R8A8_UNORM:
+                    return GL_RGBA8; // GL doesn't distinguish BGRA in internal format
+                case PixelFormat::B8G8R8A8_UNORM_SRGB:
                     return GL_SRGB8_ALPHA8;
                 case PixelFormat::R10G10B10A2_UNORM:
                     return GL_RGB10_A2;
@@ -1112,24 +1235,52 @@ namespace Spark
                     return GL_R11F_G11F_B10F;
                 case PixelFormat::R16_FLOAT:
                     return GL_R16F;
+                case PixelFormat::R16_UINT:
+                    return GL_R16UI;
                 case PixelFormat::R16G16_FLOAT:
                     return GL_RG16F;
                 case PixelFormat::R16G16B16A16_FLOAT:
                     return GL_RGBA16F;
+                case PixelFormat::R16G16B16A16_UNORM:
+                    return GL_RGBA16;
                 case PixelFormat::R32_FLOAT:
                     return GL_R32F;
+                case PixelFormat::R32_UINT:
+                    return GL_R32UI;
                 case PixelFormat::R32G32_FLOAT:
                     return GL_RG32F;
                 case PixelFormat::R32G32B32_FLOAT:
                     return GL_RGB32F;
                 case PixelFormat::R32G32B32A32_FLOAT:
                     return GL_RGBA32F;
+                case PixelFormat::BC1_UNORM:
+                    return GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+                case PixelFormat::BC1_UNORM_SRGB:
+                    return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
+                case PixelFormat::BC2_UNORM:
+                    return GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+                case PixelFormat::BC3_UNORM:
+                    return GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+                case PixelFormat::BC3_UNORM_SRGB:
+                    return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT;
+                case PixelFormat::BC4_UNORM:
+                    return GL_COMPRESSED_RED_RGTC1;
+                case PixelFormat::BC5_UNORM:
+                    return GL_COMPRESSED_RG_RGTC2;
+                case PixelFormat::BC6H_UF16:
+                    return GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT;
+                case PixelFormat::BC7_UNORM:
+                    return GL_COMPRESSED_RGBA_BPTC_UNORM;
+                case PixelFormat::BC7_UNORM_SRGB:
+                    return GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM;
                 case PixelFormat::D16_UNORM:
                     return GL_DEPTH_COMPONENT16;
                 case PixelFormat::D24_UNORM_S8_UINT:
                     return GL_DEPTH24_STENCIL8;
                 case PixelFormat::D32_FLOAT:
                     return GL_DEPTH_COMPONENT32F;
+                case PixelFormat::D32_FLOAT_S8_UINT:
+                    return GL_DEPTH32F_STENCIL8;
                 default:
                     return GL_RGBA8;
                 }
@@ -1140,22 +1291,39 @@ namespace Spark
                 switch (format)
                 {
                 case PixelFormat::R8_UNORM:
+                case PixelFormat::R8_SNORM:
+                case PixelFormat::R8_UINT:
                 case PixelFormat::R8G8_UNORM:
                 case PixelFormat::R8G8B8A8_UNORM:
                 case PixelFormat::R8G8B8A8_UNORM_SRGB:
+                case PixelFormat::R8G8B8A8_SNORM:
+                case PixelFormat::B8G8R8A8_UNORM:
+                case PixelFormat::B8G8R8A8_UNORM_SRGB:
                     return GL_UNSIGNED_BYTE;
                 case PixelFormat::R16_FLOAT:
                 case PixelFormat::R16G16_FLOAT:
                 case PixelFormat::R16G16B16A16_FLOAT:
                     return GL_HALF_FLOAT;
+                case PixelFormat::R16_UINT:
+                    return GL_UNSIGNED_SHORT;
+                case PixelFormat::R16G16B16A16_UNORM:
+                    return GL_UNSIGNED_SHORT;
                 case PixelFormat::R32_FLOAT:
                 case PixelFormat::R32G32_FLOAT:
                 case PixelFormat::R32G32B32_FLOAT:
                 case PixelFormat::R32G32B32A32_FLOAT:
                 case PixelFormat::D32_FLOAT:
                     return GL_FLOAT;
+                case PixelFormat::R32_UINT:
+                    return GL_UNSIGNED_INT;
+                case PixelFormat::R10G10B10A2_UNORM:
+                    return GL_UNSIGNED_INT_2_10_10_10_REV;
+                case PixelFormat::D16_UNORM:
+                    return GL_UNSIGNED_SHORT;
                 case PixelFormat::D24_UNORM_S8_UINT:
                     return GL_UNSIGNED_INT_24_8;
+                case PixelFormat::D32_FLOAT_S8_UINT:
+                    return GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
                 default:
                     return GL_UNSIGNED_BYTE;
                 }
@@ -1311,6 +1479,126 @@ namespace Spark
                     return GL_PATCHES;
                 default:
                     return GL_TRIANGLES;
+                }
+            }
+
+            GLenum GLDevice::GetTextureTarget(const RHITextureDesc& desc) const
+            {
+                switch (desc.type)
+                {
+                case RHITextureType::Texture1D:
+                    return GL_TEXTURE_1D;
+                case RHITextureType::Texture3D:
+                    return GL_TEXTURE_3D;
+                case RHITextureType::TextureCube:
+                    return GL_TEXTURE_CUBE_MAP;
+                case RHITextureType::Texture2DArray:
+                    return GL_TEXTURE_2D_ARRAY;
+                case RHITextureType::TextureCubeArray:
+                    return GL_TEXTURE_CUBE_MAP_ARRAY;
+                case RHITextureType::Texture2D:
+                default:
+                    if (desc.sampleCount > 1)
+                        return GL_TEXTURE_2D_MULTISAMPLE;
+                    return GL_TEXTURE_2D;
+                }
+            }
+
+            bool GLDevice::IsCompressedFormat(PixelFormat format) const
+            {
+                switch (format)
+                {
+                case PixelFormat::BC1_UNORM:
+                case PixelFormat::BC1_UNORM_SRGB:
+                case PixelFormat::BC2_UNORM:
+                case PixelFormat::BC3_UNORM:
+                case PixelFormat::BC3_UNORM_SRGB:
+                case PixelFormat::BC4_UNORM:
+                case PixelFormat::BC5_UNORM:
+                case PixelFormat::BC6H_UF16:
+                case PixelFormat::BC7_UNORM:
+                case PixelFormat::BC7_UNORM_SRGB:
+                    return true;
+                default:
+                    return false;
+                }
+            }
+
+            bool GLDevice::IsDepthFormat(PixelFormat format) const
+            {
+                switch (format)
+                {
+                case PixelFormat::D16_UNORM:
+                case PixelFormat::D24_UNORM_S8_UINT:
+                case PixelFormat::D32_FLOAT:
+                case PixelFormat::D32_FLOAT_S8_UINT:
+                    return true;
+                default:
+                    return false;
+                }
+            }
+
+            GLenum GLDevice::GetDepthAttachmentType(PixelFormat format) const
+            {
+                switch (format)
+                {
+                case PixelFormat::D24_UNORM_S8_UINT:
+                case PixelFormat::D32_FLOAT_S8_UINT:
+                    return GL_DEPTH_STENCIL_ATTACHMENT;
+                case PixelFormat::D16_UNORM:
+                case PixelFormat::D32_FLOAT:
+                default:
+                    return GL_DEPTH_ATTACHMENT;
+                }
+            }
+
+            uint32_t GLDevice::GetFormatSize(PixelFormat format) const
+            {
+                switch (format)
+                {
+                case PixelFormat::R8_UNORM:
+                case PixelFormat::R8_SNORM:
+                case PixelFormat::R8_UINT:
+                    return 1;
+                case PixelFormat::R8G8_UNORM:
+                case PixelFormat::R16_FLOAT:
+                case PixelFormat::R16_UINT:
+                case PixelFormat::D16_UNORM:
+                    return 2;
+                case PixelFormat::R8G8B8A8_UNORM:
+                case PixelFormat::R8G8B8A8_UNORM_SRGB:
+                case PixelFormat::R8G8B8A8_SNORM:
+                case PixelFormat::B8G8R8A8_UNORM:
+                case PixelFormat::B8G8R8A8_UNORM_SRGB:
+                case PixelFormat::R10G10B10A2_UNORM:
+                case PixelFormat::R11G11B10_FLOAT:
+                case PixelFormat::R16G16_FLOAT:
+                case PixelFormat::R32_FLOAT:
+                case PixelFormat::R32_UINT:
+                case PixelFormat::D24_UNORM_S8_UINT:
+                case PixelFormat::D32_FLOAT:
+                    return 4;
+                case PixelFormat::R16G16B16A16_FLOAT:
+                case PixelFormat::R16G16B16A16_UNORM:
+                case PixelFormat::R32G32_FLOAT:
+                case PixelFormat::D32_FLOAT_S8_UINT:
+                    return 8;
+                case PixelFormat::R32G32B32_FLOAT:
+                    return 12;
+                case PixelFormat::R32G32B32A32_FLOAT:
+                    return 16;
+                default:
+                    return 4;
+                }
+            }
+
+            void GLDevice::CheckGLError(const char* operation) const
+            {
+                GLenum err;
+                while ((err = glGetError()) != GL_NO_ERROR)
+                {
+                    std::cerr << "[OpenGL] Error 0x" << std::hex << err << std::dec << " during: " << operation
+                              << std::endl;
                 }
             }
 

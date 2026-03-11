@@ -76,7 +76,8 @@ namespace Spark
             class GLTexture : public IRHITexture
             {
               public:
-                GLTexture(const RHITextureDesc& desc, GLuint texture, GLenum target, GLuint framebuffer = 0);
+                GLTexture(const RHITextureDesc& desc, GLuint texture, GLuint framebuffer = 0,
+                          GLenum target = GL_TEXTURE_2D);
                 ~GLTexture() override;
 
                 const std::string& GetDebugName() const override { return m_desc.debugName; }

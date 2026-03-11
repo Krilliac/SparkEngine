@@ -202,7 +202,8 @@ namespace Spark
             {
               public:
                 VulkanSwapChain(VkDevice device, VkPhysicalDevice physDevice, VkSurfaceKHR surface,
-                                const RHISwapChainDesc& desc, const QueueFamilyIndices& queueFamilies);
+                                const RHISwapChainDesc& desc, const QueueFamilyIndices& queueFamilies,
+                                VkQueue presentQueue);
                 ~VulkanSwapChain() override;
 
                 bool Present(bool vsync) override;
@@ -216,6 +217,10 @@ namespace Spark
                 VkSwapchainKHR GetVkSwapChain() const { return m_swapChain; }
                 VkSemaphore GetImageAvailableSemaphore() const { return m_imageAvailable; }
                 VkSemaphore GetRenderFinishedSemaphore() const { return m_renderFinished; }
+                VkFence GetInFlightFence() const { return m_inFlightFence; }
+
+                // Acquire next swap chain image, returns false if resize needed
+                bool AcquireNextImage();
 
               private:
                 bool CreateSwapChain();
@@ -229,6 +234,7 @@ namespace Spark
                 VkSurfaceKHR m_surface;
                 VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
                 QueueFamilyIndices m_queueFamilies;
+                VkQueue m_presentQueue = VK_NULL_HANDLE;
 
                 std::vector<VkImage> m_swapChainImages;
                 std::vector<VkImageView> m_swapChainImageViews;
@@ -247,7 +253,8 @@ namespace Spark
             class VulkanCommandList : public IRHICommandList
             {
               public:
-                VulkanCommandList(VkDevice device, VkCommandPool commandPool, bool isImmediate);
+                VulkanCommandList(VkDevice device, VkCommandPool commandPool, bool isImmediate,
+                                  RHIStatistics* statistics = nullptr);
                 ~VulkanCommandList() override;
 
                 void Begin() override;
@@ -289,16 +296,34 @@ namespace Spark
 
                 VkCommandBuffer GetVkCommandBuffer() const { return m_commandBuffer; }
 
+                // Descriptor set binding for resource management
+                void BindDescriptorSet(VkPipelineLayout layout, VkDescriptorSet descriptorSet);
+
               private:
                 VkDevice m_device;
                 VkCommandPool m_commandPool;
                 VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
                 bool m_isImmediate;
                 bool m_isRecording = false;
+                RHIStatistics* m_statistics = nullptr;
 
                 // Current render pass state
                 VkRenderPass m_activeRenderPass = VK_NULL_HANDLE;
                 VkFramebuffer m_activeFramebuffer = VK_NULL_HANDLE;
+
+                // Tracked pipeline layout for descriptor binding
+                VkPipelineLayout m_currentPipelineLayout = VK_NULL_HANDLE;
+
+                // Pending resource bindings (flushed before draw/dispatch)
+                struct PendingBindings
+                {
+                    std::unordered_map<uint32_t, VkBuffer> constantBuffers;     // slot -> buffer
+                    std::unordered_map<uint32_t, uint64_t> constantBufferSizes; // slot -> size
+                    std::unordered_map<uint32_t, VkImageView> shaderResources;  // slot -> imageView
+                    std::unordered_map<uint32_t, VkSampler> samplers;           // slot -> sampler
+                    bool dirty = false;
+                };
+                PendingBindings m_pendingBindings;
             };
 
             // ============================================================================
@@ -362,14 +387,21 @@ namespace Spark
                 // Memory helpers
                 uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 
+                // Descriptor set management for resource binding
+                VkDescriptorSet AllocateDescriptorSet();
+                VkDescriptorSetLayout GetBindingLayout() const { return m_bindingLayout; }
+                VkPipelineLayout GetDefaultPipelineLayout() const { return m_defaultPipelineLayout; }
+
               private:
                 bool CreateInstance(const RHIDeviceDesc& desc);
                 bool SelectPhysicalDevice();
                 bool CreateLogicalDevice();
                 bool CreateCommandPool();
+                bool CreateDescriptorSetLayout();
                 QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) const;
                 bool CheckDeviceExtensionSupport(VkPhysicalDevice device) const;
                 void QueryCapabilities();
+                uint32_t GetVertexFormatSize(RHIVertexFormat format) const;
 
                 // Format conversion
                 VkFormat ConvertFormat(PixelFormat format) const;
@@ -381,6 +413,7 @@ namespace Spark
                 VkBlendOp ConvertBlendOp(RHIBlendOp op) const;
                 VkPrimitiveTopology ConvertTopology(RHIPrimitiveTopology topology) const;
                 VkFormat ConvertVertexFormat(RHIVertexFormat format) const;
+                VkBorderColor ConvertBorderColor(const float borderColor[4]) const;
 
                 VkInstance m_instance = VK_NULL_HANDLE;
                 VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
@@ -397,6 +430,21 @@ namespace Spark
                 std::unique_ptr<VulkanCommandList> m_immediateCommandList;
                 VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
                 VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;
+
+                // Descriptor set layout for resource binding
+                VkDescriptorSetLayout m_bindingLayout = VK_NULL_HANDLE;
+                VkPipelineLayout m_defaultPipelineLayout = VK_NULL_HANDLE;
+
+                // Frame synchronization
+                static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+                uint32_t m_currentFrame = 0;
+                std::vector<VkFence> m_frameFences;
+                std::vector<VkSemaphore> m_renderFinishedSemaphores;
+
+                // Debug utilities function pointers
+                PFN_vkCmdBeginDebugUtilsLabelEXT m_vkCmdBeginDebugUtilsLabel = nullptr;
+                PFN_vkCmdEndDebugUtilsLabelEXT m_vkCmdEndDebugUtilsLabel = nullptr;
+                PFN_vkCmdInsertDebugUtilsLabelEXT m_vkCmdInsertDebugUtilsLabel = nullptr;
 
                 RHIDeviceCapabilities m_capabilities;
                 RHIStatistics m_statistics;
