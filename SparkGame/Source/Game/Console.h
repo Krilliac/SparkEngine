@@ -25,23 +25,24 @@
 
 /**
  * @brief Simple text output function for console rendering
- * 
- * Basic text rendering utility that outputs text to the debug console.
- * This is a placeholder implementation that uses OutputDebugString.
- * 
+ *
+ * Placeholder for proper text rendering. The previous implementation
+ * used OutputDebugString which caused extreme spam (called per-line,
+ * per-frame whenever the console was visible).
+ *
  * @param text Text string to display
  * @param x Horizontal position (currently unused)
  * @param y Vertical position (currently unused)
  * @param scale Text scale factor (currently unused)
  * @param ctx DirectX device context (currently unused)
- * 
- * @note This is a simple implementation using OutputDebugString
- * @warning Parameters x, y, scale, and ctx are currently ignored
+ *
+ * @todo Replace with actual GPU text rendering (e.g. SpriteBatch or ImGui)
  */
-inline void DrawText(const std::wstring& text, float /*x*/, float /*y*/, float /*scale*/, ID3D11DeviceContext* /*ctx*/)
+inline void DrawText(const std::wstring& /*text*/, float /*x*/, float /*y*/, float /*scale*/,
+                     ID3D11DeviceContext* /*ctx*/)
 {
-    OutputDebugStringW(text.c_str());
-    OutputDebugStringW(L"\n");
+    // No-op: OutputDebugString was removed because it fired per-line per-frame
+    // and caused significant performance degradation when a debugger was attached.
 }
 
 /**
