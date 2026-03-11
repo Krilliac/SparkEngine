@@ -137,6 +137,11 @@ option(BUILD_TESTS "Build test suite" ON)
 # Editor available on Windows (Win32+DX11) and Linux (SDL2+OpenGL3)
 option(ENABLE_EDITOR "Enable editor features" ON)
 
+# Build profile options — controls what ships in the final binary
+option(ENABLE_CONSOLE_IN_SHIPPING "Include SparkConsole in Shipping builds" OFF)
+option(ENABLE_DEVCOMMANDS_IN_SHIPPING "Include developer commands (god, noclip, etc.) in Shipping builds" OFF)
+option(STRIP_DEBUG_SYMBOLS "Strip debug symbols from the final binary" OFF)
+
 # ---------------------------------------------------------------------
 # 4) C++ standard and in-source build guard
 # ---------------------------------------------------------------------
@@ -923,6 +928,30 @@ if(ENABLE_SDL2)
         endif()
     endif()
 endif()
+
+# Build profile options — controls what ships in Shipping builds
+if(ENABLE_CONSOLE_IN_SHIPPING)
+    list(APPEND FEATURE_DEFINITIONS "SPARK_CONSOLE_IN_SHIPPING")
+endif()
+if(ENABLE_DEVCOMMANDS_IN_SHIPPING)
+    list(APPEND FEATURE_DEFINITIONS "SPARK_DEVCOMMANDS_IN_SHIPPING")
+endif()
+if(STRIP_DEBUG_SYMBOLS)
+    list(APPEND FEATURE_DEFINITIONS "SPARK_STRIP_DEBUG_SYMBOLS")
+endif()
+
+# Per-configuration build profile definitions
+# These allow code to branch on build type at compile time:
+#   SPARK_BUILD_DEBUG       — full debugging, assertions, unoptimized
+#   SPARK_BUILD_DEVELOPMENT — symbols + optimization, console/profiler included
+#   SPARK_BUILD_RELEASE     — optimized, optional console
+#   SPARK_BUILD_SHIPPING    — maximum optimization, no dev tools
+list(APPEND FEATURE_DEFINITIONS
+    $<$<CONFIG:Debug>:SPARK_BUILD_DEBUG>
+    $<$<CONFIG:RelWithDebInfo>:SPARK_BUILD_DEVELOPMENT>
+    $<$<CONFIG:Release>:SPARK_BUILD_RELEASE>
+    $<$<CONFIG:MinSizeRel>:SPARK_BUILD_SHIPPING>
+)
 
 # Apply feature definitions to the static library (inherited by exe and game DLL)
 if(FEATURE_DEFINITIONS)

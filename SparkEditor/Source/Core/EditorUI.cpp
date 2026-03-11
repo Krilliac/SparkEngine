@@ -19,6 +19,10 @@
 #include "../Panels/WeaponEditorPanel.h"
 #include "../Panels/FPSToolsPanel.h"
 #include "../Panels/ProjectBrowserPanel.h"
+#include "../Panels/DebugVisualizerPanel.h"
+#include "../Panels/SceneStatsPanel.h"
+#include "../Panels/ObjectPlacementPanel.h"
+#include "../Panels/BuildCookPanel.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
 #include "EditorApplication.h"
@@ -574,6 +578,58 @@ namespace SparkEditor
             console.LogError("Failed to create FPS Tools panel: " + std::string(e.what()));
         }
 
+        // Create Debug Visualizer Panel
+        try
+        {
+            console.LogInfo("Creating Debug Visualizer panel...");
+            auto debugVisPanel = std::shared_ptr<DebugVisualizerPanel>(new DebugVisualizerPanel());
+            m_panels["DebugVisualizer"] = debugVisPanel;
+            console.LogSuccess("Created Debug Visualizer panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Debug Visualizer panel: " + std::string(e.what()));
+        }
+
+        // Create Scene Stats Panel
+        try
+        {
+            console.LogInfo("Creating Scene Stats panel...");
+            auto sceneStatsPanel = std::shared_ptr<SceneStatsPanel>(new SceneStatsPanel());
+            m_panels["SceneStats"] = sceneStatsPanel;
+            console.LogSuccess("Created Scene Stats panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Scene Stats panel: " + std::string(e.what()));
+        }
+
+        // Create Object Placement Panel
+        try
+        {
+            console.LogInfo("Creating Object Placement panel...");
+            auto placementPanel = std::shared_ptr<ObjectPlacementPanel>(new ObjectPlacementPanel());
+            m_panels["ObjectPlacement"] = placementPanel;
+            console.LogSuccess("Created Object Placement panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Object Placement panel: " + std::string(e.what()));
+        }
+
+        // Create Build & Cook Panel
+        try
+        {
+            console.LogInfo("Creating Build & Cook panel...");
+            auto buildCookPanel = std::shared_ptr<BuildCookPanel>(new BuildCookPanel());
+            m_panels["BuildCook"] = buildCookPanel;
+            console.LogSuccess("Created Build & Cook panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Build & Cook panel: " + std::string(e.what()));
+        }
+
         // SKIP SimpleBuildSystem in all modes since it's causing the hang
         console.LogWarning("SKIPPING Simple Build System panel (known to cause hangs)");
 
@@ -618,12 +674,28 @@ namespace SparkEditor
             m_panels["WeaponEditor"]->SetIcon(ICON_FA_CROSSHAIRS);
         if (m_panels.count("FPSTools"))
             m_panels["FPSTools"]->SetIcon(ICON_FA_ROCKET);
+        if (m_panels.count("DebugVisualizer"))
+            m_panels["DebugVisualizer"]->SetIcon(ICON_FA_BUG);
+        if (m_panels.count("SceneStats"))
+            m_panels["SceneStats"]->SetIcon(ICON_FA_CHART_BAR);
+        if (m_panels.count("ObjectPlacement"))
+            m_panels["ObjectPlacement"]->SetIcon(ICON_FA_CUBE);
+        if (m_panels.count("BuildCook"))
+            m_panels["BuildCook"]->SetIcon(ICON_FA_HAMMER);
 
-        // Hide new panels by default (accessible via FPS Tools menu)
+        // Hide secondary panels by default (accessible via menus)
         if (m_panels.count("WeaponEditor"))
             m_panels["WeaponEditor"]->SetVisible(false);
         if (m_panels.count("FPSTools"))
             m_panels["FPSTools"]->SetVisible(false);
+        if (m_panels.count("DebugVisualizer"))
+            m_panels["DebugVisualizer"]->SetVisible(false);
+        if (m_panels.count("SceneStats"))
+            m_panels["SceneStats"]->SetVisible(false);
+        if (m_panels.count("ObjectPlacement"))
+            m_panels["ObjectPlacement"]->SetVisible(false);
+        if (m_panels.count("BuildCook"))
+            m_panels["BuildCook"]->SetVisible(false);
 
         console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
     }
@@ -737,9 +809,10 @@ namespace SparkEditor
                     ShowNotification("Use the Asset Browser Import button to add assets", "info");
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Build Settings"))
+                if (ImGui::MenuItem("Build Settings..."))
                 {
-                    ShowNotification("Build Settings coming soon!", "info");
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Build & Cook settings opened", "info");
                 }
                 ImGui::Separator();
                 if (ImGui::MenuItem("Exit", "Alt+F4"))
@@ -864,6 +937,24 @@ namespace SparkEditor
                     SetPanelVisible("Profiler", !IsPanelVisible("Profiler"));
                 }
                 ImGui::Separator();
+                ImGui::TextDisabled("Tools & Debug");
+                if (ImGui::MenuItem(ICON_FA_BUG " Debug Visualizer", nullptr, IsPanelVisible("DebugVisualizer")))
+                {
+                    SetPanelVisible("DebugVisualizer", !IsPanelVisible("DebugVisualizer"));
+                }
+                if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Stats", nullptr, IsPanelVisible("SceneStats")))
+                {
+                    SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
+                }
+                if (ImGui::MenuItem(ICON_FA_CUBE " Object Placement", nullptr, IsPanelVisible("ObjectPlacement")))
+                {
+                    SetPanelVisible("ObjectPlacement", !IsPanelVisible("ObjectPlacement"));
+                }
+                if (ImGui::MenuItem(ICON_FA_HAMMER " Build & Cook", nullptr, IsPanelVisible("BuildCook")))
+                {
+                    SetPanelVisible("BuildCook", !IsPanelVisible("BuildCook"));
+                }
+                ImGui::Separator();
                 ImGui::TextDisabled("FPS Panels");
                 if (ImGui::MenuItem("Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
                 {
@@ -932,6 +1023,12 @@ namespace SparkEditor
 
             if (ImGui::BeginMenu("Build"))
             {
+                if (ImGui::MenuItem(ICON_FA_COG " Build Settings..."))
+                {
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Build & Cook panel opened", "info");
+                }
+                ImGui::Separator();
                 if (ImGui::MenuItem(ICON_FA_LIGHTBULB " Build Lighting"))
                 {
                     ShowNotification("Build Lighting started...", "info");
@@ -945,9 +1042,16 @@ namespace SparkEditor
                 {
                     ShowNotification("Build All started...", "info");
                 }
-                if (ImGui::MenuItem(ICON_FA_ROCKET " Deploy"))
+                if (ImGui::MenuItem(ICON_FA_FIRE " Cook Content"))
                 {
-                    ShowNotification("Deploy pipeline coming soon!", "info");
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Open Build & Cook panel to configure cooking", "info");
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_ROCKET " Package Project..."))
+                {
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Configure packaging in Build & Cook panel", "info");
                 }
                 ImGui::EndMenu();
             }
