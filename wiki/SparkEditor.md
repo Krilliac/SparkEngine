@@ -133,15 +133,19 @@ cmake --build build --config Release
 | Panel | Header |
 |-------|--------|
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
+| `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
 | `ConsolePanel` | `SparkEditor/Source/Panels/ConsolePanel.h` |
+| `DebugVisualizerPanel` | `SparkEditor/Source/Panels/DebugVisualizerPanel.h` |
 | `FPSToolsPanel` | `SparkEditor/Source/Panels/FPSToolsPanel.h` |
 | `GameViewPanel` | `SparkEditor/Source/Panels/GameViewPanel.h` |
 | `HierarchyPanel` | `SparkEditor/Source/Panels/HierarchyPanel.h` |
 | `InspectorPanel` | `SparkEditor/Source/Panels/InspectorPanel.h` |
+| `ObjectPlacementPanel` | `SparkEditor/Source/Panels/ObjectPlacementPanel.h` |
 | `Physics2DPanel` | `SparkEditor/Source/Panels/Physics2DPanel.h` |
 | `PrefabEditorPanel` | `SparkEditor/Source/Panels/PrefabEditorPanel.h` |
 | `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |
 | `SceneStatisticsPanel` | `SparkEditor/Source/Panels/SceneStatisticsPanel.h` |
+| `SceneStatsPanel` | `SparkEditor/Source/Panels/SceneStatsPanel.h` |
 | `SceneViewPanel` | `SparkEditor/Source/Panels/SceneViewPanel.h` |
 | `SearchPanel` | `SparkEditor/Source/Panels/SearchPanel.h` |
 | `SimpleConsolePanel` | `SparkEditor/Source/Panels/SimpleConsolePanel.h` |

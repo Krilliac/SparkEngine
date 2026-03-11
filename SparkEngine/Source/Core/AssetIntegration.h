@@ -220,7 +220,7 @@ namespace Spark
 
             for (const auto& [handle, entry] : m_assets)
             {
-                ss << "  [" << handle.GetHash() << "] " << entry.metadata.path << "\n"
+                ss << "  [" << handle.hash << "] " << entry.metadata.path << "\n"
                    << "    Type: " << entry.metadata.typeName << " | Size: " << entry.metadata.sizeBytes << " bytes"
                    << " | Loaded: " << (entry.metadata.loaded ? "YES" : "NO") << "\n";
             }

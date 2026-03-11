@@ -138,7 +138,7 @@ cd build && ctest --output-on-failure
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*52 test files, 583+ test cases*
+*55 test files, 601+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -155,8 +155,9 @@ cd build && ctest --output-on-failure
 | `TestDebugTools` | 31 |
 | `TestDestructionSystem` | 5 |
 | `TestDialogueSystem` | 4 |
+| `TestECSIntegration` | 9 |
 | `TestECSWorld` | 11 |
-| `TestEngineContext` | 9 |
+| `TestEngineContext` | 18 |
 | `TestEventSystem` | 10 |
 | `TestFileUtils` | 15 |
 | `TestFogSystem` | 17 |
@@ -193,5 +194,7 @@ cd build && ctest --output-on-failure
 | `TestTween` | 14 |
 | `TestUISystem` | 6 |
 | `TestUUID` | 12 |
+| `TestUpscalingSystem` | 0 |
+| `TestVisualScriptSystem` | 0 |
 | `TestWeatherSystem` | 8 |
 <!-- /AUTO:test_inventory -->

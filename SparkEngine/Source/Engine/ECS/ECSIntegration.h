@@ -95,12 +95,12 @@ namespace Spark::ECS
 
         // Material change tracking — only re-upload material data when MeshRenderer changes
         auto materialReactive = std::make_unique<MaterialChangeReactiveSystem>();
-        materialReactive->ConnectTo(world);
+        materialReactive->Connect(world.GetRegistry());
         systems.push_back(std::move(materialReactive));
 
         // Light change tracking — only rebuild shadow maps when lights change
         auto lightReactive = std::make_unique<LightChangeReactiveSystem>();
-        lightReactive->ConnectTo(world);
+        lightReactive->Connect(world.GetRegistry());
         systems.push_back(std::move(lightReactive));
 
         return systems;

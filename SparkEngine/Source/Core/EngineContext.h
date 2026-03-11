@@ -230,8 +230,7 @@ class EngineContext : public Spark::IEngineContext
         (depList.push_back(GetTypeId<Deps>()), ...);
 
         // Store entry for topological sorting
-        SubsystemEntry entry{GetTypeId<T>(),    typeid(T).name(),      std::move(depList),
-                             std::move(initFn), std::move(shutdownFn), false};
+        SubsystemEntry entry{GetTypeId<T>(), {}, std::move(depList), std::move(initFn), std::move(shutdownFn), false};
 
         // Replace existing entry for same type, or append
         auto it = std::find_if(m_subsystemEntries.begin(), m_subsystemEntries.end(),

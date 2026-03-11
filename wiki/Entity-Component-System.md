@@ -176,7 +176,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `LightComponent` | `SparkEngine/Source/Engine/ECS/Components/LightComponents.h` |
 | `MeshRenderer` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
 | `NameComponent` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
-| `NetworkIdentity` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
+| `NetworkIdentity` | `SparkEngine/Source/Engine/ECS/Components/NetworkComponents.h` |
 | `NineSliceSprite` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ParallaxBackground` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ParallaxLayer` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
@@ -217,8 +217,10 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `ISystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
 | `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `LightChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
 | `LightingSystem` | `SparkEngine/Source/Graphics/LightingSystem.h` |
 | `LocalizationSystem` | `SparkEngine/Source/Engine/Localization/LocalizationSystem.h` |
+| `MaterialChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
 | `MaterialSystem` | `SparkEngine/Source/Graphics/MaterialSystem.h` |
 | `ModSystem` | `SparkEngine/Source/Engine/Modding/ModSystem.h` |
 | `ParallaxSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
@@ -241,6 +243,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `UISystem` | `SparkEngine/Source/Engine/UI/UISystem.h` |
 | `UpscalingSystem` | `SparkEngine/Source/Graphics/UpscalingSystem.h` |
 | `VRSystem` | `SparkEngine/Source/Engine/VR/VRSystem.h` |
+| `VisualScriptSystem` | `SparkEngine/Source/Engine/Scripting/VisualScriptSystem.h` |
 | `WaterSystem` | `SparkEngine/Source/Graphics/WaterSystem.h` |
 | `WeatherSystem` | `SparkEngine/Source/Graphics/WeatherSystem.h` |
 <!-- /AUTO:system_list -->

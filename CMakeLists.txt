@@ -586,9 +586,11 @@ endif()
 # ---------------------------------------------------------------------
 # 9.6) Build SparkEditor if enabled and exists
 # ---------------------------------------------------------------------
-if(ENABLE_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/SparkEditor/CMakeLists.txt")
+if(ENABLE_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/SparkEditor/CMakeLists.txt" AND EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.h")
     message(STATUS "Adding SparkEditor to build...")
     add_subdirectory(SparkEditor)
+elseif(ENABLE_EDITOR AND NOT EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.h")
+    message(STATUS "SparkEditor skipped — Dear ImGui not found (initialize submodule)")
 
     if(TARGET SparkEngine AND TARGET SparkEditor)
         add_dependencies(SparkEditor SparkEngine)

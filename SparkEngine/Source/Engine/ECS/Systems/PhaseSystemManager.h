@@ -75,6 +75,10 @@ namespace Spark::ECS
       public:
         PhaseSystemManager() = default;
         ~PhaseSystemManager() = default;
+        PhaseSystemManager(const PhaseSystemManager&) = delete;
+        PhaseSystemManager& operator=(const PhaseSystemManager&) = delete;
+        PhaseSystemManager(PhaseSystemManager&&) noexcept = default;
+        PhaseSystemManager& operator=(PhaseSystemManager&&) noexcept = default;
 
         /**
          * @brief Construct and register a system in a specific execution phase.

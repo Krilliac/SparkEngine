@@ -52,6 +52,8 @@
 #include "Physics/PhysicsSystem.h"
 #include "Graphics/GraphicsConsoleCommands.h"
 #include "Utils/LocalFileCache.h"
+#include "EngineSetup.h"
+#include "AssetIntegration.h"
 
 // -----------------------------------------------------------------------------
 // Missing module startup warnings
@@ -268,6 +270,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             EngineContext::Get()->SetPhysics(g_physicsOwned.get());
         }
 
+        // Register core subsystems with dependency metadata
+        Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+        Spark::EngineSetup::InitializeJobSystem();
+
         // Module loading
         g_moduleManager = std::make_unique<ModuleManager>();
 
@@ -376,6 +382,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         if (g_graphics)
             g_graphics->SetPhysicsSystem(g_physicsOwned.get());
     }
+
+    // 5d. Register core subsystems with dependency metadata (EngineSetup)
+    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+
+    // 5e. Initialize JobSystem for parallel AI/perception/system execution
+    Spark::EngineSetup::InitializeJobSystem();
+
+    // 5f. Register SaveSystem with EngineContext
+    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+
+    // 5g. Register AssetRegistry for handle-based asset lookups
+    static Spark::AssetRegistry g_assetRegistry;
+    EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&g_assetRegistry);
 
     // 6. Load game modules via ModuleManager
     g_moduleManager = std::make_unique<ModuleManager>();
@@ -1139,6 +1158,61 @@ void RegisterEngineConsoleCommands()
             return g_audioEngine->Console_GetSourceInfo(static_cast<uint32_t>(std::stoul(args[0])));
         },
         "Get info about an audio source", "Audio");
+
+    // =========================================================================
+    // Architecture subsystem console commands
+    // =========================================================================
+
+    console.RegisterCommand(
+        "engine_subsystems",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            auto* ctx = EngineContext::Get();
+            if (!ctx)
+                return "Engine context not available";
+            std::stringstream ss;
+            ss << "=== Engine Subsystems ===\n";
+            ss << "  Registered: " << ctx->GetSubsystemCount() << "\n";
+            ss << "  Graphics:   " << (ctx->GetGraphics() ? "YES" : "NO") << "\n";
+            ss << "  Input:      " << (ctx->GetInput() ? "YES" : "NO") << "\n";
+            ss << "  Timer:      " << (ctx->GetTimer() ? "YES" : "NO") << "\n";
+            ss << "  EventBus:   " << (ctx->GetEventBus() ? "YES" : "NO") << "\n";
+            ss << "  Audio:      " << (ctx->GetAudio() ? "YES" : "NO") << "\n";
+            ss << "  Physics:    " << (ctx->GetPhysics() ? "YES" : "NO") << "\n";
+            ss << "  Animation:  " << (ctx->GetAnimation() ? "YES" : "NO") << "\n";
+            ss << "  AI:         " << (ctx->GetAI() ? "YES" : "NO") << "\n";
+            ss << "  Network:    " << (ctx->GetNetwork() ? "YES" : "NO") << "\n";
+            ss << "  SaveSystem: " << (ctx->GetSaveSystem() ? "YES" : "NO") << "\n";
+            ss << "  Scene:      " << (ctx->GetSceneManager() ? "YES" : "NO") << "\n";
+            ss << "  Scripting:  " << (ctx->GetScriptEngine() ? "YES" : "NO") << "\n";
+            ss << "  Headless:   " << (ctx->IsHeadless() ? "YES" : "NO") << "\n";
+            auto* assetReg = ctx->GetSystem<Spark::AssetRegistry>();
+            ss << "  AssetReg:   " << (assetReg ? "YES" : "NO");
+            if (assetReg)
+                ss << " (" << assetReg->GetAssetCount() << " assets)";
+            ss << "\n";
+            auto& js = Spark::JobSystem::Get();
+            ss << "  JobSystem:  " << (js.IsInitialized() ? "YES" : "NO");
+            if (js.IsInitialized())
+                ss << " (" << js.GetWorkerCount() << " workers)";
+            ss << "\n";
+            return ss.str();
+        },
+        "Show status of all registered engine subsystems", "Engine");
+
+    console.RegisterCommand(
+        "asset_list",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            auto* ctx = EngineContext::Get();
+            if (!ctx)
+                return "Engine context not available";
+            auto* reg = ctx->GetSystem<Spark::AssetRegistry>();
+            if (!reg)
+                return "Asset registry not available";
+            return reg->Console_ListAssets();
+        },
+        "List all registered assets in the asset registry", "Engine");
 }
 
 #endif // SPARK_PLATFORM_WINDOWS
@@ -1162,6 +1236,8 @@ void RegisterEngineConsoleCommands()
 #include "Utils/Timer.h"
 #include "Utils/SparkConsole.h"
 #include "Graphics/GraphicsConsoleCommands.h"
+#include "EngineSetup.h"
+#include "AssetIntegration.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -1452,6 +1528,58 @@ static void RegisterEngineConsoleCommandsLinux()
             }
         },
         "Set master audio volume", "Audio");
+
+    // Architecture subsystem console commands
+    console.RegisterCommand(
+        "engine_subsystems",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            auto* ctx = EngineContext::Get();
+            if (!ctx)
+                return "Engine context not available";
+            std::stringstream ss;
+            ss << "=== Engine Subsystems ===\n";
+            ss << "  Registered: " << ctx->GetSubsystemCount() << "\n";
+            ss << "  Graphics:   " << (ctx->GetGraphics() ? "YES" : "NO") << "\n";
+            ss << "  Input:      " << (ctx->GetInput() ? "YES" : "NO") << "\n";
+            ss << "  Timer:      " << (ctx->GetTimer() ? "YES" : "NO") << "\n";
+            ss << "  EventBus:   " << (ctx->GetEventBus() ? "YES" : "NO") << "\n";
+            ss << "  Audio:      " << (ctx->GetAudio() ? "YES" : "NO") << "\n";
+            ss << "  Physics:    " << (ctx->GetPhysics() ? "YES" : "NO") << "\n";
+            ss << "  Animation:  " << (ctx->GetAnimation() ? "YES" : "NO") << "\n";
+            ss << "  AI:         " << (ctx->GetAI() ? "YES" : "NO") << "\n";
+            ss << "  Network:    " << (ctx->GetNetwork() ? "YES" : "NO") << "\n";
+            ss << "  SaveSystem: " << (ctx->GetSaveSystem() ? "YES" : "NO") << "\n";
+            ss << "  Scene:      " << (ctx->GetSceneManager() ? "YES" : "NO") << "\n";
+            ss << "  Scripting:  " << (ctx->GetScriptEngine() ? "YES" : "NO") << "\n";
+            ss << "  Headless:   " << (ctx->IsHeadless() ? "YES" : "NO") << "\n";
+            auto* assetReg = ctx->GetSystem<Spark::AssetRegistry>();
+            ss << "  AssetReg:   " << (assetReg ? "YES" : "NO");
+            if (assetReg)
+                ss << " (" << assetReg->GetAssetCount() << " assets)";
+            ss << "\n";
+            auto& js = Spark::JobSystem::Get();
+            ss << "  JobSystem:  " << (js.IsInitialized() ? "YES" : "NO");
+            if (js.IsInitialized())
+                ss << " (" << js.GetWorkerCount() << " workers)";
+            ss << "\n";
+            return ss.str();
+        },
+        "Show status of all registered engine subsystems", "Engine");
+
+    console.RegisterCommand(
+        "asset_list",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            auto* ctx = EngineContext::Get();
+            if (!ctx)
+                return "Engine context not available";
+            auto* reg = ctx->GetSystem<Spark::AssetRegistry>();
+            if (!reg)
+                return "Asset registry not available";
+            return reg->Console_ListAssets();
+        },
+        "List all registered assets in the asset registry", "Engine");
 }
 
 int main(int argc, char* argv[])
@@ -1481,6 +1609,10 @@ int main(int argc, char* argv[])
             EngineContext::Get()->SetPhysics(g_physicsOwned.get());
         }
 #endif
+
+        // Register core subsystems with dependency metadata
+        Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+        Spark::EngineSetup::InitializeJobSystem();
 
         g_moduleManager = std::make_unique<ModuleManager>();
 
@@ -1611,6 +1743,13 @@ int main(int argc, char* argv[])
             g_graphics->SetPhysicsSystem(g_physicsOwned.get());
     }
 #endif
+
+    // 5b. Register core subsystems with dependency metadata (EngineSetup)
+    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+    Spark::EngineSetup::InitializeJobSystem();
+    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+    static Spark::AssetRegistry g_linuxAssetRegistry;
+    EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&g_linuxAssetRegistry);
 
     // 6. Module loading
     g_moduleManager = std::make_unique<ModuleManager>();
