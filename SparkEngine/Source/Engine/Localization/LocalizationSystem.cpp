@@ -55,7 +55,9 @@ namespace Spark
         {
             return it->second;
         }
-        return key; // Return the key itself as fallback
+        // Return the key parameter reference as fallback. Safe because callers
+        // always pass an lvalue (string stored in m_entries or a local).
+        return key;
     }
 
     bool StringTable::HasEntry(const std::string& key) const
@@ -99,14 +101,20 @@ namespace Spark
 
     bool LocalizationSystem::SetCurrentLanguage(const std::string& languageCode)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_languages.find(languageCode) == m_languages.end())
+        // Copy callbacks under the lock, then invoke outside to prevent deadlocks
+        // if callbacks call back into LocalizationSystem.
+        std::vector<std::function<void(const std::string&)>> callbacks;
         {
-            return false;
+            std::lock_guard<std::mutex> lock(m_mutex);
+            if (m_languages.find(languageCode) == m_languages.end())
+            {
+                return false;
+            }
+            m_currentLanguage = languageCode;
+            callbacks = m_languageChangedCallbacks;
         }
-        m_currentLanguage = languageCode;
 
-        for (const auto& callback : m_languageChangedCallbacks)
+        for (const auto& callback : callbacks)
         {
             callback(languageCode);
         }

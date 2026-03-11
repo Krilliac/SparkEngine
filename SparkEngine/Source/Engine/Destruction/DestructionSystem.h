@@ -136,9 +136,9 @@ namespace Spark
             }
             health -= effective;
 
-            // Update damage stage
-            float healthPercent = health / maxHealth;
-            damageStage = static_cast<int>((1.0f - healthPercent) * maxDamageStages);
+            // Update damage stage (guard against division by zero)
+            float healthPercent = (maxHealth > 0.0f) ? std::clamp(health / maxHealth, 0.0f, 1.0f) : 0.0f;
+            damageStage = std::clamp(static_cast<int>((1.0f - healthPercent) * maxDamageStages), 0, maxDamageStages);
 
             if (health <= 0.0f)
             {

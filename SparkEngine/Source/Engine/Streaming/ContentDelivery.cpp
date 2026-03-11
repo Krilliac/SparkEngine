@@ -99,6 +99,7 @@ namespace Spark
 
     bool ContentDelivery::VerifyBundle(const std::string& bundleName) const
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         auto it = m_localBundles.find(bundleName);
         if (it == m_localBundles.end())
         {
@@ -110,16 +111,19 @@ namespace Spark
 
     void ContentDelivery::DeleteBundle(const std::string& bundleName)
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_localBundles.erase(bundleName);
     }
 
     void ContentDelivery::OnProgress(std::function<void(const std::string&, float)> callback)
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_progressCallbacks.push_back(std::move(callback));
     }
 
     void ContentDelivery::OnComplete(std::function<void(const std::string&, bool)> callback)
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_completeCallbacks.push_back(std::move(callback));
     }
 
@@ -131,7 +135,18 @@ namespace Spark
         oss << "Install path: " << m_installPath << "\n";
         oss << "Local bundles: " << m_localBundles.size() << "\n";
         oss << "Download queue: " << m_downloadQueue.size() << "\n";
-        oss << "Overall progress: " << static_cast<int>(GetOverallProgress() * 100) << "%\n";
+        // Inline progress calculation to avoid re-acquiring m_mutex (deadlock)
+        float overallProgress = 1.0f;
+        if (!m_downloadQueue.empty())
+        {
+            float total = 0.0f;
+            for (const auto& task : m_downloadQueue)
+            {
+                total += task.progress;
+            }
+            overallProgress = total / static_cast<float>(m_downloadQueue.size());
+        }
+        oss << "Overall progress: " << static_cast<int>(overallProgress * 100) << "%\n";
         for (const auto& task : m_downloadQueue)
         {
             oss << "  " << task.bundleName << ": " << static_cast<int>(task.progress * 100) << "%"
