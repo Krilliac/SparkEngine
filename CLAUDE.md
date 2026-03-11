@@ -93,6 +93,115 @@ docs/sync-wiki.sh sync
 
 If any step fails, fix the issue before committing. CI enforces clang-format on every PR.
 
+## Post-PR checks (poll after every PR submission)
+
+After creating or pushing to a pull request, **always** poll the CI checks and fix any failures before moving on. This is mandatory — do not consider a PR complete until all checks pass.
+
+### Polling procedure
+
+```bash
+# 1. Wait 15 seconds for checks to start, then poll status
+sleep 15
+gh pr checks --watch --fail-fast
+
+# 2. If the above is not available or times out, poll manually:
+#    Repeat every 30 seconds until all checks complete (up to 15 minutes)
+gh pr checks
+```
+
+If any check fails:
+
+```bash
+# 3. Get full failure logs for the failed job
+gh run list --branch "$(git branch --show-current)" --limit 5
+gh run view <RUN_ID> --log-failed
+
+# 4. Fix the issue locally, commit, and push
+# 5. Re-poll checks until all pass (repeat steps 1-4)
+```
+
+### Matching CI build configurations locally
+
+The GitHub Actions workflow (`.github/workflows/build.yml`) runs these jobs. To reproduce failures locally, mirror the exact CI settings:
+
+**clang-format check** (runs on every PR):
+```bash
+find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+  -not -path '*/Metal/*' \
+  \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
+  xargs clang-format --dry-run --Werror 2>&1
+# Fix: pipe the same file list to clang-format -i
+```
+
+**Linux GCC build** (Debug + Release):
+```bash
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTS=ON \
+  -DCMAKE_C_COMPILER=gcc \
+  -DCMAKE_CXX_COMPILER=g++
+cmake --build build --parallel $(nproc)
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+```
+
+**Linux Clang build** (Debug + Release):
+```bash
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTS=ON \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++
+cmake --build build --parallel $(nproc)
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+```
+
+**Linux GCC AddressSanitizer** (Debug):
+```bash
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DBUILD_TESTS=ON \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build --parallel $(nproc)
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+```
+
+**Windows MSVC VS 2022 (v143)** (Debug + Release):
+```bash
+cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
+
+**Prompt validation** (runs on every PR):
+```bash
+./tools/validate-prompts.sh --ci
+```
+
+### CI jobs summary
+
+| Job | Runner | Compiler | Configs | Key flags |
+|-----|--------|----------|---------|-----------|
+| `check-format` | ubuntu-24.04 | clang-format | — | `--dry-run --Werror` |
+| `validate-prompts` | ubuntu-24.04 | — | — | `--ci` |
+| `build-linux-gcc` | ubuntu-24.04 | GCC | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan |
+| `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
+| `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
+| `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
+| `todo-count` | ubuntu-24.04 | — | — | threshold: 20 |
+
+### Rules
+
+- **Never** consider a PR done until `gh pr checks` shows all required checks passing.
+- If a check fails, download the failed run logs with `gh run view <ID> --log-failed`, diagnose, fix locally, push, and re-poll.
+- For Windows-only failures that cannot be reproduced on Linux, inspect the CI logs carefully and fix based on MSVC-specific diagnostics (e.g., `/W4` warnings, MSVC type conversion rules, Windows SDK headers).
+- The `build-windows-vs2026` and `clang-tidy` jobs use `continue-on-error` — failures there are warnings, not blockers.
+
 ## Documentation generation
 
 Two custom scripts generate documentation without requiring Doxygen or Graphviz:
