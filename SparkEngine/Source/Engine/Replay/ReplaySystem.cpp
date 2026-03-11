@@ -63,6 +63,7 @@ namespace Spark
 
     void ReplaySystem::SetMetadata(const std::string& mapName, const std::string& gameMode)
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_replayData.mapName = mapName;
         m_replayData.gameMode = gameMode;
     }
@@ -77,11 +78,13 @@ namespace Spark
 
     void ReplaySystem::PausePlayback()
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_playbackState = PlaybackState::Paused;
     }
 
     void ReplaySystem::ResumePlayback()
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         if (m_playbackState == PlaybackState::Paused)
         {
             m_playbackState = PlaybackState::Playing;
@@ -90,6 +93,7 @@ namespace Spark
 
     void ReplaySystem::StopPlayback()
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_playbackState = PlaybackState::Stopped;
         m_playbackTime = 0.0f;
         m_currentFrameIndex = 0;
@@ -97,6 +101,7 @@ namespace Spark
 
     void ReplaySystem::UpdatePlayback(float deltaTime)
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         if (m_playbackState != PlaybackState::Playing)
         {
             return;
@@ -235,6 +240,12 @@ namespace Spark
 
     bool ReplaySystem::LoadFromFile(const std::string& filePath)
     {
+        // Safety limits for deserialization to prevent OOM from malicious/corrupt files
+        constexpr uint32_t kMaxStringLength = 4096;
+        constexpr uint32_t kMaxFrameCount = 1'000'000;
+        constexpr uint32_t kMaxEntityCount = 100'000;
+        constexpr uint32_t kMaxEventCount = 1'000'000;
+
         std::lock_guard<std::mutex> lock(m_mutex);
         std::ifstream file(filePath, std::ios::binary);
         if (!file.is_open())
@@ -244,29 +255,57 @@ namespace Spark
 
         uint32_t magic = 0;
         file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-        if (magic != 0x52504C59)
+        if (!file || magic != 0x52504C59)
         {
             return false;
         }
 
         file.read(reinterpret_cast<char*>(&m_replayData.version), sizeof(uint32_t));
+        if (!file)
+        {
+            return false;
+        }
 
-        // Read metadata
+        // Read metadata with bounds-checked string lengths
         uint32_t mapLen = 0;
         file.read(reinterpret_cast<char*>(&mapLen), sizeof(mapLen));
+        if (!file || mapLen > kMaxStringLength)
+        {
+            return false;
+        }
         m_replayData.mapName.resize(mapLen);
         file.read(m_replayData.mapName.data(), mapLen);
+        if (!file)
+        {
+            return false;
+        }
 
         uint32_t modeLen = 0;
         file.read(reinterpret_cast<char*>(&modeLen), sizeof(modeLen));
+        if (!file || modeLen > kMaxStringLength)
+        {
+            return false;
+        }
         m_replayData.gameMode.resize(modeLen);
         file.read(m_replayData.gameMode.data(), modeLen);
+        if (!file)
+        {
+            return false;
+        }
 
         file.read(reinterpret_cast<char*>(&m_replayData.duration), sizeof(float));
+        if (!file)
+        {
+            return false;
+        }
 
-        // Read frames
+        // Read frames with bounds checking
         uint32_t frameCount = 0;
         file.read(reinterpret_cast<char*>(&frameCount), sizeof(frameCount));
+        if (!file || frameCount > kMaxFrameCount)
+        {
+            return false;
+        }
         m_replayData.frames.resize(frameCount);
 
         for (auto& frame : m_replayData.frames)
@@ -275,16 +314,28 @@ namespace Spark
             file.read(reinterpret_cast<char*>(&frame.frameNumber), sizeof(uint32_t));
             uint32_t entityCount = 0;
             file.read(reinterpret_cast<char*>(&entityCount), sizeof(entityCount));
+            if (!file || entityCount > kMaxEntityCount)
+            {
+                return false;
+            }
             frame.entities.resize(entityCount);
             for (auto& entity : frame.entities)
             {
                 file.read(reinterpret_cast<char*>(&entity), sizeof(ReplayEntityState));
             }
+            if (!file)
+            {
+                return false;
+            }
         }
 
-        // Read events
+        // Read events with bounds checking
         uint32_t eventCount = 0;
         file.read(reinterpret_cast<char*>(&eventCount), sizeof(eventCount));
+        if (!file || eventCount > kMaxEventCount)
+        {
+            return false;
+        }
         m_replayData.events.resize(eventCount);
 
         for (auto& event : m_replayData.events)
@@ -292,11 +343,19 @@ namespace Spark
             file.read(reinterpret_cast<char*>(&event.timestamp), sizeof(float));
             uint32_t typeLen = 0;
             file.read(reinterpret_cast<char*>(&typeLen), sizeof(typeLen));
+            if (!file || typeLen > kMaxStringLength)
+            {
+                return false;
+            }
             event.type.resize(typeLen);
             file.read(event.type.data(), typeLen);
             file.read(reinterpret_cast<char*>(&event.sourceEntity), sizeof(uint32_t));
             file.read(reinterpret_cast<char*>(&event.targetEntity), sizeof(uint32_t));
             file.read(reinterpret_cast<char*>(&event.position), sizeof(DirectX::XMFLOAT3));
+            if (!file)
+            {
+                return false;
+            }
         }
 
         return true;

@@ -196,36 +196,49 @@ namespace Spark
 
     void AchievementSystem::CheckConditions(const std::string& statName)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        auto statIt = m_statistics.find(statName);
-        if (statIt == m_statistics.end())
+        // Collect newly-unlocked achievement IDs under the lock, then invoke
+        // callbacks outside the lock to prevent deadlocks if callbacks call back
+        // into AchievementSystem.
+        std::vector<std::string> newlyUnlocked;
         {
-            return;
+            std::lock_guard<std::mutex> lock(m_mutex);
+            auto statIt = m_statistics.find(statName);
+            if (statIt == m_statistics.end())
+            {
+                return;
+            }
+
+            for (auto& [id, achievement] : m_achievements)
+            {
+                if (achievement.unlocked || achievement.conditionStat != statName)
+                {
+                    continue;
+                }
+
+                int64_t current = statIt->second.intValue;
+                int64_t required = achievement.requiredValue;
+
+                if (required > 0)
+                {
+                    achievement.progress =
+                        static_cast<float>((std::min)(current, required)) / static_cast<float>(required);
+                }
+
+                if (current >= required)
+                {
+                    achievement.unlocked = true;
+                    achievement.progress = 1.0f;
+                    newlyUnlocked.push_back(id);
+                }
+            }
         }
 
-        for (auto& [id, achievement] : m_achievements)
+        // Fire callbacks outside the lock
+        for (const auto& id : newlyUnlocked)
         {
-            if (achievement.unlocked || achievement.conditionStat != statName)
+            for (const auto& callback : m_unlockCallbacks)
             {
-                continue;
-            }
-
-            int64_t current = statIt->second.intValue;
-            int64_t required = achievement.requiredValue;
-
-            if (required > 0)
-            {
-                achievement.progress = static_cast<float>((std::min)(current, required)) / static_cast<float>(required);
-            }
-
-            if (current >= required)
-            {
-                achievement.unlocked = true;
-                achievement.progress = 1.0f;
-                for (const auto& callback : m_unlockCallbacks)
-                {
-                    callback(id);
-                }
+                callback(id);
             }
         }
     }
@@ -294,7 +307,14 @@ namespace Spark
                 size_t end = content.find(',', pos);
                 if (end != std::string::npos)
                 {
-                    stat.intValue = std::stoll(content.substr(pos, end - pos));
+                    try
+                    {
+                        stat.intValue = std::stoll(content.substr(pos, end - pos));
+                    }
+                    catch (const std::exception&)
+                    {
+                        stat.intValue = 0;
+                    }
                 }
                 std::string floatPattern = "\"float\": ";
                 size_t fPos = content.find(floatPattern, pos);
@@ -304,7 +324,14 @@ namespace Spark
                     size_t fEnd = content.find('}', fPos);
                     if (fEnd != std::string::npos)
                     {
-                        stat.floatValue = std::stod(content.substr(fPos, fEnd - fPos));
+                        try
+                        {
+                            stat.floatValue = std::stod(content.substr(fPos, fEnd - fPos));
+                        }
+                        catch (const std::exception&)
+                        {
+                            stat.floatValue = 0.0;
+                        }
                     }
                 }
             }
@@ -359,7 +386,16 @@ namespace Spark
         std::lock_guard<std::mutex> lock(m_mutex);
         std::ostringstream oss;
         oss << "=== Achievement System ===\n";
-        oss << "Achievements: " << GetUnlockedCount() << "/" << m_achievements.size() << " unlocked\n";
+        // Inline the unlocked count to avoid re-acquiring m_mutex (deadlock)
+        size_t unlockedCount = 0;
+        for (const auto& [id, achievement] : m_achievements)
+        {
+            if (achievement.unlocked)
+            {
+                ++unlockedCount;
+            }
+        }
+        oss << "Achievements: " << unlockedCount << "/" << m_achievements.size() << " unlocked\n";
         for (const auto& [id, achievement] : m_achievements)
         {
             oss << "  [" << (achievement.unlocked ? "X" : " ") << "] " << achievement.name;

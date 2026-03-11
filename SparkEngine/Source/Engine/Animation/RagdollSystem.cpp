@@ -193,7 +193,7 @@ namespace Spark::Animation
         if (instance.state == RagdollState::BlendingIn)
         {
             instance.blendTimer += deltaTime;
-            float t = instance.blendTimer / instance.blendDuration;
+            float t = (instance.blendDuration > 0.0f) ? (instance.blendTimer / instance.blendDuration) : 1.0f;
             instance.blendWeight = std::clamp(t, 0.0f, 1.0f);
 
             if (instance.blendTimer >= instance.blendDuration)
@@ -205,7 +205,7 @@ namespace Spark::Animation
         else if (instance.state == RagdollState::BlendingOut)
         {
             instance.blendTimer += deltaTime;
-            float t = instance.blendTimer / instance.blendDuration;
+            float t = (instance.blendDuration > 0.0f) ? (instance.blendTimer / instance.blendDuration) : 1.0f;
             instance.blendWeight = std::clamp(1.0f - t, 0.0f, 1.0f);
 
             if (instance.blendTimer >= instance.blendDuration)
@@ -217,7 +217,7 @@ namespace Spark::Animation
         else if (instance.state == RagdollState::Partial)
         {
             instance.blendTimer += deltaTime;
-            float t = instance.blendTimer / instance.blendDuration;
+            float t = (instance.blendDuration > 0.0f) ? (instance.blendTimer / instance.blendDuration) : 1.0f;
             instance.blendWeight = std::clamp(t, 0.0f, 1.0f);
 
             // Auto-deactivate partial ragdoll after a timeout

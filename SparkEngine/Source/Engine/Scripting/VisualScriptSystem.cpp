@@ -535,7 +535,38 @@ namespace Spark::Scripting
         }
         if (std::holds_alternative<std::string>(value))
         {
-            return "\"" + std::get<std::string>(value) + "\"";
+            // Escape special characters to prevent code injection in generated AngelScript
+            std::string escaped;
+            const auto& raw = std::get<std::string>(value);
+            escaped.reserve(raw.size() + 2);
+            for (char ch : raw)
+            {
+                switch (ch)
+                {
+                case '\\':
+                    escaped += "\\\\";
+                    break;
+                case '"':
+                    escaped += "\\\"";
+                    break;
+                case '\n':
+                    escaped += "\\n";
+                    break;
+                case '\r':
+                    escaped += "\\r";
+                    break;
+                case '\t':
+                    escaped += "\\t";
+                    break;
+                case '\0':
+                    escaped += "\\0";
+                    break;
+                default:
+                    escaped += ch;
+                    break;
+                }
+            }
+            return "\"" + escaped + "\"";
         }
         if (std::holds_alternative<uint64_t>(value))
         {
@@ -598,11 +629,31 @@ namespace Spark::Scripting
 
     // -- Compilation to AngelScript ---------------------------------------------
 
+    static std::string SanitizeIdentifier(const std::string& name)
+    {
+        std::string sanitized;
+        sanitized.reserve(name.size());
+        for (size_t i = 0; i < name.size(); ++i)
+        {
+            char ch = name[i];
+            if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' || (i > 0 && ch >= '0' && ch <= '9'))
+            {
+                sanitized += ch;
+            }
+        }
+        if (sanitized.empty())
+        {
+            sanitized = "UnnamedScript";
+        }
+        return sanitized;
+    }
+
     std::string VisualScriptGraph::CompileToAngelScript() const
     {
         std::ostringstream out;
-        out << "// Auto-generated from visual script: " << m_name << "\n";
-        out << "class " << m_name << "\n{\n";
+        std::string safeName = SanitizeIdentifier(m_name);
+        out << "// Auto-generated from visual script: " << safeName << "\n";
+        out << "class " << safeName << "\n{\n";
 
         // Member variables
         for (const auto& var : m_variables)
@@ -1076,7 +1127,14 @@ namespace Spark::Scripting
         {
             pos++;
         }
-        return std::stoi(json.substr(pos));
+        try
+        {
+            return std::stoi(json.substr(pos));
+        }
+        catch (const std::exception&)
+        {
+            return 0;
+        }
     }
 
     static float ExtractJSONFloat(const std::string& json, const std::string& key)
@@ -1097,7 +1155,14 @@ namespace Spark::Scripting
         {
             pos++;
         }
-        return std::stof(json.substr(pos));
+        try
+        {
+            return std::stof(json.substr(pos));
+        }
+        catch (const std::exception&)
+        {
+            return 0.0f;
+        }
     }
 
     static bool ExtractJSONBool(const std::string& json, const std::string& key)
@@ -1223,7 +1288,10 @@ namespace Spark::Scripting
             AddVariable(name, type, {}, isPublic);
         }
 
-        return true;
+        // Validate the deserialized graph to reject malformed/malicious data.
+        // Deserialization skips link validation for performance, so we must
+        // validate here before the graph is compiled or executed.
+        return Validate().isValid;
     }
 
     // ============================================================================
