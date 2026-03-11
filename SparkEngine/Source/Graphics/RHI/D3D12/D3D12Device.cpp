@@ -1101,6 +1101,26 @@ namespace Spark
                 psoDesc.DepthStencilState.StencilReadMask = desc.depthStencil.stencilReadMask;
                 psoDesc.DepthStencilState.StencilWriteMask = desc.depthStencil.stencilWriteMask;
 
+                // Front face stencil
+                psoDesc.DepthStencilState.FrontFace.StencilFailOp =
+                    ConvertStencilOp(desc.depthStencil.frontFace.stencilFail);
+                psoDesc.DepthStencilState.FrontFace.StencilDepthFailOp =
+                    ConvertStencilOp(desc.depthStencil.frontFace.stencilDepthFail);
+                psoDesc.DepthStencilState.FrontFace.StencilPassOp =
+                    ConvertStencilOp(desc.depthStencil.frontFace.stencilPass);
+                psoDesc.DepthStencilState.FrontFace.StencilFunc =
+                    ConvertCompareOp(desc.depthStencil.frontFace.stencilFunc);
+
+                // Back face stencil
+                psoDesc.DepthStencilState.BackFace.StencilFailOp =
+                    ConvertStencilOp(desc.depthStencil.backFace.stencilFail);
+                psoDesc.DepthStencilState.BackFace.StencilDepthFailOp =
+                    ConvertStencilOp(desc.depthStencil.backFace.stencilDepthFail);
+                psoDesc.DepthStencilState.BackFace.StencilPassOp =
+                    ConvertStencilOp(desc.depthStencil.backFace.stencilPass);
+                psoDesc.DepthStencilState.BackFace.StencilFunc =
+                    ConvertCompareOp(desc.depthStencil.backFace.stencilFunc);
+
                 // Blend state
                 psoDesc.BlendState.AlphaToCoverageEnable = desc.blend.alphaToCoverageEnable;
                 psoDesc.BlendState.IndependentBlendEnable = desc.blend.independentBlendEnable;
@@ -1225,9 +1245,85 @@ namespace Spark
                 auto* t = static_cast<D3D12Texture*>(texture);
                 if (!t || !data)
                     return;
-                // For simplicity, use an upload heap + CopyTextureRegion
-                // Full implementation would batch these with a copy queue
-                (void)mipLevel;
+
+                uint32_t mipWidth = std::max(1u, t->GetWidth() >> mipLevel);
+                uint32_t mipHeight = std::max(1u, t->GetHeight() >> mipLevel);
+                uint32_t pixelSize = GetFormatSize(t->GetFormat());
+                uint32_t rowPitch = (mipWidth * pixelSize + 255) & ~255u; // D3D12 alignment
+                uint64_t uploadSize = static_cast<uint64_t>(rowPitch) * mipHeight;
+
+                // Create upload buffer
+                D3D12_HEAP_PROPERTIES uploadHeap = {};
+                uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+                D3D12_RESOURCE_DESC bufDesc = {};
+                bufDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+                bufDesc.Width = uploadSize;
+                bufDesc.Height = 1;
+                bufDesc.DepthOrArraySize = 1;
+                bufDesc.MipLevels = 1;
+                bufDesc.SampleDesc.Count = 1;
+                bufDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+                ComPtr<ID3D12Resource> uploadBuffer;
+                HRESULT hr = m_device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &bufDesc,
+                                                               D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                               IID_PPV_ARGS(&uploadBuffer));
+                if (FAILED(hr))
+                {
+                    std::cerr << "[D3D12] Failed to create texture upload buffer" << std::endl;
+                    return;
+                }
+
+                // Copy source data into upload buffer row-by-row (respecting alignment)
+                uint8_t* mapped = nullptr;
+                uploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mapped));
+                uint32_t srcRowPitch = mipWidth * pixelSize;
+                for (uint32_t row = 0; row < mipHeight; row++)
+                {
+                    memcpy(mapped + row * rowPitch, static_cast<const uint8_t*>(data) + row * srcRowPitch, srcRowPitch);
+                }
+                uploadBuffer->Unmap(0, nullptr);
+
+                // Record copy command
+                m_immediateCommandList->Begin();
+
+                // Transition to copy dest
+                m_immediateCommandList->TransitionBarrier(t, t->GetCurrentState(), D3D12_RESOURCE_STATE_COPY_DEST);
+                m_immediateCommandList->FlushBarriers();
+
+                D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
+                srcLoc.pResource = uploadBuffer.Get();
+                srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+                srcLoc.PlacedFootprint.Offset = 0;
+                srcLoc.PlacedFootprint.Footprint.Format = ConvertFormat(t->GetFormat());
+                srcLoc.PlacedFootprint.Footprint.Width = mipWidth;
+                srcLoc.PlacedFootprint.Footprint.Height = mipHeight;
+                srcLoc.PlacedFootprint.Footprint.Depth = 1;
+                srcLoc.PlacedFootprint.Footprint.RowPitch = rowPitch;
+
+                D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
+                dstLoc.pResource = t->GetD3D12Resource();
+                dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                dstLoc.SubresourceIndex = mipLevel;
+
+                m_immediateCommandList->GetCommandList()->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
+
+                // Transition back to shader resource
+                m_immediateCommandList->TransitionBarrier(t, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                          D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                m_immediateCommandList->End();
+
+                // Execute and wait
+                ID3D12CommandList* lists[] = {m_immediateCommandList->GetCommandList()};
+                m_directQueue->ExecuteCommandLists(1, lists);
+                WaitForIdle();
+
+                // Queue upload buffer for deferred release
+                {
+                    std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
+                    m_deferredReleaseQueue.push({uploadBuffer, m_frameFence.GetCurrentValue()});
+                }
             }
 
             // ============================================================================
@@ -1404,26 +1500,40 @@ namespace Spark
                 {
                 case PixelFormat::R8_UNORM:
                     return DXGI_FORMAT_R8_UNORM;
+                case PixelFormat::R8_SNORM:
+                    return DXGI_FORMAT_R8_SNORM;
+                case PixelFormat::R8_UINT:
+                    return DXGI_FORMAT_R8_UINT;
                 case PixelFormat::R8G8_UNORM:
                     return DXGI_FORMAT_R8G8_UNORM;
                 case PixelFormat::R8G8B8A8_UNORM:
                     return DXGI_FORMAT_R8G8B8A8_UNORM;
                 case PixelFormat::R8G8B8A8_UNORM_SRGB:
                     return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+                case PixelFormat::R8G8B8A8_SNORM:
+                    return DXGI_FORMAT_R8G8B8A8_SNORM;
                 case PixelFormat::B8G8R8A8_UNORM:
                     return DXGI_FORMAT_B8G8R8A8_UNORM;
+                case PixelFormat::B8G8R8A8_UNORM_SRGB:
+                    return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
                 case PixelFormat::R10G10B10A2_UNORM:
                     return DXGI_FORMAT_R10G10B10A2_UNORM;
                 case PixelFormat::R11G11B10_FLOAT:
                     return DXGI_FORMAT_R11G11B10_FLOAT;
                 case PixelFormat::R16_FLOAT:
                     return DXGI_FORMAT_R16_FLOAT;
+                case PixelFormat::R16_UINT:
+                    return DXGI_FORMAT_R16_UINT;
                 case PixelFormat::R16G16_FLOAT:
                     return DXGI_FORMAT_R16G16_FLOAT;
                 case PixelFormat::R16G16B16A16_FLOAT:
                     return DXGI_FORMAT_R16G16B16A16_FLOAT;
+                case PixelFormat::R16G16B16A16_UNORM:
+                    return DXGI_FORMAT_R16G16B16A16_UNORM;
                 case PixelFormat::R32_FLOAT:
                     return DXGI_FORMAT_R32_FLOAT;
+                case PixelFormat::R32_UINT:
+                    return DXGI_FORMAT_R32_UINT;
                 case PixelFormat::R32G32_FLOAT:
                     return DXGI_FORMAT_R32G32_FLOAT;
                 case PixelFormat::R32G32B32_FLOAT:
@@ -1432,10 +1542,24 @@ namespace Spark
                     return DXGI_FORMAT_R32G32B32A32_FLOAT;
                 case PixelFormat::BC1_UNORM:
                     return DXGI_FORMAT_BC1_UNORM;
+                case PixelFormat::BC1_UNORM_SRGB:
+                    return DXGI_FORMAT_BC1_UNORM_SRGB;
+                case PixelFormat::BC2_UNORM:
+                    return DXGI_FORMAT_BC2_UNORM;
                 case PixelFormat::BC3_UNORM:
                     return DXGI_FORMAT_BC3_UNORM;
+                case PixelFormat::BC3_UNORM_SRGB:
+                    return DXGI_FORMAT_BC3_UNORM_SRGB;
+                case PixelFormat::BC4_UNORM:
+                    return DXGI_FORMAT_BC4_UNORM;
+                case PixelFormat::BC5_UNORM:
+                    return DXGI_FORMAT_BC5_UNORM;
+                case PixelFormat::BC6H_UF16:
+                    return DXGI_FORMAT_BC6H_UF16;
                 case PixelFormat::BC7_UNORM:
                     return DXGI_FORMAT_BC7_UNORM;
+                case PixelFormat::BC7_UNORM_SRGB:
+                    return DXGI_FORMAT_BC7_UNORM_SRGB;
                 case PixelFormat::D16_UNORM:
                     return DXGI_FORMAT_D16_UNORM;
                 case PixelFormat::D24_UNORM_S8_UINT:
@@ -1598,12 +1722,22 @@ namespace Spark
                     return DXGI_FORMAT_R32_SINT;
                 case RHIVertexFormat::Int2:
                     return DXGI_FORMAT_R32G32_SINT;
+                case RHIVertexFormat::Int3:
+                    return DXGI_FORMAT_R32G32B32_SINT;
                 case RHIVertexFormat::Int4:
                     return DXGI_FORMAT_R32G32B32A32_SINT;
                 case RHIVertexFormat::UInt1:
                     return DXGI_FORMAT_R32_UINT;
+                case RHIVertexFormat::UInt2:
+                    return DXGI_FORMAT_R32G32_UINT;
+                case RHIVertexFormat::UInt3:
+                    return DXGI_FORMAT_R32G32B32_UINT;
+                case RHIVertexFormat::UInt4:
+                    return DXGI_FORMAT_R32G32B32A32_UINT;
                 case RHIVertexFormat::UNorm8x4:
                     return DXGI_FORMAT_R8G8B8A8_UNORM;
+                case RHIVertexFormat::SNorm8x4:
+                    return DXGI_FORMAT_R8G8B8A8_SNORM;
                 default:
                     return DXGI_FORMAT_R32G32B32_FLOAT;
                 }
