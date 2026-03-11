@@ -377,7 +377,7 @@ namespace SparkEditor
         m_sampleEntities.clear();
         // clang-format off
         auto e = [&](std::string name, uint64_t id, std::vector<std::string> components, std::string path) {
-            m_sampleEntities.push_back({std::move(name), id, std::move(components), std::move(path)});
+            m_sampleEntities.push_back(SampleEntity{std::move(name), id, std::move(components), std::move(path)});
         };
         e("Player", 1, {"Transform", "Camera", "RigidBody", "Collider", "AudioSource"}, "Root/Player");
         e("MainCamera", 2, {"Transform", "Camera"}, "Root/MainCamera");
