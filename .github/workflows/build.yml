@@ -318,8 +318,8 @@ jobs:
       - name: Generate coverage
         run: |
           lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
-          lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info
-          lcov --list coverage.info
+          lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused
+          lcov --list coverage.info --ignore-errors unused
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:

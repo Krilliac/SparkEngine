@@ -1241,6 +1241,59 @@ namespace SparkEditor
                 }
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu(ICON_FA_IMAGE " 2D / Sprites"))
+            {
+                if (ImGui::MenuItem("Sprite Renderer", nullptr, false, !HasComponent(ComponentType::SPRITE_RENDERER)))
+                {
+                    AddComponent(ComponentType::SPRITE_RENDERER);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Sprite Animator", nullptr, false, !HasComponent(ComponentType::SPRITE_ANIMATOR)))
+                {
+                    AddComponent(ComponentType::SPRITE_ANIMATOR);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Tilemap", nullptr, false, !HasComponent(ComponentType::TILEMAP)))
+                {
+                    AddComponent(ComponentType::TILEMAP);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Camera 2D", nullptr, false, !HasComponent(ComponentType::CAMERA_2D)))
+                {
+                    AddComponent(ComponentType::CAMERA_2D);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Nine-Slice Sprite", nullptr, false, !HasComponent(ComponentType::NINE_SLICE)))
+                {
+                    AddComponent(ComponentType::NINE_SLICE);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Parallax Background", nullptr, false, !HasComponent(ComponentType::PARALLAX_BG)))
+                {
+                    AddComponent(ComponentType::PARALLAX_BG);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Pixel Perfect", nullptr, false, !HasComponent(ComponentType::PIXEL_PERFECT)))
+                {
+                    AddComponent(ComponentType::PIXEL_PERFECT);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu(ICON_FA_VECTOR_SQUARE " Physics 2D"))
+            {
+                if (ImGui::MenuItem("Rigid Body 2D", nullptr, false, !HasComponent(ComponentType::RIGID_BODY_2D)))
+                {
+                    AddComponent(ComponentType::RIGID_BODY_2D);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Collider 2D", nullptr, false, !HasComponent(ComponentType::COLLIDER_2D)))
+                {
+                    AddComponent(ComponentType::COLLIDER_2D);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
             ImGui::EndPopup();
         }
     }

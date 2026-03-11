@@ -156,3 +156,91 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 - [Animation](Animation) — Animation controller component
 - [Scripting with AngelScript](Scripting-with-AngelScript) — Attach scripts to entities
 - [Scene Management](Scene-Management) — Scene hierarchy and serialization
+
+## Component Inventory
+
+<!-- AUTO:component_list -->
+| Component | Header |
+|-----------|--------|
+| `AIComponent` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
+| `ActiveComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `AnimationController` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
+| `AudioSourceComponent` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |
+| `Camera2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `Camera` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `Collider2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `ColliderComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
+| `Config` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
+| `HealthComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `InventoryTag` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `LightComponent` | `SparkEngine/Source/Engine/ECS/Components/LightComponents.h` |
+| `MeshRenderer` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `NameComponent` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `NetworkIdentity` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
+| `NineSliceSprite` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `ParallaxBackground` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `ParallaxLayer` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `ParticleEmitterComponent` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
+| `PixelPerfectComponent` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `QuestTrackerTag` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `RigidBody2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `RigidBodyComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
+| `Script` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `SpriteAnimationClip` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `SpriteAnimationFrame` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `SpriteAnimator` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `SpriteRenderer` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `TagComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `TilemapComponent` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `TilesetInfo` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `Transform` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `WeatherComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+<!-- /AUTO:component_list -->
+
+## System Inventory
+
+<!-- AUTO:system_list -->
+| System | Header |
+|--------|--------|
+| `AISystem` | `SparkEngine/Source/Engine/AI/AISystem.h` |
+| `AIUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `AchievementSystem` | `SparkEngine/Source/Engine/Stats/AchievementSystem.h` |
+| `AnimationUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `AudioUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `Camera2DFollowSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `CollisionSystem` | `SparkEngine/Source/Physics/CollisionSystem.h` |
+| `DecalSystem` | `SparkEngine/Source/Graphics/DecalSystem.h` |
+| `DestructionSystem` | `SparkEngine/Source/Engine/Destruction/DestructionSystem.h` |
+| `DialogueSystem` | `SparkEngine/Source/Engine/Dialogue/DialogueSystem.h` |
+| `FogSystem` | `SparkEngine/Source/Graphics/FogSystem.h` |
+| `GPUParticleSystem` | `SparkEngine/Source/Graphics/GPUParticleSystem.h` |
+| `ISystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
+| `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `LightingSystem` | `SparkEngine/Source/Graphics/LightingSystem.h` |
+| `LocalizationSystem` | `SparkEngine/Source/Engine/Localization/LocalizationSystem.h` |
+| `MaterialSystem` | `SparkEngine/Source/Graphics/MaterialSystem.h` |
+| `ModSystem` | `SparkEngine/Source/Engine/Modding/ModSystem.h` |
+| `ParallaxSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `ParticleSystem` | `SparkEngine/Source/Graphics/GPUParticleSystem.h` |
+| `ParticleSystem` | `SparkEngine/Source/Graphics/ParticleSystem.h` |
+| `Physics2DUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `PhysicsSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `PhysicsSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
+| `PhysicsUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `PostProcessingSystem` | `SparkEngine/Source/Graphics/PostProcessingSystem.h` |
+| `RagdollSystem` | `SparkEngine/Source/Engine/Animation/RagdollSystem.h` |
+| `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `ReplaySystem` | `SparkEngine/Source/Engine/Replay/ReplaySystem.h` |
+| `SaveSystem` | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h` |
+| `Sprite2DRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `SpriteAnimatorSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `TessellationSystem` | `SparkEngine/Source/Graphics/TessellationSystem.h` |
+| `TextureSystem` | `SparkEngine/Source/Graphics/TextureSystem.h` |
+| `TilemapRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `UISystem` | `SparkEngine/Source/Engine/UI/UISystem.h` |
+| `UpscalingSystem` | `SparkEngine/Source/Graphics/UpscalingSystem.h` |
+| `VRSystem` | `SparkEngine/Source/Engine/VR/VRSystem.h` |
+| `WaterSystem` | `SparkEngine/Source/Graphics/WaterSystem.h` |
+| `WeatherSystem` | `SparkEngine/Source/Graphics/WeatherSystem.h` |
+<!-- /AUTO:system_list -->

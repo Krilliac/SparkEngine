@@ -809,6 +809,9 @@ InputManager::InputMetrics InputManager::GetMetricsThreadSafe() const
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <thread>
+#include <chrono>
+#include <iomanip>
 
 InputManager::InputManager()
     : m_mouseX(0), m_mouseY(0), m_prevMouseX(0), m_prevMouseY(0), m_mouseDeltaX(0), m_mouseDeltaY(0), m_hwnd(nullptr),
@@ -1026,24 +1029,73 @@ bool InputManager::Console_BindKey(const std::string& action, const std::string&
 }
 void InputManager::Console_UnbindKey(const std::string& action)
 {
-    m_keyBindings.erase(action);
+    auto it = m_keyBindings.find(action);
+    if (it != m_keyBindings.end())
+    {
+        m_reverseBindings.erase(it->second);
+        m_keyBindings.erase(it);
+    }
 }
 std::string InputManager::Console_ListKeyBindings() const
 {
     std::ostringstream ss;
+    ss << "Key Bindings (" << m_keyBindings.size() << " total):\n";
+    ss << "==========================================\n";
     for (const auto& [name, key] : m_keyBindings)
-        ss << name << " -> " << VirtualKeyToKeyName(key) << "\n";
+        ss << "  " << std::left << std::setw(20) << name << " -> " << VirtualKeyToKeyName(key) << " (" << key << ")\n";
+    if (m_keyBindings.empty())
+        ss << "  No key bindings configured\n";
     return ss.str();
 }
-void InputManager::Console_SimulateKeyPress(const std::string&, int) {}
+void InputManager::Console_SimulateKeyPress(const std::string& keyName, int duration)
+{
+    int virtualKey = KeyNameToVirtualKey(keyName);
+    if (virtualKey == 0)
+        return;
+
+    UpdateKeyState(virtualKey, true);
+    if (duration == 0)
+    {
+        UpdateKeyState(virtualKey, false);
+    }
+    else
+    {
+        // Schedule timed release via background thread
+        m_pendingTimedThreads.erase(std::remove_if(m_pendingTimedThreads.begin(), m_pendingTimedThreads.end(),
+                                                   [](std::thread& t) { return !t.joinable(); }),
+                                    m_pendingTimedThreads.end());
+
+        m_pendingTimedThreads.emplace_back(
+            [this, virtualKey, duration]()
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(duration));
+                UpdateKeyState(virtualKey, false);
+            });
+    }
+}
 void InputManager::Console_ClearInputStates()
 {
     m_keyStates.clear();
+    m_prevKeyStates.clear();
     memset(m_mouseButtons, 0, sizeof(m_mouseButtons));
+    memset(m_prevMouseButtons, 0, sizeof(m_prevMouseButtons));
+    m_recentInputEvents.clear();
 }
-std::string InputManager::Console_GetRecentEvents(int) const
+std::string InputManager::Console_GetRecentEvents(int count) const
 {
-    return "";
+    std::ostringstream ss;
+    ss << "Recent Input Events (last " << std::min(count, static_cast<int>(m_recentInputEvents.size())) << "):\n";
+    int startIndex = std::max(0, static_cast<int>(m_recentInputEvents.size()) - count);
+    for (int i = startIndex; i < static_cast<int>(m_recentInputEvents.size()); ++i)
+    {
+        const auto& event = m_recentInputEvents[i];
+        std::string name =
+            (event.first >= 1000) ? "Mouse" + std::to_string(event.first - 1000) : VirtualKeyToKeyName(event.first);
+        ss << "  " << name << " " << (event.second ? "PRESSED" : "RELEASED") << "\n";
+    }
+    if (m_recentInputEvents.empty())
+        ss << "  No input events recorded\n";
+    return ss.str();
 }
 bool InputManager::Console_IsActionActive(const std::string& action) const
 {
@@ -1101,16 +1153,166 @@ void InputManager::Console_RegisterStateCallback(std::function<void()> cb)
 {
     m_stateCallback = std::move(cb);
 }
-void InputManager::Console_RefreshInput() {}
-int InputManager::KeyNameToVirtualKey(const std::string&) const
+void InputManager::Console_RefreshInput()
 {
-    return 0;
+    Update();
 }
-std::string InputManager::VirtualKeyToKeyName(int) const
+int InputManager::KeyNameToVirtualKey(const std::string& keyName) const
 {
-    return "Unknown";
+    // Cross-platform key name mapping using Platform.h VK_ constants
+    static const std::unordered_map<std::string, int> keyMapping = {{"A", 'A'},
+                                                                    {"B", 'B'},
+                                                                    {"C", 'C'},
+                                                                    {"D", 'D'},
+                                                                    {"E", 'E'},
+                                                                    {"F", 'F'},
+                                                                    {"G", 'G'},
+                                                                    {"H", 'H'},
+                                                                    {"I", 'I'},
+                                                                    {"J", 'J'},
+                                                                    {"K", 'K'},
+                                                                    {"L", 'L'},
+                                                                    {"M", 'M'},
+                                                                    {"N", 'N'},
+                                                                    {"O", 'O'},
+                                                                    {"P", 'P'},
+                                                                    {"Q", 'Q'},
+                                                                    {"R", 'R'},
+                                                                    {"S", 'S'},
+                                                                    {"T", 'T'},
+                                                                    {"U", 'U'},
+                                                                    {"V", 'V'},
+                                                                    {"W", 'W'},
+                                                                    {"X", 'X'},
+                                                                    {"Y", 'Y'},
+                                                                    {"Z", 'Z'},
+                                                                    {"0", '0'},
+                                                                    {"1", '1'},
+                                                                    {"2", '2'},
+                                                                    {"3", '3'},
+                                                                    {"4", '4'},
+                                                                    {"5", '5'},
+                                                                    {"6", '6'},
+                                                                    {"7", '7'},
+                                                                    {"8", '8'},
+                                                                    {"9", '9'},
+                                                                    {"SPACE", VK_SPACE},
+                                                                    {"ENTER", VK_RETURN},
+                                                                    {"ESCAPE", VK_ESCAPE},
+                                                                    {"TAB", VK_TAB},
+                                                                    {"SHIFT", VK_SHIFT},
+                                                                    {"CTRL", VK_CONTROL},
+                                                                    {"ALT", VK_MENU},
+                                                                    {"F1", VK_F1},
+                                                                    {"F2", VK_F2},
+                                                                    {"F3", VK_F3},
+                                                                    {"F4", VK_F4},
+                                                                    {"F5", VK_F5},
+                                                                    {"F6", VK_F6},
+                                                                    {"F7", VK_F7},
+                                                                    {"F8", VK_F8},
+                                                                    {"F9", VK_F9},
+                                                                    {"F10", VK_F10},
+                                                                    {"F11", VK_F11},
+                                                                    {"F12", VK_F12},
+                                                                    {"UP", VK_UP},
+                                                                    {"DOWN", VK_DOWN},
+                                                                    {"LEFT", VK_LEFT},
+                                                                    {"RIGHT", VK_RIGHT},
+                                                                    {"BACKSPACE", VK_BACK},
+                                                                    {"DELETE", VK_DELETE},
+                                                                    {"INSERT", VK_INSERT},
+                                                                    {"HOME", VK_HOME},
+                                                                    {"END", VK_END},
+                                                                    {"PAGEUP", VK_PRIOR},
+                                                                    {"PAGEDOWN", VK_NEXT}};
+
+    std::string upperKeyName = keyName;
+    std::transform(upperKeyName.begin(), upperKeyName.end(), upperKeyName.begin(), ::toupper);
+
+    auto it = keyMapping.find(upperKeyName);
+    return (it != keyMapping.end()) ? it->second : 0;
 }
-void InputManager::LogInputEvent(int, bool) {}
+std::string InputManager::VirtualKeyToKeyName(int virtualKey) const
+{
+    static const std::unordered_map<int, std::string> reverseMapping = {{'A', "A"},
+                                                                        {'B', "B"},
+                                                                        {'C', "C"},
+                                                                        {'D', "D"},
+                                                                        {'E', "E"},
+                                                                        {'F', "F"},
+                                                                        {'G', "G"},
+                                                                        {'H', "H"},
+                                                                        {'I', "I"},
+                                                                        {'J', "J"},
+                                                                        {'K', "K"},
+                                                                        {'L', "L"},
+                                                                        {'M', "M"},
+                                                                        {'N', "N"},
+                                                                        {'O', "O"},
+                                                                        {'P', "P"},
+                                                                        {'Q', "Q"},
+                                                                        {'R', "R"},
+                                                                        {'S', "S"},
+                                                                        {'T', "T"},
+                                                                        {'U', "U"},
+                                                                        {'V', "V"},
+                                                                        {'W', "W"},
+                                                                        {'X', "X"},
+                                                                        {'Y', "Y"},
+                                                                        {'Z', "Z"},
+                                                                        {'0', "0"},
+                                                                        {'1', "1"},
+                                                                        {'2', "2"},
+                                                                        {'3', "3"},
+                                                                        {'4', "4"},
+                                                                        {'5', "5"},
+                                                                        {'6', "6"},
+                                                                        {'7', "7"},
+                                                                        {'8', "8"},
+                                                                        {'9', "9"},
+                                                                        {VK_SPACE, "Space"},
+                                                                        {VK_RETURN, "Enter"},
+                                                                        {VK_ESCAPE, "Escape"},
+                                                                        {VK_TAB, "Tab"},
+                                                                        {VK_SHIFT, "Shift"},
+                                                                        {VK_CONTROL, "Ctrl"},
+                                                                        {VK_MENU, "Alt"},
+                                                                        {VK_F1, "F1"},
+                                                                        {VK_F2, "F2"},
+                                                                        {VK_F3, "F3"},
+                                                                        {VK_F4, "F4"},
+                                                                        {VK_F5, "F5"},
+                                                                        {VK_F6, "F6"},
+                                                                        {VK_F7, "F7"},
+                                                                        {VK_F8, "F8"},
+                                                                        {VK_F9, "F9"},
+                                                                        {VK_F10, "F10"},
+                                                                        {VK_F11, "F11"},
+                                                                        {VK_F12, "F12"},
+                                                                        {VK_UP, "Up"},
+                                                                        {VK_DOWN, "Down"},
+                                                                        {VK_LEFT, "Left"},
+                                                                        {VK_RIGHT, "Right"},
+                                                                        {VK_BACK, "Backspace"},
+                                                                        {VK_DELETE, "Delete"},
+                                                                        {VK_INSERT, "Insert"},
+                                                                        {VK_HOME, "Home"},
+                                                                        {VK_END, "End"},
+                                                                        {VK_PRIOR, "PageUp"},
+                                                                        {VK_NEXT, "PageDown"}};
+
+    auto it = reverseMapping.find(virtualKey);
+    return (it != reverseMapping.end()) ? it->second : "Unknown(" + std::to_string(virtualKey) + ")";
+}
+void InputManager::LogInputEvent(int key, bool isPressed)
+{
+    if (m_recentInputEvents.size() >= 100)
+    {
+        m_recentInputEvents.erase(m_recentInputEvents.begin());
+    }
+    m_recentInputEvents.emplace_back(key, isPressed);
+}
 void InputManager::NotifyStateChange()
 {
     if (m_stateCallback)

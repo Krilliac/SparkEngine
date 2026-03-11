@@ -139,8 +139,13 @@ btCollisionShape* PhysicsSystem::CreateMeshShape(const std::vector<XMFLOAT3>& ve
 
     btTriangleMesh* triMesh = new btTriangleMesh();
 
+    const auto vertexCount = static_cast<uint32_t>(vertices.size());
     for (size_t i = 0; i + 2 < indices.size(); i += 3)
     {
+        // Bounds-check indices to prevent out-of-range access on corrupted data
+        if (indices[i] >= vertexCount || indices[i + 1] >= vertexCount || indices[i + 2] >= vertexCount)
+            continue;
+
         const XMFLOAT3& v0 = vertices[indices[i]];
         const XMFLOAT3& v1 = vertices[indices[i + 1]];
         const XMFLOAT3& v2 = vertices[indices[i + 2]];
@@ -201,7 +206,9 @@ PhysicsBody::~PhysicsBody()
     if (m_bulletBody)
     {
         delete m_bulletBody->getMotionState();
-        delete m_bulletBody->getCollisionShape();
+        // NOTE: Do not delete the collision shape here — shapes are cached and
+        // shared via PhysicsSystem::m_shapeCache. They are cleaned up when the
+        // PhysicsSystem is shut down.
         delete m_bulletBody;
         m_bulletBody = nullptr;
     }

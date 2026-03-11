@@ -148,9 +148,10 @@ namespace Spark
             // ============================================================================
 
             VulkanSwapChain::VulkanSwapChain(VkDevice device, VkPhysicalDevice physDevice, VkSurfaceKHR surface,
-                                             const RHISwapChainDesc& desc, const QueueFamilyIndices& queueFamilies)
+                                             const RHISwapChainDesc& desc, const QueueFamilyIndices& queueFamilies,
+                                             VkQueue presentQueue)
                 : m_desc(desc), m_device(device), m_physDevice(physDevice), m_surface(surface),
-                  m_queueFamilies(queueFamilies)
+                  m_queueFamilies(queueFamilies), m_presentQueue(presentQueue)
             {
                 CreateSwapChain();
                 CreateImageViews();
@@ -288,6 +289,9 @@ namespace Spark
 
             bool VulkanSwapChain::Present(bool vsync)
             {
+                if (m_swapChain == VK_NULL_HANDLE)
+                    return false;
+
                 VkPresentInfoKHR presentInfo = {};
                 presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
                 presentInfo.waitSemaphoreCount = 1;
@@ -296,8 +300,30 @@ namespace Spark
                 presentInfo.pSwapchains = &m_swapChain;
                 presentInfo.pImageIndices = &m_currentImageIndex;
 
-                // Present queue submission would happen here
-                return true;
+                VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+                if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+                {
+                    // Swap chain needs recreation - caller should handle resize
+                    return false;
+                }
+                return result == VK_SUCCESS;
+            }
+
+            bool VulkanSwapChain::AcquireNextImage()
+            {
+                if (m_swapChain == VK_NULL_HANDLE)
+                    return false;
+
+                vkWaitForFences(m_device, 1, &m_inFlightFence, VK_TRUE, UINT64_MAX);
+                vkResetFences(m_device, 1, &m_inFlightFence);
+
+                VkResult result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailable,
+                                                        VK_NULL_HANDLE, &m_currentImageIndex);
+                if (result == VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    return false;
+                }
+                return result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
             }
 
             bool VulkanSwapChain::Resize(uint32_t width, uint32_t height)
@@ -320,8 +346,9 @@ namespace Spark
             // VULKAN COMMAND LIST
             // ============================================================================
 
-            VulkanCommandList::VulkanCommandList(VkDevice device, VkCommandPool commandPool, bool isImmediate)
-                : m_device(device), m_commandPool(commandPool), m_isImmediate(isImmediate)
+            VulkanCommandList::VulkanCommandList(VkDevice device, VkCommandPool commandPool, bool isImmediate,
+                                                 RHIStatistics* statistics)
+                : m_device(device), m_commandPool(commandPool), m_isImmediate(isImmediate), m_statistics(statistics)
             {
                 VkCommandBufferAllocateInfo allocInfo = {};
                 allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -405,6 +432,10 @@ namespace Spark
                 }
 
                 vkCmdBeginRendering(m_commandBuffer, &renderingInfo);
+                if (m_statistics)
+                {
+                    m_statistics->renderTargetChanges++;
+                }
             }
 
             void VulkanCommandList::ClearRenderTarget(IRHITexture* target, const float color[4])
@@ -475,9 +506,19 @@ namespace Spark
                     return;
                 auto* vkPSO = static_cast<VulkanPipelineState*>(pipelineState);
                 vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vkPSO->GetVkPipeline());
+                m_currentPipelineLayout = vkPSO->GetVkLayout();
+                if (m_statistics)
+                {
+                    m_statistics->pipelineChanges++;
+                }
             }
 
-            void VulkanCommandList::SetPrimitiveTopology(RHIPrimitiveTopology) {}
+            void VulkanCommandList::SetPrimitiveTopology(RHIPrimitiveTopology)
+            {
+                // Topology is baked into the pipeline state in Vulkan.
+                // Dynamic topology requires VK_EXT_extended_dynamic_state which
+                // is not yet enabled. This is a no-op for now.
+            }
 
             void VulkanCommandList::SetVertexBuffer(IRHIBuffer* buffer, uint32_t slot, uint32_t offset)
             {
@@ -498,24 +539,86 @@ namespace Spark
                 vkCmdBindIndexBuffer(m_commandBuffer, vkBuf->GetVkBuffer(), offset, indexType);
             }
 
-            void VulkanCommandList::SetConstantBuffer(RHIShaderStage, uint32_t, IRHIBuffer*) {}
-            void VulkanCommandList::SetShaderResource(RHIShaderStage, uint32_t, IRHITexture*) {}
-            void VulkanCommandList::SetSampler(RHIShaderStage, uint32_t, IRHISampler*) {}
+            void VulkanCommandList::SetConstantBuffer(RHIShaderStage, uint32_t slot, IRHIBuffer* buffer)
+            {
+                if (buffer)
+                {
+                    auto* vkBuf = static_cast<VulkanBuffer*>(buffer);
+                    m_pendingBindings.constantBuffers[slot] = vkBuf->GetVkBuffer();
+                    m_pendingBindings.constantBufferSizes[slot] = vkBuf->GetSize();
+                    m_pendingBindings.dirty = true;
+                }
+                if (m_statistics)
+                {
+                    m_statistics->bufferBinds++;
+                }
+            }
+
+            void VulkanCommandList::SetShaderResource(RHIShaderStage, uint32_t slot, IRHITexture* texture)
+            {
+                if (texture)
+                {
+                    auto* vkTex = static_cast<VulkanTexture*>(texture);
+                    m_pendingBindings.shaderResources[slot] = vkTex->GetVkImageView();
+                    m_pendingBindings.dirty = true;
+                }
+                if (m_statistics)
+                {
+                    m_statistics->textureBinds++;
+                }
+            }
+
+            void VulkanCommandList::SetSampler(RHIShaderStage, uint32_t slot, IRHISampler* sampler)
+            {
+                if (sampler)
+                {
+                    auto* vkSamp = static_cast<VulkanSampler*>(sampler);
+                    m_pendingBindings.samplers[slot] = vkSamp->GetVkSampler();
+                    m_pendingBindings.dirty = true;
+                }
+            }
+
+            void VulkanCommandList::BindDescriptorSet(VkPipelineLayout layout, VkDescriptorSet descriptorSet)
+            {
+                if (m_isRecording && descriptorSet != VK_NULL_HANDLE)
+                {
+                    vkCmdBindDescriptorSets(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1,
+                                            &descriptorSet, 0, nullptr);
+                }
+            }
 
             void VulkanCommandList::Draw(uint32_t vertexCount, uint32_t startVertex)
             {
                 vkCmdDraw(m_commandBuffer, vertexCount, 1, startVertex, 0);
+                if (m_statistics)
+                {
+                    m_statistics->drawCalls++;
+                    m_statistics->verticesProcessed += vertexCount;
+                    m_statistics->trianglesRendered += vertexCount / 3;
+                }
             }
 
             void VulkanCommandList::DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex)
             {
                 vkCmdDrawIndexed(m_commandBuffer, indexCount, 1, startIndex, baseVertex, 0);
+                if (m_statistics)
+                {
+                    m_statistics->drawCalls++;
+                    m_statistics->verticesProcessed += indexCount;
+                    m_statistics->trianglesRendered += indexCount / 3;
+                }
             }
 
             void VulkanCommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex,
                                                   uint32_t startInstance)
             {
                 vkCmdDraw(m_commandBuffer, vertexCount, instanceCount, startVertex, startInstance);
+                if (m_statistics)
+                {
+                    m_statistics->drawCalls++;
+                    m_statistics->verticesProcessed += vertexCount * instanceCount;
+                    m_statistics->trianglesRendered += (vertexCount / 3) * instanceCount;
+                }
             }
 
             void VulkanCommandList::DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount,
@@ -523,11 +626,21 @@ namespace Spark
                                                          uint32_t startInstance)
             {
                 vkCmdDrawIndexed(m_commandBuffer, indexCount, instanceCount, startIndex, baseVertex, startInstance);
+                if (m_statistics)
+                {
+                    m_statistics->drawCalls++;
+                    m_statistics->verticesProcessed += indexCount * instanceCount;
+                    m_statistics->trianglesRendered += (indexCount / 3) * instanceCount;
+                }
             }
 
             void VulkanCommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z)
             {
                 vkCmdDispatch(m_commandBuffer, x, y, z);
+                if (m_statistics)
+                {
+                    m_statistics->dispatchCalls++;
+                }
             }
 
             void VulkanCommandList::BeginEvent(const char*) {}
@@ -585,8 +698,9 @@ namespace Spark
 
                 QueryCapabilities();
 
-                // Create immediate command list
-                m_immediateCommandList = std::make_unique<VulkanCommandList>(m_device, m_commandPool, true);
+                // Create immediate command list with statistics tracking
+                m_immediateCommandList =
+                    std::make_unique<VulkanCommandList>(m_device, m_commandPool, true, &m_statistics);
 
                 // Create pipeline cache
                 VkPipelineCacheCreateInfo cacheInfo = {};
@@ -607,6 +721,38 @@ namespace Spark
                 poolInfo.maxSets = 2000;
 
                 vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool);
+
+                // Create descriptor set layout and default pipeline layout
+                if (!CreateDescriptorSetLayout())
+                    return false;
+
+                // Create per-frame synchronization primitives
+                m_frameFences.resize(MAX_FRAMES_IN_FLIGHT);
+                m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+
+                VkFenceCreateInfo fenceInfo = {};
+                fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+                fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+                VkSemaphoreCreateInfo semaphoreInfo = {};
+                semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+                for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+                {
+                    vkCreateFence(m_device, &fenceInfo, nullptr, &m_frameFences[i]);
+                    vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]);
+                }
+
+                // Load debug utility function pointers if validation is enabled
+                if (m_validationEnabled)
+                {
+                    m_vkCmdBeginDebugUtilsLabel = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(
+                        vkGetInstanceProcAddr(m_instance, "vkCmdBeginDebugUtilsLabelEXT"));
+                    m_vkCmdEndDebugUtilsLabel = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(
+                        vkGetInstanceProcAddr(m_instance, "vkCmdEndDebugUtilsLabelEXT"));
+                    m_vkCmdInsertDebugUtilsLabel = reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(
+                        vkGetInstanceProcAddr(m_instance, "vkCmdInsertDebugUtilsLabelEXT"));
+                }
 
                 return true;
             }
@@ -850,12 +996,98 @@ namespace Spark
                 m_capabilities.multiDrawIndirectSupport = features.multiDrawIndirect;
             }
 
+            bool VulkanDevice::CreateDescriptorSetLayout()
+            {
+                // Create a binding layout matching D3D11's resource model:
+                // binding 0-13: uniform buffers (14 constant buffer slots)
+                // binding 14-29: combined image samplers (16 texture slots)
+                std::vector<VkDescriptorSetLayoutBinding> bindings;
+
+                // Constant buffer bindings (0-13)
+                for (uint32_t i = 0; i < 14; ++i)
+                {
+                    VkDescriptorSetLayoutBinding uboBinding = {};
+                    uboBinding.binding = i;
+                    uboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                    uboBinding.descriptorCount = 1;
+                    uboBinding.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT;
+                    bindings.push_back(uboBinding);
+                }
+
+                // Combined image sampler bindings (14-29)
+                for (uint32_t i = 0; i < 16; ++i)
+                {
+                    VkDescriptorSetLayoutBinding texBinding = {};
+                    texBinding.binding = 14 + i;
+                    texBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    texBinding.descriptorCount = 1;
+                    texBinding.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT;
+                    bindings.push_back(texBinding);
+                }
+
+                VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+                layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+                layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+                layoutInfo.pBindings = bindings.data();
+
+                if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_bindingLayout) != VK_SUCCESS)
+                    return false;
+
+                // Create default pipeline layout using this descriptor set layout
+                VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+                pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+                pipelineLayoutInfo.setLayoutCount = 1;
+                pipelineLayoutInfo.pSetLayouts = &m_bindingLayout;
+
+                if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_defaultPipelineLayout) !=
+                    VK_SUCCESS)
+                    return false;
+
+                return true;
+            }
+
+            VkDescriptorSet VulkanDevice::AllocateDescriptorSet()
+            {
+                VkDescriptorSetAllocateInfo allocInfo = {};
+                allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+                allocInfo.descriptorPool = m_descriptorPool;
+                allocInfo.descriptorSetCount = 1;
+                allocInfo.pSetLayouts = &m_bindingLayout;
+
+                VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+                if (vkAllocateDescriptorSets(m_device, &allocInfo, &descriptorSet) != VK_SUCCESS)
+                    return VK_NULL_HANDLE;
+
+                return descriptorSet;
+            }
+
             void VulkanDevice::Shutdown()
             {
                 if (m_device != VK_NULL_HANDLE)
                     vkDeviceWaitIdle(m_device);
 
                 m_immediateCommandList.reset();
+
+                // Destroy per-frame synchronization
+                for (auto fence : m_frameFences)
+                {
+                    if (fence != VK_NULL_HANDLE)
+                        vkDestroyFence(m_device, fence, nullptr);
+                }
+                m_frameFences.clear();
+
+                for (auto sem : m_renderFinishedSemaphores)
+                {
+                    if (sem != VK_NULL_HANDLE)
+                        vkDestroySemaphore(m_device, sem, nullptr);
+                }
+                m_renderFinishedSemaphores.clear();
+
+                // Destroy descriptor set layout and default pipeline layout
+                if (m_defaultPipelineLayout != VK_NULL_HANDLE)
+                    vkDestroyPipelineLayout(m_device, m_defaultPipelineLayout, nullptr);
+                if (m_bindingLayout != VK_NULL_HANDLE)
+                    vkDestroyDescriptorSetLayout(m_device, m_bindingLayout, nullptr);
 
                 if (m_pipelineCache != VK_NULL_HANDLE)
                     vkDestroyPipelineCache(m_device, m_pipelineCache, nullptr);
@@ -875,6 +1107,8 @@ namespace Spark
                 if (m_instance != VK_NULL_HANDLE)
                     vkDestroyInstance(m_instance, nullptr);
 
+                m_defaultPipelineLayout = VK_NULL_HANDLE;
+                m_bindingLayout = VK_NULL_HANDLE;
                 m_pipelineCache = VK_NULL_HANDLE;
                 m_descriptorPool = VK_NULL_HANDLE;
                 m_commandPool = VK_NULL_HANDLE;
@@ -895,7 +1129,8 @@ namespace Spark
                 vkCreateWin32SurfaceKHR(m_instance, &surfaceInfo, nullptr, &surface);
 #endif
 
-                return std::make_unique<VulkanSwapChain>(m_device, m_physicalDevice, surface, desc, m_queueFamilies);
+                return std::make_unique<VulkanSwapChain>(m_device, m_physicalDevice, surface, desc, m_queueFamilies,
+                                                         m_presentQueue);
             }
 
             IRHIBuffer* VulkanDevice::CreateBuffer(const RHIBufferDesc& desc)
@@ -916,6 +1151,10 @@ namespace Spark
                 if (desc.usage & RHIBufferUsage::CopySrc)
                     bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
                 if (desc.usage & RHIBufferUsage::CopyDst)
+                    bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+                // Ensure device-local buffers with initial data can be transfer targets
+                if (desc.initialData && desc.access == RHIBufferAccess::Static)
                     bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
                 VkBuffer buffer;
@@ -948,12 +1187,85 @@ namespace Spark
                 // Upload initial data
                 if (desc.initialData)
                 {
-                    void* mapped;
-                    vkMapMemory(m_device, memory, 0, desc.size, 0, &mapped);
-                    memcpy(mapped, desc.initialData, desc.size);
-                    vkUnmapMemory(m_device, memory);
+                    if (memProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+                    {
+                        // Direct map for host-visible memory
+                        void* mapped;
+                        vkMapMemory(m_device, memory, 0, desc.size, 0, &mapped);
+                        memcpy(mapped, desc.initialData, desc.size);
+                        vkUnmapMemory(m_device, memory);
+                    }
+                    else
+                    {
+                        // Use staging buffer for device-local memory
+                        VkBuffer stagingBuffer;
+                        VkDeviceMemory stagingMemory;
+
+                        VkBufferCreateInfo stagingInfo = {};
+                        stagingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+                        stagingInfo.size = desc.size;
+                        stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+                        stagingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+                        if (vkCreateBuffer(m_device, &stagingInfo, nullptr, &stagingBuffer) == VK_SUCCESS)
+                        {
+                            VkMemoryRequirements stagingReqs;
+                            vkGetBufferMemoryRequirements(m_device, stagingBuffer, &stagingReqs);
+
+                            VkMemoryAllocateInfo stagingAlloc = {};
+                            stagingAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+                            stagingAlloc.allocationSize = stagingReqs.size;
+                            stagingAlloc.memoryTypeIndex =
+                                FindMemoryType(stagingReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+                            if (vkAllocateMemory(m_device, &stagingAlloc, nullptr, &stagingMemory) == VK_SUCCESS)
+                            {
+                                vkBindBufferMemory(m_device, stagingBuffer, stagingMemory, 0);
+
+                                void* mapped;
+                                vkMapMemory(m_device, stagingMemory, 0, desc.size, 0, &mapped);
+                                memcpy(mapped, desc.initialData, desc.size);
+                                vkUnmapMemory(m_device, stagingMemory);
+
+                                // Record and execute copy command
+                                VkCommandBufferAllocateInfo cmdAllocInfo = {};
+                                cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+                                cmdAllocInfo.commandPool = m_commandPool;
+                                cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+                                cmdAllocInfo.commandBufferCount = 1;
+
+                                VkCommandBuffer cmdBuffer;
+                                vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmdBuffer);
+
+                                VkCommandBufferBeginInfo beginInfo = {};
+                                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                                beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+                                vkBeginCommandBuffer(cmdBuffer, &beginInfo);
+
+                                VkBufferCopy copyRegion = {};
+                                copyRegion.size = desc.size;
+                                vkCmdCopyBuffer(cmdBuffer, stagingBuffer, buffer, 1, &copyRegion);
+
+                                vkEndCommandBuffer(cmdBuffer);
+
+                                VkSubmitInfo submitInfo = {};
+                                submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                                submitInfo.commandBufferCount = 1;
+                                submitInfo.pCommandBuffers = &cmdBuffer;
+
+                                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+                                vkQueueWaitIdle(m_graphicsQueue);
+
+                                vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
+                                vkFreeMemory(m_device, stagingMemory, nullptr);
+                            }
+                            vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+                        }
+                    }
                 }
 
+                // Also set transfer dst flag for device-local buffers that may receive initial data
                 return new VulkanBuffer(desc, buffer, memory, m_device);
             }
 
@@ -1075,7 +1387,7 @@ namespace Spark
                 samplerInfo.compareOp = ConvertCompareOp(desc.compareOp);
                 samplerInfo.minLod = desc.minLod;
                 samplerInfo.maxLod = desc.maxLod;
-                memcpy(&samplerInfo.borderColor, desc.borderColor, sizeof(float) * 4); // Simplified
+                samplerInfo.borderColor = ConvertBorderColor(desc.borderColor);
 
                 VkSampler sampler;
                 if (vkCreateSampler(m_device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
@@ -1118,12 +1430,35 @@ namespace Spark
                     attributes.push_back(attr);
                 }
 
-                if (!attributes.empty())
+                // Compute per-binding strides from actual element offsets and sizes
+                std::unordered_map<uint32_t, uint32_t> bindingStrides;
+                for (const auto& elem : desc.inputLayout.elements)
+                {
+                    uint32_t elemSize = GetVertexFormatSize(elem.format);
+                    uint32_t elemEnd = elem.byteOffset + elemSize;
+                    auto it = bindingStrides.find(elem.inputSlot);
+                    if (it == bindingStrides.end() || elemEnd > it->second)
+                    {
+                        bindingStrides[elem.inputSlot] = elemEnd;
+                    }
+                }
+
+                for (const auto& [slot, stride] : bindingStrides)
                 {
                     VkVertexInputBindingDescription binding = {};
-                    binding.binding = 0;
-                    binding.stride = desc.inputLayout.elements.back().byteOffset + 8; // Approximate
-                    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+                    binding.binding = slot;
+                    binding.stride = stride;
+                    // Check if any element in this slot is per-instance
+                    bool perInstance = false;
+                    for (const auto& elem : desc.inputLayout.elements)
+                    {
+                        if (elem.inputSlot == slot && elem.perInstance)
+                        {
+                            perInstance = true;
+                            break;
+                        }
+                    }
+                    binding.inputRate = perInstance ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
                     bindings.push_back(binding);
                 }
 
@@ -1205,11 +1540,15 @@ namespace Spark
                 colorBlending.attachmentCount = static_cast<uint32_t>(colorBlendAttachments.size());
                 colorBlending.pAttachments = colorBlendAttachments.data();
 
-                // Pipeline layout
+                // Use the default pipeline layout with descriptor set bindings
+                VkPipelineLayout pipelineLayout = m_defaultPipelineLayout;
+                // We share the default layout - pipelines using it must not destroy it.
+                // Create a per-pipeline copy for safety.
                 VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
                 pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+                pipelineLayoutInfo.setLayoutCount = 1;
+                pipelineLayoutInfo.pSetLayouts = &m_bindingLayout;
 
-                VkPipelineLayout pipelineLayout;
                 if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
                     return nullptr;
 
@@ -1299,9 +1638,143 @@ namespace Spark
                 }
             }
 
-            void VulkanDevice::UpdateTexture(IRHITexture*, const void*, uint32_t, uint32_t)
+            void VulkanDevice::UpdateTexture(IRHITexture* texture, const void* data, uint32_t mipLevel, uint32_t)
             {
-                // Staging buffer copy would be implemented here
+                if (!texture || !data)
+                    return;
+
+                auto* vkTex = static_cast<VulkanTexture*>(texture);
+                uint32_t width = std::max(1u, vkTex->GetWidth() >> mipLevel);
+                uint32_t height = std::max(1u, vkTex->GetHeight() >> mipLevel);
+
+                // Calculate size based on format (simplified - assumes 4 bytes per pixel for common formats)
+                uint32_t bytesPerPixel = 4;
+                VkFormat fmt = ConvertFormat(vkTex->GetFormat());
+                if (fmt == VK_FORMAT_R8_UNORM)
+                    bytesPerPixel = 1;
+                else if (fmt == VK_FORMAT_R8G8_UNORM)
+                    bytesPerPixel = 2;
+                else if (fmt == VK_FORMAT_R16G16B16A16_SFLOAT)
+                    bytesPerPixel = 8;
+                else if (fmt == VK_FORMAT_R32G32B32A32_SFLOAT)
+                    bytesPerPixel = 16;
+                else if (fmt == VK_FORMAT_R32_SFLOAT || fmt == VK_FORMAT_R32_UINT || fmt == VK_FORMAT_R32_SINT)
+                    bytesPerPixel = 4;
+                else if (fmt == VK_FORMAT_R16_SFLOAT)
+                    bytesPerPixel = 2;
+
+                VkDeviceSize imageSize = static_cast<VkDeviceSize>(width) * height * bytesPerPixel;
+
+                // Create staging buffer
+                VkBuffer stagingBuffer;
+                VkDeviceMemory stagingMemory;
+
+                VkBufferCreateInfo bufInfo = {};
+                bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+                bufInfo.size = imageSize;
+                bufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+                bufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+                if (vkCreateBuffer(m_device, &bufInfo, nullptr, &stagingBuffer) != VK_SUCCESS)
+                    return;
+
+                VkMemoryRequirements memReqs;
+                vkGetBufferMemoryRequirements(m_device, stagingBuffer, &memReqs);
+
+                VkMemoryAllocateInfo allocInfo = {};
+                allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+                allocInfo.allocationSize = memReqs.size;
+                allocInfo.memoryTypeIndex = FindMemoryType(
+                    memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+                if (vkAllocateMemory(m_device, &allocInfo, nullptr, &stagingMemory) != VK_SUCCESS)
+                {
+                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+                    return;
+                }
+
+                vkBindBufferMemory(m_device, stagingBuffer, stagingMemory, 0);
+
+                // Copy data to staging buffer
+                void* mapped;
+                vkMapMemory(m_device, stagingMemory, 0, imageSize, 0, &mapped);
+                memcpy(mapped, data, static_cast<size_t>(imageSize));
+                vkUnmapMemory(m_device, stagingMemory);
+
+                // Record copy command
+                VkCommandBufferAllocateInfo cmdAllocInfo = {};
+                cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+                cmdAllocInfo.commandPool = m_commandPool;
+                cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+                cmdAllocInfo.commandBufferCount = 1;
+
+                VkCommandBuffer cmdBuffer;
+                vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmdBuffer);
+
+                VkCommandBufferBeginInfo beginInfo = {};
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+                vkBeginCommandBuffer(cmdBuffer, &beginInfo);
+
+                // Transition to transfer dst
+                VkImageMemoryBarrier barrier = {};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.oldLayout = vkTex->GetCurrentLayout();
+                barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image = vkTex->GetVkImage();
+                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                barrier.subresourceRange.baseMipLevel = mipLevel;
+                barrier.subresourceRange.levelCount = 1;
+                barrier.subresourceRange.baseArrayLayer = 0;
+                barrier.subresourceRange.layerCount = 1;
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+                vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0,
+                                     nullptr, 0, nullptr, 1, &barrier);
+
+                // Copy buffer to image
+                VkBufferImageCopy region = {};
+                region.bufferOffset = 0;
+                region.bufferRowLength = 0;
+                region.bufferImageHeight = 0;
+                region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                region.imageSubresource.mipLevel = mipLevel;
+                region.imageSubresource.baseArrayLayer = 0;
+                region.imageSubresource.layerCount = 1;
+                region.imageOffset = {0, 0, 0};
+                region.imageExtent = {width, height, 1};
+
+                vkCmdCopyBufferToImage(cmdBuffer, stagingBuffer, vkTex->GetVkImage(),
+                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+                // Transition to shader read optimal
+                barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+                vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                     0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+                vkEndCommandBuffer(cmdBuffer);
+
+                // Submit and wait
+                VkSubmitInfo submitInfo = {};
+                submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                submitInfo.commandBufferCount = 1;
+                submitInfo.pCommandBuffers = &cmdBuffer;
+
+                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+                vkQueueWaitIdle(m_graphicsQueue);
+
+                vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
+                vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+                vkFreeMemory(m_device, stagingMemory, nullptr);
+
+                vkTex->SetCurrentLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             }
 
             IRHICommandList* VulkanDevice::GetImmediateCommandList()
@@ -1335,8 +1808,40 @@ namespace Spark
             void VulkanDevice::BeginFrame()
             {
                 ResetStatistics();
+
+                // Wait for this frame's fence before starting new work
+                if (!m_frameFences.empty())
+                {
+                    vkWaitForFences(m_device, 1, &m_frameFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+                    vkResetFences(m_device, 1, &m_frameFences[m_currentFrame]);
+                }
             }
-            void VulkanDevice::EndFrame() {}
+
+            void VulkanDevice::EndFrame()
+            {
+                // Submit the immediate command list if recording
+                auto* cmdList = static_cast<VulkanCommandList*>(GetImmediateCommandList());
+                VkCommandBuffer cmd = cmdList->GetVkCommandBuffer();
+
+                VkSubmitInfo submitInfo = {};
+                submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                submitInfo.commandBufferCount = 1;
+                submitInfo.pCommandBuffers = &cmd;
+
+                VkFence frameFence = VK_NULL_HANDLE;
+                if (!m_frameFences.empty())
+                {
+                    frameFence = m_frameFences[m_currentFrame];
+                }
+
+                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, frameFence);
+
+                // Advance frame index
+                if (!m_frameFences.empty())
+                {
+                    m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+                }
+            }
             void VulkanDevice::WaitForIdle()
             {
                 if (m_device != VK_NULL_HANDLE)
@@ -1381,32 +1886,92 @@ namespace Spark
             // FORMAT CONVERSION HELPERS
             // ============================================================================
 
+            uint32_t VulkanDevice::GetVertexFormatSize(RHIVertexFormat format) const
+            {
+                switch (format)
+                {
+                case RHIVertexFormat::Float1:
+                case RHIVertexFormat::Int1:
+                case RHIVertexFormat::UInt1:
+                    return 4;
+                case RHIVertexFormat::Float2:
+                case RHIVertexFormat::Int2:
+                case RHIVertexFormat::UInt2:
+                    return 8;
+                case RHIVertexFormat::Float3:
+                case RHIVertexFormat::Int3:
+                case RHIVertexFormat::UInt3:
+                    return 12;
+                case RHIVertexFormat::Float4:
+                case RHIVertexFormat::Int4:
+                case RHIVertexFormat::UInt4:
+                    return 16;
+                case RHIVertexFormat::UNorm8x4:
+                case RHIVertexFormat::SNorm8x4:
+                    return 4;
+                default:
+                    return 4;
+                }
+            }
+
+            VkBorderColor VulkanDevice::ConvertBorderColor(const float borderColor[4]) const
+            {
+                // Vulkan only supports specific border color enum values
+                if (borderColor[3] == 0.0f)
+                {
+                    if (borderColor[0] == 0.0f && borderColor[1] == 0.0f && borderColor[2] == 0.0f)
+                        return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+                }
+                if (borderColor[0] == 0.0f && borderColor[1] == 0.0f && borderColor[2] == 0.0f &&
+                    borderColor[3] == 1.0f)
+                    return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+                if (borderColor[0] == 1.0f && borderColor[1] == 1.0f && borderColor[2] == 1.0f &&
+                    borderColor[3] == 1.0f)
+                    return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+                // Default to transparent black for unsupported custom border colors
+                return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+            }
+
             VkFormat VulkanDevice::ConvertFormat(PixelFormat format) const
             {
                 switch (format)
                 {
                 case PixelFormat::R8_UNORM:
                     return VK_FORMAT_R8_UNORM;
+                case PixelFormat::R8_SNORM:
+                    return VK_FORMAT_R8_SNORM;
+                case PixelFormat::R8_UINT:
+                    return VK_FORMAT_R8_UINT;
                 case PixelFormat::R8G8_UNORM:
                     return VK_FORMAT_R8G8_UNORM;
                 case PixelFormat::R8G8B8A8_UNORM:
                     return VK_FORMAT_R8G8B8A8_UNORM;
                 case PixelFormat::R8G8B8A8_UNORM_SRGB:
                     return VK_FORMAT_R8G8B8A8_SRGB;
+                case PixelFormat::R8G8B8A8_SNORM:
+                    return VK_FORMAT_R8G8B8A8_SNORM;
                 case PixelFormat::B8G8R8A8_UNORM:
                     return VK_FORMAT_B8G8R8A8_UNORM;
+                case PixelFormat::B8G8R8A8_UNORM_SRGB:
+                    return VK_FORMAT_B8G8R8A8_SRGB;
                 case PixelFormat::R10G10B10A2_UNORM:
                     return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
                 case PixelFormat::R11G11B10_FLOAT:
                     return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
                 case PixelFormat::R16_FLOAT:
                     return VK_FORMAT_R16_SFLOAT;
+                case PixelFormat::R16_UINT:
+                    return VK_FORMAT_R16_UINT;
                 case PixelFormat::R16G16_FLOAT:
                     return VK_FORMAT_R16G16_SFLOAT;
                 case PixelFormat::R16G16B16A16_FLOAT:
                     return VK_FORMAT_R16G16B16A16_SFLOAT;
+                case PixelFormat::R16G16B16A16_UNORM:
+                    return VK_FORMAT_R16G16B16A16_UNORM;
                 case PixelFormat::R32_FLOAT:
                     return VK_FORMAT_R32_SFLOAT;
+                case PixelFormat::R32_UINT:
+                    return VK_FORMAT_R32_UINT;
                 case PixelFormat::R32G32_FLOAT:
                     return VK_FORMAT_R32G32_SFLOAT;
                 case PixelFormat::R32G32B32_FLOAT:
@@ -1415,18 +1980,32 @@ namespace Spark
                     return VK_FORMAT_R32G32B32A32_SFLOAT;
                 case PixelFormat::BC1_UNORM:
                     return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+                case PixelFormat::BC1_UNORM_SRGB:
+                    return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
+                case PixelFormat::BC2_UNORM:
+                    return VK_FORMAT_BC2_UNORM_BLOCK;
                 case PixelFormat::BC3_UNORM:
                     return VK_FORMAT_BC3_UNORM_BLOCK;
+                case PixelFormat::BC3_UNORM_SRGB:
+                    return VK_FORMAT_BC3_SRGB_BLOCK;
+                case PixelFormat::BC4_UNORM:
+                    return VK_FORMAT_BC4_UNORM_BLOCK;
                 case PixelFormat::BC5_UNORM:
                     return VK_FORMAT_BC5_UNORM_BLOCK;
+                case PixelFormat::BC6H_UF16:
+                    return VK_FORMAT_BC6H_UFLOAT_BLOCK;
                 case PixelFormat::BC7_UNORM:
                     return VK_FORMAT_BC7_UNORM_BLOCK;
+                case PixelFormat::BC7_UNORM_SRGB:
+                    return VK_FORMAT_BC7_SRGB_BLOCK;
                 case PixelFormat::D16_UNORM:
                     return VK_FORMAT_D16_UNORM;
                 case PixelFormat::D24_UNORM_S8_UINT:
                     return VK_FORMAT_D24_UNORM_S8_UINT;
                 case PixelFormat::D32_FLOAT:
                     return VK_FORMAT_D32_SFLOAT;
+                case PixelFormat::D32_FLOAT_S8_UINT:
+                    return VK_FORMAT_D32_SFLOAT_S8_UINT;
                 default:
                     return VK_FORMAT_UNDEFINED;
                 }
@@ -1449,6 +2028,8 @@ namespace Spark
                     return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
                 case RHIAddressMode::Border:
                     return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+                case RHIAddressMode::MirrorOnce:
+                    return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
                 default:
                     return VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 }
@@ -1589,12 +2170,22 @@ namespace Spark
                     return VK_FORMAT_R32_SINT;
                 case RHIVertexFormat::Int2:
                     return VK_FORMAT_R32G32_SINT;
+                case RHIVertexFormat::Int3:
+                    return VK_FORMAT_R32G32B32_SINT;
                 case RHIVertexFormat::Int4:
                     return VK_FORMAT_R32G32B32A32_SINT;
                 case RHIVertexFormat::UInt1:
                     return VK_FORMAT_R32_UINT;
+                case RHIVertexFormat::UInt2:
+                    return VK_FORMAT_R32G32_UINT;
+                case RHIVertexFormat::UInt3:
+                    return VK_FORMAT_R32G32B32_UINT;
+                case RHIVertexFormat::UInt4:
+                    return VK_FORMAT_R32G32B32A32_UINT;
                 case RHIVertexFormat::UNorm8x4:
                     return VK_FORMAT_R8G8B8A8_UNORM;
+                case RHIVertexFormat::SNorm8x4:
+                    return VK_FORMAT_R8G8B8A8_SNORM;
                 default:
                     return VK_FORMAT_R32G32B32_SFLOAT;
                 }

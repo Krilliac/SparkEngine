@@ -577,8 +577,13 @@ namespace Spark::AI
             return navMesh;
 
         // Convert input geometry to navmesh triangles
+        const uint32_t vertexCount = static_cast<uint32_t>(vertices.size());
         for (size_t i = 0; i + 2 < indices.size(); i += 3)
         {
+            // Bounds-check indices to prevent out-of-range access on corrupted data
+            if (indices[i] >= vertexCount || indices[i + 1] >= vertexCount || indices[i + 2] >= vertexCount)
+                continue;
+
             const auto& v0 = vertices[indices[i]];
             const auto& v1 = vertices[indices[i + 1]];
             const auto& v2 = vertices[indices[i + 2]];
@@ -590,7 +595,7 @@ namespace Spark::AI
 
             XMFLOAT3 n;
             XMStoreFloat3(&n, normal);
-            float slopeAngle = std::acos(std::abs(n.y)) * (180.0f / 3.14159265f);
+            float slopeAngle = std::acos((std::max)(-1.0f, (std::min)(1.0f, std::abs(n.y)))) * (180.0f / 3.14159265f);
 
             if (slopeAngle > settings.agentMaxSlope)
                 continue;
@@ -689,6 +694,9 @@ namespace Spark::AI
                                                                       const NavMeshBuildSettings& settings)
     {
 
+        if (!heightData || width <= 0 || height <= 0)
+            return std::make_unique<NavMeshData>();
+
         // Convert heightfield to triangle soup, then build
         std::vector<XMFLOAT3> vertices;
         std::vector<uint32_t> indices;
@@ -763,15 +771,21 @@ namespace Spark::AI
         file.read(reinterpret_cast<char*>(&navMesh->boundsMin), sizeof(XMFLOAT3));
         file.read(reinterpret_cast<char*>(&navMesh->boundsMax), sizeof(XMFLOAT3));
 
-        // Read vertices
+        // Read vertices with safety limits to prevent excessive allocation from corrupted files
         uint32_t vertexCount;
         file.read(reinterpret_cast<char*>(&vertexCount), 4);
+        constexpr uint32_t kMaxVertices = 10'000'000; // 10M vertices max
+        if (!file.good() || vertexCount > kMaxVertices)
+            return false;
         navMesh->vertices.resize(vertexCount);
         file.read(reinterpret_cast<char*>(navMesh->vertices.data()), vertexCount * sizeof(XMFLOAT3));
 
-        // Read triangles
+        // Read triangles with safety limits
         uint32_t triangleCount;
         file.read(reinterpret_cast<char*>(&triangleCount), 4);
+        constexpr uint32_t kMaxTriangles = 10'000'000; // 10M triangles max
+        if (!file.good() || triangleCount > kMaxTriangles)
+            return false;
         navMesh->triangles.resize(triangleCount);
         for (uint32_t i = 0; i < triangleCount; ++i)
         {
@@ -781,6 +795,9 @@ namespace Spark::AI
             file.read(reinterpret_cast<char*>(&navMesh->triangles[i].area), sizeof(float));
             uint32_t adjCount;
             file.read(reinterpret_cast<char*>(&adjCount), 4);
+            constexpr uint32_t kMaxAdjacency = 10'000; // Reasonable adjacency limit per triangle
+            if (!file.good() || adjCount > kMaxAdjacency)
+                return false;
             navMesh->triangles[i].adjacency.resize(adjCount);
             if (adjCount > 0)
             {

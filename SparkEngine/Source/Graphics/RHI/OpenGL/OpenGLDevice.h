@@ -39,6 +39,12 @@ namespace Spark
         {
 
             // ============================================================================
+            // FORWARD DECLARATIONS
+            // ============================================================================
+
+            class GLDevice;
+
+            // ============================================================================
             // OPENGL RESOURCE IMPLEMENTATIONS
             // ============================================================================
 
@@ -70,7 +76,8 @@ namespace Spark
             class GLTexture : public IRHITexture
             {
               public:
-                GLTexture(const RHITextureDesc& desc, GLuint texture, GLuint framebuffer = 0);
+                GLTexture(const RHITextureDesc& desc, GLuint texture, GLuint framebuffer = 0,
+                          GLenum target = GL_TEXTURE_2D);
                 ~GLTexture() override;
 
                 const std::string& GetDebugName() const override { return m_desc.debugName; }
@@ -95,12 +102,14 @@ namespace Spark
                 void* GetDepthStencilView() const override { return GetNativeHandle(); }
 
                 GLuint GetGLTexture() const { return m_texture; }
+                GLenum GetGLTarget() const { return m_target; }
                 GLuint GetGLFramebuffer() const { return m_framebuffer; }
                 void SetFramebuffer(GLuint fbo) { m_framebuffer = fbo; }
 
               private:
                 RHITextureDesc m_desc;
                 GLuint m_texture;
+                GLenum m_target;
                 GLuint m_framebuffer;
             };
 
@@ -219,7 +228,7 @@ namespace Spark
             class GLCommandList : public IRHICommandList
             {
               public:
-                GLCommandList(bool isImmediate);
+                GLCommandList(bool isImmediate, RHIStatistics* statistics);
                 ~GLCommandList() override = default;
 
                 void Begin() override;
@@ -256,7 +265,10 @@ namespace Spark
                 void SetMarker(const char* name) override;
 
               private:
+                uint32_t EstimateVertexCount(uint32_t primitiveCount) const;
+
                 bool m_isImmediate;
+                RHIStatistics* m_statistics = nullptr;
                 GLenum m_currentTopology = GL_TRIANGLES;
                 GLuint m_currentVAO = 0;
                 GLuint m_currentProgram = 0;
@@ -298,6 +310,8 @@ namespace Spark
                 void UpdateTexture(IRHITexture* texture, const void* data, uint32_t mipLevel,
                                    uint32_t arraySlice) override;
 
+                void GenerateMips(IRHITexture* texture);
+
                 IRHICommandList* GetImmediateCommandList() override;
                 IRHICommandList* CreateDeferredCommandList() override;
                 void ExecuteCommandList(IRHICommandList* commandList) override;
@@ -324,8 +338,14 @@ namespace Spark
                 GLenum ConvertBlendFactor(RHIBlendFactor factor) const;
                 GLenum ConvertBlendOp(RHIBlendOp op) const;
                 GLenum ConvertTopology(RHIPrimitiveTopology topology) const;
+                uint32_t GetFormatSize(PixelFormat format) const;
+                GLenum GetTextureTarget(const RHITextureDesc& desc) const;
+                bool IsCompressedFormat(PixelFormat format) const;
+                bool IsDepthFormat(PixelFormat format) const;
+                GLenum GetDepthAttachmentType(PixelFormat format) const;
 
                 void QueryCapabilities();
+                void CheckGLError(const char* operation) const;
 
                 std::unique_ptr<GLCommandList> m_immediateCommandList;
                 RHIDeviceCapabilities m_capabilities;

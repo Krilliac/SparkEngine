@@ -23,6 +23,9 @@
 #include "EditorLayoutManager.h"
 #include "EditorCrashHandler.h"
 #include "ProjectManager.h"
+#include "../UndoRedo/UndoRedoManager.h"
+#include "../Prefabs/PrefabManager.h"
+#include "../Search/CommandPalette.h"
 
 #ifdef _WIN32
 struct ID3D11Device;
@@ -76,6 +79,9 @@ namespace SparkEditor
         EditorLogger* GetLogger() const { return m_logger.get(); }
         EditorCrashHandler* GetCrashHandler() const { return m_crashHandler; }
         ProjectManager* GetProjectManager() { return m_projectManager.get(); }
+        UndoRedoManager* GetUndoRedoManager() { return m_undoRedoManager.get(); }
+        PrefabManager* GetPrefabManager() { return m_prefabManager.get(); }
+        CommandPalette* GetCommandPalette() { return m_commandPalette.get(); }
 
         // Project operations (triggered from menu bar)
         void ShowNewProjectDialog();
@@ -142,6 +148,9 @@ namespace SparkEditor
         EditorCrashHandler* m_crashHandler = nullptr;
         std::unique_ptr<ProjectManager> m_projectManager;
         std::shared_ptr<ProjectBrowserPanel> m_projectBrowserPanel;
+        std::unique_ptr<UndoRedoManager> m_undoRedoManager;
+        std::unique_ptr<PrefabManager> m_prefabManager;
+        std::unique_ptr<CommandPalette> m_commandPalette;
 
         // Panel management
         std::unordered_map<std::string, std::shared_ptr<EditorPanel>> m_panels;
@@ -245,6 +254,8 @@ namespace SparkEditor
         void SetupDefaultDockLayout(ImGuiID dockspaceId);
         void UpdateStats(float deltaTime);
         void CreatePanels();
+        void InitializeCommandPalette();
+        void HandleKeyboardShortcuts();
     };
 
 } // namespace SparkEditor

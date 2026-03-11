@@ -467,4 +467,10 @@ localdev.sh
 !tools/SparkBuild-linux
 !tools/SparkBuild-macos
 
+# Generated documentation (re-create with docs/generate-api-docs.sh)
+docs/api/
+docs/output/
+docs/.api_checksums
+docs/.doc_checksums
+
 # End of SparkEngine .gitignore
