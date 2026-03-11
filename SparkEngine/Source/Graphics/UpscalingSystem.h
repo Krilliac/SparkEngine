@@ -218,6 +218,37 @@ struct alignas(16) FSR1RCASConstants
 };
 
 // =============================================================================
+// FSR 2.0 Constants
+// =============================================================================
+
+/**
+ * @brief Constant buffer for FSR 2.0 temporal upscaling pass
+ */
+struct alignas(16) FSR2Constants
+{
+    XMFLOAT4 renderSize;     ///< (renderW, renderH, 1/renderW, 1/renderH)
+    XMFLOAT4 displaySize;    ///< (displayW, displayH, 1/displayW, 1/displayH)
+    XMFLOAT4 jitterOffset;   ///< (jitterX, jitterY, motionScaleX, motionScaleY)
+    XMFLOAT4 cameraParams;   ///< (nearPlane, farPlane, verticalFOV, deltaTime)
+    XMFLOAT4 temporalParams; ///< (frameIndex, resetFlag, sharpness, reserved)
+};
+
+// =============================================================================
+// DLSS/XeSS Constants
+// =============================================================================
+
+/**
+ * @brief Constant buffer shared by DLSS/XeSS fallback path
+ */
+struct alignas(16) TemporalUpscaleConstants
+{
+    XMFLOAT4 renderSize;     ///< (renderW, renderH, 1/renderW, 1/renderH)
+    XMFLOAT4 displaySize;    ///< (displayW, displayH, 1/displayW, 1/displayH)
+    XMFLOAT4 jitterOffset;   ///< (jitterX, jitterY, 0, 0)
+    XMFLOAT4 temporalParams; ///< (frameIndex, resetFlag, sharpness, reserved)
+};
+
+// =============================================================================
 // FSR 2.0 Dispatch Description
 // =============================================================================
 
@@ -427,57 +458,7 @@ class UpscalingSystem
      * @param inputColorSRV  Low-resolution color input
      * @param outputUAV      Full-resolution output
      */
-    void ExecuteFSR1(ID3D11ShaderResourceView* inputColorSRV, ID3D11UnorderedAccessView* outputUAV)
-    {
-        if (!m_initialized || m_settings.mode != UpscalingMode::FSR1)
-        {
-            return;
-        }
-
-#ifdef SPARK_PLATFORM_WINDOWS
-        if (!m_context || !inputColorSRV || !outputUAV)
-        {
-            return;
-        }
-
-        // Pass 1: EASU (upscale)
-        {
-            FSR1EASUConstants easuConst = {};
-            float inputWidth = static_cast<float>(m_renderWidth);
-            float inputHeight = static_cast<float>(m_renderHeight);
-            float outputWidth = static_cast<float>(m_displayWidth);
-            float outputHeight = static_cast<float>(m_displayHeight);
-
-            easuConst.const0 = {inputWidth, inputHeight, outputWidth, outputHeight};
-            easuConst.const1 = {0.0f, 0.0f, inputWidth, inputHeight};
-            easuConst.const2 = {1.0f / inputWidth, 1.0f / inputHeight, 1.0f / outputWidth, 1.0f / outputHeight};
-            easuConst.const3 = {0.0f, 0.0f, 0.0f, 0.0f};
-
-            UpdateFSR1Constants(&easuConst, nullptr);
-
-            // Bind EASU compute shader and dispatch
-            // In production: bind m_fsr1EASUShader, input SRV, intermediate UAV
-            // context->Dispatch(dispatchX, dispatchY, 1);
-        }
-
-        // Pass 2: RCAS (sharpen)
-        {
-            FSR1RCASConstants rcasConst = {};
-            // RCAS attenuation: 0 = maximum sharpening, 2 = no sharpening
-            float rcasAttenuation = 2.0f * (1.0f - m_settings.sharpness);
-            rcasConst.const0 = {rcasAttenuation, 0.0f, 0.0f, 0.0f};
-
-            UpdateFSR1Constants(nullptr, &rcasConst);
-
-            // Bind RCAS compute shader and dispatch
-            // In production: bind m_fsr1RCASShader, intermediate SRV, output UAV
-            // context->Dispatch(dispatchX, dispatchY, 1);
-        }
-#else
-        (void)inputColorSRV;
-        (void)outputUAV;
-#endif
-    }
+    void ExecuteFSR1(ID3D11ShaderResourceView* inputColorSRV, ID3D11UnorderedAccessView* outputUAV);
 
     // ---- FSR 2.0 (Temporal Upscaling) ----
 
@@ -489,40 +470,7 @@ class UpscalingSystem
      *
      * @param desc Dispatch description with all required inputs
      */
-    void ExecuteFSR2(const FSR2DispatchDescription& desc)
-    {
-        if (!m_initialized || m_settings.mode != UpscalingMode::FSR2)
-        {
-            return;
-        }
-
-#ifdef SPARK_PLATFORM_WINDOWS
-        if (!m_context)
-        {
-            return;
-        }
-
-        // FSR 2.0 algorithm outline:
-        // 1. Compute luminance stability from current and previous frames
-        // 2. Reconstruct previous frame data using motion vectors
-        // 3. Compute disocclusion mask (areas with no valid history)
-        // 4. Upsample and accumulate using robust temporal filtering
-        // 5. Apply reactive mask for transparent/particle objects
-        // 6. Lock luminance to prevent flickering
-        // 7. Apply optional sharpening (RCAS)
-        //
-        // In production, this dispatches the FSR 2 compute shaders from
-        // the AMD FidelityFX SDK.
-
-        if (desc.resetAccumulation)
-        {
-            m_fsr2FrameIndex = 0;
-        }
-        m_fsr2FrameIndex++;
-#else
-        (void)desc;
-#endif
-    }
+    void ExecuteFSR2(const FSR2DispatchDescription& desc);
 
     // ---- DLSS ----
 
@@ -539,43 +487,7 @@ class UpscalingSystem
      */
     void ExecuteDLSS(ID3D11ShaderResourceView* colorSRV, ID3D11ShaderResourceView* depthSRV,
                      ID3D11ShaderResourceView* motionVectorsSRV, ID3D11ShaderResourceView* exposureSRV,
-                     ID3D11UnorderedAccessView* outputUAV, const XMFLOAT2& jitterOffset, bool resetHistory = false)
-    {
-        if (!m_initialized || m_settings.mode != UpscalingMode::DLSS)
-        {
-            return;
-        }
-
-        if (!m_dlssFeatureInfo.isAvailable)
-        {
-            return;
-        }
-
-#ifdef SPARK_PLATFORM_WINDOWS
-        // DLSS integration outline:
-        // 1. Query NVSDK_NGX for optimal settings via NVSDK_NGX_DLSS_GetOptimalSettingsCallback
-        // 2. Set DLSS parameters: render size, display size, quality, sharpness
-        // 3. Provide input resources: color, depth, motion vectors, exposure
-        // 4. Execute DLSS via NVSDK_NGX_D3D11_EvaluateFeature
-        // 5. Output is written to the provided UAV
-        //
-        // Requires the NVIDIA NGX SDK and a compatible RTX/GTX GPU.
-
-        if (resetHistory)
-        {
-            m_dlssFrameIndex = 0;
-        }
-        m_dlssFrameIndex++;
-#else
-        (void)colorSRV;
-        (void)depthSRV;
-        (void)motionVectorsSRV;
-        (void)exposureSRV;
-        (void)outputUAV;
-        (void)jitterOffset;
-        (void)resetHistory;
-#endif
-    }
+                     ID3D11UnorderedAccessView* outputUAV, const XMFLOAT2& jitterOffset, bool resetHistory = false);
 
     /** @brief Get DLSS feature info */
     const DLSSFeatureInfo& GetDLSSFeatureInfo() const { return m_dlssFeatureInfo; }
@@ -594,40 +506,7 @@ class UpscalingSystem
      */
     void ExecuteXeSS(ID3D11ShaderResourceView* colorSRV, ID3D11ShaderResourceView* depthSRV,
                      ID3D11ShaderResourceView* motionVectorsSRV, ID3D11ShaderResourceView* exposureSRV,
-                     ID3D11UnorderedAccessView* outputUAV, const XMFLOAT2& jitterOffset)
-    {
-        if (!m_initialized || m_settings.mode != UpscalingMode::XeSS)
-        {
-            return;
-        }
-
-        if (!m_xessFeatureInfo.isAvailable)
-        {
-            return;
-        }
-
-#ifdef SPARK_PLATFORM_WINDOWS
-        // XeSS integration outline:
-        // 1. Initialize XeSS context via xessD3D11CreateContext
-        // 2. Set quality mode and input/output resolutions
-        // 3. Provide input buffers: color, depth, motion vectors, exposure
-        // 4. Execute via xessD3D11Execute
-        // 5. Works on any GPU via DP4a, accelerated on Intel Arc with XMX
-        (void)colorSRV;
-        (void)depthSRV;
-        (void)motionVectorsSRV;
-        (void)exposureSRV;
-        (void)outputUAV;
-        (void)jitterOffset;
-#else
-        (void)colorSRV;
-        (void)depthSRV;
-        (void)motionVectorsSRV;
-        (void)exposureSRV;
-        (void)outputUAV;
-        (void)jitterOffset;
-#endif
-    }
+                     ID3D11UnorderedAccessView* outputUAV, const XMFLOAT2& jitterOffset);
 
     /** @brief Get XeSS feature info */
     const XeSSFeatureInfo& GetXeSSFeatureInfo() const { return m_xessFeatureInfo; }
@@ -742,6 +621,26 @@ class UpscalingSystem
 
     /** @brief Check if any upscaling is active */
     bool IsActive() const { return m_settings.mode != UpscalingMode::None; }
+
+    /**
+     * @brief Get the recommended render size for a given display resolution and quality
+     * @param displayWidth  Target display width
+     * @param displayHeight Target display height
+     * @param quality       Quality preset
+     * @param outWidth      Recommended render width
+     * @param outHeight     Recommended render height
+     */
+    static void GetRecommendedRenderSize(uint32_t displayWidth, uint32_t displayHeight, UpscalingQuality quality,
+                                         uint32_t& outWidth, uint32_t& outHeight);
+
+    /** @brief Check if FSR 1.0 is available (always true — shader-based) */
+    bool IsFSR1Available() const { return true; }
+
+    /** @brief Check if FSR 2.0 is available (requires compute shader support) */
+    bool IsFSR2Available() const { return m_fsr2Available; }
+
+    /** @brief Check if compute shaders were compiled successfully */
+    bool AreShadersCompiled() const { return m_shadersCompiled; }
 
     // ---- Console Integration ----
 
@@ -866,51 +765,11 @@ class UpscalingSystem
   private:
     // ---- Feature Detection ----
 
-    void DetectFeatures()
-    {
-        // DLSS detection: query NVIDIA NGX for feature support
-        // In production: call NVSDK_NGX_D3D11_Init and check for DLSS capability
-        m_dlssFeatureInfo.isAvailable = false;
-        m_dlssFeatureInfo.isOptimalDriver = false;
-
-        // XeSS detection: check for DP4a support (available on most modern GPUs)
-        // In production: call xessIsOptimal and xessD3D11CreateContext
-        m_xessFeatureInfo.isAvailable = false;
-        m_xessFeatureInfo.hasXMXAcceleration = false;
-    }
+    void DetectFeatures();
 
     // ---- GPU Resources ----
 
-    bool CreateGPUResources()
-    {
-#ifdef SPARK_PLATFORM_WINDOWS
-        if (!m_device)
-        {
-            return false;
-        }
-
-        // Create FSR 1.0 constant buffers
-        D3D11_BUFFER_DESC cbDesc = {};
-        cbDesc.Usage = D3D11_USAGE_DYNAMIC;
-        cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-        cbDesc.ByteWidth = sizeof(FSR1EASUConstants);
-        HRESULT hr = m_device->CreateBuffer(&cbDesc, nullptr, m_fsr1EASUConstantBuffer.GetAddressOf());
-        if (FAILED(hr))
-        {
-            return false;
-        }
-
-        cbDesc.ByteWidth = sizeof(FSR1RCASConstants);
-        hr = m_device->CreateBuffer(&cbDesc, nullptr, m_fsr1RCASConstantBuffer.GetAddressOf());
-        if (FAILED(hr))
-        {
-            return false;
-        }
-#endif
-        return true;
-    }
+    bool CreateGPUResources();
 
     void ReleaseGPUResources()
     {
@@ -925,49 +784,18 @@ class UpscalingSystem
 #endif
     }
 
-    void RecreateUpscalingResources()
-    {
-        if (!m_initialized)
-        {
-            return;
-        }
-
-#ifdef SPARK_PLATFORM_WINDOWS
-        // Release and recreate intermediate texture at new render resolution
-        m_intermediateTexture.Reset();
-        m_intermediateSRV.Reset();
-        m_intermediateUAV.Reset();
-
-        if (m_settings.mode == UpscalingMode::None || !m_device)
-        {
-            return;
-        }
-
-        // Create intermediate texture for multi-pass upscaling (FSR 1.0 EASU output)
-        D3D11_TEXTURE2D_DESC texDesc = {};
-        texDesc.Width = m_displayWidth;
-        texDesc.Height = m_displayHeight;
-        texDesc.MipLevels = 1;
-        texDesc.ArraySize = 1;
-        texDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-        texDesc.SampleDesc.Count = 1;
-        texDesc.Usage = D3D11_USAGE_DEFAULT;
-        texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-
-        m_device->CreateTexture2D(&texDesc, nullptr, m_intermediateTexture.GetAddressOf());
-
-        if (m_intermediateTexture)
-        {
-            m_device->CreateShaderResourceView(m_intermediateTexture.Get(), nullptr, m_intermediateSRV.GetAddressOf());
-            m_device->CreateUnorderedAccessView(m_intermediateTexture.Get(), nullptr, m_intermediateUAV.GetAddressOf());
-        }
-#endif
-    }
+    void RecreateUpscalingResources();
 
     void UpdateRenderResolution()
     {
         m_settings.CalculateRenderResolution(m_displayWidth, m_displayHeight, m_renderWidth, m_renderHeight);
     }
+
+    /** @brief Compile all upscaling compute shaders from inline HLSL */
+    bool CompileUpscalingShaders();
+
+    /** @brief Unbind all compute shader resources */
+    void UnbindComputeResources();
 
     void UpdateFSR1Constants(const FSR1EASUConstants* easuConst, const FSR1RCASConstants* rcasConst)
     {
@@ -1021,9 +849,14 @@ class UpscalingSystem
     DLSSFeatureInfo m_dlssFeatureInfo;
     XeSSFeatureInfo m_xessFeatureInfo;
 
+    // Feature availability flags
+    bool m_fsr2Available = false;
+    bool m_shadersCompiled = false;
+
     // Frame counters for temporal modes
     uint32_t m_fsr2FrameIndex = 0;
     uint32_t m_dlssFrameIndex = 0;
+    uint32_t m_xessFrameIndex = 0;
 
     // D3D11 resources (raw pointers are non-owning per engine convention)
     ID3D11Device* m_device = nullptr;
@@ -1036,9 +869,28 @@ class UpscalingSystem
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> m_fsr1EASUShader;
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> m_fsr1RCASShader;
 
+    // FSR 2.0 / temporal resources
+    Microsoft::WRL::ComPtr<ID3D11ComputeShader> m_fsr2TemporalCS;
+    Microsoft::WRL::ComPtr<ID3D11ComputeShader> m_fsr2SharpenCS;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_fsr2ConstantBuffer;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_temporalUpscaleConstantBuffer;
+
+    // Temporal history textures (for FSR2 accumulation)
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_temporalHistoryTexture;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_temporalHistorySRV;
+    Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView> m_temporalHistoryUAV;
+
     // Intermediate resources
     Microsoft::WRL::ComPtr<ID3D11Texture2D> m_intermediateTexture;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_intermediateSRV;
     Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView> m_intermediateUAV;
+
+    // Lock texture for luminance locking (FSR2)
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_lockTexture;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_lockSRV;
+    Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView> m_lockUAV;
+
+    // Sampler state for upscaling shaders
+    Microsoft::WRL::ComPtr<ID3D11SamplerState> m_linearClampSampler;
 #endif
 };

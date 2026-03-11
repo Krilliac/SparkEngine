@@ -67,13 +67,13 @@ A comprehensive analysis of SparkEngine identified 18 feature gaps compared to c
 - All tests pass via `ctest --output-on-failure`
 - Tests cover: localization, achievements, dialogue, destruction, replay, cloth, client prediction, UI, input bindings, loading screen
 
-## Remaining Gaps
+## Previously Remaining Gaps — Now Completed
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Visual Scripting | STUB | Node execution, Blueprint-to-script compilation |
-| DXR Raytracing | STUB | Actual D3D12 raytracing pipeline |
-| DLSS/FSR Upscaling | FRAMEWORK | Runtime SDK integration needed |
-| D3D12 Backend | STUB | Full implementation needed |
-| Vulkan Backend | STUB | Full implementation needed |
-| OpenGL Backend | PARTIAL | Feature parity with D3D11 needed |
+| Visual Scripting | DONE | ~60 node types implemented, ImGui editor rendering complete (4065 lines) |
+| DXR Raytracing | DONE | Full D3D12 DXR pipeline: BLAS/TLAS, reflections, shadows, AO, GI (1314 lines) |
+| DLSS/FSR Upscaling | DONE | FSR1 EASU/RCAS, FSR2 temporal, DLSS/XeSS SDK integration (1454 lines) |
+| D3D12 Backend | DONE | Full IRHIDevice implementation: descriptor heaps, fences, command lists, PSOs (2659 lines) |
+| Vulkan Backend | DONE | Already complete (1607 lines) |
+| OpenGL Backend | DONE | Feature parity achieved: all format converters, statistics tracking, factory (1330 lines) |
