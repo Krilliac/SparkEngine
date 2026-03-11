@@ -29,9 +29,19 @@ namespace Spark::Animation
         }
     }
 
+    void AnimationCompressor::ReduceClip(AnimationClip& clip)
+    {
+        ReduceClip(clip, Settings{});
+    }
+
     // =========================================================================
     // Full compression pipeline
     // =========================================================================
+
+    CompressedClip AnimationCompressor::CompressClip(const AnimationClip& clip)
+    {
+        return CompressClip(clip, Settings{});
+    }
 
     CompressedClip AnimationCompressor::CompressClip(const AnimationClip& clip, const Settings& settings)
     {
