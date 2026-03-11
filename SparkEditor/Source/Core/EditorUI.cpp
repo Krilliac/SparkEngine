@@ -1150,183 +1150,183 @@ namespace SparkEditor
                 if (ImGui::MenuItem(ICON_FA_HAMMER " Build & Cook", nullptr, IsPanelVisible("BuildCook")))
                 {
                     SetPanelVisible("BuildCook", !IsPanelVisible("BuildCook"));
-                    ImGui::TextDisabled("Tools & Analysis");
-                    if (ImGui::MenuItem(ICON_FA_UNDO " Undo History", nullptr, IsPanelVisible("UndoHistory")))
-                    {
-                        SetPanelVisible("UndoHistory", !IsPanelVisible("UndoHistory"));
-                    }
-                    if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Statistics", nullptr, IsPanelVisible("SceneStats")))
-                    {
-                        SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
-                    }
-                    if (ImGui::MenuItem(ICON_FA_CUBE " Prefab Editor", nullptr, IsPanelVisible("PrefabEditor")))
-                    {
-                        SetPanelVisible("PrefabEditor", !IsPanelVisible("PrefabEditor"));
-                    }
-                    if (ImGui::MenuItem(ICON_FA_SEARCH " Search", nullptr, IsPanelVisible("Search")))
-                    {
-                        SetPanelVisible("Search", !IsPanelVisible("Search"));
-                    }
-                    ImGui::Separator();
-                    ImGui::TextDisabled("2D / 2.5D Panels");
-                    if (ImGui::MenuItem("Sprite Editor", nullptr, IsPanelVisible("SpriteEditor")))
-                    {
-                        SetPanelVisible("SpriteEditor", !IsPanelVisible("SpriteEditor"));
-                    }
-                    if (ImGui::MenuItem("Tilemap Editor", nullptr, IsPanelVisible("TilemapEditor")))
-                    {
-                        SetPanelVisible("TilemapEditor", !IsPanelVisible("TilemapEditor"));
-                    }
-                    if (ImGui::MenuItem("Sprite Animation", nullptr, IsPanelVisible("SpriteAnimEditor")))
-                    {
-                        SetPanelVisible("SpriteAnimEditor", !IsPanelVisible("SpriteAnimEditor"));
-                    }
-                    if (ImGui::MenuItem("Physics 2D", nullptr, IsPanelVisible("Physics2D")))
-                    {
-                        SetPanelVisible("Physics2D", !IsPanelVisible("Physics2D"));
-                    }
-                    ImGui::Separator();
-                    ImGui::TextDisabled("FPS Panels");
-                    if (ImGui::MenuItem("Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
-                    {
-                        SetPanelVisible("WeaponEditor", !IsPanelVisible("WeaponEditor"));
-                    }
-                    if (ImGui::MenuItem("FPS Tools", nullptr, IsPanelVisible("FPSTools")))
-                    {
-                        SetPanelVisible("FPSTools", !IsPanelVisible("FPSTools"));
-                    }
-                    ImGui::Separator();
-                    if (ImGui::MenuItem("Reset Layout"))
-                    {
-                        ResetToDefaultLayout();
-                        ShowNotification("Layout reset!", "success");
-                    }
-                    if (ImGui::MenuItem("Save Layout"))
-                    {
-                        SaveLayout("Custom Layout");
-                        ShowNotification("Layout saved!", "success");
-                    }
-                    ImGui::EndMenu();
                 }
-
-                if (ImGui::BeginMenu("FPS Tools"))
+                ImGui::TextDisabled("Tools & Analysis");
+                if (ImGui::MenuItem(ICON_FA_UNDO " Undo History", nullptr, IsPanelVisible("UndoHistory")))
                 {
-                    if (ImGui::MenuItem(ICON_FA_CROSSHAIRS " Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
-                    {
-                        SetPanelVisible("WeaponEditor", !IsPanelVisible("WeaponEditor"));
-                        if (IsPanelVisible("WeaponEditor"))
-                        {
-                            ShowNotification("Weapon Editor opened!", "success");
-                        }
-                    }
-                    if (ImGui::MenuItem(ICON_FA_ROCKET " FPS Tools Panel", nullptr, IsPanelVisible("FPSTools")))
-                    {
-                        SetPanelVisible("FPSTools", !IsPanelVisible("FPSTools"));
-                        if (IsPanelVisible("FPSTools"))
-                        {
-                            ShowNotification("FPS Tools panel opened!", "success");
-                        }
-                    }
-                    ImGui::Separator();
-                    if (ImGui::MenuItem(ICON_FA_FLAG " Spawn Points"))
-                    {
-                        SetPanelVisible("FPSTools", true);
-                        ShowNotification("Open FPS Tools panel > Spawns tab", "info");
-                    }
-                    if (ImGui::MenuItem(ICON_FA_BULLSEYE " Objectives"))
-                    {
-                        SetPanelVisible("FPSTools", true);
-                        ShowNotification("Open FPS Tools panel > Level tab", "info");
-                    }
-                    ImGui::Separator();
-                    if (ImGui::MenuItem(ICON_FA_BOMB " Explosive Volumes"))
-                    {
-                        SetPanelVisible("FPSTools", true);
-                        ShowNotification("Open FPS Tools panel > Level tab", "info");
-                    }
-                    if (ImGui::MenuItem(ICON_FA_SHIELD " Cover Points"))
-                    {
-                        SetPanelVisible("FPSTools", true);
-                        ShowNotification("Open FPS Tools panel > Level tab", "info");
-                    }
-                    ImGui::EndMenu();
+                    SetPanelVisible("UndoHistory", !IsPanelVisible("UndoHistory"));
                 }
-
-                if (ImGui::BeginMenu("Build"))
+                if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Statistics", nullptr, IsPanelVisible("SceneStats")))
                 {
-                    if (ImGui::MenuItem(ICON_FA_COG " Build Settings..."))
-                    {
-                        SetPanelVisible("BuildCook", true);
-                        ShowNotification("Build & Cook panel opened", "info");
-                    }
-                    ImGui::Separator();
-                    if (ImGui::MenuItem(ICON_FA_LIGHTBULB " Build Lighting"))
-                    {
-                        ShowNotification("Build Lighting started...", "info");
-                    }
-                    if (ImGui::MenuItem(ICON_FA_MAP " Build NavMesh"))
-                    {
-                        ShowNotification("Build NavMesh started...", "info");
-                    }
-                    ImGui::Separator();
-                    if (ImGui::MenuItem(ICON_FA_HAMMER " Build All"))
-                    {
-                        ShowNotification("Build All started...", "info");
-                    }
-                    if (ImGui::MenuItem(ICON_FA_FIRE " Cook Content"))
-                    {
-                        SetPanelVisible("BuildCook", true);
-                        ShowNotification("Open Build & Cook panel to configure cooking", "info");
-                    }
-                    ImGui::Separator();
-                    if (ImGui::MenuItem(ICON_FA_ROCKET " Package Project..."))
-                    {
-                        SetPanelVisible("BuildCook", true);
-                        ShowNotification("Configure packaging in Build & Cook panel", "info");
-                    }
-                    ImGui::EndMenu();
+                    SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
                 }
-
-                if (ImGui::BeginMenu("Help"))
+                if (ImGui::MenuItem(ICON_FA_CUBE " Prefab Editor", nullptr, IsPanelVisible("PrefabEditor")))
                 {
-                    if (ImGui::MenuItem("Show Demo Window", nullptr, m_showDemoWindow))
-                    {
-                        m_showDemoWindow = !m_showDemoWindow;
-                    }
-                    if (ImGui::BeginMenu("Themes"))
-                    {
-                        auto themes = EditorTheme::GetAvailableThemes();
-                        for (const auto& name : themes)
-                        {
-                            bool isSelected = (m_currentTheme == name);
-                            if (ImGui::MenuItem(name.c_str(), nullptr, isSelected))
-                            {
-                                ApplyTheme(name);
-                                ShowNotification("Theme: " + name, "success", 2.0f);
-                            }
-                        }
-                        ImGui::EndMenu();
-                    }
-                    ImGui::Separator();
-                    if (ImGui::MenuItem("About"))
-                    {
-                        ShowNotification(ICON_FA_BOLT " Spark Engine Editor v1.0 — FPS Game Engine", "info", 5.0f);
-                    }
-                    if (ImGui::MenuItem("Documentation"))
-                    {
-                        // Open the wiki/docs in the default browser or file explorer
-#ifdef _WIN32
-                        ShellExecuteA(nullptr, "open", "docs", nullptr, nullptr, SW_SHOWNORMAL);
-#else
-                        system("xdg-open docs/ &");
-#endif
-                        ShowNotification("Opening documentation...", "info", 2.0f);
-                    }
-                    ImGui::EndMenu();
+                    SetPanelVisible("PrefabEditor", !IsPanelVisible("PrefabEditor"));
                 }
-
-                ImGui::EndMainMenuBar();
+                if (ImGui::MenuItem(ICON_FA_SEARCH " Search", nullptr, IsPanelVisible("Search")))
+                {
+                    SetPanelVisible("Search", !IsPanelVisible("Search"));
+                }
+                ImGui::Separator();
+                ImGui::TextDisabled("2D / 2.5D Panels");
+                if (ImGui::MenuItem("Sprite Editor", nullptr, IsPanelVisible("SpriteEditor")))
+                {
+                    SetPanelVisible("SpriteEditor", !IsPanelVisible("SpriteEditor"));
+                }
+                if (ImGui::MenuItem("Tilemap Editor", nullptr, IsPanelVisible("TilemapEditor")))
+                {
+                    SetPanelVisible("TilemapEditor", !IsPanelVisible("TilemapEditor"));
+                }
+                if (ImGui::MenuItem("Sprite Animation", nullptr, IsPanelVisible("SpriteAnimEditor")))
+                {
+                    SetPanelVisible("SpriteAnimEditor", !IsPanelVisible("SpriteAnimEditor"));
+                }
+                if (ImGui::MenuItem("Physics 2D", nullptr, IsPanelVisible("Physics2D")))
+                {
+                    SetPanelVisible("Physics2D", !IsPanelVisible("Physics2D"));
+                }
+                ImGui::Separator();
+                ImGui::TextDisabled("FPS Panels");
+                if (ImGui::MenuItem("Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
+                {
+                    SetPanelVisible("WeaponEditor", !IsPanelVisible("WeaponEditor"));
+                }
+                if (ImGui::MenuItem("FPS Tools", nullptr, IsPanelVisible("FPSTools")))
+                {
+                    SetPanelVisible("FPSTools", !IsPanelVisible("FPSTools"));
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Reset Layout"))
+                {
+                    ResetToDefaultLayout();
+                    ShowNotification("Layout reset!", "success");
+                }
+                if (ImGui::MenuItem("Save Layout"))
+                {
+                    SaveLayout("Custom Layout");
+                    ShowNotification("Layout saved!", "success");
+                }
+                ImGui::EndMenu();
             }
+
+            if (ImGui::BeginMenu("FPS Tools"))
+            {
+                if (ImGui::MenuItem(ICON_FA_CROSSHAIRS " Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
+                {
+                    SetPanelVisible("WeaponEditor", !IsPanelVisible("WeaponEditor"));
+                    if (IsPanelVisible("WeaponEditor"))
+                    {
+                        ShowNotification("Weapon Editor opened!", "success");
+                    }
+                }
+                if (ImGui::MenuItem(ICON_FA_ROCKET " FPS Tools Panel", nullptr, IsPanelVisible("FPSTools")))
+                {
+                    SetPanelVisible("FPSTools", !IsPanelVisible("FPSTools"));
+                    if (IsPanelVisible("FPSTools"))
+                    {
+                        ShowNotification("FPS Tools panel opened!", "success");
+                    }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_FLAG " Spawn Points"))
+                {
+                    SetPanelVisible("FPSTools", true);
+                    ShowNotification("Open FPS Tools panel > Spawns tab", "info");
+                }
+                if (ImGui::MenuItem(ICON_FA_BULLSEYE " Objectives"))
+                {
+                    SetPanelVisible("FPSTools", true);
+                    ShowNotification("Open FPS Tools panel > Level tab", "info");
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_BOMB " Explosive Volumes"))
+                {
+                    SetPanelVisible("FPSTools", true);
+                    ShowNotification("Open FPS Tools panel > Level tab", "info");
+                }
+                if (ImGui::MenuItem(ICON_FA_SHIELD " Cover Points"))
+                {
+                    SetPanelVisible("FPSTools", true);
+                    ShowNotification("Open FPS Tools panel > Level tab", "info");
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Build"))
+            {
+                if (ImGui::MenuItem(ICON_FA_COG " Build Settings..."))
+                {
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Build & Cook panel opened", "info");
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_LIGHTBULB " Build Lighting"))
+                {
+                    ShowNotification("Build Lighting started...", "info");
+                }
+                if (ImGui::MenuItem(ICON_FA_MAP " Build NavMesh"))
+                {
+                    ShowNotification("Build NavMesh started...", "info");
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_HAMMER " Build All"))
+                {
+                    ShowNotification("Build All started...", "info");
+                }
+                if (ImGui::MenuItem(ICON_FA_FIRE " Cook Content"))
+                {
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Open Build & Cook panel to configure cooking", "info");
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_ROCKET " Package Project..."))
+                {
+                    SetPanelVisible("BuildCook", true);
+                    ShowNotification("Configure packaging in Build & Cook panel", "info");
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Help"))
+            {
+                if (ImGui::MenuItem("Show Demo Window", nullptr, m_showDemoWindow))
+                {
+                    m_showDemoWindow = !m_showDemoWindow;
+                }
+                if (ImGui::BeginMenu("Themes"))
+                {
+                    auto themes = EditorTheme::GetAvailableThemes();
+                    for (const auto& name : themes)
+                    {
+                        bool isSelected = (m_currentTheme == name);
+                        if (ImGui::MenuItem(name.c_str(), nullptr, isSelected))
+                        {
+                            ApplyTheme(name);
+                            ShowNotification("Theme: " + name, "success", 2.0f);
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("About"))
+                {
+                    ShowNotification(ICON_FA_BOLT " Spark Engine Editor v1.0 — FPS Game Engine", "info", 5.0f);
+                }
+                if (ImGui::MenuItem("Documentation"))
+                {
+                    // Open the wiki/docs in the default browser or file explorer
+#ifdef _WIN32
+                    ShellExecuteA(nullptr, "open", "docs", nullptr, nullptr, SW_SHOWNORMAL);
+#else
+                    system("xdg-open docs/ &");
+#endif
+                    ShowNotification("Opening documentation...", "info", 2.0f);
+                }
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMainMenuBar();
         }
     }
 
