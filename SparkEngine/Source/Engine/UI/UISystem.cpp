@@ -99,15 +99,15 @@ namespace Spark::UI
     }
 
     // =============================================================================
-    // UIImage
+    // UIImageWidget
     // =============================================================================
 
-    UIImage::UIImage(const std::string& name, const std::string& texturePath)
+    UIImageWidget::UIImageWidget(const std::string& name, const std::string& texturePath)
         : UIWidget(name), m_texturePath(texturePath)
     {
     }
 
-    void UIImage::Render() const
+    void UIImageWidget::Render() const
     {
         if (!m_visible)
         {
@@ -146,9 +146,9 @@ namespace Spark::UI
         return ptr;
     }
 
-    UIImage* UIPanel::CreateImage(const std::string& name, const std::string& texturePath)
+    UIImageWidget* UIPanel::CreateImage(const std::string& name, const std::string& texturePath)
     {
-        auto widget = std::make_unique<UIImage>(name, texturePath);
+        auto widget = std::make_unique<UIImageWidget>(name, texturePath);
         auto* ptr = widget.get();
         m_children.push_back(std::move(widget));
         return ptr;
