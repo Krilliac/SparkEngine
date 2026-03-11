@@ -202,12 +202,14 @@ AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float
 
     if (volume < 0.0f || volume > 1.0f)
     {
-        SPARK_LOG_WARN("Audio", "PlaySound '%s': volume %.2f clamped to [0,1]", name.c_str(), volume);
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, "Audio", 5, "PlaySound '%s': volume %.2f clamped to [0,1]",
+                                name.c_str(), volume);
         volume = std::clamp(volume, 0.0f, 1.0f);
     }
     if (pitch <= 0.0f)
     {
-        SPARK_LOG_WARN("Audio", "PlaySound '%s': pitch %.2f invalid, reset to 1.0", name.c_str(), pitch);
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, "Audio", 5, "PlaySound '%s': pitch %.2f invalid, reset to 1.0",
+                                name.c_str(), pitch);
         pitch = 1.0f;
     }
 

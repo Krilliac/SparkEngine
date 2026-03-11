@@ -148,13 +148,13 @@
  * @param seconds  Minimum interval in seconds between messages
  * @param fmt      printf-style format string
  */
-#define SPARK_LOG_EVERY_SECONDS(level, cat, seconds, fmt, ...)                                                         \
+#define SPARK_LOG_EVERY_SECONDS(level, cat, _sparkInterval, fmt, ...)                                                  \
     do                                                                                                                 \
     {                                                                                                                  \
         static auto _sparkLastLogTime = std::chrono::steady_clock::time_point{};                                       \
         auto _sparkNow = std::chrono::steady_clock::now();                                                             \
         auto _sparkElapsed = std::chrono::duration_cast<std::chrono::seconds>(_sparkNow - _sparkLastLogTime).count();  \
-        if (_sparkElapsed >= (seconds) || _sparkLastLogTime == std::chrono::steady_clock::time_point{})                \
+        if (_sparkElapsed >= (_sparkInterval) || _sparkLastLogTime == std::chrono::steady_clock::time_point{})         \
         {                                                                                                              \
             _sparkLastLogTime = _sparkNow;                                                                             \
             SPARK_LOG(level, cat, fmt, ##__VA_ARGS__);                                                                 \

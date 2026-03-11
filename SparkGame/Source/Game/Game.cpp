@@ -549,13 +549,14 @@ void Game::Update(float dt)
     // Validate delta time to prevent physics explosions from bad frames
     if (!std::isfinite(dt) || dt < 0.0f)
     {
-        SPARK_LOG_WARN("Game", "Invalid deltaTime %.6f -- clamping to 0", dt);
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, "Game", 5, "Invalid deltaTime %.6f -- clamping to 0", dt);
         dt = 0.0f;
     }
     if (dt > 0.25f)
     {
-        SPARK_LOG_WARN("Game", "Large deltaTime %.4fs (>250ms) -- clamping to 250ms to prevent physics instability",
-                       dt);
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, "Game", 5,
+                                "Large deltaTime %.4fs (>250ms) -- clamping to 250ms to prevent physics instability",
+                                dt);
         dt = 0.25f;
     }
 
@@ -704,11 +705,11 @@ void Game::Render()
     }
     catch (const std::exception& e)
     {
-        SPARK_LOG_ERROR("Render", "Rendering exception: %s", e.what());
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "Render", 5, "Rendering exception: %s", e.what());
     }
     catch (...)
     {
-        SPARK_LOG_ERROR("Render", "Unknown rendering exception caught");
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "Render", 5, "Unknown rendering exception caught");
     }
 
     // Always call EndFrame exactly once if BeginFrame succeeded

@@ -6,6 +6,7 @@
  */
 
 #include "VisualScriptSystem.h"
+#include "../../Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cassert>
@@ -1762,7 +1763,7 @@ namespace Spark::Scripting
                               std::string msg = (inputs.size() > 0 && std::holds_alternative<std::string>(inputs[0]))
                                                     ? std::get<std::string>(inputs[0])
                                                     : "";
-                              std::cout << "[VisualScript] " << msg << std::endl;
+                              SPARK_LOG_INFO("Scripting", "[VisualScript] %s", msg.c_str());
                               return {};
                           }});
 
@@ -1795,8 +1796,8 @@ namespace Spark::Scripting
 
         NodeLibrary::GetInstance().RegisterBuiltinNodes();
         m_isInitialized = true;
-        std::cout << "[VisualScriptSystem] Initialized with " << NodeLibrary::GetInstance().GetAllTemplates().size()
-                  << " node templates." << std::endl;
+        SPARK_LOG_INFO("Scripting", "[VisualScriptSystem] Initialized with %zu node templates.",
+                       NodeLibrary::GetInstance().GetAllTemplates().size());
         return true;
     }
 
@@ -1804,7 +1805,7 @@ namespace Spark::Scripting
     {
         m_graphs.clear();
         m_isInitialized = false;
-        std::cout << "[VisualScriptSystem] Shutdown." << std::endl;
+        SPARK_LOG_INFO("Scripting", "[VisualScriptSystem] Shutdown.");
     }
 
     VisualScriptGraph* VisualScriptSystem::CreateGraph(const std::string& name)
@@ -1836,36 +1837,36 @@ namespace Spark::Scripting
         auto* graph = GetGraph(graphName);
         if (!graph)
         {
-            std::cerr << "[VisualScriptSystem] Cannot compile — graph '" << graphName << "' not found." << std::endl;
+            SPARK_LOG_ERROR("Scripting", "[VisualScriptSystem] Cannot compile — graph '%s' not found.",
+                            graphName.c_str());
             return false;
         }
 
         auto validation = graph->Validate();
         if (!validation.isValid)
         {
-            std::cerr << "[VisualScriptSystem] Validation failed for '" << graphName << "':" << std::endl;
+            SPARK_LOG_ERROR("Scripting", "[VisualScriptSystem] Validation failed for '%s':", graphName.c_str());
             for (const auto& err : validation.errors)
             {
-                std::cerr << "  ERROR: " << err << std::endl;
+                SPARK_LOG_ERROR("Scripting", "  ERROR: %s", err.c_str());
             }
             return false;
         }
 
         for (const auto& warn : validation.warnings)
         {
-            std::cout << "  WARNING: " << warn << std::endl;
+            SPARK_LOG_WARN("Scripting", "  WARNING: %s", warn.c_str());
         }
 
         std::string source = graph->CompileToAngelScript();
         if (source.empty())
         {
-            std::cerr << "[VisualScriptSystem] Compilation produced empty output for '" << graphName << "'."
-                      << std::endl;
+            SPARK_LOG_ERROR("Scripting", "[VisualScriptSystem] Compilation produced empty output for '%s'.",
+                            graphName.c_str());
             return false;
         }
 
-        std::cout << "[VisualScriptSystem] Compiled '" << graphName << "' (" << source.size() << " bytes):\n"
-                  << source << std::endl;
+        SPARK_LOG_INFO("Scripting", "[VisualScriptSystem] Compiled '%s' (%zu bytes)", graphName.c_str(), source.size());
 
         // In a full implementation this would register with the AngelScript engine via
         // AngelScriptEngine::GetInstance().AddScriptSection(graphName, source);
@@ -1874,7 +1875,7 @@ namespace Spark::Scripting
 
     bool VisualScriptSystem::HotReload(const std::string& graphName)
     {
-        std::cout << "[VisualScriptSystem] Hot-reloading '" << graphName << "'..." << std::endl;
+        SPARK_LOG_INFO("Scripting", "[VisualScriptSystem] Hot-reloading '%s'...", graphName.c_str());
         return CompileAndRegister(graphName);
     }
 
@@ -1883,7 +1884,7 @@ namespace Spark::Scripting
         auto it = m_graphs.find(graphName);
         if (it == m_graphs.end())
         {
-            std::cerr << "[VisualScriptSystem] Cannot save — graph '" << graphName << "' not found." << std::endl;
+            SPARK_LOG_ERROR("Scripting", "[VisualScriptSystem] Cannot save — graph '%s' not found.", graphName.c_str());
             return false;
         }
 
@@ -1891,13 +1892,13 @@ namespace Spark::Scripting
         std::ofstream file(filePath);
         if (!file.is_open())
         {
-            std::cerr << "[VisualScriptSystem] Cannot open file for writing: " << filePath << std::endl;
+            SPARK_LOG_ERROR("Scripting", "[VisualScriptSystem] Cannot open file for writing: %s", filePath.c_str());
             return false;
         }
 
         file << json;
         file.close();
-        std::cout << "[VisualScriptSystem] Saved '" << graphName << "' to " << filePath << std::endl;
+        SPARK_LOG_INFO("Scripting", "[VisualScriptSystem] Saved '%s' to %s", graphName.c_str(), filePath.c_str());
         return true;
     }
 
@@ -1906,7 +1907,7 @@ namespace Spark::Scripting
         std::ifstream file(filePath);
         if (!file.is_open())
         {
-            std::cerr << "[VisualScriptSystem] Cannot open file for reading: " << filePath << std::endl;
+            SPARK_LOG_ERROR("Scripting", "[VisualScriptSystem] Cannot open file for reading: %s", filePath.c_str());
             return false;
         }
 
@@ -1918,13 +1919,13 @@ namespace Spark::Scripting
         auto graph = std::make_unique<VisualScriptGraph>();
         if (!graph->DeserializeFromJSON(json))
         {
-            std::cerr << "[VisualScriptSystem] Failed to parse JSON from: " << filePath << std::endl;
+            SPARK_LOG_ERROR("Scripting", "[VisualScriptSystem] Failed to parse JSON from: %s", filePath.c_str());
             return false;
         }
 
         std::string name = graph->GetName();
         m_graphs[name] = std::move(graph);
-        std::cout << "[VisualScriptSystem] Loaded graph '" << name << "' from " << filePath << std::endl;
+        SPARK_LOG_INFO("Scripting", "[VisualScriptSystem] Loaded graph '%s' from %s", name.c_str(), filePath.c_str());
         return true;
     }
 
