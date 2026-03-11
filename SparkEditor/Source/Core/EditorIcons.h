@@ -129,3 +129,14 @@
 #define ICON_FA_PAINT_BRUSH "\xef\x87\xbc"   // U+F1FC
 #define ICON_FA_SHAPES "\xef\x98\x9f"        // U+F61F
 #define ICON_FA_VOLUME_UP "\xef\x80\xa8"     // U+F028
+
+// === 2D Editor Icons ===
+#define ICON_FA_ERASER "\xef\x84\xad"        // U+F12D
+#define ICON_FA_FILL_DRIP "\xef\x95\xb6"     // U+F576
+#define ICON_FA_EYE_DROPPER "\xef\x87\xbb"   // U+F1FB
+#define ICON_FA_SHIELD_ALT "\xef\x8f\xad"    // U+F3ED
+#define ICON_FA_SEARCH_PLUS "\xef\x80\x8e"   // U+F00E
+#define ICON_FA_SEARCH_MINUS "\xef\x80\x90"  // U+F010
+#define ICON_FA_MAGIC "\xef\x83\x90"         // U+F0D0
+#define ICON_FA_LAYER_GROUP "\xef\x97\x82"   // U+F5FD
+#define ICON_FA_CROP "\xef\x84\xa5"          // U+F125
