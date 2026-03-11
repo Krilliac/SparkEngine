@@ -40,8 +40,8 @@ namespace Spark
                 D3D12_DESCRIPTOR_HEAP_DESC desc = {};
                 desc.Type = type;
                 desc.NumDescriptors = descriptorCount;
-                desc.Flags = shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-                                           : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+                desc.Flags =
+                    shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
                 HRESULT hr = device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_heap));
                 if (FAILED(hr))
@@ -179,8 +179,7 @@ namespace Spark
             {
             }
 
-            D3D12PipelineState::D3D12PipelineState(const RHIPipelineStateDesc& desc,
-                                                   ComPtr<ID3D12PipelineState> pso,
+            D3D12PipelineState::D3D12PipelineState(const RHIPipelineStateDesc& desc, ComPtr<ID3D12PipelineState> pso,
                                                    ComPtr<ID3D12RootSignature> rootSignature)
                 : m_desc(desc), m_pso(std::move(pso)), m_rootSignature(std::move(rootSignature))
             {
@@ -206,8 +205,8 @@ namespace Spark
                 swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
                 ComPtr<IDXGISwapChain1> swapChain1;
-                HRESULT hr = dxgiFactory->CreateSwapChainForHwnd(
-                    commandQueue, static_cast<HWND>(desc.windowHandle), &swapChainDesc, nullptr, nullptr, &swapChain1);
+                HRESULT hr = dxgiFactory->CreateSwapChainForHwnd(commandQueue, static_cast<HWND>(desc.windowHandle),
+                                                                 &swapChainDesc, nullptr, nullptr, &swapChain1);
                 if (SUCCEEDED(hr))
                 {
                     swapChain1.As(&m_swapChain);
@@ -241,9 +240,8 @@ namespace Spark
                 ReleaseBackBufferResources();
                 m_desc.width = width;
                 m_desc.height = height;
-                HRESULT hr = m_swapChain->ResizeBuffers(
-                    m_desc.bufferCount, width, height, DXGI_FORMAT_R8G8B8A8_UNORM,
-                    DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+                HRESULT hr = m_swapChain->ResizeBuffers(m_desc.bufferCount, width, height, DXGI_FORMAT_R8G8B8A8_UNORM,
+                                                        DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
                 if (FAILED(hr))
                     return false;
                 return CreateBackBufferResources();
@@ -278,8 +276,8 @@ namespace Spark
                     texDesc.format = PixelFormat::R8G8B8A8_UNORM;
                     texDesc.usage = RHITextureUsage::RenderTarget;
 
-                    m_backBuffers[i] = std::make_unique<D3D12Texture>(
-                        texDesc, std::move(backBuffer), DescriptorAllocation{}, rtvAlloc);
+                    m_backBuffers[i] = std::make_unique<D3D12Texture>(texDesc, std::move(backBuffer),
+                                                                      DescriptorAllocation{}, rtvAlloc);
                     m_backBufferRTVs[i] = rtvAlloc;
                 }
                 return true;
@@ -302,12 +300,11 @@ namespace Spark
             // ============================================================================
 
             D3D12CommandList::D3D12CommandList(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE type,
-                                              ID3D12PipelineState* initialPSO)
+                                               ID3D12PipelineState* initialPSO)
                 : m_type(type)
             {
                 device->CreateCommandAllocator(type, IID_PPV_ARGS(&m_commandAllocator));
-                device->CreateCommandList(0, type, m_commandAllocator.Get(), initialPSO,
-                                          IID_PPV_ARGS(&m_commandList));
+                device->CreateCommandList(0, type, m_commandAllocator.Get(), initialPSO, IID_PPV_ARGS(&m_commandList));
                 m_commandList->Close();
             }
 
@@ -368,15 +365,15 @@ namespace Spark
             {
                 auto* tex = static_cast<D3D12Texture*>(target);
                 if (tex && tex->GetDSVDescriptor().IsValid())
-                    m_commandList->ClearDepthStencilView(
-                        tex->GetDSVDescriptor().cpuHandle,
-                        D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, depth, stencil, 0, nullptr);
+                    m_commandList->ClearDepthStencilView(tex->GetDSVDescriptor().cpuHandle,
+                                                         D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, depth,
+                                                         stencil, 0, nullptr);
             }
 
             void D3D12CommandList::SetViewport(const RHIViewport& viewport)
             {
-                D3D12_VIEWPORT vp = {viewport.x, viewport.y, viewport.width, viewport.height,
-                                     viewport.minDepth, viewport.maxDepth};
+                D3D12_VIEWPORT vp = {viewport.x,      viewport.y,        viewport.width,
+                                     viewport.height, viewport.minDepth, viewport.maxDepth};
                 m_commandList->RSSetViewports(1, &vp);
             }
 
@@ -404,12 +401,23 @@ namespace Spark
                 D3D_PRIMITIVE_TOPOLOGY d3dTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
                 switch (topology)
                 {
-                case RHIPrimitiveTopology::PointList: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST; break;
-                case RHIPrimitiveTopology::LineList: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_LINELIST; break;
-                case RHIPrimitiveTopology::LineStrip: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP; break;
-                case RHIPrimitiveTopology::TriangleList: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
-                case RHIPrimitiveTopology::TriangleStrip: d3dTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
-                default: break;
+                case RHIPrimitiveTopology::PointList:
+                    d3dTopology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
+                    break;
+                case RHIPrimitiveTopology::LineList:
+                    d3dTopology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+                    break;
+                case RHIPrimitiveTopology::LineStrip:
+                    d3dTopology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
+                    break;
+                case RHIPrimitiveTopology::TriangleList:
+                    d3dTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+                    break;
+                case RHIPrimitiveTopology::TriangleStrip:
+                    d3dTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+                    break;
+                default:
+                    break;
                 }
                 m_commandList->IASetPrimitiveTopology(d3dTopology);
             }
@@ -445,7 +453,8 @@ namespace Spark
                     m_commandList->SetGraphicsRootConstantBufferView(slot, buf->GetGPUVirtualAddress());
             }
 
-            void D3D12CommandList::SetShaderResource(RHIShaderStage /*stage*/, uint32_t /*slot*/, IRHITexture* /*texture*/)
+            void D3D12CommandList::SetShaderResource(RHIShaderStage /*stage*/, uint32_t /*slot*/,
+                                                     IRHITexture* /*texture*/)
             {
                 // Descriptor table binding handled via root signature
             }
@@ -467,16 +476,15 @@ namespace Spark
                 m_commandList->DrawIndexedInstanced(indexCount, 1, startIndex, baseVertex, 0);
             }
 
-            void D3D12CommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount,
-                                                 uint32_t startVertex, uint32_t startInstance)
+            void D3D12CommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex,
+                                                 uint32_t startInstance)
             {
                 FlushBarriers();
                 m_commandList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
             }
 
             void D3D12CommandList::DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount,
-                                                        uint32_t startIndex, int32_t baseVertex,
-                                                        uint32_t startInstance)
+                                                        uint32_t startIndex, int32_t baseVertex, uint32_t startInstance)
             {
                 FlushBarriers();
                 m_commandList->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
@@ -501,8 +509,7 @@ namespace Spark
                 (void)name;
             }
 
-            void D3D12CommandList::TransitionBarrier(D3D12Texture* resource,
-                                                     D3D12_RESOURCE_STATES stateBefore,
+            void D3D12CommandList::TransitionBarrier(D3D12Texture* resource, D3D12_RESOURCE_STATES stateBefore,
                                                      D3D12_RESOURCE_STATES stateAfter)
             {
                 if (stateBefore == stateAfter || !resource)
@@ -529,8 +536,8 @@ namespace Spark
             {
                 if (!m_pendingBarriers.empty())
                 {
-                    m_commandList->ResourceBarrier(
-                        static_cast<UINT>(m_pendingBarriers.size()), m_pendingBarriers.data());
+                    m_commandList->ResourceBarrier(static_cast<UINT>(m_pendingBarriers.size()),
+                                                   m_pendingBarriers.data());
                     m_pendingBarriers.clear();
                 }
             }
@@ -558,8 +565,8 @@ namespace Spark
                 if (!CreateFrameResources())
                     return false;
 
-                m_immediateCommandList = std::make_unique<D3D12CommandList>(
-                    m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+                m_immediateCommandList =
+                    std::make_unique<D3D12CommandList>(m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
 
                 DetectCapabilities();
                 DetectDXRSupport();
@@ -605,7 +612,7 @@ namespace Spark
                 // Enumerate adapters — pick the one with the most VRAM
                 ComPtr<IDXGIAdapter1> bestAdapter;
                 SIZE_T bestVRAM = 0;
-                for (UINT i = 0; ; i++)
+                for (UINT i = 0;; i++)
                 {
                     ComPtr<IDXGIAdapter1> adapter;
                     if (m_dxgiFactory->EnumAdapters1(i, &adapter) == DXGI_ERROR_NOT_FOUND)
@@ -615,8 +622,8 @@ namespace Spark
                     if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
                         continue;
                     // Check D3D12 support
-                    if (SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0,
-                                                    __uuidof(ID3D12Device), nullptr)))
+                    if (SUCCEEDED(
+                            D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), nullptr)))
                     {
                         if (adapterDesc.DedicatedVideoMemory > bestVRAM)
                         {
@@ -677,14 +684,14 @@ namespace Spark
             bool D3D12Device::CreateDescriptorHeaps()
             {
                 if (!m_cbvSrvUavHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                                                 CBV_SRV_UAV_HEAP_SIZE, true))
+                                                CBV_SRV_UAV_HEAP_SIZE, true))
                     return false;
                 if (!m_rtvHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, RTV_HEAP_SIZE, false))
                     return false;
                 if (!m_dsvHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, DSV_HEAP_SIZE, false))
                     return false;
-                if (!m_samplerHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-                                              SAMPLER_HEAP_SIZE, true))
+                if (!m_samplerHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, SAMPLER_HEAP_SIZE,
+                                              true))
                     return false;
                 return true;
             }
@@ -693,8 +700,8 @@ namespace Spark
             {
                 for (auto& frame : m_frameResources)
                 {
-                    HRESULT hr = m_device->CreateCommandAllocator(
-                        D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&frame.commandAllocator));
+                    HRESULT hr = m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                                                  IID_PPV_ARGS(&frame.commandAllocator));
                     if (FAILED(hr))
                         return false;
                     frame.fenceValue = 0;
@@ -717,10 +724,18 @@ namespace Spark
 
                 switch (adapterDesc.VendorId)
                 {
-                case 0x10DE: m_capabilities.vendorName = "NVIDIA"; break;
-                case 0x1002: m_capabilities.vendorName = "AMD"; break;
-                case 0x8086: m_capabilities.vendorName = "Intel"; break;
-                default: m_capabilities.vendorName = "Unknown"; break;
+                case 0x10DE:
+                    m_capabilities.vendorName = "NVIDIA";
+                    break;
+                case 0x1002:
+                    m_capabilities.vendorName = "AMD";
+                    break;
+                case 0x8086:
+                    m_capabilities.vendorName = "Intel";
+                    break;
+                default:
+                    m_capabilities.vendorName = "Unknown";
+                    break;
                 }
 
                 m_capabilities.apiVersion = "Direct3D 12.0";
@@ -751,8 +766,8 @@ namespace Spark
                 if (SUCCEEDED(m_device.As(&m_dxrDevice)))
                 {
                     D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = {};
-                    if (SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5,
-                                                                &options5, sizeof(options5))))
+                    if (SUCCEEDED(
+                            m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5))))
                     {
                         m_dxrSupported = (options5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED);
                         m_capabilities.rayTracingSupport = m_dxrSupported;
@@ -768,8 +783,8 @@ namespace Spark
 
             std::unique_ptr<IRHISwapChain> D3D12Device::CreateSwapChain(const RHISwapChainDesc& desc)
             {
-                return std::make_unique<D3D12SwapChain>(
-                    m_device.Get(), m_directQueue.Get(), m_dxgiFactory.Get(), &m_rtvHeap, desc);
+                return std::make_unique<D3D12SwapChain>(m_device.Get(), m_directQueue.Get(), m_dxgiFactory.Get(),
+                                                        &m_rtvHeap, desc);
             }
 
             // ============================================================================
@@ -795,9 +810,8 @@ namespace Spark
                 bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
                 ComPtr<ID3D12Resource> resource;
-                HRESULT hr = m_device->CreateCommittedResource(
-                    &heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, initialState, nullptr,
-                    IID_PPV_ARGS(&resource));
+                HRESULT hr = m_device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+                                                               initialState, nullptr, IID_PPV_ARGS(&resource));
                 if (FAILED(hr))
                     return nullptr;
 
@@ -808,8 +822,8 @@ namespace Spark
                     D3D12_HEAP_PROPERTIES uploadHeap = {};
                     uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
                     m_device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-                                                     D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                                     IID_PPV_ARGS(&uploadResource));
+                                                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                      IID_PPV_ARGS(&uploadResource));
                     if (uploadResource)
                     {
                         void* mapped = nullptr;
@@ -846,8 +860,8 @@ namespace Spark
                 texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
                 texDesc.Width = desc.width;
                 texDesc.Height = desc.height;
-                texDesc.DepthOrArraySize = static_cast<UINT16>(
-                    desc.type == RHITextureType::Texture3D ? desc.depth : desc.arraySize);
+                texDesc.DepthOrArraySize =
+                    static_cast<UINT16>(desc.type == RHITextureType::Texture3D ? desc.depth : desc.arraySize);
                 texDesc.MipLevels = static_cast<UINT16>(desc.mipLevels);
                 texDesc.Format = ConvertFormat(desc.format);
                 texDesc.SampleDesc.Count = desc.sampleCount;
@@ -879,9 +893,9 @@ namespace Spark
                 }
 
                 ComPtr<ID3D12Resource> resource;
-                HRESULT hr = m_device->CreateCommittedResource(
-                    &heapProps, D3D12_HEAP_FLAG_NONE, &texDesc, D3D12_RESOURCE_STATE_COMMON,
-                    clearValue, IID_PPV_ARGS(&resource));
+                HRESULT hr =
+                    m_device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &texDesc,
+                                                      D3D12_RESOURCE_STATE_COMMON, clearValue, IID_PPV_ARGS(&resource));
                 if (FAILED(hr))
                     return nullptr;
 
@@ -943,12 +957,24 @@ namespace Spark
                     const char* target = nullptr;
                     switch (desc.stage)
                     {
-                    case RHIShaderStage::Vertex: target = "vs_5_1"; break;
-                    case RHIShaderStage::Pixel: target = "ps_5_1"; break;
-                    case RHIShaderStage::Geometry: target = "gs_5_1"; break;
-                    case RHIShaderStage::Hull: target = "hs_5_1"; break;
-                    case RHIShaderStage::Domain: target = "ds_5_1"; break;
-                    case RHIShaderStage::Compute: target = "cs_5_1"; break;
+                    case RHIShaderStage::Vertex:
+                        target = "vs_5_1";
+                        break;
+                    case RHIShaderStage::Pixel:
+                        target = "ps_5_1";
+                        break;
+                    case RHIShaderStage::Geometry:
+                        target = "gs_5_1";
+                        break;
+                    case RHIShaderStage::Hull:
+                        target = "hs_5_1";
+                        break;
+                    case RHIShaderStage::Domain:
+                        target = "ds_5_1";
+                        break;
+                    case RHIShaderStage::Compute:
+                        target = "cs_5_1";
+                        break;
                     }
 
                     UINT compileFlags = D3DCOMPILE_OPTIMIZATION_LEVEL3;
@@ -958,8 +984,8 @@ namespace Spark
                     ComPtr<ID3DBlob> bytecode;
                     ComPtr<ID3DBlob> errors;
                     HRESULT hr = D3DCompile(desc.sourceCode.data(), desc.sourceCode.size(), desc.filePath.c_str(),
-                                            nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
-                                            desc.entryPoint.c_str(), target, compileFlags, 0, &bytecode, &errors);
+                                            nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, desc.entryPoint.c_str(), target,
+                                            compileFlags, 0, &bytecode, &errors);
                     if (FAILED(hr))
                     {
                         if (errors)
@@ -996,7 +1022,7 @@ namespace Spark
             }
 
             IRHIPipelineState* D3D12Device::CreatePipelineState(const RHIPipelineStateDesc& desc,
-                                                                 IRHIShader* vertexShader, IRHIShader* pixelShader)
+                                                                IRHIShader* vertexShader, IRHIShader* pixelShader)
             {
                 auto rootSig = CreateDefaultRootSignature();
                 if (!rootSig)
@@ -1034,9 +1060,12 @@ namespace Spark
 
                 // Rasterizer
                 psoDesc.RasterizerState.FillMode = desc.rasterizer.fillMode == RHIFillMode::Wireframe
-                                                       ? D3D12_FILL_MODE_WIREFRAME : D3D12_FILL_MODE_SOLID;
+                                                       ? D3D12_FILL_MODE_WIREFRAME
+                                                       : D3D12_FILL_MODE_SOLID;
                 psoDesc.RasterizerState.CullMode = desc.rasterizer.cullMode == RHICullMode::None ? D3D12_CULL_MODE_NONE
-                    : desc.rasterizer.cullMode == RHICullMode::Front ? D3D12_CULL_MODE_FRONT : D3D12_CULL_MODE_BACK;
+                                                   : desc.rasterizer.cullMode == RHICullMode::Front
+                                                       ? D3D12_CULL_MODE_FRONT
+                                                       : D3D12_CULL_MODE_BACK;
                 psoDesc.RasterizerState.FrontCounterClockwise = desc.rasterizer.frontCounterClockwise;
                 psoDesc.RasterizerState.DepthBias = desc.rasterizer.depthBias;
                 psoDesc.RasterizerState.DepthBiasClamp = desc.rasterizer.depthBiasClamp;
@@ -1047,8 +1076,8 @@ namespace Spark
 
                 // Depth stencil
                 psoDesc.DepthStencilState.DepthEnable = desc.depthStencil.depthEnable;
-                psoDesc.DepthStencilState.DepthWriteMask = desc.depthStencil.depthWrite
-                    ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+                psoDesc.DepthStencilState.DepthWriteMask =
+                    desc.depthStencil.depthWrite ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
                 psoDesc.DepthStencilState.DepthFunc = ConvertCompareOp(desc.depthStencil.depthFunc);
                 psoDesc.DepthStencilState.StencilEnable = desc.depthStencil.stencilEnable;
                 psoDesc.DepthStencilState.StencilReadMask = desc.depthStencil.stencilReadMask;
@@ -1097,7 +1126,8 @@ namespace Spark
             void D3D12Device::DestroyBuffer(IRHIBuffer* buffer)
             {
                 auto* b = static_cast<D3D12Buffer*>(buffer);
-                if (!b) return;
+                if (!b)
+                    return;
                 std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
                 m_deferredReleaseQueue.push({b->GetD3D12Resource(), m_frameFence.GetCurrentValue()});
                 delete b;
@@ -1106,7 +1136,8 @@ namespace Spark
             void D3D12Device::DestroyTexture(IRHITexture* texture)
             {
                 auto* t = static_cast<D3D12Texture*>(texture);
-                if (!t) return;
+                if (!t)
+                    return;
                 m_cbvSrvUavHeap.Free(t->GetSRVDescriptor());
                 m_rtvHeap.Free(t->GetRTVDescriptor());
                 m_dsvHeap.Free(t->GetDSVDescriptor());
@@ -1116,9 +1147,18 @@ namespace Spark
                 delete t;
             }
 
-            void D3D12Device::DestroyShader(IRHIShader* shader) { delete static_cast<D3D12Shader*>(shader); }
-            void D3D12Device::DestroySampler(IRHISampler* sampler) { delete static_cast<D3D12Sampler*>(sampler); }
-            void D3D12Device::DestroyPipelineState(IRHIPipelineState* state) { delete static_cast<D3D12PipelineState*>(state); }
+            void D3D12Device::DestroyShader(IRHIShader* shader)
+            {
+                delete static_cast<D3D12Shader*>(shader);
+            }
+            void D3D12Device::DestroySampler(IRHISampler* sampler)
+            {
+                delete static_cast<D3D12Sampler*>(sampler);
+            }
+            void D3D12Device::DestroyPipelineState(IRHIPipelineState* state)
+            {
+                delete static_cast<D3D12PipelineState*>(state);
+            }
 
             // ============================================================================
             // D3D12 DEVICE — RESOURCE UPDATES
@@ -1127,8 +1167,10 @@ namespace Spark
             void* D3D12Device::MapBuffer(IRHIBuffer* buffer)
             {
                 auto* b = static_cast<D3D12Buffer*>(buffer);
-                if (!b) return nullptr;
-                if (b->GetMappedPointer()) return b->GetMappedPointer();
+                if (!b)
+                    return nullptr;
+                if (b->GetMappedPointer())
+                    return b->GetMappedPointer();
                 void* mapped = nullptr;
                 b->GetD3D12Resource()->Map(0, nullptr, &mapped);
                 b->SetMappedPointer(mapped);
@@ -1148,7 +1190,8 @@ namespace Spark
             void D3D12Device::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
             {
                 auto* b = static_cast<D3D12Buffer*>(buffer);
-                if (!b || !data) return;
+                if (!b || !data)
+                    return;
                 void* mapped = MapBuffer(buffer);
                 if (mapped)
                 {
@@ -1162,7 +1205,8 @@ namespace Spark
                                             uint32_t /*arraySlice*/)
             {
                 auto* t = static_cast<D3D12Texture*>(texture);
-                if (!t || !data) return;
+                if (!t || !data)
+                    return;
                 // For simplicity, use an upload heap + CopyTextureRegion
                 // Full implementation would batch these with a copy queue
                 (void)mipLevel;
@@ -1185,7 +1229,8 @@ namespace Spark
             void D3D12Device::ExecuteCommandList(IRHICommandList* commandList)
             {
                 auto* cmdList = static_cast<D3D12CommandList*>(commandList);
-                if (!cmdList) return;
+                if (!cmdList)
+                    return;
                 std::lock_guard<std::mutex> lock(m_submitMutex);
                 ID3D12CommandList* lists[] = {cmdList->GetCommandList()};
                 m_directQueue->ExecuteCommandLists(1, lists);
@@ -1315,7 +1360,8 @@ namespace Spark
                 ComPtr<ID3DBlob> signature;
                 ComPtr<ID3DBlob> error;
                 D3D12SerializeVersionedRootSignature(&desc, &signature, &error);
-                if (!signature) return nullptr;
+                if (!signature)
+                    return nullptr;
 
                 ComPtr<ID3D12RootSignature> rootSig;
                 m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
@@ -1338,28 +1384,50 @@ namespace Spark
             {
                 switch (format)
                 {
-                case PixelFormat::R8_UNORM: return DXGI_FORMAT_R8_UNORM;
-                case PixelFormat::R8G8_UNORM: return DXGI_FORMAT_R8G8_UNORM;
-                case PixelFormat::R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_UNORM;
-                case PixelFormat::R8G8B8A8_UNORM_SRGB: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-                case PixelFormat::B8G8R8A8_UNORM: return DXGI_FORMAT_B8G8R8A8_UNORM;
-                case PixelFormat::R10G10B10A2_UNORM: return DXGI_FORMAT_R10G10B10A2_UNORM;
-                case PixelFormat::R11G11B10_FLOAT: return DXGI_FORMAT_R11G11B10_FLOAT;
-                case PixelFormat::R16_FLOAT: return DXGI_FORMAT_R16_FLOAT;
-                case PixelFormat::R16G16_FLOAT: return DXGI_FORMAT_R16G16_FLOAT;
-                case PixelFormat::R16G16B16A16_FLOAT: return DXGI_FORMAT_R16G16B16A16_FLOAT;
-                case PixelFormat::R32_FLOAT: return DXGI_FORMAT_R32_FLOAT;
-                case PixelFormat::R32G32_FLOAT: return DXGI_FORMAT_R32G32_FLOAT;
-                case PixelFormat::R32G32B32_FLOAT: return DXGI_FORMAT_R32G32B32_FLOAT;
-                case PixelFormat::R32G32B32A32_FLOAT: return DXGI_FORMAT_R32G32B32A32_FLOAT;
-                case PixelFormat::BC1_UNORM: return DXGI_FORMAT_BC1_UNORM;
-                case PixelFormat::BC3_UNORM: return DXGI_FORMAT_BC3_UNORM;
-                case PixelFormat::BC7_UNORM: return DXGI_FORMAT_BC7_UNORM;
-                case PixelFormat::D16_UNORM: return DXGI_FORMAT_D16_UNORM;
-                case PixelFormat::D24_UNORM_S8_UINT: return DXGI_FORMAT_D24_UNORM_S8_UINT;
-                case PixelFormat::D32_FLOAT: return DXGI_FORMAT_D32_FLOAT;
-                case PixelFormat::D32_FLOAT_S8_UINT: return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-                default: return DXGI_FORMAT_R8G8B8A8_UNORM;
+                case PixelFormat::R8_UNORM:
+                    return DXGI_FORMAT_R8_UNORM;
+                case PixelFormat::R8G8_UNORM:
+                    return DXGI_FORMAT_R8G8_UNORM;
+                case PixelFormat::R8G8B8A8_UNORM:
+                    return DXGI_FORMAT_R8G8B8A8_UNORM;
+                case PixelFormat::R8G8B8A8_UNORM_SRGB:
+                    return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+                case PixelFormat::B8G8R8A8_UNORM:
+                    return DXGI_FORMAT_B8G8R8A8_UNORM;
+                case PixelFormat::R10G10B10A2_UNORM:
+                    return DXGI_FORMAT_R10G10B10A2_UNORM;
+                case PixelFormat::R11G11B10_FLOAT:
+                    return DXGI_FORMAT_R11G11B10_FLOAT;
+                case PixelFormat::R16_FLOAT:
+                    return DXGI_FORMAT_R16_FLOAT;
+                case PixelFormat::R16G16_FLOAT:
+                    return DXGI_FORMAT_R16G16_FLOAT;
+                case PixelFormat::R16G16B16A16_FLOAT:
+                    return DXGI_FORMAT_R16G16B16A16_FLOAT;
+                case PixelFormat::R32_FLOAT:
+                    return DXGI_FORMAT_R32_FLOAT;
+                case PixelFormat::R32G32_FLOAT:
+                    return DXGI_FORMAT_R32G32_FLOAT;
+                case PixelFormat::R32G32B32_FLOAT:
+                    return DXGI_FORMAT_R32G32B32_FLOAT;
+                case PixelFormat::R32G32B32A32_FLOAT:
+                    return DXGI_FORMAT_R32G32B32A32_FLOAT;
+                case PixelFormat::BC1_UNORM:
+                    return DXGI_FORMAT_BC1_UNORM;
+                case PixelFormat::BC3_UNORM:
+                    return DXGI_FORMAT_BC3_UNORM;
+                case PixelFormat::BC7_UNORM:
+                    return DXGI_FORMAT_BC7_UNORM;
+                case PixelFormat::D16_UNORM:
+                    return DXGI_FORMAT_D16_UNORM;
+                case PixelFormat::D24_UNORM_S8_UINT:
+                    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+                case PixelFormat::D32_FLOAT:
+                    return DXGI_FORMAT_D32_FLOAT;
+                case PixelFormat::D32_FLOAT_S8_UINT:
+                    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+                default:
+                    return DXGI_FORMAT_R8G8B8A8_UNORM;
                 }
             }
 
@@ -1370,9 +1438,12 @@ namespace Spark
                 bool minLinear = (desc.minFilter == RHIFilterMode::Linear);
                 bool magLinear = (desc.magFilter == RHIFilterMode::Linear);
                 bool mipLinear = (desc.mipFilter == RHIFilterMode::Linear);
-                if (minLinear && magLinear && mipLinear) return D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-                if (minLinear && magLinear) return D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-                if (minLinear) return D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+                if (minLinear && magLinear && mipLinear)
+                    return D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+                if (minLinear && magLinear)
+                    return D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+                if (minLinear)
+                    return D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
                 return D3D12_FILTER_MIN_MAG_MIP_POINT;
             }
 
@@ -1380,12 +1451,18 @@ namespace Spark
             {
                 switch (mode)
                 {
-                case RHIAddressMode::Wrap: return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-                case RHIAddressMode::Clamp: return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-                case RHIAddressMode::Mirror: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
-                case RHIAddressMode::Border: return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-                case RHIAddressMode::MirrorOnce: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
-                default: return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+                case RHIAddressMode::Wrap:
+                    return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+                case RHIAddressMode::Clamp:
+                    return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+                case RHIAddressMode::Mirror:
+                    return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+                case RHIAddressMode::Border:
+                    return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+                case RHIAddressMode::MirrorOnce:
+                    return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
+                default:
+                    return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
                 }
             }
 
@@ -1393,15 +1470,24 @@ namespace Spark
             {
                 switch (op)
                 {
-                case RHICompareOp::Never: return D3D12_COMPARISON_FUNC_NEVER;
-                case RHICompareOp::Less: return D3D12_COMPARISON_FUNC_LESS;
-                case RHICompareOp::Equal: return D3D12_COMPARISON_FUNC_EQUAL;
-                case RHICompareOp::LessEqual: return D3D12_COMPARISON_FUNC_LESS_EQUAL;
-                case RHICompareOp::Greater: return D3D12_COMPARISON_FUNC_GREATER;
-                case RHICompareOp::NotEqual: return D3D12_COMPARISON_FUNC_NOT_EQUAL;
-                case RHICompareOp::GreaterEqual: return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-                case RHICompareOp::Always: return D3D12_COMPARISON_FUNC_ALWAYS;
-                default: return D3D12_COMPARISON_FUNC_LESS;
+                case RHICompareOp::Never:
+                    return D3D12_COMPARISON_FUNC_NEVER;
+                case RHICompareOp::Less:
+                    return D3D12_COMPARISON_FUNC_LESS;
+                case RHICompareOp::Equal:
+                    return D3D12_COMPARISON_FUNC_EQUAL;
+                case RHICompareOp::LessEqual:
+                    return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+                case RHICompareOp::Greater:
+                    return D3D12_COMPARISON_FUNC_GREATER;
+                case RHICompareOp::NotEqual:
+                    return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+                case RHICompareOp::GreaterEqual:
+                    return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+                case RHICompareOp::Always:
+                    return D3D12_COMPARISON_FUNC_ALWAYS;
+                default:
+                    return D3D12_COMPARISON_FUNC_LESS;
                 }
             }
 
@@ -1409,15 +1495,24 @@ namespace Spark
             {
                 switch (op)
                 {
-                case RHIStencilOp::Keep: return D3D12_STENCIL_OP_KEEP;
-                case RHIStencilOp::Zero: return D3D12_STENCIL_OP_ZERO;
-                case RHIStencilOp::Replace: return D3D12_STENCIL_OP_REPLACE;
-                case RHIStencilOp::IncrSat: return D3D12_STENCIL_OP_INCR_SAT;
-                case RHIStencilOp::DecrSat: return D3D12_STENCIL_OP_DECR_SAT;
-                case RHIStencilOp::Invert: return D3D12_STENCIL_OP_INVERT;
-                case RHIStencilOp::IncrWrap: return D3D12_STENCIL_OP_INCR;
-                case RHIStencilOp::DecrWrap: return D3D12_STENCIL_OP_DECR;
-                default: return D3D12_STENCIL_OP_KEEP;
+                case RHIStencilOp::Keep:
+                    return D3D12_STENCIL_OP_KEEP;
+                case RHIStencilOp::Zero:
+                    return D3D12_STENCIL_OP_ZERO;
+                case RHIStencilOp::Replace:
+                    return D3D12_STENCIL_OP_REPLACE;
+                case RHIStencilOp::IncrSat:
+                    return D3D12_STENCIL_OP_INCR_SAT;
+                case RHIStencilOp::DecrSat:
+                    return D3D12_STENCIL_OP_DECR_SAT;
+                case RHIStencilOp::Invert:
+                    return D3D12_STENCIL_OP_INVERT;
+                case RHIStencilOp::IncrWrap:
+                    return D3D12_STENCIL_OP_INCR;
+                case RHIStencilOp::DecrWrap:
+                    return D3D12_STENCIL_OP_DECR;
+                default:
+                    return D3D12_STENCIL_OP_KEEP;
                 }
             }
 
@@ -1425,17 +1520,28 @@ namespace Spark
             {
                 switch (factor)
                 {
-                case RHIBlendFactor::Zero: return D3D12_BLEND_ZERO;
-                case RHIBlendFactor::One: return D3D12_BLEND_ONE;
-                case RHIBlendFactor::SrcColor: return D3D12_BLEND_SRC_COLOR;
-                case RHIBlendFactor::InvSrcColor: return D3D12_BLEND_INV_SRC_COLOR;
-                case RHIBlendFactor::SrcAlpha: return D3D12_BLEND_SRC_ALPHA;
-                case RHIBlendFactor::InvSrcAlpha: return D3D12_BLEND_INV_SRC_ALPHA;
-                case RHIBlendFactor::DstAlpha: return D3D12_BLEND_DEST_ALPHA;
-                case RHIBlendFactor::InvDstAlpha: return D3D12_BLEND_INV_DEST_ALPHA;
-                case RHIBlendFactor::DstColor: return D3D12_BLEND_DEST_COLOR;
-                case RHIBlendFactor::InvDstColor: return D3D12_BLEND_INV_DEST_COLOR;
-                default: return D3D12_BLEND_ONE;
+                case RHIBlendFactor::Zero:
+                    return D3D12_BLEND_ZERO;
+                case RHIBlendFactor::One:
+                    return D3D12_BLEND_ONE;
+                case RHIBlendFactor::SrcColor:
+                    return D3D12_BLEND_SRC_COLOR;
+                case RHIBlendFactor::InvSrcColor:
+                    return D3D12_BLEND_INV_SRC_COLOR;
+                case RHIBlendFactor::SrcAlpha:
+                    return D3D12_BLEND_SRC_ALPHA;
+                case RHIBlendFactor::InvSrcAlpha:
+                    return D3D12_BLEND_INV_SRC_ALPHA;
+                case RHIBlendFactor::DstAlpha:
+                    return D3D12_BLEND_DEST_ALPHA;
+                case RHIBlendFactor::InvDstAlpha:
+                    return D3D12_BLEND_INV_DEST_ALPHA;
+                case RHIBlendFactor::DstColor:
+                    return D3D12_BLEND_DEST_COLOR;
+                case RHIBlendFactor::InvDstColor:
+                    return D3D12_BLEND_INV_DEST_COLOR;
+                default:
+                    return D3D12_BLEND_ONE;
                 }
             }
 
@@ -1443,12 +1549,18 @@ namespace Spark
             {
                 switch (op)
                 {
-                case RHIBlendOp::Add: return D3D12_BLEND_OP_ADD;
-                case RHIBlendOp::Subtract: return D3D12_BLEND_OP_SUBTRACT;
-                case RHIBlendOp::RevSubtract: return D3D12_BLEND_OP_REV_SUBTRACT;
-                case RHIBlendOp::Min: return D3D12_BLEND_OP_MIN;
-                case RHIBlendOp::Max: return D3D12_BLEND_OP_MAX;
-                default: return D3D12_BLEND_OP_ADD;
+                case RHIBlendOp::Add:
+                    return D3D12_BLEND_OP_ADD;
+                case RHIBlendOp::Subtract:
+                    return D3D12_BLEND_OP_SUBTRACT;
+                case RHIBlendOp::RevSubtract:
+                    return D3D12_BLEND_OP_REV_SUBTRACT;
+                case RHIBlendOp::Min:
+                    return D3D12_BLEND_OP_MIN;
+                case RHIBlendOp::Max:
+                    return D3D12_BLEND_OP_MAX;
+                default:
+                    return D3D12_BLEND_OP_ADD;
                 }
             }
 
@@ -1456,16 +1568,26 @@ namespace Spark
             {
                 switch (format)
                 {
-                case RHIVertexFormat::Float1: return DXGI_FORMAT_R32_FLOAT;
-                case RHIVertexFormat::Float2: return DXGI_FORMAT_R32G32_FLOAT;
-                case RHIVertexFormat::Float3: return DXGI_FORMAT_R32G32B32_FLOAT;
-                case RHIVertexFormat::Float4: return DXGI_FORMAT_R32G32B32A32_FLOAT;
-                case RHIVertexFormat::Int1: return DXGI_FORMAT_R32_SINT;
-                case RHIVertexFormat::Int2: return DXGI_FORMAT_R32G32_SINT;
-                case RHIVertexFormat::Int4: return DXGI_FORMAT_R32G32B32A32_SINT;
-                case RHIVertexFormat::UInt1: return DXGI_FORMAT_R32_UINT;
-                case RHIVertexFormat::UNorm8x4: return DXGI_FORMAT_R8G8B8A8_UNORM;
-                default: return DXGI_FORMAT_R32G32B32_FLOAT;
+                case RHIVertexFormat::Float1:
+                    return DXGI_FORMAT_R32_FLOAT;
+                case RHIVertexFormat::Float2:
+                    return DXGI_FORMAT_R32G32_FLOAT;
+                case RHIVertexFormat::Float3:
+                    return DXGI_FORMAT_R32G32B32_FLOAT;
+                case RHIVertexFormat::Float4:
+                    return DXGI_FORMAT_R32G32B32A32_FLOAT;
+                case RHIVertexFormat::Int1:
+                    return DXGI_FORMAT_R32_SINT;
+                case RHIVertexFormat::Int2:
+                    return DXGI_FORMAT_R32G32_SINT;
+                case RHIVertexFormat::Int4:
+                    return DXGI_FORMAT_R32G32B32A32_SINT;
+                case RHIVertexFormat::UInt1:
+                    return DXGI_FORMAT_R32_UINT;
+                case RHIVertexFormat::UNorm8x4:
+                    return DXGI_FORMAT_R8G8B8A8_UNORM;
+                default:
+                    return DXGI_FORMAT_R32G32B32_FLOAT;
                 }
             }
 
@@ -1473,18 +1595,26 @@ namespace Spark
             {
                 switch (format)
                 {
-                case PixelFormat::R8_UNORM: return 1;
-                case PixelFormat::R8G8_UNORM: return 2;
-                case PixelFormat::R16_FLOAT: return 2;
+                case PixelFormat::R8_UNORM:
+                    return 1;
+                case PixelFormat::R8G8_UNORM:
+                    return 2;
+                case PixelFormat::R16_FLOAT:
+                    return 2;
                 case PixelFormat::R8G8B8A8_UNORM:
                 case PixelFormat::R32_FLOAT:
                 case PixelFormat::D24_UNORM_S8_UINT:
-                case PixelFormat::D32_FLOAT: return 4;
+                case PixelFormat::D32_FLOAT:
+                    return 4;
                 case PixelFormat::R16G16B16A16_FLOAT:
-                case PixelFormat::R32G32_FLOAT: return 8;
-                case PixelFormat::R32G32B32_FLOAT: return 12;
-                case PixelFormat::R32G32B32A32_FLOAT: return 16;
-                default: return 4;
+                case PixelFormat::R32G32_FLOAT:
+                    return 8;
+                case PixelFormat::R32G32B32_FLOAT:
+                    return 12;
+                case PixelFormat::R32G32B32A32_FLOAT:
+                    return 16;
+                default:
+                    return 4;
                 }
             }
 
@@ -1492,11 +1622,16 @@ namespace Spark
             {
                 switch (access)
                 {
-                case RHIBufferAccess::Static: return D3D12_RESOURCE_STATE_COMMON;
-                case RHIBufferAccess::Dynamic: return D3D12_RESOURCE_STATE_GENERIC_READ;
-                case RHIBufferAccess::Staging: return D3D12_RESOURCE_STATE_GENERIC_READ;
-                case RHIBufferAccess::ReadBack: return D3D12_RESOURCE_STATE_COPY_DEST;
-                default: return D3D12_RESOURCE_STATE_COMMON;
+                case RHIBufferAccess::Static:
+                    return D3D12_RESOURCE_STATE_COMMON;
+                case RHIBufferAccess::Dynamic:
+                    return D3D12_RESOURCE_STATE_GENERIC_READ;
+                case RHIBufferAccess::Staging:
+                    return D3D12_RESOURCE_STATE_GENERIC_READ;
+                case RHIBufferAccess::ReadBack:
+                    return D3D12_RESOURCE_STATE_COPY_DEST;
+                default:
+                    return D3D12_RESOURCE_STATE_COMMON;
                 }
             }
 

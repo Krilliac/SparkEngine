@@ -24,9 +24,7 @@ namespace Spark::Scripting
     // ============================================================================
 
     ScriptNode::ScriptNode(NodeID id, const std::string& name, NodeCategory category)
-        : m_id(id)
-        , m_name(name)
-        , m_category(category)
+        : m_id(id), m_name(name), m_category(category)
     {
     }
 
@@ -78,10 +76,7 @@ namespace Spark::Scripting
     // VisualScriptGraph
     // ============================================================================
 
-    VisualScriptGraph::VisualScriptGraph(const std::string& name)
-        : m_name(name)
-    {
-    }
+    VisualScriptGraph::VisualScriptGraph(const std::string& name) : m_name(name) {}
 
     // -- Node management --------------------------------------------------------
 
@@ -125,10 +120,9 @@ namespace Spark::Scripting
         }
 
         // Remove all links connected to this node
-        m_links.erase(std::remove_if(m_links.begin(), m_links.end(),
-                                     [id](const LinkDesc& link)
+        m_links.erase(std::remove_if(m_links.begin(), m_links.end(), [id](const LinkDesc& link)
                                      { return link.sourceNode == id || link.targetNode == id; }),
-                       m_links.end());
+                      m_links.end());
 
         m_nodes.erase(it);
         return true;
@@ -156,10 +150,9 @@ namespace Spark::Scripting
         }
 
         // Remove any existing link to the destination input pin (inputs accept one connection)
-        m_links.erase(std::remove_if(m_links.begin(), m_links.end(),
-                                     [dstNode, dstPin](const LinkDesc& link)
+        m_links.erase(std::remove_if(m_links.begin(), m_links.end(), [dstNode, dstPin](const LinkDesc& link)
                                      { return link.targetNode == dstNode && link.targetPin == dstPin; }),
-                       m_links.end());
+                      m_links.end());
 
         LinkID linkId = m_nextLinkId++;
         LinkDesc link;
@@ -174,8 +167,7 @@ namespace Spark::Scripting
 
     bool VisualScriptGraph::RemoveLink(LinkID id)
     {
-        auto it = std::remove_if(m_links.begin(), m_links.end(),
-                                 [id](const LinkDesc& link) { return link.id == id; });
+        auto it = std::remove_if(m_links.begin(), m_links.end(), [id](const LinkDesc& link) { return link.id == id; });
         if (it == m_links.end())
         {
             return false;
@@ -287,7 +279,7 @@ namespace Spark::Scripting
     }
 
     bool VisualScriptGraph::HasCycleHelper(NodeID current, NodeID target,
-                                            std::unordered_map<NodeID, bool>& visited) const
+                                           std::unordered_map<NodeID, bool>& visited) const
     {
         if (current == target)
         {
@@ -438,8 +430,8 @@ namespace Spark::Scripting
             {
                 result.isValid = false;
                 result.errors.push_back("Link " + std::to_string(link.id) + ": type mismatch between '" +
-                                        srcNode->GetName() + "." + srcPin->name + "' and '" + dstNode->GetName() +
-                                        "." + dstPin->name + "'.");
+                                        srcNode->GetName() + "." + srcPin->name + "' and '" + dstNode->GetName() + "." +
+                                        dstPin->name + "'.");
             }
         }
 
@@ -553,7 +545,7 @@ namespace Spark::Scripting
     }
 
     std::string VisualScriptGraph::GenerateNodeCode(const ScriptNode& node,
-                                                     const std::unordered_map<PinID, std::string>& pinVarNames) const
+                                                    const std::unordered_map<PinID, std::string>& pinVarNames) const
     {
         std::string code = node.GetCodeTemplate();
         if (code.empty())
@@ -715,7 +707,8 @@ namespace Spark::Scripting
                         if (link.targetNode == currentId && link.targetPin == inPin.id)
                         {
                             const auto* dataNode = GetNode(link.sourceNode);
-                            if (dataNode && dataNode->GetCategory() != NodeCategory::Event && !visited.count(link.sourceNode))
+                            if (dataNode && dataNode->GetCategory() != NodeCategory::Event &&
+                                !visited.count(link.sourceNode))
                             {
                                 // Emit data node computation
                                 visited.insert(link.sourceNode);
@@ -726,8 +719,7 @@ namespace Spark::Scripting
                                         auto varIt = pinVarNames.find(outPin.id);
                                         if (varIt != pinVarNames.end())
                                         {
-                                            std::string nodeCode =
-                                                GenerateNodeCode(*dataNode, pinVarNames);
+                                            std::string nodeCode = GenerateNodeCode(*dataNode, pinVarNames);
                                             if (!nodeCode.empty())
                                             {
                                                 out << "        " << PinTypeToASType(outPin.type) << " "
@@ -1289,83 +1281,92 @@ namespace Spark::Scripting
         };
         auto In = [&](const std::string& n, PinType t, const PinValue& d = {})
         { return MakePin(n, t, PinDirection::Input, d); };
-        auto Out = [&](const std::string& n, PinType t)
-        { return MakePin(n, t, PinDirection::Output); };
+        auto Out = [&](const std::string& n, PinType t) { return MakePin(n, t, PinDirection::Output); };
         auto ExecIn = [&](const std::string& n = "Exec")
         { return MakePin(n, PinType::Execution, PinDirection::Input); };
         auto ExecOut = [&](const std::string& n = "Then")
         { return MakePin(n, PinType::Execution, PinDirection::Output); };
 
         // ===================== Events =====================
-        RegisterTemplate({"BeginPlay", "Begin Play", NodeCategory::Event, {},
-                          {ExecOut()}, "", nullptr});
+        RegisterTemplate({"BeginPlay", "Begin Play", NodeCategory::Event, {}, {ExecOut()}, "", nullptr});
 
-        RegisterTemplate({"Tick", "Tick", NodeCategory::Event, {},
-                          {ExecOut(), Out("DeltaTime", PinType::Float)}, "", nullptr});
+        RegisterTemplate(
+            {"Tick", "Tick", NodeCategory::Event, {}, {ExecOut(), Out("DeltaTime", PinType::Float)}, "", nullptr});
 
-        RegisterTemplate({"OnCollision", "On Collision", NodeCategory::Event, {},
-                          {ExecOut(), Out("OtherEntity", PinType::Entity)}, "", nullptr});
+        RegisterTemplate({"OnCollision",
+                          "On Collision",
+                          NodeCategory::Event,
+                          {},
+                          {ExecOut(), Out("OtherEntity", PinType::Entity)},
+                          "",
+                          nullptr});
 
         // ===================== Flow Control =====================
-        RegisterTemplate(
-            {"Branch", "Branch", NodeCategory::FlowControl,
-             {ExecIn(), In("Condition", PinType::Bool, false)},
-             {ExecOut("True"), ExecOut("False")},
-             "if ({Condition})",
-             [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-             {
-                 bool cond = inputs.size() > 0 && std::holds_alternative<bool>(inputs[0]) && std::get<bool>(inputs[0]);
-                 return {cond};
-             }});
+        RegisterTemplate({"Branch",
+                          "Branch",
+                          NodeCategory::FlowControl,
+                          {ExecIn(), In("Condition", PinType::Bool, false)},
+                          {ExecOut("True"), ExecOut("False")},
+                          "if ({Condition})",
+                          [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                          {
+                              bool cond = inputs.size() > 0 && std::holds_alternative<bool>(inputs[0]) &&
+                                          std::get<bool>(inputs[0]);
+                              return {cond};
+                          }});
 
-        RegisterTemplate(
-            {"ForLoop", "For Loop", NodeCategory::FlowControl,
-             {ExecIn(), In("Start", PinType::Int, 0), In("End", PinType::Int, 10)},
-             {ExecOut("LoopBody"), ExecOut("Completed"), Out("Index", PinType::Int)},
-             "for (int i = {Start}; i < {End}; i++)",
-             nullptr});
+        RegisterTemplate({"ForLoop",
+                          "For Loop",
+                          NodeCategory::FlowControl,
+                          {ExecIn(), In("Start", PinType::Int, 0), In("End", PinType::Int, 10)},
+                          {ExecOut("LoopBody"), ExecOut("Completed"), Out("Index", PinType::Int)},
+                          "for (int i = {Start}; i < {End}; i++)",
+                          nullptr});
 
-        RegisterTemplate(
-            {"Sequence", "Sequence", NodeCategory::FlowControl,
-             {ExecIn()},
-             {ExecOut("Then0"), ExecOut("Then1"), ExecOut("Then2")},
-             "", nullptr});
+        RegisterTemplate({"Sequence",
+                          "Sequence",
+                          NodeCategory::FlowControl,
+                          {ExecIn()},
+                          {ExecOut("Then0"), ExecOut("Then1"), ExecOut("Then2")},
+                          "",
+                          nullptr});
 
-        RegisterTemplate(
-            {"DoOnce", "Do Once", NodeCategory::FlowControl,
-             {ExecIn()},
-             {ExecOut()},
-             "if (!_doOnce) { _doOnce = true;",
-             nullptr});
+        RegisterTemplate({"DoOnce",
+                          "Do Once",
+                          NodeCategory::FlowControl,
+                          {ExecIn()},
+                          {ExecOut()},
+                          "if (!_doOnce) { _doOnce = true;",
+                          nullptr});
 
         // ===================== Math =====================
-        auto MakeBinaryMathNode = [&](const std::string& name, const std::string& op,
-                                      const std::string& display)
+        auto MakeBinaryMathNode = [&](const std::string& name, const std::string& op, const std::string& display)
         {
-            RegisterTemplate(
-                {name, display, NodeCategory::Math,
-                 {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 0.0f)},
-                 {Out("Result", PinType::Float)},
-                 "({A} " + op + " {B})",
-                 [op](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-                 {
-                     float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
-                                   ? std::get<float>(inputs[0])
-                                   : 0.0f;
-                     float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
-                                   ? std::get<float>(inputs[1])
-                                   : 0.0f;
-                     float result = 0.0f;
-                     if (op == "+")
-                         result = a + b;
-                     else if (op == "-")
-                         result = a - b;
-                     else if (op == "*")
-                         result = a * b;
-                     else if (op == "/")
-                         result = (b != 0.0f) ? a / b : 0.0f;
-                     return {result};
-                 }});
+            RegisterTemplate({name,
+                              display,
+                              NodeCategory::Math,
+                              {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 0.0f)},
+                              {Out("Result", PinType::Float)},
+                              "({A} " + op + " {B})",
+                              [op](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                              {
+                                  float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
+                                                ? std::get<float>(inputs[0])
+                                                : 0.0f;
+                                  float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
+                                                ? std::get<float>(inputs[1])
+                                                : 0.0f;
+                                  float result = 0.0f;
+                                  if (op == "+")
+                                      result = a + b;
+                                  else if (op == "-")
+                                      result = a - b;
+                                  else if (op == "*")
+                                      result = a * b;
+                                  else if (op == "/")
+                                      result = (b != 0.0f) ? a / b : 0.0f;
+                                  return {result};
+                              }});
         };
 
         MakeBinaryMathNode("Add", "+", "Add");
@@ -1374,9 +1375,10 @@ namespace Spark::Scripting
         MakeBinaryMathNode("Divide", "/", "Divide");
 
         RegisterTemplate(
-            {"Clamp", "Clamp", NodeCategory::Math,
-             {In("Value", PinType::Float, 0.0f), In("Min", PinType::Float, 0.0f),
-              In("Max", PinType::Float, 1.0f)},
+            {"Clamp",
+             "Clamp",
+             NodeCategory::Math,
+             {In("Value", PinType::Float, 0.0f), In("Min", PinType::Float, 0.0f), In("Max", PinType::Float, 1.0f)},
              {Out("Result", PinType::Float)},
              "Math::Clamp({Value}, {Min}, {Max})",
              [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
@@ -1384,50 +1386,47 @@ namespace Spark::Scripting
                  float val = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
                                  ? std::get<float>(inputs[0])
                                  : 0.0f;
-                 float lo = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
-                                ? std::get<float>(inputs[1])
-                                : 0.0f;
-                 float hi = (inputs.size() > 2 && std::holds_alternative<float>(inputs[2]))
-                                ? std::get<float>(inputs[2])
-                                : 1.0f;
+                 float lo = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1])) ? std::get<float>(inputs[1])
+                                                                                            : 0.0f;
+                 float hi = (inputs.size() > 2 && std::holds_alternative<float>(inputs[2])) ? std::get<float>(inputs[2])
+                                                                                            : 1.0f;
                  return {std::clamp(val, lo, hi)};
              }});
 
         RegisterTemplate(
-            {"Lerp", "Lerp", NodeCategory::Math,
-             {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 1.0f),
-              In("Alpha", PinType::Float, 0.5f)},
+            {"Lerp",
+             "Lerp",
+             NodeCategory::Math,
+             {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 1.0f), In("Alpha", PinType::Float, 0.5f)},
              {Out("Result", PinType::Float)},
              "Math::Lerp({A}, {B}, {Alpha})",
              [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
              {
-                 float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
-                               ? std::get<float>(inputs[0])
-                               : 0.0f;
-                 float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
-                               ? std::get<float>(inputs[1])
-                               : 1.0f;
-                 float t = (inputs.size() > 2 && std::holds_alternative<float>(inputs[2]))
-                               ? std::get<float>(inputs[2])
-                               : 0.5f;
+                 float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0])) ? std::get<float>(inputs[0])
+                                                                                           : 0.0f;
+                 float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1])) ? std::get<float>(inputs[1])
+                                                                                           : 1.0f;
+                 float t = (inputs.size() > 2 && std::holds_alternative<float>(inputs[2])) ? std::get<float>(inputs[2])
+                                                                                           : 0.5f;
                  return {a + (b - a) * t};
              }});
 
-        auto MakeUnaryMathNode = [&](const std::string& name, const std::string& display,
-                                     const std::string& code, auto func)
+        auto MakeUnaryMathNode =
+            [&](const std::string& name, const std::string& display, const std::string& code, auto func)
         {
-            RegisterTemplate(
-                {name, display, NodeCategory::Math,
-                 {In("Value", PinType::Float, 0.0f)},
-                 {Out("Result", PinType::Float)},
-                 code,
-                 [func](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-                 {
-                     float val = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
-                                     ? std::get<float>(inputs[0])
-                                     : 0.0f;
-                     return {func(val)};
-                 }});
+            RegisterTemplate({name,
+                              display,
+                              NodeCategory::Math,
+                              {In("Value", PinType::Float, 0.0f)},
+                              {Out("Result", PinType::Float)},
+                              code,
+                              [func](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                              {
+                                  float val = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
+                                                  ? std::get<float>(inputs[0])
+                                                  : 0.0f;
+                                  return {func(val)};
+                              }});
         };
 
         MakeUnaryMathNode("Abs", "Abs", "Math::Abs({Value})", [](float v) { return std::abs(v); });
@@ -1435,41 +1434,45 @@ namespace Spark::Scripting
         MakeUnaryMathNode("Cos", "Cos", "Math::Cos({Value})", [](float v) { return std::cos(v); });
         MakeUnaryMathNode("Sqrt", "Square Root", "Math::Sqrt({Value})", [](float v) { return std::sqrt(v); });
 
-        RegisterTemplate(
-            {"Min", "Min", NodeCategory::Math,
-             {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 0.0f)},
-             {Out("Result", PinType::Float)},
-             "Math::Min({A}, {B})",
-             [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-             {
-                 float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
-                               ? std::get<float>(inputs[0])
-                               : 0.0f;
-                 float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
-                               ? std::get<float>(inputs[1])
-                               : 0.0f;
-                 return {std::min(a, b)};
-             }});
+        RegisterTemplate({"Min",
+                          "Min",
+                          NodeCategory::Math,
+                          {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 0.0f)},
+                          {Out("Result", PinType::Float)},
+                          "Math::Min({A}, {B})",
+                          [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                          {
+                              float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
+                                            ? std::get<float>(inputs[0])
+                                            : 0.0f;
+                              float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
+                                            ? std::get<float>(inputs[1])
+                                            : 0.0f;
+                              return {std::min(a, b)};
+                          }});
 
-        RegisterTemplate(
-            {"Max", "Max", NodeCategory::Math,
-             {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 0.0f)},
-             {Out("Result", PinType::Float)},
-             "Math::Max({A}, {B})",
-             [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-             {
-                 float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
-                               ? std::get<float>(inputs[0])
-                               : 0.0f;
-                 float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
-                               ? std::get<float>(inputs[1])
-                               : 0.0f;
-                 return {std::max(a, b)};
-             }});
+        RegisterTemplate({"Max",
+                          "Max",
+                          NodeCategory::Math,
+                          {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 0.0f)},
+                          {Out("Result", PinType::Float)},
+                          "Math::Max({A}, {B})",
+                          [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                          {
+                              float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
+                                            ? std::get<float>(inputs[0])
+                                            : 0.0f;
+                              float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
+                                            ? std::get<float>(inputs[1])
+                                            : 0.0f;
+                              return {std::max(a, b)};
+                          }});
 
         // ===================== Logic =====================
         RegisterTemplate(
-            {"AND", "AND", NodeCategory::Logic,
+            {"AND",
+             "AND",
+             NodeCategory::Logic,
              {In("A", PinType::Bool, false), In("B", PinType::Bool, false)},
              {Out("Result", PinType::Bool)},
              "({A} && {B})",
@@ -1481,7 +1484,9 @@ namespace Spark::Scripting
              }});
 
         RegisterTemplate(
-            {"OR", "OR", NodeCategory::Logic,
+            {"OR",
+             "OR",
+             NodeCategory::Logic,
              {In("A", PinType::Bool, false), In("B", PinType::Bool, false)},
              {Out("Result", PinType::Bool)},
              "({A} || {B})",
@@ -1492,44 +1497,46 @@ namespace Spark::Scripting
                  return {a || b};
              }});
 
-        RegisterTemplate(
-            {"NOT", "NOT", NodeCategory::Logic,
-             {In("Value", PinType::Bool, false)},
-             {Out("Result", PinType::Bool)},
-             "(!{Value})",
-             [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-             {
-                 bool val = inputs.size() > 0 && std::holds_alternative<bool>(inputs[0]) && std::get<bool>(inputs[0]);
-                 return {!val};
-             }});
+        RegisterTemplate({"NOT",
+                          "NOT",
+                          NodeCategory::Logic,
+                          {In("Value", PinType::Bool, false)},
+                          {Out("Result", PinType::Bool)},
+                          "(!{Value})",
+                          [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                          {
+                              bool val = inputs.size() > 0 && std::holds_alternative<bool>(inputs[0]) &&
+                                         std::get<bool>(inputs[0]);
+                              return {!val};
+                          }});
 
-        auto MakeCompareNode = [&](const std::string& name, const std::string& display,
-                                   const std::string& op)
+        auto MakeCompareNode = [&](const std::string& name, const std::string& display, const std::string& op)
         {
-            RegisterTemplate(
-                {name, display, NodeCategory::Logic,
-                 {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 0.0f)},
-                 {Out("Result", PinType::Bool)},
-                 "({A} " + op + " {B})",
-                 [op](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-                 {
-                     float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
-                                   ? std::get<float>(inputs[0])
-                                   : 0.0f;
-                     float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
-                                   ? std::get<float>(inputs[1])
-                                   : 0.0f;
-                     bool result = false;
-                     if (op == "==")
-                         result = (a == b);
-                     else if (op == "!=")
-                         result = (a != b);
-                     else if (op == ">")
-                         result = (a > b);
-                     else if (op == "<")
-                         result = (a < b);
-                     return {result};
-                 }});
+            RegisterTemplate({name,
+                              display,
+                              NodeCategory::Logic,
+                              {In("A", PinType::Float, 0.0f), In("B", PinType::Float, 0.0f)},
+                              {Out("Result", PinType::Bool)},
+                              "({A} " + op + " {B})",
+                              [op](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                              {
+                                  float a = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
+                                                ? std::get<float>(inputs[0])
+                                                : 0.0f;
+                                  float b = (inputs.size() > 1 && std::holds_alternative<float>(inputs[1]))
+                                                ? std::get<float>(inputs[1])
+                                                : 0.0f;
+                                  bool result = false;
+                                  if (op == "==")
+                                      result = (a == b);
+                                  else if (op == "!=")
+                                      result = (a != b);
+                                  else if (op == ">")
+                                      result = (a > b);
+                                  else if (op == "<")
+                                      result = (a < b);
+                                  return {result};
+                              }});
         };
 
         MakeCompareNode("Equal", "Equal", "==");
@@ -1538,153 +1545,167 @@ namespace Spark::Scripting
         MakeCompareNode("Less", "Less Than", "<");
 
         // ===================== String =====================
-        RegisterTemplate(
-            {"Concat", "Concatenate", NodeCategory::String,
-             {In("A", PinType::String, std::string("")), In("B", PinType::String, std::string(""))},
-             {Out("Result", PinType::String)},
-             "({A} + {B})",
-             [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-             {
-                 std::string a = (inputs.size() > 0 && std::holds_alternative<std::string>(inputs[0]))
-                                     ? std::get<std::string>(inputs[0])
-                                     : "";
-                 std::string b = (inputs.size() > 1 && std::holds_alternative<std::string>(inputs[1]))
-                                     ? std::get<std::string>(inputs[1])
-                                     : "";
-                 return {a + b};
-             }});
+        RegisterTemplate({"Concat",
+                          "Concatenate",
+                          NodeCategory::String,
+                          {In("A", PinType::String, std::string("")), In("B", PinType::String, std::string(""))},
+                          {Out("Result", PinType::String)},
+                          "({A} + {B})",
+                          [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                          {
+                              std::string a = (inputs.size() > 0 && std::holds_alternative<std::string>(inputs[0]))
+                                                  ? std::get<std::string>(inputs[0])
+                                                  : "";
+                              std::string b = (inputs.size() > 1 && std::holds_alternative<std::string>(inputs[1]))
+                                                  ? std::get<std::string>(inputs[1])
+                                                  : "";
+                              return {a + b};
+                          }});
 
-        RegisterTemplate(
-            {"Length", "String Length", NodeCategory::String,
-             {In("Value", PinType::String, std::string(""))},
-             {Out("Length", PinType::Int)},
-             "{Value}.length()",
-             [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-             {
-                 std::string val = (inputs.size() > 0 && std::holds_alternative<std::string>(inputs[0]))
-                                       ? std::get<std::string>(inputs[0])
-                                       : "";
-                 return {static_cast<int32_t>(val.length())};
-             }});
+        RegisterTemplate({"Length",
+                          "String Length",
+                          NodeCategory::String,
+                          {In("Value", PinType::String, std::string(""))},
+                          {Out("Length", PinType::Int)},
+                          "{Value}.length()",
+                          [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                          {
+                              std::string val = (inputs.size() > 0 && std::holds_alternative<std::string>(inputs[0]))
+                                                    ? std::get<std::string>(inputs[0])
+                                                    : "";
+                              return {static_cast<int32_t>(val.length())};
+                          }});
 
-        RegisterTemplate(
-            {"Substring", "Substring", NodeCategory::String,
-             {In("Value", PinType::String, std::string("")), In("Start", PinType::Int, 0),
-              In("Count", PinType::Int, 1)},
-             {Out("Result", PinType::String)},
-             "{Value}.substr({Start}, {Count})",
-             [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-             {
-                 std::string val = (inputs.size() > 0 && std::holds_alternative<std::string>(inputs[0]))
-                                       ? std::get<std::string>(inputs[0])
-                                       : "";
-                 int start = (inputs.size() > 1 && std::holds_alternative<int32_t>(inputs[1]))
-                                 ? std::get<int32_t>(inputs[1])
-                                 : 0;
-                 int count = (inputs.size() > 2 && std::holds_alternative<int32_t>(inputs[2]))
-                                 ? std::get<int32_t>(inputs[2])
-                                 : 1;
-                 if (start < 0 || start >= static_cast<int>(val.length()))
-                 {
-                     return {std::string("")};
-                 }
-                 return {val.substr(static_cast<size_t>(start), static_cast<size_t>(count))};
-             }});
+        RegisterTemplate({"Substring",
+                          "Substring",
+                          NodeCategory::String,
+                          {In("Value", PinType::String, std::string("")), In("Start", PinType::Int, 0),
+                           In("Count", PinType::Int, 1)},
+                          {Out("Result", PinType::String)},
+                          "{Value}.substr({Start}, {Count})",
+                          [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                          {
+                              std::string val = (inputs.size() > 0 && std::holds_alternative<std::string>(inputs[0]))
+                                                    ? std::get<std::string>(inputs[0])
+                                                    : "";
+                              int start = (inputs.size() > 1 && std::holds_alternative<int32_t>(inputs[1]))
+                                              ? std::get<int32_t>(inputs[1])
+                                              : 0;
+                              int count = (inputs.size() > 2 && std::holds_alternative<int32_t>(inputs[2]))
+                                              ? std::get<int32_t>(inputs[2])
+                                              : 1;
+                              if (start < 0 || start >= static_cast<int>(val.length()))
+                              {
+                                  return {std::string("")};
+                              }
+                              return {val.substr(static_cast<size_t>(start), static_cast<size_t>(count))};
+                          }});
 
-        RegisterTemplate(
-            {"ToString", "To String", NodeCategory::String,
-             {In("Value", PinType::Float, 0.0f)},
-             {Out("Result", PinType::String)},
-             "formatFloat({Value})",
-             [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-             {
-                 float val = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
-                                 ? std::get<float>(inputs[0])
-                                 : 0.0f;
-                 return {std::to_string(val)};
-             }});
+        RegisterTemplate({"ToString",
+                          "To String",
+                          NodeCategory::String,
+                          {In("Value", PinType::Float, 0.0f)},
+                          {Out("Result", PinType::String)},
+                          "formatFloat({Value})",
+                          [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                          {
+                              float val = (inputs.size() > 0 && std::holds_alternative<float>(inputs[0]))
+                                              ? std::get<float>(inputs[0])
+                                              : 0.0f;
+                              return {std::to_string(val)};
+                          }});
 
         // ===================== Variable =====================
-        RegisterTemplate(
-            {"GetVariable", "Get Variable", NodeCategory::Variable,
-             {In("Name", PinType::String, std::string(""))},
-             {Out("Value", PinType::Any)},
-             "{Name}",
-             nullptr});
+        RegisterTemplate({"GetVariable",
+                          "Get Variable",
+                          NodeCategory::Variable,
+                          {In("Name", PinType::String, std::string(""))},
+                          {Out("Value", PinType::Any)},
+                          "{Name}",
+                          nullptr});
 
-        RegisterTemplate(
-            {"SetVariable", "Set Variable", NodeCategory::Variable,
-             {ExecIn(), In("Name", PinType::String, std::string("")), In("Value", PinType::Any)},
-             {ExecOut()},
-             "{Name} = {Value};",
-             nullptr});
+        RegisterTemplate({"SetVariable",
+                          "Set Variable",
+                          NodeCategory::Variable,
+                          {ExecIn(), In("Name", PinType::String, std::string("")), In("Value", PinType::Any)},
+                          {ExecOut()},
+                          "{Name} = {Value};",
+                          nullptr});
 
         // ===================== Entity =====================
-        RegisterTemplate(
-            {"GetPosition", "Get Position", NodeCategory::Entity,
-             {In("Entity", PinType::Entity)},
-             {Out("Position", PinType::Vector3)},
-             "GetEntityPosition({Entity})",
-             nullptr});
+        RegisterTemplate({"GetPosition",
+                          "Get Position",
+                          NodeCategory::Entity,
+                          {In("Entity", PinType::Entity)},
+                          {Out("Position", PinType::Vector3)},
+                          "GetEntityPosition({Entity})",
+                          nullptr});
 
-        RegisterTemplate(
-            {"SetPosition", "Set Position", NodeCategory::Entity,
-             {ExecIn(), In("Entity", PinType::Entity), In("Position", PinType::Vector3)},
-             {ExecOut()},
-             "SetEntityPosition({Entity}, {Position});",
-             nullptr});
+        RegisterTemplate({"SetPosition",
+                          "Set Position",
+                          NodeCategory::Entity,
+                          {ExecIn(), In("Entity", PinType::Entity), In("Position", PinType::Vector3)},
+                          {ExecOut()},
+                          "SetEntityPosition({Entity}, {Position});",
+                          nullptr});
 
-        RegisterTemplate(
-            {"SpawnEntity", "Spawn Entity", NodeCategory::Entity,
-             {ExecIn(), In("Template", PinType::String, std::string(""))},
-             {ExecOut(), Out("Entity", PinType::Entity)},
-             "uint64 {Entity} = SpawnEntity({Template});",
-             nullptr});
+        RegisterTemplate({"SpawnEntity",
+                          "Spawn Entity",
+                          NodeCategory::Entity,
+                          {ExecIn(), In("Template", PinType::String, std::string(""))},
+                          {ExecOut(), Out("Entity", PinType::Entity)},
+                          "uint64 {Entity} = SpawnEntity({Template});",
+                          nullptr});
 
-        RegisterTemplate(
-            {"DestroyEntity", "Destroy Entity", NodeCategory::Entity,
-             {ExecIn(), In("Entity", PinType::Entity)},
-             {ExecOut()},
-             "DestroyEntity({Entity});",
-             nullptr});
+        RegisterTemplate({"DestroyEntity",
+                          "Destroy Entity",
+                          NodeCategory::Entity,
+                          {ExecIn(), In("Entity", PinType::Entity)},
+                          {ExecOut()},
+                          "DestroyEntity({Entity});",
+                          nullptr});
 
         // ===================== Input =====================
-        RegisterTemplate(
-            {"IsKeyDown", "Is Key Down", NodeCategory::Input,
-             {In("Key", PinType::String, std::string("Space"))},
-             {Out("Pressed", PinType::Bool)},
-             "Input::IsKeyDown({Key})",
-             nullptr});
+        RegisterTemplate({"IsKeyDown",
+                          "Is Key Down",
+                          NodeCategory::Input,
+                          {In("Key", PinType::String, std::string("Space"))},
+                          {Out("Pressed", PinType::Bool)},
+                          "Input::IsKeyDown({Key})",
+                          nullptr});
 
-        RegisterTemplate(
-            {"GetAxis", "Get Axis", NodeCategory::Input,
-             {In("Axis", PinType::String, std::string("Horizontal"))},
-             {Out("Value", PinType::Float)},
-             "Input::GetAxis({Axis})",
-             nullptr});
+        RegisterTemplate({"GetAxis",
+                          "Get Axis",
+                          NodeCategory::Input,
+                          {In("Axis", PinType::String, std::string("Horizontal"))},
+                          {Out("Value", PinType::Float)},
+                          "Input::GetAxis({Axis})",
+                          nullptr});
 
         // ===================== Debug =====================
-        RegisterTemplate(
-            {"PrintString", "Print String", NodeCategory::Debug,
-             {ExecIn(), In("Message", PinType::String, std::string("Hello"))},
-             {ExecOut()},
-             "Print({Message});",
-             [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
-             {
-                 std::string msg = (inputs.size() > 0 && std::holds_alternative<std::string>(inputs[0]))
-                                       ? std::get<std::string>(inputs[0])
-                                       : "";
-                 std::cout << "[VisualScript] " << msg << std::endl;
-                 return {};
-             }});
+        RegisterTemplate({"PrintString",
+                          "Print String",
+                          NodeCategory::Debug,
+                          {ExecIn(), In("Message", PinType::String, std::string("Hello"))},
+                          {ExecOut()},
+                          "Print({Message});",
+                          [](const std::vector<PinValue>& inputs) -> std::vector<PinValue>
+                          {
+                              std::string msg = (inputs.size() > 0 && std::holds_alternative<std::string>(inputs[0]))
+                                                    ? std::get<std::string>(inputs[0])
+                                                    : "";
+                              std::cout << "[VisualScript] " << msg << std::endl;
+                              return {};
+                          }});
 
-        RegisterTemplate(
-            {"DrawDebugLine", "Draw Debug Line", NodeCategory::Debug,
-             {ExecIn(), In("Start", PinType::Vector3), In("End", PinType::Vector3),
-              In("Duration", PinType::Float, 1.0f)},
-             {ExecOut()},
-             "Debug::DrawLine({Start}, {End}, {Duration});",
-             nullptr});
+        RegisterTemplate({"DrawDebugLine",
+                          "Draw Debug Line",
+                          NodeCategory::Debug,
+                          {ExecIn(), In("Start", PinType::Vector3), In("End", PinType::Vector3),
+                           In("Duration", PinType::Float, 1.0f)},
+                          {ExecOut()},
+                          "Debug::DrawLine({Start}, {End}, {Duration});",
+                          nullptr});
     }
 
     // ============================================================================

@@ -63,11 +63,10 @@ namespace Spark::Scripting
     /**
      * @brief A typed value carried along a data wire.
      */
-    using PinValue = std::variant<std::monostate, bool, int32_t, float, std::string,
-                                  std::array<float, 2>, // Vector2
-                                  std::array<float, 3>, // Vector3
-                                  std::array<float, 4>, // Vector4
-                                  uint64_t              // Entity ID
+    using PinValue = std::variant<std::monostate, bool, int32_t, float, std::string, std::array<float, 2>, // Vector2
+                                  std::array<float, 3>,                                                    // Vector3
+                                  std::array<float, 4>,                                                    // Vector4
+                                  uint64_t                                                                 // Entity ID
                                   >;
 
     // ============================================================================
@@ -275,8 +274,7 @@ namespace Spark::Scripting
 
       private:
         bool HasCycle(NodeID fromNode, NodeID toNode) const;
-        bool HasCycleHelper(NodeID current, NodeID target,
-                            std::unordered_map<NodeID, bool>& visited) const;
+        bool HasCycleHelper(NodeID current, NodeID target, std::unordered_map<NodeID, bool>& visited) const;
         std::vector<NodeID> TopologicalSort() const;
         std::string GenerateNodeCode(const ScriptNode& node,
                                      const std::unordered_map<PinID, std::string>& pinVarNames) const;

@@ -410,8 +410,7 @@ namespace Spark::Graphics
     {
         D3D12_RAYTRACING_GEOMETRY_DESC geomDesc = {};
         geomDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-        geomDesc.Flags =
-            desc.isOpaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+        geomDesc.Flags = desc.isOpaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
         geomDesc.Triangles.VertexCount = desc.vertexCount;
         geomDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
         geomDesc.Triangles.VertexBuffer.StrideInBytes = desc.vertexStride;
@@ -458,8 +457,8 @@ namespace Spark::Graphics
         // Create scratch buffer
         bufferDesc.Width = prebuildInfo.ScratchDataSizeInBytes;
         ComPtr<ID3D12Resource> scratchBuffer;
-        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-                                             D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&scratchBuffer));
+        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_COMMON,
+                                             nullptr, IID_PPV_ARGS(&scratchBuffer));
         if (FAILED(hr))
         {
             std::cerr << "[DXR] Failed to create BLAS scratch buffer" << std::endl;
@@ -528,9 +527,8 @@ namespace Spark::Graphics
             return false;
         }
 
-        std::cout << "[DXR] Raytracing Tier "
-                  << (options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_0 ? "1.0" : "1.1") << " detected"
-                  << std::endl;
+        std::cout << "[DXR] Raytracing Tier " << (options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_0 ? "1.0" : "1.1")
+                  << " detected" << std::endl;
 
         // Create internal state
         s_dxrState = std::make_unique<DXRInternalState>();
@@ -636,8 +634,8 @@ namespace Spark::Graphics
         if (m_isInitialized && s_dxrState && s_dxrState->commandList)
         {
             uint64_t blasSize = 0;
-            auto blasBuffer = BuildBLASResource(s_dxrState->dxrDevice.Get(), s_dxrState->commandList.Get(), desc,
-                                                blasSize);
+            auto blasBuffer =
+                BuildBLASResource(s_dxrState->dxrDevice.Get(), s_dxrState->commandList.Get(), desc, blasSize);
             data.resource = blasBuffer.Detach(); // Transfer ownership
             data.size = blasSize;
         }
@@ -669,8 +667,8 @@ namespace Spark::Graphics
 
         D3D12_RAYTRACING_GEOMETRY_DESC geomDesc = {};
         geomDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-        geomDesc.Flags = blasData.desc.isOpaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE
-                                                : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+        geomDesc.Flags =
+            blasData.desc.isOpaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
         geomDesc.Triangles.VertexCount = blasData.desc.vertexCount;
         geomDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
         geomDesc.Triangles.VertexBuffer.StrideInBytes = blasData.desc.vertexStride;
@@ -850,8 +848,8 @@ namespace Spark::Graphics
         m_tlasResource = tlasBuffer.Detach();
         m_tlasSize = prebuildInfo.ResultDataMaxSizeInBytes;
 
-        std::cout << "[DXR] Built TLAS with " << instances.size() << " instances ("
-                  << (m_tlasSize / 1024) << " KB)" << std::endl;
+        std::cout << "[DXR] Built TLAS with " << instances.size() << " instances (" << (m_tlasSize / 1024) << " KB)"
+                  << std::endl;
 #endif
     }
 
@@ -885,8 +883,7 @@ namespace Spark::Graphics
 
         if (s_dxrState->rayGenShaderTable)
         {
-            dispatchDesc.RayGenerationShaderRecord.StartAddress =
-                s_dxrState->rayGenShaderTable->GetGPUVirtualAddress();
+            dispatchDesc.RayGenerationShaderRecord.StartAddress = s_dxrState->rayGenShaderTable->GetGPUVirtualAddress();
             dispatchDesc.RayGenerationShaderRecord.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
         }
 
@@ -1042,8 +1039,8 @@ namespace Spark::Graphics
         {
             uint64_t* timestamps = nullptr;
             D3D12_RANGE readRange = {0, sizeof(uint64_t) * 8};
-            if (SUCCEEDED(s_dxrState->timestampReadbackBuffer->Map(0, &readRange,
-                                                                   reinterpret_cast<void**>(&timestamps))))
+            if (SUCCEEDED(
+                    s_dxrState->timestampReadbackBuffer->Map(0, &readRange, reinterpret_cast<void**>(&timestamps))))
             {
                 double ticksToMs = 1000.0 / static_cast<double>(s_dxrState->gpuTimestampFrequency);
                 m_stats.rtReflectionsTimeMs = static_cast<float>((timestamps[1] - timestamps[0]) * ticksToMs);
@@ -1106,8 +1103,8 @@ namespace Spark::Graphics
         if (enabled)
             m_settings.enabledFeatures = m_settings.enabledFeatures | flag;
         else
-            m_settings.enabledFeatures =
-                static_cast<RTFeature>(static_cast<uint32_t>(m_settings.enabledFeatures) & ~static_cast<uint32_t>(flag));
+            m_settings.enabledFeatures = static_cast<RTFeature>(static_cast<uint32_t>(m_settings.enabledFeatures) &
+                                                                ~static_cast<uint32_t>(flag));
     }
 
     void DXRManager::Console_SetQuality(const std::string& quality)
