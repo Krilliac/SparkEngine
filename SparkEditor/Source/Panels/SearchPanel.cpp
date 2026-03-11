@@ -374,40 +374,45 @@ namespace SparkEditor
     void SearchPanel::InitializeSampleData()
     {
         // Sample entities for search demonstration
-        m_sampleEntities = {
-            SampleEntity{"Player", 1, {"Transform", "Camera", "RigidBody", "Collider", "AudioSource"}, "Root/Player"},
-            SampleEntity{"MainCamera", 2, {"Transform", "Camera"}, "Root/MainCamera"},
-            SampleEntity{"DirectionalLight", 3, {"Transform", "Light"}, "Root/Lighting/DirectionalLight"},
-            SampleEntity{"PointLight_01", 4, {"Transform", "Light"}, "Root/Lighting/PointLight_01"},
-            SampleEntity{"PointLight_02", 5, {"Transform", "Light"}, "Root/Lighting/PointLight_02"},
-            SampleEntity{"SpotLight_01", 6, {"Transform", "Light"}, "Root/Lighting/SpotLight_01"},
-            SampleEntity{"Ground", 7, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Ground"},
-            SampleEntity{
-                "Wall_North", 8, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_North"},
-            SampleEntity{
-                "Wall_South", 9, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_South"},
-            SampleEntity{
-                "Wall_East", 10, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_East"},
-            SampleEntity{
-                "Wall_West", 11, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_West"},
-            SampleEntity{"Crate_01", 12, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_01"},
-            SampleEntity{"Crate_02", 13, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_02"},
-            SampleEntity{
-                "Barrel_01", 14, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Barrel_01"},
-            SampleEntity{"WeaponPickup",
-                         15,
-                         {"Transform", "MeshRenderer", "Collider", "AudioSource"},
-                         "Root/Pickups/WeaponPickup"},
-            SampleEntity{"HealthPack", 16, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/HealthPack"},
-            SampleEntity{"AmmoBox", 17, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/AmmoBox"},
-            SampleEntity{"SpawnPoint_A", 18, {"Transform"}, "Root/GameLogic/SpawnPoint_A"},
-            SampleEntity{"SpawnPoint_B", 19, {"Transform"}, "Root/GameLogic/SpawnPoint_B"},
-            SampleEntity{"TriggerZone", 20, {"Transform", "Collider"}, "Root/GameLogic/TriggerZone"},
-            SampleEntity{"ParticleSmoke", 21, {"Transform", "ParticleSystem"}, "Root/Effects/ParticleSmoke"},
-            SampleEntity{"ParticleFire", 22, {"Transform", "ParticleSystem", "Light"}, "Root/Effects/ParticleFire"},
-            SampleEntity{"AmbientSound", 23, {"Transform", "AudioSource"}, "Root/Audio/AmbientSound"},
-            SampleEntity{"MusicPlayer", 24, {"Transform", "AudioSource"}, "Root/Audio/MusicPlayer"},
-        };
+        m_sampleEntities.clear();
+        m_sampleEntities.push_back(
+            {"Player", 1, {"Transform", "Camera", "RigidBody", "Collider", "AudioSource"}, "Root/Player"});
+        m_sampleEntities.push_back({"MainCamera", 2, {"Transform", "Camera"}, "Root/MainCamera"});
+        m_sampleEntities.push_back({"DirectionalLight", 3, {"Transform", "Light"}, "Root/Lighting/DirectionalLight"});
+        m_sampleEntities.push_back({"PointLight_01", 4, {"Transform", "Light"}, "Root/Lighting/PointLight_01"});
+        m_sampleEntities.push_back({"PointLight_02", 5, {"Transform", "Light"}, "Root/Lighting/PointLight_02"});
+        m_sampleEntities.push_back({"SpotLight_01", 6, {"Transform", "Light"}, "Root/Lighting/SpotLight_01"});
+        m_sampleEntities.push_back({"Ground", 7, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Ground"});
+        m_sampleEntities.push_back(
+            {"Wall_North", 8, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_North"});
+        m_sampleEntities.push_back(
+            {"Wall_South", 9, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_South"});
+        m_sampleEntities.push_back(
+            {"Wall_East", 10, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_East"});
+        m_sampleEntities.push_back(
+            {"Wall_West", 11, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_West"});
+        m_sampleEntities.push_back(
+            {"Crate_01", 12, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_01"});
+        m_sampleEntities.push_back(
+            {"Crate_02", 13, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_02"});
+        m_sampleEntities.push_back(
+            {"Barrel_01", 14, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Barrel_01"});
+        m_sampleEntities.push_back({"WeaponPickup",
+                                    15,
+                                    {"Transform", "MeshRenderer", "Collider", "AudioSource"},
+                                    "Root/Pickups/WeaponPickup"});
+        m_sampleEntities.push_back(
+            {"HealthPack", 16, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/HealthPack"});
+        m_sampleEntities.push_back({"AmmoBox", 17, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/AmmoBox"});
+        m_sampleEntities.push_back({"SpawnPoint_A", 18, {"Transform"}, "Root/GameLogic/SpawnPoint_A"});
+        m_sampleEntities.push_back({"SpawnPoint_B", 19, {"Transform"}, "Root/GameLogic/SpawnPoint_B"});
+        m_sampleEntities.push_back({"TriggerZone", 20, {"Transform", "Collider"}, "Root/GameLogic/TriggerZone"});
+        m_sampleEntities.push_back(
+            {"ParticleSmoke", 21, {"Transform", "ParticleSystem"}, "Root/Effects/ParticleSmoke"});
+        m_sampleEntities.push_back(
+            {"ParticleFire", 22, {"Transform", "ParticleSystem", "Light"}, "Root/Effects/ParticleFire"});
+        m_sampleEntities.push_back({"AmbientSound", 23, {"Transform", "AudioSource"}, "Root/Audio/AmbientSound"});
+        m_sampleEntities.push_back({"MusicPlayer", 24, {"Transform", "AudioSource"}, "Root/Audio/MusicPlayer"});
 
         m_sampleAssets = {
             {"PlayerModel.fbx", "Model", "Assets/Models/PlayerModel.fbx"},
