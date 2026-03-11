@@ -3857,7 +3857,6 @@ void MaterialSystem::Console_GarbageCollect()
     {
         if (it->second.use_count() == 1)
         {
-            fprintf(stderr, "[MaterialSystem] GC: collecting unused material '%s'\n", it->first.c_str());
             it = m_materials.erase(it);
             ++collected;
         }

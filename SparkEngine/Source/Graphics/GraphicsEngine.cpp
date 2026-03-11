@@ -522,7 +522,8 @@ void GraphicsEngine::EndFrame()
 
     if (FAILED(hr))
     {
-        SPARK_LOG_ERROR("Graphics", "SwapChain::Present failed with HR=0x%08lX", static_cast<long>(hr));
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "Graphics", 5, "SwapChain::Present failed with HR=0x%08lX",
+                                static_cast<long>(hr));
 
         if (hr == DXGI_ERROR_DEVICE_REMOVED)
         {
