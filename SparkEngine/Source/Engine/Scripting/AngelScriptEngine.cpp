@@ -12,6 +12,7 @@
 #include "../../Input/InputManager.h"
 #include "../../Core/SparkEngine.h"
 #include "../../Core/EngineContext.h"
+#include "../../Utils/LogMacros.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -32,17 +33,17 @@ AngelScriptEngine* AngelScriptEngine::s_instance = nullptr;
 
 static void LogWarning(const std::string& message)
 {
-    std::cerr << "[AngelScriptEngine] WARNING: " << message << "\n";
+    SPARK_LOG_WARN("Scripting", "%s", message.c_str());
 }
 
 static void LogError(const std::string& message)
 {
-    std::cerr << "[AngelScriptEngine] ERROR: " << message << "\n";
+    SPARK_LOG_ERROR("Scripting", "%s", message.c_str());
 }
 
 static void LogInfo(const std::string& message)
 {
-    std::cout << "[AngelScriptEngine] " << message << "\n";
+    SPARK_LOG_INFO("Scripting", "%s", message.c_str());
 }
 
 // ============================================================================
@@ -51,7 +52,7 @@ static void LogInfo(const std::string& message)
 
 void ASPrint(const std::string& message)
 {
-    std::cout << "[Script] " << message << "\n";
+    SPARK_LOG_INFO("Scripting", "[Script] %s", message.c_str());
 }
 
 EntityID ASCreateEntity([[maybe_unused]] const std::string& name)

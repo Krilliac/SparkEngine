@@ -736,18 +736,24 @@ void TextureSystem::GarbageCollect()
     std::lock_guard<std::mutex> lock(m_texturesMutex);
 
     // Remove textures that are only referenced by the texture system
+    size_t collected = 0;
     auto it = m_textures.begin();
     while (it != m_textures.end())
     {
         if (it->second.use_count() == 1)
         {
-            Spark::SimpleConsole::GetInstance().LogInfo("Garbage collecting texture: " + it->first);
             it = m_textures.erase(it);
+            ++collected;
         }
         else
         {
             ++it;
         }
+    }
+
+    if (collected > 0)
+    {
+        Spark::SimpleConsole::GetInstance().LogInfo("Garbage collected " + std::to_string(collected) + " texture(s)");
     }
 }
 

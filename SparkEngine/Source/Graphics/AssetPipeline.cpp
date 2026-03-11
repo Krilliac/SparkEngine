@@ -764,18 +764,24 @@ void AssetPipeline::EvictUnusedAssets()
 {
     std::lock_guard<std::mutex> lock(m_assetsMutex);
 
+    size_t evicted = 0;
     auto it = m_assets.begin();
     while (it != m_assets.end())
     {
         if (it->second.use_count() == 1)
         {
-            Spark::SimpleConsole::GetInstance().LogInfo("Evicting unused asset: " + it->first);
             it = m_assets.erase(it);
+            ++evicted;
         }
         else
         {
             ++it;
         }
+    }
+
+    if (evicted > 0)
+    {
+        Spark::SimpleConsole::GetInstance().LogInfo("Evicted " + std::to_string(evicted) + " unused asset(s)");
     }
 }
 
