@@ -5,6 +5,7 @@
 #include "Physics/PhysicsSystem.h"
 #include "Audio/AudioEngine.h"
 #include "Engine/AI/BehaviorTree.h"
+#include "Utils/Cooldown.h"
 #include <sstream>
 #include <cmath>
 
@@ -216,6 +217,10 @@ namespace Spark::ECS
                 ai.state = AIComponent::State::Dead;
                 continue;
             }
+
+            // Advance cooldown timers
+            ai.attackCooldown.Update(deltaTime);
+            ai.perceptionCooldown.Update(deltaTime);
 
             // Tick behavior tree if one is assigned
             if (ai.behaviorTreeHandle)

@@ -138,21 +138,25 @@ cd build && ctest --output-on-failure
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*55 test files, 601+ test cases*
+*62 test files, 681+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
 | `TestAIBehaviorTree` | 16 |
 | `TestAchievementSystem` | 5 |
 | `TestAnimationSystem` | 17 |
+| `TestBitFlags` | 14 |
 | `TestChromeTracing` | 5 |
 | `TestClientPrediction` | 5 |
 | `TestClothSimulation` | 4 |
+| `TestColorUtils` | 18 |
 | `TestCommandHistory` | 10 |
 | `TestConfigParser` | 16 |
+| `TestCooldown` | 14 |
 | `TestCoroutineScheduler` | 10 |
 | `TestDayNightCycle` | 10 |
 | `TestDebugTools` | 31 |
+| `TestDeltaSmoother` | 10 |
 | `TestDestructionSystem` | 5 |
 | `TestDialogueSystem` | 4 |
 | `TestECSIntegration` | 9 |
@@ -181,16 +185,19 @@ cd build && ctest --output-on-failure
 | `TestPhysicsComponents` | 22 |
 | `TestPostProcessingPipeline` | 11 |
 | `TestQuestSystem` | 10 |
+| `TestRandomEngine` | 11 |
 | `TestReplaySystem` | 4 |
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
 | `TestSaveSystem` | 7 |
+| `TestScopedTimer` | 3 |
 | `TestScreenSpaceEffects` | 16 |
 | `TestSequencer` | 10 |
 | `TestSprite2DComponents` | 35 |
 | `TestSteeringBehaviors` | 15 |
 | `TestStringUtils` | 19 |
 | `TestTemporalEffects` | 11 |
+| `TestThreadSafeQueue` | 10 |
 | `TestTween` | 14 |
 | `TestUISystem` | 6 |
 | `TestUUID` | 12 |

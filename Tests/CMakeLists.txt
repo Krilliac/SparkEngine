@@ -51,6 +51,13 @@ add_executable(SparkTests
     TestEngineContext.cpp
     TestNetBuffer.cpp
     TestSprite2DComponents.cpp
+    TestRandomEngine.cpp
+    TestCooldown.cpp
+    TestColorUtils.cpp
+    TestScopedTimer.cpp
+    TestBitFlags.cpp
+    TestThreadSafeQueue.cpp
+    TestDeltaSmoother.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

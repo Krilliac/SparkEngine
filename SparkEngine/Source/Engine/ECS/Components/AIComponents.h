@@ -9,10 +9,11 @@
 #pragma once
 #include "../../../Core/Platform.h"
 #include "../../../Utils/OpaqueHandle.h"
-#include <entt/entt.hpp>
+#include "../../../Utils/Cooldown.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
+#include <entt/entt.hpp>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,12 @@ struct AIComponent
     DirectX::XMFLOAT3 lastKnownTargetPos{0, 0, 0};
     float timeSinceLastSeen = 0.0f;
     float alertTimer = 0.0f;
+
+    /// Cooldown between attack actions (driven by config.reactionTime)
+    Spark::Cooldown attackCooldown{0.5f, true};
+
+    /// Cooldown for perception updates (avoids expensive checks every frame)
+    Spark::Cooldown perceptionCooldown{0.1f, true};
 
     // Pathfinding
     std::vector<DirectX::XMFLOAT3> currentPath;
