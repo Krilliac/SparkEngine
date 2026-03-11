@@ -9,6 +9,7 @@
 #include "AISystem.h"
 #include "PerceptionSystem.h"
 #include "SteeringBehaviors.h"
+#include "../../Utils/JobSystem.h"
 #include <sstream>
 #include <cmath>
 #include <numbers>
@@ -80,9 +81,19 @@ namespace Spark::AI
     void AISystem::Update(World& world, float deltaTime)
     {
         auto view = world.GetEntitiesWith<Transform, AIComponent>();
+
+        // Phase 1 (serial): Collect live agents, handle deaths and lazy initialization.
+        // Lazy init touches shared state (m_behaviorInstances, NavMeshManager) so it
+        // must run on the main thread.
+        struct AgentEntry
+        {
+            entt::entity entity;
+        };
+        std::vector<AgentEntry> liveAgents;
+        liveAgents.reserve(128);
+
         for (auto entity : view)
         {
-            auto& transform = view.get<Transform>(entity);
             auto& ai = view.get<AIComponent>(entity);
 
             // Skip dead agents
@@ -112,18 +123,9 @@ namespace Spark::AI
             if (!ai.navQueryHandle)
             {
                 auto& mgr = NavMeshManager::GetInstance();
-                // Try to create a query from any registered navmesh
-                // In a production engine this would be level-specific
                 auto query = mgr.CreateQuery("default");
-                if (!query)
-                {
-                    // Try the first available navmesh
-                    // For now, store nullptr; agent will use direct movement
-                }
                 if (query)
                 {
-                    // Transfer ownership to a raw pointer tracked by the system
-                    // The NavMeshQuery is kept alive by the manager pattern
                     ai.navQueryHandle = Spark::NavQueryHandle(static_cast<void*>(query.release()));
                 }
             }
@@ -136,10 +138,29 @@ namespace Spark::AI
                 bt->GetBlackboard().Set("healthPercent", healthPct);
             }
 
-            UpdatePerception(world, entity, ai, transform, deltaTime);
-            UpdateBehavior(ai, deltaTime);
-            UpdateMovement(world, ai, transform, deltaTime);
+            liveAgents.push_back({entity});
         }
+
+        // Phase 2 (parallel): Perception, behavior tree tick, and movement are
+        // independent per agent so they can run in parallel via the JobSystem.
+        const int agentCount = static_cast<int>(liveAgents.size());
+        if (agentCount == 0)
+            return;
+
+        auto& jobSystem = Spark::JobSystem::Get();
+        jobSystem.ParallelFor(
+            0, agentCount,
+            [&](int i)
+            {
+                auto entity = liveAgents[i].entity;
+                auto& transform = view.get<Transform>(entity);
+                auto& ai = view.get<AIComponent>(entity);
+
+                UpdatePerception(world, entity, ai, transform, deltaTime);
+                UpdateBehavior(ai, deltaTime);
+                UpdateMovement(world, entity, ai, transform, deltaTime);
+            },
+            4 /* minBatchSize: amortize job overhead */);
     }
 
     void AISystem::RegisterBehavior(const std::string& name, std::unique_ptr<BehaviorTree> tree)
@@ -418,11 +439,18 @@ namespace Spark::AI
         }
     }
 
-    void AISystem::UpdateMovement(World& world, AIComponent& ai, Transform& transform, float deltaTime)
+    void AISystem::UpdateMovement(World& world, EntityID entity, AIComponent& ai, Transform& transform, float deltaTime)
     {
-        // Dead or idle agents don't move
+        // Dead or idle agents don't move — clear physics velocity if present
         if (ai.state == AIComponent::State::Dead || ai.state == AIComponent::State::Idle)
+        {
+            auto* rb = world.GetComponent<RigidBodyComponent>(entity);
+            if (rb)
+            {
+                rb->linearVelocity = {0.0f, rb->linearVelocity.y, 0.0f};
+            }
             return;
+        }
 
         // Determine the movement goal
         XMFLOAT3 moveGoal = ai.moveTarget;
@@ -520,14 +548,30 @@ namespace Spark::AI
         // Truncate velocity to max speed
         desiredVelocity = SteeringDetail::Truncate(desiredVelocity, ai.config.moveSpeed);
 
-        // Apply movement
+        // Apply movement — prefer physics-driven velocity when a RigidBodyComponent
+        // exists, otherwise fall back to direct transform manipulation.
         float speed = SteeringDetail::Length(desiredVelocity);
         if (speed > kMinMovementEpsilon)
         {
-            float moveX = desiredVelocity.x * deltaTime;
-            float moveZ = desiredVelocity.z * deltaTime;
-            transform.position.x += moveX;
-            transform.position.z += moveZ;
+            // Physics-driven path: write to RigidBodyComponent::linearVelocity
+            // and let the PhysicsUpdateSystem integrate position next frame.
+            auto* rb = world.GetComponent<RigidBodyComponent>(entity);
+            if (rb)
+            {
+                // Set the desired velocity on the rigid body; the physics system
+                // will integrate position and handle collision resolution.
+                rb->linearVelocity.x = desiredVelocity.x;
+                rb->linearVelocity.y = 0.0f; // AI movement is horizontal
+                rb->linearVelocity.z = desiredVelocity.z;
+            }
+            else
+            {
+                // No rigid body — fall back to direct transform update
+                float moveX = desiredVelocity.x * deltaTime;
+                float moveZ = desiredVelocity.z * deltaTime;
+                transform.position.x += moveX;
+                transform.position.z += moveZ;
+            }
 
             // Smoothly rotate to face movement direction
             float targetYaw = std::atan2(desiredVelocity.x, desiredVelocity.z) * (180.0f / std::numbers::pi_v<float>);

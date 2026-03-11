@@ -49,8 +49,11 @@
 // Animation & Particles: AnimationController, ParticleEmitterComponent
 #include "Components/AnimationComponents.h"
 
-// AI & Networking: AIComponent, NetworkIdentity
+// AI: AIComponent
 #include "Components/AIComponents.h"
+
+// Networking: NetworkIdentity (R6.2 — separated from AI)
+#include "Components/NetworkComponents.h"
 
 // Gameplay: TagComponent, ActiveComponent, HealthComponent, Weather, Inventory, Quests
 #include "Components/GameplayComponents.h"

@@ -1,11 +1,17 @@
 /**
  * @file EngineContext.cpp
  * @brief Concrete IEngineContext implementation
+ *
+ * R1.1: Constructor now delegates to RegisterSystem<T> for each subsystem.
+ * R1.2: InitializeAll() / ShutdownAll() with topological sort.
  */
 
 #include "EngineContext.h"
 #include "Spark/Version.h"
+
+#include <algorithm>
 #include <memory>
+#include <unordered_map>
 
 // Global engine context - defined here (in SparkEngineLib) so that all
 // consumers of the static library (both the executable and SparkGame DLL)
@@ -23,8 +29,24 @@ std::unique_ptr<EngineContext>& EngineContext::GetOwned()
 }
 
 EngineContext::EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer, Spark::EventBus* eventBus)
-    : m_graphics(graphics), m_input(input), m_timer(timer), m_eventBus(eventBus)
 {
+    // Delegate all storage to the generic registry (R1.1)
+    if (graphics)
+    {
+        RegisterSystem<GraphicsEngine>(graphics);
+    }
+    if (input)
+    {
+        RegisterSystem<InputManager>(input);
+    }
+    if (timer)
+    {
+        RegisterSystem<Timer>(timer);
+    }
+    if (eventBus)
+    {
+        RegisterSystem<Spark::EventBus>(eventBus);
+    }
 }
 
 uint32_t EngineContext::GetEngineVersion() const
@@ -48,4 +70,125 @@ bool EngineContext::IsHeadless() const
 #else
     return false;
 #endif
+}
+
+// =============================================================================
+// Dependency-aware subsystem lifecycle (R1.2)
+// =============================================================================
+
+bool EngineContext::TopologicalSort(std::vector<SubsystemEntry*>& sorted)
+{
+    // Build adjacency + in-degree from m_subsystemEntries
+    std::unordered_map<TypeId, SubsystemEntry*, TypeIdHash> entryMap;
+    std::unordered_map<TypeId, int, TypeIdHash> inDegree;
+    std::unordered_map<TypeId, std::vector<TypeId>, TypeIdHash> adjacency; // dep -> dependents
+
+    for (auto& entry : m_subsystemEntries)
+    {
+        entryMap[entry.type] = &entry;
+        inDegree[entry.type]; // ensure key exists with default 0
+    }
+
+    for (auto& entry : m_subsystemEntries)
+    {
+        for (const auto& dep : entry.dependencies)
+        {
+            // Only count edges where the dependency is also a registered subsystem
+            if (entryMap.find(dep) != entryMap.end())
+            {
+                adjacency[dep].push_back(entry.type);
+                inDegree[entry.type]++;
+            }
+        }
+    }
+
+    // Kahn's algorithm
+    std::vector<TypeId> queue;
+    for (const auto& [type, degree] : inDegree)
+    {
+        if (degree == 0)
+        {
+            queue.push_back(type);
+        }
+    }
+
+    // Sort the initial queue for deterministic ordering
+    std::sort(queue.begin(), queue.end(), [](TypeId a, TypeId b) { return std::less<const void*>{}(a, b); });
+
+    sorted.clear();
+    size_t idx = 0;
+
+    while (idx < queue.size())
+    {
+        auto current = queue[idx++];
+        sorted.push_back(entryMap[current]);
+
+        // Collect and sort neighbors for determinism
+        auto adjIt = adjacency.find(current);
+        if (adjIt != adjacency.end())
+        {
+            auto neighbors = adjIt->second;
+            std::sort(neighbors.begin(), neighbors.end(),
+                      [](TypeId a, TypeId b) { return std::less<const void*>{}(a, b); });
+
+            for (const auto& neighbor : neighbors)
+            {
+                inDegree[neighbor]--;
+                if (inDegree[neighbor] == 0)
+                {
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+    }
+
+    // If we didn't visit all entries, there's a cycle
+    return sorted.size() == m_subsystemEntries.size();
+}
+
+bool EngineContext::InitializeAll()
+{
+    std::vector<SubsystemEntry*> sorted;
+    if (!TopologicalSort(sorted))
+    {
+        // Dependency cycle detected
+        return false;
+    }
+
+    m_initOrder.clear();
+
+    for (auto* entry : sorted)
+    {
+        if (entry->initFn)
+        {
+            if (!entry->initFn())
+            {
+                return false;
+            }
+        }
+        entry->initialized = true;
+        m_initOrder.push_back(entry->type);
+    }
+
+    return true;
+}
+
+void EngineContext::ShutdownAll()
+{
+    // Shut down in reverse initialization order
+    for (auto it = m_initOrder.rbegin(); it != m_initOrder.rend(); ++it)
+    {
+        auto entryIt = std::find_if(m_subsystemEntries.begin(), m_subsystemEntries.end(),
+                                    [&](const SubsystemEntry& e) { return e.type == *it; });
+        if (entryIt != m_subsystemEntries.end() && entryIt->initialized && entryIt->shutdownFn)
+        {
+            entryIt->shutdownFn();
+        }
+        if (entryIt != m_subsystemEntries.end())
+        {
+            entryIt->initialized = false;
+        }
+    }
+
+    m_initOrder.clear();
 }

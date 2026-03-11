@@ -60,15 +60,4 @@ struct AIComponent
     } config;
 };
 
-// =============================================================================
-// NetworkIdentity
-// =============================================================================
-
-struct NetworkIdentity
-{
-    uint32_t networkID = 0;
-    uint32_t ownerClientID = 0;
-    bool isLocalAuthority = false;
-    bool replicateTransform = true;
-    bool replicateHealth = true;
-};
+// NetworkIdentity has been moved to NetworkComponents.h (R6.2)
