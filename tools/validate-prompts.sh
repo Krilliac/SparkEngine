@@ -79,7 +79,9 @@ for prompt_file in "$PROMPTS_DIR"/*.md; do
     [[ "$basename_prompt" == "README.md" ]] && continue
 
     # Extract file paths that look like SparkEngine/Source/... or SparkEngine/Source/.../*.h
+    refs="$(grep -oE 'SparkEngine/Source/[A-Za-z0-9_/]+\.[a-z]+' "$prompt_file" 2>/dev/null || true)"
     while IFS= read -r ref_path; do
+        [[ -z "$ref_path" ]] && continue
         # Clean up the path (remove backticks, trailing punctuation)
         clean_path="$(echo "$ref_path" | sed 's/[`"'\''(),]//g' | sed 's/[[:space:]]*$//')"
         # Skip if it contains wildcards or is too short
@@ -94,8 +96,8 @@ for prompt_file in "$PROMPTS_DIR"/*.md; do
                 STALE_REFS=$((STALE_REFS + 1))
             fi
         fi
-    done < <(grep -oE 'SparkEngine/Source/[A-Za-z0-9_/]+\.[a-z]+' "$prompt_file" 2>/dev/null || true)
-    done
+    done <<< "$refs"
+done
 
 if [[ $STALE_REFS -eq 0 ]]; then
     log_ok "No stale source path references found"
@@ -164,6 +166,8 @@ echo "--- Check 5: Task-to-prompt mapping table ---"
 # Verify the mapping table in token-optimization.prompt.md references valid prompts
 # Extract only from the "Which Prompt to Load" table: lines matching "| description | `name` |"
 if [[ -f "$PROMPTS_DIR/token-optimization.prompt.md" ]]; then
+    mapping_refs="$(sed -n '/Which Prompt to Load/,/^## /p' "$PROMPTS_DIR/token-optimization.prompt.md" | \
+                    sed -n 's/.*| `\([a-z][a-z-]*\)` |.*/\1/p')"
     while IFS= read -r prompt_ref; do
         [[ -z "$prompt_ref" ]] && continue
         if [[ -f "$PROMPTS_DIR/${prompt_ref}.prompt.md" ]]; then
@@ -171,8 +175,7 @@ if [[ -f "$PROMPTS_DIR/token-optimization.prompt.md" ]]; then
         else
             log_error "Mapping reference '$prompt_ref' has no corresponding prompt file"
         fi
-    done < <(sed -n '/Which Prompt to Load/,/^## /p' "$PROMPTS_DIR/token-optimization.prompt.md" | \
-             sed -n 's/.*| `\([a-z][a-z-]*\)` |.*/\1/p')
+    done <<< "$mapping_refs"
 fi
 
 echo ""

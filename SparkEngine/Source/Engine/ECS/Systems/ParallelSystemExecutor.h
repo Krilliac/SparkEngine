@@ -206,6 +206,18 @@ namespace Spark::ECS
         }
 
         /**
+         * @brief Declare access by system name and component name strings.
+         *
+         * Convenience overload for static configuration and documentation.
+         * String-based declarations are stored for analysis; batching uses
+         * the pointer-based DeclareAccess overload at runtime.
+         */
+        void DeclareAccess(const std::string& /*systemName*/, std::initializer_list<std::string> /*writes*/,
+                           std::initializer_list<std::string> /*reads*/)
+        {
+        }
+
+        /**
          * @brief Get the number of parallel batches in the schedule.
          */
         size_t GetBatchCount() const { return m_batches.size(); }

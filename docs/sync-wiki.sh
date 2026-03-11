@@ -134,10 +134,10 @@ collect_inventory() {
         tname=$(basename "$tfile" .cpp)
         TEST_FILES="${TEST_FILES}${tname}\n"
         local tc
-        tc=$(grep -c '^TEST(' "$tfile" 2>/dev/null || echo 0)
+        tc=$(grep -c '^TEST(' "$tfile" 2>/dev/null) || tc=0
         TEST_COUNT=$((TEST_COUNT + tc))
     done < "$tmpfile"
-    TEST_FILE_COUNT=$(echo -e "$TEST_FILES" | grep -c '[A-Z]' || echo 0)
+    TEST_FILE_COUNT=$(echo -e "$TEST_FILES" | grep -c '[A-Z]' || true)
 
     rm -f "$tmpfile"
 
@@ -223,7 +223,7 @@ sync_testing_page() {
             local tname
             tname=$(basename "$tfile" .cpp)
             local tc
-            tc=$(grep -c '^TEST(' "$tfile" 2>/dev/null || echo 0)
+            tc=$(grep -c '^TEST(' "$tfile" 2>/dev/null) || tc=0
             echo "| \`$tname\` | $tc |"
         done)
 
@@ -278,11 +278,11 @@ sync_home_page() {
     fi
 
     local comp_count
-    comp_count=$(echo -e "$COMPONENT_LIST" | grep -c '[A-Z]' || echo 0)
+    comp_count=$(echo -e "$COMPONENT_LIST" | grep -c '[A-Z]' || true)
     local sys_count
-    sys_count=$(echo -e "$SYSTEM_LIST" | grep -c '[A-Z]' || echo 0)
+    sys_count=$(echo -e "$SYSTEM_LIST" | grep -c '[A-Z]' || true)
     local panel_count
-    panel_count=$(echo -e "$PANEL_LIST" | grep -c '[A-Z]' || echo 0)
+    panel_count=$(echo -e "$PANEL_LIST" | grep -c '[A-Z]' || true)
 
     local stats_content
     stats_content="| Metric | Count |
@@ -411,11 +411,11 @@ main() {
             collect_inventory
 
             local comp_count
-            comp_count=$(echo -e "$COMPONENT_LIST" | grep -c '[A-Z]' || echo 0)
+            comp_count=$(echo -e "$COMPONENT_LIST" | grep -c '[A-Z]' || true)
             local sys_count
-            sys_count=$(echo -e "$SYSTEM_LIST" | grep -c '[A-Z]' || echo 0)
+            sys_count=$(echo -e "$SYSTEM_LIST" | grep -c '[A-Z]' || true)
             local panel_count
-            panel_count=$(echo -e "$PANEL_LIST" | grep -c '[A-Z]' || echo 0)
+            panel_count=$(echo -e "$PANEL_LIST" | grep -c '[A-Z]' || true)
 
             echo "======================================================"
             log_info "SparkEngine Wiki Sync Status"
