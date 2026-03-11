@@ -24,12 +24,18 @@
 #include "EditorCrashHandler.h"
 #include "ProjectManager.h"
 
+#ifdef _WIN32
+struct ID3D11Device;
+struct ID3D11DeviceContext;
+#endif
+
 namespace SparkEditor
 {
 
     // Forward declarations
     class EditorPanel;
     class ProjectBrowserPanel;
+    class SimpleHierarchyPanel;
     struct EditorConfig; // Forward declare instead of defining
 
     /**
@@ -107,6 +113,19 @@ namespace SparkEditor
         // Simple recovery
         bool HasRecoveryData();
         bool ShowRecoveryDialog();
+
+        // Exit request (set by File > Exit)
+        bool IsExitRequested() const { return m_exitRequested; }
+
+#ifdef _WIN32
+        // Pass graphics device to panels that need it (SceneView)
+        void SetGraphicsDevice(ID3D11Device* device, ID3D11DeviceContext* context);
+#endif
+
+        // Scene management helpers
+        bool SaveCurrentScene(const std::string& path);
+        const std::string& GetCurrentSceneName() const { return m_currentSceneName; }
+        bool IsSceneModified() const { return m_sceneModified; }
 
         // Simple file operations
         bool ImportLayout(const std::string& filePath);
@@ -207,6 +226,14 @@ namespace SparkEditor
 
         bool m_snapEnabled = false;
         float m_snapValue = 1.0f;
+
+        // Exit state
+        bool m_exitRequested = false;
+
+        // Scene state
+        std::string m_currentScenePath;
+        std::string m_currentSceneName = "Untitled";
+        bool m_sceneModified = false;
 
         // Helper methods
         void RenderMainMenuBar();

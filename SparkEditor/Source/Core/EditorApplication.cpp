@@ -107,6 +107,14 @@ namespace SparkEditor
         }
         console.LogSuccess("EditorUI initialized successfully");
 
+#ifdef _WIN32
+        // Pass the DirectX device to panels that need it (Scene View)
+        if (m_device && m_context)
+        {
+            m_ui->SetGraphicsDevice(m_device.Get(), m_context.Get());
+        }
+#endif
+
         m_isInitialized = true;
         m_isRunning = true;
 
@@ -769,6 +777,12 @@ namespace SparkEditor
         if (m_ui)
         {
             m_ui->Update(deltaTime);
+
+            // Check if user requested exit via File > Exit
+            if (m_ui->IsExitRequested())
+            {
+                RequestExit();
+            }
         }
     }
 
@@ -810,11 +824,24 @@ namespace SparkEditor
 
     bool EditorApplication::OnShutdownRequested()
     {
-        // Use enhanced UI's recovery system to check for unsaved changes
-        if (m_ui && m_ui->HasRecoveryData())
+        auto& console = Spark::SimpleConsole::GetInstance();
+
+        // Check for unsaved scene changes
+        if (m_ui && m_ui->IsSceneModified())
         {
-            // Could show a dialog asking if user wants to save
-            // For now, allow shutdown
+            console.LogWarning("Exiting with unsaved scene changes in: " + m_ui->GetCurrentSceneName());
+            // Allow exit but log the warning so user sees it in console
+        }
+
+        // Auto-save the project on close if one is open
+        if (m_ui)
+        {
+            auto* pm = m_ui->GetProjectManager();
+            if (pm && pm->HasOpenProject())
+            {
+                pm->SaveProject();
+                console.LogInfo("Project auto-saved on exit");
+            }
         }
 
         return true;

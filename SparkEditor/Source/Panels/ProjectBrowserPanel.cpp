@@ -13,6 +13,7 @@
 #include <chrono>
 #include <ctime>
 #include <cstring>
+#include <cstdio>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -499,8 +500,33 @@ namespace SparkEditor
         }
         return false;
 #else
-        // On non-Windows platforms, we'd use a different dialog or zenity
-        // For now, return false to indicate no folder was selected
+        // On Linux/macOS, try zenity or kdialog for a native folder chooser
+        FILE* pipe = popen("zenity --file-selection --directory --title=\"Select Project Folder\" 2>/dev/null", "r");
+        if (!pipe)
+        {
+            // Try kdialog as fallback
+            pipe = popen("kdialog --getexistingdirectory ~ 2>/dev/null", "r");
+        }
+        if (pipe)
+        {
+            char buf[1024];
+            std::string result;
+            while (fgets(buf, sizeof(buf), pipe) != nullptr)
+            {
+                result += buf;
+            }
+            int status = pclose(pipe);
+            // Remove trailing newline
+            while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
+            {
+                result.pop_back();
+            }
+            if (status == 0 && !result.empty())
+            {
+                outPath = result;
+                return true;
+            }
+        }
         return false;
 #endif
     }
