@@ -14,6 +14,7 @@
 - [Audio](Audio)
 - [Input System](Input-System)
 - [Scripting with AngelScript](Scripting-with-AngelScript)
+- [Visual Scripting](Visual-Scripting)
 - [AI and Navigation](AI-and-Navigation)
 - [Animation](Animation)
 - [Networking](Networking)
@@ -43,6 +44,11 @@
 ### Platform Support
 - [VR Support](VR-Support)
 - [Mobile Platform](Mobile-Platform)
+
+### Graphics Backends
+- [D3D12 Backend](D3D12-Backend)
+- [DXR Raytracing](DXR-Raytracing)
+- [Upscaling (DLSS/FSR)](Upscaling-System)
 
 ### Advanced
 - [Build System and CMake Modules](Build-System-and-CMake-Modules)
