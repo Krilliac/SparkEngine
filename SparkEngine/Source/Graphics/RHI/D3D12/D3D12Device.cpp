@@ -12,6 +12,10 @@
 #ifdef _WIN32
 
 #include "D3D12Device.h"
+#include "../RHIFactory.h"
+#include "../../../Utils/LogMacros.h"
+
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -22,6 +26,20 @@
 #pragma comment(lib, "d3dcompiler.lib")
 
 using Microsoft::WRL::ComPtr;
+
+// ---------------------------------------------------------------------------
+// Compatibility logging macros — bridge std::format syntax to SPARK_LOG_*
+// ---------------------------------------------------------------------------
+#define LOG_ERROR(fmt, ...) SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "%s", std::format(fmt, ##__VA_ARGS__).c_str())
+#define LOG_INFO(fmt, ...) SPARK_LOG_INFO(Spark::LogCategory::Graphics, "%s", std::format(fmt, ##__VA_ARGS__).c_str())
+
+// ---------------------------------------------------------------------------
+// D3D12CalcSubresource — normally provided by d3dx12.h helper header
+// ---------------------------------------------------------------------------
+static inline UINT D3D12CalcSubresource(UINT MipSlice, UINT ArraySlice, UINT PlaneSlice, UINT MipLevels, UINT ArraySize)
+{
+    return MipSlice + ArraySlice * MipLevels + PlaneSlice * MipLevels * ArraySize;
+}
 
 namespace Spark
 {
@@ -1638,5 +1656,9 @@ namespace Spark
         } // namespace D3D12
     } // namespace RHI
 } // namespace Spark
+
+// Clean up local compatibility macros
+#undef LOG_ERROR
+#undef LOG_INFO
 
 #endif // _WIN32
