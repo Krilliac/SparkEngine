@@ -1156,7 +1156,8 @@ bool Game::DeleteObject(size_t index)
 {
     if (!SPARK_BOUNDS_CHECK(index, m_gameObjects.size()))
     {
-        SPARK_LOG_ERROR("Game", "DeleteObject: index %zu out of bounds (size=%zu)", index, m_gameObjects.size());
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "Game", 5, "DeleteObject: index %zu out of bounds (size=%zu)",
+                                index, m_gameObjects.size());
         return false;
     }
 

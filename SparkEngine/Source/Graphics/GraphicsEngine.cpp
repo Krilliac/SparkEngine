@@ -2899,13 +2899,15 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
         HRESULT resizeHr = m_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
         if (FAILED(resizeHr))
         {
-            SPARK_LOG_ERROR("Graphics", "SwapChain::ResizeBuffers failed HR=0x%08lX for size %ux%u",
-                            static_cast<long>(resizeHr), width, height);
+            SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "Graphics", 2,
+                                    "SwapChain::ResizeBuffers failed HR=0x%08lX for size %ux%u",
+                                    static_cast<long>(resizeHr), width, height);
         }
     }
     else
     {
-        SPARK_LOG_WARN("Graphics", "Swap chain not available during resize to %ux%u", width, height);
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, "Graphics", 2, "Swap chain not available during resize to %ux%u",
+                                width, height);
     }
 
     if (!m_device)
