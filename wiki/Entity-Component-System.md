@@ -163,6 +163,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | Component | Header |
 |-----------|--------|
 | `AIComponent` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
+| `AbilityComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `ActiveComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `AnimationController` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
 | `AudioSourceComponent` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |

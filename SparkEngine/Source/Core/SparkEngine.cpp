@@ -43,6 +43,7 @@
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
 #include "Utils/Timer.h"
+#include "Utils/DeltaSmoother.h"
 #include "Utils/CrashHandler.h"
 #include "Utils/D3DUtils.h"
 #include "Utils/SparkConsole.h"
@@ -115,6 +116,7 @@ std::unique_ptr<ModuleManager> g_moduleManager;
 std::unique_ptr<AudioEngine> g_audioEngine;
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 std::unique_ptr<Spark::LocalFileCache> g_fileCache;
+static Spark::DeltaSmoother g_deltaSmoother(10);
 
 #ifdef SPARK_HEADLESS_SUPPORT
 // g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
@@ -470,7 +472,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         }
         else
         {
-            float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
+            float rawDt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
+            float dt = g_deltaSmoother.Smooth(rawDt);
 
             if (g_input)
                 g_input->Update();

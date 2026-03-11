@@ -7,10 +7,12 @@
  */
 
 #pragma once
-#include <string>
-#include <vector>
-#include <unordered_set>
+#include "../../../Utils/BitFlags.h"
+#include "../../../Utils/Cooldown.h"
 #include <algorithm>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 // =============================================================================
 // TagComponent
@@ -105,4 +107,48 @@ struct QuestTrackerTag
     int activeQuestCount = 0;
     int completedQuestCount = 0;
     bool questLogOpen = false;
+};
+
+// =============================================================================
+// AbilityFlags — type-safe bitmask for entity capability tracking
+// =============================================================================
+
+enum class AbilityFlags : uint32_t
+{
+    None = 0,
+    CanJump = 1 << 0,
+    CanSprint = 1 << 1,
+    CanCrouch = 1 << 2,
+    CanShoot = 1 << 3,
+    CanMelee = 1 << 4,
+    CanInteract = 1 << 5,
+    CanSwim = 1 << 6,
+    CanClimb = 1 << 7,
+    All = 0xFFFFFFFF
+};
+SPARK_ENABLE_BITMASK_OPERATORS(AbilityFlags)
+
+// =============================================================================
+// AbilityComponent — tracks which abilities an entity has and their cooldowns
+// =============================================================================
+
+struct AbilityComponent
+{
+    Spark::BitFlags<AbilityFlags> abilities{AbilityFlags::CanJump | AbilityFlags::CanShoot | AbilityFlags::CanInteract};
+
+    /// Primary ability cooldown (e.g. fire rate)
+    Spark::Cooldown primaryCooldown{0.0f, true};
+
+    /// Secondary ability cooldown (e.g. grenade throw)
+    Spark::Cooldown secondaryCooldown{0.0f, true};
+
+    /// Dash/sprint cooldown
+    Spark::Cooldown sprintCooldown{0.0f, true};
+
+    void Update(float deltaTime)
+    {
+        primaryCooldown.Update(deltaTime);
+        secondaryCooldown.Update(deltaTime);
+        sprintCooldown.Update(deltaTime);
+    }
 };
