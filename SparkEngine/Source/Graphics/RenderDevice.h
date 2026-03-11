@@ -102,7 +102,7 @@ namespace Spark::Graphics
         // RHI access (preferred for new code)
         // ====================================================================
 
-        IRHIDevice* GetRHIDevice() const { return m_rhiDevice.get(); }
+        RHI::IRHIDevice* GetRHIDevice() const { return m_rhiDevice.get(); }
 
         // ====================================================================
         // DX11 direct access (transitional — prefer RHI for new code)
@@ -127,7 +127,7 @@ namespace Spark::Graphics
         size_t m_vramUsage = 0;
         RHI::RHIDeviceCapabilities m_capabilities{};
 
-        std::unique_ptr<IRHIDevice> m_rhiDevice;
+        std::unique_ptr<RHI::IRHIDevice> m_rhiDevice;
 
 #ifdef SPARK_PLATFORM_WINDOWS
         ComPtr<ID3D11Device1> m_d3dDevice;
