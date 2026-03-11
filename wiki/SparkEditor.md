@@ -139,12 +139,16 @@ cmake --build build --config Release
 | `HierarchyPanel` | `SparkEditor/Source/Panels/HierarchyPanel.h` |
 | `InspectorPanel` | `SparkEditor/Source/Panels/InspectorPanel.h` |
 | `Physics2DPanel` | `SparkEditor/Source/Panels/Physics2DPanel.h` |
+| `PrefabEditorPanel` | `SparkEditor/Source/Panels/PrefabEditorPanel.h` |
 | `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |
+| `SceneStatisticsPanel` | `SparkEditor/Source/Panels/SceneStatisticsPanel.h` |
 | `SceneViewPanel` | `SparkEditor/Source/Panels/SceneViewPanel.h` |
+| `SearchPanel` | `SparkEditor/Source/Panels/SearchPanel.h` |
 | `SimpleConsolePanel` | `SparkEditor/Source/Panels/SimpleConsolePanel.h` |
 | `SimpleHierarchyPanel` | `SparkEditor/Source/Panels/SimpleHierarchyPanel.h` |
 | `SpriteAnimationEditorPanel` | `SparkEditor/Source/Panels/SpriteAnimationEditorPanel.h` |
 | `SpriteEditorPanel` | `SparkEditor/Source/Panels/SpriteEditorPanel.h` |
 | `TilemapEditorPanel` | `SparkEditor/Source/Panels/TilemapEditorPanel.h` |
+| `UndoHistoryPanel` | `SparkEditor/Source/Panels/UndoHistoryPanel.h` |
 | `WeaponEditorPanel` | `SparkEditor/Source/Panels/WeaponEditorPanel.h` |
 <!-- /AUTO:panel_list -->
