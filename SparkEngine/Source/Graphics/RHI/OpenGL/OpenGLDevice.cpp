@@ -523,6 +523,15 @@ namespace Spark
             void GLCommandList::Draw(uint32_t vertexCount, uint32_t startVertex)
             {
                 glDrawArrays(m_currentTopology, startVertex, vertexCount);
+                if (m_statistics)
+                {
+                    m_statistics->drawCalls++;
+                    m_statistics->verticesProcessed += vertexCount;
+                    if (m_currentTopology == GL_TRIANGLES)
+                    {
+                        m_statistics->trianglesRendered += vertexCount / 3;
+                    }
+                }
             }
 
             void GLCommandList::DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex)
@@ -531,6 +540,15 @@ namespace Spark
                 size_t offset = startIndex * m_indexStride;
                 glDrawElementsBaseVertex(m_currentTopology, indexCount, indexType, reinterpret_cast<void*>(offset),
                                          baseVertex);
+                if (m_statistics)
+                {
+                    m_statistics->drawCalls++;
+                    m_statistics->verticesProcessed += indexCount;
+                    if (m_currentTopology == GL_TRIANGLES)
+                    {
+                        m_statistics->trianglesRendered += indexCount / 3;
+                    }
+                }
             }
 
             void GLCommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex,
@@ -538,6 +556,15 @@ namespace Spark
             {
                 glDrawArraysInstancedBaseInstance(m_currentTopology, startVertex, vertexCount, instanceCount,
                                                   startInstance);
+                if (m_statistics)
+                {
+                    m_statistics->drawCalls++;
+                    m_statistics->verticesProcessed += vertexCount * instanceCount;
+                    if (m_currentTopology == GL_TRIANGLES)
+                    {
+                        m_statistics->trianglesRendered += (vertexCount / 3) * instanceCount;
+                    }
+                }
             }
 
             void GLCommandList::DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, uint32_t startIndex,
@@ -548,12 +575,25 @@ namespace Spark
                 glDrawElementsInstancedBaseVertexBaseInstance(m_currentTopology, indexCount, indexType,
                                                               reinterpret_cast<void*>(offset), instanceCount,
                                                               baseVertex, startInstance);
+                if (m_statistics)
+                {
+                    m_statistics->drawCalls++;
+                    m_statistics->verticesProcessed += indexCount * instanceCount;
+                    if (m_currentTopology == GL_TRIANGLES)
+                    {
+                        m_statistics->trianglesRendered += (indexCount / 3) * instanceCount;
+                    }
+                }
             }
 
             void GLCommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z)
             {
                 glDispatchCompute(x, y, z);
                 glMemoryBarrier(GL_ALL_BARRIER_BITS);
+                if (m_statistics)
+                {
+                    m_statistics->dispatchCalls++;
+                }
             }
 
             void GLCommandList::BeginEvent(const char* name)
@@ -1138,6 +1178,149 @@ namespace Spark
                 default:
                     return GL_REPEAT;
                 }
+            }
+
+            GLenum GLDevice::ConvertFilter(RHIFilterMode mode) const
+            {
+                switch (mode)
+                {
+                case RHIFilterMode::Nearest:
+                    return GL_NEAREST;
+                case RHIFilterMode::Linear:
+                    return GL_LINEAR;
+                case RHIFilterMode::Anisotropic:
+                    return GL_LINEAR;
+                default:
+                    return GL_LINEAR;
+                }
+            }
+
+            GLenum GLDevice::ConvertCompareOp(RHICompareOp op) const
+            {
+                switch (op)
+                {
+                case RHICompareOp::Never:
+                    return GL_NEVER;
+                case RHICompareOp::Less:
+                    return GL_LESS;
+                case RHICompareOp::Equal:
+                    return GL_EQUAL;
+                case RHICompareOp::LessEqual:
+                    return GL_LEQUAL;
+                case RHICompareOp::Greater:
+                    return GL_GREATER;
+                case RHICompareOp::NotEqual:
+                    return GL_NOTEQUAL;
+                case RHICompareOp::GreaterEqual:
+                    return GL_GEQUAL;
+                case RHICompareOp::Always:
+                    return GL_ALWAYS;
+                default:
+                    return GL_LESS;
+                }
+            }
+
+            GLenum GLDevice::ConvertStencilOp(RHIStencilOp op) const
+            {
+                switch (op)
+                {
+                case RHIStencilOp::Keep:
+                    return GL_KEEP;
+                case RHIStencilOp::Zero:
+                    return GL_ZERO;
+                case RHIStencilOp::Replace:
+                    return GL_REPLACE;
+                case RHIStencilOp::IncrSat:
+                    return GL_INCR;
+                case RHIStencilOp::DecrSat:
+                    return GL_DECR;
+                case RHIStencilOp::Invert:
+                    return GL_INVERT;
+                case RHIStencilOp::IncrWrap:
+                    return GL_INCR_WRAP;
+                case RHIStencilOp::DecrWrap:
+                    return GL_DECR_WRAP;
+                default:
+                    return GL_KEEP;
+                }
+            }
+
+            GLenum GLDevice::ConvertBlendFactor(RHIBlendFactor factor) const
+            {
+                switch (factor)
+                {
+                case RHIBlendFactor::Zero:
+                    return GL_ZERO;
+                case RHIBlendFactor::One:
+                    return GL_ONE;
+                case RHIBlendFactor::SrcColor:
+                    return GL_SRC_COLOR;
+                case RHIBlendFactor::InvSrcColor:
+                    return GL_ONE_MINUS_SRC_COLOR;
+                case RHIBlendFactor::SrcAlpha:
+                    return GL_SRC_ALPHA;
+                case RHIBlendFactor::InvSrcAlpha:
+                    return GL_ONE_MINUS_SRC_ALPHA;
+                case RHIBlendFactor::DstAlpha:
+                    return GL_DST_ALPHA;
+                case RHIBlendFactor::InvDstAlpha:
+                    return GL_ONE_MINUS_DST_ALPHA;
+                case RHIBlendFactor::DstColor:
+                    return GL_DST_COLOR;
+                case RHIBlendFactor::InvDstColor:
+                    return GL_ONE_MINUS_DST_COLOR;
+                default:
+                    return GL_ONE;
+                }
+            }
+
+            GLenum GLDevice::ConvertBlendOp(RHIBlendOp op) const
+            {
+                switch (op)
+                {
+                case RHIBlendOp::Add:
+                    return GL_FUNC_ADD;
+                case RHIBlendOp::Subtract:
+                    return GL_FUNC_SUBTRACT;
+                case RHIBlendOp::RevSubtract:
+                    return GL_FUNC_REVERSE_SUBTRACT;
+                case RHIBlendOp::Min:
+                    return GL_MIN;
+                case RHIBlendOp::Max:
+                    return GL_MAX;
+                default:
+                    return GL_FUNC_ADD;
+                }
+            }
+
+            GLenum GLDevice::ConvertTopology(RHIPrimitiveTopology topology) const
+            {
+                switch (topology)
+                {
+                case RHIPrimitiveTopology::PointList:
+                    return GL_POINTS;
+                case RHIPrimitiveTopology::LineList:
+                    return GL_LINES;
+                case RHIPrimitiveTopology::LineStrip:
+                    return GL_LINE_STRIP;
+                case RHIPrimitiveTopology::TriangleList:
+                    return GL_TRIANGLES;
+                case RHIPrimitiveTopology::TriangleStrip:
+                    return GL_TRIANGLE_STRIP;
+                case RHIPrimitiveTopology::PatchList:
+                    return GL_PATCHES;
+                default:
+                    return GL_TRIANGLES;
+                }
+            }
+
+            // ============================================================================
+            // FACTORY FUNCTION
+            // ============================================================================
+
+            std::unique_ptr<IRHIDevice> CreateOpenGLDevice()
+            {
+                return std::make_unique<GLDevice>();
             }
 
         } // namespace OpenGL

@@ -204,18 +204,23 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 |--------|--------|
 | `AISystem` | `SparkEngine/Source/Engine/AI/AISystem.h` |
 | `AIUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `AchievementSystem` | `SparkEngine/Source/Engine/Stats/AchievementSystem.h` |
 | `AnimationUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AudioUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Camera2DFollowSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `CollisionSystem` | `SparkEngine/Source/Physics/CollisionSystem.h` |
 | `DecalSystem` | `SparkEngine/Source/Graphics/DecalSystem.h` |
+| `DestructionSystem` | `SparkEngine/Source/Engine/Destruction/DestructionSystem.h` |
+| `DialogueSystem` | `SparkEngine/Source/Engine/Dialogue/DialogueSystem.h` |
 | `FogSystem` | `SparkEngine/Source/Graphics/FogSystem.h` |
 | `GPUParticleSystem` | `SparkEngine/Source/Graphics/GPUParticleSystem.h` |
 | `ISystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
 | `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `LightingSystem` | `SparkEngine/Source/Graphics/LightingSystem.h` |
+| `LocalizationSystem` | `SparkEngine/Source/Engine/Localization/LocalizationSystem.h` |
 | `MaterialSystem` | `SparkEngine/Source/Graphics/MaterialSystem.h` |
+| `ModSystem` | `SparkEngine/Source/Engine/Modding/ModSystem.h` |
 | `ParallaxSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `ParticleSystem` | `SparkEngine/Source/Graphics/GPUParticleSystem.h` |
 | `ParticleSystem` | `SparkEngine/Source/Graphics/ParticleSystem.h` |
@@ -224,14 +229,18 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `PhysicsSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
 | `PhysicsUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `PostProcessingSystem` | `SparkEngine/Source/Graphics/PostProcessingSystem.h` |
+| `RagdollSystem` | `SparkEngine/Source/Engine/Animation/RagdollSystem.h` |
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `ReplaySystem` | `SparkEngine/Source/Engine/Replay/ReplaySystem.h` |
 | `SaveSystem` | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h` |
 | `Sprite2DRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `SpriteAnimatorSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `TessellationSystem` | `SparkEngine/Source/Graphics/TessellationSystem.h` |
 | `TextureSystem` | `SparkEngine/Source/Graphics/TextureSystem.h` |
 | `TilemapRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `UISystem` | `SparkEngine/Source/Engine/UI/UISystem.h` |
 | `UpscalingSystem` | `SparkEngine/Source/Graphics/UpscalingSystem.h` |
+| `VRSystem` | `SparkEngine/Source/Engine/VR/VRSystem.h` |
 | `WaterSystem` | `SparkEngine/Source/Graphics/WaterSystem.h` |
 | `WeatherSystem` | `SparkEngine/Source/Graphics/WeatherSystem.h` |
 <!-- /AUTO:system_list -->
