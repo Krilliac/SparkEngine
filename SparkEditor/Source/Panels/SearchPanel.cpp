@@ -375,30 +375,38 @@ namespace SparkEditor
     {
         // Sample entities for search demonstration
         m_sampleEntities = {
-            {"Player", 1, {"Transform", "Camera", "RigidBody", "Collider", "AudioSource"}, "Root/Player"},
-            {"MainCamera", 2, {"Transform", "Camera"}, "Root/MainCamera"},
-            {"DirectionalLight", 3, {"Transform", "Light"}, "Root/Lighting/DirectionalLight"},
-            {"PointLight_01", 4, {"Transform", "Light"}, "Root/Lighting/PointLight_01"},
-            {"PointLight_02", 5, {"Transform", "Light"}, "Root/Lighting/PointLight_02"},
-            {"SpotLight_01", 6, {"Transform", "Light"}, "Root/Lighting/SpotLight_01"},
-            {"Ground", 7, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Ground"},
-            {"Wall_North", 8, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_North"},
-            {"Wall_South", 9, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_South"},
-            {"Wall_East", 10, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_East"},
-            {"Wall_West", 11, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_West"},
-            {"Crate_01", 12, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_01"},
-            {"Crate_02", 13, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_02"},
-            {"Barrel_01", 14, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Barrel_01"},
-            {"WeaponPickup", 15, {"Transform", "MeshRenderer", "Collider", "AudioSource"}, "Root/Pickups/WeaponPickup"},
-            {"HealthPack", 16, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/HealthPack"},
-            {"AmmoBox", 17, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/AmmoBox"},
-            {"SpawnPoint_A", 18, {"Transform"}, "Root/GameLogic/SpawnPoint_A"},
-            {"SpawnPoint_B", 19, {"Transform"}, "Root/GameLogic/SpawnPoint_B"},
-            {"TriggerZone", 20, {"Transform", "Collider"}, "Root/GameLogic/TriggerZone"},
-            {"ParticleSmoke", 21, {"Transform", "ParticleSystem"}, "Root/Effects/ParticleSmoke"},
-            {"ParticleFire", 22, {"Transform", "ParticleSystem", "Light"}, "Root/Effects/ParticleFire"},
-            {"AmbientSound", 23, {"Transform", "AudioSource"}, "Root/Audio/AmbientSound"},
-            {"MusicPlayer", 24, {"Transform", "AudioSource"}, "Root/Audio/MusicPlayer"},
+            SampleEntity{"Player", 1, {"Transform", "Camera", "RigidBody", "Collider", "AudioSource"}, "Root/Player"},
+            SampleEntity{"MainCamera", 2, {"Transform", "Camera"}, "Root/MainCamera"},
+            SampleEntity{"DirectionalLight", 3, {"Transform", "Light"}, "Root/Lighting/DirectionalLight"},
+            SampleEntity{"PointLight_01", 4, {"Transform", "Light"}, "Root/Lighting/PointLight_01"},
+            SampleEntity{"PointLight_02", 5, {"Transform", "Light"}, "Root/Lighting/PointLight_02"},
+            SampleEntity{"SpotLight_01", 6, {"Transform", "Light"}, "Root/Lighting/SpotLight_01"},
+            SampleEntity{"Ground", 7, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Ground"},
+            SampleEntity{
+                "Wall_North", 8, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_North"},
+            SampleEntity{
+                "Wall_South", 9, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_South"},
+            SampleEntity{
+                "Wall_East", 10, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_East"},
+            SampleEntity{
+                "Wall_West", 11, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_West"},
+            SampleEntity{"Crate_01", 12, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_01"},
+            SampleEntity{"Crate_02", 13, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_02"},
+            SampleEntity{
+                "Barrel_01", 14, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Barrel_01"},
+            SampleEntity{"WeaponPickup",
+                         15,
+                         {"Transform", "MeshRenderer", "Collider", "AudioSource"},
+                         "Root/Pickups/WeaponPickup"},
+            SampleEntity{"HealthPack", 16, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/HealthPack"},
+            SampleEntity{"AmmoBox", 17, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/AmmoBox"},
+            SampleEntity{"SpawnPoint_A", 18, {"Transform"}, "Root/GameLogic/SpawnPoint_A"},
+            SampleEntity{"SpawnPoint_B", 19, {"Transform"}, "Root/GameLogic/SpawnPoint_B"},
+            SampleEntity{"TriggerZone", 20, {"Transform", "Collider"}, "Root/GameLogic/TriggerZone"},
+            SampleEntity{"ParticleSmoke", 21, {"Transform", "ParticleSystem"}, "Root/Effects/ParticleSmoke"},
+            SampleEntity{"ParticleFire", 22, {"Transform", "ParticleSystem", "Light"}, "Root/Effects/ParticleFire"},
+            SampleEntity{"AmbientSound", 23, {"Transform", "AudioSource"}, "Root/Audio/AmbientSound"},
+            SampleEntity{"MusicPlayer", 24, {"Transform", "AudioSource"}, "Root/Audio/MusicPlayer"},
         };
 
         m_sampleAssets = {
