@@ -235,7 +235,10 @@ namespace Spark::Animation
          * @param clip      The AnimationClip to reduce. Modified in place.
          * @param settings  Compression tolerances and options.
          */
-        static void ReduceClip(AnimationClip& clip, const Settings& settings = {});
+        static void ReduceClip(AnimationClip& clip, const Settings& settings);
+
+        /** @brief Overload using default settings. */
+        static void ReduceClip(AnimationClip& clip);
 
         // =====================================================================
         // Full compression pipeline (reduce + quantize -> CompressedClip)
@@ -252,7 +255,10 @@ namespace Spark::Animation
          * @param settings  Compression tolerances and quantization options.
          * @return          A CompressedClip ready for runtime playback.
          */
-        static CompressedClip CompressClip(const AnimationClip& clip, const Settings& settings = {});
+        static CompressedClip CompressClip(const AnimationClip& clip, const Settings& settings);
+
+        /** @brief Overload using default settings. */
+        static CompressedClip CompressClip(const AnimationClip& clip);
 
         // =====================================================================
         // Decompression (random access)
