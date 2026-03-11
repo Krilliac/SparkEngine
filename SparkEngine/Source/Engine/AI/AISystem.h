@@ -355,7 +355,8 @@ namespace Spark::AI
      * @param transform  The agent's current world transform (determines origin for raycasts).
      * @param deltaTime  Frame time for advancing timers.
      */
-        void UpdatePerception(World& world, AIComponent& ai, const Transform& transform, float deltaTime);
+        void UpdatePerception(World& world, EntityID selfEntity, AIComponent& ai, const Transform& transform,
+                              float deltaTime);
 
         /**
      * @brief Advance the agent's movement along its current path.

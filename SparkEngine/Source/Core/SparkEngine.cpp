@@ -790,9 +790,16 @@ void RegisterEngineConsoleCommands()
             auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
-            float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
-            physics->Console_SetGravity(x, y, z);
-            return "Gravity set to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
+            try
+            {
+                float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
+                physics->Console_SetGravity(x, y, z);
+                return "Gravity set to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid number format. Usage: physics_gravity <x> <y> <z>";
+            }
         },
         "Set world gravity vector", "Physics");
 
@@ -968,8 +975,15 @@ void RegisterEngineConsoleCommands()
                 return "Usage: audio_master_volume <0.0-1.0>";
             if (!g_audioEngine)
                 return "Audio engine not available";
-            g_audioEngine->Console_SetMasterVolume(std::stof(args[0]));
-            return "Master volume set to " + args[0];
+            try
+            {
+                g_audioEngine->Console_SetMasterVolume(std::stof(args[0]));
+                return "Master volume set to " + args[0];
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid number format. Usage: audio_master_volume <0.0-1.0>";
+            }
         },
         "Set master audio volume", "Audio");
 
@@ -1370,9 +1384,16 @@ static void RegisterEngineConsoleCommandsLinux()
             auto* physics = EngineContext::Get()->GetPhysics();
             if (!physics)
                 return "Physics system not available";
-            float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
-            physics->Console_SetGravity(x, y, z);
-            return "Gravity set to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
+            try
+            {
+                float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
+                physics->Console_SetGravity(x, y, z);
+                return "Gravity set to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid number format. Usage: physics_gravity <x> <y> <z>";
+            }
         },
         "Set world gravity vector", "Physics");
 
@@ -1420,8 +1441,15 @@ static void RegisterEngineConsoleCommandsLinux()
                 return "Usage: audio_master_volume <0.0-1.0>";
             if (!g_audioEngine)
                 return "Audio engine not available";
-            g_audioEngine->Console_SetMasterVolume(std::stof(args[0]));
-            return "Master volume set to " + args[0];
+            try
+            {
+                g_audioEngine->Console_SetMasterVolume(std::stof(args[0]));
+                return "Master volume set to " + args[0];
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid number format. Usage: audio_master_volume <0.0-1.0>";
+            }
         },
         "Set master audio volume", "Audio");
 }
