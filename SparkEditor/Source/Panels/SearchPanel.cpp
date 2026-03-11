@@ -375,44 +375,35 @@ namespace SparkEditor
     {
         // Sample entities for search demonstration
         m_sampleEntities.clear();
-        m_sampleEntities.push_back(
-            {"Player", 1, {"Transform", "Camera", "RigidBody", "Collider", "AudioSource"}, "Root/Player"});
-        m_sampleEntities.push_back({"MainCamera", 2, {"Transform", "Camera"}, "Root/MainCamera"});
-        m_sampleEntities.push_back({"DirectionalLight", 3, {"Transform", "Light"}, "Root/Lighting/DirectionalLight"});
-        m_sampleEntities.push_back({"PointLight_01", 4, {"Transform", "Light"}, "Root/Lighting/PointLight_01"});
-        m_sampleEntities.push_back({"PointLight_02", 5, {"Transform", "Light"}, "Root/Lighting/PointLight_02"});
-        m_sampleEntities.push_back({"SpotLight_01", 6, {"Transform", "Light"}, "Root/Lighting/SpotLight_01"});
-        m_sampleEntities.push_back({"Ground", 7, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Ground"});
-        m_sampleEntities.push_back(
-            {"Wall_North", 8, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_North"});
-        m_sampleEntities.push_back(
-            {"Wall_South", 9, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_South"});
-        m_sampleEntities.push_back(
-            {"Wall_East", 10, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_East"});
-        m_sampleEntities.push_back(
-            {"Wall_West", 11, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_West"});
-        m_sampleEntities.push_back(
-            {"Crate_01", 12, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_01"});
-        m_sampleEntities.push_back(
-            {"Crate_02", 13, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_02"});
-        m_sampleEntities.push_back(
-            {"Barrel_01", 14, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Barrel_01"});
-        m_sampleEntities.push_back({"WeaponPickup",
-                                    15,
-                                    {"Transform", "MeshRenderer", "Collider", "AudioSource"},
-                                    "Root/Pickups/WeaponPickup"});
-        m_sampleEntities.push_back(
-            {"HealthPack", 16, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/HealthPack"});
-        m_sampleEntities.push_back({"AmmoBox", 17, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/AmmoBox"});
-        m_sampleEntities.push_back({"SpawnPoint_A", 18, {"Transform"}, "Root/GameLogic/SpawnPoint_A"});
-        m_sampleEntities.push_back({"SpawnPoint_B", 19, {"Transform"}, "Root/GameLogic/SpawnPoint_B"});
-        m_sampleEntities.push_back({"TriggerZone", 20, {"Transform", "Collider"}, "Root/GameLogic/TriggerZone"});
-        m_sampleEntities.push_back(
-            {"ParticleSmoke", 21, {"Transform", "ParticleSystem"}, "Root/Effects/ParticleSmoke"});
-        m_sampleEntities.push_back(
-            {"ParticleFire", 22, {"Transform", "ParticleSystem", "Light"}, "Root/Effects/ParticleFire"});
-        m_sampleEntities.push_back({"AmbientSound", 23, {"Transform", "AudioSource"}, "Root/Audio/AmbientSound"});
-        m_sampleEntities.push_back({"MusicPlayer", 24, {"Transform", "AudioSource"}, "Root/Audio/MusicPlayer"});
+        // clang-format off
+        auto e = [&](std::string name, uint64_t id, std::vector<std::string> components, std::string path) {
+            m_sampleEntities.push_back({std::move(name), id, std::move(components), std::move(path)});
+        };
+        e("Player", 1, {"Transform", "Camera", "RigidBody", "Collider", "AudioSource"}, "Root/Player");
+        e("MainCamera", 2, {"Transform", "Camera"}, "Root/MainCamera");
+        e("DirectionalLight", 3, {"Transform", "Light"}, "Root/Lighting/DirectionalLight");
+        e("PointLight_01", 4, {"Transform", "Light"}, "Root/Lighting/PointLight_01");
+        e("PointLight_02", 5, {"Transform", "Light"}, "Root/Lighting/PointLight_02");
+        e("SpotLight_01", 6, {"Transform", "Light"}, "Root/Lighting/SpotLight_01");
+        e("Ground", 7, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Ground");
+        e("Wall_North", 8, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_North");
+        e("Wall_South", 9, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_South");
+        e("Wall_East", 10, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_East");
+        e("Wall_West", 11, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_West");
+        e("Crate_01", 12, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_01");
+        e("Crate_02", 13, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_02");
+        e("Barrel_01", 14, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Barrel_01");
+        e("WeaponPickup", 15, {"Transform", "MeshRenderer", "Collider", "AudioSource"}, "Root/Pickups/WeaponPickup");
+        e("HealthPack", 16, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/HealthPack");
+        e("AmmoBox", 17, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/AmmoBox");
+        e("SpawnPoint_A", 18, {"Transform"}, "Root/GameLogic/SpawnPoint_A");
+        e("SpawnPoint_B", 19, {"Transform"}, "Root/GameLogic/SpawnPoint_B");
+        e("TriggerZone", 20, {"Transform", "Collider"}, "Root/GameLogic/TriggerZone");
+        e("ParticleSmoke", 21, {"Transform", "ParticleSystem"}, "Root/Effects/ParticleSmoke");
+        e("ParticleFire", 22, {"Transform", "ParticleSystem", "Light"}, "Root/Effects/ParticleFire");
+        e("AmbientSound", 23, {"Transform", "AudioSource"}, "Root/Audio/AmbientSound");
+        e("MusicPlayer", 24, {"Transform", "AudioSource"}, "Root/Audio/MusicPlayer");
+        // clang-format on
 
         m_sampleAssets = {
             {"PlayerModel.fbx", "Model", "Assets/Models/PlayerModel.fbx"},
