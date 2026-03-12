@@ -138,12 +138,13 @@ cd build && ctest --output-on-failure
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*63 test files, 704+ test cases*
+*69 test files, 799+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
 | `TestAIBehaviorTree` | 16 |
 | `TestAchievementSystem` | 5 |
+| `TestAnimationRetargeting` | 9 |
 | `TestAnimationSystem` | 17 |
 | `TestBitFlags` | 14 |
 | `TestChromeTracing` | 5 |
@@ -162,6 +163,7 @@ cd build && ctest --output-on-failure
 | `TestECSIntegration` | 9 |
 | `TestECSWorld` | 11 |
 | `TestEngineContext` | 18 |
+| `TestEnvironmentQuery` | 12 |
 | `TestEventSystem` | 10 |
 | `TestFPSComponents` | 23 |
 | `TestFileUtils` | 15 |
@@ -179,11 +181,13 @@ cd build && ctest --output-on-failure
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestNavMesh` | 11 |
-| `TestNetBuffer` | 19 |
+| `TestNetBuffer` | 29 |
+| `TestNetworkEncryption` | 17 |
 | `TestNoiseGenerator` | 7 |
 | `TestObjectPool` | 6 |
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
+| `TestPlayModeManager` | 14 |
 | `TestPostProcessingPipeline` | 11 |
 | `TestQuestSystem` | 10 |
 | `TestRandomEngine` | 11 |
@@ -194,6 +198,7 @@ cd build && ctest --output-on-failure
 | `TestScopedTimer` | 3 |
 | `TestScreenSpaceEffects` | 16 |
 | `TestSequencer` | 10 |
+| `TestSplatmapSystem` | 10 |
 | `TestSprite2DComponents` | 35 |
 | `TestSteeringBehaviors` | 15 |
 | `TestStringUtils` | 19 |
@@ -202,7 +207,8 @@ cd build && ctest --output-on-failure
 | `TestTween` | 14 |
 | `TestUISystem` | 6 |
 | `TestUUID` | 12 |
-| `TestUpscalingSystem` | 0 |
+| `TestUpscalingSystem` | 5 |
 | `TestVisualScriptSystem` | 0 |
+| `TestWeaponSystem` | 18 |
 | `TestWeatherSystem` | 8 |
 <!-- /AUTO:test_inventory -->
