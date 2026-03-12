@@ -72,6 +72,7 @@
 
 #pragma once
 #include "../../Core/Platform.h"
+#include "../../Utils/Assert.h"
 
 #include "../ECS/Components.h"
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -753,7 +754,11 @@ namespace Spark
      *
      * @param count  Number of autosave slots to maintain.
      */
-        void SetMaxAutoSaves(int count) { m_maxAutoSaves = count; }
+        void SetMaxAutoSaves(int count)
+        {
+            ASSERT_MSG(count >= 1, "SaveSystem::SetMaxAutoSaves — count must be >= 1");
+            m_maxAutoSaves = count;
+        }
 
         /**
      * @brief Override the directory used to store save files at runtime.

@@ -9,6 +9,7 @@
 #pragma once
 #include "../../../Core/Platform.h"
 #include "../../../Utils/OpaqueHandle.h"
+#include "../../../Utils/Assert.h"
 #include <entt/entt.hpp>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -95,6 +96,18 @@ struct Camera
     float nearPlane = 0.1f;
     float farPlane = 1000.0f;
     bool isMainCamera = false;
+
+    /**
+     * @brief Validate that camera parameters are within sane ranges.
+     * @return true if all parameters are valid.
+     */
+    bool Validate() const
+    {
+        ASSERT_MSG(fov > 0.0f && fov < 180.0f, "Camera FOV must be in (0, 180)");
+        ASSERT_MSG(nearPlane > 0.0f, "Camera near plane must be positive");
+        ASSERT_MSG(farPlane > nearPlane, "Camera far plane must exceed near plane");
+        return fov > 0.0f && fov < 180.0f && nearPlane > 0.0f && farPlane > nearPlane;
+    }
 };
 
 // =============================================================================

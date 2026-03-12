@@ -384,7 +384,8 @@ TextureSystem::~TextureSystem()
 
 HRESULT TextureSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    ASSERT(device && context);
+    ASSERT_NOT_NULL(device);
+    ASSERT_NOT_NULL(context);
 
     m_device = device;
     m_context = context;
@@ -462,6 +463,10 @@ void TextureSystem::Update(float deltaTime)
 void TextureSystem::TouchTexture(const std::string& name, uint64_t currentFrame, float screenCoverage,
                                  float distanceToCamera)
 {
+    ASSERT_MSG(!name.empty(), "TextureSystem::TouchTexture — name must not be empty");
+    ASSERT_MSG(screenCoverage >= 0.0f && screenCoverage <= 1.0f,
+               "TextureSystem::TouchTexture — screenCoverage must be in [0, 1]");
+    ASSERT_MSG(distanceToCamera >= 0.0f, "TextureSystem::TouchTexture — distanceToCamera must be non-negative");
     std::lock_guard<std::mutex> lock(m_texturesMutex);
 
     auto& lru = m_lruData[name];
@@ -491,6 +496,8 @@ void TextureSystem::UnpinTexture(const std::string& name)
 
 void TextureSystem::SetTexturePriority(const std::string& name, uint8_t priority)
 {
+    ASSERT_MSG(!name.empty(), "TextureSystem::SetTexturePriority — name must not be empty");
+    ASSERT_MSG(priority <= 5, "TextureSystem::SetTexturePriority — priority must be in [0, 5]");
     std::lock_guard<std::mutex> lock(m_texturesMutex);
     m_lruData[name].priority = priority;
     if (priority >= 5)
@@ -594,6 +601,7 @@ bool TextureSystem::GetTextureLRUData(const std::string& name, TextureLRUData& o
 
 std::shared_ptr<Texture> TextureSystem::LoadTexture(const std::string& filePath, const TextureDesc& desc)
 {
+    ASSERT_MSG(!filePath.empty(), "TextureSystem::LoadTexture — filePath must not be empty");
     // Check if already loaded
     {
         std::lock_guard<std::mutex> lock(m_texturesMutex);
@@ -636,6 +644,8 @@ std::shared_ptr<Texture> TextureSystem::LoadTexture(const std::string& filePath,
 
 std::shared_ptr<Texture> TextureSystem::CreateTexture(const std::string& name, const TextureDesc& desc)
 {
+    ASSERT_MSG(!name.empty(), "TextureSystem::CreateTexture — name must not be empty");
+    ASSERT_MSG(desc.width > 0 && desc.height > 0, "TextureSystem::CreateTexture — dimensions must be positive");
     auto texture = std::make_shared<Texture>(name, desc);
 
     {
@@ -1197,6 +1207,8 @@ TextureSystem::~TextureSystem()
 
 HRESULT TextureSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    ASSERT_NOT_NULL(device);
+    ASSERT_NOT_NULL(context);
     m_device = device;
     m_context = context;
     memset(&m_metrics, 0, sizeof(m_metrics));
@@ -1290,6 +1302,10 @@ void TextureSystem::Update(float /*deltaTime*/)
 void TextureSystem::TouchTexture(const std::string& name, uint64_t currentFrame, float screenCoverage,
                                  float distanceToCamera)
 {
+    ASSERT_MSG(!name.empty(), "TextureSystem::TouchTexture — name must not be empty");
+    ASSERT_MSG(screenCoverage >= 0.0f && screenCoverage <= 1.0f,
+               "TextureSystem::TouchTexture — screenCoverage must be in [0, 1]");
+    ASSERT_MSG(distanceToCamera >= 0.0f, "TextureSystem::TouchTexture — distanceToCamera must be non-negative");
     std::lock_guard<std::mutex> lock(m_texturesMutex);
     auto& lru = m_lruData[name];
     lru.lastUsedFrame = currentFrame;
@@ -1300,6 +1316,7 @@ void TextureSystem::TouchTexture(const std::string& name, uint64_t currentFrame,
 
 void TextureSystem::PinTexture(const std::string& name)
 {
+    ASSERT_MSG(!name.empty(), "TextureSystem::PinTexture — name must not be empty");
     std::lock_guard<std::mutex> lock(m_texturesMutex);
     m_lruData[name].pinned = true;
     m_lruData[name].priority = 5;
@@ -1307,6 +1324,7 @@ void TextureSystem::PinTexture(const std::string& name)
 
 void TextureSystem::UnpinTexture(const std::string& name)
 {
+    ASSERT_MSG(!name.empty(), "TextureSystem::UnpinTexture — name must not be empty");
     std::lock_guard<std::mutex> lock(m_texturesMutex);
     auto it = m_lruData.find(name);
     if (it != m_lruData.end())
@@ -1318,6 +1336,8 @@ void TextureSystem::UnpinTexture(const std::string& name)
 
 void TextureSystem::SetTexturePriority(const std::string& name, uint8_t priority)
 {
+    ASSERT_MSG(!name.empty(), "TextureSystem::SetTexturePriority — name must not be empty");
+    ASSERT_MSG(priority <= 5, "TextureSystem::SetTexturePriority — priority must be in [0, 5]");
     std::lock_guard<std::mutex> lock(m_texturesMutex);
     m_lruData[name].priority = priority;
     if (priority >= 5)
@@ -1413,6 +1433,7 @@ bool TextureSystem::GetTextureLRUData(const std::string& name, TextureLRUData& o
 
 std::shared_ptr<Texture> TextureSystem::LoadTexture(const std::string& filePath, const TextureDesc& desc)
 {
+    ASSERT_MSG(!filePath.empty(), "TextureSystem::LoadTexture — filePath must not be empty");
     {
         std::lock_guard<std::mutex> lock(m_texturesMutex);
         auto it = m_textures.find(filePath);
@@ -1450,6 +1471,8 @@ std::shared_ptr<Texture> TextureSystem::LoadTexture(const std::string& filePath,
 
 std::shared_ptr<Texture> TextureSystem::CreateTexture(const std::string& name, const TextureDesc& desc)
 {
+    ASSERT_MSG(!name.empty(), "TextureSystem::CreateTexture — name must not be empty");
+    ASSERT_MSG(desc.width > 0 && desc.height > 0, "TextureSystem::CreateTexture — dimensions must be positive");
     auto texture = std::make_shared<Texture>(name, desc);
     {
         std::lock_guard<std::mutex> lock(m_texturesMutex);

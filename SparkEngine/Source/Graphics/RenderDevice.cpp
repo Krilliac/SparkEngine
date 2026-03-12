@@ -16,6 +16,9 @@ namespace Spark::Graphics
     bool RenderDevice::Initialize(Spark::NativeWindowHandle hwnd, uint32_t width, uint32_t height, bool fullscreen,
                                   RHI::GraphicsBackend backend)
     {
+        ASSERT_MSG(hwnd != nullptr, "RenderDevice::Initialize — null window handle");
+        ASSERT_MSG(width > 0 && height > 0, "RenderDevice::Initialize — width and height must be positive");
+
         m_width = width;
         m_height = height;
         m_fullscreen = fullscreen;

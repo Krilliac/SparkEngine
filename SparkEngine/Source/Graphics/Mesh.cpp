@@ -574,6 +574,8 @@ Mesh::~Mesh()
 
 HRESULT Mesh::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    ASSERT_MSG(device != nullptr, "Mesh::Initialize — device must not be null");
+    ASSERT_MSG(context != nullptr, "Mesh::Initialize — context must not be null");
     m_device = device;
     m_context = context;
     return S_OK;
@@ -651,6 +653,7 @@ void Mesh::CalculateNormals()
 
 HRESULT Mesh::CreateCube(float size)
 {
+    ASSERT_MSG(size > 0.0f, "Cube size must be positive");
     float h = size * 0.5f;
     m_vertices.clear();
     m_indices.clear();
@@ -697,6 +700,7 @@ HRESULT Mesh::CreateCube(float size)
 
 HRESULT Mesh::CreateTriangle(float size)
 {
+    ASSERT_MSG(size > 0.0f, "Triangle size must be positive");
     float h = size * 0.5f;
     m_vertices = {
         {{0, h, 0}, {0, 0, -1}, {0.5f, 0}}, {{h, -h, 0}, {0, 0, -1}, {1, 1}}, {{-h, -h, 0}, {0, 0, -1}, {0, 1}}};
@@ -706,6 +710,7 @@ HRESULT Mesh::CreateTriangle(float size)
 
 HRESULT Mesh::CreatePlane(float width, float depth)
 {
+    ASSERT_MSG(width > 0.0f && depth > 0.0f, "Plane dimensions must be positive");
     float hw = width * 0.5f, hd = depth * 0.5f;
     m_vertices = {{{-hw, 0, -hd}, {0, 1, 0}, {0, 0}},
                   {{hw, 0, -hd}, {0, 1, 0}, {1, 0}},
@@ -717,6 +722,8 @@ HRESULT Mesh::CreatePlane(float width, float depth)
 
 HRESULT Mesh::CreateSphere(float radius, int slices, int stacks)
 {
+    ASSERT_MSG(radius > 0.0f, "Sphere radius must be positive");
+    ASSERT_MSG(slices >= 3 && stacks >= 2, "Sphere needs at least 3 slices and 2 stacks");
     m_vertices.clear();
     m_indices.clear();
 
@@ -755,6 +762,7 @@ HRESULT Mesh::CreateSphere(float radius, int slices, int stacks)
 
 HRESULT Mesh::CreatePyramid(float size, float height)
 {
+    ASSERT_MSG(size > 0.0f && height > 0.0f, "Pyramid size and height must be positive");
     float h = size * 0.5f;
     XMFLOAT3 top = {0, height, 0};
     XMFLOAT3 bl = {-h, 0, -h}, br = {h, 0, -h};
@@ -808,6 +816,7 @@ HRESULT Mesh::CreatePyramid(float size, float height)
 
 HRESULT Mesh::CreateFromVertices(const std::vector<Vertex>& verts, const std::vector<unsigned int>& inds)
 {
+    ASSERT_MSG(!verts.empty() && !inds.empty(), "CreateFromVertices — empty vertex or index data");
     m_vertices = verts;
     m_indices = inds;
     return CreateBuffers();
@@ -815,6 +824,8 @@ HRESULT Mesh::CreateFromVertices(const std::vector<Vertex>& verts, const std::ve
 
 bool Mesh::LoadFromFile(const std::wstring& path)
 {
+    ASSERT_ALWAYS_MSG(!path.empty(), "Mesh::LoadFromFile — empty path");
+
     // Convert wide string to narrow for tinyobj on Linux
     std::string narrowPath(path.begin(), path.end());
 

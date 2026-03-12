@@ -11,6 +11,7 @@
 #pragma once
 #include "../../../Core/Platform.h"
 #include "../../../Utils/OpaqueHandle.h"
+#include "../../../Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -166,6 +167,20 @@ struct ProjectileComponent
      * @return true if the projectile should be destroyed.
      */
     bool IsExpired() const { return distanceTraveled >= maxRange || age >= maxLifetime; }
+
+    /**
+     * @brief Validate that projectile parameters are within sane ranges.
+     * @return true if all parameters are valid.
+     */
+    bool Validate() const
+    {
+        ASSERT_MSG(speed >= 0.0f, "Projectile speed must be non-negative");
+        ASSERT_MSG(damage >= 0.0f, "Projectile damage must be non-negative");
+        ASSERT_MSG(maxRange > 0.0f, "Projectile maxRange must be positive");
+        ASSERT_MSG(maxLifetime > 0.0f, "Projectile maxLifetime must be positive");
+        ASSERT_MSG(explosionRadius >= 0.0f, "Projectile explosionRadius must be non-negative");
+        return speed >= 0.0f && damage >= 0.0f && maxRange > 0.0f && maxLifetime > 0.0f && explosionRadius >= 0.0f;
+    }
 };
 
 // =============================================================================
@@ -251,7 +266,20 @@ struct InteractionComponent
      */
     void ConsumeUse()
     {
+        ASSERT_MSG(CanInteract(), "ConsumeUse called when interaction is not available");
         if (usesRemaining > 0)
             --usesRemaining;
+    }
+
+    /**
+     * @brief Validate that interaction parameters are within sane ranges.
+     * @return true if all parameters are valid.
+     */
+    bool Validate() const
+    {
+        ASSERT_MSG(interactionRadius > 0.0f, "Interaction radius must be positive");
+        ASSERT_MSG(holdDuration >= 0.0f, "Hold duration must be non-negative");
+        ASSERT_MSG(cooldownDuration >= 0.0f, "Cooldown duration must be non-negative");
+        return interactionRadius > 0.0f && holdDuration >= 0.0f && cooldownDuration >= 0.0f;
     }
 };

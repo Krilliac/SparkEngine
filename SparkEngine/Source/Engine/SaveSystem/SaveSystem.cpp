@@ -4,6 +4,7 @@
  */
 
 #include "SaveSystem.h"
+#include "../../Utils/Assert.h"
 #include "Utils/LocalFileCache.h"
 #include <cstring>
 #include <fstream>
@@ -550,6 +551,7 @@ namespace Spark
 
     bool SaveSystem::Initialize(const std::string& saveDirectory)
     {
+        ASSERT_MSG(!saveDirectory.empty(), "SaveSystem::Initialize — saveDirectory must not be empty");
         m_saveDirectory = saveDirectory;
         try
         {
@@ -565,12 +567,14 @@ namespace Spark
 
     bool SaveSystem::Save(const std::string& slotName, World& world, const SaveMetadata& metadata)
     {
+        ASSERT_MSG(!slotName.empty(), "SaveSystem::Save — slotName must not be empty");
         SaveData data = SerializeWorld(world, metadata);
         return WriteToFile(GetSavePath(slotName), data);
     }
 
     bool SaveSystem::Load(const std::string& slotName, World& world)
     {
+        ASSERT_MSG(!slotName.empty(), "SaveSystem::Load — slotName must not be empty");
         SaveData data;
         if (!ReadFromFile(GetSavePath(slotName), data))
             return false;
@@ -599,6 +603,7 @@ namespace Spark
 
     bool SaveSystem::DeleteSave(const std::string& slotName)
     {
+        ASSERT_MSG(!slotName.empty(), "SaveSystem::DeleteSave — slotName must not be empty");
         try
         {
             std::string path = GetSavePath(slotName);

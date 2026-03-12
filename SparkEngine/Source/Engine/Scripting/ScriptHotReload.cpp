@@ -4,6 +4,7 @@
  */
 
 #include "ScriptHotReload.h"
+#include "../../Utils/Assert.h"
 
 #include <algorithm>
 #include <sstream>
@@ -28,6 +29,7 @@ namespace Spark::Scripting
 
     void ScriptHotReloadManager::AddWatchDirectory(const std::string& directory, bool recursive)
     {
+        ASSERT_MSG(!directory.empty(), "ScriptHotReloadManager::AddWatchDirectory — directory must not be empty");
         m_watchDirs.push_back(directory);
         if (m_running)
         {
@@ -42,11 +44,13 @@ namespace Spark::Scripting
 
     void ScriptHotReloadManager::SetRecompileCallback(RecompileCallback callback)
     {
+        ASSERT_MSG(callback != nullptr, "ScriptHotReloadManager::SetRecompileCallback — callback must not be null");
         m_recompileCallback = std::move(callback);
     }
 
     void ScriptHotReloadManager::SetErrorCallback(ErrorCallback callback)
     {
+        ASSERT_MSG(callback != nullptr, "ScriptHotReloadManager::SetErrorCallback — callback must not be null");
         m_errorCallback = std::move(callback);
     }
 
