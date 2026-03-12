@@ -153,3 +153,6 @@
 #define ICON_FA_STREAM "\xef\x95\x90"      // U+F550
 #define ICON_FA_PLUS_SQUARE "\xef\x83\xbe" // U+F0FE
 #define ICON_FA_SLIDERS_H "\xef\x87\x9e"   // U+F1DE (horizontal sliders)
+
+// === Networking / Server Icons ===
+#define ICON_FA_SERVER "\xef\x88\xb3" // U+F233
