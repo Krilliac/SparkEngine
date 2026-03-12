@@ -180,19 +180,14 @@ namespace Spark::Physics
         return s_emptyParticles;
     }
 
-    void ClothSimulation::GetClothDimensions(uint32_t clothId, int& width, int& height) const
+    std::pair<int, int> ClothSimulation::GetClothDimensions(uint32_t clothId) const
     {
         auto it = m_clothInstances.find(clothId);
         if (it != m_clothInstances.end())
         {
-            width = it->second.width;
-            height = it->second.height;
+            return {it->second.width, it->second.height};
         }
-        else
-        {
-            width = 0;
-            height = 0;
-        }
+        return {0, 0};
     }
 
     void ClothSimulation::SimulateCloth(ClothInstance& cloth, float deltaTime)

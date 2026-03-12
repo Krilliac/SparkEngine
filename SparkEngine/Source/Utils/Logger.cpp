@@ -52,9 +52,11 @@ namespace Spark
         char buf[4096];
         int offset = 0;
 
-        offset += snprintf(buf + offset, sizeof(buf) - offset, "[%s.%03d] [TID:%s] [%-5s] [%-10s] %s", timeBuf,
-                           static_cast<int>(ms), tidStr.c_str(), LogLevelToString(msg.level),
-                           LogCategoryToString(msg.category), msg.message.c_str());
+        auto levelStr = LogLevelToString(msg.level);
+        auto catStr = LogCategoryToString(msg.category);
+        offset += snprintf(buf + offset, sizeof(buf) - offset, "[%s.%03d] [TID:%s] [%-5.*s] [%-10.*s] %s", timeBuf,
+                           static_cast<int>(ms), tidStr.c_str(), static_cast<int>(levelStr.size()), levelStr.data(),
+                           static_cast<int>(catStr.size()), catStr.data(), msg.message.c_str());
 
         // Append source location if available
         if (!msg.file.empty())

@@ -48,10 +48,9 @@ namespace Spark::VR
         // Update m_headPosition, m_headOrientation, controllers, eye matrices
     }
 
-    void VRSystem::GetRecommendedRenderSize(int& width, int& height) const
+    std::pair<int, int> VRSystem::GetRecommendedRenderSize() const
     {
-        width = m_recommendedWidth;
-        height = m_recommendedHeight;
+        return {m_recommendedWidth, m_recommendedHeight};
     }
 
     void VRSystem::TriggerHaptic(bool isLeft, float amplitude, float duration)

@@ -46,6 +46,7 @@
 #include <cmath>
 #include <functional>
 #include <unordered_map>
+#include <tuple>
 
 // =============================================================================
 // Spherical Harmonics Constants
@@ -136,12 +137,21 @@ struct IrradianceVolume
         return {sx, sy, sz};
     }
 
-    /** @brief Get the 3D grid index for a linear probe index */
-    void GetProbeGridIndex(uint32_t linearIndex, uint32_t& outX, uint32_t& outY, uint32_t& outZ) const
+    /**
+     * @brief 3D grid index for a probe in the irradiance volume
+     */
+    struct GridIndex
     {
-        outX = linearIndex % resolutionX;
-        outY = (linearIndex / resolutionX) % resolutionY;
-        outZ = linearIndex / (resolutionX * resolutionY);
+        uint32_t x = 0;
+        uint32_t y = 0;
+        uint32_t z = 0;
+    };
+
+    /** @brief Get the 3D grid index for a linear probe index */
+    GridIndex GetProbeGridIndex(uint32_t linearIndex) const
+    {
+        return {linearIndex % resolutionX, (linearIndex / resolutionX) % resolutionY,
+                linearIndex / (resolutionX * resolutionY)};
     }
 };
 
@@ -747,16 +757,16 @@ class GlobalIlluminationSystem
 
     // ---- Accessors ----
 
-    GISettings& GetSettings() { return m_settings; }
-    const GISettings& GetSettings() const { return m_settings; }
+    GISettings& GetSettings() noexcept { return m_settings; }
+    const GISettings& GetSettings() const noexcept { return m_settings; }
     void SetSettings(const GISettings& settings) { m_settings = settings; }
 
-    const std::vector<LightProbe>& GetProbes() const { return m_probes; }
-    uint32_t GetProbeCount() const { return static_cast<uint32_t>(m_probes.size()); }
+    const std::vector<LightProbe>& GetProbes() const noexcept { return m_probes; }
+    uint32_t GetProbeCount() const noexcept { return static_cast<uint32_t>(m_probes.size()); }
 
-    const IrradianceVolume& GetIrradianceVolume() const { return m_irradianceVolume; }
+    const IrradianceVolume& GetIrradianceVolume() const noexcept { return m_irradianceVolume; }
 
-    bool IsInitialized() const { return m_initialized; }
+    bool IsInitialized() const noexcept { return m_initialized; }
 
     /** @brief Get a specific probe by index */
     const LightProbe* GetProbe(uint32_t index) const

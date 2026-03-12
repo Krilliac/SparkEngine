@@ -36,6 +36,7 @@
 #include <mutex>
 #include <sstream>
 #include <algorithm>
+#include <concepts>
 #include <type_traits>
 #include <cstdint>
 
@@ -78,7 +79,7 @@ namespace Spark
         String
     };
 
-    inline const char* CVarTypeToString(CVarType type)
+    inline std::string_view CVarTypeToString(CVarType type) noexcept
     {
         switch (type)
         {
@@ -226,7 +227,14 @@ namespace Spark
     // CVar<T> - Typed console variable
     // ============================================================================
 
-    template <typename T> class CVar : public ICVar
+    /**
+     * @brief Concept constraining CVar to supported types: int, float, bool, std::string
+     */
+    template <typename T>
+    concept CVarType_c =
+        std::is_same_v<T, int> || std::is_same_v<T, float> || std::is_same_v<T, bool> || std::is_same_v<T, std::string>;
+
+    template <CVarType_c T> class CVar : public ICVar
     {
       public:
         using ChangeCallback = std::function<void(const T& oldValue, const T& newValue)>;

@@ -34,8 +34,7 @@ TEST(Cloth_ParticleCount)
     const auto& particles = cloth.GetParticles(id);
     EXPECT_EQ(particles.size(), static_cast<size_t>(12)); // 4 * 3 = 12
 
-    int w = 0, h = 0;
-    cloth.GetClothDimensions(id, w, h);
+    auto [w, h] = cloth.GetClothDimensions(id);
     EXPECT_EQ(w, 4);
     EXPECT_EQ(h, 3);
 }

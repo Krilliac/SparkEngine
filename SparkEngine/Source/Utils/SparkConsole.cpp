@@ -735,7 +735,7 @@ namespace Spark
                 else
                 {
                     LogError("Invalid value '" + newVal + "' for " + command +
-                             " (type: " + CVarTypeToString(cvar->GetType()) + ")");
+                             " (type: " + std::string(CVarTypeToString(cvar->GetType())) + ")");
                     m_stats.totalCommandsFailed++;
                     return false;
                 }

@@ -14,6 +14,7 @@
 
 #include "Utils/Assert.h"
 #include "../Core/framework.h"
+#include "InputTypes.h"
 #include <unordered_map>
 #include <functional>
 #include <mutex>
@@ -204,26 +205,23 @@ class InputManager
 
     /**
      * @brief Get mouse movement delta since last frame
-     * 
+     *
      * Returns the pixel delta movement of the mouse cursor since the last frame.
      * Applies sensitivity, dead zone, and acceleration settings.
-     * 
-     * @param deltaX Output parameter for horizontal mouse movement
-     * @param deltaY Output parameter for vertical mouse movement
-     * @return true if delta values are valid, false otherwise
+     *
+     * @return MousePoint with dx/dy values; check non-zero for valid movement
      */
-    bool GetMouseDelta(int& deltaX, int& deltaY) const;
+    MousePoint GetMouseDelta() const;
 
     /**
      * @brief Get current mouse cursor position
-     * 
+     *
      * Returns the current pixel coordinates of the mouse cursor relative
      * to the client area of the window.
-     * 
-     * @param x Output parameter for horizontal cursor position
-     * @param y Output parameter for vertical cursor position
+     *
+     * @return MousePoint with x/y position in client coordinates
      */
-    void GetMousePosition(int& x, int& y) const;
+    MousePoint GetMousePosition() const;
 
     /**
      * @brief Capture or release the mouse cursor

@@ -117,7 +117,7 @@ namespace Spark::Graphics
     {
       public:
         /** @brief Plane indices for readability. */
-        enum PlaneIndex
+        enum class PlaneIndex : int
         {
             Left = 0,
             Right,
@@ -127,6 +127,8 @@ namespace Spark::Graphics
             Far,
             Count
         };
+
+        static constexpr int kPlaneCount = static_cast<int>(PlaneIndex::Count);
 
         /**
      * @brief Extract the six frustum planes from a view-projection matrix.
@@ -138,21 +140,22 @@ namespace Spark::Graphics
      */
         void ExtractPlanes(const DirectX::XMMATRIX& viewProj)
         {
+            using enum PlaneIndex;
             DirectX::XMFLOAT4X4 m;
             DirectX::XMStoreFloat4x4(&m, viewProj);
 
             // Left: row3 + row0
-            m_planes[Left] = {m._14 + m._11, m._24 + m._21, m._34 + m._31, m._44 + m._41};
+            m_planes[static_cast<int>(Left)] = {m._14 + m._11, m._24 + m._21, m._34 + m._31, m._44 + m._41};
             // Right: row3 - row0
-            m_planes[Right] = {m._14 - m._11, m._24 - m._21, m._34 - m._31, m._44 - m._41};
+            m_planes[static_cast<int>(Right)] = {m._14 - m._11, m._24 - m._21, m._34 - m._31, m._44 - m._41};
             // Bottom: row3 + row1
-            m_planes[Bottom] = {m._14 + m._12, m._24 + m._22, m._34 + m._32, m._44 + m._42};
+            m_planes[static_cast<int>(Bottom)] = {m._14 + m._12, m._24 + m._22, m._34 + m._32, m._44 + m._42};
             // Top: row3 - row1
-            m_planes[Top] = {m._14 - m._12, m._24 - m._22, m._34 - m._32, m._44 - m._42};
+            m_planes[static_cast<int>(Top)] = {m._14 - m._12, m._24 - m._22, m._34 - m._32, m._44 - m._42};
             // Near: row2 (DirectX convention: 0 <= z <= w)
-            m_planes[Near] = {m._13, m._23, m._33, m._43};
+            m_planes[static_cast<int>(Near)] = {m._13, m._23, m._33, m._43};
             // Far: row3 - row2
-            m_planes[Far] = {m._14 - m._13, m._24 - m._23, m._34 - m._33, m._44 - m._43};
+            m_planes[static_cast<int>(Far)] = {m._14 - m._13, m._24 - m._23, m._34 - m._33, m._44 - m._43};
 
             for (auto& plane : m_planes)
             {
@@ -173,7 +176,7 @@ namespace Spark::Graphics
         {
             bool allInside = true;
 
-            for (int i = 0; i < Count; ++i)
+            for (int i = 0; i < kPlaneCount; ++i)
             {
                 const Plane& p = m_planes[i];
 
@@ -216,7 +219,7 @@ namespace Spark::Graphics
         {
             bool allInside = true;
 
-            for (int i = 0; i < Count; ++i)
+            for (int i = 0; i < kPlaneCount; ++i)
             {
                 float dist = m_planes[i].DistanceToPoint(sphere.center);
 
@@ -243,7 +246,7 @@ namespace Spark::Graphics
      */
         bool IsPointInside(const DirectX::XMFLOAT3& point) const
         {
-            for (int i = 0; i < Count; ++i)
+            for (int i = 0; i < kPlaneCount; ++i)
             {
                 if (m_planes[i].DistanceToPoint(point) < 0.0f)
                 {
@@ -257,7 +260,7 @@ namespace Spark::Graphics
         const Plane& GetPlane(int index) const { return m_planes[index]; }
 
       private:
-        std::array<Plane, Count> m_planes;
+        std::array<Plane, kPlaneCount> m_planes;
     };
 
 } // namespace Spark::Graphics

@@ -50,6 +50,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cstdint>
+#include <utility>
 
 namespace Spark::Physics
 {
@@ -237,11 +238,15 @@ namespace Spark::Physics
      */
         const std::vector<ClothParticle>& GetParticles(uint32_t clothId) const;
 
-        /** @brief Get the cloth grid dimensions. */
-        void GetClothDimensions(uint32_t clothId, int& width, int& height) const;
+        /**
+         * @brief Get the cloth grid dimensions.
+         * @param clothId Cloth handle.
+         * @return Pair of {width, height}
+         */
+        std::pair<int, int> GetClothDimensions(uint32_t clothId) const;
 
         /** @brief Get the number of active cloth instances. */
-        size_t GetInstanceCount() const { return m_clothInstances.size(); }
+        size_t GetInstanceCount() const noexcept { return m_clothInstances.size(); }
 
         // --- Console integration ---
 
