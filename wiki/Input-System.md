@@ -122,6 +122,54 @@ Call `Update()` once per frame to process input state changes:
 input.Update();  // Store current states, calculate deltas
 ```
 
+## Input Binding Manager
+
+The `InputBindingManager` provides rebindable controls, presets, and accessibility options:
+
+```cpp
+InputBindingManager bindings;
+
+// Set up bindings with primary and alternate keys
+InputBinding jumpBinding;
+jumpBinding.primaryKey   = VK_SPACE;
+jumpBinding.alternateKey = GamepadButton::A;
+bindings.SetBinding("Jump", jumpBinding);
+
+// Create and apply presets
+bindings.CreateDefaultPresets();   // "WASD", "ESDF", "Arrows", "Controller"
+bindings.ApplyPreset("WASD");
+
+// List available presets
+for (const auto& name : bindings.GetPresetNames()) {
+    LOG("Preset: " + name);
+}
+
+// Listen for binding changes (e.g., update UI prompts)
+bindings.OnBindingChanged([](const std::string& action, const InputBinding& binding) {
+    UpdateControlsUI(action, binding);
+});
+
+// Save and load bindings to/from file
+bindings.SaveToFile("Config/keybinds.json");
+bindings.LoadFromFile("Config/keybinds.json");
+```
+
+### Accessibility Options
+
+```cpp
+// Enable accessibility features via bitmask
+bindings.SetAccessibility(
+    AccessibilityFlags::HoldToToggle |
+    AccessibilityFlags::AutoAim |
+    AccessibilityFlags::LargeSubtitles
+);
+
+// Check individual flags
+if (bindings.IsAccessibilityEnabled(AccessibilityFlags::ColorblindProtanopia)) {
+    ApplyColorblindFilter();
+}
+```
+
 ## Thread Safety
 
 Input state access is protected by a mutex for thread-safe reads. However, `Update()` and `ProcessMessage()` should only be called from the main thread.

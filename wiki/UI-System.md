@@ -90,6 +90,91 @@ btn->SetNormalColor({0.3f, 0.3f, 0.3f, 0.9f});
 btn->SetHoverColor({0.4f, 0.4f, 0.4f, 0.9f});
 ```
 
+## Building a HUD
+
+A complete FPS HUD example:
+
+```cpp
+UISystem ui;
+ui.Initialize(1920, 1080);
+auto& canvas = ui.GetCanvas();
+
+// Health panel (bottom-left)
+auto* healthPanel = canvas.CreatePanel("HealthPanel");
+healthPanel->SetAnchor(Anchor::BottomLeft);
+healthPanel->SetLayout(LayoutDirection::Vertical);
+healthPanel->SetSpacing(5.0f);
+healthPanel->SetPadding(20.0f);
+healthPanel->SetBackgroundColor({0.0f, 0.0f, 0.0f, 0.5f});
+
+auto* healthLabel = healthPanel->CreateLabel("hp_label", "Health");
+healthLabel->SetFontSize(16);
+healthLabel->SetColor(UIColor::White());
+
+auto* healthBar = healthPanel->CreateProgressBar("hp_bar");
+healthBar->SetSize(200, 20);
+healthBar->SetValue(1.0f);
+healthBar->SetFillColor(UIColor::Green());
+healthBar->SetBackgroundColor({0.2f, 0.2f, 0.2f, 0.8f});
+
+// Crosshair (center)
+auto* crosshair = canvas.CreatePanel("CrosshairPanel");
+crosshair->SetAnchor(Anchor::Center);
+auto* crosshairImg = crosshair->CreateImage("crosshair_img");
+crosshairImg->SetTexturePath("Assets/UI/crosshair.png");
+crosshairImg->SetSize(32, 32);
+crosshairImg->SetTint(UIColor::White());
+
+// Ammo counter (bottom-right)
+auto* ammoPanel = canvas.CreatePanel("AmmoPanel");
+ammoPanel->SetAnchor(Anchor::BottomRight);
+auto* ammoLabel = ammoPanel->CreateLabel("ammo_text", "30 / 120");
+ammoLabel->SetFontSize(28);
+ammoLabel->SetColor(UIColor::White());
+ammoLabel->SetPosition(20, 20);
+
+// Update health bar each frame
+healthBar->SetValue(player.health / player.maxHealth);
+ammoLabel->SetText(std::to_string(weapon.ammo) + " / " + std::to_string(weapon.reserveAmmo));
+```
+
+## Pause Menu Example
+
+```cpp
+auto* pausePanel = canvas.CreatePanel("PauseMenu");
+pausePanel->SetAnchor(Anchor::Center);
+pausePanel->SetLayout(LayoutDirection::Vertical);
+pausePanel->SetSpacing(15.0f);
+pausePanel->SetPadding(30.0f);
+pausePanel->SetBackgroundColor({0.1f, 0.1f, 0.1f, 0.9f});
+pausePanel->SetVisible(false);  // Hidden by default
+
+auto* title = pausePanel->CreateLabel("pause_title", "PAUSED");
+title->SetFontSize(36);
+title->SetColor(UIColor::White());
+
+auto* resumeBtn = pausePanel->CreateButton("resume_btn", "Resume");
+resumeBtn->SetNormalColor({0.3f, 0.3f, 0.3f, 0.9f});
+resumeBtn->SetHoverColor({0.4f, 0.5f, 0.4f, 0.9f});
+resumeBtn->SetPressedColor({0.2f, 0.4f, 0.2f, 0.9f});
+resumeBtn->OnClick([&]() {
+    pausePanel->SetVisible(false);
+    SetGamePaused(false);
+});
+
+auto* quitBtn = pausePanel->CreateButton("quit_btn", "Quit to Menu");
+quitBtn->SetNormalColor({0.3f, 0.3f, 0.3f, 0.9f});
+quitBtn->SetHoverColor({0.5f, 0.3f, 0.3f, 0.9f});
+quitBtn->OnClick([&]() { LoadScene("MainMenu"); });
+
+// Toggle pause with Escape
+if (input.WasKeyPressed(VK_ESCAPE)) {
+    bool paused = !pausePanel->IsVisible();
+    pausePanel->SetVisible(paused);
+    SetGamePaused(paused);
+}
+```
+
 ## Input Handling
 
 The UI system consumes click events before they reach gameplay:
@@ -98,6 +183,13 @@ The UI system consumes click events before they reach gameplay:
 if (ui.HandleClick(mouseX, mouseY)) {
     // Click was consumed by UI — do not process in gameplay
 }
+```
+
+## Resizing
+
+```cpp
+// Handle window resize events
+ui.OnResize(newWidth, newHeight);
 ```
 
 ---

@@ -89,6 +89,99 @@ dialogue.OnConversationEnded([](const std::string& treeId) {
 | `animation` | NPC animation to play |
 | `cameraAngle` | Camera preset name |
 
+## Building a Dialogue Tree in Code
+
+```cpp
+// Create a dialogue tree programmatically (instead of loading from JSON)
+DialogueTree tree;
+tree.SetId("shopkeeper");
+tree.SetStartNodeId("greeting");
+
+// Greeting node
+DialogueNode greeting;
+greeting.id          = "greeting";
+greeting.type        = DialogueNodeType::Text;
+greeting.speakerName = "Shopkeeper";
+greeting.text        = "Welcome, traveler! What can I do for you?";
+greeting.nextNodeId  = "main_choice";
+tree.AddNode(greeting);
+
+// Choice node
+DialogueNode mainChoice;
+mainChoice.id   = "main_choice";
+mainChoice.type = DialogueNodeType::Choice;
+mainChoice.choices = {
+    {"I'd like to buy supplies.",   "", "buy_response",   "", false},
+    {"Any news from the front?",    "", "news_response",  "", false},
+    {"Goodbye.",                    "", "farewell",       "", false}
+};
+tree.AddNode(mainChoice);
+
+// Conditional branch — checks if player has enough gold
+DialogueNode buyResponse;
+buyResponse.id          = "buy_response";
+buyResponse.type        = DialogueNodeType::Branch;
+buyResponse.condition   = "hasGold:100";
+buyResponse.trueNodeId  = "can_buy";
+buyResponse.falseNodeId = "no_gold";
+tree.AddNode(buyResponse);
+
+// Event node — gives an item
+DialogueNode canBuy;
+canBuy.id        = "can_buy";
+canBuy.type      = DialogueNodeType::Event;
+canBuy.eventName = "give_item";
+canBuy.eventData = "health_potion";
+canBuy.nextNodeId = "buy_thanks";
+tree.AddNode(canBuy);
+
+// End node
+DialogueNode farewell;
+farewell.id          = "farewell";
+farewell.type        = DialogueNodeType::End;
+farewell.speakerName = "Shopkeeper";
+farewell.text        = "Safe travels!";
+tree.AddNode(farewell);
+
+// Register and start
+dialogue.RegisterTree("shopkeeper", tree);
+dialogue.StartConversation("shopkeeper");
+```
+
+## Dialogue JSON File Format
+
+```json
+{
+    "id": "guard_talk",
+    "startNode": "greeting",
+    "nodes": [
+        {
+            "id": "greeting",
+            "type": "text",
+            "speaker": "Guard",
+            "text": "Halt! State your business.",
+            "voiceClip": "Audio/Dialogue/guard_greeting.wav",
+            "nextNode": "player_choice"
+        },
+        {
+            "id": "player_choice",
+            "type": "choice",
+            "choices": [
+                { "text": "I'm here to see the captain.", "nextNode": "captain_check" },
+                { "text": "Just passing through.", "nextNode": "pass_through" }
+            ]
+        },
+        {
+            "id": "captain_check",
+            "type": "branch",
+            "condition": "hasItem:captain_letter",
+            "trueNode": "allowed",
+            "falseNode": "denied"
+        }
+    ]
+}
+```
+
 ## Console Commands
 
 ```
