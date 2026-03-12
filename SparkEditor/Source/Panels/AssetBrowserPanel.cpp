@@ -239,7 +239,7 @@ namespace SparkEditor
                     }
                 }
             }
-            catch (const std::exception& e)
+            catch (const std::exception&)
             {
                 ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), ICON_FA_EXCLAMATION " Error reading folders");
             }
@@ -367,7 +367,7 @@ namespace SparkEditor
                     ImGui::Text("Modified: [File timestamp]");
                 }
             }
-            catch (const std::exception& e)
+            catch (const std::exception&)
             {
                 ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "Error reading file info");
             }

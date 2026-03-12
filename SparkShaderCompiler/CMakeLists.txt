@@ -23,6 +23,7 @@ set(RHI_SOURCES
 if(WIN32)
     list(APPEND RHI_SOURCES
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp"
     )
 endif()
 
