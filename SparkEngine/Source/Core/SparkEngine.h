@@ -25,7 +25,7 @@ class GraphicsEngine;
 class InputManager;
 class Timer;
 class SparkEngineCamera;
-class GameModuleLoader;
+class ModuleManager;
 class IGameModule;
 
 #ifdef SPARK_PLATFORM_WINDOWS

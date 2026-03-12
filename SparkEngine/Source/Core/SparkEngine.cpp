@@ -49,6 +49,7 @@
 #include "Utils/SparkConsole.h"
 #include "EngineSettings.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Audio/AudioEngine.h"
 #include "Physics/PhysicsSystem.h"
 #include "Graphics/GraphicsConsoleCommands.h"
@@ -295,7 +296,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
         // SaveSystem
         Spark::SaveSystem::GetInstance().Initialize("Saves");
+        EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         console.LogInfo("SaveSystem initialized");
+
+        // CoroutineScheduler
+        EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
         // Register console commands (no graphics commands in headless)
         RegisterEngineConsoleCommands();
@@ -394,7 +399,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // 5f. Register SaveSystem with EngineContext
     EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
 
-    // 5g. Register AssetRegistry for handle-based asset lookups
+    // 5g. Register CoroutineScheduler with EngineContext
+    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+
+    // 5h. Register AssetRegistry for handle-based asset lookups
     static Spark::AssetRegistry g_assetRegistry;
     EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&g_assetRegistry);
 
@@ -1188,6 +1196,7 @@ void RegisterEngineConsoleCommands()
             ss << "  SaveSystem: " << (ctx->GetSaveSystem() ? "YES" : "NO") << "\n";
             ss << "  Scene:      " << (ctx->GetSceneManager() ? "YES" : "NO") << "\n";
             ss << "  Scripting:  " << (ctx->GetScriptEngine() ? "YES" : "NO") << "\n";
+            ss << "  Coroutines: " << (ctx->GetCoroutineScheduler() ? "YES" : "NO") << "\n";
             ss << "  Headless:   " << (ctx->IsHeadless() ? "YES" : "NO") << "\n";
             auto* assetReg = ctx->GetSystem<Spark::AssetRegistry>();
             ss << "  AssetReg:   " << (assetReg ? "YES" : "NO");
@@ -1230,6 +1239,7 @@ void RegisterEngineConsoleCommands()
 #include "EngineSettings.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
 #include "Audio/AudioEngine.h"
@@ -1555,6 +1565,7 @@ static void RegisterEngineConsoleCommandsLinux()
             ss << "  SaveSystem: " << (ctx->GetSaveSystem() ? "YES" : "NO") << "\n";
             ss << "  Scene:      " << (ctx->GetSceneManager() ? "YES" : "NO") << "\n";
             ss << "  Scripting:  " << (ctx->GetScriptEngine() ? "YES" : "NO") << "\n";
+            ss << "  Coroutines: " << (ctx->GetCoroutineScheduler() ? "YES" : "NO") << "\n";
             ss << "  Headless:   " << (ctx->IsHeadless() ? "YES" : "NO") << "\n";
             auto* assetReg = ctx->GetSystem<Spark::AssetRegistry>();
             ss << "  AssetReg:   " << (assetReg ? "YES" : "NO");
@@ -1634,6 +1645,8 @@ int main(int argc, char* argv[])
         }
 
         Spark::SaveSystem::GetInstance().Initialize("Saves");
+        EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+        EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
         RegisterEngineConsoleCommandsLinux();
         LogMissingModuleWarnings();
 
@@ -1751,6 +1764,7 @@ int main(int argc, char* argv[])
     Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
     Spark::EngineSetup::InitializeJobSystem();
     EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
     static Spark::AssetRegistry g_linuxAssetRegistry;
     EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&g_linuxAssetRegistry);
 
@@ -1990,6 +2004,13 @@ int main(int argc, char* argv[])
         EngineContext::Get()->SetPhysics(g_physicsOwned.get());
     }
 #endif
+
+    // Register core subsystems with dependency metadata
+    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+    Spark::EngineSetup::InitializeJobSystem();
+    Spark::SaveSystem::GetInstance().Initialize("Saves");
+    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
     g_moduleManager = std::make_unique<ModuleManager>();
 

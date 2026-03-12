@@ -17,6 +17,7 @@
 #include "Game/GameMode.h"
 #include "Game/InventorySystem.h"
 #include "Game/QuestSystem.h"
+#include "Core/EngineContext.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
 
@@ -78,13 +79,30 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
     if (!Initialize(context->GetGraphics(), context->GetInput()))
         return false;
 
-    // Wire up EventBus so game systems can communicate via events
-    if (g_game && context->GetEventBus())
-        g_game->SetEventBus(context->GetEventBus());
+    if (g_game)
+    {
+        // Wire up EventBus so game systems can communicate via events
+        if (context->GetEventBus())
+            g_game->SetEventBus(context->GetEventBus());
 
-    // Wire up physics system for projectile area queries (explosions)
-    if (g_game && context->GetPhysics())
-        g_game->SetPhysicsSystem(context->GetPhysics());
+        // Wire up physics system for projectile area queries (explosions)
+        if (context->GetPhysics())
+            g_game->SetPhysicsSystem(context->GetPhysics());
+
+        // Wire up SceneManager from the engine context if the game doesn't own one
+        // (Game creates its own SceneManager, but the engine context should know about it)
+        if (auto* sceneMgr = g_game->GetSceneManager())
+        {
+            if (!context->GetSceneManager())
+            {
+                // Register the game's SceneManager with the engine context so
+                // the editor and other modules can access it
+                auto* ctx = dynamic_cast<EngineContext*>(context);
+                if (ctx)
+                    ctx->SetSceneManager(sceneMgr);
+            }
+        }
+    }
 
     return true;
 }
