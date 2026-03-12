@@ -68,6 +68,9 @@
 // FPS: DecalComponent, ProjectileComponent, InteractionComponent
 #include "Components/FPSComponents.h"
 
+// Spline: SplineComponent, SplineFollowerComponent
+#include "Components/SplineComponents.h"
+
 // =============================================================================
 // World
 // =============================================================================

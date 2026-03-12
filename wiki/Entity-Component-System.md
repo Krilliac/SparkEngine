@@ -491,6 +491,8 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `RigidBody2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `RigidBodyComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
 | `Script` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `SplineComponent` | `SparkEngine/Source/Engine/ECS/Components/SplineComponents.h` |
+| `SplineFollowerComponent` | `SparkEngine/Source/Engine/ECS/Components/SplineComponents.h` |
 | `SpriteAnimationClip` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `SpriteAnimationFrame` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `SpriteAnimator` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
@@ -543,6 +545,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ReplaySystem` | `SparkEngine/Source/Engine/Replay/ReplaySystem.h` |
 | `SaveSystem` | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h` |
+| `SplineFollowerSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Sprite2DRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `SpriteAnimatorSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `TessellationSystem` | `SparkEngine/Source/Graphics/TessellationSystem.h` |

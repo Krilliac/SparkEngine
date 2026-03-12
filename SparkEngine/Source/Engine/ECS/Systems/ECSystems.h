@@ -694,6 +694,54 @@ namespace Spark::ECS
     };
 
     // =============================================================================
+    // Spline Follower System
+    // =============================================================================
+
+    /**
+     * @class SplineFollowerSystem
+     * @brief Advances entities along their referenced spline paths each frame.
+     *
+     * For each entity with SplineFollowerComponent and Transform:
+     * 1. Reads the referenced SplineComponent from the spline entity.
+     * 2. Advances currentDistance by speed * deltaTime.
+     * 3. Evaluates the spline at the new distance.
+     * 4. Writes the new position (and optionally rotation) to Transform.
+     *
+     * ### Execution order
+     * Should run AFTER PhysicsUpdateSystem and AnimationUpdateSystem, and BEFORE
+     * AIUpdateSystem, so that spline-following entities are positioned before AI
+     * reads their transforms.
+     *
+     * Physics -> Animation -> **SplineFollower** -> AI -> Audio -> Lifecycle -> Render
+     */
+    class SplineFollowerSystem : public ISystem
+    {
+      public:
+        /**
+         * @brief Advance all spline followers for one simulation frame.
+         *
+         * Iterates entities with SplineFollowerComponent + Transform, looks up
+         * each follower's referenced SplineComponent, advances distance, and
+         * writes position/rotation to Transform.
+         *
+         * @param world      The ECS World to query.
+         * @param deltaTime  Frame time in seconds.
+         */
+        void Update(World& world, float deltaTime) override;
+
+        const char* GetName() const override { return "SplineFollowerSystem"; }
+
+        /**
+         * @brief Get the number of actively following entities from the last frame.
+         * @return Active follower count.
+         */
+        int GetActiveFollowerCount() const { return m_activeFollowerCount; }
+
+      private:
+        int m_activeFollowerCount = 0;
+    };
+
+    // =============================================================================
     // System Manager
     // =============================================================================
 

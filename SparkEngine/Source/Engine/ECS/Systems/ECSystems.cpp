@@ -269,6 +269,102 @@ namespace Spark::ECS
     }
 
     // ============================================================================
+    // SplineFollowerSystem
+    // ============================================================================
+
+    void SplineFollowerSystem::Update(World& world, float deltaTime)
+    {
+        m_activeFollowerCount = 0;
+
+        auto view = world.GetEntitiesWith<Transform, SplineFollowerComponent>();
+        for (auto entity : view)
+        {
+            auto& transform = view.get<Transform>(entity);
+            auto& follower = view.get<SplineFollowerComponent>(entity);
+
+            if (!follower.playing || follower.finished)
+                continue;
+
+            // Look up the referenced spline entity
+            if (follower.splineEntity == entt::null)
+                continue;
+            auto* splineComp = world.GetComponent<SplineComponent>(follower.splineEntity);
+            if (!splineComp)
+                continue;
+
+            const SplinePath& path = splineComp->path;
+            float totalLength = path.GetTotalLength();
+            if (totalLength <= 0.0f)
+                continue;
+
+            // Advance distance
+            float delta = follower.speed * deltaTime;
+            if (follower.reverse)
+                follower.currentDistance -= delta;
+            else
+                follower.currentDistance += delta;
+
+            // Handle loop modes
+            switch (follower.loopMode)
+            {
+            case SplineLoopMode::Once:
+                if (follower.currentDistance >= totalLength)
+                {
+                    follower.currentDistance = totalLength;
+                    follower.finished = true;
+                }
+                else if (follower.currentDistance < 0.0f)
+                {
+                    follower.currentDistance = 0.0f;
+                    follower.finished = true;
+                }
+                break;
+
+            case SplineLoopMode::Loop:
+                if (follower.currentDistance >= totalLength)
+                    follower.currentDistance = std::fmod(follower.currentDistance, totalLength);
+                else if (follower.currentDistance < 0.0f)
+                    follower.currentDistance = totalLength + std::fmod(follower.currentDistance, totalLength);
+                break;
+
+            case SplineLoopMode::PingPong:
+                if (follower.currentDistance >= totalLength)
+                {
+                    follower.currentDistance = totalLength;
+                    follower.reverse = true;
+                }
+                else if (follower.currentDistance <= 0.0f)
+                {
+                    follower.currentDistance = 0.0f;
+                    follower.reverse = false;
+                }
+                break;
+            }
+
+            // Evaluate position
+            XMFLOAT3 position = path.GetPointAtDistance(follower.currentDistance);
+            transform.position = position;
+
+            // Orient to path tangent
+            if (follower.orientToPath)
+            {
+                XMFLOAT3 tangent = path.GetTangentAtDistance(follower.currentDistance);
+                float tangentLen = std::sqrt(tangent.x * tangent.x + tangent.y * tangent.y + tangent.z * tangent.z);
+                if (tangentLen > 0.0001f)
+                {
+                    float yaw = std::atan2(tangent.x, tangent.z) * (180.0f / 3.14159265f);
+                    float pitch = std::atan2(-tangent.y, std::sqrt(tangent.x * tangent.x + tangent.z * tangent.z)) *
+                                  (180.0f / 3.14159265f);
+                    transform.rotation.x = pitch;
+                    transform.rotation.y = yaw;
+                }
+            }
+
+            m_activeFollowerCount++;
+        }
+    }
+
+    // ============================================================================
     // SystemManager Console Integration
     // ============================================================================
 

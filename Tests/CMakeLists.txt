@@ -69,6 +69,7 @@ add_executable(SparkTests
     TestSplatmapSystem.cpp
     TestAnimationRetargeting.cpp
     TestDedicatedServer.cpp
+    TestSplineMath.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
