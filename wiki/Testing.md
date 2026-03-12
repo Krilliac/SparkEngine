@@ -1,12 +1,42 @@
 # Testing
 
-SparkEngine includes 35 unit tests using a lightweight internal test framework with CTest integration.
+SparkEngine includes a comprehensive test suite with 71 test files and 864+ test cases using a lightweight internal test framework with CTest integration.
 
 **Source:** `Tests/TestFramework.h`, `Tests/`
 
 ## Test Framework
 
-The engine uses its own lightweight test framework (no external test library dependencies):
+The engine uses its own lightweight test framework (no external test library dependencies). The framework is defined entirely in `Tests/TestFramework.h` and uses a static registry pattern for automatic test discovery.
+
+### Architecture
+
+```
+TestFramework.h     — Macros, test registration, assertion tracking
+TestMain.cpp        — main() entry point, runs all registered tests
+Test*.cpp           — Individual test files (auto-registered)
+```
+
+The framework uses three global counters to track test execution:
+
+| Global Variable | Purpose |
+|-----------------|---------|
+| `g_assertionsPassed` | Total assertions that succeeded |
+| `g_assertionsFailed` | Total assertions that failed |
+| `g_currentTest` | Name of the currently executing test |
+
+### Test Registration
+
+Tests register themselves at static initialization time via the `TestRegistrar` struct. Each test case is stored in a global `vector<TestCase>` and executed by the main runner.
+
+```cpp
+struct TestCase
+{
+    std::string name;               // Human-readable test name
+    std::string file;               // Source file path
+    int line;                       // Line number of the TEST() macro
+    std::function<void()> func;     // Test body function
+};
+```
 
 ### Test Macros
 
@@ -15,12 +45,36 @@ The engine uses its own lightweight test framework (no external test library dep
 
 TEST(MyTestName) {
     EXPECT_EQ(value, expected);        // Equality check
+    EXPECT_NE(value, unexpected);      // Not-equal check
     EXPECT_TRUE(condition);            // Boolean check
     EXPECT_FALSE(condition);           // Negative boolean check
     EXPECT_NEAR(a, b, tolerance);      // Floating-point comparison
-    EXPECT_NE(value, unexpected);      // Not-equal check
+    EXPECT_GT(a, b);                   // Greater-than check
+    EXPECT_LT(a, b);                   // Less-than check
+    EXPECT_GE(a, b);                   // Greater-or-equal check
+    EXPECT_LE(a, b);                   // Less-or-equal check
+    EXPECT_THROW(expr, ExceptionType); // Expects a specific exception
+    EXPECT_NO_THROW(expr);             // Expects no exception
 }
 ```
+
+### Assertion Macro Reference
+
+| Macro | Condition | Failure Output |
+|-------|-----------|----------------|
+| `EXPECT_TRUE(expr)` | `expr` is true | "FAIL: expr was false" |
+| `EXPECT_FALSE(expr)` | `expr` is false | "FAIL: expr was true" |
+| `EXPECT_EQ(a, b)` | `a == b` | "FAIL: a == b (actual != expected)" |
+| `EXPECT_NE(a, b)` | `a != b` | "FAIL: a != b (both value)" |
+| `EXPECT_NEAR(a, b, t)` | `|a - b| <= t` | "FAIL: |a - b| <= t (diff)" |
+| `EXPECT_GT(a, b)` | `a > b` | "FAIL: a > b (actual <= expected)" |
+| `EXPECT_LT(a, b)` | `a < b` | "FAIL: a < b (actual >= expected)" |
+| `EXPECT_GE(a, b)` | `a >= b` | "FAIL: a >= b (actual < expected)" |
+| `EXPECT_LE(a, b)` | `a <= b` | "FAIL: a <= b (actual > expected)" |
+| `EXPECT_THROW(expr, T)` | `expr` throws `T` | "FAIL: Expected T from expr" |
+| `EXPECT_NO_THROW(expr)` | `expr` throws nothing | "FAIL: Unexpected exception from expr" |
+
+All macros use `do { ... } while(0)` for safe use in if/else blocks. Failed assertions print the file, line, and values to `stderr` but do **not** abort the test -- all assertions in a test body are evaluated.
 
 ## Running Tests
 
@@ -34,50 +88,174 @@ cmake --build build
 ### Run All Tests
 
 ```bash
+# Via CTest (recommended)
 ctest --test-dir build --output-on-failure
+
+# Via direct binary execution
+./build/bin/SparkTests
 ```
 
 ### Run Specific Tests
 
 ```bash
+# CTest pattern matching
 ctest --test-dir build -R "TestPhysics"           # Run tests matching pattern
 ctest --test-dir build -R "TestECS|TestAnimation"  # Run multiple patterns
+ctest --test-dir build -E "TestNetworking"         # Exclude a pattern
+
+# Verbose output
+ctest --test-dir build -V
+
+# List all available tests without running them
+ctest --test-dir build -N
 ```
 
-## Test Coverage
+### Run Tests in Parallel
 
-The 35 unit tests cover all major subsystems:
+```bash
+ctest --test-dir build --output-on-failure -j$(nproc)
+```
 
-| Category | Tests |
-|----------|-------|
-| **Math** | Math utilities, vector operations |
-| **Core** | Object pool, ring buffer |
-| **ECS** | Entity creation, component operations, views |
-| **Physics** | Body creation, raycasting, collision |
-| **AI** | Behavior trees, NavMesh pathfinding |
-| **Animation** | State machines, blending, IK |
-| **Audio** | Audio source management |
-| **Input** | Input state tracking |
-| **Scripting** | Script compilation, lifecycle |
-| **Save System** | Serialization, compression |
-| **Events** | Event bus subscribe/publish |
-| **Weather** | Weather transitions |
-| **Inventory** | Item management |
-| **Quests** | Quest tracking |
-| **Day/Night** | Time progression |
-| **Lighting** | Light calculations |
-| **Performance** | Profiler, frame stats |
-| **Fog** | Fog calculations |
-| **Screen-Space** | SSAO, SSR parameters |
-| **Post-Processing** | Effect pipeline |
-| **Sequencer** | Cinematic timeline |
-| **Mesh LOD** | LOD switching |
-| **Console** | Command parsing |
-| **Coroutines** | Coroutine scheduling |
-| **Tweening** | Animation tweens |
-| **Temporal Effects** | TAA settings |
-| **Noise** | Procedural noise generation |
-| **Game Modes** | Game mode management |
+## Test Categories and Coverage
+
+The 71 test files cover all major engine subsystems:
+
+### Core & Utilities
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestMathUtils` | 11 | Math utility functions, vector operations |
+| `TestObjectPool` | 6 | Generic object pool allocation/deallocation |
+| `TestRingBuffer` | 14 | Circular buffer operations, wrap-around |
+| `TestResult` | 8 | Result/Error type handling |
+| `TestStringUtils` | 19 | String manipulation, parsing, formatting |
+| `TestColorUtils` | 18 | Color conversion (RGB, HSL, hex) |
+| `TestFileUtils` | 15 | File path operations, extension parsing |
+| `TestUUID` | 12 | UUID generation and comparison |
+| `TestRandomEngine` | 11 | Random number generation, seeding |
+| `TestBitFlags` | 14 | Bitwise flag operations |
+| `TestFrameAllocator` | 8 | Per-frame linear allocator |
+| `TestScopedTimer` | 3 | High-resolution timer scoping |
+| `TestThreadSafeQueue` | 10 | Thread-safe queue operations |
+| `TestLocalFileCache` | 15 | File caching system |
+| `TestConfigParser` | 16 | INI/config file parsing |
+| `TestDeltaSmoother` | 10 | Frame delta time smoothing |
+
+### ECS (Entity Component System)
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestECSWorld` | 11 | Entity creation, component add/remove, queries |
+| `TestECSIntegration` | 9 | System integration with World |
+| `TestFPSComponents` | 23 | Decal, Projectile, Interaction components |
+| `TestSprite2DComponents` | 35 | 2D sprite rendering and animation |
+| `TestPhysicsComponents` | 22 | RigidBody, Collider component validation |
+
+### Physics
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestPhysicsComponents` | 22 | Physics component creation and validation |
+| `TestFrustumCulling` | 11 | View frustum culling accuracy |
+
+### AI & Navigation
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestAIBehaviorTree` | 16 | Behavior tree node execution, composites |
+| `TestNavMesh` | 11 | NavMesh pathfinding, A* search |
+| `TestSteeringBehaviors` | 15 | Steering: seek, flee, arrive, wander |
+| `TestEnvironmentQuery` | 12 | EQS spatial queries |
+
+### Animation
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestAnimationSystem` | 17 | State machines, blending, IK, evaluation |
+| `TestAnimationRetargeting` | 9 | Skeleton retargeting between different rigs |
+| `TestClothSimulation` | 4 | Cloth physics simulation |
+
+### Networking
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestNetBuffer` | 29 | Network buffer serialization/deserialization |
+| `TestNetworkEncryption` | 17 | AES encryption, key exchange |
+| `TestClientPrediction` | 5 | Client-side prediction and reconciliation |
+| `TestDedicatedServer` | 27 | Server lifecycle, RCON, map rotation |
+
+### Gameplay Systems
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestWeaponSystem` | 18 | Fire modes, reload, recoil, ADS |
+| `TestInventorySystem` | 11 | Item add/remove, stacking, weight |
+| `TestQuestSystem` | 10 | Quest stages, objectives, completion |
+| `TestGameMode` | 5 | Game mode switching and score tracking |
+| `TestAchievementSystem` | 5 | Achievement tracking and unlocking |
+| `TestDestructionSystem` | 5 | Object destruction and debris |
+| `TestCooldown` | 14 | Cooldown timer management |
+
+### Events & Systems
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestEventSystem` | 10 | Pub/sub, subscribe, unsubscribe, publish |
+| `TestCoroutineScheduler` | 10 | Coroutine scheduling, yield, resume |
+| `TestTween` | 14 | Easing functions, value interpolation |
+
+### Engine Context & Infrastructure
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestEngineContext` | 18 | Service locator, subsystem registration |
+| `TestCommandHistory` | 10 | Console command history and recall |
+| `TestDebugTools` | 31 | Debug visualization, imgui panels |
+| `TestPlayModeManager` | 33 | Play/pause/stop mode transitions |
+| `TestInputSystem` | 11 | Input state tracking and mapping |
+| `TestInputBindings` | 5 | Configurable key bindings |
+| `TestChromeTracing` | 5 | Chrome trace output format |
+| `TestPerformanceStats` | 10 | FPS, frame time, memory tracking |
+
+### Graphics & Post-Processing
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestFogSystem` | 17 | Fog calculation (linear, exponential) |
+| `TestScreenSpaceEffects` | 16 | SSAO, SSR parameter validation |
+| `TestPostProcessingPipeline` | 11 | Effect chain ordering and configuration |
+| `TestTemporalEffects` | 11 | TAA settings and jitter patterns |
+| `TestMeshLOD` | 8 | LOD distance switching |
+| `TestLightManager` | 13 | Light creation, shadow setup |
+| `TestUpscalingSystem` | 5 | Resolution upscaling parameters |
+| `TestNoiseGenerator` | 7 | Perlin/simplex noise output ranges |
+| `TestSplatmapSystem` | 10 | Terrain texture splatmaps |
+
+### Scene & Save
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestSceneSnapshotSerializer` | 19 | Scene snapshot save/load round-trip |
+| `TestSaveSystem` | 7 | Serialization, compression, file I/O |
+| `TestLoadingScreen` | 4 | Loading screen state management |
+
+### World Systems
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestWeatherSystem` | 8 | Weather transitions, intensity |
+| `TestDayNightCycle` | 10 | Time progression, sunrise/sunset |
+| `TestSequencer` | 10 | Cinematic timeline tracks and playback |
+
+### Other
+
+| Test File | Cases | Description |
+|-----------|-------|-------------|
+| `TestDialogueSystem` | 4 | Dialogue tree navigation |
+| `TestLocalizationSystem` | 6 | String localization and language switching |
+| `TestReplaySystem` | 4 | Game replay recording/playback |
+| `TestUISystem` | 6 | UI layout and event handling |
+| `TestVisualScriptSystem` | 0 | Placeholder for visual scripting tests |
 
 ## Adding a New Test
 
@@ -99,6 +277,18 @@ TEST(MyFeature_EdgeCase) {
     EXPECT_EQ(feature.Compute(0), 0);
     EXPECT_NEAR(feature.Compute(1.0f), 1.0f, 0.001f);
 }
+
+TEST(MyFeature_ExceptionHandling) {
+    MyFeature feature;
+    EXPECT_THROW(feature.InvalidOp(), std::runtime_error);
+    EXPECT_NO_THROW(feature.SafeOp());
+}
+
+TEST(MyFeature_Comparisons) {
+    MyFeature feature;
+    EXPECT_GT(feature.GetSize(), 0);
+    EXPECT_LE(feature.GetLoad(), 1.0f);
+}
 ```
 
 2. The test is automatically discovered by CMake (tests are globbed in `Tests/CMakeLists.txt`). See [Build System and CMake Modules](Build-System-and-CMake-Modules) for build configuration.
@@ -110,16 +300,82 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+### Test Naming Conventions
+
+Follow these conventions for consistency:
+
+- Test file: `TestFeatureName.cpp` (e.g., `TestPhysicsComponents.cpp`)
+- Test case: `FeatureName_DescriptiveAction` (e.g., `PhysicsComponents_CreateDynamicBody`)
+- Use underscores to separate the feature from the behavior being tested
+
+### Testing Best Practices
+
+1. **Keep tests independent** -- Each `TEST()` should set up its own state and not depend on other tests
+2. **Test edge cases** -- Zero values, empty collections, maximum values
+3. **Use `EXPECT_NEAR` for floating-point** -- Never use `EXPECT_EQ` for float comparisons
+4. **No external dependencies** -- Tests should run without network, filesystem, or GPU access
+5. **Fast execution** -- Individual tests should complete in milliseconds
+
 ## CI Integration
 
-Tests run automatically on every push via GitHub Actions:
-- Windows (VS 2022, VS 2026) — Debug and Release
-- Linux (GCC, Clang) — Debug and Release
-- AddressSanitizer + UBSanitizer builds for memory safety
-- clang-format check (rejects PRs with formatting violations)
-- CodeQL security scanning
+Tests run automatically on every push via GitHub Actions. The CI matrix covers multiple platforms, compilers, and configurations.
+
+### CI Build Matrix
+
+| Job | Runner | Compiler | Configs | Key Flags |
+|-----|--------|----------|---------|-----------|
+| `check-format` | ubuntu-24.04 | clang-format | -- | `--dry-run --Werror` |
+| `validate-prompts` | ubuntu-24.04 | -- | -- | `--ci` |
+| `build-linux-gcc` | ubuntu-24.04 | GCC | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan |
+| `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
+| `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
+| `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
+| `todo-count` | ubuntu-24.04 | -- | -- | threshold: 20 |
+
+### Code Coverage
+
+The `coverage` CI job produces lcov reports showing line and branch coverage. To generate coverage locally:
+
+```bash
+# Build with coverage flags
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DBUILD_TESTS=ON \
+  -DCMAKE_CXX_FLAGS="--coverage" \
+  -DCMAKE_C_FLAGS="--coverage"
+cmake --build build --parallel $(nproc)
+
+# Run tests to generate coverage data
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+
+# Generate coverage report (requires lcov)
+lcov --capture --directory build --output-file coverage.info
+lcov --remove coverage.info '/usr/*' 'ThirdParty/*' 'Tests/*' --output-file coverage.filtered.info
+genhtml coverage.filtered.info --output-directory coverage-report
+```
+
+Open `coverage-report/index.html` in a browser to view the report.
 
 ### Running Sanitizer Builds Locally
+
+#### AddressSanitizer + UndefinedBehaviorSanitizer
+
+```bash
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DBUILD_TESTS=ON \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build --parallel $(nproc)
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+```
+
+Or use the preset:
 
 ```bash
 cmake --preset ci-linux-asan
@@ -127,13 +383,57 @@ cmake --build build
 cd build && ctest --output-on-failure
 ```
 
+#### ThreadSanitizer
+
+```bash
+cmake --preset ci-linux-tsan
+cmake --build build
+cd build && ctest --output-on-failure
+```
+
+### Matching CI Locally
+
+To reproduce a specific CI failure, match the exact compiler and flags:
+
+```bash
+# Linux GCC (matches build-linux-gcc)
+cmake -B build -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DBUILD_TESTS=ON
+cmake --build build --parallel $(nproc)
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+
+# Linux Clang (matches build-linux-clang)
+cmake -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DBUILD_TESTS=ON
+cmake --build build --parallel $(nproc)
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+```
+
+### Clang-Format Check
+
+The CI enforces formatting on every PR. To check locally:
+
+```bash
+find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+  -not -path '*/Metal/*' \
+  \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
+  xargs clang-format --dry-run --Werror 2>&1
+```
+
+To auto-fix:
+
+```bash
+find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+  -not -path '*/Metal/*' \
+  \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
+  xargs clang-format -i
+```
+
 ---
 
 ## See Also
 
-- [Build System and CMake Modules](Build-System-and-CMake-Modules) — BUILD_TESTS flag and CI details
-- [Getting Started](Getting-Started) — Building the project
-- [Contributing](Contributing) — Contribution workflow, pre-commit checks, and adding tests
+- [Build System and CMake Modules](Build-System-and-CMake-Modules) -- BUILD_TESTS flag and CI details
+- [Getting Started](Getting-Started) -- Building the project
+- [Contributing](Contributing) -- Contribution workflow, pre-commit checks, and adding tests
 
 ## Test File Inventory
 

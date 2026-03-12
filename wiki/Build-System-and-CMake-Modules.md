@@ -9,8 +9,8 @@ SparkEngine uses CMake 3.16+ as its build system with 30+ toggleable feature mod
 ### Minimum Requirements
 
 - CMake 3.16+
-- C++20 standard (enforced, no extensions)
-- CMP0091 policy for consistent MSVC runtime
+- C++20 standard (enforced via `cxx_std_20`, no extensions)
+- CMP0091 policy for consistent MSVC runtime library selection
 
 ### Quick Configuration
 
@@ -23,91 +23,172 @@ SparkEngine uses CMake 3.16+ as its build system with 30+ toggleable feature mod
 
 # Direct CMake
 cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+
+# Using presets (recommended)
+cmake --preset windows-release
+cmake --build --preset windows-release
+```
+
+### Configuration Flow
+
+```
+cmake -B build [options]
+    │
+    ├── Check CMake version (>= 3.16)
+    ├── Set C++20 standard (no extensions)
+    ├── Apply CMP0091 policy (MSVC runtime)
+    │
+    ├── Evaluate feature flags (-DENABLE_*)
+    │   ├── ON  → include subsystem sources, define compile macros
+    │   └── OFF → skip subsystem, set stub/no-op implementations
+    │
+    ├── Detect platform and compiler
+    │   ├── MSVC → /W4, MSVC runtime selection
+    │   ├── GCC  → -Wall -Wextra
+    │   └── Clang → -Wall -Wextra
+    │
+    ├── Configure targets (SparkEngineLib, SparkEngine, SparkGame, ...)
+    ├── Include component libraries (cmake/SparkComponentLibraries.cmake)
+    ├── Configure tests (if BUILD_TESTS=ON)
+    └── Generate build files
 ```
 
 ## Feature Flags
 
-All flags can be set during CMake configuration with `-D<FLAG>=ON|OFF`:
+All flags can be set during CMake configuration with `-D<FLAG>=ON|OFF`.
 
-### Graphics
+### Graphics Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `ENABLE_GRAPHICS` | ON | Graphics rendering engine |
+| `ENABLE_GRAPHICS` | ON | Graphics rendering engine (DX11, Vulkan, GL) |
 | `ENABLE_VULKAN` | ON | Vulkan backend |
 | `ENABLE_OPENGL` | ON | OpenGL backend |
 | `ENABLE_DXR` | OFF | DirectX Raytracing (requires D3D12) |
-| `ENABLE_POST_PROCESSING` | ON | Post-processing effects |
-| `ENABLE_LIGHTING_SYSTEM` | ON | Advanced lighting |
+| `ENABLE_POST_PROCESSING` | ON | Post-processing effects (bloom, SSAO, etc.) |
+| `ENABLE_LIGHTING_SYSTEM` | ON | Advanced lighting (PBR, IBL) |
 | `ENABLE_MESH_LOD` | ON | Mesh level-of-detail |
-| `ENABLE_DECALS` | ON | Decal system |
-| `ENABLE_FOG_SYSTEM` | ON | Fog rendering |
-| `ENABLE_SCREEN_SPACE` | ON | SSAO, SSR effects |
+| `ENABLE_DECALS` | ON | Projected decal system |
+| `ENABLE_FOG_SYSTEM` | ON | Fog rendering (distance, height) |
+| `ENABLE_SCREEN_SPACE` | ON | Screen-space effects (SSAO, SSR) |
 
-### Gameplay
+### Gameplay Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `ENABLE_PHYSX` | ON | Physics engine (Bullet) |
-| `ENABLE_AI` | ON | AI and navigation |
-| `ENABLE_ANIMATION` | ON | Skeletal animation |
-| `ENABLE_TERRAIN_SYSTEM` | ON | Heightmap terrain |
-| `ENABLE_WEATHER` | ON | Weather system |
-| `ENABLE_INVENTORY` | ON | Inventory system |
+| `ENABLE_PHYSX` | ON | Physics engine (Bullet Physics 3) |
+| `ENABLE_AI` | ON | AI and navigation (behavior trees, NavMesh) |
+| `ENABLE_ANIMATION` | ON | Skeletal animation (blending, IK, state machines) |
+| `ENABLE_TERRAIN_SYSTEM` | ON | Heightmap terrain rendering and generation |
+| `ENABLE_WEATHER` | ON | Dynamic weather system |
+| `ENABLE_INVENTORY` | ON | Item inventory system |
 | `ENABLE_QUEST_SYSTEM` | ON | Quest/objective tracking |
-| `ENABLE_DAY_NIGHT` | ON | Day/night cycle |
-| `ENABLE_SAVE_SYSTEM` | ON | Save/load system |
-| `ENABLE_PROCEDURAL` | ON | Procedural generation |
+| `ENABLE_DAY_NIGHT` | ON | Day/night cycle with time-of-day lighting |
+| `ENABLE_SAVE_SYSTEM` | ON | Game state save/load |
+| `ENABLE_PROCEDURAL` | ON | Procedural generation (noise, erosion, WFC) |
 | `ENABLE_CINEMATIC` | ON | Cinematic sequencer |
-| `ENABLE_EVENT_SYSTEM` | ON | Event bus |
+| `ENABLE_EVENT_SYSTEM` | ON | Publish/subscribe event bus |
 
-### Features
+### Feature Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `ENABLE_EDITOR` | ON (Windows) | ImGui editor |
-| `ENABLE_PROFILING` | ON | Performance profiler |
-| `ENABLE_HOT_RELOAD` | ON | Script hot-reload |
+| `ENABLE_EDITOR` | ON (Windows) | ImGui-based visual editor |
+| `ENABLE_PROFILING` | ON | Performance profiler integration |
+| `ENABLE_HOT_RELOAD` | ON | AngelScript hot-reload during development |
 | `ENABLE_ASSET_STREAMING` | ON | Runtime asset streaming |
-| `ENABLE_ADVANCED_INPUT` | ON | Advanced input features |
+| `ENABLE_ADVANCED_INPUT` | ON | Advanced input features (rebinding, combos) |
 | `ENABLE_PERF_STATS` | ON | Performance statistics overlay |
 | `ENABLE_LUA` | ON | Lua scripting support |
-| `ENABLE_COLLABORATIVE` | ON | Collaborative features |
+| `ENABLE_COLLABORATIVE` | ON | Collaborative editing features |
 
 ### External / Disabled by Default
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `ENABLE_NETWORKING` | OFF | Networking (CURL dependency issues) |
-| `ENABLE_SDL2` | OFF | SDL2 cross-platform input |
+| `ENABLE_NETWORKING` | OFF | Networking subsystem (CURL dependency issues on some platforms) |
+| `ENABLE_SDL2` | OFF | SDL2 cross-platform input (alternative to native) |
 | `BUILD_TESTS` | ON | Unit test suite (see [Testing](Testing)) |
 
-### MSVC Toolset
+### Minimal Build Example
+
+Disable most features for a core-only build:
 
 ```bash
-cmake -DSPARK_MSVC_TOOLSET=v144 ...  # VS 2026
+cmake -B build \
+    -DENABLE_GRAPHICS=OFF \
+    -DENABLE_AI=OFF \
+    -DENABLE_ANIMATION=OFF \
+    -DENABLE_EDITOR=OFF \
+    -DENABLE_WEATHER=OFF \
+    -DENABLE_TERRAIN_SYSTEM=OFF \
+    -DENABLE_CINEMATIC=OFF
+```
+
+Or use the `minimal` preset:
+
+```bash
+cmake --preset minimal
+```
+
+### MSVC Toolset Selection
+
+```bash
 cmake -DSPARK_MSVC_TOOLSET=v143 ...  # VS 2022 (default)
+cmake -DSPARK_MSVC_TOOLSET=v144 ...  # VS 2026
 ```
 
 ## CMake Presets
 
 `CMakePresets.json` provides ready-made configurations:
 
-| Preset | Description |
-|--------|-------------|
-| `windows-debug` | Windows, VS 2022, Debug |
-| `windows-release` | Windows, VS 2022, Release |
-| `linux-gcc-debug` | Linux, GCC, Debug |
-| `linux-gcc-release` | Linux, GCC, Release |
-| `linux-clang-debug` | Linux, Clang, Debug |
-| `linux-clang-release` | Linux, Clang, Release |
-| `ci-linux-asan` | AddressSanitizer build |
-| `ci-linux-tsan` | ThreadSanitizer build |
-| `minimal` | Core-only, no advanced features |
+| Preset | Generator | Compiler | Config | Notes |
+|--------|-----------|----------|--------|-------|
+| `windows-debug` | VS 2022 | MSVC | Debug | Full features |
+| `windows-release` | VS 2022 | MSVC | Release | Full features |
+| `linux-gcc-debug` | Ninja | GCC | Debug | Full features |
+| `linux-gcc-release` | Ninja | GCC | Release | Full features |
+| `linux-clang-debug` | Ninja | Clang | Debug | Full features |
+| `linux-clang-release` | Ninja | Clang | Release | Full features |
+| `ci-linux-asan` | Ninja | GCC | Debug | AddressSanitizer + UBSan |
+| `ci-linux-tsan` | Ninja | GCC | Debug | ThreadSanitizer |
+| `minimal` | Default | Default | Release | Core-only, no advanced features |
 
 ```bash
+# List available presets
+cmake --list-presets
+
+# Configure and build with a preset
 cmake --preset windows-release
 cmake --build --preset windows-release
+```
+
+## Build Targets
+
+| Target | Type | Description |
+|--------|------|-------------|
+| `SparkEngineLib` | Static library | Core engine systems (all subsystems linked here) |
+| `SparkEngine` | Executable | Runtime host (loads game modules) |
+| `SparkGame` | Shared library | Default game module DLL |
+| [SparkEditor](SparkEditor) | Executable | ImGui visual editor (Windows only) |
+| [SparkConsole](SparkConsole) | Executable | Standalone debug console (Windows only) |
+| `SparkShaderCompiler` | Executable | Offline HLSL/GLSL shader compilation tool |
+| `SparkTests` | Executable | Unit test runner (when `BUILD_TESTS=ON`) |
+
+## Build Output
+
+```
+build/
+├── bin/           # Executables and DLLs
+│   ├── SparkEngine.exe
+│   ├── SparkGame.dll
+│   ├── SparkEditor.exe
+│   ├── SparkConsole.exe
+│   └── SparkTests.exe
+├── lib/           # Static libraries (.lib / .a)
+│   └── SparkEngineLib.lib
+├── Shaders/       # Compiled shader bytecode
+└── Assets/        # Game assets (copied from source tree)
 ```
 
 ## SparkBuild
@@ -135,30 +216,11 @@ You can also update manually:
 ./tools/update-sparkbuild.sh v1.0.0      # specific version
 ```
 
-## Build Targets
-
-| Target | Type | Description |
-|--------|------|-------------|
-| `SparkEngineLib` | Static library | Core engine systems |
-| `SparkEngine` | Executable | Runtime host |
-| `SparkGame` | Shared library | Default game module |
-| [SparkEditor](SparkEditor) | Executable | Visual editor (Windows) |
-| [SparkConsole](SparkConsole) | Executable | Debug console (Windows) |
-| `SparkShaderCompiler` | Executable | Shader compilation tool |
-
-## Build Output
-
-```
-build/
-├── bin/       # Executables and DLLs
-├── lib/       # Static libraries
-├── Shaders/   # Compiled shaders
-└── Assets/    # Game assets (copied)
-```
-
 ## CMake Helper Modules
 
 ### SparkGameModule.cmake
+
+**Source:** `cmake/SparkGameModule.cmake`
 
 Provides `spark_add_game_module()` for creating game module DLLs:
 
@@ -167,14 +229,24 @@ include(cmake/SparkGameModule.cmake)
 spark_add_game_module(MyGame ${GAME_SOURCES})
 ```
 
-This:
-- Creates a shared library with module API exports
-- Links against SparkEngineLib
-- Handles platform-specific compilation flags
+#### What it does
+
+| Step | Action |
+|------|--------|
+| 1 | Creates a `SHARED` library from provided sources |
+| 2 | Defines `SPARK_MODULE_DLL` and `SPARK_GAME_DLL` compile definitions |
+| 3 | Links against `Spark::SparkEngineLib` (private) |
+| 4 | Sets SDK include directories (`SPARK_ENGINE_INCLUDE_DIR`, `Spark/`, `SparkEngine/`) |
+| 5 | Enforces C++20 via `target_compile_features(cxx_std_20)` |
+| 6 | On MSVC: sets runtime library to `MultiThreaded$<$<CONFIG:Debug>:Debug>DLL` |
+
+See [Creating a Game Module](Creating-a-Game-Module) for a complete usage guide.
 
 ### SparkEnginePreflight.cmake
 
-Validates that a SparkEngine SDK installation is complete before `find_package` runs. Include it in standalone projects to get clear error messages when `SparkEngineTargets.cmake` or `SparkGameModule.cmake` is missing (e.g. due to an interrupted install or pointing at a build tree):
+**Source:** `cmake/SparkEnginePreflight.cmake`
+
+Validates that a SparkEngine SDK installation is complete before `find_package` runs. Include it in standalone projects to get clear error messages when required files are missing.
 
 ```cmake
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
@@ -183,29 +255,82 @@ include(SparkEnginePreflight)
 find_package(SparkEngine REQUIRED)
 ```
 
-If the installation is incomplete, the preflight check emits a `FATAL_ERROR` with the exact missing file and remediation steps.
+#### Validation checks
+
+The `spark_preflight_check()` function searches candidate directories and verifies:
+
+| Required File | Purpose |
+|---------------|---------|
+| `SparkEngineConfig.cmake` | CMake package configuration |
+| `SparkEngineTargets.cmake` | Imported target definitions for `Spark::SparkEngineLib` |
+| `SparkGameModule.cmake` | Game module helper function |
+
+If any file is missing, it emits a `FATAL_ERROR` with the exact missing path and remediation steps (re-run `cmake --install`).
+
+### SparkComponentLibraries.cmake
+
+**Source:** `cmake/SparkComponentLibraries.cmake`
+
+Defines per-subsystem OBJECT library targets that partition the monolithic `SparkEngineLib` into fine-grained component libraries.
+
+```cmake
+include(cmake/SparkComponentLibraries.cmake)
+spark_define_component_libraries()
+```
+
+#### Component Library Targets
+
+| Target | Sources | Dependencies | Description |
+|--------|---------|-------------|-------------|
+| `SparkCore` | `Core/*.cpp/.h` | -- | Platform, EngineContext, Assert, Logger |
+| `SparkUtils` | `Utils/*.cpp/.h` | SparkCore | Console, Profiler, JobSystem, Octree |
+| `SparkECS` | `Engine/ECS/**/*.cpp/.h` | SparkCore | Components, Systems, World, ReactiveSystem |
+| `SparkGraphics` | `Graphics/**/*.cpp/.h` | SparkCore, SparkUtils | GraphicsEngine, RHI, Shaders, PostProcessing |
+| `SparkPhysics` | `Engine/Physics/**/*.cpp/.h` | SparkCore, SparkECS | PhysicsSystem, Bullet integration |
+| `SparkAudio` | `Engine/Audio/**/*.cpp/.h` | SparkCore, SparkECS | AudioEngine, XAudio2 |
+| `SparkAI` | `Engine/AI/**/*.cpp/.h` | SparkCore, SparkECS, SparkUtils | AISystem, BehaviorTree, NavMesh |
+| `SparkAnimation` | `Engine/Animation/**/*.cpp/.h` | SparkCore, SparkECS | Skeleton, Clips, Blending, IK |
+| `SparkNetworking` | `Engine/Networking/**/*.cpp/.h` | SparkCore | NetworkManager, Transport |
+
+#### Migration from Monolithic to Component Libraries
+
+```cmake
+# Before (monolithic)
+target_link_libraries(MyTarget PRIVATE SparkEngineLib)
+
+# After (component-based — link only what you need)
+target_link_libraries(MyTarget PRIVATE SparkECS SparkGraphics SparkPhysics)
+```
+
+`SparkEngineLib` remains as an umbrella target that links all components for backward compatibility.
 
 ### SparkEngineConfig.cmake
 
-Enables `find_package(SparkEngine)` for standalone game projects.
+Enables `find_package(SparkEngine)` for standalone game projects. Defines the `Spark::SparkEngineLib` imported target.
 
 ## Build Scripts
 
 | Script | Platform | Description |
 |--------|----------|-------------|
-| `generate.bat` | Windows | CMake configuration |
-| `generate.sh` | Linux/macOS | CMake configuration |
+| `generate.bat` | Windows | CMake configuration wrapper (accepts generator and config) |
+| `generate.sh` | Linux/macOS | CMake configuration wrapper |
 | `build.ps1` | Windows | PowerShell build script |
 | `build.sh` | Linux/macOS | Bash build script |
 
 ## Documentation Generation
 
 ```bash
-# Generate Doxygen API docs (requires doxygen + graphviz)
-cd docs && ./generate-docs.sh
+# Generate API docs from headers (no Doxygen required)
+docs/generate-api-docs.sh generate    # Full generation
+docs/generate-api-docs.sh check       # Only if headers changed (checksum-based)
+docs/generate-api-docs.sh status      # Show generation status
 
-# Or via CMake custom target (if Doxygen is found)
-cmake --build build --target docs
+# Sync wiki pages with codebase inventory
+docs/sync-wiki.sh sync               # Update auto-generated sections
+docs/sync-wiki.sh check              # Dry-run: report what's stale
+
+# Legacy Doxygen (optional, requires doxygen + graphviz)
+cd docs && ./generate-docs.sh
 ```
 
 See [docs/README.md](../docs/README.md) for full documentation tooling details.
@@ -214,13 +339,59 @@ See [docs/README.md](../docs/README.md) for full documentation tooling details.
 
 ### build.yml
 
-Runs on every push to `main`, `develop`, and `feature/*` branches:
-- **Format check:** clang-format enforcement (rejects PRs with violations)
-- **Prompt validation:** Anti-drift and overload checks for AI prompt files
-- **Sanitizers:** AddressSanitizer + UBSanitizer on Linux
-- **Platforms:** Windows (VS 2022, VS 2026), Linux (GCC, Clang)
-- **Configurations:** Debug and Release matrix
-- **Artifacts:** Retained for 7 days
+Runs on every push to `main`, `develop`, and `feature/*` branches, and on all pull requests.
+
+#### CI Job Matrix
+
+| Job | Runner | Compiler | Configs | Key Flags |
+|-----|--------|----------|---------|-----------|
+| `check-format` | ubuntu-24.04 | clang-format | -- | `--dry-run --Werror` |
+| `validate-prompts` | ubuntu-24.04 | -- | -- | `--ci` |
+| `build-linux-gcc` | ubuntu-24.04 | GCC | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan |
+| `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
+| `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
+| `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
+| `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
+| `todo-count` | ubuntu-24.04 | -- | -- | threshold: 20 |
+
+#### Reproducing CI Builds Locally
+
+**Linux GCC:**
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON \
+    -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+cmake --build build --parallel $(nproc)
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+```
+
+**Linux Clang:**
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON \
+    -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+cmake --build build --parallel $(nproc)
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+```
+
+**AddressSanitizer (ASan + UBSan):**
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \
+    -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+    -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+    -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build --parallel $(nproc)
+cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+```
+
+**Windows MSVC (VS 2022):**
+```bash
+cmake -B build -G "Visual Studio 17 2022" -A x64 \
+    -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
 
 ### release.yml
 
@@ -233,25 +404,50 @@ Runs on every push to `master`/`main`:
 ### update-sparkbuild.yml
 
 Runs weekly (every Monday at 06:00 UTC) or on manual dispatch:
-- Downloads the latest [SparkBuild](https://github.com/Krilliac/SparkBuild) release binary
+- Downloads the latest SparkBuild release binary
 - Compares SHA-256 checksums to detect changes
 - Opens a PR to update `tools/SparkBuild.exe` when a new version is available
 
 ## Compiler Support
 
-| Compiler | Version | Platform |
-|----------|---------|----------|
-| MSVC | v143 (VS 2022) | Windows |
-| MSVC | v144 (VS 2026) | Windows (experimental) |
-| GCC | 11+ | Linux |
-| Clang | 14+ | Linux |
-| Apple Clang | C++20 capable | macOS |
+| Compiler | Version | Platform | Status |
+|----------|---------|----------|--------|
+| MSVC | v143 (VS 2022) | Windows | Fully supported |
+| MSVC | v144 (VS 2026) | Windows | Experimental (`continue-on-error`) |
+| GCC | 11+ | Linux | Fully supported |
+| Clang | 14+ | Linux | Fully supported |
+| Apple Clang | C++20 capable | macOS | Experimental |
+
+### Compiler Flags
+
+| Compiler | Warning Flags | Additional |
+|----------|--------------|------------|
+| MSVC | `/W4` | Zero warnings enforced |
+| GCC | `-Wall -Wextra` | Zero warnings enforced |
+| Clang | `-Wall -Wextra` | Zero warnings enforced |
+
+## Code Formatting
+
+SparkEngine enforces consistent code style via `.clang-format` (Microsoft-based, Allman braces, 120-col, 4-space indent).
+
+```bash
+# Check formatting (dry run)
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+  -name '*.h' -o -name '*.cpp' | head -50 | xargs clang-format --dry-run --Werror 2>&1
+
+# Fix formatting automatically
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+  -name '*.h' -o -name '*.cpp' | xargs clang-format -i
+```
+
+CI rejects PRs with formatting violations.
 
 ---
 
 ## See Also
 
-- [Getting Started](Getting-Started) — Build quickstart
-- [Testing](Testing) — Running unit tests
-- [Architecture Overview](Architecture-Overview) — Engine design and subsystems
-- [Contributing](Contributing) — Contribution workflow and code style
+- [Getting Started](Getting-Started) -- Build quickstart
+- [Testing](Testing) -- Running unit tests
+- [Architecture Overview](Architecture-Overview) -- Engine design and subsystems
+- [Contributing](Contributing) -- Contribution workflow and code style
+- [Creating a Game Module](Creating-a-Game-Module) -- Building game modules
