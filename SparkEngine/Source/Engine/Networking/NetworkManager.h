@@ -53,6 +53,12 @@ constexpr SOCKET INVALID_SOCKET = -1;
 constexpr int SOCKET_ERROR = -1;
 #endif // SPARK_PLATFORM_WINDOWS
 
+// Windows headers define SendMessage as a macro (SendMessageA/SendMessageW).
+// Undefine it so our NetworkManager::SendMessage method compiles correctly.
+#ifdef SendMessage
+#undef SendMessage
+#endif
+
 #endif // ENABLE_NETWORKING
 
 namespace Spark::Net
