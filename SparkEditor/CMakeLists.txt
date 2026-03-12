@@ -257,6 +257,7 @@ if(TARGET SparkEngine)
 endif()
 
 if(TARGET SparkConsole)
+    add_dependencies(SparkEditor SparkConsole)
     add_custom_command(TARGET SparkEditor POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:SparkConsole>
