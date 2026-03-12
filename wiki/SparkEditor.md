@@ -143,11 +143,15 @@ cmake --build build --config Release
 | `GameViewPanel` | `SparkEditor/Source/Panels/GameViewPanel.h` |
 | `HierarchyPanel` | `SparkEditor/Source/Panels/HierarchyPanel.h` |
 | `InspectorPanel` | `SparkEditor/Source/Panels/InspectorPanel.h` |
+| `MaterialEditorPanel` | `SparkEditor/Source/Panels/MaterialEditorPanel.h` |
 | `ObjectPlacementPanel` | `SparkEditor/Source/Panels/ObjectPlacementPanel.h` |
 | `ParticleEditorPanel` | `SparkEditor/Source/Panels/ParticleEditorPanel.h` |
+| `PerformanceProfilerPanel` | `SparkEditor/Source/Panels/PerformanceProfilerPanel.h` |
 | `Physics2DPanel` | `SparkEditor/Source/Panels/Physics2DPanel.h` |
+| `PlayModeToolbarPanel` | `SparkEditor/Source/Panels/PlayModeToolbarPanel.h` |
 | `PrefabEditorPanel` | `SparkEditor/Source/Panels/PrefabEditorPanel.h` |
 | `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |
+| `RuntimeInspectorPanel` | `SparkEditor/Source/Panels/RuntimeInspectorPanel.h` |
 | `SceneStatisticsPanel` | `SparkEditor/Source/Panels/SceneStatisticsPanel.h` |
 | `SceneStatsPanel` | `SparkEditor/Source/Panels/SceneStatsPanel.h` |
 | `SceneViewPanel` | `SparkEditor/Source/Panels/SceneViewPanel.h` |
