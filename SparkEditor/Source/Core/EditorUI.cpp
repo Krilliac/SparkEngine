@@ -31,6 +31,7 @@
 #include "../Panels/SceneStatisticsPanel.h"
 #include "../Panels/PrefabEditorPanel.h"
 #include "../Panels/SearchPanel.h"
+#include "../Panels/DedicatedServerPanel.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
 #include "EditorApplication.h"
@@ -728,6 +729,19 @@ namespace SparkEditor
             console.LogError("Failed to create Search panel: " + std::string(e.what()));
         }
 
+        // Create Dedicated Server Panel
+        try
+        {
+            console.LogInfo("Creating Dedicated Server panel...");
+            auto dediServerPanel = std::shared_ptr<DedicatedServerPanel>(new DedicatedServerPanel());
+            m_panels["DedicatedServer"] = dediServerPanel;
+            console.LogSuccess("Created Dedicated Server panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Dedicated Server panel: " + std::string(e.what()));
+        }
+
         // SKIP SimpleBuildSystem in all modes since it's causing the hang
         console.LogWarning("SKIPPING Simple Build System panel (known to cause hangs)");
 
@@ -780,6 +794,8 @@ namespace SparkEditor
             m_panels["ObjectPlacement"]->SetIcon(ICON_FA_CUBE);
         if (m_panels.count("BuildCook"))
             m_panels["BuildCook"]->SetIcon(ICON_FA_HAMMER);
+        if (m_panels.count("DedicatedServer"))
+            m_panels["DedicatedServer"]->SetIcon(ICON_FA_SERVER);
 
         // Hide secondary panels by default (accessible via menus)
         if (m_panels.count("UndoHistory"))
@@ -810,6 +826,8 @@ namespace SparkEditor
             m_panels["PrefabEditor"]->SetVisible(false);
         if (m_panels.count("Search"))
             m_panels["Search"]->SetVisible(false);
+        if (m_panels.count("DedicatedServer"))
+            m_panels["DedicatedServer"]->SetVisible(false);
 
         console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
     }

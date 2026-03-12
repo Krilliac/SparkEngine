@@ -94,12 +94,12 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 <!-- AUTO:stats -->
 | Metric | Count |
 |--------|-------|
-| Header files | 341 |
+| Header files | 343 |
 | ECS Components | 37 |
 | ECS Systems | 47 |
-| Editor Panels | 31 |
-| Test files | 70 |
-| Test cases | 837+ |
-| Wiki pages | 44 |
-| *Last synced* | *2026-03-12 07:47* |
+| Editor Panels | 32 |
+| Test files | 71 |
+| Test cases | 864+ |
+| Wiki pages | 45 |
+| *Last synced* | *2026-03-12 14:09* |
 <!-- /AUTO:stats -->
