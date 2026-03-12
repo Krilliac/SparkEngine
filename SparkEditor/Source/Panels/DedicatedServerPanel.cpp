@@ -5,6 +5,7 @@
  * @date 2025
  */
 
+#include <algorithm>
 #include <iostream>
 
 #include <imgui.h>
