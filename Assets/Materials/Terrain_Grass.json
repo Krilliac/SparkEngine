@@ -1,0 +1,9 @@
+{
+    "name": "Terrain_Grass",
+    "shader": "PBR",
+    "albedo": "Textures/Terrain/grass.png",
+    "normal": "Textures/Default/normal_flat.png",
+    "metallic": 0.0,
+    "roughness": 0.9,
+    "ao": 1.0
+}
