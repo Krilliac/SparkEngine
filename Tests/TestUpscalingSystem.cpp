@@ -34,8 +34,7 @@ TEST(Upscaling_RenderResolutionCalculation)
     settings.mode = UpscalingMode::FSR1;
     settings.quality = UpscalingQuality::Performance;
 
-    uint32_t w = 0, h = 0;
-    settings.CalculateRenderResolution(1920, 1080, w, h);
+    auto [w, h] = settings.CalculateRenderResolution(1920, 1080);
 
     // At Performance quality (~50%), 1920x1080 -> ~960x540
     EXPECT_GT(w, 900u);
@@ -45,11 +44,11 @@ TEST(Upscaling_RenderResolutionCalculation)
 
     // 4K at Balanced quality (~58%)
     settings.quality = UpscalingQuality::Balanced;
-    settings.CalculateRenderResolution(3840, 2160, w, h);
-    EXPECT_GT(w, 2100u);
-    EXPECT_LT(w, 2400u);
-    EXPECT_GT(h, 1100u);
-    EXPECT_LT(h, 1350u);
+    auto [w2, h2] = settings.CalculateRenderResolution(3840, 2160);
+    EXPECT_GT(w2, 2100u);
+    EXPECT_LT(w2, 2400u);
+    EXPECT_GT(h2, 1100u);
+    EXPECT_LT(h2, 1350u);
 }
 
 TEST(Upscaling_ModeInputRequirements)
@@ -97,8 +96,7 @@ TEST(Upscaling_SettingsDefaults)
     EXPECT_GE(settings.sharpness, 0.0f);
 
     // When mode is None, CalculateRenderResolution returns display res
-    uint32_t w = 0, h = 0;
-    settings.CalculateRenderResolution(1920, 1080, w, h);
+    auto [w, h] = settings.CalculateRenderResolution(1920, 1080);
     EXPECT_EQ(w, 1920u);
     EXPECT_EQ(h, 1080u);
 }

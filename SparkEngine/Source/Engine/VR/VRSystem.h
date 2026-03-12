@@ -30,6 +30,7 @@
 #include <vector>
 #include <cstdint>
 #include <functional>
+#include <utility>
 
 namespace Spark::VR
 {
@@ -129,8 +130,11 @@ namespace Spark::VR
         const VREye& GetLeftEye() const { return m_leftEye; }
         const VREye& GetRightEye() const { return m_rightEye; }
 
-        /** @brief Get the recommended render target size per eye. */
-        void GetRecommendedRenderSize(int& width, int& height) const;
+        /**
+         * @brief Get the recommended render target size per eye.
+         * @return Pair of {width, height}
+         */
+        std::pair<int, int> GetRecommendedRenderSize() const;
 
         // --- Controllers ---
 

@@ -63,7 +63,7 @@ namespace Spark
     /**
      * @brief Convert LogLevel to string representation
      */
-    inline const char* LogLevelToString(LogLevel level)
+    inline std::string_view LogLevelToString(LogLevel level) noexcept
     {
         switch (level)
         {
@@ -112,7 +112,7 @@ namespace Spark
     /**
      * @brief Convert LogCategory to string representation
      */
-    inline const char* LogCategoryToString(LogCategory cat)
+    inline std::string_view LogCategoryToString(LogCategory cat) noexcept
     {
         switch (cat)
         {

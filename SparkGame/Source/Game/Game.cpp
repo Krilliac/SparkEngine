@@ -750,8 +750,8 @@ void Game::HandleInput(float dt)
         return;
     }
 
-    int dx = 0, dy = 0;
-    if (m_input->GetMouseDelta(dx, dy))
+    auto [dx, dy] = m_input->GetMouseDelta();
+    if (dx != 0 || dy != 0)
     {
         constexpr float mouseSens = 0.005f;
         m_camera->Yaw(dx * mouseSens);

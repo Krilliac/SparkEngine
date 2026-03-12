@@ -237,17 +237,14 @@ bool InputManager::WasMouseButtonReleased(int button) const
     return !m_mouseButtons[button] && m_prevMouseButtons[button];
 }
 
-bool InputManager::GetMouseDelta(int& deltaX, int& deltaY) const
+MousePoint InputManager::GetMouseDelta() const
 {
-    deltaX = m_mouseDeltaX;
-    deltaY = m_mouseDeltaY;
-    return (m_mouseDeltaX != 0 || m_mouseDeltaY != 0);
+    return {m_mouseDeltaX, m_mouseDeltaY};
 }
 
-void InputManager::GetMousePosition(int& x, int& y) const
+MousePoint InputManager::GetMousePosition() const
 {
-    x = m_mouseX;
-    y = m_mouseY;
+    return {m_mouseX, m_mouseY};
 }
 
 void InputManager::CaptureMouse(bool capture)
@@ -932,19 +929,18 @@ bool InputManager::WasMouseButtonReleased(int button) const
     return !m_mouseButtons[button] && m_prevMouseButtons[button];
 }
 
-bool InputManager::GetMouseDelta(int& deltaX, int& deltaY) const
+MousePoint InputManager::GetMouseDelta() const
 {
-    deltaX = static_cast<int>(m_mouseDeltaX * m_mouseSensitivity);
-    deltaY = static_cast<int>(m_mouseDeltaY * m_mouseSensitivity);
+    int deltaX = static_cast<int>(m_mouseDeltaX * m_mouseSensitivity);
+    int deltaY = static_cast<int>(m_mouseDeltaY * m_mouseSensitivity);
     if (m_invertMouseY)
         deltaY = -deltaY;
-    return true;
+    return {deltaX, deltaY};
 }
 
-void InputManager::GetMousePosition(int& x, int& y) const
+MousePoint InputManager::GetMousePosition() const
 {
-    x = m_mouseX;
-    y = m_mouseY;
+    return {m_mouseX, m_mouseY};
 }
 
 void InputManager::CaptureMouse(bool capture)

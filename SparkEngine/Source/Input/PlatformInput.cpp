@@ -211,16 +211,14 @@ namespace Spark::Input
         return !m_keyStates[idx] && m_prevKeyStates[idx];
     }
 
-    void Win32InputBackend::GetMousePosition(int& x, int& y) const
+    MousePoint Win32InputBackend::GetMousePosition() const
     {
-        x = m_mouseX;
-        y = m_mouseY;
+        return {m_mouseX, m_mouseY};
     }
 
-    void Win32InputBackend::GetMouseDelta(int& dx, int& dy) const
+    MousePoint Win32InputBackend::GetMouseDelta() const
     {
-        dx = m_mouseDeltaX;
-        dy = m_mouseDeltaY;
+        return {m_mouseDeltaX, m_mouseDeltaY};
     }
 
     float Win32InputBackend::GetMouseScroll() const
@@ -636,16 +634,14 @@ namespace Spark::Input
         return (idx < m_keyStates.size()) ? (!m_keyStates[idx] && m_prevKeyStates[idx]) : false;
     }
 
-    void SDL2InputBackend::GetMousePosition(int& x, int& y) const
+    MousePoint SDL2InputBackend::GetMousePosition() const
     {
-        x = m_mouseX;
-        y = m_mouseY;
+        return {m_mouseX, m_mouseY};
     }
 
-    void SDL2InputBackend::GetMouseDelta(int& dx, int& dy) const
+    MousePoint SDL2InputBackend::GetMouseDelta() const
     {
-        dx = m_mouseDeltaX;
-        dy = m_mouseDeltaY;
+        return {m_mouseDeltaX, m_mouseDeltaY};
     }
 
     float SDL2InputBackend::GetMouseScroll() const
@@ -853,15 +849,16 @@ namespace Spark::Input
             }
 
             // Mouse movement events
-            int dx = 0, dy = 0;
-            m_backend->GetMouseDelta(dx, dy);
-            if (dx != 0 || dy != 0)
+            auto mouseDelta = m_backend->GetMouseDelta();
+            if (mouseDelta.x != 0 || mouseDelta.y != 0)
             {
                 InputEvent evt{};
                 evt.type = InputEvent::Type::MouseMove;
-                m_backend->GetMousePosition(evt.mouseX, evt.mouseY);
-                evt.mouseDeltaX = dx;
-                evt.mouseDeltaY = dy;
+                auto mousePos = m_backend->GetMousePosition();
+                evt.mouseX = mousePos.x;
+                evt.mouseY = mousePos.y;
+                evt.mouseDeltaX = mouseDelta.x;
+                evt.mouseDeltaY = mouseDelta.y;
                 for (const auto& cb : m_eventCallbacks)
                 {
                     cb(evt);
@@ -944,30 +941,23 @@ namespace Spark::Input
         return m_backend ? m_backend->WasKeyReleased(key) : false;
     }
 
-    void PlatformInputManager::GetMousePosition(int& x, int& y) const
+    MousePoint PlatformInputManager::GetMousePosition() const
     {
         if (m_backend)
-            m_backend->GetMousePosition(x, y);
-        else
-        {
-            x = 0;
-            y = 0;
-        }
+            return m_backend->GetMousePosition();
+        return {0, 0};
     }
 
-    void PlatformInputManager::GetMouseDelta(int& dx, int& dy) const
+    MousePoint PlatformInputManager::GetMouseDelta() const
     {
         if (m_backend)
         {
-            m_backend->GetMouseDelta(dx, dy);
-            dx = static_cast<int>(dx * m_globalSensitivity);
-            dy = static_cast<int>(dy * m_globalSensitivity);
+            auto delta = m_backend->GetMouseDelta();
+            delta.x = static_cast<int>(delta.x * m_globalSensitivity);
+            delta.y = static_cast<int>(delta.y * m_globalSensitivity);
+            return delta;
         }
-        else
-        {
-            dx = 0;
-            dy = 0;
-        }
+        return {0, 0};
     }
 
     float PlatformInputManager::GetMouseScroll() const

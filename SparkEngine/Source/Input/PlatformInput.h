@@ -60,7 +60,11 @@
 #include <functional>
 #include <memory>
 #include <cstdint>
+#include <utility>
 #include <array>
+
+// Forward-declare MousePoint (defined in InputTypes.h)
+#include "InputTypes.h"
 
 namespace Spark::Input
 {
@@ -387,11 +391,11 @@ namespace Spark::Input
         /** @brief Check if a key was released this frame @param key The key to query @return true if just released */
         virtual bool WasKeyReleased(KeyCode key) const = 0;
 
-        /** @brief Get the current mouse position @param x [out] X position @param y [out] Y position */
-        virtual void GetMousePosition(int& x, int& y) const = 0;
+        /** @brief Get the current mouse position @return MousePoint with x/y coordinates */
+        virtual MousePoint GetMousePosition() const = 0;
 
-        /** @brief Get mouse movement since last frame @param dx [out] X delta @param dy [out] Y delta */
-        virtual void GetMouseDelta(int& dx, int& dy) const = 0;
+        /** @brief Get mouse movement since last frame @return MousePoint with dx/dy deltas */
+        virtual MousePoint GetMouseDelta() const = 0;
 
         /** @brief Get the mouse scroll wheel delta @return Scroll delta (positive = up) */
         virtual float GetMouseScroll() const = 0;
@@ -450,8 +454,8 @@ namespace Spark::Input
         bool WasKeyPressed(KeyCode key) const override;
         bool WasKeyReleased(KeyCode key) const override;
 
-        void GetMousePosition(int& x, int& y) const override;
-        void GetMouseDelta(int& dx, int& dy) const override;
+        MousePoint GetMousePosition() const override;
+        MousePoint GetMouseDelta() const override;
         float GetMouseScroll() const override;
 
         void SetMouseCapture(bool capture) override;
@@ -524,8 +528,8 @@ namespace Spark::Input
         bool WasKeyPressed(KeyCode key) const override;
         bool WasKeyReleased(KeyCode key) const override;
 
-        void GetMousePosition(int& x, int& y) const override;
-        void GetMouseDelta(int& dx, int& dy) const override;
+        MousePoint GetMousePosition() const override;
+        MousePoint GetMouseDelta() const override;
         float GetMouseScroll() const override;
 
         void SetMouseCapture(bool capture) override;
@@ -618,11 +622,11 @@ namespace Spark::Input
         /** @brief Check if a key was released this frame @param key Key to query @return true if just released */
         bool WasKeyReleased(KeyCode key) const;
 
-        /** @brief Get current mouse position in window coordinates @param x [out] X position @param y [out] Y position */
-        void GetMousePosition(int& x, int& y) const;
+        /** @brief Get current mouse position in window coordinates @return MousePoint with x/y */
+        MousePoint GetMousePosition() const;
 
-        /** @brief Get mouse movement since last frame @param dx [out] X delta @param dy [out] Y delta */
-        void GetMouseDelta(int& dx, int& dy) const;
+        /** @brief Get mouse movement since last frame @return MousePoint with dx/dy */
+        MousePoint GetMouseDelta() const;
 
         /** @brief Get mouse scroll wheel delta @return Scroll delta (positive = up) */
         float GetMouseScroll() const;

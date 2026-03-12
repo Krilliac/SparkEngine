@@ -41,6 +41,16 @@
 #include <string>
 #include <algorithm>
 #include <cmath>
+#include <utility>
+
+/**
+ * @brief Resolution as a width/height pair, enabling structured bindings
+ */
+struct Resolution
+{
+    uint32_t width = 0;
+    uint32_t height = 0;
+};
 
 // =============================================================================
 // Upscaling Enums
@@ -171,26 +181,23 @@ struct UpscalingSettings
      * @brief Calculate the render resolution for the given display resolution
      * @param displayWidth  Target display width
      * @param displayHeight Target display height
-     * @param outWidth      Computed render width
-     * @param outHeight     Computed render height
+     * @return Computed render resolution (use structured bindings: auto [w, h] = ...)
      */
-    void CalculateRenderResolution(uint32_t displayWidth, uint32_t displayHeight, uint32_t& outWidth,
-                                   uint32_t& outHeight) const
+    Resolution CalculateRenderResolution(uint32_t displayWidth, uint32_t displayHeight) const
     {
         if (mode == UpscalingMode::None)
         {
-            outWidth = displayWidth;
-            outHeight = displayHeight;
-            return;
+            return {displayWidth, displayHeight};
         }
 
         float scale = GetRenderScale(quality);
-        outWidth = std::max(1u, static_cast<uint32_t>(static_cast<float>(displayWidth) * scale));
-        outHeight = std::max(1u, static_cast<uint32_t>(static_cast<float>(displayHeight) * scale));
+        uint32_t w = std::max(1u, static_cast<uint32_t>(static_cast<float>(displayWidth) * scale));
+        uint32_t h = std::max(1u, static_cast<uint32_t>(static_cast<float>(displayHeight) * scale));
 
         // Ensure even dimensions for compute shader dispatch alignment
-        outWidth = (outWidth + 1u) & ~1u;
-        outHeight = (outHeight + 1u) & ~1u;
+        w = (w + 1u) & ~1u;
+        h = (h + 1u) & ~1u;
+        return {w, h};
     }
 };
 
@@ -407,26 +414,20 @@ class UpscalingSystem
 
     /**
      * @brief Get the current render resolution (internal, before upscaling)
+     * @return Render resolution (use structured bindings: auto [w, h] = ...)
      */
-    void GetRenderResolution(uint32_t& outWidth, uint32_t& outHeight) const
-    {
-        outWidth = m_renderWidth;
-        outHeight = m_renderHeight;
-    }
+    Resolution GetRenderResolution() const noexcept { return {m_renderWidth, m_renderHeight}; }
 
     /**
      * @brief Get the display resolution (output, after upscaling)
+     * @return Display resolution (use structured bindings: auto [w, h] = ...)
      */
-    void GetDisplayResolution(uint32_t& outWidth, uint32_t& outHeight) const
-    {
-        outWidth = m_displayWidth;
-        outHeight = m_displayHeight;
-    }
+    Resolution GetDisplayResolution() const noexcept { return {m_displayWidth, m_displayHeight}; }
 
     /**
      * @brief Get the current render scale factor
      */
-    float GetCurrentRenderScale() const
+    float GetCurrentRenderScale() const noexcept
     {
         if (m_settings.mode == UpscalingMode::None)
         {
@@ -617,30 +618,28 @@ class UpscalingSystem
     void SetSharpness(float sharpness) { m_settings.sharpness = std::clamp(sharpness, 0.0f, 1.0f); }
 
     /** @brief Check if the system is initialized */
-    bool IsInitialized() const { return m_initialized; }
+    bool IsInitialized() const noexcept { return m_initialized; }
 
     /** @brief Check if any upscaling is active */
-    bool IsActive() const { return m_settings.mode != UpscalingMode::None; }
+    bool IsActive() const noexcept { return m_settings.mode != UpscalingMode::None; }
 
     /**
      * @brief Get the recommended render size for a given display resolution and quality
      * @param displayWidth  Target display width
      * @param displayHeight Target display height
      * @param quality       Quality preset
-     * @param outWidth      Recommended render width
-     * @param outHeight     Recommended render height
+     * @return Recommended render resolution
      */
-    static void GetRecommendedRenderSize(uint32_t displayWidth, uint32_t displayHeight, UpscalingQuality quality,
-                                         uint32_t& outWidth, uint32_t& outHeight);
+    static Resolution GetRecommendedRenderSize(uint32_t displayWidth, uint32_t displayHeight, UpscalingQuality quality);
 
     /** @brief Check if FSR 1.0 is available (always true — shader-based) */
-    bool IsFSR1Available() const { return true; }
+    bool IsFSR1Available() const noexcept { return true; }
 
     /** @brief Check if FSR 2.0 is available (requires compute shader support) */
-    bool IsFSR2Available() const { return m_fsr2Available; }
+    bool IsFSR2Available() const noexcept { return m_fsr2Available; }
 
     /** @brief Check if compute shaders were compiled successfully */
-    bool AreShadersCompiled() const { return m_shadersCompiled; }
+    bool AreShadersCompiled() const noexcept { return m_shadersCompiled; }
 
     // ---- Console Integration ----
 
@@ -788,7 +787,9 @@ class UpscalingSystem
 
     void UpdateRenderResolution()
     {
-        m_settings.CalculateRenderResolution(m_displayWidth, m_displayHeight, m_renderWidth, m_renderHeight);
+        auto [w, h] = m_settings.CalculateRenderResolution(m_displayWidth, m_displayHeight);
+        m_renderWidth = w;
+        m_renderHeight = h;
     }
 
     /** @brief Compile all upscaling compute shaders from inline HLSL */
