@@ -10,7 +10,7 @@ namespace Spark::Graphics
     bool RenderPipeline::Initialize(RenderDevice* device)
     {
         m_device = device;
-        m_renderGraph = std::make_unique<RenderGraph>();
+        m_renderGraph = std::make_unique<RenderGraph>("MainPipeline");
         BuildDefaultPasses();
         return true;
     }

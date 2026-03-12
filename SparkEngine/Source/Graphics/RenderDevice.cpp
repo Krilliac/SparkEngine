@@ -42,9 +42,9 @@ namespace Spark::Graphics
         // Initialize capabilities
         m_capabilities.maxTextureSize = 16384;
         m_capabilities.maxRenderTargets = 8;
-        m_capabilities.supportsCompute = true;
-        m_capabilities.supportsGeometryShaders = true;
-        m_capabilities.supportsTessellation = true;
+        m_capabilities.computeShaderSupport = true;
+        m_capabilities.geometryShaderSupport = true;
+        m_capabilities.tessellationSupport = true;
 
         return true;
     }
