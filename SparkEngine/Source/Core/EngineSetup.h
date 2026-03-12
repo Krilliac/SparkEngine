@@ -27,6 +27,8 @@ class PhysicsSystem;
 class AudioEngine;
 class InputManager;
 class Timer;
+class SceneManager;
+class AngelScriptEngine;
 
 namespace Spark
 {
@@ -38,6 +40,9 @@ namespace Spark
     {
         class AISystem;
     }
+    class SaveSystem;
+    class CoroutineScheduler;
+    class NetworkManager;
 } // namespace Spark
 
 namespace Spark::EngineSetup
@@ -99,6 +104,36 @@ namespace Spark::EngineSetup
         if (auto* ai = ctx.GetAI())
         {
             ctx.RegisterSubsystem<Spark::AI::AISystem>(ai, DependsOn<Timer, PhysicsSystem>{});
+        }
+
+        // SaveSystem depends on nothing
+        if (auto* save = ctx.GetSaveSystem())
+        {
+            ctx.RegisterSubsystem<Spark::SaveSystem>(save, DependsOn<>{});
+        }
+
+        // CoroutineScheduler depends on Timer
+        if (auto* coroutines = ctx.GetCoroutineScheduler())
+        {
+            ctx.RegisterSubsystem<Spark::CoroutineScheduler>(coroutines, DependsOn<Timer>{});
+        }
+
+        // SceneManager depends on Graphics and Physics
+        if (auto* scene = ctx.GetSceneManager())
+        {
+            ctx.RegisterSubsystem<SceneManager>(scene, DependsOn<GraphicsEngine, PhysicsSystem>{});
+        }
+
+        // Scripting depends on Timer and EventBus
+        if (auto* script = ctx.GetScriptEngine())
+        {
+            ctx.RegisterSubsystem<AngelScriptEngine>(script, DependsOn<Timer, Spark::EventBus>{});
+        }
+
+        // Networking depends on Timer (only registered when ENABLE_NETWORKING=ON)
+        if (auto* network = ctx.GetNetwork())
+        {
+            ctx.RegisterSubsystem<Spark::NetworkManager>(network, DependsOn<Timer>{});
         }
     }
 
@@ -198,6 +233,10 @@ namespace Spark::EngineSetup
         bootstrap.Register({"Audio", []() { return true; }, []() {}, {"Timer", "Graphics"}});
         bootstrap.Register({"Animation", []() { return true; }, []() {}, {"Timer"}});
         bootstrap.Register({"AI", []() { return true; }, []() {}, {"Timer", "Physics", "JobSystem"}});
+        bootstrap.Register({"SaveSystem", []() { return true; }, []() {}, {}});
+        bootstrap.Register({"CoroutineScheduler", []() { return true; }, []() {}, {"Timer"}});
+        bootstrap.Register({"SceneManager", []() { return true; }, []() {}, {"Graphics", "Physics"}});
+        bootstrap.Register({"Scripting", []() { return true; }, []() {}, {"Timer", "EventBus"}});
 
         return bootstrap;
     }
