@@ -138,7 +138,7 @@ cd build && ctest --output-on-failure
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*69 test files, 799+ test cases*
+*70 test files, 837+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -187,7 +187,7 @@ cd build && ctest --output-on-failure
 | `TestObjectPool` | 6 |
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
-| `TestPlayModeManager` | 14 |
+| `TestPlayModeManager` | 33 |
 | `TestPostProcessingPipeline` | 11 |
 | `TestQuestSystem` | 10 |
 | `TestRandomEngine` | 11 |
@@ -195,6 +195,7 @@ cd build && ctest --output-on-failure
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
 | `TestSaveSystem` | 7 |
+| `TestSceneSnapshotSerializer` | 19 |
 | `TestScopedTimer` | 3 |
 | `TestScreenSpaceEffects` | 16 |
 | `TestSequencer` | 10 |

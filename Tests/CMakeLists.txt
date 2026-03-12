@@ -64,6 +64,7 @@ add_executable(SparkTests
     TestECSIntegration.cpp
     TestUpscalingSystem.cpp
     TestPlayModeManager.cpp
+    TestSceneSnapshotSerializer.cpp
     TestEnvironmentQuery.cpp
     TestSplatmapSystem.cpp
     TestAnimationRetargeting.cpp

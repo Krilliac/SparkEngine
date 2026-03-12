@@ -396,7 +396,8 @@ TEST(ECSIntegration_KinematicBodyNotAffected)
 TEST(ECSIntegration_AssetHandleConsistency)
 {
     // Test FNV-1a hashing produces consistent results (R3.4)
-    auto FNV1a = [](const std::string& str) -> uint64_t {
+    auto FNV1a = [](const std::string& str) -> uint64_t
+    {
         uint64_t hash = 14695981039346656037ULL;
         for (char c : str)
         {
@@ -450,14 +451,13 @@ TEST(ECSIntegration_PhaseExecutionOrder)
         int id;
     };
     std::vector<SystemEntry> systems = {
-        {Phase::Render, 6},     {Phase::Physics, 2},   {Phase::AI, 4},
-        {Phase::PrePhysics, 1}, {Phase::Audio, 5},      {Phase::PostPhysics, 3},
-        {Phase::PostRender, 7}, {Phase::Animation, 8},
+        {Phase::Render, 6}, {Phase::Physics, 2},     {Phase::AI, 4},         {Phase::PrePhysics, 1},
+        {Phase::Audio, 5},  {Phase::PostPhysics, 3}, {Phase::PostRender, 7}, {Phase::Animation, 8},
     };
 
     // Sort by phase (simulating PhaseSystemManager behavior)
-    std::sort(systems.begin(), systems.end(),
-              [](const SystemEntry& a, const SystemEntry& b) { return static_cast<int>(a.phase) < static_cast<int>(b.phase); });
+    std::sort(systems.begin(), systems.end(), [](const SystemEntry& a, const SystemEntry& b)
+              { return static_cast<int>(a.phase) < static_cast<int>(b.phase); });
 
     // Execute in order
     for (const auto& sys : systems)
