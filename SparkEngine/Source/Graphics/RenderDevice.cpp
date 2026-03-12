@@ -3,6 +3,7 @@
 
 #include "RenderDevice.h"
 #include "RHI/RHIFactory.h"
+#include "../Utils/Assert.h"
 #include <d3d11.h>
 
 namespace Spark::Graphics
