@@ -75,6 +75,13 @@ class SparkEngineCamera
     float m_nearPlane{0.1f};        ///< Near clipping plane distance
     float m_farPlane{1000.0f};      ///< Far clipping plane distance
 
+    // Smooth transition state
+    bool m_isTransitioning = false;      ///< Whether a smooth transition is active
+    XMFLOAT3 m_transitionStart{0, 0, 0}; ///< Starting position of smooth transition
+    XMFLOAT3 m_transitionEnd{0, 0, 0};   ///< Target position of smooth transition
+    float m_transitionDuration = 0.0f;   ///< Total transition duration in seconds
+    float m_transitionElapsed = 0.0f;    ///< Elapsed time during transition
+
     // Console callback system
     mutable std::mutex m_stateMutex;       ///< Thread safety for state access
     std::function<void()> m_stateCallback; ///< Callback for state changes
@@ -348,6 +355,16 @@ class SparkEngineCamera
      * @param duration Transition time in seconds
      */
     void Console_SmoothMoveTo(float targetX, float targetY, float targetZ, float duration);
+
+    /**
+     * @brief Check whether a smooth transition is currently in progress
+     * @return true if the camera is transitioning, false otherwise
+     */
+    bool IsTransitioning() const
+    {
+        std::lock_guard<std::mutex> lock(m_stateMutex);
+        return m_isTransitioning;
+    }
 
   private:
     /**

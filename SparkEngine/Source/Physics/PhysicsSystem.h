@@ -921,6 +921,46 @@ class PhysicsBody
      */
     void Console_ApplyForce(float x, float y, float z);
 
+    // =========================================================================
+    // Interpolation
+    // =========================================================================
+
+    /**
+     * @brief Get the interpolated position between previous and current physics state.
+     *
+     * Used for smooth rendering at variable framerates when physics runs at a fixed
+     * timestep. When alpha is 0 the previous position is returned; when alpha is 1
+     * the current position is returned.
+     *
+     * @param alpha  Interpolation factor in [0, 1].
+     * @return       Interpolated world-space position.
+     */
+    XMFLOAT3 GetInterpolatedPosition(float alpha) const;
+
+    /**
+     * @brief Get the interpolated transform between previous and current physics state.
+     *
+     * Lerps position and Slerps rotation for smooth rendering between fixed physics steps.
+     *
+     * @param alpha  Interpolation factor in [0, 1].
+     * @return       Interpolated world-space transform matrix.
+     */
+    XMMATRIX GetInterpolatedTransform(float alpha) const;
+
+    /**
+     * @brief Snapshot the current state as the "previous" state for interpolation.
+     *
+     * Called internally by PhysicsSystem before each fixed physics step.
+     */
+    void StoreCurrentState();
+
+    /**
+     * @brief Read back the current position and rotation from Bullet after a step.
+     *
+     * Called internally by PhysicsSystem after each fixed physics step.
+     */
+    void UpdateCurrentState();
+
   private:
     /** @brief Descriptor capturing all creation-time parameters for this body. */
     PhysicsBodyDesc m_desc;
@@ -941,6 +981,12 @@ class PhysicsBody
      * Default: 0xFFFF (all bits set — collide with every group).
      */
     uint16_t m_collisionMask = 0xFFFF;
+
+    // Interpolation state
+    XMFLOAT3 m_previousPosition{0, 0, 0};
+    XMFLOAT4 m_previousRotation{0, 0, 0, 1}; ///< Previous quaternion
+    XMFLOAT3 m_currentPosition{0, 0, 0};
+    XMFLOAT4 m_currentRotation{0, 0, 0, 1}; ///< Current quaternion
 };
 
 /**
@@ -1097,6 +1143,38 @@ class PhysicsSystem
      * @return  Maximum sub-steps per frame.
      */
     int GetMaxSubsteps() const { return m_maxSubsteps; }
+
+    // =========================================================================
+    // Interpolation
+    // =========================================================================
+
+    /**
+     * @brief Get the current interpolation alpha for rendering between physics steps.
+     *
+     * When interpolation is enabled, this value represents how far between the
+     * previous and current physics state the renderer should display. Use this
+     * with PhysicsBody::GetInterpolatedPosition() / GetInterpolatedTransform().
+     *
+     * @return  Interpolation factor in [0, 1].
+     */
+    float GetInterpolationAlpha() const { return m_interpolationAlpha; }
+
+    /**
+     * @brief Enable or disable physics state interpolation.
+     *
+     * When enabled, Update() uses a fixed-timestep accumulator pattern and
+     * stores previous/current states for smooth rendering. When disabled,
+     * Update() passes deltaTime directly to Bullet (legacy behavior).
+     *
+     * @param enabled  true to enable interpolation, false for legacy behavior.
+     */
+    void SetInterpolationEnabled(bool enabled) { m_interpolationEnabled = enabled; }
+
+    /**
+     * @brief Check whether physics interpolation is enabled.
+     * @return  true if interpolation is active.
+     */
+    bool IsInterpolationEnabled() const { return m_interpolationEnabled; }
 
     // =========================================================================
     // Body management
@@ -1723,6 +1801,19 @@ class PhysicsSystem
      * Set via Console_PausePhysics(). Bodies remain frozen in place; no callbacks fire.
      */
     bool m_paused = false;
+
+    // =========================================================================
+    // Interpolation
+    // =========================================================================
+
+    /** @brief Accumulated time for fixed-timestep interpolation. */
+    float m_accumulator = 0.0f;
+
+    /** @brief Interpolation alpha between previous and current physics state [0,1]. */
+    float m_interpolationAlpha = 1.0f;
+
+    /** @brief When true, physics bodies support interpolated transforms for rendering. */
+    bool m_interpolationEnabled = true;
 
     // =========================================================================
     // Debug rendering

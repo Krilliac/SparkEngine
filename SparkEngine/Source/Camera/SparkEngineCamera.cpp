@@ -98,6 +98,30 @@ void SparkEngineCamera::Update(float deltaTime)
     // **FIXED: Remove per-frame logging completely**
     ASSERT_MSG(deltaTime >= 0.0f && std::isfinite(deltaTime),
                "Camera Update deltaTime must be non-negative and finite");
+
+    // Process smooth transition if active
+    if (m_isTransitioning)
+    {
+        std::lock_guard<std::mutex> lock(m_stateMutex);
+        m_transitionElapsed += deltaTime;
+        float t = std::clamp(m_transitionElapsed / m_transitionDuration, 0.0f, 1.0f);
+
+        // SmoothStep for natural-looking acceleration and deceleration
+        float smoothT = t * t * (3.0f - 2.0f * t);
+
+        // Lerp position
+        XMVECTOR start = XMLoadFloat3(&m_transitionStart);
+        XMVECTOR end = XMLoadFloat3(&m_transitionEnd);
+        XMStoreFloat3(&m_position, XMVectorLerp(start, end, smoothT));
+
+        if (t >= 1.0f)
+        {
+            m_isTransitioning = false;
+        }
+
+        NotifyStateChange();
+    }
+
     UpdateViewMatrix();
 }
 
@@ -393,9 +417,16 @@ void SparkEngineCamera::Console_LookAt(float targetX, float targetY, float targe
 
 void SparkEngineCamera::Console_SmoothMoveTo(float targetX, float targetY, float targetZ, float duration)
 {
-    // This would require a smooth transition system - for now, just teleport
-    Console_SetPosition(targetX, targetY, targetZ);
-    LOG_TO_CONSOLE_IMMEDIATE(L"Camera smooth movement to target (instant for now) via console", L"INFO");
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    m_transitionStart = m_position;
+    m_transitionEnd = XMFLOAT3(targetX, targetY, targetZ);
+    m_transitionDuration = (std::max)(duration, 0.001f);
+    m_transitionElapsed = 0.0f;
+    m_isTransitioning = true;
+    LOG_TO_CONSOLE_IMMEDIATE(std::wstring(L"Camera smooth movement to (") + std::to_wstring(targetX) + L", " +
+                                 std::to_wstring(targetY) + L", " + std::to_wstring(targetZ) + L") over " +
+                                 std::to_wstring(duration) + L"s via console",
+                             L"SUCCESS");
 }
 
 void SparkEngineCamera::NotifyStateChange()

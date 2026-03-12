@@ -33,6 +33,7 @@
 #include <chrono>
 #include <atomic>
 #include <array>
+#include "NetworkInterpolation.h"
 
 #ifdef ENABLE_NETWORKING
 
@@ -221,6 +222,9 @@ namespace Spark::Net
         XMFLOAT3 velocity{0, 0, 0};
         float lastUpdateTime = 0.0f;
         bool needsFullSync = true;
+
+        /// @brief Client-side interpolation buffer for smooth remote entity rendering.
+        NetworkInterpolationBuffer interpolationBuffer;
     };
 
     // ============================================================================
