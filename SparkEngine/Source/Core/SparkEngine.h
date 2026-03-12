@@ -37,8 +37,5 @@ extern HINSTANCE g_hInst;
 extern bool g_headlessMode;
 #endif
 
-// Engine-owned subsystem instances. Access via EngineContext in game code.
-extern std::unique_ptr<GraphicsEngine> g_graphics;
-extern std::unique_ptr<InputManager> g_input;
-extern std::unique_ptr<Timer> g_timer;
-extern std::unique_ptr<GameModuleLoader> g_moduleLoader;
+// Engine-owned subsystem instances are internal to SparkEngine.cpp.
+// Game code should access subsystems via EngineContext::Get() exclusively.

@@ -67,7 +67,7 @@ namespace Spark::Net
 
     uint8_t NetBuffer::ReadUint8()
     {
-        if (m_readPos >= m_data.size())
+        if (m_error || m_readPos >= m_data.size())
         {
             m_error = true;
             return 0;
@@ -77,7 +77,7 @@ namespace Spark::Net
 
     uint16_t NetBuffer::ReadUint16()
     {
-        if (m_readPos + 2 > m_data.size())
+        if (m_error || m_readPos + 2 > m_data.size())
         {
             m_error = true;
             return 0;
@@ -90,7 +90,7 @@ namespace Spark::Net
 
     uint32_t NetBuffer::ReadUint32()
     {
-        if (m_readPos + 4 > m_data.size())
+        if (m_error || m_readPos + 4 > m_data.size())
         {
             m_error = true;
             return 0;
@@ -103,6 +103,8 @@ namespace Spark::Net
 
     float NetBuffer::ReadFloat()
     {
+        if (m_error)
+            return 0.0f;
         uint32_t bits = ReadUint32();
         float val;
         std::memcpy(&val, &bits, sizeof(float));
@@ -127,13 +129,15 @@ namespace Spark::Net
 
     XMFLOAT3 NetBuffer::ReadVector3()
     {
+        if (m_error)
+            return {0.0f, 0.0f, 0.0f};
         float x = ReadFloat(), y = ReadFloat(), z = ReadFloat();
         return {x, y, z};
     }
 
     void NetBuffer::ReadBytes(void* data, size_t size)
     {
-        if (m_readPos + size > m_data.size())
+        if (m_error || m_readPos + size > m_data.size())
         {
             m_error = true;
             return;

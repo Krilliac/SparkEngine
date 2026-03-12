@@ -162,7 +162,13 @@ namespace Spark::Net
         const std::vector<uint8_t>& GetData() const { return m_data; }
         size_t GetSize() const { return m_data.size(); }
         size_t GetReadPosition() const { return m_readPos; }
+        size_t RemainingBytes() const { return m_readPos <= m_data.size() ? m_data.size() - m_readPos : 0; }
         bool HasError() const { return m_error; }
+        bool IsValid() const { return !m_error; }
+
+        /// @brief Check if buffer can satisfy a read of `bytes` without overrun
+        bool CanRead(size_t bytes) const { return !m_error && (m_readPos + bytes <= m_data.size()); }
+
         void Reset()
         {
             m_data.clear();

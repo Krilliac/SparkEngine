@@ -3,170 +3,102 @@
  * @brief Unit tests for the DLSS/FSR/XeSS upscaling system
  */
 
+#include "TestFramework.h"
 #include "../SparkEngine/Source/Graphics/UpscalingSystem.h"
-#include <cassert>
-#include <cmath>
-#include <iostream>
-#include <string>
 
-// ============================================================================
-// Test helpers
-// ============================================================================
-
-static int g_testsPassed = 0;
-static int g_testsFailed = 0;
-
-#define TEST_ASSERT(cond, msg)                                                                                         \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (!(cond))                                                                                                   \
-        {                                                                                                              \
-            std::cerr << "FAIL: " << (msg) << " (" << __FILE__ << ":" << __LINE__ << ")" << std::endl;                 \
-            g_testsFailed++;                                                                                           \
-            return;                                                                                                    \
-        }                                                                                                              \
-    } while (false)
-
-#define TEST_PASS(name)                                                                                                \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        g_testsPassed++;                                                                                               \
-        std::cout << "  PASS: " << (name) << std::endl;                                                                \
-    } while (false)
-
-// ============================================================================
-// Tests
-// ============================================================================
-
-void TestUpscalingQualityRenderScale()
+TEST(Upscaling_QualityRenderScale)
 {
-    UpscalingSettings settings;
-    settings.displayWidth = 3840;
-    settings.displayHeight = 2160;
-
     // Ultra Performance should render at roughly 33% resolution
-    settings.quality = UpscalingQuality::UltraPerformance;
-    float scale = settings.GetRenderScale();
-    TEST_ASSERT(scale > 0.3f && scale < 0.4f, "UltraPerformance scale should be ~0.33");
+    float scale = UpscalingSettings::GetRenderScale(UpscalingQuality::UltraPerformance);
+    EXPECT_GT(scale, 0.3f);
+    EXPECT_LT(scale, 0.4f);
 
     // Performance should render at roughly 50% resolution
-    settings.quality = UpscalingQuality::Performance;
-    scale = settings.GetRenderScale();
-    TEST_ASSERT(scale > 0.45f && scale < 0.55f, "Performance scale should be ~0.50");
+    scale = UpscalingSettings::GetRenderScale(UpscalingQuality::Performance);
+    EXPECT_GT(scale, 0.45f);
+    EXPECT_LT(scale, 0.55f);
 
     // Quality should render at roughly 67% resolution
-    settings.quality = UpscalingQuality::Quality;
-    scale = settings.GetRenderScale();
-    TEST_ASSERT(scale > 0.6f && scale < 0.7f, "Quality scale should be ~0.67");
+    scale = UpscalingSettings::GetRenderScale(UpscalingQuality::Quality);
+    EXPECT_GT(scale, 0.6f);
+    EXPECT_LT(scale, 0.7f);
 
     // Native should be 1.0
-    settings.quality = UpscalingQuality::Native;
-    scale = settings.GetRenderScale();
-    TEST_ASSERT(std::abs(scale - 1.0f) < 0.01f, "Native scale should be 1.0");
-
-    TEST_PASS("UpscalingQualityRenderScale");
+    scale = UpscalingSettings::GetRenderScale(UpscalingQuality::Native);
+    EXPECT_NEAR(scale, 1.0f, 0.01f);
 }
 
-void TestRenderResolutionCalculation()
+TEST(Upscaling_RenderResolutionCalculation)
 {
     UpscalingSettings settings;
-    settings.displayWidth = 1920;
-    settings.displayHeight = 1080;
+    settings.mode = UpscalingMode::FSR1;
     settings.quality = UpscalingQuality::Performance;
 
-    auto [w, h] = settings.CalculateRenderResolution();
+    uint32_t w = 0, h = 0;
+    settings.CalculateRenderResolution(1920, 1080, w, h);
 
     // At Performance quality (~50%), 1920x1080 -> ~960x540
-    TEST_ASSERT(w > 900 && w < 1000, "Render width should be ~960 for Performance at 1080p");
-    TEST_ASSERT(h > 500 && h < 560, "Render height should be ~540 for Performance at 1080p");
+    EXPECT_GT(w, 900u);
+    EXPECT_LT(w, 1000u);
+    EXPECT_GT(h, 500u);
+    EXPECT_LT(h, 560u);
 
     // 4K at Balanced quality (~58%)
-    settings.displayWidth = 3840;
-    settings.displayHeight = 2160;
     settings.quality = UpscalingQuality::Balanced;
-    auto [w2, h2] = settings.CalculateRenderResolution();
-    TEST_ASSERT(w2 > 2100 && w2 < 2400, "Render width should be ~2227 for Balanced at 4K");
-    TEST_ASSERT(h2 > 1100 && h2 < 1350, "Render height should be ~1253 for Balanced at 4K");
-
-    TEST_PASS("RenderResolutionCalculation");
+    settings.CalculateRenderResolution(3840, 2160, w, h);
+    EXPECT_GT(w, 2100u);
+    EXPECT_LT(w, 2400u);
+    EXPECT_GT(h, 1100u);
+    EXPECT_LT(h, 1350u);
 }
 
-void TestUpscalingModeInputRequirements()
+TEST(Upscaling_ModeInputRequirements)
 {
     // FSR 1.0 only needs color
-    UpscalingInputRequirements fsr1Reqs = UpscalingInputRequirements::ForMode(UpscalingMode::FSR1);
-    TEST_ASSERT(fsr1Reqs.requiresColor, "FSR1 should require color");
-    TEST_ASSERT(!fsr1Reqs.requiresMotionVectors, "FSR1 should not require motion vectors");
-    TEST_ASSERT(!fsr1Reqs.requiresDepth, "FSR1 should not require depth");
+    auto fsr1Reqs = UpscalingInputRequirements::ForMode(UpscalingMode::FSR1);
+    EXPECT_TRUE(fsr1Reqs.needsColor);
+    EXPECT_FALSE(fsr1Reqs.needsMotionVectors);
+    EXPECT_FALSE(fsr1Reqs.needsDepth);
 
     // FSR 2.0 needs color, depth, motion vectors, and jitter
-    UpscalingInputRequirements fsr2Reqs = UpscalingInputRequirements::ForMode(UpscalingMode::FSR2);
-    TEST_ASSERT(fsr2Reqs.requiresColor, "FSR2 should require color");
-    TEST_ASSERT(fsr2Reqs.requiresMotionVectors, "FSR2 should require motion vectors");
-    TEST_ASSERT(fsr2Reqs.requiresDepth, "FSR2 should require depth");
-    TEST_ASSERT(fsr2Reqs.requiresJitter, "FSR2 should require jitter");
+    auto fsr2Reqs = UpscalingInputRequirements::ForMode(UpscalingMode::FSR2);
+    EXPECT_TRUE(fsr2Reqs.needsColor);
+    EXPECT_TRUE(fsr2Reqs.needsMotionVectors);
+    EXPECT_TRUE(fsr2Reqs.needsDepth);
+    EXPECT_TRUE(fsr2Reqs.needsJitterOffset);
 
     // DLSS needs similar to FSR 2.0 plus exposure
-    UpscalingInputRequirements dlssReqs = UpscalingInputRequirements::ForMode(UpscalingMode::DLSS);
-    TEST_ASSERT(dlssReqs.requiresColor, "DLSS should require color");
-    TEST_ASSERT(dlssReqs.requiresMotionVectors, "DLSS should require motion vectors");
-    TEST_ASSERT(dlssReqs.requiresExposure, "DLSS should require exposure");
-
-    TEST_PASS("UpscalingModeInputRequirements");
+    auto dlssReqs = UpscalingInputRequirements::ForMode(UpscalingMode::DLSS);
+    EXPECT_TRUE(dlssReqs.needsColor);
+    EXPECT_TRUE(dlssReqs.needsMotionVectors);
+    EXPECT_TRUE(dlssReqs.needsExposure);
 }
 
-void TestFSR1Constants()
+TEST(Upscaling_FSR1Constants)
 {
-    // Verify FSR 1.0 EASU constants can be constructed
-    FSR1EASUConstants easu;
-    easu.inputViewportWidth = 960.0f;
-    easu.inputViewportHeight = 540.0f;
-    easu.inputTextureSizeWidth = 960.0f;
-    easu.inputTextureSizeHeight = 540.0f;
-    easu.outputSizeWidth = 1920.0f;
-    easu.outputSizeHeight = 1080.0f;
+    // FSR1 constant buffers use XMFLOAT4 packed fields
+    FSR1EASUConstants easu{};
+    easu.const0 = {960.0f, 540.0f, 1920.0f, 1080.0f};
+    EXPECT_NEAR(easu.const0.x, 960.0f, 0.01f);
+    EXPECT_NEAR(easu.const0.z, 1920.0f, 0.01f);
 
-    TEST_ASSERT(easu.inputViewportWidth > 0, "EASU viewport width should be positive");
-    TEST_ASSERT(easu.outputSizeWidth == 1920.0f, "EASU output width should match");
-
-    // Verify RCAS constants
-    FSR1RCASConstants rcas;
-    rcas.sharpness = 0.5f;
-    TEST_ASSERT(rcas.sharpness >= 0.0f && rcas.sharpness <= 2.0f, "RCAS sharpness in valid range");
-
-    TEST_PASS("FSR1Constants");
+    FSR1RCASConstants rcas{};
+    rcas.const0 = {0.5f, 0.0f, 0.0f, 0.0f};
+    EXPECT_GE(rcas.const0.x, 0.0f);
+    EXPECT_LE(rcas.const0.x, 2.0f);
 }
 
-void TestUpscalingSettingsDefaults()
+TEST(Upscaling_SettingsDefaults)
 {
     UpscalingSettings settings;
 
-    TEST_ASSERT(settings.mode == UpscalingMode::None, "Default mode should be None");
-    TEST_ASSERT(settings.quality == UpscalingQuality::Quality, "Default quality should be Quality");
-    TEST_ASSERT(settings.sharpness >= 0.0f, "Sharpness should be non-negative");
+    EXPECT_TRUE(settings.mode == UpscalingMode::None);
+    EXPECT_TRUE(settings.quality == UpscalingQuality::Quality);
+    EXPECT_GE(settings.sharpness, 0.0f);
 
-    // When mode is None, render scale should be 1.0
-    settings.mode = UpscalingMode::None;
-    float scale = settings.GetRenderScale();
-    TEST_ASSERT(std::abs(scale - 1.0f) < 0.01f, "None mode should return 1.0 scale");
-
-    TEST_PASS("UpscalingSettingsDefaults");
-}
-
-// ============================================================================
-// Main
-// ============================================================================
-
-int main()
-{
-    std::cout << "=== Upscaling System Tests ===" << std::endl;
-
-    TestUpscalingQualityRenderScale();
-    TestRenderResolutionCalculation();
-    TestUpscalingModeInputRequirements();
-    TestFSR1Constants();
-    TestUpscalingSettingsDefaults();
-
-    std::cout << "\nResults: " << g_testsPassed << " passed, " << g_testsFailed << " failed" << std::endl;
-    return g_testsFailed > 0 ? 1 : 0;
+    // When mode is None, CalculateRenderResolution returns display res
+    uint32_t w = 0, h = 0;
+    settings.CalculateRenderResolution(1920, 1080, w, h);
+    EXPECT_EQ(w, 1920u);
+    EXPECT_EQ(h, 1080u);
 }

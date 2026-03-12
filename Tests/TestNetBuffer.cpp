@@ -66,7 +66,7 @@ namespace
 
         uint8_t ReadUint8()
         {
-            if (m_readPos >= m_data.size())
+            if (m_error || m_readPos >= m_data.size())
             {
                 m_error = true;
                 return 0;
@@ -76,7 +76,7 @@ namespace
 
         uint16_t ReadUint16()
         {
-            if (m_readPos + 2 > m_data.size())
+            if (m_error || m_readPos + 2 > m_data.size())
             {
                 m_error = true;
                 return 0;
@@ -89,7 +89,7 @@ namespace
 
         uint32_t ReadUint32()
         {
-            if (m_readPos + 4 > m_data.size())
+            if (m_error || m_readPos + 4 > m_data.size())
             {
                 m_error = true;
                 return 0;
@@ -102,6 +102,8 @@ namespace
 
         float ReadFloat()
         {
+            if (m_error)
+                return 0.0f;
             uint32_t bits = ReadUint32();
             float val;
             std::memcpy(&val, &bits, sizeof(float));
@@ -126,13 +128,15 @@ namespace
 
         Float3 ReadVector3()
         {
+            if (m_error)
+                return {0.0f, 0.0f, 0.0f};
             float x = ReadFloat(), y = ReadFloat(), z = ReadFloat();
             return {x, y, z};
         }
 
         void ReadBytes(void* data, size_t size)
         {
-            if (m_readPos + size > m_data.size())
+            if (m_error || m_readPos + size > m_data.size())
             {
                 m_error = true;
                 return;
@@ -145,7 +149,10 @@ namespace
         const std::vector<uint8_t>& GetData() const { return m_data; }
         size_t GetSize() const { return m_data.size(); }
         size_t GetReadPosition() const { return m_readPos; }
+        size_t RemainingBytes() const { return m_readPos <= m_data.size() ? m_data.size() - m_readPos : 0; }
         bool HasError() const { return m_error; }
+        bool IsValid() const { return !m_error; }
+        bool CanRead(size_t bytes) const { return !m_error && (m_readPos + bytes <= m_data.size()); }
 
         void Reset()
         {
@@ -404,4 +411,148 @@ TEST(NetBuffer_ResetClearsError)
 
     buf.Reset();
     EXPECT_FALSE(buf.HasError());
+}
+
+// ============================================================================
+// Error Propagation (once error is set, all subsequent reads fail immediately)
+// ============================================================================
+
+TEST(NetBuffer_ErrorPropagationUint16)
+{
+    NetBuffer buf;
+    buf.WriteUint8(42);
+    buf.WriteUint16(1000);
+
+    // Cause an overrun on a uint32 read (only 3 bytes available)
+    buf.ReadUint32();
+    EXPECT_TRUE(buf.HasError());
+
+    // Subsequent reads should fail immediately without advancing position
+    size_t posBeforeRead = buf.GetReadPosition();
+    auto val = buf.ReadUint16();
+    EXPECT_EQ(val, (uint16_t)0);
+    EXPECT_TRUE(buf.HasError());
+    EXPECT_EQ(buf.GetReadPosition(), posBeforeRead);
+}
+
+TEST(NetBuffer_ErrorPropagationFloat)
+{
+    NetBuffer buf;
+    // Cause error on empty buffer
+    buf.ReadUint8();
+    EXPECT_TRUE(buf.HasError());
+
+    // Float read should immediately return 0 without trying to read
+    auto val = buf.ReadFloat();
+    EXPECT_NEAR(val, 0.0f, 0.0001f);
+    EXPECT_TRUE(buf.HasError());
+}
+
+TEST(NetBuffer_ErrorPropagationString)
+{
+    NetBuffer buf;
+    buf.ReadUint8(); // Error on empty buffer
+    EXPECT_TRUE(buf.HasError());
+
+    // String read should immediately return empty
+    auto val = buf.ReadString();
+    EXPECT_TRUE(val.empty());
+    EXPECT_TRUE(buf.HasError());
+}
+
+TEST(NetBuffer_ErrorPropagationVector3)
+{
+    NetBuffer buf;
+    buf.ReadUint8(); // Error on empty buffer
+    EXPECT_TRUE(buf.HasError());
+
+    auto val = buf.ReadVector3();
+    EXPECT_NEAR(val.x, 0.0f, 0.0001f);
+    EXPECT_NEAR(val.y, 0.0f, 0.0001f);
+    EXPECT_NEAR(val.z, 0.0f, 0.0001f);
+    EXPECT_TRUE(buf.HasError());
+}
+
+TEST(NetBuffer_ErrorPropagationBytes)
+{
+    NetBuffer buf;
+    buf.ReadUint8(); // Error on empty buffer
+    EXPECT_TRUE(buf.HasError());
+
+    uint8_t data[4] = {0xAA, 0xBB, 0xCC, 0xDD};
+    buf.ReadBytes(data, 4);
+    EXPECT_TRUE(buf.HasError());
+    // Data should be unchanged since read was skipped
+    EXPECT_EQ(data[0], (uint8_t)0xAA);
+}
+
+// ============================================================================
+// New API: RemainingBytes, CanRead, IsValid
+// ============================================================================
+
+TEST(NetBuffer_RemainingBytes)
+{
+    NetBuffer buf;
+    buf.WriteUint32(42);
+    buf.WriteUint8(7);
+
+    EXPECT_EQ(buf.RemainingBytes(), (size_t)5);
+    buf.ReadUint32();
+    EXPECT_EQ(buf.RemainingBytes(), (size_t)1);
+    buf.ReadUint8();
+    EXPECT_EQ(buf.RemainingBytes(), (size_t)0);
+}
+
+TEST(NetBuffer_CanRead)
+{
+    NetBuffer buf;
+    buf.WriteUint16(100);
+
+    EXPECT_TRUE(buf.CanRead(1));
+    EXPECT_TRUE(buf.CanRead(2));
+    EXPECT_FALSE(buf.CanRead(3));
+    EXPECT_FALSE(buf.CanRead(100));
+}
+
+TEST(NetBuffer_CanReadAfterError)
+{
+    NetBuffer buf;
+    buf.ReadUint8(); // Error
+    EXPECT_TRUE(buf.HasError());
+    EXPECT_FALSE(buf.CanRead(0));
+    EXPECT_FALSE(buf.CanRead(1));
+}
+
+TEST(NetBuffer_IsValid)
+{
+    NetBuffer buf;
+    EXPECT_TRUE(buf.IsValid());
+    buf.WriteUint8(42);
+    buf.ReadUint8();
+    EXPECT_TRUE(buf.IsValid());
+
+    buf.ReadUint8(); // Overrun
+    EXPECT_FALSE(buf.IsValid());
+}
+
+TEST(NetBuffer_ChainedErrorPropagation)
+{
+    // Simulate a malformed packet: first read succeeds, then error cascades
+    NetBuffer buf;
+    buf.WriteUint8(1);   // marker byte
+    buf.WriteUint16(50); // claimed string length of 50
+
+    auto marker = buf.ReadUint8();
+    EXPECT_EQ(marker, (uint8_t)1);
+    EXPECT_FALSE(buf.HasError());
+
+    // ReadString reads len=50 but only 0 bytes remain after the length prefix
+    auto str = buf.ReadString();
+    EXPECT_TRUE(buf.HasError());
+    EXPECT_TRUE(str.empty());
+
+    // All further reads should also fail
+    auto val = buf.ReadUint32();
+    EXPECT_EQ(val, (uint32_t)0);
+    EXPECT_TRUE(buf.HasError());
 }

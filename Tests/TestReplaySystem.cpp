@@ -68,16 +68,16 @@ TEST(Replay_Playback)
     replay.StopRecording();
 
     replay.StartPlayback();
-    EXPECT_EQ(replay.GetPlaybackState(), Spark::PlaybackState::Playing);
+    EXPECT_TRUE(replay.GetPlaybackState() == Spark::PlaybackState::Playing);
 
     replay.SetPlaybackSpeed(2.0f);
     EXPECT_NEAR(replay.GetPlaybackSpeed(), 2.0f, 0.001f);
 
     replay.PausePlayback();
-    EXPECT_EQ(replay.GetPlaybackState(), Spark::PlaybackState::Paused);
+    EXPECT_TRUE(replay.GetPlaybackState() == Spark::PlaybackState::Paused);
 
     replay.StopPlayback();
-    EXPECT_EQ(replay.GetPlaybackState(), Spark::PlaybackState::Stopped);
+    EXPECT_TRUE(replay.GetPlaybackState() == Spark::PlaybackState::Stopped);
 }
 
 TEST(Replay_KillCam)
@@ -96,7 +96,7 @@ TEST(Replay_KillCam)
 
     replay.StartKillCam(2.0f, 1);
     EXPECT_TRUE(replay.IsKillCamActive());
-    EXPECT_EQ(replay.GetCamera(), Spark::PlaybackCamera::KillCam);
+    EXPECT_TRUE(replay.GetCamera() == Spark::PlaybackCamera::KillCam);
     EXPECT_NEAR(replay.GetPlaybackSpeed(), 0.5f, 0.001f);
 
     replay.StopKillCam();
