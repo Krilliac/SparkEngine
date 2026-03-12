@@ -63,6 +63,10 @@ add_executable(SparkTests
     TestNetworkEncryption.cpp
     TestECSIntegration.cpp
     TestUpscalingSystem.cpp
+    TestPlayModeManager.cpp
+    TestEnvironmentQuery.cpp
+    TestSplatmapSystem.cpp
+    TestAnimationRetargeting.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
