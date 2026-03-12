@@ -138,6 +138,7 @@ cmake --build build --config Release
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
 | `ConsolePanel` | `SparkEditor/Source/Panels/ConsolePanel.h` |
 | `DebugVisualizerPanel` | `SparkEditor/Source/Panels/DebugVisualizerPanel.h` |
+| `DedicatedServerPanel` | `SparkEditor/Source/Panels/DedicatedServerPanel.h` |
 | `DialogueEditorPanel` | `SparkEditor/Source/Panels/DialogueEditorPanel.h` |
 | `FPSToolsPanel` | `SparkEditor/Source/Panels/FPSToolsPanel.h` |
 | `GameViewPanel` | `SparkEditor/Source/Panels/GameViewPanel.h` |

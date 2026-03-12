@@ -12,6 +12,12 @@
 #include <cstring>
 #include <algorithm>
 
+// Windows headers may redefine SendMessage after our includes.
+// Undefine it so NetworkManager::SendMessage compiles correctly.
+#ifdef SendMessage
+#undef SendMessage
+#endif
+
 using namespace DirectX;
 namespace Spark::Net
 {

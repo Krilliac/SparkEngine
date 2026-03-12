@@ -68,6 +68,7 @@ add_executable(SparkTests
     TestEnvironmentQuery.cpp
     TestSplatmapSystem.cpp
     TestAnimationRetargeting.cpp
+    TestDedicatedServer.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

@@ -489,6 +489,50 @@ namespace Spark::Editor
         bool HasSnapshot() const { return m_snapshot.IsValid(); }
         size_t GetSnapshotSize() const { return m_snapshot.GetSizeBytes(); }
 
+        // -- PIE Dedicated Server --
+
+        /// @brief Configuration for launching a local dedicated server during PIE.
+        struct PIEDedicatedServerConfig
+        {
+            std::string serverName = "PIE Local Server";
+            uint16_t port = 27015;
+            int maxPlayers = 8;
+            float tickRate = 60.0f;
+            std::string mapName = "default";
+            int gameMode = 0;
+            bool autoConnectClient = true; ///< Editor viewport auto-joins as client
+            bool lanOnly = true;
+        };
+
+        /// @brief Request a dedicated server to be spawned alongside PIE.
+        bool RequestDedicatedServer(const PIEDedicatedServerConfig& config)
+        {
+            if (m_pieServerActive)
+                return false;
+            m_pieServerConfig = config;
+            m_pieServerRequested = true;
+            return true;
+        }
+
+        /// @brief Check if a PIE dedicated server was requested and consume the flag.
+        bool ConsumeDedicatedServerRequest(PIEDedicatedServerConfig& outConfig)
+        {
+            if (!m_pieServerRequested)
+                return false;
+            m_pieServerRequested = false;
+            outConfig = m_pieServerConfig;
+            return true;
+        }
+
+        /// @brief Mark the PIE dedicated server as active (called by the server launcher).
+        void SetDedicatedServerActive(bool active) { m_pieServerActive = active; }
+
+        /// @brief Check if a PIE dedicated server is currently running.
+        bool IsDedicatedServerActive() const { return m_pieServerActive; }
+
+        /// @brief Get the PIE server configuration.
+        const PIEDedicatedServerConfig& GetDedicatedServerConfig() const { return m_pieServerConfig; }
+
         // -- Console --
 
         std::string Console_GetStatus() const
@@ -523,6 +567,8 @@ namespace Spark::Editor
                     oss << " | Snapshot: " << (m_snapshot.GetSizeBytes() / 1024) << " KB";
                 if (m_config.allowLiveEditing)
                     oss << " | LiveEdits: " << m_liveEdits.size();
+                if (m_pieServerActive)
+                    oss << " | DediServer: " << m_pieServerConfig.serverName << " (:" << m_pieServerConfig.port << ")";
             }
 
             return oss.str();
@@ -586,6 +632,11 @@ namespace Spark::Editor
 
         using Clock = std::chrono::high_resolution_clock;
         Clock::time_point m_playStartTime;
+
+        // PIE Dedicated Server
+        PIEDedicatedServerConfig m_pieServerConfig;
+        bool m_pieServerRequested = false;
+        bool m_pieServerActive = false;
     };
 
 } // namespace Spark::Editor

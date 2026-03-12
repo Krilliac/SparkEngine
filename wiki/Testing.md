@@ -138,7 +138,7 @@ cd build && ctest --output-on-failure
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*70 test files, 837+ test cases*
+*71 test files, 864+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -157,6 +157,7 @@ cd build && ctest --output-on-failure
 | `TestCoroutineScheduler` | 10 |
 | `TestDayNightCycle` | 10 |
 | `TestDebugTools` | 31 |
+| `TestDedicatedServer` | 27 |
 | `TestDeltaSmoother` | 10 |
 | `TestDestructionSystem` | 5 |
 | `TestDialogueSystem` | 4 |
