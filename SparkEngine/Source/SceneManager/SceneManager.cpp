@@ -61,6 +61,7 @@ const std::vector<std::unique_ptr<GameObject>>& SceneManager::GetObjects() const
 
 bool SceneManager::LoadScene(const std::wstring& filepath)
 {
+    ASSERT_MSG(!filepath.empty(), "SceneManager::LoadScene — filepath must not be empty");
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager::LoadScene called. filepath=" + filepath, L"OPERATION");
 
     auto ext = std::filesystem::path(filepath).extension();
@@ -93,6 +94,7 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
 
 bool SceneManager::SaveScene(const std::wstring& filepath) const
 {
+    ASSERT_MSG(!filepath.empty(), "SceneManager::SaveScene — filepath must not be empty");
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager::SaveScene called. filepath=" + filepath, L"OPERATION");
     bool saved = SaveJSON(filepath);
     if (saved)
@@ -105,6 +107,8 @@ bool SceneManager::SaveScene(const std::wstring& filepath) const
 
 void SceneManager::LoadSceneAsync(const std::wstring& filepath, SceneLoadCallback callback)
 {
+    ASSERT_MSG(!filepath.empty(), "SceneManager::LoadSceneAsync — filepath must not be empty");
+    ASSERT_MSG(callback != nullptr, "SceneManager::LoadSceneAsync — callback must not be null");
     // Join any previous async load before starting a new one
     if (m_asyncLoadThread.joinable())
     {
@@ -126,6 +130,7 @@ void SceneManager::LoadSceneAsync(const std::wstring& filepath, SceneLoadCallbac
 
 int SceneManager::AddNode(const SceneNode& node)
 {
+    ASSERT_MSG(!node.name.empty(), "SceneManager::AddNode — node name must not be empty");
     int index = static_cast<int>(m_sceneNodes.size());
     m_sceneNodes.push_back(node);
 
@@ -825,6 +830,7 @@ bool SceneManager::Console_MoveNode(int index, float x, float y, float z)
 
 bool SceneManager::Console_RenameNode(int index, const std::string& newName)
 {
+    ASSERT_MSG(!newName.empty(), "SceneManager::Console_RenameNode — newName must not be empty");
     auto* node = GetNode(index);
     if (!node)
         return false;

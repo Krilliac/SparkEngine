@@ -13,6 +13,7 @@
 #include "../../Core/SparkEngine.h"
 #include "../../Core/EngineContext.h"
 #include "../../Utils/LogMacros.h"
+#include "../../Utils/Assert.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -268,6 +269,7 @@ void AngelScriptEngine::Shutdown()
 
 bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
 {
+    ASSERT_MSG(!scriptPath.empty(), "AngelScriptEngine::CompileScriptFile — scriptPath must not be empty");
     if (!m_engine)
     {
         SetLastError("Engine not initialized.");
@@ -315,6 +317,8 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
 
 bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const std::string& moduleName)
 {
+    ASSERT_MSG(!script.empty(), "AngelScriptEngine::CompileScriptFromString — script must not be empty");
+    ASSERT_MSG(!moduleName.empty(), "AngelScriptEngine::CompileScriptFromString — moduleName must not be empty");
     if (!m_engine)
     {
         SetLastError("Engine not initialized.");
@@ -362,6 +366,8 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
 
 bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& className, const std::string& moduleName)
 {
+    ASSERT_MSG(!className.empty(), "AngelScriptEngine::AttachScript — className must not be empty");
+    ASSERT_MSG(!moduleName.empty(), "AngelScriptEngine::AttachScript — moduleName must not be empty");
     if (!m_engine)
     {
         SetLastError("Engine not initialized.");

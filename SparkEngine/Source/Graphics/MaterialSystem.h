@@ -206,6 +206,26 @@ class Material
     Material(const std::string& name);
     ~Material() = default;
 
+    /**
+     * @brief Validate that PBR material properties are within expected ranges.
+     * @return true if all properties are valid.
+     */
+    static bool ValidatePBRProperties(const PBRProperties& props)
+    {
+        ASSERT_MSG(props.metallicFactor >= 0.0f && props.metallicFactor <= 1.0f, "Metallic factor must be in [0, 1]");
+        ASSERT_MSG(props.roughnessFactor >= 0.0f && props.roughnessFactor <= 1.0f,
+                   "Roughness factor must be in [0, 1]");
+        ASSERT_MSG(props.occlusionStrength >= 0.0f && props.occlusionStrength <= 1.0f,
+                   "Occlusion strength must be in [0, 1]");
+        ASSERT_MSG(props.alphaCutoff >= 0.0f && props.alphaCutoff <= 1.0f, "Alpha cutoff must be in [0, 1]");
+        ASSERT_MSG(props.indexOfRefraction > 0.0f, "Index of refraction must be positive");
+        ASSERT_MSG(props.emissiveFactor >= 0.0f, "Emissive factor must be non-negative");
+        return props.metallicFactor >= 0.0f && props.metallicFactor <= 1.0f && props.roughnessFactor >= 0.0f &&
+               props.roughnessFactor <= 1.0f && props.occlusionStrength >= 0.0f && props.occlusionStrength <= 1.0f &&
+               props.alphaCutoff >= 0.0f && props.alphaCutoff <= 1.0f && props.indexOfRefraction > 0.0f &&
+               props.emissiveFactor >= 0.0f;
+    }
+
     // Getters
     const std::string& GetName() const { return m_name; }
     const PBRProperties& GetPBRProperties() const { return m_pbrProperties; }
@@ -216,7 +236,11 @@ class Material
     std::vector<std::string> GetAvailableVariants() const;
 
     // Setters
-    void SetPBRProperties(const PBRProperties& properties) { m_pbrProperties = properties; }
+    void SetPBRProperties(const PBRProperties& properties)
+    {
+        ASSERT_MSG(ValidatePBRProperties(properties), "Invalid PBR properties");
+        m_pbrProperties = properties;
+    }
     void SetAdvancedProperties(const AdvancedProperties& properties) { m_advancedProperties = properties; }
     void SetRenderState(const MaterialRenderState& state) { m_renderState = state; }
     void SetTexture(MaterialTextureType type, const MaterialTexture& texture);
@@ -304,6 +328,8 @@ class MaterialSystem
 
     /**
      * @brief Initialize the material system
+     * @param device   D3D11 device (must not be null)
+     * @param context  D3D11 device context (must not be null)
      */
     HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* context);
 
@@ -313,6 +339,11 @@ class MaterialSystem
     void Shutdown();
 
     // Material management
+
+    /**
+     * @brief Create a new material with the given name.
+     * @param name  Non-empty unique name for the material.
+     */
     std::shared_ptr<Material> CreateMaterial(const std::string& name);
     std::shared_ptr<Material> LoadMaterial(const std::string& filePath);
     std::shared_ptr<Material> GetMaterial(const std::string& name) const;

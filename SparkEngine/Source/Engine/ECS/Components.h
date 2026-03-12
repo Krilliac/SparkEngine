@@ -36,6 +36,8 @@
 
 #pragma once
 
+#include "../../Utils/Assert.h"
+
 // Core types: EntityID, NameComponent, Transform, MeshRenderer, Camera, Script
 #include "Components/CoreComponents.h"
 
@@ -84,6 +86,7 @@ class World
     EntityID CreateEntity(const std::string& name = "")
     {
         EntityID entity = m_registry.create();
+        ASSERT_MSG(entity != entt::null, "Failed to create entity — registry returned null entity");
         if (!name.empty())
         {
             m_registry.emplace<NameComponent>(entity, NameComponent{name});
@@ -91,19 +94,42 @@ class World
         return entity;
     }
 
-    void DestroyEntity(EntityID entity) { m_registry.destroy(entity); }
+    void DestroyEntity(EntityID entity)
+    {
+        ASSERT_MSG(m_registry.valid(entity), "DestroyEntity called with invalid entity");
+        m_registry.destroy(entity);
+    }
 
     template <typename T, typename... Args> T& AddComponent(EntityID entity, Args&&... args)
     {
+        ASSERT_MSG(m_registry.valid(entity), "AddComponent called with invalid entity");
+        ASSERT_MSG(!m_registry.all_of<T>(entity), "Entity already has the requested component");
         return m_registry.emplace<T>(entity, std::forward<Args>(args)...);
     }
 
-    template <typename T> T* GetComponent(EntityID entity) { return m_registry.try_get<T>(entity); }
-    template <typename T> const T* GetComponent(EntityID entity) const { return m_registry.try_get<T>(entity); }
+    template <typename T> T* GetComponent(EntityID entity)
+    {
+        ASSERT_MSG(m_registry.valid(entity), "GetComponent called with invalid entity");
+        return m_registry.try_get<T>(entity);
+    }
+    template <typename T> const T* GetComponent(EntityID entity) const
+    {
+        ASSERT_MSG(m_registry.valid(entity), "GetComponent called with invalid entity");
+        return m_registry.try_get<T>(entity);
+    }
 
-    template <typename T> bool HasComponent(EntityID entity) const { return m_registry.all_of<T>(entity); }
+    template <typename T> bool HasComponent(EntityID entity) const
+    {
+        ASSERT_MSG(m_registry.valid(entity), "HasComponent called with invalid entity");
+        return m_registry.all_of<T>(entity);
+    }
 
-    template <typename T> void RemoveComponent(EntityID entity) { m_registry.remove<T>(entity); }
+    template <typename T> void RemoveComponent(EntityID entity)
+    {
+        ASSERT_MSG(m_registry.valid(entity), "RemoveComponent called with invalid entity");
+        ASSERT_MSG(m_registry.all_of<T>(entity), "RemoveComponent called but entity does not have the component");
+        m_registry.remove<T>(entity);
+    }
 
     template <typename... Components> auto GetEntitiesWith() { return m_registry.view<Components...>(); }
     template <typename... Components> auto GetEntitiesWith() const { return m_registry.view<Components...>(); }

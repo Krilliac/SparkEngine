@@ -7,6 +7,7 @@
 
 #include "VisualScriptSystem.h"
 #include "../../Utils/LogMacros.h"
+#include "../../Utils/Assert.h"
 
 #include <algorithm>
 #include <cassert>
@@ -83,6 +84,7 @@ namespace Spark::Scripting
 
     NodeID VisualScriptGraph::AddNode(const std::string& typeName, float posX, float posY)
     {
+        ASSERT_MSG(!typeName.empty(), "VisualScriptGraph::AddNode — typeName must not be empty");
         const auto* tmpl = NodeLibrary::GetInstance().FindTemplate(typeName);
         if (!tmpl)
         {
@@ -145,6 +147,10 @@ namespace Spark::Scripting
 
     LinkID VisualScriptGraph::AddLink(NodeID srcNode, PinID srcPin, NodeID dstNode, PinID dstPin)
     {
+        ASSERT_MSG(srcNode != INVALID_NODE_ID, "VisualScriptGraph::AddLink — srcNode must be valid");
+        ASSERT_MSG(dstNode != INVALID_NODE_ID, "VisualScriptGraph::AddLink — dstNode must be valid");
+        ASSERT_MSG(srcPin != INVALID_PIN_ID, "VisualScriptGraph::AddLink — srcPin must be valid");
+        ASSERT_MSG(dstPin != INVALID_PIN_ID, "VisualScriptGraph::AddLink — dstPin must be valid");
         if (!CanConnect(srcNode, srcPin, dstNode, dstPin))
         {
             return INVALID_LINK_ID;
@@ -232,6 +238,7 @@ namespace Spark::Scripting
     void VisualScriptGraph::AddVariable(const std::string& name, PinType type, const PinValue& defaultVal,
                                         bool isPublic)
     {
+        ASSERT_MSG(!name.empty(), "VisualScriptGraph::AddVariable — variable name must not be empty");
         // Overwrite if already exists
         for (auto& var : m_variables)
         {

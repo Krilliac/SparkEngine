@@ -9,6 +9,7 @@
 #pragma once
 #include "../../../Utils/BitFlags.h"
 #include "../../../Utils/Cooldown.h"
+#include "../../../Utils/Assert.h"
 #include <algorithm>
 #include <string>
 #include <unordered_set>
@@ -51,6 +52,7 @@ struct HealthComponent
 
     void TakeDamage(float amount)
     {
+        ASSERT_MSG(amount >= 0.0f, "TakeDamage amount must be non-negative");
         if (isDead)
             return;
         health = (std::max)(health - amount, 0.0f);
@@ -59,6 +61,7 @@ struct HealthComponent
 
     void Heal(float amount)
     {
+        ASSERT_MSG(amount >= 0.0f, "Heal amount must be non-negative");
         if (isDead)
             return; // Dead entities cannot be healed; use Revive() instead
         health = (std::min)(health + amount, maxHealth);
@@ -66,9 +69,21 @@ struct HealthComponent
 
     void Revive(float healthAmount)
     {
+        ASSERT_MSG(healthAmount > 0.0f, "Revive healthAmount must be positive");
         health = (std::min)(healthAmount, maxHealth);
         isDead = false;
         deathProcessed = false;
+    }
+
+    /**
+     * @brief Validate that health parameters are within sane ranges.
+     * @return true if all parameters are valid.
+     */
+    bool Validate() const
+    {
+        ASSERT_MSG(maxHealth > 0.0f, "maxHealth must be positive");
+        ASSERT_MSG(health >= 0.0f && health <= maxHealth, "health must be in [0, maxHealth]");
+        return maxHealth > 0.0f && health >= 0.0f && health <= maxHealth;
     }
 };
 

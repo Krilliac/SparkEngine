@@ -10,6 +10,7 @@
 #include "../../../Core/Platform.h"
 #include "../../../Utils/OpaqueHandle.h"
 #include "../../../Utils/Cooldown.h"
+#include "../../../Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -64,6 +65,22 @@ struct AIComponent
         float moveSpeed = 5.0f;
         float reactionTime = 0.5f;
         float accuracy = 0.7f;
+
+        /**
+         * @brief Validate that AI config parameters are within sane ranges.
+         * @return true if all parameters are valid.
+         */
+        bool Validate() const
+        {
+            ASSERT_MSG(detectionRange > 0.0f, "AI detectionRange must be positive");
+            ASSERT_MSG(attackRange > 0.0f, "AI attackRange must be positive");
+            ASSERT_MSG(attackRange <= detectionRange, "AI attackRange should not exceed detectionRange");
+            ASSERT_MSG(moveSpeed >= 0.0f, "AI moveSpeed must be non-negative");
+            ASSERT_MSG(reactionTime >= 0.0f, "AI reactionTime must be non-negative");
+            ASSERT_MSG(accuracy >= 0.0f && accuracy <= 1.0f, "AI accuracy must be in [0, 1]");
+            return detectionRange > 0.0f && attackRange > 0.0f && moveSpeed >= 0.0f && reactionTime >= 0.0f &&
+                   accuracy >= 0.0f && accuracy <= 1.0f;
+        }
     } config;
 };
 

@@ -303,6 +303,8 @@ class TextureSystem
 
     /**
      * @brief Set priority for a texture (0=background .. 5=pinned)
+     * @param name     Texture name (must not be empty).
+     * @param priority Priority level in [0, 5].
      */
     void SetTexturePriority(const std::string& name, uint8_t priority);
 

@@ -7,6 +7,7 @@
  */
 
 #include "NetworkManager.h"
+#include "../../Utils/Assert.h"
 #include <sstream>
 #include <cstring>
 #include <algorithm>
@@ -577,6 +578,8 @@ namespace Spark::Net
 
     bool NetworkManager::StartServer(uint16_t port, int maxClients)
     {
+        ASSERT_MSG(port > 0, "NetworkManager::StartServer — port must be greater than 0");
+        ASSERT_MSG(maxClients > 0 && maxClients <= 256, "NetworkManager::StartServer — maxClients must be in [1, 256]");
         if (!m_initialized)
         {
             if (!Initialize())
@@ -641,6 +644,9 @@ namespace Spark::Net
 
     bool NetworkManager::Connect(const std::string& address, uint16_t port, const std::string& playerName)
     {
+        ASSERT_MSG(!address.empty(), "NetworkManager::Connect — address must not be empty");
+        ASSERT_MSG(port > 0, "NetworkManager::Connect — port must be greater than 0");
+        ASSERT_MSG(!playerName.empty(), "NetworkManager::Connect — playerName must not be empty");
         if (!m_initialized)
         {
             if (!Initialize())
@@ -818,6 +824,7 @@ namespace Spark::Net
 
     void NetworkManager::SendToClient(ClientID client, const NetworkMessage& msg)
     {
+        ASSERT_MSG(client != INVALID_CLIENT, "NetworkManager::SendToClient — client ID must not be INVALID_CLIENT");
         if (m_role != NetworkRole::Server)
             return;
 
@@ -870,6 +877,7 @@ namespace Spark::Net
 
     void NetworkManager::RegisterHandler(MessageType type, MessageHandler handler)
     {
+        ASSERT_MSG(handler != nullptr, "NetworkManager::RegisterHandler — handler must not be null");
         std::lock_guard<std::mutex> lock(m_handlerMutex);
         m_handlers[static_cast<uint16_t>(type)] = std::move(handler);
     }
@@ -1110,6 +1118,7 @@ namespace Spark::Net
 
     void NetworkManager::KickClient(ClientID client, const std::string& reason)
     {
+        ASSERT_MSG(client != INVALID_CLIENT, "NetworkManager::KickClient — client ID must not be INVALID_CLIENT");
         auto it = m_clients.find(client);
         if (it == m_clients.end())
             return;

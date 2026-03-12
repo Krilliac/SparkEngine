@@ -11,6 +11,7 @@
 
 #pragma once
 #include "../../../Core/Platform.h"
+#include "../../../Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -303,6 +304,7 @@ struct TilemapComponent
     /// Resize the tilemap, preserving existing tile data where possible
     void Resize(int newWidth, int newHeight)
     {
+        ASSERT_MSG(newWidth > 0 && newHeight > 0, "Tilemap dimensions must be positive");
         std::vector<int32_t> newTiles(static_cast<size_t>(newWidth) * newHeight, 0);
         std::vector<bool> newCollision(static_cast<size_t>(newWidth) * newHeight, false);
 
@@ -380,6 +382,7 @@ struct RigidBody2D
     {
         if (bodyType != BodyType::Dynamic)
             return;
+        ASSERT_MSG(mass > 0.0f, "Cannot apply impulse to body with zero or negative mass");
         linearVelocity.x += x / mass;
         linearVelocity.y += y / mass;
     }
@@ -387,10 +390,26 @@ struct RigidBody2D
     /// Apply a force scaled by delta time
     void ApplyForce(float fx, float fy, float dt)
     {
+        ASSERT_MSG(dt >= 0.0f, "Delta time must be non-negative");
         if (bodyType != BodyType::Dynamic || mass <= 0.0f)
             return;
         linearVelocity.x += (fx / mass) * dt;
         linearVelocity.y += (fy / mass) * dt;
+    }
+
+    /**
+     * @brief Validate that 2D rigid body parameters are within sane ranges.
+     * @return true if all parameters are valid.
+     */
+    bool Validate() const
+    {
+        ASSERT_MSG(bodyType != BodyType::Dynamic || mass > 0.0f, "Dynamic 2D body must have positive mass");
+        ASSERT_MSG(friction >= 0.0f && friction <= 1.0f, "2D friction must be in [0, 1]");
+        ASSERT_MSG(restitution >= 0.0f && restitution <= 1.0f, "2D restitution must be in [0, 1]");
+        ASSERT_MSG(linearDamping >= 0.0f, "2D linearDamping must be non-negative");
+        ASSERT_MSG(angularDamping >= 0.0f, "2D angularDamping must be non-negative");
+        return (bodyType != BodyType::Dynamic || mass > 0.0f) && friction >= 0.0f && friction <= 1.0f &&
+               restitution >= 0.0f && restitution <= 1.0f;
     }
 };
 
