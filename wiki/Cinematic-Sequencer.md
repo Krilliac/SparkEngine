@@ -40,25 +40,109 @@ Keyframes define values at specific points in time. The sequencer interpolates b
 - **Bezier** curves for eased motion
 - **Step** interpolation for instant changes
 
+## Creating a Cinematic Sequence
+
+```cpp
+auto& seqMgr = SequencerManager::GetInstance();
+
+// Create a new sequence
+Sequence* intro = seqMgr.CreateSequence("IntroSequence");
+
+// Add a camera track with keyframes
+auto* camTrack = intro->AddCameraTrack();
+camTrack->AddKeyframe(CameraKeyframe{
+    0.0f,                              // time
+    {0.0f, 10.0f, -20.0f},            // position
+    {0.0f, 0.0f, 0.0f},               // lookAt
+    60.0f,                             // FOV
+    0.0f,                              // roll
+    InterpolationMode::CubicBezier     // smooth interpolation
+});
+camTrack->AddKeyframe(CameraKeyframe{
+    3.0f,                              // time
+    {5.0f, 3.0f, -5.0f},              // position
+    {0.0f, 1.0f, 0.0f},               // lookAt
+    45.0f,                             // FOV (zoom in)
+    0.0f,
+    InterpolationMode::CubicBezier
+});
+
+// Add an entity transform track (move an NPC during the cutscene)
+auto* npcTrack = intro->AddEntityTransformTrack(npcEntityId);
+npcTrack->AddPositionKeyframe(0.0f, {10.0f, 0.0f, 0.0f}, InterpolationMode::Linear);
+npcTrack->AddPositionKeyframe(2.5f, {5.0f, 0.0f, 3.0f},  InterpolationMode::Linear);
+npcTrack->AddRotationKeyframe(2.5f, {0.0f, 90.0f, 0.0f}, InterpolationMode::Linear);
+
+// Add audio cues
+auto* audioTrack = intro->AddAudioCueTrack();
+audioTrack->AddCue(AudioCue{0.0f, "cinematic_music", 0.8f, false, {}});
+audioTrack->AddCue(AudioCue{2.0f, "footsteps", 1.0f, true, {5.0f, 0.0f, 3.0f}});
+
+// Add subtitles
+auto* subTrack = intro->AddSubtitleTrack();
+subTrack->AddSubtitle(SubtitleCue{1.0f, 3.5f, "Welcome to SparkCity.", "Narrator", UIColor::White()});
+subTrack->AddSubtitle(SubtitleCue{4.0f, 6.0f, "Your mission begins now.", "Commander", UIColor::Yellow()});
+
+// Add event triggers
+auto* eventTrack = intro->AddEventTrack();
+eventTrack->AddCue(EventCue{5.0f, "enable_player_control", ""});
+eventTrack->AddCue(EventCue{5.0f, "start_music", "combat_theme"});
+
+// Add a screen fade
+auto* fadeTrack = intro->AddFadeTrack();
+fadeTrack->AddKeyframe(FadeKeyframe{0.0f, 1.0f, UIColor::Black(), InterpolationMode::Linear});   // fade from black
+fadeTrack->AddKeyframe(FadeKeyframe{1.0f, 0.0f, UIColor::Black(), InterpolationMode::Linear});   // fully visible
+fadeTrack->AddKeyframe(FadeKeyframe{5.5f, 0.0f, UIColor::Black(), InterpolationMode::Linear});   // still visible
+fadeTrack->AddKeyframe(FadeKeyframe{6.0f, 1.0f, UIColor::Black(), InterpolationMode::Linear});   // fade to black
+
+// Handle sequence events
+intro->SetEventCallback([](const std::string& eventName, const std::string& params) {
+    if (eventName == "enable_player_control") {
+        playerController.SetEnabled(true);
+    }
+});
+```
+
 ## Playback Control
 
 ```cpp
-Sequencer sequencer;
+auto& seqMgr = SequencerManager::GetInstance();
 
-// Load a sequence
-sequencer.Load("Assets/Cinematics/Intro.seq");
+// Play a sequence by name
+seqMgr.PlaySequence("IntroSequence");
 
-// Playback controls
-sequencer.Play();
-sequencer.Pause();
-sequencer.Stop();
-sequencer.SetTime(5.0f);     // Seek to 5 seconds
-sequencer.SetSpeed(0.5f);    // Half speed playback
+// Control active sequences
+seqMgr.PauseSequence("IntroSequence");
+seqMgr.StopSequence("IntroSequence");
+seqMgr.StopAll();
 
-// Check state
-bool playing = sequencer.IsPlaying();
-float currentTime = sequencer.GetCurrentTime();
-float duration = sequencer.GetDuration();
+// Direct sequence control
+Sequence* seq = seqMgr.GetSequence("IntroSequence");
+seq->Play();
+seq->Pause();
+seq->Stop();
+seq->SetTime(5.0f);            // Seek to 5 seconds
+seq->SetPlaybackSpeed(0.5f);   // Half speed
+seq->SetLooping(true);         // Loop the sequence
+
+// Query state
+SequencePlayState state = seq->GetPlayState();  // Stopped, Playing, or Paused
+float currentTime = seq->GetCurrentTime();
+float duration    = seq->GetDuration();
+bool looping      = seq->IsLooping();
+
+// Read current cinematic state for rendering
+CameraState cam    = seq->GetCurrentCameraState();
+std::string subtitle = seq->GetCurrentSubtitle();
+float fadeOpacity  = seq->GetCurrentFade();
+
+// Check if any cutscene is blocking gameplay
+if (seqMgr.IsAnyCutscenePlaying()) {
+    DisablePlayerInput();
+}
+
+// Update each frame
+seqMgr.Update(deltaTime);
 ```
 
 ## Camera Cuts

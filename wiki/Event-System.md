@@ -163,6 +163,58 @@ bool OnLoad(Spark::IEngineContext* context) override {
 }
 ```
 
+## Queued Events (Thread-Safe)
+
+Use `QueuedEventBus` when events are produced on background threads and must be dispatched on the main thread:
+
+```cpp
+QueuedEventBus queue;
+
+// On a background thread (e.g., networking, file I/O):
+queue.QueueEvent(SceneLoadedEvent{ "Level02" });
+queue.QueueEvent(CollisionEvent{ entityA, entityB, 150.0f });
+
+// On the main thread, dispatch all queued events through the bus:
+EventBus bus;
+bus.Subscribe<SceneLoadedEvent>([](const SceneLoadedEvent& e) {
+    LOG("Scene loaded: " + e.sceneName);
+});
+
+// Each frame on the main thread:
+queue.DispatchAll(bus);  // Invokes subscribers for all queued events
+size_t pending = queue.GetPendingCount();
+```
+
+## Practical Example: Gameplay Event Chain
+
+```cpp
+EventBus& bus = *context->GetEventBus();
+
+// HUD subscribes to damage events to flash the screen
+bus.Subscribe<EntityDamagedEvent>([&](const EntityDamagedEvent& e) {
+    if (e.entityId == localPlayerId) {
+        hud.FlashDamageIndicator(e.damage, e.damageSource);
+    }
+});
+
+// Audio subscribes to kills for sound feedback
+bus.Subscribe<EntityKilledEvent>([&](const EntityKilledEvent& e) {
+    if (e.killerId == localPlayerId) {
+        audio.PlaySound("kill_confirmed");
+    }
+});
+
+// Quest system listens for item pickups
+bus.Subscribe<ItemPickedUpEvent>([&](const ItemPickedUpEvent& e) {
+    questSystem.CheckObjective("collect", e.itemDefId, e.count);
+});
+
+// Achievement system listens for quest completion
+bus.Subscribe<QuestCompletedEvent>([&](const QuestCompletedEvent& e) {
+    achievements.OnQuestCompleted(e.questId, e.questName);
+});
+```
+
 ## Thread Safety
 
 - `Subscribe()` and `Unsubscribe()` are thread-safe (mutex protected)

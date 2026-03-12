@@ -68,6 +68,38 @@ For hit detection in fast-paced FPS [gameplay](Gameplay-Systems):
 - When processing a shot, the server rewinds entities to where they were when the shooter fired
 - This ensures that what players see on-screen matches hit detection regardless of latency
 
+## Starting a Server and Connecting
+
+```cpp
+NetworkManager network;
+
+// Start a dedicated server
+network.StartServer(27015);  // Listen on UDP port 27015
+
+// Or connect as a client
+network.Connect("192.168.1.100", 27015);
+
+// Register a message handler
+network.RegisterHandler(MessageType::Chat,
+    [](ClientID sender, const NetworkMessage& msg) {
+        std::string text = msg.ReadString();
+        LOG("Chat from " + std::to_string(sender) + ": " + text);
+    });
+
+// Send messages on different channels
+NetworkMessage chatMsg;
+chatMsg.WriteString("Hello team!");
+network.Send(chatMsg, MessageType::Chat, Channel::Reliable);
+
+NetworkMessage posMsg;
+posMsg.WriteFloat3(playerPosition);
+network.Send(posMsg, MessageType::Position, Channel::Unreliable);
+
+// Disconnect cleanly
+network.Disconnect();
+network.StopServer();
+```
+
 ## Network Statistics
 
 The `NetworkManager` tracks real-time statistics:
@@ -78,6 +110,15 @@ The `NetworkManager` tracks real-time statistics:
 | Jitter | Ping variation (ms) |
 | Packet Loss | Percentage of lost packets |
 | Bandwidth | Bytes sent/received per second |
+
+```cpp
+// Query network stats for display in HUD
+float ping       = network.GetPing();
+float jitter     = network.GetJitter();
+float packetLoss = network.GetPacketLoss();  // 0.0 to 1.0
+int bytesSent    = network.GetBytesSentPerSecond();
+int bytesRecv    = network.GetBytesReceivedPerSecond();
+```
 
 ## Serialization
 

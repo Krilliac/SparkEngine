@@ -64,6 +64,31 @@ Physics → Animation → AI → Audio → Lifecycle → Render
 - `GraphicsEngine` — main thread render, `std::atomic` frame state
 - `NetworkManager` — queue mutex for message I/O and handler registration
 
+## Branch freshness (run before every commit)
+
+Before committing or pushing, **always** ensure your branch is up to date with the upstream base branch:
+
+```bash
+# 1. Fetch the latest upstream commits
+git fetch origin Working
+
+# 2. Check how far behind you are
+git log --oneline HEAD..origin/Working | wc -l
+
+# 3. If behind, rebase onto the latest
+git rebase origin/Working
+
+# 4. Resolve any conflicts, then continue
+git add <resolved-files>
+git rebase --continue
+```
+
+**Rules:**
+- **Never** commit or push to a branch that is behind the base branch. Always rebase first.
+- After rebasing, re-run the doc sync scripts (`docs/sync-wiki.sh sync`) to pick up any upstream changes to auto-generated sections.
+- If the rebase produces conflicts, resolve them carefully — prefer upstream changes for auto-generated content (e.g., `<!-- AUTO:* -->` sections in wiki pages).
+- The default upstream branch is `Working` (not `main`).
+
 ## Pre-commit checks (run before every commit)
 
 After finishing any code change, **always** run these checks in order:

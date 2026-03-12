@@ -107,6 +107,75 @@ sceneMgr.RemoveNode(index);
 sceneMgr.SaveScene(L"Assets/Scenes/Modified.scene");
 ```
 
+## Creating a Complete Scene Programmatically
+
+```cpp
+SceneManager sceneMgr(&graphicsEngine, &inputManager);
+sceneMgr.NewScene();
+
+// Set scene metadata
+SceneMetadata meta;
+meta.sceneName    = "TestArena";
+meta.author       = "Developer";
+meta.gravity[1]   = -9.81f;
+meta.ambientLight[0] = 0.2f;
+meta.ambientLight[1] = 0.2f;
+meta.ambientLight[2] = 0.3f;
+
+// Add a ground plane
+SceneNode ground;
+ground.name     = "Ground";
+ground.type     = "plane";
+ground.position = {0.0f, 0.0f, 0.0f};
+ground.scale    = {50.0f, 1.0f, 50.0f};
+int groundIdx   = sceneMgr.AddNode(ground);
+
+// Add a light
+SceneNode light;
+light.name     = "SunLight";
+light.type     = "light";
+light.position = {0.0f, 20.0f, 0.0f};
+light.properties["lightType"] = "directional";
+light.properties["intensity"] = "1.5";
+sceneMgr.AddNode(light);
+
+// Add a model as a child of the ground
+SceneNode enemy;
+enemy.name      = "EnemySpawn";
+enemy.type      = "model";
+enemy.modelPath = "Assets/Models/Enemy.fbx";
+enemy.position  = {10.0f, 0.0f, 5.0f};
+int enemyIdx    = sceneMgr.AddNode(enemy);
+sceneMgr.SetParent(enemyIdx, groundIdx);  // Parent to ground
+
+// Add a trigger volume
+SceneNode trigger;
+trigger.name     = "ExitTrigger";
+trigger.type     = "trigger";
+trigger.position = {0.0f, 1.0f, 25.0f};
+trigger.scale    = {5.0f, 3.0f, 1.0f};
+sceneMgr.AddNode(trigger);
+
+// Save the scene
+sceneMgr.SaveScene(L"Assets/Scenes/TestArena.scene");
+```
+
+## Finding Nodes
+
+```cpp
+// Find a node by name
+const SceneNode* sun = sceneMgr.FindNode("SunLight");
+
+// Get total node count
+int count = sceneMgr.GetNodeCount();
+
+// List available scene files
+auto scenes = sceneMgr.GetAvailableScenes();
+for (const auto& path : scenes) {
+    LOG("Scene: " + path);
+}
+```
+
 ## Prefab System
 
 Save and load reusable prefab templates:

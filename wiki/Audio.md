@@ -79,6 +79,79 @@ audio.SetListenerPosition(cameraPosition);
 audio.SetListenerOrientation(cameraForward, cameraUp);
 ```
 
+## Audio Mixer
+
+The `AudioMixer` provides mixing buses, reverb zones, and occlusion:
+
+```cpp
+AudioMixer mixer;
+mixer.Initialize();
+
+// Create mixing buses for independent volume control
+mixer.CreateBus("SFX");
+mixer.CreateBus("Music");
+mixer.CreateBus("Ambient");
+mixer.CreateBus("Voice");
+
+// Adjust bus volumes
+mixer.SetBusVolume("SFX", 0.8f);
+mixer.SetBusMuted("Music", false);
+mixer.SetBusSolo("Voice", true);  // Solo: only this bus is audible
+
+// Add a reverb zone (e.g., inside a cave)
+ReverbZone cave;
+cave.name        = "CaveReverb";
+cave.position    = {50.0f, 0.0f, 30.0f};
+cave.innerRadius = 10.0f;
+cave.outerRadius = 25.0f;
+mixer.AddReverbZone(cave, ReverbPreset::Cave);
+
+// Audio occlusion (walls blocking sound)
+mixer.SetOcclusionEnabled(true);
+float occlusion = mixer.CalculateOcclusion(listenerPos, sourcePos);
+
+// Save and restore mixer snapshots (e.g., for menu vs. gameplay)
+mixer.SaveSnapshot("gameplay");
+mixer.RestoreSnapshot("gameplay");
+```
+
+## Music Manager
+
+The `MusicManager` handles background music, playlists, crossfading, and dynamic music:
+
+```cpp
+auto& music = MusicManager::GetInstance();
+music.Initialize();
+
+// Play a single track with crossfade
+music.Play("Assets/Audio/Music/exploration.wav");
+music.CrossfadeTo("Assets/Audio/Music/combat.wav", 2.0f);  // 2-second crossfade
+
+// Playlists
+music.RegisterPlaylist("exploration", {"track1.wav", "track2.wav", "track3.wav"});
+music.PlayPlaylist("exploration");
+music.SetPlaylistMode(PlaylistMode::Shuffle);
+music.NextTrack();
+
+// Dynamic music — automatically transitions based on gameplay intensity
+music.SetDynamicMusicState(CombatIntensity::Combat);
+music.SetCombatIntensity(CombatIntensity::BossFight);
+```
+
+## Procedural Sound Effects
+
+Generate common FPS sounds programmatically with `SoundEffectFactory`:
+
+```cpp
+// Generate procedural sounds (useful for prototyping)
+auto gunshot   = SoundEffectFactory::CreateGunshot();
+auto explosion = SoundEffectFactory::CreateExplosion();
+auto footstep  = SoundEffectFactory::CreateFootstep();
+auto reload    = SoundEffectFactory::CreateReload();
+auto pickup    = SoundEffectFactory::CreatePickup();
+auto beep      = SoundEffectFactory::CreateBeep(440.0f, 0.5f);  // frequency, duration
+```
+
 ## Object Pooling
 
 The audio engine uses an object pool for efficient source management. Sources are allocated from the pool when `Play2D`/`Play3D` is called and returned when playback completes.

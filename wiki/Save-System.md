@@ -70,9 +70,59 @@ Rotating autosaves with configurable:
 - Maximum number of autosave slots
 - Oldest autosave is overwritten when limit is reached
 
+```cpp
+// Configure autosave behavior
+saveSystem.SetMaxAutoSaves(5);          // Keep 5 rotating autosaves
+saveSystem.SetSaveDirectory("Saves/");  // Custom save directory
+
+// Trigger an autosave (call periodically or on level transitions)
+saveSystem.AutoSave(world, sceneManager);
+```
+
 ## Per-Component Serializers
 
 Components are serialized through a registry of serializer functions. The system automatically handles all built-in component types. Custom components can register their own serializers.
+
+```cpp
+auto& registry = ComponentSerializerRegistry::GetInstance();
+
+// Register built-in serializers (called once at startup)
+registry.RegisterBuiltins();
+
+// Register a custom component serializer
+registry.Register("CustomInventory",
+    // Serialize
+    [](const World& world, EntityID entity) -> std::map<std::string, std::string> {
+        const auto& inv = world.GetComponent<CustomInventory>(entity);
+        return {
+            {"capacity", std::to_string(inv.capacity)},
+            {"gold",     std::to_string(inv.gold)}
+        };
+    },
+    // Deserialize
+    [](World& world, EntityID entity, const std::map<std::string, std::string>& props) {
+        auto& inv = world.AddComponent<CustomInventory>(entity);
+        inv.capacity = std::stoi(props.at("capacity"));
+        inv.gold     = std::stoi(props.at("gold"));
+    }
+);
+```
+
+## Save Metadata
+
+Each save file stores metadata for the save slot UI:
+
+```cpp
+// Access metadata for a specific save
+SaveMetadata meta = saveSystem.GetSaveMetadata("slot1");
+std::string scene    = meta.sceneName;
+std::string cls      = meta.playerClass;
+float playtime       = meta.playTime;      // seconds
+std::string time     = meta.timestamp;     // ISO 8601
+std::string thumb    = meta.screenshotPath;
+float hp             = meta.playerHealth;
+XMFLOAT3 pos         = meta.playerPosition;
+```
 
 ## Save Slots
 
