@@ -1,18 +1,56 @@
 # Physics
 
-SparkEngine integrates **Bullet Physics 3** for rigid body dynamics, collision detection, raycasting, and constraints. The `PhysicsSystem` wraps Bullet with a DirectX Math-native API.
+SparkEngine integrates **Bullet Physics 3** for rigid body dynamics, collision detection, raycasting, constraints, cloth simulation, and soft body physics. The `PhysicsSystem` wraps Bullet with a DirectX Math-native API, transparently converting between `XMFLOAT3` / `XMMATRIX` and Bullet's `btVector3` / `btTransform`.
 
-**Source:** `SparkEngine/Source/Physics/PhysicsSystem.h`
+**Source:** `SparkEngine/Source/Physics/`
 
-## Overview
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        PhysicsSystem                            │
+│  World manager: lifecycle, simulation step, queries, callbacks  │
+│                                                                 │
+│  ┌──────────────┐  ┌───────────────────┐  ┌─────────────────┐  │
+│  │  PhysicsBody │  │ PhysicsConstraint │  │ ClothSimulation │  │
+│  │  (btRigidBody│  │ (btTypedConstraint│  │ (PBD solver)    │  │
+│  │   wrapper)   │  │   wrapper)        │  │                 │  │
+│  └──────────────┘  └───────────────────┘  └─────────────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                    CollisionSystem                              │
+│  Static utility: primitive tests, raycasts, sweep tests,       │
+│  contact manifolds, vector math helpers                        │
+└─────────────────────────────────────────────────────────────────┘
+         │                    │                    │
+         ▼                    ▼                    ▼
+┌─────────────────┐  ┌──────────────┐  ┌────────────────────┐
+│ btDynamicsWorld │  │ btBroadphase │  │ btConstraintSolver │
+│ (Bullet core)   │  │ (DBVT)       │  │ (Sequential Imp.)  │
+└─────────────────┘  └──────────────┘  └────────────────────┘
+```
+
+### Source Files
+
+| File | Responsibility |
+|------|---------------|
+| `PhysicsSystem.h` | World manager: lifecycle, simulation step, queries, callbacks, console commands |
+| `PhysicsTypes.h` | Lightweight type-only header (enums, structs, descriptors) -- no Bullet dependency |
+| `CollisionSystem.h` | Static collision detection utilities: primitive tests, raycasts, sweep tests, manifolds |
+| `ClothSimulation.h` | Position-based dynamics cloth and soft body simulation |
+
+### Class Overview
 
 | Class | Responsibility |
 |-------|---------------|
 | `PhysicsSystem` | World manager: lifecycle, simulation step, queries, callbacks |
 | `PhysicsBody` | Wrapper around `btRigidBody` with DirectX Math transform API |
-| `PhysicsConstraint` | Wrapper around `btTypedConstraint` |
+| `PhysicsConstraint` | Wrapper around `btTypedConstraint` (hinge, slider, fixed, etc.) |
+| `CollisionSystem` | Static class with primitive collision tests, raycasts, sweep tests, and vector math |
+| `ClothSimulation` | Manages all cloth and soft body instances via position-based dynamics |
 
-All `XMFLOAT3` / `XMMATRIX` types are transparently converted to and from Bullet's `btVector3` / `btTransform`.
+---
 
 ## Quick Start
 
@@ -36,58 +74,209 @@ while (running) {
 }
 ```
 
+---
+
 ## Body Types
 
 ```cpp
 enum class PhysicsBodyType {
-    Static,      // Immovable (walls, floors)
-    Kinematic,   // Animated by game logic (platforms, doors)
-    Dynamic      // Fully physics-simulated (crates, projectiles)
+    Static,      // Immovable geometry (walls, floors, terrain)
+    Kinematic,   // Animated by game logic (moving platforms, doors, elevators)
+    Dynamic      // Fully physics-simulated (crates, projectiles, ragdolls)
 };
 ```
+
+**Behavioral differences:**
+
+| Property | Static | Kinematic | Dynamic |
+|----------|--------|-----------|---------|
+| Responds to forces | No | No | Yes |
+| Moves via code | No | Yes (SetTransform) | Via forces/impulses |
+| Collides with Dynamic | Yes | Yes | Yes |
+| Has mass | 0 (infinite) | 0 (infinite) | > 0 |
+| Affected by gravity | No | No | Yes |
+| Use case | Level geometry | Platforms, doors | Crates, projectiles |
+
+---
 
 ## Collision Shapes
 
 ```cpp
 enum class CollisionShapeType {
-    Box,          // Axis-aligned box
-    Sphere,       // Sphere
-    Capsule,      // Capsule (character controllers)
-    Cylinder,     // Cylinder
-    Cone,         // Cone
-    Mesh,         // Triangle mesh (static geometry only)
-    ConvexHull,   // Convex hull (dynamic convex objects)
-    Heightfield,  // Heightfield terrain
-    Compound      // Multiple shapes combined
+    Box,          // Axis-aligned box (half-extents in dimensions)
+    Sphere,       // Sphere (uses radius field)
+    Capsule,      // Capsule -- character controllers (uses radius + height)
+    Cylinder,     // Cylinder (uses radius + height)
+    Cone,         // Cone (uses radius + height)
+    Mesh,         // Triangle mesh (static geometry only -- not for dynamic bodies)
+    ConvexHull,   // Convex hull (dynamic convex objects -- from vertex list)
+    Heightfield,  // Heightfield terrain (from height data array)
+    Compound      // Multiple shapes combined into one body
 };
 ```
+
+### CollisionShapeDesc
+
+```cpp
+struct CollisionShapeDesc {
+    CollisionShapeType type = CollisionShapeType::Box;
+    XMFLOAT3 dimensions    = {1.0f, 1.0f, 1.0f};  // Half-extents for Box
+    float radius           = 0.5f;                   // Radius for Sphere/Capsule/Cylinder/Cone
+    float height           = 1.0f;                   // Height for Capsule/Cylinder/Cone
+    std::string meshPath;                             // File path for Mesh shapes
+    std::vector<XMFLOAT3> vertices;                  // Vertices for ConvexHull
+    std::vector<uint32_t> indices;                    // Indices for Mesh
+    XMFLOAT3 localOffset   = {0, 0, 0};             // Local-space offset from body center
+    XMFLOAT3 localRotation = {0, 0, 0};             // Local-space rotation (Euler degrees)
+};
+```
+
+### Shape Selection Guide
+
+| Shape | Performance | Accuracy | When to use |
+|-------|------------|----------|-------------|
+| Box | Fastest | Low | Crates, walls, simple props |
+| Sphere | Fastest | Low | Projectiles, loose items |
+| Capsule | Fast | Medium | Character controllers, humanoids |
+| Cylinder | Fast | Medium | Barrels, pillars |
+| ConvexHull | Medium | High | Complex dynamic objects (< 256 vertices) |
+| Mesh | Slow | Exact | Static-only level geometry |
+| Heightfield | Medium | High | Large terrain surfaces |
+| Compound | Varies | High | Complex shapes from simple primitives |
+
+---
+
+## PhysicsBodyDesc
+
+The full body creation descriptor:
+
+```cpp
+struct PhysicsBodyDesc {
+    PhysicsBodyType type     = PhysicsBodyType::Dynamic;
+    XMFLOAT3 position        = {0, 0, 0};
+    XMFLOAT3 rotation        = {0, 0, 0};       // Euler angles (degrees)
+    XMFLOAT3 linearVelocity  = {0, 0, 0};       // Initial linear velocity
+    XMFLOAT3 angularVelocity = {0, 0, 0};       // Initial angular velocity
+    float mass               = 1.0f;             // Mass in kg (0 = auto from density)
+    PhysicsMaterial material;                     // Surface properties
+    CollisionShapeDesc shape;                     // Collision shape configuration
+    bool isTrigger           = false;             // Trigger volume (no collision response)
+    bool isKinematic         = false;             // Override to kinematic mode
+    std::string name;                             // Debug name for console/editor
+    void* userData           = nullptr;           // User-defined data pointer
+};
+```
+
+---
+
+## Physics Materials
+
+Named material presets control friction, restitution, and damping:
+
+```cpp
+struct PhysicsMaterial {
+    float friction       = 0.5f;   // Coulomb friction [0, inf)
+    float restitution    = 0.1f;   // Bounciness [0, 1]
+    float linearDamping  = 0.1f;   // Translational drag [0, 1]
+    float angularDamping = 0.1f;   // Rotational drag [0, 1]
+    float density        = 1.0f;   // kg/m^3 (for auto-mass)
+    bool isStatic        = false;  // Hint flag for static geometry
+    std::string name;              // Material name for registry lookup
+};
+```
+
+### Material Tuning Guide
+
+| Material | Friction | Restitution | Density (kg/m^3) | Notes |
+|----------|----------|-------------|-------------------|-------|
+| Ice | 0.03 | 0.05 | 917 | Very slippery, minimal bounce |
+| Concrete | 0.60 | 0.00 | 2400 | Level geometry default |
+| Rubber | 0.90 | 0.80 | 1100 | High grip, very bouncy |
+| Wood | 0.40 | 0.20 | 600 | Moderate friction |
+| Metal | 0.30 | 0.30 | 7800 | Low friction, moderate bounce |
+| Glass | 0.20 | 0.10 | 2500 | Smooth surface |
+
+### Friction/Restitution Mixing
+
+Bullet combines materials from two contacting bodies:
+- **Friction**: `sqrt(frictionA * frictionB)` (geometric mean)
+- **Restitution**: `max(restitutionA, restitutionB)` (maximum)
+
+### Registering Materials
+
+```cpp
+PhysicsMaterial mat;
+mat.friction    = 0.5f;
+mat.restitution = 0.3f;
+mat.linearDamping  = 0.1f;
+mat.angularDamping = 0.1f;
+
+physics.RegisterMaterial("Metal", mat);
+
+// Later, retrieve by name:
+auto metalMat = physics.GetMaterial("Metal");
+```
+
+---
 
 ## Constraints
 
 ```cpp
 enum class ConstraintType {
-    Point2Point,  // Ball-and-socket joint
-    Hinge,        // Hinge (doors, wheels)
-    Slider,       // Linear slider
-    ConeTwist,    // Cone-twist (ragdoll limbs)
-    Fixed,        // Rigid connection
-    Generic       // 6-DOF generic constraint
+    Point2Point,  // Ball-and-socket joint (3 translational DOF removed)
+    Hinge,        // Hinge joint (doors, wheels -- 1 rotational DOF)
+    Slider,       // Linear slider (pistons, rails -- 1 translational DOF)
+    ConeTwist,    // Cone-twist joint (ragdoll limbs -- limited rotation)
+    Generic6DOF,  // 6-DOF generic constraint (fully configurable limits)
+    Fixed         // Rigid connection (0 DOF -- welds two bodies)
 };
 ```
+
+### Constraint Use Cases
+
+| Type | Typical Use | Example |
+|------|------------|---------|
+| Point2Point | Rope endpoints, chains | Hanging lanterns |
+| Hinge | Rotating objects with axis | Doors, wheels, levers |
+| Slider | Linear movement along axis | Pistons, elevators, drawers |
+| ConeTwist | Limited angular freedom | Ragdoll shoulders, hips |
+| Generic6DOF | Full configurability | Vehicle suspensions |
+| Fixed | Welding bodies together | Compound wreckage pieces |
+
+---
 
 ## Raycasting
 
 ```cpp
-// Single-hit raycast
+// Single-hit raycast (returns closest hit)
 RaycastHit hit;
 if (physics.Raycast(origin, direction, maxDistance, hit)) {
-    // hit.point, hit.normal, hit.distance, hit.body
+    // hit.point     -- world position of impact
+    // hit.normal    -- surface normal at impact
+    // hit.distance  -- distance from origin
+    // hit.body      -- PhysicsBody* that was hit
+    // hit.userData   -- user data pointer from the body
 }
 
-// Multi-hit raycast
+// Multi-hit raycast (returns all intersections)
 std::vector<RaycastHit> hits;
 physics.RaycastAll(origin, direction, maxDistance, hits);
 ```
+
+### RaycastHit Structure
+
+```cpp
+struct RaycastHit {
+    bool hasHit          = false;
+    XMFLOAT3 point       = {0, 0, 0};    // World-space hit position
+    XMFLOAT3 normal      = {0, 1, 0};    // Surface normal at hit
+    float distance       = 0.0f;          // Distance from ray origin
+    PhysicsBody* body    = nullptr;       // Body that was hit
+    void* userData       = nullptr;       // User data from the body
+};
+```
+
+---
 
 ## Overlap Queries
 
@@ -100,33 +289,216 @@ physics.SphereOverlap(center, radius, bodies);
 physics.BoxOverlap(center, halfExtents, bodies);
 ```
 
-## Physics Materials
-
-Named material presets with friction and restitution:
-
-```cpp
-PhysicsMaterial mat;
-mat.friction    = 0.5f;
-mat.restitution = 0.3f;
-mat.linearDamping  = 0.1f;
-mat.angularDamping = 0.1f;
-
-physics.RegisterMaterial("Metal", mat);
-```
+---
 
 ## Collision Callbacks
+
+### ContactInfo Structure
+
+```cpp
+struct ContactInfo {
+    PhysicsBody* bodyA      = nullptr;
+    PhysicsBody* bodyB      = nullptr;
+    XMFLOAT3 contactPoint   = {0, 0, 0};  // World-space contact position
+    XMFLOAT3 contactNormal  = {0, 1, 0};  // Normal pointing from A to B
+    float penetrationDepth  = 0.0f;        // How deep objects interpenetrate
+    float appliedImpulse    = 0.0f;        // Impulse applied to resolve collision
+};
+```
+
+### Registering Callbacks
 
 ```cpp
 // Collision enter/exit callbacks
 physics.SetCollisionCallback([](PhysicsBody* a, PhysicsBody* b, const ContactInfo& info) {
-    // Handle collision
+    if (info.appliedImpulse > 50.0f) {
+        // Strong impact -- play crash sound, spawn particles
+    }
 });
 
-// Trigger enter/exit callbacks
+// Trigger enter/exit callbacks (for trigger volumes)
 physics.SetTriggerCallback([](PhysicsBody* trigger, PhysicsBody* other, bool entered) {
-    // Handle trigger
+    if (entered) {
+        // Object entered trigger zone
+    } else {
+        // Object exited trigger zone
+    }
 });
 ```
+
+---
+
+## CollisionSystem (Static Utility Class)
+
+The `CollisionSystem` class provides CPU-side collision detection independent of Bullet Physics. All methods are `static` and thread-safe.
+
+### Primitive Shapes
+
+```cpp
+struct BoundingBox {
+    XMFLOAT3 Min;   // Minimum corner
+    XMFLOAT3 Max;   // Maximum corner
+    XMFLOAT3 GetCenter() const;
+    XMFLOAT3 GetExtents() const;
+    void Transform(const XMMATRIX& transform);
+};
+
+struct BoundingSphere {
+    XMFLOAT3 Center;
+    float Radius;
+    void Transform(const XMMATRIX& transform);
+};
+
+struct Ray {
+    XMFLOAT3 Origin;
+    XMFLOAT3 Direction;   // Should be normalized
+    XMFLOAT3 GetPoint(float t) const;
+};
+```
+
+### ContactManifold
+
+```cpp
+struct ContactManifold {
+    XMFLOAT3 ContactPoints[4];   // Up to 4 contact points
+    XMFLOAT3 Normal;             // Surface normal at collision
+    float PenetrationDepth;      // Interpenetration depth
+    int ContactCount;            // Number of valid contact points (0-4)
+};
+```
+
+### Collision Tests
+
+| Method | Description |
+|--------|-------------|
+| `SphereVsSphere(a, b)` | Boolean sphere-sphere overlap |
+| `SphereVsSphere(a, b, manifold)` | Sphere-sphere with contact manifold |
+| `SphereVsBox(sphere, box)` | Boolean sphere-box overlap |
+| `SphereVsBox(sphere, box, manifold)` | Sphere-box with contact manifold |
+| `BoxVsBox(a, b)` | Boolean AABB-AABB overlap |
+| `BoxVsBox(a, b, manifold)` | AABB-AABB with contact manifold (SAT) |
+
+### Raycast Tests
+
+| Method | Description |
+|--------|-------------|
+| `RayVsSphere(ray, sphere)` | Ray-sphere intersection |
+| `RayVsBox(ray, box)` | Ray-AABB intersection |
+| `RayVsPlane(ray, point, normal)` | Ray-plane intersection |
+| `RayVsTriangle(ray, v0, v1, v2)` | Ray-triangle intersection |
+
+### Sweep (Shape-Cast) Tests
+
+| Method | Description |
+|--------|-------------|
+| `SweepSphereVsSphere(moving, velocity, target, hitTime)` | Moving sphere vs stationary sphere |
+| `SweepSphereVsBox(moving, velocity, target, hitTime)` | Moving sphere vs stationary AABB |
+| `SweepBoxVsBox(moving, velocity, target, hitTime)` | Moving AABB vs stationary AABB (Minkowski sum) |
+
+All sweep tests return a `CollisionResult` and write the parametric hit time `[0, 1]` to `hitTime`.
+
+### Utility Functions
+
+| Method | Description |
+|--------|-------------|
+| `ClosestPointOnBox(point, box)` | Closest point on AABB surface |
+| `ClosestPointOnSphere(point, sphere)` | Closest point on sphere surface |
+| `DistancePointToPlane(point, planePoint, normal)` | Signed distance to plane |
+| `PointInSphere(point, sphere)` | Point containment test |
+| `PointInBox(point, box)` | Point containment test |
+| `Vector3Length / LengthSquared / Normalize` | Vector math utilities |
+| `Vector3Dot / Cross / Reflect / Lerp` | Vector operations |
+
+---
+
+## Cloth Simulation
+
+The `ClothSimulation` class (namespace `Spark::Physics`) provides position-based dynamics (PBD) for deformable surfaces.
+
+### Features
+
+- Distance constraints (structural, shear, bending)
+- Pin constraints (attach cloth to static/kinematic points)
+- Wind and gravity forces
+- Collision with spheres, capsules, and planes
+- Configurable solver iteration count for quality/performance trade-off
+- Self-collision (optional, expensive)
+
+### ClothDescriptor
+
+```cpp
+struct ClothDescriptor {
+    int width            = 10;      // Particles in X direction
+    int height           = 10;      // Particles in Y direction
+    float spacing        = 0.1f;    // Distance between adjacent particles
+    float mass           = 1.0f;    // Total cloth mass
+    float stiffness      = 0.9f;    // Constraint stiffness [0, 1]
+    float bendStiffness  = 0.5f;    // Bending stiffness [0, 1]
+    float damping        = 0.01f;   // Velocity damping
+    XMFLOAT3 origin      = {0,0,0}; // World-space origin
+    int solverIterations = 4;       // Constraint solver iterations per frame
+};
+```
+
+### ClothCollider Types
+
+```cpp
+struct ClothCollider {
+    enum class Type { Sphere, Capsule, Plane };
+    Type type          = Type::Sphere;
+    XMFLOAT3 position  = {0, 0, 0};
+    XMFLOAT3 normal    = {0, 1, 0};   // Normal for Plane, axis for Capsule
+    float radius       = 0.5f;
+    float height       = 1.0f;         // Height for Capsule
+};
+```
+
+### Usage Example
+
+```cpp
+ClothSimulation cloth;
+ClothDescriptor desc;
+desc.width = 20; desc.height = 20;
+desc.spacing = 0.05f;
+desc.mass = 0.5f;
+desc.stiffness = 0.9f;
+desc.damping = 0.01f;
+
+auto id = cloth.CreateCloth(desc);
+cloth.PinParticle(id, 0, {0, 2, 0});       // Pin top-left corner
+cloth.PinParticle(id, 19, {0.95f, 2, 0});  // Pin top-right corner
+cloth.SetWind(id, {1.0f, 0.0f, 0.5f});
+
+// Add a sphere collider for the cloth to drape over
+ClothCollider sphere;
+sphere.type = ClothCollider::Type::Sphere;
+sphere.position = {0.5f, 1.0f, 0.0f};
+sphere.radius = 0.3f;
+cloth.AddCollider(id, sphere);
+
+// Per frame:
+cloth.Update(deltaTime);
+const auto& particles = cloth.GetParticles(id);
+// Use particle positions for mesh rendering
+```
+
+### ClothSimulation API
+
+| Method | Description |
+|--------|-------------|
+| `CreateCloth(desc)` | Create a new cloth instance, returns handle ID |
+| `DestroyCloth(id)` | Destroy a cloth instance |
+| `PinParticle(id, index, pos)` | Pin a particle to a fixed world position |
+| `UnpinParticle(id, index)` | Release a pinned particle |
+| `SetWind(id, wind)` | Set wind force direction and strength |
+| `AddCollider(id, collider)` | Add a collision primitive for cloth interaction |
+| `Update(deltaTime)` | Advance all cloth simulations |
+| `GetParticles(id)` | Get particle positions for rendering |
+| `GetClothDimensions(id, w, h)` | Get grid dimensions |
+| `GetInstanceCount()` | Number of active cloth instances |
+| `Console_GetStatus()` | Status string for console integration |
+
+---
 
 ## ECS Integration
 
@@ -134,9 +506,9 @@ Use `RigidBodyComponent` and `ColliderComponent` on entities:
 
 ```cpp
 auto& rb = world.AddComponent<RigidBodyComponent>(entity);
-rb.mass = 10.0f;
-rb.type = RigidBodyComponent::Type::Dynamic;
-rb.friction = 0.5f;
+rb.mass        = 10.0f;
+rb.type        = RigidBodyComponent::Type::Dynamic;
+rb.friction    = 0.5f;
 rb.restitution = 0.3f;
 
 auto& col = world.AddComponent<ColliderComponent>(entity);
@@ -145,7 +517,54 @@ col.dimensions = {1.0f, 1.0f, 1.0f};
 col.isTrigger  = false;
 ```
 
-The `PhysicsUpdateSystem` syncs physics body transforms with [ECS](Entity-Component-System) `Transform` components each frame.
+The `PhysicsUpdateSystem` runs in the ECS execution pipeline and:
+1. Reads `RigidBodyComponent` + `ColliderComponent` to create/update Bullet bodies
+2. Steps the physics simulation via `PhysicsSystem::Update()`
+3. Writes updated transforms back to the [ECS](Entity-Component-System) `TransformComponent`
+
+### ECS Execution Order
+
+```
+Physics --> Animation --> AI --> Audio --> Lifecycle --> Render
+  ^
+  |
+  PhysicsUpdateSystem runs here (first in the pipeline)
+```
+
+---
+
+## Internal Implementation
+
+### Bullet Physics Integration
+
+PhysicsSystem manages these Bullet objects internally:
+
+| Bullet Object | Purpose |
+|---------------|---------|
+| `btDiscreteDynamicsWorld` | The simulation world |
+| `btDefaultCollisionConfiguration` | Collision algorithm configuration |
+| `btCollisionDispatcher` | Dispatches narrow-phase collision tests |
+| `btDbvtBroadphase` | Dynamic AABB tree for broad-phase culling |
+| `btSequentialImpulseConstraintSolver` | Sequential impulse constraint solver |
+
+### Type Conversion
+
+All public APIs use DirectX Math types. Internally, conversions happen at the boundary:
+
+```
+XMFLOAT3  <-->  btVector3     (position, velocity, forces)
+XMMATRIX  <-->  btTransform   (body transforms)
+XMFLOAT4  <-->  btQuaternion  (rotations)
+```
+
+### Simulation Step
+
+`PhysicsSystem::Update(deltaTime)` calls `btDiscreteDynamicsWorld::stepSimulation()` with:
+- Fixed time step: 1/60 second (16.67 ms)
+- Max sub-steps: 10 (prevents spiral of death at low framerates)
+- Internal interpolation between fixed steps for smooth rendering
+
+---
 
 ## Debug Drawing
 
@@ -156,28 +575,88 @@ physics_debug on       # Enable debug draw
 physics_debug off      # Disable debug draw
 ```
 
+The debug drawer renders:
+- Wireframe collision shapes (color-coded by body type)
+- Constraint frames and limits
+- Contact points and normals
+- AABB broadphase volumes (optional)
+
+---
+
 ## Console Commands
 
 ```
-physics_info           # Show physics world statistics
-physics_gravity <x y z> # Set gravity vector
-physics_debug <on|off> # Toggle debug visualization
-physics_pause          # Pause physics simulation
-physics_step           # Single-step physics
-physics_material <name> # Show material properties
+physics_info                # Show physics world statistics (body count, constraint count, etc.)
+physics_gravity <x y z>     # Set gravity vector (default: 0 -9.81 0)
+physics_debug <on|off>      # Toggle debug visualization overlay
+physics_pause               # Pause physics simulation (bodies freeze)
+physics_step                # Single-step physics by one fixed timestep
+physics_material <name>     # Show properties of a named material
 ```
+
+---
+
+## Error Handling
+
+- `PhysicsSystem::Initialize()` returns `HRESULT`. Check with `FAILED()` macro.
+- `CreateBody()` returns `nullptr` if the body descriptor is invalid (e.g., mesh shape with empty vertex list).
+- `Raycast()` returns `false` and leaves `RaycastHit` unmodified when no hit occurs.
+- Constraint creation validates that both body pointers are non-null; returns `nullptr` otherwise.
+- Cloth operations with invalid IDs are no-ops (return empty particle lists).
+
+---
+
+## Performance Considerations
+
+- **Broad-phase**: DBVT (dynamic bounding volume tree) provides O(n log n) culling.
+- **Mesh shapes**: Use only for static geometry. For dynamic objects, prefer ConvexHull.
+- **Compound shapes**: More efficient than mesh for dynamic objects with complex geometry.
+- **Solver iterations**: Default is 10. Increase for more accurate stacking; decrease for better performance.
+- **Cloth iterations**: `solverIterations` in `ClothDescriptor` controls stiffness vs. performance (4 = fast, 16 = stiff).
+- **Body sleeping**: Bullet automatically deactivates bodies at rest. Reactivation is automatic on collision or force application.
+- **Raycast performance**: Single raycast is O(log n) via broadphase. Batch raycasts when possible.
+
+---
 
 ## Thread Safety
 
 PhysicsSystem is **not thread-safe**. Call all public methods from the main game thread. The physics simulation runs on the calling thread inside `Update()`.
 
+CollisionSystem methods are all `static` and **thread-safe** (no shared mutable state). They can be called from any thread for CPU-side collision queries.
+
+ClothSimulation should only be called from the main thread, similar to PhysicsSystem.
+
+---
+
+## Troubleshooting
+
+### Bodies fall through the floor
+- Ensure floor body type is `Static` (not `Dynamic` with mass 0)
+- Check that collision shapes overlap correctly (use `physics_debug on`)
+- Increase solver iterations if stacking objects tunnel through each other
+
+### Bodies jitter or vibrate
+- Reduce `restitution` values (high restitution causes energy gain)
+- Increase `linearDamping` and `angularDamping` slightly
+- Ensure mass ratios between contacting bodies are not extreme (< 100:1)
+
+### Raycast misses visible geometry
+- Verify the object has a collision shape attached (visual mesh is not physics mesh)
+- Check that the ray direction is normalized
+- Ensure `maxDistance` is large enough to reach the target
+
+### Cloth stretches excessively
+- Increase `stiffness` toward 1.0
+- Increase `solverIterations` (8-16 for stiff cloth)
+- Reduce `mass` relative to `spacing`
+
 ---
 
 ## See Also
 
-- [Entity Component System](Entity-Component-System) — RigidBody and Collider components
-- [Rendering and Graphics](Rendering-and-Graphics) — Debug draw overlay
-- [Gameplay Systems](Gameplay-Systems) — Player controller, weapons, and vehicles
-- [Terrain and Procedural Generation](Terrain-and-Procedural-Generation) — Heightfield collision shapes
-- [Animation](Animation) — Physics-driven animation and ragdolls
-- [Day Night Cycle and Weather](Day-Night-Cycle-and-Weather) — Environmental physics interactions
+- [Entity Component System](Entity-Component-System) -- RigidBody and Collider components
+- [Rendering and Graphics](Rendering-and-Graphics) -- Debug draw overlay
+- [Gameplay Systems](Gameplay-Systems) -- Player controller, weapons, and vehicles
+- [Terrain and Procedural Generation](Terrain-and-Procedural-Generation) -- Heightfield collision shapes
+- [Animation](Animation) -- Physics-driven animation and ragdolls
+- [Day Night Cycle and Weather](Day-Night-Cycle-and-Weather) -- Environmental physics interactions

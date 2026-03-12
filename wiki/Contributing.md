@@ -147,22 +147,133 @@ This project makes extensive use of AI-assisted development. All AI-generated co
 - Ensure CI passes (GitHub Actions builds on Windows and Linux)
 - Reference related issues in the PR description
 
+### PR Title Format
+
+Use a clear, imperative title that describes the change:
+
+| Type | Example |
+|------|---------|
+| Feature | `Add cloth simulation system` |
+| Bug fix | `Fix crash when loading empty scene` |
+| Refactor | `Refactor physics collision callbacks` |
+| Docs | `Update ECS wiki with component examples` |
+| Test | `Add unit tests for NavMesh pathfinding` |
+
+### PR Description Template
+
+```markdown
+## Summary
+Brief description of what this PR does and why.
+
+## Changes
+- List of specific changes made
+
+## Testing
+- How this was tested (unit tests, manual testing, etc.)
+
+## Related Issues
+Closes #123
+```
+
+### Code Review Process
+
+1. **Automated checks** — CI runs clang-format, builds (Windows + Linux), tests, and sanitizers
+2. **Manual review** — A maintainer reviews the code for correctness, style, and architecture fit
+3. **Feedback** — Address review comments by pushing additional commits (do not force-push during review)
+4. **Merge** — Once approved and CI passes, a maintainer merges the PR
+
 ## Reporting Issues
 
 Report bugs and request features at [GitHub Issues](https://github.com/Krilliac/SparkEngine/issues).
 
+### Bug Reports
+
 Include:
-- Platform and compiler version
-- Steps to reproduce
-- Expected vs. actual behavior
-- Build configuration and CMake flags used
+- **Platform and compiler version** (e.g., Windows 11, MSVC v143)
+- **Steps to reproduce** — Minimal, numbered steps to trigger the bug
+- **Expected behavior** — What you expected to happen
+- **Actual behavior** — What actually happened (include error messages, stack traces)
+- **Build configuration** — CMake flags used (`ENABLE_EDITOR`, `ENABLE_GRAPHICS`, etc.)
+- **Screenshots/logs** — If applicable, include console output or screenshots
+
+### Feature Requests
+
+Include:
+- **Use case** — Why the feature is needed
+- **Proposed solution** — How you envision it working
+- **Alternatives considered** — Other approaches you've thought of
+- **Scope** — Is this a small addition or a major subsystem?
+
+## Development Workflow
+
+### Branch Naming
+
+| Branch Type | Pattern | Example |
+|-------------|---------|---------|
+| Feature | `feature/description` | `feature/cloth-simulation` |
+| Bug fix | `fix/description` | `fix/physics-crash` |
+| Refactor | `refactor/description` | `refactor/ecs-views` |
+| Docs | `docs/description` | `docs/update-wiki` |
+
+### Testing Your Changes
+
+Before submitting a PR, verify your changes thoroughly:
+
+```bash
+# 1. Run the full test suite
+cmake -B build -DBUILD_TESTS=ON
+cmake --build build
+cd build && ctest --output-on-failure && cd ..
+
+# 2. Run with AddressSanitizer (catches memory bugs)
+cmake -B build-asan \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DBUILD_TESTS=ON \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+cmake --build build-asan
+cd build-asan && ctest --output-on-failure && cd ..
+
+# 3. Verify formatting
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+  -name '*.h' -o -name '*.cpp' | xargs clang-format --dry-run --Werror
+
+# 4. Run clang-tidy (optional but recommended)
+cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+clang-tidy -p build SparkEngine/Source/**/*.cpp
+```
+
+### Documentation Requirements
+
+Any code change that affects user-facing features **must** include documentation updates:
+
+1. **Wiki pages** — Update the relevant wiki page in `wiki/`. Create a new page if adding a new subsystem
+2. **API docs** — Add Doxygen-style comments (`@brief`, `@param`, `@return`) to public headers
+3. **Code comments** — Add inline comments for non-obvious logic
+4. **CLAUDE.md** — Update if the change affects architecture, build flags, or execution order
+
+### Adding a New Subsystem Checklist
+
+When contributing a new engine subsystem:
+
+- [ ] Create directory under `SparkEngine/Source/Engine/YourSystem/`
+- [ ] Add CMake toggle: `option(ENABLE_YOUR_SYSTEM "..." ON)`
+- [ ] Guard code with `#ifdef SPARK_ENABLE_YOUR_SYSTEM`
+- [ ] Implement singleton pattern with `GetInstance()` if appropriate
+- [ ] Register console commands if the system has debug controls
+- [ ] Add unit tests in `Tests/TestYourSystem.cpp`
+- [ ] Create wiki page in `wiki/Your-System.md`
+- [ ] Add to `wiki/_Sidebar.md` navigation
+- [ ] Update `wiki/Home.md` navigation
+- [ ] Run `docs/generate-api-docs.sh check` and `docs/sync-wiki.sh sync`
 
 ---
 
 ## See Also
 
-- [Architecture Overview](Architecture-Overview) — Engine design
-- [Build System and CMake Modules](Build-System-and-CMake-Modules) — Build configuration
-- [Testing](Testing) — Adding and running tests
+- [Architecture Overview](Architecture-Overview) — Engine design and subsystem patterns
+- [Build System and CMake Modules](Build-System-and-CMake-Modules) — Build configuration, CI/CD, and CMake flags
+- [Testing](Testing) — Adding and running tests, test framework macros
 - [Getting Started](Getting-Started) — Building and running the project
 - [Entity Component System](Entity-Component-System) — Component architecture and ECS patterns
+- [Profiler and Debugging](Profiler-and-Debugging) — Performance profiling and debug tools
+- [Troubleshooting](Troubleshooting) — Common build and runtime issues

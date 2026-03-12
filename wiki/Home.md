@@ -44,14 +44,29 @@ Pre-built binaries are published on every commit to `master`:
 - [Entity Component System](Entity-Component-System) — EnTT ECS, components, and systems
 - [Rendering and Graphics](Rendering-and-Graphics) — Graphics pipeline, materials, and post-processing
 - [Physics](Physics) — Bullet Physics integration
+- [Cloth Simulation](Cloth-Simulation) — Position-based dynamics cloth simulation
 - [Audio](Audio) — Spatial audio system
 - [Input System](Input-System) — Keyboard, mouse, and gamepad
 - [Scripting with AngelScript](Scripting-with-AngelScript) — Gameplay scripting
+- [Visual Scripting](Visual-Scripting) — Node-based visual scripting
 - [AI and Navigation](AI-and-Navigation) — Behavior trees and pathfinding
 - [Animation](Animation) — Skeletal animation and IK
+- [2D Systems](2D-Systems) — 2D physics, sprite batching, and rendering
 - [Networking](Networking) — Multiplayer networking
+- [Dedicated Server](Dedicated-Server) — Headless dedicated server
 - [Scene Management](Scene-Management) — Scenes, hierarchy, and prefabs
+- [Coroutine System](Coroutine-System) — C++20 coroutines and scheduling
 - [Event System](Event-System) — Publish/subscribe event bus
+- [Job System](Job-System) — Thread pool and parallel task execution
+- [UI System](UI-System) — Runtime UI framework
+- [Localization](Localization) — Multi-language string tables
+- [Dialogue System](Dialogue-System) — Branching dialogue trees
+- [Destruction System](Destruction-System) — Runtime mesh destruction
+- [Replay System](Replay-System) — Match replay recording and playback
+- [Achievement System](Achievement-System) — Achievement and statistics tracking
+- [Loading System](Loading-System) — Loading screen framework
+- [Mod System](Mod-System) — Mod loading and management
+- [Content Delivery](Content-Delivery) — CDN and patching system
 
 ### Gameplay & Tools
 - [Gameplay Systems](Gameplay-Systems) — Player, weapons, inventory, quests
@@ -64,8 +79,19 @@ Pre-built binaries are published on every commit to `master`:
 - [Shader Pipeline](Shader-Pipeline) — Shader authoring and compilation
 - [Asset Pipeline](Asset-Pipeline) — Asset loading and formats
 
+### Platform Support
+- [VR Support](VR-Support) — OpenXR virtual reality framework
+- [Mobile Platform](Mobile-Platform) — iOS and Android platform abstraction
+
+### Graphics Backends
+- [RHI Abstraction Layer](RHI-Abstraction-Layer) — Backend-agnostic graphics interface
+- [D3D12 Backend](D3D12-Backend) — Direct3D 12 implementation
+- [DXR Raytracing](DXR-Raytracing) — DXR 1.1 ray tracing
+- [Upscaling (DLSS/FSR)](Upscaling-System) — Temporal upscaling techniques
+
 ### Advanced
 - [Build System and CMake Modules](Build-System-and-CMake-Modules) — CMake configuration and CI/CD
+- [Profiler and Debugging](Profiler-and-Debugging) — Frame profiling, GPU timing, and debug tools
 - [Testing](Testing) — Unit tests and test framework
 - [Troubleshooting](Troubleshooting) — Common issues and solutions
 - [Contributing](Contributing) — How to contribute (includes pre-commit checks)
@@ -100,6 +126,6 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 | Editor Panels | 32 |
 | Test files | 71 |
 | Test cases | 864+ |
-| Wiki pages | 45 |
-| *Last synced* | *2026-03-12 14:57* |
+| Wiki pages | 50 |
+| *Last synced* | *2026-03-12 15:56* |
 <!-- /AUTO:stats -->
