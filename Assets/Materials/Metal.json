@@ -1,0 +1,9 @@
+{
+    "name": "Metal",
+    "shader": "PBR",
+    "albedo": "Textures/metal_diffuse.png",
+    "normal": "Textures/Default/normal_flat.png",
+    "metallic": 0.9,
+    "roughness": 0.3,
+    "ao": 1.0
+}

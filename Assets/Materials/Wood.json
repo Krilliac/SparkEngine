@@ -1,0 +1,9 @@
+{
+    "name": "Wood",
+    "shader": "PBR",
+    "albedo": "Textures/wood_diffuse.png",
+    "normal": "Textures/Default/normal_flat.png",
+    "metallic": 0.0,
+    "roughness": 0.7,
+    "ao": 1.0
+}

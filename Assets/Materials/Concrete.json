@@ -1,0 +1,9 @@
+{
+    "name": "Concrete",
+    "shader": "PBR",
+    "albedo": "Textures/concrete_diffuse.png",
+    "normal": "Textures/concrete_normal.png",
+    "metallic": 0.0,
+    "roughness": 0.85,
+    "ao": 1.0
+}

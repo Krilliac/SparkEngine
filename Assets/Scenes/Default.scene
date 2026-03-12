@@ -1,0 +1,146 @@
+{
+    "name": "Default",
+    "version": 1,
+    "description": "Default empty scene with basic setup",
+    "entities": [
+        {
+            "name": "DirectionalLight",
+            "components": {
+                "Transform": {
+                    "position": [
+                        0,
+                        10,
+                        0
+                    ],
+                    "rotation": [
+                        50,
+                        -30,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                },
+                "Light": {
+                    "type": "Directional",
+                    "color": [
+                        1.0,
+                        0.95,
+                        0.85
+                    ],
+                    "intensity": 1.0,
+                    "castShadows": true
+                }
+            }
+        },
+        {
+            "name": "Camera",
+            "components": {
+                "Transform": {
+                    "position": [
+                        0,
+                        2,
+                        -5
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                },
+                "Camera": {
+                    "fov": 75.0,
+                    "near": 0.1,
+                    "far": 1000.0,
+                    "primary": true
+                }
+            }
+        },
+        {
+            "name": "Floor",
+            "components": {
+                "Transform": {
+                    "position": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        50,
+                        1,
+                        50
+                    ]
+                },
+                "MeshRenderer": {
+                    "mesh": "Primitive/Cube",
+                    "material": "Materials/Default.json"
+                },
+                "RigidBody": {
+                    "type": "Static",
+                    "mass": 0
+                },
+                "BoxCollider": {
+                    "halfExtents": [
+                        25,
+                        0.5,
+                        25
+                    ]
+                }
+            }
+        },
+        {
+            "name": "SpawnPoint",
+            "components": {
+                "Transform": {
+                    "position": [
+                        0,
+                        1,
+                        0
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                },
+                "SpawnPoint": {
+                    "team": 0,
+                    "index": 0
+                }
+            }
+        }
+    ],
+    "environment": {
+        "ambientColor": [
+            0.15,
+            0.15,
+            0.2
+        ],
+        "skyTexture": "Textures/Sky/sky_gradient.png",
+        "fogEnabled": false,
+        "fogColor": [
+            0.7,
+            0.75,
+            0.8
+        ],
+        "fogStart": 50.0,
+        "fogEnd": 200.0
+    }
+}
