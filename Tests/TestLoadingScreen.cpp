@@ -28,7 +28,7 @@ TEST(Loading_BasicExecution)
     loader.Execute();
 
     EXPECT_EQ(executedCount, 2);
-    EXPECT_EQ(loader.GetState(), Spark::LoadingState::Completed);
+    EXPECT_TRUE(loader.GetState() == Spark::LoadingState::Completed);
     EXPECT_NEAR(loader.GetProgress(), 1.0f, 0.001f);
 }
 
@@ -62,7 +62,7 @@ TEST(Loading_FailedTask)
 
     loader.Execute();
 
-    EXPECT_EQ(loader.GetState(), Spark::LoadingState::Failed);
+    EXPECT_TRUE(loader.GetState() == Spark::LoadingState::Failed);
 }
 
 TEST(Loading_Tips)

@@ -59,6 +59,14 @@ add_executable(SparkTests
     TestThreadSafeQueue.cpp
     TestDeltaSmoother.cpp
     TestFPSComponents.cpp
+    TestWeaponSystem.cpp
+    TestNetworkEncryption.cpp
+    TestECSIntegration.cpp
+    TestUpscalingSystem.cpp
+    TestPlayModeManager.cpp
+    TestEnvironmentQuery.cpp
+    TestSplatmapSystem.cpp
+    TestAnimationRetargeting.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
