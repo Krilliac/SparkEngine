@@ -40,8 +40,6 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
-#else
-#include "../../Core/Platform.h"
 #endif
 
 #include <cstdint>
