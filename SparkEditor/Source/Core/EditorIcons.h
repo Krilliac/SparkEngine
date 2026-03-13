@@ -87,6 +87,9 @@
 #define ICON_FA_BOLT "\xef\x83\xa7"        // U+F0E7 (spark!)
 #define ICON_FA_FIRE "\xef\x81\xad"        // U+F06D
 
+// === Communication / Dialogue ===
+#define ICON_FA_COMMENT "\xef\x81\xb5" // U+F075
+
 // === Panels ===
 #define ICON_FA_SITEMAP "\xef\x83\xa8"   // U+F0E8 (hierarchy)
 #define ICON_FA_SLIDERS "\xef\x87\x9e"   // U+F1DE (inspector/properties)
