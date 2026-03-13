@@ -37,6 +37,7 @@
 #pragma once
 
 #include "../../Utils/Assert.h"
+#include "../../Utils/Validate.h"
 
 // Core types: EntityID, NameComponent, Transform, MeshRenderer, Camera, Script
 #include "Components/CoreComponents.h"
@@ -89,7 +90,9 @@ class World
     EntityID CreateEntity(const std::string& name = "")
     {
         EntityID entity = m_registry.create();
-        ASSERT_MSG(entity != entt::null, "Failed to create entity — registry returned null entity");
+        SPARK_REQUIRE(Spark::LogCategory::ECS, entity != entt::null);
+        SPARK_LOG_TRACE(Spark::LogCategory::ECS, "Created entity %u%s%s", static_cast<uint32_t>(entity),
+                        name.empty() ? "" : " name=", name.c_str());
         if (!name.empty())
         {
             m_registry.emplace<NameComponent>(entity, NameComponent{name});
@@ -99,38 +102,43 @@ class World
 
     void DestroyEntity(EntityID entity)
     {
-        ASSERT_MSG(m_registry.valid(entity), "DestroyEntity called with invalid entity");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, m_registry.valid(entity),
+                          "DestroyEntity called with invalid entity");
+        SPARK_LOG_TRACE(Spark::LogCategory::ECS, "Destroying entity %u", static_cast<uint32_t>(entity));
         m_registry.destroy(entity);
     }
 
     template <typename T, typename... Args> T& AddComponent(EntityID entity, Args&&... args)
     {
-        ASSERT_MSG(m_registry.valid(entity), "AddComponent called with invalid entity");
-        ASSERT_MSG(!m_registry.all_of<T>(entity), "Entity already has the requested component");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, m_registry.valid(entity), "AddComponent called with invalid entity");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, !m_registry.all_of<T>(entity),
+                          "Entity already has the requested component");
         return m_registry.emplace<T>(entity, std::forward<Args>(args)...);
     }
 
     template <typename T> T* GetComponent(EntityID entity)
     {
-        ASSERT_MSG(m_registry.valid(entity), "GetComponent called with invalid entity");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, m_registry.valid(entity), "GetComponent called with invalid entity");
         return m_registry.try_get<T>(entity);
     }
     template <typename T> const T* GetComponent(EntityID entity) const
     {
-        ASSERT_MSG(m_registry.valid(entity), "GetComponent called with invalid entity");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, m_registry.valid(entity), "GetComponent called with invalid entity");
         return m_registry.try_get<T>(entity);
     }
 
     template <typename T> bool HasComponent(EntityID entity) const
     {
-        ASSERT_MSG(m_registry.valid(entity), "HasComponent called with invalid entity");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, m_registry.valid(entity), "HasComponent called with invalid entity");
         return m_registry.all_of<T>(entity);
     }
 
     template <typename T> void RemoveComponent(EntityID entity)
     {
-        ASSERT_MSG(m_registry.valid(entity), "RemoveComponent called with invalid entity");
-        ASSERT_MSG(m_registry.all_of<T>(entity), "RemoveComponent called but entity does not have the component");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, m_registry.valid(entity),
+                          "RemoveComponent called with invalid entity");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, m_registry.all_of<T>(entity),
+                          "RemoveComponent called but entity does not have the component");
         m_registry.remove<T>(entity);
     }
 

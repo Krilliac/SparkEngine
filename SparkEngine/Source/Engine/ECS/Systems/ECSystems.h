@@ -56,6 +56,7 @@
 
 #include "../Components.h"
 #include "../../../Utils/Assert.h"
+#include "../../../Utils/Validate.h"
 #include <functional>
 #include <vector>
 #include <string>
@@ -830,6 +831,8 @@ namespace Spark::ECS
         {
             auto system = std::make_unique<T>(std::forward<Args>(args)...);
             T* ptr = system.get();
+            SPARK_LOG_INFO(Spark::LogCategory::ECS, "SystemManager: registering system '%s' (index=%zu)",
+                           ptr->GetName(), m_systems.size());
             m_systems.push_back(std::move(system));
             return ptr;
         }
@@ -846,6 +849,10 @@ namespace Spark::ECS
      */
         void UpdateAll(World& world, float deltaTime)
         {
+            SPARK_WARN_IF(Spark::LogCategory::ECS, deltaTime < 0.0f,
+                          "SystemManager::UpdateAll called with negative deltaTime");
+            SPARK_WARN_IF(Spark::LogCategory::ECS, deltaTime > 1.0f,
+                          "SystemManager::UpdateAll called with deltaTime > 1s — possible frame hang");
             for (auto& system : m_systems)
             {
                 if (system->IsEnabled())

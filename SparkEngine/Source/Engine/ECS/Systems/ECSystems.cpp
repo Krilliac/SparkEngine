@@ -8,6 +8,7 @@
 #include "Engine/ECS/Components/FPSComponents.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Utils/Cooldown.h"
+#include "Utils/Validate.h"
 #include <sstream>
 #include <cmath>
 
@@ -21,9 +22,9 @@ namespace Spark::ECS
 
     void RenderSystem::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
         m_renderedCount = 0;
-        if (!m_graphics)
-            return;
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_graphics);
 
         const auto& registry = world.GetRegistry();
         auto view = world.GetEntitiesWith<Transform, MeshRenderer>();
@@ -59,8 +60,10 @@ namespace Spark::ECS
 
     void PhysicsUpdateSystem::Update(World& world, float deltaTime)
     {
-        if (!m_physics)
-            return;
+        SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Physics, m_physics);
+        SPARK_WARN_IF(Spark::LogCategory::Physics, deltaTime > 0.1f,
+                      "Large deltaTime in PhysicsUpdate — possible frame spike");
 
         auto view = world.GetEntitiesWith<Transform, RigidBodyComponent>();
         for (auto entity : view)
@@ -102,8 +105,8 @@ namespace Spark::ECS
 
     void AudioUpdateSystem::Update(World& world, float deltaTime)
     {
-        if (!m_audio)
-            return;
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Audio, m_audio);
 
         auto view = world.GetEntitiesWith<Transform, AudioSourceComponent>();
         for (auto entity : view)
@@ -138,6 +141,7 @@ namespace Spark::ECS
 
     void LifecycleSystem::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
         // Collect dead entities first, then fire callbacks to avoid
         // iterator invalidation if the callback destroys the entity.
         std::vector<entt::entity> deadEntities;
@@ -153,12 +157,25 @@ namespace Spark::ECS
             }
         }
 
+        if (!deadEntities.empty())
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::ECS, "LifecycleSystem: %zu entities died this frame",
+                           deadEntities.size());
+        }
+
         if (m_onDeath)
         {
             for (auto entity : deadEntities)
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "LifecycleSystem: firing death callback for entity %u",
+                                static_cast<uint32_t>(entity));
                 m_onDeath(entity);
             }
+        }
+        else
+        {
+            SPARK_WARN_IF(Spark::LogCategory::ECS, !deadEntities.empty(),
+                          "LifecycleSystem: entities died but no death callback is registered");
         }
     }
 
@@ -168,6 +185,8 @@ namespace Spark::ECS
 
     void AnimationUpdateSystem::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Animation);
+        SPARK_WARN_IF(Spark::LogCategory::Animation, deltaTime < 0.0f, "Negative deltaTime in AnimationUpdate");
         auto view = world.GetEntitiesWith<Transform, AnimationController>();
         for (auto entity : view)
         {
@@ -206,6 +225,8 @@ namespace Spark::ECS
 
     void AIUpdateSystem::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
+        SPARK_WARN_IF(Spark::LogCategory::AI, deltaTime < 0.0f, "Negative deltaTime in AIUpdate");
         auto view = world.GetEntitiesWith<Transform, AIComponent>();
         for (auto entity : view)
         {
@@ -216,6 +237,8 @@ namespace Spark::ECS
             auto* health = world.GetComponent<HealthComponent>(entity);
             if (health && health->isDead)
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::AI, "AIUpdateSystem: entity %u marked as dead",
+                                static_cast<uint32_t>(entity));
                 ai.state = AIComponent::State::Dead;
                 continue;
             }
@@ -276,6 +299,7 @@ namespace Spark::ECS
 
     void SplineFollowerSystem::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
         m_activeFollowerCount = 0;
 
         auto view = world.GetEntitiesWith<Transform, SplineFollowerComponent>();
@@ -372,6 +396,7 @@ namespace Spark::ECS
 
     void ParticleUpdateSystem::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
         m_activeParticleCount = 0;
         m_activeEmitterCount = 0;
 
@@ -407,6 +432,7 @@ namespace Spark::ECS
 
     void DecalSystem::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
         m_activeDecalCount = 0;
         std::vector<entt::entity> expiredDecals;
 
@@ -452,6 +478,8 @@ namespace Spark::ECS
 
     void ProjectileSystem::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
+        SPARK_WARN_IF(Spark::LogCategory::ECS, deltaTime < 0.0f, "Negative deltaTime in ProjectileSystem");
         m_activeProjectileCount = 0;
         std::vector<entt::entity> expiredProjectiles;
 

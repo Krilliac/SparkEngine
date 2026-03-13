@@ -10,6 +10,7 @@
 #include "PerceptionSystem.h"
 #include "SteeringBehaviors.h"
 #include "../../Utils/JobSystem.h"
+#include "../../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
 #include <numbers>
@@ -80,6 +81,10 @@ namespace Spark::AI
 
     void AISystem::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
+        SPARK_WARN_IF(Spark::LogCategory::AI, deltaTime < 0.0f, "Negative deltaTime in AISystem::Update");
+        SPARK_WARN_IF(Spark::LogCategory::AI, deltaTime > 0.5f, "Large deltaTime (>0.5s) in AISystem::Update");
+
         auto view = world.GetEntitiesWith<Transform, AIComponent>();
 
         // Phase 1 (serial): Collect live agents, handle deaths and lazy initialization.
@@ -112,10 +117,18 @@ namespace Spark::AI
             // Lazily initialize behavior tree instance from template
             if (!ai.behaviorTreeHandle && !ai.behaviorTreeName.empty())
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::AI, "AISystem: lazy-initializing behavior tree '%s' for entity %u",
+                                ai.behaviorTreeName.c_str(), static_cast<uint32_t>(entity));
                 BehaviorTree* instance = CreateBehaviorInstance(ai.behaviorTreeName);
                 if (instance)
                 {
                     ai.behaviorTreeHandle = Spark::BehaviorTreeHandle(static_cast<void*>(instance));
+                }
+                else
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::AI,
+                                   "AISystem: failed to create behavior instance '%s' for entity %u",
+                                   ai.behaviorTreeName.c_str(), static_cast<uint32_t>(entity));
                 }
             }
 
@@ -165,14 +178,22 @@ namespace Spark::AI
 
     void AISystem::RegisterBehavior(const std::string& name, std::unique_ptr<BehaviorTree> tree)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::AI, name);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::AI, tree);
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "AISystem: registered behavior template '%s'", name.c_str());
         m_behaviorTemplates[name] = std::move(tree);
     }
 
     BehaviorTree* AISystem::CreateBehaviorInstance(const std::string& templateName)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         auto it = m_behaviorTemplates.find(templateName);
         if (it == m_behaviorTemplates.end())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::AI,
+                           "AISystem::CreateBehaviorInstance: no template named '%s' registered", templateName.c_str());
             return nullptr;
+        }
 
         // Clone the template: create a new BehaviorTree with the same name.
         // The tree structure (root node hierarchy) is shared via the template's
