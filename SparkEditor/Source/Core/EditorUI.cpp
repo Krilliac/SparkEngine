@@ -386,6 +386,7 @@ namespace SparkEditor
         ImGui::DockBuilderDockWindow("###simple_hierarchy_panel", dockLeft);
         ImGui::DockBuilderDockWindow("###inspector_panel", dockRight);
         ImGui::DockBuilderDockWindow("###scene_view_panel", dockCenter);
+        ImGui::DockBuilderDockWindow("###game_view_panel", dockCenter);
         ImGui::DockBuilderDockWindow("##Toolbar", dockCenter);
         ImGui::DockBuilderDockWindow("###simple_console_panel", dockBottom);
         ImGui::DockBuilderDockWindow("###asset_browser_panel", dockBottom);
