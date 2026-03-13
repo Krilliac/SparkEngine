@@ -7,6 +7,7 @@
 
 #include "MaterialEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../Utils/ImGuiUtils.h"
 #include <imgui.h>
 #include <iostream>
 #include <cmath>
@@ -456,9 +457,7 @@ namespace SparkEditor
             ImGui::EndPopup();
         }
 
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         // Preview shape selector
         ImGui::Text("Shape:");
