@@ -1101,6 +1101,18 @@ namespace DirectX
     }
 
     // Quaternion stubs
+    inline XMVECTOR XMQuaternionRotationRollPitchYaw(float pitch, float yaw, float roll)
+    {
+        float halfPitch = pitch * 0.5f;
+        float halfYaw = yaw * 0.5f;
+        float halfRoll = roll * 0.5f;
+        float sp = sinf(halfPitch), cp = cosf(halfPitch);
+        float sy = sinf(halfYaw), cy = cosf(halfYaw);
+        float sr = sinf(halfRoll), cr = cosf(halfRoll);
+        return {cy * sp * cr + sy * cp * sr, sy * cp * cr - cy * sp * sr,
+                cy * cp * sr - sy * sp * cr, cy * cp * cr + sy * sp * sr};
+    }
+
     inline XMVECTOR XMQuaternionRotationAxis(XMVECTOR axis, float angle)
     {
         XMVECTOR n = XMVector3Normalize(axis);
