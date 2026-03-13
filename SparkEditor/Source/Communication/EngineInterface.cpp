@@ -107,8 +107,8 @@ namespace SparkEditor
             // Simulate memory usage fluctuation (+/- 1MB)
             m_currentMetrics.memoryUsage += memDist(rng) * 1024;
             m_currentMetrics.memoryUsage =
-                std::clamp(m_currentMetrics.memoryUsage, static_cast<int64_t>(256) * 1024 * 1024,
-                           static_cast<int64_t>(1024) * 1024 * 1024);
+                std::clamp(m_currentMetrics.memoryUsage, static_cast<size_t>(256) * 1024 * 1024,
+                           static_cast<size_t>(1024) * 1024 * 1024);
 
             timeSinceUpdate = 0.0f;
         }

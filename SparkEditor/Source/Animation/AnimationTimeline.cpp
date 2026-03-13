@@ -1144,7 +1144,6 @@ namespace SparkEditor
             if (trackBottom > timelineRect.y + timelineRect.w)
                 break;
 
-            XMFLOAT4 trackRect = {timelineRect.x, trackY, timelineRect.z, m_trackHeight};
             RenderTrack(track.get(), static_cast<int>(i));
 
             // Render keyframes for each visible curve

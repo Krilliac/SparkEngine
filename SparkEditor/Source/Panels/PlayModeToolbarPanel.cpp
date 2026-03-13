@@ -9,6 +9,7 @@
 #include "../Core/EditorIcons.h"
 #include "../../../SparkEngine/Source/Engine/Editor/PlayModeManager.h"
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <iostream>
 #include <cmath>
 
