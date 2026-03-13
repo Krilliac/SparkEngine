@@ -42,10 +42,7 @@
 #include <functional>
 #include <vector>
 
-namespace entt
-{
-    class registry; // Forward declaration — full header in .cpp
-}
+#include <entt/entt.hpp>
 
 namespace Spark::World
 {

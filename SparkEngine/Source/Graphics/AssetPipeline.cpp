@@ -1087,7 +1087,7 @@ std::string AssetPipeline::CalculateChecksum(const std::string& filePath)
     char buffer[1024];
     while (file.read(buffer, sizeof(buffer)))
     {
-        for (size_t i = 0; i < file.gcount(); ++i)
+        for (std::streamsize i = 0; i < file.gcount(); ++i)
         {
             hash = hash * 31 + buffer[i];
         }
