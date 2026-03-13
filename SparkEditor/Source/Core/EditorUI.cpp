@@ -250,17 +250,19 @@ namespace SparkEditor
             }
         }
 
-        // F5: Toggle play mode
+        // F5: Toggle play mode (delegates to PlayModeManager)
         if (ImGui::IsKeyPressed(ImGuiKey_F5) && !io.WantTextInput)
         {
             if (io.KeyShift)
             {
+                m_playModeManager.ExitPlayMode();
                 m_playMode = PlayMode::Stopped;
                 ShowNotification("Stopped", "info", 2.0f);
             }
             else
             {
-                m_playMode = (m_playMode == PlayMode::Playing) ? PlayMode::Stopped : PlayMode::Playing;
+                m_playModeManager.TogglePlayMode();
+                m_playMode = m_playModeManager.IsInPlayMode() ? PlayMode::Playing : PlayMode::Stopped;
                 ShowNotification(m_playMode == PlayMode::Playing ? "Playing..." : "Stopped", "info", 2.0f);
             }
         }
@@ -757,6 +759,45 @@ namespace SparkEditor
 
         // SKIP SimpleBuildSystem in all modes since it's causing the hang
         console.LogWarning("SKIPPING Simple Build System panel (known to cause hangs)");
+
+        // Create Debug Visualizer Panel
+        try
+        {
+            console.LogInfo("Creating Debug Visualizer panel...");
+            auto debugVisualizerPanel = std::shared_ptr<DebugVisualizerPanel>(new DebugVisualizerPanel());
+            m_panels["DebugVisualizer"] = debugVisualizerPanel;
+            console.LogSuccess("Created Debug Visualizer panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Debug Visualizer panel: " + std::string(e.what()));
+        }
+
+        // Create Object Placement Panel
+        try
+        {
+            console.LogInfo("Creating Object Placement panel...");
+            auto objectPlacementPanel = std::shared_ptr<ObjectPlacementPanel>(new ObjectPlacementPanel());
+            m_panels["ObjectPlacement"] = objectPlacementPanel;
+            console.LogSuccess("Created Object Placement panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Object Placement panel: " + std::string(e.what()));
+        }
+
+        // Create Build & Cook Panel
+        try
+        {
+            console.LogInfo("Creating Build & Cook panel...");
+            auto buildCookPanel = std::shared_ptr<BuildCookPanel>(new BuildCookPanel());
+            m_panels["BuildCook"] = buildCookPanel;
+            console.LogSuccess("Created Build & Cook panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Build & Cook panel: " + std::string(e.what()));
+        }
 
         // Initialize all panels
         for (auto& [name, panel] : m_panels)
@@ -1422,14 +1463,16 @@ namespace SparkEditor
             if (cursorX > ImGui::GetCursorPosX())
                 ImGui::SetCursorPosX(cursorX);
 
-            // Play
+            // Play (delegates to PlayModeManager)
             bool isPlaying = (m_playMode == PlayMode::Playing);
             if (isPlaying)
                 ImGui::PushStyleColor(ImGuiCol_Button, playGreen);
             if (ImGui::Button(ICON_FA_PLAY, btnDim))
             {
-                m_playMode = (m_playMode == PlayMode::Playing) ? PlayMode::Stopped : PlayMode::Playing;
-                ShowNotification(isPlaying ? "Stopped" : "Playing...", isPlaying ? "info" : "success", 2.0f);
+                m_playModeManager.TogglePlayMode();
+                m_playMode = m_playModeManager.IsInPlayMode() ? PlayMode::Playing : PlayMode::Stopped;
+                ShowNotification(m_playModeManager.IsInPlayMode() ? "Playing..." : "Stopped",
+                                 m_playModeManager.IsInPlayMode() ? "success" : "info", 2.0f);
             }
             if (isPlaying)
                 ImGui::PopStyleColor();
@@ -1437,15 +1480,16 @@ namespace SparkEditor
                 ImGui::SetTooltip("Play (F5)");
             ImGui::SameLine();
 
-            // Pause
+            // Pause (delegates to PlayModeManager)
             bool isPaused = (m_playMode == PlayMode::Paused);
             if (isPaused)
                 ImGui::PushStyleColor(ImGuiCol_Button, accentAmber);
             if (ImGui::Button(ICON_FA_PAUSE, btnDim))
             {
-                if (m_playMode == PlayMode::Playing)
+                m_playModeManager.TogglePause();
+                if (m_playModeManager.IsPaused())
                     m_playMode = PlayMode::Paused;
-                else if (m_playMode == PlayMode::Paused)
+                else if (m_playModeManager.IsInPlayMode())
                     m_playMode = PlayMode::Playing;
             }
             if (isPaused)
@@ -1454,11 +1498,12 @@ namespace SparkEditor
                 ImGui::SetTooltip("Pause");
             ImGui::SameLine();
 
-            // Stop
+            // Stop (delegates to PlayModeManager)
             if (ImGui::Button(ICON_FA_STOP, btnDim))
             {
                 if (m_playMode != PlayMode::Stopped)
                 {
+                    m_playModeManager.ExitPlayMode();
                     m_playMode = PlayMode::Stopped;
                     ShowNotification("Stopped", "info", 2.0f);
                 }

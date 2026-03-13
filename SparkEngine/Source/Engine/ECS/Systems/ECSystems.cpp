@@ -5,6 +5,7 @@
 #include "Physics/PhysicsSystem.h"
 #include "Audio/AudioEngine.h"
 #include "Engine/AI/BehaviorTree.h"
+#include "Engine/ECS/Components/FPSComponents.h"
 #include "Utils/Cooldown.h"
 #include <sstream>
 #include <cmath>
@@ -361,6 +362,157 @@ namespace Spark::ECS
             }
 
             m_activeFollowerCount++;
+        }
+    }
+
+    // ============================================================================
+    // ParticleUpdateSystem
+    // ============================================================================
+
+    void ParticleUpdateSystem::Update(World& world, float deltaTime)
+    {
+        m_activeParticleCount = 0;
+        m_activeEmitterCount = 0;
+
+        auto view = world.GetEntitiesWith<Transform, ParticleEmitterComponent>();
+        for (auto entity : view)
+        {
+            auto& emitter = view.get<ParticleEmitterComponent>(entity);
+
+            // Auto-play on first frame
+            if (emitter.autoPlay && !emitter.isPlaying)
+            {
+                emitter.isPlaying = true;
+            }
+
+            if (!emitter.isPlaying)
+                continue;
+
+            // Check if entity is active
+            auto* active = world.GetComponent<ActiveComponent>(entity);
+            if (active && !active->active)
+                continue;
+
+            m_activeEmitterCount++;
+
+            // Particle count is managed by the underlying particle system via
+            // the emitter handle. Here we track active emitters for profiling.
+        }
+    }
+
+    // ============================================================================
+    // DecalSystem
+    // ============================================================================
+
+    void DecalSystem::Update(World& world, float deltaTime)
+    {
+        m_activeDecalCount = 0;
+        std::vector<entt::entity> expiredDecals;
+
+        auto view = world.GetEntitiesWith<Transform, DecalComponent>();
+        for (auto entity : view)
+        {
+            auto& decal = view.get<DecalComponent>(entity);
+
+            // Permanent decals (lifetime == 0) never expire
+            if (decal.lifetime <= 0.0f)
+            {
+                m_activeDecalCount++;
+                continue;
+            }
+
+            // Count down remaining lifetime
+            decal.remainingLifetime -= deltaTime;
+
+            if (decal.remainingLifetime <= 0.0f)
+            {
+                decal.remainingLifetime = 0.0f;
+                expiredDecals.push_back(entity);
+            }
+            else
+            {
+                m_activeDecalCount++;
+            }
+        }
+
+        // Fire expired callbacks
+        if (m_onExpired)
+        {
+            for (auto entity : expiredDecals)
+            {
+                m_onExpired(entity);
+            }
+        }
+    }
+
+    // ============================================================================
+    // ProjectileSystem
+    // ============================================================================
+
+    void ProjectileSystem::Update(World& world, float deltaTime)
+    {
+        m_activeProjectileCount = 0;
+        std::vector<entt::entity> expiredProjectiles;
+
+        auto view = world.GetEntitiesWith<Transform, ProjectileComponent>();
+        for (auto entity : view)
+        {
+            auto& transform = view.get<Transform>(entity);
+            auto& proj = view.get<ProjectileComponent>(entity);
+
+            // Skip hitscan — they resolve instantly on the frame they're fired
+            if (proj.movementType == ProjectileComponent::MovementType::Hitscan)
+                continue;
+
+            // Advance age
+            proj.age += deltaTime;
+
+            // Apply gravity for ballistic projectiles
+            constexpr float kGravity = 9.81f;
+            proj.direction.y -= kGravity * proj.gravityScale * deltaTime;
+
+            // Normalize direction and compute movement
+            float dirLen = std::sqrt(proj.direction.x * proj.direction.x + proj.direction.y * proj.direction.y +
+                                     proj.direction.z * proj.direction.z);
+            if (dirLen > 0.0001f)
+            {
+                float invLen = 1.0f / dirLen;
+                float moveX = proj.direction.x * invLen * proj.speed * deltaTime;
+                float moveY = proj.direction.y * invLen * proj.speed * deltaTime;
+                float moveZ = proj.direction.z * invLen * proj.speed * deltaTime;
+
+                transform.position.x += moveX;
+                transform.position.y += moveY;
+                transform.position.z += moveZ;
+
+                float moveDist = std::sqrt(moveX * moveX + moveY * moveY + moveZ * moveZ);
+                proj.distanceTraveled += moveDist;
+
+                // Orient projectile along its direction
+                transform.rotation.y = std::atan2(proj.direction.x, proj.direction.z) * (180.0f / 3.14159265f);
+                transform.rotation.x = std::atan2(-proj.direction.y, std::sqrt(proj.direction.x * proj.direction.x +
+                                                                               proj.direction.z * proj.direction.z)) *
+                                       (180.0f / 3.14159265f);
+            }
+
+            // Check expiration
+            if (proj.IsExpired())
+            {
+                expiredProjectiles.push_back(entity);
+            }
+            else
+            {
+                m_activeProjectileCount++;
+            }
+        }
+
+        // Fire expired callbacks
+        if (m_onExpired)
+        {
+            for (auto entity : expiredProjectiles)
+            {
+                m_onExpired(entity);
+            }
         }
     }
 

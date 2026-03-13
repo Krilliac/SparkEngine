@@ -202,7 +202,26 @@ class AngelScriptEngine
 
   private:
     static AngelScriptEngine* s_instance; ///< Singleton instance pointer
+    static World* s_boundWorld;           ///< World pointer bound for script API (createEntity, getTransform)
 
+  public:
+    /**
+     * @brief Bind an ECS World for script API functions (createEntity, getTransform).
+     *
+     * Must be called after Initialize() and before any scripts call createEntity()
+     * or getTransform(). Typically called once per scene load.
+     *
+     * @param world Non-owning pointer to the active World. Pass nullptr to unbind.
+     */
+    static void BindWorld(World* world) { s_boundWorld = world; }
+
+    /**
+     * @brief Get the currently bound World pointer.
+     * @return Pointer to the bound World, or nullptr if none is bound.
+     */
+    static World* GetBoundWorld() { return s_boundWorld; }
+
+  private:
     asIScriptEngine* m_engine = nullptr;                         ///< The core AngelScript engine
     std::unordered_map<std::string, asIScriptModule*> m_modules; ///< Compiled script modules by name
 

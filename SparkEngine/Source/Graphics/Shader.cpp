@@ -89,9 +89,8 @@ Shader::Shader()
     m_metrics.shaderMemoryUsage = 0;
     m_metrics.hotReloadEnabled = false;
 
-    // **FIXED: Add correct search paths pointing to source directory**
+    // Search paths for shader files — relative only, no hardcoded absolute paths
     m_searchPaths.clear();
-    m_searchPaths.push_back("D:/SparkEngine/SparkEngine/SparkEngine/Shaders/HLSL/");
     m_searchPaths.push_back("../SparkEngine/Shaders/HLSL/");
     m_searchPaths.push_back("../../SparkEngine/Shaders/HLSL/");
     m_searchPaths.push_back("Shaders/HLSL/");

@@ -480,6 +480,8 @@ namespace Spark::Net
         // Reliable message tracking
         SequenceNumber m_nextOutgoingSequence = 1;
         std::unordered_map<SequenceNumber, NetworkMessage> m_unacknowledgedMessages;
+        std::unordered_map<SequenceNumber, float>
+            m_reliableOriginalSendTime; ///< Tracks when each reliable msg was first sent
         float m_reliableRetransmitInterval = 0.5f;
 
         // Replication

@@ -395,6 +395,7 @@ namespace Spark::Net
         m_pendingInputs.clear();
         m_inputHistory.clear();
         m_unacknowledgedMessages.clear();
+        m_reliableOriginalSendTime.clear();
         m_lagCompensator.Clear();
 
         {
@@ -649,6 +650,7 @@ namespace Spark::Net
         m_lagCompensator.Clear();
         m_pendingInputs.clear();
         m_unacknowledgedMessages.clear();
+        m_reliableOriginalSendTime.clear();
 
         {
             std::lock_guard<std::mutex> stateLock(m_stateMutex);
@@ -748,6 +750,7 @@ namespace Spark::Net
         m_pendingInputs.clear();
         m_inputHistory.clear();
         m_unacknowledgedMessages.clear();
+        m_reliableOriginalSendTime.clear();
     }
 
     // --------------------------------------------------------------------------
@@ -875,6 +878,7 @@ namespace Spark::Net
         if (copy.channel != ChannelType::Unreliable)
         {
             m_unacknowledgedMessages[copy.sequence] = copy;
+            m_reliableOriginalSendTime.try_emplace(copy.sequence, m_serverTime);
         }
 #else
         // Without networking, just enqueue for local testing
@@ -1272,6 +1276,7 @@ namespace Spark::Net
             if (msg.channel != ChannelType::Unreliable && msg.sequence > 0)
             {
                 m_unacknowledgedMessages[msg.sequence] = msg;
+                m_reliableOriginalSendTime.try_emplace(msg.sequence, m_serverTime);
             }
 
             toSend.pop();
@@ -1294,8 +1299,22 @@ namespace Spark::Net
             if (it == m_unacknowledgedMessages.end())
                 continue;
 
+            // Check total age since original send (not last retransmit)
+            auto origIt = m_reliableOriginalSendTime.find(seq);
+            float originalSendTime = (origIt != m_reliableOriginalSendTime.end()) ? origIt->second : 0.0f;
+            float totalAge = m_serverTime - originalSendTime;
+
+            // Drop if total time since first send exceeds connection timeout
+            if (totalAge > m_connectionTimeout)
+            {
+                m_unacknowledgedMessages.erase(it);
+                m_reliableOriginalSendTime.erase(seq);
+                m_stats.packetsDropped++;
+                continue;
+            }
+
             auto& retransmitMsg = it->second;
-            retransmitMsg.timestamp = m_serverTime; // Reset timer
+            retransmitMsg.timestamp = m_serverTime; // Reset retransmit timer
             auto serialized = SerializeMessage(retransmitMsg);
 
             if (m_role == NetworkRole::Client)
@@ -1308,14 +1327,6 @@ namespace Spark::Net
                 {
                     SendRawTo(serialized, addr);
                 }
-            }
-
-            // Drop after too many retries (prevent infinite retransmit)
-            float totalAge = m_serverTime - retransmitMsg.timestamp;
-            if (totalAge > m_connectionTimeout)
-            {
-                m_unacknowledgedMessages.erase(it);
-                m_stats.packetsDropped++;
             }
         }
 #else

@@ -40,9 +40,16 @@ namespace Spark
     {
         class AISystem;
     }
+    namespace UI
+    {
+        class UISystem;
+    }
     class SaveSystem;
     class CoroutineScheduler;
     class NetworkManager;
+    class WeatherSystem;
+    class DialogueSystem;
+    class ModSystem;
 } // namespace Spark
 
 namespace Spark::EngineSetup
@@ -134,6 +141,30 @@ namespace Spark::EngineSetup
         if (auto* network = ctx.GetNetwork())
         {
             ctx.RegisterSubsystem<Spark::NetworkManager>(network, DependsOn<Timer>{});
+        }
+
+        // WeatherSystem depends on Timer (weather transitions are time-based)
+        if (auto* weather = ctx.GetSystem<Spark::WeatherSystem>())
+        {
+            ctx.RegisterSubsystem<Spark::WeatherSystem>(weather, DependsOn<Timer>{});
+        }
+
+        // UISystem depends on Timer and EventBus
+        if (auto* ui = ctx.GetSystem<Spark::UI::UISystem>())
+        {
+            ctx.RegisterSubsystem<Spark::UI::UISystem>(ui, DependsOn<Timer, Spark::EventBus>{});
+        }
+
+        // DialogueSystem depends on Timer and EventBus (fires events, tracks timing)
+        if (auto* dialogue = ctx.GetSystem<Spark::DialogueSystem>())
+        {
+            ctx.RegisterSubsystem<Spark::DialogueSystem>(dialogue, DependsOn<Timer, Spark::EventBus>{});
+        }
+
+        // ModSystem depends on nothing (scans filesystem)
+        if (auto* mods = ctx.GetSystem<Spark::ModSystem>())
+        {
+            ctx.RegisterSubsystem<Spark::ModSystem>(mods, DependsOn<>{});
         }
     }
 
