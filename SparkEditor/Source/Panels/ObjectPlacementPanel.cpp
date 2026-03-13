@@ -11,6 +11,7 @@
 
 #include "ObjectPlacementPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -21,6 +22,7 @@ namespace SparkEditor
 
     bool ObjectPlacementPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Object Placement panel\n";
 
         // Populate built-in prefab library

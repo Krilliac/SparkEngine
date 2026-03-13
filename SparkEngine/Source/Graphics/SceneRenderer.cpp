@@ -2,6 +2,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "SceneRenderer.h"
+#include "../Utils/Validate.h"
 #include <algorithm>
 
 namespace Spark::Graphics
@@ -11,6 +12,10 @@ namespace Spark::Graphics
 
     bool SceneRenderer::Initialize(uint32_t maxDrawCommands)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Graphics, maxDrawCommands > 0, false);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SceneRenderer initializing with maxDrawCommands=%u",
+                       maxDrawCommands);
         m_maxDrawCommands = maxDrawCommands;
         m_drawCommands.reserve(maxDrawCommands);
         m_visibleCommands.reserve(maxDrawCommands);
@@ -19,6 +24,9 @@ namespace Spark::Graphics
 
     void SceneRenderer::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SceneRenderer shutting down (%zu draw commands in flight)",
+                       m_drawCommands.size());
         m_drawCommands.clear();
         m_visibleCommands.clear();
         m_pathLookup.clear();

@@ -7,6 +7,7 @@
 
 #include "ProjectManager.h"
 #include "Utils/LocalFileCache.h"
+#include "Utils/Validate.h"
 #include <iostream>
 #include <filesystem>
 #include <fstream>
@@ -193,6 +194,11 @@ namespace SparkEditor
     bool ProjectManager::CreateProject(const std::string& projectName, const std::string& parentDirectory,
                                        ProjectTemplate templateType, const std::string& description)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !projectName.empty(), false);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !parentDirectory.empty(), false);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating project '%s' in '%s'", projectName.c_str(),
+                       parentDirectory.c_str());
         // If engine root is set and templates exist, use template-based creation
         if (!m_engineRoot.empty())
         {
@@ -374,6 +380,9 @@ namespace SparkEditor
 
     bool ProjectManager::OpenProject(const std::string& sparkprojectPath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !sparkprojectPath.empty(), false);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading project from '%s'", sparkprojectPath.c_str());
         std::cout << "Opening project: " << sparkprojectPath << "\n";
 
         // Accept either a .sparkproject file or a directory containing one
@@ -431,11 +440,13 @@ namespace SparkEditor
 
     bool ProjectManager::SaveProject()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_hasOpenProject)
         {
             std::cerr << "No project is currently open\n";
             return false;
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving project '%s'", m_currentProject.name.c_str());
         std::cout << "Saving project: " << m_currentProject.name << "\n";
         m_currentProject.lastModified = GetCurrentTimestamp();
         return SaveProjectFile();

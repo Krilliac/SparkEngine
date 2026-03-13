@@ -7,6 +7,7 @@
 
 #include "../Utils/LogMacros.h"
 #include "../Utils/Logger.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <queue>
@@ -34,6 +35,8 @@ namespace Spark
 
     bool EngineBootstrap::Register(SubsystemDescriptor descriptor)
     {
+        SPARK_TRACE_ENTER(LogCategory::Core);
+
         if (m_initialized)
         {
             SPARK_LOG_ERROR(LogCategory::Core, "EngineBootstrap::Register called after Initialize() — ignoring '%s'",
@@ -61,6 +64,8 @@ namespace Spark
 
     size_t EngineBootstrap::RegisterAll(std::vector<SubsystemDescriptor> descriptors)
     {
+        SPARK_TRACE_ENTER(LogCategory::Core);
+
         size_t count = 0;
         for (auto& desc : descriptors)
         {
@@ -78,6 +83,8 @@ namespace Spark
 
     bool EngineBootstrap::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Core);
+
         if (m_initialized)
         {
             SPARK_LOG_WARN(LogCategory::Core, "EngineBootstrap::Initialize called more than once — ignoring");
@@ -200,6 +207,8 @@ namespace Spark
 
     void EngineBootstrap::Shutdown()
     {
+        SPARK_TRACE_ENTER(LogCategory::Core);
+
         if (m_shutDown)
         {
             return;

@@ -5,6 +5,7 @@
 
 #include "GameModuleLoader.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/Validate.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -24,6 +25,10 @@ GameModuleLoader::~GameModuleLoader()
 
 bool GameModuleLoader::Load(const std::string& path)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_VALIDATE_RET(Spark::LogCategory::Core, !path.empty(), false);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading game module: %s", path.c_str());
+
     if (m_libraryHandle)
     {
         Spark::SimpleConsole::GetInstance().LogWarning("Game module already loaded. Unload first.");
@@ -86,6 +91,9 @@ bool GameModuleLoader::Load(const std::string& path)
 
 void GameModuleLoader::Unload()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Unloading game module");
+
     if (m_module && m_destroyFn)
     {
         m_destroyFn(m_module);
@@ -109,6 +117,10 @@ void GameModuleLoader::Unload()
 
 bool GameModuleLoader::Reload()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_VALIDATE_RET(Spark::LogCategory::Core, !m_modulePath.empty(), false);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Reloading game module");
+
     if (m_modulePath.empty())
     {
         Spark::SimpleConsole::GetInstance().LogError("No module path to reload from");

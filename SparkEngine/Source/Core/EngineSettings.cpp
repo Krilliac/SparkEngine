@@ -5,6 +5,7 @@
 
 #include "EngineSettings.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/Validate.h"
 #include <filesystem>
 #include <sstream>
 
@@ -53,6 +54,8 @@ std::string EngineSettings::FindSettingsPath() const
 // =============================================================================
 bool EngineSettings::Load(const std::string& path)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+
     m_filePath = path.empty() ? FindSettingsPath() : path;
 
     if (m_config.Load(m_filePath))
@@ -75,6 +78,8 @@ bool EngineSettings::Load(const std::string& path)
 // =============================================================================
 bool EngineSettings::Save() const
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+
     WriteToConfig();
     return m_config.Save(m_filePath);
 }
@@ -90,6 +95,8 @@ bool EngineSettings::SaveAs(const std::string& path) const
 // =============================================================================
 void EngineSettings::ResetToDefaults()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+
     m_graphics = GraphicsSettings{};
     m_audio = AudioSettings{};
     m_controls = ControlsSettings{};

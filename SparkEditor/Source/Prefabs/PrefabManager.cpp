@@ -6,6 +6,7 @@
  */
 
 #include "PrefabManager.h"
+#include "Utils/Validate.h"
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
@@ -16,6 +17,7 @@ namespace SparkEditor
 
     bool PrefabManager::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         CreateSamplePrefabs();
         return true;
     }
@@ -28,6 +30,7 @@ namespace SparkEditor
 
     PrefabAsset* PrefabManager::CreatePrefabFromEntity(uint64_t entityId, const std::string& prefabName)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         // Create a new prefab and populate it with the entity's components
         PrefabAsset prefab(prefabName);
 
@@ -81,6 +84,7 @@ namespace SparkEditor
 
     bool PrefabManager::SavePrefab(const std::string& name, const std::string& directory)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         auto it = m_prefabs.find(name);
         if (it == m_prefabs.end())
         {
@@ -94,6 +98,7 @@ namespace SparkEditor
 
     PrefabAsset* PrefabManager::LoadPrefab(const std::string& filePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         PrefabAsset prefab = PrefabAsset::Load(filePath);
         if (prefab.GetName().empty())
         {

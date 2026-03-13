@@ -8,6 +8,7 @@
 #include "AssetDependencyPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Utils/ImGuiUtils.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <fstream>
@@ -39,6 +40,7 @@ namespace SparkEditor
 
     bool AssetDependencyPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Asset Dependency panel\n";
         m_filter = DependencyFilter{};
         m_graphOffset = ImVec2(0.0f, 0.0f);

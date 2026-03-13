@@ -9,6 +9,7 @@
 
 #include "AssetPipeline.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include <iostream>
 #include <fstream>
@@ -535,7 +536,9 @@ AssetPipeline::~AssetPipeline()
 
 HRESULT AssetPipeline::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    ASSERT(device && context);
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, context);
 
     m_device = device;
     m_context = context;
@@ -549,12 +552,14 @@ HRESULT AssetPipeline::Initialize(ID3D11Device* device, ID3D11DeviceContext* con
     // Start loading threads
     SetStreamingThreadCount(2);
 
-    Spark::SimpleConsole::GetInstance().LogSuccess("AssetPipeline initialized successfully");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "AssetPipeline initialized successfully");
     return S_OK;
 }
 
 void AssetPipeline::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "AssetPipeline shutting down");
     // Stop loading threads
     m_shouldStop = true;
     m_queueCondition.notify_all();
@@ -1267,6 +1272,7 @@ std::string LoadingPriorityToString(LoadingPriority priority)
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
 #include <filesystem>

@@ -18,6 +18,7 @@
 #include "HierarchyPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../CommandHistory.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -28,6 +29,7 @@ namespace SparkEditor
 
     bool HierarchyPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Hierarchy panel\n";
         return true;
     }
@@ -43,6 +45,7 @@ namespace SparkEditor
 
     void HierarchyPanel::Render()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         if (!IsVisible())
             return;
 

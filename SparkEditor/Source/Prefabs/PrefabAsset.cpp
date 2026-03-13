@@ -6,6 +6,7 @@
  */
 
 #include "PrefabAsset.h"
+#include "Utils/Validate.h"
 #include <algorithm>
 #include <fstream>
 
@@ -18,6 +19,7 @@ namespace SparkEditor
 
     void PrefabAsset::AddComponent(const SerializedComponent& component)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Editor, component.typeName);
         // Replace if component of same type already exists
         auto it = std::find_if(m_components.begin(), m_components.end(),
                                [&](const SerializedComponent& c) { return c.typeName == component.typeName; });
@@ -35,6 +37,7 @@ namespace SparkEditor
 
     bool PrefabAsset::RemoveComponent(const std::string& typeName)
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !typeName.empty(), false);
         auto it = std::find_if(m_components.begin(), m_components.end(),
                                [&](const SerializedComponent& c) { return c.typeName == typeName; });
 
@@ -63,6 +66,8 @@ namespace SparkEditor
 
     bool PrefabAsset::Save(const std::string& path)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !path.empty(), false);
         // Simple text-based serialization for the prefab
         std::ofstream file(path);
         if (!file.is_open())
@@ -126,6 +131,7 @@ namespace SparkEditor
 
     PrefabAsset PrefabAsset::Load(const std::string& path)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         PrefabAsset prefab;
         std::ifstream file(path);
         if (!file.is_open())

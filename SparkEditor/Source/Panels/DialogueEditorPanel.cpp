@@ -8,6 +8,7 @@
 #include "DialogueEditorPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Utils/ImGuiUtils.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -34,6 +35,7 @@ namespace SparkEditor
 
     bool DialogueEditorPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Dialogue Editor panel\n";
         NewDialogue();
         m_isInitialized = true;

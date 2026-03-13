@@ -8,6 +8,7 @@
 #include "SpriteAnimationEditorPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <algorithm>
@@ -24,6 +25,7 @@ namespace SparkEditor
 
     bool SpriteAnimationEditorPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Sprite Animation Editor panel\n";
         return true;
     }

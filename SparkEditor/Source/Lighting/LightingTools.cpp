@@ -6,6 +6,7 @@
  */
 
 #include "LightingTools.h"
+#include "Utils/Validate.h"
 #include <imgui.h>
 #include <cmath>
 #include <algorithm>
@@ -39,6 +40,7 @@ namespace SparkEditor
 
     bool LightingTools::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
         if (!device || !context)
         {
             return false;

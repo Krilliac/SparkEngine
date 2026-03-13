@@ -20,6 +20,7 @@
 #include "AudioMixerPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Utils/ImGuiUtils.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -59,6 +60,7 @@ namespace SparkEditor
 
     bool AudioMixerPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Audio);
         if (m_isInitialized)
         {
             return true;

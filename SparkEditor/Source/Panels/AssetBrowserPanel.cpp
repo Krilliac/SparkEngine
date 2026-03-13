@@ -15,6 +15,7 @@
 #include "AssetBrowserPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -23,6 +24,7 @@ namespace SparkEditor
 
     bool AssetBrowserPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Asset Browser panel\n";
         return true;
     }
@@ -405,6 +407,7 @@ namespace SparkEditor
 
     void AssetBrowserPanel::ImportAsset(const std::string& filePath)
     {
+        SPARK_VALIDATE_NOT_EMPTY(LogCategory::Editor, filePath);
         std::filesystem::path sourcePath(filePath);
 
         if (!std::filesystem::exists(sourcePath))

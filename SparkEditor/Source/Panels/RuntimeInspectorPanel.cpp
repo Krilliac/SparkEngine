@@ -11,6 +11,7 @@
 
 #include "RuntimeInspectorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 
 #include <imgui.h>
 
@@ -220,6 +221,7 @@ namespace SparkEditor
 
     bool RuntimeInspectorPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Runtime Inspector panel\n";
         m_isInitialized = true;
         return true;

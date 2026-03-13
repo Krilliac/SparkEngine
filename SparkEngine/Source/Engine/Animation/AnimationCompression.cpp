@@ -6,6 +6,7 @@
  */
 
 #include "AnimationCompression.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -45,6 +46,8 @@ namespace Spark::Animation
 
     CompressedClip AnimationCompressor::CompressClip(const AnimationClip& clip, const Settings& settings)
     {
+        SPARK_TRACE_ENTER(LogCategory::Animation);
+
         // Work on a copy so we can reduce without modifying the original
         AnimationClip reduced = clip;
         ReduceClip(reduced, settings);
@@ -156,6 +159,8 @@ namespace Spark::Animation
 
     XMFLOAT3 AnimationCompressor::DecompressPosition(const CompressedVectorTrack& track, size_t keyIndex)
     {
+        SPARK_WARN_IF(LogCategory::Animation, track.times.size() != track.values.size(),
+                      "DecompressPosition: track times/values size mismatch");
         if (keyIndex >= track.values.size())
         {
             return {0.0f, 0.0f, 0.0f};

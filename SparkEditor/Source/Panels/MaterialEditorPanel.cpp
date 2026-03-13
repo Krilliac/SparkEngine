@@ -8,6 +8,7 @@
 #include "MaterialEditorPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Utils/ImGuiUtils.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <cmath>
@@ -25,6 +26,7 @@ namespace SparkEditor
 
     bool MaterialEditorPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Material Editor panel\n";
 
         SetIcon(ICON_FA_PALETTE);

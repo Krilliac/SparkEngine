@@ -4,6 +4,7 @@
 #include "RenderDevice.h"
 #include "RHI/RHIFactory.h"
 #include "../Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include <d3d11.h>
 
 namespace Spark::Graphics
@@ -17,8 +18,12 @@ namespace Spark::Graphics
     bool RenderDevice::Initialize(Spark::NativeWindowHandle hwnd, uint32_t width, uint32_t height, bool fullscreen,
                                   RHI::GraphicsBackend backend)
     {
-        ASSERT_MSG(hwnd != nullptr, "RenderDevice::Initialize — null window handle");
-        ASSERT_MSG(width > 0 && height > 0, "RenderDevice::Initialize — width and height must be positive");
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, hwnd);
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, width > 0 && height > 0,
+                          "RenderDevice::Initialize — width and height must be positive");
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RenderDevice initializing (%ux%u, fullscreen=%d)", width, height,
+                       fullscreen);
 
         m_width = width;
         m_height = height;
@@ -55,6 +60,8 @@ namespace Spark::Graphics
 
     void RenderDevice::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RenderDevice shutting down");
 #ifdef SPARK_PLATFORM_WINDOWS
         m_backBufferRTV.Reset();
         m_depthStencilView.Reset();

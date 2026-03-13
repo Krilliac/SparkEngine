@@ -7,6 +7,7 @@
 
 #include "TextureSystem.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
@@ -384,8 +385,9 @@ TextureSystem::~TextureSystem()
 
 HRESULT TextureSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    ASSERT_NOT_NULL(device);
-    ASSERT_NOT_NULL(context);
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, context);
 
     m_device = device;
     m_context = context;
@@ -397,19 +399,21 @@ HRESULT TextureSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* con
     HRESULT hr = CreateDefaultTextures();
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create default textures");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create default textures");
         return hr;
     }
 
     // Start streaming threads
     SetStreamingThreadCount(2);
 
-    Spark::SimpleConsole::GetInstance().LogSuccess("TextureSystem initialized successfully");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "TextureSystem initialized successfully");
     return S_OK;
 }
 
 void TextureSystem::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "TextureSystem shutting down");
     // Stop streaming threads
     m_shouldStop = true;
     m_streamingCondition.notify_all();
@@ -436,7 +440,7 @@ void TextureSystem::Shutdown()
     m_device = nullptr;
     m_context = nullptr;
 
-    Spark::SimpleConsole::GetInstance().LogInfo("TextureSystem shutdown complete");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "TextureSystem shutdown complete");
 }
 
 void TextureSystem::Update(float deltaTime)
@@ -1127,6 +1131,7 @@ uint32_t GetFormatBytesPerPixel(TextureFormat format)
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "TextureSystem.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
 #include <filesystem>

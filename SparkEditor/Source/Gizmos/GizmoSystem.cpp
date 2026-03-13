@@ -11,6 +11,7 @@
  */
 
 #include "GizmoSystem.h"
+#include "Utils/Validate.h"
 #include <imgui.h>
 #include <cmath>
 #include <algorithm>
@@ -114,6 +115,7 @@ namespace SparkEditor
 
     bool GizmoSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         m_device = device;
         m_context = context;
 
@@ -141,6 +143,7 @@ namespace SparkEditor
 
     void GizmoSystem::Update(float /*deltaTime*/)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         // Animation timers could be updated here for gizmo pulse effects.
         // Currently no animated state is required.
     }

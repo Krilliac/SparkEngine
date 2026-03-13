@@ -14,6 +14,7 @@
 #include "../../Core/EngineContext.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/Assert.h"
+#include "../../Utils/Validate.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -265,6 +266,9 @@ bool ASGetKey(const std::string& key)
 
 bool AngelScriptEngine::Initialize()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Scripting);
+    SPARK_LOG_INFO(Spark::LogCategory::Scripting, "AngelScriptEngine initializing...");
+
     if (m_engine)
     {
         LogWarning("Already initialized.");
@@ -292,6 +296,9 @@ bool AngelScriptEngine::Initialize()
 
 void AngelScriptEngine::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Scripting);
+    SPARK_LOG_INFO(Spark::LogCategory::Scripting, "AngelScriptEngine shutting down...");
+
     // Detach and clean up every entity script.
     for (auto& [entityID, instance] : m_entityScripts)
     {
@@ -796,6 +803,8 @@ void AngelScriptEngine::SetLastError(const std::string& error)
 
 bool AngelScriptEngine::Initialize()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Scripting);
+    SPARK_LOG_INFO(Spark::LogCategory::Scripting, "AngelScriptEngine initializing (stub — no AngelScript support)...");
     LogWarning("AngelScript support is not compiled in (SPARK_ANGELSCRIPT_SUPPORT not defined).");
     s_instance = this;
     return true;
@@ -803,6 +812,8 @@ bool AngelScriptEngine::Initialize()
 
 void AngelScriptEngine::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Scripting);
+    SPARK_LOG_INFO(Spark::LogCategory::Scripting, "AngelScriptEngine shutting down (stub)...");
     LogWarning("AngelScript support is not compiled in. Shutdown is a no-op.");
     if (s_instance == this)
     {

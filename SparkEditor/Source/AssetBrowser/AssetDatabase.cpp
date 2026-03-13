@@ -14,6 +14,7 @@
 #include <sstream>
 
 #include "AssetDatabase.h"
+#include "Utils/Validate.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -105,6 +106,7 @@ namespace SparkEditor
 
     bool AssetDatabase::Initialize(const std::string& assetDirectory)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "AssetDatabase::Initialize() - Directory: " << assetDirectory << "\n";
 
         m_assetDirectory = assetDirectory;

@@ -9,6 +9,7 @@
 
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
 #include <iostream>
@@ -1384,20 +1385,29 @@ MaterialSystem::~MaterialSystem()
 
 HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    ASSERT(device && context);
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, context);
     m_device = device;
     m_context = context;
 
     HRESULT hr = CreateDefaultMaterials();
     if (SUCCEEDED(hr))
     {
-        Spark::SimpleConsole::GetInstance().Log("MaterialSystem initialized successfully", "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem initialized successfully");
+    }
+    else
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "MaterialSystem failed to create default materials");
     }
     return hr;
 }
 
 void MaterialSystem::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem shutting down (%zu materials, %zu cached textures)",
+                   m_materials.size(), m_textureCache.size());
     m_materials.clear();
     m_textureCache.clear();
     m_samplerCache.clear();
@@ -1409,6 +1419,8 @@ void MaterialSystem::Shutdown()
 
 std::shared_ptr<Material> MaterialSystem::CreateMaterial(const std::string& name)
 {
+    SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Graphics, name);
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Creating material '%s'", name.c_str());
     auto material = std::make_shared<Material>(name);
     m_materials[name] = material;
     return material;
@@ -1416,6 +1428,8 @@ std::shared_ptr<Material> MaterialSystem::CreateMaterial(const std::string& name
 
 std::shared_ptr<Material> MaterialSystem::LoadMaterial(const std::string& filePath)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Graphics, filePath);
     // Check if already loaded
     auto it = m_materials.find(filePath);
     if (it != m_materials.end())
@@ -1434,21 +1448,25 @@ std::shared_ptr<Material> MaterialSystem::LoadMaterial(const std::string& filePa
             m_fileTimestamps[filePath] = GetFileTimestamp(filePath);
         }
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Loaded material from '%s'", filePath.c_str());
         return material;
     }
 
-    Spark::SimpleConsole::GetInstance().LogError("Failed to load material: " + filePath);
+    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load material: %s", filePath.c_str());
     return m_errorMaterial;
 }
 
 std::shared_ptr<Material> MaterialSystem::GetMaterial(const std::string& name) const
 {
     auto it = m_materials.find(name);
+    SPARK_WARN_IF(Spark::LogCategory::Graphics, it == m_materials.end() && !name.empty(),
+                  "Material not found, returning default");
     return (it != m_materials.end()) ? it->second : m_defaultMaterial;
 }
 
 void MaterialSystem::UnloadMaterial(const std::string& name)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Unloading material '%s'", name.c_str());
     auto it = m_materials.find(name);
     if (it != m_materials.end())
     {
@@ -1459,6 +1477,7 @@ void MaterialSystem::UnloadMaterial(const std::string& name)
 
 void MaterialSystem::UnloadAllMaterials()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Unloading all materials (%zu total)", m_materials.size());
     m_materials.clear();
     m_fileTimestamps.clear();
 }
@@ -2961,6 +2980,7 @@ std::string MaterialSystem::Console_ListMaterialVariants(const std::string& mate
 
 #include "MaterialSystem.h"
 #include "RHI/RHI.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>
@@ -3452,6 +3472,7 @@ MaterialSystem::~MaterialSystem()
 
 HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
     m_device = device;
     m_context = context;
     memset(&m_metrics, 0, sizeof(m_metrics));
@@ -3460,11 +3481,15 @@ HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     CreateDefaultMaterials();
 
     UpdateMetrics();
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem (Linux) initialized");
     return S_OK;
 }
 
 void MaterialSystem::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem (Linux) shutting down (%zu materials)",
+                   m_materials.size());
     m_materials.clear();
     m_textureCache.clear();
     m_samplerCache.clear();

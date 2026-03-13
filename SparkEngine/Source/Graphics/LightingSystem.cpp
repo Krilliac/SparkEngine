@@ -7,6 +7,7 @@
 
 #include "LightingSystem.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include <sstream>
 #include <algorithm>
@@ -162,7 +163,9 @@ LightingSystem::~LightingSystem()
 
 HRESULT LightingSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    ASSERT(device && context);
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, context);
 
     m_device = device;
     m_context = context;
@@ -171,7 +174,7 @@ HRESULT LightingSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     HRESULT hr = CreateConstantBuffers();
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create constant buffers");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create lighting constant buffers");
         return hr;
     }
 
@@ -179,15 +182,18 @@ HRESULT LightingSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     hr = CreateDefaultEnvironment();
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogWarning("Failed to create default environment");
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Failed to create default environment");
     }
 
-    Spark::SimpleConsole::GetInstance().LogSuccess("LightingSystem initialized successfully");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem initialized with %zu lights", m_lights.size());
     return S_OK;
 }
 
 void LightingSystem::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem shutting down (%zu lights, %zu shadow maps)",
+                   m_lights.size(), m_shadowMaps.size());
     // Clear lights
     m_lights.clear();
     m_lightDataArray.clear();
@@ -217,6 +223,9 @@ void LightingSystem::Shutdown()
 
 void LightingSystem::Update(float deltaTime, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_WARN_IF(Spark::LogCategory::Graphics, deltaTime < 0.0f,
+                  "LightingSystem::Update called with negative deltaTime");
     // Update metrics
     m_metrics.activeLights = static_cast<uint32_t>(m_lights.size());
     m_metrics.shadowCastingLights = 0;
@@ -533,6 +542,7 @@ LightingSystem::LightingMetrics LightingSystem::Console_GetMetrics() const
 
 std::shared_ptr<Light> LightingSystem::CreateLight(LightType type)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Creating light of type %d", static_cast<int>(type));
     auto light = std::make_shared<Light>(type);
     m_lights.push_back(light);
 
@@ -552,6 +562,7 @@ std::shared_ptr<Light> LightingSystem::CreateLight(LightType type)
 
 void LightingSystem::AddLight(std::shared_ptr<Light> light)
 {
+    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, light);
     if (light)
     {
         m_lights.push_back(light);
@@ -570,6 +581,7 @@ void LightingSystem::AddLight(std::shared_ptr<Light> light)
 
 void LightingSystem::RemoveLight(std::shared_ptr<Light> light)
 {
+    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, light);
     if (light)
     {
         // Remove shadow map
@@ -586,6 +598,7 @@ void LightingSystem::RemoveLight(std::shared_ptr<Light> light)
 
 void LightingSystem::RemoveAllLights()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Removing all lights (%zu total)", m_lights.size());
     m_shadowMaps.clear();
     m_lights.clear();
 
@@ -1697,6 +1710,7 @@ ShadowTechnique StringToShadowTechnique(const std::string& str)
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "LightingSystem.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>
@@ -1819,15 +1833,19 @@ LightingSystem::~LightingSystem()
 
 HRESULT LightingSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
     m_device = device;
     m_context = context;
     m_environmentLighting.skyColor = {0.5f, 0.7f, 1.0f};
     m_environmentLighting.skyIntensity = 1.0f;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem (Linux) initialized");
     return S_OK;
 }
 
 void LightingSystem::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem (Linux) shutting down");
     m_lights.clear();
     m_lightDataArray.clear();
     m_shadowMaps.clear();

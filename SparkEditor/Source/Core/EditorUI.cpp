@@ -10,6 +10,7 @@
 #include "EditorFonts.h"
 #include "EditorIcons.h"
 #include "../Utils/SparkConsole.h"
+#include "Utils/Validate.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/SimpleConsolePanel.h"
 #include "../Panels/SimpleHierarchyPanel.h"
@@ -67,6 +68,7 @@ namespace SparkEditor
 
     bool EditorUI::Initialize(const EditorConfig& config)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("Initializing Enhanced EditorUI with full configuration...");
 
@@ -320,6 +322,7 @@ namespace SparkEditor
 
     void EditorUI::Render()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_isInitialized)
             return;
 
@@ -363,12 +366,15 @@ namespace SparkEditor
         RenderModalDialogs();
 
         // Render project browser modal (on top of everything)
+        SPARK_WARN_IF(Spark::LogCategory::Editor, m_projectBrowserPanel == nullptr,
+                      "Project browser panel is null during render");
         if (m_projectBrowserPanel && m_projectBrowserPanel->IsModalActive())
         {
             m_projectBrowserPanel->Render();
         }
 
         // Render command palette overlay (on top of everything)
+        SPARK_WARN_IF(Spark::LogCategory::Editor, m_commandPalette == nullptr, "Command palette is null during render");
         if (m_commandPalette)
         {
             m_commandPalette->Render();
@@ -410,6 +416,7 @@ namespace SparkEditor
 
     void EditorUI::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("Shutting down EditorUI...");
 

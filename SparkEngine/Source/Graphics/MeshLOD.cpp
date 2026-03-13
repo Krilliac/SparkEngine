@@ -6,6 +6,7 @@
  */
 
 #include "MeshLOD.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>
@@ -58,6 +59,11 @@ namespace Spark::Graphics
                                                   const uint32_t* indices, uint32_t indexCount,
                                                   uint32_t targetIndexCount, float maxError)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, vertices);
+        SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, indices);
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, vertexCount > 0, "Simplify called with 0 vertices");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, indexCount >= 3, "Simplify called with < 3 indices");
 
         SimplificationResult result;
 
@@ -199,6 +205,11 @@ namespace Spark::Graphics
                                           uint32_t vertexCount, const uint32_t* indices, uint32_t indexCount,
                                           const LODGenerationSettings& settings)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, vertices);
+        SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, indices);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Generating LOD chain for '%s' (%u verts, %u indices)",
+                       meshName.c_str(), vertexCount, indexCount);
         LODChain chain;
         chain.meshName = meshName;
         chain.totalVertices = 0;
@@ -328,6 +339,7 @@ namespace Spark::Graphics
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "MeshLOD.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>

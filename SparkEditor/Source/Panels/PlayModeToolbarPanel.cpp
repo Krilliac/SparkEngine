@@ -9,6 +9,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Utils/ImGuiUtils.h"
 #include "../../../SparkEngine/Source/Engine/Editor/PlayModeManager.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <cmath>
@@ -24,6 +25,7 @@ namespace SparkEditor
 
     bool PlayModeToolbarPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Play Mode Toolbar panel\n";
 
         SetIcon(ICON_FA_PLAY);

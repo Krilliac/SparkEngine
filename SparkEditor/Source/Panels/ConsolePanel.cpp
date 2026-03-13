@@ -22,6 +22,7 @@
 // Project and third-party headers
 #include "ConsolePanel.h"
 #include "../Core/EditorLogger.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -73,6 +74,7 @@ namespace SparkEditor
 
     bool ConsolePanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         if (m_isInitialized)
         {
             return true;
@@ -109,6 +111,7 @@ namespace SparkEditor
 
     void ConsolePanel::Render()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         if (!BeginPanel())
         {
             EndPanel();

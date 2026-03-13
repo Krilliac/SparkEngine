@@ -10,6 +10,7 @@
 #include "EditorFonts.h"
 #include "EditorCrashHandler.h"
 #include "../Utils/SparkConsole.h"
+#include "Utils/Validate.h"
 #include <memory>
 #include <iostream>
 #include <stdexcept>
@@ -62,6 +63,7 @@ namespace SparkEditor
 
     bool EditorApplication::Initialize(const EditorConfig& config)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("Initializing Enhanced Spark Engine Editor...");
 
@@ -109,6 +111,8 @@ namespace SparkEditor
 
 #ifdef _WIN32
         // Pass the DirectX device to panels that need it (Scene View)
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Editor, m_device.Get(), false);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Editor, m_context.Get(), false);
         if (m_device && m_context)
         {
             m_ui->SetGraphicsDevice(m_device.Get(), m_context.Get());
@@ -411,6 +415,7 @@ namespace SparkEditor
 
     void EditorApplication::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("Shutting down enhanced editor...");
 
@@ -726,6 +731,7 @@ namespace SparkEditor
 
     void EditorApplication::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("Shutting down enhanced editor...");
 
@@ -773,6 +779,7 @@ namespace SparkEditor
 
     void EditorApplication::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         // Update UI system
         if (m_ui)
         {

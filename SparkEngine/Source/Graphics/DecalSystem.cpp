@@ -6,6 +6,7 @@
  */
 
 #include "DecalSystem.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
 #include <cstdlib>
@@ -70,6 +71,9 @@ namespace Spark::Graphics
 
     void DecalSystem::Initialize(uint32_t maxDecals)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_WARN_IF(Spark::LogCategory::Graphics, maxDecals == 0, "DecalSystem initialized with maxDecals=0");
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DecalSystem initializing with maxDecals=%u", maxDecals);
         m_maxDecals = maxDecals;
         m_decals.reserve(maxDecals);
 
@@ -119,6 +123,9 @@ namespace Spark::Graphics
 
     void DecalSystem::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DecalSystem shutting down (%u active decals)",
+                       GetActiveDecalCount());
         m_decals.clear();
         m_materials.clear();
         m_surfaceMappings.clear();
@@ -127,6 +134,7 @@ namespace Spark::Graphics
     Decal* DecalSystem::SpawnDecal(const XMFLOAT3& position, const XMFLOAT3& normal, DecalType type,
                                    SurfaceType surface, float size)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
         // Find appropriate material from surface mapping
         std::string materialName;
         XMFLOAT2 sizeRange = {0.05f, 0.2f};
@@ -208,12 +216,16 @@ namespace Spark::Graphics
 
     void DecalSystem::RegisterMaterial(const DecalMaterial& material)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Graphics, material.name);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Registering decal material '%s'", material.name.c_str());
         m_materials[material.name] = material;
     }
 
     const DecalMaterial* DecalSystem::GetMaterial(const std::string& name) const
     {
         auto it = m_materials.find(name);
+        SPARK_WARN_IF(Spark::LogCategory::Graphics, it == m_materials.end() && !name.empty(),
+                      "Decal material not found");
         return (it != m_materials.end()) ? &it->second : nullptr;
     }
 
@@ -224,6 +236,7 @@ namespace Spark::Graphics
 
     void DecalSystem::ClearAllDecals()
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Clearing all decals (%u active)", GetActiveDecalCount());
         for (auto& d : m_decals)
             d.active = false;
     }
@@ -317,6 +330,7 @@ namespace Spark::Graphics
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "DecalSystem.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
 #include <cstdlib>

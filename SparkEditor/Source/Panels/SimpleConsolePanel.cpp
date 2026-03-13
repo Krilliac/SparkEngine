@@ -9,6 +9,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../Utils/SparkConsole.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <sstream>
@@ -43,6 +44,7 @@ namespace SparkEditor
 
     bool SimpleConsolePanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Enhanced Console panel with SparkConsole integration\n";
 
         // Initialize SparkConsole system

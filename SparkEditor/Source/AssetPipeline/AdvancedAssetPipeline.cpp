@@ -6,6 +6,7 @@
  */
 
 #include "AdvancedAssetPipeline.h"
+#include "Utils/Validate.h"
 
 #include <imgui.h>
 
@@ -761,6 +762,7 @@ namespace SparkEditor
 
     bool AdvancedAssetPipeline::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         // Register default processors
         RegisterProcessor(std::make_unique<TextureProcessor>());
         RegisterProcessor(std::make_unique<MeshProcessor>());
@@ -954,6 +956,8 @@ namespace SparkEditor
     bool AdvancedAssetPipeline::ProcessAsset(const std::string& assetPath, const AssetImportSettings& settings,
                                              std::function<void(const AssetMetadata&)> callback)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !assetPath.empty(), false);
         if (!fs::exists(assetPath))
         {
             return false;

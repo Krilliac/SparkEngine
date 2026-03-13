@@ -6,6 +6,7 @@
  */
 
 #include "UndoRedoManager.h"
+#include "Utils/Validate.h"
 #include <algorithm>
 
 namespace SparkEditor
@@ -15,6 +16,7 @@ namespace SparkEditor
 
     void UndoRedoManager::ExecuteCommand(std::unique_ptr<EditorCommand> command)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!command)
         {
             return;
@@ -44,6 +46,8 @@ namespace SparkEditor
 
     bool UndoRedoManager::Undo()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_WARN_IF(Spark::LogCategory::Editor, m_undoStack.empty(), "Undo called on empty undo stack");
         if (!CanUndo())
         {
             return false;
@@ -62,6 +66,8 @@ namespace SparkEditor
 
     bool UndoRedoManager::Redo()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_WARN_IF(Spark::LogCategory::Editor, m_redoStack.empty(), "Redo called on empty redo stack");
         if (!CanRedo())
         {
             return false;

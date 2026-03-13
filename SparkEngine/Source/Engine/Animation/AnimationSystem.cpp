@@ -4,6 +4,7 @@
  */
 #include "../../Core/Platform.h"
 #include "AnimationSystem.h"
+#include "../../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
 #include <fstream>
@@ -140,6 +141,9 @@ namespace Spark::Animation
 
     void AnimationStateMachine::Update(float deltaTime)
     {
+        SPARK_WARN_IF(LogCategory::Animation, deltaTime < 0.0f,
+                      "AnimationStateMachine::Update called with negative deltaTime");
+
         if (m_currentState.empty())
         {
             if (!m_defaultState.empty())
@@ -1194,6 +1198,9 @@ namespace Spark::Animation
 
     void AnimationInstance::Update(float deltaTime)
     {
+        SPARK_WARN_IF(LogCategory::Animation, deltaTime < 0.0f,
+                      "AnimationInstance::Update called with negative deltaTime");
+
         if (!skeleton || skeleton->bones.empty())
             return;
 

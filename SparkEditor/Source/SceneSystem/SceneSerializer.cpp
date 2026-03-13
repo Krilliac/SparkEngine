@@ -6,6 +6,7 @@
  */
 
 #include "SceneSerializer.h"
+#include "Utils/Validate.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -25,6 +26,8 @@ namespace SparkEditor
     SerializationResult SceneSerializer::SaveScene(const SceneFile& scene, const std::string& filePath,
                                                    SerializationFormat format)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !filePath.empty(), SerializationResult{});
         auto startTime = std::chrono::high_resolution_clock::now();
 
         SerializationFormat actualFormat = format;
@@ -60,6 +63,8 @@ namespace SparkEditor
 
     SerializationResult SceneSerializer::LoadScene(const std::string& filePath, SceneFile& outScene)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !filePath.empty(), SerializationResult{});
         auto startTime = std::chrono::high_resolution_clock::now();
 
         SerializationFormat format = DetectFormat(filePath);

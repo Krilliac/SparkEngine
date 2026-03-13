@@ -4,6 +4,7 @@
  */
 
 #include "SparkEngineIntegration.h"
+#include "Utils/Validate.h"
 #include <chrono>
 #include <thread>
 #include <iostream>
@@ -35,14 +36,18 @@ namespace SparkEditor
 
     bool SparkEngineIntegration::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         m_device = device;
         m_context = context;
         m_isInitialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEngineIntegration initialized");
         return true;
     }
 
     void SparkEngineIntegration::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEngineIntegration shutting down");
         if (IsConnected() || m_connectionStatus.load() == EngineConnectionStatus::Connecting)
         {
             DisconnectFromEngine();
@@ -71,6 +76,8 @@ namespace SparkEditor
             return false;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Connecting to engine at '%s' with project '%s'", enginePath.c_str(),
+                       projectPath.c_str());
         m_enginePath = enginePath;
         m_projectPath = projectPath;
         m_shouldStop.store(false);
@@ -84,6 +91,7 @@ namespace SparkEditor
 
     void SparkEngineIntegration::DisconnectFromEngine()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Disconnecting from engine");
         m_shouldStop.store(true);
 
         if (m_communicationThread.joinable())

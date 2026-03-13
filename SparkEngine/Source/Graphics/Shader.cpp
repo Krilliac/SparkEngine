@@ -3,6 +3,7 @@
 // Shader.cpp - Enhanced shader system implementation with AAA features (C++14 compatible)
 #include "Shader.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
@@ -108,9 +109,9 @@ Shader::~Shader()
 
 HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Enhanced Shader::Initialize started with AAA features.", L"INFO");
-    ASSERT_MSG(device != nullptr, "Shader::Initialize device is null");
-    ASSERT_MSG(context != nullptr, "Shader::Initialize context is null");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, context);
 
     m_device = device;
     m_context = context;
@@ -118,8 +119,8 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     HRESULT hr = CreateConstantBuffers();
     if (FAILED(hr))
     {
-        std::wstring errorMsg = L"Enhanced Shader constant buffer creation failed with HR=0x" + std::to_wstring(hr);
-        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader constant buffer creation failed with HR=0x%08lX",
+                        static_cast<long>(hr));
         return hr;
     }
 
@@ -127,13 +128,15 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     m_vertexShader = std::unique_ptr<VertexShaderResource>(new VertexShaderResource());
     m_pixelShader = std::unique_ptr<PixelShaderResource>(new PixelShaderResource());
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Enhanced Shader system initialized with comprehensive features.", L"SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader system initialized");
     return S_OK;
 }
 
 void Shader::Shutdown()
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Enhanced Shader::Shutdown called.", L"INFO");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader system shutting down (%zu cached, %zu variants)",
+                   m_shaderCache.size(), m_shaderVariants.size());
 
     // Clear shader cache
     m_shaderCache.clear();
@@ -157,12 +160,11 @@ void Shader::Shutdown()
 
 HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompilationFlags& flags)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(std::wstring(L"Loading enhanced vertex shader: ") + filename, L"INFO");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, !filename.empty(), "LoadVertexShader: filename empty");
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, m_device);
 
     auto startTime = std::chrono::high_resolution_clock::now();
-
-    ASSERT_MSG(!filename.empty(), "LoadVertexShader: filename empty");
-    ASSERT_MSG(m_device != nullptr, "LoadVertexShader: device is null");
 
     ComPtr<ID3DBlob> vsBlob;
 
@@ -1292,6 +1294,7 @@ bool Shader::CompileWithRHI(const std::string& sourceFile, ShaderType type, int 
 
 #include "Shader.h"
 #include "RHI/RHIFactory.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
 #include <iostream>

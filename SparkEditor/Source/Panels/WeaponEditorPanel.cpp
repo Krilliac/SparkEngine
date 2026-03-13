@@ -7,6 +7,7 @@
 
 #include "WeaponEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstdio>
@@ -20,6 +21,7 @@ namespace SparkEditor
 
     bool WeaponEditorPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Editor);
         std::cout << "Initializing Weapon Editor panel\n";
 
         // Populate with default weapon data

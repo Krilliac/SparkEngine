@@ -3,6 +3,7 @@
 // ParticleSystem.cpp
 #include "ParticleSystem.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include <algorithm>
 #include <random>
 #include <cmath>
@@ -388,16 +389,20 @@ ParticleSystem::~ParticleSystem()
 
 HRESULT ParticleSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    ASSERT_MSG(device != nullptr, "ParticleSystem::Initialize device is null");
-    ASSERT_MSG(context != nullptr, "ParticleSystem::Initialize context is null");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, context);
 
     m_device = device;
     m_context = context;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ParticleSystem initialized");
     return S_OK;
 }
 
 void ParticleSystem::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ParticleSystem shutting down (%zu emitters)", m_emitters.size());
     m_emitters.clear();
     m_device = nullptr;
     m_context = nullptr;
@@ -405,6 +410,9 @@ void ParticleSystem::Shutdown()
 
 void ParticleSystem::Update(float deltaTime)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_WARN_IF(Spark::LogCategory::Graphics, deltaTime < 0.0f,
+                  "ParticleSystem::Update called with negative deltaTime");
     // Update all emitters and remove dead one-shot emitters
     for (auto it = m_emitters.begin(); it != m_emitters.end();)
     {
@@ -652,6 +660,7 @@ void ParticleSystem::Console_SpawnEffect(const std::string& effectType, float x,
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "ParticleSystem.h"
+#include "../Utils/Validate.h"
 #include <algorithm>
 #include <random>
 #include <cmath>
