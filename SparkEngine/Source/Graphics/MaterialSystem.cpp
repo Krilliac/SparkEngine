@@ -1419,7 +1419,7 @@ void MaterialSystem::Shutdown()
 
 std::shared_ptr<Material> MaterialSystem::CreateMaterial(const std::string& name)
 {
-    SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Graphics, name);
+    SPARK_VALIDATE_RET(Spark::LogCategory::Graphics, !name.empty(), nullptr);
     SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Creating material '%s'", name.c_str());
     auto material = std::make_shared<Material>(name);
     m_materials[name] = material;
@@ -1429,7 +1429,7 @@ std::shared_ptr<Material> MaterialSystem::CreateMaterial(const std::string& name
 std::shared_ptr<Material> MaterialSystem::LoadMaterial(const std::string& filePath)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
-    SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Graphics, filePath);
+    SPARK_VALIDATE_RET(Spark::LogCategory::Graphics, !filePath.empty(), nullptr);
     // Check if already loaded
     auto it = m_materials.find(filePath);
     if (it != m_materials.end())
