@@ -108,6 +108,11 @@ list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*_Updated\\.cpp$")
 list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*_EngineIntegrated\\.cpp$")
 list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*_AutoConnect\\.(cpp|h)$")
 
+# Engine utility sources needed by validation/logging macros
+list(APPEND SPARK_EDITOR_SOURCES
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Utils/Logger.cpp"
+)
+
 # Create executable
 if(WIN32)
     add_executable(SparkEditor WIN32 ${SPARK_EDITOR_SOURCES})
