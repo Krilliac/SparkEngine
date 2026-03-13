@@ -38,6 +38,7 @@ namespace SparkEditor
 
     void GameViewPanel::Update(float deltaTime)
     {
+        m_lastDeltaTime = deltaTime;
         m_totalTime += deltaTime;
 
         // Simulate health regeneration (slow)
@@ -187,7 +188,16 @@ namespace SparkEditor
         if (BeginPanel())
         {
             RenderToolbar();
+            HandleInput(m_lastDeltaTime);
             RenderGameContent();
+        }
+        else
+        {
+            // Panel is collapsed — release cursor if captured
+            if (m_isCursorCaptured)
+            {
+                m_isCursorCaptured = false;
+            }
         }
         EndPanel();
     }
@@ -272,14 +282,227 @@ namespace SparkEditor
         ImGui::Separator();
     }
 
-    void GameViewPanel::RenderGameContent()
+    ImVec2 GameViewPanel::GetConstrainedViewportSize(const ImVec2& available) const
     {
-        ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-        if (viewportSize.x <= 0 || viewportSize.y <= 0)
+        float targetW = available.x;
+        float targetH = available.y;
+
+        switch (m_resolution)
+        {
+        case Resolution::R1920x1080:
+            targetW = 1920.0f;
+            targetH = 1080.0f;
+            break;
+        case Resolution::R1280x720:
+            targetW = 1280.0f;
+            targetH = 720.0f;
+            break;
+        case Resolution::R2560x1440:
+            targetW = 2560.0f;
+            targetH = 1440.0f;
+            break;
+        case Resolution::R3840x2160:
+            targetW = 3840.0f;
+            targetH = 2160.0f;
+            break;
+        case Resolution::Free:
+        default:
+            if (m_lockAspectRatio)
+            {
+                float availAR = available.x / available.y;
+                if (availAR > m_aspectRatio)
+                {
+                    targetW = available.y * m_aspectRatio;
+                    targetH = available.y;
+                }
+                else
+                {
+                    targetW = available.x;
+                    targetH = available.x / m_aspectRatio;
+                }
+            }
+            return ImVec2(targetW, targetH);
+        }
+
+        // For fixed resolutions, scale down to fit available space
+        float scaleX = available.x / targetW;
+        float scaleY = available.y / targetH;
+        float scale = std::min(scaleX, scaleY);
+        if (scale > 1.0f)
+            scale = 1.0f;
+
+        return ImVec2(targetW * scale, targetH * scale);
+    }
+
+    void GameViewPanel::HandleInput(float deltaTime)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        bool isWindowFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        bool isWindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+
+        // Click inside the game view to capture cursor
+        if (isWindowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_isCursorCaptured)
+        {
+            // Only capture if the click is below the toolbar area (not on toolbar widgets)
+            if (!io.WantCaptureMouse || isWindowFocused)
+            {
+                m_isCursorCaptured = true;
+            }
+        }
+
+        // Escape releases cursor capture
+        if (m_isCursorCaptured && ImGui::IsKeyPressed(ImGuiKey_Escape))
+        {
+            m_isCursorCaptured = false;
+        }
+
+        // Release capture if window loses focus
+        if (m_isCursorCaptured && !isWindowFocused)
+        {
+            m_isCursorCaptured = false;
+        }
+
+        if (!m_isCursorCaptured)
             return;
 
+        // --- Mouse look ---
+        ImVec2 mouseDelta = io.MouseDelta;
+        m_cameraYaw += mouseDelta.x * m_mouseSensitivity;
+        m_cameraPitch -= mouseDelta.y * m_mouseSensitivity;
+
+        // Clamp pitch to avoid gimbal lock
+        if (m_cameraPitch > 1.5f)
+            m_cameraPitch = 1.5f;
+        if (m_cameraPitch < -1.5f)
+            m_cameraPitch = -1.5f;
+
+        // Update player angle for minimap
+        m_playerAngle = m_cameraYaw;
+
+        // --- WASD movement ---
+        float cosP = cosf(m_cameraPitch);
+        float forwardX = cosP * sinf(m_cameraYaw);
+        float forwardY = sinf(m_cameraPitch);
+        float forwardZ = cosP * cosf(m_cameraYaw);
+
+        float rightX = cosf(m_cameraYaw);
+        float rightZ = -sinf(m_cameraYaw);
+
+        float speed = m_moveSpeed * deltaTime;
+
+        // Shift to sprint
+        if (ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift))
+        {
+            speed *= 2.0f;
+            m_stamina = std::max(0.0f, m_stamina - 20.0f * deltaTime);
+        }
+
+        float dx = 0.0f, dy = 0.0f, dz = 0.0f;
+
+        if (ImGui::IsKeyDown(ImGuiKey_W))
+        {
+            dx += forwardX * speed;
+            dy += forwardY * speed;
+            dz += forwardZ * speed;
+        }
+        if (ImGui::IsKeyDown(ImGuiKey_S))
+        {
+            dx -= forwardX * speed;
+            dy -= forwardY * speed;
+            dz -= forwardZ * speed;
+        }
+        if (ImGui::IsKeyDown(ImGuiKey_A))
+        {
+            dx -= rightX * speed;
+            dz -= rightZ * speed;
+        }
+        if (ImGui::IsKeyDown(ImGuiKey_D))
+        {
+            dx += rightX * speed;
+            dz += rightZ * speed;
+        }
+
+        // Space / Ctrl for up / down
+        if (ImGui::IsKeyDown(ImGuiKey_Space))
+        {
+            dy += speed;
+        }
+        if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl))
+        {
+            dy -= speed;
+        }
+
+        m_cameraPosX += dx;
+        m_cameraPosY += dy;
+        m_cameraPosZ += dz;
+
+        // Simulate reload on R key
+        if (ImGui::IsKeyPressed(ImGuiKey_R) && !m_isReloading && m_ammo < m_maxAmmo)
+        {
+            m_isReloading = true;
+            m_reloadProgress = 0.0f;
+        }
+
+        // Simulate weapon switch on 1-5 keys
+        for (int i = 0; i < 5; i++)
+        {
+            ImGuiKey key = static_cast<ImGuiKey>(static_cast<int>(ImGuiKey_1) + i);
+            if (ImGui::IsKeyPressed(key))
+            {
+                m_currentWeaponSlot = i + 1;
+                static const char* weaponNames[] = {"Pistol", "Shotgun", "Assault Rifle", "Sniper Rifle",
+                                                    "Rocket Launcher"};
+                m_currentWeaponName = weaponNames[i];
+                m_weaponSwitchTimer = 2.0f;
+                m_weaponSwitchName = m_currentWeaponName;
+                m_weaponSwitchSlot = i + 1;
+            }
+        }
+
+        // Tab toggles scoreboard
+        if (ImGui::IsKeyDown(ImGuiKey_Tab))
+        {
+            m_showScoreboard = true;
+        }
+        else
+        {
+            m_showScoreboard = false;
+        }
+
+        // Simulate firing on left click
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && !m_isReloading && m_ammo > 0)
+        {
+            if (fmod(m_totalTime, 0.12f) < deltaTime)
+            {
+                m_ammo = std::max(0, m_ammo - 1);
+                m_hitMarkerTimer = 0.15f;
+                m_hitMarkerHeadshot = false;
+            }
+        }
+    }
+
+    void GameViewPanel::RenderGameContent()
+    {
+        ImVec2 available = ImGui::GetContentRegionAvail();
+        if (available.x <= 0 || available.y <= 0)
+            return;
+
+        ImVec2 viewportSize = GetConstrainedViewportSize(available);
+
+        // Center the viewport if constrained
+        ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+        float offsetX = (available.x - viewportSize.x) * 0.5f;
+        float offsetY = (available.y - viewportSize.y) * 0.5f;
+        ImVec2 pos(cursorPos.x + offsetX, cursorPos.y + offsetY);
+
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec2 pos = ImGui::GetCursorScreenPos();
+
+        // Letterbox bars if viewport is smaller than available area
+        if (offsetX > 0 || offsetY > 0)
+        {
+            drawList->AddRectFilled(cursorPos, ImVec2(cursorPos.x + available.x, cursorPos.y + available.y),
+                                    IM_COL32(0, 0, 0, 255));
+        }
 
         // Dark game viewport background
         drawList->AddRectFilled(pos, ImVec2(pos.x + viewportSize.x, pos.y + viewportSize.y), IM_COL32(20, 22, 28, 255));
@@ -329,11 +552,19 @@ namespace SparkEditor
             drawList->AddRectFilled(ImVec2(sx, structY - sh), ImVec2(sx + sw, structY), IM_COL32(40, 45, 50, 150));
         }
 
-        // "Game View" center text (subtle)
-        const char* label = ICON_FA_GAMEPAD " Game View - FPS Camera";
-        ImVec2 textSize = ImGui::CalcTextSize(label);
-        ImVec2 textPos(pos.x + (viewportSize.x - textSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f);
-        drawList->AddText(textPos, IM_COL32(80, 100, 120, 100), label);
+        // "Game View" center text (subtle) — show capture hint when not captured
+        if (!m_isCursorCaptured)
+        {
+            const char* label = ICON_FA_GAMEPAD " Click to enter Game View";
+            ImVec2 textSize = ImGui::CalcTextSize(label);
+            ImVec2 textPos(pos.x + (viewportSize.x - textSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f);
+            drawList->AddText(textPos, IM_COL32(80, 100, 120, 140), label);
+
+            const char* hint = "Press ESC to release cursor";
+            ImVec2 hintSize = ImGui::CalcTextSize(hint);
+            ImVec2 hintPos(pos.x + (viewportSize.x - hintSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f + 20.0f);
+            drawList->AddText(hintPos, IM_COL32(80, 100, 120, 80), hint);
+        }
 
         // FPS HUD overlay
         if (m_showHUD)
@@ -341,9 +572,9 @@ namespace SparkEditor
             RenderFPSHUD();
         }
 
-        // Advance cursor
-        ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + viewportSize.y));
-        ImGui::Dummy(ImVec2(viewportSize.x, 0));
+        // Advance cursor — use full available area so the panel occupies space properly
+        ImGui::SetCursorScreenPos(ImVec2(cursorPos.x, cursorPos.y + available.y));
+        ImGui::Dummy(ImVec2(available.x, 0));
     }
 
     void GameViewPanel::RenderFPSHUD()
@@ -434,8 +665,9 @@ namespace SparkEditor
             ImDrawList* dl = ImGui::GetWindowDrawList();
             char stats[128];
             snprintf(stats, sizeof(stats),
-                     "HP: %.0f/%.0f  ARM: %.0f  STM: %.0f\nAmmo: %d/%d (+%d)\nPos: 128.5, 1.0, 64.2", m_health,
-                     m_maxHealth, m_armor, m_stamina, m_ammo, m_maxAmmo, m_reserveAmmo);
+                     "HP: %.0f/%.0f  ARM: %.0f  STM: %.0f\nAmmo: %d/%d (+%d)\nPos: %.1f, %.1f, %.1f", m_health,
+                     m_maxHealth, m_armor, m_stamina, m_ammo, m_maxAmmo, m_reserveAmmo, m_cameraPosX, m_cameraPosY,
+                     m_cameraPosZ);
             ImVec2 statPos(winPos.x + pad, contentTop + pad);
             dl->AddRectFilled(statPos, ImVec2(statPos.x + 220, statPos.y + 54), IM_COL32(0, 0, 0, 160), 4.0f);
             dl->AddText(ImVec2(statPos.x + 6, statPos.y + 4), IM_COL32(200, 220, 200, 220), stats);

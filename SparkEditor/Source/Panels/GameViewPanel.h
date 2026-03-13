@@ -8,6 +8,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include <imgui.h>
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -28,10 +29,15 @@ namespace SparkEditor
         void Shutdown() override;
         bool HandleEvent(const std::string& eventType, void* eventData) override;
 
+        /** @brief Check if the game view is capturing input (cursor locked) */
+        bool IsCursorCaptured() const { return m_isCursorCaptured; }
+
       private:
         void RenderToolbar();
         void RenderGameContent();
         void RenderFPSHUD();
+        void HandleInput(float deltaTime);
+        ImVec2 GetConstrainedViewportSize(const ImVec2& available) const;
         void RenderCrosshair(float cx, float cy);
         void RenderHealthArmorBars(float baseX, float baseY, float width);
         void RenderAmmoDisplay(float baseX, float baseY);
@@ -140,6 +146,17 @@ namespace SparkEditor
 
         // Timers
         float m_totalTime = 0.0f;
+
+        // Input state
+        bool m_isCursorCaptured = false;
+        float m_cameraYaw = 0.0f;
+        float m_cameraPitch = 0.0f;
+        float m_cameraPosX = 128.5f;
+        float m_cameraPosY = 1.0f;
+        float m_cameraPosZ = 64.2f;
+        float m_moveSpeed = 5.0f;
+        float m_mouseSensitivity = 0.003f;
+        float m_lastDeltaTime = 0.016f;
     };
 
 } // namespace SparkEditor

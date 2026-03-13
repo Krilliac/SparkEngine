@@ -85,9 +85,10 @@ namespace SparkEditor
                                             pos.y + (viewportSize.y - textSize.y) * 0.5f);
                     drawList->AddText(textPos, IM_COL32(150, 150, 150, 255), "Scene View");
 
-                    // Advance cursor and add dummy item to grow window boundaries
-                    ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + viewportSize.y));
-                    ImGui::Dummy(ImVec2(viewportSize.x, 0)); // Add dummy item to satisfy ImGui requirements
+                    // Use InvisibleButton so the area registers as an interactive item
+                    // for hover detection and input handling
+                    ImGui::SetCursorScreenPos(pos);
+                    ImGui::InvisibleButton("##SceneViewArea", viewportSize);
                 }
 
                 // Handle input in scene view
