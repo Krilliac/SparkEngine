@@ -324,7 +324,7 @@ Panels/         — 10+ panels (Inspector, Hierarchy, Console, AssetBrowser, Gam
 Animation/      — AnimationTimeline
 AssetBrowser/   — AssetDatabase
 AssetPipeline/  — AdvancedAssetPipeline
-BuildSystem/    — SimpleBuildSystem, BuildDeploymentSystem
+BuildSystem/    — (removed; build UI is now BuildCookPanel in Panels/)
 Communication/  — EngineInterface
 Gizmos/         — GizmoSystem
 Integration/    — SparkEngineIntegration, SparkFutureIntegration, ExternalConsoleIntegration

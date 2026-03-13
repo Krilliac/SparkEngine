@@ -5,6 +5,8 @@
 
 #include "MaterialEditor.h"
 
+#include <imgui.h>
+
 #include <algorithm>
 #include <fstream>
 #include <sstream>
@@ -297,64 +299,575 @@ namespace SparkEditor
 
     void MaterialEditor::RenderNodePalette()
     {
-        // Render the categorized list of available node types that can be
-        // dragged into the graph.
+        ImGui::BeginChild("NodePalette", ImVec2(m_nodeListWidth, 0), true);
+        ImGui::Text("Node Palette");
+        ImGui::Separator();
+
+        for (const auto& [category, nodeTypes] : m_nodeCategories)
+        {
+            if (ImGui::CollapsingHeader(category.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                for (const auto& nodeType : nodeTypes)
+                {
+                    const auto& info = GetNodeTypeInfo(nodeType);
+                    if (ImGui::Button(info.name.c_str(), ImVec2(m_nodeListWidth - 20.0f, 0)))
+                    {
+                        // Add node at center of current view
+                        XMFLOAT2 center = ScreenToGraph({m_graphViewOffset.x + 400.0f, m_graphViewOffset.y + 300.0f});
+                        AddNode(nodeType, center);
+                    }
+                    if (ImGui::IsItemHovered() && !info.description.empty())
+                    {
+                        ImGui::SetTooltip("%s", info.description.c_str());
+                    }
+                }
+            }
+        }
+
+        ImGui::EndChild();
     }
 
     void MaterialEditor::RenderMaterialProperties()
     {
-        // Render the properties panel showing selected node parameters.
+        ImGui::BeginChild("MaterialProperties", ImVec2(m_propertiesWidth, 0), true);
+        ImGui::Text("Properties");
+        ImGui::Separator();
+
+        if (!m_selectedNodes.empty())
+        {
+            uint32_t selectedID = m_selectedNodes[0];
+            MaterialNode* selectedNode = nullptr;
+            for (auto& n : m_materialGraph.nodes)
+            {
+                if (n->id == selectedID)
+                {
+                    selectedNode = n.get();
+                    break;
+                }
+            }
+
+            if (selectedNode)
+            {
+                ImGui::Text("Name: %s", selectedNode->name.c_str());
+                ImGui::Text("Type: %s", selectedNode->category.c_str());
+                if (!selectedNode->description.empty())
+                {
+                    ImGui::TextWrapped("Description: %s", selectedNode->description.c_str());
+                }
+                ImGui::Separator();
+
+                // Show editable default values for unconnected input sockets
+                for (uint32_t i = 0; i < selectedNode->inputSockets.size(); ++i)
+                {
+                    auto& socket = selectedNode->inputSockets[i];
+                    if (socket.isConnected)
+                    {
+                        continue;
+                    }
+
+                    ImGui::PushID(static_cast<int>(i));
+                    switch (socket.type)
+                    {
+                    case SocketType::FLOAT:
+                        ImGui::DragFloat(socket.name.c_str(), &socket.defaultValue.x, 0.01f);
+                        break;
+                    case SocketType::COLOR:
+                    {
+                        float color[4] = {socket.defaultValue.x, socket.defaultValue.y, socket.defaultValue.z,
+                                          socket.defaultValue.w};
+                        if (ImGui::ColorEdit4(socket.name.c_str(), color))
+                        {
+                            socket.defaultValue = {color[0], color[1], color[2], color[3]};
+                        }
+                        break;
+                    }
+                    case SocketType::VECTOR3:
+                    {
+                        float vec[3] = {socket.defaultValue.x, socket.defaultValue.y, socket.defaultValue.z};
+                        if (ImGui::DragFloat3(socket.name.c_str(), vec, 0.01f))
+                        {
+                            socket.defaultValue = {vec[0], vec[1], vec[2], socket.defaultValue.w};
+                        }
+                        break;
+                    }
+                    case SocketType::VECTOR2:
+                    {
+                        float vec[2] = {socket.defaultValue.x, socket.defaultValue.y};
+                        if (ImGui::DragFloat2(socket.name.c_str(), vec, 0.01f))
+                        {
+                            socket.defaultValue = {vec[0], vec[1], socket.defaultValue.z, socket.defaultValue.w};
+                        }
+                        break;
+                    }
+                    case SocketType::VECTOR4:
+                    {
+                        float vec[4] = {socket.defaultValue.x, socket.defaultValue.y, socket.defaultValue.z,
+                                        socket.defaultValue.w};
+                        if (ImGui::DragFloat4(socket.name.c_str(), vec, 0.01f))
+                        {
+                            socket.defaultValue = {vec[0], vec[1], vec[2], vec[3]};
+                        }
+                        break;
+                    }
+                    default:
+                        ImGui::Text("%s: (no editor)", socket.name.c_str());
+                        break;
+                    }
+                    ImGui::PopID();
+                }
+            }
+        }
+        else
+        {
+            ImGui::TextDisabled("No node selected");
+        }
+
+        ImGui::EndChild();
     }
 
     void MaterialEditor::RenderMaterialPreview()
     {
-        // Render a 3D preview of the compiled material on the selected shape.
+        ImGui::BeginChild("MaterialPreview", ImVec2(0, m_previewHeight), true);
+        ImGui::Text("Material Preview");
+        ImGui::Separator();
+
         if (m_materialGraph.isCompiled)
         {
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Compiled");
+
             RenderPreviewToTexture();
+
+            if (m_previewSRV)
+            {
+                ImGui::Image(static_cast<ImTextureID>(m_previewSRV.Get()),
+                             ImVec2(m_previewHeight - 60.0f, m_previewHeight - 60.0f));
+            }
+            else
+            {
+                ImGui::TextDisabled("Preview texture not available");
+            }
         }
+        else
+        {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Not compiled");
+        }
+
+        ImGui::Separator();
+        ImGui::Text("Shape:");
+        ImGui::SameLine();
+        if (ImGui::Button("Sphere"))
+        {
+            SetPreviewShape(MaterialPreview::SPHERE);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cube"))
+        {
+            SetPreviewShape(MaterialPreview::CUBE);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Plane"))
+        {
+            SetPreviewShape(MaterialPreview::PLANE);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cylinder"))
+        {
+            SetPreviewShape(MaterialPreview::CYLINDER);
+        }
+
+        ImGui::EndChild();
     }
 
     void MaterialEditor::RenderCompilationOutput()
     {
-        // Render compilation errors and generated shader code for debugging.
+        ImGui::BeginChild("CompilationOutput", ImVec2(0, 0), true);
+        ImGui::Text("Compilation Output");
+        ImGui::Separator();
+
+        if (!m_materialGraph.compilationErrors.empty())
+        {
+            for (const auto& error : m_materialGraph.compilationErrors)
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.2f, 1.0f), "%s", error.c_str());
+            }
+        }
+
+        if (m_materialGraph.isCompiled)
+        {
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Compilation successful");
+            ImGui::Separator();
+
+            if (ImGui::CollapsingHeader("Generated Pixel Shader"))
+            {
+                ImGui::InputTextMultiline("##PixelShader", &m_materialGraph.pixelShaderCode[0],
+                                          m_materialGraph.pixelShaderCode.size() + 1, ImVec2(-1.0f, 200.0f),
+                                          ImGuiInputTextFlags_ReadOnly);
+            }
+
+            if (ImGui::CollapsingHeader("Generated Vertex Shader"))
+            {
+                ImGui::InputTextMultiline("##VertexShader", &m_materialGraph.vertexShaderCode[0],
+                                          m_materialGraph.vertexShaderCode.size() + 1, ImVec2(-1.0f, 200.0f),
+                                          ImGuiInputTextFlags_ReadOnly);
+            }
+        }
+
+        ImGui::EndChild();
     }
 
     void MaterialEditor::RenderNode(MaterialNode* node)
     {
         if (!node)
+        {
             return;
+        }
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+        XMFLOAT2 nodeScreenPos = GraphToScreen(node->position);
+        XMFLOAT2 nodeScreenEnd = GraphToScreen({node->position.x + node->size.x, node->position.y + node->size.y});
+
+        float titleHeight = 24.0f * m_graphViewScale;
+
+        // Draw node body background
+        drawList->AddRectFilled(
+            ImVec2(nodeScreenPos.x, nodeScreenPos.y), ImVec2(nodeScreenEnd.x, nodeScreenEnd.y),
+            IM_COL32(static_cast<int>(node->backgroundColor.x * 255), static_cast<int>(node->backgroundColor.y * 255),
+                     static_cast<int>(node->backgroundColor.z * 255), static_cast<int>(node->backgroundColor.w * 255)),
+            4.0f);
+
+        // Draw title bar
+        drawList->AddRectFilled(
+            ImVec2(nodeScreenPos.x, nodeScreenPos.y), ImVec2(nodeScreenEnd.x, nodeScreenPos.y + titleHeight),
+            IM_COL32(static_cast<int>(node->titleColor.x * 255), static_cast<int>(node->titleColor.y * 255),
+                     static_cast<int>(node->titleColor.z * 255), static_cast<int>(node->titleColor.w * 255)),
+            4.0f, ImDrawFlags_RoundCornersTop);
+
+        // Draw selection outline
+        if (node->isSelected)
+        {
+            drawList->AddRect(ImVec2(nodeScreenPos.x, nodeScreenPos.y), ImVec2(nodeScreenEnd.x, nodeScreenEnd.y),
+                              IM_COL32(255, 200, 50, 255), 4.0f, 0, 2.0f);
+        }
+
+        // Draw node name
+        drawList->AddText(ImVec2(nodeScreenPos.x + 6.0f, nodeScreenPos.y + 4.0f), IM_COL32(255, 255, 255, 255),
+                          node->name.c_str());
+
         RenderNodeSockets(node);
     }
 
-    void MaterialEditor::RenderNodeSockets(MaterialNode* /*node*/)
+    void MaterialEditor::RenderNodeSockets(MaterialNode* node)
     {
-        // Draw input and output socket circles on the node's edges.
+        if (!node)
+        {
+            return;
+        }
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+        // Draw input sockets (left edge)
+        for (uint32_t i = 0; i < node->inputSockets.size(); ++i)
+        {
+            const auto& socket = node->inputSockets[i];
+            float socketX = node->position.x;
+            float socketY = node->position.y + 30.0f + static_cast<float>(i) * 24.0f;
+            XMFLOAT2 screenPos = GraphToScreen({socketX, socketY});
+            float radius = socket.radius * m_graphViewScale;
+
+            ImU32 socketColor = socket.isConnected ? IM_COL32(100, 200, 100, 255) : IM_COL32(150, 150, 150, 255);
+            drawList->AddCircleFilled(ImVec2(screenPos.x, screenPos.y), radius, socketColor);
+
+            // Draw socket name to the right of the circle
+            drawList->AddText(ImVec2(screenPos.x + radius + 4.0f, screenPos.y - 6.0f), IM_COL32(200, 200, 200, 255),
+                              socket.name.c_str());
+        }
+
+        // Draw output sockets (right edge)
+        for (uint32_t i = 0; i < node->outputSockets.size(); ++i)
+        {
+            const auto& socket = node->outputSockets[i];
+            float socketX = node->position.x + node->size.x;
+            float socketY = node->position.y + 30.0f + static_cast<float>(i) * 24.0f;
+            XMFLOAT2 screenPos = GraphToScreen({socketX, socketY});
+            float radius = socket.radius * m_graphViewScale;
+
+            ImU32 socketColor = socket.isConnected ? IM_COL32(100, 200, 100, 255) : IM_COL32(150, 150, 150, 255);
+            drawList->AddCircleFilled(ImVec2(screenPos.x, screenPos.y), radius, socketColor);
+
+            // Draw socket name to the left of the circle
+            ImVec2 textSize = ImGui::CalcTextSize(socket.name.c_str());
+            drawList->AddText(ImVec2(screenPos.x - radius - 4.0f - textSize.x, screenPos.y - 6.0f),
+                              IM_COL32(200, 200, 200, 255), socket.name.c_str());
+        }
     }
 
     void MaterialEditor::RenderConnections()
     {
-        // Draw bezier curves between connected sockets.
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+        for (const auto& conn : m_materialGraph.connections)
+        {
+            // Find source and destination nodes
+            MaterialNode* fromNode = nullptr;
+            MaterialNode* toNode = nullptr;
+            for (auto& n : m_materialGraph.nodes)
+            {
+                if (n->id == conn.fromNodeID)
+                {
+                    fromNode = n.get();
+                }
+                if (n->id == conn.toNodeID)
+                {
+                    toNode = n.get();
+                }
+            }
+
+            if (!fromNode || !toNode)
+            {
+                continue;
+            }
+
+            // Calculate output socket position (right side of from-node)
+            float fromX = fromNode->position.x + fromNode->size.x;
+            float fromY = fromNode->position.y + 30.0f + static_cast<float>(conn.fromSocketIndex) * 24.0f;
+            XMFLOAT2 fromScreen = GraphToScreen({fromX, fromY});
+
+            // Calculate input socket position (left side of to-node)
+            float toX = toNode->position.x;
+            float toY = toNode->position.y + 30.0f + static_cast<float>(conn.toSocketIndex) * 24.0f;
+            XMFLOAT2 toScreen = GraphToScreen({toX, toY});
+
+            // Draw bezier curve
+            float tangentOffset = std::abs(toScreen.x - fromScreen.x) * 0.5f;
+            if (tangentOffset < 50.0f)
+            {
+                tangentOffset = 50.0f;
+            }
+
+            ImU32 lineColor =
+                conn.isSelected ? IM_COL32(255, 200, 50, 255)
+                                : IM_COL32(static_cast<int>(conn.color.x * 255), static_cast<int>(conn.color.y * 255),
+                                           static_cast<int>(conn.color.z * 255), static_cast<int>(conn.color.w * 255));
+
+            drawList->AddBezierCubic(ImVec2(fromScreen.x, fromScreen.y),
+                                     ImVec2(fromScreen.x + tangentOffset, fromScreen.y),
+                                     ImVec2(toScreen.x - tangentOffset, toScreen.y), ImVec2(toScreen.x, toScreen.y),
+                                     lineColor, conn.thickness);
+        }
     }
 
     void MaterialEditor::HandleNodeDragging()
     {
-        // Handle mouse drag to reposition nodes in the graph canvas.
+        ImVec2 mousePos = ImGui::GetMousePos();
+        XMFLOAT2 graphMousePos = ScreenToGraph({mousePos.x, mousePos.y});
+
+        if (m_isDraggingNode)
+        {
+            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+            {
+                // Update dragged node position
+                for (auto& n : m_materialGraph.nodes)
+                {
+                    if (n->id == m_draggedNodeID)
+                    {
+                        n->position.x = graphMousePos.x - m_dragOffset.x;
+                        n->position.y = graphMousePos.y - m_dragOffset.y;
+                        break;
+                    }
+                }
+            }
+
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                m_isDraggingNode = false;
+                m_draggedNodeID = 0;
+            }
+        }
+        else
+        {
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            {
+                MaterialNode* hitNode = FindNodeAtPosition(graphMousePos);
+                if (hitNode)
+                {
+                    // Check that we did not click on a socket first
+                    MaterialNode* socketNode = nullptr;
+                    uint32_t socketIdx = 0;
+                    bool isInput = false;
+                    if (!FindSocketAtPosition(graphMousePos, socketNode, socketIdx, isInput))
+                    {
+                        m_isDraggingNode = true;
+                        m_draggedNodeID = hitNode->id;
+                        m_dragOffset.x = graphMousePos.x - hitNode->position.x;
+                        m_dragOffset.y = graphMousePos.y - hitNode->position.y;
+                    }
+                }
+            }
+        }
     }
 
     void MaterialEditor::HandleConnectionCreation()
     {
-        // Handle drag-from-socket to create new connections.
+        ImVec2 mousePos = ImGui::GetMousePos();
+        XMFLOAT2 graphMousePos = ScreenToGraph({mousePos.x, mousePos.y});
+
+        if (m_isCreatingConnection)
+        {
+            // Draw temporary connection line from start socket to mouse
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+            MaterialNode* startNode = nullptr;
+            for (auto& n : m_materialGraph.nodes)
+            {
+                if (n->id == m_connectionStartNodeID)
+                {
+                    startNode = n.get();
+                    break;
+                }
+            }
+
+            if (startNode)
+            {
+                float startX = 0.0f;
+                float startY = 0.0f;
+                if (m_connectionStartIsInput)
+                {
+                    startX = startNode->position.x;
+                    startY = startNode->position.y + 30.0f + static_cast<float>(m_connectionStartSocket) * 24.0f;
+                }
+                else
+                {
+                    startX = startNode->position.x + startNode->size.x;
+                    startY = startNode->position.y + 30.0f + static_cast<float>(m_connectionStartSocket) * 24.0f;
+                }
+                XMFLOAT2 startScreen = GraphToScreen({startX, startY});
+
+                float tangentOffset = std::abs(mousePos.x - startScreen.x) * 0.5f;
+                if (tangentOffset < 50.0f)
+                {
+                    tangentOffset = 50.0f;
+                }
+
+                drawList->AddBezierCubic(ImVec2(startScreen.x, startScreen.y),
+                                         ImVec2(startScreen.x + tangentOffset, startScreen.y),
+                                         ImVec2(mousePos.x - tangentOffset, mousePos.y), ImVec2(mousePos.x, mousePos.y),
+                                         IM_COL32(255, 255, 100, 200), 2.0f);
+            }
+
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                // Check if released on a valid socket
+                MaterialNode* endNode = nullptr;
+                uint32_t endSocketIndex = 0;
+                bool endIsInput = false;
+
+                if (FindSocketAtPosition(graphMousePos, endNode, endSocketIndex, endIsInput))
+                {
+                    // Connect only if start and end socket directions differ
+                    if (m_connectionStartIsInput != endIsInput)
+                    {
+                        if (m_connectionStartIsInput)
+                        {
+                            ConnectSockets(endNode->id, endSocketIndex, m_connectionStartNodeID,
+                                           m_connectionStartSocket);
+                        }
+                        else
+                        {
+                            ConnectSockets(m_connectionStartNodeID, m_connectionStartSocket, endNode->id,
+                                           endSocketIndex);
+                        }
+                    }
+                }
+
+                m_isCreatingConnection = false;
+                m_connectionStartNodeID = 0;
+            }
+        }
+        else
+        {
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            {
+                MaterialNode* socketNode = nullptr;
+                uint32_t socketIndex = 0;
+                bool isInput = false;
+
+                if (FindSocketAtPosition(graphMousePos, socketNode, socketIndex, isInput))
+                {
+                    m_isCreatingConnection = true;
+                    m_connectionStartNodeID = socketNode->id;
+                    m_connectionStartSocket = socketIndex;
+                    m_connectionStartIsInput = isInput;
+                }
+            }
+        }
     }
 
     void MaterialEditor::HandleNodeSelection()
     {
-        // Handle click-to-select and marquee selection of nodes.
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            ImVec2 mousePos = ImGui::GetMousePos();
+            XMFLOAT2 graphMousePos = ScreenToGraph({mousePos.x, mousePos.y});
+
+            MaterialNode* hitNode = FindNodeAtPosition(graphMousePos);
+
+            if (hitNode)
+            {
+                bool ctrlHeld = ImGui::GetIO().KeyCtrl;
+
+                if (ctrlHeld)
+                {
+                    // Toggle selection on the clicked node
+                    auto it = std::find(m_selectedNodes.begin(), m_selectedNodes.end(), hitNode->id);
+                    if (it != m_selectedNodes.end())
+                    {
+                        m_selectedNodes.erase(it);
+                        hitNode->isSelected = false;
+                    }
+                    else
+                    {
+                        m_selectedNodes.push_back(hitNode->id);
+                        hitNode->isSelected = true;
+                    }
+                }
+                else
+                {
+                    // Deselect all, then select clicked node
+                    for (auto& n : m_materialGraph.nodes)
+                    {
+                        n->isSelected = false;
+                    }
+                    m_selectedNodes.clear();
+                    m_selectedNodes.push_back(hitNode->id);
+                    hitNode->isSelected = true;
+                }
+            }
+            else
+            {
+                // Clicked on background — deselect all
+                for (auto& n : m_materialGraph.nodes)
+                {
+                    n->isSelected = false;
+                }
+                m_selectedNodes.clear();
+            }
+        }
     }
 
     void MaterialEditor::UpdateNodePreviews()
     {
-        // Regenerate per-node preview thumbnails if the graph changed.
+        // Mark nodes with previews that need regeneration when the graph changes
+        if (!m_materialGraph.isCompiled)
+        {
+            for (auto& node : m_materialGraph.nodes)
+            {
+                if (node->hasPreview)
+                {
+                    node->previewTextureID = 0;
+                }
+            }
+        }
     }
 
     // =========================================================================

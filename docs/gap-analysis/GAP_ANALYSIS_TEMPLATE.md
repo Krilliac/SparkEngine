@@ -517,11 +517,11 @@
 - [ ] Multi-object transform
 
 ### 23.2 Material Editor (`SparkEditor/Source/MaterialEditor/`)
-- [ ] `MaterialEditor` — visual material property editing
-- [ ] Material preview sphere
+- [x] `MaterialEditor` — visual material property editing (ImGui node graph)
+- [x] Material preview display (preview panel with shape selector)
 - [ ] Texture slot assignment
-- [ ] Shader parameter tweaking
-- [ ] Node-based material graph (visual shader)
+- [x] Shader parameter tweaking (properties panel for selected node)
+- [x] Node-based material graph (visual shader with palette, connections, dragging)
 
 ### 23.3 Terrain Editor (`SparkEditor/Source/Terrain/`)
 - [ ] `TerrainEditor` — heightmap sculpting tools
@@ -569,8 +569,7 @@
 ## 24. Editor — Build & Deployment
 
 ### 24.1 Build System (`SparkEditor/Source/BuildSystem/`)
-- [ ] `SimpleBuildSystem` — project compilation
-- [ ] `BuildDeploymentSystem` — packaging and deployment
+- [x] `BuildCookPanel` — project compilation, packaging and deployment (canonical build UI)
 - [ ] Platform-specific build profiles
 - [ ] Asset cooking and packaging
 - [ ] Build log and error reporting

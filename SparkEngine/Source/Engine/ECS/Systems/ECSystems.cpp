@@ -6,6 +6,7 @@
 #include "Audio/AudioEngine.h"
 #include "Engine/AI/BehaviorTree.h"
 #include "Engine/ECS/Components/FPSComponents.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
 #include "Utils/Cooldown.h"
 #include <sstream>
 #include <cmath>
@@ -513,6 +514,23 @@ namespace Spark::ECS
             {
                 m_onExpired(entity);
             }
+        }
+    }
+
+    // ============================================================================
+    // AbilityUpdateSystem
+    // ============================================================================
+
+    void AbilityUpdateSystem::Update(World& world, float deltaTime)
+    {
+        m_activeCount = 0;
+
+        auto view = world.GetRegistry().view<AbilityComponent>();
+        for (auto entity : view)
+        {
+            auto& ability = view.get<AbilityComponent>(entity);
+            ability.Update(deltaTime);
+            ++m_activeCount;
         }
     }
 

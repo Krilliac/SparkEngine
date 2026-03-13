@@ -757,9 +757,6 @@ namespace SparkEditor
             console.LogError("Failed to create Dedicated Server panel: " + std::string(e.what()));
         }
 
-        // SKIP SimpleBuildSystem in all modes since it's causing the hang
-        console.LogWarning("SKIPPING Simple Build System panel (known to cause hangs)");
-
         // Create Debug Visualizer Panel
         try
         {

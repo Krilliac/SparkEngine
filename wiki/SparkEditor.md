@@ -27,7 +27,7 @@ EditorApplication
   +-- AssetDatabase               (file-system asset indexing)
   +-- PrefabManager               (prefab asset CRUD)
   +-- VersionControlSystem        (optional VCS integration)
-  +-- BuildDeploymentSystem       (cook, package, deploy)
+  +-- BuildCookPanel               (cook, package, deploy)
   +-- PerformanceProfiler         (CPU/GPU timing, memory)
 ```
 
