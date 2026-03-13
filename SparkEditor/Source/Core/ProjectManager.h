@@ -15,6 +15,7 @@
 #include <memory>
 #include <functional>
 #include <cstdint>
+#include <mutex>
 
 namespace Spark
 {
@@ -109,8 +110,12 @@ namespace SparkEditor
         void SetEngineRoot(const std::string& engineRoot) { m_engineRoot = engineRoot; }
         void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
 
-        // --- Recent projects ---
-        const std::vector<RecentProject>& GetRecentProjects() const { return m_recentProjects; }
+        // --- Recent projects (thread-safe via m_recentProjectsMutex) ---
+        std::vector<RecentProject> GetRecentProjects() const
+        {
+            std::lock_guard<std::mutex> lock(m_recentProjectsMutex);
+            return m_recentProjects;
+        }
         void RefreshRecentProjects();
         void RemoveRecentProject(const std::string& path);
         void ClearRecentProjects();
@@ -149,6 +154,7 @@ namespace SparkEditor
 
         ProjectInfo m_currentProject;
         std::vector<RecentProject> m_recentProjects;
+        mutable std::mutex m_recentProjectsMutex; ///< Protects m_recentProjects from concurrent access
         std::string m_engineRoot;
         bool m_hasOpenProject = false;
         bool m_isInitialized = false;

@@ -489,6 +489,7 @@ namespace SparkEditor
     // ------------------------------------------------------------------
     void ProjectManager::RefreshRecentProjects()
     {
+        std::lock_guard<std::mutex> lock(m_recentProjectsMutex);
         for (auto& rp : m_recentProjects)
         {
             rp.valid = fs::exists(rp.path);
@@ -497,38 +498,47 @@ namespace SparkEditor
 
     void ProjectManager::RemoveRecentProject(const std::string& path)
     {
-        m_recentProjects.erase(std::remove_if(m_recentProjects.begin(), m_recentProjects.end(),
-                                              [&](const RecentProject& rp) { return rp.path == path; }),
-                               m_recentProjects.end());
+        {
+            std::lock_guard<std::mutex> lock(m_recentProjectsMutex);
+            m_recentProjects.erase(std::remove_if(m_recentProjects.begin(), m_recentProjects.end(),
+                                                  [&](const RecentProject& rp) { return rp.path == path; }),
+                                   m_recentProjects.end());
+        }
         SaveRecentProjectsList();
     }
 
     void ProjectManager::ClearRecentProjects()
     {
-        m_recentProjects.clear();
+        {
+            std::lock_guard<std::mutex> lock(m_recentProjectsMutex);
+            m_recentProjects.clear();
+        }
         SaveRecentProjectsList();
     }
 
     void ProjectManager::AddToRecentProjects(const std::string& projectName, const std::string& sparkprojectPath)
     {
-        // Remove existing entry with same path
-        m_recentProjects.erase(std::remove_if(m_recentProjects.begin(), m_recentProjects.end(),
-                                              [&](const RecentProject& rp) { return rp.path == sparkprojectPath; }),
-                               m_recentProjects.end());
-
-        RecentProject rp;
-        rp.name = projectName;
-        rp.path = sparkprojectPath;
-        rp.engineVersion = GetCurrentEngineVersion().ToString();
-        rp.lastOpened = GetCurrentTimestamp();
-        rp.valid = true;
-
-        m_recentProjects.insert(m_recentProjects.begin(), rp);
-
-        // Keep max 10
-        if (m_recentProjects.size() > 10)
         {
-            m_recentProjects.resize(10);
+            std::lock_guard<std::mutex> lock(m_recentProjectsMutex);
+            // Remove existing entry with same path
+            m_recentProjects.erase(std::remove_if(m_recentProjects.begin(), m_recentProjects.end(),
+                                                  [&](const RecentProject& rp) { return rp.path == sparkprojectPath; }),
+                                   m_recentProjects.end());
+
+            RecentProject rp;
+            rp.name = projectName;
+            rp.path = sparkprojectPath;
+            rp.engineVersion = GetCurrentEngineVersion().ToString();
+            rp.lastOpened = GetCurrentTimestamp();
+            rp.valid = true;
+
+            m_recentProjects.insert(m_recentProjects.begin(), rp);
+
+            // Keep max 10
+            if (m_recentProjects.size() > 10)
+            {
+                m_recentProjects.resize(10);
+            }
         }
         SaveRecentProjectsList();
     }
@@ -891,6 +901,7 @@ namespace SparkEditor
 
     void ProjectManager::LoadRecentProjectsList()
     {
+        std::lock_guard<std::mutex> lock(m_recentProjectsMutex);
         m_recentProjects.clear();
         std::string filePath = GetRecentProjectsFilePath();
 

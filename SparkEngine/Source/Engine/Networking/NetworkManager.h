@@ -382,10 +382,22 @@ namespace Spark::Net
         // Lag compensation
         LagCompensator& GetLagCompensator() { return m_lagCompensator; }
 
-        // State queries
-        NetworkRole GetRole() const { return m_role; }
-        ConnectionState GetConnectionState() const { return m_connectionState; }
-        ClientID GetLocalClientID() const { return m_localClientID; }
+        // State queries (thread-safe via m_stateMutex)
+        NetworkRole GetRole() const
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            return m_role;
+        }
+        ConnectionState GetConnectionState() const
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            return m_connectionState;
+        }
+        ClientID GetLocalClientID() const
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            return m_localClientID;
+        }
         float GetServerTime() const { return m_serverTime; }
         const NetworkStats& GetStats() const { return m_stats; }
         bool IsInitialized() const { return m_initialized; }
@@ -444,6 +456,7 @@ namespace Spark::Net
         NetworkRole m_role = NetworkRole::None;
         ConnectionState m_connectionState = ConnectionState::Disconnected;
         ClientID m_localClientID = INVALID_CLIENT;
+        mutable std::mutex m_stateMutex; ///< Protects m_role, m_connectionState, m_localClientID
         float m_serverTime = 0.0f;
         float m_heartbeatInterval = 1.0f;
         float m_heartbeatTimer = 0.0f;

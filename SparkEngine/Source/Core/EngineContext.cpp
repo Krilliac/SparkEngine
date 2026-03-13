@@ -23,9 +23,19 @@ EngineContext* EngineContext::Get()
     return g_engineContext.get();
 }
 
-std::unique_ptr<EngineContext>& EngineContext::GetOwned()
+const std::unique_ptr<EngineContext>& EngineContext::GetOwned()
 {
     return g_engineContext;
+}
+
+void EngineContext::SetOwned(std::unique_ptr<EngineContext> ctx)
+{
+    g_engineContext = std::move(ctx);
+}
+
+void EngineContext::ResetOwned()
+{
+    g_engineContext.reset();
 }
 
 EngineContext::EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer, Spark::EventBus* eventBus)

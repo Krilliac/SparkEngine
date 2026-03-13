@@ -2159,6 +2159,11 @@ AssetPipeline* GraphicsEngine::GetAssetPipeline() const
     return m_assetPipeline.get();
 }
 
+Spark::RHI::IRHIDevice* GraphicsEngine::GetRHIDevice() const
+{
+    return m_rhiBridge ? m_rhiBridge->GetDevice() : nullptr;
+}
+
 LightManager* GraphicsEngine::GetLightManager() const
 {
     return m_lightManager.get();
