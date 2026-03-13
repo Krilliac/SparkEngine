@@ -56,18 +56,66 @@ void ASPrint(const std::string& message)
     SPARK_LOG_INFO("Scripting", "[Script] %s", message.c_str());
 }
 
-EntityID ASCreateEntity([[maybe_unused]] const std::string& name)
+EntityID ASCreateEntity(const std::string& name)
 {
-    // Requires a World pointer — in a real integration the engine context
-    // would supply it.  For now return null entity.
-    LogWarning("ASCreateEntity called but no World is bound to the scripting engine.");
-    return entt::null;
+    if (name.empty())
+    {
+        LogWarning("ASCreateEntity: entity name should not be empty.");
+    }
+
+    // Attempt to get the ECS World via EngineContext's generic registry.
+    // The World must be registered as a subsystem by the game/editor layer.
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        LogError("ASCreateEntity: EngineContext not available.");
+        return entt::null;
+    }
+
+    auto* world = ctx->GetSystem<World>();
+    if (!world)
+    {
+        LogWarning("ASCreateEntity: no World registered in EngineContext. "
+                   "Register one via ctx->SetSystem<World>(&world) before calling scripts.");
+        return entt::null;
+    }
+
+    EntityID entity = world->CreateEntity(name);
+    LogInfo("ASCreateEntity: created entity '" + name + "' (ID=" + std::to_string(static_cast<uint32_t>(entity)) +
+            ").");
+    return entity;
 }
 
-Transform* ASGetTransform([[maybe_unused]] EntityID entity)
+Transform* ASGetTransform(EntityID entity)
 {
-    LogWarning("ASGetTransform called but no World is bound to the scripting engine.");
-    return nullptr;
+    if (entity == entt::null)
+    {
+        LogWarning("ASGetTransform: called with null entity.");
+        return nullptr;
+    }
+
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        LogError("ASGetTransform: EngineContext not available.");
+        return nullptr;
+    }
+
+    auto* world = ctx->GetSystem<World>();
+    if (!world)
+    {
+        LogWarning("ASGetTransform: no World registered in EngineContext.");
+        return nullptr;
+    }
+
+    if (!world->HasComponent<Transform>(entity))
+    {
+        LogWarning("ASGetTransform: entity " + std::to_string(static_cast<uint32_t>(entity)) +
+                   " has no Transform component or is not valid.");
+        return nullptr;
+    }
+
+    return world->GetComponent<Transform>(entity);
 }
 
 /**

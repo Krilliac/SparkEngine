@@ -36,6 +36,16 @@ namespace Spark::World
             return false;
         }
 
+        // Validate reference position
+        if (!std::isfinite(referencePos.x) || !std::isfinite(referencePos.y) || !std::isfinite(referencePos.z))
+        {
+            SPARK_LOG_ERROR("WorldOrigin",
+                            "Update called with non-finite reference position (%.1f, %.1f, %.1f). "
+                            "Skipping — this may indicate a physics or transform bug.",
+                            referencePos.x, referencePos.y, referencePos.z);
+            return false;
+        }
+
         // Calculate distance from current local origin
         float distSq =
             referencePos.x * referencePos.x + referencePos.y * referencePos.y + referencePos.z * referencePos.z;
@@ -61,6 +71,21 @@ namespace Spark::World
 
     void WorldOriginSystem::ForceRebase(entt::registry& registry, const DirectX::XMFLOAT3& offset)
     {
+        // Validate offset
+        if (!std::isfinite(offset.x) || !std::isfinite(offset.y) || !std::isfinite(offset.z))
+        {
+            SPARK_LOG_ERROR("WorldOrigin", "ForceRebase called with non-finite offset (%.1f, %.1f, %.1f). Aborting.",
+                            offset.x, offset.y, offset.z);
+            return;
+        }
+
+        // Skip zero-offset rebases
+        if (offset.x == 0.0f && offset.y == 0.0f && offset.z == 0.0f)
+        {
+            SPARK_LOG_DEBUG("WorldOrigin", "ForceRebase called with zero offset. Skipping.");
+            return;
+        }
+
         // Shift all entity transforms
         ShiftAllTransforms(registry, offset);
 

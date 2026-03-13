@@ -480,6 +480,23 @@ Errors include the file path, line number, and column where the error occurred. 
 | `Module already exists` | Compiling the same module twice | Use unique module names or detach first |
 | `Script class not found` | Typo in `className` passed to `AttachScript` | Ensure class name matches the `.as` file exactly |
 
+## Client/Server Script Context
+
+For multiplayer games, scripts can be separated into client-only, server-only, and shared contexts. This prevents server logic from running on clients and vice versa.
+
+```cpp
+// On the server:
+scriptEngine.SetScriptContext(AngelScriptEngine::ScriptContext::Server);
+
+// On the client:
+scriptEngine.SetScriptContext(AngelScriptEngine::ScriptContext::Client);
+
+// Default (runs everywhere):
+scriptEngine.SetScriptContext(AngelScriptEngine::ScriptContext::Shared);
+```
+
+When set to `Server`, scripts tagged `[client]` are skipped during execution. When set to `Client`, scripts tagged `[server]` are skipped. This enables clean separation of authoritative server logic (e.g., damage calculation, loot drops) from client-only logic (e.g., UI effects, camera shake).
+
 ## Module Isolation
 
 Each script file is compiled into a separate AngelScript module, providing namespace isolation between scripts. The module name is derived from the filename by default, or can be specified explicitly when compiling from a string.

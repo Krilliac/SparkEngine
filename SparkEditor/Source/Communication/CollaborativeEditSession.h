@@ -45,6 +45,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <queue>
 #include <vector>
 
 #ifdef _WIN32
@@ -145,6 +146,38 @@ namespace SparkEditor
     using PeerDisconnectedCallback = std::function<void(PeerID)>;
     using EditReceivedCallback = std::function<void(const EditMessage&)>;
     using LockChangedCallback = std::function<void(const std::string& nodeId, PeerID owner)>;
+
+    // ============================================================================
+    // Internal Message Types
+    // ============================================================================
+
+    /**
+     * @brief Types of internal messages exchanged between peers
+     */
+    enum class InternalMessageType : uint8_t
+    {
+        Presence,         ///< Peer presence/heartbeat update
+        SelectionChanged, ///< Peer selection changed
+        EditBroadcast,    ///< Edit operation broadcast
+        LockRequest,      ///< Lock acquisition request
+        LockRelease,      ///< Lock release notification
+        PeerConnect,      ///< New peer connected
+        PeerDisconnect    ///< Peer disconnected
+    };
+
+    /**
+     * @brief Internal message structure for the send/receive queues
+     */
+    struct InternalMessage
+    {
+        InternalMessageType type;
+        PeerID sourcePeer = INVALID_PEER; ///< Originating peer
+        std::string nodeId;               ///< Relevant node ID (if applicable)
+        std::string payload;              ///< Serialized data payload
+        uint64_t timestamp = 0;           ///< Message timestamp (ms since session start)
+        EditMessage editMessage;          ///< Embedded edit message (for EditBroadcast type)
+        EditorPeer peerInfo;              ///< Embedded peer info (for Presence/PeerConnect)
+    };
 
     // ============================================================================
     // Collaborative Edit Session
@@ -334,6 +367,11 @@ namespace SparkEditor
         // Presence broadcasting
         float m_presenceBroadcastInterval = 1.0f;
         float m_presenceBroadcastTimer = 0.0f;
+
+        // Message queues
+        std::queue<InternalMessage> m_outgoingMessages;
+        std::queue<InternalMessage> m_incomingMessages;
+        mutable std::mutex m_messageMutex;
     };
 
 } // namespace SparkEditor

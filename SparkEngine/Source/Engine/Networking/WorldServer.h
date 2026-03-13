@@ -37,6 +37,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -104,6 +105,8 @@ namespace Spark::Net
         size_t memoryUsageMB = 0;
         bool isOnline = false;
         std::chrono::steady_clock::time_point lastHeartbeat;
+        XMFLOAT3 areaPosition{0.0f, 0.0f, 0.0f};      ///< World-space origin of the area region
+        XMFLOAT3 areaSize{1000.0f, 1000.0f, 1000.0f}; ///< Extent of the area region
     };
 
     // ============================================================================
@@ -119,7 +122,14 @@ namespace Spark::Net
         uint32_t totalAreaTransfers = 0;
         uint32_t failedTransfers = 0;
         float averageAreaLoad = 0.0f;
+        uint32_t loadBalanceEvents = 0;      ///< Number of load balance passes performed
+        uint32_t totalEntityMigrations = 0;  ///< Number of entity migrations completed
+        uint32_t totalMessagesProcessed = 0; ///< Total world messages processed
     };
+
+    /// Load thresholds for area balancing
+    constexpr float LOAD_BALANCE_OVERLOAD_THRESHOLD = 0.8f;
+    constexpr float LOAD_BALANCE_UNDERLOAD_THRESHOLD = 0.3f;
 
     // ============================================================================
     // World Server
@@ -289,6 +299,11 @@ namespace Spark::Net
 
         // Load balancing
         float m_loadBalanceTimer = 0.0f;
+
+        // Message queue
+        std::queue<NetworkMessage> m_worldMessageQueue;
+        mutable std::mutex m_messageMutex;
+        float m_messageLogTimer = 0.0f; ///< Timer for periodic message processing stats
 
         // Logging
         mutable std::mutex m_logMutex;

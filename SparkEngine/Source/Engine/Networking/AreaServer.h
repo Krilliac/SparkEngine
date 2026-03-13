@@ -38,6 +38,7 @@
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -225,7 +226,22 @@ namespace Spark::Net
 
         // Cross-area messaging
         std::unordered_map<uint16_t, CrossAreaHandler> m_crossAreaHandlers;
+        std::queue<std::pair<AreaID, NetworkMessage>> m_crossAreaMessageQueue;
         mutable std::mutex m_crossAreaMutex;
+
+        // Entity tracking
+        std::unordered_map<uint32_t, MigratingEntity> m_trackedEntities;
+
+        // Area bounds (axis-aligned bounding box)
+        XMFLOAT3 m_boundsMin{-500.0f, -500.0f, -500.0f};
+        XMFLOAT3 m_boundsMax{500.0f, 500.0f, 500.0f};
+
+        // Rate-limited logging
+        float m_lastStatusLogTime = 0.0f;
+        static constexpr float STATUS_LOG_INTERVAL = 10.0f;
+
+        // Heartbeat timeout
+        static constexpr float HEARTBEAT_TIMEOUT = 30.0f;
     };
 
 } // namespace Spark::Net

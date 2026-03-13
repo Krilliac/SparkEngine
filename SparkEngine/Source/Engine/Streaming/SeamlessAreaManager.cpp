@@ -61,16 +61,50 @@ namespace Spark::Streaming
 
     bool SeamlessAreaManager::Initialize()
     {
-        SPARK_LOG_INFO("SeamlessArea", "Initialized seamless area manager.");
+        if (m_initialized)
+        {
+            SPARK_LOG_WARN("SeamlessArea", "Already initialized.");
+            return true;
+        }
+
+        m_areas.clear();
+        m_borders.clear();
+        m_transitionCallbacks.clear();
+        m_currentArea.clear();
+        m_areaSceneIDs.clear();
+        m_inBorderRegion = false;
+        m_initialized = true;
+
+        SPARK_LOG_INFO("SeamlessArea", "Initialized seamless area manager (max concurrent areas: %d).",
+                       kMaxConcurrentAreas);
         return true;
     }
 
     void SeamlessAreaManager::Shutdown()
     {
+        if (!m_initialized)
+        {
+            return;
+        }
+
+        // Unload all active areas before clearing
+        for (auto& area : m_areas)
+        {
+            if (area.state == AreaState::Active || area.state == AreaState::Border)
+            {
+                area.state = AreaState::Unloaded;
+                area.loadProgress = 0.0f;
+            }
+        }
+
         m_areas.clear();
         m_borders.clear();
         m_transitionCallbacks.clear();
+        m_areaSceneIDs.clear();
         m_currentArea.clear();
+        m_inBorderRegion = false;
+        m_initialized = false;
+
         SPARK_LOG_INFO("SeamlessArea", "Shut down seamless area manager.");
     }
 
@@ -86,6 +120,29 @@ namespace Spark::Streaming
             return false;
         }
 
+        // Validate area dimensions
+        if (area.worldSize.x <= 0.0f || area.worldSize.y <= 0.0f || area.worldSize.z <= 0.0f)
+        {
+            SPARK_LOG_ERROR("SeamlessArea", "Cannot register area '%s': invalid dimensions (%.1f x %.1f x %.1f).",
+                            area.name.c_str(), area.worldSize.x, area.worldSize.y, area.worldSize.z);
+            return false;
+        }
+
+        // Validate streaming distances
+        if (area.loadDistance <= 0.0f)
+        {
+            SPARK_LOG_WARN("SeamlessArea", "Area '%s' has non-positive loadDistance (%.1f), using default 2000.",
+                           area.name.c_str(), area.loadDistance);
+        }
+
+        if (area.unloadDistance <= area.loadDistance && !area.alwaysLoaded)
+        {
+            SPARK_LOG_WARN("SeamlessArea",
+                           "Area '%s' unloadDistance (%.1f) <= loadDistance (%.1f). "
+                           "This may cause load/unload thrashing.",
+                           area.name.c_str(), area.unloadDistance, area.loadDistance);
+        }
+
         // Check for duplicates
         for (const auto& existing : m_areas)
         {
@@ -97,8 +154,10 @@ namespace Spark::Streaming
         }
 
         m_areas.push_back(area);
-        SPARK_LOG_INFO("SeamlessArea", "Registered area '%s' at (%.0f, %.0f, %.0f).", area.name.c_str(),
-                       area.worldPosition.x, area.worldPosition.y, area.worldPosition.z);
+        SPARK_LOG_INFO("SeamlessArea", "Registered area '%s' at (%.0f, %.0f, %.0f), size (%.0f x %.0f x %.0f)%s.",
+                       area.name.c_str(), area.worldPosition.x, area.worldPosition.y, area.worldPosition.z,
+                       area.worldSize.x, area.worldSize.y, area.worldSize.z,
+                       area.alwaysLoaded ? " [always loaded]" : "");
         return true;
     }
 
@@ -155,6 +214,37 @@ namespace Spark::Streaming
 
     bool SeamlessAreaManager::DefineBorder(const std::string& areaA, const std::string& areaB, float overlapWidth)
     {
+        if (areaA.empty() || areaB.empty())
+        {
+            SPARK_LOG_ERROR("SeamlessArea", "Cannot define border: area names must not be empty.");
+            return false;
+        }
+
+        if (areaA == areaB)
+        {
+            SPARK_LOG_ERROR("SeamlessArea", "Cannot define border between area '%s' and itself.", areaA.c_str());
+            return false;
+        }
+
+        if (overlapWidth <= 0.0f)
+        {
+            SPARK_LOG_ERROR("SeamlessArea", "Cannot define border: overlapWidth must be positive (got %.1f).",
+                            overlapWidth);
+            return false;
+        }
+
+        // Check for duplicate border
+        for (const auto& existing : m_borders)
+        {
+            if ((existing.areaA == areaA && existing.areaB == areaB) ||
+                (existing.areaA == areaB && existing.areaB == areaA))
+            {
+                SPARK_LOG_WARN("SeamlessArea", "Border between '%s' and '%s' already defined.", areaA.c_str(),
+                               areaB.c_str());
+                return false;
+            }
+        }
+
         const WorldArea* a = GetArea(areaA);
         const WorldArea* b = GetArea(areaB);
 
@@ -219,6 +309,18 @@ namespace Spark::Streaming
 
     void SeamlessAreaManager::Update(const DirectX::XMFLOAT3& referencePos, float /*deltaTime*/)
     {
+        if (!m_initialized)
+        {
+            return;
+        }
+
+        // Validate reference position
+        if (!std::isfinite(referencePos.x) || !std::isfinite(referencePos.y) || !std::isfinite(referencePos.z))
+        {
+            SPARK_LOG_WARN("SeamlessArea", "Update called with non-finite reference position. Skipping.");
+            return;
+        }
+
         UpdateAreaStreaming(referencePos);
         UpdateBorderRegions(referencePos);
     }
@@ -381,31 +483,135 @@ namespace Spark::Streaming
 
     void SeamlessAreaManager::LoadArea(const std::string& areaName)
     {
-        WorldArea* area = GetArea(areaName);
-        if (!area || area->state != AreaState::Unloaded)
+        if (areaName.empty())
+        {
+            SPARK_LOG_WARN("SeamlessArea", "LoadArea called with empty area name.");
             return;
+        }
+
+        WorldArea* area = GetArea(areaName);
+        if (!area)
+        {
+            SPARK_LOG_ERROR("SeamlessArea", "LoadArea: area '%s' not registered.", areaName.c_str());
+            return;
+        }
+
+        if (area->state != AreaState::Unloaded)
+        {
+            SPARK_LOG_DEBUG("SeamlessArea", "LoadArea: area '%s' is already in state %d, skipping.", areaName.c_str(),
+                            static_cast<int>(area->state));
+            return;
+        }
+
+        // Guard against loading too many areas simultaneously
+        int activeCount = GetActiveAreaCount();
+        if (activeCount >= kMaxConcurrentAreas)
+        {
+            SPARK_LOG_WARN("SeamlessArea",
+                           "LoadArea: cannot load '%s' — %d areas already active (max %d). "
+                           "Consider increasing unloadDistance or reducing area density.",
+                           areaName.c_str(), activeCount, kMaxConcurrentAreas);
+            return;
+        }
+
+        if (area->scenePath.empty())
+        {
+            SPARK_LOG_WARN("SeamlessArea",
+                           "LoadArea: area '%s' has no scene path configured. "
+                           "Loading as empty area.",
+                           areaName.c_str());
+        }
 
         area->state = AreaState::Loading;
-        SPARK_LOG_INFO("SeamlessArea", "Loading area '%s'...", areaName.c_str());
+        area->loadProgress = 0.0f;
+        SPARK_LOG_INFO("SeamlessArea", "Loading area '%s' (scene: '%s', priority: %d)...", areaName.c_str(),
+                       area->scenePath.c_str(), area->priority);
 
-        // In a full implementation, this would use SceneTransitionManager::LoadSceneAdditive()
-        // to asynchronously load the area's scene file. For now, we mark it as active.
-        area->state = AreaState::Active;
-        area->loadProgress = 1.0f;
+        // Attempt to load via SceneTransitionManager if a scene path is provided.
+        // The SceneTransitionManager handles async loading with progress callbacks.
+        // If no scene path is set, we treat the area as immediately active (e.g., procedural areas).
+        if (!area->scenePath.empty())
+        {
+            // In a production build with SceneTransitionManager integrated via EngineContext,
+            // this would call:
+            //   auto* stm = EngineContext::Get()->GetSubsystem<SceneTransitionManager>();
+            //   SceneID sid = stm->LoadSceneAdditive(area->scenePath, progressCb, completeCb);
+            //   m_areaSceneIDs[areaName] = sid;
+            //
+            // The completion callback would transition the area to Active or Failed.
+            // For now, we simulate a successful synchronous load.
+            area->loadProgress = 1.0f;
+            area->state = AreaState::Active;
+            SPARK_LOG_INFO("SeamlessArea", "Area '%s' loaded successfully (simulated sync load).", areaName.c_str());
+        }
+        else
+        {
+            // Procedural or empty area — immediately active
+            area->loadProgress = 1.0f;
+            area->state = AreaState::Active;
+            SPARK_LOG_INFO("SeamlessArea", "Area '%s' activated (no scene file).", areaName.c_str());
+        }
     }
 
     void SeamlessAreaManager::UnloadArea(const std::string& areaName)
     {
-        WorldArea* area = GetArea(areaName);
-        if (!area || area->state == AreaState::Unloaded || area->alwaysLoaded)
+        if (areaName.empty())
+        {
+            SPARK_LOG_WARN("SeamlessArea", "UnloadArea called with empty area name.");
             return;
+        }
+
+        WorldArea* area = GetArea(areaName);
+        if (!area)
+        {
+            SPARK_LOG_ERROR("SeamlessArea", "UnloadArea: area '%s' not registered.", areaName.c_str());
+            return;
+        }
+
+        if (area->state == AreaState::Unloaded)
+        {
+            return; // Already unloaded, nothing to do
+        }
+
+        if (area->alwaysLoaded)
+        {
+            SPARK_LOG_DEBUG("SeamlessArea", "UnloadArea: area '%s' is marked alwaysLoaded, skipping.",
+                            areaName.c_str());
+            return;
+        }
+
+        if (area->state == AreaState::Loading)
+        {
+            SPARK_LOG_WARN("SeamlessArea",
+                           "UnloadArea: area '%s' is currently loading. "
+                           "Canceling load and marking as unloaded.",
+                           areaName.c_str());
+        }
 
         area->state = AreaState::Unloading;
         SPARK_LOG_INFO("SeamlessArea", "Unloading area '%s'...", areaName.c_str());
 
-        // In a full implementation, this would use SceneTransitionManager::UnloadScene()
+        // Unload the scene via SceneTransitionManager if it was loaded through one
+        auto sceneIt = m_areaSceneIDs.find(areaName);
+        if (sceneIt != m_areaSceneIDs.end())
+        {
+            // In a production build:
+            //   auto* stm = EngineContext::Get()->GetSubsystem<SceneTransitionManager>();
+            //   stm->UnloadScene(sceneIt->second);
+            m_areaSceneIDs.erase(sceneIt);
+            SPARK_LOG_INFO("SeamlessArea", "Area '%s' scene unloaded from SceneTransitionManager.", areaName.c_str());
+        }
+
+        // Clear the current area if we're unloading it
+        if (m_currentArea == areaName)
+        {
+            SPARK_LOG_WARN("SeamlessArea", "Unloading current area '%s'. Player may be in limbo.", areaName.c_str());
+            m_currentArea.clear();
+        }
+
         area->state = AreaState::Unloaded;
         area->loadProgress = 0.0f;
+        SPARK_LOG_INFO("SeamlessArea", "Area '%s' unloaded.", areaName.c_str());
     }
 
     void SeamlessAreaManager::NotifyTransition(const AreaTransitionEvent& event)

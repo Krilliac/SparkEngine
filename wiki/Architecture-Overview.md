@@ -253,6 +253,9 @@ ctx->ShutdownAll();
 | **Scripting** | `AngelScriptEngine` | AngelScript VM, engine bindings, hot-reload in editor |
 | **Input** | `InputManager` | Keyboard, mouse, gamepad; action bindings, input mapping |
 | **Networking** | `NetworkManager` | UDP client/server, entity replication, lag compensation, client prediction |
+| **Area Servers** | `AreaServer` / `WorldServer` | Scalable multiplayer with per-area server processes ([docs](Area-Server-Architecture)) |
+| **Large Worlds** | `WorldOriginSystem` / `SeamlessAreaManager` | Origin rebasing and seamless area streaming ([docs](Large-World-Support)) |
+| **Collaboration** | `CollaborativeEditSession` | Multi-user editor sessions with node locking ([docs](Collaborative-Editing)) |
 | **Save** | `SaveSystem` | Game state serialization with compression |
 | **Procedural** | -- | Noise generators (Perlin, Simplex), hydraulic erosion, Wave Function Collapse |
 
@@ -309,15 +312,16 @@ SparkEngine/
 │       │   ├── Gameplay/     # WeaponManager, weapon definitions
 │       │   ├── Localization/ # Localization system
 │       │   ├── Modding/      # Mod loading system
-│       │   ├── Networking/   # UDP multiplayer, replication, dedicated server
+│       │   ├── Networking/   # UDP multiplayer, AreaServer, WorldServer
 │       │   ├── Procedural/   # Noise, erosion, mesh generation, WFC
 │       │   ├── Replay/       # Replay recording/playback
 │       │   ├── SaveSystem/   # Serialization, compression
-│       │   ├── Scripting/    # AngelScript VM, visual scripting
+│       │   ├── Scripting/    # AngelScript VM, hot-reload, visual scripting
 │       │   ├── Stats/        # Achievement system
+│       │   ├── Streaming/    # SeamlessAreaManager, SceneTransitionManager
 │       │   ├── UI/           # UI system
 │       │   ├── VR/           # VR system (stub)
-│       │   └── World/        # World management, day/night, weather
+│       │   └── World/        # WorldOriginSystem, day/night, weather
 │       ├── Game/             # Player, weapons, vehicles, HUD, terrain
 │       ├── Graphics/         # DX11 renderer, RHI, PBR, post-processing
 │       │   ├── DecalSystem.h

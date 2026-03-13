@@ -90,7 +90,7 @@ namespace Spark::World
          * @brief Set the distance threshold that triggers origin rebasing
          * @param threshold Distance in world units (default: 5000.0)
          */
-        void SetRebasingThreshold(float threshold) { m_threshold = threshold; }
+        void SetRebasingThreshold(float threshold) { m_threshold = threshold > 0.0f ? threshold : m_threshold; }
 
         /**
          * @brief Get the current rebasing threshold

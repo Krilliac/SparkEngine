@@ -13,6 +13,7 @@
 #include <cstdio>
 #define SPARK_LOG_INFO(cat, fmt, ...) fprintf(stderr, "[" cat "] " fmt "\n", ##__VA_ARGS__)
 #define SPARK_LOG_WARN(cat, fmt, ...) fprintf(stderr, "[" cat " WARN] " fmt "\n", ##__VA_ARGS__)
+#define SPARK_LOG_DEBUG(cat, fmt, ...) fprintf(stderr, "[" cat " DEBUG] " fmt "\n", ##__VA_ARGS__)
 #endif
 
 namespace SparkEditor
@@ -179,13 +180,36 @@ namespace SparkEditor
 
     void CollaborativeEditSession::SetLocalSelection(const std::string& nodeId)
     {
-        std::lock_guard<std::mutex> lock(m_peerMutex);
-        auto it = m_peers.find(m_localPeerID);
-        if (it != m_peers.end())
+        // Validate nodeId length to prevent excessively long identifiers
+        if (nodeId.size() >= 256)
         {
-            it->second.selectedNode = nodeId;
+            SPARK_LOG_WARN("CollabEdit", "SetLocalSelection rejected: nodeId exceeds 255 chars (length=%zu).",
+                           nodeId.size());
+            return;
         }
-        // In a full implementation, broadcast selection change to peers
+
+        {
+            std::lock_guard<std::mutex> lock(m_peerMutex);
+            auto it = m_peers.find(m_localPeerID);
+            if (it != m_peers.end())
+            {
+                it->second.selectedNode = nodeId;
+            }
+        }
+
+        // Queue a selection-changed message for broadcast to all peers
+        {
+            InternalMessage msg;
+            msg.type = InternalMessageType::SelectionChanged;
+            msg.sourcePeer = m_localPeerID;
+            msg.nodeId = nodeId;
+            msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
+
+            std::lock_guard<std::mutex> lock(m_messageMutex);
+            m_outgoingMessages.push(std::move(msg));
+        }
+
+        SPARK_LOG_INFO("CollabEdit", "Local selection changed to '%s' (PeerID=%u).", nodeId.c_str(), m_localPeerID);
     }
 
     void CollaborativeEditSession::SetLocalViewportCamera(const XMFLOAT3& position, const XMFLOAT3& direction)
@@ -280,15 +304,55 @@ namespace SparkEditor
 
     void CollaborativeEditSession::BroadcastEdit(const EditMessage& message)
     {
+        // Validate the EditMessage
+        if (message.nodeId.empty())
+        {
+            SPARK_LOG_WARN("CollabEdit", "BroadcastEdit rejected: nodeId is empty.");
+            return;
+        }
+
+        if (message.sourceEditor == INVALID_PEER)
+        {
+            SPARK_LOG_WARN("CollabEdit", "BroadcastEdit rejected: sourceEditor is not set.");
+            return;
+        }
+
+        if (static_cast<uint8_t>(message.type) > static_cast<uint8_t>(EditMessageType::ComponentModified))
+        {
+            SPARK_LOG_WARN("CollabEdit", "BroadcastEdit rejected: invalid EditMessageType (%u).",
+                           static_cast<unsigned>(message.type));
+            return;
+        }
+
+        // Prepare the message, setting timestamp if not already set
+        EditMessage outgoing = message;
+        if (outgoing.timestamp == 0)
+        {
+            outgoing.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
+        }
+
         m_editsBroadcast++;
 
-        // In a full implementation, serialize and send the edit message to
-        // all connected peers via the session's network channel.
+        // Serialize the EditMessage into a message queue entry for network broadcast
+        {
+            InternalMessage msg;
+            msg.type = InternalMessageType::EditBroadcast;
+            msg.sourcePeer = outgoing.sourceEditor;
+            msg.nodeId = outgoing.nodeId;
+            msg.timestamp = outgoing.timestamp;
+            msg.editMessage = outgoing;
 
-        // For now, just notify the local callback (useful for testing)
+            std::lock_guard<std::mutex> lock(m_messageMutex);
+            m_outgoingMessages.push(std::move(msg));
+        }
+
+        SPARK_LOG_INFO("CollabEdit", "BroadcastEdit: type=%u nodeId='%s' from PeerID=%u.",
+                       static_cast<unsigned>(outgoing.type), outgoing.nodeId.c_str(), outgoing.sourceEditor);
+
+        // Still call the local callback for immediate local processing
         if (m_onEditReceived)
         {
-            m_onEditReceived(message);
+            m_onEditReceived(outgoing);
         }
     }
 
@@ -330,18 +394,183 @@ namespace SparkEditor
 
     void CollaborativeEditSession::ProcessIncomingMessages()
     {
-        // In a full implementation, receive and process messages from the
-        // session's network channel:
-        // - Peer presence updates -> update m_peers
-        // - Lock requests/releases -> update m_nodeLocks
-        // - Edit messages -> invoke m_onEditReceived callback
-        // - Peer connect/disconnect -> invoke callbacks
+        // Drain the incoming message queue into a local copy to minimize lock hold time
+        std::queue<InternalMessage> localQueue;
+        {
+            std::lock_guard<std::mutex> lock(m_messageMutex);
+            std::swap(localQueue, m_incomingMessages);
+        }
+
+        if (localQueue.empty())
+        {
+            return;
+        }
+
+        SPARK_LOG_DEBUG("CollabEdit", "Processing %zu incoming messages.", localQueue.size());
+
+        while (!localQueue.empty())
+        {
+            InternalMessage msg = std::move(localQueue.front());
+            localQueue.pop();
+
+            switch (msg.type)
+            {
+            case InternalMessageType::Presence:
+            {
+                // Update peer presence in the peers map
+                std::lock_guard<std::mutex> lock(m_peerMutex);
+                auto it = m_peers.find(msg.sourcePeer);
+                if (it != m_peers.end())
+                {
+                    it->second.viewportCameraPos = msg.peerInfo.viewportCameraPos;
+                    it->second.viewportCameraDir = msg.peerInfo.viewportCameraDir;
+                    it->second.selectedNode = msg.peerInfo.selectedNode;
+                    it->second.lastActivityTime = m_sessionTime;
+                    it->second.isActive = true;
+                }
+                break;
+            }
+
+            case InternalMessageType::SelectionChanged:
+            {
+                std::lock_guard<std::mutex> lock(m_peerMutex);
+                auto it = m_peers.find(msg.sourcePeer);
+                if (it != m_peers.end())
+                {
+                    it->second.selectedNode = msg.nodeId;
+                    it->second.lastActivityTime = m_sessionTime;
+                }
+                break;
+            }
+
+            case InternalMessageType::EditBroadcast:
+            {
+                m_editsReceived++;
+                SPARK_LOG_INFO("CollabEdit", "Received edit: type=%u nodeId='%s' from PeerID=%u.",
+                               static_cast<unsigned>(msg.editMessage.type), msg.editMessage.nodeId.c_str(),
+                               msg.sourcePeer);
+
+                if (m_onEditReceived)
+                {
+                    m_onEditReceived(msg.editMessage);
+                }
+                break;
+            }
+
+            case InternalMessageType::LockRequest:
+            {
+                std::lock_guard<std::mutex> lock(m_lockMutex);
+                auto it = m_nodeLocks.find(msg.nodeId);
+                if (it == m_nodeLocks.end())
+                {
+                    // Grant the lock
+                    NodeLock newLock;
+                    newLock.nodeId = msg.nodeId;
+                    newLock.ownerPeer = msg.sourcePeer;
+                    newLock.lockTime = std::chrono::steady_clock::now();
+                    m_nodeLocks[msg.nodeId] = newLock;
+
+                    SPARK_LOG_INFO("CollabEdit", "Lock granted on '%s' to PeerID=%u.", msg.nodeId.c_str(),
+                                   msg.sourcePeer);
+
+                    if (m_onLockChanged)
+                    {
+                        m_onLockChanged(msg.nodeId, msg.sourcePeer);
+                    }
+                }
+                break;
+            }
+
+            case InternalMessageType::LockRelease:
+            {
+                std::lock_guard<std::mutex> lock(m_lockMutex);
+                auto it = m_nodeLocks.find(msg.nodeId);
+                if (it != m_nodeLocks.end() && it->second.ownerPeer == msg.sourcePeer)
+                {
+                    m_nodeLocks.erase(it);
+
+                    SPARK_LOG_INFO("CollabEdit", "Lock released on '%s' by PeerID=%u.", msg.nodeId.c_str(),
+                                   msg.sourcePeer);
+
+                    if (m_onLockChanged)
+                    {
+                        m_onLockChanged(msg.nodeId, INVALID_PEER);
+                    }
+                }
+                break;
+            }
+
+            case InternalMessageType::PeerConnect:
+            {
+                {
+                    std::lock_guard<std::mutex> lock(m_peerMutex);
+                    m_peers[msg.sourcePeer] = msg.peerInfo;
+                    m_peers[msg.sourcePeer].lastActivityTime = m_sessionTime;
+                }
+
+                SPARK_LOG_INFO("CollabEdit", "Peer connected: '%s' (PeerID=%u).", msg.peerInfo.userName.c_str(),
+                               msg.sourcePeer);
+
+                if (m_onPeerConnected)
+                {
+                    m_onPeerConnected(msg.peerInfo);
+                }
+                break;
+            }
+
+            case InternalMessageType::PeerDisconnect:
+            {
+                {
+                    std::lock_guard<std::mutex> lock(m_peerMutex);
+                    m_peers.erase(msg.sourcePeer);
+                }
+
+                SPARK_LOG_INFO("CollabEdit", "Peer disconnected: PeerID=%u.", msg.sourcePeer);
+
+                if (m_onPeerDisconnected)
+                {
+                    m_onPeerDisconnected(msg.sourcePeer);
+                }
+                break;
+            }
+            }
+        }
     }
 
     void CollaborativeEditSession::BroadcastPresence()
     {
-        // In a full implementation, send local peer state (selection,
-        // camera position) to all connected peers.
+        // Collect local peer state
+        EditorPeer localPeerSnapshot;
+        {
+            std::lock_guard<std::mutex> lock(m_peerMutex);
+            auto it = m_peers.find(m_localPeerID);
+            if (it == m_peers.end())
+            {
+                SPARK_LOG_WARN("CollabEdit", "BroadcastPresence: local peer not found in peers map.");
+                return;
+            }
+
+            // Update local peer's activity time
+            it->second.lastActivityTime = m_sessionTime;
+            it->second.isActive = true;
+            localPeerSnapshot = it->second;
+        }
+
+        // Queue a presence message for broadcast to all peers
+        {
+            InternalMessage msg;
+            msg.type = InternalMessageType::Presence;
+            msg.sourcePeer = m_localPeerID;
+            msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
+            msg.peerInfo = localPeerSnapshot;
+
+            std::lock_guard<std::mutex> lock(m_messageMutex);
+            m_outgoingMessages.push(std::move(msg));
+        }
+
+        SPARK_LOG_DEBUG("CollabEdit", "Presence broadcast: PeerID=%u selection='%s' pos=(%.1f,%.1f,%.1f).",
+                        m_localPeerID, localPeerSnapshot.selectedNode.c_str(), localPeerSnapshot.viewportCameraPos.x,
+                        localPeerSnapshot.viewportCameraPos.y, localPeerSnapshot.viewportCameraPos.z);
     }
 
     void CollaborativeEditSession::ExpireStaleNodes()

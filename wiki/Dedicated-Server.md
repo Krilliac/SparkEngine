@@ -2,6 +2,8 @@
 
 SparkEngine supports two approaches for running a dedicated server: a **built-in dedicated server** compiled into the engine core, and a **game module dedicated server** loaded as a DLL plugin at runtime. This page compares both approaches and helps you choose the right one for your project.
 
+For MMO-scale multiplayer with multiple server processes managing different world areas, see [Area Server Architecture](Area-Server-Architecture).
+
 **Source:** `SparkEngine/Source/Engine/Networking/DedicatedServer.h`, `SparkEngine/Source/Engine/Networking/NetworkManager.h`
 
 > **Note:** Both approaches require `ENABLE_NETWORKING=ON` during CMake configuration. See [Networking](Networking) for full networking documentation.

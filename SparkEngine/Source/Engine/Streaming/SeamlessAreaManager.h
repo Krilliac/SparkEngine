@@ -46,6 +46,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -290,8 +291,15 @@ namespace Spark::Streaming
         std::vector<BorderRegion> m_borders;
         std::string m_currentArea;
         bool m_inBorderRegion = false;
+        bool m_initialized = false;
 
         std::vector<AreaTransitionCallback> m_transitionCallbacks;
+
+        /// Scene ID tracking for areas loaded via SceneTransitionManager
+        std::unordered_map<std::string, uint32_t> m_areaSceneIDs;
+
+        /// Maximum concurrent loaded areas to prevent resource exhaustion
+        static constexpr int kMaxConcurrentAreas = 16;
     };
 
 } // namespace Spark::Streaming

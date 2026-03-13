@@ -246,6 +246,18 @@ Features:
 | `AudioMixerPanel` | Audio bus mixing and routing |
 | `MaterialEditorPanel` | Material property editor panel |
 
+## Collaborative Editing
+
+SparkEditor supports multi-user collaborative editing sessions where multiple editor instances can work on the same scene simultaneously. See [Collaborative Editing](Collaborative-Editing) for full documentation.
+
+Key features:
+- **Peer presence** — see other editors' selections and viewport cameras
+- **Node locking** — pessimistic locks prevent conflicting edits
+- **Edit broadcasting** — changes are visible across all editors in real-time
+- **Auto-expiry** — locks expire after 5 minutes to prevent blocking
+
+Source: `SparkEditor/Source/Communication/CollaborativeEditSession.h`
+
 ## Undo/Redo System
 
 The `UndoRedoManager` (`UndoRedo/UndoRedoManager.h`) maintains command stacks for full undo/redo support:
