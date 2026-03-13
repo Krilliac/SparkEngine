@@ -311,8 +311,90 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
         m_modules[moduleName] = mod;
     }
 
+    m_moduleFilePaths[moduleName] = scriptPath;
+
     LogInfo("Compiled script file: " + scriptPath + " -> module '" + moduleName + "'.");
     return true;
+}
+
+// -------------------------------------------------------------------------
+// Hot-Reload Support
+// -------------------------------------------------------------------------
+
+bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
+{
+    auto fileIt = m_moduleFilePaths.find(moduleName);
+    if (fileIt == m_moduleFilePaths.end())
+    {
+        SetLastError("No file path recorded for module '" + moduleName + "'. Cannot hot-reload.");
+        LogError(m_lastError);
+        return false;
+    }
+
+    const std::string& filePath = fileIt->second;
+
+    // 1. Collect all entity scripts that reference this module
+    struct SavedBinding
+    {
+        EntityID entity;
+        std::string className;
+    };
+    std::vector<SavedBinding> bindings;
+
+    for (const auto& [entity, instance] : m_entityScripts)
+    {
+        if (instance.moduleName == moduleName)
+        {
+            bindings.push_back({entity, instance.className});
+        }
+    }
+
+    // 2. Detach all scripts from this module
+    for (const auto& binding : bindings)
+    {
+        DetachScript(binding.entity);
+    }
+
+    // 3. Recompile the module from disk
+    if (!CompileScriptFile(filePath))
+    {
+        LogError("Hot-reload failed: recompilation of '" + filePath + "' failed.");
+        return false;
+    }
+
+    // 4. Re-attach scripts to their entities
+    bool allSucceeded = true;
+    for (const auto& binding : bindings)
+    {
+        if (!AttachScript(binding.entity, binding.className, moduleName))
+        {
+            LogError("Hot-reload: failed to re-attach '" + binding.className + "' to entity " +
+                     std::to_string(static_cast<uint32_t>(binding.entity)));
+            allSucceeded = false;
+        }
+    }
+
+    LogInfo("Hot-reloaded module '" + moduleName + "' (" + std::to_string(bindings.size()) + " scripts re-attached).");
+    return allSucceeded;
+}
+
+std::string AngelScriptEngine::GetModuleFilePath(const std::string& moduleName) const
+{
+    auto it = m_moduleFilePaths.find(moduleName);
+    return it != m_moduleFilePaths.end() ? it->second : std::string{};
+}
+
+std::vector<EntityID> AngelScriptEngine::GetEntitiesForModule(const std::string& moduleName) const
+{
+    std::vector<EntityID> result;
+    for (const auto& [entity, instance] : m_entityScripts)
+    {
+        if (instance.moduleName == moduleName)
+        {
+            result.push_back(entity);
+        }
+    }
+    return result;
 }
 
 bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const std::string& moduleName)
@@ -743,6 +825,23 @@ void AngelScriptEngine::RegisterComponentTypes()
 void AngelScriptEngine::RegisterGlobalFunctions()
 {
     // No-op without AngelScript.
+}
+
+bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
+{
+    LogWarning("Cannot hot-reload module '" + moduleName + "': AngelScript support not compiled in.");
+    SetLastError("AngelScript support not available.");
+    return false;
+}
+
+std::string AngelScriptEngine::GetModuleFilePath(const std::string& /*moduleName*/) const
+{
+    return {};
+}
+
+std::vector<EntityID> AngelScriptEngine::GetEntitiesForModule(const std::string& /*moduleName*/) const
+{
+    return {};
 }
 
 AngelScriptEngine::ScriptInstance* AngelScriptEngine::GetScriptInstance(EntityID /*entity*/)

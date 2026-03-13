@@ -246,6 +246,71 @@ class AngelScriptEngine
     // Internal Helpers
     // ========================================================================
 
+    // ========================================================================
+    // Hot-Reload Support
+    // ========================================================================
+
+    /**
+     * @brief Recompile a module and re-attach all entity scripts that reference it
+     *
+     * Serializes script state via optional Serialize() callbacks, recompiles the
+     * module from disk, and re-attaches all entity scripts from the module.
+     * State is restored via Deserialize() if available.
+     *
+     * @param moduleName Name of the module to reload
+     * @return true if recompilation and re-attachment succeeded
+     */
+    bool HotReloadModule(const std::string& moduleName);
+
+    /**
+     * @brief Get the file path associated with a compiled module
+     * @param moduleName Module name
+     * @return File path, or empty string if not found
+     */
+    std::string GetModuleFilePath(const std::string& moduleName) const;
+
+    /**
+     * @brief Get all entity IDs that have scripts attached from a given module
+     * @param moduleName Module name
+     * @return Vector of entity IDs
+     */
+    std::vector<EntityID> GetEntitiesForModule(const std::string& moduleName) const;
+
+    // ========================================================================
+    // Script Execution Context (Client/Server)
+    // ========================================================================
+
+    /**
+     * @brief Script execution context for multiplayer separation
+     */
+    enum class ScriptContext : uint8_t
+    {
+        Shared, ///< Runs on both client and server (default)
+        Server, ///< Runs only on the dedicated server
+        Client  ///< Runs only on the client
+    };
+
+    /**
+     * @brief Set the current execution context
+     *
+     * When set to Server, scripts tagged [client] are skipped.
+     * When set to Client, scripts tagged [server] are skipped.
+     *
+     * @param context The execution context
+     */
+    void SetScriptContext(ScriptContext context) { m_scriptContext = context; }
+
+    /**
+     * @brief Get the current execution context
+     */
+    ScriptContext GetScriptContext() const { return m_scriptContext; }
+
+  private:
+    ScriptContext m_scriptContext = ScriptContext::Shared;
+
+    /// Maps module name -> source file path for hot-reload
+    std::unordered_map<std::string, std::string> m_moduleFilePaths;
+
     /**
      * @brief Look up a script instance by entity ID
      * @param entity The entity to look up
