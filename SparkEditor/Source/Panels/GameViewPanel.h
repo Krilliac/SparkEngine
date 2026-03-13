@@ -28,6 +28,9 @@ namespace SparkEditor
         void Shutdown() override;
         bool HandleEvent(const std::string& eventType, void* eventData) override;
 
+        /** @brief Check if the game view is capturing input (cursor locked) */
+        bool IsCursorCaptured() const { return m_isCursorCaptured; }
+
       private:
         void RenderToolbar();
         void RenderGameContent();

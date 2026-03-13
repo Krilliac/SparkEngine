@@ -265,8 +265,20 @@ namespace SparkEditor
             }
         }
 
-        // W/E/R: Transform tool shortcuts (only when not typing in a text field)
-        if (!io.WantTextInput && !io.WantCaptureKeyboard)
+        // W/E/R: Transform tool shortcuts (only when not typing and not in game view)
+        bool gameViewCapturing = false;
+        {
+            auto gvIt = m_panels.find("GameView");
+            if (gvIt != m_panels.end())
+            {
+                auto* gv = dynamic_cast<GameViewPanel*>(gvIt->second.get());
+                if (gv)
+                {
+                    gameViewCapturing = gv->IsCursorCaptured();
+                }
+            }
+        }
+        if (!io.WantTextInput && !io.WantCaptureKeyboard && !gameViewCapturing)
         {
             if (ImGui::IsKeyPressed(ImGuiKey_W) && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
             {
