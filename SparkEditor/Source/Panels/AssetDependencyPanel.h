@@ -225,6 +225,7 @@ namespace SparkEditor
         ImVec4 GetAssetTypeColor(AssetType type) const;
         const char* GetAssetTypeName(AssetType type) const;
         AssetType ClassifyAsset(const std::string& path) const;
+        bool PassesFilter(const AssetNode& node) const;
 
       private:
         std::unordered_map<std::string, AssetNode> m_nodes;
