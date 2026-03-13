@@ -113,7 +113,7 @@ std::unique_ptr<InputManager> g_input;
 std::unique_ptr<Timer> g_timer;
 std::unique_ptr<Spark::EventBus> g_eventBus;
 std::unique_ptr<ModuleManager> g_moduleManager;
-// EngineContext accessed via EngineContext::Get() / EngineContext::GetOwned()
+// EngineContext accessed via EngineContext::Get() / EngineContext::SetOwned() / EngineContext::ResetOwned()
 std::unique_ptr<AudioEngine> g_audioEngine;
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 std::unique_ptr<Spark::LocalFileCache> g_fileCache;
@@ -261,7 +261,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         // Initialize only the subsystems needed for headless operation
         g_timer = std::make_unique<Timer>();
         g_eventBus = std::make_unique<Spark::EventBus>();
-        EngineContext::GetOwned() = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
+        EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get()));
 
         // File cache
         g_fileCache = std::make_unique<Spark::LocalFileCache>();
@@ -344,7 +344,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         }
 
         g_fileCache.reset();
-        EngineContext::GetOwned().reset();
+        EngineContext::ResetOwned();
         g_eventBus.reset();
         g_timer.reset();
 
@@ -375,8 +375,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
     // 5. Create event bus and engine context (service locator for modules)
     g_eventBus = std::make_unique<Spark::EventBus>();
-    EngineContext::GetOwned() =
-        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
+    EngineContext::SetOwned(
+        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
 
     // 5b. File cache (registered via generic system registry)
     g_fileCache = std::make_unique<Spark::LocalFileCache>();
@@ -523,7 +523,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         g_physicsOwned.reset();
     }
 
-    EngineContext::GetOwned().reset();
+    EngineContext::ResetOwned();
     g_eventBus.reset();
     g_input.reset();
     g_graphics.reset();
@@ -1267,7 +1267,7 @@ std::unique_ptr<InputManager> g_input;
 std::unique_ptr<Timer> g_timer;
 std::unique_ptr<Spark::EventBus> g_eventBus;
 std::unique_ptr<ModuleManager> g_moduleManager;
-// EngineContext accessed via EngineContext::Get() / EngineContext::GetOwned()
+// EngineContext accessed via EngineContext::Get() / EngineContext::SetOwned() / EngineContext::ResetOwned()
 std::unique_ptr<AudioEngine> g_audioEngine;
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
@@ -1615,7 +1615,7 @@ int main(int argc, char* argv[])
 
         g_eventBus = std::make_unique<Spark::EventBus>();
         g_timer = std::make_unique<Timer>();
-        EngineContext::GetOwned() = std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get());
+        EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get()));
 
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
         {
@@ -1687,7 +1687,7 @@ int main(int argc, char* argv[])
         }
 #endif
 
-        EngineContext::GetOwned().reset();
+        EngineContext::ResetOwned();
         g_eventBus.reset();
         g_timer.reset();
         console.Shutdown();
@@ -1747,8 +1747,8 @@ int main(int argc, char* argv[])
         std::cout << "Graphics engine initialization deferred (headless fallback)." << std::endl;
 
     // 4. Engine context (service locator)
-    EngineContext::GetOwned() =
-        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
+    EngineContext::SetOwned(
+        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
 
     // 5. Physics
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
@@ -1973,7 +1973,7 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    EngineContext::GetOwned().reset();
+    EngineContext::ResetOwned();
     g_eventBus.reset();
     g_input.reset();
     g_graphics.reset();
@@ -1995,8 +1995,8 @@ int main(int argc, char* argv[])
     g_graphics = std::make_unique<GraphicsEngine>();
     g_graphics->Initialize(nullptr);
 
-    EngineContext::GetOwned() =
-        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get());
+    EngineContext::SetOwned(
+        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
 
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     {
@@ -2051,7 +2051,7 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    EngineContext::GetOwned().reset();
+    EngineContext::ResetOwned();
     g_graphics.reset();
     g_input.reset();
     g_timer.reset();

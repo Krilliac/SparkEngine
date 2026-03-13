@@ -32,6 +32,7 @@
 #include "GPUDebugMarkers.h"
 #include "MakeDesc.h"
 #include "GPUTimestampQuery.h"
+#include "RHI/RHIBridge.h"
 #include <functional>
 #include <mutex>
 #include <chrono>
@@ -368,6 +369,36 @@ class GraphicsEngine
     AssetPipeline* GetAssetPipeline() const;
 
     // ========================================================================
+    // RHI BRIDGE ACCESS
+    // ========================================================================
+
+    /**
+     * @brief Get the RHI bridge for backend-agnostic rendering
+     *
+     * The RHI bridge provides access to the abstract rendering hardware
+     * interface, enabling code to issue draw calls through IRHIDevice
+     * rather than directly using D3D11 APIs. This is the recommended
+     * path for new rendering code.
+     *
+     * @return Pointer to the RHI bridge, or nullptr if not initialized
+     */
+    Spark::RHI::RHIBridge* GetRHIBridge() const { return m_rhiBridge.get(); }
+
+    /**
+     * @brief Get the active RHI device for resource creation
+     *
+     * Convenience accessor that returns the underlying IRHIDevice from
+     * the RHI bridge. Returns nullptr if the bridge is not initialized.
+     */
+    Spark::RHI::IRHIDevice* GetRHIDevice() const;
+
+    /**
+     * @brief Check if RHI backend is available
+     * @return true if the RHI bridge has been initialized
+     */
+    bool IsRHIAvailable() const { return m_rhiBridge != nullptr; }
+
+    // ========================================================================
     // RENDERER INTEGRATION SYSTEMS
     // ========================================================================
 
@@ -578,6 +609,7 @@ class GraphicsEngine
     // ADVANCED RENDERING SUBSYSTEMS
     // ========================================================================
 
+    std::unique_ptr<Spark::RHI::RHIBridge> m_rhiBridge; ///< Optional RHI abstraction bridge
     std::unique_ptr<TextureSystem> m_textureSystem;
     std::unique_ptr<MaterialSystem> m_materialSystem;
     std::unique_ptr<LightingSystem> m_lightingSystem;

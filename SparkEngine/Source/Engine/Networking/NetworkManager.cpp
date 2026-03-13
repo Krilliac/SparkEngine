@@ -68,6 +68,8 @@ namespace Spark::Net
 
     void NetBuffer::WriteBytes(const void* data, size_t size)
     {
+        if (!data || size == 0)
+            return;
         const auto* bytes = static_cast<const uint8_t*>(data);
         m_data.insert(m_data.end(), bytes, bytes + size);
     }
@@ -144,6 +146,8 @@ namespace Spark::Net
 
     void NetBuffer::ReadBytes(void* data, size_t size)
     {
+        if (!data || size == 0)
+            return;
         if (m_error || m_readPos + size > m_data.size())
         {
             m_error = true;
@@ -294,6 +298,7 @@ namespace Spark::Net
         RegisterHandler(MessageType::ConnectAccepted,
                         [this](const NetworkMessage& msg)
                         {
+                            std::lock_guard<std::mutex> stateLock(m_stateMutex);
                             if (m_role == NetworkRole::Client)
                             {
                                 NetBuffer buf;
@@ -392,9 +397,12 @@ namespace Spark::Net
         m_unacknowledgedMessages.clear();
         m_lagCompensator.Clear();
 
-        m_role = NetworkRole::None;
-        m_connectionState = ConnectionState::Disconnected;
-        m_localClientID = INVALID_CLIENT;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            m_role = NetworkRole::None;
+            m_connectionState = ConnectionState::Disconnected;
+            m_localClientID = INVALID_CLIENT;
+        }
         m_serverTime = 0.0f;
         m_nextClientID = 1;
         m_nextNetworkID = 1;
@@ -597,10 +605,13 @@ namespace Spark::Net
             return false;
 #endif // ENABLE_NETWORKING
 
-        m_role = NetworkRole::Server;
-        m_connectionState = ConnectionState::Connected;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            m_role = NetworkRole::Server;
+            m_connectionState = ConnectionState::Connected;
+            m_localClientID = 0; // Server is client 0
+        }
         m_maxClients = maxClients;
-        m_localClientID = 0; // Server is client 0
         m_serverTime = 0.0f;
         m_heartbeatTimer = 0.0f;
         m_replicationTimer = 0.0f;
@@ -639,9 +650,12 @@ namespace Spark::Net
         m_pendingInputs.clear();
         m_unacknowledgedMessages.clear();
 
-        m_role = NetworkRole::None;
-        m_connectionState = ConnectionState::Disconnected;
-        m_localClientID = INVALID_CLIENT;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            m_role = NetworkRole::None;
+            m_connectionState = ConnectionState::Disconnected;
+            m_localClientID = INVALID_CLIENT;
+        }
     }
 
     // --------------------------------------------------------------------------
@@ -676,8 +690,11 @@ namespace Spark::Net
         }
 #endif // ENABLE_NETWORKING
 
-        m_role = NetworkRole::Client;
-        m_connectionState = ConnectionState::Connecting;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            m_role = NetworkRole::Client;
+            m_connectionState = ConnectionState::Connecting;
+        }
 
         // Send connect request
         NetworkMessage connectMsg;
@@ -695,15 +712,20 @@ namespace Spark::Net
 
     void NetworkManager::Disconnect()
     {
-        if (m_connectionState == ConnectionState::Disconnected)
-            return;
-
-        m_connectionState = ConnectionState::Disconnecting;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            if (m_connectionState == ConnectionState::Disconnected)
+                return;
+            m_connectionState = ConnectionState::Disconnecting;
+        }
 
         NetworkMessage disconnectMsg;
         disconnectMsg.type = MessageType::Disconnect;
         disconnectMsg.channel = ChannelType::Reliable;
-        disconnectMsg.senderID = m_localClientID;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            disconnectMsg.senderID = m_localClientID;
+        }
         SendMessage(disconnectMsg);
 
         // Flush so the disconnect message actually goes out
@@ -714,9 +736,12 @@ namespace Spark::Net
         m_clientAddresses.clear();
 #endif // ENABLE_NETWORKING
 
-        m_connectionState = ConnectionState::Disconnected;
-        m_role = NetworkRole::None;
-        m_localClientID = INVALID_CLIENT;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            m_connectionState = ConnectionState::Disconnected;
+            m_role = NetworkRole::None;
+            m_localClientID = INVALID_CLIENT;
+        }
         m_clients.clear();
         m_replicatedEntities.clear();
         m_lagCompensator.Clear();

@@ -111,9 +111,24 @@ class EngineContext : public Spark::IEngineContext
     static EngineContext* Get();
 
     /**
-     * @brief Access the owning unique_ptr (for initialization/shutdown only)
+     * @brief Access the owning unique_ptr (read-only)
+     *
+     * Returns a const reference to prevent external code from accidentally
+     * moving or resetting the singleton. Use Get() for non-owning access,
+     * SetOwned() to initialize, and ResetOwned() to tear down.
      */
-    static std::unique_ptr<EngineContext>& GetOwned();
+    static const std::unique_ptr<EngineContext>& GetOwned();
+
+    /**
+     * @brief Set the global EngineContext (initialization only)
+     * @param ctx The new EngineContext to install as the global singleton
+     */
+    static void SetOwned(std::unique_ptr<EngineContext> ctx);
+
+    /**
+     * @brief Reset the global EngineContext (shutdown only)
+     */
+    static void ResetOwned();
 
     // =========================================================================
     // Named getters — delegate to generic registry (R1.1)
