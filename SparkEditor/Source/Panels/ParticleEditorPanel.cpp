@@ -7,6 +7,7 @@
 
 #include "ParticleEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../Utils/ImGuiUtils.h"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -262,9 +263,7 @@ namespace SparkEditor
             SaveEffect();
         }
 
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         // Playback controls
         if (m_previewPlaying)
@@ -289,9 +288,7 @@ namespace SparkEditor
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Playback speed");
 
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         // Preset library toggle
         bool presetActive = m_showPresetLibrary;
@@ -312,9 +309,7 @@ namespace SparkEditor
         // Effect name
         if (m_currentEffect)
         {
-            ImGui::SameLine();
-            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-            ImGui::SameLine();
+            SparkEditor::VerticalSeparator();
 
             char nameBuf[256];
             std::snprintf(nameBuf, sizeof(nameBuf), "%s", m_currentEffect->name.c_str());

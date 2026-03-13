@@ -7,6 +7,7 @@
 
 #include "AssetDependencyPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../Utils/ImGuiUtils.h"
 #include <imgui.h>
 #include <iostream>
 #include <fstream>
@@ -376,9 +377,7 @@ namespace SparkEditor
             ImGui::EndPopup();
         }
 
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         ImGui::Checkbox(ICON_FA_SLIDERS " Filters", &m_showFilterPanel);
         ImGui::SameLine();
@@ -388,9 +387,7 @@ namespace SparkEditor
         ImGui::SameLine();
         ImGui::Checkbox(ICON_FA_LIST_ALT " List", &m_showListView);
 
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
         ImGui::Text(ICON_FA_SITEMAP " Assets: %zu  Edges: %zu", m_nodes.size(), m_edges.size());
     }
 

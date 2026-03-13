@@ -19,6 +19,7 @@
 // Project and third-party headers
 #include "AudioMixerPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../Utils/ImGuiUtils.h"
 
 namespace SparkEditor
 {
@@ -552,9 +553,7 @@ namespace SparkEditor
             ImGui::EndDisabled();
         }
 
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         // Toggle snapshot manager
         if (ImGui::Button(ICON_FA_SAVE " Snapshots"))
@@ -578,9 +577,7 @@ namespace SparkEditor
             m_showEffectChain = !m_showEffectChain;
         }
 
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         // Strip width slider
         ImGui::SetNextItemWidth(100.0f);
