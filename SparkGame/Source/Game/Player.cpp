@@ -235,7 +235,7 @@ void Player::RenderWeapon(const XMMATRIX& view, const XMMATRIX& proj)
     }
 }
 
-// Damage & healing - enhanced with class system (shield, resistance, overshield)
+// Damage & healing - enhanced with class system (shield, resistance, energy shield)
 void Player::TakeDamage(float dmg)
 {
     LOG_TO_CONSOLE(L"Player::TakeDamage called. dmg=" + std::to_wstring(dmg), L"OPERATION");
@@ -254,7 +254,7 @@ void Player::TakeDamage(float dmg)
     // Apply class damage resistance
     float effectiveDmg = dmg * (1.0f - m_damageResistance);
 
-    // Cloaked infiltrator takes bonus damage (de-cloaks on hit)
+    // Cloaked recon takes bonus damage (de-cloaks on hit)
     if (m_cloakActive)
     {
         m_cloakActive = false;
@@ -262,11 +262,11 @@ void Player::TakeDamage(float dmg)
         effectiveDmg *= 1.5f; // 50% bonus damage while cloaked
     }
 
-    // Overshield absorbs damage first (Heavy Assault)
-    if (m_overshieldHP > 0.0f)
+    // Energy shield absorbs damage first (Vanguard)
+    if (m_energyShieldHP > 0.0f)
     {
-        float shieldAbsorbed = std::min(effectiveDmg, m_overshieldHP);
-        m_overshieldHP -= shieldAbsorbed;
+        float shieldAbsorbed = std::min(effectiveDmg, m_energyShieldHP);
+        m_energyShieldHP -= shieldAbsorbed;
         effectiveDmg -= shieldAbsorbed;
     }
 
@@ -524,8 +524,8 @@ void Player::HandleInput(float)
     if (m_input->WasKeyPressed('G'))
         ActivateSecondaryAbility();
 
-    // Jetpack hold (Light Assault) - hold Space while in air
-    if (m_playerClass == PlayerClass::LIGHT_ASSAULT && m_primaryAbility.isActive)
+    // Jetpack hold (Scout) - hold Space while in air
+    if (m_playerClass == PlayerClass::SCOUT && m_primaryAbility.isActive)
     {
         m_jetpackActive = m_input->IsKeyDown(VK_SPACE) && m_jetpackFuel > 0.0f;
     }
@@ -548,7 +548,7 @@ void Player::UpdateMovement(float dt)
     if (m_currentVehicle)
         return;
 
-    // MAX lockdown prevents all movement
+    // Titan lockdown prevents all movement
     if (m_lockedDown)
         return;
 
@@ -564,14 +564,14 @@ void Player::UpdateMovement(float dt)
         speed *= m_crouchMultiplier;
     }
 
-    // Cloaked infiltrator moves slightly slower
+    // Cloaked recon moves slightly slower
     if (m_cloakActive)
     {
         speed *= 0.75f;
     }
 
-    // Heavy Assault overshield active = slower
-    if (m_overshieldHP > 0.0f && m_primaryAbility.isActive && m_playerClass == PlayerClass::HEAVY_ASSAULT)
+    // Vanguard energy shield active = slower
+    if (m_energyShieldHP > 0.0f && m_primaryAbility.isActive && m_playerClass == PlayerClass::VANGUARD)
     {
         speed *= 0.8f;
     }
@@ -799,7 +799,7 @@ void Player::ApplyClassStats(const Spark::ClassDefinition& classDef)
     m_jetpackActive = false;
     m_jetpackFuel = m_jetpackMaxFuel;
     m_cloakActive = false;
-    m_overshieldHP = 0.0f;
+    m_energyShieldHP = 0.0f;
     m_lockedDown = false;
     m_energy = m_maxEnergy;
 }
@@ -820,8 +820,8 @@ bool Player::ActivatePrimaryAbility()
         case ClassAbility::CLOAK:
             m_cloakActive = true;
             break;
-        case ClassAbility::OVERSHIELD:
-            m_overshieldHP = m_overshieldMaxHP;
+        case ClassAbility::ENERGY_SHIELD:
+            m_energyShieldHP = m_energyShieldMaxHP;
             break;
         case ClassAbility::LOCKDOWN:
             m_lockedDown = true;
@@ -850,7 +850,7 @@ bool Player::ActivateSecondaryAbility()
         switch (m_secondaryAbility.type)
         {
         case ClassAbility::EMERGENCY_REPAIR:
-            // MAX self-repair: restore 50% health
+            // Titan self-repair: restore 50% health
             Heal(m_maxHealth * 0.5f);
             break;
         case ClassAbility::HEAL_AURA:
@@ -919,7 +919,7 @@ void Player::EquipTool()
 
 void Player::UpdateClassMechanics(float dt)
 {
-    // Shield recharge (PlanetSide 2 style)
+    // Shield recharge (delayed regeneration)
     m_shieldRechargeTimer += dt;
     if (m_shieldRechargeTimer >= m_shieldRechargeDelay && m_shield < m_maxShield)
     {
@@ -933,8 +933,8 @@ void Player::UpdateClassMechanics(float dt)
     m_primaryAbility.Update(dt);
     m_secondaryAbility.Update(dt);
 
-    // Class-specific passive: Combat Medic health regen
-    if (m_playerClass == PlayerClass::COMBAT_MEDIC && m_health < m_maxHealth)
+    // Class-specific passive: Medic health regen
+    if (m_playerClass == PlayerClass::MEDIC && m_health < m_maxHealth)
     {
         m_health = std::min(m_maxHealth, m_health + 2.0f * dt);
     }
@@ -942,16 +942,16 @@ void Player::UpdateClassMechanics(float dt)
     // Class-specific updates
     switch (m_playerClass)
     {
-    case PlayerClass::LIGHT_ASSAULT:
+    case PlayerClass::SCOUT:
         UpdateJetpack(dt);
         break;
-    case PlayerClass::INFILTRATOR:
+    case PlayerClass::RECON:
         UpdateCloak(dt);
         break;
-    case PlayerClass::HEAVY_ASSAULT:
-        UpdateOvershield(dt);
+    case PlayerClass::VANGUARD:
+        UpdateEnergyShield(dt);
         break;
-    case PlayerClass::MAX_SUIT:
+    case PlayerClass::TITAN:
         // Lockdown: deactivate when ability ends
         if (m_lockedDown && !m_primaryAbility.isActive)
         {
@@ -986,7 +986,7 @@ void Player::UpdateJetpack(float dt)
 
 void Player::UpdateCloak(float dt)
 {
-    // Firing decloaks the infiltrator
+    // Firing decloaks the recon
     if (m_cloakActive && m_isFiring)
     {
         m_cloakActive = false;
@@ -1000,22 +1000,22 @@ void Player::UpdateCloak(float dt)
     }
 }
 
-void Player::UpdateOvershield(float dt)
+void Player::UpdateEnergyShield(float dt)
 {
-    // Overshield decays slowly
-    if (m_overshieldHP > 0.0f && m_primaryAbility.isActive)
+    // Energy shield decays slowly
+    if (m_energyShieldHP > 0.0f && m_primaryAbility.isActive)
     {
-        m_overshieldHP -= 5.0f * dt; // Slow decay
-        if (m_overshieldHP <= 0.0f)
+        m_energyShieldHP -= 5.0f * dt; // Slow decay
+        if (m_energyShieldHP <= 0.0f)
         {
-            m_overshieldHP = 0.0f;
+            m_energyShieldHP = 0.0f;
         }
     }
 
-    // Overshield disappears when ability ends
+    // Energy shield disappears when ability ends
     if (!m_primaryAbility.isActive)
     {
-        m_overshieldHP = 0.0f;
+        m_energyShieldHP = 0.0f;
     }
 }
 

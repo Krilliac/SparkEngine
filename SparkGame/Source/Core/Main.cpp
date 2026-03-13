@@ -64,7 +64,7 @@ SparkGameModule::~SparkGameModule()
 Spark::ModuleInfo SparkGameModule::GetModuleInfo() const
 {
     Spark::ModuleInfo info{};
-    info.name = "Spark Game";
+    info.name = "Spark Arena - Engine Showcase";
     info.version = "1.0.0";
     info.sdkVersion = SPARK_SDK_VERSION;
     info.loadOrder = 1000;
@@ -128,7 +128,7 @@ void SparkGameModule::OnRender()
 
 const char* SparkGameModule::GetGameName() const
 {
-    return "Spark Game";
+    return "Spark Arena";
 }
 
 const char* SparkGameModule::GetGameVersion() const
@@ -571,6 +571,84 @@ void SparkGameModule::RegisterGameConsoleCommands()
             return enable ? "HUD elements enabled" : "HUD elements disabled";
         },
         "Toggle HUD visibility (hud [on|off])");
+
+    // -------------------------------------------------------------------------
+    // Networking commands
+    // -------------------------------------------------------------------------
+
+#ifdef ENABLE_NETWORKING
+    console.RegisterCommand(
+        "net_host",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            uint16_t port = 27015;
+            int maxClients = 32;
+            if (!args.empty())
+                port = static_cast<uint16_t>(std::stoi(args[0]));
+            if (args.size() > 1)
+                maxClients = std::stoi(args[1]);
+            return game->StartServer(port, maxClients) ? "Server started" : "Failed to start server";
+        },
+        "Host a server (net_host [port] [max_clients])");
+
+    console.RegisterCommand(
+        "net_connect",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: net_connect <address> [port]";
+            if (!game)
+                return "Game not available";
+            uint16_t port = 27015;
+            if (args.size() > 1)
+                port = static_cast<uint16_t>(std::stoi(args[1]));
+            return game->ConnectToServer(args[0], port) ? "Connecting..." : "Failed to connect";
+        },
+        "Connect to a server (net_connect <address> [port])");
+
+    console.RegisterCommand(
+        "net_disconnect",
+        [game](const std::vector<std::string>&) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            game->DisconnectNetwork();
+            return "Disconnected";
+        },
+        "Disconnect from network");
+
+    console.RegisterCommand(
+        "net_status",
+        [game](const std::vector<std::string>&) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            return game->GetNetworkStatus();
+        },
+        "Show network status");
+
+    console.RegisterCommand(
+        "net_stats",
+        [game](const std::vector<std::string>&) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            auto stats = game->GetNetworkStats();
+            std::stringstream ss;
+            ss << "=== Network Stats ===\n";
+            ss << "Ping: " << stats.ping << "ms\n";
+            ss << "Jitter: " << stats.jitter << "ms\n";
+            ss << "Packet Loss: " << (stats.packetLoss * 100.0f) << "%\n";
+            ss << "Upload: " << stats.bandwidthUp << " KB/s\n";
+            ss << "Download: " << stats.bandwidthDown << " KB/s\n";
+            ss << "Sent: " << stats.packetsSent << " packets (" << stats.bytesSent << " bytes)\n";
+            ss << "Received: " << stats.packetsReceived << " packets (" << stats.bytesReceived << " bytes)\n";
+            return ss.str();
+        },
+        "Show network statistics");
+#endif // ENABLE_NETWORKING
 }
 
 // ===================================================================================

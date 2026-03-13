@@ -117,7 +117,7 @@ namespace Spark
         // Visibility toggles
         bool showHealthBar = true;
         bool showArmorBar = true;
-        bool showShieldBar = true; ///< Rechargeable shield bar (PS2 style)
+        bool showShieldBar = true; ///< Rechargeable energy shield bar
         bool showAmmoCounter = true;
         bool showCrosshair = true;
         bool showDamageIndicators = true;
@@ -132,9 +132,9 @@ namespace Spark
         bool showAbilityBar = true;     ///< Primary/secondary ability cooldowns
         bool showEnergyBar = true;      ///< Ability energy pool
         bool showLoadoutSlots = true;   ///< Weapon loadout slots (1-4)
-        bool showOvershield = true;     ///< Heavy Assault overshield indicator
-        bool showJetpackFuel = true;    ///< Light Assault jetpack fuel gauge
-        bool showCloakIndicator = true; ///< Infiltrator cloak status
+        bool showEnergyShield = true;   ///< Vanguard energy shield indicator
+        bool showJetpackFuel = true;    ///< Scout jetpack fuel gauge
+        bool showCloakIndicator = true; ///< Recon cloak status
 
         // Crosshair settings
         CrosshairStyle crosshairStyle = CrosshairStyle::Dynamic;
@@ -185,7 +185,7 @@ namespace Spark
         struct
         {
             int r = 100, g = 200, b = 255, a = 180;
-        } overshieldColor; ///< Overshield (light blue)
+        } energyShieldColor; ///< Energy shield (light blue)
         struct
         {
             int r = 255, g = 165, b = 0, a = 220;
@@ -440,7 +440,7 @@ namespace Spark
         void UpdateLowHealthEffects(float dt);
 
         // Class system HUD state
-        SparkEditor::PlayerClass m_currentClass = SparkEditor::PlayerClass::LIGHT_ASSAULT;
+        SparkEditor::PlayerClass m_currentClass = SparkEditor::PlayerClass::SCOUT;
         float m_classChangeTimer = 0.0f;
         std::string m_classChangeName;
         static constexpr float CLASS_CHANGE_DURATION = 3.0f;

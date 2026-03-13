@@ -99,12 +99,12 @@ namespace Spark
 
     bool ClassSystem::Initialize()
     {
-        InitLightAssault();
-        InitCombatMedic();
+        InitScout();
+        InitMedic();
         InitEngineer();
-        InitInfiltrator();
-        InitHeavyAssault();
-        InitMAXSuit();
+        InitRecon();
+        InitVanguard();
+        InitTitan();
         return true;
     }
 
@@ -130,14 +130,14 @@ namespace Spark
     }
 
     // ============================================================================
-    // Class Definitions - PlanetSide 2 / Battlefield Inspired
+    // Class Definitions - Spark Engine Showcase Archetypes
     // ============================================================================
 
-    void ClassSystem::InitLightAssault()
+    void ClassSystem::InitScout()
     {
         ClassDefinition def;
-        def.classType = PlayerClass::LIGHT_ASSAULT;
-        def.name = "Light Assault";
+        def.classType = PlayerClass::SCOUT;
+        def.name = "Scout";
         def.description = "Fast and agile class with jetpack for vertical mobility. "
                           "Excels at flanking and ambush tactics.";
 
@@ -184,14 +184,14 @@ namespace Spark
         def.allowedWeapons = {WeaponType::ASSAULT_RIFLE, WeaponType::SUBMACHINE_GUN, WeaponType::PISTOL,
                               WeaponType::SHOTGUN,       WeaponType::THROWING_KNIFE, WeaponType::MELEE_WEAPON};
 
-        m_classes[static_cast<int>(PlayerClass::LIGHT_ASSAULT)] = def;
+        m_classes[static_cast<int>(PlayerClass::SCOUT)] = def;
     }
 
-    void ClassSystem::InitCombatMedic()
+    void ClassSystem::InitMedic()
     {
         ClassDefinition def;
-        def.classType = PlayerClass::COMBAT_MEDIC;
-        def.name = "Combat Medic";
+        def.classType = PlayerClass::MEDIC;
+        def.name = "Medic";
         def.description = "Support class that heals and revives allies. "
                           "Well-armed with assault rifles for frontline combat.";
 
@@ -239,7 +239,7 @@ namespace Spark
         def.allowedWeapons = {WeaponType::ASSAULT_RIFLE,  WeaponType::RIFLE,        WeaponType::PISTOL,
                               WeaponType::SUBMACHINE_GUN, WeaponType::MEDICAL_TOOL, WeaponType::MELEE_WEAPON};
 
-        m_classes[static_cast<int>(PlayerClass::COMBAT_MEDIC)] = def;
+        m_classes[static_cast<int>(PlayerClass::MEDIC)] = def;
     }
 
     void ClassSystem::InitEngineer()
@@ -297,11 +297,11 @@ namespace Spark
         m_classes[static_cast<int>(PlayerClass::ENGINEER)] = def;
     }
 
-    void ClassSystem::InitInfiltrator()
+    void ClassSystem::InitRecon()
     {
         ClassDefinition def;
-        def.classType = PlayerClass::INFILTRATOR;
-        def.name = "Infiltrator";
+        def.classType = PlayerClass::RECON;
+        def.name = "Recon";
         def.description = "Stealth reconnaissance class with cloaking technology. "
                           "Deadly at range with sniper rifles, fragile up close.";
 
@@ -337,7 +337,7 @@ namespace Spark
         def.primaryAbility.durationMax = 12.0f; // 12 seconds of cloak
         def.primaryAbility.energyCost = 20.0f;
 
-        def.secondaryAbility.type = ClassAbility::RECON_DART;
+        def.secondaryAbility.type = ClassAbility::SENSOR_PULSE;
         def.secondaryAbility.cooldownMax = 25.0f;
         def.secondaryAbility.durationMax = 15.0f; // 15 second scan duration
         def.secondaryAbility.energyCost = 15.0f;
@@ -351,15 +351,15 @@ namespace Spark
                               WeaponType::CROSSBOW,     WeaponType::THROWING_KNIFE, WeaponType::SCANNER,
                               WeaponType::MELEE_WEAPON};
 
-        m_classes[static_cast<int>(PlayerClass::INFILTRATOR)] = def;
+        m_classes[static_cast<int>(PlayerClass::RECON)] = def;
     }
 
-    void ClassSystem::InitHeavyAssault()
+    void ClassSystem::InitVanguard()
     {
         ClassDefinition def;
-        def.classType = PlayerClass::HEAVY_ASSAULT;
-        def.name = "Heavy Assault";
-        def.description = "Frontline tank class with overshield and heavy weapons. "
+        def.classType = PlayerClass::VANGUARD;
+        def.name = "Vanguard";
+        def.description = "Frontline tank class with energy shield and heavy weapons. "
                           "Dominates direct combat but trades mobility for power.";
 
         // Stats - tanky, slow, high firepower
@@ -386,10 +386,10 @@ namespace Spark
         def.loadout.secondary = LoadoutSlot(WeaponType::ROCKET_LAUNCHER, 2);
         def.loadout.sidearm = LoadoutSlot(WeaponType::PISTOL, 2);
 
-        // Abilities: Overshield + Rocket Barrage
-        def.primaryAbility.type = ClassAbility::OVERSHIELD;
+        // Abilities: Energy Shield + Rocket Barrage
+        def.primaryAbility.type = ClassAbility::ENERGY_SHIELD;
         def.primaryAbility.cooldownMax = 15.0f;
-        def.primaryAbility.durationMax = 10.0f; // 10 second overshield
+        def.primaryAbility.durationMax = 10.0f; // 10 second energy shield
         def.primaryAbility.energyCost = 30.0f;
 
         def.secondaryAbility.type = ClassAbility::ROCKET_BARRAGE;
@@ -406,14 +406,14 @@ namespace Spark
                               WeaponType::ASSAULT_RIFLE, WeaponType::MINIGUN,         WeaponType::SHOTGUN,
                               WeaponType::MELEE_WEAPON};
 
-        m_classes[static_cast<int>(PlayerClass::HEAVY_ASSAULT)] = def;
+        m_classes[static_cast<int>(PlayerClass::VANGUARD)] = def;
     }
 
-    void ClassSystem::InitMAXSuit()
+    void ClassSystem::InitTitan()
     {
         ClassDefinition def;
-        def.classType = PlayerClass::MAX_SUIT;
-        def.name = "MAX Suit";
+        def.classType = PlayerClass::TITAN;
+        def.name = "Titan";
         def.description = "Mechanized assault exosuit with extreme armor and dual weapons. "
                           "Walking fortress that dominates infantry combat.";
 
@@ -460,7 +460,7 @@ namespace Spark
                               WeaponType::ROCKET_LAUNCHER, WeaponType::FLAMETHROWER, WeaponType::PLASMA_RIFLE,
                               WeaponType::MELEE_WEAPON};
 
-        m_classes[static_cast<int>(PlayerClass::MAX_SUIT)] = def;
+        m_classes[static_cast<int>(PlayerClass::TITAN)] = def;
     }
 
     // ============================================================================
@@ -612,18 +612,18 @@ namespace Spark
     {
         switch (classType)
         {
-        case PlayerClass::LIGHT_ASSAULT:
-            return "Light Assault";
-        case PlayerClass::COMBAT_MEDIC:
-            return "Combat Medic";
+        case PlayerClass::SCOUT:
+            return "Scout";
+        case PlayerClass::MEDIC:
+            return "Medic";
         case PlayerClass::ENGINEER:
             return "Engineer";
-        case PlayerClass::INFILTRATOR:
-            return "Infiltrator";
-        case PlayerClass::HEAVY_ASSAULT:
-            return "Heavy Assault";
-        case PlayerClass::MAX_SUIT:
-            return "MAX Suit";
+        case PlayerClass::RECON:
+            return "Recon";
+        case PlayerClass::VANGUARD:
+            return "Vanguard";
+        case PlayerClass::TITAN:
+            return "Titan";
         default:
             return "Unknown";
         }
@@ -633,17 +633,17 @@ namespace Spark
     {
         switch (classType)
         {
-        case PlayerClass::LIGHT_ASSAULT:
+        case PlayerClass::SCOUT:
             return "Fast and agile with jetpack. Flanking specialist.";
-        case PlayerClass::COMBAT_MEDIC:
+        case PlayerClass::MEDIC:
             return "Heals and revives allies. Frontline support.";
         case PlayerClass::ENGINEER:
             return "Deploys turrets and barriers. Area denial expert.";
-        case PlayerClass::INFILTRATOR:
+        case PlayerClass::RECON:
             return "Stealth recon with sniper rifles. Intel gatherer.";
-        case PlayerClass::HEAVY_ASSAULT:
-            return "Tanky frontline with LMGs and overshield.";
-        case PlayerClass::MAX_SUIT:
+        case PlayerClass::VANGUARD:
+            return "Tanky frontline with LMGs and energy shield.";
+        case PlayerClass::TITAN:
             return "Mechanized exosuit. Walking fortress.";
         default:
             return "Unknown class.";
@@ -668,10 +668,10 @@ namespace Spark
             return "Deploy Barrier";
         case ClassAbility::CLOAK:
             return "Cloak";
-        case ClassAbility::RECON_DART:
-            return "Recon Dart";
-        case ClassAbility::OVERSHIELD:
-            return "Overshield";
+        case ClassAbility::SENSOR_PULSE:
+            return "Sensor Pulse";
+        case ClassAbility::ENERGY_SHIELD:
+            return "Energy Shield";
         case ClassAbility::ROCKET_BARRAGE:
             return "Rocket Barrage";
         case ClassAbility::LOCKDOWN:
