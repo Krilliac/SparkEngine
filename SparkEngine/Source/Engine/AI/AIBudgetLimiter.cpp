@@ -8,6 +8,7 @@
 #include "AIBudgetLimiter.h"
 #include "AISystem.h"
 #include "../ECS/Components.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -21,6 +22,7 @@ namespace Spark::AI
 
     void AIBudgetLimiter::BeginFrame(const DirectX::XMFLOAT3& playerPosition, World& world)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         m_frameStartTime = std::chrono::high_resolution_clock::now();
         m_frameActive = true;
         m_nextAgentIndex = 0;
@@ -160,6 +162,7 @@ namespace Spark::AI
 
     void AIBudgetLimiter::EndFrame()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         if (!m_frameActive)
         {
             return;

@@ -21,6 +21,7 @@
 #include "Engine/Events/EventSystem.h"
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
+#include "Utils/Validate.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
@@ -226,6 +227,7 @@ static bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
 // ===================================================================================
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
     ASSERT(hInstance != nullptr);
 
     // 1. Crash handler

@@ -7,6 +7,7 @@
 
 #include "SearchPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cctype>
@@ -18,6 +19,7 @@ namespace SparkEditor
 
     bool SearchPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         InitializeSampleData();
         m_isInitialized = true;
         return true;

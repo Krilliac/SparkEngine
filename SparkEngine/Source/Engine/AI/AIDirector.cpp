@@ -4,6 +4,7 @@
  */
 
 #include "AIDirector.h"
+#include "../../Utils/Validate.h"
 
 #include "../ECS/Components/GameplayComponents.h"
 
@@ -21,6 +22,7 @@ namespace Spark::AI
 
     void AIDirector::Update(World& world, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         if (!m_enabled)
         {
             return;
@@ -40,6 +42,8 @@ namespace Spark::AI
 
     void AIDirector::SetDesiredIntensityRange(float minIntensity, float maxIntensity)
     {
+        SPARK_WARN_IF(Spark::LogCategory::AI, minIntensity > maxIntensity,
+                      "SetDesiredIntensityRange: minIntensity > maxIntensity, values will be swapped");
         m_minIntensity = std::clamp(minIntensity, 0.0f, 1.0f);
         m_maxIntensity = std::clamp(maxIntensity, 0.0f, 1.0f);
         if (m_minIntensity > m_maxIntensity)

@@ -4,6 +4,7 @@
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/Validate.h"
 #include <algorithm>
 #include <iostream>
 #include <sstream>
@@ -42,15 +43,16 @@ AudioEngine::~AudioEngine()
 
 HRESULT AudioEngine::Initialize(size_t maxSources)
 {
-    SPARK_LOG_INFO("Audio", "AudioEngine::Initialize -- maxSources=%zu", maxSources);
-    ASSERT_MSG(maxSources > 0, "AudioEngine maxSources must be positive");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine::Initialize -- maxSources=%zu", maxSources);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, maxSources > 0, "AudioEngine maxSources must be positive");
     m_maxSources = maxSources;
     m_settings.maxSources = static_cast<int>(maxSources);
 
     HRESULT hr = XAudio2Create(&m_xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
     if (FAILED(hr))
     {
-        SPARK_LOG_FATAL("Audio",
+        SPARK_LOG_FATAL(Spark::LogCategory::Audio,
                         "XAudio2Create failed HR=0x%08lX -- "
                         "Check audio drivers and Windows Audio Service",
                         static_cast<long>(hr));
@@ -60,7 +62,7 @@ HRESULT AudioEngine::Initialize(size_t maxSources)
     hr = m_xAudio2->CreateMasteringVoice(&m_masterVoice);
     if (FAILED(hr))
     {
-        SPARK_LOG_FATAL("Audio",
+        SPARK_LOG_FATAL(Spark::LogCategory::Audio,
                         "CreateMasteringVoice failed HR=0x%08lX -- "
                         "No audio output device available?",
                         static_cast<long>(hr));
@@ -75,12 +77,13 @@ HRESULT AudioEngine::Initialize(size_t maxSources)
     for (size_t i = 0; i < m_maxSources; ++i)
     {
         auto source = std::make_unique<AudioSource>();
-        ASSERT_NOT_NULL(source.get());
+        SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Audio, source.get());
         source->SourceID = m_nextSourceID++;
         m_availableSources.push_back(source.get());
         m_audioSources.push_back(std::move(source));
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine initialization complete - audio ready");
     Spark::SimpleConsole::GetInstance().Log(
         "AudioEngine initialization complete with console integration - audio ready.", "SUCCESS");
     return S_OK;
@@ -88,6 +91,7 @@ HRESULT AudioEngine::Initialize(size_t maxSources)
 
 void AudioEngine::Update(float deltaTime)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
     static bool firstFrame = true;
     if (firstFrame)
     {
@@ -106,6 +110,8 @@ void AudioEngine::Update(float deltaTime)
 
 void AudioEngine::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine::Shutdown called");
     Spark::SimpleConsole::GetInstance().Log("AudioEngine::Shutdown called.", "INFO");
     StopAllSounds();
     m_soundEffects.clear();
@@ -137,12 +143,14 @@ void AudioEngine::Shutdown()
 
 HRESULT AudioEngine::LoadSound(const std::string& name, const std::wstring& filename)
 {
-    ASSERT_MSG(!name.empty(), "Sound name must be non-empty");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !name.empty(), "Sound name must be non-empty");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !filename.empty(), "Sound filename must be non-empty");
     auto sound = std::make_unique<SoundEffect>();
-    ASSERT_NOT_NULL(sound.get());
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Audio, sound.get());
 
     HRESULT hr = sound->LoadFromFile(filename);
-    ASSERT_MSG(SUCCEEDED(hr), "SoundEffect::LoadFromFile failed");
+    SPARK_WARN_IF(Spark::LogCategory::Audio, FAILED(hr), "SoundEffect::LoadFromFile failed");
     if (FAILED(hr))
     {
         Spark::SimpleConsole::GetInstance().Log("Failed to load sound '" + name + "' from file", "ERROR");
@@ -177,7 +185,8 @@ SoundEffect* AudioEngine::GetSound(const std::string& name)
 
 AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float pitch, bool loop)
 {
-    ASSERT_MSG(!name.empty(), "Sound name must be non-empty");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !name.empty(), "Sound name must be non-empty");
     SoundEffect* sound = GetSound(name);
     if (!sound)
     {
@@ -195,21 +204,21 @@ AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float
     if (!src->Voice)
     {
         HRESULT hr = CreateSourceVoice(sound->GetFormat(), &src->Voice);
-        ASSERT_MSG(SUCCEEDED(hr), "CreateSourceVoice failed");
+        SPARK_WARN_IF(Spark::LogCategory::Audio, FAILED(hr), "CreateSourceVoice failed");
         if (FAILED(hr))
             return nullptr;
     }
 
     if (volume < 0.0f || volume > 1.0f)
     {
-        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, "Audio", 5, "PlaySound '%s': volume %.2f clamped to [0,1]",
-                                name.c_str(), volume);
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, Spark::LogCategory::Audio, 5,
+                                "PlaySound '%s': volume %.2f clamped to [0,1]", name.c_str(), volume);
         volume = std::clamp(volume, 0.0f, 1.0f);
     }
     if (pitch <= 0.0f)
     {
-        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, "Audio", 5, "PlaySound '%s': pitch %.2f invalid, reset to 1.0",
-                                name.c_str(), pitch);
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, Spark::LogCategory::Audio, 5,
+                                "PlaySound '%s': pitch %.2f invalid, reset to 1.0", name.c_str(), pitch);
         pitch = 1.0f;
     }
 
@@ -225,14 +234,14 @@ AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float
 
     XAUDIO2_BUFFER buffer = {};
     buffer.AudioBytes = sound->GetDataSize();
-    ASSERT_MSG(buffer.AudioBytes > 0, "Empty audio data");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, buffer.AudioBytes > 0, "Empty audio data");
     buffer.pAudioData = sound->GetData();
     buffer.Flags = XAUDIO2_END_OF_STREAM;
     if (loop)
         buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
 
     HRESULT hr = src->Voice->SubmitSourceBuffer(&buffer);
-    ASSERT_MSG(SUCCEEDED(hr), "SubmitSourceBuffer failed");
+    SPARK_WARN_IF(Spark::LogCategory::Audio, FAILED(hr), "SubmitSourceBuffer failed");
     if (FAILED(hr))
         return nullptr;
 
@@ -260,7 +269,7 @@ AudioSource* AudioEngine::PlaySound3D(const std::string& name, const XMFLOAT3& p
 
 void AudioEngine::StopSound(AudioSource* source)
 {
-    ASSERT_NOT_NULL(source);
+    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Audio, source);
     if (source->IsPlaying && source->Voice)
     {
         source->Voice->Stop();
@@ -731,7 +740,7 @@ AudioSource* AudioEngine::GetAvailableSource()
 
 void AudioEngine::ReturnSource(AudioSource* source)
 {
-    ASSERT_NOT_NULL(source);
+    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Audio, source);
     source->IsPlaying = false;
     source->Sound = nullptr;
     m_availableSources.push_back(source);
@@ -853,7 +862,7 @@ void AudioEngine::Apply3DAudioToSource(AudioSource* source)
 
 HRESULT AudioEngine::CreateSourceVoice(const WAVEFORMATEX& format, IXAudio2SourceVoice** voice)
 {
-    ASSERT_MSG(m_xAudio2 != nullptr, "XAudio2 not initialized");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, m_xAudio2 != nullptr, "XAudio2 not initialized");
     return m_xAudio2->CreateSourceVoice(voice, &format);
 }
 
@@ -869,7 +878,7 @@ IXAudio2SubmixVoice* AudioEngine::CreateSubmixVoice(uint32_t inputChannels, uint
     HRESULT hr = m_xAudio2->CreateSubmixVoice(&submixVoice, inputChannels, inputSampleRate);
     if (FAILED(hr))
     {
-        SPARK_LOG_ERROR("Audio", "CreateSubmixVoice failed HR=0x%08lX", static_cast<long>(hr));
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "CreateSubmixVoice failed HR=0x%08lX", static_cast<long>(hr));
         Spark::SimpleConsole::GetInstance().Log("CreateSubmixVoice failed", "ERROR");
         return nullptr;
     }

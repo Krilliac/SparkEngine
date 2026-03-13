@@ -4,6 +4,7 @@
  */
 
 #include "SceneTransitionManager.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <sstream>
@@ -21,6 +22,7 @@ namespace Spark::Streaming
 
     void SceneTransitionManager::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
         // Process transition animation
         if (m_transitioning)
         {
@@ -42,6 +44,8 @@ namespace Spark::Streaming
     SceneID SceneTransitionManager::LoadScene(const std::string& filePath, const TransitionConfig& transition,
                                               LoadProgressCallback onProgress, LoadCompleteCallback onComplete)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !filePath.empty(), INVALID_SCENE);
         std::lock_guard<std::mutex> lock(m_mutex);
 
         SceneID id = AllocateSceneID();
@@ -84,6 +88,8 @@ namespace Spark::Streaming
     SceneID SceneTransitionManager::LoadSceneAdditive(const std::string& filePath, LoadProgressCallback onProgress,
                                                       LoadCompleteCallback onComplete)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !filePath.empty(), INVALID_SCENE);
         std::lock_guard<std::mutex> lock(m_mutex);
 
         SceneID id = AllocateSceneID();

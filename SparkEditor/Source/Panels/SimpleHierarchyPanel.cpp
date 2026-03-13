@@ -14,6 +14,7 @@
 #include "SimpleHierarchyPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -24,6 +25,7 @@ namespace SparkEditor
 
     bool SimpleHierarchyPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Simple Hierarchy panel\n";
 
         // Add some default objects

@@ -8,11 +8,12 @@
  */
 
 #include "CrashHandler.h"
+#include "Validate.h"
 #include <cstdio>
 
 void InstallCrashHandler(const CrashConfig& /*cfg*/)
 {
-    // No crash handler available without miniz
+    SPARK_LOG_WARN(Spark::LogCategory::Core, "CrashHandler stub: no crash handler available (miniz not found)");
 }
 
 void TriggerCrashHandler(const char* assertMsg)

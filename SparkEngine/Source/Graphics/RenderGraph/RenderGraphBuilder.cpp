@@ -6,6 +6,7 @@
  */
 
 #include "RenderGraphBuilder.h"
+#include "../../Utils/Validate.h"
 
 #include <cassert>
 #include <sstream>
@@ -89,6 +90,7 @@ namespace Spark::Graphics
 
     void StandardPipelineBuilder::Build(RenderGraph& graph)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
         // Passes are added in dependency order.  The RenderGraph compiler
         // will verify and reorder if needed, but adding them in the natural
         // order makes the setup lambdas straightforward.

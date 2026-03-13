@@ -6,6 +6,7 @@
 #include "WorldOriginSystem.h"
 #include "../ECS/Components/CoreComponents.h"
 #include "../../Utils/LogMacros.h"
+#include "../../Utils/Validate.h"
 
 #include <cmath>
 #include <entt/entt.hpp>
@@ -31,6 +32,7 @@ namespace Spark::World
 
     bool WorldOriginSystem::Update(entt::registry& registry, const DirectX::XMFLOAT3& referencePos)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
         if (!m_enabled)
         {
             return false;
@@ -71,6 +73,7 @@ namespace Spark::World
 
     void WorldOriginSystem::ForceRebase(entt::registry& registry, const DirectX::XMFLOAT3& offset)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
         // Validate offset
         if (!std::isfinite(offset.x) || !std::isfinite(offset.y) || !std::isfinite(offset.z))
         {
@@ -127,6 +130,8 @@ namespace Spark::World
 
     void WorldOriginSystem::Reset()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "WorldOriginSystem resetting accumulated offset");
         m_accumulatedOffset = {0.0f, 0.0f, 0.0f};
         m_stats = {};
     }

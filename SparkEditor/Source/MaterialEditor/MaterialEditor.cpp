@@ -4,6 +4,7 @@
  */
 
 #include "MaterialEditor.h"
+#include "Utils/Validate.h"
 
 #include <imgui.h>
 
@@ -28,6 +29,7 @@ namespace SparkEditor
 
     bool MaterialEditor::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         InitializeNodeTypes();
         CreateNewMaterial("Default Material");
         return true;

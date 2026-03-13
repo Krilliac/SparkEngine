@@ -7,6 +7,7 @@
 
 #include "EditorTheme.h"
 #include "Utils/LocalFileCache.h"
+#include "Utils/Validate.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
@@ -93,6 +94,8 @@ namespace SparkEditor
 
     bool EditorTheme::ApplyTheme(const std::string& themeName)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !themeName.empty(), false);
         if (s_registeredThemes.empty())
         {
             InitializeDefaultThemes();
@@ -321,6 +324,8 @@ namespace SparkEditor
 
     void EditorTheme::InitializeDefaultThemes()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing default editor themes");
         RegisterTheme(CreateSparkThemeImpl());
         RegisterTheme(CreateUnityProTheme());
         RegisterTheme(CreateUnrealProTheme());
@@ -1067,6 +1072,7 @@ namespace SparkEditor
     bool ThemeCustomizer::ExportTheme(const EditorThemeData& theme, const std::string& filepath,
                                       Spark::LocalFileCache* cache)
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !filepath.empty(), false);
         try
         {
             std::ofstream file(filepath);
@@ -1152,6 +1158,7 @@ namespace SparkEditor
     bool ThemeCustomizer::ImportTheme(const std::string& filepath, EditorThemeData& outTheme,
                                       Spark::LocalFileCache* cache)
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !filepath.empty(), false);
         try
         {
             std::string content;

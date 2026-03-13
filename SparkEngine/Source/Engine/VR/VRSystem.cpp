@@ -4,6 +4,7 @@
  */
 
 #include "VRSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <sstream>
 
@@ -21,6 +22,8 @@ namespace Spark::VR
 
     bool VRSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "VRSystem initializing");
         // OpenXR initialization would happen here:
         // 1. xrCreateInstance()
         // 2. xrGetSystem()
@@ -34,12 +37,15 @@ namespace Spark::VR
 
     void VRSystem::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "VRSystem shutting down");
         // Release OpenXR resources
         m_initialized = false;
     }
 
     void VRSystem::UpdateTracking()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         if (!m_initialized)
         {
             return;
@@ -67,6 +73,8 @@ namespace Spark::VR
 
     void VRSystem::RecenterTracking()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "VR recentering tracking space");
         if (!m_initialized)
         {
             return;

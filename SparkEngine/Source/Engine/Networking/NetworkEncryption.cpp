@@ -4,6 +4,7 @@
  */
 
 #include "NetworkEncryption.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cstring>
@@ -104,6 +105,7 @@ namespace Spark::Net
 
     std::vector<uint8_t> EncryptPacket(const SessionKey& key, uint64_t sequence, const std::vector<uint8_t>& payload)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         // Output: [nonce 8B] [encrypted payload] [hmac 4B]
         std::vector<uint8_t> packet;
         packet.reserve(NONCE_SIZE + payload.size() + HMAC_SIZE);
@@ -130,6 +132,7 @@ namespace Spark::Net
     bool DecryptPacket(const SessionKey& key, const std::vector<uint8_t>& packet, std::vector<uint8_t>& outPayload,
                        uint64_t& outSequence)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (packet.size() < ENCRYPTION_OVERHEAD)
             return false;
 

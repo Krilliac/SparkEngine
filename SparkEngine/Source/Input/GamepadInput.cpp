@@ -1,6 +1,7 @@
 #include "Core/Platform.h"
 // GamepadInput.cpp
 #include "GamepadInput.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
 #include <algorithm>
@@ -14,6 +15,7 @@ GamepadInput::~GamepadInput()
 
 void GamepadInput::Update(float deltaTime)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Input);
     m_connectionPollTimer += deltaTime;
 
     for (int i = 0; i < MAX_CONTROLLERS; ++i)
@@ -182,6 +184,8 @@ bool GamepadInput::IsTriggerDown(GamepadTrigger trigger, float threshold, int co
 
 void GamepadInput::SetVibration(float leftMotor, float rightMotor, float duration, int controllerIndex)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+    SPARK_VALIDATE_RANGE(Spark::LogCategory::Input, controllerIndex, 0, MAX_CONTROLLERS - 1);
     if (controllerIndex < 0 || controllerIndex >= MAX_CONTROLLERS)
         return;
 
@@ -198,6 +202,8 @@ void GamepadInput::SetVibration(float leftMotor, float rightMotor, float duratio
 
 void GamepadInput::StopVibration(int controllerIndex)
 {
+    SPARK_WARN_IF(Spark::LogCategory::Input, controllerIndex < 0 || controllerIndex >= MAX_CONTROLLERS,
+                  "StopVibration called with out-of-range controller index");
     if (controllerIndex < 0 || controllerIndex >= MAX_CONTROLLERS)
         return;
 
@@ -212,6 +218,7 @@ void GamepadInput::StopVibration(int controllerIndex)
 
 void GamepadInput::StopAllVibrations()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Stopping all gamepad vibrations");
     for (int i = 0; i < MAX_CONTROLLERS; ++i)
         StopVibration(i);
 }
@@ -222,6 +229,9 @@ void GamepadInput::StopAllVibrations()
 
 void GamepadInput::SetDeadZone(GamepadStick stick, float deadZone)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+    SPARK_WARN_IF(Spark::LogCategory::Input, deadZone < 0.0f || deadZone > 1.0f,
+                  "Dead zone value out of [0,1] range, will be clamped");
     deadZone = std::clamp(deadZone, 0.0f, 1.0f);
     if (stick == GamepadStick::Left)
         m_leftStickDeadZone = deadZone;
@@ -240,6 +250,8 @@ float GamepadInput::GetDeadZone(GamepadStick stick) const
 
 void GamepadInput::BindAction(const std::string& action, GamepadButton button)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+    SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Input, action);
     ActionBinding binding;
     binding.type = ActionBinding::Type::Button;
     binding.button = button;
@@ -250,6 +262,8 @@ void GamepadInput::BindAction(const std::string& action, GamepadButton button)
 
 void GamepadInput::BindAction(const std::string& action, GamepadTrigger trigger, float threshold)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+    SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Input, action);
     ActionBinding binding;
     binding.type = ActionBinding::Type::Trigger;
     binding.button = GamepadButton::A;

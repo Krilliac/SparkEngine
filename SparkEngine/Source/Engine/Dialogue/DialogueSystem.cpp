@@ -4,6 +4,7 @@
  */
 
 #include "DialogueSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <fstream>
 #include <sstream>
@@ -209,6 +210,9 @@ namespace Spark
 
     bool DialogueSystem::LoadTree(const std::string& treeId, const std::string& filePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Game, !treeId.empty(), false);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Game, !filePath.empty(), false);
         auto tree = std::make_unique<DialogueTree>();
         if (!tree->LoadFromFile(filePath))
         {
@@ -221,12 +225,15 @@ namespace Spark
 
     void DialogueSystem::RegisterTree(const std::string& treeId, std::unique_ptr<DialogueTree> tree)
     {
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, tree);
         tree->SetId(treeId);
         m_trees[treeId] = std::move(tree);
     }
 
     bool DialogueSystem::StartConversation(const std::string& treeId)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Starting conversation with tree '%s'", treeId.c_str());
         auto it = m_trees.find(treeId);
         if (it == m_trees.end())
         {
@@ -251,6 +258,8 @@ namespace Spark
 
     void DialogueSystem::EndConversation()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Ending conversation with tree '%s'", m_state.treeId.c_str());
         std::string treeId = m_state.treeId;
         m_state.isActive = false;
         m_state.currentNodeId.clear();
@@ -264,6 +273,7 @@ namespace Spark
 
     void DialogueSystem::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         if (!m_state.isActive)
         {
             return;

@@ -9,6 +9,7 @@
 
 #include "RenderTarget.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -26,7 +27,10 @@ RenderTarget::~RenderTarget()
 
 HRESULT RenderTarget::Create(ID3D11Device* device)
 {
-    ASSERT(device);
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, m_desc.width > 0 && m_desc.height > 0,
+                      "RenderTarget dimensions must be positive");
 
     DXGI_FORMAT dxgiFormat = GetDXGIFormat(m_desc.format);
 
@@ -1013,6 +1017,7 @@ RenderTargetFormat RenderTargetManager::StringToFormat(const std::string& str) c
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "RenderTarget.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
 #include <cstring>

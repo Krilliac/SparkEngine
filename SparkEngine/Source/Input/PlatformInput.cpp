@@ -5,6 +5,7 @@
  */
 
 #include "PlatformInput.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>
@@ -118,14 +119,18 @@ namespace Spark::Input
 
     bool Win32InputBackend::Initialize(void* windowHandle)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Input, windowHandle, false);
         m_windowHandle = windowHandle;
         m_keyStates.fill(false);
         m_prevKeyStates.fill(false);
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "Win32InputBackend initialized");
         return true;
     }
 
     void Win32InputBackend::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "Win32InputBackend shutting down");
         if (m_mouseCaptured)
         {
             SetMouseCapture(false);
@@ -134,6 +139,7 @@ namespace Spark::Input
 
     void Win32InputBackend::PollEvents()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
         // Save previous states
         m_prevKeyStates = m_keyStates;
         for (auto& gp : m_gamepads)
@@ -452,8 +458,10 @@ namespace Spark::Input
 
     bool SDL2InputBackend::Initialize(void* windowHandle)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
         if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) < 0)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Input, "SDL2 initialization failed");
             return false;
         }
         m_window = windowHandle;
@@ -479,6 +487,7 @@ namespace Spark::Input
 
     void SDL2InputBackend::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "SDL2InputBackend shutting down");
         for (int i = 0; i < MAX_GAMEPADS; ++i)
         {
             if (m_sdlControllers[i])
@@ -780,6 +789,8 @@ namespace Spark::Input
 
     bool PlatformInputManager::Initialize(void* windowHandle, const std::string& preferredBackend)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Input, windowHandle, false);
 #ifdef SPARK_SDL2_AVAILABLE
         if (preferredBackend == "sdl2" || preferredBackend == "SDL2")
         {
@@ -808,6 +819,7 @@ namespace Spark::Input
 
     void PlatformInputManager::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "PlatformInputManager shutting down");
         if (m_backend)
             m_backend->Shutdown();
         m_backend.reset();
@@ -815,6 +827,7 @@ namespace Spark::Input
 
     void PlatformInputManager::Update()
     {
+        SPARK_WARN_IF(Spark::LogCategory::Input, !m_backend, "PlatformInputManager::Update called with no backend");
         if (!m_backend)
             return;
         m_backend->PollEvents();
@@ -1043,6 +1056,8 @@ namespace Spark::Input
 
     void PlatformInputManager::BindAction(const std::string& name, KeyCode key, ActionTrigger trigger)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Input, name);
         ActionBinding binding;
         binding.actionName = name;
         binding.key = key;
@@ -1053,6 +1068,8 @@ namespace Spark::Input
 
     void PlatformInputManager::BindAction(const std::string& name, GamepadBtn button, ActionTrigger trigger)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Input, name);
         ActionBinding binding;
         binding.actionName = name;
         binding.gamepadButton = button;
@@ -1063,6 +1080,8 @@ namespace Spark::Input
 
     void PlatformInputManager::BindAxis(const std::string& name, KeyCode positiveKey, KeyCode negativeKey, float scale)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Input, name);
         AxisBinding binding;
         binding.axisName = name;
         binding.positiveKey = positiveKey;
@@ -1074,6 +1093,8 @@ namespace Spark::Input
 
     void PlatformInputManager::BindAxis(const std::string& name, GamepadAxis axis, float scale, float deadZone)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Input, name);
         AxisBinding binding;
         binding.axisName = name;
         binding.gamepadAxis = axis;
@@ -1168,6 +1189,8 @@ namespace Spark::Input
 
     void PlatformInputManager::RemoveAction(const std::string& name)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_WARN_IF(Spark::LogCategory::Input, name.empty(), "RemoveAction called with empty name");
         m_actionBindings.erase(std::remove_if(m_actionBindings.begin(), m_actionBindings.end(),
                                               [&](const ActionBinding& b) { return b.actionName == name; }),
                                m_actionBindings.end());
@@ -1296,6 +1319,7 @@ namespace Spark::Input
 
     void PlatformInputManager::RegisterEventCallback(InputEventCallback callback)
     {
+        SPARK_WARN_IF(Spark::LogCategory::Input, !callback, "RegisterEventCallback called with null callback");
         m_eventCallbacks.push_back(std::move(callback));
     }
 

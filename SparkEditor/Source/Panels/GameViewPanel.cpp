@@ -8,6 +8,7 @@
 #include "GameViewPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <cmath>
@@ -26,6 +27,7 @@ namespace SparkEditor
 
     bool GameViewPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Game View panel with full FPS HUD\n";
 
         // Pre-populate scoreboard for preview

@@ -11,6 +11,7 @@
 
 #include "DebugVisualizerPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -21,6 +22,7 @@ namespace SparkEditor
 
     bool DebugVisualizerPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Debug Visualizer panel\n";
         return true;
     }

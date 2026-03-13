@@ -1,4 +1,5 @@
 #include "TerrainEditor.h"
+#include "Utils/Validate.h"
 
 using namespace DirectX;
 namespace SparkEditor
@@ -68,6 +69,7 @@ namespace SparkEditor
 
     bool TerrainEditor::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         return true;
     }
 

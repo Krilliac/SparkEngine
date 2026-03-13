@@ -4,6 +4,7 @@
  */
 
 #include "WeaponManager.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -50,6 +51,8 @@ namespace Spark::Gameplay
 
     void WeaponRegistry::RegisterDefaults()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Registering default weapon definitions");
         // Pistol
         {
             WeaponDefinition def;
@@ -208,6 +211,7 @@ namespace Spark::Gameplay
 
     void WeaponSystem::ProcessWeapon(WeaponInventoryComponent& inv, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         auto& weapon = inv.GetActiveWeapon();
         if (weapon.definitionID == 0)
             return;
@@ -301,6 +305,7 @@ namespace Spark::Gameplay
 
     void WeaponSystem::HandleFiring(WeaponInstance& weapon, const WeaponDefinition& def, WeaponInventoryComponent& inv)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         // Semi-auto: prevent firing while trigger is held from previous shot
         if (def.fireMode == FireMode::SemiAuto && weapon.triggerHeld)
             return;

@@ -6,6 +6,7 @@
  */
 
 #include "ProjectBrowserPanel.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <filesystem>
@@ -52,6 +53,7 @@ namespace SparkEditor
 
     bool ProjectBrowserPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         m_isInitialized = true;
         return true;
     }

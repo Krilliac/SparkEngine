@@ -3,6 +3,7 @@
 #include "Player.h"
 #include "Input/InputManager.h"
 #include "Utils/Assert.h"
+#include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -47,6 +48,7 @@ namespace Spark
 
     bool InteractiveObject::Interact(Player* player)
     {
+        SPARK_WARN_IF(Spark::LogCategory::Game, !player, "Interact called with null player");
         if (!m_isInteractable || !player)
             return false;
         if (m_interactionCallback)
@@ -724,6 +726,8 @@ namespace Spark
 
     bool InteractionSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing InteractionSystem");
         m_objects.clear();
         m_highlightedObject = nullptr;
         return true;

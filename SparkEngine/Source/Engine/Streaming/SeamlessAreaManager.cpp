@@ -5,6 +5,7 @@
 
 #include "SeamlessAreaManager.h"
 #include "../../Utils/LogMacros.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -61,6 +62,7 @@ namespace Spark::Streaming
 
     bool SeamlessAreaManager::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
         if (m_initialized)
         {
             SPARK_LOG_WARN("SeamlessArea", "Already initialized.");
@@ -82,6 +84,7 @@ namespace Spark::Streaming
 
     void SeamlessAreaManager::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
         if (!m_initialized)
         {
             return;
@@ -309,6 +312,7 @@ namespace Spark::Streaming
 
     void SeamlessAreaManager::Update(const DirectX::XMFLOAT3& referencePos, float /*deltaTime*/)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
         if (!m_initialized)
         {
             return;

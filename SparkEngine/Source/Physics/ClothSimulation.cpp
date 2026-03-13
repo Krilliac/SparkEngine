@@ -4,6 +4,7 @@
  */
 
 #include "ClothSimulation.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -18,6 +19,10 @@ namespace Spark::Physics
 
     uint32_t ClothSimulation::CreateCloth(const ClothDescriptor& desc)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+        SPARK_WARN_IF(Spark::LogCategory::Physics, desc.width <= 0 || desc.height <= 0,
+                      "ClothDescriptor has non-positive dimensions");
+        SPARK_WARN_IF(Spark::LogCategory::Physics, desc.mass <= 0.0f, "ClothDescriptor has non-positive mass");
         uint32_t id = m_nextId++;
         ClothInstance cloth;
         cloth.id = id;
@@ -161,6 +166,9 @@ namespace Spark::Physics
 
     void ClothSimulation::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+        SPARK_WARN_IF(Spark::LogCategory::Physics, deltaTime < 0.0f,
+                      "ClothSimulation::Update called with negative deltaTime");
         for (auto& [id, cloth] : m_clothInstances)
         {
             if (cloth.enabled)
@@ -192,6 +200,8 @@ namespace Spark::Physics
 
     void ClothSimulation::SimulateCloth(ClothInstance& cloth, float deltaTime)
     {
+        SPARK_WARN_IF(Spark::LogCategory::Physics, deltaTime <= 0.0f,
+                      "ClothSimulation::SimulateCloth called with non-positive deltaTime");
         ApplyForces(cloth, deltaTime);
         IntegratePositions(cloth, deltaTime);
 

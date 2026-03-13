@@ -3,6 +3,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "InputManager.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include <Windows.h>
 #include <windowsx.h> // GET_X_LPARAM, GET_Y_LPARAM
@@ -28,11 +29,13 @@ InputManager::InputManager()
     // Reserve space for recent events
     m_recentInputEvents.reserve(100);
 
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager constructed (Windows)");
     Spark::SimpleConsole::GetInstance().Log("InputManager constructed with console integration.", "INFO");
 }
 
 InputManager::~InputManager()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager shutting down");
     Spark::SimpleConsole::GetInstance().Log("InputManager destructor called.", "INFO");
     if (m_mouseCaptured)
         CaptureMouse(false);
@@ -50,7 +53,8 @@ InputManager::~InputManager()
 
 void InputManager::Initialize(HWND hwnd)
 {
-    ASSERT_MSG(hwnd != nullptr, "InputManager::Initialize - hwnd is null");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Input, hwnd);
     m_hwnd = hwnd;
 
     RECT rect;
@@ -62,6 +66,7 @@ void InputManager::Initialize(HWND hwnd)
     m_mouseX = m_prevMouseX = center.x;
     m_mouseY = m_prevMouseY = center.y;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager initialized (Windows)");
     Spark::SimpleConsole::GetInstance().Log("InputManager initialized with console integration.", "SUCCESS");
 }
 
@@ -75,7 +80,7 @@ void InputManager::Update()
         firstFrame = false;
     }
 
-    ASSERT_MSG(m_hwnd != nullptr, "InputManager::Update - hwnd not initialized");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, m_hwnd != nullptr, "InputManager::Update - hwnd not initialized");
 
     m_prevKeyStates = m_keyStates;
     memcpy(m_prevMouseButtons, m_mouseButtons, sizeof(m_mouseButtons));
@@ -193,7 +198,7 @@ void InputManager::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
 bool InputManager::IsKeyDown(int key) const
 {
-    ASSERT_MSG(key >= 0, "IsKeyDown - invalid key code");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, key >= 0, "IsKeyDown - invalid key code");
     auto it = m_keyStates.find(key);
     return it != m_keyStates.end() && it->second;
 }
@@ -205,7 +210,7 @@ bool InputManager::IsKeyUp(int key) const
 
 bool InputManager::WasKeyPressed(int key) const
 {
-    ASSERT_MSG(key >= 0, "WasKeyPressed - invalid key code");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, key >= 0, "WasKeyPressed - invalid key code");
     bool curr = IsKeyDown(key);
     bool prev = m_prevKeyStates.count(key) ? m_prevKeyStates.at(key) : false;
     return curr && !prev;
@@ -213,7 +218,7 @@ bool InputManager::WasKeyPressed(int key) const
 
 bool InputManager::WasKeyReleased(int key) const
 {
-    ASSERT_MSG(key >= 0, "WasKeyReleased - invalid key code");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, key >= 0, "WasKeyReleased - invalid key code");
     bool curr = IsKeyDown(key);
     bool prev = m_prevKeyStates.count(key) ? m_prevKeyStates.at(key) : false;
     return !curr && prev;
@@ -221,19 +226,19 @@ bool InputManager::WasKeyReleased(int key) const
 
 bool InputManager::IsMouseButtonDown(int button) const
 {
-    ASSERT_MSG(button >= 0 && button < 3, "IsMouseButtonDown - invalid button");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, button >= 0 && button < 3, "IsMouseButtonDown - invalid button");
     return m_mouseButtons[button];
 }
 
 bool InputManager::WasMouseButtonPressed(int button) const
 {
-    ASSERT_MSG(button >= 0 && button < 3, "WasMouseButtonPressed - invalid button");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, button >= 0 && button < 3, "WasMouseButtonPressed - invalid button");
     return m_mouseButtons[button] && !m_prevMouseButtons[button];
 }
 
 bool InputManager::WasMouseButtonReleased(int button) const
 {
-    ASSERT_MSG(button >= 0 && button < 3, "WasMouseButtonReleased - invalid button");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, button >= 0 && button < 3, "WasMouseButtonReleased - invalid button");
     return !m_mouseButtons[button] && m_prevMouseButtons[button];
 }
 
@@ -628,7 +633,7 @@ void InputManager::Console_RefreshInput()
 
 void InputManager::UpdateKeyState(int key, bool isDown)
 {
-    ASSERT_MSG(key >= 0, "UpdateKeyState - invalid key code");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, key >= 0, "UpdateKeyState - invalid key code");
     m_keyStates[key] = isDown;
     if (key == VK_ESCAPE && !isDown && m_mouseCaptured)
         CaptureMouse(false);
@@ -636,7 +641,7 @@ void InputManager::UpdateKeyState(int key, bool isDown)
 
 void InputManager::UpdateMouseButton(int button, bool isDown)
 {
-    ASSERT_MSG(button >= 0 && button < 3, "UpdateMouseButton - invalid button");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, button >= 0 && button < 3, "UpdateMouseButton - invalid button");
     m_mouseButtons[button] = isDown;
 }
 
@@ -800,6 +805,7 @@ InputManager::InputMetrics InputManager::GetMetricsThreadSafe() const
 
 #include "InputManager.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include <cstring>
 #include <cmath>
@@ -819,10 +825,12 @@ InputManager::InputManager()
     memset(m_mouseButtons, 0, sizeof(m_mouseButtons));
     memset(m_prevMouseButtons, 0, sizeof(m_prevMouseButtons));
     m_recentInputEvents.reserve(100);
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager constructed (Linux/macOS)");
 }
 
 InputManager::~InputManager()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager shutting down");
     for (auto& t : m_pendingTimedThreads)
     {
         if (t.joinable())
@@ -833,7 +841,9 @@ InputManager::~InputManager()
 
 void InputManager::Initialize(HWND hwnd)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Input);
     m_hwnd = hwnd;
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager initialized (Linux/SDL2 backend)");
     Spark::SimpleConsole::GetInstance().Log("InputManager initialized (Linux/SDL2 backend).", "INFO");
 }
 
@@ -951,6 +961,7 @@ void InputManager::CaptureMouse(bool capture)
 
 void InputManager::UpdateKeyState(int key, bool isDown)
 {
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, key >= 0, "UpdateKeyState - invalid key code");
     m_keyStates[key] = isDown;
     if (isDown)
         ++m_keyPressCount;
@@ -961,6 +972,7 @@ void InputManager::UpdateKeyState(int key, bool isDown)
 
 void InputManager::UpdateMouseButton(int button, bool isDown)
 {
+    SPARK_WARN_IF(Spark::LogCategory::Input, button < 0 || button >= 3, "UpdateMouseButton - invalid button index");
     if (button >= 0 && button < 3)
     {
         m_mouseButtons[button] = isDown;

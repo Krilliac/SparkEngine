@@ -9,6 +9,7 @@
  */
 
 #include "Profiler.h"
+#include "Validate.h"
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
@@ -36,6 +37,9 @@ ScopedProfileTimer::~ScopedProfileTimer()
 #ifdef SPARK_PLATFORM_WINDOWS
 HRESULT Profiler::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_WARN_IF_NULL(Spark::LogCategory::Core, device);
+    SPARK_WARN_IF_NULL(Spark::LogCategory::Core, context);
     m_device = device;
     m_context = context;
     m_enabled = true;
@@ -47,6 +51,8 @@ HRESULT Profiler::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 
 void Profiler::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Profiler shutting down");
     m_enabled = false;
     m_currentFrameSamples.clear();
     m_activeSections.clear();

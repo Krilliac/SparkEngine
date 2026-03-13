@@ -6,6 +6,7 @@
  */
 
 #include "EngineInterface.h"
+#include "Utils/Validate.h"
 #include <iostream>
 #include <chrono>
 #include <thread>
@@ -31,6 +32,9 @@ namespace SparkEditor
 
     bool EngineInterface::Initialize(const std::string& pipeName)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !pipeName.empty(), false);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EngineInterface initializing with pipe: %s", pipeName.c_str());
         std::cout << "EngineInterface::Initialize() with pipe: " << pipeName << "\n";
 
         m_pipeName = pipeName;
@@ -65,6 +69,8 @@ namespace SparkEditor
 
     void EngineInterface::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EngineInterface shutting down");
         std::cout << "EngineInterface::Shutdown()\n";
 
         m_isShuttingDown = true;
@@ -84,6 +90,7 @@ namespace SparkEditor
 
     void EngineInterface::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         // Update metrics (simulated when not connected to a real engine)
         static float timeSinceUpdate = 0.0f;
         timeSinceUpdate += deltaTime;
@@ -125,6 +132,8 @@ namespace SparkEditor
 
     bool EngineInterface::Connect(float timeoutSeconds)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EngineInterface connecting (timeout: %.1fs)", timeoutSeconds);
         std::cout << "Attempting to connect to engine (timeout: " << timeoutSeconds << "s)\n";
 
         // For now, simulate a connection
@@ -149,6 +158,8 @@ namespace SparkEditor
 
     void EngineInterface::Disconnect()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EngineInterface disconnecting");
         std::cout << "Disconnecting from engine\n";
 
         m_isConnected = false;

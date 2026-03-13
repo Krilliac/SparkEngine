@@ -7,6 +7,7 @@
 
 #include "EditorCrashHandler.h"
 #include "EditorLogger.h"
+#include "Utils/Validate.h"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -69,6 +70,9 @@ namespace SparkEditor
 
     bool EditorCrashHandler::Initialize(const std::string& crashDirectory, EditorLogger* logger)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !crashDirectory.empty(), false);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorCrashHandler initializing");
         std::cout << "EditorCrashHandler initializing...\n";
 
         m_crashDirectory = crashDirectory;
@@ -95,6 +99,8 @@ namespace SparkEditor
 
     void EditorCrashHandler::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorCrashHandler shutting down");
         std::cout << "EditorCrashHandler shutting down...\n";
 
         // Signal auto-save thread to stop
@@ -137,6 +143,7 @@ namespace SparkEditor
     void EditorCrashHandler::HandleAssertion(const std::string& expression, const char* file, int line,
                                              const std::string& message)
     {
+        SPARK_WARN_IF(Spark::LogCategory::Editor, expression.empty(), "HandleAssertion called with empty expression");
         std::lock_guard<std::mutex> lock(m_statsMutex);
         m_stats.assertionFailures++;
 
@@ -915,6 +922,7 @@ namespace SparkEditor
 
     bool EditorCrashHandler::SaveCrashLog(const CrashInfo& crashInfo, const std::string& filePath)
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !filePath.empty(), false);
         std::ofstream file(filePath);
         if (!file.is_open())
         {

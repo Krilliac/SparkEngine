@@ -2,6 +2,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "RenderPipeline.h"
+#include "../Utils/Validate.h"
 #include <algorithm>
 
 namespace Spark::Graphics
@@ -9,14 +10,20 @@ namespace Spark::Graphics
 
     bool RenderPipeline::Initialize(RenderDevice* device)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, device, false);
         m_device = device;
         m_renderGraph = std::make_unique<RenderGraph>("MainPipeline");
         BuildDefaultPasses();
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RenderPipeline initialized with %zu default passes",
+                       m_passes.size());
         return true;
     }
 
     void RenderPipeline::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RenderPipeline shutting down (%zu passes)", m_passes.size());
         m_passes.clear();
         m_renderGraph.reset();
         m_device = nullptr;
@@ -25,7 +32,9 @@ namespace Spark::Graphics
     void RenderPipeline::ExecuteFrame(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix,
                                       const DirectX::XMFLOAT3& cameraPos)
     {
-        if (!m_device || !m_renderGraph)
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_device);
+        if (!m_renderGraph)
             return;
 
         // Sort passes if registrations changed
@@ -55,6 +64,8 @@ namespace Spark::Graphics
 
     void RenderPipeline::RegisterPass(const std::string& name, PassPhase phase, PassSetupFn setupFn)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Graphics, name);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Registering render pass '%s'", name.c_str());
         // Remove existing pass with same name
         RemovePass(name);
 

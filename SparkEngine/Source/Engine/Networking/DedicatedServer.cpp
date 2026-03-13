@@ -17,6 +17,8 @@
 #undef SendMessage
 #endif
 
+#include "../../Utils/Validate.h"
+
 #include <algorithm>
 #include <cstring>
 #include <fstream>
@@ -46,6 +48,7 @@ namespace Spark::Net
 
     bool DedicatedServer::InitializeOnly(const ServerConfig& config)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (m_running.load(std::memory_order_acquire))
             return false;
 
@@ -170,6 +173,7 @@ namespace Spark::Net
 
     bool DedicatedServer::Start(const ServerConfig& config)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (!InitializeOnly(config))
             return false;
 
@@ -194,6 +198,7 @@ namespace Spark::Net
 
     void DedicatedServer::Stop()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (!m_running.load(std::memory_order_acquire))
             return;
 
@@ -407,6 +412,7 @@ namespace Spark::Net
 
     void DedicatedServer::ChangeMap(const std::string& mapName)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Network, mapName);
         if (m_matchInProgress)
             EndMatch();
 
@@ -462,6 +468,7 @@ namespace Spark::Net
 
     void DedicatedServer::KickPlayer(ClientID id, const std::string& reason)
     {
+        SPARK_WARN_IF(Spark::LogCategory::Network, reason.empty(), "KickPlayer called with empty reason");
         NetworkManager::GetInstance().KickClient(id, reason);
         m_stats.currentPlayers = GetPlayerCount();
         Log("Kicked client " + std::to_string(id) + ": " + reason);

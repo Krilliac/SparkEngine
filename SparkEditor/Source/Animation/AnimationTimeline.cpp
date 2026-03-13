@@ -4,6 +4,7 @@
  */
 
 #include "AnimationTimeline.h"
+#include "Utils/Validate.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
@@ -274,6 +275,8 @@ namespace SparkEditor
 
     bool AnimationTimeline::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AnimationTimeline initializing");
         CreateNewClip("Default Animation", 5.0f, 30.0f);
         m_isInitialized = true;
         return true;
@@ -281,6 +284,7 @@ namespace SparkEditor
 
     void AnimationTimeline::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_currentClip)
             return;
 
@@ -320,6 +324,7 @@ namespace SparkEditor
 
     void AnimationTimeline::Render()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_isVisible)
             return;
 
@@ -380,6 +385,8 @@ namespace SparkEditor
 
     void AnimationTimeline::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AnimationTimeline shutting down");
         m_currentClip.reset();
         m_selection.Clear();
         m_playbackState = PlaybackState::STOPPED;
@@ -416,6 +423,7 @@ namespace SparkEditor
 
     void AnimationTimeline::CreateNewClip(const std::string& name, float duration, float frameRate)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Editor, name);
         auto clip = std::make_unique<AnimationClip>();
         clip->name = name;
         clip->duration = duration;
@@ -430,6 +438,7 @@ namespace SparkEditor
 
     bool AnimationTimeline::LoadAnimationClip(const std::string& filePath)
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !filePath.empty(), false);
         std::ifstream file(filePath);
         if (!file.is_open())
             return false;
@@ -525,6 +534,7 @@ namespace SparkEditor
 
     bool AnimationTimeline::SaveAnimationClip(const std::string& filePath)
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !filePath.empty(), false);
         if (!m_currentClip)
             return false;
 
@@ -898,6 +908,7 @@ namespace SparkEditor
 
     void AnimationTimeline::CalculateAutoTangents(AnimationCurve* curve)
     {
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Editor, curve);
         if (!curve)
             return;
         auto& kfs = curve->keyframes;

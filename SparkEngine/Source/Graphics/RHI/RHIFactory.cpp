@@ -6,6 +6,7 @@
  */
 
 #include "RHIFactory.h"
+#include "../../Utils/Validate.h"
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -82,6 +83,7 @@ namespace Spark
 
         std::unique_ptr<IRHIDevice> CreateDevice(GraphicsBackend backend)
         {
+            SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
             if (backend == GraphicsBackend::Auto)
                 backend = GetRecommendedBackend();
 

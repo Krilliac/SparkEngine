@@ -5,6 +5,7 @@
 
 #include "ScriptHotReload.h"
 #include "../../Utils/Assert.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <sstream>
@@ -30,6 +31,7 @@ namespace Spark::Scripting
     void ScriptHotReloadManager::AddWatchDirectory(const std::string& directory, bool recursive)
     {
         ASSERT_MSG(!directory.empty(), "ScriptHotReloadManager::AddWatchDirectory — directory must not be empty");
+        SPARK_VALIDATE_NOT_EMPTY(LogCategory::Scripting, directory);
         m_watchDirs.push_back(directory);
         if (m_running)
         {
@@ -65,6 +67,8 @@ namespace Spark::Scripting
 
     void ScriptHotReloadManager::Start()
     {
+        SPARK_TRACE_ENTER(LogCategory::Scripting);
+
         if (m_running)
             return;
 
@@ -80,6 +84,8 @@ namespace Spark::Scripting
 
     void ScriptHotReloadManager::Stop()
     {
+        SPARK_TRACE_ENTER(LogCategory::Scripting);
+
         m_running = false;
         m_pendingChanges.clear();
     }
@@ -90,6 +96,8 @@ namespace Spark::Scripting
 
     int ScriptHotReloadManager::PollChanges()
     {
+        SPARK_TRACE_ENTER(LogCategory::Scripting);
+
         if (!m_running)
             return 0;
 

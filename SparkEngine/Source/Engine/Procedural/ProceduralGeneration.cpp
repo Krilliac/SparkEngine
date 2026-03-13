@@ -4,6 +4,7 @@
  */
 
 #include "ProceduralGeneration.h"
+#include "../../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
 #include <algorithm>
@@ -187,6 +188,9 @@ namespace Spark::Procedural
 
     std::vector<float> HeightmapGenerator::Generate(const HeightmapSettings& settings)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Procedural);
+        SPARK_WARN_IF(Spark::LogCategory::Procedural, settings.width <= 0 || settings.height <= 0,
+                      "HeightmapGenerator::Generate called with non-positive dimensions");
         NoiseGenerator noise(settings.seed);
         size_t size = static_cast<size_t>(settings.width) * settings.height;
         std::vector<float> heightmap(size);
@@ -997,6 +1001,8 @@ namespace Spark::Procedural
 
     DungeonLayout DungeonGenerator::GenerateBSP(const DungeonSettings& settings)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Procedural);
+        SPARK_LOG_INFO(Spark::LogCategory::Procedural, "Generating BSP dungeon %dx%d", settings.width, settings.height);
         DungeonLayout layout;
         layout.width = settings.width;
         layout.height = settings.height;

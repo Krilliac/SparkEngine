@@ -16,6 +16,7 @@
 
 #include "SceneStatsPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -30,6 +31,7 @@ namespace SparkEditor
 
     bool SceneStatsPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Scene Stats panel\n";
         return true;
     }

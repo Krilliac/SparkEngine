@@ -7,6 +7,7 @@
 
 #include "PrefabEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <algorithm>
 
@@ -20,6 +21,7 @@ namespace SparkEditor
 
     bool PrefabEditorPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         m_isInitialized = true;
         return true;
     }

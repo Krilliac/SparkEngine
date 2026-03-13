@@ -1,6 +1,7 @@
 #include "../Core/Platform.h"
 #include "SparkConsole.h"
 #include "ConsoleVariable.h"
+#include "Validate.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -448,10 +449,13 @@ namespace Spark
 
     bool SimpleConsole::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         if (m_initialized)
         {
             return true;
         }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "SimpleConsole initializing");
 
         if (!CreateConsoleWindow())
         {
@@ -519,11 +523,13 @@ namespace Spark
 
     void SimpleConsole::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         if (!m_initialized)
         {
             return;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "SimpleConsole shutting down");
         LogInfo("Console shutdown initiated");
 
         // Persist command history before shutdown
@@ -4395,7 +4401,8 @@ namespace Spark
             "debug_assert_test",
             [](const std::vector<std::string>& args) -> std::string
             {
-                ASSERT_MSG(false, "Test assertion triggered from console command 'debug_assert_test'");
+                SPARK_REQUIRE_MSG(Spark::LogCategory::Core, false,
+                                  "Test assertion triggered from console command 'debug_assert_test'");
                 return "Assertion was non-fatal or handled";
             },
             "Trigger a test assertion for debugging", "Debug");
@@ -5584,7 +5591,8 @@ namespace Spark
                 }
 
                 LogWarning("Triggering test assertion from console...");
-                ASSERT_MSG(false, "Test assertion triggered from console command 'crash_test_assert'");
+                SPARK_REQUIRE_MSG(Spark::LogCategory::Core, false,
+                                  "Test assertion triggered from console command 'crash_test_assert'");
                 return "Assertion fired (non-fatal mode - engine continues)";
             },
             "Trigger a test assertion to verify error handling", "Crash/Diagnostics");
@@ -6224,6 +6232,7 @@ namespace Spark
 #ifndef SPARK_PLATFORM_WINDOWS
 #include "../Core/Platform.h"
 #include "SparkConsole.h"
+#include "Validate.h"
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -6439,8 +6448,10 @@ namespace Spark
 
     bool SimpleConsole::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         if (m_initialized)
             return true;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "SimpleConsole initializing (Linux)");
         CreateConsoleWindow();
         SetupConsoleHandles();
         RegisterDefaultCommands();
@@ -6452,6 +6463,8 @@ namespace Spark
     }
     void SimpleConsole::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "SimpleConsole shutting down (Linux)");
         m_initialized = false;
         m_commands.clear();
         m_logHistory.clear();

@@ -2,6 +2,7 @@
 #include "GameMechanics.h"
 #include "Player.h"
 #include "Utils/Assert.h"
+#include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -32,6 +33,8 @@ namespace Spark
 
     bool DamageZoneSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing DamageZoneSystem");
         m_zones.clear();
         m_damageTickTimer = 0.0f;
         return true;
@@ -39,6 +42,7 @@ namespace Spark
 
     void DamageZoneSystem::Update(float deltaTime, Player* player)
     {
+        SPARK_WARN_IF(Spark::LogCategory::Game, !player, "DamageZoneSystem::Update called with null player");
         if (!player || !player->IsAlive())
             return;
 
@@ -231,6 +235,8 @@ namespace Spark
 
     bool RespawnSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing RespawnSystem");
         m_spawnPoints.clear();
         m_killHistory.clear();
         m_respawnTimer = 0.0f;
@@ -306,6 +312,7 @@ namespace Spark
     void RespawnSystem::OnPlayerDeath(Player* player, const std::string& killerName, const std::string& weapon,
                                       bool headshot)
     {
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, player);
         if (!player)
             return;
 
@@ -323,6 +330,7 @@ namespace Spark
 
     void RespawnSystem::RespawnPlayer(Player* player)
     {
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, player);
         if (!player)
             return;
 

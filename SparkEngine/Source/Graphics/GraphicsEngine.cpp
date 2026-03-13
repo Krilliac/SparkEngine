@@ -5,6 +5,7 @@
 #include "../Utils/Assert.h"
 #include "../Utils/SparkError.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/Validate.h"
 
 // **CRITICAL FIX: Add missing system includes**
 #include "TextureSystem.h"
@@ -330,6 +331,8 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
 void GraphicsEngine::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GraphicsEngine::Shutdown — beginning graphics subsystem teardown");
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::Shutdown called.", L"INFO");
 
     // Shutdown advanced systems
@@ -419,11 +422,11 @@ void GraphicsEngine::Shutdown()
 
 void GraphicsEngine::BeginFrame()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
     bool expected = false;
     if (!m_frameInProgress.compare_exchange_strong(expected, true))
     {
-        LOG_TO_CONSOLE_RATE_LIMITED(L"Warning: BeginFrame called while frame already in progress - skipping",
-                                    L"WARNING");
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "BeginFrame called while frame already in progress — skipping");
         return;
     }
 
@@ -465,10 +468,11 @@ void GraphicsEngine::BeginFrame()
 
 void GraphicsEngine::EndFrame()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
     bool expected = true;
     if (!m_frameInProgress.compare_exchange_strong(expected, false))
     {
-        LOG_TO_CONSOLE_RATE_LIMITED(L"Warning: EndFrame called without matching BeginFrame - skipping", L"WARNING");
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "EndFrame called without matching BeginFrame — skipping");
         return;
     }
 
@@ -541,6 +545,8 @@ void GraphicsEngine::EndFrame()
 void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath, const std::string& materialPath,
                                             const DirectX::XMMATRIX& worldMatrix, bool castShadows)
 {
+    SPARK_WARN_IF(Spark::LogCategory::Graphics, meshPath.empty(), "SubmitMeshForRendering: empty meshPath");
+    SPARK_WARN_IF(Spark::LogCategory::Graphics, materialPath.empty(), "SubmitMeshForRendering: empty materialPath");
     MeshDrawCommand cmd;
     cmd.meshPath = meshPath;
     cmd.materialPath = materialPath;
@@ -2924,6 +2930,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #include "../Physics/PhysicsSystem.h"
 #include "../Game/GameObject.h"
 #include "RHI/RHI.h"
+#include "../Utils/Validate.h"
 #include <iostream>
 #include <sstream>
 #include <chrono>
@@ -3030,6 +3037,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
 void GraphicsEngine::Shutdown()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GraphicsEngine::Shutdown (RHI path) — beginning teardown");
     auto& rhi = GetRHI();
     if (!rhi.initialized)
         return;

@@ -4,6 +4,7 @@
  */
 
 #include "MobilePlatform.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <sstream>
@@ -15,6 +16,8 @@ namespace Spark::Mobile
 
     bool MobilePlatform::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "MobilePlatform initializing");
         m_qualitySettings = GetSettingsForPreset(m_qualityPreset);
         m_initialized = true;
         return true;
@@ -22,6 +25,7 @@ namespace Spark::Mobile
 
     void MobilePlatform::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         (void)deltaTime;
         RecognizeGestures();
         m_pendingGestures.clear();
@@ -85,6 +89,7 @@ namespace Spark::Mobile
 
     void MobilePlatform::SetQualityPreset(MobileQualityPreset preset)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Setting mobile quality preset to %d", static_cast<int>(preset));
         m_qualityPreset = preset;
         m_qualitySettings = GetSettingsForPreset(preset);
     }

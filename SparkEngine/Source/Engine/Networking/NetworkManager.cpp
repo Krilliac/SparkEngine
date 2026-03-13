@@ -8,6 +8,7 @@
 
 #include "NetworkManager.h"
 #include "../../Utils/Assert.h"
+#include "../../Utils/Validate.h"
 #include <sstream>
 #include <cstring>
 #include <algorithm>
@@ -78,6 +79,8 @@ namespace Spark::Net
     {
         if (m_error || m_readPos >= m_data.size())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "NetBuffer::ReadUint8 — buffer overrun at pos %zu (size=%zu)",
+                           m_readPos, m_data.size());
             m_error = true;
             return 0;
         }
@@ -88,6 +91,9 @@ namespace Spark::Net
     {
         if (m_error || m_readPos + 2 > m_data.size())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "NetBuffer::ReadUint16 — buffer overrun at pos %zu (need 2, size=%zu)", m_readPos,
+                           m_data.size());
             m_error = true;
             return 0;
         }
@@ -101,6 +107,9 @@ namespace Spark::Net
     {
         if (m_error || m_readPos + 4 > m_data.size())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "NetBuffer::ReadUint32 — buffer overrun at pos %zu (need 4, size=%zu)", m_readPos,
+                           m_data.size());
             m_error = true;
             return 0;
         }
@@ -127,6 +136,9 @@ namespace Spark::Net
             return {};
         if (m_readPos + len > m_data.size())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "NetBuffer::ReadString — buffer overrun: string len=%u, remaining=%zu", len,
+                           m_data.size() - m_readPos);
             m_error = true;
             return {};
         }
@@ -274,18 +286,26 @@ namespace Spark::Net
 
     bool NetworkManager::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (m_initialized)
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "NetworkManager::Initialize — already initialized");
             return true;
+        }
 
 #ifdef ENABLE_NETWORKING
 #ifdef SPARK_PLATFORM_WINDOWS
         WSADATA wsaData{};
         int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
         if (result != 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "WSAStartup failed with error: %d", result);
             return false;
+        }
 #endif // SPARK_PLATFORM_WINDOWS
 #endif // ENABLE_NETWORKING
 
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "NetworkManager initialized");
         m_initialized = true;
         m_lastBandwidthSample = std::chrono::steady_clock::now();
         m_bytesSentSinceSample = 0;
@@ -593,8 +613,11 @@ namespace Spark::Net
 
     bool NetworkManager::StartServer(uint16_t port, int maxClients)
     {
-        ASSERT_MSG(port > 0, "NetworkManager::StartServer — port must be greater than 0");
-        ASSERT_MSG(maxClients > 0 && maxClients <= 256, "NetworkManager::StartServer — maxClients must be in [1, 256]");
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Network, port > 0, "port must be greater than 0");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Network, maxClients > 0 && maxClients <= 256,
+                          "maxClients must be in [1, 256]");
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Starting server on port %u (maxClients=%d)", port, maxClients);
         if (!m_initialized)
         {
             if (!Initialize())
@@ -666,9 +689,12 @@ namespace Spark::Net
 
     bool NetworkManager::Connect(const std::string& address, uint16_t port, const std::string& playerName)
     {
-        ASSERT_MSG(!address.empty(), "NetworkManager::Connect — address must not be empty");
-        ASSERT_MSG(port > 0, "NetworkManager::Connect — port must be greater than 0");
-        ASSERT_MSG(!playerName.empty(), "NetworkManager::Connect — playerName must not be empty");
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !address.empty(), "address must not be empty");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Network, port > 0, "port must be greater than 0");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !playerName.empty(), "playerName must not be empty");
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Connecting to %s:%u as '%s'", address.c_str(), port,
+                       playerName.c_str());
         if (!m_initialized)
         {
             if (!Initialize())
@@ -759,9 +785,11 @@ namespace Spark::Net
 
     void NetworkManager::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (m_role == NetworkRole::None)
             return;
 
+        SPARK_WARN_IF(Spark::LogCategory::Network, deltaTime < 0.0f, "Negative deltaTime in NetworkManager::Update");
         m_serverTime += deltaTime;
 
         // Receive from socket and enqueue

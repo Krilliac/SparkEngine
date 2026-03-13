@@ -2,6 +2,7 @@
 #include "ConsoleProcessManager.h"
 #include "Utils/Assert.h"
 #include "Utils/CrashHandler.h"
+#include "Validate.h"
 #include <iostream>
 #include <sstream>
 #include <filesystem>
@@ -55,6 +56,7 @@ namespace Spark
     ConsoleProcessManager::ConsoleProcessManager()
         : m_commandRegistry(std::make_unique<CommandRegistry>()), m_consoleThread(), m_shouldStopThread(false)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleProcessManager constructed");
 
         // Register default commands
         m_commandRegistry->RegisterCommand(
@@ -95,7 +97,7 @@ namespace Spark
             "assert_test",
             [](const std::vector<std::string>& args) -> std::string
             {
-                ASSERT_MSG(false, "Test assertion triggered from console command");
+                SPARK_REQUIRE_MSG(Spark::LogCategory::Core, false, "Test assertion triggered from console command");
                 return "This should not be reached";
             },
             "Trigger a test assertion", "assert_test");
@@ -148,13 +150,14 @@ namespace Spark
 
     bool ConsoleProcessManager::Initialize(const std::wstring& consolePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         if (m_initialized)
         {
-            OutputDebugStringW(L"ConsoleProcessManager already initialized\n");
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "ConsoleProcessManager already initialized");
             return true;
         }
 
-        OutputDebugStringW(L"ConsoleProcessManager::Initialize starting...\n");
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleProcessManager::Initialize starting");
 
         wchar_t currentDir[MAX_PATH];
         GetModuleFileNameW(NULL, currentDir, MAX_PATH);
@@ -209,9 +212,11 @@ namespace Spark
 
     void ConsoleProcessManager::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         if (!m_initialized)
             return;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleProcessManager shutting down");
         m_shouldStopThread = true;
         if (m_consoleThread.joinable())
             m_consoleThread.join();
@@ -427,8 +432,11 @@ namespace Spark
 
     bool ConsoleProcessManager::Initialize(const std::wstring& consolePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         if (m_initialized)
             return true;
+
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleProcessManager::Initialize starting (Linux)");
 
         // Get the executable directory
         char exePath[PATH_MAX];
@@ -488,9 +496,11 @@ namespace Spark
 
     void ConsoleProcessManager::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         if (!m_initialized)
             return;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleProcessManager shutting down (Linux)");
         m_shouldStopThread = true;
         if (m_consoleThread.joinable())
             m_consoleThread.join();

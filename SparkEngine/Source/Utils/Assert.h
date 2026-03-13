@@ -65,6 +65,25 @@
 #include <windows.h>
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
+// Undefine Windows macros that collide with our enum members and method names
+#ifdef ERROR
+#undef ERROR
+#endif
+#ifdef OPAQUE
+#undef OPAQUE
+#endif
+#ifdef TRANSPARENT
+#undef TRANSPARENT
+#endif
+#ifdef GetTickCount
+#undef GetTickCount
+#endif
+#ifdef GetCurrentTime
+#undef GetCurrentTime
+#endif
+#ifdef GetClassName
+#undef GetClassName
+#endif
 #endif
 
 // Forward declarations

@@ -4,6 +4,7 @@
  */
 
 #include "NavMesh.h"
+#include "../../Utils/Validate.h"
 #include <sstream>
 #include <fstream>
 #include <cmath>
@@ -18,7 +19,10 @@ namespace Spark::AI
     // NavMeshQuery
     // ============================================================================
 
-    NavMeshQuery::NavMeshQuery(const NavMeshData* navMesh) : m_navMesh(navMesh) {}
+    NavMeshQuery::NavMeshQuery(const NavMeshData* navMesh) : m_navMesh(navMesh)
+    {
+        SPARK_WARN_IF_NULL(Spark::LogCategory::AI, navMesh);
+    }
 
     NavMeshHit NavMeshQuery::FindNearestPoint(const XMFLOAT3& position, float searchRadius) const
     {
@@ -564,7 +568,8 @@ namespace Spark::AI
                                                        const std::vector<uint32_t>& indices,
                                                        const NavMeshBuildSettings& settings)
     {
-
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
+        SPARK_WARN_IF(Spark::LogCategory::AI, vertices.empty(), "NavMeshBuilder::Build called with empty vertices");
         auto navMesh = std::make_unique<NavMeshData>();
         navMesh->cellSize = settings.cellSize;
         navMesh->cellHeight = settings.cellHeight;
@@ -693,7 +698,7 @@ namespace Spark::AI
                                                                       const XMFLOAT3& origin, float cellSize,
                                                                       const NavMeshBuildSettings& settings)
     {
-
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         if (!heightData || width <= 0 || height <= 0)
             return std::make_unique<NavMeshData>();
 
@@ -744,6 +749,9 @@ namespace Spark::AI
 
     bool NavMeshManager::LoadNavMesh(const std::string& name, const std::string& filepath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
+        SPARK_VALIDATE_RET(Spark::LogCategory::AI, !name.empty(), false);
+        SPARK_VALIDATE_RET(Spark::LogCategory::AI, !filepath.empty(), false);
         std::ifstream file(filepath, std::ios::binary);
         if (!file.is_open())
             return false;
@@ -815,6 +823,7 @@ namespace Spark::AI
     bool NavMeshManager::BuildNavMesh(const std::string& name, const std::vector<XMFLOAT3>& vertices,
                                       const std::vector<uint32_t>& indices, const NavMeshBuildSettings& settings)
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::AI, !name.empty(), false);
         auto navMesh = NavMeshBuilder::Build(vertices, indices, settings);
         if (!navMesh)
             return false;
@@ -830,6 +839,7 @@ namespace Spark::AI
 
     std::unique_ptr<NavMeshQuery> NavMeshManager::CreateQuery(const std::string& name) const
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::AI, !name.empty(), nullptr);
         const NavMeshData* nm = GetNavMesh(name);
         if (!nm)
             return nullptr;
@@ -843,6 +853,8 @@ namespace Spark::AI
 
     void NavMeshManager::Clear()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "NavMeshManager::Clear — removing all %zu navmeshes.",
+                       m_navMeshes.size());
         m_navMeshes.clear();
     }
 

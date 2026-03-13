@@ -4,6 +4,7 @@
  */
 
 #include "VersionControlSystem.h"
+#include "Utils/Validate.h"
 #include <imgui.h>
 #include <cstdio>
 #include <cstring>
@@ -176,6 +177,7 @@ namespace SparkEditor
 
     bool VersionControlSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         m_isEnabled = true;
 
         // Register default merge handlers

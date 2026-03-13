@@ -4,17 +4,10 @@
  */
 
 #include "CollaborativeEditSession.h"
+#include "Utils/Validate.h"
 
 #include <algorithm>
 #include <sstream>
-
-// Use engine logging if available, otherwise fall back to stderr
-#ifndef SPARK_LOG_INFO
-#include <cstdio>
-#define SPARK_LOG_INFO(cat, fmt, ...) fprintf(stderr, "[" cat "] " fmt "\n", ##__VA_ARGS__)
-#define SPARK_LOG_WARN(cat, fmt, ...) fprintf(stderr, "[" cat " WARN] " fmt "\n", ##__VA_ARGS__)
-#define SPARK_LOG_DEBUG(cat, fmt, ...) fprintf(stderr, "[" cat " DEBUG] " fmt "\n", ##__VA_ARGS__)
-#endif
 
 namespace SparkEditor
 {
@@ -36,9 +29,11 @@ namespace SparkEditor
 
     bool CollaborativeEditSession::Host(uint16_t port, const std::string& userName)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !userName.empty(), false);
         if (m_connected.load(std::memory_order_acquire))
         {
-            SPARK_LOG_WARN("CollabEdit", "Already connected.");
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Already connected.");
             return false;
         }
 
@@ -61,16 +56,19 @@ namespace SparkEditor
 
         m_connected.store(true, std::memory_order_release);
 
-        SPARK_LOG_INFO("CollabEdit", "Hosting session on port %u as '%s' (PeerID=%u).", port, userName.c_str(),
-                       m_localPeerID);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Hosting session on port %u as '%s' (PeerID=%u).", port,
+                       userName.c_str(), m_localPeerID);
         return true;
     }
 
     bool CollaborativeEditSession::Connect(const std::string& address, uint16_t port, const std::string& userName)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !address.empty(), false);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !userName.empty(), false);
         if (m_connected.load(std::memory_order_acquire))
         {
-            SPARK_LOG_WARN("CollabEdit", "Already connected.");
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Already connected.");
             return false;
         }
 
@@ -93,13 +91,14 @@ namespace SparkEditor
 
         m_connected.store(true, std::memory_order_release);
 
-        SPARK_LOG_INFO("CollabEdit", "Connected to %s:%u as '%s' (PeerID=%u).", address.c_str(), port, userName.c_str(),
-                       m_localPeerID);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Connected to %s:%u as '%s' (PeerID=%u).", address.c_str(), port,
+                       userName.c_str(), m_localPeerID);
         return true;
     }
 
     void CollaborativeEditSession::Disconnect()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_connected.load(std::memory_order_acquire))
             return;
 
@@ -127,7 +126,7 @@ namespace SparkEditor
             m_peers.clear();
         }
 
-        SPARK_LOG_INFO("CollabEdit", "Disconnected from session.");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Disconnected from session.");
     }
 
     // ============================================================================
@@ -136,6 +135,7 @@ namespace SparkEditor
 
     void CollaborativeEditSession::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_connected.load(std::memory_order_acquire))
             return;
 
@@ -183,8 +183,8 @@ namespace SparkEditor
         // Validate nodeId length to prevent excessively long identifiers
         if (nodeId.size() >= 256)
         {
-            SPARK_LOG_WARN("CollabEdit", "SetLocalSelection rejected: nodeId exceeds 255 chars (length=%zu).",
-                           nodeId.size());
+            SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                           "SetLocalSelection rejected: nodeId exceeds 255 chars (length=%zu).", nodeId.size());
             return;
         }
 
@@ -209,7 +209,8 @@ namespace SparkEditor
             m_outgoingMessages.push(std::move(msg));
         }
 
-        SPARK_LOG_INFO("CollabEdit", "Local selection changed to '%s' (PeerID=%u).", nodeId.c_str(), m_localPeerID);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Local selection changed to '%s' (PeerID=%u).", nodeId.c_str(),
+                       m_localPeerID);
     }
 
     void CollaborativeEditSession::SetLocalViewportCamera(const DirectX::XMFLOAT3& position,
@@ -308,19 +309,19 @@ namespace SparkEditor
         // Validate the EditMessage
         if (message.nodeId.empty())
         {
-            SPARK_LOG_WARN("CollabEdit", "BroadcastEdit rejected: nodeId is empty.");
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "BroadcastEdit rejected: nodeId is empty.");
             return;
         }
 
         if (message.sourceEditor == INVALID_PEER)
         {
-            SPARK_LOG_WARN("CollabEdit", "BroadcastEdit rejected: sourceEditor is not set.");
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "BroadcastEdit rejected: sourceEditor is not set.");
             return;
         }
 
         if (static_cast<uint8_t>(message.type) > static_cast<uint8_t>(EditMessageType::ComponentModified))
         {
-            SPARK_LOG_WARN("CollabEdit", "BroadcastEdit rejected: invalid EditMessageType (%u).",
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "BroadcastEdit rejected: invalid EditMessageType (%u).",
                            static_cast<unsigned>(message.type));
             return;
         }
@@ -347,7 +348,7 @@ namespace SparkEditor
             m_outgoingMessages.push(std::move(msg));
         }
 
-        SPARK_LOG_INFO("CollabEdit", "BroadcastEdit: type=%u nodeId='%s' from PeerID=%u.",
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "BroadcastEdit: type=%u nodeId='%s' from PeerID=%u.",
                        static_cast<unsigned>(outgoing.type), outgoing.nodeId.c_str(), outgoing.sourceEditor);
 
         // Still call the local callback for immediate local processing
@@ -407,7 +408,7 @@ namespace SparkEditor
             return;
         }
 
-        SPARK_LOG_DEBUG("CollabEdit", "Processing %zu incoming messages.", localQueue.size());
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Processing %zu incoming messages.", localQueue.size());
 
         while (!localQueue.empty())
         {
@@ -447,7 +448,7 @@ namespace SparkEditor
             case InternalMessageType::EditBroadcast:
             {
                 m_editsReceived++;
-                SPARK_LOG_INFO("CollabEdit", "Received edit: type=%u nodeId='%s' from PeerID=%u.",
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Received edit: type=%u nodeId='%s' from PeerID=%u.",
                                static_cast<unsigned>(msg.editMessage.type), msg.editMessage.nodeId.c_str(),
                                msg.sourcePeer);
 
@@ -471,7 +472,7 @@ namespace SparkEditor
                     newLock.lockTime = std::chrono::steady_clock::now();
                     m_nodeLocks[msg.nodeId] = newLock;
 
-                    SPARK_LOG_INFO("CollabEdit", "Lock granted on '%s' to PeerID=%u.", msg.nodeId.c_str(),
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Lock granted on '%s' to PeerID=%u.", msg.nodeId.c_str(),
                                    msg.sourcePeer);
 
                     if (m_onLockChanged)
@@ -490,8 +491,8 @@ namespace SparkEditor
                 {
                     m_nodeLocks.erase(it);
 
-                    SPARK_LOG_INFO("CollabEdit", "Lock released on '%s' by PeerID=%u.", msg.nodeId.c_str(),
-                                   msg.sourcePeer);
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Lock released on '%s' by PeerID=%u.",
+                                   msg.nodeId.c_str(), msg.sourcePeer);
 
                     if (m_onLockChanged)
                     {
@@ -509,8 +510,8 @@ namespace SparkEditor
                     m_peers[msg.sourcePeer].lastActivityTime = m_sessionTime;
                 }
 
-                SPARK_LOG_INFO("CollabEdit", "Peer connected: '%s' (PeerID=%u).", msg.peerInfo.userName.c_str(),
-                               msg.sourcePeer);
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Peer connected: '%s' (PeerID=%u).",
+                               msg.peerInfo.userName.c_str(), msg.sourcePeer);
 
                 if (m_onPeerConnected)
                 {
@@ -526,7 +527,7 @@ namespace SparkEditor
                     m_peers.erase(msg.sourcePeer);
                 }
 
-                SPARK_LOG_INFO("CollabEdit", "Peer disconnected: PeerID=%u.", msg.sourcePeer);
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Peer disconnected: PeerID=%u.", msg.sourcePeer);
 
                 if (m_onPeerDisconnected)
                 {
@@ -547,7 +548,7 @@ namespace SparkEditor
             auto it = m_peers.find(m_localPeerID);
             if (it == m_peers.end())
             {
-                SPARK_LOG_WARN("CollabEdit", "BroadcastPresence: local peer not found in peers map.");
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "BroadcastPresence: local peer not found in peers map.");
                 return;
             }
 
@@ -569,8 +570,9 @@ namespace SparkEditor
             m_outgoingMessages.push(std::move(msg));
         }
 
-        SPARK_LOG_DEBUG("CollabEdit", "Presence broadcast: PeerID=%u selection='%s' pos=(%.1f,%.1f,%.1f).",
-                        m_localPeerID, localPeerSnapshot.selectedNode.c_str(), localPeerSnapshot.viewportCameraPos.x,
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor,
+                        "Presence broadcast: PeerID=%u selection='%s' pos=(%.1f,%.1f,%.1f).", m_localPeerID,
+                        localPeerSnapshot.selectedNode.c_str(), localPeerSnapshot.viewportCameraPos.x,
                         localPeerSnapshot.viewportCameraPos.y, localPeerSnapshot.viewportCameraPos.z);
     }
 

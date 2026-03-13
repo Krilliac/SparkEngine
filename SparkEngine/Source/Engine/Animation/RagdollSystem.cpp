@@ -4,6 +4,7 @@
  */
 
 #include "RagdollSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <sstream>
@@ -36,6 +37,8 @@ namespace Spark::Animation
 
     void RagdollSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Animation);
+
         // Register a default humanoid ragdoll definition
         RagdollDefinition humanoid;
         humanoid.AddBone("Hips", {.shape = RagdollShapeType::Box, .radius = 0.15f, .length = 0.2f, .mass = 10.0f});
@@ -76,6 +79,8 @@ namespace Spark::Animation
 
     void RagdollSystem::Update(float deltaTime)
     {
+        SPARK_WARN_IF(LogCategory::Animation, deltaTime < 0.0f, "RagdollSystem::Update called with negative deltaTime");
+
         for (auto& [entityId, instance] : m_instances)
         {
             if (instance.state == RagdollState::Inactive)
@@ -94,6 +99,8 @@ namespace Spark::Animation
 
     void RagdollSystem::ActivateRagdoll(uint32_t entityId, const std::string& defName, float blendTime)
     {
+        SPARK_TRACE_ENTER(LogCategory::Animation);
+
         auto defIt = m_definitions.find(defName);
         if (defIt == m_definitions.end())
         {
@@ -116,6 +123,8 @@ namespace Spark::Animation
 
     void RagdollSystem::DeactivateRagdoll(uint32_t entityId, float blendTime)
     {
+        SPARK_TRACE_ENTER(LogCategory::Animation);
+
         auto it = m_instances.find(entityId);
         if (it == m_instances.end())
         {

@@ -1,4 +1,5 @@
 #include "LevelStreamingSystem.h"
+#include "Utils/Validate.h"
 
 using namespace DirectX;
 namespace SparkEditor
@@ -53,10 +54,14 @@ namespace SparkEditor
 
     bool LevelStreamingSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
         return true;
     }
 
-    void LevelStreamingSystem::Update(float /*deltaTime*/) {}
+    void LevelStreamingSystem::Update(float /*deltaTime*/)
+    {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+    }
 
     void LevelStreamingSystem::Render() {}
 

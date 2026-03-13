@@ -6,6 +6,7 @@
  */
 
 #include "GameMode.h"
+#include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
 
@@ -16,6 +17,8 @@ namespace Spark
 
     bool GameMode::Initialize(const GameModeRules& rules)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing GameMode: %s", rules.modeName.c_str());
         m_rules = rules;
         m_roundState = RoundState::WaitingForPlayers;
         m_matchActive = false;
@@ -60,6 +63,8 @@ namespace Spark
 
     void GameMode::StartMatch()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Starting match");
         m_matchActive = true;
         m_currentRound = 0;
         m_alphaScore = 0;
@@ -86,6 +91,8 @@ namespace Spark
 
     void GameMode::EndMatch()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Ending match");
         m_matchActive = false;
         m_roundState = RoundState::MatchEnd;
 

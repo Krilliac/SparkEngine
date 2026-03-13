@@ -4,6 +4,7 @@
  */
 
 #include "ClientPrediction.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -42,6 +43,7 @@ namespace Spark
 
     void ClientPrediction::Reconcile(const PredictedState& serverState, float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         // Calculate correction magnitude
         float dx = serverState.position.x - m_currentState.position.x;
         float dy = serverState.position.y - m_currentState.position.y;
@@ -76,6 +78,7 @@ namespace Spark
 
     void ClientPrediction::SetMovementSimulator(std::function<void(PredictedState&, const PredictedInput&, float)> func)
     {
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Network, func != nullptr, "Movement simulator function must not be null");
         m_movementSimulator = std::move(func);
     }
 

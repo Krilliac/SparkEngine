@@ -8,6 +8,7 @@
 #include "VisualScriptSystem.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/Assert.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cassert>
@@ -1796,6 +1797,8 @@ namespace Spark::Scripting
 
     bool VisualScriptSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(LogCategory::Scripting);
+
         if (m_isInitialized)
         {
             return true;
@@ -1810,6 +1813,8 @@ namespace Spark::Scripting
 
     void VisualScriptSystem::Shutdown()
     {
+        SPARK_TRACE_ENTER(LogCategory::Scripting);
+
         m_graphs.clear();
         m_isInitialized = false;
         SPARK_LOG_INFO("Scripting", "[VisualScriptSystem] Shutdown.");
@@ -1841,6 +1846,8 @@ namespace Spark::Scripting
 
     bool VisualScriptSystem::CompileAndRegister(const std::string& graphName)
     {
+        SPARK_TRACE_ENTER(LogCategory::Scripting);
+
         auto* graph = GetGraph(graphName);
         if (!graph)
         {
@@ -1911,6 +1918,8 @@ namespace Spark::Scripting
 
     bool VisualScriptSystem::LoadGraph(const std::string& filePath)
     {
+        SPARK_TRACE_ENTER(LogCategory::Scripting);
+
         std::ifstream file(filePath);
         if (!file.is_open())
         {

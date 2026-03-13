@@ -6,6 +6,7 @@
  */
 
 #include "../Profiler/PerformanceProfiler.h"
+#include "Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <algorithm>
@@ -117,6 +118,7 @@ namespace SparkEditor
 
     bool PerformanceProfiler::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Performance Profiler panel\n";
         m_isProfiling = true;
         return true;

@@ -6,6 +6,7 @@
  */
 
 #include "ExternalConsoleIntegration.h"
+#include "Utils/Validate.h"
 #include <iostream>
 #include <chrono>
 #include <sstream>
@@ -37,6 +38,8 @@ namespace SparkEditor
 
     bool ExternalConsoleIntegration::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ExternalConsoleIntegration initializing");
         std::cout << "Initializing Enhanced External Console Integration with Engine-Style Logging\n";
 
         m_running = true;
@@ -65,6 +68,8 @@ namespace SparkEditor
     {
         if (m_running)
         {
+            SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "ExternalConsoleIntegration shutting down");
             std::cout << "Shutting down Enhanced External Console Integration\n";
 
             try
@@ -218,6 +223,8 @@ namespace SparkEditor
 
     bool ExternalConsoleIntegration::ConnectToEngine(const std::string& host, int port)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !host.empty(), false);
         std::cout << "Connecting to external Spark Console with Engine-Style Logging...\n";
 
         // Try to launch SparkConsole.exe
@@ -323,6 +330,7 @@ namespace SparkEditor
 
     bool ExternalConsoleIntegration::SendCommand(const std::string& command)
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !command.empty(), false);
         if (!m_connected)
         {
             std::cout << "Cannot send command: not connected to console\n";

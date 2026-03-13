@@ -4,6 +4,7 @@
  */
 
 #include "VisualScriptingSystem.h"
+#include "Utils/Validate.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -2388,6 +2389,7 @@ namespace SparkEditor
 
     bool VisualScriptingSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scripting);
         m_executor = std::make_unique<ScriptExecutor>();
         InitializeBuiltInNodes();
         return true;

@@ -18,6 +18,7 @@
 
 #include "../Core/Platform.h"
 #include "UpscalingSystem.h"
+#include "../Utils/Validate.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
@@ -795,6 +796,11 @@ namespace Spark
             bool CompileComputeShader(ID3D11Device* device, const char* hlslSource, const char* entryPoint,
                                       ID3D11ComputeShader** outShader)
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, device, false);
+                SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, hlslSource, false);
+                SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, entryPoint, false);
+                SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, outShader, false);
                 if (!device || !hlslSource || !entryPoint || !outShader)
                 {
                     return false;
@@ -838,6 +844,10 @@ namespace Spark
  */
             bool CreateFSR1Shaders(ID3D11Device* device, ID3D11ComputeShader** outEASU, ID3D11ComputeShader** outRCAS)
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, device, false);
+                SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, outEASU, false);
+                SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, outRCAS, false);
                 if (!device || !outEASU || !outRCAS)
                 {
                     return false;

@@ -2,6 +2,7 @@
 // Grenade.cpp
 #include "Grenade.h"
 #include "Utils/Assert.h"
+#include "Utils/Validate.h"
 #include "Physics/PhysicsSystem.h"
 
 using DirectX::XMFLOAT3;
@@ -11,8 +12,8 @@ using DirectX::XMMATRIX;
 Grenade::Grenade() : m_fuseTime(3.0f), m_explosionRadius(8.0f), m_hasExploded(false)
 {
     // Validate parameters
-    ASSERT_MSG(m_fuseTime > 0.0f, "Grenade fuse time must be positive");
-    ASSERT_MSG(m_explosionRadius > 0.0f, "Grenade explosion radius must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, m_fuseTime > 0.0f, "Grenade fuse time must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, m_explosionRadius > 0.0f, "Grenade explosion radius must be positive");
 
     m_damage = 100.0f;
     m_speed = 15.0f;
@@ -23,23 +24,26 @@ Grenade::Grenade() : m_fuseTime(3.0f), m_explosionRadius(8.0f), m_hasExploded(fa
 
     // Scale grenade
     XMFLOAT3 scale{0.3f, 0.3f, 0.3f};
-    ASSERT_MSG(scale.x > 0.0f && scale.y > 0.0f && scale.z > 0.0f, "Grenade scale must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, scale.x > 0.0f && scale.y > 0.0f && scale.z > 0.0f,
+                      "Grenade scale must be positive");
     SetScale(scale);
 }
 
 HRESULT Grenade::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    ASSERT_MSG(device != nullptr, "Grenade::Initialize device is null");
-    ASSERT_MSG(context != nullptr, "Grenade::Initialize context is null");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
 
     HRESULT hr = Projectile::Initialize(device, context);
-    ASSERT_MSG(SUCCEEDED(hr), "Projectile::Initialize failed in Grenade");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Projectile::Initialize failed in Grenade");
     return hr;
 }
 
 void Grenade::Update(float deltaTime)
 {
-    ASSERT_MSG(deltaTime >= 0.0f && std::isfinite(deltaTime), "Invalid deltaTime in Grenade::Update");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, deltaTime >= 0.0f && std::isfinite(deltaTime),
+                      "Invalid deltaTime in Grenade::Update");
 
     if (!m_active)
         return;
@@ -59,12 +63,13 @@ void Grenade::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
     if (!m_active)
         return;
-    ASSERT_MSG(m_mesh != nullptr, "Grenade mesh not initialized");
+    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, m_mesh);
     Projectile::Render(view, projection);
 }
 
 void Grenade::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     m_hasExploded = false;
     Projectile::Fire(startPosition, direction, speed);
 }

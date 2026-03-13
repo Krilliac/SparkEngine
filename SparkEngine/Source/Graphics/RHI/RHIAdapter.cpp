@@ -6,6 +6,7 @@
  */
 
 #include "RHIAdapter.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cassert>
@@ -27,7 +28,8 @@ namespace Spark::RHI
 
     bool RHIAdapter::Initialize(IRHIDevice* device)
     {
-        assert(device && "RHIAdapter::Initialize -- device must not be null");
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
         if (!device)
         {
             return false;
@@ -40,6 +42,8 @@ namespace Spark::RHI
 
     void RHIAdapter::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RHIAdapter::Shutdown");
         if (!m_device)
         {
             return;
@@ -87,8 +91,10 @@ namespace Spark::RHI
 
     void RHIAdapter::BeginFrame()
     {
-        assert(m_device && "RHIAdapter::BeginFrame -- not initialized");
-        assert(!m_frameActive && "RHIAdapter::BeginFrame -- frame already in progress");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, m_device != nullptr,
+                          "RHIAdapter::BeginFrame -- not initialized");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, !m_frameActive,
+                          "RHIAdapter::BeginFrame -- frame already in progress");
 
         m_device->BeginFrame();
         m_commandList = m_device->GetImmediateCommandList();
@@ -98,7 +104,7 @@ namespace Spark::RHI
 
     void RHIAdapter::EndFrame()
     {
-        assert(m_frameActive && "RHIAdapter::EndFrame -- no frame in progress");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, m_frameActive, "RHIAdapter::EndFrame -- no frame in progress");
 
         m_commandList->End();
         m_device->EndFrame();

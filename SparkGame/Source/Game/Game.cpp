@@ -12,6 +12,8 @@
 #include "ClassSystem.h"
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
+#include "Utils/Validate.h"
+#include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/TextureSystem.h"
@@ -60,10 +62,12 @@ Game::~Game()
 --------------------------------------------------------------*/
 HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Game::Initialize called");
     LOG_TO_CONSOLE_IMMEDIATE(L"Game::Initialize called.", L"INFO");
 
-    ASSERT(graphics != nullptr);
-    ASSERT(input != nullptr);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, graphics);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, input);
 
     m_graphics = graphics;
     m_input = input;

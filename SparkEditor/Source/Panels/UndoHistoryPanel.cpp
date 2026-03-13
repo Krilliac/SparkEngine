@@ -7,6 +7,7 @@
 
 #include "UndoHistoryPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 
 namespace SparkEditor
@@ -19,6 +20,7 @@ namespace SparkEditor
 
     bool UndoHistoryPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         m_isInitialized = true;
         return true;
     }

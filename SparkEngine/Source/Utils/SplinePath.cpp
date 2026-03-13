@@ -7,6 +7,7 @@
 #include "SplinePath.h"
 #include "SplineMath.h"
 #include "Utils/Assert.h"
+#include "Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -29,28 +30,32 @@ void SplinePath::AddPoint(const XMFLOAT3& point)
 
 void SplinePath::InsertPoint(int index, const XMFLOAT3& point)
 {
-    ASSERT_MSG(index >= 0 && index <= static_cast<int>(m_points.size()), "InsertPoint index out of range");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index <= static_cast<int>(m_points.size()),
+                      "InsertPoint index out of range");
     m_points.insert(m_points.begin() + index, point);
     MarkDirty();
 }
 
 void SplinePath::RemovePoint(int index)
 {
-    ASSERT_MSG(index >= 0 && index < static_cast<int>(m_points.size()), "RemovePoint index out of range");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index < static_cast<int>(m_points.size()),
+                      "RemovePoint index out of range");
     m_points.erase(m_points.begin() + index);
     MarkDirty();
 }
 
 void SplinePath::SetPoint(int index, const XMFLOAT3& point)
 {
-    ASSERT_MSG(index >= 0 && index < static_cast<int>(m_points.size()), "SetPoint index out of range");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index < static_cast<int>(m_points.size()),
+                      "SetPoint index out of range");
     m_points[index] = point;
     MarkDirty();
 }
 
 const XMFLOAT3& SplinePath::GetPoint(int index) const
 {
-    ASSERT_MSG(index >= 0 && index < static_cast<int>(m_points.size()), "GetPoint index out of range");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index < static_cast<int>(m_points.size()),
+                      "GetPoint index out of range");
     return m_points[index];
 }
 

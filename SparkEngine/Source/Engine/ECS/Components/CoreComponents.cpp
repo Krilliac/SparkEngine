@@ -1,6 +1,7 @@
 // CoreComponents.cpp
 #include "../../../Core/Platform.h"
 #include "CoreComponents.h"
+#include "../../../Utils/Validate.h"
 
 using namespace DirectX;
 
@@ -19,6 +20,7 @@ XMMATRIX Transform::GetLocalMatrix() const
 
 XMMATRIX Transform::GetWorldMatrix(const entt::registry& registry) const
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
     XMMATRIX localMtx = GetLocalMatrix();
 
     if (parent == entt::null)

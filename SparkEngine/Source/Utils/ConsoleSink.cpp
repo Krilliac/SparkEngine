@@ -7,6 +7,7 @@
 
 #include "ConsoleSink.h"
 #include "SparkConsole.h"
+#include "Validate.h"
 
 #include <cstring>
 
@@ -17,6 +18,7 @@ namespace Spark
 
     void ConsoleSink::Write(const LogMessage& msg)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         // Build the message: [Category] message (file:line)
         std::string formatted;
         formatted.reserve(msg.message.size() + 64);

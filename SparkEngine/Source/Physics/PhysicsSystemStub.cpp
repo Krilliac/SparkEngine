@@ -10,6 +10,7 @@
 #include "Core/Platform.h"
 #include "PhysicsSystem.h"
 #include "Utils/LogMacros.h"
+#include "Utils/Validate.h"
 #include <sstream>
 
 // ============================================================================
@@ -309,12 +310,15 @@ PhysicsSystem::~PhysicsSystem()
 
 HRESULT PhysicsSystem::Initialize()
 {
-    SPARK_LOG_WARN("Physics", "Bullet Physics not available — physics simulation disabled");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+    SPARK_LOG_WARN(Spark::LogCategory::Physics, "Bullet Physics not available — physics simulation disabled");
     return S_OK;
 }
 
 void PhysicsSystem::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "PhysicsSystem stub shutting down");
     m_bodies.clear();
     m_constraints.clear();
     m_namedBodies.clear();
@@ -344,8 +348,8 @@ std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& de
 
 void PhysicsSystem::RemoveBody(std::shared_ptr<PhysicsBody> body)
 {
-    if (!body)
-        return;
+    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Physics, body);
+
     if (!body->GetName().empty())
     {
         m_namedBodies.erase(body->GetName());

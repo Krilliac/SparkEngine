@@ -4,6 +4,7 @@
  */
 
 #include "Sequencer.h"
+#include "../../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>
@@ -507,7 +508,10 @@ namespace Spark::Cinematic
     // Sequence
     // ============================================================================
 
-    Sequence::Sequence(const std::string& name) : m_name(name) {}
+    Sequence::Sequence(const std::string& name) : m_name(name)
+    {
+        SPARK_WARN_IF(Spark::LogCategory::Cinematic, name.empty(), "Sequence created with empty name");
+    }
 
     CameraPathTrack* Sequence::AddCameraTrack(const std::string& trackName)
     {
@@ -579,6 +583,7 @@ namespace Spark::Cinematic
 
     void Sequence::Play()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Cinematic);
         if (m_playState == SequencePlayState::Stopped)
         {
             m_currentTime = 0.0f;
@@ -597,6 +602,7 @@ namespace Spark::Cinematic
 
     void Sequence::Stop()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Cinematic);
         m_playState = SequencePlayState::Stopped;
         m_currentTime = 0.0f;
         m_previousTime = 0.0f;
@@ -623,6 +629,7 @@ namespace Spark::Cinematic
 
     void Sequence::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Cinematic);
         if (m_playState != SequencePlayState::Playing)
             return;
 
@@ -717,6 +724,7 @@ namespace Spark::Cinematic
 
     Sequence* SequencerManager::CreateSequence(const std::string& name)
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::Cinematic, !name.empty(), nullptr);
         auto seq = std::make_unique<Sequence>(name);
         auto* ptr = seq.get();
         m_sequences[name] = std::move(seq);
@@ -736,6 +744,7 @@ namespace Spark::Cinematic
 
     bool SequencerManager::PlaySequence(const std::string& name)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Cinematic);
         auto* seq = GetSequence(name);
         if (!seq)
             return false;
@@ -759,6 +768,7 @@ namespace Spark::Cinematic
 
     void SequencerManager::StopAll()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Cinematic, "Stopping all sequences");
         for (auto& [name, seq] : m_sequences)
         {
             seq->Stop();

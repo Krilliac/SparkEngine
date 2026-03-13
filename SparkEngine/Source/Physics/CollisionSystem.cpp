@@ -2,6 +2,7 @@
 // CollisionSystem.cpp
 #include "CollisionSystem.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -25,7 +26,7 @@ XMFLOAT3 BoundingBox::GetExtents() const
 
 void BoundingBox::Transform(const XMMATRIX& transform)
 {
-    ASSERT_MSG(std::isfinite(transform.r[0].m128_f32[0]), "Invalid transform matrix");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
 
     XMFLOAT3 corners[8] = {{Min.x, Min.y, Min.z}, {Max.x, Min.y, Min.z}, {Min.x, Max.y, Min.z}, {Max.x, Max.y, Min.z},
                            {Min.x, Min.y, Max.z}, {Max.x, Min.y, Max.z}, {Min.x, Max.y, Max.z}, {Max.x, Max.y, Max.z}};
@@ -52,7 +53,7 @@ void BoundingBox::Transform(const XMMATRIX& transform)
 // BoundingSphere methods
 void BoundingSphere::Transform(const XMMATRIX& transform)
 {
-    ASSERT_MSG(std::isfinite(transform.r[0].m128_f32[0]), "Invalid transform matrix");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
 
     XMVECTOR c = XMLoadFloat3(&Center);
     c = XMVector3Transform(c, transform);
@@ -62,14 +63,14 @@ void BoundingSphere::Transform(const XMMATRIX& transform)
     float sy = XMVectorGetX(XMVector3Length(transform.r[1]));
     float sz = XMVectorGetX(XMVector3Length(transform.r[2]));
     float scale = std::max({sx, sy, sz});
-    ASSERT_MSG(scale > 0.0f, "Non-positive scale");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Physics, scale > 0.0f, "Non-positive scale");
     Radius *= scale;
 }
 
 // Ray methods
 XMFLOAT3 Ray::GetPoint(float t) const
 {
-    ASSERT_MSG(std::isfinite(t), "Invalid ray parameter");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Physics, std::isfinite(t), "Invalid ray parameter");
     return XMFLOAT3(Origin.x + Direction.x * t, Origin.y + Direction.y * t, Origin.z + Direction.z * t);
 }
 

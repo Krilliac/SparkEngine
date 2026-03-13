@@ -8,6 +8,7 @@
 #include "Spark/Version.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
+#include "Utils/Validate.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -105,6 +106,10 @@ ModuleManager::~ModuleManager()
 
 bool ModuleManager::LoadModule(const std::string& path)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_VALIDATE_RET(Spark::LogCategory::Core, !path.empty(), false);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading module: %s", path.c_str());
+
     auto& console = Spark::SimpleConsole::GetInstance();
 
     // Load the shared library
@@ -501,6 +506,9 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 
 void ModuleManager::UnloadAll()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Unloading all modules (%zu loaded)", m_modules.size());
+
     for (auto& entry : m_modules)
         UnloadEntry(entry);
     m_modules.clear();

@@ -2,6 +2,7 @@
 #include "Model.h"
 #include "ModelVertex.h"
 #include "../Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Graphics/GraphicsEngine.h"
 #include <tiny_obj_loader.h>
 #include <vector>
@@ -20,8 +21,9 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     // ------------------------------------------------------------------
     //  Argument validation
     // ------------------------------------------------------------------
-    ASSERT_ALWAYS_MSG(!filename.empty(), "Model::LoadObj - filename is empty");
-    ASSERT_ALWAYS_MSG(device != nullptr, "Model::LoadObj - ID3D11Device is null");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, !filename.empty(), "Model::LoadObj - filename is empty");
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
 
     // Convert UTF-16 filename to UTF-8 for tinyobjloader
     std::string fileUtf8(filename.begin(), filename.end());
@@ -39,7 +41,7 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
         OutputDebugStringA(("tinyobj error: " + warn + err + "\n").c_str());
         return E_FAIL;
     }
-    ASSERT_ALWAYS_MSG(!shapes.empty(), "OBJ file contains no shapes");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, !shapes.empty(), "OBJ file contains no shapes");
 
     // ------------------------------------------------------------------
     //  Build vertex / index arrays
@@ -76,7 +78,7 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     }
 
     m_indexCount = static_cast<UINT>(idxs.size());
-    ASSERT_ALWAYS_MSG(m_indexCount > 0, "OBJ produced zero indices");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, m_indexCount > 0, "OBJ produced zero indices");
 
     // ------------------------------------------------------------------
     //  Create GPU buffers
@@ -92,7 +94,7 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     sd.pSysMem = verts.data();
 
     HRESULT hr = device->CreateBuffer(&bd, &sd, &m_vb);
-    ASSERT_MSG(SUCCEEDED(hr), "Failed to create vertex buffer");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, SUCCEEDED(hr), "Failed to create vertex buffer");
     if (FAILED(hr))
         return hr;
 
@@ -102,14 +104,14 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     sd.pSysMem = idxs.data();
 
     hr = device->CreateBuffer(&bd, &sd, &m_ib);
-    ASSERT_MSG(SUCCEEDED(hr), "Failed to create index buffer");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, SUCCEEDED(hr), "Failed to create index buffer");
     return hr;
 }
 
 void Model::Render(ID3D11DeviceContext* ctx, GraphicsEngine* graphics, const DirectX::XMMATRIX* world,
                    const DirectX::XMMATRIX* view, const DirectX::XMMATRIX* proj)
 {
-    ASSERT(ctx != nullptr);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, ctx);
 
     // **SAFETY CHECK: Don't render if model failed to load**
     if (m_vb == nullptr || m_ib == nullptr || m_indexCount == 0)

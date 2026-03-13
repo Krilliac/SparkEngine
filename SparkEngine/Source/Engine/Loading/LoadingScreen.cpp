@@ -4,6 +4,7 @@
  */
 
 #include "LoadingScreen.h"
+#include "../../Utils/Validate.h"
 
 #include <sstream>
 #include <random>
@@ -20,6 +21,8 @@ namespace Spark
 
     void LoadingScreen::BeginLoading(const std::string& name)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Beginning loading session: '%s'", name.c_str());
         std::lock_guard<std::mutex> lock(m_mutex);
         m_sessionName = name;
         m_tasks.clear();
@@ -32,6 +35,8 @@ namespace Spark
 
     void LoadingScreen::AddTask(const std::string& name, float weight, std::function<bool()> execute)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Core, name);
+        SPARK_WARN_IF(Spark::LogCategory::Core, weight <= 0.0f, "Loading task added with non-positive weight");
         std::lock_guard<std::mutex> lock(m_mutex);
         LoadingTask task;
         task.name = name;
@@ -42,6 +47,8 @@ namespace Spark
 
     void LoadingScreen::Execute()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_WARN_IF(Spark::LogCategory::Core, m_tasks.empty(), "Execute called with no loading tasks");
         m_state = LoadingState::Loading;
 
         // Calculate total weight

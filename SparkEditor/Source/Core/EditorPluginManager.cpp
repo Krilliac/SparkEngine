@@ -8,6 +8,7 @@
 #include "EditorPluginManager.h"
 #include "EditorPanel.h"
 #include "../Utils/SparkConsole.h"
+#include "Utils/Validate.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -33,6 +34,7 @@ namespace SparkEditor
     bool EditorPluginManager::RegisterPluginInstance(std::unique_ptr<IEditorPlugin> plugin, bool isFromDLL,
                                                      void* libraryHandle, DestroyEditorPluginFn destroyFn)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!plugin)
         {
             Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Cannot register null plugin");
@@ -64,6 +66,9 @@ namespace SparkEditor
 
     bool EditorPluginManager::LoadPlugin(const std::string& path)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !path.empty(), false);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading plugin from '%s'", path.c_str());
         Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Loading plugin from '" + path + "'...");
 
         void* handle = nullptr;
@@ -124,6 +129,9 @@ namespace SparkEditor
 
     bool EditorPluginManager::UnloadPlugin(const std::string& name)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !name.empty(), false);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Unloading plugin '%s'", name.c_str());
         auto it = FindPlugin(name);
         if (it == m_plugins.end())
         {

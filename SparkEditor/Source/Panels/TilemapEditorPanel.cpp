@@ -8,6 +8,7 @@
 #include "TilemapEditorPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <algorithm>
@@ -22,6 +23,7 @@ namespace SparkEditor
 
     bool TilemapEditorPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Tilemap Editor panel\n";
         return true;
     }

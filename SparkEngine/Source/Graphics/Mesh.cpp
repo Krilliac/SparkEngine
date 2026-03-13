@@ -2,6 +2,7 @@
 // Mesh.cpp
 #include "Mesh.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 //#include "Utils/Debug.h"
 #include <tiny_obj_loader.h>
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -28,11 +29,12 @@ Mesh::~Mesh()
 
 HRESULT Mesh::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    std::wcout << L"[OPERATION] Mesh::Initialize called." << std::endl;
-    ASSERT(device && context);
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, context);
     m_device = device;
     m_context = context;
-    std::wcout << L"[INFO] Mesh initialized with device/context." << std::endl;
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Mesh initialized with device/context");
     return S_OK;
 }
 
@@ -59,8 +61,8 @@ void Mesh::Shutdown()
 
 bool Mesh::LoadFromFile(const std::wstring& path)
 {
-    std::wcout << L"[OPERATION] Mesh::LoadFromFile called. path=" << path << std::endl;
-    ASSERT_ALWAYS_MSG(!path.empty(), "Mesh::LoadFromFile – empty path");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, !path.empty(), "Mesh::LoadFromFile — empty path");
 
     // Convert wide path to UTF-8 for tinyobjloader
     auto u8path_u8 = std::filesystem::path(path).u8string(); // basic_string<char8_t>
@@ -172,9 +174,9 @@ bool Mesh::LoadFromFile(const std::wstring& path)
 
 HRESULT Mesh::CreateFromVertices(const std::vector<Vertex>& verts, const std::vector<unsigned int>& inds)
 {
-    std::wcout << L"[OPERATION] Mesh::CreateFromVertices called. verts=" << verts.size() << L" inds=" << inds.size()
-               << std::endl;
-    ASSERT(!verts.empty() && !inds.empty());
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, !verts.empty() && !inds.empty(),
+                      "CreateFromVertices — empty vertex or index data");
 
     m_vertices = verts;
     m_indices = inds;
@@ -187,8 +189,8 @@ HRESULT Mesh::CreateFromVertices(const std::vector<Vertex>& verts, const std::ve
 
 HRESULT Mesh::CreateCube(float size)
 {
-    std::wcout << L"[OPERATION] Mesh::CreateCube called. size=" << size << std::endl;
-    ASSERT(size > 0.0f);
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, size > 0.0f, "Cube size must be positive");
 
     // Clear existing data
     m_vertices.clear();
@@ -270,9 +272,8 @@ HRESULT Mesh::CreateCube(float size)
 
 HRESULT Mesh::CreateTriangle(float size)
 {
-    ASSERT(size > 0.0f);
-
-    std::wcout << L"[OPERATION] Mesh::CreateTriangle called. size=" << size << std::endl;
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, size > 0.0f, "Triangle size must be positive");
 
     std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;
@@ -307,9 +308,8 @@ HRESULT Mesh::CreateTriangle(float size)
 
 HRESULT Mesh::CreatePlane(float width, float depth)
 {
-    ASSERT(width > 0.0f && depth > 0.0f);
-
-    std::wcout << L"[OPERATION] Mesh::CreatePlane called. width=" << width << L" depth=" << depth << std::endl;
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, width > 0.0f && depth > 0.0f, "Plane dimensions must be positive");
 
     MeshData md;
     float hw = width * 0.5f, hd = depth * 0.5f;
@@ -332,11 +332,10 @@ HRESULT Mesh::CreatePlane(float width, float depth)
 
 HRESULT Mesh::CreateSphere(float radius, int slices, int stacks)
 {
-    ASSERT(radius > 0.0f);
-    ASSERT(slices >= 3 && stacks >= 2);
-
-    std::wcout << L"[OPERATION] Mesh::CreateSphere called. radius=" << radius << L" slices=" << slices << L" stacks="
-               << stacks << std::endl;
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, radius > 0.0f, "Sphere radius must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, slices >= 3 && stacks >= 2,
+                      "Sphere needs at least 3 slices and 2 stacks");
 
     MeshData md;
     for (int i = 0; i <= stacks; ++i)
@@ -378,9 +377,9 @@ HRESULT Mesh::CreateSphere(float radius, int slices, int stacks)
 
 HRESULT Mesh::CreatePyramid(float size, float height)
 {
-    ASSERT(size > 0.0f && height > 0.0f);
-
-    std::wcout << L"[OPERATION] Mesh::CreatePyramid called. size=" << size << L" height=" << height << std::endl;
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, size > 0.0f && height > 0.0f,
+                      "Pyramid size and height must be positive");
 
     // Clear existing data
     m_vertices.clear();
@@ -535,8 +534,8 @@ HRESULT Mesh::CreateBuffers()
 
 void Mesh::Render(ID3D11DeviceContext* ctx)
 {
-    // **FIXED: Removed per-frame logging that was causing severe performance issues**
-    ASSERT(ctx && m_vb && m_ib && m_indexCount > 0);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, ctx && m_vb && m_ib && m_indexCount > 0,
+                      "Mesh::Render — invalid render state");
 
     UINT stride = sizeof(Vertex), offset = 0;
     ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
@@ -561,6 +560,7 @@ void Mesh::Render(ID3D11DeviceContext* ctx)
 // Linux implementation using RHI abstraction
 // ============================================================================
 #include "Mesh.h"
+#include "../Utils/Validate.h"
 #include <iostream>
 #include <cstring>
 #include <unordered_map>

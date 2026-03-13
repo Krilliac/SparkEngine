@@ -6,6 +6,7 @@
  */
 
 #include "SceneManager.h"
+#include "Utils/Validate.h"
 #include <iostream>
 
 namespace SparkEditor
@@ -36,6 +37,9 @@ namespace SparkEditor
 
     bool SceneManager::CreateNewScene(const std::string& sceneName)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !sceneName.empty(), false);
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "Creating new scene '%s'", sceneName.c_str());
         std::cout << "Creating new scene: " << sceneName << "\n";
         m_currentScenePath = sceneName + ".scene";
         m_hasUnsavedChanges = true;
@@ -44,6 +48,9 @@ namespace SparkEditor
 
     bool SceneManager::LoadScene(const std::string& scenePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !scenePath.empty(), false);
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "Loading scene from '%s'", scenePath.c_str());
         std::cout << "Loading scene: " << scenePath << "\n";
         m_currentScenePath = scenePath;
         m_hasUnsavedChanges = false;
@@ -52,6 +59,9 @@ namespace SparkEditor
 
     bool SceneManager::SaveScene(const std::string& scenePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !scenePath.empty(), false);
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "Saving scene to '%s'", scenePath.c_str());
         std::cout << "Saving scene: " << scenePath << "\n";
         m_currentScenePath = scenePath;
         m_hasUnsavedChanges = false;

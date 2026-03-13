@@ -1,6 +1,7 @@
 #include "Core/Platform.h"
 #include "SoundEffect.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include <fstream>
 #include <cmath>
 #include <random>
@@ -22,7 +23,8 @@ SoundEffect::~SoundEffect()
 
 HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
 {
-    ASSERT_ALWAYS_MSG(!filename.empty(), "SoundEffect::LoadFromFile - empty filename");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !filename.empty(), "SoundEffect::LoadFromFile - empty filename");
 
 #ifdef SPARK_PLATFORM_WINDOWS
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
@@ -35,7 +37,7 @@ HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
         return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
 
     std::streamsize size = file.tellg();
-    ASSERT_ALWAYS_MSG(size > 0, "Zero-length WAV file");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, size > 0, "Zero-length WAV file");
     file.seekg(0, std::ios::beg);
 
     std::vector<BYTE> buffer(static_cast<size_t>(size));
@@ -47,7 +49,9 @@ HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
 
 HRESULT SoundEffect::LoadFromMemory(const BYTE* data, DWORD dataSize)
 {
-    ASSERT_ALWAYS(data && dataSize);
+    SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Audio, data);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, dataSize > 0, "LoadFromMemory called with zero dataSize");
     return ParseWAVFile(data, dataSize);
 }
 
@@ -68,7 +72,8 @@ float SoundEffect::GetDuration() const
 // ---------------------------------------------------------------------------
 HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
 {
-    ASSERT_ALWAYS(data && size >= 44); // minimum WAV header
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Audio, data);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, size >= 44, "WAV data too small for minimum header");
 
     DWORD fmtSize = 0, fmtPos = 0;
     if (FAILED(FindChunk(data, size, 0x20746d66, fmtSize, fmtPos))) // 'fmt '
@@ -91,8 +96,8 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
 
 HRESULT SoundEffect::FindChunk(const BYTE* data, DWORD dataSize, DWORD fourCC, DWORD& outSize, DWORD& outPos)
 {
-    ASSERT(dataSize > 12); // RIFF header size
-    DWORD offset = 12;     // skip RIFF + WAVE ids
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, dataSize > 12, "WAV data too small for RIFF header");
+    DWORD offset = 12; // skip RIFF + WAVE ids
 
     while (offset + 8 <= dataSize)
     {
@@ -125,7 +130,7 @@ void SoundEffectFactory::GenerateWaveform(std::vector<short>& samples, float fre
 {
     const DWORD SR = 44100;
     const DWORD count = static_cast<DWORD>(dur * SR);
-    ASSERT_ALWAYS(count);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, count > 0, "GenerateWaveform: sample count must be positive");
 
     samples.resize(count);
     for (DWORD i = 0; i < count; ++i)
@@ -139,7 +144,7 @@ void SoundEffectFactory::GenerateWaveform(std::vector<short>& samples, float fre
 
 std::unique_ptr<SoundEffect> SoundEffectFactory::CreateFromSamples(const std::vector<short>& samples, DWORD SR)
 {
-    ASSERT_ALWAYS(!samples.empty());
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !samples.empty(), "CreateFromSamples: samples must not be empty");
 
     auto se = std::make_unique<SoundEffect>();
 

@@ -8,6 +8,7 @@
 #include "ParallelPerception.h"
 #include "../ECS/Components.h"
 #include "AISystem.h"
+#include "../../Utils/Validate.h"
 
 #include <cmath>
 #include <algorithm>
@@ -22,6 +23,9 @@ namespace Spark::AI
     void ParallelPerceptionSystem::Initialize(const DirectX::XMFLOAT3& worldMin, const DirectX::XMFLOAT3& worldMax,
                                               int octreeMaxDepth)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "ParallelPerceptionSystem::Initialize (octreeMaxDepth=%d).",
+                       octreeMaxDepth);
         m_worldMin = worldMin;
         m_worldMax = worldMax;
         m_octreeMaxDepth = octreeMaxDepth;
@@ -38,8 +42,10 @@ namespace Spark::AI
 
     void ParallelPerceptionSystem::RebuildSpatialIndex(World& world)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         if (!m_initialized)
         {
+            SPARK_WARN_IF(Spark::LogCategory::AI, true, "RebuildSpatialIndex called before Initialize");
             return;
         }
 
@@ -272,6 +278,7 @@ namespace Spark::AI
 
     void ParallelPerceptionSystem::UpdateAllAgents(World& world, float currentTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         if (!m_initialized)
         {
             return;

@@ -8,6 +8,7 @@
 
 #include "EngineContext.h"
 #include "Spark/Version.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <memory>
@@ -158,10 +159,14 @@ bool EngineContext::TopologicalSort(std::vector<SubsystemEntry*>& sorted)
 
 bool EngineContext::InitializeAll()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineContext::InitializeAll — %zu subsystems registered",
+                   m_subsystemEntries.size());
+
     std::vector<SubsystemEntry*> sorted;
     if (!TopologicalSort(sorted))
     {
-        // Dependency cycle detected
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext: dependency cycle detected in subsystem graph");
         return false;
     }
 
@@ -171,8 +176,11 @@ bool EngineContext::InitializeAll()
     {
         if (entry->initFn)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "EngineContext: initializing subsystem (type=%p)", entry->type);
             if (!entry->initFn())
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext: subsystem initialization failed (type=%p)",
+                                entry->type);
                 return false;
             }
         }
@@ -180,11 +188,17 @@ bool EngineContext::InitializeAll()
         m_initOrder.push_back(entry->type);
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineContext::InitializeAll — all %zu subsystems initialized",
+                   m_initOrder.size());
     return true;
 }
 
 void EngineContext::ShutdownAll()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineContext::ShutdownAll — shutting down %zu subsystems",
+                   m_initOrder.size());
+
     // Shut down in reverse initialization order
     for (auto it = m_initOrder.rbegin(); it != m_initOrder.rend(); ++it)
     {

@@ -1,4 +1,5 @@
 #include "Core/Platform.h"
+#include "Validate.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -18,6 +19,7 @@ ID3D11DeviceContext* g_D3DContext = nullptr;
 static GraphicsEngine* GetGraphicsFromContext()
 {
     auto* ctx = EngineContext::Get();
+    SPARK_WARN_IF_NULL(Spark::LogCategory::Graphics, ctx);
     return ctx ? ctx->GetGraphics() : nullptr;
 }
 

@@ -8,6 +8,7 @@
 #include "Physics2DPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
 #include <algorithm>
@@ -27,6 +28,7 @@ namespace SparkEditor
 
     bool Physics2DPanel::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
         std::cout << "Initializing Physics 2D panel\n";
         return true;
     }

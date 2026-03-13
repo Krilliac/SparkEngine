@@ -4,6 +4,7 @@
  */
 
 #include "UISystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <sstream>
@@ -342,11 +343,17 @@ namespace Spark::UI
 
     void UISystem::Initialize(int screenWidth, int screenHeight)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "UISystem initializing with resolution %dx%d", screenWidth,
+                       screenHeight);
+        SPARK_WARN_IF(Spark::LogCategory::Core, screenWidth <= 0 || screenHeight <= 0,
+                      "UISystem initialized with non-positive screen dimensions");
         m_canvas.Initialize(screenWidth, screenHeight);
     }
 
     void UISystem::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         if (m_visible)
         {
             m_canvas.Update(deltaTime);
@@ -363,6 +370,7 @@ namespace Spark::UI
 
     void UISystem::OnResize(int width, int height)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "UISystem resizing to %dx%d", width, height);
         m_canvas.Resize(width, height);
     }
 

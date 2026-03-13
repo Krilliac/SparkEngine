@@ -4,6 +4,7 @@
  */
 
 #include "ReplaySystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <fstream>
@@ -16,6 +17,8 @@ namespace Spark
 
     void ReplaySystem::StartRecording()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Starting replay recording");
         std::lock_guard<std::mutex> lock(m_mutex);
         m_isRecording = true;
         m_recordTimer = 0.0f;
@@ -27,6 +30,8 @@ namespace Spark
 
     void ReplaySystem::StopRecording()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Stopping replay recording");
         std::lock_guard<std::mutex> lock(m_mutex);
         m_isRecording = false;
         if (!m_replayData.frames.empty())
@@ -70,6 +75,8 @@ namespace Spark
 
     void ReplaySystem::StartPlayback()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Starting replay playback");
         std::lock_guard<std::mutex> lock(m_mutex);
         m_playbackState = PlaybackState::Playing;
         m_playbackTime = 0.0f;
@@ -93,6 +100,8 @@ namespace Spark
 
     void ReplaySystem::StopPlayback()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Stopping replay playback");
         std::lock_guard<std::mutex> lock(m_mutex);
         m_playbackState = PlaybackState::Stopped;
         m_playbackTime = 0.0f;
@@ -101,6 +110,7 @@ namespace Spark
 
     void ReplaySystem::UpdatePlayback(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         std::lock_guard<std::mutex> lock(m_mutex);
         if (m_playbackState != PlaybackState::Playing)
         {
@@ -161,6 +171,9 @@ namespace Spark
 
     void ReplaySystem::StartKillCam(float rewindSeconds, uint32_t focusEntity)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_WARN_IF(Spark::LogCategory::Game, rewindSeconds <= 0.0f,
+                      "StartKillCam called with non-positive rewindSeconds");
         m_killCamActive = true;
         m_killCamFocusEntity = focusEntity;
         m_killCamStartTime = m_replayData.duration - rewindSeconds;
@@ -182,6 +195,8 @@ namespace Spark
 
     bool ReplaySystem::SaveToFile(const std::string& filePath) const
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Saving replay to '%s'", filePath.c_str());
         std::lock_guard<std::mutex> lock(m_mutex);
         std::ofstream file(filePath, std::ios::binary);
         if (!file.is_open())
@@ -240,6 +255,8 @@ namespace Spark
 
     bool ReplaySystem::LoadFromFile(const std::string& filePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Loading replay from '%s'", filePath.c_str());
         // Safety limits for deserialization to prevent OOM from malicious/corrupt files
         constexpr uint32_t kMaxStringLength = 4096;
         constexpr uint32_t kMaxFrameCount = 1'000'000;

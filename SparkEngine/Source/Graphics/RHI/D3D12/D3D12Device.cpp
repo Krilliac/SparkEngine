@@ -14,6 +14,7 @@
 #include "D3D12Device.h"
 #include "../RHIFactory.h"
 #include "../../../Utils/LogMacros.h"
+#include "../../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cassert>
@@ -573,6 +574,8 @@ namespace Spark
 
             bool D3D12Device::Initialize(const RHIDeviceDesc& desc)
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12Device::Initialize starting");
                 m_debugEnabled = desc.enableDebugLayer;
                 if (!CreateDevice(desc))
                     return false;
@@ -595,6 +598,8 @@ namespace Spark
 
             void D3D12Device::Shutdown()
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12Device::Shutdown");
                 WaitForIdle();
                 ProcessDeferredReleases();
                 m_immediateCommandList.reset();

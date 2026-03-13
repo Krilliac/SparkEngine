@@ -5,6 +5,7 @@
  */
 
 #include "MusicManager.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
 #include <algorithm>
@@ -194,6 +195,8 @@ namespace Spark::Audio
 
     void MusicManager::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "MusicManager::Initialize");
         m_isPlaying = false;
         m_isPaused = false;
         m_isCrossfading = false;
@@ -211,6 +214,8 @@ namespace Spark::Audio
 
     void MusicManager::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "MusicManager::Shutdown");
         Stop(0.0f);
         m_tracks.clear();
         m_playlists.clear();
@@ -235,6 +240,8 @@ namespace Spark::Audio
 
     void MusicManager::Play(const std::string& trackName, float fadeInDuration)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, trackName);
         if (m_tracks.find(trackName) == m_tracks.end())
             return;
 
@@ -250,6 +257,7 @@ namespace Spark::Audio
 
     void MusicManager::Stop(float fadeOutDuration)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
         if (fadeOutDuration > 0.0f)
         {
             AudioMixer::GetInstance().FadeBus(AudioBus::Music, 0.0f, fadeOutDuration);
@@ -269,6 +277,8 @@ namespace Spark::Audio
 
     void MusicManager::CrossfadeTo(const std::string& trackName, float duration)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, trackName);
         if (m_tracks.find(trackName) == m_tracks.end())
             return;
         if (trackName == m_currentTrack)
@@ -287,6 +297,8 @@ namespace Spark::Audio
 
     void MusicManager::PlayPlaylist(const std::string& playlistName)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, playlistName);
         auto it = m_playlists.find(playlistName);
         if (it == m_playlists.end())
             return;

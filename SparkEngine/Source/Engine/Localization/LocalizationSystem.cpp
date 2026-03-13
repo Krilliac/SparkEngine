@@ -4,6 +4,7 @@
  */
 
 #include "LocalizationSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <fstream>
 #include <sstream>
@@ -89,6 +90,9 @@ namespace Spark
 
     bool LocalizationSystem::LoadLanguage(const std::string& languageCode, const std::string& filePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading language '%s' from '%s'", languageCode.c_str(),
+                       filePath.c_str());
         std::lock_guard<std::mutex> lock(m_mutex);
         StringTable table;
         if (!table.LoadFromFile(filePath))
@@ -101,6 +105,8 @@ namespace Spark
 
     bool LocalizationSystem::SetCurrentLanguage(const std::string& languageCode)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Setting current language to '%s'", languageCode.c_str());
         // Copy callbacks under the lock, then invoke outside to prevent deadlocks
         // if callbacks call back into LocalizationSystem.
         std::vector<std::function<void(const std::string&)>> callbacks;

@@ -8,6 +8,7 @@
 
 #include "PhysicsSystem.h"
 #include "Utils/Assert.h"
+#include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 
 #include <btBulletDynamicsCommon.h>
@@ -709,6 +710,8 @@ PhysicsSystem::~PhysicsSystem()
 
 HRESULT PhysicsSystem::Initialize()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "PhysicsSystem initializing (Bullet Physics)");
     // Initialize default material
     m_defaultMaterial.friction = 0.5f;
     m_defaultMaterial.restitution = 0.1f;
@@ -737,9 +740,12 @@ HRESULT PhysicsSystem::Initialize()
 
 void PhysicsSystem::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
     // Guard against double shutdown (destructor also calls Shutdown)
     if (!m_dynamicsWorld && m_bodies.empty() && m_constraints.empty())
         return;
+
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "PhysicsSystem shutting down");
 
     // Remove all constraints from the world first
     if (m_dynamicsWorld)
@@ -796,6 +802,9 @@ void PhysicsSystem::Shutdown()
 
 void PhysicsSystem::Update(float deltaTime)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+    SPARK_WARN_IF(Spark::LogCategory::Physics, deltaTime < 0.0f,
+                  "PhysicsSystem::Update called with negative deltaTime");
     if (m_paused || deltaTime <= 0.0f)
     {
         return;
@@ -1009,8 +1018,8 @@ XMFLOAT3 PhysicsSystem::GetGravity() const
 
 std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& desc)
 {
-    if (!m_dynamicsWorld)
-        return nullptr;
+    SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Physics, m_dynamicsWorld, nullptr);
 
     // Create collision shape
     btCollisionShape* shape = CreateCollisionShape(desc.shape);
