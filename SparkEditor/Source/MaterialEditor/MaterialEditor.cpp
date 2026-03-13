@@ -435,14 +435,16 @@ namespace SparkEditor
         {
             ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Compiled");
 
+#ifdef _WIN32
             RenderPreviewToTexture();
 
             if (m_previewSRV)
             {
-                ImGui::Image(static_cast<ImTextureID>(m_previewSRV.Get()),
+                ImGui::Image(reinterpret_cast<ImTextureID>(m_previewSRV.Get()),
                              ImVec2(m_previewHeight - 60.0f, m_previewHeight - 60.0f));
             }
             else
+#endif
             {
                 ImGui::TextDisabled("Preview texture not available");
             }
