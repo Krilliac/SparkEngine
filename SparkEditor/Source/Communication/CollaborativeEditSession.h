@@ -53,7 +53,6 @@
 #else
 #include "Core/Platform.h"
 #endif
-using namespace DirectX;
 
 namespace SparkEditor
 {
@@ -72,9 +71,9 @@ namespace SparkEditor
     {
         PeerID id = INVALID_PEER;
         std::string userName;
-        std::string selectedNode;               ///< Currently selected scene node
-        XMFLOAT3 viewportCameraPos = {0, 0, 0}; ///< Peer's viewport camera position
-        XMFLOAT3 viewportCameraDir = {0, 0, 1}; ///< Peer's viewport camera direction
+        std::string selectedNode;                        ///< Currently selected scene node
+        DirectX::XMFLOAT3 viewportCameraPos = {0, 0, 0}; ///< Peer's viewport camera position
+        DirectX::XMFLOAT3 viewportCameraDir = {0, 0, 1}; ///< Peer's viewport camera direction
         float lastActivityTime = 0.0f;
         bool isActive = true;
 
@@ -260,7 +259,7 @@ namespace SparkEditor
         /**
          * @brief Update the local editor's viewport camera (broadcast to peers)
          */
-        void SetLocalViewportCamera(const XMFLOAT3& position, const XMFLOAT3& direction);
+        void SetLocalViewportCamera(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& direction);
 
         // -- Node Locking --
 

@@ -212,7 +212,8 @@ namespace SparkEditor
         SPARK_LOG_INFO("CollabEdit", "Local selection changed to '%s' (PeerID=%u).", nodeId.c_str(), m_localPeerID);
     }
 
-    void CollaborativeEditSession::SetLocalViewportCamera(const XMFLOAT3& position, const XMFLOAT3& direction)
+    void CollaborativeEditSession::SetLocalViewportCamera(const DirectX::XMFLOAT3& position,
+                                                          const DirectX::XMFLOAT3& direction)
     {
         std::lock_guard<std::mutex> lock(m_peerMutex);
         auto it = m_peers.find(m_localPeerID);
