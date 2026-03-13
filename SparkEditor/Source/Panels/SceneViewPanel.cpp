@@ -19,7 +19,7 @@ namespace SparkEditor
 
     bool SceneViewPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Scene View panel\n";
         return true;
     }
@@ -31,7 +31,7 @@ namespace SparkEditor
 
     void SceneViewPanel::Render()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!IsVisible())
             return;
 

@@ -27,7 +27,7 @@ namespace SparkEditor
 
     bool GameViewPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Game View panel with full FPS HUD\n";
 
         // Pre-populate scoreboard for preview

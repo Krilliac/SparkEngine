@@ -28,7 +28,7 @@ namespace SparkEditor
 
     bool Physics2DPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Physics);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
         std::cout << "Initializing Physics 2D panel\n";
         return true;
     }

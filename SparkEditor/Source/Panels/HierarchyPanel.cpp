@@ -29,7 +29,7 @@ namespace SparkEditor
 
     bool HierarchyPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Hierarchy panel\n";
         return true;
     }
@@ -45,7 +45,7 @@ namespace SparkEditor
 
     void HierarchyPanel::Render()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!IsVisible())
             return;
 

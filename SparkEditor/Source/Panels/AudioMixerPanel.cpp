@@ -60,7 +60,7 @@ namespace SparkEditor
 
     bool AudioMixerPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Audio);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
         if (m_isInitialized)
         {
             return true;

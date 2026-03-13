@@ -22,7 +22,7 @@ namespace SparkEditor
 
     bool BuildCookPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Build & Cook panel\n";
         ApplyProfileDefaults(BuildProfile::Development);
         return true;
@@ -40,7 +40,7 @@ namespace SparkEditor
                 m_isBuildRunning = false;
                 m_buildStatus = "Build Complete";
                 m_buildLog.push_back({"Build completed successfully!", "info"});
-                SPARK_LOG_INFO(LogCategory::Editor, "Build completed successfully");
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build completed successfully");
             }
         }
     }
@@ -365,7 +365,7 @@ namespace SparkEditor
             ImGui::BeginDisabled();
         if (ImGui::Button(ICON_FA_HAMMER " Build", btnSize))
         {
-            SPARK_LOG_INFO(LogCategory::Editor, "Build started");
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build started");
             m_isBuildRunning = true;
             m_buildProgress = 0.0f;
             m_buildStatus = "Building...";

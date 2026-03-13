@@ -22,7 +22,7 @@ namespace SparkEditor
 
     bool DebugVisualizerPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Debug Visualizer panel\n";
         return true;
     }

@@ -30,7 +30,7 @@ namespace SparkEditor
 
     bool DedicatedServerPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Dedicated Server panel\n";
         return true;
     }

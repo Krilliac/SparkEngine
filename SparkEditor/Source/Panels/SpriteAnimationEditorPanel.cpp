@@ -25,7 +25,7 @@ namespace SparkEditor
 
     bool SpriteAnimationEditorPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Sprite Animation Editor panel\n";
         return true;
     }

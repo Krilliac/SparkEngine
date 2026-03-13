@@ -19,7 +19,7 @@ namespace SparkEditor
 
     bool SearchPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         InitializeSampleData();
         m_isInitialized = true;
         return true;

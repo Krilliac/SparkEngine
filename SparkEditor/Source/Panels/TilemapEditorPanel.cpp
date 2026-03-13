@@ -23,7 +23,7 @@ namespace SparkEditor
 
     bool TilemapEditorPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Tilemap Editor panel\n";
         return true;
     }

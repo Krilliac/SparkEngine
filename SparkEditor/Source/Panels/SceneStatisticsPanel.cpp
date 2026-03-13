@@ -20,7 +20,7 @@ namespace SparkEditor
 
     bool SceneStatisticsPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         m_fpsHistory.fill(0.0f);
         m_frameTimeHistory.fill(0.0f);
         m_drawCallHistory.fill(0.0f);

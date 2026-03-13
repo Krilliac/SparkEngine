@@ -25,7 +25,7 @@ namespace SparkEditor
 
     bool PlayModeToolbarPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Play Mode Toolbar panel\n";
 
         SetIcon(ICON_FA_PLAY);

@@ -20,7 +20,7 @@ namespace SparkEditor
 
     bool UndoHistoryPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         m_isInitialized = true;
         return true;
     }

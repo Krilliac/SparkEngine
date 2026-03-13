@@ -25,7 +25,7 @@ namespace SparkEditor
 
     bool SimpleHierarchyPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Simple Hierarchy panel\n";
 
         // Add some default objects

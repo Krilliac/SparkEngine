@@ -221,7 +221,7 @@ namespace SparkEditor
 
     bool RuntimeInspectorPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Runtime Inspector panel\n";
         m_isInitialized = true;
         return true;

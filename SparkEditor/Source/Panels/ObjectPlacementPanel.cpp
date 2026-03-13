@@ -22,7 +22,7 @@ namespace SparkEditor
 
     bool ObjectPlacementPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Object Placement panel\n";
 
         // Populate built-in prefab library

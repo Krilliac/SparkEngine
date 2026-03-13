@@ -150,7 +150,7 @@ namespace SparkEditor
 
     bool PerformanceProfilerPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Performance Profiler panel\n";
         ClearData();
         m_isInitialized = true;

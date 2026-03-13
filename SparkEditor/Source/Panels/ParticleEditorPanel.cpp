@@ -35,7 +35,7 @@ namespace SparkEditor
 
     bool ParticleEditorPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Particle Editor panel\n";
         InitializePresets();
         NewEffect();

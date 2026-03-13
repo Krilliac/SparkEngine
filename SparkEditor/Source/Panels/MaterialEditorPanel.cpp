@@ -26,7 +26,7 @@ namespace SparkEditor
 
     bool MaterialEditorPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Material Editor panel\n";
 
         SetIcon(ICON_FA_PALETTE);

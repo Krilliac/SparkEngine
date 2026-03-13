@@ -74,7 +74,7 @@ namespace SparkEditor
 
     bool ConsolePanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (m_isInitialized)
         {
             return true;
@@ -111,7 +111,7 @@ namespace SparkEditor
 
     void ConsolePanel::Render()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!BeginPanel())
         {
             EndPanel();

@@ -35,7 +35,7 @@ namespace SparkEditor
 
     bool DialogueEditorPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Dialogue Editor panel\n";
         NewDialogue();
         m_isInitialized = true;

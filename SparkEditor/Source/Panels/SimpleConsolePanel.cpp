@@ -44,7 +44,7 @@ namespace SparkEditor
 
     bool SimpleConsolePanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Enhanced Console panel with SparkConsole integration\n";
 
         // Initialize SparkConsole system

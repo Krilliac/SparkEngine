@@ -40,7 +40,7 @@ namespace SparkEditor
 
     bool AssetDependencyPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Asset Dependency panel\n";
         m_filter = DependencyFilter{};
         m_graphOffset = ImVec2(0.0f, 0.0f);

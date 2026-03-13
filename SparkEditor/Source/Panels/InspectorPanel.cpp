@@ -25,7 +25,7 @@ namespace SparkEditor
 
     bool InspectorPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Inspector panel\n";
         return true;
     }

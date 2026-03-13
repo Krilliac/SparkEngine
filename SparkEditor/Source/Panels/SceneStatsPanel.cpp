@@ -31,7 +31,7 @@ namespace SparkEditor
 
     bool SceneStatsPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Scene Stats panel\n";
         return true;
     }

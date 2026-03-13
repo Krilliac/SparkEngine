@@ -21,7 +21,7 @@ namespace SparkEditor
 
     bool WeaponEditorPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Weapon Editor panel\n";
 
         // Populate with default weapon data

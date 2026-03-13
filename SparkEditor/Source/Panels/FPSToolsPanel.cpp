@@ -20,7 +20,7 @@ namespace SparkEditor
 
     bool FPSToolsPanel::Initialize()
     {
-        SPARK_TRACE_ENTER(LogCategory::Editor);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing FPS Tools panel\n";
 
         // Default spawn points
