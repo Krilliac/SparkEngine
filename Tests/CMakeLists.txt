@@ -70,6 +70,9 @@ add_executable(SparkTests
     TestAnimationRetargeting.cpp
     TestDedicatedServer.cpp
     TestSplineMath.cpp
+    TestPhysicsInterpolation.cpp
+    TestCameraInterpolation.cpp
+    TestNetworkInterpolation.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

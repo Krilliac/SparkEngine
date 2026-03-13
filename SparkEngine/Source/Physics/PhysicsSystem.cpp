@@ -199,6 +199,13 @@ size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc)
 
 PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, btRigidBody* bulletBody) : m_desc(desc), m_bulletBody(bulletBody)
 {
+    // Initialize interpolation state from the initial position
+    m_previousPosition = desc.position;
+    m_currentPosition = desc.position;
+    // Convert initial Euler rotation to quaternion for interpolation
+    XMVECTOR quat = XMQuaternionRotationRollPitchYaw(desc.rotation.x, desc.rotation.y, desc.rotation.z);
+    XMStoreFloat4(&m_previousRotation, quat);
+    XMStoreFloat4(&m_currentRotation, quat);
 }
 
 PhysicsBody::~PhysicsBody()
@@ -343,6 +350,67 @@ void PhysicsBody::SetTransform(const XMMATRIX& transform)
     }
 
     m_bulletBody->activate();
+}
+
+// ============================================================================
+// PHYSICS BODY INTERPOLATION
+// ============================================================================
+
+XMFLOAT3 PhysicsBody::GetInterpolatedPosition(float alpha) const
+{
+    XMVECTOR prev = XMLoadFloat3(&m_previousPosition);
+    XMVECTOR curr = XMLoadFloat3(&m_currentPosition);
+    XMFLOAT3 result;
+    XMStoreFloat3(&result, XMVectorLerp(prev, curr, alpha));
+    return result;
+}
+
+XMMATRIX PhysicsBody::GetInterpolatedTransform(float alpha) const
+{
+    // Lerp position
+    XMVECTOR prevPos = XMLoadFloat3(&m_previousPosition);
+    XMVECTOR currPos = XMLoadFloat3(&m_currentPosition);
+    XMVECTOR interpPos = XMVectorLerp(prevPos, currPos, alpha);
+
+    // Slerp rotation
+    XMVECTOR prevRot = XMLoadFloat4(&m_previousRotation);
+    XMVECTOR currRot = XMLoadFloat4(&m_currentRotation);
+    XMVECTOR interpRot = XMQuaternionSlerp(prevRot, currRot, alpha);
+
+    XMMATRIX rotMatrix = XMMatrixRotationQuaternion(interpRot);
+    XMFLOAT3 pos;
+    XMStoreFloat3(&pos, interpPos);
+    XMMATRIX transMatrix = XMMatrixTranslation(pos.x, pos.y, pos.z);
+
+    return rotMatrix * transMatrix;
+}
+
+void PhysicsBody::StoreCurrentState()
+{
+    m_previousPosition = m_currentPosition;
+    m_previousRotation = m_currentRotation;
+}
+
+void PhysicsBody::UpdateCurrentState()
+{
+    if (!m_bulletBody)
+        return;
+
+    btTransform transform;
+    if (m_bulletBody->getMotionState())
+    {
+        m_bulletBody->getMotionState()->getWorldTransform(transform);
+    }
+    else
+    {
+        transform = m_bulletBody->getWorldTransform();
+    }
+
+    const btVector3& origin = transform.getOrigin();
+    m_currentPosition = XMFLOAT3(origin.getX(), origin.getY(), origin.getZ());
+
+    const btQuaternion& rot = transform.getRotation();
+    m_currentRotation = XMFLOAT4(rot.getX(), rot.getY(), rot.getZ(), rot.getW());
 }
 
 XMFLOAT3 PhysicsBody::GetLinearVelocity() const
@@ -737,7 +805,43 @@ void PhysicsSystem::Update(float deltaTime)
 
     if (m_dynamicsWorld)
     {
-        m_dynamicsWorld->stepSimulation(deltaTime, m_maxSubsteps, m_timeStep);
+        if (m_interpolationEnabled)
+        {
+            // Fixed-timestep accumulator with interpolation
+            m_accumulator += deltaTime;
+
+            while (m_accumulator >= m_timeStep)
+            {
+                // Snapshot current state as previous before stepping
+                for (auto& body : m_bodies)
+                {
+                    if (body)
+                    {
+                        body->StoreCurrentState();
+                    }
+                }
+
+                m_dynamicsWorld->stepSimulation(m_timeStep, 1, m_timeStep);
+
+                // Read back new state from Bullet
+                for (auto& body : m_bodies)
+                {
+                    if (body)
+                    {
+                        body->UpdateCurrentState();
+                    }
+                }
+
+                m_accumulator -= m_timeStep;
+            }
+
+            m_interpolationAlpha = (m_timeStep > 0.0f) ? m_accumulator / m_timeStep : 1.0f;
+        }
+        else
+        {
+            // Legacy behavior: pass deltaTime directly to Bullet
+            m_dynamicsWorld->stepSimulation(deltaTime, m_maxSubsteps, m_timeStep);
+        }
     }
 
     ProcessCollisions();
