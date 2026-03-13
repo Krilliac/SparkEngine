@@ -16,7 +16,7 @@
 #include "Graphics/TextureSystem.h"
 #include "Graphics/MaterialSystem.h"
 #include "Graphics/LightingSystem.h"
-#include "Graphics/PostProcessingSystem.h"
+#include "Graphics/PostProcessingPipeline.h"
 #include "Graphics/AssetPipeline.h"
 #include "Physics/PhysicsSystem.h"
 #include "Core/EngineContext.h"
@@ -165,7 +165,7 @@ namespace SparkConsole
             "pp_list",
             [graphics](const std::vector<std::string>&) -> std::string
             {
-                if (auto postProcessing = graphics->GetPostProcessingSystem())
+                if (auto postProcessing = graphics->GetPostProcessingPipeline())
                 {
                     return postProcessing->Console_ListEffects();
                 }
@@ -179,7 +179,7 @@ namespace SparkConsole
             {
                 if (args.size() < 2)
                     return "Usage: exposure <value>";
-                if (auto postProcessing = graphics->GetPostProcessingSystem())
+                if (auto postProcessing = graphics->GetPostProcessingPipeline())
                 {
                     postProcessing->Console_SetExposure(std::stof(args[1]));
                     return "Exposure set to: " + args[1];

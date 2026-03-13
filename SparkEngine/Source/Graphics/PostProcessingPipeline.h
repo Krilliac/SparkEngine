@@ -414,6 +414,8 @@ namespace Spark::Graphics
             return result;
         }
 
+        void Console_SetExposure(float value) { m_lightShaftSettings.exposure = value; }
+
         /** @brief Set the D3D11 device and context for GPU execution */
         void SetDevice(ID3D11Device* device, ID3D11DeviceContext* context)
         {

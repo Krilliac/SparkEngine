@@ -540,7 +540,6 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `PhysicsSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `PhysicsSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
 | `PhysicsUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
-| `PostProcessingSystem` | `SparkEngine/Source/Graphics/PostProcessingSystem.h` |
 | `ProjectileSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `RagdollSystem` | `SparkEngine/Source/Engine/Animation/RagdollSystem.h` |
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
