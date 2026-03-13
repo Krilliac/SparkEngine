@@ -49,6 +49,10 @@ The networking subsystem is composed of several layered modules that work togeth
 | `NetworkEncryption.h` | Per-connection session keys, HMAC integrity, replay protection, rate limiting |
 | `NetworkIntegration.h` | `NetworkStack` -- combines transport + security into unified stack |
 | `DedicatedServer.h` | Headless server: tick loop, RCON, map rotation, LAN broadcast |
+| `AreaServer.h` | Per-area server process for scalable multiplayer worlds |
+| `WorldServer.h` | Central coordinator for area-based multiplayer architecture |
+
+> **Area Server Architecture** — For MMO-scale multiplayer with multiple area servers coordinated by a WorldServer, see [Area Server Architecture](Area-Server-Architecture).
 
 ### Namespace
 

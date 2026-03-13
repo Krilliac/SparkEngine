@@ -8,7 +8,7 @@
 [![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/loc.json)](https://github.com/Krilliac/SparkEngine)
 [![Source Files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/files.json)](https://github.com/Krilliac/SparkEngine)
 
-**Spark Engine** is a free, open-source 3D game engine written in C++20. It is designed for first-person shooters and other 3D games, with built-in support for DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Cross-platform (Windows and Linux), modular, and MIT-licensed.
+**Spark Engine** is a free, open-source 3D game engine written in C++20. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Built-in support for DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
 
 > **Early Development** — SparkEngine is under active development. Systems are being built out and stabilized. Expect rough edges.
 
@@ -17,6 +17,9 @@
 ### Why Spark Engine?
 
 - **Complete game engine** — rendering, physics, audio, AI, animation, networking, scripting, and editor all in one package
+- **General-purpose** — FPS, RPG, MMO, battle royale, open-world — build any genre with one engine
+- **Scalable multiplayer** — from single-player to MMO-scale via area-based server architecture
+- **Large world support** — seamless area streaming and floating-point origin rebasing for worlds of any size
 - **Truly open-source** — MIT license, no royalties, no strings attached
 - **Built for learning and modding** — clean C++20 codebase with 30+ toggleable CMake modules
 - **Ready-to-download binaries** — pre-built Windows and Linux binaries on every commit
@@ -70,15 +73,15 @@ Skeletal animation with bone hierarchies, keyframe clips, state machines with cr
 
 > **Status: Experimental — disabled by default** (`ENABLE_NETWORKING=OFF`). See [Networking Configuration](#networking-configuration) below.
 
-UDP client/server architecture with entity replication, client-side prediction with server reconciliation, lag compensation (hitbox rewinding with 1-second history), reliable/unreliable/ordered message channels, and network statistics (ping, jitter, packet loss, bandwidth).
+UDP client/server architecture with entity replication, client-side prediction with server reconciliation, lag compensation (hitbox rewinding with 1-second history), reliable/unreliable/ordered message channels, and network statistics (ping, jitter, packet loss, bandwidth). Area-based server architecture (inspired by HeroEngine) with WorldServer coordination, per-area AreaServer instances, cross-area entity migration, dynamic load balancing, and player session management across area transitions — enabling MMO-scale multiplayer worlds.
 
 ### Scripting
 
-AngelScript with Unity-style hot-reload, lifecycle callbacks (Start, Update, OnCollision), full engine API bindings (math, components, input, entities), per-file module isolation, and runtime error reporting.
+AngelScript with Unity-style hot-reload (file watcher with debouncing and state preservation), lifecycle callbacks (Start, Update, OnCollision), full engine API bindings (math, components, input, entities), per-file module isolation, client/server script context separation for multiplayer, and runtime error reporting.
 
 ### Editor
 
-ImGui-powered visual editor with scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor, visual scripting, terrain editing, weapon editor, profiler, version control integration, build/deployment system, level streaming, docking, and theming.
+ImGui-powered visual editor with scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor, visual scripting, terrain editing, weapon editor, profiler, version control integration, build/deployment system, level streaming, collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness), docking, and theming.
 
 ### Procedural Generation
 
@@ -209,14 +212,20 @@ Standalone debug console application that communicates with SparkEngine via name
 |    Gameplay       |    AI & Nav       |    Networking     |
 |                   |                   |                   |
 |  PlayerController |  BehaviorTree     |  UDP Client/Srv   |
-|  WeaponSystem     |  NavMesh (A*)     |  Prediction       |
-|  VehicleSystem    |  Perception       |  Lag Compensation |
+|  WeaponSystem     |  NavMesh (A*)     |  AreaServer       |
+|  VehicleSystem    |  Perception       |  WorldServer      |
 +-------------------+-------------------+-------------------+
-|    Procedural     |    Animation      |    Utilities      |
+|    Procedural     |    Animation      |  Large Worlds     |
 |                   |                   |                   |
-|  Noise (Perlin+)  |  Skeletal Anim    |  CrashHandler     |
-|  Erosion / WFC    |  IK / Blending    |  Console (200+)   |
-|  Mesh Generation  |  State Machines   |  Profiler / Debug |
+|  Noise (Perlin+)  |  Skeletal Anim    |  Origin Rebasing  |
+|  Erosion / WFC    |  IK / Blending    |  Seamless Areas   |
+|  Mesh Generation  |  State Machines   |  Scene Streaming  |
++-------------------+-------------------+-------------------+
+|   Collaboration   |                   |    Utilities      |
+|                   |                   |                   |
+|  Multi-User Edit  |                   |  CrashHandler     |
+|  Node Locking     |                   |  Console (200+)   |
+|  Edit Broadcast   |                   |  Profiler / Debug |
 +-------------------+-------------------+-------------------+
 ```
 
@@ -234,10 +243,12 @@ SparkEngine/
 |       |   |-- AI/          # Behavior trees, NavMesh, perception, steering
 |       |   |-- Animation/   # Skeletal animation, IK, state machines
 |       |   |-- ECS/         # Entity component system (EnTT)
-|       |   |-- Networking/  # UDP multiplayer, replication, lag compensation
+|       |   |-- Networking/  # UDP multiplayer, replication, AreaServer, WorldServer
 |       |   |-- Procedural/  # Noise, erosion, mesh generation, WFC
 |       |   |-- SaveSystem/  # Serialization, compression, save slots
 |       |   |-- Scripting/   # AngelScript VM, hot-reload, API bindings
+|       |   |-- Streaming/   # SeamlessAreaManager, SceneTransitionManager
+|       |   |-- World/       # WorldOriginSystem (floating-point origin rebasing)
 |       |-- Enums/           # Shared enumerations
 |       |-- Game/            # Player, weapons, vehicles, HUD, terrain, inventory
 |       |-- Graphics/        # DX11 renderer, PBR, post-processing, particles, RHI
@@ -445,6 +456,10 @@ cmake -B build -DENABLE_NETWORKING=ON
 | **Lag compensation** | Hitbox rewinding with 1-second history |
 | **Message channels** | Unreliable, Reliable, ReliableOrdered |
 | **Statistics** | Ping, jitter, packet loss, bandwidth |
+| **Area servers** | Per-area server instances coordinated by a WorldServer |
+| **Entity migration** | Cross-area entity serialization and transfer |
+| **Load balancing** | Dynamic area reassignment across machines |
+| **Player sessions** | Session management across area transitions |
 
 ### Platform support
 

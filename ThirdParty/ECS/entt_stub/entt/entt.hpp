@@ -241,6 +241,13 @@ namespace entt
     class registry
     {
       public:
+        /** Check if an entity handle is valid (exists in the registry). */
+        bool valid(entity e) const
+        {
+            const auto& alive = m_entities.m_alive;
+            return std::find(alive.begin(), alive.end(), e) != alive.end();
+        }
+
         /** Create a new entity. */
         entity create() { return m_entities.create(); }
 

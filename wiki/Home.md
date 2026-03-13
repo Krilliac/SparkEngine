@@ -1,6 +1,6 @@
 # Spark Engine
 
-**Spark Engine** is a free, open-source 3D game engine written in C++20. Designed for first-person shooters and other 3D games, it ships with DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an EnTT-based ECS architecture, and an ImGui visual editor.
+**Spark Engine** is a free, open-source 3D game engine written in C++20. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an EnTT-based ECS architecture, an ImGui visual editor, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
 
 > **Early Development** — SparkEngine is under active development. Expect rough edges.
 
@@ -54,7 +54,10 @@ Pre-built binaries are published on every commit to `master`:
 - [2D Systems](2D-Systems) — 2D physics, sprite batching, and rendering
 - [Networking](Networking) — Multiplayer networking
 - [Dedicated Server](Dedicated-Server) — Headless dedicated server
+- [Area Server Architecture](Area-Server-Architecture) — Scalable MMO-style area servers
 - [Scene Management](Scene-Management) — Scenes, hierarchy, and prefabs
+- [Large World Support](Large-World-Support) — Origin rebasing and seamless area streaming
+- [Collaborative Editing](Collaborative-Editing) — Multi-user editor sessions
 - [Coroutine System](Coroutine-System) — C++20 coroutines and scheduling
 - [Event System](Event-System) — Publish/subscribe event bus
 - [Job System](Job-System) — Thread pool and parallel task execution
@@ -120,12 +123,12 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 <!-- AUTO:stats -->
 | Metric | Count |
 |--------|-------|
-| Header files | 349 |
+| Header files | 354 |
 | ECS Components | 39 |
-| ECS Systems | 48 |
+| ECS Systems | 49 |
 | Editor Panels | 32 |
 | Test files | 75 |
 | Test cases | 917+ |
-| Wiki pages | 50 |
-| *Last synced* | *2026-03-13 03:26* |
+| Wiki pages | 53 |
+| *Last synced* | *2026-03-13 04:30* |
 <!-- /AUTO:stats -->

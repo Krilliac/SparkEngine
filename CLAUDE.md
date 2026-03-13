@@ -2,13 +2,15 @@
 
 ## What is this?
 
-SparkEngine is a C++20 open-source 3D game engine targeting first-person shooters.
+SparkEngine is a C++20 open-source 3D game engine. Originally focused on first-person shooters, it is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres.
 - **Rendering**: DirectX 11 (Windows), OpenGL stubs (Linux/macOS)
 - **Physics**: Bullet Physics 3
 - **Audio**: XAudio2
 - **ECS**: EnTT
-- **Scripting**: AngelScript
-- **Editor**: Dear ImGui
+- **Scripting**: AngelScript (with hot-reload and client/server context separation)
+- **Editor**: Dear ImGui (with collaborative multi-user editing)
+- **Networking**: UDP client/server, AreaServer/WorldServer architecture (HeroEngine-inspired)
+- **Large worlds**: Floating-point origin rebasing, seamless area streaming
 - **Primary platform**: Windows 10+ (MSVC); Linux/macOS are experimental
 
 ## Build
@@ -41,16 +43,20 @@ CMake 3.16+, C++20 required. Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `E
 ## Architecture (key directories)
 
 ```
-SparkEngine/Source/Core/        — Platform.h, EngineContext.h
-SparkEngine/Source/Graphics/    — GraphicsEngine (DX11), Shader, PostProcessing
-SparkEngine/Source/Engine/ECS/  — Components.h, Systems/ECSystems.h
-SparkEngine/Source/Engine/AI/   — AISystem, BehaviorTree, NavMesh
+SparkEngine/Source/Core/             — Platform.h, EngineContext.h
+SparkEngine/Source/Graphics/         — GraphicsEngine (DX11), Shader, PostProcessing
+SparkEngine/Source/Engine/ECS/       — Components.h, Systems/ECSystems.h
+SparkEngine/Source/Engine/AI/        — AISystem, BehaviorTree, NavMesh
 SparkEngine/Source/Engine/Animation/ — Skeletal animation, IK, state machines
-SparkEngine/Source/Engine/Networking/ — NetworkManager (disabled by default)
-SparkEngine/Source/Utils/       — Console, Logger, Profiler, Assert
-SparkEditor/Source/             — ImGui editor (22 subsystems)
-SparkGame/Source/               — Example FPS game module (DLL)
-Tests/                          — 35+ unit tests, CTest
+SparkEngine/Source/Engine/Networking/ — NetworkManager, AreaServer, WorldServer
+SparkEngine/Source/Engine/Streaming/ — SeamlessAreaManager, SceneTransitionManager
+SparkEngine/Source/Engine/World/     — WorldOriginSystem (origin rebasing)
+SparkEngine/Source/Engine/Scripting/ — AngelScript VM, hot-reload, script context
+SparkEngine/Source/Utils/            — Console, Logger, Profiler, Assert
+SparkEditor/Source/Communication/    — CollaborativeEditSession (multi-user editing)
+SparkEditor/Source/                  — ImGui editor (22+ subsystems)
+SparkGame/Source/                    — Example FPS game module (DLL)
+Tests/                               — 35+ unit tests, CTest
 ```
 
 ## ECS execution order
