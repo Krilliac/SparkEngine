@@ -81,6 +81,12 @@ namespace Spark::Validation
                 std::fprintf(stderr, "[%s] VALIDATION FAILED: %s  (%s:%d in %s)\n", kind, expr, file, line,
                              func ? func : "?");
             }
+            auto earlyTrace = Spark::StackTrace::Capture(2);
+            std::string earlyTraceStr = earlyTrace.ToString("    ");
+            if (!earlyTraceStr.empty())
+            {
+                std::fprintf(stderr, "Stack Trace:\n%s", earlyTraceStr.c_str());
+            }
             std::fflush(stderr);
             return;
         }
@@ -95,6 +101,14 @@ namespace Spark::Validation
             std::snprintf(buf, sizeof(buf), "[%s] VALIDATION FAILED: %s", kind, expr);
         }
         logger.Log(level, category, file, line, func, std::string(buf));
+
+        // Append stack trace for diagnostic context
+        auto stackTrace = Spark::StackTrace::Capture(2);
+        std::string traceStr = stackTrace.ToString("    ");
+        if (!traceStr.empty())
+        {
+            logger.Log(level, category, file, line, func, std::string("Stack Trace:\n") + traceStr);
+        }
     }
 
     /**
