@@ -17,6 +17,7 @@
 #pragma once
 
 #include "Utils/Assert.h" // existing ASSERT / ASSERT_MSG
+#include "Utils/StackTrace.h"
 #include <cstdio>
 #include <cstdarg>
 #include <cstdlib>
@@ -116,6 +117,12 @@ namespace SparkError
         {
             LogMessage(Severity::Error, "Check", file, line, func, "CHECK FAILED: %s", expr);
         }
+        auto stackTrace = Spark::StackTrace::Capture(2);
+        std::string traceStr = stackTrace.ToString("    ");
+        if (!traceStr.empty())
+        {
+            LogMessage(Severity::Error, "Check", file, line, func, "Stack Trace:\n%s", traceStr.c_str());
+        }
         return false; // always returns false for use in conditionals
     }
 
@@ -125,6 +132,12 @@ namespace SparkError
     {
         LogMessage(Severity::Error, "Bounds", file, line, func, "BOUNDS CHECK FAILED: %s = %lld, valid range [0, %lld)",
                    indexExpr, index, size);
+        auto stackTrace = Spark::StackTrace::Capture(2);
+        std::string traceStr = stackTrace.ToString("    ");
+        if (!traceStr.empty())
+        {
+            LogMessage(Severity::Error, "Bounds", file, line, func, "Stack Trace:\n%s", traceStr.c_str());
+        }
         return false;
     }
 
@@ -152,6 +165,12 @@ namespace SparkError
         {
             LogMessage(Severity::Error, "HRESULT", file, line, func, "HR FAILED: %s returned 0x%08lX (%s)", expr, hr,
                        sysMsg);
+        }
+        auto stackTrace = Spark::StackTrace::Capture(2);
+        std::string traceStr = stackTrace.ToString("    ");
+        if (!traceStr.empty())
+        {
+            LogMessage(Severity::Error, "HRESULT", file, line, func, "Stack Trace:\n%s", traceStr.c_str());
         }
         return false;
     }

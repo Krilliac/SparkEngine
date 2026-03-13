@@ -40,6 +40,8 @@
 #include <ctime>
 #include <string>
 
+#include "StackTrace.h"
+
 /**
  * @def DEBUG_BREAK()
  * @brief Trigger a debugger breakpoint
@@ -131,22 +133,27 @@ namespace Assert
             va_end(args);
         }
 
+        // Capture stack trace before building the message
+        auto stackTrace = Spark::StackTrace::Capture(2); // skip Fail + macro wrapper
+        std::string traceStr = stackTrace.ToString("    ");
+
         // Build the full assertion text
-        char fullMsg[2048];
+        char fullMsg[4096];
         std::snprintf(fullMsg, sizeof(fullMsg),
                       "===== ASSERTION FAILED =====\n"
                       "Time       : %s\n"
                       "Expression : %s\n"
                       "Location   : %s(%d)\n"
                       "Message    : %s\n"
-                      "Thread ID  : 0x%08X\n",
+                      "Thread ID  : 0x%08X\n"
+                      "Stack Trace:\n%s",
                       timeBuf, expr, file, line, userMsg[0] ? userMsg : "(none)",
 #ifdef _WIN32
-                      static_cast<unsigned>(GetCurrentThreadId())
+                      static_cast<unsigned>(GetCurrentThreadId()),
 #else
-                      0u
+                      0u,
 #endif
-        );
+                      traceStr.c_str());
 
         // Print immediately
         std::fprintf(stderr, "%s", fullMsg);
@@ -185,20 +192,25 @@ namespace Assert
             va_end(args);
         }
 
-        char fullMsg[2048];
+        // Capture stack trace
+        auto stackTrace = Spark::StackTrace::Capture(2);
+        std::string traceStr = stackTrace.ToString("    ");
+
+        char fullMsg[4096];
         std::snprintf(fullMsg, sizeof(fullMsg),
                       "===== HRESULT FAILED =====\n"
                       "Expression : %s returned 0x%08lX\n"
                       "Location   : %s(%d)\n"
                       "Message    : %s\n"
-                      "Thread ID  : 0x%08X\n",
+                      "Thread ID  : 0x%08X\n"
+                      "Stack Trace:\n%s",
                       expr, hr, file, line, userMsg[0] ? userMsg : "(none)",
 #ifdef _WIN32
-                      static_cast<unsigned>(GetCurrentThreadId())
+                      static_cast<unsigned>(GetCurrentThreadId()),
 #else
-                      0u
+                      0u,
 #endif
-        );
+                      traceStr.c_str());
 
         std::fprintf(stderr, "%s", fullMsg);
         std::fflush(stderr);
