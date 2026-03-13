@@ -81,6 +81,9 @@
 #ifdef GetCurrentTime
 #undef GetCurrentTime
 #endif
+#ifdef GetClassName
+#undef GetClassName
+#endif
 #endif
 
 // Forward declarations
