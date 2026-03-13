@@ -7,6 +7,7 @@
 
 #include "DialogueEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../Utils/ImGuiUtils.h"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -528,9 +529,7 @@ namespace SparkEditor
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Save current dialogue");
 
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         // Add node buttons
         if (ImGui::Button(ICON_FA_PLUS " NPC Line"))
@@ -551,9 +550,7 @@ namespace SparkEditor
             AddNode(DialogueNodeType::Condition, pos);
         }
 
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         // Preview mode toggle
         if (m_previewMode)
@@ -583,9 +580,7 @@ namespace SparkEditor
         // Dialogue name
         if (m_currentDialogue)
         {
-            ImGui::SameLine();
-            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-            ImGui::SameLine();
+            SparkEditor::VerticalSeparator();
 
             char nameBuf[256];
             std::snprintf(nameBuf, sizeof(nameBuf), "%s", m_currentDialogue->name.c_str());

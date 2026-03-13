@@ -7,9 +7,9 @@
 
 #include "PlayModeToolbarPanel.h"
 #include "../Core/EditorIcons.h"
+#include "../Utils/ImGuiUtils.h"
 #include "../../../SparkEngine/Source/Engine/Editor/PlayModeManager.h"
 #include <imgui.h>
-#include <imgui_internal.h>
 #include <iostream>
 #include <cmath>
 
@@ -92,29 +92,19 @@ namespace SparkEditor
         }
 
         RenderTransportControls();
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         RenderTimeScaleControls();
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         RenderSubsystemToggles();
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         RenderCameraModeSelector();
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         RenderLiveEditControls();
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
+        SparkEditor::VerticalSeparator();
 
         RenderStatusDisplay();
 
