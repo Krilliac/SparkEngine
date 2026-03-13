@@ -8,6 +8,7 @@
 #ifdef ENABLE_NETWORKING
 
 #include "../../Utils/LogMacros.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,6 +36,7 @@ namespace Spark::Net
 
     bool WorldServer::Start(const WorldServerConfig& config)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (m_running.load(std::memory_order_acquire))
         {
             SPARK_LOG_WARN("WorldServer", "Already running.");
@@ -54,6 +56,7 @@ namespace Spark::Net
 
     void WorldServer::Stop()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (!m_running.load(std::memory_order_acquire))
             return;
 
@@ -79,6 +82,7 @@ namespace Spark::Net
 
     void WorldServer::Tick(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         ProcessWorldMessages(deltaTime);
         ProcessAreaHeartbeats();
         UpdatePlayerSessions(deltaTime);
@@ -239,6 +243,9 @@ namespace Spark::Net
     AreaID WorldServer::HandlePlayerConnect(ClientID clientId, const std::string& playerName,
                                             const XMFLOAT3& spawnPosition)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
+        SPARK_WARN_IF(Spark::LogCategory::Network, playerName.empty(),
+                      "HandlePlayerConnect called with empty playerName");
         AreaID targetArea = GetAreaForPosition(spawnPosition);
         if (targetArea == INVALID_AREA)
         {

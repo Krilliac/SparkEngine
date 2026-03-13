@@ -6,15 +6,21 @@
  */
 
 #include "EditorPanel.h"
+#include "Utils/Validate.h"
 #include <imgui.h>
 
 namespace SparkEditor
 {
 
-    EditorPanel::EditorPanel(const std::string& name, const std::string& id) : m_name(name), m_id(id), m_title(name) {}
+    EditorPanel::EditorPanel(const std::string& name, const std::string& id) : m_name(name), m_id(id), m_title(name)
+    {
+        SPARK_WARN_IF(Spark::LogCategory::Editor, name.empty(), "EditorPanel created with empty name");
+        SPARK_WARN_IF(Spark::LogCategory::Editor, id.empty(), "EditorPanel created with empty id");
+    }
 
     bool EditorPanel::BeginPanel()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_isVisible)
         {
             return false;

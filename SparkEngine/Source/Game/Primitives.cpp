@@ -2,6 +2,7 @@
 // Primitives.cpp
 #include "Primitives.h"
 #include "../Utils/Assert.h"
+#include "../Utils/Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -12,7 +13,8 @@ using namespace DirectX;
 
 MeshData Primitives::CreateCube(float size)
 {
-    ASSERT_MSG(size > 0.0f, "Cube size must be positive");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, size > 0.0f, "Cube size must be positive");
 
     MeshData m;
     float h = size * 0.5f;
@@ -33,13 +35,15 @@ MeshData Primitives::CreateCube(float size)
         }
     }
 
-    ASSERT_ALWAYS_MSG(!m.vertices.empty() && !m.indices.empty(), "CreateCube produced empty mesh");
+    SPARK_ENSURE_MSG(Spark::LogCategory::Graphics, !m.vertices.empty() && !m.indices.empty(),
+                     "CreateCube produced empty mesh");
     return m;
 }
 
 MeshData Primitives::CreatePlane(float width, float depth)
 {
-    ASSERT_MSG(width > 0.0f && depth > 0.0f, "Plane dimensions must be positive");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, width > 0.0f && depth > 0.0f, "Plane dimensions must be positive");
 
     MeshData m;
     float hw = width * 0.5f, hd = depth * 0.5f;
@@ -53,14 +57,16 @@ MeshData Primitives::CreatePlane(float width, float depth)
         m.indices.push_back(static_cast<unsigned int>(m.indices.size()));
     }
 
-    ASSERT_ALWAYS_MSG(!m.vertices.empty() && !m.indices.empty(), "CreatePlane produced empty mesh");
+    SPARK_ENSURE_MSG(Spark::LogCategory::Graphics, !m.vertices.empty() && !m.indices.empty(),
+                     "CreatePlane produced empty mesh");
     return m;
 }
 
 MeshData Primitives::CreateSphere(float radius, int slices, int stacks)
 {
-    ASSERT_MSG(radius > 0.0f, "Sphere radius must be positive");
-    ASSERT_MSG(slices >= 3 && stacks >= 2, "Sphere slices/stacks must be >=3/2");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, radius > 0.0f, "Sphere radius must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, slices >= 3 && stacks >= 2, "Sphere slices/stacks must be >=3/2");
 
     MeshData m;
     for (int i = 0; i <= stacks; ++i)
@@ -90,6 +96,7 @@ MeshData Primitives::CreateSphere(float radius, int slices, int stacks)
         }
     }
 
-    ASSERT_ALWAYS_MSG(!m.vertices.empty() && !m.indices.empty(), "CreateSphere produced empty mesh");
+    SPARK_ENSURE_MSG(Spark::LogCategory::Graphics, !m.vertices.empty() && !m.indices.empty(),
+                     "CreateSphere produced empty mesh");
     return m;
 }

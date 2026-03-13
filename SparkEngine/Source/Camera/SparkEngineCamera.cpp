@@ -2,6 +2,7 @@
 #include "SparkEngineCamera.h"
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -52,10 +53,9 @@ using namespace DirectX;
 
 void SparkEngineCamera::Initialize(float aspectRatio)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(std::wstring(L"SparkEngineCamera::Initialize called. aspectRatio=") +
-                                 std::to_wstring(aspectRatio),
-                             L"OPERATION");
-    ASSERT_MSG(aspectRatio > 0.0f, "Aspect ratio must be positive");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SparkEngineCamera::Initialize called. aspectRatio=%f", aspectRatio);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, aspectRatio > 0.0f, "Aspect ratio must be positive");
 
     std::lock_guard<std::mutex> lock(m_stateMutex);
     m_aspectRatio = aspectRatio;
@@ -96,8 +96,8 @@ void SparkEngineCamera::UpdateProjectionMatrix()
 void SparkEngineCamera::Update(float deltaTime)
 {
     // **FIXED: Remove per-frame logging completely**
-    ASSERT_MSG(deltaTime >= 0.0f && std::isfinite(deltaTime),
-               "Camera Update deltaTime must be non-negative and finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, deltaTime >= 0.0f && std::isfinite(deltaTime),
+                      "Camera Update deltaTime must be non-negative and finite");
 
     // Process smooth transition if active
     if (m_isTransitioning)
@@ -128,7 +128,7 @@ void SparkEngineCamera::Update(float deltaTime)
 void SparkEngineCamera::MoveForward(float amount)
 {
     // **FIXED: Remove per-frame logging completely**
-    ASSERT_MSG(std::isfinite(amount), "Move amount must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, std::isfinite(amount), "Move amount must be finite");
 
     std::lock_guard<std::mutex> lock(m_stateMutex);
     XMVECTOR p = XMLoadFloat3(&m_position);
@@ -141,7 +141,7 @@ void SparkEngineCamera::MoveForward(float amount)
 void SparkEngineCamera::MoveRight(float amount)
 {
     // **FIXED: Remove per-frame logging completely**
-    ASSERT_MSG(std::isfinite(amount), "Move amount must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, std::isfinite(amount), "Move amount must be finite");
 
     std::lock_guard<std::mutex> lock(m_stateMutex);
     XMVECTOR p = XMLoadFloat3(&m_position);
@@ -154,7 +154,7 @@ void SparkEngineCamera::MoveRight(float amount)
 void SparkEngineCamera::MoveUp(float amount)
 {
     // **FIXED: Remove per-frame logging completely**
-    ASSERT_MSG(std::isfinite(amount), "Move amount must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, std::isfinite(amount), "Move amount must be finite");
 
     std::lock_guard<std::mutex> lock(m_stateMutex);
     XMVECTOR p = XMLoadFloat3(&m_position);
@@ -167,7 +167,7 @@ void SparkEngineCamera::MoveUp(float amount)
 void SparkEngineCamera::Pitch(float angle)
 {
     // **ENHANCED: Apply mouse sensitivity and Y-inversion from console**
-    ASSERT_MSG(std::isfinite(angle), "Angle must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, std::isfinite(angle), "Angle must be finite");
 
     std::lock_guard<std::mutex> lock(m_stateMutex);
     float adjustedAngle = angle * m_rotationSpeed * m_mouseSensitivity;
@@ -184,7 +184,7 @@ void SparkEngineCamera::Pitch(float angle)
 void SparkEngineCamera::Yaw(float angle)
 {
     // **ENHANCED: Apply mouse sensitivity from console**
-    ASSERT_MSG(std::isfinite(angle), "Angle must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, std::isfinite(angle), "Angle must be finite");
 
     std::lock_guard<std::mutex> lock(m_stateMutex);
     float adjustedAngle = angle * m_rotationSpeed * m_mouseSensitivity;
@@ -201,7 +201,7 @@ void SparkEngineCamera::Yaw(float angle)
 void SparkEngineCamera::Roll(float angle)
 {
     LOG_TO_CONSOLE(std::wstring(L"SparkEngineCamera::Roll called. angle=") + std::to_wstring(angle), L"OPERATION");
-    ASSERT_MSG(std::isfinite(angle), "Roll angle must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, std::isfinite(angle), "Roll angle must be finite");
 
     std::lock_guard<std::mutex> lock(m_stateMutex);
     m_roll += angle * m_rotationSpeed;
@@ -221,7 +221,7 @@ void SparkEngineCamera::SetZoom(bool enabled)
     std::lock_guard<std::mutex> lock(m_stateMutex);
     // Pick FOV
     float fov = enabled ? m_zoomedFov : m_defaultFov;
-    ASSERT_MSG(fov > 0.0f && fov < XM_PI, "Invalid FOV");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, fov > 0.0f && fov < XM_PI, "Invalid FOV");
 
     m_projectionMatrix = XMMatrixPerspectiveFovLH(fov, m_aspectRatio, m_nearPlane, m_farPlane);
     NotifyStateChange();

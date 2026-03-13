@@ -4,6 +4,7 @@
  */
 
 #include "InputBindings.h"
+#include "../Utils/Validate.h"
 
 #include <fstream>
 #include <sstream>
@@ -19,11 +20,14 @@ namespace Spark
 
     InputBindingManager::InputBindingManager()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "InputBindingManager initializing");
         CreateDefaultPresets();
     }
 
     void InputBindingManager::SetBinding(const std::string& action, const InputBinding& binding)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Input, action);
         m_bindings[action] = binding;
         for (const auto& callback : m_bindingChangedCallbacks)
         {
@@ -43,6 +47,8 @@ namespace Spark
 
     void InputBindingManager::RemoveBinding(const std::string& action)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_WARN_IF(Spark::LogCategory::Input, action.empty(), "RemoveBinding called with empty action name");
         m_bindings.erase(action);
     }
 
@@ -81,6 +87,8 @@ namespace Spark
 
     bool InputBindingManager::ApplyPreset(const std::string& presetName)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Input, !presetName.empty(), false);
         for (const auto& preset : m_presets)
         {
             if (preset.name == presetName)
@@ -147,9 +155,12 @@ namespace Spark
 
     bool InputBindingManager::SaveToFile(const std::string& filePath) const
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Input, !filePath.empty(), false);
         std::ofstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Input, "Failed to open file for saving bindings: %s", filePath.c_str());
             return false;
         }
 
@@ -176,9 +187,12 @@ namespace Spark
 
     bool InputBindingManager::LoadFromFile(const std::string& filePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Input, !filePath.empty(), false);
         std::ifstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Input, "Failed to open file for loading bindings: %s", filePath.c_str());
             return false;
         }
 
@@ -214,6 +228,7 @@ namespace Spark
 
     void InputBindingManager::OnBindingChanged(std::function<void(const std::string&, const InputBinding&)> callback)
     {
+        SPARK_WARN_IF(Spark::LogCategory::Input, !callback, "OnBindingChanged called with null callback");
         m_bindingChangedCallbacks.push_back(std::move(callback));
     }
 

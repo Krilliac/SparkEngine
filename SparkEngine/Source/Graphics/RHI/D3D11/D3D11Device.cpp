@@ -8,6 +8,7 @@
  */
 
 #include "D3D11Device.h"
+#include "../../../Utils/Validate.h"
 #include <algorithm>
 #include <cassert>
 
@@ -495,6 +496,8 @@ namespace Spark
 
             bool D3D11Device::Initialize(const RHIDeviceDesc& desc)
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D11Device::Initialize starting");
                 m_debugEnabled = desc.enableDebugLayer;
 
                 UINT createFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
@@ -556,6 +559,8 @@ namespace Spark
 
             void D3D11Device::Shutdown()
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D11Device::Shutdown");
                 m_immediateCommandList.reset();
                 m_immediateContext.Reset();
                 m_dxgiFactory.Reset();

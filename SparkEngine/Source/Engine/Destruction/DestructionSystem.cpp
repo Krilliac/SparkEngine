@@ -4,6 +4,7 @@
  */
 
 #include "DestructionSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <sstream>
@@ -15,6 +16,8 @@ namespace Spark
 
     void DestructionSystem::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+        SPARK_LOG_INFO(Spark::LogCategory::Physics, "DestructionSystem initializing");
         // Register some default fracture patterns
         FracturePattern woodenCrate;
         woodenCrate.AddPiece({"plank1", "debris_plank", {0.3f, 0, 0}, 0.5f, 8.0f, 3.0f});
@@ -47,6 +50,7 @@ namespace Spark
 
     void DestructionSystem::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
         // Update debris lifetimes
         for (auto& debris : m_debris)
         {
@@ -66,6 +70,7 @@ namespace Spark
 
     void DestructionSystem::RegisterPattern(const std::string& name, const FracturePattern& pattern)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Physics, name);
         m_patterns[name] = pattern;
     }
 
@@ -78,6 +83,8 @@ namespace Spark
     void DestructionSystem::ApplyDamage(uint32_t entityId, float damage, const DirectX::XMFLOAT3& hitPoint,
                                         const DirectX::XMFLOAT3& hitDir)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+        SPARK_WARN_IF(Spark::LogCategory::Physics, damage < 0.0f, "ApplyDamage called with negative damage value");
         // Damage application is handled via DestructibleComponent::ApplyDamage
         // This method handles the fracturing/debris spawning after destruction
 

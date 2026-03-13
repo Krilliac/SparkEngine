@@ -4,6 +4,7 @@
 // CrashHandlerHelpers.cpp
 #include "Utils/CrashHandler.h"
 #include "Utils/Assert.h"
+#include "Validate.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -524,6 +525,7 @@ static bool Upload(const std::string&, const std::wstring&, const std::string&);
 #endif
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
 {
+    // NOTE: Minimal instrumentation here — we are inside a crash handler
     HandleCrashInternal(ep, nullptr);
     return EXCEPTION_EXECUTE_HANDLER;
 }

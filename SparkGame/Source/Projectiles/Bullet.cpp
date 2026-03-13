@@ -2,6 +2,7 @@
 // Bullet.cpp
 #include "Bullet.h"
 #include "Utils/Assert.h"
+#include "Utils/Validate.h"
 
 using DirectX::XMFLOAT3;
 using DirectX::XMMATRIX;
@@ -13,26 +14,29 @@ Bullet::Bullet()
     m_speed = 100.0f;
     m_maxLifeTime = 3.0f;
 
-    // Assert scale values are positive
+    // Validate scale values are positive
     XMFLOAT3 scale = {0.05f, 0.05f, 0.2f};
-    ASSERT_MSG(scale.x > 0 && scale.y > 0 && scale.z > 0, "Bullet scale must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, scale.x > 0 && scale.y > 0 && scale.z > 0,
+                      "Bullet scale must be positive");
     SetScale(scale);
 }
 
 HRESULT Bullet::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    ASSERT_MSG(device != nullptr, "Bullet::Initialize - device is null");
-    ASSERT_MSG(context != nullptr, "Bullet::Initialize - context is null");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
 
     // Base initialization sets up mesh and transforms
     HRESULT hr = Projectile::Initialize(device, context);
-    ASSERT_MSG(SUCCEEDED(hr), "Projectile::Initialize failed in Bullet");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Projectile::Initialize failed in Bullet");
     return hr;
 }
 
 void Bullet::Update(float deltaTime)
 {
-    ASSERT_MSG(deltaTime >= 0.0f && std::isfinite(deltaTime), "Invalid deltaTime in Bullet::Update");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, deltaTime >= 0.0f && std::isfinite(deltaTime),
+                      "Invalid deltaTime in Bullet::Update");
     // Use base physics/lifetime/collision
     Projectile::Update(deltaTime);
 }
@@ -41,6 +45,6 @@ void Bullet::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
     if (!m_active)
         return;
-    ASSERT_MSG(m_mesh != nullptr, "Bullet mesh not initialized");
+    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, m_mesh);
     Projectile::Render(view, projection);
 }

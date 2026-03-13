@@ -1,6 +1,7 @@
 #include "Core/Platform.h"
 #include "CubeObject.h"
-#include "Utils/Assert.h"         // custom assert
+#include "Utils/Assert.h" // custom assert
+#include "Utils/Validate.h"
 #include "Game/PlaceholderMesh.h" // Add this include for LoadOrPlaceholderMesh
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -14,20 +15,22 @@ using DirectX::XMMATRIX;
 CubeObject::CubeObject(float size) : m_size(size)
 {
     std::wcout << L"[INFO] CubeObject constructed. size=" << size << std::endl;
-    ASSERT_MSG(size > 0.0f, "Cube size must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, size > 0.0f, "Cube size must be positive");
     SetName("Cube_" + std::to_string(GetID()));
 }
 
 HRESULT CubeObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     std::wcout << L"[OPERATION] CubeObject::Initialize called. size=" << m_size << std::endl;
-    ASSERT(device != nullptr);
-    ASSERT(context != nullptr);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
     return GameObject::Initialize(device, context);
 }
 
 void CubeObject::CreateMesh()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     std::wcout << L"[OPERATION] CubeObject::CreateMesh called. size=" << m_size << std::endl;
     if (!m_mesh)
     {
@@ -36,7 +39,7 @@ void CubeObject::CreateMesh()
     }
     HRESULT hr = m_mesh->Initialize(m_device, m_context);
     std::wcout << L"[INFO] Mesh initialized for CubeObject. HR=0x" << std::hex << hr << std::dec << std::endl;
-    ASSERT_MSG(SUCCEEDED(hr), "Mesh initialization failed");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Mesh initialization failed");
     bool loaded = false;
     if (!m_modelPath.empty())
     {
@@ -55,8 +58,8 @@ void CubeObject::CreateMesh()
             hr = m_mesh->CreatePlane(m_size, m_size);
         }
         std::wcout << L"[INFO] Procedural cube mesh created. HR=0x" << std::hex << hr << std::dec << std::endl;
-        ASSERT_MSG(SUCCEEDED(hr), "Failed to create procedural cube mesh");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Failed to create procedural cube mesh");
     }
-    ASSERT_MSG(m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
-               "Cube mesh must have vertices and indices after loading/creation");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
+                      "Cube mesh must have vertices and indices after loading/creation");
 }

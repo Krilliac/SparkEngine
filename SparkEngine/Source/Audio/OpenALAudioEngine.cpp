@@ -12,6 +12,7 @@
 #if !defined(SPARK_PLATFORM_WINDOWS)
 
 #include "OpenALAudioEngine.h"
+#include "../Utils/Validate.h"
 
 #ifdef SPARK_OPENAL_AVAILABLE
 #include <AL/al.h>
@@ -98,6 +99,7 @@ namespace Spark::Audio
 
     bool OpenALAudioEngine::Initialize(size_t maxSources)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
 #ifdef SPARK_OPENAL_AVAILABLE
         m_maxSources = maxSources;
 
@@ -153,6 +155,7 @@ namespace Spark::Audio
         }
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "OpenAL audio engine initialized: %zu sources", m_sources.size());
         fprintf(stdout, "[OpenAL] Audio engine initialized: %zu sources, device: %s\n", m_sources.size(),
                 alcGetString(m_device, ALC_DEVICE_SPECIFIER));
         return true;
@@ -172,6 +175,7 @@ namespace Spark::Audio
 
     void OpenALAudioEngine::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
 #ifdef SPARK_OPENAL_AVAILABLE
         if (!m_initialized)
             return;
@@ -215,12 +219,16 @@ namespace Spark::Audio
         }
 
         m_initialized = false;
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "OpenAL audio engine shut down");
         fprintf(stdout, "[OpenAL] Audio engine shut down\n");
 #endif
     }
 
     bool OpenALAudioEngine::LoadSound(const std::string& name, const std::string& filename)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_WARN_IF(Spark::LogCategory::Audio, name.empty(), "LoadSound called with empty name");
+        SPARK_WARN_IF(Spark::LogCategory::Audio, filename.empty(), "LoadSound called with empty filename");
 #ifdef SPARK_OPENAL_AVAILABLE
         if (!m_initialized)
             return false;
@@ -274,6 +282,7 @@ namespace Spark::Audio
 
     OpenALSource* OpenALAudioEngine::PlaySound(const std::string& name, float volume, float pitch, bool loop)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
 #ifdef SPARK_OPENAL_AVAILABLE
         if (!m_initialized)
             return nullptr;
@@ -322,6 +331,7 @@ namespace Spark::Audio
     OpenALSource* OpenALAudioEngine::PlaySound3D(const std::string& name, const Float3& position, float volume,
                                                  float pitch, bool loop)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
 #ifdef SPARK_OPENAL_AVAILABLE
         if (!m_initialized)
             return nullptr;
@@ -374,8 +384,9 @@ namespace Spark::Audio
 
     void OpenALAudioEngine::StopSound(OpenALSource* source)
     {
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Audio, source);
 #ifdef SPARK_OPENAL_AVAILABLE
-        if (!source || !source->IsPlaying)
+        if (!source->IsPlaying)
             return;
         alSourceStop(source->alSource);
         alSourcei(source->alSource, AL_BUFFER, 0);

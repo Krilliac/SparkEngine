@@ -2,6 +2,7 @@
 // Terrain.cpp
 #include "Terrain.h"
 #include "Utils/Assert.h"
+#include "Utils/Validate.h"
 #include <fstream>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -15,11 +16,12 @@ using namespace DirectX;
 HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, const wchar_t* file, UINT w, UINT h,
                             float s)
 {
-    ASSERT(device != nullptr);
-    ASSERT(ctx != nullptr);
-    ASSERT_MSG(file != nullptr, "Heightmap file path null");
-    ASSERT_MSG(w > 1 && h > 1, "Terrain dimensions must be >1");
-    ASSERT_MSG(s > 0, "Cell spacing must be positive");
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, ctx);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, file != nullptr, "Heightmap file path null");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, w > 1 && h > 1, "Terrain dimensions must be >1");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, s > 0, "Cell spacing must be positive");
 
     // 1) Read raw 8-bit BMP after 54-byte header
     std::vector<uint8_t> data(w * h);
@@ -35,8 +37,8 @@ HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, cons
     CalculateNormals();
 
     // Ensure we have vertices and indices
-    ASSERT_ALWAYS_MSG(!m_vertices.empty(), "No terrain vertices generated");
-    ASSERT_ALWAYS_MSG(!m_indices.empty(), "No terrain indices generated");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, !m_vertices.empty(), "No terrain vertices generated");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, !m_indices.empty(), "No terrain indices generated");
 
     // 3) Create VB
     D3D11_BUFFER_DESC bd{};
@@ -48,7 +50,7 @@ HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, cons
     sd.pSysMem = m_vertices.data();
 
     HRESULT hr = device->CreateBuffer(&bd, &sd, &m_vb);
-    ASSERT_MSG(SUCCEEDED(hr), "Terrain vertex buffer creation failed");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Terrain vertex buffer creation failed");
     if (FAILED(hr))
         return hr;
 
@@ -59,14 +61,14 @@ HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, cons
     sd.pSysMem = m_indices.data();
 
     hr = device->CreateBuffer(&bd, &sd, &m_ib);
-    ASSERT_MSG(SUCCEEDED(hr), "Terrain index buffer creation failed");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Terrain index buffer creation failed");
     m_indexCount = UINT(m_indices.size());
     return hr;
 }
 
 void Terrain::BuildMesh(const std::vector<uint8_t>& h, UINT w, UINT hgt, float s)
 {
-    ASSERT_MSG(h.size() == w * hgt, "Height data size mismatch");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, h.size() == w * hgt, "Height data size mismatch");
 
     m_vertices.resize(static_cast<std::vector<TerrainVertex, std::allocator<TerrainVertex>>::size_type>(w) * hgt);
     m_indices.clear();
@@ -96,13 +98,14 @@ void Terrain::BuildMesh(const std::vector<uint8_t>& h, UINT w, UINT hgt, float s
         }
     }
 
-    ASSERT_ALWAYS_MSG(!m_vertices.empty(), "BuildMesh: no vertices");
-    ASSERT_ALWAYS_MSG(!m_indices.empty(), "BuildMesh: no indices");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, !m_vertices.empty(), "BuildMesh: no vertices");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, !m_indices.empty(), "BuildMesh: no indices");
 }
 
 void Terrain::CalculateNormals()
 {
-    ASSERT(!m_vertices.empty() && !m_indices.empty());
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, !m_vertices.empty() && !m_indices.empty(),
+                      "Cannot calculate normals without vertices and indices");
 
     // Zero normals
     for (auto& v : m_vertices)
@@ -146,10 +149,10 @@ void Terrain::CalculateNormals()
 
 void Terrain::Render(ID3D11DeviceContext* ctx)
 {
-    ASSERT(ctx != nullptr);
-    ASSERT(m_vb != nullptr);
-    ASSERT(m_ib != nullptr);
-    ASSERT(m_indexCount > 0);
+    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, ctx);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, m_vb.Get());
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, m_ib.Get());
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, m_indexCount > 0, "Terrain has no indices to render");
 
     UINT stride = sizeof(TerrainVertex), offset = 0;
     ctx->IASetVertexBuffers(0, 1, m_vb.GetAddressOf(), &stride, &offset);

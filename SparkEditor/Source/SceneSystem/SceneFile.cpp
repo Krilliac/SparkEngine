@@ -6,6 +6,7 @@
  */
 
 #include "SceneFile.h"
+#include "Utils/Validate.h"
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -61,6 +62,7 @@ namespace SparkEditor
 
     std::vector<SceneObject*> SceneFile::FindObjectsByName(const std::string& name)
     {
+        SPARK_WARN_IF(Spark::LogCategory::Editor, name.empty(), "FindObjectsByName called with empty name");
         std::vector<SceneObject*> result;
         for (auto& obj : objects)
         {
@@ -87,6 +89,8 @@ namespace SparkEditor
 
     void SceneFile::AddAssetReference(const std::string& assetPath, const std::string& assetType)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Editor, assetPath);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Editor, assetType);
         // Check if already referenced
         for (const auto& ref : assetReferences)
         {
@@ -103,6 +107,7 @@ namespace SparkEditor
 
     bool SceneFile::Validate(std::vector<std::string>& errors) const
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         bool valid = true;
 
         if (header.magic != SCENE_FILE_MAGIC)

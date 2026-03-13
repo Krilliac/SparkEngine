@@ -7,6 +7,7 @@
 
 #include "EditorFonts.h"
 #include "EditorIcons.h"
+#include "Utils/Validate.h"
 #include <iostream>
 #include <filesystem>
 
@@ -21,6 +22,9 @@ namespace SparkEditor
 
     void EditorFonts::LoadFonts(float baseFontSize)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading editor fonts (baseFontSize=%.1f)", baseFontSize);
+        SPARK_WARN_IF(Spark::LogCategory::Editor, baseFontSize <= 0.0f, "Font size is non-positive");
         ImGuiIO& io = ImGui::GetIO();
 
         // Font search paths (relative to executable)

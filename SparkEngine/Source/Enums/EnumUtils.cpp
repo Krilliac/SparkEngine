@@ -7,6 +7,7 @@
 
 #include "EnumUtils.h"
 #include "Enums/GameSystemEnums.h"
+#include "../Utils/Validate.h"
 #include <algorithm>
 #include <unordered_map>
 #include <cctype>

@@ -20,6 +20,7 @@
 #include "Core/EngineContext.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/Validate.h"
 
 // Global game pointer used by SparkConsole (in SparkEngineLib) to call into
 // game systems.  Owned by SparkGameModule; set during Initialize, cleared
@@ -73,6 +74,8 @@ Spark::ModuleInfo SparkGameModule::GetModuleInfo() const
 
 bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, context, false);
     m_context = context;
 
     // Delegate to the shared Initialize logic using the context's subsystems
@@ -138,11 +141,16 @@ const char* SparkGameModule::GetGameVersion() const
 
 bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     if (m_initialized)
         return true; // Prevent double-init
 
+    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, graphics, false);
+    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, input, false);
+
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Initializing SparkGame module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing SparkGame module");
 
     g_game = std::make_unique<Game>();
     HRESULT hr = g_game->Initialize(graphics, input);
@@ -166,8 +174,11 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
 
 void SparkGameModule::Shutdown()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     if (!m_initialized)
         return;
+
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Shutting down SparkGame module");
 
     if (g_game)
     {

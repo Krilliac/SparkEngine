@@ -3,6 +3,7 @@
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 #include "Utils/ConsoleProcessManager.h"
+#include "Validate.h"
 
 // Only include CURL when networking is enabled
 #ifdef NETWORKING_ENABLED
@@ -464,6 +465,7 @@ static void ZipFiles(const std::wstring& zip, const std::vector<std::wstring>& f
 
 void InstallCrashHandler(const CrashConfig& cfg)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Installing crash handler (Windows)");
     g_cfg = cfg;
     g_triggerCrashOnAssert = cfg.triggerCrashOnAssert;
 
@@ -472,6 +474,7 @@ void InstallCrashHandler(const CrashConfig& cfg)
 #endif
 
     SetUnhandledExceptionFilter(CrashFilter);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Crash handler installed successfully");
 }
 
 void TriggerCrashHandler(const char* assertMsg)
@@ -1213,6 +1216,7 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
 
 void InstallCrashHandler(const CrashConfig& cfg)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Installing crash handler (Linux)");
     g_cfg = cfg;
     g_triggerCrashOnAssert = cfg.triggerCrashOnAssert;
 
@@ -1309,6 +1313,7 @@ void SetAssertCrashBehavior(bool shouldCrash)
 // Unsupported platform stubs
 void InstallCrashHandler(const CrashConfig& cfg)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Installing crash handler (stub - unsupported platform)");
     g_cfg = cfg;
     g_triggerCrashOnAssert = cfg.triggerCrashOnAssert;
 }

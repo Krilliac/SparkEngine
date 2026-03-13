@@ -4,6 +4,7 @@
  */
 
 #include "ContentDelivery.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <sstream>
@@ -15,6 +16,8 @@ namespace Spark
 
     bool ContentDelivery::CheckForUpdates(const std::string& manifestUrl)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !manifestUrl.empty(), false);
         // In a real implementation, this would HTTP GET the manifest URL
         // and parse the JSON response. For now, provide the framework.
         (void)manifestUrl;
@@ -38,6 +41,8 @@ namespace Spark
 
     bool ContentDelivery::QueueDownload(const std::string& bundleName, int priority)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !bundleName.empty(), false);
         std::lock_guard<std::mutex> lock(m_mutex);
         DownloadTask task;
         task.bundleName = bundleName;
@@ -65,6 +70,7 @@ namespace Spark
 
     void ContentDelivery::Update(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
         (void)deltaTime;
         // Process download queue — real implementation would use async HTTP
         // For framework purposes, mark tasks as progressing
@@ -93,12 +99,14 @@ namespace Spark
 
     void ContentDelivery::CancelAll()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "ContentDelivery::CancelAll — clearing download queue.");
         std::lock_guard<std::mutex> lock(m_mutex);
         m_downloadQueue.clear();
     }
 
     bool ContentDelivery::VerifyBundle(const std::string& bundleName) const
     {
+        SPARK_VALIDATE_RET(Spark::LogCategory::Scene, !bundleName.empty(), false);
         std::lock_guard<std::mutex> lock(m_mutex);
         auto it = m_localBundles.find(bundleName);
         if (it == m_localBundles.end())
@@ -111,6 +119,7 @@ namespace Spark
 
     void ContentDelivery::DeleteBundle(const std::string& bundleName)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Scene, bundleName);
         std::lock_guard<std::mutex> lock(m_mutex);
         m_localBundles.erase(bundleName);
     }

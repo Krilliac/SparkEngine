@@ -8,6 +8,7 @@
 #ifdef ENABLE_NETWORKING
 
 #include "../../Utils/LogMacros.h"
+#include "../../Utils/Validate.h"
 
 #include <cmath>
 #include <sstream>
@@ -32,6 +33,7 @@ namespace Spark::Net
 
     bool AreaServer::Start(const AreaServerConfig& config)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (m_running.load(std::memory_order_acquire))
         {
             SPARK_LOG_WARN("AreaServer", "Already running.");
@@ -52,6 +54,7 @@ namespace Spark::Net
 
     void AreaServer::Stop()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         if (!m_running.load(std::memory_order_acquire))
             return;
 
@@ -68,6 +71,7 @@ namespace Spark::Net
 
     void AreaServer::Tick(float deltaTime)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         ProcessClientMessages(deltaTime);
         UpdateSimulation(deltaTime);
         CheckEntityBoundaries();
@@ -83,6 +87,7 @@ namespace Spark::Net
 
     bool AreaServer::AcceptMigratingEntity(const MigratingEntity& entity)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         // Validate networkID
         if (entity.networkID == 0)
         {

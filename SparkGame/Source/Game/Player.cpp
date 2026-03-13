@@ -3,6 +3,7 @@
 #include "VehicleSystem.h"
 #include "InteractiveObject.h"
 #include "Utils/Assert.h"
+#include "Utils/Validate.h"
 #include "Camera/SparkEngineCamera.h"
 #include "Input/InputManager.h"
 #include "Projectiles/WeaponStats.h"
@@ -55,6 +56,8 @@ Player::~Player() = default;
 // Constructor
 Player::Player() : m_currentWeapon(GetWeaponStats(WeaponType::PISTOL)), m_collisionSphere(GetPosition(), 0.5f)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Player constructed");
     LOG_TO_CONSOLE_IMMEDIATE(L"Player constructed.", L"INFO");
     SetName("Player");
     m_currentAmmo = m_currentWeapon.MagazineSize;

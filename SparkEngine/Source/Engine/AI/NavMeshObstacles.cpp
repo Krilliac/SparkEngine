@@ -6,6 +6,7 @@
  */
 
 #include "NavMeshObstacles.h"
+#include "../../Utils/Validate.h"
 
 #include <cmath>
 #include <sstream>
@@ -30,6 +31,8 @@ namespace Spark::AI
 
     void NavMeshObstacleManager::SetNavMesh(NavMeshData* navMesh)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
+        SPARK_WARN_IF_NULL(Spark::LogCategory::AI, navMesh);
         // Restore all existing carves on the old NavMesh before switching
         if (m_navMesh != nullptr)
         {
@@ -49,6 +52,7 @@ namespace Spark::AI
 
     ObstacleHandle NavMeshObstacleManager::AddObstacle(const ObstacleDesc& desc)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         if (m_navMesh == nullptr)
         {
             return InvalidObstacleHandle;
@@ -168,6 +172,8 @@ namespace Spark::AI
 
     void NavMeshObstacleManager::Clear()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "NavMeshObstacleManager::Clear — removing %zu obstacles.",
+                       m_obstacles.size());
         if (m_navMesh != nullptr)
         {
             // Restore all carved triangles

@@ -7,6 +7,7 @@
 
 #include "RHIBridge.h"
 #include "RHIFactory.h"
+#include "../../Utils/Validate.h"
 #include <cassert>
 #include <fstream>
 #include <algorithm>
@@ -137,6 +138,8 @@ namespace Spark
         bool RHIBridge::Initialize(void* windowHandle, uint32_t width, uint32_t height, GraphicsBackend backend,
                                    bool enableDebug)
         {
+            SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RHIBridge::Initialize %ux%u", width, height);
             if (m_initialized)
                 Shutdown();
 
@@ -199,6 +202,8 @@ namespace Spark
 
         void RHIBridge::Shutdown()
         {
+            SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RHIBridge::Shutdown");
             if (!m_initialized)
                 return;
 

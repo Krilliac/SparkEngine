@@ -1,24 +1,28 @@
 #include "Core/Platform.h"
 #include "PyramidObject.h"
+#include "Utils/Validate.h"
 #include <string>
 #include <iostream>
 
 PyramidObject::PyramidObject(float size) : m_size(size)
 {
     std::wcout << L"[INFO] PyramidObject constructed. size=" << size << std::endl;
-    ASSERT_MSG(size > 0.f, "Pyramid size must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, size > 0.f, "Pyramid size must be positive");
     SetName("Pyramid_" + std::to_string(GetID()));
 }
 
 HRESULT PyramidObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     std::wcout << L"[OPERATION] PyramidObject::Initialize called. size=" << m_size << std::endl;
-    ASSERT(device != nullptr && context != nullptr);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
     return GameObject::Initialize(device, context);
 }
 
 void PyramidObject::CreateMesh()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     std::wcout << L"[OPERATION] PyramidObject::CreateMesh called. size=" << m_size << std::endl;
     if (!m_mesh)
     {
@@ -27,7 +31,7 @@ void PyramidObject::CreateMesh()
     }
     HRESULT hr = m_mesh->Initialize(m_device, m_context);
     std::wcout << L"[INFO] Mesh initialized for PyramidObject. HR=0x" << std::hex << hr << std::dec << std::endl;
-    ASSERT_MSG(SUCCEEDED(hr), "Mesh initialization failed");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Mesh initialization failed");
 
     bool loaded = false;
     if (!m_modelPath.empty())
@@ -56,9 +60,9 @@ void PyramidObject::CreateMesh()
             hr = m_mesh->CreatePlane(m_size, m_size);
         }
         std::wcout << L"[INFO] Procedural pyramid mesh created. HR=0x" << std::hex << hr << std::dec << std::endl;
-        ASSERT_MSG(SUCCEEDED(hr), "Failed to create procedural pyramid mesh");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Failed to create procedural pyramid mesh");
     }
 
-    ASSERT_MSG(m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
-               "Pyramid mesh must have vertices and indices after loading/creation");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
+                      "Pyramid mesh must have vertices and indices after loading/creation");
 }

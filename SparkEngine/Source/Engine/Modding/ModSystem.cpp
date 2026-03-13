@@ -4,6 +4,7 @@
  */
 
 #include "ModSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -18,6 +19,8 @@ namespace Spark
 
     size_t ModSystem::ScanForMods(const std::string& modsDirectory)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Scanning for mods in '%s'", modsDirectory.c_str());
         m_modsDirectory = modsDirectory;
         size_t found = 0;
 
@@ -105,6 +108,7 @@ namespace Spark
 
     void ModSystem::UnloadAll()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Unloading all mods");
         for (auto& [id, info] : m_mods)
         {
             if (info.loaded)
@@ -116,6 +120,8 @@ namespace Spark
 
     bool ModSystem::LoadMod(const std::string& modId)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Loading mod '%s'", modId.c_str());
         auto it = m_mods.find(modId);
         if (it == m_mods.end())
         {
@@ -144,6 +150,8 @@ namespace Spark
 
     void ModSystem::UnloadMod(const std::string& modId)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Unloading mod '%s'", modId.c_str());
         auto it = m_mods.find(modId);
         if (it == m_mods.end())
         {

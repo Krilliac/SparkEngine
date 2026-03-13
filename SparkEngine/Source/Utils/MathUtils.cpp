@@ -2,6 +2,7 @@
 // MathUtils.cpp
 #include "MathUtils.h"
 #include "Utils/Assert.h"
+#include "Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -29,19 +30,19 @@ static bool s_randomInitialized = false;
 
 float MathUtils::DegreesToRadians(float degrees)
 {
-    ASSERT_MSG(std::isfinite(degrees), "Degrees must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(degrees), "Degrees must be finite");
     return degrees * DEG_TO_RAD;
 }
 
 float MathUtils::RadiansToDegrees(float radians)
 {
-    ASSERT_MSG(std::isfinite(radians), "Radians must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(radians), "Radians must be finite");
     return radians * RAD_TO_DEG;
 }
 
 float MathUtils::WrapAngle(float angle)
 {
-    ASSERT_MSG(std::isfinite(angle), "Angle must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(angle), "Angle must be finite");
     while (angle > PI)
         angle -= TWO_PI;
     while (angle < -PI)
@@ -51,7 +52,7 @@ float MathUtils::WrapAngle(float angle)
 
 float MathUtils::NormalizeAngle(float angle)
 {
-    ASSERT_MSG(std::isfinite(angle), "Angle must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(angle), "Angle must be finite");
     while (angle < 0.0f)
         angle += TWO_PI;
     while (angle >= TWO_PI)
@@ -65,19 +66,21 @@ float MathUtils::NormalizeAngle(float angle)
 
 float MathUtils::Lerp(float a, float b, float t)
 {
-    ASSERT_MSG(std::isfinite(a) && std::isfinite(b) && std::isfinite(t), "Lerp inputs must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(a) && std::isfinite(b) && std::isfinite(t),
+                      "Lerp inputs must be finite");
     return a + t * (b - a);
 }
 
 XMFLOAT3 MathUtils::Lerp(const XMFLOAT3& a, const XMFLOAT3& b, float t)
 {
-    ASSERT_MSG(std::isfinite(t), "Lerp t must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(t), "Lerp t must be finite");
     return XMFLOAT3(Lerp(a.x, b.x, t), Lerp(a.y, b.y, t), Lerp(a.z, b.z, t));
 }
 
 float MathUtils::SmoothStep(float a, float b, float t)
 {
-    ASSERT_MSG(std::isfinite(a) && std::isfinite(b) && std::isfinite(t), "SmoothStep inputs must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(a) && std::isfinite(b) && std::isfinite(t),
+                      "SmoothStep inputs must be finite");
     t = Clamp(t, 0.0f, 1.0f);
     t = t * t * (3.0f - 2.0f * t);
     return Lerp(a, b, t);
@@ -89,8 +92,10 @@ float MathUtils::SmoothStep(float a, float b, float t)
 
 float MathUtils::Distance(const XMFLOAT3& a, const XMFLOAT3& b)
 {
-    ASSERT_MSG(std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(a.z), "Distance a must be finite");
-    ASSERT_MSG(std::isfinite(b.x) && std::isfinite(b.y) && std::isfinite(b.z), "Distance b must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(a.z),
+                      "Distance a must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(b.x) && std::isfinite(b.y) && std::isfinite(b.z),
+                      "Distance b must be finite");
     float dx = b.x - a.x;
     float dy = b.y - a.y;
     float dz = b.z - a.z;
@@ -99,8 +104,10 @@ float MathUtils::Distance(const XMFLOAT3& a, const XMFLOAT3& b)
 
 float MathUtils::DistanceSquared(const XMFLOAT3& a, const XMFLOAT3& b)
 {
-    ASSERT_MSG(std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(a.z), "DistanceSquared a must be finite");
-    ASSERT_MSG(std::isfinite(b.x) && std::isfinite(b.y) && std::isfinite(b.z), "DistanceSquared b must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(a.z),
+                      "DistanceSquared a must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(b.x) && std::isfinite(b.y) && std::isfinite(b.z),
+                      "DistanceSquared b must be finite");
     float dx = b.x - a.x;
     float dy = b.y - a.y;
     float dz = b.z - a.z;
@@ -119,6 +126,7 @@ XMFLOAT3 MathUtils::Direction(const XMFLOAT3& from, const XMFLOAT3& to)
 
 void MathUtils::InitializeRandom()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
     if (!s_randomInitialized)
     {
         s_randomGenerator.seed(s_randomDevice());
@@ -136,7 +144,7 @@ float MathUtils::RandomFloat(float min, float max)
 
 int MathUtils::RandomInt(int min, int max)
 {
-    ASSERT_MSG(min <= max, "RandomInt min must be <= max");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, min <= max, "RandomInt min must be <= max");
     InitializeRandom();
     std::uniform_int_distribution<int> distribution(min, max);
     return distribution(s_randomGenerator);
@@ -153,7 +161,7 @@ XMFLOAT3 MathUtils::RandomDirection()
 
 XMFLOAT3 MathUtils::RandomPointInSphere(float radius)
 {
-    ASSERT_MSG(radius >= 0.0f, "Sphere radius must be non-negative");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, radius >= 0.0f, "Sphere radius must be non-negative");
     XMFLOAT3 point{};
     float lengthSq;
     do
@@ -172,7 +180,7 @@ XMFLOAT3 MathUtils::RandomPointInSphere(float radius)
 
 float MathUtils::Clamp(float value, float min, float max)
 {
-    ASSERT_MSG(min <= max, "Clamp min must be <= max");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, min <= max, "Clamp min must be <= max");
     if (value < min)
         return min;
     if (value > max)
@@ -182,7 +190,7 @@ float MathUtils::Clamp(float value, float min, float max)
 
 int MathUtils::Clamp(int value, int min, int max)
 {
-    ASSERT_MSG(min <= max, "Clamp min must be <= max");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, min <= max, "Clamp min must be <= max");
     if (value < min)
         return min;
     if (value > max)
@@ -206,13 +214,15 @@ XMMATRIX MathUtils::CreateLookAt(const XMFLOAT3& eye, const XMFLOAT3& target, co
 
 XMMATRIX MathUtils::CreatePerspective(float fovY, float aspectRatio, float nearPlane, float farPlane)
 {
-    ASSERT_MSG(fovY > 0 && aspectRatio > 0 && nearPlane > 0 && farPlane > nearPlane, "Invalid perspective parameters");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, fovY > 0 && aspectRatio > 0 && nearPlane > 0 && farPlane > nearPlane,
+                      "Invalid perspective parameters");
     return XMMatrixPerspectiveFovLH(fovY, aspectRatio, nearPlane, farPlane);
 }
 
 XMMATRIX MathUtils::CreateOrthographic(float width, float height, float nearPlane, float farPlane)
 {
-    ASSERT_MSG(width > 0 && height > 0 && farPlane > nearPlane, "Invalid orthographic parameters");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, width > 0 && height > 0 && farPlane > nearPlane,
+                      "Invalid orthographic parameters");
     return XMMatrixOrthographicLH(width, height, nearPlane, farPlane);
 }
 
@@ -232,13 +242,13 @@ XMFLOAT3 MathUtils::Subtract(const XMFLOAT3& a, const XMFLOAT3& b)
 
 XMFLOAT3 MathUtils::Multiply(const XMFLOAT3& v, float scalar)
 {
-    ASSERT_MSG(std::isfinite(scalar), "Multiply scalar must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(scalar), "Multiply scalar must be finite");
     return XMFLOAT3(v.x * scalar, v.y * scalar, v.z * scalar);
 }
 
 XMFLOAT3 MathUtils::Divide(const XMFLOAT3& v, float scalar)
 {
-    ASSERT_MSG(scalar != 0.0f, "Divide by zero");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, scalar != 0.0f, "Divide by zero");
     float inv = 1.0f / scalar;
     return XMFLOAT3(v.x * inv, v.y * inv, v.z * inv);
 }
@@ -255,9 +265,10 @@ XMFLOAT3 MathUtils::Cross(const XMFLOAT3& a, const XMFLOAT3& b)
 
 XMFLOAT3 MathUtils::Normalize(const XMFLOAT3& v)
 {
-    ASSERT_MSG(std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z), "Normalize input must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z),
+                      "Normalize input must be finite");
     float len = Length(v);
-    ASSERT_MSG(len >= 0.0f, "Length must be non-negative");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, len >= 0.0f, "Length must be non-negative");
     return len > 0.0f ? Divide(v, len) : XMFLOAT3(0, 0, 0);
 }
 
@@ -277,19 +288,19 @@ float MathUtils::LengthSquared(const XMFLOAT3& v)
 
 float MathUtils::EaseInQuad(float t)
 {
-    ASSERT_MSG(std::isfinite(t), "EaseInQuad t must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(t), "EaseInQuad t must be finite");
     return t * t;
 }
 
 float MathUtils::EaseOutQuad(float t)
 {
-    ASSERT_MSG(std::isfinite(t), "EaseOutQuad t must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(t), "EaseOutQuad t must be finite");
     return 1.0f - (1.0f - t) * (1.0f - t);
 }
 
 float MathUtils::EaseInOutQuad(float t)
 {
-    ASSERT_MSG(std::isfinite(t), "EaseInOutQuad t must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(t), "EaseInOutQuad t must be finite");
     if (t < 0.5f)
         return 2.0f * t * t;
     else
@@ -301,20 +312,20 @@ float MathUtils::EaseInOutQuad(float t)
 
 float MathUtils::EaseInCubic(float t)
 {
-    ASSERT_MSG(std::isfinite(t), "EaseInCubic t must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(t), "EaseInCubic t must be finite");
     return t * t * t;
 }
 
 float MathUtils::EaseOutCubic(float t)
 {
-    ASSERT_MSG(std::isfinite(t), "EaseOutCubic t must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(t), "EaseOutCubic t must be finite");
     float f = (1.0f - t);
     return 1.0f - f * f * f;
 }
 
 float MathUtils::EaseInOutCubic(float t)
 {
-    ASSERT_MSG(std::isfinite(t), "EaseInOutCubic t must be finite");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, std::isfinite(t), "EaseInOutCubic t must be finite");
     if (t < 0.5f)
         return 4.0f * t * t * t;
     else

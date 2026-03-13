@@ -8,6 +8,7 @@
  */
 
 #include "DXRSupport.h"
+#include "../../Utils/Validate.h"
 #include <sstream>
 #include <iostream>
 #include <cstring>
@@ -495,8 +496,11 @@ namespace Spark::Graphics
 
     bool DXRManager::Initialize(void* d3d12Device)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DXRManager::Initialize starting");
         if (!d3d12Device)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "DXRManager::Initialize called with null device");
             m_isAvailable = false;
             m_isInitialized = false;
             return false;
@@ -591,6 +595,8 @@ namespace Spark::Graphics
 
     void DXRManager::Shutdown()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DXRManager::Shutdown");
 #ifdef SPARK_PLATFORM_WINDOWS
         if (s_dxrState)
         {

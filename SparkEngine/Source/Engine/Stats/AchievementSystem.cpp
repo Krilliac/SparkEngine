@@ -4,6 +4,7 @@
  */
 
 #include "AchievementSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <fstream>
 #include <sstream>
@@ -21,6 +22,8 @@ namespace Spark
     void AchievementSystem::DefineAchievement(const std::string& id, const std::string& name,
                                               const std::string& description, bool hidden)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Game, id);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Game, name);
         std::lock_guard<std::mutex> lock(m_mutex);
         Achievement achievement;
         achievement.id = id;
@@ -44,6 +47,7 @@ namespace Spark
 
     bool AchievementSystem::UnlockAchievement(const std::string& id)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         std::lock_guard<std::mutex> lock(m_mutex);
         auto it = m_achievements.find(id);
         if (it == m_achievements.end() || it->second.unlocked)
@@ -245,6 +249,8 @@ namespace Spark
 
     bool AchievementSystem::SaveToFile(const std::string& filePath) const
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Saving achievements to '%s'", filePath.c_str());
         std::lock_guard<std::mutex> lock(m_mutex);
         std::ofstream file(filePath);
         if (!file.is_open())
@@ -285,6 +291,8 @@ namespace Spark
 
     bool AchievementSystem::LoadFromFile(const std::string& filePath)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Loading achievements from '%s'", filePath.c_str());
         std::ifstream file(filePath);
         if (!file.is_open())
         {
@@ -362,6 +370,7 @@ namespace Spark
 
     void AchievementSystem::ResetAll()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Resetting all achievements and statistics");
         std::lock_guard<std::mutex> lock(m_mutex);
         for (auto& [id, achievement] : m_achievements)
         {

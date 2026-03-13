@@ -6,6 +6,7 @@
  */
 
 #include "WeaponStats.h"
+#include "Utils/Validate.h"
 #include <unordered_map>
 #include <string>
 #include <algorithm>

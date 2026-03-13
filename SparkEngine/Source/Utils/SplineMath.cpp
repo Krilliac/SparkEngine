@@ -6,6 +6,7 @@
 #include "../Core/Platform.h"
 #include "SplineMath.h"
 #include "Utils/Assert.h"
+#include "Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -107,7 +108,7 @@ static float PointDistance(const XMFLOAT3& a, const XMFLOAT3& b)
 float SplineMath::CatmullRomSegmentLength(const XMFLOAT3& p0, const XMFLOAT3& p1, const XMFLOAT3& p2,
                                           const XMFLOAT3& p3, int subdivisions)
 {
-    ASSERT_MSG(subdivisions > 0, "Subdivisions must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, subdivisions > 0, "Subdivisions must be positive");
 
     float totalLength = 0.0f;
     XMFLOAT3 prev = p1; // At t=0 the segment starts at p1
@@ -124,7 +125,7 @@ float SplineMath::CatmullRomSegmentLength(const XMFLOAT3& p0, const XMFLOAT3& p1
 float SplineMath::CubicBezierSegmentLength(const XMFLOAT3& p0, const XMFLOAT3& p1, const XMFLOAT3& p2,
                                            const XMFLOAT3& p3, int subdivisions)
 {
-    ASSERT_MSG(subdivisions > 0, "Subdivisions must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, subdivisions > 0, "Subdivisions must be positive");
 
     float totalLength = 0.0f;
     XMFLOAT3 prev = p0; // At t=0 the Bezier starts at p0

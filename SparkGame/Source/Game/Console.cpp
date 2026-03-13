@@ -2,6 +2,7 @@
 // Console.cpp
 #include "Console.h"
 #include "Utils/Assert.h"
+#include "Utils/Validate.h"
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -9,7 +10,8 @@
 // -----------------------------------------------------------------------------
 void Console::Initialize(int screenW, int screenH)
 {
-    ASSERT(screenW > 0 && screenH > 0);
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, screenW > 0 && screenH > 0, "Screen dimensions must be positive");
     width = screenW;
     height = screenH;
 
@@ -87,7 +89,7 @@ bool Console::HandleChar(wchar_t c)
     if (!visible)
         return false;
 
-    ASSERT_MSG(c >= 0, "Invalid character code");
+    SPARK_WARN_IF(Spark::LogCategory::Game, c < 0, "Invalid character code received");
     if (c >= L' ' && c <= L'~') // printable ASCII
         inputLine.push_back(c);
 
@@ -193,7 +195,7 @@ void Console::Log(const std::wstring& msg)
 // -----------------------------------------------------------------------------
 void Console::ExecuteCommand(const std::wstring& line)
 {
-    ASSERT_ALWAYS(!line.empty());
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, !line.empty(), "Console command line must not be empty");
     Log(L"> " + line);
 
     std::wistringstream iss(line);
@@ -229,7 +231,7 @@ void Console::Render(ID3D11DeviceContext* ctx)
 {
     if (!visible)
         return;
-    ASSERT(ctx != nullptr);
+    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, ctx);
 
     constexpr float lineH = 18.0f;
     constexpr float scale = 1.0f;

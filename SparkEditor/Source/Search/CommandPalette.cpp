@@ -7,6 +7,7 @@
 
 #include "CommandPalette.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/Validate.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cctype>
@@ -19,6 +20,8 @@ namespace SparkEditor
     void CommandPalette::RegisterAction(const std::string& name, const std::string& category,
                                         std::function<void()> callback, const std::string& shortcut)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Editor, name);
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Editor, category);
         PaletteAction action;
         action.name = name;
         action.category = category;
@@ -64,6 +67,7 @@ namespace SparkEditor
 
     void CommandPalette::Render()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_isOpen)
         {
             return;

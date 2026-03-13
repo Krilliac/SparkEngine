@@ -11,6 +11,7 @@
 #include "GraphicsConsoleCommands.h"
 #include "GraphicsEngine.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/Validate.h"
 #include <sstream>
 #include <string>
 #include <vector>
@@ -20,6 +21,8 @@ namespace Spark::Graphics
 
     void RegisterGraphicsConsoleCommands(GraphicsEngine& engine)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Registering graphics console commands");
         auto& console = Spark::SimpleConsole::GetInstance();
 
         console.RegisterCommand(

@@ -10,6 +10,7 @@
  */
 
 #include "Utils/SparkConsole.h"
+#include "Utils/Validate.h"
 #include "Game/Game.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Shader.h"
@@ -32,6 +33,10 @@ namespace SparkConsole
  */
     void RegisterAdvancedCommands(Game* game, GraphicsEngine* graphics)
     {
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, graphics);
+        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Registering advanced console commands");
+
         auto& console = Spark::SimpleConsole::GetInstance();
 
         // ========================================================================

@@ -7,6 +7,7 @@
 
 #include "../../Core/Platform.h"
 #include "NetworkInterpolation.h"
+#include "../../Utils/Validate.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -20,6 +21,7 @@ namespace Spark::Net
 
     void NetworkInterpolationBuffer::AddSnapshot(const InterpolationSnapshot& snapshot)
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         m_snapshots[m_writeIndex] = snapshot;
         m_writeIndex = (m_writeIndex + 1) % MAX_SNAPSHOTS;
         if (m_count < MAX_SNAPSHOTS)
@@ -96,6 +98,8 @@ namespace Spark::Net
 
     void NetworkInterpolationBuffer::Clear()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "NetworkInterpolationBuffer::Clear — resetting %zu snapshots.",
+                       m_count);
         m_count = 0;
         m_writeIndex = 0;
     }

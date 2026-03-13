@@ -4,6 +4,7 @@
  */
 
 #include "AudioMixer.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -16,6 +17,8 @@ namespace Spark::Audio
 
     void AudioMixer::Initialize()
     {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioMixer::Initialize - creating default bus hierarchy");
         CreateBus("Master", "");
         CreateBus("SFX", "Master");
         CreateBus("Music", "Master");
@@ -32,6 +35,7 @@ namespace Spark::Audio
 
     void AudioMixer::CreateBus(const std::string& name, const std::string& parentBus)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, name);
         BusState state;
         state.bus.name = name;
         state.bus.parentBus = parentBus;
@@ -128,6 +132,7 @@ namespace Spark::Audio
 
     void AudioMixer::AddReverbZone(const ReverbZone& zone)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, zone.name);
         m_reverbZones.push_back(zone);
         // Sort by priority (highest first)
         std::sort(m_reverbZones.begin(), m_reverbZones.end(),
@@ -244,6 +249,7 @@ namespace Spark::Audio
 
     void AudioMixer::SaveSnapshot(const std::string& name)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, name);
         Snapshot snapshot;
         for (const auto& [busName, state] : m_buses)
         {
@@ -254,6 +260,7 @@ namespace Spark::Audio
 
     void AudioMixer::RestoreSnapshot(const std::string& name, float blendTime)
     {
+        SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, name);
         auto it = m_snapshots.find(name);
         if (it == m_snapshots.end())
         {

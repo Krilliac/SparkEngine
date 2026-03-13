@@ -11,6 +11,7 @@
 #ifdef SPARK_OPENGL_SUPPORT
 
 #include "OpenGLDevice.h"
+#include "../../../Utils/Validate.h"
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -644,6 +645,8 @@ namespace Spark
 
             bool GLDevice::Initialize(const RHIDeviceDesc& desc)
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLDevice::Initialize starting");
                 m_debugEnabled = desc.enableDebugLayer;
 
                 // GLAD must be loaded before any GL calls
@@ -668,6 +671,8 @@ namespace Spark
 
             void GLDevice::Shutdown()
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLDevice::Shutdown");
                 m_immediateCommandList.reset();
             }
 

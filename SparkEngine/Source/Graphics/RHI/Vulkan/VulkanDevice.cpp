@@ -12,6 +12,7 @@
 #ifdef SPARK_VULKAN_SUPPORT
 
 #include "VulkanDevice.h"
+#include "../../../Utils/Validate.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -685,6 +686,8 @@ namespace Spark
 
             bool VulkanDevice::Initialize(const RHIDeviceDesc& desc)
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "VulkanDevice::Initialize starting");
                 m_validationEnabled = desc.enableDebugLayer;
 
                 if (!CreateInstance(desc))
@@ -1063,6 +1066,8 @@ namespace Spark
 
             void VulkanDevice::Shutdown()
             {
+                SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "VulkanDevice::Shutdown");
                 if (m_device != VK_NULL_HANDLE)
                     vkDeviceWaitIdle(m_device);
 

@@ -6,6 +6,7 @@
  */
 
 #include "EditorLogger.h"
+#include "Utils/Validate.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -199,6 +200,7 @@ namespace SparkEditor
 
     void EditorLogger::RemoveTarget(LogTarget* target)
     {
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Editor, target);
         std::lock_guard<std::mutex> lock(m_mutex);
         m_targets.erase(std::remove_if(m_targets.begin(), m_targets.end(),
                                        [target](const std::unique_ptr<LogTarget>& ptr) { return ptr.get() == target; }),
@@ -241,6 +243,7 @@ namespace SparkEditor
 
     bool EditorLogger::ExportLogs(const std::string& filename, std::function<bool(const LogEntry&)> filter) const
     {
+        SPARK_WARN_IF(Spark::LogCategory::Editor, filename.empty(), "ExportLogs called with empty filename");
         std::ofstream file(filename);
         if (!file.is_open())
         {

@@ -1,25 +1,29 @@
 #include "Core/Platform.h"
 #include "WallObject.h"
+#include "Utils/Validate.h"
 #include <string>
 #include <iostream>
 
 WallObject::WallObject(float width, float height) : m_width(width), m_height(height)
 {
     std::wcout << L"[INFO] WallObject constructed. width=" << width << L" height=" << height << std::endl;
-    ASSERT_MSG(width > 0.f && height > 0.f, "Wall dimensions must be positive");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, width > 0.f && height > 0.f, "Wall dimensions must be positive");
     SetName("Wall_" + std::to_string(GetID()));
 }
 
 HRESULT WallObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     std::wcout << L"[OPERATION] WallObject::Initialize called. width=" << m_width << L" height=" << m_height
                << std::endl;
-    ASSERT(device != nullptr && context != nullptr);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
+    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
     return GameObject::Initialize(device, context);
 }
 
 void WallObject::CreateMesh()
 {
+    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     std::wcout << L"[OPERATION] WallObject::CreateMesh called. width=" << m_width << L" height=" << m_height
                << std::endl;
     if (!m_mesh)
@@ -29,7 +33,7 @@ void WallObject::CreateMesh()
     }
     HRESULT hr = m_mesh->Initialize(m_device, m_context);
     std::wcout << L"[INFO] Mesh initialized for WallObject. HR=0x" << std::hex << hr << std::dec << std::endl;
-    ASSERT_MSG(SUCCEEDED(hr), "Mesh initialization failed");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Mesh initialization failed");
     bool loaded = false;
     if (!m_modelPath.empty())
     {
@@ -40,8 +44,8 @@ void WallObject::CreateMesh()
     {
         hr = m_mesh->CreatePlane(m_width, m_height);
         std::wcout << L"[INFO] Procedural wall mesh created. HR=0x" << std::hex << hr << std::dec << std::endl;
-        ASSERT_MSG(SUCCEEDED(hr), "Failed to create procedural wall mesh");
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Failed to create procedural wall mesh");
     }
-    ASSERT_MSG(m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
-               "Wall mesh must have vertices and indices after loading");
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, m_mesh && m_mesh->GetVertexCount() > 0 && m_mesh->GetIndexCount() > 0,
+                      "Wall mesh must have vertices and indices after loading");
 }
