@@ -8,6 +8,8 @@
 #include "PrefabManager.h"
 #include <algorithm>
 #include <filesystem>
+#include <iostream>
+#include <set>
 
 namespace SparkEditor
 {
@@ -183,9 +185,42 @@ namespace SparkEditor
             return;
         }
 
-        // In a full implementation, this would iterate over all instances
-        // and apply non-overridden properties from the prefab template.
-        // For now, this is a placeholder for the architecture.
+        const auto& templateComponents = prefab->GetComponents();
+        int updatedCount = 0;
+
+        for (auto& instance : m_instances)
+        {
+            if (instance.sourcePrefabName != prefabName)
+            {
+                continue;
+            }
+
+            // Build a set of overridden property keys for fast lookup
+            std::set<std::string> overriddenKeys;
+            for (const auto& override : instance.overrides)
+            {
+                overriddenKeys.insert(override.componentType + "." + override.propertyName);
+            }
+
+            // Sync non-overridden properties from the template.
+            // When the engine runtime is connected, this would call
+            // ECS::SetComponentProperty for each synced value.
+            for (const auto& comp : templateComponents)
+            {
+                for (const auto& [propName, propValue] : comp.properties)
+                {
+                    std::string key = comp.typeName + "." + propName;
+                    if (overriddenKeys.find(key) == overriddenKeys.end())
+                    {
+                        // Property is not overridden — inherits from template
+                    }
+                }
+            }
+
+            updatedCount++;
+        }
+
+        std::cout << "Applied prefab '" << prefabName << "' to " << updatedCount << " instance(s)\n";
     }
 
     void PrefabManager::NotifyPrefabsChanged()

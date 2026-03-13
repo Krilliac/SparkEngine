@@ -228,8 +228,14 @@ namespace SparkEditor
 
             return true;
         }
+        catch (const std::exception& e)
+        {
+            std::cerr << "SaveRecoveryData failed: " << e.what() << "\n";
+            return false;
+        }
         catch (...)
         {
+            std::cerr << "SaveRecoveryData failed with unknown exception\n";
             return false;
         }
     }
@@ -315,8 +321,14 @@ namespace SparkEditor
             file.close();
             return data;
         }
+        catch (const std::exception& e)
+        {
+            std::cerr << "LoadRecoveryData failed: " << e.what() << "\n";
+            return std::nullopt;
+        }
         catch (...)
         {
+            std::cerr << "LoadRecoveryData failed with unknown exception\n";
             return std::nullopt;
         }
     }
@@ -344,8 +356,13 @@ namespace SparkEditor
                 std::filesystem::remove(recoveryFile);
             }
         }
+        catch (const std::exception& e)
+        {
+            std::cerr << "ClearRecoveryData failed: " << e.what() << "\n";
+        }
         catch (...)
         {
+            std::cerr << "ClearRecoveryData failed with unknown exception\n";
         }
     }
 

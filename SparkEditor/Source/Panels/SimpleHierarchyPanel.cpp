@@ -111,7 +111,17 @@ namespace SparkEditor
                     icon = ICON_FA_CIRCLE;
 
                 ImGui::PushID(static_cast<int>(i));
-                ImGui::TreeNodeEx("##obj", flags, "%s  %s", icon, object.c_str());
+                bool objHidden = !IsObjectVisible(object);
+                if (objHidden)
+                {
+                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
+                }
+                ImGui::TreeNodeEx("##obj", flags, "%s  %s%s", icon, object.c_str(),
+                                  objHidden ? "  " ICON_FA_EYE_SLASH : "");
+                if (objHidden)
+                {
+                    ImGui::PopStyleVar();
+                }
 
                 if (ImGui::IsItemClicked())
                 {
@@ -134,9 +144,12 @@ namespace SparkEditor
                         break;
                     }
                     ImGui::Separator();
-                    if (ImGui::MenuItem(ICON_FA_EYE " Toggle Visibility"))
                     {
-                        // Toggle visibility placeholder
+                        bool isHidden = !IsObjectVisible(object);
+                        if (ImGui::MenuItem(isHidden ? ICON_FA_EYE_SLASH " Show" : ICON_FA_EYE " Hide"))
+                        {
+                            ToggleObjectVisibility(object);
+                        }
                     }
                     ImGui::EndPopup();
                 }
@@ -236,6 +249,7 @@ namespace SparkEditor
         m_sceneObjects.clear();
         m_selectedObject.clear();
         m_searchFilter[0] = '\0';
+        m_hiddenObjects.clear();
 
         // Populate with the standard default objects
         m_sceneObjects.push_back("Main Camera");
@@ -243,6 +257,26 @@ namespace SparkEditor
         m_sceneObjects.push_back("Ground Plane");
 
         std::cout << "Scene hierarchy reset to default\n";
+    }
+
+    bool SimpleHierarchyPanel::IsObjectVisible(const std::string& objectName) const
+    {
+        return m_hiddenObjects.find(objectName) == m_hiddenObjects.end();
+    }
+
+    void SimpleHierarchyPanel::ToggleObjectVisibility(const std::string& objectName)
+    {
+        auto it = m_hiddenObjects.find(objectName);
+        if (it != m_hiddenObjects.end())
+        {
+            m_hiddenObjects.erase(it);
+            std::cout << "Object shown: " << objectName << "\n";
+        }
+        else
+        {
+            m_hiddenObjects.insert(objectName);
+            std::cout << "Object hidden: " << objectName << "\n";
+        }
     }
 
 } // namespace SparkEditor

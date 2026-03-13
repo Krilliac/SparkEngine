@@ -9,6 +9,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <random>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -83,30 +84,31 @@ namespace SparkEditor
 
     void EngineInterface::Update(float deltaTime)
     {
-        // Update metrics to simulate a real engine
+        // Update metrics (simulated when not connected to a real engine)
         static float timeSinceUpdate = 0.0f;
         timeSinceUpdate += deltaTime;
 
         if (timeSinceUpdate >= 1.0f)
-        { // Update every second
+        {
             std::lock_guard<std::mutex> lock(m_metricsMutex);
 
-            // Simulate realistic metrics
-            m_currentMetrics.fps = 58.0f + (rand() % 10); // 58-67 FPS
-            m_currentMetrics.frameTime = 1000.0f / m_currentMetrics.fps;
-            m_currentMetrics.cpuTime = 6.0f + (rand() % 6); // 6-11ms
-            m_currentMetrics.gpuTime = 5.0f + (rand() % 8); // 5-12ms
+            // Use a proper random engine instead of rand()
+            static std::mt19937 rng(std::random_device{}());
+            std::uniform_real_distribution<float> fpsDist(58.0f, 67.0f);
+            std::uniform_real_distribution<float> cpuDist(6.0f, 11.0f);
+            std::uniform_real_distribution<float> gpuDist(5.0f, 12.0f);
+            std::uniform_int_distribution<int64_t> memDist(-1024, 1024);
 
-            // Simulate memory usage fluctuation
-            m_currentMetrics.memoryUsage += (rand() % 2048 - 1024) * 1024; // �1MB
-            if (m_currentMetrics.memoryUsage < 256 * 1024 * 1024)
-            {
-                m_currentMetrics.memoryUsage = 256 * 1024 * 1024;
-            }
-            if (m_currentMetrics.memoryUsage > 1024 * 1024 * 1024)
-            {
-                m_currentMetrics.memoryUsage = 1024 * 1024 * 1024;
-            }
+            m_currentMetrics.fps = fpsDist(rng);
+            m_currentMetrics.frameTime = 1000.0f / m_currentMetrics.fps;
+            m_currentMetrics.cpuTime = cpuDist(rng);
+            m_currentMetrics.gpuTime = gpuDist(rng);
+
+            // Simulate memory usage fluctuation (+/- 1MB)
+            m_currentMetrics.memoryUsage += memDist(rng) * 1024;
+            m_currentMetrics.memoryUsage =
+                std::clamp(m_currentMetrics.memoryUsage, static_cast<int64_t>(256) * 1024 * 1024,
+                           static_cast<int64_t>(1024) * 1024 * 1024);
 
             timeSinceUpdate = 0.0f;
         }
