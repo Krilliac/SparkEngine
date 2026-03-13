@@ -1,13 +1,14 @@
 /**
  * @file Game.h
- * @brief Main game class managing the core game loop and scene systems
+ * @brief Main game class - Spark Arena engine showcase
  * @author Spark Engine Team
  * @date 2025
- * 
+ *
  * The Game class serves as the central coordinator for all game systems,
  * managing the main game loop, scene updates, rendering operations, and
- * coordination between different engine subsystems like graphics, input,
- * camera, and game objects.
+ * coordination between all engine subsystems including graphics, input,
+ * physics, networking, AI, animation, and more. This is the primary
+ * showcase module demonstrating Spark Engine capabilities.
  */
 
 #pragma once
@@ -24,6 +25,7 @@
 #include "HUDSystem.h"
 #include "InventorySystem.h"
 #include "QuestSystem.h"
+#include "Engine/Networking/NetworkManager.h"
 #include <memory>
 #include <vector>
 
@@ -442,6 +444,48 @@ class SPARK_GAME_API Game
      */
     void CreateTestScene(const std::string& sceneType);
 
+    // ============================================================================
+    // NETWORKING SYSTEM
+    // ============================================================================
+
+#ifdef ENABLE_NETWORKING
+    /**
+     * @brief Start a local server for multiplayer
+     * @param port Server listen port (default 27015)
+     * @param maxClients Maximum connected clients
+     * @return true if server started successfully
+     */
+    bool StartServer(uint16_t port = 27015, int maxClients = 32);
+
+    /**
+     * @brief Connect to a remote server
+     * @param address Server IP address or hostname
+     * @param port Server port
+     * @return true if connection initiated
+     */
+    bool ConnectToServer(const std::string& address, uint16_t port = 27015);
+
+    /**
+     * @brief Disconnect from current server or stop hosting
+     */
+    void DisconnectNetwork();
+
+    /**
+     * @brief Check if networking is active (server or client)
+     */
+    bool IsNetworkActive() const;
+
+    /**
+     * @brief Get network role description string
+     */
+    std::string GetNetworkStatus() const;
+
+    /**
+     * @brief Get network statistics (ping, packet loss, etc.)
+     */
+    Spark::Net::NetworkStats GetNetworkStats() const;
+#endif // ENABLE_NETWORKING
+
   private:
     /**
      * @brief Update the camera based on input and game state
@@ -495,6 +539,10 @@ class SPARK_GAME_API Game
     Spark::QuestRegistry m_questRegistry;          ///< Quest definitions
     Spark::QuestJournalComponent m_playerQuests;   ///< Player quest journal
     Spark::EventBus* m_eventBus{nullptr};          ///< Engine event bus (not owned)
+
+#ifdef ENABLE_NETWORKING
+    bool m_networkInitialized{false}; ///< Whether networking subsystem was initialized
+#endif
 
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene

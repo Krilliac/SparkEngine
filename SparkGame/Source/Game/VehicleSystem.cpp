@@ -598,7 +598,7 @@ namespace Spark
     {
         VehicleDefinition def;
         def.type = VehicleType::BUGGY;
-        def.name = "Harasser Buggy";
+        def.name = "Striker Buggy";
         def.description = "Fast light attack vehicle with a mounted gun";
         def.maxHealth = 400.0f;
         def.maxArmor = 50.0f;
@@ -637,7 +637,7 @@ namespace Spark
     {
         VehicleDefinition def;
         def.type = VehicleType::TANK;
-        def.name = "Vanguard MBT";
+        def.name = "Sentinel MBT";
         def.description = "Heavy main battle tank with powerful cannon";
         def.maxHealth = 2000.0f;
         def.maxArmor = 500.0f;
@@ -673,7 +673,7 @@ namespace Spark
     {
         VehicleDefinition def;
         def.type = VehicleType::APC;
-        def.name = "Sunderer APC";
+        def.name = "Bulwark APC";
         def.description = "Armored transport with mobile spawn capability";
         def.maxHealth = 1500.0f;
         def.maxArmor = 300.0f;
@@ -720,7 +720,7 @@ namespace Spark
     {
         VehicleDefinition def;
         def.type = VehicleType::MOTORCYCLE;
-        def.name = "Flash Motorcycle";
+        def.name = "Bolt Motorcycle";
         def.description = "Ultra-fast single-rider recon vehicle";
         def.maxHealth = 200.0f;
         def.maxArmor = 0.0f;
@@ -747,7 +747,7 @@ namespace Spark
     {
         VehicleDefinition def;
         def.type = VehicleType::TRUCK;
-        def.name = "ANT Transport";
+        def.name = "Hauler Transport";
         def.description = "Heavy resource transport truck";
         def.maxHealth = 1000.0f;
         def.maxArmor = 200.0f;
@@ -777,7 +777,7 @@ namespace Spark
     {
         VehicleDefinition def;
         def.type = VehicleType::HELICOPTER;
-        def.name = "Valkyrie Gunship";
+        def.name = "Raptor Gunship";
         def.description = "Versatile VTOL attack helicopter";
         def.maxHealth = 800.0f;
         def.maxArmor = 100.0f;
@@ -821,7 +821,7 @@ namespace Spark
     {
         VehicleDefinition def;
         def.type = VehicleType::JET;
-        def.name = "Mosquito Fighter";
+        def.name = "Talon Fighter";
         def.description = "Single-seat high-speed combat aircraft";
         def.maxHealth = 600.0f;
         def.maxArmor = 50.0f;
@@ -855,7 +855,7 @@ namespace Spark
     {
         VehicleDefinition def;
         def.type = VehicleType::DROPSHIP;
-        def.name = "Galaxy Dropship";
+        def.name = "Titan Dropship";
         def.description = "Massive troop transport aircraft";
         def.maxHealth = 3000.0f;
         def.maxArmor = 400.0f;

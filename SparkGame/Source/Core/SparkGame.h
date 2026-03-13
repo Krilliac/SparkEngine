@@ -1,15 +1,15 @@
 /**
  * @file SparkGame.h
- * @brief SparkGame module - implements both IModule and IGameModule
+ * @brief SparkGame module - Spark Engine FPS showcase
  * @author Spark Engine Team
  * @date 2025
  *
- * SparkGame is a DLL that the SparkEngine executable loads at runtime.
- * It implements both the new IModule interface (via Spark::IModule) and
- * the legacy IGameModule interface for backward compatibility.
+ * SparkGame is the initial engine showcase module loaded as a DLL at runtime.
+ * It demonstrates all major engine subsystems: rendering, physics, AI,
+ * animation, audio, networking, ECS, vehicles, and class-based FPS gameplay.
  *
- * The engine's ModuleManager will prefer the new CreateModule/DestroyModule
- * exports, but falls back to CreateGameModule/DestroyGameModule if needed.
+ * Implements both the new IModule interface (via Spark::IModule) and
+ * the legacy IGameModule interface for backward compatibility.
  */
 
 #pragma once

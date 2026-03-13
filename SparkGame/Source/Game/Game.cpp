@@ -107,9 +107,9 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         return hr;
     }
 
-    // Set default class (Light Assault)
-    m_player->SetClass(PlayerClass::LIGHT_ASSAULT, m_classSystem.get());
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player class set to Light Assault (default)", L"SUCCESS");
+    // Set default class (Scout)
+    m_player->SetClass(PlayerClass::SCOUT, m_classSystem.get());
+    LOG_TO_CONSOLE_IMMEDIATE(L"Player class set to Scout (default)", L"SUCCESS");
 
     /* Projectile pool --------------------------------------*/
     m_projectilePool = std::make_unique<ProjectilePool>(100);
@@ -448,6 +448,14 @@ void Game::Shutdown()
     m_sceneManager.reset();
     m_eventBus = nullptr;
 
+#ifdef ENABLE_NETWORKING
+    if (m_networkInitialized)
+    {
+        Spark::Net::NetworkManager::GetInstance().Shutdown();
+        m_networkInitialized = false;
+    }
+#endif
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Game shutdown complete - all systems cleaned up.", L"INFO");
 }
 
@@ -593,6 +601,27 @@ void Game::Update(float dt)
     if (m_hudSystem)
         m_hudSystem->Update(dt);
     Spark::QuestOps::UpdateTimers(m_playerQuests, m_questRegistry, dt);
+
+#ifdef ENABLE_NETWORKING
+    // Update networking - process incoming messages, send outgoing state
+    if (m_networkInitialized)
+    {
+        auto& netMgr = Spark::Net::NetworkManager::GetInstance();
+        netMgr.Update(dt);
+
+        // Replicate player position to network
+        if (m_player && netMgr.GetRole() != Spark::Net::NetworkRole::None)
+        {
+            auto pos = m_player->GetPosition();
+            auto vel = m_player->GetVelocity();
+            // Send client input state for prediction/reconciliation
+            Spark::Net::ClientInputState inputState{};
+            inputState.deltaTime = dt;
+            inputState.timestamp = netMgr.GetServerTime();
+            netMgr.SendClientInput(inputState);
+        }
+    }
+#endif
 
     // Update advanced systems through main GraphicsEngine
     if (m_graphics)
@@ -784,17 +813,17 @@ void Game::HandleInput(float dt)
 
     // Class switching with F5-F10 keys
     if (m_input->WasKeyPressed(VK_F5))
-        SetPlayerClass(PlayerClass::LIGHT_ASSAULT);
+        SetPlayerClass(PlayerClass::SCOUT);
     if (m_input->WasKeyPressed(VK_F6))
-        SetPlayerClass(PlayerClass::COMBAT_MEDIC);
+        SetPlayerClass(PlayerClass::MEDIC);
     if (m_input->WasKeyPressed(VK_F7))
         SetPlayerClass(PlayerClass::ENGINEER);
     if (m_input->WasKeyPressed(VK_F8))
-        SetPlayerClass(PlayerClass::INFILTRATOR);
+        SetPlayerClass(PlayerClass::RECON);
     if (m_input->WasKeyPressed(VK_F9))
-        SetPlayerClass(PlayerClass::HEAVY_ASSAULT);
+        SetPlayerClass(PlayerClass::VANGUARD);
     if (m_input->WasKeyPressed(VK_F10))
-        SetPlayerClass(PlayerClass::MAX_SUIT);
+        SetPlayerClass(PlayerClass::TITAN);
 
     // Cycle classes with [ and ]
     if (m_input->WasKeyPressed(VK_OEM_4))
@@ -1405,7 +1434,7 @@ PlayerClass Game::GetPlayerClass() const
 {
     if (m_player)
         return m_player->GetClass();
-    return PlayerClass::LIGHT_ASSAULT;
+    return PlayerClass::SCOUT;
 }
 
 void Game::CycleNextClass()
@@ -1906,3 +1935,104 @@ bool Game::PlayerExitVehicle()
         return false;
     return m_player->ExitVehicle();
 }
+
+// ============================================================================
+// NETWORKING SYSTEM
+// ============================================================================
+
+#ifdef ENABLE_NETWORKING
+
+bool Game::StartServer(uint16_t port, int maxClients)
+{
+    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
+    if (!m_networkInitialized)
+    {
+        if (!netMgr.Initialize())
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"NetworkManager::Initialize() failed", L"ERROR");
+            return false;
+        }
+        m_networkInitialized = true;
+    }
+
+    if (!netMgr.StartServer(port, maxClients))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to start server on port " + std::to_wstring(port), L"ERROR");
+        return false;
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Server started on port " + std::to_wstring(port) + L" (max " +
+                                 std::to_wstring(maxClients) + L" clients)",
+                             L"SUCCESS");
+
+    // Register player entity for replication
+    Spark::Net::ReplicatedEntity playerEntity{};
+    playerEntity.entityType = "Player";
+    playerEntity.ownerID = netMgr.GetLocalClientID();
+    if (m_player)
+    {
+        auto pos = m_player->GetPosition();
+        playerEntity.position = {pos.x, pos.y, pos.z};
+    }
+    netMgr.RegisterReplicatedEntity(playerEntity);
+
+    return true;
+}
+
+bool Game::ConnectToServer(const std::string& address, uint16_t port)
+{
+    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
+    if (!m_networkInitialized)
+    {
+        if (!netMgr.Initialize())
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"NetworkManager::Initialize() failed", L"ERROR");
+            return false;
+        }
+        m_networkInitialized = true;
+    }
+
+    std::wstring addr(address.begin(), address.end());
+    LOG_TO_CONSOLE_IMMEDIATE(L"Connecting to " + addr + L":" + std::to_wstring(port) + L"...", L"INFO");
+    netMgr.Connect(address, port, "Player");
+    return true;
+}
+
+void Game::DisconnectNetwork()
+{
+    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
+    if (netMgr.GetRole() == Spark::Net::NetworkRole::Server)
+    {
+        netMgr.StopServer();
+        LOG_TO_CONSOLE_IMMEDIATE(L"Server stopped", L"INFO");
+    }
+    else if (netMgr.GetRole() == Spark::Net::NetworkRole::Client)
+    {
+        netMgr.Disconnect();
+        LOG_TO_CONSOLE_IMMEDIATE(L"Disconnected from server", L"INFO");
+    }
+}
+
+bool Game::IsNetworkActive() const
+{
+    if (!m_networkInitialized)
+        return false;
+    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
+    return netMgr.GetRole() != Spark::Net::NetworkRole::None;
+}
+
+std::string Game::GetNetworkStatus() const
+{
+    if (!m_networkInitialized)
+        return "Networking not initialized";
+    return Spark::Net::NetworkManager::GetInstance().Console_GetStatus();
+}
+
+Spark::Net::NetworkStats Game::GetNetworkStats() const
+{
+    if (!m_networkInitialized)
+        return {};
+    return Spark::Net::NetworkManager::GetInstance().GetStats();
+}
+
+#endif // ENABLE_NETWORKING

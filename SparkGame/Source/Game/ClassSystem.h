@@ -1,13 +1,12 @@
 /**
  * @file ClassSystem.h
- * @brief FPS class system inspired by PlanetSide 2 and Battlefield
+ * @brief FPS class system for the Spark Engine showcase
  * @author Spark Engine Team
  * @date 2025
  *
  * Implements a full class-based loadout and ability system with six distinct
- * classes: Light Assault, Combat Medic, Engineer, Infiltrator, Heavy Assault,
- * and MAX Suit. Each class has unique stats, weapon loadouts, passive traits,
- * and active abilities.
+ * archetypes: Scout, Medic, Engineer, Recon, Vanguard, and Titan. Each class
+ * has unique stats, weapon loadouts, passive traits, and active abilities.
  */
 
 #pragma once
@@ -94,14 +93,14 @@ namespace Spark
  */
     struct ClassDefinition
     {
-        PlayerClass classType = PlayerClass::LIGHT_ASSAULT;
+        PlayerClass classType = PlayerClass::SCOUT;
         std::string name;
         std::string description;
 
         // Base stats
         float baseHealth = 100.0f;
         float baseArmor = 0.0f;
-        float baseShield = 0.0f; ///< Rechargeable shield (like PS2)
+        float baseShield = 0.0f; ///< Rechargeable energy shield
         float shieldRechargeRate = 10.0f;
         float shieldRechargeDelay = 6.0f;
         float baseSpeed = 5.0f;
@@ -286,12 +285,12 @@ namespace Spark
         static int GetClassCount() { return static_cast<int>(PlayerClass::COUNT); }
 
       private:
-        void InitLightAssault();
-        void InitCombatMedic();
+        void InitScout();
+        void InitMedic();
         void InitEngineer();
-        void InitInfiltrator();
-        void InitHeavyAssault();
-        void InitMAXSuit();
+        void InitRecon();
+        void InitVanguard();
+        void InitTitan();
 
         std::unordered_map<int, ClassDefinition> m_classes;
         std::vector<Deployable> m_deployables;

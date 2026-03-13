@@ -608,9 +608,9 @@ class SPARK_GAME_API Player : public GameObject
     float m_speed{5}, m_jumpHeight{3};       ///< Movement speed and jump height
 
     // Class system
-    PlayerClass m_playerClass{PlayerClass::LIGHT_ASSAULT}; ///< Current class
-    Spark::ClassSystem* m_classSystem{nullptr};            ///< Reference to class system
-    float m_shield{0}, m_maxShield{50};                    ///< Rechargeable shield
+    PlayerClass m_playerClass{PlayerClass::SCOUT}; ///< Current class
+    Spark::ClassSystem* m_classSystem{nullptr};    ///< Reference to class system
+    float m_shield{0}, m_maxShield{50};            ///< Rechargeable shield
     float m_shieldRechargeRate{10.0f};
     float m_shieldRechargeDelay{6.0f};
     float m_shieldRechargeTimer{0.0f};     ///< Timer since last damage
@@ -631,9 +631,9 @@ class SPARK_GAME_API Player : public GameObject
     float m_jetpackMaxFuel{100.0f};
     float m_jetpackThrust{8.0f};
     bool m_cloakActive{false};
-    float m_overshieldHP{0.0f};
-    float m_overshieldMaxHP{200.0f};
-    bool m_lockedDown{false}; ///< MAX lockdown state
+    float m_energyShieldHP{0.0f};
+    float m_energyShieldMaxHP{200.0f};
+    bool m_lockedDown{false}; ///< Titan lockdown state
 
     // Movement
     DirectX::XMFLOAT3 m_velocity{};              ///< Current velocity vector
@@ -744,22 +744,22 @@ class SPARK_GAME_API Player : public GameObject
     void UpdateClassMechanics(float dt);
 
     /**
-     * @brief Handle jetpack mechanics for Light Assault
+     * @brief Handle jetpack mechanics for Scout
      * @param dt Delta time
      */
     void UpdateJetpack(float dt);
 
     /**
-     * @brief Handle cloak mechanics for Infiltrator
+     * @brief Handle cloak mechanics for Recon
      * @param dt Delta time
      */
     void UpdateCloak(float dt);
 
     /**
-     * @brief Handle overshield mechanics for Heavy Assault
+     * @brief Handle energy shield mechanics for Vanguard
      * @param dt Delta time
      */
-    void UpdateOvershield(float dt);
+    void UpdateEnergyShield(float dt);
 
     /**
      * @brief Apply class definition stats to player

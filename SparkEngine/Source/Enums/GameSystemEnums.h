@@ -263,17 +263,17 @@ namespace SparkEditor
     /**
  * @brief Player class types for class-based FPS gameplay
  *
- * Inspired by PlanetSide 2 and Battlefield class systems.
+ * Generic FPS archetypes designed for the Spark Engine showcase.
  * Each class has unique stats, weapon loadouts, and abilities.
  */
     enum class PlayerClass
     {
-        LIGHT_ASSAULT = 0, ///< Fast, mobile class with jetpack ability and assault rifles
-        COMBAT_MEDIC = 1,  ///< Support healer with ARs and medical tools
-        ENGINEER = 2,      ///< Repair/builder class with SMGs and deployables
-        INFILTRATOR = 3,   ///< Stealth recon class with sniper rifles and cloak
-        HEAVY_ASSAULT = 4, ///< Tanky frontline class with LMGs and overshield
-        MAX_SUIT = 5,      ///< Heavy mech suit with dual weapons, extreme tankiness
+        SCOUT = 0,    ///< Fast, mobile class with jetpack ability and assault rifles
+        MEDIC = 1,    ///< Support healer with ARs and medical tools
+        ENGINEER = 2, ///< Repair/builder class with SMGs and deployables
+        RECON = 3,    ///< Stealth reconnaissance class with sniper rifles and cloak
+        VANGUARD = 4, ///< Tanky frontline class with LMGs and energy shield
+        TITAN = 5,    ///< Heavy exosuit with dual weapons, extreme tankiness
         COUNT = 6
     };
 
@@ -286,18 +286,18 @@ namespace SparkEditor
     enum class ClassAbility
     {
         NONE = 0,
-        JETPACK = 1,          ///< Light Assault: vertical thrust/flight
-        SPRINT_BOOST = 2,     ///< Light Assault: temporary speed burst
-        HEAL_AURA = 3,        ///< Combat Medic: area-of-effect healing
-        REVIVE = 4,           ///< Combat Medic: revive downed allies
+        JETPACK = 1,          ///< Scout: vertical thrust/flight
+        SPRINT_BOOST = 2,     ///< Scout: temporary speed burst
+        HEAL_AURA = 3,        ///< Medic: area-of-effect healing
+        REVIVE = 4,           ///< Medic: revive downed allies
         DEPLOY_TURRET = 5,    ///< Engineer: place an automated turret
         DEPLOY_BARRIER = 6,   ///< Engineer: place a defensive barrier
-        CLOAK = 7,            ///< Infiltrator: temporary invisibility
-        RECON_DART = 8,       ///< Infiltrator: reveal enemies on minimap
-        OVERSHIELD = 9,       ///< Heavy Assault: temporary shield boost
-        ROCKET_BARRAGE = 10,  ///< Heavy Assault: salvo of rockets
-        LOCKDOWN = 11,        ///< MAX: root in place for increased fire rate
-        EMERGENCY_REPAIR = 12 ///< MAX: self-repair burst
+        CLOAK = 7,            ///< Recon: temporary invisibility
+        SENSOR_PULSE = 8,     ///< Recon: reveal enemies on minimap
+        ENERGY_SHIELD = 9,    ///< Vanguard: temporary shield boost
+        ROCKET_BARRAGE = 10,  ///< Vanguard: salvo of rockets
+        LOCKDOWN = 11,        ///< Titan: root in place for increased fire rate
+        EMERGENCY_REPAIR = 12 ///< Titan: self-repair burst
     };
 
     /**
