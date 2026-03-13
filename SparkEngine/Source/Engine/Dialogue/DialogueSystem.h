@@ -43,6 +43,8 @@
 #include <memory>
 #include <cstdint>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark
 {
 
@@ -139,6 +141,13 @@ namespace Spark
      * @return Pointer to node, or nullptr if not found.
      */
         const DialogueNode* GetNode(const std::string& nodeId) const;
+
+        /**
+     * @brief Get a mutable node by ID.
+     * @param nodeId Node identifier.
+     * @return Pointer to node, or nullptr if not found.
+     */
+        DialogueNode* GetMutableNode(const std::string& nodeId);
 
         /** @brief Get all node IDs. */
         std::vector<std::string> GetNodeIds() const;
@@ -303,6 +312,10 @@ namespace Spark
         std::unordered_map<std::string, std::function<bool(const std::string&)>> m_conditionEvaluators;
         std::vector<std::function<void(const std::string&, const std::string&)>> m_eventCallbacks;
         std::vector<std::function<void(const std::string&)>> m_endCallbacks;
+
+        int m_processDepth = 0; ///< Recursion depth counter for cycle detection in ProcessNode
+
+        static constexpr int kMaxProcessDepth = 100; ///< Maximum recursion depth before aborting
     };
 
 } // namespace Spark

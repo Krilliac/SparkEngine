@@ -26,6 +26,7 @@
 #include "../UndoRedo/UndoRedoManager.h"
 #include "../Prefabs/PrefabManager.h"
 #include "../Search/CommandPalette.h"
+#include "Engine/Editor/PlayModeManager.h"
 
 #ifdef _WIN32
 struct ID3D11Device;
@@ -209,7 +210,7 @@ namespace SparkEditor
         // Additional member variable for selected objects count
         int m_selectedObjectCount = 0;
 
-        // Toolbar state
+        // Toolbar state — delegates to PlayModeManager for scene snapshot/restore
         enum class PlayMode
         {
             Stopped,
@@ -217,6 +218,9 @@ namespace SparkEditor
             Paused
         };
         PlayMode m_playMode = PlayMode::Stopped;
+
+        /// @brief Play-in-editor manager (scene snapshot, time control, subsystem toggles)
+        Spark::Editor::PlayModeManager m_playModeManager;
 
         enum class TransformTool
         {

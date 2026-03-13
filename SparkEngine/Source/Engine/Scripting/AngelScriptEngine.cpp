@@ -27,6 +27,7 @@ namespace fs = std::filesystem;
 // ============================================================================
 
 AngelScriptEngine* AngelScriptEngine::s_instance = nullptr;
+World* AngelScriptEngine::s_boundWorld = nullptr;
 
 // ============================================================================
 // Helper: log a warning to stderr (used by stubs and real paths alike)
@@ -81,6 +82,7 @@ EntityID ASCreateEntity(const std::string& name)
     }
 
     EntityID entity = world->CreateEntity(name);
+    world->AddComponent<Transform>(entity);
     LogInfo("ASCreateEntity: created entity '" + name + "' (ID=" + std::to_string(static_cast<uint32_t>(entity)) +
             ").");
     return entity;

@@ -88,9 +88,18 @@ struct HealthComponent
 };
 
 // =============================================================================
-// WeatherComponent
+// WeatherComponent — marks entities as weather-affected zones
 // =============================================================================
 
+/**
+ * @brief Per-entity weather zone data.
+ *
+ * Attach to trigger/zone entities to define localized weather areas.
+ * The global Spark::WeatherSystem reads these when entities overlap
+ * the player to blend weather transitions.
+ *
+ * @note Data-only component — game code queries via World::view<WeatherComponent>().
+ */
 struct WeatherComponent
 {
     int weatherType = 0;
@@ -102,9 +111,18 @@ struct WeatherComponent
 };
 
 // =============================================================================
-// InventoryTag
+// InventoryTag — marks entities that have an inventory
 // =============================================================================
 
+/**
+ * @brief Tag component for entities that carry an inventory.
+ *
+ * Game code queries this via World::view<InventoryTag>() to find entities
+ * with inventories (players, chests, NPCs). Inventory management logic
+ * lives in game modules, not the engine.
+ *
+ * @note Data-only marker — no engine-level system processes it.
+ */
 struct InventoryTag
 {
     int maxSlots = 20;
@@ -114,9 +132,17 @@ struct InventoryTag
 };
 
 // =============================================================================
-// QuestTrackerTag
+// QuestTrackerTag — marks entities that participate in quests
 // =============================================================================
 
+/**
+ * @brief Tag component for entities with quest tracking.
+ *
+ * Game code queries this to find entities involved in quests.
+ * Quest progression logic lives in game modules.
+ *
+ * @note Data-only marker — no engine-level system processes it.
+ */
 struct QuestTrackerTag
 {
     int activeQuestCount = 0;

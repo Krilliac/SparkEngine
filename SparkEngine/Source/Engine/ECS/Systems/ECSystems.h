@@ -744,6 +744,33 @@ namespace Spark::ECS
     };
 
     // =============================================================================
+    // Ability Update System
+    // =============================================================================
+
+    /**
+     * @class AbilityUpdateSystem
+     * @brief Ticks AbilityComponent cooldowns each frame.
+     *
+     * Iterates entities with `AbilityComponent` and calls `Update(deltaTime)` to
+     * advance all ability cooldowns (primary, secondary, sprint). This ensures
+     * cooldowns are properly tracked by the engine regardless of game logic.
+     *
+     * ### Execution order
+     * Should run during the Gameplay phase, after physics and animation.
+     */
+    class AbilityUpdateSystem : public ISystem
+    {
+      public:
+        void Update(World& world, float deltaTime) override;
+        const char* GetName() const override { return "AbilityUpdateSystem"; }
+
+        int GetActiveAbilityCount() const { return m_activeCount; }
+
+      private:
+        int m_activeCount = 0;
+    };
+
+    // =============================================================================
     // System Manager
     // =============================================================================
 

@@ -56,6 +56,10 @@
 #include "Utils/LocalFileCache.h"
 #include "EngineSetup.h"
 #include "AssetIntegration.h"
+#include "Graphics/WeatherSystem.h"
+#include "Engine/UI/UISystem.h"
+#include "Engine/Dialogue/DialogueSystem.h"
+#include "Engine/Modding/ModSystem.h"
 
 // -----------------------------------------------------------------------------
 // Missing module startup warnings
@@ -117,6 +121,10 @@ std::unique_ptr<ModuleManager> g_moduleManager;
 std::unique_ptr<AudioEngine> g_audioEngine;
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 std::unique_ptr<Spark::LocalFileCache> g_fileCache;
+std::unique_ptr<Spark::WeatherSystem> g_weatherSystem;
+std::unique_ptr<Spark::UI::UISystem> g_uiSystem;
+std::unique_ptr<Spark::DialogueSystem> g_dialogueSystem;
+std::unique_ptr<Spark::ModSystem> g_modSystem;
 static Spark::DeltaSmoother g_deltaSmoother(10);
 
 #ifdef SPARK_HEADLESS_SUPPORT
@@ -405,6 +413,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // 5h. Register AssetRegistry for handle-based asset lookups
     static Spark::AssetRegistry g_assetRegistry;
     EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&g_assetRegistry);
+
+    // 5i. Register gameplay subsystems (Weather, UI, Dialogue, Modding)
+    g_weatherSystem = std::make_unique<Spark::WeatherSystem>();
+    EngineContext::Get()->RegisterSystem<Spark::WeatherSystem>(g_weatherSystem.get());
+
+    g_uiSystem = std::make_unique<Spark::UI::UISystem>();
+    EngineContext::Get()->RegisterSystem<Spark::UI::UISystem>(g_uiSystem.get());
+
+    g_dialogueSystem = std::make_unique<Spark::DialogueSystem>();
+    EngineContext::Get()->RegisterSystem<Spark::DialogueSystem>(g_dialogueSystem.get());
+
+    g_modSystem = std::make_unique<Spark::ModSystem>();
+    EngineContext::Get()->RegisterSystem<Spark::ModSystem>(g_modSystem.get());
 
     // 6. Load game modules via ModuleManager
     g_moduleManager = std::make_unique<ModuleManager>();
@@ -1251,6 +1272,10 @@ void RegisterEngineConsoleCommands()
 #include "Graphics/GraphicsConsoleCommands.h"
 #include "EngineSetup.h"
 #include "AssetIntegration.h"
+#include "Graphics/WeatherSystem.h"
+#include "Engine/UI/UISystem.h"
+#include "Engine/Dialogue/DialogueSystem.h"
+#include "Engine/Modding/ModSystem.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -1768,6 +1793,19 @@ int main(int argc, char* argv[])
     static Spark::AssetRegistry g_linuxAssetRegistry;
     EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&g_linuxAssetRegistry);
 
+    // 5c. Register gameplay subsystems (Weather, UI, Dialogue, Modding)
+    static Spark::WeatherSystem g_linuxWeatherSystem;
+    EngineContext::Get()->RegisterSystem<Spark::WeatherSystem>(&g_linuxWeatherSystem);
+
+    static Spark::UI::UISystem g_linuxUISystem;
+    EngineContext::Get()->RegisterSystem<Spark::UI::UISystem>(&g_linuxUISystem);
+
+    static Spark::DialogueSystem g_linuxDialogueSystem;
+    EngineContext::Get()->RegisterSystem<Spark::DialogueSystem>(&g_linuxDialogueSystem);
+
+    static Spark::ModSystem g_linuxModSystem;
+    EngineContext::Get()->RegisterSystem<Spark::ModSystem>(&g_linuxModSystem);
+
     // 6. Module loading
     g_moduleManager = std::make_unique<ModuleManager>();
 
@@ -2011,6 +2049,16 @@ int main(int argc, char* argv[])
     Spark::SaveSystem::GetInstance().Initialize("Saves");
     EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+
+    // Register gameplay subsystems (Weather, UI, Dialogue, Modding)
+    static Spark::WeatherSystem g_fallbackWeatherSystem;
+    EngineContext::Get()->RegisterSystem<Spark::WeatherSystem>(&g_fallbackWeatherSystem);
+    static Spark::UI::UISystem g_fallbackUISystem;
+    EngineContext::Get()->RegisterSystem<Spark::UI::UISystem>(&g_fallbackUISystem);
+    static Spark::DialogueSystem g_fallbackDialogueSystem;
+    EngineContext::Get()->RegisterSystem<Spark::DialogueSystem>(&g_fallbackDialogueSystem);
+    static Spark::ModSystem g_fallbackModSystem;
+    EngineContext::Get()->RegisterSystem<Spark::ModSystem>(&g_fallbackModSystem);
 
     g_moduleManager = std::make_unique<ModuleManager>();
 

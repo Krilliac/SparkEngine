@@ -70,6 +70,32 @@ Physics → Animation → AI → Audio → Lifecycle → Render
 - `GraphicsEngine` — main thread render, `std::atomic` frame state
 - `NetworkManager` — queue mutex for message I/O and handler registration
 
+## Session start (run at the beginning of every session)
+
+At the start of every new session, **immediately** sync your branch with the latest upstream `Working` branch before doing anything else:
+
+```bash
+# 1. Fetch the latest upstream commits
+git fetch origin Working
+
+# 2. Check how far behind you are
+git log --oneline HEAD..origin/Working | wc -l
+
+# 3. If behind, rebase onto the latest
+git rebase origin/Working
+
+# 4. If conflicts arise, resolve them (prefer upstream for auto-generated content)
+git add <resolved-files>
+git rebase --continue
+```
+
+**Why:** Feature branches diverge from `Working` as other PRs merge. Without rebasing at session start, you'll be working on stale code and face larger conflicts later.
+
+**Rules:**
+- This is the **first thing** to do in every session — before reading code, before making changes, before anything else.
+- If the rebase produces conflicts, resolve them carefully and re-run `docs/sync-wiki.sh sync`.
+- The default upstream branch is `Working` (not `main`).
+
 ## Branch freshness (run before every commit)
 
 Before committing or pushing, **always** ensure your branch is up to date with the upstream base branch:

@@ -54,7 +54,6 @@ namespace Spark::Graphics
 #include "TemporalEffects.h" // Full definition needed for TAASettings struct
 class TextureSystem;
 class LightingSystem;
-class PostProcessingSystem;
 class AssetPipeline;
 class PhysicsSystem;
 class GameObject;
@@ -242,7 +241,7 @@ struct RenderStatistics
  * - TextureSystem for advanced texture management and streaming
  * - MaterialSystem for PBR materials and shader management
  * - LightingSystem for advanced lighting and shadow mapping
- * - PostProcessingSystem for HDR and visual effects
+ * - PostProcessingPipeline for HDR and visual effects
  * - AssetPipeline for model loading and asset streaming
  * - PhysicsSystem for physics simulation integration
  */
@@ -365,7 +364,7 @@ class GraphicsEngine
     TextureSystem* GetTextureSystem() const;
     MaterialSystem* GetMaterialSystem() const;
     LightingSystem* GetLightingSystem() const;
-    PostProcessingSystem* GetPostProcessingSystem() const;
+    Spark::Graphics::PostProcessingPipeline* GetPostProcessingPipeline() const;
     AssetPipeline* GetAssetPipeline() const;
 
     // ========================================================================
@@ -613,7 +612,6 @@ class GraphicsEngine
     std::unique_ptr<TextureSystem> m_textureSystem;
     std::unique_ptr<MaterialSystem> m_materialSystem;
     std::unique_ptr<LightingSystem> m_lightingSystem;
-    std::unique_ptr<PostProcessingSystem> m_postProcessingSystem;
     std::unique_ptr<AssetPipeline> m_assetPipeline;
     // Non-owning: PhysicsSystem lifetime managed by SparkEngine.cpp / EngineContext
     PhysicsSystem* m_physicsSystem = nullptr;

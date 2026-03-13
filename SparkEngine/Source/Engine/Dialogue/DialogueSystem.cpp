@@ -27,6 +27,12 @@ namespace Spark
         return it != m_nodes.end() ? &it->second : nullptr;
     }
 
+    DialogueNode* DialogueTree::GetMutableNode(const std::string& nodeId)
+    {
+        auto it = m_nodes.find(nodeId);
+        return it != m_nodes.end() ? &it->second : nullptr;
+    }
+
     std::vector<std::string> DialogueTree::GetNodeIds() const
     {
         std::vector<std::string> ids;
@@ -67,6 +73,16 @@ namespace Spark
         std::regex speakerRegex(R"~~("speaker"\s*:\s*"([^"]*)")~~");
         std::regex textRegex(R"~~("text"\s*:\s*"([^"]*)")~~");
         std::regex nextRegex(R"~~("next"\s*:\s*"([^"]*)")~~");
+        std::regex typeRegex(R"~~("type"\s*:\s*"([^"]*)")~~");
+        std::regex conditionRegex(R"~~("condition"\s*:\s*"([^"]*)")~~");
+        std::regex trueNodeRegex(R"~~("trueNodeId"\s*:\s*"([^"]*)")~~");
+        std::regex falseNodeRegex(R"~~("falseNodeId"\s*:\s*"([^"]*)")~~");
+        std::regex eventNameRegex(R"~~("eventName"\s*:\s*"([^"]*)")~~");
+        std::regex eventDataRegex(R"~~("eventData"\s*:\s*"([^"]*)")~~");
+        std::regex displayDurationRegex(R"~~("displayDuration"\s*:\s*([0-9]*\.?[0-9]+))~~");
+        std::regex choiceEntryRegex(R"~~(\{[^}]*"text"\s*:\s*"([^"]*)"[^}]*\})~~");
+        std::regex choiceNextRegex(R"~~("nextNodeId"\s*:\s*"([^"]*)")~~");
+        std::regex choiceCondRegex(R"~~("condition"\s*:\s*"([^"]*)")~~");
 
         auto nodeBegin = std::sregex_iterator(content.begin(), content.end(), nodeRegex);
         auto nodeEnd = std::sregex_iterator();
@@ -82,6 +98,28 @@ namespace Spark
                 static_cast<size_t>(it->position()),
                 (std::min)(static_cast<size_t>(500), content.size() - static_cast<size_t>(it->position())));
 
+            // Parse node type
+            if (std::regex_search(nodeContext, match, typeRegex))
+            {
+                const std::string& typeStr = match[1].str();
+                if (typeStr == "Choice")
+                {
+                    node.type = DialogueNodeType::Choice;
+                }
+                else if (typeStr == "Branch")
+                {
+                    node.type = DialogueNodeType::Branch;
+                }
+                else if (typeStr == "Event")
+                {
+                    node.type = DialogueNodeType::Event;
+                }
+                else if (typeStr == "End")
+                {
+                    node.type = DialogueNodeType::End;
+                }
+            }
+
             if (std::regex_search(nodeContext, match, speakerRegex))
             {
                 node.speakerName = match[1].str();
@@ -93,6 +131,68 @@ namespace Spark
             if (std::regex_search(nodeContext, match, nextRegex))
             {
                 node.nextNodeId = match[1].str();
+            }
+
+            // Parse displayDuration for Text nodes
+            if (std::regex_search(nodeContext, match, displayDurationRegex))
+            {
+                node.displayDuration = std::stof(match[1].str());
+            }
+
+            // Parse Branch node fields
+            if (std::regex_search(nodeContext, match, conditionRegex))
+            {
+                node.condition = match[1].str();
+            }
+            if (std::regex_search(nodeContext, match, trueNodeRegex))
+            {
+                node.trueNodeId = match[1].str();
+            }
+            if (std::regex_search(nodeContext, match, falseNodeRegex))
+            {
+                node.falseNodeId = match[1].str();
+            }
+
+            // Parse Event node fields
+            if (std::regex_search(nodeContext, match, eventNameRegex))
+            {
+                node.eventName = match[1].str();
+            }
+            if (std::regex_search(nodeContext, match, eventDataRegex))
+            {
+                node.eventData = match[1].str();
+            }
+
+            // Parse choices array for Choice nodes
+            if (node.type == DialogueNodeType::Choice)
+            {
+                // Find the "choices" array region in the context
+                size_t choicesPos = nodeContext.find("\"choices\"");
+                if (choicesPos != std::string::npos)
+                {
+                    std::string choicesContext = nodeContext.substr(choicesPos);
+                    auto choiceBegin =
+                        std::sregex_iterator(choicesContext.begin(), choicesContext.end(), choiceEntryRegex);
+                    auto choiceEnd = std::sregex_iterator();
+
+                    for (auto cIt = choiceBegin; cIt != choiceEnd; ++cIt)
+                    {
+                        DialogueChoice choice;
+                        choice.text = (*cIt)[1].str();
+
+                        std::string entryStr = (*cIt)[0].str();
+                        std::smatch choiceMatch;
+                        if (std::regex_search(entryStr, choiceMatch, choiceNextRegex))
+                        {
+                            choice.nextNodeId = choiceMatch[1].str();
+                        }
+                        if (std::regex_search(entryStr, choiceMatch, choiceCondRegex))
+                        {
+                            choice.condition = choiceMatch[1].str();
+                        }
+                        node.choices.push_back(std::move(choice));
+                    }
+                }
             }
 
             AddNode(node);
@@ -203,6 +303,25 @@ namespace Spark
         }
 
         const auto& choice = available[choiceIndex];
+
+        // Mark the selected choice as visited in the actual tree node
+        auto treeIt = m_trees.find(m_state.treeId);
+        if (treeIt != m_trees.end())
+        {
+            DialogueNode* mutableNode = treeIt->second->GetMutableNode(m_state.currentNodeId);
+            if (mutableNode)
+            {
+                for (auto& treeChoice : mutableNode->choices)
+                {
+                    if (treeChoice.text == choice.text && treeChoice.nextNodeId == choice.nextNodeId)
+                    {
+                        treeChoice.visited = true;
+                        break;
+                    }
+                }
+            }
+        }
+
         m_state.currentNodeId = choice.nextNodeId;
         m_state.nodeTimer = 0.0f;
         m_state.waitingForInput = false;
@@ -305,6 +424,18 @@ namespace Spark
 
     void DialogueSystem::ProcessNode(const DialogueNode& node)
     {
+        ++m_processDepth;
+        if (m_processDepth > kMaxProcessDepth)
+        {
+            SPARK_LOG_WARN("Dialogue",
+                           "ProcessNode exceeded max recursion depth (%d) - possible cycle at node '%s'. "
+                           "Ending conversation.",
+                           kMaxProcessDepth, node.id.c_str());
+            m_processDepth = 0;
+            EndConversation();
+            return;
+        }
+
         switch (node.type)
         {
         case DialogueNodeType::Text:
@@ -348,6 +479,8 @@ namespace Spark
             EndConversation();
             break;
         }
+
+        --m_processDepth;
     }
 
     bool DialogueSystem::EvaluateCondition(const std::string& condition) const

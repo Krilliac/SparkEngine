@@ -10,7 +10,6 @@
 #include "TextureSystem.h"
 #include "MaterialSystem.h"
 #include "LightingSystem.h"
-#include "PostProcessingSystem.h"
 #include "AssetPipeline.h"
 
 #include "TemporalEffects.h"
@@ -104,12 +103,10 @@ GraphicsEngine::GraphicsEngine()
         m_textureSystem = std::make_unique<TextureSystem>();
         m_materialSystem = std::make_unique<MaterialSystem>();
         m_lightingSystem = std::make_unique<LightingSystem>();
-        m_postProcessingSystem = std::make_unique<PostProcessingSystem>();
         m_assetPipeline = std::make_unique<AssetPipeline>();
         // PhysicsSystem is now created and owned by SparkEngine.cpp / EngineContext
         // m_physicsSystem is set via SetPhysicsSystem() after engine init
 
-        // Create legacy systems for compatibility
         m_lightManager = std::make_unique<LightManager>();
         m_postProcessing = std::make_unique<PostProcessingPipeline>();
         m_temporalEffects = std::make_unique<TemporalEffects>();
@@ -281,19 +278,6 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         }
     }
 
-    if (m_postProcessingSystem)
-    {
-        hr = m_postProcessingSystem->Initialize(m_device.Get(), m_context.Get());
-        if (FAILED(hr))
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize PostProcessingSystem", L"ERROR");
-        }
-        else
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"PostProcessingSystem initialized successfully", L"SUCCESS");
-        }
-    }
-
     if (m_assetPipeline)
     {
         hr = m_assetPipeline->Initialize(m_device.Get(), m_context.Get());
@@ -365,12 +349,6 @@ void GraphicsEngine::Shutdown()
     {
         m_lightingSystem->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"LightingSystem shutdown complete", L"INFO");
-    }
-
-    if (m_postProcessingSystem)
-    {
-        m_postProcessingSystem->Shutdown();
-        LOG_TO_CONSOLE_IMMEDIATE(L"PostProcessingSystem shutdown complete", L"INFO");
     }
 
     if (m_assetPipeline)
@@ -1435,7 +1413,7 @@ void GraphicsEngine::UpdateAdvancedMetrics()
         }
 
         // Update post-processing metrics
-        if (m_postProcessingSystem)
+        if (m_postProcessing)
         {
             m_statistics.postProcessPasses = 0;
             if (m_settings.bloom)
@@ -1467,7 +1445,7 @@ void GraphicsEngine::ApplyAdvancedGraphicsState()
         LOG_TO_CONSOLE_IMMEDIATE(L"Applying TAA settings", L"INFO");
     }
 
-    if (m_ssaoSettings.enabled && m_postProcessingSystem)
+    if (m_ssaoSettings.enabled && m_postProcessing)
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Applying SSAO settings", L"INFO");
     }
@@ -2149,9 +2127,9 @@ LightingSystem* GraphicsEngine::GetLightingSystem() const
     return m_lightingSystem.get();
 }
 
-PostProcessingSystem* GraphicsEngine::GetPostProcessingSystem() const
+Spark::Graphics::PostProcessingPipeline* GraphicsEngine::GetPostProcessingPipeline() const
 {
-    return m_postProcessingSystem.get();
+    return m_postProcessing.get();
 }
 
 AssetPipeline* GraphicsEngine::GetAssetPipeline() const
@@ -2937,10 +2915,10 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
 #include "TextureSystem.h"
 #include "MaterialSystem.h"
 #include "LightingSystem.h"
-#include "PostProcessingSystem.h"
 #include "AssetPipeline.h"
 #include "LightManager.h"
 #include "PostProcessingPipeline.h"
+using Spark::Graphics::PostProcessingPipeline;
 #include "RenderTarget.h"
 #include "TemporalEffects.h"
 #include "../Physics/PhysicsSystem.h"
@@ -3035,11 +3013,11 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_textureSystem = std::make_unique<TextureSystem>();
     m_materialSystem = std::make_unique<MaterialSystem>();
     m_lightingSystem = std::make_unique<LightingSystem>();
-    m_postProcessingSystem = std::make_unique<PostProcessingSystem>();
     m_assetPipeline = std::make_unique<AssetPipeline>();
     // PhysicsSystem is now created and owned by SparkEngine.cpp / EngineContext
     // m_physicsSystem is set via SetPhysicsSystem() after engine init
     m_lightManager = std::make_unique<LightManager>();
+    m_postProcessing = std::make_unique<PostProcessingPipeline>();
 
     std::cout << "[GraphicsEngine] Initialized on Linux via RHI (" << rhi.bridge.GetBackendName() << ")" << std::endl;
 
@@ -3060,7 +3038,7 @@ void GraphicsEngine::Shutdown()
     m_textureSystem.reset();
     m_materialSystem.reset();
     m_lightingSystem.reset();
-    m_postProcessingSystem.reset();
+    m_postProcessing.reset();
     m_assetPipeline.reset();
     m_physicsSystem = nullptr; // Non-owning, just clear the pointer
     m_lightManager.reset();
@@ -3260,9 +3238,9 @@ LightingSystem* GraphicsEngine::GetLightingSystem() const
 {
     return m_lightingSystem.get();
 }
-PostProcessingSystem* GraphicsEngine::GetPostProcessingSystem() const
+Spark::Graphics::PostProcessingPipeline* GraphicsEngine::GetPostProcessingPipeline() const
 {
-    return m_postProcessingSystem.get();
+    return m_postProcessing.get();
 }
 AssetPipeline* GraphicsEngine::GetAssetPipeline() const
 {
