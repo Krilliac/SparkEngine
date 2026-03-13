@@ -10,6 +10,7 @@
 #include "../Core/EditorPanel.h"
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 namespace SparkEditor
 {
@@ -61,10 +62,24 @@ namespace SparkEditor
      */
         const std::vector<std::string>& GetSceneObjects() const { return m_sceneObjects; }
 
+        /**
+         * @brief Check if an object is visible
+         * @param objectName Name of the object
+         * @return true if visible (default), false if hidden
+         */
+        bool IsObjectVisible(const std::string& objectName) const;
+
+        /**
+         * @brief Toggle visibility of an object
+         * @param objectName Name of the object
+         */
+        void ToggleObjectVisibility(const std::string& objectName);
+
       private:
         std::vector<std::string> m_sceneObjects;
         std::string m_selectedObject;
         char m_searchFilter[256] = {0};
+        std::unordered_set<std::string> m_hiddenObjects;
     };
 
 } // namespace SparkEditor

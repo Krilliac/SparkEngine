@@ -209,10 +209,16 @@ namespace SparkEditor
     {
         if (ImGui::CollapsingHeader(ICON_FA_CUBE " Body Inspector"))
         {
+            if (!m_scene)
+            {
+                ImGui::TextColored(ImVec4(0.55f, 0.58f, 0.62f, 1.0f),
+                                   ICON_FA_INFO_CIRCLE " No scene loaded. Load a scene to inspect physics bodies.");
+                return;
+            }
+
             ImGui::Text("Select a physics entity to inspect its 2D body properties.");
             ImGui::Spacing();
 
-            // RigidBody2D properties (placeholder for selected entity)
             static int bodyType = 2;
             const char* bodyTypes[] = {"Static", "Kinematic", "Dynamic"};
             ImGui::Combo("Body Type", &bodyType, bodyTypes, 3);

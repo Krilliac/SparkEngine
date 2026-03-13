@@ -31,6 +31,7 @@ namespace SparkEditor
         void RenderWeaponPreview();
         void RenderDPSChart();
         void RenderComparisonTable();
+        void SaveAllWeapons();
 
         struct WeaponEntry
         {

@@ -83,6 +83,14 @@ namespace SparkEditor
         int m_rectStartX = 0;
         int m_rectStartY = 0;
 
+        // Map data
+        int m_mapWidth = 20;
+        int m_mapHeight = 15;
+        std::vector<int32_t> m_tiles;
+        std::vector<bool> m_collision;
+
+        void EnsureMapData();
+
         // Undo buffer (simple: stores full map state)
         struct TilemapSnapshot
         {
@@ -94,6 +102,11 @@ namespace SparkEditor
         std::vector<TilemapSnapshot> m_undoStack;
         std::vector<TilemapSnapshot> m_redoStack;
         static constexpr size_t MAX_UNDO_HISTORY = 50;
+
+        void PushUndoSnapshot(const std::vector<int32_t>& tiles, const std::vector<bool>& collision, int width,
+                              int height);
+        void PerformUndo();
+        void PerformRedo();
     };
 
 } // namespace SparkEditor

@@ -129,7 +129,7 @@ namespace SparkEditor
                 ImGui::BeginDisabled();
             if (ImGui::Button(ICON_FA_UNDO " Undo"))
             {
-                // Undo logic placeholder
+                PerformUndo();
             }
             if (!canUndo)
                 ImGui::EndDisabled();
@@ -141,7 +141,7 @@ namespace SparkEditor
                 ImGui::BeginDisabled();
             if (ImGui::Button(ICON_FA_REDO " Redo"))
             {
-                // Redo logic placeholder
+                PerformRedo();
             }
             if (!canRedo)
                 ImGui::EndDisabled();
@@ -218,23 +218,38 @@ namespace SparkEditor
         RenderMapProperties();
     }
 
+    void TilemapEditorPanel::PushUndoSnapshot(const std::vector<int32_t>& tiles, const std::vector<bool>& collision,
+                                              int width, int height)
+    {
+        TilemapSnapshot snapshot;
+        snapshot.tiles = tiles;
+        snapshot.collisionFlags = collision;
+        snapshot.width = width;
+        snapshot.height = height;
+        m_undoStack.push_back(std::move(snapshot));
+        if (m_undoStack.size() > MAX_UNDO_HISTORY)
+        {
+            m_undoStack.erase(m_undoStack.begin());
+        }
+        m_redoStack.clear();
+    }
+
+    void TilemapEditorPanel::EnsureMapData()
+    {
+        if (m_tiles.empty() || static_cast<int>(m_tiles.size()) != m_mapWidth * m_mapHeight)
+        {
+            m_tiles.resize(static_cast<size_t>(m_mapWidth) * m_mapHeight, 0);
+            m_collision.resize(static_cast<size_t>(m_mapWidth) * m_mapHeight, false);
+        }
+    }
+
     void TilemapEditorPanel::RenderMapCanvas()
     {
-        // Demo tilemap for visualization
-        static int mapWidth = 20;
-        static int mapHeight = 15;
-        static std::vector<int32_t> demoTiles;
-        static std::vector<bool> demoCollision;
-
-        if (demoTiles.empty() || static_cast<int>(demoTiles.size()) != mapWidth * mapHeight)
-        {
-            demoTiles.resize(static_cast<size_t>(mapWidth) * mapHeight, 0);
-            demoCollision.resize(static_cast<size_t>(mapWidth) * mapHeight, false);
-        }
+        EnsureMapData();
 
         float tileSize = 16.0f * m_canvasZoom;
-        float canvasW = mapWidth * tileSize;
-        float canvasH = mapHeight * tileSize;
+        float canvasW = m_mapWidth * tileSize;
+        float canvasH = m_mapHeight * tileSize;
 
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
         canvasPos.x += m_canvasPanX;
@@ -242,14 +257,14 @@ namespace SparkEditor
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
         // Draw tiles
-        for (int y = 0; y < mapHeight; ++y)
+        for (int y = 0; y < m_mapHeight; ++y)
         {
-            for (int x = 0; x < mapWidth; ++x)
+            for (int x = 0; x < m_mapWidth; ++x)
             {
                 float px = canvasPos.x + x * tileSize;
                 float py = canvasPos.y + y * tileSize;
 
-                int32_t tileID = demoTiles[static_cast<size_t>(y) * mapWidth + x];
+                int32_t tileID = m_tiles[static_cast<size_t>(y) * m_mapWidth + x];
 
                 if (tileID > 0)
                 {
@@ -265,7 +280,7 @@ namespace SparkEditor
                 }
 
                 // Collision overlay
-                if (m_showCollision && demoCollision[static_cast<size_t>(y) * mapWidth + x])
+                if (m_showCollision && m_collision[static_cast<size_t>(y) * m_mapWidth + x])
                 {
                     drawList->AddRectFilled(ImVec2(px + 2, py + 2), ImVec2(px + tileSize - 2, py + tileSize - 2),
                                             IM_COL32(255, 0, 0, 80));
@@ -289,7 +304,7 @@ namespace SparkEditor
             int tileY = static_cast<int>((mousePos.y - canvasPos.y) / tileSize);
 
             // Highlight hovered tile
-            if (tileX >= 0 && tileX < mapWidth && tileY >= 0 && tileY < mapHeight)
+            if (tileX >= 0 && tileX < m_mapWidth && tileY >= 0 && tileY < m_mapHeight)
             {
                 float hx = canvasPos.x + tileX * tileSize;
                 float hy = canvasPos.y + tileY * tileSize;
@@ -298,24 +313,31 @@ namespace SparkEditor
 
                 if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 {
-                    size_t idx = static_cast<size_t>(tileY) * mapWidth + tileX;
+                    // Capture undo snapshot on first click
+                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                    {
+                        PushUndoSnapshot(m_tiles, m_collision, m_mapWidth, m_mapHeight);
+                    }
+
+                    size_t idx = static_cast<size_t>(tileY) * m_mapWidth + tileX;
                     switch (m_currentTool)
                     {
                     case TileTool::Paint:
-                        demoTiles[idx] = m_selectedTileID;
+                        m_tiles[idx] = m_selectedTileID;
                         break;
                     case TileTool::Erase:
-                        demoTiles[idx] = 0;
+                        m_tiles[idx] = 0;
                         break;
                     case TileTool::Fill:
                         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-                            FloodFill(demoTiles, mapWidth, mapHeight, tileX, tileY, m_selectedTileID);
+                            FloodFill(m_tiles, m_mapWidth, m_mapHeight, tileX, tileY, m_selectedTileID);
                         break;
                     case TileTool::Eyedropper:
-                        m_selectedTileID = demoTiles[idx];
+                        m_selectedTileID = m_tiles[idx];
                         break;
                     case TileTool::CollisionPaint:
-                        demoCollision[idx] = !demoCollision[idx];
+                        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                            m_collision[idx] = !m_collision[idx];
                         break;
                     case TileTool::Rectangle:
                         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -341,8 +363,8 @@ namespace SparkEditor
                     {
                         for (int fx = x0; fx <= x1; ++fx)
                         {
-                            if (fx >= 0 && fx < mapWidth && fy >= 0 && fy < mapHeight)
-                                demoTiles[static_cast<size_t>(fy) * mapWidth + fx] = m_selectedTileID;
+                            if (fx >= 0 && fx < m_mapWidth && fy >= 0 && fy < m_mapHeight)
+                                m_tiles[static_cast<size_t>(fy) * m_mapWidth + fx] = m_selectedTileID;
                         }
                     }
                 }
@@ -366,7 +388,7 @@ namespace SparkEditor
         }
 
         // Status bar
-        ImGui::Text("Map: %dx%d | Zoom: %.1fx | Tool: %s | Tile: %d", mapWidth, mapHeight, m_canvasZoom,
+        ImGui::Text("Map: %dx%d | Zoom: %.1fx | Tool: %s | Tile: %d", m_mapWidth, m_mapHeight, m_canvasZoom,
                     m_currentTool == TileTool::Paint            ? "Paint"
                     : m_currentTool == TileTool::Erase          ? "Erase"
                     : m_currentTool == TileTool::Fill           ? "Fill"
@@ -433,6 +455,50 @@ namespace SparkEditor
                 ImGui::RadioButton("8-bit (full)", &bitmaskMode, 1);
             }
         }
+    }
+
+    void TilemapEditorPanel::PerformUndo()
+    {
+        if (m_undoStack.empty())
+            return;
+
+        // Save current state to redo stack
+        TilemapSnapshot current;
+        current.tiles = m_tiles;
+        current.collisionFlags = m_collision;
+        current.width = m_mapWidth;
+        current.height = m_mapHeight;
+        m_redoStack.push_back(std::move(current));
+
+        // Restore from undo stack
+        const auto& snapshot = m_undoStack.back();
+        m_tiles = snapshot.tiles;
+        m_collision = snapshot.collisionFlags;
+        m_mapWidth = snapshot.width;
+        m_mapHeight = snapshot.height;
+        m_undoStack.pop_back();
+    }
+
+    void TilemapEditorPanel::PerformRedo()
+    {
+        if (m_redoStack.empty())
+            return;
+
+        // Save current state to undo stack
+        TilemapSnapshot current;
+        current.tiles = m_tiles;
+        current.collisionFlags = m_collision;
+        current.width = m_mapWidth;
+        current.height = m_mapHeight;
+        m_undoStack.push_back(std::move(current));
+
+        // Restore from redo stack
+        const auto& snapshot = m_redoStack.back();
+        m_tiles = snapshot.tiles;
+        m_collision = snapshot.collisionFlags;
+        m_mapWidth = snapshot.width;
+        m_mapHeight = snapshot.height;
+        m_redoStack.pop_back();
     }
 
     void TilemapEditorPanel::FloodFill(std::vector<int32_t>& tiles, int mapW, int mapH, int startX, int startY,

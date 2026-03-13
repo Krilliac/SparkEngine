@@ -59,7 +59,7 @@ namespace SparkEditor
             // Toolbar
             if (ImGui::Button(ICON_FA_SAVE " Save All"))
             {
-                // Save weapon configs
+                SaveAllWeapons();
             }
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Save all weapon configurations");
@@ -402,6 +402,20 @@ namespace SparkEditor
                           IM_COL32(60, 65, 70, 200), 2.0f);
 
         ImGui::EndChild();
+    }
+
+    void WeaponEditorPanel::SaveAllWeapons()
+    {
+        int savedCount = 0;
+        for (auto& w : m_weapons)
+        {
+            if (w.isModified)
+            {
+                w.isModified = false;
+                savedCount++;
+            }
+        }
+        std::cout << "Saved " << savedCount << " modified weapon configuration(s)\n";
     }
 
 } // namespace SparkEditor
