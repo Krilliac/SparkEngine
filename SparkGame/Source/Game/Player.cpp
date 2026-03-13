@@ -4,6 +4,7 @@
 #include "InteractiveObject.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
+#include "Utils/SparkConsole.h"
 #include "Camera/SparkEngineCamera.h"
 #include "Input/InputManager.h"
 #include "Projectiles/WeaponStats.h"

@@ -11,6 +11,7 @@
 #include "Graphics/GraphicsEngine.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
+#include "../Utils/SparkConsole.h"
 #include "../Utils/ConsoleProcessManager.h"
 #include "Utils/LocalFileCache.h"
 

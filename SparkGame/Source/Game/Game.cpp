@@ -13,6 +13,7 @@
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 #include "Utils/Validate.h"
+#include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/TextureSystem.h"
