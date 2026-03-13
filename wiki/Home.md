@@ -130,5 +130,5 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 | Test files | 75 |
 | Test cases | 917+ |
 | Wiki pages | 53 |
-| *Last synced* | *2026-03-13 15:31* |
+| *Last synced* | *2026-03-13 16:17* |
 <!-- /AUTO:stats -->
