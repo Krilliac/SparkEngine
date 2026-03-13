@@ -17,6 +17,7 @@
 
 // Base ECS
 #include "Systems/ECSystems.h"
+#include "Systems/Systems2D.h"
 
 // Architecture extensions
 #include "Systems/PhaseSystemManager.h"
@@ -37,16 +38,21 @@ namespace Spark::ECS
      *
      * Registers all standard engine systems in their correct phases and optionally
      * wraps the physics phase with a FixedTimestepPhysicsSystem for deterministic
-     * simulation.
+     * simulation. When 2D pointers are provided, 2D-specific systems are also
+     * registered in their appropriate phases.
      *
-     * @param graphics   Non-owning pointer to GraphicsEngine (may be nullptr for headless).
-     * @param physics    Non-owning pointer to PhysicsSystem (may be nullptr to skip physics).
-     * @param audio      Non-owning pointer to AudioEngine (may be nullptr for headless).
+     * @param graphics       Non-owning pointer to GraphicsEngine (may be nullptr for headless).
+     * @param physics        Non-owning pointer to PhysicsSystem (may be nullptr to skip physics).
+     * @param audio          Non-owning pointer to AudioEngine (may be nullptr for headless).
      * @param fixedTimestep  Physics timestep in seconds (default 1/60).
+     * @param spriteBatch    Non-owning pointer to SpriteBatch for 2D rendering (may be nullptr).
+     * @param physics2D      Non-owning pointer to Physics2DWorld for 2D physics (may be nullptr).
      * @return Configured PhaseSystemManager.
      */
     inline PhaseSystemManager CreateGameSystems(GraphicsEngine* graphics, PhysicsSystem* physics, AudioEngine* audio,
-                                                float fixedTimestep = 1.0f / 60.0f)
+                                                float fixedTimestep = 1.0f / 60.0f,
+                                                Graphics2D::SpriteBatch* spriteBatch = nullptr,
+                                                Physics2D::Physics2DWorld* physics2D = nullptr)
     {
         PhaseSystemManager mgr;
 
@@ -56,8 +62,17 @@ namespace Spark::ECS
             mgr.AddSystem<PhysicsUpdateSystem>(Phase::Physics, physics, fixedTimestep);
         }
 
+        // 2D physics phase
+        if (physics2D)
+        {
+            mgr.AddSystem<Physics2DUpdateSystem>(Phase::Physics, physics2D);
+        }
+
         // Animation phase
         mgr.AddSystem<AnimationUpdateSystem>(Phase::Animation);
+
+        // 2D sprite animation phase
+        mgr.AddSystem<SpriteAnimatorSystem>(Phase::Animation);
 
         // AI phase
         mgr.AddSystem<AIUpdateSystem>(Phase::AI);
@@ -71,10 +86,21 @@ namespace Spark::ECS
         // Gameplay phase: lifecycle management (health, death, active state)
         mgr.AddSystem<LifecycleSystem>(Phase::Gameplay);
 
+        // Pre-render phase: parallax and camera follow
+        mgr.AddSystem<ParallaxSystem>(Phase::PreRender);
+        mgr.AddSystem<Camera2DFollowSystem>(Phase::PreRender);
+
         // Render phase
         if (graphics)
         {
             mgr.AddSystem<RenderSystem>(Phase::Render, graphics);
+        }
+
+        // 2D render phase: tilemaps first, then sprites on top
+        if (spriteBatch)
+        {
+            mgr.AddSystem<TilemapRenderSystem>(Phase::Render, spriteBatch);
+            mgr.AddSystem<Sprite2DRenderSystem>(Phase::Render, spriteBatch);
         }
 
         return mgr;
@@ -134,6 +160,14 @@ namespace Spark::ECS
 
         // Render: reads Transform, MeshRenderer (read-only)
         executor.DeclareAccess("RenderSystem", {}, {"Transform", "MeshRenderer"});
+
+        // 2D systems
+        executor.DeclareAccess("Physics2DUpdateSystem", {"Transform", "RigidBody2D"}, {"Collider2D"});
+        executor.DeclareAccess("SpriteAnimatorSystem", {"SpriteAnimator"}, {"SpriteRenderer"});
+        executor.DeclareAccess("ParallaxSystem", {"ParallaxBackground"}, {"Transform", "Camera2D"});
+        executor.DeclareAccess("Camera2DFollowSystem", {"Transform"}, {"Camera2D"});
+        executor.DeclareAccess("TilemapRenderSystem", {}, {"Transform", "TilemapComponent"});
+        executor.DeclareAccess("Sprite2DRenderSystem", {}, {"Transform", "SpriteRenderer", "SpriteAnimator"});
     }
 
 } // namespace Spark::ECS
