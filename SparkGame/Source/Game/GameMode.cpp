@@ -35,41 +35,37 @@ namespace Spark
 
         m_roundFSM.AddState(RoundState::WaitingForPlayers);
 
-        m_roundFSM.AddState(
-            RoundState::Countdown, nullptr,
-            [this](float dt)
-            {
-                m_roundState = RoundState::Countdown;
-                UpdateCountdown(dt);
-            });
+        m_roundFSM.AddState(RoundState::Countdown, nullptr,
+                            [this](float dt)
+                            {
+                                m_roundState = RoundState::Countdown;
+                                UpdateCountdown(dt);
+                            });
 
-        m_roundFSM.AddState(
-            RoundState::InProgress, nullptr,
-            [this](float dt)
-            {
-                m_roundState = RoundState::InProgress;
-                m_roundElapsed += dt;
-                if (m_rules.timeLimit > 0.0f)
-                {
-                    m_roundTimeRemaining -= dt;
-                    if (m_roundTimeRemaining <= 0.0f)
-                    {
-                        m_roundTimeRemaining = 0.0f;
-                        EndRound(GetLeadingTeam());
-                        return;
-                    }
-                }
-                CheckWinCondition();
-            });
+        m_roundFSM.AddState(RoundState::InProgress, nullptr,
+                            [this](float dt)
+                            {
+                                m_roundState = RoundState::InProgress;
+                                m_roundElapsed += dt;
+                                if (m_rules.timeLimit > 0.0f)
+                                {
+                                    m_roundTimeRemaining -= dt;
+                                    if (m_roundTimeRemaining <= 0.0f)
+                                    {
+                                        m_roundTimeRemaining = 0.0f;
+                                        EndRound(GetLeadingTeam());
+                                        return;
+                                    }
+                                }
+                                CheckWinCondition();
+                            });
 
-        m_roundFSM.AddState(RoundState::RoundEnd,
-                             [this]() { m_roundState = RoundState::RoundEnd; });
-        m_roundFSM.AddState(RoundState::MatchEnd,
-                             [this]() { m_roundState = RoundState::MatchEnd; });
+        m_roundFSM.AddState(RoundState::RoundEnd, [this]() { m_roundState = RoundState::RoundEnd; });
+        m_roundFSM.AddState(RoundState::MatchEnd, [this]() { m_roundState = RoundState::MatchEnd; });
 
         // Automatic transition: Countdown → InProgress when timer expires
         m_roundFSM.AddTransition(RoundState::Countdown, RoundState::InProgress,
-                                  [this]() { return m_countdownTimer <= 0.0f; });
+                                 [this]() { return m_countdownTimer <= 0.0f; });
 
         m_roundFSM.Start(RoundState::WaitingForPlayers);
         return true;
