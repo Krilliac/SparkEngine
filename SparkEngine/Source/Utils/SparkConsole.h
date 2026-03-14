@@ -34,6 +34,7 @@
 
 #pragma once
 #include "../Core/Platform.h"
+#include "Hash.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -131,6 +132,7 @@ namespace Spark
             std::string description; ///< Human-readable description shown in help output
             std::string category;    ///< Command category (e.g., "Graphics", "Physics")
             std::string usage;       ///< Usage pattern (e.g., "player_heal [amount]")
+            uint64_t nameHash = 0;   ///< FNV-1a64 hash of the command name for fast lookup
         };
 
         /**

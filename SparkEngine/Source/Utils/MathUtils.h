@@ -45,6 +45,7 @@
 
 #include "../Core/framework.h" // XMFLOAT3, XMMATRIX
 #include "Utils/Assert.h"
+#include "Utils/TypeTraits.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -188,6 +189,23 @@ class MathUtils
      * @endcode
      */
     static float Lerp(float a, float b, float t);
+
+    /**
+     * @brief Generic linear interpolation for any arithmetic type.
+     *
+     * Constrainted to Spark::Arithmetic types (integers and floating-point).
+     * Avoids ambiguity with the float and XMFLOAT3 overloads via concept constraint.
+     *
+     * @tparam T  Any arithmetic type (int, double, etc.).
+     * @param a   Start value.
+     * @param b   End value.
+     * @param t   Interpolation factor in [0, 1].
+     * @return    Interpolated value.
+     */
+    template <Spark::Arithmetic T> static T Lerp(T a, T b, float t)
+    {
+        return a + static_cast<T>(static_cast<float>(b - a) * t);
+    }
 
     /**
      * @brief Linear interpolation between two 3D vectors.
@@ -377,6 +395,24 @@ class MathUtils
      * @return       Clamped value in [min, max].
      */
     static int Clamp(int value, int min, int max);
+
+    /**
+     * @brief Generic clamp for any arithmetic type.
+     *
+     * Constrainted to Spark::Arithmetic types to avoid ambiguity with the
+     * float, int, and XMFLOAT3 overloads. Prefer the specific overloads for
+     * float and int; use this for double, uint32_t, etc.
+     *
+     * @tparam T      Any arithmetic type (double, uint32_t, etc.).
+     * @param value   Input value to clamp.
+     * @param minVal  Lower bound (inclusive).
+     * @param maxVal  Upper bound (inclusive).
+     * @return        Clamped value in [minVal, maxVal].
+     */
+    template <Spark::Arithmetic T> static T Clamp(T value, T minVal, T maxVal)
+    {
+        return value < minVal ? minVal : (value > maxVal ? maxVal : value);
+    }
 
     /**
      * @brief Clamp each component of a 3D vector independently.

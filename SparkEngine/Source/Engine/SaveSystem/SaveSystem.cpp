@@ -5,6 +5,7 @@
 
 #include "SaveSystem.h"
 #include "../../Utils/Assert.h"
+#include "../../Utils/EventBus.h"
 #include "../../Utils/Validate.h"
 #include "Utils/LocalFileCache.h"
 #include <cstring>
@@ -17,6 +18,33 @@ namespace fs = std::filesystem;
 
 namespace Spark
 {
+
+    // ============================================================================
+    // Save/Load events published on the global EventBus
+    // ============================================================================
+
+    /// @brief Published on the global EventBus before serialization begins.
+    struct SaveBeginEvent
+    {
+        std::string slotName;
+    };
+    /// @brief Published on the global EventBus after a successful save.
+    struct SaveCompleteEvent
+    {
+        std::string slotName;
+        bool success = false;
+    };
+    /// @brief Published on the global EventBus before deserialization begins.
+    struct LoadBeginEvent
+    {
+        std::string slotName;
+    };
+    /// @brief Published on the global EventBus after a load attempt (success or failure).
+    struct LoadCompleteEvent
+    {
+        std::string slotName;
+        bool success = false;
+    };
 
     // ============================================================================
     // ComponentSerializerRegistry
@@ -573,18 +601,27 @@ namespace Spark
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(), "SaveSystem::Save — slotName must not be empty");
+        EventBus::Global().Publish<SaveBeginEvent>({slotName});
         SaveData data = SerializeWorld(world, metadata);
-        return WriteToFile(GetSavePath(slotName), data);
+        bool ok = WriteToFile(GetSavePath(slotName), data);
+        EventBus::Global().Publish<SaveCompleteEvent>({slotName, ok});
+        return ok;
     }
 
     bool SaveSystem::Load(const std::string& slotName, World& world)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(), "SaveSystem::Load — slotName must not be empty");
+        EventBus::Global().Publish<LoadBeginEvent>({slotName});
         SaveData data;
         if (!ReadFromFile(GetSavePath(slotName), data))
+        {
+            EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
             return false;
-        return DeserializeWorld(data, world);
+        }
+        bool ok = DeserializeWorld(data, world);
+        EventBus::Global().Publish<LoadCompleteEvent>({slotName, ok});
+        return ok;
     }
 
     bool SaveSystem::QuickSave(World& world, const SaveMetadata& metadata)

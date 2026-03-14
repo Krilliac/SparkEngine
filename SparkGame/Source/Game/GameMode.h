@@ -10,6 +10,7 @@
 
 #pragma once
 #include "Core/Platform.h"
+#include "Utils/StateMachine.h"
 
 #include <string>
 #include <vector>
@@ -264,6 +265,7 @@ namespace Spark
       private:
         GameModeRules m_rules;
         RoundState m_roundState = RoundState::WaitingForPlayers;
+        Spark::StateMachine<RoundState> m_roundFSM; ///< Drives round lifecycle updates
         bool m_matchActive = false;
         int m_currentRound = 0;
         float m_roundTimeRemaining = 0.0f;
