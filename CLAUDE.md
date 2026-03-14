@@ -128,7 +128,7 @@ cat .claude/index.md
 
 ## Persistence Context Database
 
-The `.claude/` directory is a persistent AI memory store — a knowledge base that Claude reads and writes across sessions. It records learned solutions, workarounds, and step-by-step remediation sequences for recurring issues so future sessions skip re-discovery.
+The `.claude/` directory is a persistent AI memory store — a general self-learning knowledge base that Claude reads and writes across sessions. It captures everything worth remembering: issue fixes, effective workflows, optimizations, codebase observations, and project decisions. Future sessions start with this accumulated knowledge rather than from scratch.
 
 ### At session start
 
@@ -138,11 +138,21 @@ After the git sync (steps 1–4 above), read the index:
 cat .claude/index.md
 ```
 
-If any topic matches your current task, read the full knowledge file before proceeding.
+Scan the index for topics relevant to the current task or domain. Read those files before proceeding.
 
 ### When to write a new entry
 
-After solving a problem that required multiple attempts (or is likely to recur), write or update the relevant file in `.claude/knowledge/` and update `.claude/index.md`. Commit context updates alongside code changes.
+Write or update a `.claude/knowledge/` file whenever Claude learns something worth preserving:
+
+| Trigger | Entry type |
+|---------|-----------|
+| A problem required multiple attempts to solve | **Issue** |
+| A workflow or approach proved consistently effective | **Pattern** |
+| A faster/better way to do something was discovered | **Optimization** |
+| A non-obvious codebase/tooling fact was discovered | **Observation** |
+| An architectural or style decision was made | **Decision** |
+
+After writing, update `.claude/index.md` and commit both alongside code changes.
 
 ### Entry format
 
@@ -150,12 +160,15 @@ After solving a problem that required multiple attempts (or is likely to recur),
 # [Topic]
 
 **Last updated:** YYYY-MM-DD
-**Status:** Resolved | Workaround | Ongoing
+**Type:** Issue | Pattern | Optimization | Observation | Decision
+**Status:** Resolved | Active | Ongoing
 
-## Issue
+## Description
 ## Context
-## Methods Tried  (numbered, each ending with → FAILED / → WORKED)
-## Solution (Reliable Method)
+## Methods Tried  ← Issue only; numbered, each ending with → FAILED / → WORKED
+## Approach       ← Pattern/Optimization only
+## Details        ← Observation/Decision only
+## Solution / Summary
 ## Notes
 ```
 
@@ -163,21 +176,24 @@ After solving a problem that required multiple attempts (or is likely to recur),
 
 ```
 .claude/
-├── README.md                          # Full usage guide
-├── index.md                           # Master index — read at session start
+├── README.md                              # Full usage guide
+├── index.md                               # Master index — read at session start
 └── knowledge/
-    ├── github-api-pr-checks.md        # PR check status — use gh run list, not gh pr checks --watch
-    ├── ci-failures.md                 # CI job blocking/non-blocking, local reproduction
-    ├── git-rebase-conflicts.md        # Auto-generated file rules, conflict resolution
-    ├── clang-format.md                # Full file scan required; Metal excluded; no head-50
-    ├── cmake-linux-build-failures.md  # Cache conflicts, missing packages, DirectX guards
-    └── windows-msvc-w4-warnings.md    # MSVC /W4 fix table; diagnose from CI logs
+    ├── github-api-pr-checks.md            # [Issue] PR check status access
+    ├── ci-failures.md                     # [Issue] CI job blocking rules, reproduction
+    ├── git-rebase-conflicts.md            # [Issue] Rebase conflict resolution
+    ├── clang-format.md                    # [Issue] Full scan required; Metal excluded
+    ├── cmake-linux-build-failures.md      # [Issue] Linux CMake configure/build failures
+    ├── windows-msvc-w4-warnings.md        # [Issue] MSVC /W4 fix table
+    ├── workflow-patterns.md               # [Pattern] Effective dev workflows
+    └── codebase-observations.md           # [Observation] Non-obvious SparkEngine facts
 ```
 
 **Rules:**
 - Do not exclude `.claude/` from `.promptignore` — Claude must be able to read it.
 - Entries are written by Claude sessions; humans may correct factual errors only.
 - Always commit context changes — future sessions on any branch benefit.
+- Prefer updating an existing entry over creating a new one for the same topic.
 
 ## Branch freshness (run before every commit)
 

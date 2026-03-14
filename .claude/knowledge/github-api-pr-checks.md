@@ -1,6 +1,7 @@
 # GitHub API / PR Check Status
 
 **Last updated:** 2026-03-14
+**Type:** Issue
 **Status:** Resolved
 
 ## Issue

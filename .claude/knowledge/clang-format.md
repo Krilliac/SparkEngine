@@ -1,6 +1,7 @@
 # clang-format Issues and Fixes
 
 **Last updated:** 2026-03-14
+**Type:** Issue
 **Status:** Resolved
 
 ## Issue
