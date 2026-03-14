@@ -130,6 +130,46 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DENABLE_NETWORKING=O
 
 ---
 
+## Pattern: Removal Before Addition
+
+### Approach
+
+Before writing any new code in a file, check its size. If it is over the limit (400 lines for `.cpp`, 200 for `.h`), trim it first:
+
+```bash
+# Check size of a file before editing
+wc -l SparkEngine/Source/Utils/SparkConsole.cpp
+
+# If over limit:
+# 1. Find dead methods (no callers outside the class)
+grep -n "void SimpleConsole::" SparkEngine/Source/Utils/SparkConsole.cpp | head -30
+# 2. Delete them
+# 3. Then make your actual change
+```
+
+For any new public method being added:
+1. Search for existing methods that do something similar
+2. If one exists, extend it — don't add a new one
+3. If there are now 2 similar methods after your change, remove the older one
+
+For any new system/class being added:
+1. Search for an existing class that could be extended
+2. If adding, remove something of equivalent complexity
+
+### When to apply
+
+- Every time you open a file to edit it
+- Before every PR — check net line delta: should be ≤ 0 for refactors, minimal positive for features
+- When a file starts feeling hard to navigate
+
+### Notes
+
+- Removal is not "going backwards" — it is the primary maintenance activity
+- The goal is a codebase that shrinks toward its essential minimum, not grows toward "comprehensive"
+- If a feature isn't used by something running today, delete it
+
+---
+
 ## Pattern: Session Start Checklist Order
 
 ### Approach
@@ -141,11 +181,18 @@ Every session should start in this exact order before doing anything else:
 3. Resolve any rebase conflicts (see [git-rebase-conflicts.md](git-rebase-conflicts.md))
 4. `cat .claude/index.md` — load persistent context
 5. Read any knowledge files relevant to the current task
-6. **Then** start reading code or planning
+6. **Bloat check** — run before touching anything:
+   ```bash
+   find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkGame/Source \
+     -name '*.cpp' | xargs wc -l | sort -rn | head -15
+   ```
+7. **Then** start reading code or planning
 
-Skipping step 4–5 means starting each session without the accumulated knowledge from prior sessions.
+Skipping step 4–5 means starting each session without accumulated knowledge. Skipping step 6 means walking into a bloated file blind.
 
 ### Notes
 
 - If `wc -l` output is 0 in step 1, the branch is up to date — skip the rebase.
 - Never start reading or editing code before completing the git sync. Stale code leads to conflicts on push.
+- The bloat check takes 2 seconds. Files over 400 lines must be trimmed before adding to them.
+- **See also:** [ai-bloat-pattern.md](ai-bloat-pattern.md) for why this problem exists and how to prevent it.

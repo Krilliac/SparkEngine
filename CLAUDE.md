@@ -29,6 +29,68 @@ cd build && ctest --output-on-failure
 
 CMake 3.16+, C++20 required. Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (OFF by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`.
 
+## Anti-Bloat Rules — HIGHEST PRIORITY
+
+These rules exist because AI-assisted development has a structural bias toward complexity. Every session, without active enforcement, will add more than it removes. These rules are non-negotiable and override every other instinct.
+
+### The Core Problem
+
+AI defaults to:
+- Adding features "just in case" → dead code accumulates
+- Creating helper classes for single uses → pointless abstraction
+- Over-engineering simple problems → 261KB files that nobody can debug
+- Building systems without wiring them in → ConsoleProcessManager-style orphans
+- Scattering related logic → 25 command registration functions instead of 1
+
+### Hard Limits
+
+| Thing | Limit | Action if exceeded |
+|-------|-------|--------------------|
+| `.cpp` file size | 400 lines | Refactor before touching anything else |
+| `.h` file size | 200 lines | Split or consolidate before adding anything |
+| Public methods per class | 15 | Justify each one or remove it |
+| Private helper methods per class | 10 | Extract to free function or delete |
+| Command registration functions | 1 per subsystem | Consolidate before adding commands |
+| Parallel singleton systems doing the same thing | 0 | Remove the duplicate |
+
+### Before Writing Any Code — Ask These Questions
+
+1. **Does this already exist?** Search before writing. If yes, use the existing one.
+2. **Will this be called?** If you can't name the caller right now, don't write it.
+3. **Can the existing code do this with a small change?** Prefer editing over adding.
+4. **Is this a one-time use?** If yes, inline it — no helper function, no new class.
+5. **Am I future-proofing?** Stop. Write only what is needed today.
+
+### Mandatory Removal Before Addition
+
+- Adding a new class → remove or consolidate an existing one if the total count grows
+- Adding a new `.cpp` file → justify why it can't live in an existing file
+- Adding a new public method → check if a private or existing method can be extended
+- Adding new command registrations → they go in ONE place per subsystem, not scattered
+
+### Dead Code Is Actively Harmful
+
+- Unused public methods → delete immediately, don't comment out
+- Uninitialized systems (built but never called) → either wire them in or delete them
+- Features built but not integrated → count as bugs, not WIP
+- Commented-out code → delete it, git history exists for a reason
+- "Stub" implementations → either implement fully or remove entirely
+
+### Signs You Are Creating Bloat — Stop Immediately
+
+- Writing a function longer than 50 lines
+- A class has more `Register*` methods than actual logic
+- You're adding a 6th logging method when 3 exist
+- A new `*Manager` or `*System` class when the existing one can be extended
+- Duplicating member variables that exist in a related class
+- Creating an abstraction for something used in exactly one place
+
+### The Removal Mandate
+
+Every PR that adds code **must** also remove code. If a PR adds 50 lines and removes 0, that is a bloat PR and should be rejected. Aim for negative line counts on refactor tasks. The codebase should shrink over time, not grow.
+
+---
+
 ## Coding Standards
 
 - **C++20**: `constexpr`, `enum class`, structured bindings, `std::format`, concepts
@@ -124,7 +186,13 @@ After the git sync, **read `.claude/index.md`** to load session context (step 5 
 ```bash
 # 5. Load persistent context
 cat .claude/index.md
+
+# 6. Bloat check — identify the worst files before touching anything
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkGame/Source \
+  -name '*.cpp' | xargs wc -l | sort -rn | head -15
 ```
+
+Step 6 takes 2 seconds and tells you immediately what is over the line-count limit. If the task involves any of those files, the first job is to trim them, not add to them.
 
 ## Persistence Context Database
 
@@ -412,6 +480,37 @@ Whenever code is **added**, **modified**, or **deleted**, update the correspondi
 
 Skipping documentation is **not acceptable** — treat docs as part of the deliverable, not an afterthought.
 
+## Wiring Things In — Functionality Is Not Optional
+
+A system that exists but is never initialized, called, or connected is **worse than not existing**. It adds confusion, maintenance burden, and false confidence. The rule is simple:
+
+- **Every system must be initialized.** If `Initialize()` exists, it must be called somewhere in the startup path.
+- **Every update loop must be called.** If `Update()` or `ProcessCommands()` exists, it must appear in the main loop.
+- **Every sink must have a source.** If a system receives data (commands, logs, events), something must be sending it.
+
+When wiring a system in, use the absolute minimum code:
+```cpp
+// CORRECT — minimal, direct, explicit
+ConsoleProcessManager::GetInstance().Initialize();  // in startup
+ConsoleProcessManager::GetInstance().ProcessCommands();  // in main loop
+
+// WRONG — wrapping in another layer of abstraction before it even works
+class ConsoleInitHelper { ... };  // NO. Just call Initialize().
+```
+
+If you discover a system that is built but not wired in: **either wire it in immediately, or delete it**. It cannot stay in a half-built state.
+
+## Known Debloat Targets (address these before adding anything new)
+
+These are confirmed bloat problems discovered during audit. They must be fixed before new features are added in the relevant areas.
+
+| File | Problem | Action Required |
+|------|---------|-----------------|
+| `SparkEngine/Source/Utils/SparkConsole.cpp` | 261KB — embedded console UI that's no longer used (cursor handling, ANSI colors, tab state, Win32 console) | Strip all local UI code; keep only Log(), severity helpers |
+| `SparkEngine/Source/Utils/SparkConsole.h` | 25+ `Register*()` methods scattered across subsystems | Consolidate into ≤3: Engine, Game, Debug |
+| `SparkEngine/Source/Utils/ConsoleProcessManager` | Built but never initialized; `ProcessCommands()` never called | Wire into startup and main loop |
+| `SparkEngine/Source/Core/SparkEngine.cpp` | `SimpleConsole::Initialize()` called 5 times in different code paths | Call it once, correctly |
+
 ## Things to know
 
 - Use `EngineContext` service locator, not deprecated `g_graphics`/`g_input` globals
@@ -422,3 +521,5 @@ Skipping documentation is **not acceptable** — treat docs as part of the deliv
 - `.clang-tidy` checks for bugprone, modernize, performance, and readability issues
 - Doxygen config lives in `docs/Doxyfile.txt`; wiki pages in `wiki/`
 - 82+ unit tests in `Tests/`; always run `ctest` after changes
+- **SparkConsole communicates with the engine via stdin/stdout pipes.** ConsoleProcessManager launches the subprocess and owns the pipe. SimpleConsole is the engine-side log sink only — it is not an IPC layer.
+- **ConsoleProcessManager must be initialized at engine startup** and `ProcessCommands()` must be called each frame. Without this, SparkConsole.exe never launches and commands are never executed.
