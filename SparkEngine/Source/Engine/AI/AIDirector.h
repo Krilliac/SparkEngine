@@ -40,6 +40,7 @@
 #pragma once
 
 #include "../ECS/Systems/ECSystems.h"
+#include "../../Utils/StateMachine.h"
 
 #include <string>
 #include <vector>
@@ -199,6 +200,7 @@ namespace Spark::AI
 
         // Phase timing
         DirectorPhase m_currentPhase = DirectorPhase::BuildUp;
+        Spark::StateMachine<DirectorPhase> m_phaseFSM; ///< Drives phase cycling lifecycle
         float m_phaseTimer = 0.0f;
         float m_buildUpDuration = 60.0f;
         float m_peakDuration = 20.0f;

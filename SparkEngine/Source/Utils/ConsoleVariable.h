@@ -37,6 +37,7 @@
 #include <sstream>
 #include <algorithm>
 #include <concepts>
+#include "TypeTraits.h"
 #include <type_traits>
 #include <cstdint>
 
@@ -256,7 +257,7 @@ namespace Spark
         /**
          * @brief Construct with range clamping (numeric types only)
          */
-        template <typename U = T, typename = std::enable_if_t<std::is_arithmetic_v<U>>>
+        template <Spark::Arithmetic U = T>
         CVar(std::string name, T defaultVal, CVarFlags flags, std::string description, T minVal, T maxVal)
             : m_name(std::move(name)), m_description(std::move(description)), m_flags(flags), m_value(defaultVal),
               m_defaultValue(defaultVal), m_hasRange(true), m_min(minVal), m_max(maxVal)

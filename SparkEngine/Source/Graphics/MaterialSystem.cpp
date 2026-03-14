@@ -9,6 +9,7 @@
 
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
+#include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
@@ -2686,43 +2687,48 @@ std::string MaterialSystem::TextureTypeToString(MaterialTextureType type) const
 
 MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) const
 {
-    if (str == "Albedo")
+    using namespace Spark::HashLiterals;
+    switch (Spark::FNV1a64(str))
+    {
+    case "Albedo"_hash64:
         return MaterialTextureType::Albedo;
-    if (str == "Normal")
+    case "Normal"_hash64:
         return MaterialTextureType::Normal;
-    if (str == "Metallic")
+    case "Metallic"_hash64:
         return MaterialTextureType::Metallic;
-    if (str == "Roughness")
+    case "Roughness"_hash64:
         return MaterialTextureType::Roughness;
-    if (str == "Occlusion")
+    case "Occlusion"_hash64:
         return MaterialTextureType::Occlusion;
-    if (str == "Emissive")
+    case "Emissive"_hash64:
         return MaterialTextureType::Emissive;
-    if (str == "Height")
+    case "Height"_hash64:
         return MaterialTextureType::Height;
-    if (str == "DetailAlbedo")
+    case "DetailAlbedo"_hash64:
         return MaterialTextureType::DetailAlbedo;
-    if (str == "DetailNormal")
+    case "DetailNormal"_hash64:
         return MaterialTextureType::DetailNormal;
-    if (str == "Subsurface")
+    case "Subsurface"_hash64:
         return MaterialTextureType::Subsurface;
-    if (str == "Transmission")
+    case "Transmission"_hash64:
         return MaterialTextureType::Transmission;
-    if (str == "Clearcoat")
+    case "Clearcoat"_hash64:
         return MaterialTextureType::Clearcoat;
-    if (str == "ClearcoatRoughness")
+    case "ClearcoatRoughness"_hash64:
         return MaterialTextureType::ClearcoatRoughness;
-    if (str == "Anisotropy")
+    case "Anisotropy"_hash64:
         return MaterialTextureType::Anisotropy;
-    if (str == "Custom0")
+    case "Custom0"_hash64:
         return MaterialTextureType::Custom0;
-    if (str == "Custom1")
+    case "Custom1"_hash64:
         return MaterialTextureType::Custom1;
-    if (str == "Custom2")
+    case "Custom2"_hash64:
         return MaterialTextureType::Custom2;
-    if (str == "Custom3")
+    case "Custom3"_hash64:
         return MaterialTextureType::Custom3;
-    return MaterialTextureType::Albedo; // Default fallback
+    default:
+        return MaterialTextureType::Albedo;
+    }
 }
 
 std::string MaterialSystem::Console_DumpMaterialDetails(const std::string& materialName) const
@@ -2980,6 +2986,7 @@ std::string MaterialSystem::Console_ListMaterialVariants(const std::string& mate
 
 #include "MaterialSystem.h"
 #include "RHI/RHI.h"
+#include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
@@ -4272,43 +4279,48 @@ MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) 
     std::string lower = str;
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
 
-    if (lower == "albedo")
+    using namespace Spark::HashLiterals;
+    switch (Spark::FNV1a64(lower))
+    {
+    case "albedo"_hash64:
         return MaterialTextureType::Albedo;
-    if (lower == "normal")
+    case "normal"_hash64:
         return MaterialTextureType::Normal;
-    if (lower == "metallic")
+    case "metallic"_hash64:
         return MaterialTextureType::Metallic;
-    if (lower == "roughness")
+    case "roughness"_hash64:
         return MaterialTextureType::Roughness;
-    if (lower == "occlusion")
+    case "occlusion"_hash64:
         return MaterialTextureType::Occlusion;
-    if (lower == "emissive")
+    case "emissive"_hash64:
         return MaterialTextureType::Emissive;
-    if (lower == "height")
+    case "height"_hash64:
         return MaterialTextureType::Height;
-    if (lower == "detailalbedo")
+    case "detailalbedo"_hash64:
         return MaterialTextureType::DetailAlbedo;
-    if (lower == "detailnormal")
+    case "detailnormal"_hash64:
         return MaterialTextureType::DetailNormal;
-    if (lower == "subsurface")
+    case "subsurface"_hash64:
         return MaterialTextureType::Subsurface;
-    if (lower == "transmission")
+    case "transmission"_hash64:
         return MaterialTextureType::Transmission;
-    if (lower == "clearcoat")
+    case "clearcoat"_hash64:
         return MaterialTextureType::Clearcoat;
-    if (lower == "clearcoatroughness")
+    case "clearcoatroughness"_hash64:
         return MaterialTextureType::ClearcoatRoughness;
-    if (lower == "anisotropy")
+    case "anisotropy"_hash64:
         return MaterialTextureType::Anisotropy;
-    if (lower == "custom0")
+    case "custom0"_hash64:
         return MaterialTextureType::Custom0;
-    if (lower == "custom1")
+    case "custom1"_hash64:
         return MaterialTextureType::Custom1;
-    if (lower == "custom2")
+    case "custom2"_hash64:
         return MaterialTextureType::Custom2;
-    if (lower == "custom3")
+    case "custom3"_hash64:
         return MaterialTextureType::Custom3;
-    return MaterialTextureType::Albedo;
+    default:
+        return MaterialTextureType::Albedo;
+    }
 }
 
 #endif // SPARK_PLATFORM_WINDOWS

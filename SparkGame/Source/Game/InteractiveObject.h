@@ -264,6 +264,7 @@ namespace Spark
 
       private:
         ElevatorState m_state = ElevatorState::AtBottom;
+        Spark::StateMachine<ElevatorState> m_elevatorFSM; ///< Drives elevator movement lifecycle
         XMFLOAT3 m_bottomPosition = {0, 0, 0};
         XMFLOAT3 m_topPosition = {0, 10, 0};
         float m_moveSpeed = 5.0f;

@@ -8,6 +8,7 @@
 
 #include "PhysicsSystem.h"
 #include "Utils/Assert.h"
+#include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 
@@ -180,16 +181,14 @@ size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc)
 {
     size_t hash = std::hash<int>()(static_cast<int>(desc.type));
 
-    auto hashCombine = [](size_t& seed, size_t value) { seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2); };
-
-    hashCombine(hash, std::hash<float>()(desc.dimensions.x));
-    hashCombine(hash, std::hash<float>()(desc.dimensions.y));
-    hashCombine(hash, std::hash<float>()(desc.dimensions.z));
-    hashCombine(hash, std::hash<float>()(desc.radius));
-    hashCombine(hash, std::hash<float>()(desc.height));
-    hashCombine(hash, std::hash<std::string>()(desc.meshPath));
-    hashCombine(hash, std::hash<size_t>()(desc.vertices.size()));
-    hashCombine(hash, std::hash<size_t>()(desc.indices.size()));
+    Spark::CombineHash(hash, std::hash<float>()(desc.dimensions.x));
+    Spark::CombineHash(hash, std::hash<float>()(desc.dimensions.y));
+    Spark::CombineHash(hash, std::hash<float>()(desc.dimensions.z));
+    Spark::CombineHash(hash, std::hash<float>()(desc.radius));
+    Spark::CombineHash(hash, std::hash<float>()(desc.height));
+    Spark::CombineHash(hash, std::hash<std::string>()(desc.meshPath));
+    Spark::CombineHash(hash, std::hash<size_t>()(desc.vertices.size()));
+    Spark::CombineHash(hash, std::hash<size_t>()(desc.indices.size()));
 
     return hash;
 }

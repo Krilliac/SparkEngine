@@ -18,6 +18,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <chrono>
+#include "Utils/TypeTraits.h"
 
 namespace SparkEditor
 {
@@ -28,7 +29,7 @@ namespace SparkEditor
  * Provides common functionality for enum validation and conversion.
  * Specialized for specific enum types to provide custom behavior.
  */
-    template <typename EnumType> class EnumUtils
+    template <Spark::Enum EnumType> class EnumUtils
     {
       public:
         /**
@@ -36,11 +37,7 @@ namespace SparkEditor
      * @param value Enum value to validate
      * @return true if the value is within valid range
      */
-        static bool IsValid(EnumType value)
-        {
-            static_assert(std::is_enum_v<EnumType>, "EnumType must be an enumeration");
-            return IsValidImpl(value);
-        }
+        static bool IsValid(EnumType value) { return IsValidImpl(value); }
 
         /**
      * @brief Convert enum to string representation
@@ -163,7 +160,7 @@ namespace SparkEditor
  * Provides range-based for loop support for enums.
  * Usage: for (auto value : EnumIterator<MyEnum>()) { ... }
  */
-    template <typename EnumType> class EnumIterator
+    template <Spark::Enum EnumType> class EnumIterator
     {
       public:
         class Iterator
@@ -200,9 +197,8 @@ namespace SparkEditor
  * 
  * Provides bitwise operations for enum flags with type safety.
  */
-    template <typename EnumType> class EnumFlags
+    template <Spark::Enum EnumType> class EnumFlags
     {
-        static_assert(std::is_enum_v<EnumType>, "EnumType must be an enumeration");
 
       public:
         using UnderlyingType = std::underlying_type_t<EnumType>;
@@ -281,7 +277,7 @@ namespace SparkEditor
  * 
  * Provides runtime validation for enum values with detailed error reporting.
  */
-    template <typename EnumType> class EnumValidator
+    template <Spark::Enum EnumType> class EnumValidator
     {
       public:
         struct ValidationResult

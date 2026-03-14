@@ -292,46 +292,55 @@ namespace Spark
         m_objectType = InteractiveObjectType::ELEVATOR;
         SetName("Elevator");
         m_interactionRange = 3.0f;
+
+        // Set up elevator state FSM — callbacks keep m_state in sync for external queries.
+        m_elevatorFSM.AddState(ElevatorState::AtBottom, [this]() { m_state = ElevatorState::AtBottom; });
+
+        m_elevatorFSM.AddState(
+            ElevatorState::MovingUp, [this]() { m_state = ElevatorState::MovingUp; },
+            [this](float dt)
+            {
+                m_moveProgress += m_moveSpeed * dt / GetDistanceFrom(m_topPosition);
+                if (m_moveProgress > 1.0f)
+                    m_moveProgress = 1.0f;
+            });
+
+        m_elevatorFSM.AddState(
+            ElevatorState::AtTop,
+            [this]()
+            {
+                m_state = ElevatorState::AtTop;
+                m_waitTimer = 0.0f;
+            },
+            [this](float dt)
+            {
+                if (m_autoReturn)
+                    m_waitTimer += dt;
+            });
+
+        m_elevatorFSM.AddState(
+            ElevatorState::MovingDown, [this]() { m_state = ElevatorState::MovingDown; },
+            [this](float dt)
+            {
+                m_moveProgress -= m_moveSpeed * dt / GetDistanceFrom(m_bottomPosition);
+                if (m_moveProgress < 0.0f)
+                    m_moveProgress = 0.0f;
+            });
+
+        // Automatic transitions
+        m_elevatorFSM.AddTransition(ElevatorState::MovingUp, ElevatorState::AtTop,
+                                    [this]() { return m_moveProgress >= 1.0f; });
+        m_elevatorFSM.AddTransition(ElevatorState::MovingDown, ElevatorState::AtBottom,
+                                    [this]() { return m_moveProgress <= 0.0f; });
+        m_elevatorFSM.AddTransition(ElevatorState::AtTop, ElevatorState::MovingDown,
+                                    [this]() { return m_autoReturn && m_waitTimer >= m_waitTime; });
+
+        m_elevatorFSM.Start(ElevatorState::AtBottom);
     }
 
     void ElevatorObject::Update(float deltaTime)
     {
-        switch (m_state)
-        {
-        case ElevatorState::MovingUp:
-            m_moveProgress += m_moveSpeed * deltaTime / GetDistanceFrom(m_topPosition);
-            if (m_moveProgress >= 1.0f)
-            {
-                m_moveProgress = 1.0f;
-                m_state = ElevatorState::AtTop;
-                m_waitTimer = 0.0f;
-            }
-            break;
-
-        case ElevatorState::MovingDown:
-            m_moveProgress -= m_moveSpeed * deltaTime / GetDistanceFrom(m_bottomPosition);
-            if (m_moveProgress <= 0.0f)
-            {
-                m_moveProgress = 0.0f;
-                m_state = ElevatorState::AtBottom;
-                m_waitTimer = 0.0f;
-            }
-            break;
-
-        case ElevatorState::AtTop:
-            if (m_autoReturn)
-            {
-                m_waitTimer += deltaTime;
-                if (m_waitTimer >= m_waitTime)
-                {
-                    m_state = ElevatorState::MovingDown;
-                }
-            }
-            break;
-
-        case ElevatorState::AtBottom:
-            break;
-        }
+        m_elevatorFSM.Tick(deltaTime);
 
         // Interpolate position
         XMFLOAT3 pos = {m_bottomPosition.x + (m_topPosition.x - m_bottomPosition.x) * m_moveProgress,
@@ -354,12 +363,12 @@ namespace Spark
     {
         if (m_state == ElevatorState::AtBottom)
         {
-            m_state = ElevatorState::MovingUp;
+            m_elevatorFSM.TransitionTo(ElevatorState::MovingUp);
             m_ridingPlayer = player;
         }
         else if (m_state == ElevatorState::AtTop)
         {
-            m_state = ElevatorState::MovingDown;
+            m_elevatorFSM.TransitionTo(ElevatorState::MovingDown);
             m_ridingPlayer = player;
         }
         return InteractiveObject::Interact(player);

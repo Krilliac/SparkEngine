@@ -4,6 +4,7 @@
  */
 
 #include "DialogueSystem.h"
+#include "../../Utils/Hash.h"
 #include "../../Utils/Validate.h"
 
 #include <fstream>
@@ -99,25 +100,27 @@ namespace Spark
                 static_cast<size_t>(it->position()),
                 (std::min)(static_cast<size_t>(500), content.size() - static_cast<size_t>(it->position())));
 
-            // Parse node type
+            // Parse node type using compile-time hash dispatch
             if (std::regex_search(nodeContext, match, typeRegex))
             {
+                using namespace Spark::HashLiterals;
                 const std::string& typeStr = match[1].str();
-                if (typeStr == "Choice")
+                switch (Spark::FNV1a64(typeStr))
                 {
+                case "Choice"_hash64:
                     node.type = DialogueNodeType::Choice;
-                }
-                else if (typeStr == "Branch")
-                {
+                    break;
+                case "Branch"_hash64:
                     node.type = DialogueNodeType::Branch;
-                }
-                else if (typeStr == "Event")
-                {
+                    break;
+                case "Event"_hash64:
                     node.type = DialogueNodeType::Event;
-                }
-                else if (typeStr == "End")
-                {
+                    break;
+                case "End"_hash64:
                     node.type = DialogueNodeType::End;
+                    break;
+                default:
+                    break; // Stays as DialogueNodeType::Text
                 }
             }
 
