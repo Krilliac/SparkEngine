@@ -3,7 +3,7 @@
 ## What is this?
 
 SparkEngine is a C++20 open-source 3D game engine. Originally focused on first-person shooters, it is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres.
-- **Rendering**: DirectX 11 (Windows), OpenGL stubs (Linux/macOS)
+- **Rendering**: Full RHI abstraction — D3D11 (primary), D3D12/Vulkan/Metal/OpenGL (experimental backends)
 - **Physics**: Bullet Physics 3
 - **Audio**: XAudio2
 - **ECS**: EnTT
@@ -27,7 +27,7 @@ cmake --build build --config Release
 cd build && ctest --output-on-failure
 ```
 
-CMake 3.16+, C++20 required. Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (OFF by default).
+CMake 3.16+, C++20 required. Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (OFF by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`.
 
 ## Coding Standards
 
@@ -43,20 +43,43 @@ CMake 3.16+, C++20 required. Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `E
 ## Architecture (key directories)
 
 ```
-SparkEngine/Source/Core/             — Platform.h, EngineContext.h
-SparkEngine/Source/Graphics/         — GraphicsEngine (DX11), Shader, PostProcessing
-SparkEngine/Source/Engine/ECS/       — Components.h, Systems/ECSystems.h
-SparkEngine/Source/Engine/AI/        — AISystem, BehaviorTree, NavMesh
-SparkEngine/Source/Engine/Animation/ — Skeletal animation, IK, state machines
-SparkEngine/Source/Engine/Networking/ — NetworkManager, AreaServer, WorldServer
-SparkEngine/Source/Engine/Streaming/ — SeamlessAreaManager, SceneTransitionManager
-SparkEngine/Source/Engine/World/     — WorldOriginSystem (origin rebasing)
-SparkEngine/Source/Engine/Scripting/ — AngelScript VM, hot-reload, script context
-SparkEngine/Source/Utils/            — Console, Logger, Profiler, Assert
-SparkEditor/Source/Communication/    — CollaborativeEditSession (multi-user editing)
-SparkEditor/Source/                  — ImGui editor (22+ subsystems)
-SparkGame/Source/                    — Example FPS game module (DLL)
-Tests/                               — 35+ unit tests, CTest
+SparkEngine/Source/Core/                 — Platform.h, EngineContext.h
+SparkEngine/Source/Camera/               — Camera system
+SparkEngine/Source/Graphics/             — GraphicsEngine, Shader, PostProcessing, RHI abstraction layer
+SparkEngine/Source/Graphics/RHI/         — Multi-API RHI (D3D11/D3D12/Vulkan/Metal/OpenGL backends)
+SparkEngine/Source/Graphics/RenderGraph/ — Render graph system
+SparkEngine/Source/Engine/ECS/           — CoreComponents.h + 12 domain component headers, Systems/ECSystems.h
+SparkEngine/Source/Engine/AI/            — AISystem, BehaviorTree, NavMesh
+SparkEngine/Source/Engine/Animation/     — Skeletal animation, IK, state machines
+SparkEngine/Source/Engine/Networking/    — NetworkManager, AreaServer, WorldServer
+SparkEngine/Source/Engine/Streaming/     — SeamlessAreaManager, SceneTransitionManager
+SparkEngine/Source/Engine/World/         — WorldOriginSystem (origin rebasing)
+SparkEngine/Source/Engine/Scripting/     — AngelScript VM, hot-reload, script context
+SparkEngine/Source/Engine/2D/            — 2D rendering and sprite systems
+SparkEngine/Source/Engine/Cinematic/     — Sequencer, playback
+SparkEngine/Source/Engine/Coroutine/     — Async coroutine scheduler
+SparkEngine/Source/Engine/Destruction/   — Destructible objects
+SparkEngine/Source/Engine/Dialogue/      — Branching dialogue system
+SparkEngine/Source/Engine/Events/        — Event bus / event system
+SparkEngine/Source/Engine/Gameplay/      — Inventory, quest, achievement, weapon mechanics
+SparkEngine/Source/Engine/Loading/       — Loading screens and management
+SparkEngine/Source/Engine/Localization/  — Localization system
+SparkEngine/Source/Engine/Mobile/        — Mobile platform support
+SparkEngine/Source/Engine/Modding/       — Game modding support
+SparkEngine/Source/Engine/Procedural/    — Procedural generation, noise, splines
+SparkEngine/Source/Engine/Replay/        — Record/playback system
+SparkEngine/Source/Engine/SaveSystem/    — Save/load persistence
+SparkEngine/Source/Engine/Stats/         — Performance telemetry
+SparkEngine/Source/Engine/UI/            — UI system
+SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking
+SparkEngine/Source/Utils/                — Console, Logger, Profiler, Assert
+SparkEditor/Source/Communication/        — CollaborativeEditSession (multi-user editing)
+SparkEditor/Source/                      — ImGui editor (22 subsystems, 32 specialized panels)
+SparkGame/Source/                        — Example FPS game module (DLL)
+SparkConsole/src/                        — Standalone console application
+SparkShaderCompiler/src/                 — Shader compilation tool
+SparkSDK/                                — Public SDK/interface headers
+Tests/                                   — 82+ unit tests, CTest
 ```
 
 ## ECS execution order
@@ -308,8 +331,8 @@ Skipping documentation is **not acceptable** — treat docs as part of the deliv
 - Use `EngineContext` service locator, not deprecated `g_graphics`/`g_input` globals
 - Cross-platform types live in `Core/Platform.h` (DirectXMath stubs on Linux)
 - Networking is disabled in default builds (`ENABLE_NETWORKING=OFF`)
-- VR/AR, DXR, DLSS/FSR are not implemented
+- VR is implemented (`SparkEngine/Source/Engine/VR/`); DXR raytracing is optional (`ENABLE_DXR=OFF` by default); DLSS/FSR are not implemented
 - `.clang-format` enforces Microsoft-based style (Allman braces, 120-col, 4-space indent)
 - `.clang-tidy` checks for bugprone, modernize, performance, and readability issues
 - Doxygen config lives in `docs/Doxyfile.txt`; wiki pages in `wiki/`
-- 35+ unit tests in `Tests/`; always run `ctest` after changes
+- 82+ unit tests in `Tests/`; always run `ctest` after changes
