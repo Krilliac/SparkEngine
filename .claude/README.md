@@ -80,6 +80,17 @@ All entries use this structure. Sections marked _(Issue only)_ are omitted for n
 - `Ongoing` — Issue or situation that recurs and is being managed
 - `Superseded` — Entry replaced by a better approach (keep for history)
 
+## Cross-References
+
+When an entry directly relates to another, add a `**See also:**` line in the Notes section:
+
+```markdown
+## Notes
+- **See also:** [topic description](filename.md)
+```
+
+Use this when one entry's context or solution depends on knowledge from another (e.g., an Optimization that references its related Issue, or an Observation that leads to a Pattern). This allows navigating between related entries without returning to the index.
+
 ## Rules
 
 1. **Claude owns these files** — written by Claude sessions; humans may correct factual errors.
@@ -88,6 +99,7 @@ All entries use this structure. Sections marked _(Issue only)_ are omitted for n
 4. **Do not exclude from `.promptignore`** — this directory must remain visible to Claude.
 5. **Update the index** — whenever you add or update a knowledge file, update `index.md`.
 6. **Prefer updating over creating** — if an existing entry covers the topic, extend it.
+7. **Cross-reference related entries** — add `See also:` links when entries are meaningfully related.
 
 ## Entry Types Reference
 
@@ -113,5 +125,6 @@ All entries use this structure. Sections marked _(Issue only)_ are omitted for n
     ├── cmake-linux-build-failures.md      # [Issue] Linux CMake configure/build failures
     ├── windows-msvc-w4-warnings.md        # [Issue] MSVC /W4 warning-as-error patterns
     ├── workflow-patterns.md               # [Pattern] Effective SparkEngine dev workflows
-    └── codebase-observations.md           # [Observation] Non-obvious SparkEngine facts
+    ├── codebase-observations.md           # [Observation] Non-obvious SparkEngine facts
+    └── build-optimizations.md            # [Optimization] Build and CI workflow speedups
 ```

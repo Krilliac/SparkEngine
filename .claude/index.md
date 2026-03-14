@@ -14,6 +14,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Windows MSVC /W4 warnings | [knowledge/windows-msvc-w4-warnings.md](knowledge/windows-msvc-w4-warnings.md) | Issue | Resolved | 2026-03-14 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
+| Build and CI workflow speedups | [knowledge/build-optimizations.md](knowledge/build-optimizations.md) | Optimization | Active | 2026-03-14 |
 
 ## Quick Reference by Topic
 
@@ -36,6 +37,16 @@ _Read this at every session start (after git sync). Each row links to a detailed
 **Starting a task involving multiple codebase areas** → Launch parallel Explore agents. See [workflow-patterns.md](knowledge/workflow-patterns.md).
 
 **After any structural code change** → Run `generate-api-docs.sh check` + `sync-wiki.sh sync`. See [workflow-patterns.md](knowledge/workflow-patterns.md).
+
+### Working faster (Optimizations)
+
+**Slow cmake build** → Add `--parallel $(nproc)`. See [build-optimizations.md](knowledge/build-optimizations.md).
+
+**CI failure log is huge** → Use `gh run view <RUN_ID> --log-failed` for just the failures. See [build-optimizations.md](knowledge/build-optimizations.md).
+
+**About to rebase** → Check `git log --oneline HEAD..origin/Working | wc -l` first. See [build-optimizations.md](knowledge/build-optimizations.md).
+
+**Verify CMake preset flags without configuring** → `cmake --preset linux-gcc-release -N`. See [build-optimizations.md](knowledge/build-optimizations.md).
 
 ### Understanding the codebase (Observations)
 

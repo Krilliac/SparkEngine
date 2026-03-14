@@ -32,6 +32,7 @@ If code in a disabled system silently breaks, it won't show up in standard CI bu
 
 - To verify what's enabled in the current build: `cmake --preset linux-gcc-release -N` (dry run shows resolved options)
 - CI does NOT enable `ENABLE_NETWORKING` — network-related CI failures must be from code paths that compile unconditionally
+- **See also:** [build-optimizations.md](build-optimizations.md) for the CMake dry-run preset verification optimization
 
 ---
 
@@ -111,6 +112,7 @@ During rebase conflicts in wiki files, always take upstream for the AUTO: sectio
 
 - Files that have AUTO: sections: `Entity-Component-System.md`, `Testing.md`, `SparkEditor.md`, `Home.md`
 - To add a new wiki page: create the file in `wiki/`, then add it to `wiki/_Sidebar.md`
+- **See also:** [git-rebase-conflicts.md](git-rebase-conflicts.md) for conflict resolution in AUTO: sections during rebases
 
 ---
 

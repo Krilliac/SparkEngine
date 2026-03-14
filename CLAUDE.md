@@ -161,7 +161,7 @@ After writing, update `.claude/index.md` and commit both alongside code changes.
 
 **Last updated:** YYYY-MM-DD
 **Type:** Issue | Pattern | Optimization | Observation | Decision
-**Status:** Resolved | Active | Ongoing
+**Status:** Resolved | Active | Ongoing | Superseded
 
 ## Description
 ## Context
@@ -186,8 +186,18 @@ After writing, update `.claude/index.md` and commit both alongside code changes.
     ├── cmake-linux-build-failures.md      # [Issue] Linux CMake configure/build failures
     ├── windows-msvc-w4-warnings.md        # [Issue] MSVC /W4 fix table
     ├── workflow-patterns.md               # [Pattern] Effective dev workflows
-    └── codebase-observations.md           # [Observation] Non-obvious SparkEngine facts
+    ├── codebase-observations.md           # [Observation] Non-obvious SparkEngine facts
+    └── build-optimizations.md            # [Optimization] Build and CI workflow speedups
 ```
+
+### At session end
+
+After completing any non-trivial task, review whether anything learned during the session warrants a new or updated entry. This is especially important for:
+- **Optimizations** discovered incidentally (a faster flag, a better command sequence)
+- **Patterns** that worked well and should be repeated
+- **Observations** about the codebase that weren't obvious before
+
+Don't wait for something to break. Positive learning — things that worked well — is equally worth recording.
 
 **Rules:**
 - Do not exclude `.claude/` from `.promptignore` — Claude must be able to read it.

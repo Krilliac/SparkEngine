@@ -103,6 +103,7 @@ Stop at the first failure; fix it before proceeding to the next step.
 - Step 1 (format) is cheap (~5 seconds). Do it even for tiny changes — MSVC code often reformats differently.
 - Step 2 (configure) detects include path issues early before a full compile.
 - Step 5 (docs) is only needed when step 1 touches headers or structural files.
+- **See also:** [clang-format.md](clang-format.md) for why `head -50` must not be used in step 1; [build-optimizations.md](build-optimizations.md) for the `--parallel $(nproc)` flag in step 3.
 
 ---
 
