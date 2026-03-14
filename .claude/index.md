@@ -15,6 +15,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
 | Build and CI workflow speedups | [knowledge/build-optimizations.md](knowledge/build-optimizations.md) | Optimization | Active | 2026-03-14 |
+| AI bloat pattern and countermeasures | [knowledge/ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md) | Observation | Active | 2026-03-14 |
 
 ## Quick Reference by Topic
 
@@ -33,6 +34,12 @@ _Read this at every session start (after git sync). Each row links to a detailed
 **Windows CI fails but Linux passes** → MSVC `/W4` warnings. Use fix table. See [windows-msvc-w4-warnings.md](knowledge/windows-msvc-w4-warnings.md).
 
 ### Doing things well (Patterns & Optimizations)
+
+**BEFORE writing any code** → Check file size. If over 400 lines (.cpp) or 200 lines (.h), trim first. See [ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md).
+
+**BEFORE adding a new method/class** → Search for existing one. Remove a duplicate if adding. See [workflow-patterns.md](knowledge/workflow-patterns.md).
+
+**System is built but Initialize() is never called** → Either wire it in immediately or delete it. See [ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md).
 
 **Starting a task involving multiple codebase areas** → Launch parallel Explore agents. See [workflow-patterns.md](knowledge/workflow-patterns.md).
 
