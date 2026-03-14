@@ -163,13 +163,15 @@ After solving a problem that required multiple attempts (or is likely to recur),
 
 ```
 .claude/
-├── README.md                        # Full usage guide
-├── index.md                         # Master index — read at session start
+├── README.md                          # Full usage guide
+├── index.md                           # Master index — read at session start
 └── knowledge/
-    ├── github-api-pr-checks.md      # PR check status — use gh run list, not gh pr checks --watch
-    ├── ci-failures.md               # CI job blocking/non-blocking, local reproduction
-    ├── git-rebase-conflicts.md      # Auto-generated file rules, conflict resolution
-    └── clang-format.md              # Full file scan required; Metal excluded; no head-50
+    ├── github-api-pr-checks.md        # PR check status — use gh run list, not gh pr checks --watch
+    ├── ci-failures.md                 # CI job blocking/non-blocking, local reproduction
+    ├── git-rebase-conflicts.md        # Auto-generated file rules, conflict resolution
+    ├── clang-format.md                # Full file scan required; Metal excluded; no head-50
+    ├── cmake-linux-build-failures.md  # Cache conflicts, missing packages, DirectX guards
+    └── windows-msvc-w4-warnings.md    # MSVC /W4 fix table; diagnose from CI logs
 ```
 
 **Rules:**

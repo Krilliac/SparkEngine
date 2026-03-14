@@ -83,8 +83,10 @@ All knowledge files use this standard structure:
 ├── README.md           # This file — system overview
 ├── index.md            # Master index — READ THIS AT SESSION START
 └── knowledge/
-    ├── github-api-pr-checks.md    # GitHub API / PR check status access
-    ├── ci-failures.md             # CI build failure patterns
-    ├── git-rebase-conflicts.md    # Rebase conflict resolution
-    └── clang-format.md            # clang-format issues and fixes
+    ├── github-api-pr-checks.md        # GitHub API / PR check status access
+    ├── ci-failures.md                 # CI build failure patterns
+    ├── git-rebase-conflicts.md        # Rebase conflict resolution
+    ├── clang-format.md                # clang-format issues and fixes
+    ├── cmake-linux-build-failures.md  # Linux CMake configure/build failures
+    └── windows-msvc-w4-warnings.md    # MSVC /W4 warning-as-error patterns
 ```

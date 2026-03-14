@@ -8,6 +8,8 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | CI build failure patterns | [knowledge/ci-failures.md](knowledge/ci-failures.md) | Resolved | 2026-03-14 |
 | Git rebase conflicts | [knowledge/git-rebase-conflicts.md](knowledge/git-rebase-conflicts.md) | Resolved | 2026-03-14 |
 | clang-format issues | [knowledge/clang-format.md](knowledge/clang-format.md) | Resolved | 2026-03-14 |
+| CMake Linux build failures | [knowledge/cmake-linux-build-failures.md](knowledge/cmake-linux-build-failures.md) | Resolved | 2026-03-14 |
+| Windows MSVC /W4 warnings | [knowledge/windows-msvc-w4-warnings.md](knowledge/windows-msvc-w4-warnings.md) | Resolved | 2026-03-14 |
 
 ## Quick Reference
 
@@ -18,6 +20,10 @@ _Read this at every session start (after git sync). Each row links to a detailed
 **Rebase conflict** → `<!-- AUTO:* -->` and `docs/api/` always take upstream. See [git-rebase-conflicts.md](knowledge/git-rebase-conflicts.md).
 
 **clang-format failure** → Don't use `head -50` shortcut; match CI's Metal exclusion. See [clang-format.md](knowledge/clang-format.md).
+
+**CMake configure/build fails on Linux** → Check submodules, apt packages, cache conflicts. See [cmake-linux-build-failures.md](knowledge/cmake-linux-build-failures.md).
+
+**Windows CI fails but Linux passes** → MSVC `/W4` warnings. Use fix table. See [windows-msvc-w4-warnings.md](knowledge/windows-msvc-w4-warnings.md).
 
 ---
 
