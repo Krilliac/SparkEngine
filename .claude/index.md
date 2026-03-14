@@ -12,14 +12,19 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | clang-format issues | [knowledge/clang-format.md](knowledge/clang-format.md) | Issue | Resolved | 2026-03-14 |
 | CMake Linux build failures | [knowledge/cmake-linux-build-failures.md](knowledge/cmake-linux-build-failures.md) | Issue | Resolved | 2026-03-14 |
 | Windows MSVC /W4 warnings | [knowledge/windows-msvc-w4-warnings.md](knowledge/windows-msvc-w4-warnings.md) | Issue | Resolved | 2026-03-14 |
+| **ConsoleProcessManager unwired (critical)** | [knowledge/consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md) | Issue | Active | 2026-03-14 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
+| **SparkConsole refactor plan (critical)** | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | Active | 2026-03-14 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
 | Build and CI workflow speedups | [knowledge/build-optimizations.md](knowledge/build-optimizations.md) | Optimization | Active | 2026-03-14 |
 | AI bloat pattern and countermeasures | [knowledge/ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md) | Observation | Active | 2026-03-14 |
+| **Codebase bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-14.md](knowledge/codebase-bloat-audit-2026-03-14.md) | Observation | Active | 2026-03-14 |
 
 ## Quick Reference by Topic
 
 ### Fixing problems (Issues)
+
+**CRITICAL: ConsoleProcessManager never called** → It's unwired. 15-min fix: add Initialize() at startup + ProcessCommands() in main loop. See [consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md).
 
 **Checking PR / CI status** → Use `gh run list` + `gh run view`, NOT `gh pr checks --watch`. See [github-api-pr-checks.md](knowledge/github-api-pr-checks.md).
 
@@ -35,11 +40,15 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Doing things well (Patterns & Optimizations)
 
+**CRITICAL: 22 files violate size limits** → See [codebase-bloat-audit-2026-03-14.md](knowledge/codebase-bloat-audit-2026-03-14.md). Largest: SparkConsole.cpp (6,996 lines), GraphicsEngine.cpp (4,579), MaterialSystem.cpp (4,326).
+
+**CRITICAL: SparkConsole needs refactoring** → 6,000+ lines of embedded UI bloat that should be in SparkConsole.exe instead. See [sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) for 2-session plan.
+
 **BEFORE writing any code** → Check file size. If over 400 lines (.cpp) or 200 lines (.h), trim first. See [ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md).
 
 **BEFORE adding a new method/class** → Search for existing one. Remove a duplicate if adding. See [workflow-patterns.md](knowledge/workflow-patterns.md).
 
-**System is built but Initialize() is never called** → Either wire it in immediately or delete it. See [ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md).
+**System is built but Initialize() is never called** → Either wire it in immediately or delete it. ConsoleProcessManager is an active example. See [ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md).
 
 **Starting a task involving multiple codebase areas** → Launch parallel Explore agents. See [workflow-patterns.md](knowledge/workflow-patterns.md).
 
