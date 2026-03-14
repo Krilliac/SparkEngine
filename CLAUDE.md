@@ -119,6 +119,66 @@ git rebase --continue
 - If the rebase produces conflicts, resolve them carefully and re-run `docs/sync-wiki.sh sync`.
 - The default upstream branch is `Working` (not `main`).
 
+After the git sync, **read `.claude/index.md`** to load session context (step 5 below).
+
+```bash
+# 5. Load persistent context
+cat .claude/index.md
+```
+
+## Persistence Context Database
+
+The `.claude/` directory is a persistent AI memory store — a knowledge base that Claude reads and writes across sessions. It records learned solutions, workarounds, and step-by-step remediation sequences for recurring issues so future sessions skip re-discovery.
+
+### At session start
+
+After the git sync (steps 1–4 above), read the index:
+
+```bash
+cat .claude/index.md
+```
+
+If any topic matches your current task, read the full knowledge file before proceeding.
+
+### When to write a new entry
+
+After solving a problem that required multiple attempts (or is likely to recur), write or update the relevant file in `.claude/knowledge/` and update `.claude/index.md`. Commit context updates alongside code changes.
+
+### Entry format
+
+```markdown
+# [Topic]
+
+**Last updated:** YYYY-MM-DD
+**Status:** Resolved | Workaround | Ongoing
+
+## Issue
+## Context
+## Methods Tried  (numbered, each ending with → FAILED / → WORKED)
+## Solution (Reliable Method)
+## Notes
+```
+
+### Structure
+
+```
+.claude/
+├── README.md                          # Full usage guide
+├── index.md                           # Master index — read at session start
+└── knowledge/
+    ├── github-api-pr-checks.md        # PR check status — use gh run list, not gh pr checks --watch
+    ├── ci-failures.md                 # CI job blocking/non-blocking, local reproduction
+    ├── git-rebase-conflicts.md        # Auto-generated file rules, conflict resolution
+    ├── clang-format.md                # Full file scan required; Metal excluded; no head-50
+    ├── cmake-linux-build-failures.md  # Cache conflicts, missing packages, DirectX guards
+    └── windows-msvc-w4-warnings.md    # MSVC /W4 fix table; diagnose from CI logs
+```
+
+**Rules:**
+- Do not exclude `.claude/` from `.promptignore` — Claude must be able to read it.
+- Entries are written by Claude sessions; humans may correct factual errors only.
+- Always commit context changes — future sessions on any branch benefit.
+
 ## Branch freshness (run before every commit)
 
 Before committing or pushing, **always** ensure your branch is up to date with the upstream base branch:
