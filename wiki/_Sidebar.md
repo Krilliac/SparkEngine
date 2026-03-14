@@ -61,6 +61,7 @@
 ### Advanced
 - [Build System and CMake Modules](Build-System-and-CMake-Modules)
 - [Profiler and Debugging](Profiler-and-Debugging)
+- [Utilities](Utilities)
 - [Testing](Testing)
 - [Troubleshooting](Troubleshooting)
 - [Contributing](Contributing)

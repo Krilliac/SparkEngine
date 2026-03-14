@@ -79,45 +79,50 @@ namespace Spark
         m_objectType = InteractiveObjectType::DOOR;
         SetName("Door");
         m_interactionRange = 3.0f;
+
+        // Set up door state FSM — callbacks keep m_doorState in sync for external queries.
+        m_doorFSM.AddState(DoorState::Closed, [this]() { m_doorState = DoorState::Closed; });
+        m_doorFSM.AddState(
+            DoorState::Opening, [this]() { m_doorState = DoorState::Opening; },
+            [this](float dt)
+            {
+                m_openProgress += m_openSpeed * dt;
+                if (m_openProgress > 1.0f)
+                    m_openProgress = 1.0f;
+            });
+        m_doorFSM.AddState(
+            DoorState::Open,
+            [this]()
+            {
+                m_doorState = DoorState::Open;
+                m_autoCloseTimer = 0.0f;
+            },
+            [this](float dt)
+            {
+                if (m_autoClose)
+                    m_autoCloseTimer += dt;
+            });
+        m_doorFSM.AddState(
+            DoorState::Closing, [this]() { m_doorState = DoorState::Closing; },
+            [this](float dt)
+            {
+                m_openProgress -= m_openSpeed * dt;
+                if (m_openProgress < 0.0f)
+                    m_openProgress = 0.0f;
+            });
+
+        // Automatic transitions
+        m_doorFSM.AddTransition(DoorState::Opening, DoorState::Open, [this]() { return m_openProgress >= 1.0f; });
+        m_doorFSM.AddTransition(DoorState::Closing, DoorState::Closed, [this]() { return m_openProgress <= 0.0f; });
+        m_doorFSM.AddTransition(DoorState::Open, DoorState::Closing,
+                                [this]() { return m_autoClose && m_autoCloseTimer >= m_autoCloseTime; });
+
+        m_doorFSM.Start(DoorState::Closed);
     }
 
     void DoorObject::Update(float deltaTime)
     {
-        switch (m_doorState)
-        {
-        case DoorState::Opening:
-            m_openProgress += m_openSpeed * deltaTime;
-            if (m_openProgress >= 1.0f)
-            {
-                m_openProgress = 1.0f;
-                m_doorState = DoorState::Open;
-                m_autoCloseTimer = 0.0f;
-            }
-            break;
-
-        case DoorState::Closing:
-            m_openProgress -= m_openSpeed * deltaTime;
-            if (m_openProgress <= 0.0f)
-            {
-                m_openProgress = 0.0f;
-                m_doorState = DoorState::Closed;
-            }
-            break;
-
-        case DoorState::Open:
-            if (m_autoClose)
-            {
-                m_autoCloseTimer += deltaTime;
-                if (m_autoCloseTimer >= m_autoCloseTime)
-                {
-                    Close();
-                }
-            }
-            break;
-
-        case DoorState::Closed:
-            break;
-        }
+        m_doorFSM.Tick(deltaTime);
 
         // Apply door movement based on style
         if (m_doorStyle == DoorStyle::Sliding)
@@ -160,12 +165,12 @@ namespace Spark
     {
         if (m_doorState == DoorState::Closed || m_doorState == DoorState::Closing)
         {
-            m_doorState = DoorState::Opening;
             if (m_openProgress == 0.0f)
             {
                 m_closedPosition = GetPosition();
                 m_closedRotationY = GetRotation().y;
             }
+            m_doorFSM.TransitionTo(DoorState::Opening);
         }
     }
 
@@ -173,7 +178,7 @@ namespace Spark
     {
         if (m_doorState == DoorState::Open || m_doorState == DoorState::Opening)
         {
-            m_doorState = DoorState::Closing;
+            m_doorFSM.TransitionTo(DoorState::Closing);
         }
     }
 

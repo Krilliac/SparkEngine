@@ -73,6 +73,12 @@ add_executable(SparkTests
     TestPhysicsInterpolation.cpp
     TestCameraInterpolation.cpp
     TestNetworkInterpolation.cpp
+    TestTypeTraits.cpp
+    TestHash.cpp
+    TestScopeGuard.cpp
+    TestSerializer.cpp
+    TestEventBus.cpp
+    TestStateMachine.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

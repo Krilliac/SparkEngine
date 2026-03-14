@@ -649,7 +649,7 @@ namespace Spark
     void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
                                         const std::string& category, const std::string& usage)
     {
-        m_commands[name] = {handler, description, category, usage};
+        m_commands[name] = {handler, description, category, usage, Spark::FNV1a64(name)};
         m_stats.registeredCommands = static_cast<uint32_t>(m_commands.size());
     }
 

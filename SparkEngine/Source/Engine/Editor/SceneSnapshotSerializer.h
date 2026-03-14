@@ -12,6 +12,7 @@
 #pragma once
 
 #include "../../Core/Platform.h"
+#include "Utils/Serializer.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -26,138 +27,66 @@ namespace Spark::Editor
 {
 
     // ========================================================================
-    // Binary buffer helpers
+    // Binary buffer helpers — thin wrappers over Spark::BinaryWriter/Reader
+    //
+    // SnapshotWriter and SnapshotReader delegate all byte-level work to the
+    // engine-wide Serializer.h utilities, which provide consistent little-endian
+    // byte ordering and bounds-checked reads. The named methods (WriteU32, etc.)
+    // are kept for API compatibility with registered ComponentSerializerEntry
+    // callbacks throughout the engine.
     // ========================================================================
 
     class SnapshotWriter
     {
       public:
-        void WriteU32(uint32_t v)
-        {
-            const auto* p = reinterpret_cast<const uint8_t*>(&v);
-            m_data.insert(m_data.end(), p, p + sizeof(v));
-        }
-
-        void WriteU64(uint64_t v)
-        {
-            const auto* p = reinterpret_cast<const uint8_t*>(&v);
-            m_data.insert(m_data.end(), p, p + sizeof(v));
-        }
-
-        void WriteFloat(float v)
-        {
-            const auto* p = reinterpret_cast<const uint8_t*>(&v);
-            m_data.insert(m_data.end(), p, p + sizeof(v));
-        }
-
-        void WriteBool(bool v) { m_data.push_back(v ? 1 : 0); }
-
-        void WriteString(const std::string& s)
-        {
-            WriteU32(static_cast<uint32_t>(s.size()));
-            m_data.insert(m_data.end(), s.begin(), s.end());
-        }
-
+        void WriteU32(uint32_t v) { m_writer.Write<uint32_t>(v); }
+        void WriteU64(uint64_t v) { m_writer.Write<uint64_t>(v); }
+        void WriteFloat(float v) { m_writer.Write<float>(v); }
+        void WriteBool(bool v) { m_writer.Write<bool>(v); }
+        void WriteString(const std::string& s) { m_writer.WriteString(s); }
         void WriteFloat3(float x, float y, float z)
         {
-            WriteFloat(x);
-            WriteFloat(y);
-            WriteFloat(z);
+            m_writer.Write<float>(x);
+            m_writer.Write<float>(y);
+            m_writer.Write<float>(z);
         }
+        void WriteBytes(const void* data, size_t size) { m_writer.WriteBytes(data, size); }
 
-        void WriteBytes(const void* data, size_t size)
-        {
-            const auto* p = reinterpret_cast<const uint8_t*>(data);
-            m_data.insert(m_data.end(), p, p + size);
-        }
-
-        const std::vector<uint8_t>& GetData() const { return m_data; }
-        std::vector<uint8_t> TakeData() { return std::move(m_data); }
-        size_t Size() const { return m_data.size(); }
+        const std::vector<uint8_t>& GetData() const { return m_writer.GetBuffer(); }
+        std::vector<uint8_t> TakeData() { return m_writer.TakeBuffer(); }
+        size_t Size() const { return m_writer.Size(); }
 
       private:
-        std::vector<uint8_t> m_data;
+        Spark::BinaryWriter m_writer;
     };
 
     class SnapshotReader
     {
       public:
-        explicit SnapshotReader(const std::vector<uint8_t>& data) : m_data(data) {}
+        explicit SnapshotReader(const std::vector<uint8_t>& data) : m_reader(data) {}
 
-        bool HasRemaining(size_t bytes) const { return m_offset + bytes <= m_data.size(); }
+        bool HasRemaining(size_t bytes) const { return m_reader.Remaining() >= bytes; }
 
-        uint32_t ReadU32()
-        {
-            uint32_t v = 0;
-            if (HasRemaining(sizeof(v)))
-            {
-                std::memcpy(&v, m_data.data() + m_offset, sizeof(v));
-                m_offset += sizeof(v);
-            }
-            return v;
-        }
-
-        uint64_t ReadU64()
-        {
-            uint64_t v = 0;
-            if (HasRemaining(sizeof(v)))
-            {
-                std::memcpy(&v, m_data.data() + m_offset, sizeof(v));
-                m_offset += sizeof(v);
-            }
-            return v;
-        }
-
-        float ReadFloat()
-        {
-            float v = 0.0f;
-            if (HasRemaining(sizeof(v)))
-            {
-                std::memcpy(&v, m_data.data() + m_offset, sizeof(v));
-                m_offset += sizeof(v);
-            }
-            return v;
-        }
-
-        bool ReadBool()
-        {
-            if (HasRemaining(1))
-                return m_data[m_offset++] != 0;
-            return false;
-        }
-
-        std::string ReadString()
-        {
-            uint32_t len = ReadU32();
-            if (!HasRemaining(len))
-                return {};
-            std::string s(reinterpret_cast<const char*>(m_data.data() + m_offset), len);
-            m_offset += len;
-            return s;
-        }
+        uint32_t ReadU32() { return m_reader.Read<uint32_t>(); }
+        uint64_t ReadU64() { return m_reader.Read<uint64_t>(); }
+        float ReadFloat() { return m_reader.Read<float>(); }
+        bool ReadBool() { return m_reader.Read<bool>(); }
+        std::string ReadString() { return m_reader.ReadString(); }
 
         void ReadFloat3(float& x, float& y, float& z)
         {
-            x = ReadFloat();
-            y = ReadFloat();
-            z = ReadFloat();
+            x = m_reader.Read<float>();
+            y = m_reader.Read<float>();
+            z = m_reader.Read<float>();
         }
 
-        bool ReadBytes(void* out, size_t size)
-        {
-            if (!HasRemaining(size))
-                return false;
-            std::memcpy(out, m_data.data() + m_offset, size);
-            m_offset += size;
-            return true;
-        }
+        bool ReadBytes(void* out, size_t size) { return m_reader.ReadBytes(out, size); }
 
-        size_t GetOffset() const { return m_offset; }
-        bool IsValid() const { return m_offset <= m_data.size(); }
+        size_t GetOffset() const { return m_reader.Tell(); }
+        bool IsValid() const { return !m_reader.HasError(); }
 
       private:
-        const std::vector<uint8_t>& m_data;
-        size_t m_offset = 0;
+        Spark::BinaryReader m_reader;
     };
 
     // ========================================================================

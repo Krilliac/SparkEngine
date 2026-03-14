@@ -28,6 +28,46 @@ namespace Spark
         m_firstBloodOccurred = false;
         m_playerScores.clear();
         m_roundResults.clear();
+
+        // Set up round-state FSM — callbacks keep m_roundState in sync so that
+        // external code querying GetRoundState() always sees the correct value.
+        m_roundFSM.Reset();
+
+        m_roundFSM.AddState(RoundState::WaitingForPlayers);
+
+        m_roundFSM.AddState(RoundState::Countdown, nullptr,
+                            [this](float dt)
+                            {
+                                m_roundState = RoundState::Countdown;
+                                UpdateCountdown(dt);
+                            });
+
+        m_roundFSM.AddState(RoundState::InProgress, nullptr,
+                            [this](float dt)
+                            {
+                                m_roundState = RoundState::InProgress;
+                                m_roundElapsed += dt;
+                                if (m_rules.timeLimit > 0.0f)
+                                {
+                                    m_roundTimeRemaining -= dt;
+                                    if (m_roundTimeRemaining <= 0.0f)
+                                    {
+                                        m_roundTimeRemaining = 0.0f;
+                                        EndRound(GetLeadingTeam());
+                                        return;
+                                    }
+                                }
+                                CheckWinCondition();
+                            });
+
+        m_roundFSM.AddState(RoundState::RoundEnd, [this]() { m_roundState = RoundState::RoundEnd; });
+        m_roundFSM.AddState(RoundState::MatchEnd, [this]() { m_roundState = RoundState::MatchEnd; });
+
+        // Automatic transition: Countdown → InProgress when timer expires
+        m_roundFSM.AddTransition(RoundState::Countdown, RoundState::InProgress,
+                                 [this]() { return m_countdownTimer <= 0.0f; });
+
+        m_roundFSM.Start(RoundState::WaitingForPlayers);
         return true;
     }
 
@@ -36,29 +76,7 @@ namespace Spark
         if (!m_matchActive)
             return;
 
-        switch (m_roundState)
-        {
-        case RoundState::Countdown:
-            UpdateCountdown(deltaTime);
-            break;
-
-        case RoundState::InProgress:
-            m_roundElapsed += deltaTime;
-            if (m_rules.timeLimit > 0.0f)
-            {
-                m_roundTimeRemaining -= deltaTime;
-                if (m_roundTimeRemaining <= 0.0f)
-                {
-                    m_roundTimeRemaining = 0.0f;
-                    EndRound(GetLeadingTeam());
-                }
-            }
-            CheckWinCondition();
-            break;
-
-        default:
-            break;
-        }
+        m_roundFSM.Tick(deltaTime);
     }
 
     void GameMode::StartMatch()
@@ -95,6 +113,7 @@ namespace Spark
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Ending match");
         m_matchActive = false;
         m_roundState = RoundState::MatchEnd;
+        m_roundFSM.TransitionTo(RoundState::MatchEnd);
 
         Team winner = GetLeadingTeam();
         if (m_events.onMatchEnd)
@@ -107,6 +126,7 @@ namespace Spark
     {
         m_currentRound++;
         m_roundState = RoundState::Countdown;
+        m_roundFSM.TransitionTo(RoundState::Countdown);
         m_countdownTimer = 3.0f; // 3 second countdown
         m_roundElapsed = 0.0f;
         m_roundTimeRemaining = m_rules.timeLimit;
@@ -126,6 +146,7 @@ namespace Spark
     void GameMode::EndRound(Team winningTeam)
     {
         m_roundState = RoundState::RoundEnd;
+        m_roundFSM.TransitionTo(RoundState::RoundEnd);
 
         RoundResult result;
         result.roundNumber = m_currentRound;
@@ -152,10 +173,8 @@ namespace Spark
     {
         m_countdownTimer -= dt;
         if (m_countdownTimer <= 0.0f)
-        {
             m_countdownTimer = 0.0f;
-            m_roundState = RoundState::InProgress;
-        }
+        // Transition to InProgress is driven by the FSM condition (m_countdownTimer <= 0)
     }
 
     // === Player Management ===

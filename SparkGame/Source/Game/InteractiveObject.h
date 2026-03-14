@@ -12,6 +12,7 @@
 
 #pragma once
 #include "Core/Platform.h"
+#include "Utils/StateMachine.h"
 
 #include "Game/GameObject.h"
 #include "Enums/GameSystemEnums.h"
@@ -153,6 +154,7 @@ namespace Spark
 
       private:
         DoorState m_doorState = DoorState::Closed;
+        Spark::StateMachine<DoorState> m_doorFSM; ///< Drives door animation lifecycle
         DoorStyle m_doorStyle = DoorStyle::Sliding;
         bool m_isLocked = false;
         bool m_autoClose = true;
