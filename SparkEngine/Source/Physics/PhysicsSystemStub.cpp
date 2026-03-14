@@ -10,6 +10,7 @@
 #include "Core/Platform.h"
 #include "PhysicsSystem.h"
 #include "Utils/LogMacros.h"
+#include "Utils/Hash.h"
 #include "Utils/Validate.h"
 #include <sstream>
 
@@ -33,11 +34,16 @@ std::string PhysicsBodyTypeToString(PhysicsBodyType type)
 
 PhysicsBodyType StringToPhysicsBodyType(const std::string& str)
 {
-    if (str == "Static")
+    using namespace Spark::HashLiterals;
+    switch (Spark::FNV1a64(str))
+    {
+    case "Static"_hash64:
         return PhysicsBodyType::Static;
-    if (str == "Kinematic")
+    case "Kinematic"_hash64:
         return PhysicsBodyType::Kinematic;
-    return PhysicsBodyType::Dynamic;
+    default:
+        return PhysicsBodyType::Dynamic;
+    }
 }
 
 std::string CollisionShapeTypeToString(CollisionShapeType type)
@@ -68,23 +74,28 @@ std::string CollisionShapeTypeToString(CollisionShapeType type)
 
 CollisionShapeType StringToCollisionShapeType(const std::string& str)
 {
-    if (str == "Sphere")
+    using namespace Spark::HashLiterals;
+    switch (Spark::FNV1a64(str))
+    {
+    case "Sphere"_hash64:
         return CollisionShapeType::Sphere;
-    if (str == "Capsule")
+    case "Capsule"_hash64:
         return CollisionShapeType::Capsule;
-    if (str == "Cylinder")
+    case "Cylinder"_hash64:
         return CollisionShapeType::Cylinder;
-    if (str == "Cone")
+    case "Cone"_hash64:
         return CollisionShapeType::Cone;
-    if (str == "Mesh")
+    case "Mesh"_hash64:
         return CollisionShapeType::Mesh;
-    if (str == "ConvexHull")
+    case "ConvexHull"_hash64:
         return CollisionShapeType::ConvexHull;
-    if (str == "Heightfield")
+    case "Heightfield"_hash64:
         return CollisionShapeType::Heightfield;
-    if (str == "Compound")
+    case "Compound"_hash64:
         return CollisionShapeType::Compound;
-    return CollisionShapeType::Box;
+    default:
+        return CollisionShapeType::Box;
+    }
 }
 
 std::string ConstraintTypeToString(ConstraintType type)
@@ -109,17 +120,22 @@ std::string ConstraintTypeToString(ConstraintType type)
 
 ConstraintType StringToConstraintType(const std::string& str)
 {
-    if (str == "Hinge")
+    using namespace Spark::HashLiterals;
+    switch (Spark::FNV1a64(str))
+    {
+    case "Hinge"_hash64:
         return ConstraintType::Hinge;
-    if (str == "Slider")
+    case "Slider"_hash64:
         return ConstraintType::Slider;
-    if (str == "ConeTwist")
+    case "ConeTwist"_hash64:
         return ConstraintType::ConeTwist;
-    if (str == "Generic6DOF")
+    case "Generic6DOF"_hash64:
         return ConstraintType::Generic6DOF;
-    if (str == "Fixed")
+    case "Fixed"_hash64:
         return ConstraintType::Fixed;
-    return ConstraintType::Point2Point;
+    default:
+        return ConstraintType::Point2Point;
+    }
 }
 
 // ============================================================================
@@ -622,10 +638,10 @@ void PhysicsSystem::ProcessCollisions() {}
 size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc)
 {
     size_t hash = std::hash<int>{}(static_cast<int>(desc.type));
-    hash ^= std::hash<float>{}(desc.dimensions.x) << 1;
-    hash ^= std::hash<float>{}(desc.dimensions.y) << 2;
-    hash ^= std::hash<float>{}(desc.dimensions.z) << 3;
-    hash ^= std::hash<float>{}(desc.radius) << 4;
-    hash ^= std::hash<float>{}(desc.height) << 5;
+    Spark::CombineHash(hash, std::hash<float>{}(desc.dimensions.x));
+    Spark::CombineHash(hash, std::hash<float>{}(desc.dimensions.y));
+    Spark::CombineHash(hash, std::hash<float>{}(desc.dimensions.z));
+    Spark::CombineHash(hash, std::hash<float>{}(desc.radius));
+    Spark::CombineHash(hash, std::hash<float>{}(desc.height));
     return hash;
 }

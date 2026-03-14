@@ -4,6 +4,7 @@
  */
 
 #include "Sequencer.h"
+#include "../../Utils/MathUtils.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
@@ -14,17 +15,17 @@ namespace Spark::Cinematic
 {
 
     // ============================================================================
-    // Helper: Linear interpolation for float
+    // Helper: Linear interpolation — delegates to MathUtils
     // ============================================================================
 
     static float LerpF(float a, float b, float t)
     {
-        return a + (b - a) * t;
+        return MathUtils::Lerp(a, b, t);
     }
 
     static XMFLOAT3 LerpFloat3(const XMFLOAT3& a, const XMFLOAT3& b, float t)
     {
-        return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t};
+        return MathUtils::Lerp(a, b, t);
     }
 
     // ============================================================================

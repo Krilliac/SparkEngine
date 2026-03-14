@@ -4,6 +4,7 @@
  */
 
 #include "ReplaySystem.h"
+#include "../../Utils/Serializer.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -204,52 +205,43 @@ namespace Spark
             return false;
         }
 
+        Spark::BinaryWriter writer;
+
         // Write header
-        uint32_t magic = 0x52504C59; // "RPLY"
-        file.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
-        file.write(reinterpret_cast<const char*>(&m_replayData.version), sizeof(uint32_t));
+        writer.Write<uint32_t>(0x52504C59); // "RPLY"
+        writer.Write<uint32_t>(m_replayData.version);
 
         // Write metadata
-        uint32_t mapLen = static_cast<uint32_t>(m_replayData.mapName.size());
-        file.write(reinterpret_cast<const char*>(&mapLen), sizeof(mapLen));
-        file.write(m_replayData.mapName.data(), mapLen);
+        writer.WriteString(m_replayData.mapName);
+        writer.WriteString(m_replayData.gameMode);
+        writer.Write<float>(m_replayData.duration);
 
-        uint32_t modeLen = static_cast<uint32_t>(m_replayData.gameMode.size());
-        file.write(reinterpret_cast<const char*>(&modeLen), sizeof(modeLen));
-        file.write(m_replayData.gameMode.data(), modeLen);
-
-        file.write(reinterpret_cast<const char*>(&m_replayData.duration), sizeof(float));
-
-        // Write frame count and frames
-        uint32_t frameCount = static_cast<uint32_t>(m_replayData.frames.size());
-        file.write(reinterpret_cast<const char*>(&frameCount), sizeof(frameCount));
-
+        // Write frames
+        writer.Write<uint32_t>(static_cast<uint32_t>(m_replayData.frames.size()));
         for (const auto& frame : m_replayData.frames)
         {
-            file.write(reinterpret_cast<const char*>(&frame.timestamp), sizeof(float));
-            file.write(reinterpret_cast<const char*>(&frame.frameNumber), sizeof(uint32_t));
-            uint32_t entityCount = static_cast<uint32_t>(frame.entities.size());
-            file.write(reinterpret_cast<const char*>(&entityCount), sizeof(entityCount));
+            writer.Write<float>(frame.timestamp);
+            writer.Write<uint32_t>(frame.frameNumber);
+            writer.Write<uint32_t>(static_cast<uint32_t>(frame.entities.size()));
             for (const auto& entity : frame.entities)
             {
-                file.write(reinterpret_cast<const char*>(&entity), sizeof(ReplayEntityState));
+                writer.WriteBytes(&entity, sizeof(ReplayEntityState));
             }
         }
 
         // Write events
-        uint32_t eventCount = static_cast<uint32_t>(m_replayData.events.size());
-        file.write(reinterpret_cast<const char*>(&eventCount), sizeof(eventCount));
+        writer.Write<uint32_t>(static_cast<uint32_t>(m_replayData.events.size()));
         for (const auto& event : m_replayData.events)
         {
-            file.write(reinterpret_cast<const char*>(&event.timestamp), sizeof(float));
-            uint32_t typeLen = static_cast<uint32_t>(event.type.size());
-            file.write(reinterpret_cast<const char*>(&typeLen), sizeof(typeLen));
-            file.write(event.type.data(), typeLen);
-            file.write(reinterpret_cast<const char*>(&event.sourceEntity), sizeof(uint32_t));
-            file.write(reinterpret_cast<const char*>(&event.targetEntity), sizeof(uint32_t));
-            file.write(reinterpret_cast<const char*>(&event.position), sizeof(DirectX::XMFLOAT3));
+            writer.Write<float>(event.timestamp);
+            writer.WriteString(event.type);
+            writer.Write<uint32_t>(event.sourceEntity);
+            writer.Write<uint32_t>(event.targetEntity);
+            writer.WriteBytes(&event.position, sizeof(DirectX::XMFLOAT3));
         }
 
+        const auto& buffer = writer.GetBuffer();
+        file.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
         return true;
     }
 
@@ -258,68 +250,49 @@ namespace Spark
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Loading replay from '%s'", filePath.c_str());
         // Safety limits for deserialization to prevent OOM from malicious/corrupt files
-        constexpr uint32_t kMaxStringLength = 4096;
         constexpr uint32_t kMaxFrameCount = 1'000'000;
         constexpr uint32_t kMaxEntityCount = 100'000;
         constexpr uint32_t kMaxEventCount = 1'000'000;
 
         std::lock_guard<std::mutex> lock(m_mutex);
-        std::ifstream file(filePath, std::ios::binary);
+        std::ifstream file(filePath, std::ios::binary | std::ios::ate);
         if (!file.is_open())
         {
             return false;
         }
 
-        uint32_t magic = 0;
-        file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-        if (!file || magic != 0x52504C59)
-        {
-            return false;
-        }
-
-        file.read(reinterpret_cast<char*>(&m_replayData.version), sizeof(uint32_t));
+        auto fileSize = file.tellg();
+        file.seekg(0, std::ios::beg);
+        std::vector<uint8_t> fileData(static_cast<size_t>(fileSize));
+        file.read(reinterpret_cast<char*>(fileData.data()), fileSize);
         if (!file)
         {
             return false;
         }
 
-        // Read metadata with bounds-checked string lengths
-        uint32_t mapLen = 0;
-        file.read(reinterpret_cast<char*>(&mapLen), sizeof(mapLen));
-        if (!file || mapLen > kMaxStringLength)
-        {
-            return false;
-        }
-        m_replayData.mapName.resize(mapLen);
-        file.read(m_replayData.mapName.data(), mapLen);
-        if (!file)
+        Spark::BinaryReader reader(fileData);
+
+        // Read and verify header
+        uint32_t magic = reader.Read<uint32_t>();
+        if (reader.HasError() || magic != 0x52504C59)
         {
             return false;
         }
 
-        uint32_t modeLen = 0;
-        file.read(reinterpret_cast<char*>(&modeLen), sizeof(modeLen));
-        if (!file || modeLen > kMaxStringLength)
-        {
-            return false;
-        }
-        m_replayData.gameMode.resize(modeLen);
-        file.read(m_replayData.gameMode.data(), modeLen);
-        if (!file)
-        {
-            return false;
-        }
+        m_replayData.version = reader.Read<uint32_t>();
 
-        file.read(reinterpret_cast<char*>(&m_replayData.duration), sizeof(float));
-        if (!file)
+        // Read metadata
+        m_replayData.mapName = reader.ReadString();
+        m_replayData.gameMode = reader.ReadString();
+        m_replayData.duration = reader.Read<float>();
+        if (reader.HasError())
         {
             return false;
         }
 
         // Read frames with bounds checking
-        uint32_t frameCount = 0;
-        file.read(reinterpret_cast<char*>(&frameCount), sizeof(frameCount));
-        if (!file || frameCount > kMaxFrameCount)
+        uint32_t frameCount = reader.Read<uint32_t>();
+        if (reader.HasError() || frameCount > kMaxFrameCount)
         {
             return false;
         }
@@ -327,29 +300,27 @@ namespace Spark
 
         for (auto& frame : m_replayData.frames)
         {
-            file.read(reinterpret_cast<char*>(&frame.timestamp), sizeof(float));
-            file.read(reinterpret_cast<char*>(&frame.frameNumber), sizeof(uint32_t));
-            uint32_t entityCount = 0;
-            file.read(reinterpret_cast<char*>(&entityCount), sizeof(entityCount));
-            if (!file || entityCount > kMaxEntityCount)
+            frame.timestamp = reader.Read<float>();
+            frame.frameNumber = reader.Read<uint32_t>();
+            uint32_t entityCount = reader.Read<uint32_t>();
+            if (reader.HasError() || entityCount > kMaxEntityCount)
             {
                 return false;
             }
             frame.entities.resize(entityCount);
             for (auto& entity : frame.entities)
             {
-                file.read(reinterpret_cast<char*>(&entity), sizeof(ReplayEntityState));
+                reader.ReadBytes(&entity, sizeof(ReplayEntityState));
             }
-            if (!file)
+            if (reader.HasError())
             {
                 return false;
             }
         }
 
         // Read events with bounds checking
-        uint32_t eventCount = 0;
-        file.read(reinterpret_cast<char*>(&eventCount), sizeof(eventCount));
-        if (!file || eventCount > kMaxEventCount)
+        uint32_t eventCount = reader.Read<uint32_t>();
+        if (reader.HasError() || eventCount > kMaxEventCount)
         {
             return false;
         }
@@ -357,19 +328,12 @@ namespace Spark
 
         for (auto& event : m_replayData.events)
         {
-            file.read(reinterpret_cast<char*>(&event.timestamp), sizeof(float));
-            uint32_t typeLen = 0;
-            file.read(reinterpret_cast<char*>(&typeLen), sizeof(typeLen));
-            if (!file || typeLen > kMaxStringLength)
-            {
-                return false;
-            }
-            event.type.resize(typeLen);
-            file.read(event.type.data(), typeLen);
-            file.read(reinterpret_cast<char*>(&event.sourceEntity), sizeof(uint32_t));
-            file.read(reinterpret_cast<char*>(&event.targetEntity), sizeof(uint32_t));
-            file.read(reinterpret_cast<char*>(&event.position), sizeof(DirectX::XMFLOAT3));
-            if (!file)
+            event.timestamp = reader.Read<float>();
+            event.type = reader.ReadString();
+            event.sourceEntity = reader.Read<uint32_t>();
+            event.targetEntity = reader.Read<uint32_t>();
+            reader.ReadBytes(&event.position, sizeof(DirectX::XMFLOAT3));
+            if (reader.HasError())
             {
                 return false;
             }

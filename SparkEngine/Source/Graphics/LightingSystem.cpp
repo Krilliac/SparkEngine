@@ -7,6 +7,7 @@
 
 #include "LightingSystem.h"
 #include "Utils/Assert.h"
+#include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include <sstream>
@@ -1654,17 +1655,22 @@ std::string LightTypeToString(LightType type)
 
 LightType StringToLightType(const std::string& str)
 {
-    if (str == "directional")
+    using namespace Spark::HashLiterals;
+    switch (Spark::FNV1a64(str))
+    {
+    case "directional"_hash64:
         return LightType::Directional;
-    if (str == "point")
+    case "point"_hash64:
         return LightType::Point;
-    if (str == "spot")
+    case "spot"_hash64:
         return LightType::Spot;
-    if (str == "area")
+    case "area"_hash64:
         return LightType::Area;
-    if (str == "environment")
+    case "environment"_hash64:
         return LightType::Environment;
-    return LightType::Directional; // Default
+    default:
+        return LightType::Directional;
+    }
 }
 
 std::string ShadowTechniqueToString(ShadowTechnique technique)
@@ -1690,19 +1696,24 @@ std::string ShadowTechniqueToString(ShadowTechnique technique)
 
 ShadowTechnique StringToShadowTechnique(const std::string& str)
 {
-    if (str == "none")
+    using namespace Spark::HashLiterals;
+    switch (Spark::FNV1a64(str))
+    {
+    case "none"_hash64:
         return ShadowTechnique::None;
-    if (str == "basic")
+    case "basic"_hash64:
         return ShadowTechnique::Basic;
-    if (str == "pcf")
+    case "pcf"_hash64:
         return ShadowTechnique::PCF;
-    if (str == "vsm")
+    case "vsm"_hash64:
         return ShadowTechnique::VSM;
-    if (str == "csm")
+    case "csm"_hash64:
         return ShadowTechnique::CSM;
-    if (str == "pcss")
+    case "pcss"_hash64:
         return ShadowTechnique::PCSS;
-    return ShadowTechnique::PCF; // Default
+    default:
+        return ShadowTechnique::PCF;
+    }
 }
 
 #endif // inner SPARK_PLATFORM_WINDOWS
@@ -1710,6 +1721,7 @@ ShadowTechnique StringToShadowTechnique(const std::string& str)
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "LightingSystem.h"
+#include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
@@ -2155,17 +2167,22 @@ std::string LightTypeToString(LightType type)
 
 LightType StringToLightType(const std::string& str)
 {
-    if (str == "directional")
+    using namespace Spark::HashLiterals;
+    switch (Spark::FNV1a64(str))
+    {
+    case "directional"_hash64:
         return LightType::Directional;
-    if (str == "point")
+    case "point"_hash64:
         return LightType::Point;
-    if (str == "spot")
+    case "spot"_hash64:
         return LightType::Spot;
-    if (str == "area")
+    case "area"_hash64:
         return LightType::Area;
-    if (str == "environment")
+    case "environment"_hash64:
         return LightType::Environment;
-    return LightType::Directional;
+    default:
+        return LightType::Directional;
+    }
 }
 
 std::string ShadowTechniqueToString(ShadowTechnique technique)
@@ -2191,19 +2208,24 @@ std::string ShadowTechniqueToString(ShadowTechnique technique)
 
 ShadowTechnique StringToShadowTechnique(const std::string& str)
 {
-    if (str == "none")
+    using namespace Spark::HashLiterals;
+    switch (Spark::FNV1a64(str))
+    {
+    case "none"_hash64:
         return ShadowTechnique::None;
-    if (str == "basic")
+    case "basic"_hash64:
         return ShadowTechnique::Basic;
-    if (str == "pcf")
+    case "pcf"_hash64:
         return ShadowTechnique::PCF;
-    if (str == "vsm")
+    case "vsm"_hash64:
         return ShadowTechnique::VSM;
-    if (str == "csm")
+    case "csm"_hash64:
         return ShadowTechnique::CSM;
-    if (str == "pcss")
+    case "pcss"_hash64:
         return ShadowTechnique::PCSS;
-    return ShadowTechnique::PCF;
+    default:
+        return ShadowTechnique::PCF;
+    }
 }
 
 #endif // SPARK_PLATFORM_WINDOWS

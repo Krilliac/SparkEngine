@@ -18,6 +18,78 @@ namespace Spark::AI
     AIDirector::AIDirector()
     {
         m_baseDifficultyParams = DifficultyParameters{};
+
+        // --- Phase FSM setup ---
+        m_phaseFSM.AddState(
+            DirectorPhase::BuildUp,
+            [this]()
+            {
+                m_currentPhase = DirectorPhase::BuildUp;
+                m_phaseTimer = 0.0f;
+            },
+            [this](float dt)
+            {
+                m_phaseTimer += dt;
+                float progress = m_phaseTimer / m_buildUpDuration;
+                m_targetIntensity = m_minIntensity + (m_maxIntensity - m_minIntensity) * progress;
+            });
+
+        m_phaseFSM.AddState(
+            DirectorPhase::Peak,
+            [this]()
+            {
+                m_currentPhase = DirectorPhase::Peak;
+                m_phaseTimer = 0.0f;
+            },
+            [this](float dt)
+            {
+                m_phaseTimer += dt;
+                m_targetIntensity = m_maxIntensity;
+            });
+
+        m_phaseFSM.AddState(
+            DirectorPhase::Relax,
+            [this]()
+            {
+                m_currentPhase = DirectorPhase::Relax;
+                m_phaseTimer = 0.0f;
+            },
+            [this](float dt)
+            {
+                m_phaseTimer += dt;
+                float progress = m_phaseTimer / m_relaxDuration;
+                m_targetIntensity = m_maxIntensity - (m_maxIntensity - m_minIntensity) * progress;
+            });
+
+        m_phaseFSM.AddState(
+            DirectorPhase::Transition,
+            [this]()
+            {
+                m_currentPhase = DirectorPhase::Transition;
+                m_phaseTimer = 0.0f;
+            },
+            [this](float dt) { m_phaseTimer += dt; });
+
+        // Transitions
+        m_phaseFSM.AddTransition(DirectorPhase::BuildUp, DirectorPhase::Peak,
+                                 [this]() { return m_phaseTimer >= m_buildUpDuration; });
+
+        m_phaseFSM.AddTransition(DirectorPhase::Peak, DirectorPhase::Relax,
+                                 [this]()
+                                 {
+                                     float earlyExitThreshold = m_peakDuration * 0.5f;
+                                     bool playerStruggling = m_playerMetrics.healthPercent < 0.2f;
+                                     return m_phaseTimer >= m_peakDuration ||
+                                            (m_phaseTimer >= earlyExitThreshold && playerStruggling);
+                                 });
+
+        m_phaseFSM.AddTransition(DirectorPhase::Relax, DirectorPhase::BuildUp,
+                                 [this]() { return m_phaseTimer >= m_relaxDuration; });
+
+        m_phaseFSM.AddTransition(DirectorPhase::Transition, DirectorPhase::BuildUp,
+                                 [this]() { return m_phaseTimer >= 2.0f; });
+
+        m_phaseFSM.Start(DirectorPhase::BuildUp);
     }
 
     void AIDirector::Update(World& world, float deltaTime)
@@ -79,60 +151,7 @@ namespace Spark::AI
 
     void AIDirector::UpdateIntensity(float deltaTime)
     {
-        m_phaseTimer += deltaTime;
-
-        switch (m_currentPhase)
-        {
-        case DirectorPhase::BuildUp:
-        {
-            float progress = m_phaseTimer / m_buildUpDuration;
-            m_targetIntensity = m_minIntensity + (m_maxIntensity - m_minIntensity) * progress;
-
-            if (m_phaseTimer >= m_buildUpDuration)
-            {
-                m_currentPhase = DirectorPhase::Peak;
-                m_phaseTimer = 0.0f;
-            }
-            break;
-        }
-        case DirectorPhase::Peak:
-        {
-            m_targetIntensity = m_maxIntensity;
-
-            // End peak early if player is struggling
-            float earlyExitThreshold = m_peakDuration * 0.5f;
-            bool playerStruggling = m_playerMetrics.healthPercent < 0.2f;
-
-            if (m_phaseTimer >= m_peakDuration || (m_phaseTimer >= earlyExitThreshold && playerStruggling))
-            {
-                m_currentPhase = DirectorPhase::Relax;
-                m_phaseTimer = 0.0f;
-            }
-            break;
-        }
-        case DirectorPhase::Relax:
-        {
-            float progress = m_phaseTimer / m_relaxDuration;
-            m_targetIntensity = m_maxIntensity - (m_maxIntensity - m_minIntensity) * progress;
-
-            if (m_phaseTimer >= m_relaxDuration)
-            {
-                m_currentPhase = DirectorPhase::BuildUp;
-                m_phaseTimer = 0.0f;
-            }
-            break;
-        }
-        case DirectorPhase::Transition:
-        {
-            // Smooth transition between phases
-            if (m_phaseTimer >= 2.0f)
-            {
-                m_currentPhase = DirectorPhase::BuildUp;
-                m_phaseTimer = 0.0f;
-            }
-            break;
-        }
-        }
+        m_phaseFSM.Tick(deltaTime);
 
         // Adjust target intensity based on player skill
         float skillAdjustment = (m_playerSkillEstimate - 0.5f) * 0.2f;
@@ -222,8 +241,7 @@ namespace Spark::AI
 
     void AIDirector::Console_ForcePhase(DirectorPhase phase)
     {
-        m_currentPhase = phase;
-        m_phaseTimer = 0.0f;
+        m_phaseFSM.TransitionTo(phase);
     }
 
     void AIDirector::Console_SetIntensity(float intensity)

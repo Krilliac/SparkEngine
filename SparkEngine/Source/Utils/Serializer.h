@@ -47,6 +47,7 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include "TypeTraits.h"
 
 namespace Spark
 {
@@ -66,9 +67,8 @@ namespace Spark
 #endif
         }
 
-        template <typename T> [[nodiscard]] inline T ByteSwap(T value) noexcept
+        template <Spark::TriviallyCopyable T> [[nodiscard]] inline T ByteSwap(T value) noexcept
         {
-            static_assert(std::is_trivially_copyable_v<T>, "ByteSwap requires a trivially copyable type");
             uint8_t bytes[sizeof(T)];
             std::memcpy(bytes, &value, sizeof(T));
             for (size_t i = 0; i < sizeof(T) / 2; ++i)
@@ -121,10 +121,10 @@ namespace Spark
          * @tparam T    A trivially-copyable, non-pointer type.
          * @param value  Value to serialise.
          */
-        template <typename T> void Write(const T& value)
+        template <Spark::TriviallyCopyable T>
+            requires(!std::is_pointer_v<T>)
+        void Write(const T& value)
         {
-            static_assert(std::is_trivially_copyable_v<T>, "BinaryWriter::Write requires a trivially copyable type");
-            static_assert(!std::is_pointer_v<T>, "BinaryWriter::Write does not accept raw pointers");
 
             T leValue = Detail::ToLittleEndian(value);
             const auto* bytes = reinterpret_cast<const uint8_t*>(&leValue);
@@ -239,10 +239,10 @@ namespace Spark
          * @tparam T  A trivially-copyable, non-pointer type.
          * @return    The deserialised value, or a zero-initialised T on error.
          */
-        template <typename T> T Read()
+        template <Spark::TriviallyCopyable T>
+            requires(!std::is_pointer_v<T>)
+        T Read()
         {
-            static_assert(std::is_trivially_copyable_v<T>, "BinaryReader::Read requires a trivially copyable type");
-            static_assert(!std::is_pointer_v<T>, "BinaryReader::Read does not return raw pointers");
 
             T value{};
             if (!Consume(sizeof(T)))

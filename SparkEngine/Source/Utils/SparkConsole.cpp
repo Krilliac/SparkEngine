@@ -1,6 +1,7 @@
 #include "../Core/Platform.h"
 #include "SparkConsole.h"
 #include "ConsoleVariable.h"
+#include "Hash.h"
 #include "Validate.h"
 #include <iostream>
 #include <sstream>
@@ -106,21 +107,26 @@ namespace Spark
 
     ConsoleSeverity StringToConsoleSeverity(const std::string& str)
     {
-        if (str == "TRACE")
+        using namespace Spark::HashLiterals;
+        switch (Spark::FNV1a64(str))
+        {
+        case "TRACE"_hash64:
             return ConsoleSeverity::Trace;
-        if (str == "DEBUG")
+        case "DEBUG"_hash64:
             return ConsoleSeverity::Debug;
-        if (str == "INFO")
+        case "INFO"_hash64:
             return ConsoleSeverity::Info;
-        if (str == "SUCCESS")
+        case "SUCCESS"_hash64:
             return ConsoleSeverity::Success;
-        if (str == "WARNING")
+        case "WARNING"_hash64:
             return ConsoleSeverity::Warning;
-        if (str == "ERROR")
+        case "ERROR"_hash64:
             return ConsoleSeverity::Error;
-        if (str == "CRITICAL")
+        case "CRITICAL"_hash64:
             return ConsoleSeverity::Critical;
-        return ConsoleSeverity::Info;
+        default:
+            return ConsoleSeverity::Info;
+        }
     }
 
     // ============================================================================
@@ -6279,21 +6285,26 @@ namespace Spark
 
     ConsoleSeverity StringToConsoleSeverity(const std::string& str)
     {
-        if (str == "TRACE")
+        using namespace Spark::HashLiterals;
+        switch (Spark::FNV1a64(str))
+        {
+        case "TRACE"_hash64:
             return ConsoleSeverity::Trace;
-        if (str == "DEBUG")
+        case "DEBUG"_hash64:
             return ConsoleSeverity::Debug;
-        if (str == "INFO")
+        case "INFO"_hash64:
             return ConsoleSeverity::Info;
-        if (str == "SUCCESS")
+        case "SUCCESS"_hash64:
             return ConsoleSeverity::Success;
-        if (str == "WARNING")
+        case "WARNING"_hash64:
             return ConsoleSeverity::Warning;
-        if (str == "ERROR")
+        case "ERROR"_hash64:
             return ConsoleSeverity::Error;
-        if (str == "CRITICAL")
+        case "CRITICAL"_hash64:
             return ConsoleSeverity::Critical;
-        return ConsoleSeverity::Info;
+        default:
+            return ConsoleSeverity::Info;
+        }
     }
 
     SimpleConsole::Color SimpleConsole::SeverityToColor(ConsoleSeverity severity)

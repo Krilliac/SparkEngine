@@ -37,6 +37,7 @@
 
 #include <cstdint>
 #include <type_traits>
+#include "TypeTraits.h"
 
 // =============================================================================
 // Free operator overloads for enum class bitmasks
@@ -97,9 +98,8 @@ namespace Spark
      *
      * @tparam E  Enum class type with power-of-two values.
      */
-    template <typename E> class BitFlags
+    template <Spark::Enum E> class BitFlags
     {
-        static_assert(std::is_enum_v<E>, "BitFlags requires an enum type");
         using Underlying = std::underlying_type_t<E>;
 
       public:
