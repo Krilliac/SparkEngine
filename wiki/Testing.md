@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*75 test files, 917+ test cases*
+*81 test files, 1007+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -466,6 +466,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestECSWorld` | 11 |
 | `TestEngineContext` | 18 |
 | `TestEnvironmentQuery` | 12 |
+| `TestEventBus` | 15 |
 | `TestEventSystem` | 10 |
 | `TestFPSComponents` | 23 |
 | `TestFileUtils` | 15 |
@@ -473,6 +474,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestFrameAllocator` | 8 |
 | `TestFrustumCulling` | 11 |
 | `TestGameMode` | 5 |
+| `TestHash` | 18 |
 | `TestInputBindings` | 5 |
 | `TestInputSystem` | 11 |
 | `TestInventorySystem` | 11 |
@@ -500,17 +502,21 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestRingBuffer` | 14 |
 | `TestSaveSystem` | 7 |
 | `TestSceneSnapshotSerializer` | 19 |
+| `TestScopeGuard` | 13 |
 | `TestScopedTimer` | 3 |
 | `TestScreenSpaceEffects` | 16 |
 | `TestSequencer` | 10 |
+| `TestSerializer` | 17 |
 | `TestSplatmapSystem` | 10 |
 | `TestSplineMath` | 24 |
 | `TestSprite2DComponents` | 35 |
+| `TestStateMachine` | 16 |
 | `TestSteeringBehaviors` | 15 |
 | `TestStringUtils` | 19 |
 | `TestTemporalEffects` | 11 |
 | `TestThreadSafeQueue` | 10 |
 | `TestTween` | 14 |
+| `TestTypeTraits` | 11 |
 | `TestUISystem` | 6 |
 | `TestUUID` | 12 |
 | `TestUpscalingSystem` | 5 |
