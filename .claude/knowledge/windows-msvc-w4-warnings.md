@@ -1,6 +1,7 @@
 # Windows MSVC /W4 Warnings-as-Errors
 
 **Last updated:** 2026-03-14
+**Type:** Issue
 **Status:** Resolved
 
 ## Issue

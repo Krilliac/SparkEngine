@@ -1,6 +1,7 @@
 # Git Rebase Conflicts
 
 **Last updated:** 2026-03-14
+**Type:** Issue
 **Status:** Resolved
 
 ## Issue
