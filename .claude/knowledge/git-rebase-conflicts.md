@@ -77,3 +77,4 @@ To take upstream for just the auto-sections, open the file and manually accept t
 - The `--rebase-merges` flag is not needed for this repo — the history is linear on feature branches.
 - If a rebase has many conflicts (5+ files), consider whether your branch has diverged too far. In that case, it may be worth doing a careful `git merge` instead of a rebase, then squashing before the PR.
 - **Never** use `git rebase --abort` then force-push to skip a rebase. Always resolve conflicts properly.
+- **See also:** [build-optimizations.md](build-optimizations.md) for checking branch delta before rebasing; [codebase-observations.md](codebase-observations.md) for details on AUTO: wiki markers.
