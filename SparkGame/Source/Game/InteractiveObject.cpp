@@ -90,17 +90,18 @@ namespace Spark
                 if (m_openProgress > 1.0f)
                     m_openProgress = 1.0f;
             });
-        m_doorFSM.AddState(DoorState::Open,
-                           [this]()
-                           {
-                               m_doorState = DoorState::Open;
-                               m_autoCloseTimer = 0.0f;
-                           },
-                           [this](float dt)
-                           {
-                               if (m_autoClose)
-                                   m_autoCloseTimer += dt;
-                           });
+        m_doorFSM.AddState(
+            DoorState::Open,
+            [this]()
+            {
+                m_doorState = DoorState::Open;
+                m_autoCloseTimer = 0.0f;
+            },
+            [this](float dt)
+            {
+                if (m_autoClose)
+                    m_autoCloseTimer += dt;
+            });
         m_doorFSM.AddState(
             DoorState::Closing, [this]() { m_doorState = DoorState::Closing; },
             [this](float dt)
@@ -111,10 +112,8 @@ namespace Spark
             });
 
         // Automatic transitions
-        m_doorFSM.AddTransition(DoorState::Opening, DoorState::Open,
-                                [this]() { return m_openProgress >= 1.0f; });
-        m_doorFSM.AddTransition(DoorState::Closing, DoorState::Closed,
-                                [this]() { return m_openProgress <= 0.0f; });
+        m_doorFSM.AddTransition(DoorState::Opening, DoorState::Open, [this]() { return m_openProgress >= 1.0f; });
+        m_doorFSM.AddTransition(DoorState::Closing, DoorState::Closed, [this]() { return m_openProgress <= 0.0f; });
         m_doorFSM.AddTransition(DoorState::Open, DoorState::Closing,
                                 [this]() { return m_autoClose && m_autoCloseTimer >= m_autoCloseTime; });
 
