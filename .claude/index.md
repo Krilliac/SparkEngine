@@ -18,8 +18,9 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
 | Build and CI workflow speedups | [knowledge/build-optimizations.md](knowledge/build-optimizations.md) | Optimization | Active | 2026-03-14 |
 | AI bloat pattern and countermeasures | [knowledge/ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md) | Observation | Active | 2026-03-14 |
-| **Codebase bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-14.md](knowledge/codebase-bloat-audit-2026-03-14.md) | Observation | Active | 2026-03-14 |
-| **Extended bloat audit — dead code, ODR, duplicate inits** | [knowledge/bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md) | Observation | Active | 2026-03-14 |
+| Codebase bloat audit (March 14) | [knowledge/codebase-bloat-audit-2026-03-14.md](knowledge/codebase-bloat-audit-2026-03-14.md) | Observation | Superseded | 2026-03-14 |
+| Extended bloat audit (March 14) | [knowledge/bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md) | Observation | Superseded | 2026-03-14 |
+| **Comprehensive bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-15 |
 
 ## Quick Reference by Topic
 
@@ -41,9 +42,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Doing things well (Patterns & Optimizations)
 
-**CRITICAL: 22 files violate size limits** → See [codebase-bloat-audit-2026-03-14.md](knowledge/codebase-bloat-audit-2026-03-14.md). Largest: SparkConsole.cpp (6,996 lines), GraphicsEngine.cpp (4,579), MaterialSystem.cpp (4,326).
-
-**CRITICAL: 3 dead utility headers, ODR risk, duplicate inits** → ChromeTracing.h/MemoryDebugger.h/FrameInspector.h (1,052 lines, 0 usages). Two AudioMixer classes in same namespace (ODR risk). SparkEngine.cpp creates PhysicsSystem/Graphics 3+ times. See [bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md).
+**CRITICAL: 47 files violate size limits, 127 classes exceed method limit, 17 orphaned singletons** → See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md). 5 dead files (1,607 lines), 10,000+ removable lines total.
 
 **CRITICAL: SparkConsole needs refactoring** → 6,000+ lines of embedded UI bloat that should be in SparkConsole.exe instead. See [sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) for 2-session plan.
 
