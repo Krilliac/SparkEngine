@@ -48,6 +48,7 @@
 #include "Utils/CrashHandler.h"
 #include "Utils/D3DUtils.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/ConsoleProcessManager.h"
 #include "EngineSettings.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
@@ -294,6 +295,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         if (console.Initialize())
             console.LogSuccess("Headless server console initialized");
 
+        Spark::ConsoleProcessManager::GetInstance().Initialize();
+
         if (LoadGameModules(*g_moduleManager, lpCmdLine))
         {
             g_moduleManager->InitializeAll(EngineContext::Get());
@@ -329,6 +332,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             if (g_moduleManager && g_moduleManager->HasModules())
                 g_moduleManager->UpdateAll(dt);
 
+            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
 
             auto elapsed = std::chrono::steady_clock::now() - tickStart;
@@ -337,6 +341,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         }
 
         // Shutdown
+        Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
 
         if (g_moduleManager)
@@ -348,7 +353,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
         if (g_physicsOwned)
         {
-
             g_physicsOwned->Shutdown();
             g_physicsOwned.reset();
         }
@@ -521,11 +525,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
                 g_graphics->EndFrame();
             }
 
+            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
         }
     }
 
     // 10. Shutdown
+    Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
 
     if (g_moduleManager)
@@ -638,6 +644,9 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
         console.LogInfo("Settings loaded from " + settings.GetFilePath());
         console.LogInfo("Type 'help' for complete command reference");
     }
+
+    // Launch SparkConsole subprocess for command IPC
+    Spark::ConsoleProcessManager::GetInstance().Initialize();
 
     ShowWindow(hWnd, nCmdShow);
     UpdateWindow(hWnd);
@@ -1271,6 +1280,7 @@ void RegisterEngineConsoleCommands()
 #endif
 #include "Utils/Timer.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/ConsoleProcessManager.h"
 #include "Graphics/GraphicsConsoleCommands.h"
 #include "EngineSetup.h"
 #include "AssetIntegration.h"
@@ -1661,6 +1671,8 @@ int main(int argc, char* argv[])
         if (console.Initialize())
             console.LogSuccess("Headless server console initialized");
 
+        Spark::ConsoleProcessManager::GetInstance().Initialize();
+
         if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
         {
             g_moduleManager->InitializeAll(EngineContext::Get());
@@ -1689,6 +1701,7 @@ int main(int argc, char* argv[])
             if (g_moduleManager && g_moduleManager->HasModules())
                 g_moduleManager->UpdateAll(dt);
 
+            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
 
             auto elapsed = std::chrono::steady_clock::now() - tickStart;
@@ -1696,6 +1709,7 @@ int main(int argc, char* argv[])
                 std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
         }
 
+        Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
 
         if (g_moduleManager)
@@ -1817,6 +1831,9 @@ int main(int argc, char* argv[])
         console.LogSuccess("Spark Engine runtime initialized (Linux/SDL2)");
         console.LogInfo("Settings loaded from " + settings.GetFilePath());
     }
+
+    // Launch SparkConsole subprocess for command IPC
+    Spark::ConsoleProcessManager::GetInstance().Initialize();
 
     if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
     {
@@ -1989,10 +2006,12 @@ int main(int argc, char* argv[])
             g_graphics->EndFrame();
         }
 
+        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
         console.Update();
     }
 
     // 10. Shutdown
+    Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
 
     if (g_moduleManager)
@@ -2007,7 +2026,6 @@ int main(int argc, char* argv[])
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     if (g_physicsOwned)
     {
-
         g_physicsOwned->Shutdown();
         g_physicsOwned.reset();
     }
@@ -2066,6 +2084,7 @@ int main(int argc, char* argv[])
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.Initialize();
+    Spark::ConsoleProcessManager::GetInstance().Initialize();
     console.LogWarning("No SDL2 - engine will exit after initialization.");
     LogMissingModuleWarnings();
 
@@ -2081,9 +2100,12 @@ int main(int argc, char* argv[])
         float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
         if (g_moduleManager && g_moduleManager->HasModules())
             g_moduleManager->UpdateAll(dt);
+        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
         console.Update();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
+
+    Spark::ConsoleProcessManager::GetInstance().Shutdown();
 
     if (g_moduleManager)
     {
@@ -2095,7 +2117,6 @@ int main(int argc, char* argv[])
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     if (g_physicsOwned)
     {
-
         g_physicsOwned->Shutdown();
         g_physicsOwned.reset();
     }

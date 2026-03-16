@@ -12,7 +12,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | clang-format issues | [knowledge/clang-format.md](knowledge/clang-format.md) | Issue | Resolved | 2026-03-14 |
 | CMake Linux build failures | [knowledge/cmake-linux-build-failures.md](knowledge/cmake-linux-build-failures.md) | Issue | Resolved | 2026-03-14 |
 | Windows MSVC /W4 warnings | [knowledge/windows-msvc-w4-warnings.md](knowledge/windows-msvc-w4-warnings.md) | Issue | Resolved | 2026-03-14 |
-| **ConsoleProcessManager unwired (critical)** | [knowledge/consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md) | Issue | Active | 2026-03-14 |
+| **ConsoleProcessManager wired in** | [knowledge/consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md) | Issue | Resolved | 2026-03-16 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | **SparkConsole refactor plan (critical)** | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | Active | 2026-03-14 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
@@ -43,7 +43,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Fixing problems (Issues)
 
-**CRITICAL: ConsoleProcessManager never called** → It's unwired. 15-min fix: add Initialize() at startup + ProcessCommands() in main loop. See [consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md).
+**ConsoleProcessManager — RESOLVED** → Wired into all 5 startup paths. See [consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md).
 
 **Checking PR / CI status** → Use `gh run list` + `gh run view`, NOT `gh pr checks --watch`. See [github-api-pr-checks.md](knowledge/github-api-pr-checks.md).
 
