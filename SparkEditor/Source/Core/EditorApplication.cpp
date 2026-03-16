@@ -32,7 +32,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_opengl3.h>
 #include <SDL.h>
-#include <GL/glew.h>
+#include <GL/gl.h>
 #endif
 
 #include <chrono>
@@ -555,15 +555,6 @@ namespace SparkEditor
 
         SDL_GL_MakeCurrent(m_window, m_glContext);
         SDL_GL_SetSwapInterval(1); // VSync
-
-        // Initialize GLEW
-        GLenum glewErr = glewInit();
-        if (glewErr != GLEW_OK)
-        {
-            console.LogError("Failed to initialize GLEW: " +
-                             std::string(reinterpret_cast<const char*>(glewGetErrorString(glewErr))));
-            return false;
-        }
 
         std::cout << "OpenGL initialized: " << glGetString(GL_VERSION) << "\n";
         std::cout << "GLSL version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << "\n";
