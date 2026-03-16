@@ -58,7 +58,8 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev 
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
+
     - name: Configure CMake (ASan + UBSan)
       run: |
         cmake -B build \
@@ -201,7 +202,8 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev 
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
+
     - name: Configure CMake
       run: |
         cmake -B build \
@@ -253,7 +255,8 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake libgl-dev libvulkan-dev libsdl2-dev 
+        sudo apt-get install -y clang cmake libgl-dev libvulkan-dev libsdl2-dev
+
     - name: Configure CMake
       run: |
         cmake -B build \
@@ -300,7 +303,8 @@ jobs:
         with:
           submodules: recursive
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y lcov libgl-dev libsdl2-dev       - name: Configure
+        run: sudo apt-get update && sudo apt-get install -y lcov libgl-dev libsdl2-dev
+      - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
@@ -336,7 +340,8 @@ jobs:
         with:
           submodules: recursive
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang-tidy libgl-dev libsdl2-dev       - name: Configure
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy libgl-dev libsdl2-dev
+      - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
