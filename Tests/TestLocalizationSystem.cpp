@@ -25,7 +25,7 @@ TEST(StringTable_SetAndGet)
 TEST(StringTable_MissingKeyReturnsSelf)
 {
     Spark::StringTable table;
-    const std::string& result = table.GetEntry("missing.key");
+    std::string result = table.GetEntry("missing.key");
     EXPECT_EQ(result, std::string("missing.key"));
 }
 
