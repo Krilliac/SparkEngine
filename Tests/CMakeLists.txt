@@ -78,12 +78,21 @@ add_executable(SparkTests
     TestSerializer.cpp
     TestEventBus.cpp
     TestStateMachine.cpp
+    TestClientPrediction.cpp
+    TestClothSimulation.cpp
+    TestDialogueSystem.cpp
+    TestInputBindings.cpp
+    TestLoadingScreen.cpp
+    TestUISystem.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
     "${CMAKE_SOURCE_DIR}/ThirdParty"
 )
+
+# Link engine static library so tests can call .cpp-backed implementations
+target_link_libraries(SparkTests PRIVATE SparkEngineLib)
 
 # Link with EnTT (header-only)
 if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt")

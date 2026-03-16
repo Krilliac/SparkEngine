@@ -176,7 +176,7 @@ void GameObject::Scale(const XMFLOAT3& d)
     m_worldMatrixDirty = true;
 }
 
-XMMATRIX GameObject::GetWorldMatrix()
+XMMATRIX GameObject::GetWorldMatrix() const
 {
     if (m_worldMatrixDirty)
         UpdateWorldMatrix();
@@ -269,7 +269,7 @@ void GameObject::CreateMesh()
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, m_context);
 }
 
-void GameObject::UpdateWorldMatrix()
+void GameObject::UpdateWorldMatrix() const
 {
     XMMATRIX S = XMMatrixScaling(m_scale.x, m_scale.y, m_scale.z);
     XMMATRIX R = XMMatrixRotationRollPitchYaw(m_rotation.x, m_rotation.y, m_rotation.z);

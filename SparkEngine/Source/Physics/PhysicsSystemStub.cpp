@@ -635,7 +635,7 @@ void PhysicsSystem::UpdateMetrics()
 
 void PhysicsSystem::ProcessCollisions() {}
 
-size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc)
+size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc) const
 {
     size_t hash = std::hash<int>{}(static_cast<int>(desc.type));
     Spark::CombineHash(hash, std::hash<float>{}(desc.dimensions.x));

@@ -135,7 +135,7 @@ namespace Spark
         SimpleConsole& operator=(const SimpleConsole&) = delete;
 
         std::vector<std::string> ParseCommand(const std::string& commandLine);
-        std::string GetTimestamp();
+        std::string GetTimestamp() const;
         std::string FindClosestCommand(const std::string& input) const;
         std::string ResolveAliases(const std::string& commandLine);
 

@@ -343,7 +343,7 @@ class AssetPipeline
     void UnloadAsset(const std::string& path);
     void UnloadAllAssets();
     std::shared_ptr<Asset> GetAsset(const std::string& path);
-    bool IsAssetLoaded(const std::string& path);
+    bool IsAssetLoaded(const std::string& path) const;
 
     // Cache management
     void SetCacheSize(size_t maxMemoryMB);
@@ -363,10 +363,10 @@ class AssetPipeline
 
     // Asset discovery
     std::vector<std::string> ScanDirectory(const std::string& directory, AssetType type = AssetType::Unknown);
-    AssetType DetectAssetType(const std::string& path);
+    AssetType DetectAssetType(const std::string& path) const;
 
     // Metadata
-    AssetMetadata GetAssetMetadata(const std::string& path);
+    AssetMetadata GetAssetMetadata(const std::string& path) const;
     void RefreshAssetMetadata(const std::string& path);
 
     // Hot reloading
@@ -473,9 +473,9 @@ class AssetPipeline
 
     // Helper methods
     void LoadingThreadFunction();
-    AssetType DetectAssetTypeFromExtension(const std::string& extension);
-    std::string CalculateChecksum(const std::string& filePath);
-    uint64_t GetFileTimestamp(const std::string& filePath);
+    AssetType DetectAssetTypeFromExtension(const std::string& extension) const;
+    std::string CalculateChecksum(const std::string& filePath) const;
+    uint64_t GetFileTimestamp(const std::string& filePath) const;
     void UpdateMetrics();
 
     // Asset loaders

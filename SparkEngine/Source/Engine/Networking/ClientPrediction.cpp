@@ -106,19 +106,19 @@ namespace Spark
             state.position.y += state.velocity.y * deltaTime;
         }
 
+        // Simple ground check (before jump so jumping from ground works)
+        if (state.position.y < 0.0f)
+        {
+            state.position.y = 0.0f;
+            state.velocity.y = 0.0f;
+            state.isGrounded = true;
+        }
+
         // Jump
         if (input.jump && state.isGrounded)
         {
             state.velocity.y = jumpForce;
             state.isGrounded = false;
-        }
-
-        // Simple ground check
-        if (state.position.y <= 0.0f)
-        {
-            state.position.y = 0.0f;
-            state.velocity.y = 0.0f;
-            state.isGrounded = true;
         }
 
         // Look direction

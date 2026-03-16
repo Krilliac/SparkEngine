@@ -152,13 +152,19 @@ namespace Spark
                 : m_desc(desc), m_device(device)
             {
                 ComPtr<IDXGIDevice> dxgiDevice;
-                device->QueryInterface(__uuidof(IDXGIDevice), &dxgiDevice);
+                HRESULT hr = device->QueryInterface(__uuidof(IDXGIDevice), &dxgiDevice);
+                if (FAILED(hr))
+                    return;
 
                 ComPtr<IDXGIAdapter> dxgiAdapter;
-                dxgiDevice->GetAdapter(&dxgiAdapter);
+                hr = dxgiDevice->GetAdapter(&dxgiAdapter);
+                if (FAILED(hr))
+                    return;
 
                 ComPtr<IDXGIFactory2> dxgiFactory;
-                dxgiAdapter->GetParent(__uuidof(IDXGIFactory2), &dxgiFactory);
+                hr = dxgiAdapter->GetParent(__uuidof(IDXGIFactory2), &dxgiFactory);
+                if (FAILED(hr))
+                    return;
 
                 DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
                 swapChainDesc.Width = desc.width;
@@ -171,7 +177,9 @@ namespace Spark
                 swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
                 HWND hwnd = static_cast<HWND>(desc.windowHandle);
-                dxgiFactory->CreateSwapChainForHwnd(device, hwnd, &swapChainDesc, nullptr, nullptr, &m_swapChain);
+                hr = dxgiFactory->CreateSwapChainForHwnd(device, hwnd, &swapChainDesc, nullptr, nullptr, &m_swapChain);
+                if (FAILED(hr))
+                    return;
 
                 CreateBackBufferViews();
             }
@@ -528,14 +536,22 @@ namespace Spark
 
                 // Get DXGI factory
                 ComPtr<IDXGIDevice> dxgiDevice;
-                m_device.As(&dxgiDevice);
+                hr = m_device.As(&dxgiDevice);
+                if (FAILED(hr))
+                    return false;
                 ComPtr<IDXGIAdapter> adapter;
-                dxgiDevice->GetAdapter(&adapter);
-                adapter->GetParent(__uuidof(IDXGIFactory2), &m_dxgiFactory);
+                hr = dxgiDevice->GetAdapter(&adapter);
+                if (FAILED(hr))
+                    return false;
+                hr = adapter->GetParent(__uuidof(IDXGIFactory2), &m_dxgiFactory);
+                if (FAILED(hr))
+                    return false;
 
                 // Query capabilities
                 DXGI_ADAPTER_DESC adapterDesc;
-                adapter->GetDesc(&adapterDesc);
+                hr = adapter->GetDesc(&adapterDesc);
+                if (FAILED(hr))
+                    return false;
 
                 char deviceName[256];
                 wcstombs(deviceName, adapterDesc.Description, 256);
@@ -654,13 +670,17 @@ namespace Spark
                     srvDesc.Format = format;
                     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
                     srvDesc.Texture2D.MipLevels = desc.mipLevels;
-                    m_device->CreateShaderResourceView(texture.Get(), &srvDesc, &srv);
+                    hr = m_device->CreateShaderResourceView(texture.Get(), &srvDesc, &srv);
+                    if (FAILED(hr))
+                        return nullptr;
                 }
 
                 ComPtr<ID3D11RenderTargetView> rtv;
                 if (desc.usage & RHITextureUsage::RenderTarget)
                 {
-                    m_device->CreateRenderTargetView(texture.Get(), nullptr, &rtv);
+                    hr = m_device->CreateRenderTargetView(texture.Get(), nullptr, &rtv);
+                    if (FAILED(hr))
+                        return nullptr;
                 }
 
                 ComPtr<ID3D11DepthStencilView> dsv;
@@ -669,7 +689,9 @@ namespace Spark
                     D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
                     dsvDesc.Format = format;
                     dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-                    m_device->CreateDepthStencilView(texture.Get(), &dsvDesc, &dsv);
+                    hr = m_device->CreateDepthStencilView(texture.Get(), &dsvDesc, &dsv);
+                    if (FAILED(hr))
+                        return nullptr;
                 }
 
                 return std::make_unique<D3D11Texture>(desc, texture, std::move(srv), std::move(rtv), std::move(dsv))
@@ -717,7 +739,9 @@ namespace Spark
                 }
                 else if (desc.bytecode && desc.bytecodeSize > 0)
                 {
-                    D3DCreateBlob(desc.bytecodeSize, &bytecodeBlob);
+                    HRESULT hr = D3DCreateBlob(desc.bytecodeSize, &bytecodeBlob);
+                    if (FAILED(hr))
+                        return nullptr;
                     memcpy(bytecodeBlob->GetBufferPointer(), desc.bytecode, desc.bytecodeSize);
                 }
                 else
@@ -839,8 +863,11 @@ namespace Spark
                 ComPtr<ID3D11InputLayout> inputLayout;
                 if (!elements.empty() && d3dVS)
                 {
-                    m_device->CreateInputLayout(elements.data(), static_cast<UINT>(elements.size()),
-                                                d3dVS->GetBytecode(), d3dVS->GetBytecodeSize(), &inputLayout);
+                    HRESULT hr = m_device->CreateInputLayout(elements.data(), static_cast<UINT>(elements.size()),
+                                                              d3dVS->GetBytecode(), d3dVS->GetBytecodeSize(),
+                                                              &inputLayout);
+                    if (FAILED(hr))
+                        return nullptr;
                 }
 
                 // Create rasterizer state
@@ -860,7 +887,9 @@ namespace Spark
                 rasterDesc.AntialiasedLineEnable = desc.rasterizer.antialiasedLineEnable;
 
                 ComPtr<ID3D11RasterizerState> rasterizerState;
-                m_device->CreateRasterizerState(&rasterDesc, &rasterizerState);
+                HRESULT hr = m_device->CreateRasterizerState(&rasterDesc, &rasterizerState);
+                if (FAILED(hr))
+                    return nullptr;
 
                 // Create depth stencil state
                 D3D11_DEPTH_STENCIL_DESC dsDesc = {};
@@ -883,7 +912,9 @@ namespace Spark
                 dsDesc.BackFace.StencilFunc = ConvertCompareOp(desc.depthStencil.backFace.stencilFunc);
 
                 ComPtr<ID3D11DepthStencilState> depthStencilState;
-                m_device->CreateDepthStencilState(&dsDesc, &depthStencilState);
+                hr = m_device->CreateDepthStencilState(&dsDesc, &depthStencilState);
+                if (FAILED(hr))
+                    return nullptr;
 
                 // Create blend state
                 D3D11_BLEND_DESC blendDesc = {};
@@ -905,7 +936,9 @@ namespace Spark
                 }
 
                 ComPtr<ID3D11BlendState> blendState;
-                m_device->CreateBlendState(&blendDesc, &blendState);
+                hr = m_device->CreateBlendState(&blendDesc, &blendState);
+                if (FAILED(hr))
+                    return nullptr;
 
                 return std::make_unique<D3D11PipelineState>(desc, std::move(inputLayout), std::move(rasterizerState),
                                                             std::move(depthStencilState), std::move(blendState), d3dVS,

@@ -491,7 +491,7 @@ namespace Spark
         return args;
     }
 
-    std::string SimpleConsole::GetTimestamp()
+    std::string SimpleConsole::GetTimestamp() const
     {
         auto now = std::chrono::system_clock::now();
         auto t = std::chrono::system_clock::to_time_t(now);

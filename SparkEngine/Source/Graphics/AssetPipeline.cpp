@@ -751,7 +751,7 @@ std::shared_ptr<Asset> AssetPipeline::GetAsset(const std::string& path)
     return (it != m_assets.end()) ? it->second : nullptr;
 }
 
-bool AssetPipeline::IsAssetLoaded(const std::string& path)
+bool AssetPipeline::IsAssetLoaded(const std::string& path) const
 {
     std::lock_guard<std::mutex> lock(m_assetsMutex);
     return m_assets.find(path) != m_assets.end();
@@ -853,7 +853,7 @@ std::vector<std::string> AssetPipeline::ScanDirectory(const std::string& directo
     return assets;
 }
 
-AssetType AssetPipeline::DetectAssetType(const std::string& path)
+AssetType AssetPipeline::DetectAssetType(const std::string& path) const
 {
     std::string ext = std::filesystem::path(path).extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
@@ -861,7 +861,7 @@ AssetType AssetPipeline::DetectAssetType(const std::string& path)
     return DetectAssetTypeFromExtension(ext);
 }
 
-AssetMetadata AssetPipeline::GetAssetMetadata(const std::string& path)
+AssetMetadata AssetPipeline::GetAssetMetadata(const std::string& path) const
 {
     AssetMetadata metadata;
     metadata.filePath = path;
@@ -1053,7 +1053,7 @@ void AssetPipeline::LoadingThreadFunction()
     }
 }
 
-AssetType AssetPipeline::DetectAssetTypeFromExtension(const std::string& extension)
+AssetType AssetPipeline::DetectAssetTypeFromExtension(const std::string& extension) const
 {
     if (extension == ".obj" || extension == ".fbx" || extension == ".dae" || extension == ".gltf" ||
         extension == ".glb")
@@ -1081,7 +1081,7 @@ AssetType AssetPipeline::DetectAssetTypeFromExtension(const std::string& extensi
     return AssetType::Unknown;
 }
 
-std::string AssetPipeline::CalculateChecksum(const std::string& filePath)
+std::string AssetPipeline::CalculateChecksum(const std::string& filePath) const
 {
     // Simple checksum implementation - in production would use MD5/SHA
     std::ifstream file(filePath, std::ios::binary);
@@ -1101,7 +1101,7 @@ std::string AssetPipeline::CalculateChecksum(const std::string& filePath)
     return std::to_string(hash);
 }
 
-uint64_t AssetPipeline::GetFileTimestamp(const std::string& filePath)
+uint64_t AssetPipeline::GetFileTimestamp(const std::string& filePath) const
 {
     try
     {
@@ -1771,7 +1771,7 @@ std::shared_ptr<Asset> AssetPipeline::GetAsset(const std::string& path)
     return nullptr;
 }
 
-bool AssetPipeline::IsAssetLoaded(const std::string& path)
+bool AssetPipeline::IsAssetLoaded(const std::string& path) const
 {
     std::lock_guard<std::mutex> lock(m_assetsMutex);
     auto it = m_assets.find(path);
@@ -1860,14 +1860,14 @@ std::vector<std::string> AssetPipeline::ScanDirectory(const std::string& directo
     return results;
 }
 
-AssetType AssetPipeline::DetectAssetType(const std::string& path)
+AssetType AssetPipeline::DetectAssetType(const std::string& path) const
 {
     std::string ext = std::filesystem::path(path).extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
     return DetectAssetTypeFromExtension(ext);
 }
 
-AssetMetadata AssetPipeline::GetAssetMetadata(const std::string& path)
+AssetMetadata AssetPipeline::GetAssetMetadata(const std::string& path) const
 {
     // First check if the asset is loaded and has metadata
     {
@@ -2115,7 +2115,7 @@ void AssetPipeline::LoadingThreadFunction()
     }
 }
 
-AssetType AssetPipeline::DetectAssetTypeFromExtension(const std::string& extension)
+AssetType AssetPipeline::DetectAssetTypeFromExtension(const std::string& extension) const
 {
     if (extension == ".obj" || extension == ".fbx" || extension == ".gltf" || extension == ".glb")
         return AssetType::Mesh;
@@ -2139,7 +2139,7 @@ AssetType AssetPipeline::DetectAssetTypeFromExtension(const std::string& extensi
     return AssetType::Unknown;
 }
 
-std::string AssetPipeline::CalculateChecksum(const std::string& filePath)
+std::string AssetPipeline::CalculateChecksum(const std::string& filePath) const
 {
     // Simple additive checksum for Linux (no GPU work, CPU-side only)
     std::ifstream file(filePath, std::ios::binary);
@@ -2166,7 +2166,7 @@ std::string AssetPipeline::CalculateChecksum(const std::string& filePath)
     return ss.str();
 }
 
-uint64_t AssetPipeline::GetFileTimestamp(const std::string& filePath)
+uint64_t AssetPipeline::GetFileTimestamp(const std::string& filePath) const
 {
     struct stat fileStat;
     if (stat(filePath.c_str(), &fileStat) != 0)

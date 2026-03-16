@@ -322,8 +322,13 @@ namespace Spark
                                                ID3D12PipelineState* initialPSO)
                 : m_type(type)
             {
-                device->CreateCommandAllocator(type, IID_PPV_ARGS(&m_commandAllocator));
-                device->CreateCommandList(0, type, m_commandAllocator.Get(), initialPSO, IID_PPV_ARGS(&m_commandList));
+                HRESULT hr = device->CreateCommandAllocator(type, IID_PPV_ARGS(&m_commandAllocator));
+                if (FAILED(hr))
+                    return;
+                hr = device->CreateCommandList(0, type, m_commandAllocator.Get(), initialPSO,
+                                               IID_PPV_ARGS(&m_commandList));
+                if (FAILED(hr))
+                    return;
                 m_commandList->Close();
             }
 
@@ -844,15 +849,18 @@ namespace Spark
                     // Create upload buffer for initial data
                     D3D12_HEAP_PROPERTIES uploadHeap = {};
                     uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
-                    m_device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-                                                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                                      IID_PPV_ARGS(&uploadResource));
-                    if (uploadResource)
+                    hr = m_device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+                                                           D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                           IID_PPV_ARGS(&uploadResource));
+                    if (SUCCEEDED(hr) && uploadResource)
                     {
                         void* mapped = nullptr;
-                        uploadResource->Map(0, nullptr, &mapped);
-                        memcpy(mapped, desc.initialData, desc.size);
-                        uploadResource->Unmap(0, nullptr);
+                        hr = uploadResource->Map(0, nullptr, &mapped);
+                        if (SUCCEEDED(hr) && mapped)
+                        {
+                            memcpy(mapped, desc.initialData, desc.size);
+                            uploadResource->Unmap(0, nullptr);
+                        }
                     }
                 }
 
@@ -862,10 +870,13 @@ namespace Spark
                 if (isDynamic)
                 {
                     void* mapped = nullptr;
-                    buffer->GetD3D12Resource()->Map(0, nullptr, &mapped);
-                    buffer->SetMappedPointer(mapped);
-                    if (desc.initialData && mapped)
-                        memcpy(mapped, desc.initialData, desc.size);
+                    hr = buffer->GetD3D12Resource()->Map(0, nullptr, &mapped);
+                    if (SUCCEEDED(hr))
+                    {
+                        buffer->SetMappedPointer(mapped);
+                        if (desc.initialData && mapped)
+                            memcpy(mapped, desc.initialData, desc.size);
+                    }
                 }
 
                 if (!desc.debugName.empty())
@@ -970,7 +981,9 @@ namespace Spark
                 if (desc.bytecode && desc.bytecodeSize > 0)
                 {
                     ComPtr<ID3DBlob> blob;
-                    D3DCreateBlob(desc.bytecodeSize, &blob);
+                    HRESULT hr = D3DCreateBlob(desc.bytecodeSize, &blob);
+                    if (FAILED(hr))
+                        return nullptr;
                     memcpy(blob->GetBufferPointer(), desc.bytecode, desc.bytecodeSize);
                     return new D3D12Shader(desc, std::move(blob));
                 }
@@ -1215,7 +1228,9 @@ namespace Spark
                 if (b->GetMappedPointer())
                     return b->GetMappedPointer();
                 void* mapped = nullptr;
-                b->GetD3D12Resource()->Map(0, nullptr, &mapped);
+                HRESULT hr = b->GetD3D12Resource()->Map(0, nullptr, &mapped);
+                if (FAILED(hr))
+                    return nullptr;
                 b->SetMappedPointer(mapped);
                 return mapped;
             }
@@ -1282,7 +1297,9 @@ namespace Spark
 
                 // Copy source data into upload buffer row-by-row (respecting alignment)
                 uint8_t* mapped = nullptr;
-                uploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mapped));
+                hr = uploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mapped));
+                if (FAILED(hr))
+                    return;
                 uint32_t srcRowPitch = mipWidth * pixelSize;
                 for (uint32_t row = 0; row < mipHeight; row++)
                 {
@@ -1478,20 +1495,24 @@ namespace Spark
 
                 ComPtr<ID3DBlob> signature;
                 ComPtr<ID3DBlob> error;
-                D3D12SerializeVersionedRootSignature(&desc, &signature, &error);
-                if (!signature)
+                HRESULT hr = D3D12SerializeVersionedRootSignature(&desc, &signature, &error);
+                if (FAILED(hr) || !signature)
                     return nullptr;
 
                 ComPtr<ID3D12RootSignature> rootSig;
-                m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
-                                              IID_PPV_ARGS(&rootSig));
+                hr = m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
+                                                    IID_PPV_ARGS(&rootSig));
+                if (FAILED(hr))
+                    return nullptr;
                 return rootSig;
             }
 
             ComPtr<ID3D12RootSignature> D3D12Device::CreateRootSignature(const void* data, size_t dataSize) const
             {
                 ComPtr<ID3D12RootSignature> rootSig;
-                m_device->CreateRootSignature(0, data, dataSize, IID_PPV_ARGS(&rootSig));
+                HRESULT hr = m_device->CreateRootSignature(0, data, dataSize, IID_PPV_ARGS(&rootSig));
+                if (FAILED(hr))
+                    return nullptr;
                 return rootSig;
             }
 
