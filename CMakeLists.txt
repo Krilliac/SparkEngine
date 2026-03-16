@@ -562,11 +562,28 @@ endif()
 # ---------------------------------------------------------------------
 # 9.6) Build SparkEditor if enabled and exists
 # ---------------------------------------------------------------------
-if(ENABLE_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/SparkEditor/CMakeLists.txt" AND EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.h")
+set(SPARK_EDITOR_DEPS_OK TRUE)
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.h")
+    set(SPARK_EDITOR_DEPS_OK FALSE)
+    set(SPARK_EDITOR_SKIP_REASON "Dear ImGui not found (initialize submodule)")
+elseif(NOT WIN32)
+    # Linux editor requires SDL2 and OpenGL — check before adding subdirectory
+    find_package(SDL2 QUIET)
+    find_package(OpenGL QUIET)
+    if(NOT SDL2_FOUND)
+        set(SPARK_EDITOR_DEPS_OK FALSE)
+        set(SPARK_EDITOR_SKIP_REASON "SDL2 not found (install libsdl2-dev)")
+    elseif(NOT OpenGL_FOUND)
+        set(SPARK_EDITOR_DEPS_OK FALSE)
+        set(SPARK_EDITOR_SKIP_REASON "OpenGL not found (install libgl-dev)")
+    endif()
+endif()
+
+if(ENABLE_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/SparkEditor/CMakeLists.txt" AND SPARK_EDITOR_DEPS_OK)
     message(STATUS "Adding SparkEditor to build...")
     add_subdirectory(SparkEditor)
-elseif(ENABLE_EDITOR AND NOT EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.h")
-    message(STATUS "SparkEditor skipped — Dear ImGui not found (initialize submodule)")
+elseif(ENABLE_EDITOR AND NOT SPARK_EDITOR_DEPS_OK)
+    message(STATUS "SparkEditor skipped — ${SPARK_EDITOR_SKIP_REASON}")
 
     if(TARGET SparkEngine AND TARGET SparkEditor)
         add_dependencies(SparkEditor SparkEngine)

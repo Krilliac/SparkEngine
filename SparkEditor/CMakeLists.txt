@@ -47,10 +47,9 @@ if(IMGUI_INCLUDE_DIR)
                 d3d11 dxgi user32 gdi32 shell32 ole32 oleaut32 uuid comdlg32 advapi32
             )
         else()
-            # Linux: SDL2 + OpenGL3 backends
+            # Linux: SDL2 + OpenGL3 backends (ImGui ships its own GL loader)
             find_package(SDL2 REQUIRED)
             find_package(OpenGL REQUIRED)
-            find_package(GLEW REQUIRED)
 
             add_library(imgui STATIC
                 ${IMGUI_CORE_SOURCES}
@@ -65,7 +64,7 @@ if(IMGUI_INCLUDE_DIR)
                 target_link_libraries(imgui PUBLIC ${SDL2_LIBRARIES})
             endif()
 
-            target_link_libraries(imgui PUBLIC OpenGL::GL GLEW::GLEW)
+            target_link_libraries(imgui PUBLIC OpenGL::GL)
         endif()
 
         target_include_directories(imgui PUBLIC
@@ -208,10 +207,9 @@ if(WIN32)
         odbc32 odbccp32 winmm shlwapi comctl32 version
     )
 else()
-    # Linux libraries
+    # Linux libraries (ImGui ships its own GL loader — no GLEW needed)
     find_package(SDL2 REQUIRED)
     find_package(OpenGL REQUIRED)
-    find_package(GLEW REQUIRED)
 
     if(TARGET SDL2::SDL2)
         target_link_libraries(SparkEditor PRIVATE SDL2::SDL2)
@@ -220,7 +218,7 @@ else()
         target_link_libraries(SparkEditor PRIVATE ${SDL2_LIBRARIES})
     endif()
 
-    target_link_libraries(SparkEditor PRIVATE OpenGL::GL GLEW::GLEW)
+    target_link_libraries(SparkEditor PRIVATE OpenGL::GL)
     target_link_libraries(SparkEditor PRIVATE pthread dl)
 endif()
 
