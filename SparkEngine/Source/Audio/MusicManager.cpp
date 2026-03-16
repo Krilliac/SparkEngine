@@ -58,10 +58,10 @@ namespace Spark::Audio
     }
 
     // ============================================================================
-    // AudioMixer
+    // AudioBusMixer
     // ============================================================================
 
-    AudioMixer::AudioMixer()
+    AudioBusMixer::AudioBusMixer()
     {
         // Initialize default bus hierarchy
         m_buses[static_cast<int>(AudioBus::Master)] = {1.0f, false, AudioBus::Master};
@@ -72,33 +72,33 @@ namespace Spark::Audio
         m_buses[static_cast<int>(AudioBus::UI)] = {0.8f, false, AudioBus::Master};
     }
 
-    AudioMixer& AudioMixer::GetInstance()
+    AudioBusMixer& AudioBusMixer::GetInstance()
     {
-        static AudioMixer instance;
+        static AudioBusMixer instance;
         return instance;
     }
 
-    void AudioMixer::SetBusVolume(AudioBus bus, float volume)
+    void AudioBusMixer::SetBusVolume(AudioBus bus, float volume)
     {
         m_buses[static_cast<int>(bus)].volume = (std::max)(0.0f, (std::min)(2.0f, volume));
     }
 
-    float AudioMixer::GetBusVolume(AudioBus bus) const
+    float AudioBusMixer::GetBusVolume(AudioBus bus) const
     {
         return m_buses[static_cast<int>(bus)].volume;
     }
 
-    void AudioMixer::SetBusMuted(AudioBus bus, bool muted)
+    void AudioBusMixer::SetBusMuted(AudioBus bus, bool muted)
     {
         m_buses[static_cast<int>(bus)].muted = muted;
     }
 
-    bool AudioMixer::IsBusMuted(AudioBus bus) const
+    bool AudioBusMixer::IsBusMuted(AudioBus bus) const
     {
         return m_buses[static_cast<int>(bus)].muted;
     }
 
-    float AudioMixer::GetEffectiveVolume(AudioBus bus) const
+    float AudioBusMixer::GetEffectiveVolume(AudioBus bus) const
     {
         if (m_buses[static_cast<int>(bus)].muted)
             return 0.0f;
@@ -115,17 +115,17 @@ namespace Spark::Audio
         return vol;
     }
 
-    void AudioMixer::SetBusSettings(AudioBus bus, const MixerBusSettings& settings)
+    void AudioBusMixer::SetBusSettings(AudioBus bus, const MixerBusSettings& settings)
     {
         m_buses[static_cast<int>(bus)] = settings;
     }
 
-    const MixerBusSettings& AudioMixer::GetBusSettings(AudioBus bus) const
+    const MixerBusSettings& AudioBusMixer::GetBusSettings(AudioBus bus) const
     {
         return m_buses[static_cast<int>(bus)];
     }
 
-    void AudioMixer::FadeBus(AudioBus bus, float targetVolume, float duration)
+    void AudioBusMixer::FadeBus(AudioBus bus, float targetVolume, float duration)
     {
         // Remove existing fade for this bus
         m_activeFades.erase(std::remove_if(m_activeFades.begin(), m_activeFades.end(),
@@ -147,7 +147,7 @@ namespace Spark::Audio
         m_activeFades.push_back(fade);
     }
 
-    void AudioMixer::Update(float deltaTime)
+    void AudioBusMixer::Update(float deltaTime)
     {
         for (auto it = m_activeFades.begin(); it != m_activeFades.end();)
         {
@@ -169,7 +169,7 @@ namespace Spark::Audio
         }
     }
 
-    std::string AudioMixer::Console_GetMixerInfo() const
+    std::string AudioBusMixer::Console_GetMixerInfo() const
     {
         const char* busNames[] = {"Master", "SFX", "Music", "Voice", "Ambient", "UI"};
         std::ostringstream ss;
@@ -209,7 +209,7 @@ namespace Spark::Audio
 
         UpdateCrossfade(deltaTime);
         UpdateDynamicMusic(deltaTime);
-        AudioMixer::GetInstance().Update(deltaTime);
+        AudioBusMixer::GetInstance().Update(deltaTime);
     }
 
     void MusicManager::Shutdown()
@@ -251,7 +251,7 @@ namespace Spark::Audio
 
         if (fadeInDuration > 0.0f)
         {
-            AudioMixer::GetInstance().FadeBus(AudioBus::Music, 0.7f, fadeInDuration);
+            AudioBusMixer::GetInstance().FadeBus(AudioBus::Music, 0.7f, fadeInDuration);
         }
     }
 
@@ -260,7 +260,7 @@ namespace Spark::Audio
         SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
         if (fadeOutDuration > 0.0f)
         {
-            AudioMixer::GetInstance().FadeBus(AudioBus::Music, 0.0f, fadeOutDuration);
+            AudioBusMixer::GetInstance().FadeBus(AudioBus::Music, 0.0f, fadeOutDuration);
         }
         m_isPlaying = false;
         m_isCrossfading = false;

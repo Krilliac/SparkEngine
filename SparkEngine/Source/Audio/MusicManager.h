@@ -54,10 +54,10 @@ namespace Spark::Audio
         float highPassCutoff = 20.0f;       ///< High-pass filter cutoff Hz
     };
 
-    class AudioMixer
+    class AudioBusMixer
     {
       public:
-        static AudioMixer& GetInstance();
+        static AudioBusMixer& GetInstance();
 
         void SetBusVolume(AudioBus bus, float volume);
         float GetBusVolume(AudioBus bus) const;
@@ -81,7 +81,7 @@ namespace Spark::Audio
         std::string Console_GetMixerInfo() const;
 
       private:
-        AudioMixer();
+        AudioBusMixer();
         MixerBusSettings m_buses[static_cast<int>(AudioBus::Count)];
 
         struct FadeState
