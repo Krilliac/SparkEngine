@@ -32,7 +32,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_opengl3.h>
 #include <SDL.h>
-#include <GL/gl.h>
+#include <SDL_opengl.h>
 #endif
 
 #include <chrono>

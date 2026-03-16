@@ -38,12 +38,11 @@ if(EXISTS "${IMGUI_DIR}/imgui.cpp")
         endif()
         message(STATUS "ThirdParty: Dear ImGui configured (Win32+DX11)")
     else()
-        # Linux: SDL2 + OpenGL3 backends
+        # Linux: SDL2 + OpenGL3 backends (ImGui ships its own GL loader)
         find_package(SDL2 QUIET)
         find_package(OpenGL QUIET)
-        find_package(GLEW QUIET)
 
-        if(SDL2_FOUND AND OpenGL_FOUND AND GLEW_FOUND)
+        if(SDL2_FOUND AND OpenGL_FOUND)
             add_library(imgui STATIC
                 ${IMGUI_CORE_SOURCES}
                 ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
@@ -57,13 +56,13 @@ if(EXISTS "${IMGUI_DIR}/imgui.cpp")
                 target_include_directories(imgui PUBLIC ${SDL2_INCLUDE_DIRS})
                 target_link_libraries(imgui PUBLIC ${SDL2_LIBRARIES})
             endif()
-            target_link_libraries(imgui PUBLIC OpenGL::GL GLEW::GLEW)
+            target_link_libraries(imgui PUBLIC OpenGL::GL)
             message(STATUS "ThirdParty: Dear ImGui configured (SDL2+OpenGL3)")
         else()
             # Fallback: core only without platform backends
             add_library(imgui STATIC ${IMGUI_CORE_SOURCES})
             target_include_directories(imgui PUBLIC ${IMGUI_DIR})
-            message(STATUS "ThirdParty: Dear ImGui configured (core only, install SDL2/GLEW for full editor support)")
+            message(STATUS "ThirdParty: Dear ImGui configured (core only, install SDL2 for full editor support)")
         endif()
     endif()
 else()
