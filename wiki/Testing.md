@@ -438,12 +438,11 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*81 test files, 1007+ test cases*
+*76 test files, 977+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
 | `TestAIBehaviorTree` | 16 |
-| `TestAchievementSystem` | 5 |
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationSystem` | 17 |
 | `TestBitFlags` | 14 |
@@ -460,7 +459,6 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestDebugTools` | 31 |
 | `TestDedicatedServer` | 27 |
 | `TestDeltaSmoother` | 10 |
-| `TestDestructionSystem` | 5 |
 | `TestDialogueSystem` | 4 |
 | `TestECSIntegration` | 9 |
 | `TestECSWorld` | 11 |
@@ -481,7 +479,6 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestLightManager` | 13 |
 | `TestLoadingScreen` | 4 |
 | `TestLocalFileCache` | 15 |
-| `TestLocalizationSystem` | 6 |
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestNavMesh` | 11 |
@@ -497,7 +494,6 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestPostProcessingPipeline` | 11 |
 | `TestQuestSystem` | 10 |
 | `TestRandomEngine` | 11 |
-| `TestReplaySystem` | 4 |
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
 | `TestSaveSystem` | 7 |
@@ -507,7 +503,6 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestScreenSpaceEffects` | 16 |
 | `TestSequencer` | 10 |
 | `TestSerializer` | 17 |
-| `TestSplatmapSystem` | 10 |
 | `TestSplineMath` | 24 |
 | `TestSprite2DComponents` | 35 |
 | `TestStateMachine` | 16 |
