@@ -7,15 +7,16 @@
 
 ## Description
 
-Comprehensive audit of 30 editor features. 14 panels/features are working, 8 panels are built-not-shown (never instantiated, ~10K dead lines), 5 systems are built-not-wired, and 4 features are completely missing.
+Comprehensive audit of 30 editor features. 21 panels/features are working, 10 panels are built-not-shown (never instantiated, ~15K dead lines), 5 systems are built-not-wired, and 4 features are completely missing.
 
 ---
 
-## Working Features (14)
+## Working Features (21)
 
 | Feature | Panel | Lines | Engine Refs | Notes |
 |---------|-------|-------|-------------|-------|
 | Viewport/scene view | SceneViewPanel | 404 | D3D11 setup | Render target, camera controls, render modes. Gap: no entity picking |
+| Game view | GameViewPanel | — | Direct | Renders game camera with input handling and cursor capture |
 | Entity inspector | InspectorPanel | 1,303 | 18 | Full component editing with undo/redo via CommandHistory |
 | Scene hierarchy | SimpleHierarchyPanel | 283 | 1 | Tree view, selection. Limited vs unused HierarchyPanel (1,045 lines) |
 | Asset browser | AssetBrowserPanel | 457 | 2 | File/folder browser, thumbnails, drag-and-drop |
@@ -28,29 +29,34 @@ Comprehensive audit of 30 editor features. 14 panels/features are working, 8 pan
 | Build/export | BuildCookPanel | 591 | 3 | Build config, platform targeting, cook/package |
 | Scene statistics | SceneStatisticsPanel | 391 | 2 | Object/triangle/vertex counts, memory, draw calls |
 | Toolbar/menu | RenderMainMenuBar() + RenderToolbar() | — | Direct | File/Edit/View/GameObject/Tools/Help menus |
+| Search | SearchPanel | — | — | Ctrl+F or Window menu, entity/asset search |
+| Prefab system | PrefabManager + PrefabEditorPanel | — | — | Prefab creation, editing, instantiation |
+| Project management | ProjectManager + ProjectBrowserPanel | — | — | Project creation and loading |
+| 2D editors | SpriteEditor, TilemapEditor, Physics2DPanel | — | — | Sprite, tilemap, 2D physics editing |
+| FPS tools | FPSToolsPanel + WeaponEditorPanel | — | — | FPS gameplay and weapon editing tools |
+| Object placement | ObjectPlacementPanel | — | — | Object placement tools (hidden by default) |
 | Gizmos (UI only) | SceneViewPanel buttons | — | — | Mode buttons exist but GizmoSystem NOT connected |
 
 ---
 
-## Built-Not-Shown (8 panels, ~10K dead lines)
+## Built-Not-Shown (10 panels, ~15K dead lines)
 
 Fully implemented panels that are NEVER instantiated in EditorUI::CreatePanels():
 
 | Panel | Lines | Key Features | Why It Matters |
 |-------|-------|-------------|----------------|
-| MaterialEditorPanel | 1,832 | Shader params, texture slots, render states, live preview | Largest panel, fully implemented |
-| DialogueEditorPanel | 1,781 | Node-graph editor, branching, conditions, choices | Complete dialogue tree editor |
-| AssetDependencyPanel | 1,551 | Dependency graph, reverse lookup, circular detection, unused assets | Powerful debugging tool |
-| AudioMixerPanel | 1,467 | Channel faders, bus routing, effects chains, level metering | Full mixing console |
-| ParticleEditorPanel | 1,235 | Multi-emitter, presets, live preview, physics, birth/death events | Complete particle authoring |
-| RuntimeInspectorPanel | 1,003 | Live object inspection, property modification during gameplay | Valuable for debugging |
-| PerformanceProfilerPanel | 1,296 | Alternative to PerformanceProfiler (duplicate) | Backup implementation |
-| ConsolePanel | 821 | Alternative to SimpleConsolePanel (duplicate) | Backup implementation |
-| HierarchyPanel | 1,045 | Alternative to SimpleHierarchyPanel (15 engine refs vs 1) | More capable but unused |
-| SceneStatsPanel | 273 | Alternative to SceneStatisticsPanel (duplicate) | Backup implementation |
-| PlayModeToolbarPanel | ~500 | Play mode controls | Duplicate of inline toolbar |
+| MaterialEditorPanel | 2,102 | Shader params, texture slots, render states, live preview | Largest panel, fully implemented |
+| DialogueEditorPanel | 2,138 | Node-graph editor, branching, conditions, choices | Complete dialogue tree editor |
+| AssetDependencyPanel | 1,812 | Dependency graph, reverse lookup, circular detection, unused assets | Powerful debugging tool |
+| AudioMixerPanel | 1,719 | Channel faders, bus routing, effects chains, level metering | Full mixing console |
+| PerformanceProfilerPanel | 1,496 | Flame-graph timeline, subsystem breakdown (alternate to PerformanceProfiler) | Backup implementation |
+| ParticleEditorPanel | 1,526 | Multi-emitter, presets, live preview, physics, birth/death events | Complete particle authoring |
+| RuntimeInspectorPanel | 1,192 | Live object inspection, property modification during gameplay | Valuable for debugging |
+| ConsolePanel | 1,136 | Advanced console with history (alternate to SimpleConsolePanel) | Backup implementation |
+| HierarchyPanel | 1,045 | Full hierarchy with drag-drop (alternate to SimpleHierarchyPanel) | More capable but unused |
+| PlayModeToolbarPanel | 725 | Play mode controls with time scale and subsystem toggles | Duplicate of inline toolbar |
 
-**Total dead panel code: ~11,804 lines**
+**Total dead panel code: ~14,891 lines**
 
 ---
 
