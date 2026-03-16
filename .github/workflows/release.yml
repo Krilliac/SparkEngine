@@ -106,7 +106,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev libglew-dev
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
 
     - name: Configure CMake
       run: |
