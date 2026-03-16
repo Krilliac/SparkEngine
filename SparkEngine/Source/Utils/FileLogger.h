@@ -419,14 +419,20 @@ namespace Spark
         if (Spark::FileLogger::GetInstance().IsInitialized())                                                          \
         {                                                                                                              \
             char _msg[1024];                                                                                           \
-            snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__);                                                          \
+            snprintf(_msg, sizeof(_msg), fmt __VA_OPT__(, ) __VA_ARGS__);                                              \
             Spark::FileLogger::GetInstance().Write(level, category, _msg, __FILE__, __LINE__, __FUNCTION__);           \
         }                                                                                                              \
     } while (0)
 
-#define SPARK_FILE_LOG_TRACE(cat, fmt, ...) SPARK_FILE_LOG(Spark::FileLogLevel::Trace, cat, fmt, ##__VA_ARGS__)
-#define SPARK_FILE_LOG_DEBUG(cat, fmt, ...) SPARK_FILE_LOG(Spark::FileLogLevel::Debug, cat, fmt, ##__VA_ARGS__)
-#define SPARK_FILE_LOG_INFO(cat, fmt, ...) SPARK_FILE_LOG(Spark::FileLogLevel::Info, cat, fmt, ##__VA_ARGS__)
-#define SPARK_FILE_LOG_WARN(cat, fmt, ...) SPARK_FILE_LOG(Spark::FileLogLevel::Warn, cat, fmt, ##__VA_ARGS__)
-#define SPARK_FILE_LOG_ERROR(cat, fmt, ...) SPARK_FILE_LOG(Spark::FileLogLevel::Error, cat, fmt, ##__VA_ARGS__)
-#define SPARK_FILE_LOG_FATAL(cat, fmt, ...) SPARK_FILE_LOG(Spark::FileLogLevel::Fatal, cat, fmt, ##__VA_ARGS__)
+#define SPARK_FILE_LOG_TRACE(cat, fmt, ...)                                                                            \
+    SPARK_FILE_LOG(Spark::FileLogLevel::Trace, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_FILE_LOG_DEBUG(cat, fmt, ...)                                                                            \
+    SPARK_FILE_LOG(Spark::FileLogLevel::Debug, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_FILE_LOG_INFO(cat, fmt, ...)                                                                             \
+    SPARK_FILE_LOG(Spark::FileLogLevel::Info, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_FILE_LOG_WARN(cat, fmt, ...)                                                                             \
+    SPARK_FILE_LOG(Spark::FileLogLevel::Warn, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_FILE_LOG_ERROR(cat, fmt, ...)                                                                            \
+    SPARK_FILE_LOG(Spark::FileLogLevel::Error, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_FILE_LOG_FATAL(cat, fmt, ...)                                                                            \
+    SPARK_FILE_LOG(Spark::FileLogLevel::Fatal, cat, fmt __VA_OPT__(, ) __VA_ARGS__)

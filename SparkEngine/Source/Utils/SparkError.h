@@ -287,8 +287,8 @@ namespace SparkError
         if (!(expr))                                                                                                   \
         {                                                                                                              \
             SparkError::LogMessage(SparkError::Severity::Fatal, "Verify", __FILE__, __LINE__, __FUNCTION__,            \
-                                   "VERIFY FAILED: %s -- " fmt, #expr, ##__VA_ARGS__);                                 \
-            Assert::Fail(#expr, __FILE__, __LINE__, fmt, ##__VA_ARGS__);                                               \
+                                   "VERIFY FAILED: %s -- " fmt, #expr __VA_OPT__(, ) __VA_ARGS__);                     \
+            Assert::Fail(#expr, __FILE__, __LINE__, fmt __VA_OPT__(, ) __VA_ARGS__);                                   \
         }                                                                                                              \
     } while (0)
 
