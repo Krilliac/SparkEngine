@@ -12,7 +12,7 @@
 #include "../Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "../Panels/SceneViewPanel.h"
-#include "../Panels/SimpleConsolePanel.h"
+#include "../Panels/ConsolePanel.h"
 #include "../Panels/HierarchyPanel.h"
 #include "../Panels/InspectorPanel.h"
 #include "../Panels/AssetBrowserPanel.h"
@@ -549,17 +549,17 @@ namespace SparkEditor
             console.LogError("Failed to create Scene View panel: " + std::string(e.what()));
         }
 
-        // Create Simple Console Panel
+        // Create Console Panel (advanced logging, filtering, command execution)
         try
         {
-            console.LogInfo("Creating Simple Console panel...");
-            auto consolePanel = std::shared_ptr<SimpleConsolePanel>(new SimpleConsolePanel());
+            console.LogInfo("Creating Console panel...");
+            auto consolePanel = std::shared_ptr<ConsolePanel>(new ConsolePanel());
             m_panels["Console"] = consolePanel;
-            console.LogSuccess("Created Simple Console panel");
+            console.LogSuccess("Created Console panel");
         }
         catch (const std::exception& e)
         {
-            console.LogError("Failed to create Simple Console panel: " + std::string(e.what()));
+            console.LogError("Failed to create Console panel: " + std::string(e.what()));
         }
 
         // Create Hierarchy Panel (full tree with drag-drop, undo, multi-select)

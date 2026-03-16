@@ -33,8 +33,12 @@ These were deleted in prior sessions because they had no callers and were pure s
 | ParticleEditorPanel | 1,235 | Deleted — never wired in |
 | RuntimeInspectorPanel | 1,003 | Deleted — never wired in |
 
+### SimpleConsolePanel Replaced by ConsolePanel (2026-03-16)
+- **SimpleConsolePanel** (999 lines) **DELETED** — duplicate of ConsolePanel with fewer features
+- EditorUI.cpp now creates `ConsolePanel` (advanced logging, filtering, export) instead of `SimpleConsolePanel`
+- ProjectBrowserPanel was already wired in (confirmed at EditorUI.cpp:109)
+
 ### Remaining Issues
-- **Console Duplication**: ConsolePanel (821 lines) and SimpleConsolePanel (880 lines) both exist with different architectures
 - **Oversized Files**: EditorUI.cpp (~2,400 lines), AdvancedAssetPipeline.cpp (2,324 lines) still exceed limits
 - **SparkEngineIntegration**: 51 public methods in one class — needs decomposition
 

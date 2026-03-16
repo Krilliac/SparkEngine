@@ -12,7 +12,7 @@
 namespace Spark
 {
 
-    // Global reference to external console (will be set by the SimpleConsolePanel)
+    // Global reference to external console (set by editor console integration)
     static SparkEditor::ExternalConsoleIntegration* g_externalConsole = nullptr;
 
     SimpleConsole& SimpleConsole::GetInstance()
@@ -280,7 +280,7 @@ namespace Spark
 
     void SimpleConsole::SendToExternalConsole(const std::string& message, const std::string& type)
     {
-        // THE KEY FIX: Use the global g_externalConsole that gets set by SimpleConsolePanel
+        // THE KEY FIX: Use the global g_externalConsole that gets set by editor console integration
         if (g_externalConsole)
         {
             try
@@ -308,7 +308,7 @@ namespace Spark
 
 } // namespace Spark
 
-// Global function to set external console reference (called by SimpleConsolePanel)
+// Global function to set external console reference (called by editor console integration)
 extern "C" void SetSparkConsoleExternalConsole(SparkEditor::ExternalConsoleIntegration* console)
 {
     Spark::g_externalConsole = console;
