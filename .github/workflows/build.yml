@@ -299,7 +299,7 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install dependencies
@@ -336,7 +336,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install dependencies
@@ -361,7 +361,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Count TODO/FIXME/HACK comments
         run: |
           count=$(grep -rn 'TODO\|FIXME\|HACK\|XXX' SparkEngine/Source SparkEditor/Source SparkGame/Source --include='*.h' --include='*.cpp' | wc -l)
