@@ -55,16 +55,11 @@ Both implement type-safe pub/sub using `std::type_index`. EventSystem.h also def
 
 **Fix:** Pick one. EventBus.h has better RAII semantics; EventSystem.h has deferred dispatch. Merge the best of both into one.
 
-## Medium: Parallel Visual Scripting
+## Medium: Parallel Visual Scripting — RESOLVED (deleted)
 
-### 5. VisualScriptSystem vs VisualScriptingSystem (7,991 lines combined)
+### 5. VisualScriptSystem vs VisualScriptingSystem — DELETED
 
-| System | Location | Lines |
-|--------|----------|-------|
-| VisualScriptSystem | `Engine/Scripting/VisualScriptSystem.{h,cpp}` | 3,054 |
-| VisualScriptingSystem | `SparkEditor/VisualScripting/VisualScriptingSystem.{h,cpp}` | 4,937 |
-
-Both define node graphs, pin types, compilation, serialization. Neither includes the other. Neither is wired into startup. Both are effectively dead code.
+Both systems (7,343 lines combined) were deleted as dead code in March 2026. Neither was wired into any startup path or included by any other source file. The orphaned test was also removed.
 
 ## Medium: SceneManager Naming Collision
 

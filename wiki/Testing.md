@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*76 test files, 977+ test cases*
+*75 test files, 977+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -515,7 +515,6 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestUISystem` | 6 |
 | `TestUUID` | 12 |
 | `TestUpscalingSystem` | 5 |
-| `TestVisualScriptSystem` | 0 |
 | `TestWeaponSystem` | 18 |
 | `TestWeatherSystem` | 8 |
 <!-- /AUTO:test_inventory -->

@@ -547,7 +547,6 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `UISystem` | `SparkEngine/Source/Engine/UI/UISystem.h` |
 | `UpscalingSystem` | `SparkEngine/Source/Graphics/UpscalingSystem.h` |
 | `VRSystem` | `SparkEngine/Source/Engine/VR/VRSystem.h` |
-| `VisualScriptSystem` | `SparkEngine/Source/Engine/Scripting/VisualScriptSystem.h` |
 | `WeatherSystem` | `SparkEngine/Source/Graphics/WeatherSystem.h` |
 | `WorldOriginSystem` | `SparkEngine/Source/Engine/World/WorldOriginSystem.h` |
 <!-- /AUTO:system_list -->

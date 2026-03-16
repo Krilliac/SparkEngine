@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-16
 **Type:** Issue
-**Status:** Active (partially resolved)
+**Status:** Active (7 of 9 resolved)
 **Severity:** Critical
 
 ## Description
@@ -51,13 +51,11 @@ Static analysis identified 2 critical, 3 high, and 4 medium security vulnerabili
 
 **Fix applied:** `LoadScene()` now rejects file paths containing `..` sequences before loading.
 
-### 5. Unsafe Network Deserialization — STILL OPEN
+### 5. Unsafe Network Deserialization — RESOLVED
 
-**File:** `Engine/SaveSystem/SaveSystem.cpp:409-510`
+**File:** `Engine/SaveSystem/SaveSystem.cpp`
 
-Component properties deserialized without type or bounds validation. Malicious save files can inject oversized strings.
-
-**Fix needed:** Validate property types against component schema, enforce max string lengths.
+**Fix applied:** Added `SafeGetFloat()`, `SafeGetUint32()`, `SafeGetString()` static helpers that wrap `std::stof`/`std::stoul` in try/catch and enforce a 4096-character max property length. All 12 component deserializers now use these safe helpers instead of raw `std::stof`/`std::stoul` calls. Malformed save data returns defaults instead of crashing.
 
 ---
 
