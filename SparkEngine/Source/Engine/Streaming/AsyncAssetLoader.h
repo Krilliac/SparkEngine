@@ -348,7 +348,7 @@ namespace Spark
         std::unordered_map<AssetLoadHandle, AssetLoadState> m_states;
         ThreadSafeQueue<AssetLoadResult> m_completionQueue;
         std::atomic<AssetLoadHandle> m_nextHandle{1};
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
     };
 
 } // namespace Spark

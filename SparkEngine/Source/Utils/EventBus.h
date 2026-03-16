@@ -44,6 +44,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -311,7 +312,7 @@ namespace Spark
 
         mutable std::mutex m_channelsMutex;
         std::unordered_map<std::type_index, std::unique_ptr<IChannel>> m_channels;
-        uint64_t m_nextId = 0;
+        std::atomic<uint64_t> m_nextId{0};
     };
 
 } // namespace Spark

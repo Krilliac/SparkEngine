@@ -33,6 +33,7 @@
 #include "SteamTransport.h"
 #include "NetworkSecurity.h"
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <sstream>
@@ -226,7 +227,7 @@ namespace Spark::Net
         std::unique_ptr<ITransport> m_transport;
         std::unique_ptr<NetworkSecurity> m_security;
         NetworkStackConfig m_config;
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
     };
 
 } // namespace Spark::Net

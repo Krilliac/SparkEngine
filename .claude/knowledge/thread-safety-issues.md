@@ -11,36 +11,32 @@
 
 ---
 
-## Critical: Systemic `bool m_initialized` Race
+## Critical: Systemic `bool m_initialized` Race — PARTIALLY FIXED
 
-**30+ subsystems** declare `bool m_initialized = false;` without atomic protection. If `Initialize()` is called from multiple threads (or checked from a different thread than where it's set), this is a data race.
+**30+ subsystems** declare `bool m_initialized = false;` without atomic protection.
 
-**Affected files include:**
-- `Engine/Scripting/ScriptHotReload.h:177` — `bool m_running`
-- `Engine/Streaming/AsyncAssetLoader.h:351` — `bool m_initialized`
-- `Graphics/ConstantBufferRing.h:345`
-- `Engine/Networking/NetworkIntegration.h:229`
-- `Engine/Streaming/SeamlessAreaManager.h:292`
-- `Graphics/TextureSystem.h` — `bool m_loaded`, `bool m_streaming`
-- `Utils/FileLogger.h:402`
-- And 20+ more subsystems
+**FIXED (2026-03-16) — 7 highest-risk subsystems converted to `std::atomic<bool>`:**
+- `Engine/Scripting/ScriptHotReload.h` — `m_running`
+- `Engine/Networking/NetworkManager.h` — `m_initialized`
+- `Engine/Networking/NetworkIntegration.h` — `m_initialized`
+- `Engine/Streaming/AsyncAssetLoader.h` — `m_initialized`
+- `Utils/SparkConsole.h` — `m_initialized`
+- `Utils/FileLogger.h` — `m_initialized`
 
-**Fix:** Convert all to `std::atomic<bool>`. This is a mechanical fix.
+**Still raw `bool` (lower risk, mostly single-threaded Graphics stubs):**
+- 20+ Graphics headers (ConstantBufferRing, LightManager, SkyAtmosphere, etc.)
+- `Engine/Streaming/SeamlessAreaManager.h`
+- `Engine/Mobile/MobilePlatform.h`
+- `Engine/AI/ParallelPerception.h`, `AIIntegration.h`
+- `Engine/VR/VRSystem.h`
 
 ---
 
-## Critical: EventBus::m_nextId Data Race
+## Critical: EventBus::m_nextId Data Race — FIXED
 
-**File:** `Utils/EventBus.h:178,314`
+**File:** `Utils/EventBus.h`
 
-```cpp
-uint64_t m_nextId = 0;  // Line 314 — NOT atomic
-uint64_t id = ++m_nextId;  // Line 178 — race on increment
-```
-
-`m_nextId` is global to the bus but only protected by per-channel mutexes. Two threads subscribing to different event types race on the shared counter.
-
-**Fix:** Change to `std::atomic<uint64_t> m_nextId{0};`
+**FIXED (2026-03-16):** Changed `uint64_t m_nextId = 0` to `std::atomic<uint64_t> m_nextId{0}`. Added `<atomic>` include.
 
 ---
 

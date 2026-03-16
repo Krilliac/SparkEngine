@@ -31,6 +31,7 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include <atomic>
 #include <string>
 #include <fstream>
 #include <mutex>
@@ -399,7 +400,7 @@ namespace Spark
         size_t m_currentFileSize = 0;
         uint64_t m_messageCount = 0;
         int m_fileIndex = 0;
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
         std::mutex m_mutex;
     };
 

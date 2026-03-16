@@ -452,7 +452,7 @@ namespace Spark::Net
         std::unordered_map<ClientID, sockaddr_in> m_clientAddresses;
 #endif // ENABLE_NETWORKING
 
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
         NetworkRole m_role = NetworkRole::None;
         ConnectionState m_connectionState = ConnectionState::Disconnected;
         ClientID m_localClientID = INVALID_CLIENT;

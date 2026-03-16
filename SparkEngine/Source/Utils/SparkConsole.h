@@ -174,7 +174,7 @@ namespace Spark
         std::deque<LogEntry> m_logHistory;                       ///< Rolling log history
         std::deque<std::string> m_commandHistory;                ///< Rolling command history
 
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
         bool m_visible = true;
         std::string m_currentInput;
         int m_historyIndex = 0;
