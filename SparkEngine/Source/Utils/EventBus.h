@@ -193,6 +193,11 @@ namespace Spark
          */
         template <typename E> void Publish(const E& event)
         {
+            // Guard against infinite recursion (handler publishes same event type)
+            static thread_local int s_publishDepth = 0;
+            if (s_publishDepth > 0)
+                return; // Silently ignore recursive publish for the same event type
+
             ChannelOf<E>* ch = FindChannel<E>();
             if (!ch)
                 return;
@@ -206,8 +211,10 @@ namespace Spark
                     snapshot.push_back(entry.handler);
             }
 
+            ++s_publishDepth;
             for (auto& handler : snapshot)
                 handler(event);
+            --s_publishDepth;
         }
 
         /**
