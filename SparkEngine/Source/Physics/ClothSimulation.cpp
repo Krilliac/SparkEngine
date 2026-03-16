@@ -23,6 +23,12 @@ namespace Spark::Physics
         SPARK_WARN_IF(Spark::LogCategory::Physics, desc.width <= 0 || desc.height <= 0,
                       "ClothDescriptor has non-positive dimensions");
         SPARK_WARN_IF(Spark::LogCategory::Physics, desc.mass <= 0.0f, "ClothDescriptor has non-positive mass");
+        if (desc.width <= 0 || desc.height <= 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Physics, "ClothDescriptor has zero-size dimensions (%d x %d)",
+                            desc.width, desc.height);
+            return 0;
+        }
         uint32_t id = m_nextId++;
         ClothInstance cloth;
         cloth.id = id;

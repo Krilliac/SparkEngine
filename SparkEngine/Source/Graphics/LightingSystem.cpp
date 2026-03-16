@@ -676,6 +676,12 @@ int LightingSystem::Console_CreateLight(const std::string& type)
     LightType lightType = StringToLightType(type);
     auto light = CreateLight(lightType);
 
+    if (m_lights.empty())
+    {
+        Spark::SimpleConsole::GetInstance().LogError("Failed to create light of type: " + type);
+        return -1;
+    }
+
     int index = static_cast<int>(m_lights.size() - 1);
     Spark::SimpleConsole::GetInstance().LogSuccess("Created light at index " + std::to_string(index));
     return index;
@@ -2013,6 +2019,8 @@ int LightingSystem::Console_CreateLight(const std::string& type)
 {
     LightType lightType = StringToLightType(type);
     CreateLight(lightType);
+    if (m_lights.empty())
+        return -1;
     return static_cast<int>(m_lights.size() - 1);
 }
 

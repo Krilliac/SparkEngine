@@ -12,7 +12,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | clang-format issues | [knowledge/clang-format.md](knowledge/clang-format.md) | Issue | Resolved | 2026-03-14 |
 | CMake Linux build failures | [knowledge/cmake-linux-build-failures.md](knowledge/cmake-linux-build-failures.md) | Issue | Resolved | 2026-03-14 |
 | Windows MSVC /W4 warnings | [knowledge/windows-msvc-w4-warnings.md](knowledge/windows-msvc-w4-warnings.md) | Issue | Resolved | 2026-03-14 |
-| **ConsoleProcessManager unwired (critical)** | [knowledge/consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md) | Issue | Active | 2026-03-14 |
+| **ConsoleProcessManager wired in** | [knowledge/consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md) | Issue | Resolved | 2026-03-16 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | **SparkConsole refactor plan (critical)** | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | Active | 2026-03-14 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
@@ -22,18 +22,19 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Extended bloat audit (March 14) | [knowledge/bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md) | Observation | Superseded | 2026-03-14 |
 | **Comprehensive bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-15 |
 | **30 orphaned headers (11K+ dead lines)** | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | Active | 2026-03-16 |
-| **8 unused editor panels (11K+ dead lines)** | [knowledge/editor-panel-bloat.md](knowledge/editor-panel-bloat.md) | Observation | Active | 2026-03-16 |
-| **5 duplicate systems, 3 ODR risks** | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | Active | 2026-03-16 |
+| **Editor panels: 4 restored, 9 deleted, all resolved** | [knowledge/editor-panel-bloat.md](knowledge/editor-panel-bloat.md) | Observation | Resolved | 2026-03-16 |
+| **Feature restoration: 5 wrongly deleted features restored** | [knowledge/feature-restoration-2026-03-16.md](knowledge/feature-restoration-2026-03-16.md) | Decision | Resolved | 2026-03-16 |
+| **5 duplicate systems, 2 of 3 ODR risks fixed** | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | Partially Resolved | 2026-03-16 |
 | **11 orphaned tests, 14 untested subsystems** | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-16 |
 | **8 dead CMake options, duplicate imgui** | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | Active | 2026-03-16 |
 | **26 singletons (12 orphaned), 74-member god object** | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | Active | 2026-03-16 |
 | **66 oversized functions, 7 private-method violations, 4 duplicate functions** | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
-| **SECURITY: 2 critical vulns (DLL injection, command injection)** | [knowledge/security-vulnerabilities.md](knowledge/security-vulnerabilities.md) | Issue | Active | 2026-03-16 |
-| **THREADING: 30+ unprotected bools, EventBus race, lock ordering** | [knowledge/thread-safety-issues.md](knowledge/thread-safety-issues.md) | Issue | Active | 2026-03-16 |
-| **MEMORY/ERRORS: naked new/delete, 15+ unchecked HRESULT, underflows** | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Active | 2026-03-16 |
+| **SECURITY: all 9 vulns fixed** | [knowledge/security-vulnerabilities.md](knowledge/security-vulnerabilities.md) | Issue | Resolved | 2026-03-16 |
+| **THREADING: all critical races fixed** | [knowledge/thread-safety-issues.md](knowledge/thread-safety-issues.md) | Issue | Resolved | 2026-03-16 |
+| **MEMORY/ERRORS: HRESULT, underflows, div-by-zero fixed; 3 low-risk OPEN** | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Mostly Resolved | 2026-03-16 |
 | **Rendering: 17 working, 12 header-only stubs (~15K dead lines)** | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | Active | 2026-03-16 |
 | **Engine: 17 working, 7 orphaned systems (~90K+ dead lines)** | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-16 |
-| **Editor: 14 working, 8 unshown panels (~10K dead lines)** | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | Active | 2026-03-16 |
+| **Editor: 24 working, all panels resolved** | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | Mostly Resolved | 2026-03-16 |
 | **SparkGame: 75% functional FPS, no AI enemies** | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
 | **SDK: ECS not exposed, unique_ptr DLL export, IGameModule gap** | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | Active | 2026-03-16 |
 | **Docs: 53 wiki pages, 245/246 Doxygen, 10 critical gaps** | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-16 |
@@ -43,7 +44,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Fixing problems (Issues)
 
-**CRITICAL: ConsoleProcessManager never called** → It's unwired. 15-min fix: add Initialize() at startup + ProcessCommands() in main loop. See [consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md).
+**ConsoleProcessManager — RESOLVED** → Wired into all 5 startup paths. See [consoleprocessmanager-wiring.md](knowledge/consoleprocessmanager-wiring.md).
 
 **Checking PR / CI status** → Use `gh run list` + `gh run view`, NOT `gh pr checks --watch`. See [github-api-pr-checks.md](knowledge/github-api-pr-checks.md).
 
@@ -63,9 +64,9 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **CRITICAL: 30 orphaned headers never included anywhere (~11K lines)** → 19 graphics headers, 3 engine, 3 utils, 4 editor. See [orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md).
 
-**CRITICAL: 8 editor panels built but never shown (11,257 lines)** → MaterialEditor, Dialogue, AssetDependency, AudioMixer, Profiler, Particle, RuntimeInspector, PlayModeToolbar. Plus engine-depends-on-editor violation in AllEnums.h. See [editor-panel-bloat.md](knowledge/editor-panel-bloat.md).
+**RESOLVED: All 10 unused editor panels resolved** → 4 restored (HierarchyPanel, ConsolePanel, MaterialEditor, PlayModeToolbar), 6 deleted (Dialogue, AssetDependency, AudioMixer, Profiler, Particle, RuntimeInspector). All 4 duplicate pairs resolved. See [editor-panel-bloat.md](knowledge/editor-panel-bloat.md).
 
-**HIGH: 3 ODR violation risks** → AudioMixer (2 defs), AnimationStateMachine (2 defs), dual EventBus implementations. See [duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md).
+**PARTIALLY RESOLVED: ODR risks** → AudioMixer renamed (fixed), AnimationStateMachine deduped (fixed), dual EventBus still open. See [duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md).
 
 **MEDIUM: 11 orphaned tests not in CMake, 14 untested subsystems** → See [test-suite-audit.md](knowledge/test-suite-audit.md).
 
@@ -101,19 +102,11 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Security & correctness (Issues)
 
-**CRITICAL: DLL injection + command injection** → LoadLibraryA() without path validation in GameModuleLoader/ModuleManager/EditorPluginManager. popen() with unsanitized user input in VersionControlSystem. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
+**RESOLVED: Security vulnerabilities (9/9 fixed)** → DLL injection, command injection, path traversal, deserialization — all patched. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
 
-**CRITICAL: Path traversal in SaveSystem and SceneManager** → Save slot names and scene paths not validated; `../` sequences can read/write arbitrary files. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
+**RESOLVED: Thread safety** → 11 highest-risk `atomic<bool>` conversions done, EventBus m_nextId atomic, recursion guard added, lock ordering documented. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
 
-**HIGH: 30+ subsystems have unprotected `bool m_initialized`** → Data race if checked from multiple threads. Mechanical fix: convert to `std::atomic<bool>`. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
-
-**HIGH: EventBus::m_nextId is not atomic** → Data race on subscription ID generation across event types. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
-
-**HIGH: 15+ unchecked HRESULT calls in D3D11/D3D12** → Silent failures cause null pointer crashes later. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
-
-**HIGH: 6+ integer underflows from `size() - 1` on empty containers** → Wraps to SIZE_MAX, causes out-of-bounds access. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
-
-**MEDIUM: 70+ const-correctness violations** → Getter methods missing const qualifier, especially in Graphics subsystem. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
+**MOSTLY RESOLVED: Memory/error handling** → HRESULT, underflows, div-by-zero, const-correctness all fixed. 3 low-risk items remain open (naked new in Physics, RHI .release() pattern, COM manual release). See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
 
 ### Understanding the codebase (Observations)
 

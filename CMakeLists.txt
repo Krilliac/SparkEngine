@@ -95,42 +95,18 @@ endif()
 # ---------------------------------------------------------------------
 # 3) Custom build options
 # ---------------------------------------------------------------------
-option(ENABLE_PHYSX "Enable PhysX physics engine" ON)
-option(ENABLE_LUA "Enable Lua scripting support" ON)
-option(ENABLE_COLLABORATIVE "Enable collaborative features" ON)
 option(ENABLE_GRAPHICS "Enable graphics engine" ON)
 option(ENABLE_PROFILING "Enable profiling tools" ON)
-option(ENABLE_NETWORKING "Enable networking features (experimental — requires socket libs)" OFF)  # Disabled by default; UDP multiplayer, no CURL dependency required
-option(ENABLE_ASSET_STREAMING "Enable asset streaming" ON)
-option(ENABLE_HOT_RELOAD "Enable hot reload functionality" ON)
-option(ENABLE_TERRAIN_SYSTEM "Enable terrain system" ON)
-option(ENABLE_POST_PROCESSING "Enable post-processing effects" ON)
-option(ENABLE_LIGHTING_SYSTEM "Enable advanced lighting" ON)
-option(ENABLE_ADVANCED_INPUT "Enable advanced input features" ON)
+option(ENABLE_NETWORKING "Enable networking features (experimental — requires socket libs)" OFF)
 option(ENABLE_VULKAN "Enable Vulkan graphics backend (experimental)" ON)
 option(ENABLE_OPENGL "Enable OpenGL graphics backend (experimental)" ON)
-option(ENABLE_AI "Enable AI and navigation systems" ON)
-option(ENABLE_ANIMATION "Enable skeletal animation system" ON)
-option(ENABLE_SAVE_SYSTEM "Enable save/load system" ON)
-option(ENABLE_PROCEDURAL "Enable procedural generation" ON)
-option(ENABLE_CINEMATIC "Enable cinematic sequencer" ON)
-option(ENABLE_DECALS "Enable decal system" ON)
-option(ENABLE_MESH_LOD "Enable mesh LOD system" ON)
-option(ENABLE_DXR "Enable DirectX Raytracing support (experimental)" OFF)  # Requires D3D12, disabled by default
+option(ENABLE_DXR "Enable DirectX Raytracing support (experimental)" OFF)
 # SDL2 is auto-enabled on Linux for windowing + input; can be used on Windows too
 if(NOT WIN32)
     option(ENABLE_SDL2 "Enable SDL2 cross-platform input and windowing" ON)
 else()
     option(ENABLE_SDL2 "Enable SDL2 cross-platform input and windowing" OFF)
 endif()
-option(ENABLE_WEATHER "Enable weather system" ON)
-option(ENABLE_INVENTORY "Enable inventory system" ON)
-option(ENABLE_QUEST_SYSTEM "Enable quest/objective system" ON)
-option(ENABLE_EVENT_SYSTEM "Enable publish/subscribe event bus" ON)
-option(ENABLE_DAY_NIGHT "Enable day/night cycle system" ON)
-option(ENABLE_PERF_STATS "Enable performance statistics overlay" ON)
-option(ENABLE_FOG_SYSTEM "Enable fog rendering system" ON)
-option(ENABLE_SCREEN_SPACE "Enable screen-space effects (SSAO, SSR)" ON)
 option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON)
 option(BUILD_TESTS "Build test suite" ON)
 
@@ -742,55 +718,13 @@ if(SPARK_OPENGL_AVAILABLE)
 endif()
 
 # ---------------------------------------------------------------------
-# 13) Lua, PhysX, and other third-party includes
+# 13) Third-party includes
 # ---------------------------------------------------------------------
-if(ENABLE_LUA)
-    foreach(PATH IN ITEMS
-        "ThirdParty/Scripting/lua"
-        "ThirdParty/Scripting/sol2/single/include"
-        "ThirdParty/sol2/single/include"
-    )
-        if(EXISTS "${CMAKE_SOURCE_DIR}/${PATH}")
-            if(PATH MATCHES "sol2" AND NOT TARGET sol2)
-                add_library(sol2 INTERFACE)
-                target_include_directories(sol2 INTERFACE "${CMAKE_SOURCE_DIR}/${PATH}")
-                target_link_libraries(SparkEngineLib PUBLIC sol2)
-                target_compile_definitions(SparkEngineLib PUBLIC LUA_SCRIPTING_ENABLED)
-                message(STATUS "Found Sol2 at: ${PATH}")
-            else()
-                target_include_directories(SparkEngineLib PUBLIC "${CMAKE_SOURCE_DIR}/${PATH}")
-                message(STATUS "Found Lua headers at: ${PATH}")
-            endif()
-        endif()
-    endforeach()
-endif()
-
-if(ENABLE_PHYSX)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/PhysX/include")
-        target_include_directories(SparkEngineLib PUBLIC "ThirdParty/Physics/PhysX/include")
-        target_compile_definitions(SparkEngineLib PUBLIC PHYSX_AVAILABLE)
-        message(STATUS "PhysX headers found")
-    else()
-        message(STATUS "PhysX not found (optional)")
-    endif()
-endif()
 
 # ---------------------------------------------------------------------
 # 14) Feature definitions
 # ---------------------------------------------------------------------
 set(FEATURE_DEFINITIONS "")
-
-if(ENABLE_EDITOR)
-    list(APPEND FEATURE_DEFINITIONS "EDITOR_ENABLED")
-endif()
-
-if(ENABLE_GRAPHICS)
-    list(APPEND FEATURE_DEFINITIONS "GRAPHICS_ENABLED")
-endif()
-
-if(ENABLE_COLLABORATIVE)
-    list(APPEND FEATURE_DEFINITIONS "COLLABORATIVE_ENABLED")
-endif()
 
 if(ENABLE_PROFILING)
     list(APPEND FEATURE_DEFINITIONS "PROFILING_ENABLED")
@@ -798,102 +732,6 @@ endif()
 
 if(ENABLE_NETWORKING)
     list(APPEND FEATURE_DEFINITIONS "NETWORKING_ENABLED")
-endif()
-
-if(ENABLE_ASSET_STREAMING)
-    list(APPEND FEATURE_DEFINITIONS "ASSET_STREAMING_ENABLED")
-endif()
-
-if(ENABLE_HOT_RELOAD)
-    list(APPEND FEATURE_DEFINITIONS "HOT_RELOAD_ENABLED")
-endif()
-
-if(ENABLE_TERRAIN_SYSTEM)
-    list(APPEND FEATURE_DEFINITIONS "TERRAIN_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_POST_PROCESSING)
-    list(APPEND FEATURE_DEFINITIONS "POST_PROCESSING_ENABLED")
-endif()
-
-if(ENABLE_LIGHTING_SYSTEM)
-    list(APPEND FEATURE_DEFINITIONS "LIGHTING_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_ADVANCED_INPUT)
-    list(APPEND FEATURE_DEFINITIONS "ADVANCED_INPUT_ENABLED")
-endif()
-
-if(SPARK_VULKAN_AVAILABLE)
-    list(APPEND FEATURE_DEFINITIONS "VULKAN_BACKEND_AVAILABLE")
-endif()
-
-if(SPARK_OPENGL_AVAILABLE)
-    list(APPEND FEATURE_DEFINITIONS "OPENGL_BACKEND_AVAILABLE")
-endif()
-
-if(ENABLE_AI)
-    list(APPEND FEATURE_DEFINITIONS "AI_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_ANIMATION)
-    list(APPEND FEATURE_DEFINITIONS "ANIMATION_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_SAVE_SYSTEM)
-    list(APPEND FEATURE_DEFINITIONS "SAVE_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_PROCEDURAL)
-    list(APPEND FEATURE_DEFINITIONS "PROCEDURAL_GENERATION_ENABLED")
-endif()
-
-if(ENABLE_CINEMATIC)
-    list(APPEND FEATURE_DEFINITIONS "CINEMATIC_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_DECALS)
-    list(APPEND FEATURE_DEFINITIONS "DECAL_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_MESH_LOD)
-    list(APPEND FEATURE_DEFINITIONS "MESH_LOD_ENABLED")
-endif()
-
-if(ENABLE_DXR)
-    list(APPEND FEATURE_DEFINITIONS "DXR_ENABLED")
-endif()
-
-if(ENABLE_WEATHER)
-    list(APPEND FEATURE_DEFINITIONS "WEATHER_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_INVENTORY)
-    list(APPEND FEATURE_DEFINITIONS "INVENTORY_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_QUEST_SYSTEM)
-    list(APPEND FEATURE_DEFINITIONS "QUEST_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_EVENT_SYSTEM)
-    list(APPEND FEATURE_DEFINITIONS "EVENT_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_DAY_NIGHT)
-    list(APPEND FEATURE_DEFINITIONS "DAY_NIGHT_CYCLE_ENABLED")
-endif()
-
-if(ENABLE_PERF_STATS)
-    list(APPEND FEATURE_DEFINITIONS "PERF_STATS_ENABLED")
-endif()
-
-if(ENABLE_FOG_SYSTEM)
-    list(APPEND FEATURE_DEFINITIONS "FOG_SYSTEM_ENABLED")
-endif()
-
-if(ENABLE_SCREEN_SPACE)
-    list(APPEND FEATURE_DEFINITIONS "SCREEN_SPACE_EFFECTS_ENABLED")
 endif()
 
 if(SPARK_HEADLESS_SUPPORT)
@@ -1117,14 +955,6 @@ message(STATUS "Editor: ${ENABLE_EDITOR}")
 message(STATUS "Shader Compiler Tool: ENABLED")
 message(STATUS "Tests: ${BUILD_TESTS}")
 message(STATUS "Networking: ${ENABLE_NETWORKING}")
-message(STATUS "Systems:")
-message(STATUS "  AI/NavMesh     : ${ENABLE_AI}")
-message(STATUS "  Animation      : ${ENABLE_ANIMATION}")
-message(STATUS "  Save System    : ${ENABLE_SAVE_SYSTEM}")
-message(STATUS "  Procedural Gen : ${ENABLE_PROCEDURAL}")
-message(STATUS "  Cinematic      : ${ENABLE_CINEMATIC}")
-message(STATUS "  Decals         : ${ENABLE_DECALS}")
-message(STATUS "  Mesh LOD       : ${ENABLE_MESH_LOD}")
 message(STATUS "  DXR RayTracing : ${ENABLE_DXR}")
 message(STATUS "  SDL2 Input     : ${ENABLE_SDL2}")
 message(STATUS "  Headless Mode  : ${SPARK_HEADLESS_SUPPORT}")

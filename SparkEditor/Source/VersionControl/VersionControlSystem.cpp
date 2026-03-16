@@ -436,6 +436,27 @@ namespace SparkEditor
     // Staging and Committing
     // ============================================================================
 
+    static bool ContainsShellMetachars(const std::string& str)
+    {
+        for (char c : str)
+        {
+            switch (c)
+            {
+            case ';':
+            case '|':
+            case '&':
+            case '$':
+            case '`':
+            case '\n':
+            case '\r':
+                return true;
+            default:
+                break;
+            }
+        }
+        return false;
+    }
+
     VCSOperationResult VersionControlSystem::StageFiles(const std::vector<std::string>& filePaths)
     {
         if (!m_repositoryInfo)
@@ -444,6 +465,13 @@ namespace SparkEditor
         VCSOperationResult lastResult;
         for (const auto& file : filePaths)
         {
+            if (ContainsShellMetachars(file))
+            {
+                lastResult.success = false;
+                lastResult.errorMessage = "File path contains unsafe characters: " + file;
+                lastResult.exitCode = -1;
+                return lastResult;
+            }
             std::string cmd = "git add \"" + file + "\"";
             lastResult = ExecuteCommand(cmd, m_repositoryInfo->path);
             if (!lastResult.success)
@@ -463,6 +491,13 @@ namespace SparkEditor
         VCSOperationResult lastResult;
         for (const auto& file : filePaths)
         {
+            if (ContainsShellMetachars(file))
+            {
+                lastResult.success = false;
+                lastResult.errorMessage = "File path contains unsafe characters: " + file;
+                lastResult.exitCode = -1;
+                return lastResult;
+            }
             std::string cmd = "git reset HEAD \"" + file + "\"";
             lastResult = ExecuteCommand(cmd, m_repositoryInfo->path);
             if (!lastResult.success)
@@ -1345,6 +1380,25 @@ namespace SparkEditor
     {
         VCSOperationResult result;
         auto startTime = std::chrono::steady_clock::now();
+
+        // Security: reject shell metacharacters in working directory to prevent injection
+        if (!workingDirectory.empty() && ContainsShellMetachars(workingDirectory))
+        {
+            result.success = false;
+            result.errorMessage = "Working directory contains unsafe characters";
+            result.exitCode = -1;
+            return result;
+        }
+
+        // Security: reject shell metacharacters in command arguments
+        // Only allow git commands (all callers use "git ..." commands)
+        if (command.substr(0, 4) != "git " && command.substr(0, 4) != "git\t" && command != "git --version")
+        {
+            result.success = false;
+            result.errorMessage = "Only git commands are allowed";
+            result.exitCode = -1;
+            return result;
+        }
 
         std::string fullCommand = command;
         if (!workingDirectory.empty())

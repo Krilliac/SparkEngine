@@ -83,6 +83,54 @@ namespace Spark
             it->second.deserialize(world, entity, data);
     }
 
+    // ============================================================================
+    // Safe deserialization helpers — reject malformed save data instead of crashing
+    // ============================================================================
+
+    static constexpr size_t kMaxPropertyLen = 4096;
+
+    static float SafeGetFloat(const std::unordered_map<std::string, std::string>& props, const std::string& key,
+                              float def)
+    {
+        auto it = props.find(key);
+        if (it == props.end() || it->second.size() > kMaxPropertyLen)
+            return def;
+        try
+        {
+            return std::stof(it->second);
+        }
+        catch (...)
+        {
+            return def;
+        }
+    }
+
+    static uint32_t SafeGetUint32(const std::unordered_map<std::string, std::string>& props, const std::string& key,
+                                  uint32_t def)
+    {
+        auto it = props.find(key);
+        if (it == props.end() || it->second.size() > kMaxPropertyLen)
+            return def;
+        try
+        {
+            return static_cast<uint32_t>(std::stoul(it->second));
+        }
+        catch (...)
+        {
+            return def;
+        }
+    }
+
+    static std::string SafeGetString(const std::unordered_map<std::string, std::string>& props, const std::string& key)
+    {
+        auto it = props.find(key);
+        if (it == props.end())
+            return "";
+        if (it->second.size() > kMaxPropertyLen)
+            return it->second.substr(0, kMaxPropertyLen);
+        return it->second;
+    }
+
     void ComponentSerializerRegistry::RegisterBuiltins()
     {
         // Transform
@@ -107,14 +155,10 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& t = world.AddComponent<Transform>(entity);
-                auto get = [&](const std::string& key, float def) -> float
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? std::stof(it->second) : def;
-                };
-                t.position = {get("px", 0), get("py", 0), get("pz", 0)};
-                t.rotation = {get("rx", 0), get("ry", 0), get("rz", 0)};
-                t.scale = {get("sx", 1), get("sy", 1), get("sz", 1)};
+                auto& p = data.properties;
+                t.position = {SafeGetFloat(p, "px", 0), SafeGetFloat(p, "py", 0), SafeGetFloat(p, "pz", 0)};
+                t.rotation = {SafeGetFloat(p, "rx", 0), SafeGetFloat(p, "ry", 0), SafeGetFloat(p, "rz", 0)};
+                t.scale = {SafeGetFloat(p, "sx", 1), SafeGetFloat(p, "sy", 1), SafeGetFloat(p, "sz", 1)};
             });
 
         // MeshRenderer
@@ -135,16 +179,12 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& m = world.AddComponent<MeshRenderer>(entity);
-                auto get = [&](const std::string& key) -> std::string
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? it->second : "";
-                };
-                m.meshPath = get("meshPath");
-                m.materialPath = get("materialPath");
-                m.castShadows = get("castShadows") != "0";
-                m.receiveShadows = get("receiveShadows") != "0";
-                m.visible = get("visible") != "0";
+                auto& p = data.properties;
+                m.meshPath = SafeGetString(p, "meshPath");
+                m.materialPath = SafeGetString(p, "materialPath");
+                m.castShadows = SafeGetString(p, "castShadows") != "0";
+                m.receiveShadows = SafeGetString(p, "receiveShadows") != "0";
+                m.visible = SafeGetString(p, "visible") != "0";
             });
 
         // HealthComponent
@@ -163,14 +203,10 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& h = world.AddComponent<HealthComponent>(entity);
-                auto get = [&](const std::string& key, float def) -> float
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? std::stof(it->second) : def;
-                };
-                h.health = get("health", 100.0f);
-                h.maxHealth = get("maxHealth", 100.0f);
-                h.isDead = (data.properties.count("isDead") && data.properties.at("isDead") == "1");
+                auto& p = data.properties;
+                h.health = SafeGetFloat(p, "health", 100.0f);
+                h.maxHealth = SafeGetFloat(p, "maxHealth", 100.0f);
+                h.isDead = SafeGetString(p, "isDead") == "1";
             });
 
         // LightComponent
@@ -193,16 +229,12 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& l = world.AddComponent<LightComponent>(entity);
-                auto get = [&](const std::string& key, float def) -> float
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? std::stof(it->second) : def;
-                };
-                l.type = static_cast<LightComponent::Type>(static_cast<int>(get("type", 1)));
-                l.color = {get("cr", 1), get("cg", 1), get("cb", 1)};
-                l.intensity = get("intensity", 1.0f);
-                l.range = get("range", 10.0f);
-                l.castShadows = (data.properties.count("castShadows") && data.properties.at("castShadows") == "1");
+                auto& p = data.properties;
+                l.type = static_cast<LightComponent::Type>(static_cast<int>(SafeGetFloat(p, "type", 1)));
+                l.color = {SafeGetFloat(p, "cr", 1), SafeGetFloat(p, "cg", 1), SafeGetFloat(p, "cb", 1)};
+                l.intensity = SafeGetFloat(p, "intensity", 1.0f);
+                l.range = SafeGetFloat(p, "range", 10.0f);
+                l.castShadows = SafeGetString(p, "castShadows") == "1";
             });
 
         // AudioSourceComponent
@@ -223,16 +255,12 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& a = world.AddComponent<AudioSourceComponent>(entity);
-                auto get = [&](const std::string& key) -> std::string
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? it->second : "";
-                };
-                a.soundName = get("soundName");
-                a.volume = data.properties.count("volume") ? std::stof(data.properties.at("volume")) : 1.0f;
-                a.is3D = get("is3D") != "0";
-                a.loop = get("loop") == "1";
-                a.playOnAwake = get("playOnAwake") == "1";
+                auto& p = data.properties;
+                a.soundName = SafeGetString(p, "soundName");
+                a.volume = SafeGetFloat(p, "volume", 1.0f);
+                a.is3D = SafeGetString(p, "is3D") != "0";
+                a.loop = SafeGetString(p, "loop") == "1";
+                a.playOnAwake = SafeGetString(p, "playOnAwake") == "1";
             });
 
         // Camera
@@ -252,15 +280,11 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& c = world.AddComponent<Camera>(entity);
-                auto get = [&](const std::string& key, float def) -> float
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? std::stof(it->second) : def;
-                };
-                c.fov = get("fov", 60.0f);
-                c.nearPlane = get("nearPlane", 0.1f);
-                c.farPlane = get("farPlane", 1000.0f);
-                c.isMainCamera = (data.properties.count("isMainCamera") && data.properties.at("isMainCamera") == "1");
+                auto& p = data.properties;
+                c.fov = SafeGetFloat(p, "fov", 60.0f);
+                c.nearPlane = SafeGetFloat(p, "nearPlane", 0.1f);
+                c.farPlane = SafeGetFloat(p, "farPlane", 1000.0f);
+                c.isMainCamera = SafeGetString(p, "isMainCamera") == "1";
             });
 
         // Script
@@ -281,16 +305,12 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& s = world.AddComponent<Script>(entity);
-                auto get = [&](const std::string& key) -> std::string
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? it->second : "";
-                };
-                s.scriptPath = get("scriptPath");
-                s.className = get("className");
-                s.moduleName = get("moduleName");
-                s.enabled = get("enabled") != "0";
-                s.started = get("started") == "1";
+                auto& p = data.properties;
+                s.scriptPath = SafeGetString(p, "scriptPath");
+                s.className = SafeGetString(p, "className");
+                s.moduleName = SafeGetString(p, "moduleName");
+                s.enabled = SafeGetString(p, "enabled") != "0";
+                s.started = SafeGetString(p, "started") == "1";
             });
 
         // RigidBodyComponent
@@ -320,20 +340,16 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& rb = world.AddComponent<RigidBodyComponent>(entity);
-                auto get = [&](const std::string& key, float def) -> float
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? std::stof(it->second) : def;
-                };
-                rb.type = static_cast<RigidBodyComponent::Type>(static_cast<int>(get("type", 2)));
-                rb.mass = get("mass", 1.0f);
-                rb.friction = get("friction", 0.5f);
-                rb.restitution = get("restitution", 0.1f);
-                rb.linearDamping = get("linearDamping", 0.1f);
-                rb.angularDamping = get("angularDamping", 0.1f);
-                rb.isTrigger = (data.properties.count("isTrigger") && data.properties.at("isTrigger") == "1");
-                rb.linearVelocity = {get("lvx", 0), get("lvy", 0), get("lvz", 0)};
-                rb.angularVelocity = {get("avx", 0), get("avy", 0), get("avz", 0)};
+                auto& p = data.properties;
+                rb.type = static_cast<RigidBodyComponent::Type>(static_cast<int>(SafeGetFloat(p, "type", 2)));
+                rb.mass = SafeGetFloat(p, "mass", 1.0f);
+                rb.friction = SafeGetFloat(p, "friction", 0.5f);
+                rb.restitution = SafeGetFloat(p, "restitution", 0.1f);
+                rb.linearDamping = SafeGetFloat(p, "linearDamping", 0.1f);
+                rb.angularDamping = SafeGetFloat(p, "angularDamping", 0.1f);
+                rb.isTrigger = SafeGetString(p, "isTrigger") == "1";
+                rb.linearVelocity = {SafeGetFloat(p, "lvx", 0), SafeGetFloat(p, "lvy", 0), SafeGetFloat(p, "lvz", 0)};
+                rb.angularVelocity = {SafeGetFloat(p, "avx", 0), SafeGetFloat(p, "avy", 0), SafeGetFloat(p, "avz", 0)};
                 rb.physicsBodyHandle = nullptr;
             });
 
@@ -359,16 +375,13 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& col = world.AddComponent<ColliderComponent>(entity);
-                auto get = [&](const std::string& key, float def) -> float
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? std::stof(it->second) : def;
-                };
-                col.shape = static_cast<ColliderComponent::Shape>(static_cast<int>(get("shape", 0)));
-                col.halfExtents = {get("hex", 0.5f), get("hey", 0.5f), get("hez", 0.5f)};
-                col.radius = get("radius", 0.5f);
-                col.height = get("height", 1.0f);
-                col.offset = {get("ox", 0), get("oy", 0), get("oz", 0)};
+                auto& p = data.properties;
+                col.shape = static_cast<ColliderComponent::Shape>(static_cast<int>(SafeGetFloat(p, "shape", 0)));
+                col.halfExtents = {SafeGetFloat(p, "hex", 0.5f), SafeGetFloat(p, "hey", 0.5f),
+                                   SafeGetFloat(p, "hez", 0.5f)};
+                col.radius = SafeGetFloat(p, "radius", 0.5f);
+                col.height = SafeGetFloat(p, "height", 1.0f);
+                col.offset = {SafeGetFloat(p, "ox", 0), SafeGetFloat(p, "oy", 0), SafeGetFloat(p, "oz", 0)};
             });
 
         // ParticleEmitterComponent
@@ -396,24 +409,16 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& pe = world.AddComponent<ParticleEmitterComponent>(entity);
-                auto getf = [&](const std::string& key, float def) -> float
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? std::stof(it->second) : def;
-                };
-                auto gets = [&](const std::string& key) -> std::string
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? it->second : "";
-                };
-                pe.effectName = gets("effectName");
-                pe.autoPlay = gets("autoPlay") != "0";
-                pe.isPlaying = gets("isPlaying") == "1";
-                pe.emissionRate = getf("emissionRate", 10.0f);
-                pe.lifetime = getf("lifetime", 1.0f);
-                pe.startColor = {getf("scr", 1), getf("scg", 1), getf("scb", 1), getf("sca", 1)};
-                pe.startSize = getf("startSize", 0.1f);
-                pe.startSpeed = getf("startSpeed", 1.0f);
+                auto& p = data.properties;
+                pe.effectName = SafeGetString(p, "effectName");
+                pe.autoPlay = SafeGetString(p, "autoPlay") != "0";
+                pe.isPlaying = SafeGetString(p, "isPlaying") == "1";
+                pe.emissionRate = SafeGetFloat(p, "emissionRate", 10.0f);
+                pe.lifetime = SafeGetFloat(p, "lifetime", 1.0f);
+                pe.startColor = {SafeGetFloat(p, "scr", 1), SafeGetFloat(p, "scg", 1), SafeGetFloat(p, "scb", 1),
+                                 SafeGetFloat(p, "sca", 1)};
+                pe.startSize = SafeGetFloat(p, "startSize", 0.1f);
+                pe.startSpeed = SafeGetFloat(p, "startSpeed", 1.0f);
                 pe.emitterHandle = nullptr;
             });
 
@@ -446,24 +451,15 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& ac = world.AddComponent<AnimationController>(entity);
-                auto getf = [&](const std::string& key, float def) -> float
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? std::stof(it->second) : def;
-                };
-                auto gets = [&](const std::string& key) -> std::string
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? it->second : "";
-                };
-                ac.currentAnimation = gets("currentAnimation");
-                ac.defaultAnimation = gets("defaultAnimation");
-                ac.playbackSpeed = getf("playbackSpeed", 1.0f);
-                ac.currentTime = getf("currentTime", 0.0f);
-                ac.playing = gets("playing") != "0";
-                ac.loop = gets("loop") != "0";
+                auto& p = data.properties;
+                ac.currentAnimation = SafeGetString(p, "currentAnimation");
+                ac.defaultAnimation = SafeGetString(p, "defaultAnimation");
+                ac.playbackSpeed = SafeGetFloat(p, "playbackSpeed", 1.0f);
+                ac.currentTime = SafeGetFloat(p, "currentTime", 0.0f);
+                ac.playing = SafeGetString(p, "playing") != "0";
+                ac.loop = SafeGetString(p, "loop") != "0";
                 // Deserialize availableAnimations from comma-separated string
-                std::string animList = gets("availableAnimations");
+                std::string animList = SafeGetString(p, "availableAnimations");
                 if (!animList.empty())
                 {
                     std::istringstream iss(animList);
@@ -495,21 +491,12 @@ namespace Spark
             [](World& world, EntityID entity, const SerializedComponent& data)
             {
                 auto& ni = world.AddComponent<NetworkIdentity>(entity);
-                auto getu = [&](const std::string& key, uint32_t def) -> uint32_t
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? static_cast<uint32_t>(std::stoul(it->second)) : def;
-                };
-                auto gets = [&](const std::string& key) -> std::string
-                {
-                    auto it = data.properties.find(key);
-                    return (it != data.properties.end()) ? it->second : "";
-                };
-                ni.networkID = getu("networkID", 0);
-                ni.ownerClientID = getu("ownerClientID", 0);
-                ni.isLocalAuthority = gets("isLocalAuthority") == "1";
-                ni.replicateTransform = gets("replicateTransform") != "0";
-                ni.replicateHealth = gets("replicateHealth") != "0";
+                auto& p = data.properties;
+                ni.networkID = SafeGetUint32(p, "networkID", 0);
+                ni.ownerClientID = SafeGetUint32(p, "ownerClientID", 0);
+                ni.isLocalAuthority = SafeGetString(p, "isLocalAuthority") == "1";
+                ni.replicateTransform = SafeGetString(p, "replicateTransform") != "0";
+                ni.replicateHealth = SafeGetString(p, "replicateHealth") != "0";
             });
 
         // TagComponent
@@ -601,6 +588,8 @@ namespace Spark
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(), "SaveSystem::Save — slotName must not be empty");
+        if (!IsValidSlotName(slotName))
+            return false;
         EventBus::Global().Publish<SaveBeginEvent>({slotName});
         SaveData data = SerializeWorld(world, metadata);
         bool ok = WriteToFile(GetSavePath(slotName), data);
@@ -612,6 +601,8 @@ namespace Spark
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(), "SaveSystem::Load — slotName must not be empty");
+        if (!IsValidSlotName(slotName))
+            return false;
         EventBus::Global().Publish<LoadBeginEvent>({slotName});
         SaveData data;
         if (!ReadFromFile(GetSavePath(slotName), data))
@@ -649,10 +640,12 @@ namespace Spark
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(),
                           "SaveSystem::DeleteSave — slotName must not be empty");
+        if (!IsValidSlotName(slotName))
+            return false;
         try
         {
             std::string path = GetSavePath(slotName);
-            if (!fs::exists(path))
+            if (path.empty() || !fs::exists(path))
                 return true;
             return fs::remove(path);
         }
@@ -1133,8 +1126,26 @@ namespace Spark
         }
     }
 
+    bool SaveSystem::IsValidSlotName(const std::string& slotName)
+    {
+        if (slotName.empty() || slotName.size() > 64)
+            return false;
+        for (char c : slotName)
+        {
+            if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-')
+                return false;
+        }
+        return true;
+    }
+
     std::string SaveSystem::GetSavePath(const std::string& slotName) const
     {
+        if (!IsValidSlotName(slotName))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SaveSystem: Invalid slot name '%s' — rejected",
+                            slotName.c_str());
+            return {};
+        }
         return m_saveDirectory + "/" + slotName + ".spark_save";
     }
 

@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <functional>
@@ -174,7 +175,7 @@ namespace Spark::Scripting
         std::vector<PendingChange> m_pendingChanges;
         uint32_t m_debounceMs = 300; // 300ms default debounce
 
-        bool m_running = false;
+        std::atomic<bool> m_running{false};
         int m_recompileCount = 0;
         int m_errorCount = 0;
         std::vector<RecompileResult> m_recentErrors; ///< Last N errors

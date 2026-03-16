@@ -177,7 +177,7 @@ btCollisionShape* PhysicsSystem::CreateConvexHullShape(const std::vector<XMFLOAT
     return convexShape;
 }
 
-size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc)
+size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc) const
 {
     size_t hash = std::hash<int>()(static_cast<int>(desc.type));
 

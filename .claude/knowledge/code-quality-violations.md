@@ -49,10 +49,10 @@ CLAUDE.md: *"Writing a function longer than 50 lines"* is a sign of bloat.
 
 ### Duplicate Functions Detected
 
-- `CompileEmbeddedPixelShader` appears twice in GraphicsEngine.cpp (lines 2012, 4522)
-- `CompileEmbeddedVertexShader` appears twice in GraphicsEngine.cpp (lines 1941, 4459)
-- `GetShaderPermutation` appears twice in MaterialSystem.cpp (88 and 83 lines)
-- `SaveToFile` appears twice in MaterialSystem.cpp (161 and 84 lines)
+- ~~`CompileEmbeddedPixelShader` appears twice in GraphicsEngine.cpp~~ — **NOT duplicates.** These are platform-specific implementations: one inside `#ifdef SPARK_PLATFORM_WINDOWS` (HLSL/D3D) and one in `#else` (GLSL/OpenGL). Both are needed for cross-platform compilation.
+- ~~`CompileEmbeddedVertexShader` appears twice in GraphicsEngine.cpp~~ — Same as above: Windows HLSL vs Linux GLSL implementations.
+- `GetShaderPermutation` appears twice in MaterialSystem.cpp (88 and 83 lines) — OPEN
+- `SaveToFile` appears twice in MaterialSystem.cpp (161 and 84 lines) — OPEN
 
 ---
 
@@ -116,7 +116,7 @@ The codebase is clean in this regard.
 | Violation Type | Count | Severity |
 |---------------|-------|----------|
 | Functions >50 lines | 66 | High |
-| Duplicate functions in same file | 4 | High |
+| Duplicate functions in same file | 2 (was 4; 2 were platform-specific, not duplicates) | Medium |
 | Classes with >10 private methods | 7 | High |
 | Struct m_ prefix violations | ~80+ fields | Low (gray area) |
 | Commented-out code | 2 blocks | Low |

@@ -178,7 +178,7 @@ class GameObject
      * 
      * @return 4x4 world transformation matrix
      */
-    XMMATRIX GetWorldMatrix();
+    XMMATRIX GetWorldMatrix() const;
 
     /**
      * @brief Get the object's forward direction vector
@@ -275,14 +275,14 @@ class GameObject
      * Recalculates the world matrix from current position, rotation, and scale
      * values. Called automatically when transform properties change.
      */
-    void UpdateWorldMatrix();
+    void UpdateWorldMatrix() const;
 
     // Transform state
-    XMFLOAT3 m_position{};         ///< World position
-    XMFLOAT3 m_rotation{};         ///< Rotation in Euler angles (radians)
-    XMFLOAT3 m_scale{1, 1, 1};     ///< Scale factors for each axis
-    XMMATRIX m_worldMatrix{};      ///< Cached world transformation matrix
-    bool m_worldMatrixDirty{true}; ///< Flag indicating if world matrix needs recalculation
+    XMFLOAT3 m_position{};                 ///< World position
+    XMFLOAT3 m_rotation{};                 ///< Rotation in Euler angles (radians)
+    XMFLOAT3 m_scale{1, 1, 1};             ///< Scale factors for each axis
+    mutable XMMATRIX m_worldMatrix{};      ///< Cached world transformation matrix
+    mutable bool m_worldMatrixDirty{true}; ///< Flag indicating if world matrix needs recalculation
 
     // Rendering
     std::unique_ptr<Mesh> m_mesh;            ///< 3D mesh for rendering

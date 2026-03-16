@@ -452,11 +452,13 @@ namespace Spark::Net
         std::unordered_map<ClientID, sockaddr_in> m_clientAddresses;
 #endif // ENABLE_NETWORKING
 
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
         NetworkRole m_role = NetworkRole::None;
         ConnectionState m_connectionState = ConnectionState::Disconnected;
         ClientID m_localClientID = INVALID_CLIENT;
-        mutable std::mutex m_stateMutex; ///< Protects m_role, m_connectionState, m_localClientID
+        /// @brief Protects m_role, m_connectionState, m_localClientID.
+        /// Lock ordering: m_stateMutex → m_queueMutex → m_handlerMutex (never reverse).
+        mutable std::mutex m_stateMutex;
         float m_serverTime = 0.0f;
         float m_heartbeatInterval = 1.0f;
         float m_heartbeatTimer = 0.0f;
@@ -474,8 +476,8 @@ namespace Spark::Net
         std::queue<NetworkMessage> m_outgoingQueue;
         std::queue<NetworkMessage> m_incomingQueue;
         std::unordered_map<uint16_t, MessageHandler> m_handlers;
-        mutable std::mutex m_queueMutex;
-        mutable std::mutex m_handlerMutex;
+        mutable std::mutex m_queueMutex;   ///< Protects m_outgoingQueue, m_incomingQueue
+        mutable std::mutex m_handlerMutex; ///< Protects m_handlers (lowest in lock order)
 
         // Reliable message tracking
         SequenceNumber m_nextOutgoingSequence = 1;

@@ -1,17 +1,15 @@
 # ConsoleProcessManager Wiring — Critical Issue
 
-**Last updated:** 2026-03-14
+**Last updated:** 2026-03-16
 **Type:** Issue
-**Status:** Active
-**Priority:** 🔴 CRITICAL
+**Status:** Resolved
+**Priority:** 🔴 CRITICAL (was)
 
 ---
 
 ## Executive Summary
 
-**ConsoleProcessManager is built but never initialized or called.** It's a complete system that sits idle, preventing SparkConsole.exe from launching and commands from being executed.
-
-**Fix time:** ~15 minutes (3 lines of code)
+**RESOLVED (2026-03-16).** ConsoleProcessManager is now wired into all 5 engine startup paths (Windows windowed, Windows headless, Linux SDL2, Linux headless, Linux fallback). Initialize() at startup, ProcessCommands() each frame, Shutdown() before exit.
 
 ---
 

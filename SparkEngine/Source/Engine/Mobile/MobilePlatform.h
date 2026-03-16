@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <vector>
 #include <functional>
@@ -239,7 +240,7 @@ namespace Spark::Mobile
         float m_batteryLevel = -1.0f;
         bool m_isCharging = false;
         bool m_batteryAwareScaling = true;
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
     };
 
 } // namespace Spark::Mobile

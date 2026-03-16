@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "AISystem.h"
 #include "ParallelPerception.h"
 #include "AIBudgetLimiter.h"
@@ -221,7 +223,7 @@ namespace Spark::AI
         AIIntegrationConfig m_config;
         DirectX::XMFLOAT3 m_playerPosition{0.0f, 0.0f, 0.0f};
         float m_worldTime = 0.0f;
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
     };
 
 } // namespace Spark::AI

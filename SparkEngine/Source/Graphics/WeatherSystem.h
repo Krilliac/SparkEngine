@@ -269,7 +269,7 @@ namespace Spark
         {
             if (m_isTransitioning)
             {
-                m_transitionProgress += dt / m_transitionDuration;
+                m_transitionProgress += (m_transitionDuration > 0.0f) ? (dt / m_transitionDuration) : 1.0f;
                 if (m_transitionProgress >= 1.0f)
                 {
                     m_transitionProgress = 1.0f;

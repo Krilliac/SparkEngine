@@ -31,6 +31,9 @@ namespace SparkEditor
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Hierarchy panel\n";
+
+        // Create a default scene so the panel works immediately
+        ResetToDefault();
         return true;
     }
 
@@ -1040,6 +1043,43 @@ namespace SparkEditor
         }
         m_needsSelectionUpdate = true;
         m_filterCacheDirty = true;
+    }
+
+    void HierarchyPanel::ResetToDefault()
+    {
+        // Create an owned scene if none is set externally
+        m_ownedScene = std::make_unique<SceneFile>();
+        m_scene = m_ownedScene.get();
+
+        m_scene->objects.clear();
+        m_scene->components.clear();
+        m_selectedObjects.clear();
+        m_selectedSet.clear();
+        m_expandedObjects.clear();
+        m_filterCacheDirty = true;
+        m_searchFilter.clear();
+        m_searchBuffer[0] = '\0';
+
+        // Populate with standard default objects
+        CreateObject("Main Camera");
+        CreateObject("Directional Light");
+        CreateObject("Ground Plane");
+
+        std::cout << "Scene hierarchy reset to default\n";
+    }
+
+    std::vector<std::string> HierarchyPanel::GetSceneObjects() const
+    {
+        std::vector<std::string> names;
+        if (m_scene)
+        {
+            names.reserve(m_scene->objects.size());
+            for (const auto& obj : m_scene->objects)
+            {
+                names.push_back(obj.name);
+            }
+        }
+        return names;
     }
 
 } // namespace SparkEditor

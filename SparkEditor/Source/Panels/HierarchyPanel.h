@@ -13,10 +13,11 @@
 
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
-#include <vector>
-#include <string>
 #include <functional>
+#include <memory>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 namespace SparkEditor
 {
@@ -82,6 +83,15 @@ namespace SparkEditor
      * @param scene Scene data to display in hierarchy
      */
         void SetScene(SceneFile* scene);
+
+        /** @brief Create a new object in the scene hierarchy. */
+        ObjectID CreateObject(const std::string& name, ObjectID parentID = INVALID_OBJECT_ID);
+
+        /** @brief Reset hierarchy to default scene objects (Camera, Light, Ground). */
+        void ResetToDefault();
+
+        /** @brief Get all scene object names (for serialization compatibility). */
+        std::vector<std::string> GetSceneObjects() const;
 
         /**
      * @brief Get currently selected objects
@@ -240,14 +250,6 @@ namespace SparkEditor
         bool ObjectOrDescendantPassesFilter(const SceneObject* object) const;
 
         /**
-     * @brief Create new object
-     * @param name Object name
-     * @param parentID Parent object ID (INVALID_OBJECT_ID for root)
-     * @return ID of created object
-     */
-        ObjectID CreateObject(const std::string& name, ObjectID parentID = INVALID_OBJECT_ID);
-
-        /**
      * @brief Duplicate object
      * @param objectID Object to duplicate
      * @return ID of duplicated object
@@ -293,7 +295,8 @@ namespace SparkEditor
 
       private:
         // Scene data
-        SceneFile* m_scene = nullptr; ///< Current scene being displayed
+        std::unique_ptr<SceneFile> m_ownedScene; ///< Internally owned scene (used if no external scene set)
+        SceneFile* m_scene = nullptr;            ///< Current scene being displayed
 
         // Selection state
         std::vector<ObjectID> m_selectedObjects;          ///< Currently selected objects

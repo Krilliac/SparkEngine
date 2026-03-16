@@ -39,7 +39,7 @@ namespace SparkEditor
     // Forward declarations
     class EditorPanel;
     class ProjectBrowserPanel;
-    class SimpleHierarchyPanel;
+    class HierarchyPanel;
     struct EditorConfig; // Forward declare instead of defining
 
     /**

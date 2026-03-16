@@ -34,7 +34,8 @@ Texture::Texture(const std::string& name, const TextureDesc& desc) : m_name(name
 
 HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* device)
 {
-    ASSERT(device);
+    if (!device)
+        return E_INVALIDARG;
 
     // Load image using WIC
     HRESULT hr = S_OK;
@@ -131,7 +132,8 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* devic
 
 HRESULT Texture::CreateFromData(const void* data, size_t dataSize, ID3D11Device* device)
 {
-    ASSERT(device && data && dataSize > 0);
+    if (!device || !data || dataSize == 0)
+        return E_INVALIDARG;
 
     D3D11_TEXTURE2D_DESC texDesc = {};
     texDesc.Width = m_desc.width;

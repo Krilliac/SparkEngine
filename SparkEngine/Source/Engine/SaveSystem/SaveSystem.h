@@ -838,6 +838,7 @@ namespace Spark
      * @param slotName  Slot identifier.
      * @return          Full path to the corresponding `.sav` file.
      */
+        static bool IsValidSlotName(const std::string& slotName);
         std::string GetSavePath(const std::string& slotName) const;
 
         /** @brief Directory where all `.sav` files are stored. Defaults to `"Saves"`. */

@@ -44,6 +44,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -192,6 +193,11 @@ namespace Spark
          */
         template <typename E> void Publish(const E& event)
         {
+            // Guard against infinite recursion (handler publishes same event type)
+            static thread_local int s_publishDepth = 0;
+            if (s_publishDepth > 0)
+                return; // Silently ignore recursive publish for the same event type
+
             ChannelOf<E>* ch = FindChannel<E>();
             if (!ch)
                 return;
@@ -205,8 +211,10 @@ namespace Spark
                     snapshot.push_back(entry.handler);
             }
 
+            ++s_publishDepth;
             for (auto& handler : snapshot)
                 handler(event);
+            --s_publishDepth;
         }
 
         /**
@@ -311,7 +319,7 @@ namespace Spark
 
         mutable std::mutex m_channelsMutex;
         std::unordered_map<std::type_index, std::unique_ptr<IChannel>> m_channels;
-        uint64_t m_nextId = 0;
+        std::atomic<uint64_t> m_nextId{0};
     };
 
 } // namespace Spark

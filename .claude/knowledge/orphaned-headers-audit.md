@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-16
 **Type:** Observation
-**Status:** Active
+**Status:** Mostly resolved (27 of 30 deleted)
 **Severity:** High
 
 ## Description
@@ -82,8 +82,14 @@ Per CLAUDE.md anti-bloat rules: *"Features built but not integrated count as bug
 
 These should be deleted. If a feature is needed later, it can be rebuilt from git history — keeping unintegrated headers creates false confidence that the feature exists.
 
+## Resolution (2026-03-16)
+
+27 of 30 orphaned headers were deleted across two cleanup commits (~40K lines in the first pass, DayNightCycle.h in the second). Three files remain intentionally:
+- `MetalDevice.h` (542 lines) — experimental Metal backend, expected orphan
+- `PerformanceStats.h` (331 lines) — actually used by SparkGame module (not truly orphaned)
+- `DayNightCycle.h` was deleted (test has standalone copy)
+
 ## Notes
 
-- The Graphics orphaned headers are the most concerning: they suggest a rendering pipeline was designed on paper but never wired in
-- AllEnums.h is particularly problematic: it includes SparkEditor enum headers from within SparkEngine (engine-depends-on-editor violation)
 - MetalDevice.h is expected to be orphaned (experimental backend)
+- PerformanceStats.h was misidentified as orphaned — it's included by SparkGame/Source/Game/Game.h

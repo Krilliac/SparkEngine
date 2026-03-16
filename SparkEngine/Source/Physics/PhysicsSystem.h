@@ -1897,7 +1897,7 @@ class PhysicsSystem
 
     void UpdateMetrics();
     void ProcessCollisions();
-    size_t HashShape(const CollisionShapeDesc& desc);
+    size_t HashShape(const CollisionShapeDesc& desc) const;
 };
 
 // Utility functions

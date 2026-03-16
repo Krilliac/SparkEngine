@@ -7,11 +7,11 @@
 
 ## Description
 
-Comprehensive audit of all 27+ gameplay/engine systems. 17 systems are fully operational (initialized + called each frame). 7 systems are built but never wired in (~90K+ lines of orphaned code). 3 systems are missing entirely.
+Comprehensive audit of all 27+ gameplay/engine systems. 19 systems are fully operational (initialized + called each frame or restored with tests). Several systems were deleted as orphaned code and some were restored when found to be legitimate.
 
 ---
 
-## Working Systems (17)
+## Working Systems (19)
 
 All initialized in startup and called in the main loop:
 
@@ -34,31 +34,40 @@ All initialized in startup and called in the main loop:
 | Dialogue | SparkEngine.cpp:426 | Branching conversations | DialogueSystem.cpp |
 | Weather | SparkEngine.cpp:420 | Day/night cycles, weather effects | WeatherSystem.cpp |
 | World origin | World management init | Origin rebasing for large worlds | WorldOriginSystem |
+| **Localization** | **RESTORED** — has tests | File-based string tables with regex parsing | LocalizationSystem.cpp (227 lines) |
+| **Destruction** | **RESTORED** — has tests | Fracture patterns, physics debris | DestructionSystem.cpp (147 lines) |
 
 ---
 
-## Built-Not-Wired Systems (7)
+## Restored Systems (2026-03-16)
 
-Complete implementations that are NEVER initialized or called:
+### Localization System
+- **Files:** `Engine/Localization/LocalizationSystem.cpp` (227 lines), `.h` (197 lines)
+- **Test:** `Tests/TestLocalizationSystem.cpp` — tests string table get/set, missing key fallback
+- **Functionality:** JSON-based string tables, per-language loading, key lookup with fallback
+- **Previously deleted** as "stub-only, never called" — actually a complete implementation with tests
 
-| System | Files | Size | What Exists | What's Missing |
-|--------|-------|------|-------------|----------------|
-| Streaming (seamless areas) | 3 cpp, 4 h | ~1,000+ lines | HeroEngine-inspired area transitions | NOT in SparkEngine.cpp init or main loop |
-| Networking (UDP) | 7 cpp, 12 h | Large | AreaServer, WorldServer, client prediction, lag comp | ENABLE_NETWORKING=OFF default; Game.cpp:614 refs netMgr but gated |
-| Procedural generation | ProceduralGeneration.cpp | 52KB | Noise, splines, terrain generation | Never instantiated or updated |
-| Destruction | DestructionSystem.cpp | 5.6KB | Destructible objects infrastructure | Never initialized |
-| Cinematic/Sequencer | Sequencer.cpp | 29KB | Full playback, tracks, camera control | Never initialized |
-| Replay system | ReplaySystem.h | Large | Kill cam, spectator replay, full-state recording | Never initialized |
-| Achievement system | AchievementSystem.h | Medium | Stat tracking, unlock conditions, platform bridging | Never initialized |
+### Destruction System
+- **Files:** `Engine/Destruction/DestructionSystem.cpp` (147 lines), `.h` (267 lines)
+- **Test:** `Tests/TestDestructionSystem.cpp` — tests fracture patterns, damage application
+- **Functionality:** Fracture patterns (wood, metal, concrete), debris physics, damage thresholds
+- **Previously deleted** as "never initialized" — complete implementation with built-in presets
 
-### Additional partially-wired:
+---
 
-| System | Status |
-|--------|--------|
-| Localization | Localization.cpp exists but stub-only, never called |
-| Loading screens | LoadingScreen.cpp exists, partially wired |
-| VR | VR.cpp exists, registered via core subsystems — actually WORKING |
-| Stats/telemetry | Working, registered via core subsystems |
+## Systems Deleted (confirmed orphaned/stub)
+
+These systems were deleted because they were genuinely stub-only with no real implementation:
+
+| System | Files | Size | Why Deleted |
+|--------|-------|------|-------------|
+| Streaming (seamless areas) | 3 cpp, 4 h | ~1,000+ lines | Never wired in; stub implementation |
+| Procedural generation | ProceduralGeneration.cpp | 52KB | Never instantiated or updated |
+| Cinematic/Sequencer | Sequencer.cpp | 29KB | Never initialized |
+| Replay system | ReplaySystem.h | Large | Never initialized |
+| Achievement system | AchievementSystem.h | Medium | Never initialized |
+| Content Delivery | ContentDelivery.cpp/h | 337 lines | Stub-only CDN framework, no HTTP |
+| Visual Scripting (2 copies) | 7,343 lines total | 7.3KB | Two independent implementations, neither wired in |
 
 ---
 
@@ -72,27 +81,8 @@ Complete implementations that are NEVER initialized or called:
 
 ---
 
-## Key Findings
+## Notes
 
-1. **17 systems are fully operational** — the engine core is functional for basic game development
-2. **7 systems are ConsoleProcessManager-style orphans** — built but never wired in, adding ~90K+ lines of maintenance burden
-3. **Streaming system** is the largest orphan (~1,000+ lines of HeroEngine-inspired code that nobody calls)
-4. **Networking** is fully implemented but disabled by default; when ENABLE_NETWORKING=ON, it should work
-5. **3 gameplay systems have no engine-level implementation** — inventory, quests, and weapons exist only in SparkGame
-6. **Procedural generation** (52KB) is one of the largest orphaned systems — complete noise/spline/terrain gen that's never used
-
----
-
-## Action Required
-
-**Per CLAUDE.md Anti-Bloat Rules**: Built-but-not-wired systems must be either wired in or deleted. The 7 orphaned systems represent significant dead code that creates false confidence about engine capabilities.
-
-| System | Recommendation |
-|--------|---------------|
-| Streaming | Wire in or delete — critical for claimed "seamless area" feature |
-| Networking | Acceptable as opt-in (ENABLE_NETWORKING); document clearly |
-| Procedural gen | Delete unless terrain system is planned |
-| Destruction | Wire into physics or delete |
-| Cinematic | Wire into editor sequencer panel or delete |
-| Replay | Wire into game module or delete |
-| Achievement | Wire into game module or delete |
+- Networking is fully implemented but opt-in via ENABLE_NETWORKING; acceptable as-is
+- VR system is registered via core subsystems — actually working
+- Loading screens are partially wired

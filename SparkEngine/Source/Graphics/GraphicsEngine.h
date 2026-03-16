@@ -404,24 +404,31 @@ class GraphicsEngine
 #ifdef SPARK_PLATFORM_WINDOWS
     /** @brief Get the pipeline state cache for hash-based D3D11 state deduplication. */
     Spark::Graphics::PipelineStateCache* GetPipelineStateCache() { return &m_pipelineStateCache; }
+    const Spark::Graphics::PipelineStateCache* GetPipelineStateCache() const { return &m_pipelineStateCache; }
 
     /** @brief Get the render target pool for transient RT recycling. */
     Spark::Graphics::RenderTargetPool* GetRenderTargetPool() { return &m_renderTargetPool; }
+    const Spark::Graphics::RenderTargetPool* GetRenderTargetPool() const { return &m_renderTargetPool; }
 
     /** @brief Get the GPU scene buffer for persistent instance data. */
     Spark::Graphics::GPUSceneBuffer* GetGPUSceneBuffer() { return &m_gpuSceneBuffer; }
+    const Spark::Graphics::GPUSceneBuffer* GetGPUSceneBuffer() const { return &m_gpuSceneBuffer; }
 
     /** @brief Get the BVH accelerator for hierarchical frustum culling. */
     Spark::Graphics::BVHAccelerator* GetBVHAccelerator() { return &m_bvhAccelerator; }
+    const Spark::Graphics::BVHAccelerator* GetBVHAccelerator() const { return &m_bvhAccelerator; }
 
     /** @brief Get the constant buffer ring for dynamic CB sub-allocation. */
     Spark::Graphics::ConstantBufferRing* GetConstantBufferRing() { return &m_constantBufferRing; }
+    const Spark::Graphics::ConstantBufferRing* GetConstantBufferRing() const { return &m_constantBufferRing; }
 
     /** @brief Get the GPU debug markers for PIX/RenderDoc annotations. */
     Spark::Graphics::GPUDebugMarkers* GetGPUDebugMarkers() { return &m_gpuDebugMarkers; }
+    const Spark::Graphics::GPUDebugMarkers* GetGPUDebugMarkers() const { return &m_gpuDebugMarkers; }
 
     /** @brief Get the GPU timestamp query system for per-pass timing. */
     Spark::Graphics::GPUTimestampQuery* GetGPUTimestampQuery() { return &m_gpuTimestampQuery; }
+    const Spark::Graphics::GPUTimestampQuery* GetGPUTimestampQuery() const { return &m_gpuTimestampQuery; }
 #endif // SPARK_PLATFORM_WINDOWS
 
     /** @brief Set non-owning physics pointer (called by engine during init) */
