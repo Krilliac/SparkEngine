@@ -31,8 +31,10 @@ using Microsoft::WRL::ComPtr;
 // ---------------------------------------------------------------------------
 // Compatibility logging macros — bridge std::format syntax to SPARK_LOG_*
 // ---------------------------------------------------------------------------
-#define LOG_ERROR(fmt, ...) SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "%s", std::format(fmt, ##__VA_ARGS__).c_str())
-#define LOG_INFO(fmt, ...) SPARK_LOG_INFO(Spark::LogCategory::Graphics, "%s", std::format(fmt, ##__VA_ARGS__).c_str())
+#define LOG_ERROR(fmt, ...)                                                                                            \
+    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "%s", std::format(fmt __VA_OPT__(, ) __VA_ARGS__).c_str())
+#define LOG_INFO(fmt, ...)                                                                                             \
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "%s", std::format(fmt __VA_OPT__(, ) __VA_ARGS__).c_str())
 
 // ---------------------------------------------------------------------------
 // D3D12CalcSubresource — normally provided by d3dx12.h helper header

@@ -49,7 +49,7 @@
         if (_logger.ShouldLog(level, category))                                                                        \
         {                                                                                                              \
             char _sparkLogBuf[4096];                                                                                   \
-            snprintf(_sparkLogBuf, sizeof(_sparkLogBuf), fmt, ##__VA_ARGS__);                                          \
+            snprintf(_sparkLogBuf, sizeof(_sparkLogBuf), fmt __VA_OPT__(, ) __VA_ARGS__);                              \
             _logger.Log(level, category, __FILE__, __LINE__, __FUNCTION__, std::string(_sparkLogBuf));                 \
         }                                                                                                              \
     } while (0)
@@ -66,12 +66,12 @@
 #undef SPARK_LOG_ERROR
 #undef SPARK_LOG_FATAL
 
-#define SPARK_LOG_TRACE(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Trace, cat, fmt, ##__VA_ARGS__)
-#define SPARK_LOG_DEBUG(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Debug, cat, fmt, ##__VA_ARGS__)
-#define SPARK_LOG_INFO(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Info, cat, fmt, ##__VA_ARGS__)
-#define SPARK_LOG_WARN(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Warn, cat, fmt, ##__VA_ARGS__)
-#define SPARK_LOG_ERROR(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Error, cat, fmt, ##__VA_ARGS__)
-#define SPARK_LOG_FATAL(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Fatal, cat, fmt, ##__VA_ARGS__)
+#define SPARK_LOG_TRACE(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Trace, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_LOG_DEBUG(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Debug, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_LOG_INFO(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Info, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_LOG_WARN(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Warn, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_LOG_ERROR(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Error, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define SPARK_LOG_FATAL(cat, fmt, ...) SPARK_LOG(Spark::LogLevel::Fatal, cat, fmt __VA_OPT__(, ) __VA_ARGS__)
 
 // ============================================================================
 // Compile-time stripping for Trace/Debug in Release builds
@@ -99,7 +99,7 @@
         if (!_sparkLogOnceFlag)                                                                                        \
         {                                                                                                              \
             _sparkLogOnceFlag = true;                                                                                  \
-            SPARK_LOG(level, cat, fmt, ##__VA_ARGS__);                                                                 \
+            SPARK_LOG(level, cat, fmt __VA_OPT__(, ) __VA_ARGS__);                                                     \
         }                                                                                                              \
     } while (0)
 
@@ -118,7 +118,7 @@
         if (++_sparkLogCounter >= (N))                                                                                 \
         {                                                                                                              \
             _sparkLogCounter = 0;                                                                                      \
-            SPARK_LOG(level, cat, fmt, ##__VA_ARGS__);                                                                 \
+            SPARK_LOG(level, cat, fmt __VA_OPT__(, ) __VA_ARGS__);                                                     \
         }                                                                                                              \
     } while (0)
 
@@ -135,7 +135,7 @@
     {                                                                                                                  \
         if (cond)                                                                                                      \
         {                                                                                                              \
-            SPARK_LOG(level, cat, fmt, ##__VA_ARGS__);                                                                 \
+            SPARK_LOG(level, cat, fmt __VA_OPT__(, ) __VA_ARGS__);                                                     \
         }                                                                                                              \
     } while (0)
 
@@ -156,7 +156,7 @@
         if (_sparkElapsed >= (_sparkInterval) || _sparkLastLogTime == std::chrono::steady_clock::time_point{})         \
         {                                                                                                              \
             _sparkLastLogTime = _sparkNow;                                                                             \
-            SPARK_LOG(level, cat, fmt, ##__VA_ARGS__);                                                                 \
+            SPARK_LOG(level, cat, fmt __VA_OPT__(, ) __VA_ARGS__);                                                     \
         }                                                                                                              \
     } while (0)
 

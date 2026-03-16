@@ -39,6 +39,7 @@
 #include <DirectXMath.h>
 #endif
 
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <unordered_map>
