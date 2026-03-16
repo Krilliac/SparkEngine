@@ -62,6 +62,13 @@
 #include "Engine/UI/UISystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/Modding/ModSystem.h"
+#include "Utils/ChromeTracing.h"
+#include "Utils/MemoryDebugger.h"
+#include "Utils/FrameInspector.h"
+#include "Utils/Tween.h"
+#include "Utils/DebugDraw.h"
+#include "Utils/DebugOverlay.h"
+#include "Utils/FileLogger.h"
 
 // -----------------------------------------------------------------------------
 // Missing module startup warnings
@@ -102,6 +109,40 @@ static void LogMissingModuleWarnings()
         console.LogWarning("See README.md 'Dependencies' section for details.");
         console.LogWarning("------------------------------------------------------------");
     }
+}
+
+// -----------------------------------------------------------------------------
+// Debug/utility system initialization (shared across all startup paths)
+// -----------------------------------------------------------------------------
+static void InitDebugSystems()
+{
+    Spark::FileLogger::GetInstance().Initialize("Logs");
+    Spark::ChromeTracing::GetInstance().Start();
+#ifndef NDEBUG
+    Spark::MemoryDebugger::GetInstance().SetEnabled(true);
+#endif
+    Spark::DebugOverlay::GetInstance().SetEnabled(true);
+    Spark::DebugDrawManager::GetInstance().SetEnabled(true);
+}
+
+static void UpdateDebugSystems(float dt)
+{
+    Spark::TweenManager::GetInstance().Update(dt);
+    Spark::DebugDrawManager::GetInstance().Flush(dt);
+    Spark::DebugOverlay::GetInstance().Update(dt);
+    Spark::FrameInspector::GetInstance().OnFrameEnd();
+}
+
+static void ShutdownDebugSystems()
+{
+    Spark::TweenManager::GetInstance().KillAll();
+    Spark::DebugDrawManager::GetInstance().Clear();
+#ifndef NDEBUG
+    Spark::MemoryDebugger::GetInstance().PrintLeakReport();
+#endif
+    Spark::ChromeTracing::GetInstance().SaveToFile("spark_trace.json");
+    Spark::ChromeTracing::GetInstance().Stop();
+    Spark::FileLogger::GetInstance().Shutdown();
 }
 
 // -----------------------------------------------------------------------------
@@ -296,6 +337,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             console.LogSuccess("Headless server console initialized");
 
         Spark::ConsoleProcessManager::GetInstance().Initialize();
+        InitDebugSystems();
 
         if (LoadGameModules(*g_moduleManager, lpCmdLine))
         {
@@ -332,6 +374,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             if (g_moduleManager && g_moduleManager->HasModules())
                 g_moduleManager->UpdateAll(dt);
 
+            UpdateDebugSystems(dt);
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
 
@@ -341,6 +384,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         }
 
         // Shutdown
+        ShutdownDebugSystems();
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
 
@@ -488,6 +532,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // 8b. Log warnings for missing third-party modules
     LogMissingModuleWarnings();
 
+    // 8c. Initialize debug/utility systems
+    InitDebugSystems();
+
     // 9. Message loop + tick
     HACCEL accel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SparkEngine));
     MSG msg = {};
@@ -525,12 +572,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
                 g_graphics->EndFrame();
             }
 
+            UpdateDebugSystems(dt);
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
         }
     }
 
     // 10. Shutdown
+    ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
 
@@ -1288,6 +1337,13 @@ void RegisterEngineConsoleCommands()
 #include "Engine/UI/UISystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/Modding/ModSystem.h"
+#include "Utils/ChromeTracing.h"
+#include "Utils/MemoryDebugger.h"
+#include "Utils/FrameInspector.h"
+#include "Utils/Tween.h"
+#include "Utils/DebugDraw.h"
+#include "Utils/DebugOverlay.h"
+#include "Utils/FileLogger.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -1347,6 +1403,40 @@ static void LogMissingModuleWarnings()
         console.LogWarning("See README.md 'Dependencies' section for details.");
         console.LogWarning("------------------------------------------------------------");
     }
+}
+
+// -----------------------------------------------------------------------------
+// Debug/utility system initialization (shared across all startup paths)
+// -----------------------------------------------------------------------------
+static void InitDebugSystems()
+{
+    Spark::FileLogger::GetInstance().Initialize("Logs");
+    Spark::ChromeTracing::GetInstance().Start();
+#ifndef NDEBUG
+    Spark::MemoryDebugger::GetInstance().SetEnabled(true);
+#endif
+    Spark::DebugOverlay::GetInstance().SetEnabled(true);
+    Spark::DebugDrawManager::GetInstance().SetEnabled(true);
+}
+
+static void UpdateDebugSystems(float dt)
+{
+    Spark::TweenManager::GetInstance().Update(dt);
+    Spark::DebugDrawManager::GetInstance().Flush(dt);
+    Spark::DebugOverlay::GetInstance().Update(dt);
+    Spark::FrameInspector::GetInstance().OnFrameEnd();
+}
+
+static void ShutdownDebugSystems()
+{
+    Spark::TweenManager::GetInstance().KillAll();
+    Spark::DebugDrawManager::GetInstance().Clear();
+#ifndef NDEBUG
+    Spark::MemoryDebugger::GetInstance().PrintLeakReport();
+#endif
+    Spark::ChromeTracing::GetInstance().SaveToFile("spark_trace.json");
+    Spark::ChromeTracing::GetInstance().Stop();
+    Spark::FileLogger::GetInstance().Shutdown();
 }
 
 static std::atomic<bool> g_shutdownRequested{false};
@@ -1672,6 +1762,7 @@ int main(int argc, char* argv[])
             console.LogSuccess("Headless server console initialized");
 
         Spark::ConsoleProcessManager::GetInstance().Initialize();
+        InitDebugSystems();
 
         if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
         {
@@ -1701,6 +1792,7 @@ int main(int argc, char* argv[])
             if (g_moduleManager && g_moduleManager->HasModules())
                 g_moduleManager->UpdateAll(dt);
 
+            UpdateDebugSystems(dt);
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
 
@@ -1709,6 +1801,7 @@ int main(int argc, char* argv[])
                 std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
         }
 
+        ShutdownDebugSystems();
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
 
@@ -1880,6 +1973,9 @@ int main(int argc, char* argv[])
     // 8b. Log warnings for missing third-party modules
     LogMissingModuleWarnings();
 
+    // 8c. Initialize debug/utility systems
+    InitDebugSystems();
+
     // 9. Main event loop (SDL2)
     console.LogInfo("Starting main engine loop (SDL2)...");
     bool running = true;
@@ -2006,11 +2102,13 @@ int main(int argc, char* argv[])
             g_graphics->EndFrame();
         }
 
+        UpdateDebugSystems(dt);
         Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
         console.Update();
     }
 
     // 10. Shutdown
+    ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
 
@@ -2085,6 +2183,7 @@ int main(int argc, char* argv[])
     auto& console = Spark::SimpleConsole::GetInstance();
     console.Initialize();
     Spark::ConsoleProcessManager::GetInstance().Initialize();
+    InitDebugSystems();
     console.LogWarning("No SDL2 - engine will exit after initialization.");
     LogMissingModuleWarnings();
 
@@ -2100,11 +2199,13 @@ int main(int argc, char* argv[])
         float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
         if (g_moduleManager && g_moduleManager->HasModules())
             g_moduleManager->UpdateAll(dt);
+        UpdateDebugSystems(dt);
         Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
         console.Update();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 
+    ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
 
     if (g_moduleManager)

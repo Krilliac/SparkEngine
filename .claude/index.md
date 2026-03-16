@@ -47,7 +47,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Doing things well (Patterns & Optimizations)
 
-**CRITICAL: 47 files violate size limits, 127 classes exceed method limit, 17 orphaned singletons** → See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md). 5 dead files (1,607 lines), 10,000+ removable lines total.
+**CRITICAL: 47 files violate size limits, 127 classes exceed method limit, 10 orphaned singletons (7 wired in this session)** → See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md). All 7 dead utility headers now wired in. Remaining: DecalSystem, DXRSupport, PlatformInputManager, NavMesh.
 
 **CRITICAL: 30 orphaned headers never included anywhere (~11K lines)** → See [orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md).
 

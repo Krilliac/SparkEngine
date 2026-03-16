@@ -41,7 +41,7 @@ TEST(ChromeTracing_ScopeGuard)
     tracer.Start();
 
     {
-        SPARK_TRACE_SCOPE("ScopedTest");
+        SPARK_CHROME_TRACE_SCOPE("ScopedTest");
         // Some work
         volatile int x = 0;
         for (int i = 0; i < 100; i++)
