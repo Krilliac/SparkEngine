@@ -346,12 +346,12 @@ XMFLOAT2 GamepadInput::ApplyDeadZone(short rawX, short rawY, float deadZone) con
     if (m_deadZoneMode == DeadZoneMode::Circular)
     {
         float magnitude = sqrtf(x * x + y * y);
-        if (magnitude < deadZone)
+        if (magnitude <= deadZone)
             return {0, 0};
 
         // Remap from [deadZone..1] to [0..1]
-        float normalized = (magnitude - deadZone) / (1.0f - deadZone);
-        normalized = std::clamp(normalized, 0.0f, 1.0f);
+        float range = 1.0f - deadZone;
+        float normalized = (range > 0.0f) ? std::clamp((magnitude - deadZone) / range, 0.0f, 1.0f) : 0.0f;
         float scale = normalized / magnitude;
         return {x * scale, y * scale};
     }

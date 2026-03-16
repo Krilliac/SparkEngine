@@ -68,23 +68,22 @@ Manual `pFactory->Release()` calls instead of ComPtr. Not exception-safe.
 
 ### Integer Underflow: `size() - 1` on Empty Containers
 
-| File | Line | Expression |
-|------|------|-----------|
-| `Engine/Replay/ReplaySystem.cpp` | 358 | `frames.size() - 1` (wraps to SIZE_MAX if empty) |
-| `Engine/Animation/AnimationCompression.cpp` | 203, 235, 567, 597 | `track.times.size() - 1` |
-| `Engine/Loading/LoadingScreen.cpp` | 134 | `size() - 1` |
-| `Graphics/LightingSystem.cpp` | 679, 2016 | `size() - 1` |
+Most reported instances are already guarded by early-return checks before the arithmetic:
+- `ReplaySystem.cpp:358` — guarded by empty check at line 347
+- `AnimationCompression.cpp:203,235` — guarded by empty checks at lines 191, 224
+- `AnimationCompression.cpp:567,597` — guarded by `size() <= 2` checks
+- `LoadingScreen.cpp:134` — guarded by empty check at line 129
 
-**Fix:** Add `if (container.empty()) return;` guard before arithmetic.
+**FIXED (2026-03-16):** `LightingSystem.cpp` Console_CreateLight() — both instances now check `m_lights.empty()` after `CreateLight()` before subtracting.
 
-### Division by Zero Risks
+### Division by Zero Risks — FIXED (2026-03-16)
 
-| File | Line | Expression |
-|------|------|-----------|
-| `Graphics/WeatherSystem.h` | 272 | `dt / m_transitionDuration` |
-| `Input/GamepadInput.cpp` | 355 | `normalized / magnitude` |
-| `Physics/ClothSimulation.cpp` | 34 | `mass / (width * height)` |
-| `Physics/PhysicsSystem.cpp` | 500 | Float equality check on zero |
+| File | Expression | Fix |
+|------|-----------|-----|
+| `Graphics/WeatherSystem.h` | `dt / m_transitionDuration` | **FIXED** — ternary guard, instant transition if duration is 0 |
+| `Input/GamepadInput.cpp` | `normalized / magnitude` | **FIXED** — changed `<` to `<=` in deadzone check; guarded range division |
+| `Physics/ClothSimulation.cpp` | `mass / (width * height)` | **FIXED** — early return if width or height <= 0 |
+| `Physics/PhysicsSystem.cpp` | Float equality check on zero | Already safe — guarded by `invMass == 0` check |
 
 ### Silent Catch Blocks
 
