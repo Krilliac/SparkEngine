@@ -27,6 +27,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | **11 orphaned tests, 14 untested subsystems** | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-16 |
 | **8 dead CMake options, duplicate imgui** | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | Active | 2026-03-16 |
 | **26 singletons (12 orphaned), 74-member god object** | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | Active | 2026-03-16 |
+| **66 oversized functions, 7 private-method violations, 4 duplicate functions** | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
 
 ## Quick Reference by Topic
 
@@ -61,6 +62,10 @@ _Read this at every session start (after git sync). Each row links to a detailed
 **MEDIUM: 8 dead CMake build options** → ENABLE_LUA, ENABLE_PHYSX (no backend), 6 flags with no code guards. See [cmake-build-audit.md](knowledge/cmake-build-audit.md).
 
 **INFO: 26 singletons total (12 orphaned), GraphicsEngine has 74 member variables** → See [globals-singletons-audit.md](knowledge/globals-singletons-audit.md).
+
+**HIGH: 66 functions exceed 50-line limit, 4 duplicate functions in same files** → RegisterEngineConsoleCommands (555 lines), RenderMainMenuBar (514), main() (488). See [code-quality-violations.md](knowledge/code-quality-violations.md).
+
+**HIGH: 7 classes exceed 10 private-method limit** → PostProcessingPipeline (84 private methods!), PhysicsSystem (42), SimpleConsole (42). See [code-quality-violations.md](knowledge/code-quality-violations.md).
 
 **CRITICAL: SparkConsole needs refactoring** → 6,000+ lines of embedded UI bloat that should be in SparkConsole.exe instead. See [sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) for 2-session plan.
 
