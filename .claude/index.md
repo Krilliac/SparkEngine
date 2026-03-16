@@ -28,6 +28,9 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | **8 dead CMake options, duplicate imgui** | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | Active | 2026-03-16 |
 | **26 singletons (12 orphaned), 74-member god object** | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | Active | 2026-03-16 |
 | **66 oversized functions, 7 private-method violations, 4 duplicate functions** | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
+| **SECURITY: 2 critical vulns (DLL injection, command injection)** | [knowledge/security-vulnerabilities.md](knowledge/security-vulnerabilities.md) | Issue | Active | 2026-03-16 |
+| **THREADING: 30+ unprotected bools, EventBus race, lock ordering** | [knowledge/thread-safety-issues.md](knowledge/thread-safety-issues.md) | Issue | Active | 2026-03-16 |
+| **MEMORY/ERRORS: naked new/delete, 15+ unchecked HRESULT, underflows** | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Active | 2026-03-16 |
 
 ## Quick Reference by Topic
 
@@ -88,6 +91,22 @@ _Read this at every session start (after git sync). Each row links to a detailed
 **About to rebase** → Check `git log --oneline HEAD..origin/Working | wc -l` first. See [build-optimizations.md](knowledge/build-optimizations.md).
 
 **Verify CMake preset flags without configuring** → `cmake --preset linux-gcc-release -N`. See [build-optimizations.md](knowledge/build-optimizations.md).
+
+### Security & correctness (Issues)
+
+**CRITICAL: DLL injection + command injection** → LoadLibraryA() without path validation in GameModuleLoader/ModuleManager/EditorPluginManager. popen() with unsanitized user input in VersionControlSystem. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
+
+**CRITICAL: Path traversal in SaveSystem and SceneManager** → Save slot names and scene paths not validated; `../` sequences can read/write arbitrary files. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
+
+**HIGH: 30+ subsystems have unprotected `bool m_initialized`** → Data race if checked from multiple threads. Mechanical fix: convert to `std::atomic<bool>`. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
+
+**HIGH: EventBus::m_nextId is not atomic** → Data race on subscription ID generation across event types. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
+
+**HIGH: 15+ unchecked HRESULT calls in D3D11/D3D12** → Silent failures cause null pointer crashes later. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
+
+**HIGH: 6+ integer underflows from `size() - 1` on empty containers** → Wraps to SIZE_MAX, causes out-of-bounds access. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
+
+**MEDIUM: 70+ const-correctness violations** → Getter methods missing const qualifier, especially in Graphics subsystem. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
 
 ### Understanding the codebase (Observations)
 
