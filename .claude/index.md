@@ -35,6 +35,9 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | **Engine: 17 working, 7 orphaned systems (~90K+ dead lines)** | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-16 |
 | **Editor: 14 working, 8 unshown panels (~10K dead lines)** | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | Active | 2026-03-16 |
 | **SparkGame: 75% functional FPS, no AI enemies** | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
+| **SDK: ECS not exposed, unique_ptr DLL export, IGameModule gap** | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | Active | 2026-03-16 |
+| **Docs: 53 wiki pages, 245/246 Doxygen, 10 critical gaps** | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-16 |
+| **ThirdParty: 6 uninitialized submodules, curl dead code** | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-16 |
 
 ## Quick Reference by Topic
 
@@ -127,6 +130,14 @@ _Read this at every session start (after git sync). Each row links to a detailed
 **Editor**: 14 working panels (viewport, inspector, hierarchy, assets, physics debug, console, profiler, animation, PIE, undo, build, stats, toolbar). 8 built-not-shown (~10K lines): MaterialEditor (1,832), DialogueEditor (1,781), AssetDependency (1,551), AudioMixer (1,467), ParticleEditor (1,235), RuntimeInspector (1,003). 4 duplicate panel pairs. Missing: shader graph, AI debug, cinematic editor, project settings. See [editor-functionality-status.md](knowledge/editor-functionality-status.md).
 
 **SparkGame**: 75% functional FPS framework. Working: module loading, player controller, weapons (18 types), HUD (production quality), vehicles (70%), level loading. Missing: AI enemies (0%). SparkConsole.exe and SparkShaderCompiler.exe are 100% functional tools. See [sparkgame-module-status.md](knowledge/sparkgame-module-status.md).
+
+### SDK, docs, and dependencies
+
+**SDK/API**: 6 headers (365 LOC), 18 subsystem getters via IEngineContext. CRITICAL: `std::unique_ptr<Game>` exported across DLL boundary (ABI risk). ECS not exposed (major gap). IGameModule.h is internal but used as public. See [sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md).
+
+**Documentation**: 53 wiki pages (29,583 lines), 245/246 headers with Doxygen (99.6%). Missing: threading model, networking protocol spec, asset format specs, 19 editor subsystem pages. README says "35 tests" but CLAUDE.md says "82+". See [documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md).
+
+**Third-party deps**: 7 deps total, all permissive licenses (MIT/ZLib). ALL 6 git submodules uninitialized — build silently disables features. curl is dead code (declared but never built/linked). No version tracking file. Duplicate imgui target. See [thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md).
 
 ---
 
