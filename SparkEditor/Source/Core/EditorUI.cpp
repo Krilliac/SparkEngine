@@ -48,6 +48,8 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace SparkEditor
@@ -1395,7 +1397,13 @@ namespace SparkEditor
 #ifdef _WIN32
                     ShellExecuteA(nullptr, "open", "docs", nullptr, nullptr, SW_SHOWNORMAL);
 #else
-                    system("xdg-open docs/ &");
+                    // Use fork/execlp instead of system() to avoid shell injection risks
+                    pid_t pid = fork();
+                    if (pid == 0)
+                    {
+                        execlp("xdg-open", "xdg-open", "docs/", nullptr);
+                        _exit(1);
+                    }
 #endif
                     ShowNotification("Opening documentation...", "info", 2.0f);
                 }

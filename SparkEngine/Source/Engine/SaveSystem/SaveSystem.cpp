@@ -601,6 +601,8 @@ namespace Spark
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(), "SaveSystem::Save — slotName must not be empty");
+        if (!IsValidSlotName(slotName))
+            return false;
         EventBus::Global().Publish<SaveBeginEvent>({slotName});
         SaveData data = SerializeWorld(world, metadata);
         bool ok = WriteToFile(GetSavePath(slotName), data);
@@ -612,6 +614,8 @@ namespace Spark
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(), "SaveSystem::Load — slotName must not be empty");
+        if (!IsValidSlotName(slotName))
+            return false;
         EventBus::Global().Publish<LoadBeginEvent>({slotName});
         SaveData data;
         if (!ReadFromFile(GetSavePath(slotName), data))
@@ -649,10 +653,12 @@ namespace Spark
         SPARK_TRACE_ENTER(Spark::LogCategory::Save);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !slotName.empty(),
                           "SaveSystem::DeleteSave — slotName must not be empty");
+        if (!IsValidSlotName(slotName))
+            return false;
         try
         {
             std::string path = GetSavePath(slotName);
-            if (!fs::exists(path))
+            if (path.empty() || !fs::exists(path))
                 return true;
             return fs::remove(path);
         }
@@ -1133,8 +1139,26 @@ namespace Spark
         }
     }
 
+    bool SaveSystem::IsValidSlotName(const std::string& slotName)
+    {
+        if (slotName.empty() || slotName.size() > 64)
+            return false;
+        for (char c : slotName)
+        {
+            if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-')
+                return false;
+        }
+        return true;
+    }
+
     std::string SaveSystem::GetSavePath(const std::string& slotName) const
     {
+        if (!IsValidSlotName(slotName))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SaveSystem: Invalid slot name '%s' — rejected",
+                            slotName.c_str());
+            return {};
+        }
         return m_saveDirectory + "/" + slotName + ".spark_save";
     }
 

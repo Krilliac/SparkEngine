@@ -66,6 +66,15 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
     SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Scene, !filepath.empty(),
                       "SceneManager::LoadScene — filepath must not be empty");
+
+    // Security: reject path traversal attempts
+    std::string narrowCheck = WideToNarrow(filepath);
+    if (narrowCheck.find("..") != std::string::npos)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Path traversal rejected: " + filepath, L"ERROR");
+        return false;
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager::LoadScene called. filepath=" + filepath, L"OPERATION");
 
     auto ext = std::filesystem::path(filepath).extension();

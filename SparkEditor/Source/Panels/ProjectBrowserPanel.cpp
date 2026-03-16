@@ -525,8 +525,12 @@ namespace SparkEditor
             }
             if (status == 0 && !result.empty())
             {
-                outPath = result;
-                return true;
+                // Validate that the returned path is an existing directory
+                if (std::filesystem::is_directory(result))
+                {
+                    outPath = result;
+                    return true;
+                }
             }
         }
         return false;

@@ -112,6 +112,13 @@ bool ModuleManager::LoadModule(const std::string& path)
 
     auto& console = Spark::SimpleConsole::GetInstance();
 
+    // Security: reject path traversal sequences
+    if (path.find("..") != std::string::npos)
+    {
+        console.LogError("Module path rejected — contains '..' traversal: " + path);
+        return false;
+    }
+
     // Load the shared library
     void* handle = nullptr;
 #ifdef _WIN32
