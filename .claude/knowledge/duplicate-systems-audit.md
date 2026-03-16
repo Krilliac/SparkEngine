@@ -2,36 +2,22 @@
 
 **Last updated:** 2026-03-16
 **Type:** Observation
-**Status:** Active
-**Severity:** Critical
+**Status:** Partially Resolved
+**Severity:** Medium (was Critical — 2 of 3 ODR risks fixed)
 
 ## Description
 
-5 confirmed cases of duplicate or parallel system implementations. 3 carry ODR (One Definition Rule) violation risk. 2 are architectural duplications that fragment functionality.
+5 confirmed cases of duplicate or parallel system implementations. 2 ODR risks have been fixed. 1 architectural duplication remains.
 
 ## Critical: ODR Violation Risks
 
-### 1. AudioMixer — Two Classes, Same Name, Same Namespace
+### 1. AudioMixer — Two Classes, Same Name, Same Namespace — RESOLVED
 
-| File | Pattern |
-|------|---------|
-| `Audio/AudioMixer.h` (331 lines) | Instance-based; Initialize()/Update() |
-| `Audio/MusicManager.h` line 57 (part of 292 lines) | Singleton; SetBusVolume/FadeBus |
+**Fix applied:** MusicManager's AudioMixer was renamed to `AudioBusMixer` in a prior session.
 
-Both define `class AudioMixer` in `namespace Spark::Audio`. Including both headers in one translation unit is an ODR violation.
+### 2. AnimationStateMachine — Defined in Two Headers — RESOLVED
 
-**Fix:** Rename MusicManager's AudioMixer to `AudioBusMixer`.
-
-### 2. AnimationStateMachine — Defined in Two Headers
-
-| File | Context |
-|------|---------|
-| `Engine/Animation/AnimationStateMachine.h` (108+ lines) | Standalone dedicated header |
-| `Engine/Animation/AnimationSystem.h` (line 560+) | Embedded within AnimationSystem |
-
-Same class defined in both files. Including both causes ODR violation.
-
-**Fix:** Remove the definition from AnimationSystem.h; keep only in AnimationStateMachine.h and `#include` it.
+**Fix applied:** The standalone `AnimationStateMachine.h` header was deleted in a prior session. The canonical definition lives in `AnimationSystem.h`.
 
 ### 3. SimpleConsole — Engine and Editor Versions
 
@@ -72,11 +58,11 @@ Different namespaces, but identical class names cause confusion when reading cod
 
 ## Summary
 
-| Issue | Severity | Fix Effort |
-|-------|----------|-----------|
-| AudioMixer ODR risk | Critical | 15 min (rename) |
-| AnimationStateMachine ODR risk | Critical | 15 min (remove duplicate) |
-| Dual EventBus implementations | High | 1-2 hours (merge) |
+| Issue | Severity | Status |
+|-------|----------|--------|
+| AudioMixer ODR risk | Critical | **RESOLVED** (renamed to AudioBusMixer) |
+| AnimationStateMachine ODR risk | Critical | **RESOLVED** (standalone header deleted) |
+| Dual EventBus implementations | High | OPEN (merge best of both) |
 | SimpleConsole duplication | High | Documented, bridge exists |
-| Dual VisualScripting systems | High | Multi-session refactor |
-| SceneManager naming | Medium | Rename one |
+| Dual VisualScripting systems | N/A | **RESOLVED** (both deleted as dead code) |
+| SceneManager naming | Medium | OPEN (cosmetic) |

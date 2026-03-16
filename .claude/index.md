@@ -24,14 +24,14 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | **30 orphaned headers (11K+ dead lines)** | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | Active | 2026-03-16 |
 | **Editor panels: 3 restored, 8 deleted** | [knowledge/editor-panel-bloat.md](knowledge/editor-panel-bloat.md) | Observation | Partially Resolved | 2026-03-16 |
 | **Feature restoration: 5 wrongly deleted features restored** | [knowledge/feature-restoration-2026-03-16.md](knowledge/feature-restoration-2026-03-16.md) | Decision | Resolved | 2026-03-16 |
-| **5 duplicate systems, 3 ODR risks** | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | Active | 2026-03-16 |
+| **5 duplicate systems, 2 of 3 ODR risks fixed** | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | Partially Resolved | 2026-03-16 |
 | **11 orphaned tests, 14 untested subsystems** | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-16 |
 | **8 dead CMake options, duplicate imgui** | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | Active | 2026-03-16 |
 | **26 singletons (12 orphaned), 74-member god object** | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | Active | 2026-03-16 |
 | **66 oversized functions, 7 private-method violations, 4 duplicate functions** | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
-| **SECURITY: 2 critical vulns (DLL injection, command injection)** | [knowledge/security-vulnerabilities.md](knowledge/security-vulnerabilities.md) | Issue | Active | 2026-03-16 |
-| **THREADING: 30+ unprotected bools, EventBus race, lock ordering** | [knowledge/thread-safety-issues.md](knowledge/thread-safety-issues.md) | Issue | Active | 2026-03-16 |
-| **MEMORY/ERRORS: naked new/delete, 15+ unchecked HRESULT, underflows** | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Active | 2026-03-16 |
+| **SECURITY: all 9 vulns fixed** | [knowledge/security-vulnerabilities.md](knowledge/security-vulnerabilities.md) | Issue | Resolved | 2026-03-16 |
+| **THREADING: all critical races fixed** | [knowledge/thread-safety-issues.md](knowledge/thread-safety-issues.md) | Issue | Resolved | 2026-03-16 |
+| **MEMORY/ERRORS: HRESULT, underflows, div-by-zero fixed; 3 low-risk OPEN** | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Mostly Resolved | 2026-03-16 |
 | **Rendering: 17 working, 12 header-only stubs (~15K dead lines)** | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | Active | 2026-03-16 |
 | **Engine: 17 working, 7 orphaned systems (~90K+ dead lines)** | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-16 |
 | **Editor: 14 working, 8 unshown panels (~10K dead lines)** | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | Active | 2026-03-16 |
@@ -66,7 +66,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **CRITICAL: 8 editor panels built but never shown (11,257 lines)** → MaterialEditor, Dialogue, AssetDependency, AudioMixer, Profiler, Particle, RuntimeInspector, PlayModeToolbar. Plus engine-depends-on-editor violation in AllEnums.h. See [editor-panel-bloat.md](knowledge/editor-panel-bloat.md).
 
-**HIGH: 3 ODR violation risks** → AudioMixer (2 defs), AnimationStateMachine (2 defs), dual EventBus implementations. See [duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md).
+**PARTIALLY RESOLVED: ODR risks** → AudioMixer renamed (fixed), AnimationStateMachine deduped (fixed), dual EventBus still open. See [duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md).
 
 **MEDIUM: 11 orphaned tests not in CMake, 14 untested subsystems** → See [test-suite-audit.md](knowledge/test-suite-audit.md).
 
@@ -102,19 +102,11 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Security & correctness (Issues)
 
-**CRITICAL: DLL injection + command injection** → LoadLibraryA() without path validation in GameModuleLoader/ModuleManager/EditorPluginManager. popen() with unsanitized user input in VersionControlSystem. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
+**RESOLVED: Security vulnerabilities (9/9 fixed)** → DLL injection, command injection, path traversal, deserialization — all patched. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
 
-**CRITICAL: Path traversal in SaveSystem and SceneManager** → Save slot names and scene paths not validated; `../` sequences can read/write arbitrary files. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
+**RESOLVED: Thread safety** → 11 highest-risk `atomic<bool>` conversions done, EventBus m_nextId atomic, recursion guard added, lock ordering documented. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
 
-**HIGH: 30+ subsystems have unprotected `bool m_initialized`** → Data race if checked from multiple threads. Mechanical fix: convert to `std::atomic<bool>`. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
-
-**HIGH: EventBus::m_nextId is not atomic** → Data race on subscription ID generation across event types. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
-
-**HIGH: 15+ unchecked HRESULT calls in D3D11/D3D12** → Silent failures cause null pointer crashes later. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
-
-**HIGH: 6+ integer underflows from `size() - 1` on empty containers** → Wraps to SIZE_MAX, causes out-of-bounds access. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
-
-**MEDIUM: 70+ const-correctness violations** → Getter methods missing const qualifier, especially in Graphics subsystem. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
+**MOSTLY RESOLVED: Memory/error handling** → HRESULT, underflows, div-by-zero, const-correctness all fixed. 3 low-risk items remain open (naked new in Physics, RHI .release() pattern, COM manual release). See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
 
 ### Understanding the codebase (Observations)
 
