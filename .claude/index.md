@@ -18,8 +18,26 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
 | Build and CI workflow speedups | [knowledge/build-optimizations.md](knowledge/build-optimizations.md) | Optimization | Active | 2026-03-14 |
 | AI bloat pattern and countermeasures | [knowledge/ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md) | Observation | Active | 2026-03-14 |
-| **Codebase bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-14.md](knowledge/codebase-bloat-audit-2026-03-14.md) | Observation | Active | 2026-03-14 |
-| **Extended bloat audit — dead code, ODR, duplicate inits** | [knowledge/bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md) | Observation | Active | 2026-03-14 |
+| Codebase bloat audit (March 14) | [knowledge/codebase-bloat-audit-2026-03-14.md](knowledge/codebase-bloat-audit-2026-03-14.md) | Observation | Superseded | 2026-03-14 |
+| Extended bloat audit (March 14) | [knowledge/bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md) | Observation | Superseded | 2026-03-14 |
+| **Comprehensive bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-15 |
+| **30 orphaned headers (11K+ dead lines)** | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | Active | 2026-03-16 |
+| **8 unused editor panels (11K+ dead lines)** | [knowledge/editor-panel-bloat.md](knowledge/editor-panel-bloat.md) | Observation | Active | 2026-03-16 |
+| **5 duplicate systems, 3 ODR risks** | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | Active | 2026-03-16 |
+| **11 orphaned tests, 14 untested subsystems** | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-16 |
+| **8 dead CMake options, duplicate imgui** | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | Active | 2026-03-16 |
+| **26 singletons (12 orphaned), 74-member god object** | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | Active | 2026-03-16 |
+| **66 oversized functions, 7 private-method violations, 4 duplicate functions** | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
+| **SECURITY: 2 critical vulns (DLL injection, command injection)** | [knowledge/security-vulnerabilities.md](knowledge/security-vulnerabilities.md) | Issue | Active | 2026-03-16 |
+| **THREADING: 30+ unprotected bools, EventBus race, lock ordering** | [knowledge/thread-safety-issues.md](knowledge/thread-safety-issues.md) | Issue | Active | 2026-03-16 |
+| **MEMORY/ERRORS: naked new/delete, 15+ unchecked HRESULT, underflows** | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Active | 2026-03-16 |
+| **Rendering: 17 working, 12 header-only stubs (~15K dead lines)** | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | Active | 2026-03-16 |
+| **Engine: 17 working, 7 orphaned systems (~90K+ dead lines)** | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-16 |
+| **Editor: 14 working, 8 unshown panels (~10K dead lines)** | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | Active | 2026-03-16 |
+| **SparkGame: 75% functional FPS, no AI enemies** | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
+| **SDK: ECS not exposed, unique_ptr DLL export, IGameModule gap** | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | Active | 2026-03-16 |
+| **Docs: 53 wiki pages, 245/246 Doxygen, 10 critical gaps** | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-16 |
+| **ThirdParty: 6 uninitialized submodules, curl dead code** | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-16 |
 
 ## Quick Reference by Topic
 
@@ -41,9 +59,23 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Doing things well (Patterns & Optimizations)
 
-**CRITICAL: 22 files violate size limits** → See [codebase-bloat-audit-2026-03-14.md](knowledge/codebase-bloat-audit-2026-03-14.md). Largest: SparkConsole.cpp (6,996 lines), GraphicsEngine.cpp (4,579), MaterialSystem.cpp (4,326).
+**CRITICAL: 47 files violate size limits, 127 classes exceed method limit, 17 orphaned singletons** → See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md). 5 dead files (1,607 lines), 10,000+ removable lines total.
 
-**CRITICAL: 3 dead utility headers, ODR risk, duplicate inits** → ChromeTracing.h/MemoryDebugger.h/FrameInspector.h (1,052 lines, 0 usages). Two AudioMixer classes in same namespace (ODR risk). SparkEngine.cpp creates PhysicsSystem/Graphics 3+ times. See [bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md).
+**CRITICAL: 30 orphaned headers never included anywhere (~11K lines)** → 19 graphics headers, 3 engine, 3 utils, 4 editor. See [orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md).
+
+**CRITICAL: 8 editor panels built but never shown (11,257 lines)** → MaterialEditor, Dialogue, AssetDependency, AudioMixer, Profiler, Particle, RuntimeInspector, PlayModeToolbar. Plus engine-depends-on-editor violation in AllEnums.h. See [editor-panel-bloat.md](knowledge/editor-panel-bloat.md).
+
+**HIGH: 3 ODR violation risks** → AudioMixer (2 defs), AnimationStateMachine (2 defs), dual EventBus implementations. See [duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md).
+
+**MEDIUM: 11 orphaned tests not in CMake, 14 untested subsystems** → See [test-suite-audit.md](knowledge/test-suite-audit.md).
+
+**MEDIUM: 8 dead CMake build options** → ENABLE_LUA, ENABLE_PHYSX (no backend), 6 flags with no code guards. See [cmake-build-audit.md](knowledge/cmake-build-audit.md).
+
+**INFO: 26 singletons total (12 orphaned), GraphicsEngine has 74 member variables** → See [globals-singletons-audit.md](knowledge/globals-singletons-audit.md).
+
+**HIGH: 66 functions exceed 50-line limit, 4 duplicate functions in same files** → RegisterEngineConsoleCommands (555 lines), RenderMainMenuBar (514), main() (488). See [code-quality-violations.md](knowledge/code-quality-violations.md).
+
+**HIGH: 7 classes exceed 10 private-method limit** → PostProcessingPipeline (84 private methods!), PhysicsSystem (42), SimpleConsole (42). See [code-quality-violations.md](knowledge/code-quality-violations.md).
 
 **CRITICAL: SparkConsole needs refactoring** → 6,000+ lines of embedded UI bloat that should be in SparkConsole.exe instead. See [sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) for 2-session plan.
 
@@ -67,11 +99,45 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **Verify CMake preset flags without configuring** → `cmake --preset linux-gcc-release -N`. See [build-optimizations.md](knowledge/build-optimizations.md).
 
+### Security & correctness (Issues)
+
+**CRITICAL: DLL injection + command injection** → LoadLibraryA() without path validation in GameModuleLoader/ModuleManager/EditorPluginManager. popen() with unsanitized user input in VersionControlSystem. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
+
+**CRITICAL: Path traversal in SaveSystem and SceneManager** → Save slot names and scene paths not validated; `../` sequences can read/write arbitrary files. See [security-vulnerabilities.md](knowledge/security-vulnerabilities.md).
+
+**HIGH: 30+ subsystems have unprotected `bool m_initialized`** → Data race if checked from multiple threads. Mechanical fix: convert to `std::atomic<bool>`. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
+
+**HIGH: EventBus::m_nextId is not atomic** → Data race on subscription ID generation across event types. See [thread-safety-issues.md](knowledge/thread-safety-issues.md).
+
+**HIGH: 15+ unchecked HRESULT calls in D3D11/D3D12** → Silent failures cause null pointer crashes later. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
+
+**HIGH: 6+ integer underflows from `size() - 1` on empty containers** → Wraps to SIZE_MAX, causes out-of-bounds access. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
+
+**MEDIUM: 70+ const-correctness violations** → Getter methods missing const qualifier, especially in Graphics subsystem. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
+
 ### Understanding the codebase (Observations)
 
 **Networking/graphics don't compile** → Likely disabled by CMake toggles. See [codebase-observations.md](knowledge/codebase-observations.md).
 
 **Using legacy globals like `g_graphics`** → Deprecated; use `EngineContext`. See [codebase-observations.md](knowledge/codebase-observations.md).
+
+### Functional audit — what works vs scaffolding
+
+**Rendering pipeline**: 17 features working (D3D11, forward/deferred/forward+, materials, lighting, particles, decals, LOD, FSR/DLSS). 12 header-only stubs (~15K dead lines): sky, water, GI, shadow atlas, render graph, occlusion culling, instance renderer. No terrain system. DXR complete but disabled. See [rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md).
+
+**Engine systems**: 17 working (ECS, physics, AI, animation, audio, input, camera, scripting, save, UI, modding, events, coroutines, 2D, dialogue, weather, world origin). 7 orphaned (~90K+ lines): streaming, procedural gen (52KB), cinematic sequencer (29KB), replay, destruction, achievement, localization. Missing engine-level: inventory, quest, weapon. See [gameplay-systems-status.md](knowledge/gameplay-systems-status.md).
+
+**Editor**: 14 working panels (viewport, inspector, hierarchy, assets, physics debug, console, profiler, animation, PIE, undo, build, stats, toolbar). 8 built-not-shown (~10K lines): MaterialEditor (1,832), DialogueEditor (1,781), AssetDependency (1,551), AudioMixer (1,467), ParticleEditor (1,235), RuntimeInspector (1,003). 4 duplicate panel pairs. Missing: shader graph, AI debug, cinematic editor, project settings. See [editor-functionality-status.md](knowledge/editor-functionality-status.md).
+
+**SparkGame**: 75% functional FPS framework. Working: module loading, player controller, weapons (18 types), HUD (production quality), vehicles (70%), level loading. Missing: AI enemies (0%). SparkConsole.exe and SparkShaderCompiler.exe are 100% functional tools. See [sparkgame-module-status.md](knowledge/sparkgame-module-status.md).
+
+### SDK, docs, and dependencies
+
+**SDK/API**: 6 headers (365 LOC), 18 subsystem getters via IEngineContext. CRITICAL: `std::unique_ptr<Game>` exported across DLL boundary (ABI risk). ECS not exposed (major gap). IGameModule.h is internal but used as public. See [sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md).
+
+**Documentation**: 53 wiki pages (29,583 lines), 245/246 headers with Doxygen (99.6%). Missing: threading model, networking protocol spec, asset format specs, 19 editor subsystem pages. README says "35 tests" but CLAUDE.md says "82+". See [documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md).
+
+**Third-party deps**: 7 deps total, all permissive licenses (MIT/ZLib). ALL 6 git submodules uninitialized — build silently disables features. curl is dead code (declared but never built/linked). No version tracking file. Duplicate imgui target. See [thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md).
 
 ---
 
