@@ -2,12 +2,12 @@
 
 **Last updated:** 2026-03-16
 **Type:** Observation
-**Status:** Active
-**Severity:** High
+**Status:** Mostly Resolved
+**Severity:** Medium
 
 ## Description
 
-Comprehensive audit of 30 editor features. 21 panels/features are working, 10 panels are built-not-shown (never instantiated, ~15K dead lines), 5 systems are built-not-wired, and 4 features are completely missing.
+Comprehensive audit of 30 editor features. 24 panels/features are now working. All 10 previously built-not-shown panels have been resolved (4 restored, 6 deleted). All 4 duplicate panel pairs resolved. 5 systems remain built-not-wired, 4 features missing.
 
 ---
 
@@ -18,10 +18,10 @@ Comprehensive audit of 30 editor features. 21 panels/features are working, 10 pa
 | Viewport/scene view | SceneViewPanel | 404 | D3D11 setup | Render target, camera controls, render modes. Gap: no entity picking |
 | Game view | GameViewPanel | — | Direct | Renders game camera with input handling and cursor capture |
 | Entity inspector | InspectorPanel | 1,303 | 18 | Full component editing with undo/redo via CommandHistory |
-| Scene hierarchy | SimpleHierarchyPanel | 283 | 1 | Tree view, selection. Limited vs unused HierarchyPanel (1,045 lines) |
+| Scene hierarchy | HierarchyPanel | 1,045 | 1 | Full tree with drag-drop, undo, multi-select (replaced SimpleHierarchyPanel) |
 | Asset browser | AssetBrowserPanel | 457 | 2 | File/folder browser, thumbnails, drag-and-drop |
 | Physics debug | DebugVisualizerPanel + Physics2DPanel | 245+308 | 1 each | Wireframe physics, collision shapes |
-| Console | SimpleConsolePanel | 880 | 9 | Command input, log display, SparkConsole bridge |
+| Console | ConsolePanel | 821 | 9 | Advanced logging, filtering, export, command execution (replaced SimpleConsolePanel) |
 | Profiler | PerformanceProfiler | 1,210 | 1-2 | Frame time graphs, CPU/GPU timing, memory |
 | Animation editor | SpriteAnimationEditorPanel | 534 | 1 | Frame-by-frame sprite animation only (no skeletal) |
 | Play mode (PIE) | PlayModeManager | — | Direct | Play/Pause/Stop, F5 hotkey, scene snapshot/restore |
@@ -39,24 +39,22 @@ Comprehensive audit of 30 editor features. 21 panels/features are working, 10 pa
 
 ---
 
-## Built-Not-Shown (10 panels, ~15K dead lines)
+## Built-Not-Shown — All Resolved
 
-Fully implemented panels that are NEVER instantiated in EditorUI::CreatePanels():
+All 10 previously unused panels have been either **restored and wired in** or **deleted**:
 
-| Panel | Lines | Key Features | Why It Matters |
-|-------|-------|-------------|----------------|
-| MaterialEditorPanel | 2,102 | Shader params, texture slots, render states, live preview | Largest panel, fully implemented |
-| DialogueEditorPanel | 2,138 | Node-graph editor, branching, conditions, choices | Complete dialogue tree editor |
-| AssetDependencyPanel | 1,812 | Dependency graph, reverse lookup, circular detection, unused assets | Powerful debugging tool |
-| AudioMixerPanel | 1,719 | Channel faders, bus routing, effects chains, level metering | Full mixing console |
-| PerformanceProfilerPanel | 1,496 | Flame-graph timeline, subsystem breakdown (alternate to PerformanceProfiler) | Backup implementation |
-| ParticleEditorPanel | 1,526 | Multi-emitter, presets, live preview, physics, birth/death events | Complete particle authoring |
-| RuntimeInspectorPanel | 1,192 | Live object inspection, property modification during gameplay | Valuable for debugging |
-| ConsolePanel | 1,136 | Advanced console with history (alternate to SimpleConsolePanel) | Backup implementation |
-| HierarchyPanel | 1,045 | Full hierarchy with drag-drop (alternate to SimpleHierarchyPanel) | More capable but unused |
-| PlayModeToolbarPanel | 725 | Play mode controls with time scale and subsystem toggles | Duplicate of inline toolbar |
-
-**Total dead panel code: ~14,891 lines**
+| Panel | Action | Session |
+|-------|--------|---------|
+| MaterialEditorPanel | **RESTORED** — wired into EditorUI | 2026-03-16 |
+| HierarchyPanel | **RESTORED** — replaced SimpleHierarchyPanel | 2026-03-16 |
+| PlayModeToolbarPanel | **RESTORED** — wired into EditorUI | 2026-03-16 |
+| ConsolePanel | **RESTORED** — replaced SimpleConsolePanel | 2026-03-16 |
+| DialogueEditorPanel | **DELETED** — never wired in | Prior session |
+| AssetDependencyPanel | **DELETED** — never wired in | Prior session |
+| AudioMixerPanel | **DELETED** — never wired in | Prior session |
+| PerformanceProfilerPanel | **DELETED** — never wired in | Prior session |
+| ParticleEditorPanel | **DELETED** — never wired in | Prior session |
+| RuntimeInspectorPanel | **DELETED** — never wired in | Prior session |
 
 ---
 
@@ -86,23 +84,23 @@ Systems with implementations but NO reference in EditorUI.cpp:
 
 ---
 
-## Duplicate Panel Pairs (4)
+## Duplicate Panel Pairs — All Resolved
 
-| Active Panel | Unused Duplicate | Active Lines | Duplicate Lines |
-|-------------|-----------------|-------------|-----------------|
-| SimpleHierarchyPanel | HierarchyPanel | 283 | 1,045 |
-| SimpleConsolePanel | ConsolePanel | 880 | 821 |
-| PerformanceProfiler | PerformanceProfilerPanel | 1,210 | 1,296 |
-| SceneStatisticsPanel | SceneStatsPanel | 391 | 273 |
+All 4 duplicate pairs have been resolved:
 
-In each case, the "Simple" or shorter version is the one actually instantiated.
+| Winner | Deleted Duplicate | Resolution |
+|--------|-------------------|------------|
+| HierarchyPanel | SimpleHierarchyPanel | Superior version now active |
+| ConsolePanel | SimpleConsolePanel | Superior version now active |
+| PerformanceProfiler | PerformanceProfilerPanel | Duplicate deleted |
+| SceneStatisticsPanel | SceneStatsPanel | Duplicate deleted |
 
 ---
 
 ## Key Findings
 
-1. **6 substantial panels (8,869 lines)** are fully implemented but never shown — MaterialEditor, Dialogue, AssetDependency, AudioMixer, Particle, RuntimeInspector
-2. **4 duplicate panel pairs** exist — the more capable version is always the unused one
+1. **All 10 built-not-shown panels resolved** — 4 restored, 6 deleted
+2. **All 4 duplicate panel pairs resolved** — superior version now active in each case
 3. **GizmoSystem is disconnected** — buttons exist in SceneViewPanel but no transform manipulation
 4. **Version control and collaborative editing** are built but invisible to users
 5. **Animation editor** only supports 2D sprites — no skeletal/bone animation editing
@@ -110,10 +108,7 @@ In each case, the "Simple" or shorter version is the one actually instantiated.
 
 ---
 
-## Action Required
+## Remaining Action Items
 
-**Immediate decision needed** for each built-not-shown panel:
-- **Instantiate**: Add to CreatePanels() if the feature is wanted
-- **Delete**: Remove if the feature is not needed (per CLAUDE.md: dead code is actively harmful)
-
-**Built-not-wired systems** must be either connected to the editor UI or deleted.
+- **GizmoSystem**: Connect to SceneViewPanel or delete
+- **Built-not-wired systems** (TerrainEditor, LightingTools, VersionControlSystem, CollaborativeEditSession, EditorPluginManager): Either connect or delete

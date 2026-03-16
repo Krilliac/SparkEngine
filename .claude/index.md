@@ -22,7 +22,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Extended bloat audit (March 14) | [knowledge/bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md) | Observation | Superseded | 2026-03-14 |
 | **Comprehensive bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-15 |
 | **30 orphaned headers (11K+ dead lines)** | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | Active | 2026-03-16 |
-| **Editor panels: 3 restored, 8 deleted** | [knowledge/editor-panel-bloat.md](knowledge/editor-panel-bloat.md) | Observation | Partially Resolved | 2026-03-16 |
+| **Editor panels: 4 restored, 9 deleted, all resolved** | [knowledge/editor-panel-bloat.md](knowledge/editor-panel-bloat.md) | Observation | Resolved | 2026-03-16 |
 | **Feature restoration: 5 wrongly deleted features restored** | [knowledge/feature-restoration-2026-03-16.md](knowledge/feature-restoration-2026-03-16.md) | Decision | Resolved | 2026-03-16 |
 | **5 duplicate systems, 2 of 3 ODR risks fixed** | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | Partially Resolved | 2026-03-16 |
 | **11 orphaned tests, 14 untested subsystems** | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-16 |
@@ -34,7 +34,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | **MEMORY/ERRORS: HRESULT, underflows, div-by-zero fixed; 3 low-risk OPEN** | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Mostly Resolved | 2026-03-16 |
 | **Rendering: 17 working, 12 header-only stubs (~15K dead lines)** | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | Active | 2026-03-16 |
 | **Engine: 17 working, 7 orphaned systems (~90K+ dead lines)** | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-16 |
-| **Editor: 14 working, 8 unshown panels (~10K dead lines)** | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | Active | 2026-03-16 |
+| **Editor: 24 working, all panels resolved** | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | Mostly Resolved | 2026-03-16 |
 | **SparkGame: 75% functional FPS, no AI enemies** | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
 | **SDK: ECS not exposed, unique_ptr DLL export, IGameModule gap** | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | Active | 2026-03-16 |
 | **Docs: 53 wiki pages, 245/246 Doxygen, 10 critical gaps** | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-16 |
@@ -64,7 +64,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **CRITICAL: 30 orphaned headers never included anywhere (~11K lines)** → 19 graphics headers, 3 engine, 3 utils, 4 editor. See [orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md).
 
-**CRITICAL: 8 editor panels built but never shown (11,257 lines)** → MaterialEditor, Dialogue, AssetDependency, AudioMixer, Profiler, Particle, RuntimeInspector, PlayModeToolbar. Plus engine-depends-on-editor violation in AllEnums.h. See [editor-panel-bloat.md](knowledge/editor-panel-bloat.md).
+**RESOLVED: All 10 unused editor panels resolved** → 4 restored (HierarchyPanel, ConsolePanel, MaterialEditor, PlayModeToolbar), 6 deleted (Dialogue, AssetDependency, AudioMixer, Profiler, Particle, RuntimeInspector). All 4 duplicate pairs resolved. See [editor-panel-bloat.md](knowledge/editor-panel-bloat.md).
 
 **PARTIALLY RESOLVED: ODR risks** → AudioMixer renamed (fixed), AnimationStateMachine deduped (fixed), dual EventBus still open. See [duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md).
 
