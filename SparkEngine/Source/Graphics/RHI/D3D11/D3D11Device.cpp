@@ -863,9 +863,9 @@ namespace Spark
                 ComPtr<ID3D11InputLayout> inputLayout;
                 if (!elements.empty() && d3dVS)
                 {
-                    HRESULT hr = m_device->CreateInputLayout(elements.data(), static_cast<UINT>(elements.size()),
-                                                              d3dVS->GetBytecode(), d3dVS->GetBytecodeSize(),
-                                                              &inputLayout);
+                    HRESULT hr =
+                        m_device->CreateInputLayout(elements.data(), static_cast<UINT>(elements.size()),
+                                                    d3dVS->GetBytecode(), d3dVS->GetBytecodeSize(), &inputLayout);
                     if (FAILED(hr))
                         return nullptr;
                 }

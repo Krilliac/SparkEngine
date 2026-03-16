@@ -84,6 +84,8 @@ add_executable(SparkTests
     TestInputBindings.cpp
     TestLoadingScreen.cpp
     TestUISystem.cpp
+    TestLocalizationSystem.cpp
+    TestDestructionSystem.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

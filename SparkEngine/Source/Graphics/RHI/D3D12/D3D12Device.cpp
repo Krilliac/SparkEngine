@@ -1501,7 +1501,7 @@ namespace Spark
 
                 ComPtr<ID3D12RootSignature> rootSig;
                 hr = m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
-                                                    IID_PPV_ARGS(&rootSig));
+                                                   IID_PPV_ARGS(&rootSig));
                 if (FAILED(hr))
                     return nullptr;
                 return rootSig;

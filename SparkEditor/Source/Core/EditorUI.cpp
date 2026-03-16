@@ -13,7 +13,7 @@
 #include "Utils/Validate.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/SimpleConsolePanel.h"
-#include "../Panels/SimpleHierarchyPanel.h"
+#include "../Panels/HierarchyPanel.h"
 #include "../Panels/InspectorPanel.h"
 #include "../Panels/AssetBrowserPanel.h"
 #include "../Panels/GameViewPanel.h"
@@ -21,7 +21,6 @@
 #include "../Panels/FPSToolsPanel.h"
 #include "../Panels/ProjectBrowserPanel.h"
 #include "../Panels/DebugVisualizerPanel.h"
-#include "../Panels/SceneStatsPanel.h"
 #include "../Panels/ObjectPlacementPanel.h"
 #include "../Panels/BuildCookPanel.h"
 #include "../Panels/SpriteEditorPanel.h"
@@ -33,6 +32,8 @@
 #include "../Panels/PrefabEditorPanel.h"
 #include "../Panels/SearchPanel.h"
 #include "../Panels/DedicatedServerPanel.h"
+#include "../Panels/MaterialEditorPanel.h"
+#include "../Panels/PlayModeToolbarPanel.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
 #include "EditorApplication.h"
@@ -151,7 +152,7 @@ namespace SparkEditor
                     auto hierIt = m_panels.find("Hierarchy");
                     if (hierIt != m_panels.end())
                     {
-                        auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(hierIt->second.get());
+                        auto* hierarchy = dynamic_cast<HierarchyPanel*>(hierIt->second.get());
                         if (hierarchy)
                         {
                             hierarchy->ResetToDefault();
@@ -220,7 +221,7 @@ namespace SparkEditor
                 auto it = m_panels.find("Hierarchy");
                 if (it != m_panels.end())
                 {
-                    auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(it->second.get());
+                    auto* hierarchy = dynamic_cast<HierarchyPanel*>(it->second.get());
                     if (hierarchy)
                     {
                         hierarchy->ResetToDefault();
@@ -561,17 +562,17 @@ namespace SparkEditor
             console.LogError("Failed to create Simple Console panel: " + std::string(e.what()));
         }
 
-        // Create Simple Hierarchy Panel
+        // Create Hierarchy Panel (full tree with drag-drop, undo, multi-select)
         try
         {
-            console.LogInfo("Creating Simple Hierarchy panel...");
-            auto hierarchyPanel = std::shared_ptr<SimpleHierarchyPanel>(new SimpleHierarchyPanel());
+            console.LogInfo("Creating Hierarchy panel...");
+            auto hierarchyPanel = std::shared_ptr<HierarchyPanel>(new HierarchyPanel());
             m_panels["Hierarchy"] = hierarchyPanel;
-            console.LogSuccess("Created Simple Hierarchy panel");
+            console.LogSuccess("Created Hierarchy panel");
         }
         catch (const std::exception& e)
         {
-            console.LogError("Failed to create Simple Hierarchy panel: " + std::string(e.what()));
+            console.LogError("Failed to create Hierarchy panel: " + std::string(e.what()));
         }
 
         // Create Inspector Panel
@@ -805,6 +806,32 @@ namespace SparkEditor
             console.LogError("Failed to create Build & Cook panel: " + std::string(e.what()));
         }
 
+        // Create Play Mode Toolbar Panel (Play/Stop/Pause transport controls)
+        try
+        {
+            console.LogInfo("Creating Play Mode Toolbar panel...");
+            auto playModeToolbar = std::shared_ptr<PlayModeToolbarPanel>(new PlayModeToolbarPanel());
+            m_panels["PlayModeToolbar"] = playModeToolbar;
+            console.LogSuccess("Created Play Mode Toolbar panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Play Mode Toolbar panel: " + std::string(e.what()));
+        }
+
+        // Create Material Editor Panel (PBR material and shader property editor)
+        try
+        {
+            console.LogInfo("Creating Material Editor panel...");
+            auto materialEditor = std::shared_ptr<MaterialEditorPanel>(new MaterialEditorPanel());
+            m_panels["MaterialEditor"] = materialEditor;
+            console.LogSuccess("Created Material Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Material Editor panel: " + std::string(e.what()));
+        }
+
         // Initialize all panels
         for (auto& [name, panel] : m_panels)
         {
@@ -904,7 +931,7 @@ namespace SparkEditor
                     auto it = m_panels.find("Hierarchy");
                     if (it != m_panels.end())
                     {
-                        auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(it->second.get());
+                        auto* hierarchy = dynamic_cast<HierarchyPanel*>(it->second.get());
                         if (hierarchy)
                         {
                             hierarchy->ResetToDefault();
@@ -1079,7 +1106,7 @@ namespace SparkEditor
                     auto it = m_panels.find("Hierarchy");
                     if (it != m_panels.end())
                     {
-                        auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(it->second.get());
+                        auto* hierarchy = dynamic_cast<HierarchyPanel*>(it->second.get());
                         if (hierarchy)
                         {
                             hierarchy->CreateObject(name);
@@ -1206,6 +1233,14 @@ namespace SparkEditor
                 if (ImGui::MenuItem("Game View", nullptr, IsPanelVisible("GameView")))
                 {
                     SetPanelVisible("GameView", !IsPanelVisible("GameView"));
+                }
+                if (ImGui::MenuItem(ICON_FA_PALETTE " Material Editor", nullptr, IsPanelVisible("MaterialEditor")))
+                {
+                    SetPanelVisible("MaterialEditor", !IsPanelVisible("MaterialEditor"));
+                }
+                if (ImGui::MenuItem(ICON_FA_PLAY " Play Mode Toolbar", nullptr, IsPanelVisible("PlayModeToolbar")))
+                {
+                    SetPanelVisible("PlayModeToolbar", !IsPanelVisible("PlayModeToolbar"));
                 }
                 if (ImGui::MenuItem("Profiler", nullptr, IsPanelVisible("Profiler")))
                 {
@@ -2134,7 +2169,7 @@ namespace SparkEditor
             auto it = m_panels.find("Hierarchy");
             if (it != m_panels.end())
             {
-                auto* hierarchy = dynamic_cast<SimpleHierarchyPanel*>(it->second.get());
+                auto* hierarchy = dynamic_cast<HierarchyPanel*>(it->second.get());
                 if (hierarchy)
                 {
                     const auto& objects = hierarchy->GetSceneObjects();

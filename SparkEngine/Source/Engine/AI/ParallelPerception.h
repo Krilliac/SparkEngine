@@ -29,6 +29,8 @@
 
 #include "../../Core/Platform.h"
 #include "../../Utils/JobSystem.h"
+
+#include <atomic>
 #include "PerceptionSystem.h"
 #include "../ECS/Components/CoreComponents.h"
 
@@ -230,7 +232,7 @@ namespace Spark::AI
         uint32_t m_lastAgentCount = 0;
 
         /// Whether Initialize() has been called
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
     };
 
 } // namespace Spark::AI

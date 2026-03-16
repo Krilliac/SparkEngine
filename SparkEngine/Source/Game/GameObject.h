@@ -278,9 +278,9 @@ class GameObject
     void UpdateWorldMatrix() const;
 
     // Transform state
-    XMFLOAT3 m_position{};         ///< World position
-    XMFLOAT3 m_rotation{};         ///< Rotation in Euler angles (radians)
-    XMFLOAT3 m_scale{1, 1, 1};     ///< Scale factors for each axis
+    XMFLOAT3 m_position{};                 ///< World position
+    XMFLOAT3 m_rotation{};                 ///< Rotation in Euler angles (radians)
+    XMFLOAT3 m_scale{1, 1, 1};             ///< Scale factors for each axis
     mutable XMMATRIX m_worldMatrix{};      ///< Cached world transformation matrix
     mutable bool m_worldMatrixDirty{true}; ///< Flag indicating if world matrix needs recalculation
 

@@ -22,7 +22,8 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Extended bloat audit (March 14) | [knowledge/bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md) | Observation | Superseded | 2026-03-14 |
 | **Comprehensive bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-15 |
 | **30 orphaned headers (11K+ dead lines)** | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | Active | 2026-03-16 |
-| **8 unused editor panels (11K+ dead lines)** | [knowledge/editor-panel-bloat.md](knowledge/editor-panel-bloat.md) | Observation | Active | 2026-03-16 |
+| **Editor panels: 3 restored, 8 deleted** | [knowledge/editor-panel-bloat.md](knowledge/editor-panel-bloat.md) | Observation | Partially Resolved | 2026-03-16 |
+| **Feature restoration: 5 wrongly deleted features restored** | [knowledge/feature-restoration-2026-03-16.md](knowledge/feature-restoration-2026-03-16.md) | Decision | Resolved | 2026-03-16 |
 | **5 duplicate systems, 3 ODR risks** | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | Active | 2026-03-16 |
 | **11 orphaned tests, 14 untested subsystems** | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-16 |
 | **8 dead CMake options, duplicate imgui** | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | Active | 2026-03-16 |

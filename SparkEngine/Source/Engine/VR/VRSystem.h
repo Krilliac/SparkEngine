@@ -22,6 +22,8 @@
 
 #include "../../Core/Platform.h"
 
+#include <atomic>
+
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif
@@ -169,7 +171,7 @@ namespace Spark::VR
         std::string Console_GetStatus() const;
 
       private:
-        bool m_initialized = false;
+        std::atomic<bool> m_initialized{false};
         DirectX::XMFLOAT3 m_headPosition{0, 0, 0};
         DirectX::XMFLOAT4 m_headOrientation{0, 0, 0, 1};
         VREye m_leftEye;
