@@ -170,6 +170,28 @@ std::unique_ptr<Spark::DialogueSystem> g_dialogueSystem;
 std::unique_ptr<Spark::ModSystem> g_modSystem;
 static Spark::DeltaSmoother g_deltaSmoother(10);
 
+// -----------------------------------------------------------------------------
+// Common initialization helpers (used by all startup paths)
+// -----------------------------------------------------------------------------
+
+static void InitPhysics()
+{
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+    g_physicsOwned = std::make_unique<PhysicsSystem>();
+    EngineContext::Get()->SetPhysics(g_physicsOwned.get());
+    if (g_graphics)
+        g_graphics->SetPhysicsSystem(g_physicsOwned.get());
+#endif
+}
+
+static void InitConsole()
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.Initialize();
+    Spark::ConsoleProcessManager::GetInstance().Initialize();
+    InitDebugSystems();
+}
+
 #ifdef SPARK_HEADLESS_SUPPORT
 // g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
 static std::atomic<bool> g_shutdownRequested{false};
@@ -319,11 +341,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         g_fileCache = std::make_unique<Spark::LocalFileCache>();
         EngineContext::Get()->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
 
-        // Physics
-        {
-            g_physicsOwned = std::make_unique<PhysicsSystem>();
-            EngineContext::Get()->SetPhysics(g_physicsOwned.get());
-        }
+        InitPhysics();
 
         // Register core subsystems with dependency metadata
         Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
@@ -332,12 +350,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         // Module loading
         g_moduleManager = std::make_unique<ModuleManager>();
 
+        InitConsole();
         auto& console = Spark::SimpleConsole::GetInstance();
-        if (console.Initialize())
-            console.LogSuccess("Headless server console initialized");
-
-        Spark::ConsoleProcessManager::GetInstance().Initialize();
-        InitDebugSystems();
 
         if (LoadGameModules(*g_moduleManager, lpCmdLine))
         {
@@ -441,12 +455,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     EngineContext::Get()->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
 
     // 5c. Create PhysicsSystem (owned here, not by GraphicsEngine)
-    {
-        g_physicsOwned = std::make_unique<PhysicsSystem>();
-        EngineContext::Get()->SetPhysics(g_physicsOwned.get());
-        if (g_graphics)
-            g_graphics->SetPhysicsSystem(g_physicsOwned.get());
-    }
+    InitPhysics();
 
     // 5d. Register core subsystems with dependency metadata (EngineSetup)
     Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
@@ -1439,6 +1448,28 @@ static void ShutdownDebugSystems()
     Spark::FileLogger::GetInstance().Shutdown();
 }
 
+// -----------------------------------------------------------------------------
+// Common initialization helpers (used by all Linux startup paths)
+// -----------------------------------------------------------------------------
+
+static void InitPhysics()
+{
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+    g_physicsOwned = std::make_unique<PhysicsSystem>();
+    EngineContext::Get()->SetPhysics(g_physicsOwned.get());
+    if (g_graphics)
+        g_graphics->SetPhysicsSystem(g_physicsOwned.get());
+#endif
+}
+
+static void InitConsole()
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.Initialize();
+    Spark::ConsoleProcessManager::GetInstance().Initialize();
+    InitDebugSystems();
+}
+
 static std::atomic<bool> g_shutdownRequested{false};
 
 static void SignalHandler(int)
@@ -1744,25 +1775,15 @@ int main(int argc, char* argv[])
         g_timer = std::make_unique<Timer>();
         EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get()));
 
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-        {
-            g_physicsOwned = std::make_unique<PhysicsSystem>();
-            EngineContext::Get()->SetPhysics(g_physicsOwned.get());
-        }
-#endif
+        InitPhysics();
 
         // Register core subsystems with dependency metadata
         Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
         Spark::EngineSetup::InitializeJobSystem();
 
         g_moduleManager = std::make_unique<ModuleManager>();
-
+        InitConsole();
         auto& console = Spark::SimpleConsole::GetInstance();
-        if (console.Initialize())
-            console.LogSuccess("Headless server console initialized");
-
-        Spark::ConsoleProcessManager::GetInstance().Initialize();
-        InitDebugSystems();
 
         if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
         {
@@ -1885,14 +1906,7 @@ int main(int argc, char* argv[])
         std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
 
     // 5. Physics
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-    {
-        g_physicsOwned = std::make_unique<PhysicsSystem>();
-        EngineContext::Get()->SetPhysics(g_physicsOwned.get());
-        if (g_graphics)
-            g_graphics->SetPhysicsSystem(g_physicsOwned.get());
-    }
-#endif
+    InitPhysics();
 
     // 5b. Register core subsystems with dependency metadata (EngineSetup)
     Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
@@ -2154,12 +2168,7 @@ int main(int argc, char* argv[])
     EngineContext::SetOwned(
         std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
 
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-    {
-        g_physicsOwned = std::make_unique<PhysicsSystem>();
-        EngineContext::Get()->SetPhysics(g_physicsOwned.get());
-    }
-#endif
+    InitPhysics();
 
     // Register core subsystems with dependency metadata
     Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
@@ -2180,10 +2189,8 @@ int main(int argc, char* argv[])
 
     g_moduleManager = std::make_unique<ModuleManager>();
 
+    InitConsole();
     auto& console = Spark::SimpleConsole::GetInstance();
-    console.Initialize();
-    Spark::ConsoleProcessManager::GetInstance().Initialize();
-    InitDebugSystems();
     console.LogWarning("No SDL2 - engine will exit after initialization.");
     LogMissingModuleWarnings();
 
