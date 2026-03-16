@@ -436,6 +436,27 @@ namespace SparkEditor
     // Staging and Committing
     // ============================================================================
 
+    static bool ContainsShellMetachars(const std::string& str)
+    {
+        for (char c : str)
+        {
+            switch (c)
+            {
+            case ';':
+            case '|':
+            case '&':
+            case '$':
+            case '`':
+            case '\n':
+            case '\r':
+                return true;
+            default:
+                break;
+            }
+        }
+        return false;
+    }
+
     VCSOperationResult VersionControlSystem::StageFiles(const std::vector<std::string>& filePaths)
     {
         if (!m_repositoryInfo)
@@ -1352,27 +1373,6 @@ namespace SparkEditor
                 }
             }
         }
-    }
-
-    static bool ContainsShellMetachars(const std::string& str)
-    {
-        for (char c : str)
-        {
-            switch (c)
-            {
-            case ';':
-            case '|':
-            case '&':
-            case '$':
-            case '`':
-            case '\n':
-            case '\r':
-                return true;
-            default:
-                break;
-            }
-        }
-        return false;
     }
 
     VCSOperationResult VersionControlSystem::ExecuteCommand(const std::string& command,
