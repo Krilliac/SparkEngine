@@ -204,8 +204,9 @@ namespace Spark
 
 } // namespace Spark
 
-// Convenience macros
+// Convenience macros (prefixed CHROME_ to avoid conflict with Validate.h SPARK_TRACE_SCOPE)
 #define SPARK_TRACE_CONCAT_INNER(a, b) a##b
 #define SPARK_TRACE_CONCAT(a, b) SPARK_TRACE_CONCAT_INNER(a, b)
-#define SPARK_TRACE_SCOPE(name) ::Spark::ScopedTraceEvent SPARK_TRACE_CONCAT(_traceScope_, __LINE__)(name)
-#define SPARK_TRACE_SCOPE_CAT(name, cat) ::Spark::ScopedTraceEvent SPARK_TRACE_CONCAT(_traceScope_, __LINE__)(name, cat)
+#define SPARK_CHROME_TRACE_SCOPE(name) ::Spark::ScopedTraceEvent SPARK_TRACE_CONCAT(_traceScope_, __LINE__)(name)
+#define SPARK_CHROME_TRACE_SCOPE_CAT(name, cat)                                                                        \
+    ::Spark::ScopedTraceEvent SPARK_TRACE_CONCAT(_traceScope_, __LINE__)(name, cat)

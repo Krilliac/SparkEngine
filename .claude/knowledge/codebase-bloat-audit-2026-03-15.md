@@ -83,15 +83,18 @@ Comprehensive audit combining prior findings (March 14) with new deep analysis. 
 
 ## 2. Dead Code — Delete Immediately (0 usages)
 
-| File | Lines | Evidence |
-|------|-------|----------|
-| `Utils/ChromeTracing.h` | 211 | 0 includes, 0 call sites. Profiler.h supersedes. |
-| `Utils/MemoryDebugger.h` | 433 | 0 includes, 0 macro calls. ASan/Valgrind replaces. |
-| `Utils/FrameInspector.h` | 408 | 0 includes, 0 GetInstance() calls. |
-| `Utils/Tween.h` | 455 | 0 includes anywhere. Test file reimplements locally. |
-| `Utils/ScopeGuard.h` | ~100 | Only included in its own test file; no production usage. |
+| File | Lines | Evidence | Status |
+|------|-------|----------|--------|
+| `Utils/ChromeTracing.h` | 211 | ~~0 includes~~ | **WIRED IN** (2026-03-16) — Start()/Stop()/SaveToFile() in all 5 startup paths |
+| `Utils/MemoryDebugger.h` | 433 | ~~0 includes~~ | **WIRED IN** (2026-03-16) — SetEnabled()/PrintLeakReport() in debug builds |
+| `Utils/FrameInspector.h` | 408 | ~~0 includes~~ | **WIRED IN** (2026-03-16) — OnFrameEnd() in all main loops |
+| `Utils/Tween.h` | 455 | ~~0 includes~~ | **WIRED IN** (2026-03-16) — TweenManager::Update(dt) in all main loops |
+| `Utils/ScopeGuard.h` | ~285 | Only included in its own test file | Utility header — no init needed, available for use |
+| `Utils/DebugDraw.h` | 418 | ~~0 includes~~ | **WIRED IN** (2026-03-16) — SetEnabled()/Flush(dt) in all main loops |
+| `Utils/DebugOverlay.h` | 413 | ~~0 includes~~ | **WIRED IN** (2026-03-16) — SetEnabled()/Update(dt) in all main loops |
+| `Utils/FileLogger.h` | 432 | ~~0 includes~~ | **WIRED IN** (2026-03-16) — Initialize()/Shutdown() in all startup paths |
 
-**Total confirmed dead code: ~1,607 lines**
+**Previously dead code now wired in: 7 of 8 systems (ScopeGuard is a utility, needs no wiring)**
 
 ---
 
@@ -110,15 +113,17 @@ Systems with `GetInstance()` / `Initialize()` / `Update()` that are **never call
 | **DXRSupport** | `Graphics/RHI/DXRSupport.h` | Initialize() never called |
 | **PlatformInputManager** | `Input/PlatformInput.h` | Initialize() and Update() never called (InputManager used instead) |
 
-### Tier 2 — Debug/Utility (never wired in)
+### Tier 2 — Debug/Utility (**ALL WIRED IN** — 2026-03-16)
 
-| System | File | Issue |
-|--------|------|-------|
-| **DebugDraw** | `Utils/DebugDraw.h` | GetInstance() never called outside macros |
-| **DebugOverlay** | `Utils/DebugOverlay.h` | Update() never called in main loop |
-| **ChromeTracing** | `Utils/ChromeTracing.h` | Dead code (see above) |
-| **FrameInspector** | `Utils/FrameInspector.h` | Dead code (see above) |
-| **MemoryDebugger** | `Utils/MemoryDebugger.h` | Dead code (see above) |
+| System | File | Status |
+|--------|------|--------|
+| **DebugDraw** | `Utils/DebugDraw.h` | **WIRED IN** — SetEnabled()+Flush(dt) in all 5 startup/loop paths |
+| **DebugOverlay** | `Utils/DebugOverlay.h` | **WIRED IN** — SetEnabled()+Update(dt) in all 5 startup/loop paths |
+| **ChromeTracing** | `Utils/ChromeTracing.h` | **WIRED IN** — Start()/SaveToFile()/Stop() in all paths |
+| **FrameInspector** | `Utils/FrameInspector.h` | **WIRED IN** — OnFrameEnd() in all loop paths |
+| **MemoryDebugger** | `Utils/MemoryDebugger.h` | **WIRED IN** — SetEnabled()/PrintLeakReport() in debug builds |
+| **TweenManager** | `Utils/Tween.h` | **WIRED IN** — Update(dt) in all loop paths |
+| **FileLogger** | `Utils/FileLogger.h` | **WIRED IN** — Initialize()/Shutdown() in all paths |
 
 ### Tier 3 — Gameplay/AI (built but disconnected)
 
@@ -229,34 +234,28 @@ Violates "1 per subsystem" limit. Should consolidate to 3–4 functions max (Eng
 
 ## 6. Duplicate #include
 
-`Shader.cpp` line 1298 includes `SparkConsole.h` a second time (first at line 7). Harmless but signals copy-paste assembly.
+`Shader.cpp` line 1298 includes `SparkConsole.h` — verified as platform-specific (Windows/Linux `#ifdef`), not a true duplicate.
 
 ---
 
 ## Priority Action Plan
 
-### P0 — Delete Now (zero risk, immediate line reduction)
+### P0 — RESOLVED: Dead headers wired in (2026-03-16)
 
-| Action | Lines Removed |
-|--------|--------------|
-| Delete `ChromeTracing.h` | 211 |
-| Delete `MemoryDebugger.h` | 433 |
-| Delete `FrameInspector.h` | 408 |
-| Delete `Tween.h` | 455 |
-| Delete `ScopeGuard.h` | ~100 |
-| Remove duplicate `#include` in Shader.cpp | 1 |
-| **Subtotal** | **~1,608** |
+All 7 previously-dead utility systems are now wired into all 5 engine startup paths (Windows headless, Windows windowed, Linux headless, Linux SDL2, Linux fallback) via `InitDebugSystems()`/`UpdateDebugSystems(dt)`/`ShutdownDebugSystems()` helper functions in SparkEngine.cpp.
 
-### P1 — Wire or Delete Orphaned Systems (1–2 sessions)
+ChromeTracing macro renamed to `SPARK_CHROME_TRACE_SCOPE` to avoid conflict with `Validate.h`'s `SPARK_TRACE_SCOPE`.
 
-| Action | Impact |
-|--------|--------|
-| Wire ConsoleProcessManager into startup + main loop | Enables console subprocess |
-| Wire or delete DecalSystem | 0 calls = dead |
-| Wire or delete FileLogger | 0 calls = dead |
-| Wire or delete DXRSupport | Optional; behind toggle |
-| Audit PlatformInputManager vs InputManager | One may be dead |
-| Wire or delete NavMesh, NavMeshObstacles | AI navigation dead |
+### P1 — Wire or Delete Remaining Orphaned Systems
+
+| Action | Impact | Status |
+|--------|--------|--------|
+| ~~Wire ConsoleProcessManager~~ | ~~Enables console subprocess~~ | **DONE** (prior session) |
+| ~~Wire FileLogger~~ | ~~File-based logging~~ | **DONE** (this session) |
+| Wire or delete DecalSystem | 0 calls = dead | OPEN |
+| Wire or delete DXRSupport | Optional; behind toggle | OPEN |
+| Audit PlatformInputManager vs InputManager | One may be dead | OPEN |
+| Wire or delete NavMesh, NavMeshObstacles | AI navigation dead | OPEN |
 | Wire or delete Sequencer | Cinematic system dead |
 | Wire or delete AnimationSystem singleton | Animation update dead |
 | Wire or delete MeshLOD | LOD management dead |
