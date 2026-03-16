@@ -21,6 +21,12 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Codebase bloat audit (March 14) | [knowledge/codebase-bloat-audit-2026-03-14.md](knowledge/codebase-bloat-audit-2026-03-14.md) | Observation | Superseded | 2026-03-14 |
 | Extended bloat audit (March 14) | [knowledge/bloat-audit-extended-2026-03-14.md](knowledge/bloat-audit-extended-2026-03-14.md) | Observation | Superseded | 2026-03-14 |
 | **Comprehensive bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-15 |
+| **30 orphaned headers (11K+ dead lines)** | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | Active | 2026-03-16 |
+| **8 unused editor panels (11K+ dead lines)** | [knowledge/editor-panel-bloat.md](knowledge/editor-panel-bloat.md) | Observation | Active | 2026-03-16 |
+| **5 duplicate systems, 3 ODR risks** | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | Active | 2026-03-16 |
+| **11 orphaned tests, 14 untested subsystems** | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-16 |
+| **8 dead CMake options, duplicate imgui** | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | Active | 2026-03-16 |
+| **26 singletons (12 orphaned), 74-member god object** | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | Active | 2026-03-16 |
 
 ## Quick Reference by Topic
 
@@ -43,6 +49,18 @@ _Read this at every session start (after git sync). Each row links to a detailed
 ### Doing things well (Patterns & Optimizations)
 
 **CRITICAL: 47 files violate size limits, 127 classes exceed method limit, 17 orphaned singletons** → See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md). 5 dead files (1,607 lines), 10,000+ removable lines total.
+
+**CRITICAL: 30 orphaned headers never included anywhere (~11K lines)** → 19 graphics headers, 3 engine, 3 utils, 4 editor. See [orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md).
+
+**CRITICAL: 8 editor panels built but never shown (11,257 lines)** → MaterialEditor, Dialogue, AssetDependency, AudioMixer, Profiler, Particle, RuntimeInspector, PlayModeToolbar. Plus engine-depends-on-editor violation in AllEnums.h. See [editor-panel-bloat.md](knowledge/editor-panel-bloat.md).
+
+**HIGH: 3 ODR violation risks** → AudioMixer (2 defs), AnimationStateMachine (2 defs), dual EventBus implementations. See [duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md).
+
+**MEDIUM: 11 orphaned tests not in CMake, 14 untested subsystems** → See [test-suite-audit.md](knowledge/test-suite-audit.md).
+
+**MEDIUM: 8 dead CMake build options** → ENABLE_LUA, ENABLE_PHYSX (no backend), 6 flags with no code guards. See [cmake-build-audit.md](knowledge/cmake-build-audit.md).
+
+**INFO: 26 singletons total (12 orphaned), GraphicsEngine has 74 member variables** → See [globals-singletons-audit.md](knowledge/globals-singletons-audit.md).
 
 **CRITICAL: SparkConsole needs refactoring** → 6,000+ lines of embedded UI bloat that should be in SparkConsole.exe instead. See [sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) for 2-session plan.
 
