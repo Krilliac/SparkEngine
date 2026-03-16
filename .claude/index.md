@@ -31,6 +31,10 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | **SECURITY: 2 critical vulns (DLL injection, command injection)** | [knowledge/security-vulnerabilities.md](knowledge/security-vulnerabilities.md) | Issue | Active | 2026-03-16 |
 | **THREADING: 30+ unprotected bools, EventBus race, lock ordering** | [knowledge/thread-safety-issues.md](knowledge/thread-safety-issues.md) | Issue | Active | 2026-03-16 |
 | **MEMORY/ERRORS: naked new/delete, 15+ unchecked HRESULT, underflows** | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Active | 2026-03-16 |
+| **Rendering: 17 working, 12 header-only stubs (~15K dead lines)** | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | Active | 2026-03-16 |
+| **Engine: 17 working, 7 orphaned systems (~90K+ dead lines)** | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-16 |
+| **Editor: 14 working, 8 unshown panels (~10K dead lines)** | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | Active | 2026-03-16 |
+| **SparkGame: 75% functional FPS, no AI enemies** | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
 
 ## Quick Reference by Topic
 
@@ -113,6 +117,16 @@ _Read this at every session start (after git sync). Each row links to a detailed
 **Networking/graphics don't compile** → Likely disabled by CMake toggles. See [codebase-observations.md](knowledge/codebase-observations.md).
 
 **Using legacy globals like `g_graphics`** → Deprecated; use `EngineContext`. See [codebase-observations.md](knowledge/codebase-observations.md).
+
+### Functional audit — what works vs scaffolding
+
+**Rendering pipeline**: 17 features working (D3D11, forward/deferred/forward+, materials, lighting, particles, decals, LOD, FSR/DLSS). 12 header-only stubs (~15K dead lines): sky, water, GI, shadow atlas, render graph, occlusion culling, instance renderer. No terrain system. DXR complete but disabled. See [rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md).
+
+**Engine systems**: 17 working (ECS, physics, AI, animation, audio, input, camera, scripting, save, UI, modding, events, coroutines, 2D, dialogue, weather, world origin). 7 orphaned (~90K+ lines): streaming, procedural gen (52KB), cinematic sequencer (29KB), replay, destruction, achievement, localization. Missing engine-level: inventory, quest, weapon. See [gameplay-systems-status.md](knowledge/gameplay-systems-status.md).
+
+**Editor**: 14 working panels (viewport, inspector, hierarchy, assets, physics debug, console, profiler, animation, PIE, undo, build, stats, toolbar). 8 built-not-shown (~10K lines): MaterialEditor (1,832), DialogueEditor (1,781), AssetDependency (1,551), AudioMixer (1,467), ParticleEditor (1,235), RuntimeInspector (1,003). 4 duplicate panel pairs. Missing: shader graph, AI debug, cinematic editor, project settings. See [editor-functionality-status.md](knowledge/editor-functionality-status.md).
+
+**SparkGame**: 75% functional FPS framework. Working: module loading, player controller, weapons (18 types), HUD (production quality), vehicles (70%), level loading. Missing: AI enemies (0%). SparkConsole.exe and SparkShaderCompiler.exe are 100% functional tools. See [sparkgame-module-status.md](knowledge/sparkgame-module-status.md).
 
 ---
 
