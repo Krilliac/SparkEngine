@@ -12,6 +12,7 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <numeric>
 
@@ -128,16 +129,65 @@ namespace SparkEditor
         }
     }
 
-    bool TerrainHeightmap::LoadFromImage(const std::string& /*filePath*/)
+    bool TerrainHeightmap::LoadFromImage(const std::string& filePath)
     {
-        // Image loading requires stb_image or similar — placeholder
-        return false;
+        // Load raw 16-bit or 8-bit heightmap (RAW format: width*height samples, no header)
+        std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+        if (!file.is_open())
+            return false;
+
+        auto fileSize = static_cast<size_t>(file.tellg());
+        file.seekg(0);
+
+        // Determine dimensions: assume square heightmap
+        size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
+
+        bool is16Bit = (fileSize >= pixelCount * 2);
+        bool is8Bit = (fileSize >= pixelCount);
+        if (!is16Bit && !is8Bit)
+            return false;
+
+        heights.resize(pixelCount);
+        if (is16Bit)
+        {
+            std::vector<uint16_t> raw(pixelCount);
+            file.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(pixelCount * 2));
+            for (size_t i = 0; i < pixelCount; ++i)
+                heights[i] = minHeight + (static_cast<float>(raw[i]) / 65535.0f) * (maxHeight - minHeight);
+        }
+        else
+        {
+            std::vector<uint8_t> raw(pixelCount);
+            file.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(pixelCount));
+            for (size_t i = 0; i < pixelCount; ++i)
+                heights[i] = minHeight + (static_cast<float>(raw[i]) / 255.0f) * (maxHeight - minHeight);
+        }
+        return file.good();
     }
 
-    bool TerrainHeightmap::SaveToImage(const std::string& /*filePath*/) const
+    bool TerrainHeightmap::SaveToImage(const std::string& filePath) const
     {
-        // Image saving requires stb_image_write or similar — placeholder
-        return false;
+        // Save as 16-bit RAW heightmap
+        if (heights.empty())
+            return false;
+
+        std::ofstream file(filePath, std::ios::binary);
+        if (!file.is_open())
+            return false;
+
+        float range = maxHeight - minHeight;
+        if (range < 1e-6f)
+            range = 1.0f;
+
+        std::vector<uint16_t> raw(heights.size());
+        for (size_t i = 0; i < heights.size(); ++i)
+        {
+            float normalized = std::clamp((heights[i] - minHeight) / range, 0.0f, 1.0f);
+            raw[i] = static_cast<uint16_t>(normalized * 65535.0f);
+        }
+        file.write(reinterpret_cast<const char*>(raw.data()),
+                   static_cast<std::streamsize>(raw.size() * sizeof(uint16_t)));
+        return file.good();
     }
 
     // --- TerrainData ---
@@ -282,18 +332,136 @@ namespace SparkEditor
         SetModified(true);
     }
 
-    bool TerrainEditor::LoadTerrain(const std::string& /*filePath*/)
+    bool TerrainEditor::LoadTerrain(const std::string& filePath)
     {
-        // Binary .sparkterrain loading — placeholder for file format
-        return false;
+        std::ifstream file(filePath, std::ios::binary);
+        if (!file.is_open())
+            return false;
+
+        // Magic number check
+        uint32_t magic = 0;
+        file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+        if (magic != 0x53504B54) // 'SPKT'
+            return false;
+
+        auto terrain = std::make_unique<TerrainData>();
+
+        // Read terrain name
+        uint32_t nameLen = 0;
+        file.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
+        if (nameLen > 4096)
+            return false;
+        terrain->name.resize(nameLen);
+        file.read(terrain->name.data(), nameLen);
+
+        // Read basic properties
+        file.read(reinterpret_cast<char*>(&terrain->size), sizeof(float));
+        file.read(reinterpret_cast<char*>(&terrain->position), sizeof(XMFLOAT3));
+        file.read(reinterpret_cast<char*>(&terrain->lodLevels), sizeof(int));
+        file.read(reinterpret_cast<char*>(&terrain->lodBias), sizeof(float));
+        file.read(reinterpret_cast<char*>(&terrain->generateCollider), sizeof(bool));
+
+        // Read heightmap
+        file.read(reinterpret_cast<char*>(&terrain->heightmap.width), sizeof(int));
+        file.read(reinterpret_cast<char*>(&terrain->heightmap.height), sizeof(int));
+        file.read(reinterpret_cast<char*>(&terrain->heightmap.scale), sizeof(float));
+        file.read(reinterpret_cast<char*>(&terrain->heightmap.minHeight), sizeof(float));
+        file.read(reinterpret_cast<char*>(&terrain->heightmap.maxHeight), sizeof(float));
+
+        size_t heightCount = static_cast<size_t>(terrain->heightmap.width) * terrain->heightmap.height;
+        terrain->heightmap.heights.resize(heightCount);
+        file.read(reinterpret_cast<char*>(terrain->heightmap.heights.data()),
+                  static_cast<std::streamsize>(heightCount * sizeof(float)));
+
+        // Read texture layer count
+        uint32_t layerCount = 0;
+        file.read(reinterpret_cast<char*>(&layerCount), sizeof(layerCount));
+        for (uint32_t i = 0; i < layerCount && i < 64; ++i)
+        {
+            uint32_t lnameLen = 0;
+            file.read(reinterpret_cast<char*>(&lnameLen), sizeof(lnameLen));
+            if (lnameLen > 4096)
+                break;
+            std::string lname(lnameLen, '\0');
+            file.read(lname.data(), lnameLen);
+            terrain->AddTextureLayer(lname);
+        }
+
+        // Read splatmap
+        file.read(reinterpret_cast<char*>(&terrain->splatmapResolution), sizeof(int));
+        size_t splatSize = static_cast<size_t>(terrain->splatmapResolution) * terrain->splatmapResolution * 4;
+        terrain->splatmaps.resize(splatSize);
+        if (splatSize > 0)
+        {
+            file.read(reinterpret_cast<char*>(terrain->splatmaps.data()), static_cast<std::streamsize>(splatSize));
+        }
+
+        if (!file.good())
+            return false;
+
+        m_currentTerrain = std::move(terrain);
+        m_undoStack.clear();
+        m_redoStack.clear();
+        SetModified(false);
+        return true;
     }
 
-    bool TerrainEditor::SaveTerrain(const std::string& /*filePath*/)
+    bool TerrainEditor::SaveTerrain(const std::string& filePath)
     {
         if (!m_currentTerrain)
             return false;
-        // Binary .sparkterrain saving — placeholder for file format
-        return false;
+
+        std::ofstream file(filePath, std::ios::binary);
+        if (!file.is_open())
+            return false;
+
+        // Magic number
+        uint32_t magic = 0x53504B54; // 'SPKT'
+        file.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+
+        // Terrain name
+        auto nameLen = static_cast<uint32_t>(m_currentTerrain->name.size());
+        file.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
+        file.write(m_currentTerrain->name.data(), nameLen);
+
+        // Basic properties
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->size), sizeof(float));
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->position), sizeof(XMFLOAT3));
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->lodLevels), sizeof(int));
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->lodBias), sizeof(float));
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->generateCollider), sizeof(bool));
+
+        // Heightmap
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.width), sizeof(int));
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.height), sizeof(int));
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.scale), sizeof(float));
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.minHeight), sizeof(float));
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->heightmap.maxHeight), sizeof(float));
+
+        size_t heightCount = m_currentTerrain->heightmap.heights.size();
+        file.write(reinterpret_cast<const char*>(m_currentTerrain->heightmap.heights.data()),
+                   static_cast<std::streamsize>(heightCount * sizeof(float)));
+
+        // Texture layers
+        auto layerCount = static_cast<uint32_t>(m_currentTerrain->textureLayers.size());
+        file.write(reinterpret_cast<const char*>(&layerCount), sizeof(layerCount));
+        for (const auto& layer : m_currentTerrain->textureLayers)
+        {
+            auto lnameLen = static_cast<uint32_t>(layer->name.size());
+            file.write(reinterpret_cast<const char*>(&lnameLen), sizeof(lnameLen));
+            file.write(layer->name.data(), lnameLen);
+        }
+
+        // Splatmap
+        file.write(reinterpret_cast<const char*>(&m_currentTerrain->splatmapResolution), sizeof(int));
+        if (!m_currentTerrain->splatmaps.empty())
+        {
+            file.write(reinterpret_cast<const char*>(m_currentTerrain->splatmaps.data()),
+                       static_cast<std::streamsize>(m_currentTerrain->splatmaps.size()));
+        }
+
+        SetModified(false);
+        return file.good();
     }
 
     void TerrainEditor::ApplyToolAtPosition(const XMFLOAT3& worldPosition, float strength)

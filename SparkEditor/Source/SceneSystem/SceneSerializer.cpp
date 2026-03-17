@@ -11,6 +11,7 @@
 #include <iostream>
 #include <sstream>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <iomanip>
@@ -1281,24 +1282,132 @@ namespace SparkEditor
         return true;
     }
 
-    void* SceneSerializer::TransformToJSON(const Transform& /*transform*/)
+    void* SceneSerializer::TransformToJSON(const Transform& transform)
     {
-        return nullptr; // Would require a JSON library
+        // Produce a heap-allocated JSON string for the transform.
+        // Caller must delete the returned std::string* when done.
+        auto* json = new std::string();
+        std::ostringstream ss;
+        ss << std::setprecision(6);
+        ss << "{\"position\":[" << transform.position.x << "," << transform.position.y << "," << transform.position.z
+           << "]," << "\"rotation\":[" << transform.rotation.x << "," << transform.rotation.y << ","
+           << transform.rotation.z << "," << transform.rotation.w << "]," << "\"scale\":[" << transform.scale.x << ","
+           << transform.scale.y << "," << transform.scale.z << "]," << "\"parentID\":" << transform.parentID << "}";
+        *json = ss.str();
+        return json;
     }
 
-    bool SceneSerializer::JSONToTransform(void* /*json*/, Transform& /*transform*/)
+    bool SceneSerializer::JSONToTransform(void* json, Transform& transform)
     {
-        return false; // Would require a JSON library
+        if (!json)
+            return false;
+        const auto* str = static_cast<const std::string*>(json);
+        if (str->empty())
+            return false;
+
+        // Minimal parser: extract arrays by key name
+        auto extractArray = [&](const std::string& key, float* out, int count) -> bool
+        {
+            auto pos = str->find("\"" + key + "\"");
+            if (pos == std::string::npos)
+                return false;
+            pos = str->find('[', pos);
+            if (pos == std::string::npos)
+                return false;
+            ++pos;
+            for (int i = 0; i < count; ++i)
+            {
+                char* end = nullptr;
+                out[i] = std::strtof(str->c_str() + pos, &end);
+                pos = static_cast<size_t>(end - str->c_str());
+                if (pos < str->size() && (*end == ',' || *end == ']'))
+                    ++pos;
+            }
+            return true;
+        };
+
+        extractArray("position", &transform.position.x, 3);
+        extractArray("rotation", &transform.rotation.x, 4);
+        extractArray("scale", &transform.scale.x, 3);
+
+        // Extract parentID
+        auto pidPos = str->find("\"parentID\"");
+        if (pidPos != std::string::npos)
+        {
+            pidPos = str->find(':', pidPos);
+            if (pidPos != std::string::npos)
+            {
+                char* end = nullptr;
+                transform.parentID = std::strtoull(str->c_str() + pidPos + 1, &end, 10);
+            }
+        }
+        return true;
     }
 
-    void* SceneSerializer::ComponentToJSON(const Component& /*component*/)
+    void* SceneSerializer::ComponentToJSON(const Component& component)
     {
-        return nullptr; // Would require a JSON library
+        auto* json = new std::string();
+        std::ostringstream ss;
+        ss << "{\"type\":\"" << ComponentTypeToString(component.type) << "\"," << "\"objectID\":" << component.objectID
+           << "," << "\"enabled\":" << (component.enabled ? "true" : "false");
+        if (!component.data.empty())
+        {
+            ss << ",\"data\":\"" << BytesToHex(component.data) << "\"";
+        }
+        ss << "}";
+        *json = ss.str();
+        return json;
     }
 
-    bool SceneSerializer::JSONToComponent(void* /*json*/, Component& /*component*/)
+    bool SceneSerializer::JSONToComponent(void* json, Component& component)
     {
-        return false; // Would require a JSON library
+        if (!json)
+            return false;
+        const auto* str = static_cast<const std::string*>(json);
+        if (str->empty())
+            return false;
+
+        // Extract type string
+        auto typePos = str->find("\"type\":\"");
+        if (typePos != std::string::npos)
+        {
+            typePos += 8;
+            auto endPos = str->find('"', typePos);
+            if (endPos != std::string::npos)
+            {
+                std::string typeStr = str->substr(typePos, endPos - typePos);
+                component.type = StringToComponentType(typeStr);
+            }
+        }
+
+        // Extract objectID
+        auto oidPos = str->find("\"objectID\":");
+        if (oidPos != std::string::npos)
+        {
+            char* end = nullptr;
+            component.objectID = std::strtoull(str->c_str() + oidPos + 11, &end, 10);
+        }
+
+        // Extract enabled
+        auto enPos = str->find("\"enabled\":");
+        if (enPos != std::string::npos)
+        {
+            component.enabled = (str->find("true", enPos + 10) == enPos + 10);
+        }
+
+        // Extract data hex string
+        auto dataPos = str->find("\"data\":\"");
+        if (dataPos != std::string::npos)
+        {
+            dataPos += 8;
+            auto endPos = str->find('"', dataPos);
+            if (endPos != std::string::npos)
+            {
+                std::string hexStr = str->substr(dataPos, endPos - dataPos);
+                component.data = HexToBytes(hexStr);
+            }
+        }
+        return true;
     }
 
     bool SceneSerializer::ValidateScene(const SceneFile& scene, SerializationResult& result)
