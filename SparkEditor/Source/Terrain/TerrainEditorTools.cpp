@@ -1,4 +1,10 @@
-// TerrainEditorTools.cpp — Tool application, coordinate conversion, noise, erosion
+/**
+ * @file TerrainEditorTools.cpp
+ * @brief Tool application, coordinate conversion, noise, and erosion for the terrain editor
+ *
+ * Contains the "doing" side of the terrain editor — sculpting brushes, texture painting,
+ * procedural generation, and the math helpers they depend on.
+ */
 
 #include "TerrainEditor.h"
 
@@ -10,17 +16,26 @@ using namespace DirectX;
 namespace SparkEditor
 {
 
+    // =========================================================================
+    // Procedural generation tools
+    // =========================================================================
+
     void TerrainEditor::GenerateNoiseHeightmap(int octaves, float frequency, float amplitude, float lacunarity,
                                                float persistence)
     {
         if (!m_currentTerrain)
             return;
+
         auto& hm = m_currentTerrain->heightmap;
         hm.heights.resize(static_cast<size_t>(hm.width) * static_cast<size_t>(hm.height));
+
         for (int y = 0; y < hm.height; ++y)
+        {
             for (int x = 0; x < hm.width; ++x)
             {
-                float h = 0.0f, freq = frequency, amp = amplitude;
+                float h = 0.0f;
+                float freq = frequency;
+                float amp = amplitude;
                 for (int o = 0; o < octaves; ++o)
                 {
                     h += GeneratePerlinNoise(static_cast<float>(x), static_cast<float>(y), freq) * amp;
@@ -29,6 +44,8 @@ namespace SparkEditor
                 }
                 hm.SetHeight(x, y, h);
             }
+        }
+
         UpdateTerrainMesh();
         UpdateTerrainCollision();
         SetModified(true);
@@ -38,11 +55,14 @@ namespace SparkEditor
     {
         if (!m_currentTerrain)
             return;
+
         auto& hm = m_currentTerrain->heightmap;
         for (int iter = 0; iter < iterations; ++iter)
         {
+            // Work on a copy so reads don't see partially-smoothed data
             std::vector<float> smoothed = hm.heights;
             for (int y = 1; y < hm.height - 1; ++y)
+            {
                 for (int x = 1; x < hm.width - 1; ++x)
                 {
                     float avg = (hm.GetHeight(x - 1, y) + hm.GetHeight(x + 1, y) + hm.GetHeight(x, y - 1) +
@@ -52,8 +72,10 @@ namespace SparkEditor
                     smoothed[static_cast<size_t>(y) * static_cast<size_t>(hm.width) + static_cast<size_t>(x)] =
                         current + (avg - current) * strength;
                 }
+            }
             hm.heights = std::move(smoothed);
         }
+
         UpdateTerrainMesh();
         UpdateTerrainCollision();
         SetModified(true);
@@ -63,11 +85,18 @@ namespace SparkEditor
     {
         if (!m_currentTerrain)
             return;
+
+        // Simple thermal erosion: pick random points and erode toward lowest neighbor
         auto& hm = m_currentTerrain->heightmap;
         for (int i = 0; i < iterations; ++i)
-            ApplyHydraulicErosion(std::rand() % hm.width, std::rand() % hm.height, strength);
+        {
+            int x = std::rand() % hm.width;
+            int y = std::rand() % hm.height;
+            ApplyHydraulicErosion(x, y, strength);
+        }
         (void)evaporationRate;
         (void)depositionRate;
+
         UpdateTerrainMesh();
         UpdateTerrainCollision();
         SetModified(true);
@@ -83,19 +112,31 @@ namespace SparkEditor
         if (!layer->useAutoPlacement)
             return;
 
+        // Walk every splatmap texel, sample the heightmap height and slope,
+        // and paint weight where the layer's placement rules are satisfied.
         int res = m_currentTerrain->splatmapResolution;
         for (int y = 0; y < res; ++y)
+        {
             for (int x = 0; x < res; ++x)
             {
-                int hmX = static_cast<int>(static_cast<float>(x) / res * (m_currentTerrain->heightmap.width - 1));
-                int hmY = static_cast<int>(static_cast<float>(y) / res * (m_currentTerrain->heightmap.height - 1));
-                float h = m_currentTerrain->heightmap.GetHeight(hmX, hmY);
-                float slope = CalculateTerrainSlope(hmX, hmY);
-                if (h >= layer->minHeight && h <= layer->maxHeight && slope >= layer->minSlope &&
-                    slope <= layer->maxSlope && layerIndex < 4)
-                    m_currentTerrain->SetSplatmapWeight(
-                        x, y, layerIndex, static_cast<uint8_t>(layer->placementStrength * 255.0f));
+                float hmX = static_cast<float>(x) / static_cast<float>(res) *
+                            static_cast<float>(m_currentTerrain->heightmap.width - 1);
+                float hmY = static_cast<float>(y) / static_cast<float>(res) *
+                            static_cast<float>(m_currentTerrain->heightmap.height - 1);
+
+                float h = m_currentTerrain->heightmap.GetHeight(static_cast<int>(hmX), static_cast<int>(hmY));
+                float slope = CalculateTerrainSlope(static_cast<int>(hmX), static_cast<int>(hmY));
+
+                bool inRange = h >= layer->minHeight && h <= layer->maxHeight && slope >= layer->minSlope &&
+                               slope <= layer->maxSlope;
+
+                if (inRange && layerIndex < 4)
+                {
+                    auto w = static_cast<uint8_t>(layer->placementStrength * 255.0f);
+                    m_currentTerrain->SetSplatmapWeight(x, y, layerIndex, w);
+                }
             }
+        }
         SetModified(true);
     }
 

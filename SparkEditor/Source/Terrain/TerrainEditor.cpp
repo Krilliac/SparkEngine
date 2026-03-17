@@ -1,4 +1,7 @@
-// TerrainEditor.cpp — Core terrain editor: lifecycle, load/save, undo/redo, mesh/collision rebuild
+/**
+ * @file TerrainEditor.cpp
+ * @brief Core terrain editor: lifecycle, load/save, undo/redo, mesh/collision rebuild
+ */
 
 #include "TerrainEditor.h"
 #include "Utils/Validate.h"
@@ -15,6 +18,7 @@ namespace SparkEditor
 {
 
     TerrainEditor::TerrainEditor() : EditorPanel("Terrain Editor", "terrain_editor") {}
+
     TerrainEditor::~TerrainEditor() = default;
 
     bool TerrainEditor::Initialize()
@@ -288,28 +292,31 @@ namespace SparkEditor
     {
         if (!m_currentOperation)
             return;
+
         m_undoStack.push_back(std::move(m_currentOperation));
         m_redoStack.clear();
+
+        // Trim undo stack to configured maximum
         while (static_cast<int>(m_undoStack.size()) > m_maxUndoOperations)
+        {
             m_undoStack.erase(m_undoStack.begin());
+        }
     }
 
     void TerrainEditor::UndoOperation()
     {
-        if (!m_undoStack.empty())
-        {
-            m_redoStack.push_back(std::move(m_undoStack.back()));
-            m_undoStack.pop_back();
-        }
+        if (m_undoStack.empty())
+            return;
+        m_redoStack.push_back(std::move(m_undoStack.back()));
+        m_undoStack.pop_back();
     }
 
     void TerrainEditor::RedoOperation()
     {
-        if (!m_redoStack.empty())
-        {
-            m_undoStack.push_back(std::move(m_redoStack.back()));
-            m_redoStack.pop_back();
-        }
+        if (m_redoStack.empty())
+            return;
+        m_undoStack.push_back(std::move(m_redoStack.back()));
+        m_redoStack.pop_back();
     }
 
     // --- Mesh/collision rebuild ---
@@ -319,32 +326,43 @@ namespace SparkEditor
         m_meshDirty = false;
         if (!m_currentTerrain)
             return;
+
         auto& hm = m_currentTerrain->heightmap;
-        int w = hm.width, h = hm.height;
+        int w = hm.width;
+        int h = hm.height;
         if (w < 2 || h < 2 || hm.heights.empty())
             return;
 
-        float cellSize = m_currentTerrain->size / static_cast<float>(w - 1);
-        float halfSize = m_currentTerrain->size * 0.5f;
-        auto idx = [w](int x, int y) { return static_cast<size_t>(y) * static_cast<size_t>(w) + x; };
+        float terrainSize = m_currentTerrain->size;
+        float cellSize = terrainSize / static_cast<float>(w - 1);
+        float halfSize = terrainSize * 0.5f;
 
-        // Build vertex positions
-        size_t vertCount = static_cast<size_t>(w) * h;
+        // Build vertex positions from heightmap
+        size_t vertCount = static_cast<size_t>(w) * static_cast<size_t>(h);
         m_meshVertices.resize(vertCount);
         for (int y = 0; y < h; ++y)
-            for (int x = 0; x < w; ++x)
-                m_meshVertices[idx(x, y)] = {x * cellSize - halfSize + m_currentTerrain->position.x,
-                                             hm.GetHeight(x, y) * hm.scale + m_currentTerrain->position.y,
-                                             y * cellSize - halfSize + m_currentTerrain->position.z};
-
-        // Build normals from heightmap finite differences
-        m_meshNormals.resize(vertCount);
-        for (int y = 0; y < h; ++y)
+        {
             for (int x = 0; x < w; ++x)
             {
-                XMFLOAT3 n = {(hm.GetHeight(x - 1, y) - hm.GetHeight(x + 1, y)) * hm.scale / (2.0f * cellSize),
-                              1.0f,
-                              (hm.GetHeight(x, y - 1) - hm.GetHeight(x, y + 1)) * hm.scale / (2.0f * cellSize)};
+                size_t idx = static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x);
+                m_meshVertices[idx] = {static_cast<float>(x) * cellSize - halfSize + m_currentTerrain->position.x,
+                                       hm.GetHeight(x, y) * hm.scale + m_currentTerrain->position.y,
+                                       static_cast<float>(y) * cellSize - halfSize + m_currentTerrain->position.z};
+            }
+        }
+
+        // Build normals via central-difference on the heightmap
+        m_meshNormals.resize(vertCount);
+        for (int y = 0; y < h; ++y)
+        {
+            for (int x = 0; x < w; ++x)
+            {
+                float hL = hm.GetHeight(x - 1, y) * hm.scale;
+                float hR = hm.GetHeight(x + 1, y) * hm.scale;
+                float hD = hm.GetHeight(x, y - 1) * hm.scale;
+                float hU = hm.GetHeight(x, y + 1) * hm.scale;
+
+                XMFLOAT3 n = {(hL - hR) / (2.0f * cellSize), 1.0f, (hD - hU) / (2.0f * cellSize)};
                 float len = std::sqrt(n.x * n.x + n.y * n.y + n.z * n.z);
                 if (len > 0.0f)
                 {
@@ -352,19 +370,31 @@ namespace SparkEditor
                     n.y /= len;
                     n.z /= len;
                 }
-                m_meshNormals[idx(x, y)] = n;
-            }
 
-        // Build triangle indices (two triangles per quad)
+                size_t idx = static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x);
+                m_meshNormals[idx] = n;
+            }
+        }
+
+        // Build triangle indices — two triangles per heightmap quad
         m_meshIndices.clear();
-        m_meshIndices.reserve(static_cast<size_t>(w - 1) * (h - 1) * 6);
+        m_meshIndices.reserve(static_cast<size_t>(w - 1) * static_cast<size_t>(h - 1) * 6);
         for (int y = 0; y < h - 1; ++y)
+        {
             for (int x = 0; x < w - 1; ++x)
             {
                 auto tl = static_cast<uint32_t>(y * w + x);
-                auto tr = tl + 1, bl = static_cast<uint32_t>((y + 1) * w + x), br = bl + 1;
-                m_meshIndices.insert(m_meshIndices.end(), {tl, bl, tr, tr, bl, br});
+                auto tr = static_cast<uint32_t>(y * w + x + 1);
+                auto bl = static_cast<uint32_t>((y + 1) * w + x);
+                auto br = static_cast<uint32_t>((y + 1) * w + x + 1);
+                m_meshIndices.push_back(tl);
+                m_meshIndices.push_back(bl);
+                m_meshIndices.push_back(tr);
+                m_meshIndices.push_back(tr);
+                m_meshIndices.push_back(bl);
+                m_meshIndices.push_back(br);
             }
+        }
     }
 
     void TerrainEditor::UpdateTerrainCollision()
@@ -372,14 +402,20 @@ namespace SparkEditor
         m_collisionDirty = false;
         if (!m_currentTerrain)
             return;
+
         auto& hm = m_currentTerrain->heightmap;
         if (hm.heights.empty())
             return;
-        // Build world-space height array for physics heightfield shapes (Bullet)
-        m_collisionHeights.resize(hm.heights.size());
+
+        // Build a contiguous world-space height array for physics heightfield shapes.
+        // Bullet Physics uses this directly for btHeightfieldTerrainShape.
+        size_t count = hm.heights.size();
+        m_collisionHeights.resize(count);
         float posY = m_currentTerrain->position.y;
-        for (size_t i = 0; i < hm.heights.size(); ++i)
+        for (size_t i = 0; i < count; ++i)
+        {
             m_collisionHeights[i] = hm.heights[i] * hm.scale + posY;
+        }
     }
 
 } // namespace SparkEditor

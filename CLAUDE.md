@@ -29,29 +29,42 @@ cd build && ctest --output-on-failure
 
 CMake 3.16+, C++20 required. Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (OFF by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`.
 
-## Anti-Bloat Rules — HIGHEST PRIORITY
+## Anti-Bloat Guidelines
 
-These rules exist because AI-assisted development has a structural bias toward complexity. Every session, without active enforcement, will add more than it removes. These rules are non-negotiable and override every other instinct.
+These guidelines exist because AI-assisted development has a structural bias toward complexity. Without active awareness, sessions tend to add more than they remove. The goal is **sanity, not sacrifice** — keep code clean and intentional without stripping away legitimate verbosity, comments, or readability.
 
 ### The Core Problem
 
 AI defaults to:
 - Adding features "just in case" → dead code accumulates
 - Creating helper classes for single uses → pointless abstraction
-- Over-engineering simple problems → 261KB files that nobody can debug
+- Over-engineering simple problems → massive files that nobody can debug
 - Building systems without wiring them in → ConsoleProcessManager-style orphans
 - Scattering related logic → 25 command registration functions instead of 1
 
-### Hard Limits
+### Sensible Thresholds (Not Hard Limits)
 
-| Thing | Limit | Action if exceeded |
-|-------|-------|--------------------|
-| `.cpp` file size | 400 lines | Refactor before touching anything else |
-| `.h` file size | 200 lines | Split or consolidate before adding anything |
-| Public methods per class | 15 | Justify each one or remove it |
-| Private helper methods per class | 10 | Extract to free function or delete |
+These are **guidelines for when to pause and think**, not absolute rules. A 450-line `.cpp` that is clean, well-commented, and logically cohesive is fine. A 200-line `.cpp` full of cryptic compressed code is not. Use judgment.
+
+| Thing | Threshold | What to do |
+|-------|-----------|------------|
+| `.cpp` file size | ~500 lines | Ask: "Is this one cohesive thing, or two things jammed together?" Split if it's doing multiple jobs. Leave it if it's one coherent unit. |
+| `.h` file size | ~300 lines | Ask: "Are these types/declarations related?" Data-heavy headers with many structs are fine. A class header with 40 methods probably needs splitting. |
+| Public methods per class | ~15 | Ask: "Does each method earn its place?" If yes, keep them. |
+| Function length | ~60 lines | Ask: "Can I understand this at a glance?" Long functions with clear linear flow are fine. Long functions with nested branching should be split. |
 | Command registration functions | 1 per subsystem | Consolidate before adding commands |
 | Parallel singleton systems doing the same thing | 0 | Remove the duplicate |
+
+### The Readability Principle
+
+**Never sacrifice readability to hit a line count.** Specifically:
+- **Comments that explain "why"** are valuable — keep them. Don't strip comments to save lines.
+- **Descriptive variable names** are better than terse ones. `brushRadius` > `br`.
+- **Vertical whitespace** between logical sections aids scanning. Don't collapse everything.
+- **Explicit loop bodies with braces** are clearer than braceless single-line forms when the body is non-trivial.
+- **One statement per line** — don't pack `float h = 0.0f, freq = frequency, amp = amplitude;` to save two lines.
+
+The question is always: **"Does this make sense to someone reading it for the first time?"**
 
 ### Before Writing Any Code — Ask These Questions
 
@@ -61,33 +74,35 @@ AI defaults to:
 4. **Is this a one-time use?** If yes, inline it — no helper function, no new class.
 5. **Am I future-proofing?** Stop. Write only what is needed today.
 
-### Mandatory Removal Before Addition
+### Before Adding New Files or Classes
 
-- Adding a new class → remove or consolidate an existing one if the total count grows
-- Adding a new `.cpp` file → justify why it can't live in an existing file
-- Adding a new public method → check if a private or existing method can be extended
+- Adding a new class → ask if an existing one can be extended instead
+- Adding a new `.cpp` file → ask if it can logically live in an existing file
+- Adding a new public method → check if a private or existing method covers the need
 - Adding new command registrations → they go in ONE place per subsystem, not scattered
+
+If the answer is genuinely "no, this needs its own thing" — go ahead and add it. New files for clear responsibilities are good architecture, not bloat.
 
 ### Dead Code Is Actively Harmful
 
-- Unused public methods → delete immediately, don't comment out
+- Unused public methods → delete, don't comment out
 - Uninitialized systems (built but never called) → either wire them in or delete them
 - Features built but not integrated → count as bugs, not WIP
 - Commented-out code → delete it, git history exists for a reason
 - "Stub" implementations → either implement fully or remove entirely
 
-### Signs You Are Creating Bloat — Stop Immediately
+### Signs of Actual Bloat — Pause and Reconsider
 
-- Writing a function longer than 50 lines
 - A class has more `Register*` methods than actual logic
 - You're adding a 6th logging method when 3 exist
 - A new `*Manager` or `*System` class when the existing one can be extended
 - Duplicating member variables that exist in a related class
 - Creating an abstraction for something used in exactly one place
+- A file is growing because unrelated concerns are being added to it
 
-### The Removal Mandate
+### On Removal
 
-Every PR that adds code **must** also remove code. If a PR adds 50 lines and removes 0, that is a bloat PR and should be rejected. Aim for negative line counts on refactor tasks. The codebase should shrink over time, not grow.
+When refactoring, aim to remove dead weight — but removal is a tool, not a mandate. A PR that adds 200 well-structured lines and removes 0 is fine if those 200 lines are genuinely needed. A PR that adds 50 lines of speculative code and removes 0 is bloat. The distinction is intent and necessity, not arithmetic.
 
 ---
 
