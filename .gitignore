@@ -473,4 +473,7 @@ docs/output/
 docs/.api_checksums
 docs/.doc_checksums
 
+# CTest artifacts
+Testing/
+
 # End of SparkEngine .gitignore
