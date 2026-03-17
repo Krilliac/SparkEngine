@@ -88,7 +88,8 @@
 #define ICON_FA_FIRE "\xef\x81\xad"        // U+F06D
 
 // === Communication / Dialogue ===
-#define ICON_FA_COMMENT "\xef\x81\xb5" // U+F075
+#define ICON_FA_COMMENT "\xef\x81\xb5"  // U+F075
+#define ICON_FA_COMMENTS "\xef\x82\x86" // U+F086
 
 // === Panels ===
 #define ICON_FA_SITEMAP "\xef\x83\xa8"   // U+F0E8 (hierarchy)
@@ -158,8 +159,39 @@
 #define ICON_FA_SLIDERS_H "\xef\x87\x9e"   // U+F1DE (horizontal sliders)
 
 // === Networking / Server Icons ===
-#define ICON_FA_SERVER "\xef\x88\xb3"  // U+F233
-#define ICON_FA_PLUG "\xef\x87\xa6"    // U+F1E6
-#define ICON_FA_USERS "\xef\x83\x80"   // U+F0C0
-#define ICON_FA_SPINNER "\xef\x84\x90" // U+F110
-#define ICON_FA_REFRESH "\xef\x80\xa1" // U+F021 (arrows-rotate)
+#define ICON_FA_SERVER "\xef\x88\xb3"        // U+F233
+#define ICON_FA_PLUG "\xef\x87\xa6"          // U+F1E6
+#define ICON_FA_USERS "\xef\x83\x80"         // U+F0C0
+#define ICON_FA_SPINNER "\xef\x84\x90"       // U+F110
+#define ICON_FA_REFRESH "\xef\x80\xa1"       // U+F021 (arrows-rotate)
+#define ICON_FA_NETWORK_WIRED "\xef\x9b\xbf" // U+F6FF
+
+// === Weather Icons ===
+#define ICON_FA_CLOUD "\xef\x83\x82"      // U+F0C2
+#define ICON_FA_CLOUD_RAIN "\xef\x9c\xbd" // U+F73D
+#define ICON_FA_CLOUD_SUN "\xef\x9b\x84"  // U+F6C4
+#define ICON_FA_SNOWFLAKE "\xef\x8b\x9c"  // U+F2DC
+#define ICON_FA_SMOG "\xef\x9d\x9e"       // U+F75F
+#define ICON_FA_WIND "\xef\x9c\xae"       // U+F72E
+
+// === Editor Tool Icons ===
+#define ICON_FA_ADJUST "\xef\x81\x82"       // U+F042
+#define ICON_FA_ARROW_UP "\xef\x81\xa2"     // U+F062
+#define ICON_FA_ARROW_DOWN "\xef\x81\xa3"   // U+F063
+#define ICON_FA_ARROW_RIGHT "\xef\x81\xa1"  // U+F061
+#define ICON_FA_FILTER "\xef\x82\xb0"       // U+F0B0
+#define ICON_FA_LIST "\xef\x80\xb3"         // U+F03A
+#define ICON_FA_QUESTION "\xef\x84\xa8"     // U+F128
+#define ICON_FA_HAND_POINTER "\xef\x89\x9a" // U+F25A
+#define ICON_FA_STAMP "\xef\x96\xbf"        // U+F5BF
+#define ICON_FA_TH_LARGE "\xef\x80\x89"     // U+F009
+
+// === AI / Logic Icons ===
+#define ICON_FA_BRAIN "\xef\x97\x83"           // U+F5DC
+#define ICON_FA_PROJECT_DIAGRAM "\xef\x95\x82" // U+F542
+#define ICON_FA_CODE_BRANCH "\xef\x84\xa6"     // U+F126
+#define ICON_FA_CHALKBOARD "\xef\x94\x9b"      // U+F51B
+
+// === Path / Spline Icons ===
+#define ICON_FA_BEZIER_CURVE "\xef\x95\x9b" // U+F55B
+#define ICON_FA_ROUTE "\xef\x93\x97"        // U+F4D7

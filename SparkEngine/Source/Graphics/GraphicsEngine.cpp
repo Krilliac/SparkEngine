@@ -855,7 +855,9 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
     if (m_hybridRT && m_rhiBridge)
     {
         auto* cmd = m_rhiBridge->GetCommandList();
-        DirectX::XMFLOAT3 camPos = {m_cameraPosition.x, m_cameraPosition.y, m_cameraPosition.z};
+        XMMATRIX invView = XMMatrixInverse(nullptr, viewMatrix);
+        DirectX::XMFLOAT3 camPos;
+        XMStoreFloat3(&camPos, invView.r[3]);
         DirectX::XMFLOAT3 lightDir = {0.0f, -1.0f, 0.5f}; // Primary directional light
         Spark::Graphics::SSRSettings ssrDefaults;         // Screen-space coordination
 
@@ -1307,6 +1309,106 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
                                      std::to_wstring(culledObjects) + L") in " +
                                      std::to_wstring(cullingTime.count() / 1000.0f) + L"ms",
                                  L"INFO");
+    }
+}
+
+// ============================================================================
+// POST-PROCESSING AND TEMPORAL EFFECTS
+// ============================================================================
+
+void GraphicsEngine::RenderPostProcessing()
+{
+    m_postProcessStartTime = std::chrono::high_resolution_clock::now();
+
+    // Delegate to the actual PostProcessingPipeline system
+    if (m_postProcessing)
+    {
+        float deltaTime = m_statistics.frameTime / 1000.0f; // ms -> seconds
+        m_postProcessing->Process(deltaTime);
+        m_postProcessing->Render();
+    }
+
+    // Also dispatch through RHI path for cross-platform passes
+    auto& rhi = GetRHI();
+    if (rhi.initialized)
+    {
+        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
+        if (cmd)
+        {
+            uint32_t passCount = 0;
+            cmd->BeginEvent("PostProcessing_RHI");
+
+            if (m_settings.bloom)
+            {
+                cmd->BeginEvent("Bloom");
+                cmd->Draw(3, 0);
+                passCount++;
+                cmd->EndEvent();
+            }
+
+            if (m_settings.ssao)
+            {
+                cmd->BeginEvent("SSAO");
+                cmd->Draw(3, 0);
+                passCount++;
+                cmd->EndEvent();
+            }
+
+            if (m_hdrEnabled)
+            {
+                cmd->BeginEvent("ToneMapping");
+                cmd->Draw(3, 0);
+                passCount++;
+                cmd->EndEvent();
+            }
+
+            m_statistics.postProcessPasses = passCount + m_postProcessing->GetActivePassCount();
+            cmd->EndEvent();
+        }
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    m_statistics.postProcessTime = std::chrono::duration<float, std::milli>(endTime - m_postProcessStartTime).count();
+}
+
+void GraphicsEngine::RenderTemporalEffects()
+{
+    // Delegate to the actual TemporalEffects system
+    if (m_temporalEffects)
+    {
+        m_temporalEffects->SetTAAEnabled(m_settings.taa);
+        m_temporalEffects->SetMotionBlurEnabled(m_settings.motionBlur);
+
+        m_temporalEffects->Render();
+
+        if (m_settings.taa)
+            m_statistics.postProcessPasses++;
+        if (m_settings.motionBlur)
+            m_statistics.postProcessPasses++;
+    }
+
+    // Also dispatch through RHI path for cross-platform tracking
+    auto& rhi = GetRHI();
+    if (rhi.initialized)
+    {
+        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
+        if (cmd)
+        {
+            cmd->BeginEvent("TemporalEffects_RHI");
+            if (m_settings.taa)
+            {
+                cmd->BeginEvent("TAA");
+                cmd->Draw(3, 0);
+                cmd->EndEvent();
+            }
+            if (m_settings.motionBlur)
+            {
+                cmd->BeginEvent("MotionBlur");
+                cmd->Draw(3, 0);
+                cmd->EndEvent();
+            }
+            cmd->EndEvent();
+        }
     }
 }
 

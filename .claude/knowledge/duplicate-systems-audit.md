@@ -1,13 +1,12 @@
 # Duplicate Systems Audit — ODR Risks and Parallel Implementations
 
-**Last updated:** 2026-03-16
+**Last updated:** 2026-03-17
 **Type:** Observation
-**Status:** Partially Resolved
-**Severity:** Medium (was Critical — 2 of 3 ODR risks fixed)
+**Status:** Mostly Resolved
 
 ## Description
 
-5 confirmed cases of duplicate or parallel system implementations. 2 ODR risks have been fixed. 1 architectural duplication remains.
+5 confirmed cases of duplicate or parallel system implementations. 3 ODR risks fixed, 1 architectural duplication documented, 1 cosmetic.
 
 ## Critical: ODR Violation Risks
 
@@ -19,33 +18,22 @@
 
 **Fix applied:** The standalone `AnimationStateMachine.h` header was deleted in a prior session. The canonical definition lives in `AnimationSystem.h`.
 
-### 3. SimpleConsole — Engine and Editor Versions
+### 3. Dual EventBus Implementations — RESOLVED (2026-03-17)
+
+**Fix applied:** `EventSystem.h` no longer defines its own `Spark::EventBus` class. It now includes `Utils/EventBus.h` (the canonical implementation with RAII SubscriptionHandle, per-type mutex, snapshot-based publish) and only defines built-in event types + QueuedEventBus. A `SubscriptionID` type alias is kept for backward compatibility.
+
+### 4. SimpleConsole — Engine and Editor Versions
 
 | File | Lines | Namespace |
 |------|-------|-----------|
-| `SparkEngine/Source/Utils/SparkConsole.h` | 450 | `Spark::SimpleConsole` |
+| `SparkEngine/Source/Utils/SparkConsole.h` | 162 | `Spark::SimpleConsole` |
 | `SparkEditor/Source/Utils/SparkConsole.h` | 77 | `SparkEditor::SimpleConsole` |
 
-Different namespaces prevent ODR violation, but the duplication is bridged via `EditorConsoleBridge.h` (documented as "Problem R7.3"). Separate command registries and log histories cause behavioral divergence.
+Different namespaces prevent ODR violation. The engine version is now lean (551 lines .cpp, 162 lines .h) after refactoring in a prior session.
 
-## High: Parallel Event Systems
+## Resolved: Visual Scripting — DELETED
 
-### 4. EventBus — Two Independent Implementations
-
-| File | API Pattern | Thread Safety |
-|------|------------|---------------|
-| `Utils/EventBus.h` (lines 146-315) | RAII `SubscriptionHandle` (auto-unsubscribe) | Mutex-protected |
-| `Engine/Events/EventSystem.h` (lines 65-182) | Manual `SubscriptionID` (integer-based) | Mutex-protected |
-
-Both implement type-safe pub/sub using `std::type_index`. EventSystem.h also defines `QueuedEventBus` for deferred dispatch. Code can use either, fragmenting event flow.
-
-**Fix:** Pick one. EventBus.h has better RAII semantics; EventSystem.h has deferred dispatch. Merge the best of both into one.
-
-## Medium: Parallel Visual Scripting — RESOLVED (deleted)
-
-### 5. VisualScriptSystem vs VisualScriptingSystem — DELETED
-
-Both systems (7,343 lines combined) were deleted as dead code in March 2026. Neither was wired into any startup path or included by any other source file. The orphaned test was also removed.
+Both VisualScriptSystem and VisualScriptingSystem (7,343 lines combined) were deleted as dead code.
 
 ## Medium: SceneManager Naming Collision
 
@@ -62,7 +50,7 @@ Different namespaces, but identical class names cause confusion when reading cod
 |-------|----------|--------|
 | AudioMixer ODR risk | Critical | **RESOLVED** (renamed to AudioBusMixer) |
 | AnimationStateMachine ODR risk | Critical | **RESOLVED** (standalone header deleted) |
-| Dual EventBus implementations | High | OPEN (merge best of both) |
-| SimpleConsole duplication | High | Documented, bridge exists |
+| Dual EventBus implementations | High | **RESOLVED** (EventSystem.h delegates to EventBus.h) |
+| SimpleConsole duplication | Low | Documented, different namespaces, engine version refactored |
 | Dual VisualScripting systems | N/A | **RESOLVED** (both deleted as dead code) |
 | SceneManager naming | Medium | OPEN (cosmetic) |

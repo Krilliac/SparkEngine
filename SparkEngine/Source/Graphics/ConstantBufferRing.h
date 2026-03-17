@@ -31,6 +31,7 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "../Utils/Logger.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11_1.h>

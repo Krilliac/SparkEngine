@@ -1,39 +1,40 @@
 # CMake Build System Audit
 
-**Last updated:** 2026-03-16
+**Last updated:** 2026-03-17
 **Type:** Observation
-**Status:** Active
-**Severity:** Medium
+**Status:** Mostly Resolved
+**Severity:** Low (was Medium)
 
 ## Description
 
 Audit of CMakeLists.txt files for dead options, stale references, and build system bloat.
 
-## Dead Build Options (Define Flags Never Checked in Code)
+## Resolved Issues
 
-### Critical: Options With No Backend
+### Dead Build Options — RESOLVED (prior sessions)
 
-| Option | Flag Defined | Status |
-|--------|-------------|--------|
-| `ENABLE_LUA` | `LUA_SCRIPTING_ENABLED` | ThirdParty/Scripting/lua/ does NOT exist. No code checks flag. |
-| `ENABLE_PHYSX` | `PHYSX_AVAILABLE` | ThirdParty/Physics/PhysX/ does NOT exist. No code checks flag. |
+`ENABLE_LUA` and `ENABLE_PHYSX` were removed in a prior session. No dead-backend options remain.
 
-**Action:** Delete both options and their header search code entirely.
+### Dead curl Dependency — RESOLVED (2026-03-17)
 
-### Medium: Options That Set Flags But No Code Guards Exist
+Removed curl submodule entry from `.gitmodules`, deleted empty `ThirdParty/Networking/curl/` directory, and removed curl dependency check from `CMakeLists.txt`.
 
-| Option | Flag Defined | Lines |
-|--------|-------------|-------|
-| `ENABLE_COLLABORATIVE` | `COLLABORATIVE_ENABLED` | 791-793 |
-| `ENABLE_GRAPHICS` | `GRAPHICS_ENABLED` | 787-789 |
-| `ENABLE_ASSET_STREAMING` | `ASSET_STREAMING_ENABLED` | 803-805 |
-| `ENABLE_HOT_RELOAD` | `HOT_RELOAD_ENABLED` | 807-809 |
-| `ENABLE_TERRAIN_SYSTEM` | `TERRAIN_SYSTEM_ENABLED` | 811-813 |
-| `ENABLE_ADVANCED_INPUT` | `ADVANCED_INPUT_ENABLED` | 823-825 |
+### Dead Build Flags — RESOLVED (prior sessions)
 
-6 options define compile flags that are never `#ifdef`'d in any source file.
+The 6 options (`ENABLE_COLLABORATIVE`, `ENABLE_GRAPHICS`, `ENABLE_ASSET_STREAMING`, `ENABLE_HOT_RELOAD`, `ENABLE_TERRAIN_SYSTEM`, `ENABLE_ADVANCED_INPUT`) that set flags with no code guards were removed in a prior session.
 
-**Action:** Remove options or add actual code guards.
+## Remaining Issues
+
+### Duplicate imgui Target Definitions
+
+- `ThirdParty/CMakeLists.txt`: 3 `add_library(imgui)` calls (Win32+DX11, SDL2+OpenGL3, core-only)
+- `SparkEditor/CMakeLists.txt`: 2 more `add_library(imgui)` calls (guarded by `if(NOT TARGET imgui)`)
+
+Guard prevents actual duplication at build time, but the code is scattered.
+
+### Circular Linking Pattern
+
+SparkEngine links both SparkGame (SHARED) and SparkEngineLib (STATIC). SparkGame also links SparkEngineLib. Documented with comments but architecturally fragile.
 
 ## Build Options That Work Correctly
 
@@ -43,32 +44,16 @@ Audit of CMakeLists.txt files for dead options, stale references, and build syst
 - `ENABLE_DXR` — Controls DXR support
 - `ENABLE_NETWORKING` — Controls networking code
 - `ENABLE_VULKAN`, `ENABLE_OPENGL` — Control RHI backends
-
-## Duplicate imgui Target Definitions
-
-- `ThirdParty/CMakeLists.txt`: 3 `add_library(imgui)` calls (Win32+DX11, SDL2+OpenGL3, core-only)
-- `SparkEditor/CMakeLists.txt`: 2 more `add_library(imgui)` calls (guarded by `if(NOT TARGET imgui)`)
-
-Guard prevents actual duplication at build time, but the code is scattered and fragile.
-
-**Action:** Remove imgui definitions from SparkEditor/CMakeLists.txt entirely.
-
-## Stale Third-Party References
-
-- `ThirdParty/Networking/curl/` — Directory exists but is empty. CMake checks for `curl/CMakeLists.txt` which doesn't exist. Reports "MISSING" in dependency status.
-
-## Circular Linking Pattern
-
-SparkEngine executable links both SparkGame (SHARED) and SparkEngineLib (STATIC). SparkGame also links SparkEngineLib. This creates a circular reference because SparkConsole code in SparkEngineLib references Game/Player symbols from SparkGame.
-
-Documented with comments but architecturally fragile.
+- `ENABLE_SDL2` — Auto-enabled on Linux
+- `SPARK_HEADLESS_SUPPORT` — Dedicated server mode
+- `ENABLE_HYBRID_RT` — Hybrid ray tracing
 
 ## Summary
 
-| Issue | Count | Severity |
-|-------|-------|----------|
-| Dead build options (no backend) | 2 | Critical |
-| Dead build flags (no code guards) | 6 | Medium |
-| Duplicate target definitions | 1 (imgui) | Medium |
-| Empty third-party directories | 1 (curl) | Low |
-| Circular linking | 1 pattern | Low |
+| Issue | Severity | Status |
+|-------|----------|--------|
+| Dead build options (no backend) | ~~Critical~~ | **RESOLVED** |
+| Dead build flags (no code guards) | ~~Medium~~ | **RESOLVED** |
+| Dead curl dependency | ~~Low~~ | **RESOLVED** |
+| Duplicate imgui target definitions | Low | OPEN (fragile but works) |
+| Circular linking | Low | OPEN (documented) |

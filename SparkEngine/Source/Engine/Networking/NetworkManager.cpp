@@ -330,8 +330,14 @@ namespace Spark::Net
         RegisterHandler(MessageType::Heartbeat,
                         [this](const NetworkMessage& msg)
                         {
-                            if (m_role == NetworkRole::Server)
+                            NetworkRole role;
                             {
+                                std::lock_guard<std::mutex> lock(m_stateMutex);
+                                role = m_role;
+                            }
+                            if (role == NetworkRole::Server)
+                            {
+                                std::lock_guard<std::mutex> lock(m_clientsMutex);
                                 auto it = m_clients.find(msg.senderID);
                                 if (it != m_clients.end())
                                 {
@@ -342,7 +348,12 @@ namespace Spark::Net
         RegisterHandler(MessageType::EntityStateUpdate,
                         [this](const NetworkMessage& msg)
                         {
-                            if (m_role == NetworkRole::Client)
+                            NetworkRole role;
+                            {
+                                std::lock_guard<std::mutex> lock(m_stateMutex);
+                                role = m_role;
+                            }
+                            if (role == NetworkRole::Client)
                             {
                                 NetBuffer buf;
                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
@@ -352,7 +363,12 @@ namespace Spark::Net
         RegisterHandler(MessageType::ClientInput,
                         [this](const NetworkMessage& msg)
                         {
-                            if (m_role == NetworkRole::Server)
+                            NetworkRole role;
+                            {
+                                std::lock_guard<std::mutex> lock(m_stateMutex);
+                                role = m_role;
+                            }
+                            if (role == NetworkRole::Server)
                             {
                                 NetBuffer buf;
                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
@@ -370,7 +386,10 @@ namespace Spark::Net
                                 input.crouch = (flags & 16) != 0;
                                 input.deltaTime = buf.ReadFloat();
                                 input.timestamp = m_serverTime;
-                                m_pendingInputs.push_back(input);
+                                {
+                                    std::lock_guard<std::mutex> lock(m_inputMutex);
+                                    m_pendingInputs.push_back(input);
+                                }
                             }
                         });
 
@@ -923,19 +942,31 @@ namespace Spark::Net
 
     void NetworkManager::SendToAll(const NetworkMessage& msg)
     {
-        for (const auto& [id, info] : m_clients)
+        std::vector<ClientID> clientIDs;
         {
-            SendToClient(id, msg);
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            clientIDs.reserve(m_clients.size());
+            for (const auto& [id, info] : m_clients)
+                clientIDs.push_back(id);
         }
+        for (ClientID id : clientIDs)
+            SendToClient(id, msg);
     }
 
     void NetworkManager::SendToAllExcept(ClientID excludeClient, const NetworkMessage& msg)
     {
-        for (const auto& [id, info] : m_clients)
+        std::vector<ClientID> clientIDs;
         {
-            if (id != excludeClient)
-                SendToClient(id, msg);
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            clientIDs.reserve(m_clients.size());
+            for (const auto& [id, info] : m_clients)
+            {
+                if (id != excludeClient)
+                    clientIDs.push_back(id);
+            }
         }
+        for (ClientID id : clientIDs)
+            SendToClient(id, msg);
     }
 
     void NetworkManager::BroadcastMessage(const NetworkMessage& msg)
@@ -956,13 +987,18 @@ namespace Spark::Net
 
     uint32_t NetworkManager::RegisterReplicatedEntity(const ReplicatedEntity& entity)
     {
-        uint32_t netID = m_nextNetworkID++;
+        uint32_t netID = m_nextNetworkID.fetch_add(1, std::memory_order_relaxed);
         m_replicatedEntities[netID] = entity;
         m_replicatedEntities[netID].networkID = netID;
         m_replicatedEntities[netID].needsFullSync = true;
 
         // Notify clients about the new entity (server only)
-        if (m_role == NetworkRole::Server)
+        NetworkRole role;
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            role = m_role;
+        }
+        if (role == NetworkRole::Server)
         {
             NetworkMessage msg;
             msg.type = MessageType::EntitySpawn;
@@ -1476,7 +1512,10 @@ namespace Spark::Net
         {
             info.name = "Player_" + std::to_string(newID);
         }
-        m_clients[newID] = info;
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            m_clients[newID] = info;
+        }
 
         // Send acceptance with assigned client ID
         NetworkMessage accept;
@@ -1492,7 +1531,10 @@ namespace Spark::Net
     void NetworkManager::HandleDisconnect(const NetworkMessage& msg)
     {
         ClientID clientID = msg.senderID;
-        m_clients.erase(clientID);
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            m_clients.erase(clientID);
+        }
 
 #ifdef ENABLE_NETWORKING
         m_clientAddresses.erase(clientID);

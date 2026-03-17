@@ -570,7 +570,15 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
     }
 
     // Retrieve the created object.
-    asIScriptObject* obj = *static_cast<asIScriptObject**>(ctx->GetAddressOfReturnValue());
+    void* retAddr = ctx->GetAddressOfReturnValue();
+    if (!retAddr)
+    {
+        SetLastError("Factory returned no address for class '" + className + "'.");
+        LogError(m_lastError);
+        ctx->Release();
+        return false;
+    }
+    asIScriptObject* obj = *static_cast<asIScriptObject**>(retAddr);
     if (!obj)
     {
         SetLastError("Factory returned null for class '" + className + "'.");
@@ -612,7 +620,7 @@ void AngelScriptEngine::DetachScript(EntityID entity)
 void AngelScriptEngine::CallStart(EntityID entity)
 {
     ScriptInstance* inst = GetScriptInstance(entity);
-    if (!inst || !inst->startMethod)
+    if (!inst || !inst->startMethod || !inst->context)
         return;
 
     inst->context->Prepare(inst->startMethod);
@@ -628,7 +636,7 @@ void AngelScriptEngine::CallStart(EntityID entity)
 void AngelScriptEngine::CallUpdate(EntityID entity, float deltaTime)
 {
     ScriptInstance* inst = GetScriptInstance(entity);
-    if (!inst || !inst->updateMethod)
+    if (!inst || !inst->updateMethod || !inst->context)
         return;
 
     inst->context->Prepare(inst->updateMethod);
@@ -645,7 +653,7 @@ void AngelScriptEngine::CallUpdate(EntityID entity, float deltaTime)
 void AngelScriptEngine::CallOnCollision(EntityID entity, EntityID other)
 {
     ScriptInstance* inst = GetScriptInstance(entity);
-    if (!inst || !inst->onCollisionMethod)
+    if (!inst || !inst->onCollisionMethod || !inst->context)
         return;
 
     inst->context->Prepare(inst->onCollisionMethod);

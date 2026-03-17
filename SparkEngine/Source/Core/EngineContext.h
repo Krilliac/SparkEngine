@@ -32,6 +32,7 @@ class AudioEngine;
 class PhysicsSystem;
 class SceneManager;
 class AngelScriptEngine;
+class World;
 
 // ============================================================================
 // Compile-time type ID (works with incomplete/forward-declared types)
@@ -159,6 +160,8 @@ class EngineContext : public Spark::IEngineContext
     const Spark::AI::AISystem* GetAI() const override { return GetSystem<Spark::AI::AISystem>(); }
     Spark::NetworkManager* GetNetwork() override { return GetSystem<Spark::NetworkManager>(); }
     const Spark::NetworkManager* GetNetwork() const override { return GetSystem<Spark::NetworkManager>(); }
+    World* GetWorld() override { return GetSystem<World>(); }
+    const World* GetWorld() const override { return GetSystem<World>(); }
     SceneManager* GetSceneManager() override { return GetSystem<SceneManager>(); }
     const SceneManager* GetSceneManager() const override { return GetSystem<SceneManager>(); }
     AngelScriptEngine* GetScriptEngine() override { return GetSystem<AngelScriptEngine>(); }
@@ -186,6 +189,7 @@ class EngineContext : public Spark::IEngineContext
     void SetAnimation(Spark::Animation::AnimationSystem* a) { RegisterSystem<Spark::Animation::AnimationSystem>(a); }
     void SetAI(Spark::AI::AISystem* a) { RegisterSystem<Spark::AI::AISystem>(a); }
     void SetNetwork(Spark::NetworkManager* n) { RegisterSystem<Spark::NetworkManager>(n); }
+    void SetWorld(World* w) { RegisterSystem<World>(w); }
     void SetSceneManager(SceneManager* s) { RegisterSystem<SceneManager>(s); }
     void SetScriptEngine(AngelScriptEngine* s) { RegisterSystem<AngelScriptEngine>(s); }
     void SetSaveSystem(Spark::SaveSystem* s) { RegisterSystem<Spark::SaveSystem>(s); }

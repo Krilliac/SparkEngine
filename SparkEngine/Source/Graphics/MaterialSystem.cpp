@@ -549,6 +549,19 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
         std::string currentSection = "";
         int lineNumber = 0;
 
+        // Helper lambda to safely parse a single float value
+        auto safeStof = [](const std::string& value, float defaultVal = 0.0f) -> float
+        {
+            try
+            {
+                return std::stof(value);
+            }
+            catch (const std::exception&)
+            {
+                return defaultVal;
+            }
+        };
+
         // Helper lambda to parse comma-separated values
         auto parseFloatArray = [](const std::string& value, std::vector<float>& output)
         {
@@ -642,19 +655,19 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     }
                     else if (key == "MetallicFactor")
                     {
-                        m_pbrProperties.metallicFactor = std::stof(value);
+                        m_pbrProperties.metallicFactor = safeStof(value);
                     }
                     else if (key == "RoughnessFactor")
                     {
-                        m_pbrProperties.roughnessFactor = std::stof(value);
+                        m_pbrProperties.roughnessFactor = safeStof(value);
                     }
                     else if (key == "NormalScale")
                     {
-                        m_pbrProperties.normalScale = std::stof(value);
+                        m_pbrProperties.normalScale = safeStof(value);
                     }
                     else if (key == "OcclusionStrength")
                     {
-                        m_pbrProperties.occlusionStrength = std::stof(value);
+                        m_pbrProperties.occlusionStrength = safeStof(value);
                     }
                     else if (key == "EmissiveColor")
                     {
@@ -668,15 +681,15 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     }
                     else if (key == "EmissiveFactor")
                     {
-                        m_pbrProperties.emissiveFactor = std::stof(value);
+                        m_pbrProperties.emissiveFactor = safeStof(value);
                     }
                     else if (key == "AlphaCutoff")
                     {
-                        m_pbrProperties.alphaCutoff = std::stof(value);
+                        m_pbrProperties.alphaCutoff = safeStof(value);
                     }
                     else if (key == "IndexOfRefraction")
                     {
-                        m_pbrProperties.indexOfRefraction = std::stof(value);
+                        m_pbrProperties.indexOfRefraction = safeStof(value);
                     }
                 }
                 else if (currentSection == "Advanced")
@@ -697,7 +710,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     }
                     else if (key == "SubsurfaceRadius")
                     {
-                        m_advancedProperties.subsurfaceRadius = std::stof(value);
+                        m_advancedProperties.subsurfaceRadius = safeStof(value);
                     }
                     else if (key == "ClearcoatEnabled")
                     {
@@ -705,11 +718,11 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     }
                     else if (key == "ClearcoatFactor")
                     {
-                        m_advancedProperties.clearcoatFactor = std::stof(value);
+                        m_advancedProperties.clearcoatFactor = safeStof(value);
                     }
                     else if (key == "ClearcoatRoughness")
                     {
-                        m_advancedProperties.clearcoatRoughness = std::stof(value);
+                        m_advancedProperties.clearcoatRoughness = safeStof(value);
                     }
                     else if (key == "AnisotropyEnabled")
                     {
@@ -717,7 +730,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     }
                     else if (key == "AnisotropyFactor")
                     {
-                        m_advancedProperties.anisotropyFactor = std::stof(value);
+                        m_advancedProperties.anisotropyFactor = safeStof(value);
                     }
                     else if (key == "AnisotropyDirection")
                     {
@@ -734,7 +747,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     }
                     else if (key == "TransmissionFactor")
                     {
-                        m_advancedProperties.transmissionFactor = std::stof(value);
+                        m_advancedProperties.transmissionFactor = safeStof(value);
                     }
                     else if (key == "TransmissionColor")
                     {
@@ -762,7 +775,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     }
                     else if (key == "SheenRoughness")
                     {
-                        m_advancedProperties.sheenRoughness = std::stof(value);
+                        m_advancedProperties.sheenRoughness = safeStof(value);
                     }
                     else if (key == "IridescenceEnabled")
                     {
@@ -770,15 +783,15 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     }
                     else if (key == "IridescenceFactor")
                     {
-                        m_advancedProperties.iridescenceFactor = std::stof(value);
+                        m_advancedProperties.iridescenceFactor = safeStof(value);
                     }
                     else if (key == "IridescenceIOR")
                     {
-                        m_advancedProperties.iridescenceIOR = std::stof(value);
+                        m_advancedProperties.iridescenceIOR = safeStof(value);
                     }
                     else if (key == "IridescenceThickness")
                     {
-                        m_advancedProperties.iridescenceThickness = std::stof(value);
+                        m_advancedProperties.iridescenceThickness = safeStof(value);
                     }
                 }
                 else if (currentSection == "RenderState")
@@ -848,7 +861,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                             auto it = m_textures.find(static_cast<MaterialTextureType>(textureType));
                             if (it != m_textures.end())
                             {
-                                it->second.intensity = std::stof(value);
+                                it->second.intensity = safeStof(value);
                             }
                         }
                     }

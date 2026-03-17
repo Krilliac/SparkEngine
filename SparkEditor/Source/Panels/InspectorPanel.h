@@ -63,6 +63,34 @@ namespace SparkEditor
         void RenderColliderComponent();
         void RenderAudioSourceComponent();
         void RenderTerrainComponent();
+
+        // 2D / Sprite components
+        void RenderSpriteRendererComponent();
+        void RenderSpriteAnimatorComponent();
+        void RenderCamera2DComponent();
+        void RenderTilemapComponent();
+        void RenderNineSliceComponent();
+        void RenderParallaxBGComponent();
+        void RenderPixelPerfectComponent();
+        void RenderRigidBody2DComponent();
+        void RenderCollider2DComponent();
+
+        // Animation & Effects
+        void RenderParticleEmitterComponent();
+        void RenderAnimationControllerComponent();
+        void RenderScriptComponent();
+
+        // Gameplay components
+        void RenderHealthComponent();
+        void RenderAIAgentComponent();
+        void RenderSplineComponent();
+        void RenderSplineFollowerComponent();
+        void RenderDecalComponent();
+        void RenderProjectileComponent();
+        void RenderInteractionComponent();
+        void RenderWeatherComponent();
+        void RenderNetworkIdentityComponent();
+
         void RenderAddComponentMenu();
 
         /// Helper: check if the inspected object has a specific component type

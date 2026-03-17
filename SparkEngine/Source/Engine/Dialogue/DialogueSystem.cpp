@@ -140,7 +140,14 @@ namespace Spark
             // Parse displayDuration for Text nodes
             if (std::regex_search(nodeContext, match, displayDurationRegex))
             {
-                node.displayDuration = std::stof(match[1].str());
+                try
+                {
+                    node.displayDuration = std::stof(match[1].str());
+                }
+                catch (const std::exception&)
+                {
+                    node.displayDuration = 3.0f; // Safe default
+                }
             }
 
             // Parse Branch node fields

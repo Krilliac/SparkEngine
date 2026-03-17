@@ -24,8 +24,8 @@
 
 // Global game pointer used by SparkConsole (in SparkEngineLib) to call into
 // game systems.  Owned by SparkGameModule; set during Initialize, cleared
-// during Shutdown.
-SPARK_GAME_API std::unique_ptr<Game> g_game;
+// during Shutdown.  Raw pointer avoids unique_ptr ABI mismatch across DLL boundary.
+SPARK_GAME_API Game* g_game = nullptr;
 
 // Global in-game console overlay used by Game::Render().
 Console g_console;
@@ -152,12 +152,13 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
     console.LogInfo("Initializing SparkGame module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing SparkGame module");
 
-    g_game = std::make_unique<Game>();
+    g_game = new Game();
     HRESULT hr = g_game->Initialize(graphics, input);
     if (FAILED(hr))
     {
         console.LogError("Game::Initialize() failed");
-        g_game.reset();
+        delete g_game;
+        g_game = nullptr;
         return false;
     }
 
@@ -183,7 +184,8 @@ void SparkGameModule::Shutdown()
     if (g_game)
     {
         g_game->Shutdown();
-        g_game.reset();
+        delete g_game;
+        g_game = nullptr;
     }
     m_initialized = false;
 
@@ -231,7 +233,7 @@ bool SparkGameModule::IsPaused() const
 void SparkGameModule::RegisterGameConsoleCommands()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
-    Game* game = g_game.get();
+    Game* game = g_game;
 
     console.RegisterCommand(
         "game_timescale",

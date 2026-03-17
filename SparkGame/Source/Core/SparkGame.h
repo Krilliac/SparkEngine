@@ -16,14 +16,15 @@
 
 #include "Spark/SparkSDK.h"
 #include "Core/IGameModule.h"
-#include <memory>
 
 // Forward declarations
 class Game;
 class Console;
 
-// Global game pointer shared between SparkGame and SparkEngineLib (SparkConsole)
-extern SPARK_GAME_API std::unique_ptr<Game> g_game;
+// Global game pointer shared between SparkGame and SparkEngineLib (SparkConsole).
+// Raw pointer — owned by SparkGameModule, set during Initialize, cleared during Shutdown.
+// Not exported as unique_ptr to avoid ABI/CRT mismatch across DLL boundaries.
+extern SPARK_GAME_API Game* g_game;
 
 /**
  * @brief Game module implementation for SparkGame

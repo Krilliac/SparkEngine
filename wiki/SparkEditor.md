@@ -469,27 +469,36 @@ cmake --build build --config Release
 <!-- AUTO:panel_list -->
 | Panel | Header |
 |-------|--------|
+| `AIEditorPanel` | `SparkEditor/Source/Panels/AIEditorPanel.h` |
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
 | `ConsolePanel` | `SparkEditor/Source/Panels/ConsolePanel.h` |
 | `DebugVisualizerPanel` | `SparkEditor/Source/Panels/DebugVisualizerPanel.h` |
 | `DedicatedServerPanel` | `SparkEditor/Source/Panels/DedicatedServerPanel.h` |
+| `DialogueEditorPanel` | `SparkEditor/Source/Panels/DialogueEditorPanel.h` |
+| `EventMonitorPanel` | `SparkEditor/Source/Panels/EventMonitorPanel.h` |
 | `FPSToolsPanel` | `SparkEditor/Source/Panels/FPSToolsPanel.h` |
 | `GameViewPanel` | `SparkEditor/Source/Panels/GameViewPanel.h` |
 | `HierarchyPanel` | `SparkEditor/Source/Panels/HierarchyPanel.h` |
 | `InspectorPanel` | `SparkEditor/Source/Panels/InspectorPanel.h` |
+| `LocalizationPanel` | `SparkEditor/Source/Panels/LocalizationPanel.h` |
 | `MaterialEditorPanel` | `SparkEditor/Source/Panels/MaterialEditorPanel.h` |
 | `ObjectPlacementPanel` | `SparkEditor/Source/Panels/ObjectPlacementPanel.h` |
+| `ParticleEditorPanel` | `SparkEditor/Source/Panels/ParticleEditorPanel.h` |
 | `Physics2DPanel` | `SparkEditor/Source/Panels/Physics2DPanel.h` |
 | `PlayModeToolbarPanel` | `SparkEditor/Source/Panels/PlayModeToolbarPanel.h` |
+| `PostProcessingPanel` | `SparkEditor/Source/Panels/PostProcessingPanel.h` |
 | `PrefabEditorPanel` | `SparkEditor/Source/Panels/PrefabEditorPanel.h` |
 | `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |
+| `SaveSystemPanel` | `SparkEditor/Source/Panels/SaveSystemPanel.h` |
 | `SceneStatisticsPanel` | `SparkEditor/Source/Panels/SceneStatisticsPanel.h` |
 | `SceneViewPanel` | `SparkEditor/Source/Panels/SceneViewPanel.h` |
 | `SearchPanel` | `SparkEditor/Source/Panels/SearchPanel.h` |
+| `SplineEditorPanel` | `SparkEditor/Source/Panels/SplineEditorPanel.h` |
 | `SpriteAnimationEditorPanel` | `SparkEditor/Source/Panels/SpriteAnimationEditorPanel.h` |
 | `SpriteEditorPanel` | `SparkEditor/Source/Panels/SpriteEditorPanel.h` |
 | `TilemapEditorPanel` | `SparkEditor/Source/Panels/TilemapEditorPanel.h` |
 | `UndoHistoryPanel` | `SparkEditor/Source/Panels/UndoHistoryPanel.h` |
 | `WeaponEditorPanel` | `SparkEditor/Source/Panels/WeaponEditorPanel.h` |
+| `WeatherFogPanel` | `SparkEditor/Source/Panels/WeatherFogPanel.h` |
 <!-- /AUTO:panel_list -->

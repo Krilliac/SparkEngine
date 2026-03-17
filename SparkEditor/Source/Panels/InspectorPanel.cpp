@@ -218,6 +218,66 @@ namespace SparkEditor
                         comp.SetData(as);
                         break;
                     }
+                    case ComponentType::SPRITE_RENDERER:
+                        comp.SetData(SpriteRendererData{});
+                        break;
+                    case ComponentType::CAMERA_2D:
+                        comp.SetData(Camera2DData{});
+                        break;
+                    case ComponentType::RIGID_BODY_2D:
+                        comp.SetData(RigidBody2DData{});
+                        break;
+                    case ComponentType::COLLIDER_2D:
+                        comp.SetData(Collider2DData{});
+                        break;
+                    case ComponentType::TILEMAP:
+                        comp.SetData(TilemapData{});
+                        break;
+                    case ComponentType::NINE_SLICE:
+                        comp.SetData(NineSliceData{});
+                        break;
+                    case ComponentType::PIXEL_PERFECT:
+                        comp.SetData(PixelPerfectData{});
+                        break;
+                    case ComponentType::PARTICLE_SYSTEM:
+                        comp.SetData(ParticleEmitterData{});
+                        break;
+                    case ComponentType::ANIMATION:
+                        comp.SetData(AnimationControllerData{});
+                        break;
+                    case ComponentType::SCRIPT:
+                        comp.SetData(ScriptData{});
+                        break;
+                    case ComponentType::HEALTH:
+                        comp.SetData(HealthData{});
+                        break;
+                    case ComponentType::AI_AGENT:
+                        comp.SetData(AIAgentData{});
+                        break;
+                    case ComponentType::SPLINE:
+                        comp.SetData(SplineData{});
+                        break;
+                    case ComponentType::SPLINE_FOLLOWER:
+                        comp.SetData(SplineFollowerData{});
+                        break;
+                    case ComponentType::DECAL:
+                        comp.SetData(DecalData{});
+                        break;
+                    case ComponentType::PROJECTILE:
+                        comp.SetData(ProjectileData{});
+                        break;
+                    case ComponentType::INTERACTION:
+                        comp.SetData(InteractionData{});
+                        break;
+                    case ComponentType::WEATHER:
+                        comp.SetData(WeatherData{});
+                        break;
+                    case ComponentType::NETWORK_IDENTITY:
+                        comp.SetData(NetworkIdentityData{});
+                        break;
+                    case ComponentType::PARALLAX_BG:
+                        comp.SetData(ParallaxLayerData{});
+                        break;
                     default:
                         break;
                     }
@@ -570,39 +630,67 @@ namespace SparkEditor
         RenderTransformComponent();
 
         if (HasComponent(ComponentType::MESH_RENDERER))
-        {
             RenderMeshRendererComponent();
-        }
-
         if (HasComponent(ComponentType::LIGHT))
-        {
             RenderLightComponent();
-        }
-
         if (HasComponent(ComponentType::CAMERA))
-        {
             RenderCameraComponent();
-        }
-
         if (HasComponent(ComponentType::RIGID_BODY))
-        {
             RenderRigidBodyComponent();
-        }
-
         if (HasComponent(ComponentType::COLLIDER))
-        {
             RenderColliderComponent();
-        }
-
         if (HasComponent(ComponentType::AUDIO_SOURCE))
-        {
             RenderAudioSourceComponent();
-        }
-
         if (HasComponent(ComponentType::TERRAIN))
-        {
             RenderTerrainComponent();
-        }
+
+        // 2D / Sprite components
+        if (HasComponent(ComponentType::SPRITE_RENDERER))
+            RenderSpriteRendererComponent();
+        if (HasComponent(ComponentType::SPRITE_ANIMATOR))
+            RenderSpriteAnimatorComponent();
+        if (HasComponent(ComponentType::CAMERA_2D))
+            RenderCamera2DComponent();
+        if (HasComponent(ComponentType::TILEMAP))
+            RenderTilemapComponent();
+        if (HasComponent(ComponentType::NINE_SLICE))
+            RenderNineSliceComponent();
+        if (HasComponent(ComponentType::PARALLAX_BG))
+            RenderParallaxBGComponent();
+        if (HasComponent(ComponentType::PIXEL_PERFECT))
+            RenderPixelPerfectComponent();
+        if (HasComponent(ComponentType::RIGID_BODY_2D))
+            RenderRigidBody2DComponent();
+        if (HasComponent(ComponentType::COLLIDER_2D))
+            RenderCollider2DComponent();
+
+        // Animation & Effects
+        if (HasComponent(ComponentType::PARTICLE_SYSTEM))
+            RenderParticleEmitterComponent();
+        if (HasComponent(ComponentType::ANIMATION))
+            RenderAnimationControllerComponent();
+        if (HasComponent(ComponentType::SCRIPT))
+            RenderScriptComponent();
+
+        // Gameplay components
+        if (HasComponent(ComponentType::HEALTH))
+            RenderHealthComponent();
+        if (HasComponent(ComponentType::AI_AGENT))
+            RenderAIAgentComponent();
+        if (HasComponent(ComponentType::SPLINE))
+            RenderSplineComponent();
+        if (HasComponent(ComponentType::SPLINE_FOLLOWER))
+            RenderSplineFollowerComponent();
+        if (HasComponent(ComponentType::DECAL))
+            RenderDecalComponent();
+        if (HasComponent(ComponentType::PROJECTILE))
+            RenderProjectileComponent();
+        if (HasComponent(ComponentType::INTERACTION))
+            RenderInteractionComponent();
+        if (HasComponent(ComponentType::WEATHER))
+            RenderWeatherComponent();
+        if (HasComponent(ComponentType::NETWORK_IDENTITY))
+            RenderNetworkIdentityComponent();
     }
 
     // ============================================================================
@@ -1212,6 +1300,861 @@ namespace SparkEditor
     }
 
     // ============================================================================
+    // Sprite Renderer Component
+    // ============================================================================
+
+    void InspectorPanel::RenderSpriteRendererComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_IMAGE " Sprite Renderer");
+        if (ImGui::BeginPopupContextItem("##SpriteRendererCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::SPRITE_RENDERER);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::SPRITE_RENDERER);
+            SpriteRendererData* sr = comp ? comp->GetData<SpriteRendererData>() : nullptr;
+            if (sr)
+            {
+                char texBuf[256];
+                strncpy(texBuf, sr->texturePath.c_str(), sizeof(texBuf) - 1);
+                texBuf[sizeof(texBuf) - 1] = '\0';
+                ImGui::SetNextItemWidth(-1);
+                if (ImGui::InputText("Texture", texBuf, sizeof(texBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                    sr->texturePath = texBuf;
+
+                float color[4] = {sr->color.x, sr->color.y, sr->color.z, sr->color.w};
+                if (ImGui::ColorEdit4("Color", color))
+                    sr->color = {color[0], color[1], color[2], color[3]};
+
+                float pivot[2] = {sr->pivot.x, sr->pivot.y};
+                if (ImGui::DragFloat2("Pivot", pivot, 0.01f, 0.0f, 1.0f))
+                    sr->pivot = {pivot[0], pivot[1]};
+
+                ImGui::DragFloat("Pixels/Unit", &sr->pixelsPerUnit, 1.0f, 1.0f, 1000.0f);
+                ImGui::DragInt("Sorting Layer", &sr->sortingLayer);
+                ImGui::DragInt("Order in Layer", &sr->orderInLayer);
+                ImGui::Checkbox("Flip X", &sr->flipX);
+                ImGui::SameLine();
+                ImGui::Checkbox("Flip Y", &sr->flipY);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Sprite Animator Component
+    // ============================================================================
+
+    void InspectorPanel::RenderSpriteAnimatorComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_FILM " Sprite Animator");
+        if (ImGui::BeginPopupContextItem("##SpriteAnimatorCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::SPRITE_ANIMATOR);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            ImGui::TextDisabled("Edit clips in the Sprite Animation Editor panel");
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Camera 2D Component
+    // ============================================================================
+
+    void InspectorPanel::RenderCamera2DComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_CAMERA " Camera 2D");
+        if (ImGui::BeginPopupContextItem("##Camera2DCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::CAMERA_2D);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::CAMERA_2D);
+            Camera2DData* cam = comp ? comp->GetData<Camera2DData>() : nullptr;
+            if (cam)
+            {
+                ImGui::DragFloat("Ortho Size", &cam->orthoSize, 0.1f, 0.1f, 100.0f);
+                ImGui::DragFloat("Zoom", &cam->zoom, 0.01f, 0.1f, 10.0f);
+                ImGui::DragFloat("Near Plane", &cam->nearPlane, 1.0f, -1000.0f, cam->farPlane);
+                ImGui::DragFloat("Far Plane", &cam->farPlane, 1.0f, cam->nearPlane, 1000.0f);
+                ImGui::DragFloat("Follow Smoothing", &cam->followSmoothing, 0.01f, 0.0f, 1.0f);
+
+                float dz[2] = {cam->deadZone.x, cam->deadZone.y};
+                if (ImGui::DragFloat2("Dead Zone", dz, 0.1f, 0.0f, 20.0f))
+                    cam->deadZone = {dz[0], dz[1]};
+
+                float cc[4] = {cam->clearColor.x, cam->clearColor.y, cam->clearColor.z, cam->clearColor.w};
+                if (ImGui::ColorEdit4("Clear Color", cc))
+                    cam->clearColor = {cc[0], cc[1], cc[2], cc[3]};
+
+                ImGui::Checkbox("Main 2D Camera", &cam->isMain2DCamera);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Tilemap Component
+    // ============================================================================
+
+    void InspectorPanel::RenderTilemapComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_TH " Tilemap");
+        if (ImGui::BeginPopupContextItem("##TilemapCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::TILEMAP);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::TILEMAP);
+            TilemapData* tm = comp ? comp->GetData<TilemapData>() : nullptr;
+            if (tm)
+            {
+                char tilesetBuf[256];
+                strncpy(tilesetBuf, tm->tilesetTexturePath.c_str(), sizeof(tilesetBuf) - 1);
+                tilesetBuf[sizeof(tilesetBuf) - 1] = '\0';
+                ImGui::SetNextItemWidth(-1);
+                if (ImGui::InputText("Tileset", tilesetBuf, sizeof(tilesetBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                    tm->tilesetTexturePath = tilesetBuf;
+
+                ImGui::DragInt("Tile Width", &tm->tileWidth, 1.0f, 1, 256);
+                ImGui::DragInt("Tile Height", &tm->tileHeight, 1.0f, 1, 256);
+                ImGui::DragInt("Map Width", &tm->mapWidth, 1.0f, 0, 1024);
+                ImGui::DragInt("Map Height", &tm->mapHeight, 1.0f, 0, 1024);
+                ImGui::DragFloat("Pixels/Unit", &tm->pixelsPerUnit, 1.0f, 1.0f, 1000.0f);
+                ImGui::DragInt("Sorting Layer", &tm->sortingLayer);
+                ImGui::Checkbox("Generate Collision", &tm->generateCollision);
+
+                ImGui::TextDisabled("Paint tiles in the Tilemap Editor panel");
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Nine-Slice Sprite Component
+    // ============================================================================
+
+    void InspectorPanel::RenderNineSliceComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_BORDER_ALL " Nine-Slice");
+        if (ImGui::BeginPopupContextItem("##NineSliceCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::NINE_SLICE);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::NINE_SLICE);
+            NineSliceData* ns = comp ? comp->GetData<NineSliceData>() : nullptr;
+            if (ns)
+            {
+                ImGui::InputText("Texture", ns->texturePath, sizeof(ns->texturePath));
+
+                ImGui::TextDisabled("Borders (pixels)");
+                ImGui::DragFloat("Left", &ns->borderLeft, 1.0f, 0.0f, 256.0f);
+                ImGui::DragFloat("Top", &ns->borderTop, 1.0f, 0.0f, 256.0f);
+                ImGui::DragFloat("Right", &ns->borderRight, 1.0f, 0.0f, 256.0f);
+                ImGui::DragFloat("Bottom", &ns->borderBottom, 1.0f, 0.0f, 256.0f);
+
+                float sz[2] = {ns->size.x, ns->size.y};
+                if (ImGui::DragFloat2("Size", sz, 0.1f, 0.01f))
+                    ns->size = {sz[0], sz[1]};
+
+                float color[4] = {ns->color.x, ns->color.y, ns->color.z, ns->color.w};
+                if (ImGui::ColorEdit4("Color", color))
+                    ns->color = {color[0], color[1], color[2], color[3]};
+
+                ImGui::Checkbox("Fill Center", &ns->fillCenter);
+                ImGui::DragInt("Sorting Layer", &ns->sortingLayer);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Parallax Background Component
+    // ============================================================================
+
+    void InspectorPanel::RenderParallaxBGComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_LAYER_GROUP " Parallax Background");
+        if (ImGui::BeginPopupContextItem("##ParallaxBGCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::PARALLAX_BG);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::PARALLAX_BG);
+            ParallaxLayerData* pl = comp ? comp->GetData<ParallaxLayerData>() : nullptr;
+            if (pl)
+            {
+                char texBuf[256];
+                strncpy(texBuf, pl->texturePath.c_str(), sizeof(texBuf) - 1);
+                texBuf[sizeof(texBuf) - 1] = '\0';
+                ImGui::SetNextItemWidth(-1);
+                if (ImGui::InputText("Texture", texBuf, sizeof(texBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                    pl->texturePath = texBuf;
+
+                float speed[2] = {pl->scrollSpeed.x, pl->scrollSpeed.y};
+                if (ImGui::DragFloat2("Scroll Speed", speed, 0.01f))
+                    pl->scrollSpeed = {speed[0], speed[1]};
+
+                ImGui::Checkbox("Tile X", &pl->tileX);
+                ImGui::SameLine();
+                ImGui::Checkbox("Tile Y", &pl->tileY);
+
+                float tint[4] = {pl->tint.x, pl->tint.y, pl->tint.z, pl->tint.w};
+                if (ImGui::ColorEdit4("Tint", tint))
+                    pl->tint = {tint[0], tint[1], tint[2], tint[3]};
+
+                ImGui::DragInt("Sort Order", &pl->sortOrder);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Pixel Perfect Component
+    // ============================================================================
+
+    void InspectorPanel::RenderPixelPerfectComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_TH_LARGE " Pixel Perfect");
+        if (ImGui::BeginPopupContextItem("##PixelPerfectCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::PIXEL_PERFECT);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::PIXEL_PERFECT);
+            PixelPerfectData* pp = comp ? comp->GetData<PixelPerfectData>() : nullptr;
+            if (pp)
+            {
+                ImGui::DragInt("Reference Width", &pp->referenceWidth, 1.0f, 64, 3840);
+                ImGui::DragInt("Reference Height", &pp->referenceHeight, 1.0f, 64, 2160);
+                ImGui::Checkbox("Upscale to Fill", &pp->upscaleToFill);
+                ImGui::Checkbox("Crop to Fit", &pp->cropToFit);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Rigid Body 2D Component
+    // ============================================================================
+
+    void InspectorPanel::RenderRigidBody2DComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_GLOBE " Rigid Body 2D");
+        if (ImGui::BeginPopupContextItem("##RigidBody2DCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::RIGID_BODY_2D);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::RIGID_BODY_2D);
+            RigidBody2DData* rb = comp ? comp->GetData<RigidBody2DData>() : nullptr;
+            if (rb)
+            {
+                const char* bodyTypes[] = {"Static", "Kinematic", "Dynamic"};
+                ImGui::Combo("Body Type", &rb->bodyType, bodyTypes, IM_ARRAYSIZE(bodyTypes));
+
+                if (rb->bodyType == 2) // Dynamic
+                    ImGui::DragFloat("Mass", &rb->mass, 0.1f, 0.01f, 1000.0f);
+
+                ImGui::DragFloat("Gravity Scale", &rb->gravityScale, 0.1f, -10.0f, 10.0f);
+                ImGui::DragFloat("Linear Damping", &rb->linearDamping, 0.01f, 0.0f, 100.0f);
+                ImGui::DragFloat("Angular Damping", &rb->angularDamping, 0.01f, 0.0f, 100.0f);
+                ImGui::DragFloat("Friction", &rb->friction, 0.01f, 0.0f, 1.0f);
+                ImGui::DragFloat("Restitution", &rb->restitution, 0.01f, 0.0f, 1.0f);
+                ImGui::Checkbox("Fixed Rotation", &rb->fixedRotation);
+                ImGui::Checkbox("Bullet (CCD)", &rb->isBullet);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Collider 2D Component
+    // ============================================================================
+
+    void InspectorPanel::RenderCollider2DComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_VECTOR_SQUARE " Collider 2D");
+        if (ImGui::BeginPopupContextItem("##Collider2DCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::COLLIDER_2D);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::COLLIDER_2D);
+            Collider2DData* col = comp ? comp->GetData<Collider2DData>() : nullptr;
+            if (col)
+            {
+                const char* shapes[] = {"Box", "Circle", "Capsule", "Polygon", "Edge"};
+                ImGui::Combo("Shape", &col->shape, shapes, IM_ARRAYSIZE(shapes));
+
+                float offset[2] = {col->offset.x, col->offset.y};
+                if (ImGui::DragFloat2("Offset", offset, 0.01f))
+                    col->offset = {offset[0], offset[1]};
+
+                switch (col->shape)
+                {
+                case 0: // Box
+                {
+                    float he[2] = {col->halfExtents.x, col->halfExtents.y};
+                    if (ImGui::DragFloat2("Half Extents", he, 0.01f, 0.001f))
+                        col->halfExtents = {he[0], he[1]};
+                    break;
+                }
+                case 1: // Circle
+                    ImGui::DragFloat("Radius", &col->radius, 0.01f, 0.001f, 100.0f);
+                    break;
+                case 2: // Capsule
+                    ImGui::DragFloat("Radius", &col->radius, 0.01f, 0.001f, 100.0f);
+                    ImGui::DragFloat("Height", &col->height, 0.01f, 0.001f, 100.0f);
+                    break;
+                default:
+                    break;
+                }
+
+                ImGui::Checkbox("Is Trigger", &col->isTrigger);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Particle Emitter Component
+    // ============================================================================
+
+    void InspectorPanel::RenderParticleEmitterComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_FIRE " Particle Emitter");
+        if (ImGui::BeginPopupContextItem("##ParticleEmitterCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::PARTICLE_SYSTEM);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::PARTICLE_SYSTEM);
+            ParticleEmitterData* pe = comp ? comp->GetData<ParticleEmitterData>() : nullptr;
+            if (pe)
+            {
+                ImGui::InputText("Effect Name", pe->effectName, sizeof(pe->effectName));
+                ImGui::Checkbox("Auto Play", &pe->autoPlay);
+                ImGui::SameLine();
+                ImGui::Checkbox("Loop", &pe->loop);
+
+                ImGui::Separator();
+                ImGui::TextDisabled("Emission");
+                ImGui::DragFloat("Rate", &pe->emissionRate, 1.0f, 0.0f, 10000.0f, "%.0f/s");
+                ImGui::DragInt("Max Particles", &pe->maxParticles, 10.0f, 1, 100000);
+                ImGui::DragFloat("Lifetime", &pe->lifetime, 0.1f, 0.01f, 60.0f, "%.2f s");
+
+                ImGui::Separator();
+                ImGui::TextDisabled("Initial Values");
+                float color[4] = {pe->startColor.x, pe->startColor.y, pe->startColor.z, pe->startColor.w};
+                if (ImGui::ColorEdit4("Start Color", color))
+                    pe->startColor = {color[0], color[1], color[2], color[3]};
+
+                ImGui::DragFloat("Start Size", &pe->startSize, 0.01f, 0.001f, 10.0f);
+                ImGui::DragFloat("Start Speed", &pe->startSpeed, 0.1f, 0.0f, 100.0f);
+                ImGui::DragFloat("Gravity", &pe->gravityMultiplier, 0.01f, -2.0f, 2.0f);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Animation Controller Component
+    // ============================================================================
+
+    void InspectorPanel::RenderAnimationControllerComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_RUNNING " Animation");
+        if (ImGui::BeginPopupContextItem("##AnimationCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::ANIMATION);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::ANIMATION);
+            AnimationControllerData* anim = comp ? comp->GetData<AnimationControllerData>() : nullptr;
+            if (anim)
+            {
+                ImGui::InputText("Default Clip", anim->defaultAnimation, sizeof(anim->defaultAnimation));
+                ImGui::DragFloat("Speed", &anim->playbackSpeed, 0.01f, 0.0f, 10.0f);
+                ImGui::Checkbox("Playing", &anim->playing);
+                ImGui::SameLine();
+                ImGui::Checkbox("Loop", &anim->loop);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Script Component
+    // ============================================================================
+
+    void InspectorPanel::RenderScriptComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_CODE " Script");
+        if (ImGui::BeginPopupContextItem("##ScriptCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::SCRIPT);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::SCRIPT);
+            ScriptData* script = comp ? comp->GetData<ScriptData>() : nullptr;
+            if (script)
+            {
+                ImGui::InputText("Script Path", script->scriptPath, sizeof(script->scriptPath));
+                ImGui::InputText("Class Name", script->className, sizeof(script->className));
+                ImGui::Checkbox("Auto Start", &script->autoStart);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Health Component
+    // ============================================================================
+
+    void InspectorPanel::RenderHealthComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_HEART " Health");
+        if (ImGui::BeginPopupContextItem("##HealthCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::HEALTH);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::HEALTH);
+            HealthData* hp = comp ? comp->GetData<HealthData>() : nullptr;
+            if (hp)
+            {
+                ImGui::DragFloat("Health", &hp->health, 1.0f, 0.0f, hp->maxHealth);
+                ImGui::DragFloat("Max Health", &hp->maxHealth, 1.0f, 1.0f, 10000.0f);
+
+                // Health bar preview
+                float fraction = hp->maxHealth > 0.0f ? hp->health / hp->maxHealth : 0.0f;
+                ImGui::ProgressBar(fraction, ImVec2(-1, 0), "");
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // AI Agent Component
+    // ============================================================================
+
+    void InspectorPanel::RenderAIAgentComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_BRAIN " AI Agent");
+        if (ImGui::BeginPopupContextItem("##AIAgentCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::AI_AGENT);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::AI_AGENT);
+            AIAgentData* ai = comp ? comp->GetData<AIAgentData>() : nullptr;
+            if (ai)
+            {
+                const char* states[] = {"Idle", "Patrolling", "Alert", "Combat", "Fleeing", "Dead"};
+                ImGui::Combo("Initial State", &ai->aiState, states, IM_ARRAYSIZE(states));
+                ImGui::InputText("Behavior Tree", ai->behaviorTreeName, sizeof(ai->behaviorTreeName));
+
+                ImGui::Separator();
+                ImGui::TextDisabled("Perception");
+                ImGui::DragFloat("Detection Range", &ai->detectionRange, 0.5f, 0.0f, 200.0f);
+                ImGui::DragFloat("Attack Range", &ai->attackRange, 0.5f, 0.0f, 100.0f);
+                ImGui::DragFloat("Reaction Time", &ai->reactionTime, 0.05f, 0.0f, 5.0f, "%.2f s");
+
+                ImGui::Separator();
+                ImGui::TextDisabled("Movement");
+                ImGui::DragFloat("Move Speed", &ai->moveSpeed, 0.1f, 0.0f, 50.0f);
+                ImGui::SliderFloat("Accuracy", &ai->accuracy, 0.0f, 1.0f);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Spline Component
+    // ============================================================================
+
+    void InspectorPanel::RenderSplineComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_BEZIER_CURVE " Spline");
+        if (ImGui::BeginPopupContextItem("##SplineCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::SPLINE);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::SPLINE);
+            SplineData* spline = comp ? comp->GetData<SplineData>() : nullptr;
+            if (spline)
+            {
+                ImGui::Checkbox("Debug Visible", &spline->debugVisible);
+                ImGui::Checkbox("Closed Loop", &spline->closed);
+                ImGui::Text("Control Points: %d", spline->pointCount);
+                ImGui::TextDisabled("Edit points in the Spline Editor panel");
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Spline Follower Component
+    // ============================================================================
+
+    void InspectorPanel::RenderSplineFollowerComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_ROUTE " Spline Follower");
+        if (ImGui::BeginPopupContextItem("##SplineFollowerCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::SPLINE_FOLLOWER);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::SPLINE_FOLLOWER);
+            SplineFollowerData* sf = comp ? comp->GetData<SplineFollowerData>() : nullptr;
+            if (sf)
+            {
+                ImGui::DragFloat("Speed", &sf->speed, 0.1f, 0.0f, 100.0f);
+
+                const char* loopModes[] = {"Once", "Loop", "Ping-Pong"};
+                ImGui::Combo("Loop Mode", &sf->loopMode, loopModes, IM_ARRAYSIZE(loopModes));
+
+                ImGui::Checkbox("Playing", &sf->playing);
+                ImGui::Checkbox("Orient to Path", &sf->orientToPath);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Decal Component
+    // ============================================================================
+
+    void InspectorPanel::RenderDecalComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_STAMP " Decal");
+        if (ImGui::BeginPopupContextItem("##DecalCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::DECAL);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::DECAL);
+            DecalData* decal = comp ? comp->GetData<DecalData>() : nullptr;
+            if (decal)
+            {
+                ImGui::InputText("Texture", decal->texturePath, sizeof(decal->texturePath));
+                ImGui::InputText("Category", decal->category, sizeof(decal->category));
+
+                float sz[3] = {decal->size.x, decal->size.y, decal->size.z};
+                if (ImGui::DragFloat3("Size", sz, 0.01f, 0.001f, 10.0f))
+                    decal->size = {sz[0], sz[1], sz[2]};
+
+                float color[4] = {decal->color.x, decal->color.y, decal->color.z, decal->color.w};
+                if (ImGui::ColorEdit4("Color", color))
+                    decal->color = {color[0], color[1], color[2], color[3]};
+
+                ImGui::DragFloat("Lifetime", &decal->lifetime, 1.0f, 0.0f, 300.0f, "%.0f s (0=permanent)");
+                ImGui::DragFloat("Fade Duration", &decal->fadeOutDuration, 0.1f, 0.0f, 30.0f, "%.1f s");
+                ImGui::Checkbox("Receive Lighting", &decal->receiveLighting);
+                ImGui::DragInt("Sort Order", &decal->sortOrder);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Projectile Component
+    // ============================================================================
+
+    void InspectorPanel::RenderProjectileComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_CROSSHAIRS " Projectile");
+        if (ImGui::BeginPopupContextItem("##ProjectileCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::PROJECTILE);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::PROJECTILE);
+            ProjectileData* proj = comp ? comp->GetData<ProjectileData>() : nullptr;
+            if (proj)
+            {
+                const char* moveTypes[] = {"Hitscan", "Ballistic"};
+                ImGui::Combo("Movement", &proj->movementType, moveTypes, IM_ARRAYSIZE(moveTypes));
+
+                const char* impactTypes[] = {"Destroy", "Bounce", "Pierce", "Stick"};
+                ImGui::Combo("On Impact", &proj->impactBehavior, impactTypes, IM_ARRAYSIZE(impactTypes));
+
+                ImGui::DragFloat("Speed", &proj->speed, 1.0f, 0.0f, 5000.0f);
+                ImGui::DragFloat("Damage", &proj->damage, 1.0f, 0.0f, 1000.0f);
+                ImGui::DragFloat("Gravity Scale", &proj->gravityScale, 0.1f, 0.0f, 5.0f);
+                ImGui::DragFloat("Explosion Radius", &proj->explosionRadius, 0.5f, 0.0f, 100.0f);
+                ImGui::DragFloat("Max Range", &proj->maxRange, 10.0f, 0.0f, 10000.0f);
+                ImGui::DragFloat("Max Lifetime", &proj->maxLifetime, 0.5f, 0.0f, 60.0f, "%.1f s");
+
+                if (proj->impactBehavior == 1) // Bounce
+                    ImGui::DragInt("Bounces", &proj->bouncesRemaining, 1.0f, 0, 20);
+                if (proj->impactBehavior == 2) // Pierce
+                    ImGui::DragInt("Pierces", &proj->piercesRemaining, 1.0f, 0, 20);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Interaction Component
+    // ============================================================================
+
+    void InspectorPanel::RenderInteractionComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_HAND_POINTER " Interaction");
+        if (ImGui::BeginPopupContextItem("##InteractionCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::INTERACTION);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::INTERACTION);
+            InteractionData* inter = comp ? comp->GetData<InteractionData>() : nullptr;
+            if (inter)
+            {
+                const char* types[] = {"Use", "Pickup", "Hold", "Toggle"};
+                ImGui::Combo("Type", &inter->interactionType, types, IM_ARRAYSIZE(types));
+
+                ImGui::InputText("Display Name", inter->displayName, sizeof(inter->displayName));
+                ImGui::InputText("Action Verb", inter->actionVerb, sizeof(inter->actionVerb));
+                ImGui::DragFloat("Radius", &inter->interactionRadius, 0.1f, 0.0f, 50.0f);
+
+                if (inter->interactionType == 2) // Hold
+                    ImGui::DragFloat("Hold Duration", &inter->holdDuration, 0.1f, 0.0f, 30.0f, "%.1f s");
+
+                ImGui::DragFloat("Cooldown", &inter->cooldownDuration, 0.1f, 0.0f, 30.0f, "%.1f s");
+                ImGui::DragInt("Uses (-1=unlimited)", &inter->usesRemaining, 1.0f, -1, 100);
+                ImGui::Checkbox("Show Highlight", &inter->showHighlight);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Weather Component
+    // ============================================================================
+
+    void InspectorPanel::RenderWeatherComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_CLOUD_SUN " Weather Zone");
+        if (ImGui::BeginPopupContextItem("##WeatherCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::WEATHER);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::WEATHER);
+            WeatherData* weather = comp ? comp->GetData<WeatherData>() : nullptr;
+            if (weather)
+            {
+                const char* weatherTypes[] = {"Clear", "Cloudy", "Rain", "Snow", "Fog", "Storm"};
+                ImGui::Combo("Type", &weather->weatherType, weatherTypes, IM_ARRAYSIZE(weatherTypes));
+
+                ImGui::SliderFloat("Intensity", &weather->intensity, 0.0f, 1.0f);
+                ImGui::DragFloat("Wind Speed", &weather->windSpeed, 0.1f, 0.0f, 50.0f);
+
+                float windDir[3] = {weather->windDirection.x, weather->windDirection.y, weather->windDirection.z};
+                if (ImGui::DragFloat3("Wind Dir", windDir, 0.1f, -1.0f, 1.0f))
+                    weather->windDirection = {windDir[0], windDir[1], windDir[2]};
+
+                ImGui::DragFloat("Transition Time", &weather->transitionTime, 0.1f, 0.0f, 30.0f, "%.1f s");
+                ImGui::Checkbox("Enabled", &weather->enabled);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Network Identity Component
+    // ============================================================================
+
+    void InspectorPanel::RenderNetworkIdentityComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_NETWORK_WIRED " Network Identity");
+        if (ImGui::BeginPopupContextItem("##NetworkIdentityCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::NETWORK_IDENTITY);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::NETWORK_IDENTITY);
+            NetworkIdentityData* net = comp ? comp->GetData<NetworkIdentityData>() : nullptr;
+            if (net)
+            {
+                ImGui::Checkbox("Replicate Transform", &net->replicateTransform);
+                ImGui::Checkbox("Replicate Health", &net->replicateHealth);
+                ImGui::Checkbox("Local Authority", &net->isLocalAuthority);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
     // Add Component Menu
     // ============================================================================
 
@@ -1358,6 +2301,67 @@ namespace SparkEditor
                 if (ImGui::MenuItem("Terrain", nullptr, false, !HasComponent(ComponentType::TERRAIN)))
                 {
                     AddComponent(ComponentType::TERRAIN);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu(ICON_FA_HEART " Gameplay"))
+            {
+                if (ImGui::MenuItem("Health", nullptr, false, !HasComponent(ComponentType::HEALTH)))
+                {
+                    AddComponent(ComponentType::HEALTH);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Interaction", nullptr, false, !HasComponent(ComponentType::INTERACTION)))
+                {
+                    AddComponent(ComponentType::INTERACTION);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Projectile", nullptr, false, !HasComponent(ComponentType::PROJECTILE)))
+                {
+                    AddComponent(ComponentType::PROJECTILE);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Decal", nullptr, false, !HasComponent(ComponentType::DECAL)))
+                {
+                    AddComponent(ComponentType::DECAL);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Weather Zone", nullptr, false, !HasComponent(ComponentType::WEATHER)))
+                {
+                    AddComponent(ComponentType::WEATHER);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu(ICON_FA_BRAIN " AI"))
+            {
+                if (ImGui::MenuItem("AI Agent", nullptr, false, !HasComponent(ComponentType::AI_AGENT)))
+                {
+                    AddComponent(ComponentType::AI_AGENT);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu(ICON_FA_BEZIER_CURVE " Splines"))
+            {
+                if (ImGui::MenuItem("Spline", nullptr, false, !HasComponent(ComponentType::SPLINE)))
+                {
+                    AddComponent(ComponentType::SPLINE);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Spline Follower", nullptr, false, !HasComponent(ComponentType::SPLINE_FOLLOWER)))
+                {
+                    AddComponent(ComponentType::SPLINE_FOLLOWER);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu(ICON_FA_NETWORK_WIRED " Networking"))
+            {
+                if (ImGui::MenuItem("Network Identity", nullptr, false, !HasComponent(ComponentType::NETWORK_IDENTITY)))
+                {
+                    AddComponent(ComponentType::NETWORK_IDENTITY);
                     m_showAddComponentMenu = false;
                 }
                 ImGui::EndMenu();
