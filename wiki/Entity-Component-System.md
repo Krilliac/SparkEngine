@@ -498,6 +498,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `SpriteAnimator` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `SpriteRenderer` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `TagComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `TerrainComponent` | `SparkEngine/Source/Engine/ECS/Components/TerrainComponents.h` |
 | `TilemapComponent` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `TilesetInfo` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `Transform` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |

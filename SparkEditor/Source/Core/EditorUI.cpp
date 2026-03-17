@@ -34,6 +34,7 @@
 #include "../Panels/DedicatedServerPanel.h"
 #include "../Panels/MaterialEditorPanel.h"
 #include "../Panels/PlayModeToolbarPanel.h"
+#include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
 #include "EditorApplication.h"
@@ -832,6 +833,19 @@ namespace SparkEditor
             console.LogError("Failed to create Material Editor panel: " + std::string(e.what()));
         }
 
+        // Create Terrain Editor Panel (height sculpting, texture painting, vegetation)
+        try
+        {
+            console.LogInfo("Creating Terrain Editor panel...");
+            auto terrainEditor = std::shared_ptr<TerrainEditor>(new TerrainEditor());
+            m_panels["TerrainEditor"] = terrainEditor;
+            console.LogSuccess("Created Terrain Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Terrain Editor panel: " + std::string(e.what()));
+        }
+
         // Initialize all panels
         for (auto& [name, panel] : m_panels)
         {
@@ -883,6 +897,8 @@ namespace SparkEditor
             m_panels["BuildCook"]->SetIcon(ICON_FA_HAMMER);
         if (m_panels.count("DedicatedServer"))
             m_panels["DedicatedServer"]->SetIcon(ICON_FA_SERVER);
+        if (m_panels.count("TerrainEditor"))
+            m_panels["TerrainEditor"]->SetIcon(ICON_FA_MOUNTAIN);
 
         // Hide secondary panels by default (accessible via menus)
         if (m_panels.count("UndoHistory"))
@@ -915,6 +931,8 @@ namespace SparkEditor
             m_panels["Search"]->SetVisible(false);
         if (m_panels.count("DedicatedServer"))
             m_panels["DedicatedServer"]->SetVisible(false);
+        if (m_panels.count("TerrainEditor"))
+            m_panels["TerrainEditor"]->SetVisible(false);
 
         console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
     }
@@ -1263,6 +1281,10 @@ namespace SparkEditor
                 if (ImGui::MenuItem(ICON_FA_HAMMER " Build & Cook", nullptr, IsPanelVisible("BuildCook")))
                 {
                     SetPanelVisible("BuildCook", !IsPanelVisible("BuildCook"));
+                }
+                if (ImGui::MenuItem(ICON_FA_MOUNTAIN " Terrain Editor", nullptr, IsPanelVisible("TerrainEditor")))
+                {
+                    SetPanelVisible("TerrainEditor", !IsPanelVisible("TerrainEditor"));
                 }
                 ImGui::TextDisabled("Tools & Analysis");
                 if (ImGui::MenuItem(ICON_FA_UNDO " Undo History", nullptr, IsPanelVisible("UndoHistory")))

@@ -496,6 +496,8 @@ namespace SparkEditor
         /**
      * @brief Render tool palette
      */
+        void RenderNoTerrainView();
+
         void RenderToolPalette();
 
         /**
