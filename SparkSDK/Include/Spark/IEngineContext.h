@@ -24,6 +24,7 @@ class AudioEngine;
 class PhysicsSystem;
 class SceneManager;
 class AngelScriptEngine;
+class World;
 
 namespace Spark
 {
@@ -95,6 +96,10 @@ namespace Spark
         /** @brief Get the network manager (may return nullptr if networking is disabled) */
         virtual NetworkManager* GetNetwork() { return nullptr; }
         virtual const NetworkManager* GetNetwork() const { return nullptr; }
+
+        /** @brief Get the ECS world (may return nullptr if not initialized) */
+        virtual World* GetWorld() { return nullptr; }
+        virtual const World* GetWorld() const { return nullptr; }
 
         /** @brief Get the scene manager (may return nullptr if not initialized) */
         virtual SceneManager* GetSceneManager() { return nullptr; }

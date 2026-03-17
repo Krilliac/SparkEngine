@@ -1,188 +1,63 @@
 /**
  * @file EventSystem.h
- * @brief Type-safe publish/subscribe event bus for decoupled system communication
+ * @brief Built-in event types and deferred event queue for engine communication
  * @author Spark Engine Team
  * @date 2025
  *
- * Provides a lightweight, type-safe event bus that allows engine systems to
- * communicate without direct dependencies. Systems publish events and
- * subscribers receive them through registered callbacks.
+ * Re-exports the canonical EventBus from Utils/EventBus.h and defines the
+ * engine's built-in event types (gameplay, lifecycle, physics, input, etc.)
+ * plus a QueuedEventBus for thread-safe deferred dispatch.
  *
  * ## Usage
  * @code
- *   EventBus bus;
+ *   // Subscribe with RAII handle (auto-unsubscribes on destruction)
+ *   auto handle = Spark::EventBus::Global().Subscribe<EntityDamagedEvent>(
+ *       [](const EntityDamagedEvent& e) {
+ *           std::cout << "Entity took " << e.damage << " damage!\n";
+ *       });
  *
- *   // Subscribe to an event
- *   auto id = bus.Subscribe<EntityDamagedEvent>([](const EntityDamagedEvent& e) {
- *       std::cout << "Entity took " << e.damage << " damage!\n";
- *   });
+ *   // Publish from anywhere
+ *   Spark::EventBus::Global().Publish(EntityDamagedEvent{ .entityId = 1, .damage = 50.0f });
  *
- *   // Publish an event
- *   bus.Publish(EntityDamagedEvent{ entityId, 50.0f, DamageType::Fire });
- *
- *   // Unsubscribe when done
- *   bus.Unsubscribe<EntityDamagedEvent>(id);
+ *   // Deferred dispatch from worker threads
+ *   QueuedEventBus queue;
+ *   queue.QueueEvent(CollisionEvent{ entityA, entityB, 42.0f });
+ *   queue.DispatchAll(mainEventBus);  // on main thread
  * @endcode
  *
  * ## Thread safety
- * The event bus uses a mutex for thread-safe subscribe/unsubscribe. Publishing
- * events is safe from any thread, but callbacks execute on the publishing thread.
+ * The EventBus uses per-type mutexes for thread-safe subscribe/unsubscribe.
+ * Publishing is safe from any thread. QueuedEventBus adds deferred dispatch.
  */
 
 #pragma once
 
-#include <functional>
-#include <unordered_map>
-#include <vector>
-#include <string>
-#include <typeindex>
-#include <mutex>
+// Canonical EventBus implementation — single source of truth for the event bus class
+#include "Utils/EventBus.h"
+
 #include <cstdint>
-#include <algorithm>
+#include <functional>
+#include <mutex>
+#include <string>
+#include <vector>
 
 namespace Spark
 {
 
     // =============================================================================
-    // Subscription handle
-    // =============================================================================
-
-    /** @brief Unique identifier for an event subscription, used for unsubscription. */
-    using SubscriptionID = uint64_t;
-
-    // =============================================================================
-    // Event Bus
+    // Legacy SubscriptionID type alias
     // =============================================================================
 
     /**
- * @class EventBus
- * @brief Central publish/subscribe message broker for engine events.
- *
- * The EventBus uses C++ RTTI (std::type_index) to route events by type.
- * Each event type T can have multiple subscribers. Subscribers are invoked
- * synchronously in registration order when an event is published.
- */
-    class EventBus
-    {
-      public:
-        EventBus() = default;
-        ~EventBus() = default;
-
-        // Non-copyable, movable
-        EventBus(const EventBus&) = delete;
-        EventBus& operator=(const EventBus&) = delete;
-        EventBus(EventBus&&) = default;
-        EventBus& operator=(EventBus&&) = default;
-
-        /**
-     * @brief Subscribe to events of type T.
+     * @brief Legacy subscription ID type for code that uses manual unsubscription.
      *
-     * @tparam T      Event type to subscribe to.
-     * @param callback  Function called when an event of type T is published.
-     * @return          SubscriptionID that can be used to unsubscribe later.
+     * New code should prefer SubscriptionHandle (RAII, auto-unsubscribes).
+     * This alias is kept for backward compatibility with existing callers.
      */
-        template <typename T> SubscriptionID Subscribe(std::function<void(const T&)> callback)
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            SubscriptionID id = m_nextId++;
-            auto& subs = m_subscribers[std::type_index(typeid(T))];
-            subs.push_back({id, [cb = std::move(callback)](const void* data) { cb(*static_cast<const T*>(data)); }});
-            return id;
-        }
-
-        /**
-     * @brief Unsubscribe a previously registered callback.
-     *
-     * @tparam T  Event type the subscription was for.
-     * @param id  The SubscriptionID returned by Subscribe().
-     * @return    true if the subscription was found and removed.
-     */
-        template <typename T> bool Unsubscribe(SubscriptionID id)
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            auto it = m_subscribers.find(std::type_index(typeid(T)));
-            if (it == m_subscribers.end())
-                return false;
-
-            auto& subs = it->second;
-            auto sub = std::remove_if(subs.begin(), subs.end(), [id](const Subscription& s) { return s.id == id; });
-            if (sub == subs.end())
-                return false;
-            subs.erase(sub, subs.end());
-            return true;
-        }
-
-        /**
-     * @brief Publish an event to all subscribers of type T.
-     *
-     * Callbacks are invoked synchronously in registration order on the
-     * calling thread. The event object is passed by const reference.
-     *
-     * @tparam T     Event type to publish.
-     * @param event  The event data to broadcast.
-     */
-        template <typename T> void Publish(const T& event)
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            auto it = m_subscribers.find(std::type_index(typeid(T)));
-            if (it == m_subscribers.end())
-                return;
-
-            // Copy subscriber list to allow safe iteration if callbacks modify subscriptions
-            auto subs = it->second;
-            for (const auto& sub : subs)
-            {
-                sub.callback(&event);
-            }
-        }
-
-        /**
-     * @brief Remove all subscriptions for a given event type.
-     * @tparam T  Event type to clear.
-     */
-        template <typename T> void ClearSubscriptions()
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_subscribers.erase(std::type_index(typeid(T)));
-        }
-
-        /**
-     * @brief Remove all subscriptions for all event types.
-     */
-        void ClearAll()
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_subscribers.clear();
-        }
-
-        /**
-     * @brief Get the number of subscribers for a given event type.
-     * @tparam T  Event type to query.
-     * @return    Number of active subscriptions.
-     */
-        template <typename T> size_t GetSubscriberCount() const
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            auto it = m_subscribers.find(std::type_index(typeid(T)));
-            if (it == m_subscribers.end())
-                return 0;
-            return it->second.size();
-        }
-
-      private:
-        struct Subscription
-        {
-            SubscriptionID id;
-            std::function<void(const void*)> callback;
-        };
-
-        mutable std::mutex m_mutex;
-        std::unordered_map<std::type_index, std::vector<Subscription>> m_subscribers;
-        SubscriptionID m_nextId = 1;
-    };
+    using SubscriptionID = uint64_t;
 
     // =============================================================================
-    // Built-in Event Types
+    // Built-in Event Types — Gameplay
     // =============================================================================
 
     /** @brief Fired when an entity takes damage. */
@@ -401,17 +276,6 @@ namespace Spark
      * dispatched in bulk on the main thread during a specific engine phase
      * (e.g., between physics and rendering).
      *
-     * ## Usage
-     * @code
-     *   QueuedEventBus queue;
-     *
-     *   // Worker thread: queue events safely
-     *   queue.QueueEvent(CollisionEvent{ entityA, entityB, 42.0f });
-     *
-     *   // Main thread: dispatch all queued events through the EventBus
-     *   queue.DispatchAll(mainEventBus);
-     * @endcode
-     *
      * ## Thread safety
      * QueueEvent() is safe to call from any thread. DispatchAll() should be
      * called from the main thread; it acquires the lock, swaps the queue, then
@@ -423,7 +287,6 @@ namespace Spark
         QueuedEventBus() = default;
         ~QueuedEventBus() = default;
 
-        // Non-copyable, movable
         QueuedEventBus(const QueuedEventBus&) = delete;
         QueuedEventBus& operator=(const QueuedEventBus&) = delete;
         QueuedEventBus(QueuedEventBus&&) = default;
@@ -431,10 +294,6 @@ namespace Spark
 
         /**
          * @brief Queue an event for deferred dispatch. Thread-safe.
-         *
-         * The event is type-erased and stored internally. It will be published
-         * to an EventBus when DispatchAll() is called.
-         *
          * @tparam T     Event type.
          * @param event  Event data to queue.
          */
@@ -446,11 +305,6 @@ namespace Spark
 
         /**
          * @brief Dispatch all queued events through the given EventBus.
-         *
-         * Swaps the internal queue under lock, then dispatches each event
-         * without holding the lock. This minimises contention with producer
-         * threads that may be calling QueueEvent() concurrently.
-         *
          * @param bus  The EventBus to publish queued events through.
          */
         void DispatchAll(EventBus& bus)
@@ -467,19 +321,14 @@ namespace Spark
             }
         }
 
-        /**
-         * @brief Get the number of events currently waiting in the queue.
-         * @return  Count of pending events.
-         */
+        /** @brief Get the number of events currently waiting in the queue. */
         size_t GetPendingCount() const
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             return m_pendingEvents.size();
         }
 
-        /**
-         * @brief Discard all queued events without dispatching them.
-         */
+        /** @brief Discard all queued events without dispatching them. */
         void Clear()
         {
             std::lock_guard<std::mutex> lock(m_mutex);

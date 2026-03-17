@@ -1041,15 +1041,6 @@ else()
     message(STATUS "  [MISSING] AngelScript     — scripting system unavailable")
 endif()
 
-# curl
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Networking/curl/CMakeLists.txt")
-    message(STATUS "  [OK]      curl            — HTTP client (networking)")
-else()
-    list(APPEND _SPARK_MISSING_DEPS "curl")
-    math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
-    message(STATUS "  [MISSING] curl            — HTTP networking unavailable")
-endif()
-
 # TinyObjLoader
 if(TINYOBJ_FOUND)
     message(STATUS "  [OK]      TinyObjLoader   — OBJ model loading")
