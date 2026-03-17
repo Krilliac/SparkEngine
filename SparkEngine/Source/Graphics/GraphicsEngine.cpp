@@ -1,6 +1,16 @@
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-// GraphicsEngine.cpp - COMPLETE IMPLEMENTATION WITH ALL 600+ LINES RESTORED
+/**
+ * @file GraphicsEngine.cpp
+ * @brief Central rendering orchestrator for SparkEngine (D3D11)
+ *
+ * Manages the full rendering lifecycle: D3D11 device/swap chain initialization,
+ * shader compilation, render target management, lighting, shadow mapping,
+ * post-processing (HDR, bloom, SSAO, TAA, SSR, volumetrics), and frame
+ * presentation. Integrates with MaterialSystem, TextureSystem, LightingSystem,
+ * AssetPipeline, and PostProcessingPipeline. Supports forward and deferred
+ * rendering pipelines, configurable MSAA, and real-time settings adjustment.
+ */
 #include "GraphicsEngine.h"
 #include "../Utils/Assert.h"
 #include "../Utils/SparkError.h"

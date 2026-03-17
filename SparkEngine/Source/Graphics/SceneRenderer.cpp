@@ -1,5 +1,14 @@
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
+/**
+ * @file SceneRenderer.cpp
+ * @brief High-level scene rendering: draw command submission, frustum culling, and sorting
+ *
+ * Collects draw commands each frame via Submit(), then CullAndSort() performs
+ * clip-space frustum culling with a conservative margin and sorts visible
+ * commands by material (batching) then by distance (front-to-back for opaque).
+ * Uses a per-frame linear allocator to minimize allocation overhead.
+ */
 
 #include "SceneRenderer.h"
 #include "../Utils/Validate.h"
@@ -10,6 +19,7 @@ namespace Spark::Graphics
 
     const std::string SceneRenderer::s_emptyString;
 
+    /// Pre-allocates draw command storage up to the specified maximum.
     bool SceneRenderer::Initialize(uint32_t maxDrawCommands)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
@@ -32,6 +42,7 @@ namespace Spark::Graphics
         m_pathLookup.clear();
     }
 
+    /// Clears all draw commands and resets the per-frame linear allocator for the new frame.
     void SceneRenderer::BeginFrame()
     {
         m_drawCommands.clear();
@@ -64,6 +75,11 @@ namespace Spark::Graphics
         Submit(meshHandle, materialHandle, worldMatrix, castShadows);
     }
 
+    /// Frustum-culls draw commands and sorts survivors for efficient rendering.
+    /// Culling transforms each object's world position to clip space and tests against
+    /// NDC bounds with a kMargin=2.0 expansion to account for object bounding radius.
+    /// Survivors are sorted by material sortKey (minimizes state changes) then by
+    /// squared distance to camera (front-to-back reduces overdraw for opaque geometry).
     void SceneRenderer::CullAndSort(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix,
                                     const DirectX::XMFLOAT3& cameraPos)
     {

@@ -1,5 +1,14 @@
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
+/**
+ * @file RenderDevice.cpp
+ * @brief Core GPU device and swap chain management for Direct3D 11
+ *
+ * Owns the D3D11 device, immediate context, swap chain, and back buffer views.
+ * Handles device creation with feature-level negotiation (11.0/11.1), DXGI
+ * swap chain setup via FLIP_DISCARD, and viewport/render-target binding.
+ * Resize support tears down old views and recreates them without device loss.
+ */
 
 #include "RenderDevice.h"
 #include "RHI/RHIFactory.h"
@@ -15,6 +24,8 @@ namespace Spark::Graphics
         Shutdown();
     }
 
+    /// Initializes the D3D11 device, swap chain, back buffer RTV, and depth-stencil view.
+    /// Auto backend defaults to D3D11 on Windows. Returns false on any creation failure.
     bool RenderDevice::Initialize(Spark::NativeWindowHandle hwnd, uint32_t width, uint32_t height, bool fullscreen,
                                   RHI::GraphicsBackend backend)
     {
@@ -58,6 +69,7 @@ namespace Spark::Graphics
         return true;
     }
 
+    /// Releases all D3D11 resources in reverse creation order: views, swap chain, context, device.
     void RenderDevice::Shutdown()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
@@ -73,6 +85,8 @@ namespace Spark::Graphics
         m_rhiDevice.reset();
     }
 
+    /// Handles window resize: releases old views, unbinds render targets,
+    /// resizes the swap chain buffers, then recreates back buffer and depth-stencil views.
     bool RenderDevice::Resize(uint32_t width, uint32_t height)
     {
         if (width == 0 || height == 0)
@@ -108,6 +122,7 @@ namespace Spark::Graphics
         return true;
     }
 
+    /// Presents the back buffer. syncInterval=1 enables VSync, 0 presents immediately.
     void RenderDevice::Present(bool vsync)
     {
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -119,9 +134,13 @@ namespace Spark::Graphics
 #endif
     }
 
+    /// Creates the D3D11 device (hardware driver, feature level 11.0+), immediate context,
+    /// and DXGI swap chain. Uses FLIP_DISCARD with double-buffering and R8G8B8A8_UNORM format.
+    /// Queries VRAM from the adapter descriptor for telemetry.
     bool RenderDevice::CreateDevice(Spark::NativeWindowHandle hwnd, uint32_t width, uint32_t height, bool fullscreen)
     {
 #ifdef SPARK_PLATFORM_WINDOWS
+        // Configure swap chain: double-buffered FLIP_DISCARD for low-latency presentation
         DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
         swapChainDesc.Width = width;
         swapChainDesc.Height = height;
@@ -187,6 +206,8 @@ namespace Spark::Graphics
         return true;
     }
 
+    /// Creates the back buffer RTV, depth-stencil texture (D24_UNORM_S8_UINT),
+    /// depth-stencil view, viewport, and binds them as the active render targets.
     bool RenderDevice::CreateBackBufferViews()
     {
 #ifdef SPARK_PLATFORM_WINDOWS

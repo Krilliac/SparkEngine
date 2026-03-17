@@ -1,5 +1,14 @@
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
+/**
+ * @file RenderPipeline.cpp
+ * @brief Render graph-based pipeline that manages ordered render passes
+ *
+ * Orchestrates the frame rendering pipeline through registered passes sorted
+ * by phase (Shadow -> Geometry -> Lighting -> Transparent -> PostProcess -> UI -> Debug).
+ * Each pass contributes to a RenderGraph that is compiled (topological sort,
+ * dead-pass elimination, resource aliasing) and executed each frame.
+ */
 
 #include "RenderPipeline.h"
 #include "../Utils/Validate.h"
@@ -8,6 +17,7 @@
 namespace Spark::Graphics
 {
 
+    /// Creates the render graph and registers default passes matching the GraphicsEngine pipeline.
     bool RenderPipeline::Initialize(RenderDevice* device)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
@@ -29,6 +39,8 @@ namespace Spark::Graphics
         m_device = nullptr;
     }
 
+    /// Executes a single frame: re-sorts passes if dirty, builds the render graph
+    /// from enabled passes, compiles it (dependency sort + dead-pass culling), then executes.
     void RenderPipeline::ExecuteFrame(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix,
                                       const DirectX::XMFLOAT3& cameraPos)
     {
@@ -62,6 +74,8 @@ namespace Spark::Graphics
         m_renderGraph->Execute();
     }
 
+    /// Registers a named render pass at a given phase. Replaces any existing pass with the same name.
+    /// Marks the pass list dirty so it will be re-sorted before the next frame execution.
     void RenderPipeline::RegisterPass(const std::string& name, PassPhase phase, PassSetupFn setupFn)
     {
         SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Graphics, name);
@@ -124,10 +138,11 @@ namespace Spark::Graphics
         return result;
     }
 
+    /// Registers placeholder passes for the standard rendering pipeline stages.
+    /// These no-op passes define the phase ordering and will be replaced with real
+    /// implementations as the RHI migration progresses.
     void RenderPipeline::BuildDefaultPasses()
     {
-        // Register default passes matching the existing GraphicsEngine pipeline.
-        // Each pass is a no-op setup that will be filled in as the RHI migration progresses.
 
         RegisterPass("ShadowPass", PassPhase::Shadow,
                      [](RenderGraph& graph)
@@ -190,6 +205,7 @@ namespace Spark::Graphics
                      });
     }
 
+    /// Stable-sorts passes by phase enum value, preserving registration order within the same phase.
     void RenderPipeline::SortPasses()
     {
         std::stable_sort(m_passes.begin(), m_passes.end(), [](const RegisteredPass& a, const RegisteredPass& b)
