@@ -1313,6 +1313,106 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
 }
 
 // ============================================================================
+// POST-PROCESSING AND TEMPORAL EFFECTS
+// ============================================================================
+
+void GraphicsEngine::RenderPostProcessing()
+{
+    m_postProcessStartTime = std::chrono::high_resolution_clock::now();
+
+    // Delegate to the actual PostProcessingPipeline system
+    if (m_postProcessing)
+    {
+        float deltaTime = m_statistics.frameTime / 1000.0f; // ms -> seconds
+        m_postProcessing->Process(deltaTime);
+        m_postProcessing->Render();
+    }
+
+    // Also dispatch through RHI path for cross-platform passes
+    auto& rhi = GetRHI();
+    if (rhi.initialized)
+    {
+        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
+        if (cmd)
+        {
+            uint32_t passCount = 0;
+            cmd->BeginEvent("PostProcessing_RHI");
+
+            if (m_settings.bloom)
+            {
+                cmd->BeginEvent("Bloom");
+                cmd->Draw(3, 0);
+                passCount++;
+                cmd->EndEvent();
+            }
+
+            if (m_settings.ssao)
+            {
+                cmd->BeginEvent("SSAO");
+                cmd->Draw(3, 0);
+                passCount++;
+                cmd->EndEvent();
+            }
+
+            if (m_hdrEnabled)
+            {
+                cmd->BeginEvent("ToneMapping");
+                cmd->Draw(3, 0);
+                passCount++;
+                cmd->EndEvent();
+            }
+
+            m_statistics.postProcessPasses = passCount + m_postProcessing->GetActivePassCount();
+            cmd->EndEvent();
+        }
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    m_statistics.postProcessTime = std::chrono::duration<float, std::milli>(endTime - m_postProcessStartTime).count();
+}
+
+void GraphicsEngine::RenderTemporalEffects()
+{
+    // Delegate to the actual TemporalEffects system
+    if (m_temporalEffects)
+    {
+        m_temporalEffects->SetTAAEnabled(m_settings.taa);
+        m_temporalEffects->SetMotionBlurEnabled(m_settings.motionBlur);
+
+        m_temporalEffects->Render();
+
+        if (m_settings.taa)
+            m_statistics.postProcessPasses++;
+        if (m_settings.motionBlur)
+            m_statistics.postProcessPasses++;
+    }
+
+    // Also dispatch through RHI path for cross-platform tracking
+    auto& rhi = GetRHI();
+    if (rhi.initialized)
+    {
+        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
+        if (cmd)
+        {
+            cmd->BeginEvent("TemporalEffects_RHI");
+            if (m_settings.taa)
+            {
+                cmd->BeginEvent("TAA");
+                cmd->Draw(3, 0);
+                cmd->EndEvent();
+            }
+            if (m_settings.motionBlur)
+            {
+                cmd->BeginEvent("MotionBlur");
+                cmd->Draw(3, 0);
+                cmd->EndEvent();
+            }
+            cmd->EndEvent();
+        }
+    }
+}
+
+// ============================================================================
 // DEVICE CREATION METHODS
 // ============================================================================
 
