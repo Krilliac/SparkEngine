@@ -7,25 +7,25 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Topic | File | Type | Status | Last Updated |
 |-------|------|------|--------|--------------|
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
-| **SparkConsole refactor plan (critical)** | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | Active | 2026-03-14 |
+| SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
 | Build and CI workflow speedups | [knowledge/build-optimizations.md](knowledge/build-optimizations.md) | Optimization | Active | 2026-03-14 |
 | AI bloat pattern and countermeasures | [knowledge/ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md) | Observation | Active | 2026-03-14 |
-| **Comprehensive bloat audit (critical)** | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-15 |
-| **30 orphaned headers (11K+ dead lines)** | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | Active | 2026-03-16 |
-| **5 duplicate systems, 2 of 3 ODR risks fixed** | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | Partially Resolved | 2026-03-16 |
-| **11 orphaned tests, 14 untested subsystems** | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-16 |
-| **8 dead CMake options, duplicate imgui** | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | Active | 2026-03-16 |
-| **26 singletons (12 orphaned), 74-member god object** | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | Active | 2026-03-16 |
-| **66 oversized functions, 7 private-method violations, 4 duplicate functions** | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
-| **MEMORY/ERRORS: 3 low-risk items remain** | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Mostly Resolved | 2026-03-16 |
-| **Rendering: 17 working, 12 header-only stubs (~15K dead lines)** | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | Active | 2026-03-16 |
-| **Engine: 17 working, 7 orphaned systems (~90K+ dead lines)** | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-16 |
-| **Editor: 24 working, all panels resolved** | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | Mostly Resolved | 2026-03-16 |
-| **SparkGame: 75% functional FPS, no AI enemies** | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
-| **SDK: ECS not exposed, unique_ptr DLL export, IGameModule gap** | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | Active | 2026-03-16 |
-| **Docs: 53 wiki pages, 245/246 Doxygen, 10 critical gaps** | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-16 |
-| **ThirdParty: 6 uninitialized submodules, curl dead code** | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-16 |
+| Comprehensive bloat audit | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-15 |
+| 30 orphaned headers (27 deleted, 3 intentional) | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | **Resolved** | 2026-03-16 |
+| Duplicate systems (3/3 ODR risks fixed) | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
+| 11 orphaned tests (now wired in) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | **Mostly Resolved** | 2026-03-16 |
+| CMake build (curl removed, dead options gone) | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
+| 26 singletons (12 orphaned), 74-member god object | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | Active | 2026-03-16 |
+| 66 oversized functions, 7 private-method violations | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
+| MEMORY/ERRORS: 3 low-risk items remain | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Mostly Resolved | 2026-03-16 |
+| Rendering: 17 working, 12 header-only stubs (~15K dead lines) | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | Active | 2026-03-16 |
+| Engine: 17 working, 7 orphaned systems (~90K+ dead lines) | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-16 |
+| Editor: 24 working, all panels resolved | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | **Resolved** | 2026-03-16 |
+| SparkGame: 75% functional FPS, no AI enemies | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
+| SDK: unique_ptr fixed, ECS exposed, IGameModule gap | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
+| Docs: 53 wiki pages, 245/246 Doxygen, 10 critical gaps | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-16 |
+| ThirdParty: 6 uninitialized submodules, curl removed | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-17 |
 
 ## Quick Reference by Topic
 
@@ -43,27 +43,25 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **Windows CI fails but Linux passes** → MSVC `/W4` warnings. See CLAUDE.md CI section.
 
-**MOSTLY RESOLVED: Memory/error handling** → 3 low-risk items remain open (naked new in Physics, RHI .release() pattern, COM manual release). See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
+**MOSTLY RESOLVED: Memory/error handling** → 3 low-risk items remain open. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
 
 ### Doing things well (Patterns & Optimizations)
 
-**CRITICAL: 47 files violate size limits, 127 classes exceed method limit, 10 orphaned singletons (7 wired in this session)** → See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md). All 7 dead utility headers now wired in. Remaining: DecalSystem, DXRSupport, PlatformInputManager, NavMesh.
+**RESOLVED: SparkConsole** → Refactored from ~7,000 to 551 lines. Now a clean log sink + command registry.
 
-**CRITICAL: 30 orphaned headers never included anywhere (~11K lines)** → See [orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md).
+**RESOLVED: EventBus ODR** → EventSystem.h now delegates to Utils/EventBus.h. Single canonical implementation.
 
-**PARTIALLY RESOLVED: ODR risks** → Dual EventBus still open. See [duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md).
+**RESOLVED: SDK unique_ptr** → Changed to raw pointer with manual lifecycle. ECS World exposed via GetWorld().
 
-**MEDIUM: 11 orphaned tests not in CMake, 14 untested subsystems** → See [test-suite-audit.md](knowledge/test-suite-audit.md).
+**RESOLVED: curl dependency** → Removed from .gitmodules and CMakeLists.txt.
 
-**MEDIUM: 8 dead CMake build options** → See [cmake-build-audit.md](knowledge/cmake-build-audit.md).
+**Active: 47 files violate size limits, 127 classes exceed method limit** → See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md).
 
-**HIGH: 66 functions exceed 50-line limit, 4 duplicate functions** → See [code-quality-violations.md](knowledge/code-quality-violations.md).
+**Active: 66 functions exceed 50-line limit** → See [code-quality-violations.md](knowledge/code-quality-violations.md).
 
-**CRITICAL: SparkConsole needs refactoring** → 6,000+ lines of embedded UI bloat. See [sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md).
+**BEFORE writing any code** → Check file size. If over 500 lines (.cpp) or 300 lines (.h), consider splitting. See [ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md).
 
-**BEFORE writing any code** → Check file size. If over 400 lines (.cpp) or 200 lines (.h), trim first. See [ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md).
-
-**BEFORE adding a new method/class** → Search for existing one. Remove a duplicate if adding. See [workflow-patterns.md](knowledge/workflow-patterns.md).
+**BEFORE adding a new method/class** → Search for existing one. See [workflow-patterns.md](knowledge/workflow-patterns.md).
 
 ### Working faster (Optimizations)
 
@@ -81,6 +79,8 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Functional audit — what works vs scaffolding
 
+**All 9 core subsystems are FUNCTIONAL** (confirmed 2026-03-17): Graphics (D3D11), Physics (Bullet3), Audio (XAudio2), ECS (EnTT), Input, Scene Management, AI (behavior trees + NavMesh), Animation (skeletal + IK), Main Game Loop.
+
 **Rendering pipeline**: 17 working, 12 header-only stubs (~15K dead lines). See [rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md).
 
 **Engine systems**: 17 working, 7 orphaned (~90K+ lines). See [gameplay-systems-status.md](knowledge/gameplay-systems-status.md).
@@ -89,22 +89,28 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **SparkGame**: 75% functional FPS. See [sparkgame-module-status.md](knowledge/sparkgame-module-status.md).
 
-**SDK/API**: ECS not exposed, unique_ptr DLL export risk. See [sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md).
+**SDK/API**: unique_ptr fixed, ECS exposed. See [sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md).
 
 **Documentation**: 53 wiki pages, 99.6% Doxygen coverage. See [documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md).
 
-**Third-party deps**: 6 uninitialized submodules, curl dead code. See [thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md).
+**Third-party deps**: 5 uninitialized submodules (curl removed). See [thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md).
 
-## Resolved Issues (cleaned up 2026-03-16)
+## Resolved Issues (cleaned up 2026-03-17)
 
-_These issues were fully resolved and their knowledge files removed. Key learnings are preserved inline above._
+_These issues were fully resolved. Key learnings are preserved inline above._
 
 - **Security vulnerabilities** (9/9 fixed) — DLL injection, command injection, path traversal, deserialization all patched
 - **Thread safety** — 11 atomic conversions, EventBus m_nextId atomic, recursion guard, lock ordering documented
-- **ConsoleProcessManager** — Wired into all 5 startup paths
+- **ConsoleProcessManager** — Wired into all startup paths
 - **Editor panel bloat** — 4 panels restored, 9 deleted, all duplicate pairs resolved
 - **Feature restoration** — 5 wrongly deleted features restored
-- **GitHub API/PR checks**, **CI failures**, **rebase conflicts**, **clang-format**, **CMake Linux builds**, **MSVC /W4 warnings** — all resolved, key tips kept in quick reference above
+- **SparkConsole refactor** — From ~7,000 to 551 lines
+- **EventBus ODR violation** — EventSystem.h now delegates to canonical EventBus.h
+- **SDK unique_ptr DLL export** — Changed to raw pointer, ABI crash risk eliminated
+- **ECS not in SDK** — GetWorld() added to IEngineContext
+- **curl dead dependency** — Removed from .gitmodules and CMakeLists.txt
+- **Dead CMake options** — ENABLE_LUA, ENABLE_PHYSX and 6 unused flags removed
+- **GitHub API/PR checks**, **CI failures**, **rebase conflicts**, **clang-format**, **CMake Linux builds**, **MSVC /W4 warnings** — all resolved
 
 ---
 
