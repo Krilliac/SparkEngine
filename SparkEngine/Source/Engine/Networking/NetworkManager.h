@@ -469,6 +469,7 @@ namespace Spark::Net
 
         // Clients (server-side)
         std::unordered_map<ClientID, ClientInfo> m_clients;
+        mutable std::mutex m_clientsMutex; ///< Protects m_clients, m_nextClientID
         ClientID m_nextClientID = 1;
         int m_maxClients = 32;
 
@@ -488,12 +489,13 @@ namespace Spark::Net
 
         // Replication
         std::unordered_map<uint32_t, ReplicatedEntity> m_replicatedEntities;
-        uint32_t m_nextNetworkID = 1;
+        std::atomic<uint32_t> m_nextNetworkID{1};
         float m_replicationInterval = 0.05f; ///< 20 Hz replication rate
         float m_replicationTimer = 0.0f;
 
         // Client input
         std::vector<ClientInputState> m_pendingInputs;
+        mutable std::mutex m_inputMutex; ///< Protects m_pendingInputs
         SequenceNumber m_inputSequence = 0;
 
         // Prediction

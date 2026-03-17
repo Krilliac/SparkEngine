@@ -92,9 +92,16 @@ namespace SparkConsole
                     return "Usage: tex_memory <mb>";
                 if (auto textureSystem = graphics->GetTextureSystem())
                 {
-                    size_t mb = static_cast<size_t>(std::stof(args[1]));
-                    textureSystem->Console_SetMemoryBudget(mb);
-                    return "Texture memory budget set to: " + args[1] + " MB";
+                    try
+                    {
+                        size_t mb = static_cast<size_t>(std::stof(args[1]));
+                        textureSystem->Console_SetMemoryBudget(mb);
+                        return "Texture memory budget set to: " + args[1] + " MB";
+                    }
+                    catch (const std::exception&)
+                    {
+                        return "Invalid number: " + args[1];
+                    }
                 }
                 return "Texture system not available";
             },
@@ -186,8 +193,15 @@ namespace SparkConsole
                     return "Usage: exposure <value>";
                 if (auto postProcessing = graphics->GetPostProcessingPipeline())
                 {
-                    postProcessing->Console_SetExposure(std::stof(args[1]));
-                    return "Exposure set to: " + args[1];
+                    try
+                    {
+                        postProcessing->Console_SetExposure(std::stof(args[1]));
+                        return "Exposure set to: " + args[1];
+                    }
+                    catch (const std::exception&)
+                    {
+                        return "Invalid number: " + args[1];
+                    }
                 }
                 return "Post-processing system not available";
             },
@@ -260,8 +274,15 @@ namespace SparkConsole
                     return "Usage: gravity <x> <y> <z>";
                 if (auto physicsSystem = EngineContext::Get() ? EngineContext::Get()->GetPhysics() : nullptr)
                 {
-                    physicsSystem->Console_SetGravity(std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
-                    return "Gravity set to: (" + args[1] + ", " + args[2] + ", " + args[3] + ")";
+                    try
+                    {
+                        physicsSystem->Console_SetGravity(std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
+                        return "Gravity set to: (" + args[1] + ", " + args[2] + ", " + args[3] + ")";
+                    }
+                    catch (const std::exception&)
+                    {
+                        return "Invalid number in arguments";
+                    }
                 }
                 return "Physics system not available";
             },

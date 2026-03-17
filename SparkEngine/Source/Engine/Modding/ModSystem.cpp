@@ -285,7 +285,14 @@ namespace Spark
             if (modIt != m_mods.end())
             {
                 modIt->second.enabled = (match[2].str() == "true");
-                modIt->second.loadOrder = std::stoi(match[3].str());
+                try
+                {
+                    modIt->second.loadOrder = std::stoi(match[3].str());
+                }
+                catch (const std::exception&)
+                {
+                    modIt->second.loadOrder = 0;
+                }
                 m_modStates[modId] = modIt->second.enabled ? ModState::Available : ModState::Disabled;
             }
         }

@@ -559,10 +559,17 @@ namespace Spark::Net
                             {
                                 if (args.empty())
                                     return std::string("Usage: kick <clientID> [reason]");
-                                ClientID id = static_cast<ClientID>(std::stoul(args[0]));
-                                std::string reason = (args.size() > 1) ? args[1] : "Kicked by admin";
-                                KickPlayer(id, reason);
-                                return std::string("Kicked client ") + std::to_string(id);
+                                try
+                                {
+                                    ClientID id = static_cast<ClientID>(std::stoul(args[0]));
+                                    std::string reason = (args.size() > 1) ? args[1] : "Kicked by admin";
+                                    KickPlayer(id, reason);
+                                    return std::string("Kicked client ") + std::to_string(id);
+                                }
+                                catch (const std::exception&)
+                                {
+                                    return std::string("Invalid client ID: ") + args[0];
+                                }
                             });
 
         RegisterRconCommand("ban", "Ban a player: ban <id> [reason]",
@@ -570,10 +577,17 @@ namespace Spark::Net
                             {
                                 if (args.empty())
                                     return std::string("Usage: ban <clientID> [reason]");
-                                ClientID id = static_cast<ClientID>(std::stoul(args[0]));
-                                std::string reason = (args.size() > 1) ? args[1] : "Banned by admin";
-                                BanPlayer(id, reason);
-                                return std::string("Banned client ") + std::to_string(id);
+                                try
+                                {
+                                    ClientID id = static_cast<ClientID>(std::stoul(args[0]));
+                                    std::string reason = (args.size() > 1) ? args[1] : "Banned by admin";
+                                    BanPlayer(id, reason);
+                                    return std::string("Banned client ") + std::to_string(id);
+                                }
+                                catch (const std::exception&)
+                                {
+                                    return std::string("Invalid client ID: ") + args[0];
+                                }
                             });
 
         RegisterRconCommand("map", "Change map: map <name>",

@@ -198,29 +198,38 @@ namespace Spark
 
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-        // Parse accessibility flags
-        std::regex accessRegex(R"~~("accessibility"\s*:\s*(\d+))~~");
-        std::smatch accessMatch;
-        if (std::regex_search(content, accessMatch, accessRegex))
+        try
         {
-            m_accessibilityFlags = static_cast<AccessibilityFlags>(std::stoul(accessMatch[1].str()));
+            // Parse accessibility flags
+            std::regex accessRegex(R"~~("accessibility"\s*:\s*(\d+))~~");
+            std::smatch accessMatch;
+            if (std::regex_search(content, accessMatch, accessRegex))
+            {
+                m_accessibilityFlags = static_cast<AccessibilityFlags>(std::stoul(accessMatch[1].str()));
+            }
+
+            // Parse bindings
+            std::regex bindingRegex(
+                R"~~("(\w+)"\s*:\s*\{\s*"primary"\s*:\s*(\d+)\s*,\s*"alternate"\s*:\s*(\d+)\s*,\s*"gamepad"\s*:\s*(-?\d+)\s*,\s*"holdToToggle"\s*:\s*(true|false)\s*\})~~");
+            auto begin = std::sregex_iterator(content.begin(), content.end(), bindingRegex);
+            auto end = std::sregex_iterator();
+
+            for (auto it = begin; it != end; ++it)
+            {
+                const std::smatch& match = *it;
+                InputBinding binding;
+                binding.primaryKey = std::stoi(match[2].str());
+                binding.alternateKey = std::stoi(match[3].str());
+                binding.gamepadButton = std::stoi(match[4].str());
+                binding.holdToToggle = (match[5].str() == "true");
+                m_bindings[match[1].str()] = binding;
+            }
         }
-
-        // Parse bindings
-        std::regex bindingRegex(
-            R"~~("(\w+)"\s*:\s*\{\s*"primary"\s*:\s*(\d+)\s*,\s*"alternate"\s*:\s*(\d+)\s*,\s*"gamepad"\s*:\s*(-?\d+)\s*,\s*"holdToToggle"\s*:\s*(true|false)\s*\})~~");
-        auto begin = std::sregex_iterator(content.begin(), content.end(), bindingRegex);
-        auto end = std::sregex_iterator();
-
-        for (auto it = begin; it != end; ++it)
+        catch (const std::exception& e)
         {
-            const std::smatch& match = *it;
-            InputBinding binding;
-            binding.primaryKey = std::stoi(match[2].str());
-            binding.alternateKey = std::stoi(match[3].str());
-            binding.gamepadButton = std::stoi(match[4].str());
-            binding.holdToToggle = (match[5].str() == "true");
-            m_bindings[match[1].str()] = binding;
+            SPARK_LOG_ERROR(Spark::LogCategory::Input, "Failed to parse bindings file %s: %s", filePath.c_str(),
+                            e.what());
+            return false;
         }
 
         return true;

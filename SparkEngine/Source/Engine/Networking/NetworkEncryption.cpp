@@ -5,6 +5,7 @@
 
 #include "NetworkEncryption.h"
 #include "../../Utils/Validate.h"
+#include "../../Utils/Logger.h"
 
 #include <algorithm>
 #include <cstring>
@@ -146,7 +147,10 @@ namespace Spark::Net
 
         uint32_t computedHMAC = ComputeHMAC(key, packet.data(), hmacOffset);
         if (receivedHMAC != computedHMAC)
-            return false; // Integrity check failed
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet integrity check failed: HMAC mismatch");
+            return false;
+        }
 
         // Extract nonce (sequence number)
         outSequence = 0;
@@ -249,11 +253,19 @@ namespace Spark::Net
 
         // Check if sequence is within the window
         if (m_maxSequence - sequence >= WINDOW_SIZE)
-            return false; // Too old
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Replay protection: sequence %llu too old (max=%llu)",
+                           static_cast<unsigned long long>(sequence), static_cast<unsigned long long>(m_maxSequence));
+            return false;
+        }
 
         size_t idx = sequence % WINDOW_SIZE;
         if (m_window[idx])
-            return false; // Already received (replay)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Replay protection: duplicate sequence %llu detected",
+                           static_cast<unsigned long long>(sequence));
+            return false;
+        }
 
         m_window[idx] = true;
         return true;

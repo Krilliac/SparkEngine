@@ -259,8 +259,11 @@ namespace Spark::Graphics
             "rt.quality",
             [&engine](const std::vector<std::string>& args) -> std::string
             {
-                if (!engine.GetHybridRT() || args.empty())
+                if (args.empty())
                     return "Usage: rt.quality <off|low|medium|high|ultra>";
+                auto* rt = engine.GetHybridRT();
+                if (!rt)
+                    return "Hybrid RT not available";
                 auto q = Spark::RHI::RayTracingQuality::Medium;
                 if (args[0] == "off")
                     q = Spark::RHI::RayTracingQuality::Off;
@@ -272,7 +275,7 @@ namespace Spark::Graphics
                     q = Spark::RHI::RayTracingQuality::High;
                 else if (args[0] == "ultra")
                     q = Spark::RHI::RayTracingQuality::Ultra;
-                engine.GetHybridRT()->SetQuality(q);
+                rt->SetQuality(q);
                 return "RT quality set to: " + args[0];
             },
             "Set ray tracing quality preset");
@@ -281,8 +284,11 @@ namespace Spark::Graphics
             "rt.mode",
             [&engine](const std::vector<std::string>& args) -> std::string
             {
-                if (!engine.GetHybridRT() || args.empty())
+                if (args.empty())
                     return "Usage: rt.mode <auto|sdfgi|hardware|off>";
+                auto* rt = engine.GetHybridRT();
+                if (!rt)
+                    return "Hybrid RT not available";
                 auto b = Spark::RHI::RayTracingBackend::Disabled;
                 if (args[0] == "auto")
                     b = Spark::RHI::RayTracingBackend::Disabled; // Disabled override = auto
@@ -292,10 +298,10 @@ namespace Spark::Graphics
                     b = Spark::RHI::RayTracingBackend::HardwareDXR;
                 else if (args[0] == "off")
                 {
-                    engine.GetHybridRT()->SetQuality(Spark::RHI::RayTracingQuality::Off);
+                    rt->SetQuality(Spark::RHI::RayTracingQuality::Off);
                     return "RT disabled";
                 }
-                engine.GetHybridRT()->SetBackendOverride(b);
+                rt->SetBackendOverride(b);
                 return "RT mode set to: " + args[0];
             },
             "Set ray tracing backend (auto/sdfgi/hardware/off)");
@@ -304,16 +310,19 @@ namespace Spark::Graphics
             "rt.reflections",
             [&engine](const std::vector<std::string>& args) -> std::string
             {
-                if (!engine.GetHybridRT() || args.empty())
+                if (args.empty())
                     return "Usage: rt.reflections <0|1>";
+                auto* rt = engine.GetHybridRT();
+                if (!rt)
+                    return "Hybrid RT not available";
                 bool enable = (args[0] == "1" || args[0] == "on");
-                auto effects = engine.GetHybridRT()->GetEnabledEffects();
+                auto effects = rt->GetEnabledEffects();
                 if (enable)
                     effects = effects | Spark::RHI::RTEffect::Reflections;
                 else
                     effects = static_cast<Spark::RHI::RTEffect>(
                         static_cast<uint32_t>(effects) & ~static_cast<uint32_t>(Spark::RHI::RTEffect::Reflections));
-                engine.GetHybridRT()->SetEnabledEffects(effects);
+                rt->SetEnabledEffects(effects);
                 return enable ? "RT reflections enabled" : "RT reflections disabled";
             },
             "Enable/disable RT reflections");
@@ -322,17 +331,20 @@ namespace Spark::Graphics
             "rt.gi",
             [&engine](const std::vector<std::string>& args) -> std::string
             {
-                if (!engine.GetHybridRT() || args.empty())
+                if (args.empty())
                     return "Usage: rt.gi <0|1>";
+                auto* rt = engine.GetHybridRT();
+                if (!rt)
+                    return "Hybrid RT not available";
                 bool enable = (args[0] == "1" || args[0] == "on");
-                auto effects = engine.GetHybridRT()->GetEnabledEffects();
+                auto effects = rt->GetEnabledEffects();
                 if (enable)
                     effects = effects | Spark::RHI::RTEffect::GlobalIllumination;
                 else
                     effects = static_cast<Spark::RHI::RTEffect>(
                         static_cast<uint32_t>(effects) &
                         ~static_cast<uint32_t>(Spark::RHI::RTEffect::GlobalIllumination));
-                engine.GetHybridRT()->SetEnabledEffects(effects);
+                rt->SetEnabledEffects(effects);
                 return enable ? "RT GI enabled" : "RT GI disabled";
             },
             "Enable/disable RT global illumination");
@@ -341,16 +353,19 @@ namespace Spark::Graphics
             "rt.shadows",
             [&engine](const std::vector<std::string>& args) -> std::string
             {
-                if (!engine.GetHybridRT() || args.empty())
+                if (args.empty())
                     return "Usage: rt.shadows <0|1>";
+                auto* rt = engine.GetHybridRT();
+                if (!rt)
+                    return "Hybrid RT not available";
                 bool enable = (args[0] == "1" || args[0] == "on");
-                auto effects = engine.GetHybridRT()->GetEnabledEffects();
+                auto effects = rt->GetEnabledEffects();
                 if (enable)
                     effects = effects | Spark::RHI::RTEffect::Shadows;
                 else
                     effects = static_cast<Spark::RHI::RTEffect>(static_cast<uint32_t>(effects) &
                                                                 ~static_cast<uint32_t>(Spark::RHI::RTEffect::Shadows));
-                engine.GetHybridRT()->SetEnabledEffects(effects);
+                rt->SetEnabledEffects(effects);
                 return enable ? "RT shadows enabled" : "RT shadows disabled";
             },
             "Enable/disable RT soft shadows");
