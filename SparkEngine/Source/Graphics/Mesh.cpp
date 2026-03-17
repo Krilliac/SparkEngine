@@ -1,5 +1,14 @@
 #include "../Core/Platform.h"
-// Mesh.cpp
+/**
+ * @file Mesh.cpp
+ * @brief CPU-side mesh geometry and D3D11 GPU buffer management
+ *
+ * Supports loading OBJ files via tinyobjloader, procedural primitive generation
+ * (cube, sphere, plane, triangle, pyramid), automatic normal calculation via
+ * cross-product accumulation, and D3D11 vertex/index buffer creation.
+ * Dual implementation: Windows uses DirectXMath + D3D11; Linux stores CPU-side
+ * data for the RHI abstraction layer.
+ */
 #include "Mesh.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
@@ -59,6 +68,9 @@ void Mesh::Shutdown()
     std::wcout << L"[INFO] Mesh shutdown complete." << std::endl;
 }
 
+/// Loads an OBJ mesh from disk using tinyobjloader. Converts wide path to UTF-8,
+/// extracts positions/normals/UVs per-index (expanding shared vertices), recalculates
+/// normals if any are zero, then uploads to GPU via CreateBuffers().
 bool Mesh::LoadFromFile(const std::wstring& path)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
@@ -449,9 +461,10 @@ HRESULT Mesh::CreatePyramid(float size, float height)
     return CreateFromVertices(vertices, indices);
 }
 
+/// Computes per-face normals via cross product and assigns to all three triangle vertices.
+/// Note: this produces flat shading; smooth normals would require accumulation + normalization.
 void Mesh::CalculateNormals()
 {
-    // **FIXED: Removed excessive logging**
     ASSERT(!m_vertices.empty() && !m_indices.empty());
 
     for (size_t i = 0; i + 2 < m_indices.size(); i += 3)
@@ -478,9 +491,10 @@ void Mesh::CalculateNormals()
     }
 }
 
+/// Creates D3D11 vertex and index buffers from CPU-side data. Releases any
+/// previously allocated buffers first to prevent COM object leaks.
 HRESULT Mesh::CreateBuffers()
 {
-    // **FIXED: Removed excessive logging**
     ASSERT(m_device);
     ASSERT(!m_vertices.empty() && !m_indices.empty());
 
@@ -532,6 +546,8 @@ HRESULT Mesh::CreateBuffers()
     return S_OK;
 }
 
+/// Binds vertex/index buffers to the input assembler and issues an indexed draw call.
+/// Uses triangle list topology with 32-bit indices.
 void Mesh::Render(ID3D11DeviceContext* ctx)
 {
     SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, ctx && m_vb && m_ib && m_indexCount > 0,
@@ -542,7 +558,6 @@ void Mesh::Render(ID3D11DeviceContext* ctx)
     ctx->IASetIndexBuffer(m_ib, DXGI_FORMAT_R32_UINT, 0);
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // **ENSURE PROPER RENDERING STATE**
     ctx->DrawIndexed(m_indexCount, 0, 0);
 
     // **ONLY log rendering statistics occasionally for debugging**
@@ -557,7 +572,7 @@ void Mesh::Render(ID3D11DeviceContext* ctx)
 #else // !SPARK_PLATFORM_WINDOWS
 
 // ============================================================================
-// Linux implementation using RHI abstraction
+// Linux implementation — stores CPU-side geometry; GPU upload deferred to RHI
 // ============================================================================
 #include "Mesh.h"
 #include "../Utils/Validate.h"
@@ -862,7 +877,8 @@ bool Mesh::LoadFromFile(const std::wstring& path)
     m_vertices.clear();
     m_indices.clear();
 
-    // Use a map to deduplicate vertices
+    // Deduplicate vertices using a hash combining vertex/normal/texcoord indices.
+    // This reduces vertex count for shared geometry (e.g., smooth-shaded faces).
     std::unordered_map<size_t, unsigned int> uniqueVertices;
 
     for (const auto& shape : shapes)

@@ -1,6 +1,14 @@
 #include "Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-// ParticleSystem.cpp
+/**
+ * @file ParticleSystem.cpp
+ * @brief GPU-accelerated particle emitter and system manager
+ *
+ * Implements billboard particle emission with configurable rate, burst, duration,
+ * and looping. Particles are updated CPU-side (velocity, gravity, lifetime, color
+ * interpolation, size scaling) then uploaded to a dynamic vertex buffer for
+ * rendering. Thread-local RNG ensures safe parallel emission.
+ */
 #include "ParticleSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
@@ -12,15 +20,18 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 using namespace DirectX;
-// Thread-local random engine for particle randomization
+/// Thread-local Mersenne Twister RNG seeded from hardware entropy.
+/// Thread-local avoids contention when multiple emitters update in parallel.
 static thread_local std::mt19937 s_rng(std::random_device{}());
 
+/// Returns a uniformly distributed float in [lo, hi].
 static float RandomFloat(float lo, float hi)
 {
     std::uniform_real_distribution<float> dist(lo, hi);
     return dist(s_rng);
 }
 
+/// Returns a uniformly distributed float in [0, 1].
 static float RandomFloat01()
 {
     return RandomFloat(0.0f, 1.0f);
@@ -58,6 +69,9 @@ HRESULT ParticleEmitter::Initialize(ID3D11Device* device)
     return device->CreateBuffer(&bd, nullptr, m_vertexBuffer.GetAddressOf());
 }
 
+/// Per-frame emitter update: manages lifetime, emission accumulation, burst timing,
+/// and per-particle physics (velocity, gravity, color/size interpolation, death).
+/// Uses a fractional accumulator for emission rate so sub-frame emission is smooth.
 void ParticleEmitter::Update(float deltaTime)
 {
     if (!m_playing)
@@ -65,13 +79,13 @@ void ParticleEmitter::Update(float deltaTime)
 
     m_elapsedTime += deltaTime;
 
-    // Check duration (non-looping emitters)
+    // Non-looping emitters stop after their duration expires
     if (!m_desc.loop && m_desc.duration > 0.0f && m_elapsedTime >= m_desc.duration)
     {
         m_playing = false;
     }
 
-    // Emit new particles based on rate
+    // Accumulate fractional particles from emission rate; spawn one per whole unit
     if (m_playing)
     {
         m_emissionAccumulator += m_desc.emissionRate * deltaTime;
@@ -81,7 +95,7 @@ void ParticleEmitter::Update(float deltaTime)
             m_emissionAccumulator -= 1.0f;
         }
 
-        // Handle burst emission
+        // Periodic burst: spawn burstCount particles at fixed intervals
         if (m_desc.burstInterval > 0.0f)
         {
             m_burstTimer += deltaTime;

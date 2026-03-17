@@ -1,6 +1,15 @@
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-// Shader.cpp - Enhanced shader system implementation with AAA features (C++14 compatible)
+/**
+ * @file Shader.cpp
+ * @brief D3D11 shader compilation, variant management, and hot-reload system
+ *
+ * Compiles HLSL vertex/pixel/geometry/compute shaders via D3DCompile, manages
+ * shader variants (permutations with different #defines), supports runtime
+ * hot-reload by monitoring file timestamps, and caches compiled bytecode via
+ * LocalFileCache for faster subsequent loads. Input layout creation is automatic
+ * based on shader reflection.
+ */
 #include "Shader.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
