@@ -546,6 +546,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `SplineFollowerSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Sprite2DRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `SpriteAnimatorSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `TerrainSystem` | `SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.h` |
 | `TextureSystem` | `SparkEngine/Source/Graphics/TextureSystem.h` |
 | `TilemapRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `UISystem` | `SparkEngine/Source/Engine/UI/UISystem.h` |
