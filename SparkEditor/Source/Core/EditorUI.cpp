@@ -34,6 +34,15 @@
 #include "../Panels/DedicatedServerPanel.h"
 #include "../Panels/MaterialEditorPanel.h"
 #include "../Panels/PlayModeToolbarPanel.h"
+#include "../Panels/PostProcessingPanel.h"
+#include "../Panels/DialogueEditorPanel.h"
+#include "../Panels/AIEditorPanel.h"
+#include "../Panels/SplineEditorPanel.h"
+#include "../Panels/ParticleEditorPanel.h"
+#include "../Panels/EventMonitorPanel.h"
+#include "../Panels/SaveSystemPanel.h"
+#include "../Panels/LocalizationPanel.h"
+#include "../Panels/WeatherFogPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
@@ -846,6 +855,114 @@ namespace SparkEditor
             console.LogError("Failed to create Terrain Editor panel: " + std::string(e.what()));
         }
 
+        // Create Post Processing Panel
+        try
+        {
+            auto postProcessPanel = std::shared_ptr<PostProcessingPanel>(new PostProcessingPanel());
+            m_panels["PostProcessing"] = postProcessPanel;
+            console.LogSuccess("Created Post Processing panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Post Processing panel: " + std::string(e.what()));
+        }
+
+        // Create Dialogue Editor Panel
+        try
+        {
+            auto dialoguePanel = std::shared_ptr<DialogueEditorPanel>(new DialogueEditorPanel());
+            m_panels["DialogueEditor"] = dialoguePanel;
+            console.LogSuccess("Created Dialogue Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Dialogue Editor panel: " + std::string(e.what()));
+        }
+
+        // Create AI Editor Panel
+        try
+        {
+            auto aiPanel = std::shared_ptr<AIEditorPanel>(new AIEditorPanel());
+            m_panels["AIEditor"] = aiPanel;
+            console.LogSuccess("Created AI Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create AI Editor panel: " + std::string(e.what()));
+        }
+
+        // Create Spline Editor Panel
+        try
+        {
+            auto splinePanel = std::shared_ptr<SplineEditorPanel>(new SplineEditorPanel());
+            m_panels["SplineEditor"] = splinePanel;
+            console.LogSuccess("Created Spline Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Spline Editor panel: " + std::string(e.what()));
+        }
+
+        // Create Particle Editor Panel
+        try
+        {
+            auto particlePanel = std::shared_ptr<ParticleEditorPanel>(new ParticleEditorPanel());
+            m_panels["ParticleEditor"] = particlePanel;
+            console.LogSuccess("Created Particle Editor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Particle Editor panel: " + std::string(e.what()));
+        }
+
+        // Create Event Monitor Panel
+        try
+        {
+            auto eventPanel = std::shared_ptr<EventMonitorPanel>(new EventMonitorPanel());
+            m_panels["EventMonitor"] = eventPanel;
+            console.LogSuccess("Created Event Monitor panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Event Monitor panel: " + std::string(e.what()));
+        }
+
+        // Create Save System Panel
+        try
+        {
+            auto savePanel = std::shared_ptr<SaveSystemPanel>(new SaveSystemPanel());
+            m_panels["SaveSystem"] = savePanel;
+            console.LogSuccess("Created Save System panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Save System panel: " + std::string(e.what()));
+        }
+
+        // Create Localization Panel
+        try
+        {
+            auto locPanel = std::shared_ptr<LocalizationPanel>(new LocalizationPanel());
+            m_panels["Localization"] = locPanel;
+            console.LogSuccess("Created Localization panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Localization panel: " + std::string(e.what()));
+        }
+
+        // Create Weather & Fog Panel
+        try
+        {
+            auto weatherPanel = std::shared_ptr<WeatherFogPanel>(new WeatherFogPanel());
+            m_panels["WeatherFog"] = weatherPanel;
+            console.LogSuccess("Created Weather & Fog panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Weather & Fog panel: " + std::string(e.what()));
+        }
+
         // Initialize all panels
         for (auto& [name, panel] : m_panels)
         {
@@ -933,6 +1050,53 @@ namespace SparkEditor
             m_panels["DedicatedServer"]->SetVisible(false);
         if (m_panels.count("TerrainEditor"))
             m_panels["TerrainEditor"]->SetVisible(false);
+
+        // New content/system panels — hidden by default
+        if (m_panels.count("PostProcessing"))
+        {
+            m_panels["PostProcessing"]->SetIcon(ICON_FA_MAGIC);
+            m_panels["PostProcessing"]->SetVisible(false);
+        }
+        if (m_panels.count("DialogueEditor"))
+        {
+            m_panels["DialogueEditor"]->SetIcon(ICON_FA_COMMENTS);
+            m_panels["DialogueEditor"]->SetVisible(false);
+        }
+        if (m_panels.count("AIEditor"))
+        {
+            m_panels["AIEditor"]->SetIcon(ICON_FA_BRAIN);
+            m_panels["AIEditor"]->SetVisible(false);
+        }
+        if (m_panels.count("SplineEditor"))
+        {
+            m_panels["SplineEditor"]->SetIcon(ICON_FA_BEZIER_CURVE);
+            m_panels["SplineEditor"]->SetVisible(false);
+        }
+        if (m_panels.count("ParticleEditor"))
+        {
+            m_panels["ParticleEditor"]->SetIcon(ICON_FA_FIRE);
+            m_panels["ParticleEditor"]->SetVisible(false);
+        }
+        if (m_panels.count("EventMonitor"))
+        {
+            m_panels["EventMonitor"]->SetIcon(ICON_FA_BOLT);
+            m_panels["EventMonitor"]->SetVisible(false);
+        }
+        if (m_panels.count("SaveSystem"))
+        {
+            m_panels["SaveSystem"]->SetIcon(ICON_FA_SAVE);
+            m_panels["SaveSystem"]->SetVisible(false);
+        }
+        if (m_panels.count("Localization"))
+        {
+            m_panels["Localization"]->SetIcon(ICON_FA_GLOBE);
+            m_panels["Localization"]->SetVisible(false);
+        }
+        if (m_panels.count("WeatherFog"))
+        {
+            m_panels["WeatherFog"]->SetIcon(ICON_FA_CLOUD_SUN);
+            m_panels["WeatherFog"]->SetVisible(false);
+        }
 
         console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
     }
@@ -2327,6 +2491,15 @@ namespace SparkEditor
         RegisterPanelToggle("SceneStats", "Scene Statistics");
         RegisterPanelToggle("PrefabEditor", "Prefab Editor");
         RegisterPanelToggle("Search", "Search");
+        RegisterPanelToggle("PostProcessing", "Post Processing");
+        RegisterPanelToggle("DialogueEditor", "Dialogue Editor");
+        RegisterPanelToggle("AIEditor", "AI Editor");
+        RegisterPanelToggle("SplineEditor", "Spline Editor");
+        RegisterPanelToggle("ParticleEditor", "Particle Editor");
+        RegisterPanelToggle("EventMonitor", "Event Monitor");
+        RegisterPanelToggle("SaveSystem", "Save System");
+        RegisterPanelToggle("Localization", "Localization");
+        RegisterPanelToggle("WeatherFog", "Weather & Fog");
 
         // Register undo/redo commands
         m_commandPalette->RegisterAction(

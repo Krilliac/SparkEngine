@@ -329,6 +329,189 @@ namespace SparkEditor
         int sortOrder = -100;
     };
 
+    // =========================================================================
+    // Gameplay Component Data
+    // =========================================================================
+
+    /**
+     * @brief Script component scene data
+     */
+    struct ScriptData
+    {
+        char scriptPath[256] = {}; ///< Path to script file
+        char className[128] = {};  ///< Script class name
+        bool autoStart = true;     ///< Start script on scene load
+    };
+
+    /**
+     * @brief Particle emitter scene data
+     */
+    struct ParticleEmitterData
+    {
+        char effectName[128] = {};                      ///< Particle effect name
+        bool autoPlay = true;                           ///< Auto-start on scene load
+        float emissionRate = 10.0f;                     ///< Particles per second
+        float lifetime = 1.0f;                          ///< Particle lifetime (seconds)
+        XMFLOAT4 startColor = {1.0f, 1.0f, 1.0f, 1.0f}; ///< Initial particle color
+        float startSize = 0.1f;                         ///< Initial particle size
+        float startSpeed = 1.0f;                        ///< Initial particle speed
+        float gravityMultiplier = 0.0f;                 ///< Gravity influence
+        int maxParticles = 1000;                        ///< Maximum particle count
+        bool loop = true;                               ///< Loop emission
+    };
+
+    /**
+     * @brief Animation controller scene data
+     */
+    struct AnimationControllerData
+    {
+        char defaultAnimation[128] = {}; ///< Default animation clip name
+        float playbackSpeed = 1.0f;      ///< Playback speed multiplier
+        bool playing = true;             ///< Start playing on load
+        bool loop = true;                ///< Loop animation
+    };
+
+    /**
+     * @brief Nine-slice sprite scene data
+     */
+    struct NineSliceData
+    {
+        char texturePath[256] = {};                ///< Texture path
+        float borderLeft = 8.0f;                   ///< Left border (pixels)
+        float borderTop = 8.0f;                    ///< Top border (pixels)
+        float borderRight = 8.0f;                  ///< Right border (pixels)
+        float borderBottom = 8.0f;                 ///< Bottom border (pixels)
+        XMFLOAT2 size = {1.0f, 1.0f};              ///< World-space size
+        XMFLOAT4 color = {1.0f, 1.0f, 1.0f, 1.0f}; ///< Tint color
+        bool fillCenter = true;                    ///< Fill center region
+        int sortingLayer = 0;                      ///< Render sort layer
+    };
+
+    /**
+     * @brief Pixel-perfect rendering scene data
+     */
+    struct PixelPerfectData
+    {
+        int referenceWidth = 320;  ///< Reference resolution width
+        int referenceHeight = 240; ///< Reference resolution height
+        bool upscaleToFill = true; ///< Upscale to fill screen
+        bool cropToFit = false;    ///< Crop to fit screen
+    };
+
+    /**
+     * @brief Health component scene data
+     */
+    struct HealthData
+    {
+        float health = 100.0f;    ///< Current health
+        float maxHealth = 100.0f; ///< Maximum health
+    };
+
+    /**
+     * @brief AI agent scene data
+     */
+    struct AIAgentData
+    {
+        int aiState = 0;                 ///< 0=Idle,1=Patrol,2=Alert,3=Combat,4=Flee,5=Dead
+        char behaviorTreeName[128] = {}; ///< Behavior tree template name
+        float detectionRange = 30.0f;    ///< Detection radius
+        float attackRange = 15.0f;       ///< Attack radius
+        float moveSpeed = 5.0f;          ///< Movement speed
+        float accuracy = 0.7f;           ///< Aim accuracy [0,1]
+        float reactionTime = 0.5f;       ///< Reaction delay (seconds)
+    };
+
+    /**
+     * @brief Spline path scene data
+     */
+    struct SplineData
+    {
+        bool debugVisible = false; ///< Show spline in editor
+        bool closed = false;       ///< Closed loop spline
+        int pointCount = 0;        ///< Number of control points (data stored separately)
+    };
+
+    /**
+     * @brief Spline follower scene data
+     */
+    struct SplineFollowerData
+    {
+        float speed = 1.0f;       ///< Movement speed
+        int loopMode = 0;         ///< 0=Once, 1=Loop, 2=PingPong
+        bool playing = true;      ///< Playback active
+        bool orientToPath = true; ///< Align rotation to tangent
+    };
+
+    /**
+     * @brief Decal scene data
+     */
+    struct DecalData
+    {
+        char texturePath[256] = {};                ///< Decal texture path
+        char category[64] = "generic";             ///< Decal category
+        XMFLOAT3 size = {0.1f, 0.1f, 0.05f};       ///< Projection half-extents
+        XMFLOAT4 color = {1.0f, 1.0f, 1.0f, 1.0f}; ///< Tint RGBA
+        float lifetime = 30.0f;                    ///< Lifetime (0=permanent)
+        float fadeOutDuration = 2.0f;              ///< Fade time at end
+        bool receiveLighting = true;               ///< Receive scene lighting
+        int sortOrder = 0;                         ///< Z-order priority
+    };
+
+    /**
+     * @brief Projectile scene data
+     */
+    struct ProjectileData
+    {
+        int movementType = 1;         ///< 0=Hitscan, 1=Ballistic
+        int impactBehavior = 0;       ///< 0=Destroy, 1=Bounce, 2=Pierce, 3=Stick
+        float speed = 100.0f;         ///< Projectile speed
+        float damage = 25.0f;         ///< Damage on hit
+        float gravityScale = 1.0f;    ///< Gravity influence
+        float explosionRadius = 0.0f; ///< Explosion radius (0=none)
+        float maxRange = 500.0f;      ///< Maximum travel distance
+        float maxLifetime = 10.0f;    ///< Maximum lifetime
+        int bouncesRemaining = 0;     ///< Bounce count (Bounce mode)
+        int piercesRemaining = 0;     ///< Pierce count (Pierce mode)
+    };
+
+    /**
+     * @brief Interaction scene data
+     */
+    struct InteractionData
+    {
+        int interactionType = 0;        ///< 0=Use, 1=Pickup, 2=Hold, 3=Toggle
+        char displayName[128] = {};     ///< Display name
+        char actionVerb[64] = "Use";    ///< Action prompt text
+        float interactionRadius = 2.5f; ///< Interaction range
+        float holdDuration = 0.0f;      ///< Hold time for Hold type
+        float cooldownDuration = 0.0f;  ///< Cooldown between uses
+        int usesRemaining = -1;         ///< -1 = unlimited
+        bool showHighlight = true;      ///< Highlight when in range
+    };
+
+    /**
+     * @brief Weather zone scene data
+     */
+    struct WeatherData
+    {
+        int weatherType = 0;                         ///< 0=Clear,1=Cloudy,2=Rain,3=Snow,4=Fog,5=Storm
+        float intensity = 0.0f;                      ///< Weather intensity [0,1]
+        float windSpeed = 0.0f;                      ///< Wind speed
+        XMFLOAT3 windDirection = {1.0f, 0.0f, 0.0f}; ///< Wind direction
+        float transitionTime = 3.0f;                 ///< Transition duration (seconds)
+        bool enabled = true;                         ///< Weather active
+    };
+
+    /**
+     * @brief Network identity scene data
+     */
+    struct NetworkIdentityData
+    {
+        bool replicateTransform = true; ///< Replicate position/rotation
+        bool replicateHealth = true;    ///< Replicate health state
+        bool isLocalAuthority = false;  ///< Local authority flag
+    };
+
     // ComponentType is defined in ../Enums/SceneSystemEnums.h to avoid ODR violations
 
     /**

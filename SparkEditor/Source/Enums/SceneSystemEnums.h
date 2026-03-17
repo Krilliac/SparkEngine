@@ -40,7 +40,19 @@ namespace SparkEditor
         NINE_SLICE = 17,      ///< Nine-slice sprite for UI
         PIXEL_PERFECT = 18,   ///< Pixel-perfect rendering constraint
         TERRAIN = 19,         ///< Terrain heightmap component
-        CUSTOM = 1000         ///< Custom components start at 1000
+
+        // Gameplay components
+        HEALTH = 20,           ///< Health/damage component
+        AI_AGENT = 21,         ///< AI behavior and pathfinding
+        SPLINE = 22,           ///< Spline path component
+        SPLINE_FOLLOWER = 23,  ///< Entity follows a spline
+        DECAL = 24,            ///< Decal projection component
+        PROJECTILE = 25,       ///< Projectile/ballistic component
+        INTERACTION = 26,      ///< Interaction trigger component
+        WEATHER = 27,          ///< Weather zone component
+        NETWORK_IDENTITY = 28, ///< Network replication identity
+
+        CUSTOM = 1000 ///< Custom components start at 1000
     };
 
     /**
