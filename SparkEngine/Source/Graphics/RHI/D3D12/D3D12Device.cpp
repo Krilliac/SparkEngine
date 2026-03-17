@@ -1022,7 +1022,7 @@ namespace Spark
                 DescriptorAllocation srvAlloc, rtvAlloc, dsvAlloc, uavAlloc;
                 if (desc.usage & RHITextureUsage::ShaderResource)
                 {
-                    srvAlloc = m_srvHeap.Allocate(1);
+                    srvAlloc = m_cbvSrvUavHeap.Allocate(1);
                     if (srvAlloc.IsValid())
                     {
                         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};

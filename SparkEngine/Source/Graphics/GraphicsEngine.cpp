@@ -855,7 +855,9 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
     if (m_hybridRT && m_rhiBridge)
     {
         auto* cmd = m_rhiBridge->GetCommandList();
-        DirectX::XMFLOAT3 camPos = {m_cameraPosition.x, m_cameraPosition.y, m_cameraPosition.z};
+        XMMATRIX invView = XMMatrixInverse(nullptr, viewMatrix);
+        DirectX::XMFLOAT3 camPos;
+        XMStoreFloat3(&camPos, invView.r[3]);
         DirectX::XMFLOAT3 lightDir = {0.0f, -1.0f, 0.5f}; // Primary directional light
         Spark::Graphics::SSRSettings ssrDefaults;         // Screen-space coordination
 
