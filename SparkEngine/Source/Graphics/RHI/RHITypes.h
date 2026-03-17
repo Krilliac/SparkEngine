@@ -105,7 +105,14 @@ namespace Spark
             Geometry,
             Hull,
             Domain,
-            Compute
+            Compute,
+            // Ray tracing stages (DXR / VK_KHR_ray_tracing_pipeline)
+            RayGeneration,
+            ClosestHit,
+            Miss,
+            AnyHit,
+            Intersection,
+            Callable
         };
 
         enum class ShaderLanguage
@@ -468,6 +475,65 @@ namespace Spark
         };
 
         // ============================================================================
+        // RAY TRACING ENUMS
+        // ============================================================================
+
+        /// @brief Active ray tracing backend — selected at init based on hardware
+        enum class RayTracingBackend
+        {
+            Disabled,       ///< No RT support or user disabled
+            Software_SDFGI, ///< SDF sphere tracing via compute (DX11 CS 5.0+)
+            Software_VCT,   ///< Voxel cone tracing (future)
+            HardwareDXR,    ///< DXR 1.1 (D3D12 Ultimate, inline + pipeline)
+            HardwareVKRT    ///< VK_KHR_ray_tracing_pipeline + acceleration_structure
+        };
+
+        /// @brief Quality tier for hybrid ray tracing
+        enum class RayTracingQuality
+        {
+            Off,    ///< RT disabled, screen-space only
+            Low,    ///< SDFGI quarter-res, 1 bounce, 32 max steps
+            Medium, ///< SDFGI half-res, 2 bounces, 64 steps
+            High,   ///< Hardware RT or SDFGI full-res, 2 bounces
+            Ultra   ///< Hardware RT full-res, multi-bounce, denoised
+        };
+
+        /// @brief RT feature flags — which effects use ray tracing
+        enum class RTEffect : uint32_t
+        {
+            None = 0,
+            Reflections = 1 << 0,
+            GlobalIllumination = 1 << 1,
+            Shadows = 1 << 2,
+            AmbientOcclusion = 1 << 3,
+            All = 0xF
+        };
+
+        inline RTEffect operator|(RTEffect a, RTEffect b)
+        {
+            return static_cast<RTEffect>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+        }
+        inline RTEffect operator&(RTEffect a, RTEffect b)
+        {
+            return static_cast<RTEffect>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+        }
+        inline bool HasEffect(RTEffect flags, RTEffect effect)
+        {
+            return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(effect)) != 0;
+        }
+
+        /// @brief Detailed ray tracing capabilities queried from the device
+        struct RTCapabilities
+        {
+            RayTracingBackend bestBackend = RayTracingBackend::Disabled;
+            bool supportsHardwareRT = false;
+            bool supportsInlineRT = false;  ///< DXR 1.1 inline / VK_KHR_ray_query
+            uint32_t maxRecursionDepth = 0; ///< Hardware max recursion depth
+            bool supportsVRS = false;       ///< Variable rate shading for RT cost control
+            uint32_t raytracingTier = 0;    ///< DX12: D3D12_RAYTRACING_TIER value
+        };
+
+        // ============================================================================
         // DEVICE CAPABILITIES
         // ============================================================================
 
@@ -496,6 +562,8 @@ namespace Spark
             bool rayTracingSupport = false;
             bool variableRateShadingSupport = false;
             bool bindlessResourceSupport = false;
+
+            RTCapabilities rayTracing; ///< Detailed ray tracing capabilities
 
             uint32_t maxMSAASamples = 8;
             float maxAnisotropy = 16.0f;

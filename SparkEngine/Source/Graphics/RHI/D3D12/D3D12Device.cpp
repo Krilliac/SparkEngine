@@ -522,6 +522,16 @@ namespace Spark
                 m_commandList->Dispatch(x, y, z);
             }
 
+            void D3D12CommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
+            {
+                if (!dst || !src)
+                    return;
+                FlushBarriers();
+                auto* d3dDst = static_cast<D3D12Texture*>(dst);
+                auto* d3dSrc = static_cast<D3D12Texture*>(src);
+                m_commandList->CopyResource(d3dDst->GetD3D12Resource(), d3dSrc->GetD3D12Resource());
+            }
+
             void D3D12CommandList::BeginEvent(const char* name)
             {
                 // PIX event markers (requires pix3.h for full support)
@@ -801,6 +811,28 @@ namespace Spark
                     {
                         m_dxrSupported = (options5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED);
                         m_capabilities.rayTracingSupport = m_dxrSupported;
+
+                        // Populate detailed RT capabilities for HybridRTManager
+                        // Per DirectX-Graphics-Samples patterns: check tier for feature level
+                        m_capabilities.rayTracing.supportsHardwareRT = m_dxrSupported;
+                        m_capabilities.rayTracing.raytracingTier = static_cast<uint32_t>(options5.RaytracingTier);
+                        // Tier 1.1 enables inline RT (RayQuery in any shader stage),
+                        // GPU-driven DispatchRays, and AddToStateObject for incremental PSO builds
+                        m_capabilities.rayTracing.supportsInlineRT =
+                            (options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
+                        m_capabilities.rayTracing.maxRecursionDepth =
+                            m_dxrSupported ? 31 : 0; // DXR spec max recursion is 31
+                        m_capabilities.rayTracing.bestBackend =
+                            m_dxrSupported ? RayTracingBackend::HardwareDXR : RayTracingBackend::Software_SDFGI;
+
+                        // Check VRS support (D3D12_OPTIONS6) for adaptive RT resolution
+                        D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = {};
+                        if (SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &options6,
+                                                                    sizeof(options6))))
+                        {
+                            m_capabilities.rayTracing.supportsVRS =
+                                (options6.VariableShadingRateTier != D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED);
+                        }
                     }
                 }
                 if (!m_dxrSupported)
@@ -978,6 +1010,33 @@ namespace Spark
                 return new D3D12Texture(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);
             }
 
+            IRHITexture* D3D12Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            {
+                if (!nativeHandle)
+                    return nullptr;
+
+                auto* nativeResource = static_cast<ID3D12Resource*>(nativeHandle);
+                ComPtr<ID3D12Resource> resource;
+                nativeResource->QueryInterface(IID_PPV_ARGS(&resource));
+
+                DescriptorAllocation srvAlloc, rtvAlloc, dsvAlloc, uavAlloc;
+                if (desc.usage & RHITextureUsage::ShaderResource)
+                {
+                    srvAlloc = m_srvHeap.Allocate(1);
+                    if (srvAlloc.IsValid())
+                    {
+                        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                        srvDesc.Format = ConvertFormat(desc.format);
+                        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                        srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                        m_device->CreateShaderResourceView(resource.Get(), &srvDesc, srvAlloc.cpuHandle);
+                    }
+                }
+
+                return new D3D12Texture(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);
+            }
+
             IRHIShader* D3D12Device::CreateShader(const RHIShaderDesc& desc)
             {
                 if (desc.bytecode && desc.bytecodeSize > 0)
@@ -1012,6 +1071,14 @@ namespace Spark
                         break;
                     case RHIShaderStage::Compute:
                         target = "cs_5_1";
+                        break;
+                    case RHIShaderStage::RayGeneration:
+                    case RHIShaderStage::ClosestHit:
+                    case RHIShaderStage::Miss:
+                    case RHIShaderStage::AnyHit:
+                    case RHIShaderStage::Intersection:
+                    case RHIShaderStage::Callable:
+                        target = "lib_6_5"; // DXR shader library target
                         break;
                     }
 

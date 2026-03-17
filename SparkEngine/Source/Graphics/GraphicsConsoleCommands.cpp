@@ -11,6 +11,9 @@
 #include "GraphicsConsoleCommands.h"
 #include "GraphicsEngine.h"
 #include "../Utils/SparkConsole.h"
+#ifdef SPARK_HYBRID_RT
+#include "HybridRT/HybridRTManager.h"
+#endif
 #include "../Utils/Validate.h"
 #include <sstream>
 #include <string>
@@ -237,6 +240,121 @@ namespace Spark::Graphics
                 return "Graphics device reset";
             },
             "Reset the graphics device");
+
+        // ====================================================================
+        // Ray Tracing Console Commands
+        // ====================================================================
+#ifdef SPARK_HYBRID_RT
+        console.RegisterCommand(
+            "rt.status",
+            [&engine](const std::vector<std::string>&) -> std::string
+            {
+                if (engine.GetHybridRT())
+                    return engine.GetHybridRT()->Console_GetStatus();
+                return "Hybrid RT not initialized";
+            },
+            "Display hybrid ray tracing status");
+
+        console.RegisterCommand(
+            "rt.quality",
+            [&engine](const std::vector<std::string>& args) -> std::string
+            {
+                if (!engine.GetHybridRT() || args.empty())
+                    return "Usage: rt.quality <off|low|medium|high|ultra>";
+                auto q = Spark::RHI::RayTracingQuality::Medium;
+                if (args[0] == "off")
+                    q = Spark::RHI::RayTracingQuality::Off;
+                else if (args[0] == "low")
+                    q = Spark::RHI::RayTracingQuality::Low;
+                else if (args[0] == "medium")
+                    q = Spark::RHI::RayTracingQuality::Medium;
+                else if (args[0] == "high")
+                    q = Spark::RHI::RayTracingQuality::High;
+                else if (args[0] == "ultra")
+                    q = Spark::RHI::RayTracingQuality::Ultra;
+                engine.GetHybridRT()->SetQuality(q);
+                return "RT quality set to: " + args[0];
+            },
+            "Set ray tracing quality preset");
+
+        console.RegisterCommand(
+            "rt.mode",
+            [&engine](const std::vector<std::string>& args) -> std::string
+            {
+                if (!engine.GetHybridRT() || args.empty())
+                    return "Usage: rt.mode <auto|sdfgi|hardware|off>";
+                auto b = Spark::RHI::RayTracingBackend::Disabled;
+                if (args[0] == "auto")
+                    b = Spark::RHI::RayTracingBackend::Disabled; // Disabled override = auto
+                else if (args[0] == "sdfgi")
+                    b = Spark::RHI::RayTracingBackend::Software_SDFGI;
+                else if (args[0] == "hardware")
+                    b = Spark::RHI::RayTracingBackend::HardwareDXR;
+                else if (args[0] == "off")
+                {
+                    engine.GetHybridRT()->SetQuality(Spark::RHI::RayTracingQuality::Off);
+                    return "RT disabled";
+                }
+                engine.GetHybridRT()->SetBackendOverride(b);
+                return "RT mode set to: " + args[0];
+            },
+            "Set ray tracing backend (auto/sdfgi/hardware/off)");
+
+        console.RegisterCommand(
+            "rt.reflections",
+            [&engine](const std::vector<std::string>& args) -> std::string
+            {
+                if (!engine.GetHybridRT() || args.empty())
+                    return "Usage: rt.reflections <0|1>";
+                bool enable = (args[0] == "1" || args[0] == "on");
+                auto effects = engine.GetHybridRT()->GetEnabledEffects();
+                if (enable)
+                    effects = effects | Spark::RHI::RTEffect::Reflections;
+                else
+                    effects = static_cast<Spark::RHI::RTEffect>(
+                        static_cast<uint32_t>(effects) & ~static_cast<uint32_t>(Spark::RHI::RTEffect::Reflections));
+                engine.GetHybridRT()->SetEnabledEffects(effects);
+                return enable ? "RT reflections enabled" : "RT reflections disabled";
+            },
+            "Enable/disable RT reflections");
+
+        console.RegisterCommand(
+            "rt.gi",
+            [&engine](const std::vector<std::string>& args) -> std::string
+            {
+                if (!engine.GetHybridRT() || args.empty())
+                    return "Usage: rt.gi <0|1>";
+                bool enable = (args[0] == "1" || args[0] == "on");
+                auto effects = engine.GetHybridRT()->GetEnabledEffects();
+                if (enable)
+                    effects = effects | Spark::RHI::RTEffect::GlobalIllumination;
+                else
+                    effects = static_cast<Spark::RHI::RTEffect>(
+                        static_cast<uint32_t>(effects) &
+                        ~static_cast<uint32_t>(Spark::RHI::RTEffect::GlobalIllumination));
+                engine.GetHybridRT()->SetEnabledEffects(effects);
+                return enable ? "RT GI enabled" : "RT GI disabled";
+            },
+            "Enable/disable RT global illumination");
+
+        console.RegisterCommand(
+            "rt.shadows",
+            [&engine](const std::vector<std::string>& args) -> std::string
+            {
+                if (!engine.GetHybridRT() || args.empty())
+                    return "Usage: rt.shadows <0|1>";
+                bool enable = (args[0] == "1" || args[0] == "on");
+                auto effects = engine.GetHybridRT()->GetEnabledEffects();
+                if (enable)
+                    effects = effects | Spark::RHI::RTEffect::Shadows;
+                else
+                    effects = static_cast<Spark::RHI::RTEffect>(static_cast<uint32_t>(effects) &
+                                                                ~static_cast<uint32_t>(Spark::RHI::RTEffect::Shadows));
+                engine.GetHybridRT()->SetEnabledEffects(effects);
+                return enable ? "RT shadows enabled" : "RT shadows disabled";
+            },
+            "Enable/disable RT soft shadows");
+#endif // SPARK_HYBRID_RT
     }
 
 } // namespace Spark::Graphics

@@ -17,6 +17,7 @@
 
 #pragma once
 #include "../../Core/Platform.h"
+#include "RHITypes.h" // RayTracingBackend for GetBackend()
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -153,6 +154,12 @@ namespace Spark::Graphics
         /// Check if DXR is available on this system
         bool IsAvailable() const { return m_isAvailable; }
 
+        /// @brief Get the ray tracing backend type for HybridRTManager coordination
+        Spark::RHI::RayTracingBackend GetBackend() const
+        {
+            return m_isAvailable ? Spark::RHI::RayTracingBackend::HardwareDXR : Spark::RHI::RayTracingBackend::Disabled;
+        }
+
         /// Initialize DXR (requires D3D12 device)
         bool Initialize(void* d3d12Device);
         void Shutdown();
@@ -200,17 +207,23 @@ namespace Spark::Graphics
         bool m_isInitialized = false;
         DXRSettings m_settings;
 
-        // Acceleration structures (opaque — actual D3D12 resources in implementation)
+        // Acceleration structures — opaque handles. The D3D12 ComPtr resources
+        // are stored inside DXRInternalState (DXRSupport.cpp) and indexed by these.
         struct BLASData
         {
             BLASDesc desc;
-            void* resource = nullptr;
+            uint32_t internalIndex = UINT32_MAX; ///< Index into DXRInternalState::blasResources
             uint64_t size = 0;
         };
         std::vector<BLASData> m_blasList;
-        void* m_tlasResource = nullptr;
+        std::unordered_map<std::string, uint32_t> m_blasLookup; ///< meshName → blasIndex dedup
+
+        uint32_t m_tlasInternalIndex = UINT32_MAX;
         uint64_t m_tlasSize = 0;
         uint32_t m_tlasInstanceCount = 0;
+
+        bool BuildRTPSOs();       ///< Create ray tracing pipeline state objects
+        bool BuildShaderTables(); ///< Build shader binding tables with proper alignment
 
         mutable DXRStats m_stats{};
     };

@@ -644,6 +644,20 @@ namespace Spark
                 }
             }
 
+            void VulkanCommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
+            {
+                if (!dst || !src)
+                    return;
+                auto* vkDst = static_cast<VulkanTexture*>(dst);
+                auto* vkSrc = static_cast<VulkanTexture*>(src);
+                VkImageCopy region = {};
+                region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                region.extent = {vkSrc->GetWidth(), vkSrc->GetHeight(), 1};
+                vkCmdCopyImage(m_commandBuffer, vkSrc->GetVkImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               vkDst->GetVkImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+            }
+
             void VulkanCommandList::BeginEvent(const char*) {}
             void VulkanCommandList::EndEvent() {}
             void VulkanCommandList::SetMarker(const char*) {}
@@ -894,14 +908,43 @@ namespace Spark
                 vulkan12Features.timelineSemaphore = VK_TRUE;
                 vulkan12Features.bufferDeviceAddress = VK_TRUE;
 
+                // Build extension list — add RT extensions if available
+                std::vector<const char*> enabledExtensions(m_deviceExtensions.begin(), m_deviceExtensions.end());
+                {
+                    uint32_t extCount = 0;
+                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
+                    std::vector<VkExtensionProperties> availableExts(extCount);
+                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, availableExts.data());
+
+                    auto hasExt = [&](const char* name)
+                    {
+                        for (const auto& e : availableExts)
+                            if (std::strcmp(e.extensionName, name) == 0)
+                                return true;
+                        return false;
+                    };
+
+                    const char* rtExts[] = {
+                        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+                        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+                        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+                        VK_KHR_RAY_QUERY_EXTENSION_NAME,
+                    };
+                    for (const char* ext : rtExts)
+                    {
+                        if (hasExt(ext))
+                            enabledExtensions.push_back(ext);
+                    }
+                }
+
                 VkDeviceCreateInfo createInfo = {};
                 createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
                 createInfo.pNext = &vulkan12Features;
                 createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
                 createInfo.pQueueCreateInfos = queueCreateInfos.data();
                 createInfo.pEnabledFeatures = &deviceFeatures;
-                createInfo.enabledExtensionCount = static_cast<uint32_t>(m_deviceExtensions.size());
-                createInfo.ppEnabledExtensionNames = m_deviceExtensions.data();
+                createInfo.enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size());
+                createInfo.ppEnabledExtensionNames = enabledExtensions.data();
 
                 VkResult result = vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device);
                 if (result != VK_SUCCESS)
@@ -997,6 +1040,78 @@ namespace Spark
                 m_capabilities.geometryShaderSupport = features.geometryShader;
                 m_capabilities.computeShaderSupport = true;
                 m_capabilities.multiDrawIndirectSupport = features.multiDrawIndirect;
+
+                // Probe Vulkan RT extensions per Vulkan-Hpp / KHR spec patterns.
+                // Full hardware RT requires these four extensions (Vulkan 1.1+):
+                //   VK_KHR_acceleration_structure
+                //   VK_KHR_ray_tracing_pipeline
+                //   VK_KHR_deferred_host_operations (required by acceleration_structure)
+                //   VK_KHR_buffer_device_address     (required by acceleration_structure)
+                // Inline RT (ray query in compute/fragment) additionally needs:
+                //   VK_KHR_ray_query
+                // VRS (variable rate shading) for adaptive RT resolution:
+                //   VK_KHR_fragment_shading_rate
+                {
+                    uint32_t extCount = 0;
+                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
+                    std::vector<VkExtensionProperties> exts(extCount);
+                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, exts.data());
+
+                    bool hasAccelStruct = false;
+                    bool hasRTPipeline = false;
+                    bool hasDeferredOps = false;
+                    bool hasBufferAddr = false;
+                    bool hasRayQuery = false;
+                    bool hasVRS = false;
+
+                    for (const auto& ext : exts)
+                    {
+                        if (std::strcmp(ext.extensionName, "VK_KHR_acceleration_structure") == 0)
+                            hasAccelStruct = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_ray_tracing_pipeline") == 0)
+                            hasRTPipeline = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_deferred_host_operations") == 0)
+                            hasDeferredOps = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_buffer_device_address") == 0)
+                            hasBufferAddr = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_ray_query") == 0)
+                            hasRayQuery = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_fragment_shading_rate") == 0)
+                            hasVRS = true;
+                    }
+
+                    bool fullHWRT = hasAccelStruct && hasRTPipeline && hasDeferredOps && hasBufferAddr;
+
+                    if (fullHWRT)
+                    {
+                        // Query actual max recursion depth via pNext chain
+                        VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtPipelineProps = {};
+                        rtPipelineProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+                        VkPhysicalDeviceProperties2 props2 = {};
+                        props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+                        props2.pNext = &rtPipelineProps;
+                        vkGetPhysicalDeviceProperties2(m_physicalDevice, &props2);
+
+                        m_capabilities.rayTracing.bestBackend = RayTracingBackend::HardwareVKRT;
+                        m_capabilities.rayTracing.supportsHardwareRT = true;
+                        m_capabilities.rayTracing.supportsInlineRT = hasRayQuery;
+                        m_capabilities.rayTracing.maxRecursionDepth = rtPipelineProps.maxRayRecursionDepth > 0
+                                                                          ? rtPipelineProps.maxRayRecursionDepth
+                                                                          : 1; // Spec minimum
+                        m_capabilities.rayTracing.supportsVRS = hasVRS;
+                        m_capabilities.rayTracing.raytracingTier = hasRayQuery ? 2 : 1;
+                    }
+                    else
+                    {
+                        // Software SDFGI fallback — compute shaders always available in Vulkan
+                        m_capabilities.rayTracing.bestBackend = RayTracingBackend::Software_SDFGI;
+                        m_capabilities.rayTracing.supportsHardwareRT = false;
+                        m_capabilities.rayTracing.supportsInlineRT = false;
+                        m_capabilities.rayTracing.maxRecursionDepth = 0;
+                        m_capabilities.rayTracing.supportsVRS = false;
+                        m_capabilities.rayTracing.raytracingTier = 0;
+                    }
+                }
             }
 
             bool VulkanDevice::CreateDescriptorSetLayout()
@@ -1344,6 +1459,15 @@ namespace Spark
                 }
 
                 return new VulkanTexture(desc, image, memory, imageView, m_device);
+            }
+
+            IRHITexture* VulkanDevice::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            {
+                if (!nativeHandle)
+                    return nullptr;
+                // Wrap an externally-owned VkImage — caller manages lifetime
+                auto image = static_cast<VkImage>(nativeHandle);
+                return new VulkanTexture(desc, image, VK_NULL_HANDLE, m_device);
             }
 
             IRHIShader* VulkanDevice::CreateShader(const RHIShaderDesc& desc)

@@ -108,6 +108,9 @@ namespace Spark
             // Compute
             virtual void Dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
 
+            // Resource copy
+            virtual void CopyTexture(IRHITexture* dst, IRHITexture* src) = 0;
+
             // Debug
             virtual void BeginEvent(const char* name) = 0;
             virtual void EndEvent() = 0;
@@ -136,6 +139,10 @@ namespace Spark
             virtual IRHISampler* CreateSampler(const RHISamplerDesc& desc) = 0;
             virtual IRHIPipelineState* CreatePipelineState(const RHIPipelineStateDesc& desc, IRHIShader* vertexShader,
                                                            IRHIShader* pixelShader) = 0;
+
+            /// Wrap a native texture handle (e.g. ID3D11Texture2D*) as an IRHITexture.
+            /// The RHI does NOT own the resource — caller must ensure it outlives the wrapper.
+            virtual IRHITexture* WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc) = 0;
 
             // Resource destruction
             virtual void DestroyBuffer(IRHIBuffer* buffer) = 0;

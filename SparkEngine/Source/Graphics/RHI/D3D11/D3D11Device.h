@@ -251,6 +251,8 @@ namespace Spark
 
                 void Dispatch(uint32_t x, uint32_t y, uint32_t z) override;
 
+                void CopyTexture(IRHITexture* dst, IRHITexture* src) override;
+
                 void BeginEvent(const char* name) override;
                 void EndEvent() override;
                 void SetMarker(const char* name) override;
@@ -277,6 +279,7 @@ namespace Spark
 
                 IRHIBuffer* CreateBuffer(const RHIBufferDesc& desc) override;
                 IRHITexture* CreateTexture(const RHITextureDesc& desc) override;
+                IRHITexture* WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc) override;
                 IRHIShader* CreateShader(const RHIShaderDesc& desc) override;
                 IRHISampler* CreateSampler(const RHISamplerDesc& desc) override;
                 IRHIPipelineState* CreatePipelineState(const RHIPipelineStateDesc& desc, IRHIShader* vertexShader,

@@ -394,6 +394,8 @@ namespace Spark
                 case RHIShaderStage::Compute:
                     m_context->CSSetConstantBuffers(slot, 1, &buf);
                     break;
+                default:
+                    break;
                 }
             }
 
@@ -425,6 +427,8 @@ namespace Spark
                     break;
                 case RHIShaderStage::Compute:
                     m_context->CSSetShaderResources(slot, 1, &srv);
+                    break;
+                default:
                     break;
                 }
             }
@@ -482,6 +486,15 @@ namespace Spark
             void D3D11CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z)
             {
                 m_context->Dispatch(x, y, z);
+            }
+
+            void D3D11CommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
+            {
+                if (!dst || !src)
+                    return;
+                auto* d3dDst = static_cast<D3D11Texture*>(dst);
+                auto* d3dSrc = static_cast<D3D11Texture*>(src);
+                m_context->CopyResource(d3dDst->GetD3D11Resource(), d3dSrc->GetD3D11Resource());
             }
 
             void D3D11CommandList::BeginEvent(const char*) {}
@@ -566,6 +579,16 @@ namespace Spark
                 m_capabilities.maxRenderTargets = 8;
                 m_capabilities.maxAnisotropy = 16.0f;
                 m_capabilities.apiVersion = "DirectX 11.1";
+
+                // DX11 supports compute shaders (CS 5.0) for SDFGI software RT fallback
+                // No hardware RT on DX11 — requires DX12 for DXR
+                m_capabilities.rayTracing.bestBackend = m_capabilities.computeShaderSupport
+                                                            ? RayTracingBackend::Software_SDFGI
+                                                            : RayTracingBackend::Disabled;
+                m_capabilities.rayTracing.supportsHardwareRT = false;
+                m_capabilities.rayTracing.supportsInlineRT = false;
+                m_capabilities.rayTracing.maxRecursionDepth = 0;
+                m_capabilities.rayTracing.supportsVRS = false;
 
                 // Create immediate command list wrapper
                 m_immediateCommandList = std::make_unique<D3D11CommandList>(m_immediateContext.Get(), true);
@@ -698,6 +721,28 @@ namespace Spark
                     .release();
             }
 
+            IRHITexture* D3D11Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            {
+                if (!nativeHandle)
+                    return nullptr;
+
+                auto* texture = static_cast<ID3D11Texture2D*>(nativeHandle);
+                ComPtr<ID3D11Resource> resource;
+                texture->QueryInterface(IID_PPV_ARGS(&resource));
+
+                ComPtr<ID3D11ShaderResourceView> srv;
+                if (desc.usage & RHITextureUsage::ShaderResource)
+                {
+                    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                    srvDesc.Format = ConvertFormat(desc.format);
+                    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                    srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                    m_device->CreateShaderResourceView(resource.Get(), &srvDesc, &srv);
+                }
+
+                return std::make_unique<D3D11Texture>(desc, resource, std::move(srv)).release();
+            }
+
             IRHIShader* D3D11Device::CreateShader(const RHIShaderDesc& desc)
             {
                 ComPtr<ID3DBlob> bytecodeBlob;
@@ -727,6 +772,8 @@ namespace Spark
                     case RHIShaderStage::Compute:
                         target = "cs_5_0";
                         break;
+                    default:
+                        return nullptr; // RT stages not supported in D3D11
                     }
 
                     UINT flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
@@ -808,6 +855,8 @@ namespace Spark
                         cs.As(&shaderObj);
                     break;
                 }
+                default:
+                    return nullptr; // RT stages not supported in D3D11
                 }
 
                 if (FAILED(hr) || !shaderObj)

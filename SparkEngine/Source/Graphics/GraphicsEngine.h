@@ -50,7 +50,8 @@ class LightManager;
 namespace Spark::Graphics
 {
     class PostProcessingPipeline;
-}
+    class HybridRTManager;
+} // namespace Spark::Graphics
 #include "TemporalEffects.h" // Full definition needed for TAASettings struct
 class TextureSystem;
 class LightingSystem;
@@ -583,6 +584,10 @@ class GraphicsEngine
     void Console_SetGPUTiming(bool enabled);
     size_t Console_GetVRAMUsage() const;
 
+#ifdef SPARK_HYBRID_RT
+    /// @brief Get the hybrid RT manager for console command access
+    Spark::Graphics::HybridRTManager* GetHybridRT() { return m_hybridRT.get(); }
+#endif
 
     // ========================================================================
     // BASIC SHADER SYSTEM (for rendering pipeline)
@@ -630,6 +635,10 @@ class GraphicsEngine
     std::unique_ptr<LightManager> m_lightManager;
     std::unique_ptr<Spark::Graphics::PostProcessingPipeline> m_postProcessing;
     std::unique_ptr<TemporalEffects> m_temporalEffects;
+
+#ifdef SPARK_HYBRID_RT
+    std::unique_ptr<Spark::Graphics::HybridRTManager> m_hybridRT;
+#endif
 
     // ========================================================================
     // DIRECTX RESOURCES

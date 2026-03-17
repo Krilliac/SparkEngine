@@ -73,7 +73,8 @@ static void PrintUsage(const char* programName)
               << "\n"
               << "Options:\n"
               << "  -o <path>        Output file path\n"
-              << "  -stage <stage>   Shader stage: vertex, pixel, geometry, hull, domain, compute\n"
+              << "  -stage <stage>   Shader stage: vertex, pixel, geometry, hull, domain, compute,\n"
+              << "                   raygen, closesthit, miss, anyhit, intersection, callable\n"
               << "  -backend <api>   Target backend: d3d11, vulkan, opengl, auto (default: auto)\n"
               << "  -entry <name>    Entry point (default: main)\n"
               << "  -D<DEFINE>       Add preprocessor define\n"
@@ -108,6 +109,18 @@ static Spark::RHI::RHIShaderStage ParseStage(const std::string& str)
         return Spark::RHI::RHIShaderStage::Domain;
     if (str == "compute" || str == "cs")
         return Spark::RHI::RHIShaderStage::Compute;
+    if (str == "raygen" || str == "rgen" || str == "raygeneration")
+        return Spark::RHI::RHIShaderStage::RayGeneration;
+    if (str == "closesthit" || str == "rchit" || str == "chs")
+        return Spark::RHI::RHIShaderStage::ClosestHit;
+    if (str == "miss" || str == "rmiss")
+        return Spark::RHI::RHIShaderStage::Miss;
+    if (str == "anyhit" || str == "rahit")
+        return Spark::RHI::RHIShaderStage::AnyHit;
+    if (str == "intersection" || str == "rint")
+        return Spark::RHI::RHIShaderStage::Intersection;
+    if (str == "callable" || str == "rcall")
+        return Spark::RHI::RHIShaderStage::Callable;
     std::cerr << "Warning: Unknown shader stage '" << str << "', defaulting to vertex\n";
     return Spark::RHI::RHIShaderStage::Vertex;
 }
@@ -144,6 +157,18 @@ static const char* StageToString(Spark::RHI::RHIShaderStage stage)
         return "Domain";
     case Spark::RHI::RHIShaderStage::Compute:
         return "Compute";
+    case Spark::RHI::RHIShaderStage::RayGeneration:
+        return "RayGeneration";
+    case Spark::RHI::RHIShaderStage::ClosestHit:
+        return "ClosestHit";
+    case Spark::RHI::RHIShaderStage::Miss:
+        return "Miss";
+    case Spark::RHI::RHIShaderStage::AnyHit:
+        return "AnyHit";
+    case Spark::RHI::RHIShaderStage::Intersection:
+        return "Intersection";
+    case Spark::RHI::RHIShaderStage::Callable:
+        return "Callable";
     default:
         return "Unknown";
     }
@@ -183,6 +208,18 @@ static Spark::RHI::RHIShaderStage InferStageFromFilename(const std::string& file
         return Spark::RHI::RHIShaderStage::Domain;
     if (lower.find("cs") != std::string::npos || lower.find("compute") != std::string::npos)
         return Spark::RHI::RHIShaderStage::Compute;
+    if (lower.find("raygen") != std::string::npos || lower.find("rgen") != std::string::npos)
+        return Spark::RHI::RHIShaderStage::RayGeneration;
+    if (lower.find("closesthit") != std::string::npos || lower.find("rchit") != std::string::npos)
+        return Spark::RHI::RHIShaderStage::ClosestHit;
+    if (lower.find("miss") != std::string::npos || lower.find("rmiss") != std::string::npos)
+        return Spark::RHI::RHIShaderStage::Miss;
+    if (lower.find("anyhit") != std::string::npos || lower.find("rahit") != std::string::npos)
+        return Spark::RHI::RHIShaderStage::AnyHit;
+    if (lower.find("intersection") != std::string::npos || lower.find("rint") != std::string::npos)
+        return Spark::RHI::RHIShaderStage::Intersection;
+    if (lower.find("callable") != std::string::npos || lower.find("rcall") != std::string::npos)
+        return Spark::RHI::RHIShaderStage::Callable;
 
     // Default
     return Spark::RHI::RHIShaderStage::Vertex;
@@ -418,8 +455,9 @@ int main(int argc, char* argv[])
         }
 
         // Supported shader file extensions
-        const std::vector<std::string> shaderExts = {".hlsl", ".glsl", ".vert", ".frag", ".comp", ".geom",
-                                                     ".tesc", ".tese", ".vs",   ".ps",   ".gs",   ".cs"};
+        const std::vector<std::string> shaderExts = {".hlsl", ".glsl",  ".vert",  ".frag",  ".comp", ".geom",
+                                                     ".tesc", ".tese",  ".vs",    ".ps",    ".gs",   ".cs",
+                                                     ".rgen", ".rmiss", ".rchit", ".rahit", ".rint", ".rcall"};
 
         auto isShaderFile = [&](const fs::path& path)
         {

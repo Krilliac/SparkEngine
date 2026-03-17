@@ -613,6 +613,16 @@ namespace Spark
                 }
             }
 
+            void GLCommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
+            {
+                if (!dst || !src)
+                    return;
+                auto* glDst = static_cast<GLTexture*>(dst);
+                auto* glSrc = static_cast<GLTexture*>(src);
+                glCopyImageSubData(glSrc->GetGLTexture(), GL_TEXTURE_2D, 0, 0, 0, 0, glDst->GetGLTexture(),
+                                   GL_TEXTURE_2D, 0, 0, 0, 0, glSrc->GetWidth(), glSrc->GetHeight(), 1);
+            }
+
             void GLCommandList::BeginEvent(const char* name)
             {
                 glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, name);
@@ -811,6 +821,15 @@ namespace Spark
                 }
 
                 return new GLTexture(desc, texture, fbo, target);
+            }
+
+            IRHITexture* GLDevice::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            {
+                if (!nativeHandle)
+                    return nullptr;
+                // Interpret as OpenGL texture name (GLuint stored in pointer)
+                auto glTex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(nativeHandle));
+                return new GLTexture(desc, glTex, 0, GL_TEXTURE_2D);
             }
 
             IRHIShader* GLDevice::CreateShader(const RHIShaderDesc& desc)

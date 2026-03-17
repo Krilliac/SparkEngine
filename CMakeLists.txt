@@ -101,6 +101,7 @@ option(ENABLE_NETWORKING "Enable networking features (experimental — requires 
 option(ENABLE_VULKAN "Enable Vulkan graphics backend (experimental)" ON)
 option(ENABLE_OPENGL "Enable OpenGL graphics backend (experimental)" ON)
 option(ENABLE_DXR "Enable DirectX Raytracing support (experimental)" OFF)
+option(ENABLE_HYBRID_RT "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)" ON)
 # SDL2 is auto-enabled on Linux for windowing + input; can be used on Windows too
 if(NOT WIN32)
     option(ENABLE_SDL2 "Enable SDL2 cross-platform input and windowing" ON)
@@ -732,6 +733,16 @@ if(SPARK_OPENGL_AVAILABLE)
     endif()
 
     message(STATUS "SparkEngine: OpenGL backend ENABLED")
+endif()
+
+# --- Hybrid Ray Tracing ---
+if(ENABLE_HYBRID_RT)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_HYBRID_RT=1)
+    message(STATUS "SparkEngine: Hybrid Ray Tracing ENABLED (SDFGI software fallback)")
+    if(ENABLE_DXR)
+        target_compile_definitions(SparkEngineLib PUBLIC SPARK_HARDWARE_RT=1)
+        message(STATUS "SparkEngine: Hardware RT (DXR) ENABLED")
+    endif()
 endif()
 
 # ---------------------------------------------------------------------
