@@ -522,6 +522,16 @@ namespace Spark
                 m_commandList->Dispatch(x, y, z);
             }
 
+            void D3D12CommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
+            {
+                if (!dst || !src)
+                    return;
+                FlushBarriers();
+                auto* d3dDst = static_cast<D3D12Texture*>(dst);
+                auto* d3dSrc = static_cast<D3D12Texture*>(src);
+                m_commandList->CopyResource(d3dDst->GetD3D12Resource(), d3dSrc->GetD3D12Resource());
+            }
+
             void D3D12CommandList::BeginEvent(const char* name)
             {
                 // PIX event markers (requires pix3.h for full support)
@@ -995,6 +1005,33 @@ namespace Spark
                     uavDesc.Format = texDesc.Format;
                     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
                     m_device->CreateUnorderedAccessView(resource.Get(), nullptr, &uavDesc, uavAlloc.cpuHandle);
+                }
+
+                return new D3D12Texture(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);
+            }
+
+            IRHITexture* D3D12Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            {
+                if (!nativeHandle)
+                    return nullptr;
+
+                auto* nativeResource = static_cast<ID3D12Resource*>(nativeHandle);
+                ComPtr<ID3D12Resource> resource;
+                nativeResource->QueryInterface(IID_PPV_ARGS(&resource));
+
+                DescriptorAllocation srvAlloc, rtvAlloc, dsvAlloc, uavAlloc;
+                if (desc.usage & RHITextureUsage::ShaderResource)
+                {
+                    srvAlloc = m_srvHeap.Allocate(1);
+                    if (srvAlloc.IsValid())
+                    {
+                        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                        srvDesc.Format = ConvertFormat(desc.format);
+                        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                        srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                        m_device->CreateShaderResourceView(resource.Get(), &srvDesc, srvAlloc.cpuHandle);
+                    }
                 }
 
                 return new D3D12Texture(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);

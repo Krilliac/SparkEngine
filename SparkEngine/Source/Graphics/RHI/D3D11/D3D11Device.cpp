@@ -488,6 +488,15 @@ namespace Spark
                 m_context->Dispatch(x, y, z);
             }
 
+            void D3D11CommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
+            {
+                if (!dst || !src)
+                    return;
+                auto* d3dDst = static_cast<D3D11Texture*>(dst);
+                auto* d3dSrc = static_cast<D3D11Texture*>(src);
+                m_context->CopyResource(d3dDst->GetD3D11Resource(), d3dSrc->GetD3D11Resource());
+            }
+
             void D3D11CommandList::BeginEvent(const char*) {}
             void D3D11CommandList::EndEvent() {}
             void D3D11CommandList::SetMarker(const char*) {}
@@ -710,6 +719,28 @@ namespace Spark
 
                 return std::make_unique<D3D11Texture>(desc, texture, std::move(srv), std::move(rtv), std::move(dsv))
                     .release();
+            }
+
+            IRHITexture* D3D11Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            {
+                if (!nativeHandle)
+                    return nullptr;
+
+                auto* texture = static_cast<ID3D11Texture2D*>(nativeHandle);
+                ComPtr<ID3D11Resource> resource;
+                texture->QueryInterface(IID_PPV_ARGS(&resource));
+
+                ComPtr<ID3D11ShaderResourceView> srv;
+                if (desc.usage & RHITextureUsage::ShaderResource)
+                {
+                    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                    srvDesc.Format = ConvertFormat(desc.format);
+                    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                    srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                    m_device->CreateShaderResourceView(resource.Get(), &srvDesc, &srv);
+                }
+
+                return std::make_unique<D3D11Texture>(desc, resource, std::move(srv)).release();
             }
 
             IRHIShader* D3D11Device::CreateShader(const RHIShaderDesc& desc)

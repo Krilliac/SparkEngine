@@ -644,6 +644,20 @@ namespace Spark
                 }
             }
 
+            void VulkanCommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
+            {
+                if (!dst || !src)
+                    return;
+                auto* vkDst = static_cast<VulkanTexture*>(dst);
+                auto* vkSrc = static_cast<VulkanTexture*>(src);
+                VkImageCopy region = {};
+                region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                region.extent = {vkSrc->GetWidth(), vkSrc->GetHeight(), 1};
+                vkCmdCopyImage(m_commandBuffer, vkSrc->GetVkImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               vkDst->GetVkImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+            }
+
             void VulkanCommandList::BeginEvent(const char*) {}
             void VulkanCommandList::EndEvent() {}
             void VulkanCommandList::SetMarker(const char*) {}
@@ -1445,6 +1459,15 @@ namespace Spark
                 }
 
                 return new VulkanTexture(desc, image, memory, imageView, m_device);
+            }
+
+            IRHITexture* VulkanDevice::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            {
+                if (!nativeHandle)
+                    return nullptr;
+                // Wrap an externally-owned VkImage — caller manages lifetime
+                auto image = static_cast<VkImage>(nativeHandle);
+                return new VulkanTexture(desc, image, VK_NULL_HANDLE, m_device);
             }
 
             IRHIShader* VulkanDevice::CreateShader(const RHIShaderDesc& desc)

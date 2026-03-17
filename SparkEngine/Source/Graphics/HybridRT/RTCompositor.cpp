@@ -138,8 +138,11 @@ namespace Spark::Graphics
         uint32_t dispatchY = (m_height + 7) / 8;
         cmd->Dispatch(dispatchX, dispatchY, 1);
 
-        // TODO: Copy output to history buffer for next frame's temporal accumulation
-        // This requires a CopyResource or a second pass — deferred to RHI copy support
+        // Copy composite output to history buffer for next frame's temporal accumulation
+        if (m_historyBuffer && output)
+        {
+            cmd->CopyTexture(m_historyBuffer, output);
+        }
 
         cmd->EndEvent();
     }
