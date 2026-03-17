@@ -13,49 +13,24 @@
 
 #include "Platform.h"
 
-#ifdef SPARK_PLATFORM_WINDOWS
-#include "framework.h"
+// ============================================================================
+// Common includes (shared between all platforms)
+// ============================================================================
 #include "SparkEngine.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
-#include "Engine/Events/EventSystem.h"
-#include "Utils/Assert.h"
-#include "Utils/SparkError.h"
-#include "Utils/Validate.h"
-
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <Windows.h>
-#endif // SPARK_PLATFORM_WINDOWS
-#include <atomic>
-#include <memory>
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
-#endif // SPARK_PLATFORM_WINDOWS
-#include <cstdio>
-#include <cstdlib>
-#include <algorithm>
-#include <sstream>
-#include <chrono>
-#include <cmath>
-#include <filesystem>
-#include <thread>
-#include <iostream>
-
-#include "Graphics/GraphicsEngine.h"
-#include "Input/InputManager.h"
-#include "Utils/Timer.h"
-#include "Utils/DeltaSmoother.h"
-#include "Utils/CrashHandler.h"
-#include "Utils/D3DUtils.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/ConsoleProcessManager.h"
 #include "EngineSettings.h"
+#include "EngineConsoleCommands.h"
+#include "Engine/Events/EventSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
-#include "Audio/AudioEngine.h"
-#include "Physics/PhysicsSystem.h"
+#include "Graphics/GraphicsEngine.h"
 #include "Graphics/GraphicsConsoleCommands.h"
-#include "Utils/LocalFileCache.h"
+#include "Input/InputManager.h"
+#include "Audio/AudioEngine.h"
+#include "Utils/Timer.h"
+#include "Utils/SparkConsole.h"
+#include "Utils/ConsoleProcessManager.h"
 #include "EngineSetup.h"
 #include "AssetIntegration.h"
 #include "Graphics/WeatherSystem.h"
@@ -69,10 +44,62 @@
 #include "Utils/DebugDraw.h"
 #include "Utils/DebugOverlay.h"
 #include "Utils/FileLogger.h"
+#include "Graphics/DecalSystem.h"
+#include "Graphics/MeshLOD.h"
+#include "Engine/Gameplay/WeaponManager.h"
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+#include "Physics/PhysicsSystem.h"
+#endif
 
-// -----------------------------------------------------------------------------
-// Missing module startup warnings
-// -----------------------------------------------------------------------------
+#include <atomic>
+#include <memory>
+#include <sstream>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <algorithm>
+#include <filesystem>
+#include <thread>
+#include <iostream>
+
+// Platform-specific includes
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "framework.h"
+#include "Utils/Assert.h"
+#include "Utils/SparkError.h"
+#include "Utils/Validate.h"
+#include "Utils/DeltaSmoother.h"
+#include "Utils/CrashHandler.h"
+#include "Utils/D3DUtils.h"
+#include "Utils/LocalFileCache.h"
+#include <Windows.h>
+#include <DirectXMath.h>
+#else
+#include <csignal>
+#include <cstring>
+#ifdef SPARK_SDL2_AVAILABLE
+#include <SDL.h>
+#endif
+#endif // SPARK_PLATFORM_WINDOWS
+
+// ============================================================================
+// Common globals (shared between all platforms)
+// ============================================================================
+std::unique_ptr<GraphicsEngine> g_graphics;
+std::unique_ptr<InputManager> g_input;
+std::unique_ptr<Timer> g_timer;
+std::unique_ptr<Spark::EventBus> g_eventBus;
+std::unique_ptr<ModuleManager> g_moduleManager;
+std::unique_ptr<AudioEngine> g_audioEngine;
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+std::unique_ptr<PhysicsSystem> g_physicsOwned;
+#endif
+
+// ============================================================================
+// Common helper functions (shared across all startup paths)
+// ============================================================================
+
 static void LogMissingModuleWarnings()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -111,9 +138,6 @@ static void LogMissingModuleWarnings()
     }
 }
 
-// -----------------------------------------------------------------------------
-// Debug/utility system initialization (shared across all startup paths)
-// -----------------------------------------------------------------------------
 static void InitDebugSystems()
 {
     Spark::FileLogger::GetInstance().Initialize("Logs");
@@ -123,6 +147,14 @@ static void InitDebugSystems()
 #endif
     Spark::DebugOverlay::GetInstance().SetEnabled(true);
     Spark::DebugDrawManager::GetInstance().SetEnabled(true);
+
+    // Graphics utility singletons
+    Spark::Graphics::DecalSystem::GetInstance().Initialize();
+    // LODManager is passive (no init needed)
+    // NavMeshObstacleManager is wired at level load time when a navmesh is available
+
+    // Register default weapon definitions
+    Spark::Gameplay::WeaponRegistry::GetInstance().RegisterDefaults();
 }
 
 static void UpdateDebugSystems(float dt)
@@ -131,10 +163,15 @@ static void UpdateDebugSystems(float dt)
     Spark::DebugDrawManager::GetInstance().Flush(dt);
     Spark::DebugOverlay::GetInstance().Update(dt);
     Spark::FrameInspector::GetInstance().OnFrameEnd();
+
+    // Update decal fading
+    Spark::Graphics::DecalSystem::GetInstance().Update(dt);
 }
 
 static void ShutdownDebugSystems()
 {
+    Spark::Graphics::DecalSystem::GetInstance().Shutdown();
+
     Spark::TweenManager::GetInstance().KillAll();
     Spark::DebugDrawManager::GetInstance().Clear();
 #ifndef NDEBUG
@@ -144,35 +181,6 @@ static void ShutdownDebugSystems()
     Spark::ChromeTracing::GetInstance().Stop();
     Spark::FileLogger::GetInstance().Shutdown();
 }
-
-// -----------------------------------------------------------------------------
-// Globals
-// -----------------------------------------------------------------------------
-constexpr int MAX_LOADSTRING = 100;
-
-HINSTANCE g_hInst;
-WCHAR g_szTitle[MAX_LOADSTRING];
-WCHAR g_szClass[MAX_LOADSTRING];
-
-// Engine subsystems
-std::unique_ptr<GraphicsEngine> g_graphics;
-std::unique_ptr<InputManager> g_input;
-std::unique_ptr<Timer> g_timer;
-std::unique_ptr<Spark::EventBus> g_eventBus;
-std::unique_ptr<ModuleManager> g_moduleManager;
-// EngineContext accessed via EngineContext::Get() / EngineContext::SetOwned() / EngineContext::ResetOwned()
-std::unique_ptr<AudioEngine> g_audioEngine;
-std::unique_ptr<PhysicsSystem> g_physicsOwned;
-std::unique_ptr<Spark::LocalFileCache> g_fileCache;
-std::unique_ptr<Spark::WeatherSystem> g_weatherSystem;
-std::unique_ptr<Spark::UI::UISystem> g_uiSystem;
-std::unique_ptr<Spark::DialogueSystem> g_dialogueSystem;
-std::unique_ptr<Spark::ModSystem> g_modSystem;
-static Spark::DeltaSmoother g_deltaSmoother(10);
-
-// -----------------------------------------------------------------------------
-// Common initialization helpers (used by all startup paths)
-// -----------------------------------------------------------------------------
 
 static void InitPhysics()
 {
@@ -191,6 +199,34 @@ static void InitConsole()
     Spark::ConsoleProcessManager::GetInstance().Initialize();
     InitDebugSystems();
 }
+
+static void ShutdownPhysics()
+{
+#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+    if (g_physicsOwned)
+    {
+        g_physicsOwned->Shutdown();
+        g_physicsOwned.reset();
+    }
+#endif
+}
+
+// ============================================================================
+// Windows platform
+// ============================================================================
+#ifdef SPARK_PLATFORM_WINDOWS
+
+// Windows-specific globals
+constexpr int MAX_LOADSTRING = 100;
+HINSTANCE g_hInst;
+WCHAR g_szTitle[MAX_LOADSTRING];
+WCHAR g_szClass[MAX_LOADSTRING];
+std::unique_ptr<Spark::LocalFileCache> g_fileCache;
+std::unique_ptr<Spark::WeatherSystem> g_weatherSystem;
+std::unique_ptr<Spark::UI::UISystem> g_uiSystem;
+std::unique_ptr<Spark::DialogueSystem> g_dialogueSystem;
+std::unique_ptr<Spark::ModSystem> g_modSystem;
+static Spark::DeltaSmoother g_deltaSmoother(10);
 
 #ifdef SPARK_HEADLESS_SUPPORT
 // g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
@@ -225,8 +261,7 @@ BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 
-// Console command registration (engine-side only)
-void RegisterEngineConsoleCommands();
+// Graphics console commands are registered via GraphicsConsoleCommands.cpp
 
 /**
  * @brief Get the executable directory
@@ -371,8 +406,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         // CoroutineScheduler
         EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
-        // Register console commands (no graphics commands in headless)
-        RegisterEngineConsoleCommands();
+        // Register console commands
+        if (g_graphics)
+            Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
+        Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get());
 
         // Fixed 60 Hz server loop
         constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -409,11 +446,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             g_moduleManager.reset();
         }
 
-        if (g_physicsOwned)
-        {
-            g_physicsOwned->Shutdown();
-            g_physicsOwned.reset();
-        }
+        ShutdownPhysics();
 
         g_fileCache.reset();
         EngineContext::ResetOwned();
@@ -535,7 +568,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     }
 
     // 8. Register engine console commands
-    RegisterEngineConsoleCommands();
+    if (g_graphics)
+        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
+    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get());
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
     // 8b. Log warnings for missing third-party modules
@@ -602,13 +637,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_audioEngine.reset();
     g_fileCache.reset();
 
-    // Shut down physics before graphics (physics was extracted from GraphicsEngine)
-    if (g_physicsOwned)
-    {
-
-        g_physicsOwned->Shutdown();
-        g_physicsOwned.reset();
-    }
+    ShutdownPhysics();
 
     EngineContext::ResetOwned();
     g_eventBus.reset();
@@ -757,718 +786,13 @@ INT_PTR CALLBACK About(HWND hDlg, UINT msg, WPARAM wParam, LPARAM)
     return FALSE;
 }
 
-// ===================================================================================
-//                    ENGINE CONSOLE COMMANDS
-// ===================================================================================
-void RegisterEngineConsoleCommands()
-{
-    auto& console = Spark::SimpleConsole::GetInstance();
-
-    // Graphics console commands are now registered in GraphicsConsoleCommands.cpp
-    if (g_graphics)
-        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-
-    console.RegisterCommand(
-        "module_info",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!g_moduleManager || !g_moduleManager->HasModules())
-                return "No modules loaded";
-            std::stringstream ss;
-            ss << "=== Loaded Modules (" << g_moduleManager->GetModuleCount() << ") ===\n";
-            // Show primary module info
-            auto* primary = g_moduleManager->GetPrimaryModule();
-            if (primary)
-            {
-                auto info = primary->GetModuleInfo();
-                ss << "Primary: " << info.name << " v" << info.version << " (loadOrder=" << info.loadOrder << ")\n";
-            }
-            return ss.str();
-        },
-        "Show loaded module info");
-
-    console.RegisterCommand(
-        "module_reload",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (!g_moduleManager || !g_moduleManager->HasModules())
-                return "No modules loaded";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-
-            std::string name;
-            if (!args.empty())
-            {
-                name = args[0];
-            }
-            else
-            {
-                // Reload primary module
-                auto* primary = g_moduleManager->GetPrimaryModule();
-                if (!primary)
-                    return "No primary module to reload";
-                name = primary->GetModuleInfo().name;
-            }
-
-            if (g_moduleManager->ReloadModule(name, EngineContext::Get()))
-                return "Module '" + name + "' reloaded successfully";
-            return "Failed to reload module '" + name + "'";
-        },
-        "Hot-reload a module DLL (usage: module_reload [name])");
-
-    // ---- SaveSystem commands ----
-    console.RegisterCommand(
-        "save_list",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            try
-            {
-                return Spark::SaveSystem::GetInstance().Console_ListSaves();
-            }
-            catch (...)
-            {
-                return "SaveSystem not available";
-            }
-        },
-        "List all save slots", "Save");
-
-    console.RegisterCommand(
-        "save_info",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: save_info <slot_name>";
-            try
-            {
-                return Spark::SaveSystem::GetInstance().Console_GetSaveInfo(args[0]);
-            }
-            catch (...)
-            {
-                return "SaveSystem not available";
-            }
-        },
-        "Show details for a save slot", "Save");
-
-    // ---- PhysicsSystem commands ----
-    console.RegisterCommand(
-        "physics_metrics",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            auto m = physics->Console_GetMetrics();
-            std::stringstream ss;
-            ss << "=== Physics Metrics ===\n";
-            ss << "Active Bodies: " << m.activeRigidBodies << "/" << m.totalRigidBodies << "\n";
-            ss << "Constraints: " << m.activeConstraints << "\n";
-            ss << "Collision Pairs: " << m.collisionPairs << "\n";
-            ss << "Sim Time: " << m.simulationTime << "ms\n";
-            ss << "Substeps: " << m.substeps << "\n";
-            return ss.str();
-        },
-        "Display physics performance metrics", "Physics");
-
-    console.RegisterCommand(
-        "physics_list",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            return physics->Console_ListBodies();
-        },
-        "List all physics bodies", "Physics");
-
-    console.RegisterCommand(
-        "physics_body_info",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: physics_body_info <name>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            return physics->Console_GetBodyInfo(args[0]);
-        },
-        "Get detailed info about a physics body", "Physics");
-
-    console.RegisterCommand(
-        "physics_gravity",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 3)
-                return "Usage: physics_gravity <x> <y> <z>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            try
-            {
-                float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
-                physics->Console_SetGravity(x, y, z);
-                return "Gravity set to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
-            }
-            catch (const std::exception&)
-            {
-                return "Invalid number format. Usage: physics_gravity <x> <y> <z>";
-            }
-        },
-        "Set world gravity vector", "Physics");
-
-    console.RegisterCommand(
-        "physics_create",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 5)
-                return "Usage: physics_create <name> <type> <x> <y> <z>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            float x = std::stof(args[2]), y = std::stof(args[3]), z = std::stof(args[4]);
-            bool ok = physics->Console_CreateBody(args[0], args[1], x, y, z);
-            return ok ? "Body '" + args[0] + "' created" : "Failed to create body (invalid type?)";
-        },
-        "Create a physics body (type: static/kinematic/dynamic)", "Physics");
-
-    console.RegisterCommand(
-        "physics_remove",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: physics_remove <name>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            bool ok = physics->Console_RemoveBody(args[0]);
-            return ok ? "Body '" + args[0] + "' removed" : "Body not found";
-        },
-        "Remove a physics body", "Physics");
-
-    console.RegisterCommand(
-        "physics_set",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 3)
-                return "Usage: physics_set <name> <property> <value>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            physics->Console_SetBodyProperty(args[0], args[1], std::stof(args[2]));
-            return args[1] + " set to " + args[2] + " on '" + args[0] + "'";
-        },
-        "Set body property (mass/friction/restitution/linearDamping/angularDamping)", "Physics");
-
-    console.RegisterCommand(
-        "physics_force",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 4)
-                return "Usage: physics_force <name> <x> <y> <z>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            physics->Console_ApplyForce(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
-            return "Force applied to '" + args[0] + "'";
-        },
-        "Apply force to a physics body", "Physics");
-
-    console.RegisterCommand(
-        "physics_impulse",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 4)
-                return "Usage: physics_impulse <name> <x> <y> <z>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            physics->Console_ApplyImpulse(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
-            return "Impulse applied to '" + args[0] + "'";
-        },
-        "Apply impulse to a physics body", "Physics");
-
-    console.RegisterCommand(
-        "physics_debug",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: physics_debug <on|off>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
-            physics->Console_EnableDebugDraw(enable);
-            return enable ? "Physics debug draw enabled" : "Physics debug draw disabled";
-        },
-        "Toggle physics debug overlay", "Physics");
-
-    console.RegisterCommand(
-        "physics_pause",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: physics_pause <on|off>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            bool pause = (args[0] == "on" || args[0] == "true" || args[0] == "1");
-            physics->Console_PausePhysics(pause);
-            return pause ? "Physics simulation paused" : "Physics simulation resumed";
-        },
-        "Pause/resume physics simulation", "Physics");
-
-    console.RegisterCommand(
-        "physics_timestep",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: physics_timestep <seconds>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            float ts = std::stof(args[0]);
-            physics->Console_SetTimeStep(ts);
-            return "Physics timestep set to " + args[0] + "s";
-        },
-        "Set physics fixed timestep", "Physics");
-
-    console.RegisterCommand(
-        "physics_raycast",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 7)
-                return "Usage: physics_raycast <ox> <oy> <oz> <dx> <dy> <dz> <maxDist>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            return physics->Console_Raycast(std::stof(args[0]), std::stof(args[1]), std::stof(args[2]),
-                                            std::stof(args[3]), std::stof(args[4]), std::stof(args[5]),
-                                            std::stof(args[6]));
-        },
-        "Perform a physics raycast", "Physics");
-
-    console.RegisterCommand(
-        "physics_reset",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            physics->Console_Reset();
-            return "Physics world reset";
-        },
-        "Reset physics world to initial state", "Physics");
-
-    // ---- AudioEngine commands ----
-    console.RegisterCommand(
-        "audio_master_volume",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: audio_master_volume <0.0-1.0>";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            try
-            {
-                g_audioEngine->Console_SetMasterVolume(std::stof(args[0]));
-                return "Master volume set to " + args[0];
-            }
-            catch (const std::exception&)
-            {
-                return "Invalid number format. Usage: audio_master_volume <0.0-1.0>";
-            }
-        },
-        "Set master audio volume", "Audio");
-
-    console.RegisterCommand(
-        "audio_sfx_volume",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: audio_sfx_volume <0.0-1.0>";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            g_audioEngine->Console_SetSFXVolume(std::stof(args[0]));
-            return "SFX volume set to " + args[0];
-        },
-        "Set SFX volume", "Audio");
-
-    console.RegisterCommand(
-        "audio_music_volume",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: audio_music_volume <0.0-1.0>";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            g_audioEngine->Console_SetMusicVolume(std::stof(args[0]));
-            return "Music volume set to " + args[0];
-        },
-        "Set music volume", "Audio");
-
-    console.RegisterCommand(
-        "audio_3d",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: audio_3d <on|off>";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
-            g_audioEngine->Console_Set3DAudio(enable);
-            return enable ? "3D audio enabled" : "3D audio disabled";
-        },
-        "Toggle 3D spatial audio", "Audio");
-
-    console.RegisterCommand(
-        "audio_play_test",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: audio_play_test <sound_name> [3d]";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            bool is3D = (args.size() > 1 && (args[1] == "3d" || args[1] == "true"));
-            uint32_t id = g_audioEngine->Console_PlayTestSound(args[0], is3D);
-            return id > 0 ? "Playing sound (ID: " + std::to_string(id) + ")" : "Failed to play sound";
-        },
-        "Play a test sound", "Audio");
-
-    console.RegisterCommand(
-        "audio_stop",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: audio_stop <source_id>";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            g_audioEngine->Console_StopSound(static_cast<uint32_t>(std::stoul(args[0])));
-            return "Sound stopped";
-        },
-        "Stop a playing sound by ID", "Audio");
-
-    console.RegisterCommand(
-        "audio_stop_all",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            g_audioEngine->Console_StopAllSounds();
-            return "All sounds stopped";
-        },
-        "Stop all playing sounds", "Audio");
-
-    console.RegisterCommand(
-        "audio_list",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            return g_audioEngine->Console_ListSounds();
-        },
-        "List all loaded sounds", "Audio");
-
-    console.RegisterCommand(
-        "audio_metrics",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            auto m = g_audioEngine->Console_GetMetrics();
-            std::stringstream ss;
-            ss << "=== Audio Metrics ===\n";
-            ss << "Active Sources: " << m.activeSources << "/" << m.totalSources << "\n";
-            ss << "Loaded Sounds: " << m.loadedSounds << "\n";
-            ss << "Memory: " << (m.memoryUsage / 1024) << " KB\n";
-            return ss.str();
-        },
-        "Display audio performance metrics", "Audio");
-
-    console.RegisterCommand(
-        "audio_reset",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            g_audioEngine->Console_ResetToDefaults();
-            return "Audio settings reset to defaults";
-        },
-        "Reset audio settings to defaults", "Audio");
-
-    console.RegisterCommand(
-        "audio_listener_pos",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 3)
-                return "Usage: audio_listener_pos <x> <y> <z>";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            g_audioEngine->Console_SetListenerPosition(std::stof(args[0]), std::stof(args[1]), std::stof(args[2]));
-            return "Listener position set";
-        },
-        "Set 3D audio listener position", "Audio");
-
-    console.RegisterCommand(
-        "audio_doppler",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: audio_doppler <scale>";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            g_audioEngine->Console_SetDopplerScale(std::stof(args[0]));
-            return "Doppler scale set to " + args[0];
-        },
-        "Set Doppler effect scale", "Audio");
-
-    console.RegisterCommand(
-        "audio_source_info",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: audio_source_info <source_id>";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            return g_audioEngine->Console_GetSourceInfo(static_cast<uint32_t>(std::stoul(args[0])));
-        },
-        "Get info about an audio source", "Audio");
-
-    // =========================================================================
-    // Architecture subsystem console commands
-    // =========================================================================
-
-    console.RegisterCommand(
-        "engine_subsystems",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            auto* ctx = EngineContext::Get();
-            if (!ctx)
-                return "Engine context not available";
-            std::stringstream ss;
-            ss << "=== Engine Subsystems ===\n";
-            ss << "  Registered: " << ctx->GetSubsystemCount() << "\n";
-            ss << "  Graphics:   " << (ctx->GetGraphics() ? "YES" : "NO") << "\n";
-            ss << "  Input:      " << (ctx->GetInput() ? "YES" : "NO") << "\n";
-            ss << "  Timer:      " << (ctx->GetTimer() ? "YES" : "NO") << "\n";
-            ss << "  EventBus:   " << (ctx->GetEventBus() ? "YES" : "NO") << "\n";
-            ss << "  Audio:      " << (ctx->GetAudio() ? "YES" : "NO") << "\n";
-            ss << "  Physics:    " << (ctx->GetPhysics() ? "YES" : "NO") << "\n";
-            ss << "  Animation:  " << (ctx->GetAnimation() ? "YES" : "NO") << "\n";
-            ss << "  AI:         " << (ctx->GetAI() ? "YES" : "NO") << "\n";
-            ss << "  Network:    " << (ctx->GetNetwork() ? "YES" : "NO") << "\n";
-            ss << "  SaveSystem: " << (ctx->GetSaveSystem() ? "YES" : "NO") << "\n";
-            ss << "  Scene:      " << (ctx->GetSceneManager() ? "YES" : "NO") << "\n";
-            ss << "  Scripting:  " << (ctx->GetScriptEngine() ? "YES" : "NO") << "\n";
-            ss << "  Coroutines: " << (ctx->GetCoroutineScheduler() ? "YES" : "NO") << "\n";
-            ss << "  Headless:   " << (ctx->IsHeadless() ? "YES" : "NO") << "\n";
-            auto* assetReg = ctx->GetSystem<Spark::AssetRegistry>();
-            ss << "  AssetReg:   " << (assetReg ? "YES" : "NO");
-            if (assetReg)
-                ss << " (" << assetReg->GetAssetCount() << " assets)";
-            ss << "\n";
-            auto& js = Spark::JobSystem::Get();
-            ss << "  JobSystem:  " << (js.IsInitialized() ? "YES" : "NO");
-            if (js.IsInitialized())
-                ss << " (" << js.GetWorkerCount() << " workers)";
-            ss << "\n";
-            return ss.str();
-        },
-        "Show status of all registered engine subsystems", "Engine");
-
-    console.RegisterCommand(
-        "asset_list",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            auto* ctx = EngineContext::Get();
-            if (!ctx)
-                return "Engine context not available";
-            auto* reg = ctx->GetSystem<Spark::AssetRegistry>();
-            if (!reg)
-                return "Asset registry not available";
-            return reg->Console_ListAssets();
-        },
-        "List all registered assets in the asset registry", "Engine");
-}
 
 #endif // SPARK_PLATFORM_WINDOWS
 
 // ============================================================================
-// Non-Windows: main entry point with SDL2 window + event loop
+// Linux platform
 // ============================================================================
 #ifndef SPARK_PLATFORM_WINDOWS
-#include "SparkEngine.h"
-#include "ModuleManager.h"
-#include "EngineContext.h"
-#include "EngineSettings.h"
-#include "Engine/Events/EventSystem.h"
-#include "Engine/SaveSystem/SaveSystem.h"
-#include "Engine/Coroutine/CoroutineScheduler.h"
-#include "Graphics/GraphicsEngine.h"
-#include "Input/InputManager.h"
-#include "Audio/AudioEngine.h"
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-#include "Physics/PhysicsSystem.h"
-#endif
-#include "Utils/Timer.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/ConsoleProcessManager.h"
-#include "Graphics/GraphicsConsoleCommands.h"
-#include "EngineSetup.h"
-#include "AssetIntegration.h"
-#include "Graphics/WeatherSystem.h"
-#include "Engine/UI/UISystem.h"
-#include "Engine/Dialogue/DialogueSystem.h"
-#include "Engine/Modding/ModSystem.h"
-#include "Utils/ChromeTracing.h"
-#include "Utils/MemoryDebugger.h"
-#include "Utils/FrameInspector.h"
-#include "Utils/Tween.h"
-#include "Utils/DebugDraw.h"
-#include "Utils/DebugOverlay.h"
-#include "Utils/FileLogger.h"
-#include <iostream>
-#include <thread>
-#include <chrono>
-#include <csignal>
-#include <cstring>
-#include <filesystem>
-
-#ifdef SPARK_SDL2_AVAILABLE
-#include <SDL.h>
-#endif
-
-std::unique_ptr<GraphicsEngine> g_graphics;
-std::unique_ptr<InputManager> g_input;
-std::unique_ptr<Timer> g_timer;
-std::unique_ptr<Spark::EventBus> g_eventBus;
-std::unique_ptr<ModuleManager> g_moduleManager;
-// EngineContext accessed via EngineContext::Get() / EngineContext::SetOwned() / EngineContext::ResetOwned()
-std::unique_ptr<AudioEngine> g_audioEngine;
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-std::unique_ptr<PhysicsSystem> g_physicsOwned;
-#endif
-
-// -----------------------------------------------------------------------------
-// Missing module startup warnings (Linux)
-// -----------------------------------------------------------------------------
-static void LogMissingModuleWarnings()
-{
-    auto& console = Spark::SimpleConsole::GetInstance();
-    int missingCount = 0;
-
-#ifndef SPARK_BULLET_PHYSICS_AVAILABLE
-    console.LogWarning(
-        "[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and raycasting are DISABLED.");
-    console.LogWarning(
-        "                 Physics-dependent features (gravity, projectiles, triggers) will not function.");
-    ++missingCount;
-#endif
-
-#ifndef SPARK_MINIZ_AVAILABLE
-    console.LogWarning("[MISSING MODULE] miniz — crash dump compression and save file compression are DISABLED.");
-    console.LogWarning("                 CrashHandler is using a stub. Save files will not be compressed.");
-    ++missingCount;
-#endif
-
-#ifndef SPARK_SDL2_AVAILABLE
-    console.LogWarning("[MISSING MODULE] SDL2 — cross-platform windowing and input are DISABLED.");
-    console.LogWarning("                 Install libsdl2-dev and rebuild with -DENABLE_SDL2=ON for windowed mode.");
-    ++missingCount;
-#endif
-
-    if (missingCount > 0)
-    {
-        console.LogWarning("------------------------------------------------------------");
-        console.LogWarning(std::to_string(missingCount) + " module(s) missing. Expect degraded functionality.");
-        console.LogWarning("Run: git submodule update --init --recursive");
-        console.LogWarning("Then rebuild to restore full engine features.");
-        console.LogWarning("See README.md 'Dependencies' section for details.");
-        console.LogWarning("------------------------------------------------------------");
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Debug/utility system initialization (shared across all startup paths)
-// -----------------------------------------------------------------------------
-static void InitDebugSystems()
-{
-    Spark::FileLogger::GetInstance().Initialize("Logs");
-    Spark::ChromeTracing::GetInstance().Start();
-#ifndef NDEBUG
-    Spark::MemoryDebugger::GetInstance().SetEnabled(true);
-#endif
-    Spark::DebugOverlay::GetInstance().SetEnabled(true);
-    Spark::DebugDrawManager::GetInstance().SetEnabled(true);
-}
-
-static void UpdateDebugSystems(float dt)
-{
-    Spark::TweenManager::GetInstance().Update(dt);
-    Spark::DebugDrawManager::GetInstance().Flush(dt);
-    Spark::DebugOverlay::GetInstance().Update(dt);
-    Spark::FrameInspector::GetInstance().OnFrameEnd();
-}
-
-static void ShutdownDebugSystems()
-{
-    Spark::TweenManager::GetInstance().KillAll();
-    Spark::DebugDrawManager::GetInstance().Clear();
-#ifndef NDEBUG
-    Spark::MemoryDebugger::GetInstance().PrintLeakReport();
-#endif
-    Spark::ChromeTracing::GetInstance().SaveToFile("spark_trace.json");
-    Spark::ChromeTracing::GetInstance().Stop();
-    Spark::FileLogger::GetInstance().Shutdown();
-}
-
-// -----------------------------------------------------------------------------
-// Common initialization helpers (used by all Linux startup paths)
-// -----------------------------------------------------------------------------
-
-static void InitPhysics()
-{
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-    g_physicsOwned = std::make_unique<PhysicsSystem>();
-    EngineContext::Get()->SetPhysics(g_physicsOwned.get());
-    if (g_graphics)
-        g_graphics->SetPhysicsSystem(g_physicsOwned.get());
-#endif
-}
-
-static void InitConsole()
-{
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.Initialize();
-    Spark::ConsoleProcessManager::GetInstance().Initialize();
-    InitDebugSystems();
-}
 
 static std::atomic<bool> g_shutdownRequested{false};
 
@@ -1529,230 +853,6 @@ static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
     return manager.LoadModulesFromDirectory(exeDir.string());
 }
 
-// Console command registration (engine-side, mirrors the Windows version)
-static void RegisterEngineConsoleCommandsLinux()
-{
-    auto& console = Spark::SimpleConsole::GetInstance();
-
-    if (g_graphics)
-        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-
-    console.RegisterCommand(
-        "module_info",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!g_moduleManager || !g_moduleManager->HasModules())
-                return "No modules loaded";
-            std::stringstream ss;
-            ss << "=== Loaded Modules (" << g_moduleManager->GetModuleCount() << ") ===\n";
-            auto* primary = g_moduleManager->GetPrimaryModule();
-            if (primary)
-            {
-                auto info = primary->GetModuleInfo();
-                ss << "Primary: " << info.name << " v" << info.version << " (loadOrder=" << info.loadOrder << ")\n";
-            }
-            return ss.str();
-        },
-        "Show loaded module info");
-
-    console.RegisterCommand(
-        "module_reload",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (!g_moduleManager || !g_moduleManager->HasModules())
-                return "No modules loaded";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            std::string name;
-            if (!args.empty())
-            {
-                name = args[0];
-            }
-            else
-            {
-                auto* primary = g_moduleManager->GetPrimaryModule();
-                if (!primary)
-                    return "No primary module to reload";
-                name = primary->GetModuleInfo().name;
-            }
-            if (g_moduleManager->ReloadModule(name, EngineContext::Get()))
-                return "Module '" + name + "' reloaded successfully";
-            return "Failed to reload module '" + name + "'";
-        },
-        "Hot-reload a module SO (usage: module_reload [name])");
-
-    // SaveSystem
-    console.RegisterCommand(
-        "save_list",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            try
-            {
-                return Spark::SaveSystem::GetInstance().Console_ListSaves();
-            }
-            catch (...)
-            {
-                return "SaveSystem not available";
-            }
-        },
-        "List all save slots", "Save");
-
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-    // PhysicsSystem commands
-    console.RegisterCommand(
-        "physics_metrics",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            auto m = physics->Console_GetMetrics();
-            std::stringstream ss;
-            ss << "=== Physics Metrics ===\n";
-            ss << "Active Bodies: " << m.activeRigidBodies << "/" << m.totalRigidBodies << "\n";
-            ss << "Constraints: " << m.activeConstraints << "\n";
-            ss << "Collision Pairs: " << m.collisionPairs << "\n";
-            ss << "Sim Time: " << m.simulationTime << "ms\n";
-            ss << "Substeps: " << m.substeps << "\n";
-            return ss.str();
-        },
-        "Display physics performance metrics", "Physics");
-
-    console.RegisterCommand(
-        "physics_gravity",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 3)
-                return "Usage: physics_gravity <x> <y> <z>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            try
-            {
-                float x = std::stof(args[0]), y = std::stof(args[1]), z = std::stof(args[2]);
-                physics->Console_SetGravity(x, y, z);
-                return "Gravity set to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
-            }
-            catch (const std::exception&)
-            {
-                return "Invalid number format. Usage: physics_gravity <x> <y> <z>";
-            }
-        },
-        "Set world gravity vector", "Physics");
-
-    console.RegisterCommand(
-        "physics_debug",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: physics_debug <on|off>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
-            physics->Console_EnableDebugDraw(enable);
-            return enable ? "Physics debug draw enabled" : "Physics debug draw disabled";
-        },
-        "Toggle physics debug overlay", "Physics");
-
-    console.RegisterCommand(
-        "physics_pause",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: physics_pause <on|off>";
-            if (!EngineContext::Get())
-                return "Engine context not available";
-            auto* physics = EngineContext::Get()->GetPhysics();
-            if (!physics)
-                return "Physics system not available";
-            bool pause = (args[0] == "on" || args[0] == "true" || args[0] == "1");
-            physics->Console_PausePhysics(pause);
-            return pause ? "Physics simulation paused" : "Physics simulation resumed";
-        },
-        "Pause/resume physics simulation", "Physics");
-#endif // SPARK_BULLET_PHYSICS_AVAILABLE
-
-    // AudioEngine commands
-    console.RegisterCommand(
-        "audio_master_volume",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: audio_master_volume <0.0-1.0>";
-            if (!g_audioEngine)
-                return "Audio engine not available";
-            try
-            {
-                g_audioEngine->Console_SetMasterVolume(std::stof(args[0]));
-                return "Master volume set to " + args[0];
-            }
-            catch (const std::exception&)
-            {
-                return "Invalid number format. Usage: audio_master_volume <0.0-1.0>";
-            }
-        },
-        "Set master audio volume", "Audio");
-
-    // Architecture subsystem console commands
-    console.RegisterCommand(
-        "engine_subsystems",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            auto* ctx = EngineContext::Get();
-            if (!ctx)
-                return "Engine context not available";
-            std::stringstream ss;
-            ss << "=== Engine Subsystems ===\n";
-            ss << "  Registered: " << ctx->GetSubsystemCount() << "\n";
-            ss << "  Graphics:   " << (ctx->GetGraphics() ? "YES" : "NO") << "\n";
-            ss << "  Input:      " << (ctx->GetInput() ? "YES" : "NO") << "\n";
-            ss << "  Timer:      " << (ctx->GetTimer() ? "YES" : "NO") << "\n";
-            ss << "  EventBus:   " << (ctx->GetEventBus() ? "YES" : "NO") << "\n";
-            ss << "  Audio:      " << (ctx->GetAudio() ? "YES" : "NO") << "\n";
-            ss << "  Physics:    " << (ctx->GetPhysics() ? "YES" : "NO") << "\n";
-            ss << "  Animation:  " << (ctx->GetAnimation() ? "YES" : "NO") << "\n";
-            ss << "  AI:         " << (ctx->GetAI() ? "YES" : "NO") << "\n";
-            ss << "  Network:    " << (ctx->GetNetwork() ? "YES" : "NO") << "\n";
-            ss << "  SaveSystem: " << (ctx->GetSaveSystem() ? "YES" : "NO") << "\n";
-            ss << "  Scene:      " << (ctx->GetSceneManager() ? "YES" : "NO") << "\n";
-            ss << "  Scripting:  " << (ctx->GetScriptEngine() ? "YES" : "NO") << "\n";
-            ss << "  Coroutines: " << (ctx->GetCoroutineScheduler() ? "YES" : "NO") << "\n";
-            ss << "  Headless:   " << (ctx->IsHeadless() ? "YES" : "NO") << "\n";
-            auto* assetReg = ctx->GetSystem<Spark::AssetRegistry>();
-            ss << "  AssetReg:   " << (assetReg ? "YES" : "NO");
-            if (assetReg)
-                ss << " (" << assetReg->GetAssetCount() << " assets)";
-            ss << "\n";
-            auto& js = Spark::JobSystem::Get();
-            ss << "  JobSystem:  " << (js.IsInitialized() ? "YES" : "NO");
-            if (js.IsInitialized())
-                ss << " (" << js.GetWorkerCount() << " workers)";
-            ss << "\n";
-            return ss.str();
-        },
-        "Show status of all registered engine subsystems", "Engine");
-
-    console.RegisterCommand(
-        "asset_list",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            auto* ctx = EngineContext::Get();
-            if (!ctx)
-                return "Engine context not available";
-            auto* reg = ctx->GetSystem<Spark::AssetRegistry>();
-            if (!reg)
-                return "Asset registry not available";
-            return reg->Console_ListAssets();
-        },
-        "List all registered assets in the asset registry", "Engine");
-}
 
 int main(int argc, char* argv[])
 {
@@ -1798,7 +898,9 @@ int main(int argc, char* argv[])
         Spark::SaveSystem::GetInstance().Initialize("Saves");
         EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
-        RegisterEngineConsoleCommandsLinux();
+        if (g_graphics)
+            Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
+        Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get());
         LogMissingModuleWarnings();
 
         constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -1833,14 +935,7 @@ int main(int argc, char* argv[])
             g_moduleManager.reset();
         }
 
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-        if (g_physicsOwned)
-        {
-
-            g_physicsOwned->Shutdown();
-            g_physicsOwned.reset();
-        }
-#endif
+        ShutdownPhysics();
 
         EngineContext::ResetOwned();
         g_eventBus.reset();
@@ -1981,7 +1076,9 @@ int main(int argc, char* argv[])
     }
 
     // 8. Console commands
-    RegisterEngineConsoleCommandsLinux();
+    if (g_graphics)
+        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
+    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get());
     settings.RegisterConsoleCommands();
 
     // 8b. Log warnings for missing third-party modules
@@ -2134,14 +1231,7 @@ int main(int argc, char* argv[])
     }
 
     g_audioEngine.reset();
-
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-    if (g_physicsOwned)
-    {
-        g_physicsOwned->Shutdown();
-        g_physicsOwned.reset();
-    }
-#endif
+    ShutdownPhysics();
 
     EngineContext::ResetOwned();
     g_eventBus.reset();
@@ -2154,7 +1244,7 @@ int main(int argc, char* argv[])
     SDL_DestroyWindow(window);
     SDL_Quit();
 
-#else // !SPARK_SDL2_AVAILABLE
+#else  // !SPARK_SDL2_AVAILABLE
     // Fallback: no SDL2 available, run without a window (headless-like)
     std::cerr << "Warning: SDL2 not available. Running without a window." << std::endl;
     std::cerr << "Install SDL2 and rebuild with -DENABLE_SDL2=ON for windowed mode." << std::endl;
@@ -2222,13 +1312,7 @@ int main(int argc, char* argv[])
         g_moduleManager.reset();
     }
 
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-    if (g_physicsOwned)
-    {
-        g_physicsOwned->Shutdown();
-        g_physicsOwned.reset();
-    }
-#endif
+    ShutdownPhysics();
 
     EngineContext::ResetOwned();
     g_graphics.reset();
