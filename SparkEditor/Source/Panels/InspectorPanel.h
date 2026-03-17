@@ -62,6 +62,7 @@ namespace SparkEditor
         void RenderRigidBodyComponent();
         void RenderColliderComponent();
         void RenderAudioSourceComponent();
+        void RenderTerrainComponent();
         void RenderAddComponentMenu();
 
         /// Helper: check if the inspected object has a specific component type

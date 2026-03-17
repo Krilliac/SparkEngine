@@ -300,6 +300,23 @@ namespace SparkEditor
     };
 
     /**
+     * @brief Terrain component scene data
+     */
+    struct TerrainSceneData
+    {
+        int heightmapResolution = 513; ///< Heightmap width/height in samples
+        float terrainSize = 1000.0f;   ///< Terrain extent in world units
+        float heightScale = 1.0f;      ///< Vertical scale multiplier
+        float minHeight = 0.0f;        ///< Minimum terrain height
+        float maxHeight = 100.0f;      ///< Maximum terrain height
+        int lodLevels = 4;             ///< Number of LOD levels
+        float lodBias = 1.0f;          ///< LOD distance bias
+        bool generateCollider = true;  ///< Generate physics collision
+        bool castShadows = true;       ///< Terrain casts shadows
+        bool receiveShadows = true;    ///< Terrain receives shadows
+    };
+
+    /**
      * @brief Parallax background scene data
      */
     struct ParallaxLayerData

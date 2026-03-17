@@ -294,6 +294,8 @@ namespace SparkEditor
             return "ParticleSystem";
         case ComponentType::ANIMATION:
             return "Animation";
+        case ComponentType::TERRAIN:
+            return "Terrain";
         default:
             return "Custom_" + std::to_string(static_cast<uint32_t>(type));
         }
@@ -321,6 +323,8 @@ namespace SparkEditor
             return ComponentType::PARTICLE_SYSTEM;
         if (s == "Animation")
             return ComponentType::ANIMATION;
+        if (s == "Terrain")
+            return ComponentType::TERRAIN;
         return ComponentType::CUSTOM;
     }
 

@@ -39,6 +39,7 @@ namespace SparkEditor
         PARALLAX_BG = 16,     ///< Parallax scrolling background
         NINE_SLICE = 17,      ///< Nine-slice sprite for UI
         PIXEL_PERFECT = 18,   ///< Pixel-perfect rendering constraint
+        TERRAIN = 19,         ///< Terrain heightmap component
         CUSTOM = 1000         ///< Custom components start at 1000
     };
 

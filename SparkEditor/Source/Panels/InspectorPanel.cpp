@@ -598,6 +598,11 @@ namespace SparkEditor
         {
             RenderAudioSourceComponent();
         }
+
+        if (HasComponent(ComponentType::TERRAIN))
+        {
+            RenderTerrainComponent();
+        }
     }
 
     // ============================================================================
@@ -1155,6 +1160,58 @@ namespace SparkEditor
     }
 
     // ============================================================================
+    // Terrain Component
+    // ============================================================================
+
+    void InspectorPanel::RenderTerrainComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_MOUNTAIN " Terrain");
+
+        if (ImGui::BeginPopupContextItem("##TerrainCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+            {
+                RemoveComponent(ComponentType::TERRAIN);
+            }
+            ImGui::EndPopup();
+        }
+
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::TERRAIN);
+            TerrainSceneData* terrain = comp ? comp->GetData<TerrainSceneData>() : nullptr;
+
+            if (terrain)
+            {
+                ImGui::DragInt("Resolution", &terrain->heightmapResolution, 1.0f, 33, 4097);
+                ImGui::DragFloat("Size", &terrain->terrainSize, 10.0f, 100.0f, 10000.0f, "%.0f m");
+                ImGui::DragFloat("Height Scale", &terrain->heightScale, 0.1f, 0.1f, 100.0f);
+                ImGui::DragFloat("Min Height", &terrain->minHeight, 0.5f, -1000.0f, terrain->maxHeight);
+                ImGui::DragFloat("Max Height", &terrain->maxHeight, 0.5f, terrain->minHeight, 1000.0f);
+
+                ImGui::Separator();
+                ImGui::TextDisabled("LOD");
+                ImGui::DragInt("LOD Levels", &terrain->lodLevels, 0.1f, 1, 8);
+                ImGui::DragFloat("LOD Bias", &terrain->lodBias, 0.1f, 0.1f, 4.0f, "%.1f");
+
+                ImGui::Separator();
+                ImGui::TextDisabled("Physics");
+                ImGui::Checkbox("Generate Collider", &terrain->generateCollider);
+                ImGui::Checkbox("Cast Shadows", &terrain->castShadows);
+                ImGui::Checkbox("Receive Shadows", &terrain->receiveShadows);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
     // Add Component Menu
     // ============================================================================
 
@@ -1292,6 +1349,15 @@ namespace SparkEditor
                 if (ImGui::MenuItem("Collider 2D", nullptr, false, !HasComponent(ComponentType::COLLIDER_2D)))
                 {
                     AddComponent(ComponentType::COLLIDER_2D);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu(ICON_FA_MOUNTAIN " Terrain"))
+            {
+                if (ImGui::MenuItem("Terrain", nullptr, false, !HasComponent(ComponentType::TERRAIN)))
+                {
+                    AddComponent(ComponentType::TERRAIN);
                     m_showAddComponentMenu = false;
                 }
                 ImGui::EndMenu();
