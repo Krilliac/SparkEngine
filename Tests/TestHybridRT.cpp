@@ -32,7 +32,7 @@ TEST(HybridRT_QualityEnum_HasAllValues)
 TEST(HybridRT_RTCapabilities_DefaultDisabled)
 {
     RTCapabilities caps;
-    EXPECT_EQ(caps.bestBackend, RayTracingBackend::Disabled);
+    EXPECT_EQ(static_cast<int>(caps.bestBackend), static_cast<int>(RayTracingBackend::Disabled));
     EXPECT_FALSE(caps.supportsHardwareRT);
     EXPECT_FALSE(caps.supportsInlineRT);
     EXPECT_EQ(caps.maxRecursionDepth, 0u);
@@ -45,7 +45,8 @@ TEST(HybridRT_RTCapabilities_InDeviceCaps)
     // Verify RTCapabilities is accessible as a member
     deviceCaps.rayTracing.bestBackend = RayTracingBackend::Software_SDFGI;
     deviceCaps.rayTracing.supportsHardwareRT = false;
-    EXPECT_EQ(deviceCaps.rayTracing.bestBackend, RayTracingBackend::Software_SDFGI);
+    EXPECT_EQ(static_cast<int>(deviceCaps.rayTracing.bestBackend),
+              static_cast<int>(RayTracingBackend::Software_SDFGI));
     EXPECT_FALSE(deviceCaps.rayTracing.supportsHardwareRT);
 }
 

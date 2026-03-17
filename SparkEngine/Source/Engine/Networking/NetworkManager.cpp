@@ -821,8 +821,8 @@ namespace Spark::Net
                 }
                 else
                 {
-                    SPARK_LOG_WARN(Spark::LogCategory::Network, "Unknown message type {} — dropping",
-                                   static_cast<uint16_t>(msg.type));
+                    SPARK_LOG_WARN(Spark::LogCategory::Network, "Unknown message type %u — dropping",
+                                   static_cast<unsigned>(msg.type));
                 }
                 m_stats.packetsReceived++;
                 toDispatch.pop();

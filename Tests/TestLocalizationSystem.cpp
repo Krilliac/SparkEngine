@@ -76,5 +76,6 @@ TEST(Localization_AvailableLanguages)
     // After fresh state, should have whatever was loaded
     auto langs = loc.GetAvailableLanguages();
     // Languages list should be a vector (may be empty in test)
-    EXPECT_TRUE(langs.size() >= static_cast<size_t>(0));
+    // GetAvailableLanguages should return a valid vector (may be empty in test)
+    (void)langs;
 }

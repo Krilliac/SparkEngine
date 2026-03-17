@@ -26,6 +26,8 @@
 #include "TemporalEffects.h"
 #include "LightManager.h"
 #include "PostProcessingPipeline.h"
+#include "ShadowAtlas.h"
+#include "ScreenSpaceEffects.h"
 using Spark::Graphics::PostProcessingPipeline;
 #ifdef SPARK_HYBRID_RT
 #include "HybridRT/HybridRTManager.h"
@@ -127,6 +129,8 @@ GraphicsEngine::GraphicsEngine()
         m_lightManager = std::make_unique<LightManager>();
         m_postProcessing = std::make_unique<PostProcessingPipeline>();
         m_temporalEffects = std::make_unique<TemporalEffects>();
+        m_shadowAtlas = std::make_unique<Spark::Graphics::ShadowAtlas>();
+        m_screenSpaceEffects = std::make_unique<Spark::Graphics::ScreenSpaceEffects>();
 
         LOG_TO_CONSOLE_IMMEDIATE(L"Advanced systems created successfully", L"INFO");
     }
@@ -360,6 +364,55 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     }
 #endif
 
+    // Initialize post-processing pipeline with D3D11 device
+    if (m_postProcessing)
+    {
+        m_postProcessing->SetDevice(m_device.Get(), m_context.Get());
+        if (m_postProcessing->Initialize(m_windowWidth, m_windowHeight))
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"PostProcessingPipeline initialized successfully", L"SUCCESS");
+        }
+        else
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"PostProcessingPipeline GPU init failed (CPU-only mode)", L"WARNING");
+        }
+    }
+
+    // Initialize temporal effects (TAA, motion blur) with D3D11 device
+    if (m_temporalEffects)
+    {
+        m_temporalEffects->SetDevice(m_device.Get(), m_context.Get());
+        m_temporalEffects->Initialize(m_windowWidth, m_windowHeight);
+        if (m_temporalEffects->InitializeGPU())
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"TemporalEffects initialized successfully", L"SUCCESS");
+        }
+        else
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"TemporalEffects GPU init failed (CPU-only mode)", L"WARNING");
+        }
+    }
+
+    // Initialize shadow atlas for shadow map management
+    if (m_shadowAtlas)
+    {
+        uint32_t shadowAtlasSize = m_settings.shadowMapSize * 2; // 2x shadow map size
+        if (m_shadowAtlas->Initialize(shadowAtlasSize))
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"ShadowAtlas initialized successfully", L"SUCCESS");
+        }
+    }
+
+    // Initialize screen-space effects (SSAO, SSR, contact shadows)
+    if (m_screenSpaceEffects)
+    {
+        if (m_screenSpaceEffects->Initialize(m_windowWidth, m_windowHeight))
+        {
+            m_screenSpaceEffects->SetSSAOEnabled(m_settings.ssao);
+            LOG_TO_CONSOLE_IMMEDIATE(L"ScreenSpaceEffects initialized successfully", L"SUCCESS");
+        }
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine initialization complete - rendering ready.", L"SUCCESS");
 
     // ✅ ADD: Initialize basic shaders for rendering
@@ -446,6 +499,18 @@ void GraphicsEngine::Shutdown()
         LOG_TO_CONSOLE_IMMEDIATE(L"TemporalEffects shutdown complete", L"INFO");
     }
 
+    if (m_shadowAtlas)
+    {
+        m_shadowAtlas->Shutdown();
+        LOG_TO_CONSOLE_IMMEDIATE(L"ShadowAtlas shutdown complete", L"INFO");
+    }
+
+    if (m_screenSpaceEffects)
+    {
+        m_screenSpaceEffects->Shutdown();
+        LOG_TO_CONSOLE_IMMEDIATE(L"ScreenSpaceEffects shutdown complete", L"INFO");
+    }
+
     // Release DirectX resources
     m_hdrSRV.Reset();
     m_hdrRTV.Reset();
@@ -493,6 +558,8 @@ void GraphicsEngine::BeginFrame()
     m_sortedDrawList.clear();
     m_constantBufferRing.BeginFrame(m_context.Get());
     m_gpuTimestampQuery.BeginFrame(m_context.Get());
+    if (m_shadowAtlas)
+        m_shadowAtlas->BeginFrame();
 
     ASSERT(m_context && m_renderTargetView && m_depthStencilView);
 
@@ -542,6 +609,8 @@ void GraphicsEngine::EndFrame()
     m_constantBufferRing.EndFrame();
     m_gpuTimestampQuery.EndFrame(m_context.Get());
     m_renderTargetPool.Tick();
+    if (m_shadowAtlas)
+        m_shadowAtlas->EndFrame();
 
     if (!m_swapChain)
     {
@@ -668,6 +737,16 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
         m_statistics.visibleObjects = static_cast<uint32_t>(visibleObjects.size());
     }
 
+    // Feed temporal effects with frame matrices for TAA jitter and motion vectors
+    if (m_temporalEffects)
+    {
+        XMFLOAT4X4 viewF, projF;
+        XMStoreFloat4x4(&viewF, viewMatrix);
+        XMStoreFloat4x4(&projF, projMatrix);
+        float dt = m_statistics.frameTime / 1000.0f;
+        m_temporalEffects->BeginFrame(viewF, projF, dt);
+    }
+
     // Choose rendering path
     switch (m_currentPipeline)
     {
@@ -686,6 +765,18 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
     default:
         RenderForward(viewMatrix, projMatrix, visibleObjects);
         break;
+    }
+
+    // Apply temporal effects (TAA resolve, motion blur)
+    RenderTemporalEffects();
+
+    // Apply post-processing effects
+    RenderPostProcessing();
+
+    // End temporal frame
+    if (m_temporalEffects)
+    {
+        m_temporalEffects->EndFrame();
     }
 
     // Update final statistics
@@ -3046,6 +3137,14 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
     SetViewport();
     ApplyGraphicsState();
     ApplyAdvancedGraphicsState();
+
+    // Resize post-processing, temporal effects, and screen-space effects
+    if (m_postProcessing)
+        m_postProcessing->Resize(width, height);
+    if (m_temporalEffects)
+        m_temporalEffects->Resize(width, height);
+    if (m_screenSpaceEffects)
+        m_screenSpaceEffects->Resize(width, height);
 }
 
 #else // !SPARK_PLATFORM_WINDOWS
@@ -3066,6 +3165,8 @@ using Spark::Graphics::PostProcessingPipeline;
 #endif
 #include "RenderTarget.h"
 #include "TemporalEffects.h"
+#include "ScreenSpaceEffects.h"
+#include "ShadowAtlas.h"
 #include "../Physics/PhysicsSystem.h"
 #include "../Game/GameObject.h"
 #include "RHI/RHI.h"
@@ -3073,6 +3174,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #include <iostream>
 #include <sstream>
 #include <chrono>
+#include <cmath>
 
 // ---------------------------------------------------------------------------
 // Internal detail: a file-local RHI bridge instance shared by all methods.
@@ -4334,15 +4436,77 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
     {
         // Frustum culling via view-projection matrix
         XMMATRIX viewProj = XMMatrixMultiply(viewMatrix, projMatrix);
+        XMFLOAT4X4 vp;
+        XMStoreFloat4x4(&vp, viewProj);
+
+        // Extract 6 frustum planes from VP matrix (Griggs-Hartmann method)
+        // Each plane: (a, b, c, d) where ax + by + cz + d = 0
+        float planes[6][4];
+        // Left:   row3 + row0
+        planes[0][0] = vp.m[0][3] + vp.m[0][0];
+        planes[0][1] = vp.m[1][3] + vp.m[1][0];
+        planes[0][2] = vp.m[2][3] + vp.m[2][0];
+        planes[0][3] = vp.m[3][3] + vp.m[3][0];
+        // Right:  row3 - row0
+        planes[1][0] = vp.m[0][3] - vp.m[0][0];
+        planes[1][1] = vp.m[1][3] - vp.m[1][0];
+        planes[1][2] = vp.m[2][3] - vp.m[2][0];
+        planes[1][3] = vp.m[3][3] - vp.m[3][0];
+        // Bottom: row3 + row1
+        planes[2][0] = vp.m[0][3] + vp.m[0][1];
+        planes[2][1] = vp.m[1][3] + vp.m[1][1];
+        planes[2][2] = vp.m[2][3] + vp.m[2][1];
+        planes[2][3] = vp.m[3][3] + vp.m[3][1];
+        // Top:    row3 - row1
+        planes[3][0] = vp.m[0][3] - vp.m[0][1];
+        planes[3][1] = vp.m[1][3] - vp.m[1][1];
+        planes[3][2] = vp.m[2][3] - vp.m[2][1];
+        planes[3][3] = vp.m[3][3] - vp.m[3][1];
+        // Near:   row2
+        planes[4][0] = vp.m[0][2];
+        planes[4][1] = vp.m[1][2];
+        planes[4][2] = vp.m[2][2];
+        planes[4][3] = vp.m[3][2];
+        // Far:    row3 - row2
+        planes[5][0] = vp.m[0][3] - vp.m[0][2];
+        planes[5][1] = vp.m[1][3] - vp.m[1][2];
+        planes[5][2] = vp.m[2][3] - vp.m[2][2];
+        planes[5][3] = vp.m[3][3] - vp.m[3][2];
+
+        // Normalize planes
+        for (auto& p : planes)
+        {
+            float len = std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+            if (len > 0.0f)
+            {
+                float inv = 1.0f / len;
+                p[0] *= inv;
+                p[1] *= inv;
+                p[2] *= inv;
+                p[3] *= inv;
+            }
+        }
 
         for (auto* obj : objects)
         {
             if (!obj || !obj->IsActive() || !obj->IsVisible())
                 continue;
 
-            // Simple sphere-based frustum test using object position
-            // Objects that pass are added to the visible list
-            visibleObjects.push_back(obj);
+            // Sphere-based frustum test
+            XMFLOAT3 pos = obj->GetPosition();
+            constexpr float boundingRadius = 5.0f;
+            bool visible = true;
+            for (int i = 0; i < 6; ++i)
+            {
+                float dist = planes[i][0] * pos.x + planes[i][1] * pos.y + planes[i][2] * pos.z + planes[i][3];
+                if (dist < -boundingRadius)
+                {
+                    visible = false;
+                    break;
+                }
+            }
+            if (visible)
+                visibleObjects.push_back(obj);
         }
     }
 
@@ -4402,84 +4566,109 @@ void GraphicsEngine::RenderLightingPass()
 
 void GraphicsEngine::RenderPostProcessing()
 {
-    auto& rhi = GetRHI();
-    if (!rhi.initialized)
-        return;
-
-    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-    if (!cmd)
-        return;
-
     m_postProcessStartTime = std::chrono::high_resolution_clock::now();
-    cmd->BeginEvent("PostProcessing");
 
-    uint32_t passCount = 0;
-
-    // Bloom pass
-    if (m_settings.bloom)
+    // Delegate to the actual PostProcessingPipeline system
+    if (m_postProcessing)
     {
-        cmd->BeginEvent("Bloom");
-        cmd->Draw(3, 0);
-        passCount++;
-        cmd->EndEvent();
+        // Note: Depth SRV for depth-aware effects (DOF, light shafts) is set
+        // via SetDepthSRV() when a depth SRV is available from advanced render targets
+
+        // Calculate delta time from frame timing
+        float deltaTime = m_statistics.frameTime / 1000.0f; // ms -> seconds
+        m_postProcessing->Process(deltaTime);
+        m_postProcessing->Render();
     }
 
-    // SSAO pass
-    if (m_settings.ssao)
+    // Also dispatch through RHI path for cross-platform passes
+    auto& rhi = GetRHI();
+    if (rhi.initialized)
     {
-        cmd->BeginEvent("SSAO");
-        cmd->Draw(3, 0);
-        passCount++;
-        cmd->EndEvent();
-    }
+        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
+        if (cmd)
+        {
+            uint32_t passCount = 0;
+            cmd->BeginEvent("PostProcessing_RHI");
 
-    // Tone mapping (always active when HDR is enabled)
-    if (m_hdrEnabled)
-    {
-        cmd->BeginEvent("ToneMapping");
-        cmd->Draw(3, 0);
-        passCount++;
-        cmd->EndEvent();
+            // Bloom pass (engine-level, not in PostProcessingPipeline)
+            if (m_settings.bloom)
+            {
+                cmd->BeginEvent("Bloom");
+                cmd->Draw(3, 0);
+                passCount++;
+                cmd->EndEvent();
+            }
+
+            // SSAO pass
+            if (m_settings.ssao)
+            {
+                cmd->BeginEvent("SSAO");
+                cmd->Draw(3, 0);
+                passCount++;
+                cmd->EndEvent();
+            }
+
+            // Tone mapping (always active when HDR is enabled)
+            if (m_hdrEnabled)
+            {
+                cmd->BeginEvent("ToneMapping");
+                cmd->Draw(3, 0);
+                passCount++;
+                cmd->EndEvent();
+            }
+
+            m_statistics.postProcessPasses = passCount + m_postProcessing->GetActivePassCount();
+            cmd->EndEvent();
+        }
     }
 
     auto endTime = std::chrono::high_resolution_clock::now();
     m_statistics.postProcessTime = std::chrono::duration<float, std::milli>(endTime - m_postProcessStartTime).count();
-    m_statistics.postProcessPasses = passCount;
-
-    cmd->EndEvent();
 }
 
 void GraphicsEngine::RenderTemporalEffects()
 {
+    // Delegate to the actual TemporalEffects system
+    if (m_temporalEffects)
+    {
+        m_temporalEffects->SetTAAEnabled(m_settings.taa);
+        m_temporalEffects->SetMotionBlurEnabled(m_settings.motionBlur);
+
+        // Note: Depth SRV for temporal reprojection is set via SetDepthSRV()
+        // when a depth SRV is available from advanced render targets
+
+        // Render TAA resolve and motion blur GPU passes
+        m_temporalEffects->Render();
+
+        if (m_settings.taa)
+            m_statistics.postProcessPasses++;
+        if (m_settings.motionBlur)
+            m_statistics.postProcessPasses++;
+    }
+
+    // Also dispatch through RHI path for cross-platform tracking
     auto& rhi = GetRHI();
-    if (!rhi.initialized)
-        return;
-
-    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-    if (!cmd)
-        return;
-
-    cmd->BeginEvent("TemporalEffects");
-
-    // TAA pass
-    if (m_settings.taa)
+    if (rhi.initialized)
     {
-        cmd->BeginEvent("TAA");
-        cmd->Draw(3, 0);
-        m_statistics.postProcessPasses++;
-        cmd->EndEvent();
+        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
+        if (cmd)
+        {
+            cmd->BeginEvent("TemporalEffects_RHI");
+            if (m_settings.taa)
+            {
+                cmd->BeginEvent("TAA");
+                cmd->Draw(3, 0);
+                cmd->EndEvent();
+            }
+            if (m_settings.motionBlur)
+            {
+                cmd->BeginEvent("MotionBlur");
+                cmd->Draw(3, 0);
+                cmd->EndEvent();
+            }
+            cmd->EndEvent();
+        }
     }
-
-    // Motion blur
-    if (m_settings.motionBlur)
-    {
-        cmd->BeginEvent("MotionBlur");
-        cmd->Draw(3, 0);
-        m_statistics.postProcessPasses++;
-        cmd->EndEvent();
-    }
-
-    cmd->EndEvent();
 }
 
 HRESULT GraphicsEngine::InitializeBasicShaders()
