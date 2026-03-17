@@ -189,12 +189,10 @@ namespace Spark::Editor
                 writer.WriteString(entry.typeName);
 
                 // Let the component serializer write its data
-                uint32_t instanceCount = 0;
                 if (entry.serialize)
                 {
-                    instanceCount = entry.serialize(writer, registry);
+                    entry.serialize(writer, registry);
                 }
-                // instanceCount is written inside the serializer
             }
 
             return writer.TakeData();

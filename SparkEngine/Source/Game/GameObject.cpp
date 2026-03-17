@@ -46,7 +46,8 @@ HRESULT GameObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* contex
     m_mesh = std::make_unique<Mesh>();
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, m_mesh);
     HRESULT hr = m_mesh->Initialize(device, context);
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Mesh initialized for GameObject ID=%u HR=0x%08X", m_id, hr);
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Mesh initialized for GameObject ID=%u HR=0x%08lX", m_id,
+                   static_cast<long>(hr));
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Mesh::Initialize failed");
     if (FAILED(hr))
     {
