@@ -105,7 +105,14 @@ namespace Spark
             Geometry,
             Hull,
             Domain,
-            Compute
+            Compute,
+            // Ray tracing stages (DXR / VK_KHR_ray_tracing_pipeline)
+            RayGeneration,
+            ClosestHit,
+            Miss,
+            AnyHit,
+            Intersection,
+            Callable
         };
 
         enum class ShaderLanguage

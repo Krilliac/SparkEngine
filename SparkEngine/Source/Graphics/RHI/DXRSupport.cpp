@@ -2,9 +2,8 @@
  * @file DXRSupport.cpp
  * @brief DirectX Raytracing (DXR) implementation with full D3D12 pipeline
  *
- * Implements ray-traced reflections, shadows, ambient occlusion, and global
- * illumination using the DXR 1.1 API (inline ray tracing via TraceRayInline
- * or DispatchRays with shader tables).
+ * Implements ray-traced reflections, shadows, AO, and GI using DXR 1.1.
+ * Resources are managed via ComPtr — no manual Release() calls.
  */
 
 #include "DXRSupport.h"
@@ -27,48 +26,51 @@ using namespace DirectX;
 namespace Spark::Graphics
 {
 
-    // ============================================================================
-    // DXR HLSL shader file paths (extracted from inline strings to Shaders/HLSL/RayTracing/)
-    // Compiled at runtime via DXC (dxcompiler.dll) with lib_6_5 profile
-    // ============================================================================
-
 #ifdef SPARK_PLATFORM_WINDOWS
 
-    static const char* k_reflectionsShaderPath = "Shaders/HLSL/RayTracing/DXRReflections.hlsl";
-    static const char* k_shadowsShaderPath = "Shaders/HLSL/RayTracing/DXRShadows.hlsl";
-    static const char* k_aoShaderPath = "Shaders/HLSL/RayTracing/DXRAO.hlsl";
-    static const char* k_giShaderPath = "Shaders/HLSL/RayTracing/DXRGI.hlsl";
+    static const char* k_shaderPaths[] = {
+        "Shaders/HLSL/RayTracing/DXRReflections.hlsl",
+        "Shaders/HLSL/RayTracing/DXRShadows.hlsl",
+        "Shaders/HLSL/RayTracing/DXRAO.hlsl",
+        "Shaders/HLSL/RayTracing/DXRGI.hlsl",
+    };
 
-    // ============================================================================
-    // DXR Internal State (D3D12 resources)
-    // ============================================================================
+    // Shader table record alignment required by DXR spec
+    static constexpr UINT k_shaderRecordAlignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+
+    static UINT AlignTo(UINT size, UINT alignment)
+    {
+        return (size + alignment - 1) & ~(alignment - 1);
+    }
 
     struct DXRInternalState
     {
         ComPtr<ID3D12Device5> dxrDevice;
-        ComPtr<ID3D12StateObject> reflectionsPSO;
-        ComPtr<ID3D12StateObject> shadowsPSO;
-        ComPtr<ID3D12StateObject> aoPSO;
-        ComPtr<ID3D12StateObject> giPSO;
+        ComPtr<ID3D12StateObject> psos[4]; // reflections, shadows, AO, GI
         ComPtr<ID3D12RootSignature> globalRootSignature;
-        ComPtr<ID3D12RootSignature> localRootSignature;
         ComPtr<ID3D12CommandAllocator> commandAllocator;
         ComPtr<ID3D12GraphicsCommandList4> commandList;
         ComPtr<ID3D12CommandQueue> commandQueue;
+        ComPtr<ID3D12DescriptorHeap> cbvSrvUavHeap;
 
-        // Shader tables
-        ComPtr<ID3D12Resource> rayGenShaderTable;
-        ComPtr<ID3D12Resource> missShaderTable;
-        ComPtr<ID3D12Resource> hitGroupShaderTable;
+        // Shader tables (per-PSO: rayGen, miss, hitGroup records)
+        UINT shaderRecordSize = 0;
+        ComPtr<ID3D12Resource> rayGenTable;
+        ComPtr<ID3D12Resource> missTable;
+        ComPtr<ID3D12Resource> hitGroupTable;
 
         // Output textures
-        ComPtr<ID3D12Resource> reflectionOutput;
-        ComPtr<ID3D12Resource> shadowOutput;
-        ComPtr<ID3D12Resource> aoOutput;
-        ComPtr<ID3D12Resource> giOutput;
-
+        ComPtr<ID3D12Resource> outputTextures[4];
         uint32_t outputWidth = 0;
         uint32_t outputHeight = 0;
+
+        // Acceleration structure resources (owned by ComPtr)
+        std::vector<ComPtr<ID3D12Resource>> blasResources;
+        ComPtr<ID3D12Resource> tlasResource;
+
+        // Scratch buffer pool — reused across AS builds
+        ComPtr<ID3D12Resource> scratchBuffer;
+        uint64_t scratchBufferSize = 0;
 
         // Timing queries
         ComPtr<ID3D12QueryHeap> timestampQueryHeap;
@@ -78,81 +80,78 @@ namespace Spark::Graphics
 
     static std::unique_ptr<DXRInternalState> s_dxrState;
 
-    // ============================================================================
-    // Helper: Create global root signature for DXR
-    // ============================================================================
+    // Ensure scratch buffer is at least `requiredSize` bytes
+    static void EnsureScratchBuffer(DXRInternalState& state, uint64_t requiredSize)
+    {
+        if (state.scratchBufferSize >= requiredSize)
+            return;
+
+        state.scratchBuffer.Reset();
+        state.scratchBufferSize = std::max(requiredSize, static_cast<uint64_t>(1 << 20)); // min 1MB
+
+        D3D12_HEAP_PROPERTIES heapProps = {};
+        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width = state.scratchBufferSize;
+        desc.Height = 1;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.SampleDesc.Count = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        state.dxrDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON,
+                                                 nullptr, IID_PPV_ARGS(&state.scratchBuffer));
+    }
 
     static bool CreateDXRRootSignature(ID3D12Device5* device, DXRInternalState& state)
     {
-        // Global root signature: TLAS (t0), output UAV (u0), GBuffer SRVs (t1-t3), CBV (b0)
         D3D12_DESCRIPTOR_RANGE1 srvRange = {};
         srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
         srvRange.NumDescriptors = 4;
-        srvRange.BaseShaderRegister = 0;
-        srvRange.RegisterSpace = 0;
         srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
         D3D12_DESCRIPTOR_RANGE1 uavRange = {};
         uavRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
         uavRange.NumDescriptors = 1;
-        uavRange.BaseShaderRegister = 0;
-        uavRange.RegisterSpace = 0;
         uavRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
         D3D12_ROOT_PARAMETER1 rootParams[3] = {};
-
-        // Param 0: SRV table (TLAS + GBuffer)
         rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         rootParams[0].DescriptorTable.NumDescriptorRanges = 1;
         rootParams[0].DescriptorTable.pDescriptorRanges = &srvRange;
         rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-        // Param 1: UAV table (output)
         rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
         rootParams[1].DescriptorTable.pDescriptorRanges = &uavRange;
         rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-        // Param 2: CBV (constants)
         rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         rootParams[2].Descriptor.ShaderRegister = 0;
-        rootParams[2].Descriptor.RegisterSpace = 0;
         rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
         desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
         desc.Desc_1_1.NumParameters = 3;
         desc.Desc_1_1.pParameters = rootParams;
-        desc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
-        ComPtr<ID3DBlob> signature;
-        ComPtr<ID3DBlob> error;
+        ComPtr<ID3DBlob> signature, error;
         HRESULT hr = D3D12SerializeVersionedRootSignature(&desc, &signature, &error);
         if (FAILED(hr))
         {
             if (error)
-                std::cerr << "[DXR] Root signature serialization failed: "
-                          << static_cast<const char*>(error->GetBufferPointer()) << std::endl;
+                std::cerr << "[DXR] Root sig error: " << static_cast<const char*>(error->GetBufferPointer())
+                          << std::endl;
             return false;
         }
 
-        hr = device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
-                                         IID_PPV_ARGS(&state.globalRootSignature));
-        if (FAILED(hr))
-        {
-            std::cerr << "[DXR] Failed to create global root signature" << std::endl;
-            return false;
-        }
-
-        return true;
+        return SUCCEEDED(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
+                                                     IID_PPV_ARGS(&state.globalRootSignature)));
     }
 
-    // ============================================================================
-    // Helper: Build BLAS from geometry
-    // ============================================================================
-
-    static ComPtr<ID3D12Resource> BuildBLASResource(ID3D12Device5* device, ID3D12GraphicsCommandList4* cmdList,
-                                                    const BLASDesc& desc, uint64_t& outSize)
+    static ComPtr<ID3D12Resource> BuildBLASResource(DXRInternalState& state, const BLASDesc& desc, uint64_t& outSize)
     {
         D3D12_RAYTRACING_GEOMETRY_DESC geomDesc = {};
         geomDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -171,67 +170,96 @@ namespace Spark::Graphics
         inputs.Flags = desc.allowUpdate ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE
                                         : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
-        device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild = {};
+        state.dxrDevice->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuild);
+        outSize = prebuild.ResultDataMaxSizeInBytes;
 
-        outSize = prebuildInfo.ResultDataMaxSizeInBytes;
-
-        // Create the BLAS buffer
         D3D12_HEAP_PROPERTIES heapProps = {};
         heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-        D3D12_RESOURCE_DESC bufferDesc = {};
-        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        bufferDesc.Width = prebuildInfo.ResultDataMaxSizeInBytes;
-        bufferDesc.Height = 1;
-        bufferDesc.DepthOrArraySize = 1;
-        bufferDesc.MipLevels = 1;
-        bufferDesc.SampleDesc.Count = 1;
-        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        D3D12_RESOURCE_DESC bufDesc = {};
+        bufDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bufDesc.Width = prebuild.ResultDataMaxSizeInBytes;
+        bufDesc.Height = 1;
+        bufDesc.DepthOrArraySize = 1;
+        bufDesc.MipLevels = 1;
+        bufDesc.SampleDesc.Count = 1;
+        bufDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        bufDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
         ComPtr<ID3D12Resource> blasBuffer;
-        HRESULT hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-                                                     D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nullptr,
-                                                     IID_PPV_ARGS(&blasBuffer));
-        if (FAILED(hr))
+        if (FAILED(state.dxrDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufDesc,
+                                                            D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+                                                            nullptr, IID_PPV_ARGS(&blasBuffer))))
         {
-            std::cerr << "[DXR] Failed to create BLAS buffer for '" << desc.meshName << "'" << std::endl;
+            std::cerr << "[DXR] Failed to create BLAS for '" << desc.meshName << "'" << std::endl;
             return nullptr;
         }
 
-        // Create scratch buffer
-        bufferDesc.Width = prebuildInfo.ScratchDataSizeInBytes;
-        ComPtr<ID3D12Resource> scratchBuffer;
-        hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_COMMON,
-                                             nullptr, IID_PPV_ARGS(&scratchBuffer));
-        if (FAILED(hr))
-        {
-            std::cerr << "[DXR] Failed to create BLAS scratch buffer" << std::endl;
-            return nullptr;
-        }
+        EnsureScratchBuffer(state, prebuild.ScratchDataSizeInBytes);
 
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
         buildDesc.Inputs = inputs;
         buildDesc.DestAccelerationStructureData = blasBuffer->GetGPUVirtualAddress();
-        buildDesc.ScratchAccelerationStructureData = scratchBuffer->GetGPUVirtualAddress();
+        buildDesc.ScratchAccelerationStructureData = state.scratchBuffer->GetGPUVirtualAddress();
 
-        cmdList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
+        state.commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
 
-        // UAV barrier to ensure build is complete
         D3D12_RESOURCE_BARRIER barrier = {};
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
         barrier.UAV.pResource = blasBuffer.Get();
-        cmdList->ResourceBarrier(1, &barrier);
+        state.commandList->ResourceBarrier(1, &barrier);
 
         return blasBuffer;
     }
 
-#endif // SPARK_PLATFORM_WINDOWS
+    // Common dispatch helper shared by all 4 trace methods
+    static void DispatchRT(DXRInternalState& state, uint32_t psoIndex, uint32_t tsBegin)
+    {
+        auto* cmdList = state.commandList.Get();
 
-    // ============================================================================
-    // DXRManager Implementation
-    // ============================================================================
+        if (state.timestampQueryHeap)
+            cmdList->EndQuery(state.timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, tsBegin);
+
+        // Bind descriptor heap, root signature, and PSO
+        ID3D12DescriptorHeap* heaps[] = {state.cbvSrvUavHeap.Get()};
+        if (state.cbvSrvUavHeap)
+            cmdList->SetDescriptorHeaps(1, heaps);
+
+        cmdList->SetComputeRootSignature(state.globalRootSignature.Get());
+        cmdList->SetPipelineState1(state.psos[psoIndex].Get());
+
+        UINT recordSize = AlignTo(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, k_shaderRecordAlignment);
+
+        D3D12_DISPATCH_RAYS_DESC dispatch = {};
+        dispatch.Width = state.outputWidth;
+        dispatch.Height = state.outputHeight;
+        dispatch.Depth = 1;
+
+        if (state.rayGenTable)
+        {
+            dispatch.RayGenerationShaderRecord.StartAddress = state.rayGenTable->GetGPUVirtualAddress();
+            dispatch.RayGenerationShaderRecord.SizeInBytes = recordSize;
+        }
+        if (state.missTable)
+        {
+            dispatch.MissShaderTable.StartAddress = state.missTable->GetGPUVirtualAddress();
+            dispatch.MissShaderTable.SizeInBytes = recordSize;
+            dispatch.MissShaderTable.StrideInBytes = recordSize;
+        }
+        if (state.hitGroupTable)
+        {
+            dispatch.HitGroupTable.StartAddress = state.hitGroupTable->GetGPUVirtualAddress();
+            dispatch.HitGroupTable.SizeInBytes = recordSize;
+            dispatch.HitGroupTable.StrideInBytes = recordSize;
+        }
+
+        cmdList->DispatchRays(&dispatch);
+
+        if (state.timestampQueryHeap)
+            cmdList->EndQuery(state.timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, tsBegin + 1);
+    }
+
+#endif // SPARK_PLATFORM_WINDOWS
 
     DXRManager& DXRManager::GetInstance()
     {
@@ -254,51 +282,40 @@ namespace Spark::Graphics
 #ifdef SPARK_PLATFORM_WINDOWS
         auto* device = static_cast<ID3D12Device*>(d3d12Device);
 
-        // Check for DXR support via ID3D12Device5
         ComPtr<ID3D12Device5> dxrDevice;
-        HRESULT hr = device->QueryInterface(IID_PPV_ARGS(&dxrDevice));
-        if (FAILED(hr))
+        if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dxrDevice))))
         {
-            std::cerr << "[DXR] Device does not support ID3D12Device5 interface" << std::endl;
+            std::cerr << "[DXR] Device does not support ID3D12Device5" << std::endl;
             m_isAvailable = false;
-            m_isInitialized = false;
             return false;
         }
 
-        // Check raytracing tier
         D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = {};
-        hr = dxrDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5));
+        HRESULT hr = dxrDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5));
         if (FAILED(hr) || options5.RaytracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
         {
-            std::cerr << "[DXR] GPU does not support DXR (Raytracing Tier: Not Supported)" << std::endl;
+            std::cerr << "[DXR] GPU does not support DXR" << std::endl;
             m_isAvailable = false;
-            m_isInitialized = false;
             return false;
         }
 
         std::cout << "[DXR] Raytracing Tier " << (options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_0 ? "1.0" : "1.1")
-                  << " detected" << std::endl;
+                  << std::endl;
 
-        // Create internal state
         s_dxrState = std::make_unique<DXRInternalState>();
         s_dxrState->dxrDevice = dxrDevice;
 
-        // Create global root signature
         if (!CreateDXRRootSignature(dxrDevice.Get(), *s_dxrState))
         {
-            std::cerr << "[DXR] Failed to create root signatures" << std::endl;
             s_dxrState.reset();
             m_isAvailable = false;
-            m_isInitialized = false;
             return false;
         }
 
-        // Create command allocator and command list for AS builds
         hr = dxrDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                                                IID_PPV_ARGS(&s_dxrState->commandAllocator));
         if (FAILED(hr))
         {
-            std::cerr << "[DXR] Failed to create command allocator" << std::endl;
             s_dxrState.reset();
             return false;
         }
@@ -307,33 +324,160 @@ namespace Spark::Graphics
         hr = dxrDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, s_dxrState->commandAllocator.Get(),
                                           nullptr, IID_PPV_ARGS(&baseCmdList));
         if (SUCCEEDED(hr))
-        {
             baseCmdList.As(&s_dxrState->commandList);
-        }
 
-        // Query GPU timestamp frequency for timing
         D3D12_COMMAND_QUEUE_DESC queueDesc = {};
         queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         hr = dxrDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&s_dxrState->commandQueue));
         if (SUCCEEDED(hr))
-        {
             s_dxrState->commandQueue->GetTimestampFrequency(&s_dxrState->gpuTimestampFrequency);
-        }
 
-        // Create timestamp query heap for profiling
+        // CBV/SRV/UAV descriptor heap for RT bindings
+        D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+        heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        heapDesc.NumDescriptors = 16;
+        heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        dxrDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&s_dxrState->cbvSrvUavHeap));
+
         D3D12_QUERY_HEAP_DESC queryHeapDesc = {};
         queryHeapDesc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-        queryHeapDesc.Count = 8; // 4 features * 2 (start/end)
+        queryHeapDesc.Count = 8;
         dxrDevice->CreateQueryHeap(&queryHeapDesc, IID_PPV_ARGS(&s_dxrState->timestampQueryHeap));
 
         m_isAvailable = true;
         m_isInitialized = true;
+
+        BuildRTPSOs();
+        BuildShaderTables();
+
         std::cout << "[DXR] Initialized successfully" << std::endl;
         return true;
-
 #else
         m_isAvailable = false;
         m_isInitialized = false;
+        return false;
+#endif
+    }
+
+    bool DXRManager::BuildRTPSOs()
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        if (!s_dxrState || !s_dxrState->dxrDevice || !s_dxrState->globalRootSignature)
+            return false;
+
+        // Build one RTPSO per effect: each has RayGen + Miss + ClosestHit in a HitGroup
+        const wchar_t* rayGenExports[] = {L"ReflectionRayGen", L"ShadowRayGen", L"AORayGen", L"GIRayGen"};
+        const wchar_t* missExports[] = {L"ReflectionMiss", L"ShadowMiss", L"AOMiss", L"GIMiss"};
+        const wchar_t* hitExports[] = {L"ReflectionClosestHit", L"ShadowClosestHit", L"AOClosestHit", L"GIClosestHit"};
+        const wchar_t* hitGroupNames[] = {L"ReflectionHitGroup", L"ShadowHitGroup", L"AOHitGroup", L"GIHitGroup"};
+        const UINT maxRecursion[] = {2, 1, 1, 3};
+
+        for (int i = 0; i < 4; i++)
+        {
+            // 5 subobjects: DXIL library, hit group, root sig association, shader config, pipeline config
+            D3D12_STATE_SUBOBJECT subobjects[5] = {};
+
+            D3D12_DXIL_LIBRARY_DESC libDesc = {};
+            // Shader bytecode would be loaded from k_shaderPaths[i] via DXC at runtime
+            // For now, set up the PSO structure; actual bytecode binding happens in shader loading
+            subobjects[0].Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
+            subobjects[0].pDesc = &libDesc;
+
+            D3D12_HIT_GROUP_DESC hitGroupDesc = {};
+            hitGroupDesc.HitGroupExport = hitGroupNames[i];
+            hitGroupDesc.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+            hitGroupDesc.ClosestHitShaderImport = hitExports[i];
+            subobjects[1].Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
+            subobjects[1].pDesc = &hitGroupDesc;
+
+            D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {};
+            shaderConfig.MaxPayloadSizeInBytes = 32;
+            shaderConfig.MaxAttributeSizeInBytes = 8; // float2 barycentrics
+            subobjects[2].Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
+            subobjects[2].pDesc = &shaderConfig;
+
+            D3D12_GLOBAL_ROOT_SIGNATURE globalRS = {};
+            globalRS.pGlobalRootSignature = s_dxrState->globalRootSignature.Get();
+            subobjects[3].Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;
+            subobjects[3].pDesc = &globalRS;
+
+            D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfig = {};
+            pipelineConfig.MaxTraceRecursionDepth = maxRecursion[i];
+            subobjects[4].Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
+            subobjects[4].pDesc = &pipelineConfig;
+
+            D3D12_STATE_OBJECT_DESC stateObjectDesc = {};
+            stateObjectDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+            stateObjectDesc.NumSubobjects = 5;
+            stateObjectDesc.pSubobjects = subobjects;
+
+            HRESULT hr = s_dxrState->dxrDevice->CreateStateObject(&stateObjectDesc, IID_PPV_ARGS(&s_dxrState->psos[i]));
+            if (FAILED(hr))
+                std::cerr << "[DXR] Failed to create RTPSO " << i << " (hr=0x" << std::hex << hr << std::dec << ")"
+                          << std::endl;
+        }
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    bool DXRManager::BuildShaderTables()
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        if (!s_dxrState || !s_dxrState->psos[0])
+            return false;
+
+        UINT recordSize = AlignTo(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, k_shaderRecordAlignment);
+        s_dxrState->shaderRecordSize = recordSize;
+
+        auto createTable = [&](ComPtr<ID3D12Resource>& table) -> bool
+        {
+            D3D12_HEAP_PROPERTIES heapProps = {};
+            heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+            D3D12_RESOURCE_DESC desc = {};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            desc.Width = recordSize;
+            desc.Height = 1;
+            desc.DepthOrArraySize = 1;
+            desc.MipLevels = 1;
+            desc.SampleDesc.Count = 1;
+            desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+            return SUCCEEDED(s_dxrState->dxrDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+                                                                            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                                            IID_PPV_ARGS(&table)));
+        };
+
+        bool ok = createTable(s_dxrState->rayGenTable) && createTable(s_dxrState->missTable) &&
+                  createTable(s_dxrState->hitGroupTable);
+
+        // Populate tables with shader identifiers from PSO 0 (reflections as default)
+        if (ok && s_dxrState->psos[0])
+        {
+            ComPtr<ID3D12StateObjectProperties> props;
+            if (SUCCEEDED(s_dxrState->psos[0].As(&props)))
+            {
+                auto writeRecord = [&](ComPtr<ID3D12Resource>& table, const wchar_t* exportName)
+                {
+                    void* id = props->GetShaderIdentifier(exportName);
+                    if (!id)
+                        return;
+                    void* mapped = nullptr;
+                    if (SUCCEEDED(table->Map(0, nullptr, &mapped)))
+                    {
+                        memcpy(mapped, id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+                        table->Unmap(0, nullptr);
+                    }
+                };
+                writeRecord(s_dxrState->rayGenTable, L"ReflectionRayGen");
+                writeRecord(s_dxrState->missTable, L"ReflectionMiss");
+                writeRecord(s_dxrState->hitGroupTable, L"ReflectionHitGroup");
+            }
+        }
+
+        return ok;
+#else
         return false;
 #endif
     }
@@ -345,32 +489,28 @@ namespace Spark::Graphics
 #ifdef SPARK_PLATFORM_WINDOWS
         if (s_dxrState)
         {
-            // Wait for GPU to finish before releasing
-            if (s_dxrState->commandQueue)
+            if (s_dxrState->commandQueue && s_dxrState->dxrDevice)
             {
                 ComPtr<ID3D12Fence> fence;
-                if (s_dxrState->dxrDevice)
+                if (SUCCEEDED(s_dxrState->dxrDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))))
                 {
-                    HRESULT hr = s_dxrState->dxrDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
-                    if (SUCCEEDED(hr))
+                    s_dxrState->commandQueue->Signal(fence.Get(), 1);
+                    HANDLE event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+                    if (event)
                     {
-                        s_dxrState->commandQueue->Signal(fence.Get(), 1);
-                        HANDLE event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-                        if (event)
-                        {
-                            fence->SetEventOnCompletion(1, event);
-                            WaitForSingleObject(event, 5000);
-                            CloseHandle(event);
-                        }
+                        fence->SetEventOnCompletion(1, event);
+                        WaitForSingleObject(event, 5000);
+                        CloseHandle(event);
                     }
                 }
             }
-            s_dxrState.reset();
+            s_dxrState.reset(); // All ComPtrs release automatically
         }
 #endif
 
         m_blasList.clear();
-        m_tlasResource = nullptr;
+        m_blasLookup.clear();
+        m_tlasInternalIndex = UINT32_MAX;
         m_tlasSize = 0;
         m_tlasInstanceCount = 0;
         m_isInitialized = false;
@@ -378,6 +518,14 @@ namespace Spark::Graphics
 
     uint32_t DXRManager::CreateBLAS(const BLASDesc& desc)
     {
+        // Dedup: reuse existing BLAS for same mesh
+        if (!desc.meshName.empty())
+        {
+            auto it = m_blasLookup.find(desc.meshName);
+            if (it != m_blasLookup.end())
+                return it->second;
+        }
+
         BLASData data;
         data.desc = desc;
 
@@ -385,9 +533,12 @@ namespace Spark::Graphics
         if (m_isInitialized && s_dxrState && s_dxrState->commandList)
         {
             uint64_t blasSize = 0;
-            auto blasBuffer =
-                BuildBLASResource(s_dxrState->dxrDevice.Get(), s_dxrState->commandList.Get(), desc, blasSize);
-            data.resource = blasBuffer.Detach(); // Transfer ownership
+            auto blasBuffer = BuildBLASResource(*s_dxrState, desc, blasSize);
+            if (blasBuffer)
+            {
+                data.internalIndex = static_cast<uint32_t>(s_dxrState->blasResources.size());
+                s_dxrState->blasResources.push_back(std::move(blasBuffer));
+            }
             data.size = blasSize;
         }
         else
@@ -397,8 +548,13 @@ namespace Spark::Graphics
                         static_cast<uint64_t>(desc.indexCount) * sizeof(uint32_t);
         }
 
+        auto index = static_cast<uint32_t>(m_blasList.size());
         m_blasList.push_back(data);
-        return static_cast<uint32_t>(m_blasList.size() - 1);
+
+        if (!desc.meshName.empty())
+            m_blasLookup[desc.meshName] = index;
+
+        return index;
     }
 
     void DXRManager::UpdateBLAS(uint32_t blasIndex)
@@ -411,10 +567,10 @@ namespace Spark::Graphics
             return;
 
         auto& blasData = m_blasList[blasIndex];
-        if (!blasData.resource || !blasData.desc.allowUpdate)
+        if (blasData.internalIndex == UINT32_MAX || !blasData.desc.allowUpdate)
             return;
 
-        auto* blasBuffer = static_cast<ID3D12Resource*>(blasData.resource);
+        auto& blasBuffer = s_dxrState->blasResources[blasData.internalIndex];
 
         D3D12_RAYTRACING_GEOMETRY_DESC geomDesc = {};
         geomDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -434,38 +590,21 @@ namespace Spark::Graphics
         inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE |
                        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
 
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
-        s_dxrState->dxrDevice->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
-
-        // Create scratch buffer for update
-        D3D12_HEAP_PROPERTIES heapProps = {};
-        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-        D3D12_RESOURCE_DESC bufferDesc = {};
-        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        bufferDesc.Width = prebuildInfo.UpdateScratchDataSizeInBytes;
-        bufferDesc.Height = 1;
-        bufferDesc.DepthOrArraySize = 1;
-        bufferDesc.MipLevels = 1;
-        bufferDesc.SampleDesc.Count = 1;
-        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-        ComPtr<ID3D12Resource> scratchBuffer;
-        s_dxrState->dxrDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-                                                       D3D12_RESOURCE_STATE_COMMON, nullptr,
-                                                       IID_PPV_ARGS(&scratchBuffer));
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild = {};
+        s_dxrState->dxrDevice->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuild);
+        EnsureScratchBuffer(*s_dxrState, prebuild.UpdateScratchDataSizeInBytes);
 
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
         buildDesc.Inputs = inputs;
         buildDesc.DestAccelerationStructureData = blasBuffer->GetGPUVirtualAddress();
         buildDesc.SourceAccelerationStructureData = blasBuffer->GetGPUVirtualAddress();
-        buildDesc.ScratchAccelerationStructureData = scratchBuffer->GetGPUVirtualAddress();
+        buildDesc.ScratchAccelerationStructureData = s_dxrState->scratchBuffer->GetGPUVirtualAddress();
 
         s_dxrState->commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
 
         D3D12_RESOURCE_BARRIER barrier = {};
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        barrier.UAV.pResource = blasBuffer;
+        barrier.UAV.pResource = blasBuffer.Get();
         s_dxrState->commandList->ResourceBarrier(1, &barrier);
 #endif
     }
@@ -476,14 +615,17 @@ namespace Spark::Graphics
             return;
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        if (m_blasList[blasIndex].resource)
+        auto& data = m_blasList[blasIndex];
+        if (data.internalIndex != UINT32_MAX && s_dxrState && data.internalIndex < s_dxrState->blasResources.size())
         {
-            auto* resource = static_cast<ID3D12Resource*>(m_blasList[blasIndex].resource);
-            resource->Release();
+            s_dxrState->blasResources[data.internalIndex].Reset();
         }
 #endif
 
-        m_blasList[blasIndex].resource = nullptr;
+        if (!m_blasList[blasIndex].desc.meshName.empty())
+            m_blasLookup.erase(m_blasList[blasIndex].desc.meshName);
+
+        m_blasList[blasIndex].internalIndex = UINT32_MAX;
         m_blasList[blasIndex].size = 0;
     }
 
@@ -495,51 +637,46 @@ namespace Spark::Graphics
         if (!m_isInitialized || !s_dxrState || instances.empty())
             return;
 
-        // Create instance descriptor buffer
         std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs(instances.size());
         for (size_t i = 0; i < instances.size(); i++)
         {
             auto& dst = instanceDescs[i];
             const auto& src = instances[i];
 
-            // Copy 3x4 transform from XMFLOAT4X4
             for (int row = 0; row < 3; row++)
-            {
                 for (int col = 0; col < 4; col++)
-                {
                     dst.Transform[row][col] = src.transform.m[row][col];
-                }
-            }
 
             dst.InstanceID = src.instanceID;
             dst.InstanceMask = src.instanceMask;
             dst.InstanceContributionToHitGroupIndex = src.hitGroupIndex;
             dst.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
 
-            // Set BLAS address
-            if (src.blasIndex < m_blasList.size() && m_blasList[src.blasIndex].resource)
+            if (src.blasIndex < m_blasList.size())
             {
-                auto* blasBuffer = static_cast<ID3D12Resource*>(m_blasList[src.blasIndex].resource);
-                dst.AccelerationStructure = blasBuffer->GetGPUVirtualAddress();
+                uint32_t intIdx = m_blasList[src.blasIndex].internalIndex;
+                if (intIdx != UINT32_MAX && intIdx < s_dxrState->blasResources.size() &&
+                    s_dxrState->blasResources[intIdx])
+                {
+                    dst.AccelerationStructure = s_dxrState->blasResources[intIdx]->GetGPUVirtualAddress();
+                }
             }
         }
 
-        // Upload instance descs
-        size_t instanceBufferSize = instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC);
-        D3D12_HEAP_PROPERTIES uploadHeapProps = {};
-        uploadHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-        D3D12_RESOURCE_DESC bufferDesc = {};
-        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        bufferDesc.Width = instanceBufferSize;
-        bufferDesc.Height = 1;
-        bufferDesc.DepthOrArraySize = 1;
-        bufferDesc.MipLevels = 1;
-        bufferDesc.SampleDesc.Count = 1;
-        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        auto instanceBufferSize = instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC);
+        D3D12_HEAP_PROPERTIES uploadHeap = {};
+        uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC bufDesc = {};
+        bufDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bufDesc.Width = instanceBufferSize;
+        bufDesc.Height = 1;
+        bufDesc.DepthOrArraySize = 1;
+        bufDesc.MipLevels = 1;
+        bufDesc.SampleDesc.Count = 1;
+        bufDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
         ComPtr<ID3D12Resource> instanceBuffer;
-        s_dxrState->dxrDevice->CreateCommittedResource(&uploadHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+        s_dxrState->dxrDevice->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &bufDesc,
                                                        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                                                        IID_PPV_ARGS(&instanceBuffer));
         void* mapped = nullptr;
@@ -547,7 +684,6 @@ namespace Spark::Graphics
         memcpy(mapped, instanceDescs.data(), instanceBufferSize);
         instanceBuffer->Unmap(0, nullptr);
 
-        // Get prebuild info for TLAS
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
         inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
         inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
@@ -555,218 +691,85 @@ namespace Spark::Graphics
         inputs.InstanceDescs = instanceBuffer->GetGPUVirtualAddress();
         inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
-        s_dxrState->dxrDevice->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild = {};
+        s_dxrState->dxrDevice->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuild);
 
-        // Release old TLAS
-        if (m_tlasResource)
-        {
-            static_cast<ID3D12Resource*>(m_tlasResource)->Release();
-            m_tlasResource = nullptr;
-        }
+        // Release old TLAS via ComPtr reset
+        if (m_tlasInternalIndex != UINT32_MAX)
+            s_dxrState->tlasResource.Reset();
 
-        // Create TLAS buffer
-        D3D12_HEAP_PROPERTIES defaultHeapProps = {};
-        defaultHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-        bufferDesc.Width = prebuildInfo.ResultDataMaxSizeInBytes;
-        bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        D3D12_HEAP_PROPERTIES defaultHeap = {};
+        defaultHeap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        bufDesc.Width = prebuild.ResultDataMaxSizeInBytes;
+        bufDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-        ComPtr<ID3D12Resource> tlasBuffer;
-        s_dxrState->dxrDevice->CreateCommittedResource(&defaultHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+        s_dxrState->dxrDevice->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &bufDesc,
                                                        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nullptr,
-                                                       IID_PPV_ARGS(&tlasBuffer));
+                                                       IID_PPV_ARGS(&s_dxrState->tlasResource));
 
-        // Create scratch buffer
-        bufferDesc.Width = prebuildInfo.ScratchDataSizeInBytes;
-        ComPtr<ID3D12Resource> scratchBuffer;
-        s_dxrState->dxrDevice->CreateCommittedResource(&defaultHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-                                                       D3D12_RESOURCE_STATE_COMMON, nullptr,
-                                                       IID_PPV_ARGS(&scratchBuffer));
+        EnsureScratchBuffer(*s_dxrState, prebuild.ScratchDataSizeInBytes);
 
-        // Build TLAS
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
         buildDesc.Inputs = inputs;
-        buildDesc.DestAccelerationStructureData = tlasBuffer->GetGPUVirtualAddress();
-        buildDesc.ScratchAccelerationStructureData = scratchBuffer->GetGPUVirtualAddress();
+        buildDesc.DestAccelerationStructureData = s_dxrState->tlasResource->GetGPUVirtualAddress();
+        buildDesc.ScratchAccelerationStructureData = s_dxrState->scratchBuffer->GetGPUVirtualAddress();
 
         s_dxrState->commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
 
         D3D12_RESOURCE_BARRIER barrier = {};
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        barrier.UAV.pResource = tlasBuffer.Get();
+        barrier.UAV.pResource = s_dxrState->tlasResource.Get();
         s_dxrState->commandList->ResourceBarrier(1, &barrier);
 
-        m_tlasResource = tlasBuffer.Detach();
-        m_tlasSize = prebuildInfo.ResultDataMaxSizeInBytes;
+        m_tlasInternalIndex = 0;
+        m_tlasSize = prebuild.ResultDataMaxSizeInBytes;
 
         std::cout << "[DXR] Built TLAS with " << instances.size() << " instances (" << (m_tlasSize / 1024) << " KB)"
                   << std::endl;
 #endif
     }
 
-    void DXRManager::TraceReflections(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos)
+    void DXRManager::TraceReflections(const XMMATRIX& /*viewProj*/, const XMFLOAT3& /*cameraPos*/)
     {
         if (!m_isInitialized || !HasFeature(m_settings.enabledFeatures, RTFeature::Reflections))
             return;
-
 #ifdef SPARK_PLATFORM_WINDOWS
-        if (!s_dxrState || !s_dxrState->reflectionsPSO || !m_tlasResource)
+        if (!s_dxrState || !s_dxrState->psos[0] || !s_dxrState->tlasResource)
             return;
-
-        auto* cmdList = s_dxrState->commandList.Get();
-        if (!cmdList)
-            return;
-
-        // Emit timestamp begin
-        if (s_dxrState->timestampQueryHeap)
-        {
-            cmdList->EndQuery(s_dxrState->timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0);
-        }
-
-        // Set root signature and descriptor heaps
-        cmdList->SetComputeRootSignature(s_dxrState->globalRootSignature.Get());
-
-        // Dispatch rays
-        D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
-        dispatchDesc.Width = s_dxrState->outputWidth;
-        dispatchDesc.Height = s_dxrState->outputHeight;
-        dispatchDesc.Depth = 1;
-
-        if (s_dxrState->rayGenShaderTable)
-        {
-            dispatchDesc.RayGenerationShaderRecord.StartAddress = s_dxrState->rayGenShaderTable->GetGPUVirtualAddress();
-            dispatchDesc.RayGenerationShaderRecord.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-        }
-
-        if (s_dxrState->missShaderTable)
-        {
-            dispatchDesc.MissShaderTable.StartAddress = s_dxrState->missShaderTable->GetGPUVirtualAddress();
-            dispatchDesc.MissShaderTable.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-            dispatchDesc.MissShaderTable.StrideInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-        }
-
-        if (s_dxrState->hitGroupShaderTable)
-        {
-            dispatchDesc.HitGroupTable.StartAddress = s_dxrState->hitGroupShaderTable->GetGPUVirtualAddress();
-            dispatchDesc.HitGroupTable.SizeInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-            dispatchDesc.HitGroupTable.StrideInBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-        }
-
-        cmdList->SetPipelineState1(s_dxrState->reflectionsPSO.Get());
-        cmdList->DispatchRays(&dispatchDesc);
-
-        // Emit timestamp end
-        if (s_dxrState->timestampQueryHeap)
-        {
-            cmdList->EndQuery(s_dxrState->timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 1);
-        }
-
-        m_stats.rtReflectionsTimeMs = 0.0f; // Updated when readback is resolved
+        DispatchRT(*s_dxrState, 0, 0);
 #endif
     }
 
-    void DXRManager::TraceShadows(const XMFLOAT3& lightDirection)
+    void DXRManager::TraceShadows(const XMFLOAT3& /*lightDirection*/)
     {
         if (!m_isInitialized || !HasFeature(m_settings.enabledFeatures, RTFeature::Shadows))
             return;
-
 #ifdef SPARK_PLATFORM_WINDOWS
-        if (!s_dxrState || !s_dxrState->shadowsPSO || !m_tlasResource)
+        if (!s_dxrState || !s_dxrState->psos[1] || !s_dxrState->tlasResource)
             return;
-
-        auto* cmdList = s_dxrState->commandList.Get();
-        if (!cmdList)
-            return;
-
-        if (s_dxrState->timestampQueryHeap)
-        {
-            cmdList->EndQuery(s_dxrState->timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 2);
-        }
-
-        cmdList->SetComputeRootSignature(s_dxrState->globalRootSignature.Get());
-
-        D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
-        dispatchDesc.Width = s_dxrState->outputWidth;
-        dispatchDesc.Height = s_dxrState->outputHeight;
-        dispatchDesc.Depth = 1;
-
-        cmdList->SetPipelineState1(s_dxrState->shadowsPSO.Get());
-        cmdList->DispatchRays(&dispatchDesc);
-
-        if (s_dxrState->timestampQueryHeap)
-        {
-            cmdList->EndQuery(s_dxrState->timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 3);
-        }
+        DispatchRT(*s_dxrState, 1, 2);
 #endif
     }
 
-    void DXRManager::TraceAmbientOcclusion(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos)
+    void DXRManager::TraceAmbientOcclusion(const XMMATRIX& /*viewProj*/, const XMFLOAT3& /*cameraPos*/)
     {
         if (!m_isInitialized || !HasFeature(m_settings.enabledFeatures, RTFeature::AmbientOcclusion))
             return;
-
 #ifdef SPARK_PLATFORM_WINDOWS
-        if (!s_dxrState || !s_dxrState->aoPSO || !m_tlasResource)
+        if (!s_dxrState || !s_dxrState->psos[2] || !s_dxrState->tlasResource)
             return;
-
-        auto* cmdList = s_dxrState->commandList.Get();
-        if (!cmdList)
-            return;
-
-        if (s_dxrState->timestampQueryHeap)
-        {
-            cmdList->EndQuery(s_dxrState->timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 4);
-        }
-
-        cmdList->SetComputeRootSignature(s_dxrState->globalRootSignature.Get());
-
-        D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
-        dispatchDesc.Width = s_dxrState->outputWidth;
-        dispatchDesc.Height = s_dxrState->outputHeight;
-        dispatchDesc.Depth = 1;
-
-        cmdList->SetPipelineState1(s_dxrState->aoPSO.Get());
-        cmdList->DispatchRays(&dispatchDesc);
-
-        if (s_dxrState->timestampQueryHeap)
-        {
-            cmdList->EndQuery(s_dxrState->timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 5);
-        }
+        DispatchRT(*s_dxrState, 2, 4);
 #endif
     }
 
-    void DXRManager::TraceGlobalIllumination(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos)
+    void DXRManager::TraceGlobalIllumination(const XMMATRIX& /*viewProj*/, const XMFLOAT3& /*cameraPos*/)
     {
         if (!m_isInitialized || !HasFeature(m_settings.enabledFeatures, RTFeature::GlobalIllumination))
             return;
-
 #ifdef SPARK_PLATFORM_WINDOWS
-        if (!s_dxrState || !s_dxrState->giPSO || !m_tlasResource)
+        if (!s_dxrState || !s_dxrState->psos[3] || !s_dxrState->tlasResource)
             return;
-
-        auto* cmdList = s_dxrState->commandList.Get();
-        if (!cmdList)
-            return;
-
-        if (s_dxrState->timestampQueryHeap)
-        {
-            cmdList->EndQuery(s_dxrState->timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 6);
-        }
-
-        cmdList->SetComputeRootSignature(s_dxrState->globalRootSignature.Get());
-
-        D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
-        dispatchDesc.Width = s_dxrState->outputWidth;
-        dispatchDesc.Height = s_dxrState->outputHeight;
-        dispatchDesc.Depth = 1;
-
-        cmdList->SetPipelineState1(s_dxrState->giPSO.Get());
-        cmdList->DispatchRays(&dispatchDesc);
-
-        if (s_dxrState->timestampQueryHeap)
-        {
-            cmdList->EndQuery(s_dxrState->timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 7);
-        }
+        DispatchRT(*s_dxrState, 3, 6);
 #endif
     }
 
@@ -779,13 +782,11 @@ namespace Spark::Graphics
     {
         m_stats.blasCount = static_cast<uint32_t>(m_blasList.size());
         m_stats.tlasInstanceCount = m_tlasInstanceCount;
-        m_stats.accelerationStructureMemory = 0;
+        m_stats.accelerationStructureMemory = m_tlasSize;
         for (const auto& blas : m_blasList)
             m_stats.accelerationStructureMemory += blas.size;
-        m_stats.accelerationStructureMemory += m_tlasSize;
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        // Resolve GPU timestamps if available
         if (s_dxrState && s_dxrState->timestampReadbackBuffer && s_dxrState->gpuTimestampFrequency > 0)
         {
             uint64_t* timestamps = nullptr;
@@ -798,40 +799,31 @@ namespace Spark::Graphics
                 m_stats.rtShadowsTimeMs = static_cast<float>((timestamps[3] - timestamps[2]) * ticksToMs);
                 m_stats.rtAOTimeMs = static_cast<float>((timestamps[5] - timestamps[4]) * ticksToMs);
                 m_stats.rtGITimeMs = static_cast<float>((timestamps[7] - timestamps[6]) * ticksToMs);
-
                 D3D12_RANGE writeRange = {0, 0};
                 s_dxrState->timestampReadbackBuffer->Unmap(0, &writeRange);
             }
         }
 #endif
-
         return m_stats;
     }
 
     std::string DXRManager::Console_GetStatus() const
     {
         std::ostringstream ss;
-        ss << "=== DXR Status ===\n";
-        ss << "Available: " << (m_isAvailable ? "Yes" : "No") << "\n";
-        ss << "Initialized: " << (m_isInitialized ? "Yes" : "No") << "\n";
+        ss << "=== DXR Status ===\n"
+           << "Available: " << (m_isAvailable ? "Yes" : "No") << "\n"
+           << "Initialized: " << (m_isInitialized ? "Yes" : "No") << "\n";
         if (m_isInitialized)
         {
             auto stats = GetStats();
-            ss << "BLAS Count: " << stats.blasCount << "\n";
-            ss << "TLAS Instances: " << stats.tlasInstanceCount << "\n";
-            ss << "AS Memory: " << (stats.accelerationStructureMemory / 1024) << " KB\n";
-            ss << "Timing (ms):\n";
-            ss << "  Reflections: " << stats.rtReflectionsTimeMs << "\n";
-            ss << "  Shadows: " << stats.rtShadowsTimeMs << "\n";
-            ss << "  AO: " << stats.rtAOTimeMs << "\n";
-            ss << "  GI: " << stats.rtGITimeMs << "\n";
-            ss << "Features:\n";
-            ss << "  Reflections: " << (HasFeature(m_settings.enabledFeatures, RTFeature::Reflections) ? "ON" : "OFF")
-               << "\n";
-            ss << "  Shadows: " << (HasFeature(m_settings.enabledFeatures, RTFeature::Shadows) ? "ON" : "OFF") << "\n";
-            ss << "  AO: " << (HasFeature(m_settings.enabledFeatures, RTFeature::AmbientOcclusion) ? "ON" : "OFF")
-               << "\n";
-            ss << "  GI: " << (HasFeature(m_settings.enabledFeatures, RTFeature::GlobalIllumination) ? "ON" : "OFF")
+            ss << "BLAS Count: " << stats.blasCount << "\n"
+               << "TLAS Instances: " << stats.tlasInstanceCount << "\n"
+               << "AS Memory: " << (stats.accelerationStructureMemory / 1024) << " KB\n"
+               << "Reflections: " << (HasFeature(m_settings.enabledFeatures, RTFeature::Reflections) ? "ON" : "OFF")
+               << "\n"
+               << "Shadows: " << (HasFeature(m_settings.enabledFeatures, RTFeature::Shadows) ? "ON" : "OFF") << "\n"
+               << "AO: " << (HasFeature(m_settings.enabledFeatures, RTFeature::AmbientOcclusion) ? "ON" : "OFF") << "\n"
+               << "GI: " << (HasFeature(m_settings.enabledFeatures, RTFeature::GlobalIllumination) ? "ON" : "OFF")
                << "\n";
         }
         return ss.str();
@@ -862,37 +854,32 @@ namespace Spark::Graphics
     {
         if (quality == "low")
         {
-            m_settings.reflections.samplesPerPixel = 1;
-            m_settings.reflections.maxBounces = 1;
-            m_settings.shadows.samplesPerPixel = 1;
-            m_settings.ambientOcclusion.samplesPerPixel = 1;
+            m_settings.reflections = {true, 1, 0.5f, 1, 100.0f, true};
+            m_settings.shadows = {true, 1, 0.05f, true};
+            m_settings.ambientOcclusion = {true, 3.0f, 1, 1.5f, true};
             m_settings.renderScale = 0.5f;
         }
         else if (quality == "medium")
         {
-            m_settings.reflections.samplesPerPixel = 1;
-            m_settings.reflections.maxBounces = 1;
-            m_settings.shadows.samplesPerPixel = 2;
-            m_settings.ambientOcclusion.samplesPerPixel = 2;
+            m_settings.reflections = {true, 1, 0.5f, 1, 100.0f, true};
+            m_settings.shadows = {true, 2, 0.05f, true};
+            m_settings.ambientOcclusion = {true, 3.0f, 2, 1.5f, true};
             m_settings.renderScale = 0.75f;
         }
         else if (quality == "high")
         {
-            m_settings.reflections.samplesPerPixel = 2;
-            m_settings.reflections.maxBounces = 2;
-            m_settings.shadows.samplesPerPixel = 4;
-            m_settings.ambientOcclusion.samplesPerPixel = 4;
+            m_settings.reflections = {true, 2, 0.5f, 2, 100.0f, true};
+            m_settings.shadows = {true, 4, 0.05f, true};
+            m_settings.ambientOcclusion = {true, 3.0f, 4, 1.5f, true};
             m_settings.globalIllumination.samplesPerPixel = 1;
             m_settings.renderScale = 1.0f;
         }
         else if (quality == "ultra")
         {
-            m_settings.reflections.samplesPerPixel = 4;
-            m_settings.reflections.maxBounces = 3;
-            m_settings.shadows.samplesPerPixel = 8;
-            m_settings.ambientOcclusion.samplesPerPixel = 8;
-            m_settings.globalIllumination.maxBounces = 3;
-            m_settings.globalIllumination.samplesPerPixel = 2;
+            m_settings.reflections = {true, 3, 0.5f, 4, 100.0f, true};
+            m_settings.shadows = {true, 8, 0.05f, true};
+            m_settings.ambientOcclusion = {true, 3.0f, 8, 1.5f, true};
+            m_settings.globalIllumination = {true, 3, 2, 50.0f, true, {2.0f, 2.0f, 2.0f}};
             m_settings.renderScale = 1.0f;
         }
     }

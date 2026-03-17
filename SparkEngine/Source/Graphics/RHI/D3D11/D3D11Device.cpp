@@ -394,6 +394,8 @@ namespace Spark
                 case RHIShaderStage::Compute:
                     m_context->CSSetConstantBuffers(slot, 1, &buf);
                     break;
+                default:
+                    break;
                 }
             }
 
@@ -425,6 +427,8 @@ namespace Spark
                     break;
                 case RHIShaderStage::Compute:
                     m_context->CSSetShaderResources(slot, 1, &srv);
+                    break;
+                default:
                     break;
                 }
             }
@@ -737,6 +741,8 @@ namespace Spark
                     case RHIShaderStage::Compute:
                         target = "cs_5_0";
                         break;
+                    default:
+                        return nullptr; // RT stages not supported in D3D11
                     }
 
                     UINT flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
@@ -818,6 +824,8 @@ namespace Spark
                         cs.As(&shaderObj);
                     break;
                 }
+                default:
+                    return nullptr; // RT stages not supported in D3D11
                 }
 
                 if (FAILED(hr) || !shaderObj)

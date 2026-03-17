@@ -207,17 +207,23 @@ namespace Spark::Graphics
         bool m_isInitialized = false;
         DXRSettings m_settings;
 
-        // Acceleration structures (opaque — actual D3D12 resources in implementation)
+        // Acceleration structures — opaque handles. The D3D12 ComPtr resources
+        // are stored inside DXRInternalState (DXRSupport.cpp) and indexed by these.
         struct BLASData
         {
             BLASDesc desc;
-            void* resource = nullptr;
+            uint32_t internalIndex = UINT32_MAX; ///< Index into DXRInternalState::blasResources
             uint64_t size = 0;
         };
         std::vector<BLASData> m_blasList;
-        void* m_tlasResource = nullptr;
+        std::unordered_map<std::string, uint32_t> m_blasLookup; ///< meshName → blasIndex dedup
+
+        uint32_t m_tlasInternalIndex = UINT32_MAX;
         uint64_t m_tlasSize = 0;
         uint32_t m_tlasInstanceCount = 0;
+
+        bool BuildRTPSOs();       ///< Create ray tracing pipeline state objects
+        bool BuildShaderTables(); ///< Build shader binding tables with proper alignment
 
         mutable DXRStats m_stats{};
     };

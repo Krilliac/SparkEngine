@@ -894,14 +894,43 @@ namespace Spark
                 vulkan12Features.timelineSemaphore = VK_TRUE;
                 vulkan12Features.bufferDeviceAddress = VK_TRUE;
 
+                // Build extension list — add RT extensions if available
+                std::vector<const char*> enabledExtensions(m_deviceExtensions.begin(), m_deviceExtensions.end());
+                {
+                    uint32_t extCount = 0;
+                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
+                    std::vector<VkExtensionProperties> availableExts(extCount);
+                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, availableExts.data());
+
+                    auto hasExt = [&](const char* name)
+                    {
+                        for (const auto& e : availableExts)
+                            if (std::strcmp(e.extensionName, name) == 0)
+                                return true;
+                        return false;
+                    };
+
+                    const char* rtExts[] = {
+                        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+                        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+                        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+                        VK_KHR_RAY_QUERY_EXTENSION_NAME,
+                    };
+                    for (const char* ext : rtExts)
+                    {
+                        if (hasExt(ext))
+                            enabledExtensions.push_back(ext);
+                    }
+                }
+
                 VkDeviceCreateInfo createInfo = {};
                 createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
                 createInfo.pNext = &vulkan12Features;
                 createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
                 createInfo.pQueueCreateInfos = queueCreateInfos.data();
                 createInfo.pEnabledFeatures = &deviceFeatures;
-                createInfo.enabledExtensionCount = static_cast<uint32_t>(m_deviceExtensions.size());
-                createInfo.ppEnabledExtensionNames = m_deviceExtensions.data();
+                createInfo.enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size());
+                createInfo.ppEnabledExtensionNames = enabledExtensions.data();
 
                 VkResult result = vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device);
                 if (result != VK_SUCCESS)
@@ -1041,12 +1070,20 @@ namespace Spark
 
                     if (fullHWRT)
                     {
-                        // Query ray tracing pipeline properties for max recursion depth
-                        // via VkPhysicalDeviceRayTracingPipelinePropertiesKHR (Vulkan 1.1+ pNext chain)
+                        // Query actual max recursion depth via pNext chain
+                        VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtPipelineProps = {};
+                        rtPipelineProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+                        VkPhysicalDeviceProperties2 props2 = {};
+                        props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+                        props2.pNext = &rtPipelineProps;
+                        vkGetPhysicalDeviceProperties2(m_physicalDevice, &props2);
+
                         m_capabilities.rayTracing.bestBackend = RayTracingBackend::HardwareVKRT;
                         m_capabilities.rayTracing.supportsHardwareRT = true;
                         m_capabilities.rayTracing.supportsInlineRT = hasRayQuery;
-                        m_capabilities.rayTracing.maxRecursionDepth = 31; // Spec minimum is 1, most GPUs support 31
+                        m_capabilities.rayTracing.maxRecursionDepth = rtPipelineProps.maxRayRecursionDepth > 0
+                                                                          ? rtPipelineProps.maxRayRecursionDepth
+                                                                          : 1; // Spec minimum
                         m_capabilities.rayTracing.supportsVRS = hasVRS;
                         m_capabilities.rayTracing.raytracingTier = hasRayQuery ? 2 : 1;
                     }

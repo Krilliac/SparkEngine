@@ -1035,6 +1035,14 @@ namespace Spark
                     case RHIShaderStage::Compute:
                         target = "cs_5_1";
                         break;
+                    case RHIShaderStage::RayGeneration:
+                    case RHIShaderStage::ClosestHit:
+                    case RHIShaderStage::Miss:
+                    case RHIShaderStage::AnyHit:
+                    case RHIShaderStage::Intersection:
+                    case RHIShaderStage::Callable:
+                        target = "lib_6_5"; // DXR shader library target
+                        break;
                     }
 
                     UINT compileFlags = D3DCOMPILE_OPTIMIZATION_LEVEL3;
