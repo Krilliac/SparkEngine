@@ -17,6 +17,7 @@
 
 #pragma once
 #include "../../Core/Platform.h"
+#include "RHITypes.h" // RayTracingBackend for GetBackend()
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -152,6 +153,12 @@ namespace Spark::Graphics
 
         /// Check if DXR is available on this system
         bool IsAvailable() const { return m_isAvailable; }
+
+        /// @brief Get the ray tracing backend type for HybridRTManager coordination
+        Spark::RHI::RayTracingBackend GetBackend() const
+        {
+            return m_isAvailable ? Spark::RHI::RayTracingBackend::HardwareDXR : Spark::RHI::RayTracingBackend::Disabled;
+        }
 
         /// Initialize DXR (requires D3D12 device)
         bool Initialize(void* d3d12Device);

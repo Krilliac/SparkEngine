@@ -518,6 +518,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `CollisionSystem` | `SparkEngine/Source/Physics/CollisionSystem.h` |
 | `DecalSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `DecalSystem` | `SparkEngine/Source/Graphics/DecalSystem.h` |
+| `DestructionSystem` | `SparkEngine/Source/Engine/Destruction/DestructionSystem.h` |
 | `DialogueSystem` | `SparkEngine/Source/Engine/Dialogue/DialogueSystem.h` |
 | `FogSystem` | `SparkEngine/Source/Graphics/FogSystem.h` |
 | `ISystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
@@ -525,6 +526,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `LightChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
 | `LightingSystem` | `SparkEngine/Source/Graphics/LightingSystem.h` |
+| `LocalizationSystem` | `SparkEngine/Source/Engine/Localization/LocalizationSystem.h` |
 | `MaterialChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
 | `MaterialSystem` | `SparkEngine/Source/Graphics/MaterialSystem.h` |
 | `ModSystem` | `SparkEngine/Source/Engine/Modding/ModSystem.h` |
@@ -535,6 +537,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `PhysicsSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `PhysicsSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
 | `PhysicsUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `ProbeSystem` | `SparkEngine/Source/Graphics/HybridRT/ProbeSystem.h` |
 | `ProjectileSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `RagdollSystem` | `SparkEngine/Source/Engine/Animation/RagdollSystem.h` |
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |

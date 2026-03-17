@@ -567,6 +567,16 @@ namespace Spark
                 m_capabilities.maxAnisotropy = 16.0f;
                 m_capabilities.apiVersion = "DirectX 11.1";
 
+                // DX11 supports compute shaders (CS 5.0) for SDFGI software RT fallback
+                // No hardware RT on DX11 — requires DX12 for DXR
+                m_capabilities.rayTracing.bestBackend = m_capabilities.computeShaderSupport
+                                                            ? RayTracingBackend::Software_SDFGI
+                                                            : RayTracingBackend::Disabled;
+                m_capabilities.rayTracing.supportsHardwareRT = false;
+                m_capabilities.rayTracing.supportsInlineRT = false;
+                m_capabilities.rayTracing.maxRecursionDepth = 0;
+                m_capabilities.rayTracing.supportsVRS = false;
+
                 // Create immediate command list wrapper
                 m_immediateCommandList = std::make_unique<D3D11CommandList>(m_immediateContext.Get(), true);
 

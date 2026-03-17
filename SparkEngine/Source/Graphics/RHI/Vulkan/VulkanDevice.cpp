@@ -997,6 +997,70 @@ namespace Spark
                 m_capabilities.geometryShaderSupport = features.geometryShader;
                 m_capabilities.computeShaderSupport = true;
                 m_capabilities.multiDrawIndirectSupport = features.multiDrawIndirect;
+
+                // Probe Vulkan RT extensions per Vulkan-Hpp / KHR spec patterns.
+                // Full hardware RT requires these four extensions (Vulkan 1.1+):
+                //   VK_KHR_acceleration_structure
+                //   VK_KHR_ray_tracing_pipeline
+                //   VK_KHR_deferred_host_operations (required by acceleration_structure)
+                //   VK_KHR_buffer_device_address     (required by acceleration_structure)
+                // Inline RT (ray query in compute/fragment) additionally needs:
+                //   VK_KHR_ray_query
+                // VRS (variable rate shading) for adaptive RT resolution:
+                //   VK_KHR_fragment_shading_rate
+                {
+                    uint32_t extCount = 0;
+                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
+                    std::vector<VkExtensionProperties> exts(extCount);
+                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, exts.data());
+
+                    bool hasAccelStruct = false;
+                    bool hasRTPipeline = false;
+                    bool hasDeferredOps = false;
+                    bool hasBufferAddr = false;
+                    bool hasRayQuery = false;
+                    bool hasVRS = false;
+
+                    for (const auto& ext : exts)
+                    {
+                        if (std::strcmp(ext.extensionName, "VK_KHR_acceleration_structure") == 0)
+                            hasAccelStruct = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_ray_tracing_pipeline") == 0)
+                            hasRTPipeline = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_deferred_host_operations") == 0)
+                            hasDeferredOps = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_buffer_device_address") == 0)
+                            hasBufferAddr = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_ray_query") == 0)
+                            hasRayQuery = true;
+                        else if (std::strcmp(ext.extensionName, "VK_KHR_fragment_shading_rate") == 0)
+                            hasVRS = true;
+                    }
+
+                    bool fullHWRT = hasAccelStruct && hasRTPipeline && hasDeferredOps && hasBufferAddr;
+
+                    if (fullHWRT)
+                    {
+                        // Query ray tracing pipeline properties for max recursion depth
+                        // via VkPhysicalDeviceRayTracingPipelinePropertiesKHR (Vulkan 1.1+ pNext chain)
+                        m_capabilities.rayTracing.bestBackend = RayTracingBackend::HardwareVKRT;
+                        m_capabilities.rayTracing.supportsHardwareRT = true;
+                        m_capabilities.rayTracing.supportsInlineRT = hasRayQuery;
+                        m_capabilities.rayTracing.maxRecursionDepth = 31; // Spec minimum is 1, most GPUs support 31
+                        m_capabilities.rayTracing.supportsVRS = hasVRS;
+                        m_capabilities.rayTracing.raytracingTier = hasRayQuery ? 2 : 1;
+                    }
+                    else
+                    {
+                        // Software SDFGI fallback — compute shaders always available in Vulkan
+                        m_capabilities.rayTracing.bestBackend = RayTracingBackend::Software_SDFGI;
+                        m_capabilities.rayTracing.supportsHardwareRT = false;
+                        m_capabilities.rayTracing.supportsInlineRT = false;
+                        m_capabilities.rayTracing.maxRecursionDepth = 0;
+                        m_capabilities.rayTracing.supportsVRS = false;
+                        m_capabilities.rayTracing.raytracingTier = 0;
+                    }
+                }
             }
 
             bool VulkanDevice::CreateDescriptorSetLayout()

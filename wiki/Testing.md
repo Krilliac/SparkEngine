@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*75 test files, 977+ test cases*
+*78 test files, 1008+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -459,6 +459,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestDebugTools` | 31 |
 | `TestDedicatedServer` | 27 |
 | `TestDeltaSmoother` | 10 |
+| `TestDestructionSystem` | 5 |
 | `TestDialogueSystem` | 4 |
 | `TestECSIntegration` | 9 |
 | `TestECSWorld` | 11 |
@@ -473,12 +474,14 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestFrustumCulling` | 11 |
 | `TestGameMode` | 5 |
 | `TestHash` | 18 |
+| `TestHybridRT` | 20 |
 | `TestInputBindings` | 5 |
 | `TestInputSystem` | 11 |
 | `TestInventorySystem` | 11 |
 | `TestLightManager` | 13 |
 | `TestLoadingScreen` | 4 |
 | `TestLocalFileCache` | 15 |
+| `TestLocalizationSystem` | 6 |
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestNavMesh` | 11 |

@@ -27,6 +27,9 @@
 #include "LightManager.h"
 #include "PostProcessingPipeline.h"
 using Spark::Graphics::PostProcessingPipeline;
+#ifdef SPARK_HYBRID_RT
+#include "HybridRT/HybridRTManager.h"
+#endif
 #include "Shader.h"
 #include "RenderTarget.h"
 #include "../Physics/PhysicsSystem.h"
@@ -323,6 +326,20 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_gpuDebugMarkers.Initialize(m_context.Get());
     m_gpuTimestampQuery.Initialize(m_device.Get());
 
+    // Initialize hybrid ray tracing system (SDFGI software fallback or hardware DXR)
+#ifdef SPARK_HYBRID_RT
+    m_hybridRT = std::make_unique<Spark::Graphics::HybridRTManager>();
+    if (!m_hybridRT->Initialize(m_rhiBridge.GetDevice(), m_windowWidth, m_windowHeight))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"HybridRT: Falling back to screen-space only", L"WARNING");
+        m_hybridRT.reset();
+    }
+    else
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"HybridRT initialized successfully", L"SUCCESS");
+    }
+#endif
+
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine initialization complete - rendering ready.", L"SUCCESS");
 
     // ✅ ADD: Initialize basic shaders for rendering
@@ -372,6 +389,15 @@ void GraphicsEngine::Shutdown()
 
     // PhysicsSystem lifecycle is now managed by SparkEngine.cpp / EngineContext
     m_physicsSystem = nullptr;
+
+    // Shutdown hybrid ray tracing
+#ifdef SPARK_HYBRID_RT
+    if (m_hybridRT)
+    {
+        m_hybridRT->Shutdown();
+        m_hybridRT.reset();
+    }
+#endif
 
     // Shutdown renderer integration systems
     m_pipelineStateCache.Shutdown();
@@ -712,6 +738,21 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
 
     // Phase 2: Lighting pass
     LightingPass(viewMatrix, projMatrix);
+
+    // Phase 2.5: Hybrid ray tracing (SDFGI or DXR) — after lighting, before transparents
+#ifdef SPARK_HYBRID_RT
+    if (m_hybridRT)
+    {
+        auto* cmd = m_rhiBridge.GetCommandList();
+        DirectX::XMFLOAT3 camPos = {m_cameraPosition.x, m_cameraPosition.y, m_cameraPosition.z};
+        DirectX::XMFLOAT3 lightDir = {0.0f, -1.0f, 0.5f}; // Primary directional light
+        Spark::Graphics::SSRSettings ssrDefaults;         // Screen-space coordination
+        m_hybridRT->Execute(cmd, viewMatrix, projMatrix, camPos, lightDir, nullptr, nullptr,
+                            nullptr,                   // GBuffer textures — wired when GBuffer is exposed
+                            nullptr, nullptr, nullptr, // SS textures + lighting output
+                            ssrDefaults);
+    }
+#endif
 
     // Phase 3: Forward rendering for transparent objects
     uint32_t transparentDrawCalls = 0;
@@ -2935,6 +2976,9 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
 #include "LightManager.h"
 #include "PostProcessingPipeline.h"
 using Spark::Graphics::PostProcessingPipeline;
+#ifdef SPARK_HYBRID_RT
+#include "HybridRT/HybridRTManager.h"
+#endif
 #include "RenderTarget.h"
 #include "TemporalEffects.h"
 #include "../Physics/PhysicsSystem.h"

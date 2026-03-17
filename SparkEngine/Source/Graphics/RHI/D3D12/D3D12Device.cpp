@@ -801,6 +801,28 @@ namespace Spark
                     {
                         m_dxrSupported = (options5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED);
                         m_capabilities.rayTracingSupport = m_dxrSupported;
+
+                        // Populate detailed RT capabilities for HybridRTManager
+                        // Per DirectX-Graphics-Samples patterns: check tier for feature level
+                        m_capabilities.rayTracing.supportsHardwareRT = m_dxrSupported;
+                        m_capabilities.rayTracing.raytracingTier = static_cast<uint32_t>(options5.RaytracingTier);
+                        // Tier 1.1 enables inline RT (RayQuery in any shader stage),
+                        // GPU-driven DispatchRays, and AddToStateObject for incremental PSO builds
+                        m_capabilities.rayTracing.supportsInlineRT =
+                            (options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1);
+                        m_capabilities.rayTracing.maxRecursionDepth =
+                            m_dxrSupported ? 31 : 0; // DXR spec max recursion is 31
+                        m_capabilities.rayTracing.bestBackend =
+                            m_dxrSupported ? RayTracingBackend::HardwareDXR : RayTracingBackend::Software_SDFGI;
+
+                        // Check VRS support (D3D12_OPTIONS6) for adaptive RT resolution
+                        D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = {};
+                        if (SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &options6,
+                                                                    sizeof(options6))))
+                        {
+                            m_capabilities.rayTracing.supportsVRS =
+                                (options6.VariableShadingRateTier != D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED);
+                        }
                     }
                 }
                 if (!m_dxrSupported)
