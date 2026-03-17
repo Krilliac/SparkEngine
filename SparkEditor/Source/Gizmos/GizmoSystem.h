@@ -442,6 +442,10 @@ namespace SparkEditor
             float padding[3];
         };
 
+        // Cached matrices for hit testing (set during HandleMouseInput)
+        XMMATRIX m_cachedView = XMMatrixIdentity();
+        XMMATRIX m_cachedProj = XMMatrixIdentity();
+
         // Colors
         static constexpr XMFLOAT4 COLOR_X_AXIS = {1.0f, 0.3f, 0.3f, 1.0f};      ///< X-axis color (red)
         static constexpr XMFLOAT4 COLOR_Y_AXIS = {0.3f, 1.0f, 0.3f, 1.0f};      ///< Y-axis color (green)

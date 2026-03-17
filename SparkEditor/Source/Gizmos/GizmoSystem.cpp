@@ -203,6 +203,10 @@ namespace SparkEditor
 
         Ray ray = Ray::ScreenToWorldRay(mouseX, mouseY, viewMatrix, projMatrix, viewport);
 
+        // Cache matrices for hit testing
+        m_cachedView = viewMatrix;
+        m_cachedProj = projMatrix;
+
         XMFLOAT3 center = CalculateGizmoCenter(selectedObjects);
         Transform gizmoTransform;
         gizmoTransform.position = center;
@@ -531,45 +535,142 @@ namespace SparkEditor
 
     GizmoAxis GizmoSystem::TestTranslationGizmoHit(const Ray& /*ray*/, const Transform& transform)
     {
-        // Perform hit testing in screen space using the current ImGui mouse position
         ImVec2 mouse = ImGui::GetIO().MousePos;
         XMFLOAT4 vp = {0.0f, 0.0f, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y};
 
-        // We need view/proj to project -- not available directly here.
-        // Use a simple screen-space heuristic: test distance from mouse to
-        // each axis line drawn from the screen-space centre.
-        // Since the render methods use the same WorldToScreen projection,
-        // we approximate by storing the last-rendered centre. For simplicity
-        // in this stub we use the ImGui display centre as a proxy -- in production
-        // this would use cached screen positions.
+        XMFLOAT2 center = WorldToScreen(transform.position, m_cachedView, m_cachedProj, vp);
+        float size = CalculateAdaptiveSize(transform.position, m_cachedView) * GIZMO_AXIS_LENGTH;
 
-        // Approximate: treat transform.position as already projected in a reasonable way
-        // For a proper implementation the viewMatrix/projMatrix would need to be cached
-        // or passed. Here we return NONE and rely on the HandleMouseInput path which
-        // uses ray-based testing.
+        // Project each axis endpoint and test distance from mouse to the line
+        struct AxisTest
+        {
+            GizmoAxis axis;
+            XMFLOAT3 endWorld;
+        };
+        AxisTest axes[] = {
+            {GizmoAxis::X, {transform.position.x + m_gizmoSize, transform.position.y, transform.position.z}},
+            {GizmoAxis::Y, {transform.position.x, transform.position.y + m_gizmoSize, transform.position.z}},
+            {GizmoAxis::Z, {transform.position.x, transform.position.y, transform.position.z + m_gizmoSize}},
+        };
 
-        (void)transform;
-        (void)mouse;
-        (void)vp;
+        GizmoAxis closest = GizmoAxis::NONE;
+        float closestDist = GIZMO_HIT_THRESHOLD;
 
-        // Simple heuristic: check distance from mouse to the three axis directions
-        // using the gizmo centre projected to screen.
-        // Since we do not have the matrices here, we return NONE. The actual hit
-        // testing happens in HandleMouseInput via the ray parameter.
-        return GizmoAxis::NONE;
+        for (const auto& ax : axes)
+        {
+            XMFLOAT2 end = WorldToScreen(ax.endWorld, m_cachedView, m_cachedProj, vp);
+            // Normalize to fixed pixel length
+            float dx = end.x - center.x;
+            float dy = end.y - center.y;
+            float len = std::sqrt(dx * dx + dy * dy);
+            if (len > 1e-4f)
+            {
+                end.x = center.x + (dx / len) * size;
+                end.y = center.y + (dy / len) * size;
+            }
+            float dist =
+                PointToLineDistance2D(ImVec2(mouse.x, mouse.y), ImVec2(center.x, center.y), ImVec2(end.x, end.y));
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = ax.axis;
+            }
+        }
+        return closest;
     }
 
-    GizmoAxis GizmoSystem::TestRotationGizmoHit(const Ray& /*ray*/, const Transform& /*transform*/)
+    GizmoAxis GizmoSystem::TestRotationGizmoHit(const Ray& /*ray*/, const Transform& transform)
     {
-        // Screen-space ring distance testing would go here.
-        // Returns NONE as a baseline; HandleMouseInput drives interaction.
-        return GizmoAxis::NONE;
+        ImVec2 mouse = ImGui::GetIO().MousePos;
+        XMFLOAT4 vp = {0.0f, 0.0f, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y};
+
+        XMFLOAT2 center = WorldToScreen(transform.position, m_cachedView, m_cachedProj, vp);
+        float adaptiveSize = CalculateAdaptiveSize(transform.position, m_cachedView);
+        float radius = adaptiveSize * GIZMO_RING_RADIUS;
+
+        GizmoAxis closest = GizmoAxis::NONE;
+        float closestDist = GIZMO_HIT_THRESHOLD;
+
+        // X-axis ring (squished horizontally — 0.3x width, full height)
+        {
+            float dx = (mouse.x - center.x) / 0.3f;
+            float dy = mouse.y - center.y;
+            float dist = std::abs(std::sqrt(dx * dx + dy * dy) - radius);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = GizmoAxis::X;
+            }
+        }
+
+        // Y-axis ring (full width, squished vertically — 0.3x height)
+        {
+            float dx = mouse.x - center.x;
+            float dy = (mouse.y - center.y) / 0.3f;
+            float dist = std::abs(std::sqrt(dx * dx + dy * dy) - radius);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = GizmoAxis::Y;
+            }
+        }
+
+        // Z-axis ring (full circle)
+        {
+            float dist = PointToCircleDistance2D(ImVec2(mouse.x, mouse.y), ImVec2(center.x, center.y), radius);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = GizmoAxis::Z;
+            }
+        }
+        return closest;
     }
 
-    GizmoAxis GizmoSystem::TestScaleGizmoHit(const Ray& /*ray*/, const Transform& /*transform*/)
+    GizmoAxis GizmoSystem::TestScaleGizmoHit(const Ray& /*ray*/, const Transform& transform)
     {
-        // Screen-space line distance testing analogous to translation.
-        return GizmoAxis::NONE;
+        // Scale gizmo uses the same line-based axes as translation
+        // Reuse the same screen-space line distance approach
+        ImVec2 mouse = ImGui::GetIO().MousePos;
+        XMFLOAT4 vp = {0.0f, 0.0f, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y};
+
+        XMFLOAT2 center = WorldToScreen(transform.position, m_cachedView, m_cachedProj, vp);
+        float size = CalculateAdaptiveSize(transform.position, m_cachedView) * GIZMO_AXIS_LENGTH;
+
+        struct AxisTest
+        {
+            GizmoAxis axis;
+            XMFLOAT3 endWorld;
+        };
+        AxisTest axes[] = {
+            {GizmoAxis::X, {transform.position.x + m_gizmoSize, transform.position.y, transform.position.z}},
+            {GizmoAxis::Y, {transform.position.x, transform.position.y + m_gizmoSize, transform.position.z}},
+            {GizmoAxis::Z, {transform.position.x, transform.position.y, transform.position.z + m_gizmoSize}},
+        };
+
+        GizmoAxis closest = GizmoAxis::NONE;
+        float closestDist = GIZMO_HIT_THRESHOLD;
+
+        for (const auto& ax : axes)
+        {
+            XMFLOAT2 end = WorldToScreen(ax.endWorld, m_cachedView, m_cachedProj, vp);
+            float dx = end.x - center.x;
+            float dy = end.y - center.y;
+            float len = std::sqrt(dx * dx + dy * dy);
+            if (len > 1e-4f)
+            {
+                end.x = center.x + (dx / len) * size;
+                end.y = center.y + (dy / len) * size;
+            }
+            float dist =
+                PointToLineDistance2D(ImVec2(mouse.x, mouse.y), ImVec2(center.x, center.y), ImVec2(end.x, end.y));
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = ax.axis;
+            }
+        }
+        return closest;
     }
 
     // ========================================================================

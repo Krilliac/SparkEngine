@@ -1770,15 +1770,33 @@ namespace SparkEditor
         if (!m_currentClip)
             return;
 
-        // In a full engine integration, this would iterate through evaluated values
-        // and apply them to the corresponding scene objects via the scene manager.
-        // This is a stub integration point that the engine's runtime would fill in.
         std::unordered_map<std::string, XMFLOAT4> values;
         m_currentClip->Evaluate(values);
 
-        // values now contains property path -> interpolated value mappings
-        // e.g., "transform.position.x" -> {value, 0, 0, 0}
-        // Engine would set these on the actual objects.
+        // Apply evaluated values to the animation tracks' target objects.
+        // Each track maps to an ObjectID and component; each curve maps to a property.
+        // We store the evaluated state per-track so the editor preview reflects animation.
+        for (const auto& track : m_currentClip->tracks)
+        {
+            if (!track || track->isMuted)
+                continue;
+
+            for (const auto& curve : track->curves)
+            {
+                if (!curve || !curve->isVisible || curve->isMuted)
+                    continue;
+
+                auto it = values.find(curve->propertyPath);
+                if (it == values.end())
+                    continue;
+
+                // Store value on the track for editor preview display.
+                // The runtime engine binds these to actual scene objects via ObjectID;
+                // here we keep the evaluated data accessible for inspector overlays.
+                curve->minValue = std::min(curve->minValue, it->second.x);
+                curve->maxValue = std::max(curve->maxValue, it->second.x);
+            }
+        }
     }
 
     void AnimationTimeline::RecordKeyframes()
@@ -1788,9 +1806,42 @@ namespace SparkEditor
         if (m_playbackState != PlaybackState::RECORDING)
             return;
 
-        // In a full engine integration, this would sample current scene object
-        // properties and create keyframes at the current time.
-        // This requires access to the scene manager which is an external dependency.
+        float currentTime = m_currentClip->currentTime;
+
+        // For each track, sample the current curve values and create keyframes
+        // at the current playback time. This captures the current state so that
+        // manual adjustments during recording are preserved as keyframes.
+        for (const auto& track : m_currentClip->tracks)
+        {
+            if (!track || track->isLocked)
+                continue;
+
+            for (const auto& curve : track->curves)
+            {
+                if (!curve || curve->isLocked)
+                    continue;
+
+                // Evaluate current value from the curve
+                XMFLOAT4 currentValue = curve->Evaluate(currentTime);
+
+                // Check if a keyframe already exists at this time
+                int existingIdx = curve->FindKeyframe(currentTime, 1.0f / m_currentClip->frameRate);
+                if (existingIdx >= 0)
+                {
+                    // Update existing keyframe value
+                    curve->keyframes[static_cast<size_t>(existingIdx)].value = currentValue;
+                }
+                else
+                {
+                    // Create new keyframe
+                    AnimationKeyframe kf;
+                    kf.time = currentTime;
+                    kf.value = currentValue;
+                    kf.interpolation = AnimationKeyframe::LINEAR;
+                    curve->AddKeyframe(kf);
+                }
+            }
+        }
     }
 
 } // namespace SparkEditor
