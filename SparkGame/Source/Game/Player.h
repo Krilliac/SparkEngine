@@ -66,6 +66,8 @@ namespace Spark
 
 class SPARK_GAME_API Player : public GameObject
 {
+    using GameObject::Initialize; // Bring base 2-arg overload into scope
+
   public:
     /**
      * @brief Default constructor

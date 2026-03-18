@@ -137,7 +137,7 @@ void MathUtils::InitializeRandom()
 float MathUtils::RandomFloat(float min, float max)
 {
     std::wcout << L"[OPERATION] MathUtils::RandomFloat called. min=" << min << L" max=" << max << std::endl;
-    float result = min + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (max - min)));
+    float result = min + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX) / (max - min));
     std::wcout << L"[INFO] MathUtils::RandomFloat result=" << result << std::endl;
     return result;
 }

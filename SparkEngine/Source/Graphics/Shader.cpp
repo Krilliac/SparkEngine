@@ -1313,6 +1313,7 @@ bool Shader::CompileWithRHI(const std::string& sourceFile, ShaderType type, int 
 #include <sys/stat.h>
 
 // Console logging integration (Linux version)
+#undef LOG_TO_CONSOLE_IMMEDIATE
 #define LOG_TO_CONSOLE_IMMEDIATE(wmsg, wtype)                                                                          \
     do                                                                                                                 \
     {                                                                                                                  \

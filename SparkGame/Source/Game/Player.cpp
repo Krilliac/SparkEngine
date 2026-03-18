@@ -23,6 +23,9 @@
 using namespace DirectX;
 
 // **FIXED: Rate-limited logging for Player to prevent console spam**
+#undef LOG_TO_CONSOLE_RATE_LIMITED
+#undef LOG_TO_CONSOLE
+#undef LOG_TO_CONSOLE_IMMEDIATE
 #define LOG_TO_CONSOLE_RATE_LIMITED(msg, type)                                                                         \
     do                                                                                                                 \
     {                                                                                                                  \
