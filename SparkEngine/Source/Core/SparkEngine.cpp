@@ -201,10 +201,19 @@ static void InitGameplaySystems()
 
 static void UpdateGameplaySystems(float dt)
 {
-    // Get world from context — may be null during startup/shutdown
     auto* ctx = EngineContext::Get();
     if (!ctx)
         return;
+
+    // Update gameplay subsystems that don't require the ECS world
+    if (auto* weather = ctx->GetSystem<Spark::WeatherSystem>())
+        weather->Update(dt);
+    if (auto* dialogue = ctx->GetSystem<Spark::DialogueSystem>())
+        dialogue->Update(dt);
+    if (auto* ui = ctx->GetSystem<Spark::UI::UISystem>())
+        ui->Update(dt);
+
+    // ECS-dependent systems require a valid world
     auto* world = ctx->GetWorld();
     if (!world)
         return;
@@ -266,7 +275,11 @@ static void InitConsole()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
     console.Initialize();
-    Spark::ConsoleProcessManager::GetInstance().Initialize();
+
+    if (!Spark::ConsoleProcessManager::GetInstance().Initialize())
+    {
+        console.LogWarning("ConsoleProcessManager failed to initialize — SparkConsole subprocess unavailable");
+    }
     InitDebugSystems();
     InitGameplaySystems();
 }
@@ -507,7 +520,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         g_moduleHotReload->Start();
 
         // SaveSystem
-        Spark::SaveSystem::GetInstance().Initialize("Saves");
+        if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+        }
         EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         console.LogInfo("SaveSystem initialized");
 
@@ -655,7 +671,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_moduleHotReload->Start();
 
     // 7. Initialize additional subsystems
-    Spark::SaveSystem::GetInstance().Initialize("Saves");
+    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+    }
     console.LogInfo("SaveSystem initialized");
 
     g_audioEngine = std::make_unique<AudioEngine>();
@@ -990,7 +1009,10 @@ int main(int argc, char* argv[])
         g_moduleHotReload->WatchAllLoadedModules();
         g_moduleHotReload->Start();
 
-        Spark::SaveSystem::GetInstance().Initialize("Saves");
+        if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+        }
         EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
         if (g_graphics)
@@ -1151,7 +1173,10 @@ int main(int argc, char* argv[])
     g_moduleHotReload->Start();
 
     // 7. Additional subsystems
-    Spark::SaveSystem::GetInstance().Initialize("Saves");
+    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+    }
     console.LogInfo("SaveSystem initialized");
 
     g_audioEngine = std::make_unique<AudioEngine>();
@@ -1331,7 +1356,9 @@ int main(int argc, char* argv[])
     g_timer = std::make_unique<Timer>();
     g_input = std::make_unique<InputManager>();
     g_graphics = std::make_unique<GraphicsEngine>();
-    g_graphics->Initialize(nullptr);
+    HRESULT hr = g_graphics->Initialize(nullptr);
+    if (FAILED(hr))
+        std::cerr << "Graphics initialization failed (fallback mode)." << std::endl;
 
     EngineContext::SetOwned(
         std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
@@ -1341,7 +1368,10 @@ int main(int argc, char* argv[])
     // Register core subsystems with dependency metadata
     Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
     Spark::EngineSetup::InitializeJobSystem();
-    Spark::SaveSystem::GetInstance().Initialize("Saves");
+    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+    }
     EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
