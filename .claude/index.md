@@ -11,7 +11,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
 | Build and CI workflow speedups | [knowledge/build-optimizations.md](knowledge/build-optimizations.md) | Optimization | Active | 2026-03-14 |
 | AI bloat pattern and countermeasures | [knowledge/ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md) | Observation | Active | 2026-03-14 |
-| Comprehensive bloat audit | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-15 |
+| Comprehensive bloat audit (P0 resolved) | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-18 |
 | 30 orphaned headers (27 deleted, 3 intentional) | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | **Resolved** | 2026-03-16 |
 | Duplicate systems (3/3 ODR risks fixed) | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
 | 11 orphaned tests (now wired in) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | **Mostly Resolved** | 2026-03-16 |
@@ -55,9 +55,15 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **RESOLVED: curl dependency** → Removed from .gitmodules and CMakeLists.txt.
 
-**RESOLVED: GraphicsEngine.cpp split** → From 4,949 lines to 5 focused modules (1,284 + 1,014 + 1,301 + 763 + 819 lines).
+**RESOLVED: 5 major file splits (2026-03-18):**
+- GraphicsEngine.cpp (4,949 → 5 files, largest 1,284)
+- MaterialSystem.cpp (4,283 → 3 files, largest 1,435)
+- EditorUI.cpp (2,691 → 3 files, largest 1,358)
+- AssetPipeline.cpp (2,557 → 3 files, largest 1,595)
+- Shader.cpp (2,344 → 2 files, largest 1,922)
+- Pattern: extract Console_* methods + class implementations into separate TUs
 
-**Active: 47 files violate size limits, 127 classes exceed method limit** → See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md).
+**Active: Remaining oversized files (P1/P2)** — InspectorPanel (2,373), VulkanDevice (2,327), AdvancedAssetPipeline (2,324), LightingSystem (2,239), Game.cpp (2,042), PhysicsSystem (2,029). See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md).
 
 **Active: 66 functions exceed 50-line limit** → See [code-quality-violations.md](knowledge/code-quality-violations.md).
 
@@ -112,6 +118,9 @@ _These issues were fully resolved. Key learnings are preserved inline above._
 - **ECS not in SDK** — GetWorld() added to IEngineContext
 - **curl dead dependency** — Removed from .gitmodules and CMakeLists.txt
 - **Dead CMake options** — ENABLE_LUA, ENABLE_PHYSX and 6 unused flags removed
+- **5 major file splits** — GraphicsEngine, MaterialSystem, EditorUI, AssetPipeline, Shader (all P0 bloat targets)
+- **Startup path analysis** — 3 platform entry points (WinMain/headless/SDL2) verified correct, not duplicate
+- **Orphaned system triage** — DecalSystem wired; DXRManager partially gated; NavMesh/AnimationSystem/Sequencer need deeper integration
 - **GitHub API/PR checks**, **CI failures**, **rebase conflicts**, **clang-format**, **CMake Linux builds**, **MSVC /W4 warnings** — all resolved
 
 ---
