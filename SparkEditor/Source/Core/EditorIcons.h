@@ -123,6 +123,13 @@
 #define ICON_FA_WINDOW_MAXIMIZE "\xef\x8b\x90" // U+F2D0
 #define ICON_FA_COMPRESS "\xef\x81\xa6"        // U+F066
 
+// === Tools / Snap ===
+#define ICON_FA_MAGNET "\xef\x81\xb6" // U+F076
+
+// === Metrics / Data ===
+#define ICON_FA_TACHOMETER_ALT "\xef\x8f\xbd" // U+F3FD
+#define ICON_FA_DATABASE "\xef\x87\x80"       // U+F1C0
+
 // === Additional Icons ===
 #define ICON_FA_RUNNING "\xef\x9c\x8c"       // U+F70C (person-running)
 #define ICON_FA_CODE "\xef\x84\xa1"          // U+F121
