@@ -11,6 +11,7 @@
  */
 
 #include "SceneRenderer.h"
+#include "DrawSortKey.h"
 #include "../Utils/Validate.h"
 #include <algorithm>
 
@@ -76,32 +77,35 @@ namespace Spark::Graphics
     }
 
     /// Frustum-culls draw commands and sorts survivors for efficient rendering.
-    /// Culling transforms each object's world position to clip space and tests against
-    /// NDC bounds with a kMargin=2.0 expansion to account for object bounding radius.
-    /// Survivors are sorted by material sortKey (minimizes state changes) then by
-    /// squared distance to camera (front-to-back reduces overdraw for opaque geometry).
+    /// Uses DrawSortKey to build 64-bit composite sort keys encoding render layer,
+    /// shader hash, material hash, and quantized depth for optimal GPU state batching.
+    /// Falls back to radix sort for large draw lists (>64 entries).
     void SceneRenderer::CullAndSort(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix,
                                     const DirectX::XMFLOAT3& cameraPos)
     {
         m_visibleCommands.clear();
 
-        // Build view-projection matrix for frustum extraction
         DirectX::XMMATRIX viewProj = DirectX::XMMatrixMultiply(viewMatrix, projMatrix);
         DirectX::XMVECTOR cameraPosVec = DirectX::XMLoadFloat3(&cameraPos);
 
-        // Frustum culling: test each command's world position against the frustum
-        for (auto& cmd : m_drawCommands)
+        // Build sorted draw list using DrawSortKey for optimal state batching
+        std::vector<DrawSortEntry> sortEntries;
+        sortEntries.reserve(m_drawCommands.size());
+
+        for (uint32_t i = 0; i < static_cast<uint32_t>(m_drawCommands.size()); ++i)
         {
+            auto& cmd = m_drawCommands[i];
+
             // Extract position from world matrix
             DirectX::XMFLOAT3 objPos(cmd.worldMatrix._41, cmd.worldMatrix._42, cmd.worldMatrix._43);
             DirectX::XMVECTOR objPosVec = DirectX::XMLoadFloat3(&objPos);
 
-            // Compute distance to camera for sorting
+            // Compute distance to camera
             DirectX::XMVECTOR diff = DirectX::XMVectorSubtract(objPosVec, cameraPosVec);
             DirectX::XMVECTOR distSq = DirectX::XMVector3LengthSq(diff);
             DirectX::XMStoreFloat(&cmd.distanceToCamera, distSq);
 
-            // Simple frustum check: transform point to clip space and check bounds
+            // Frustum check: transform point to clip space and test bounds
             DirectX::XMVECTOR clipPos =
                 DirectX::XMVector4Transform(DirectX::XMVectorSet(objPos.x, objPos.y, objPos.z, 1.0f), viewProj);
 
@@ -112,23 +116,35 @@ namespace Spark::Graphics
                 float y = DirectX::XMVectorGetY(clipPos) / w;
                 float z = DirectX::XMVectorGetZ(clipPos) / w;
 
-                // Conservative frustum bounds (allow some margin for object size)
                 constexpr float kMargin = 2.0f;
                 if (x >= -kMargin && x <= kMargin && y >= -kMargin && y <= kMargin && z >= -0.1f && z <= 1.1f)
                 {
-                    m_visibleCommands.push_back(cmd);
+                    // Build 64-bit sort key from mesh/material hashes and view depth
+                    float viewDepth = z * w; // Linearized view-space depth
+                    uint32_t shaderHash = static_cast<uint32_t>(cmd.mesh.hash >> 32);
+                    uint32_t materialHash = static_cast<uint32_t>(cmd.material.hash);
+
+                    DrawSortEntry entry;
+                    entry.key = DrawSortKey::BuildOpaque(shaderHash, materialHash, viewDepth);
+                    entry.drawIndex = i;
+
+                    // Store the sort key back in the command for downstream use
+                    cmd.sortKey = static_cast<uint32_t>(entry.key >> 32);
+
+                    sortEntries.push_back(entry);
                 }
             }
         }
 
-        // Sort by sort key (material batching), then by distance (front-to-back for opaque)
-        std::sort(m_visibleCommands.begin(), m_visibleCommands.end(),
-                  [](const DrawCommand& a, const DrawCommand& b)
-                  {
-                      if (a.sortKey != b.sortKey)
-                          return a.sortKey < b.sortKey;
-                      return a.distanceToCamera < b.distanceToCamera;
-                  });
+        // Use radix sort for large lists, std::sort for small ones
+        DrawSortKey::RadixSort(sortEntries);
+
+        // Build visible command list in sorted order
+        m_visibleCommands.reserve(sortEntries.size());
+        for (const auto& entry : sortEntries)
+        {
+            m_visibleCommands.push_back(m_drawCommands[entry.drawIndex]);
+        }
     }
 
     void SceneRenderer::EndFrame()

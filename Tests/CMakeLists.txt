@@ -90,6 +90,7 @@ add_executable(SparkTests
     TestHybridRT.cpp
     TestReliableChannel.cpp
     TestModuleDependency.cpp
+    TestReflection.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

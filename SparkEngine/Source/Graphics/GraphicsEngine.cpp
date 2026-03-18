@@ -561,6 +561,10 @@ void GraphicsEngine::BeginFrame()
     if (m_shadowAtlas)
         m_shadowAtlas->BeginFrame();
 
+    // Shader hot-reload: check for modified .hlsl files each frame
+    if (m_shader)
+        m_shader->HotReloadShaders();
+
     ASSERT(m_context && m_renderTargetView && m_depthStencilView);
 
     if (!m_context || !m_renderTargetView || !m_depthStencilView)
