@@ -61,6 +61,7 @@
 - [Upscaling (DLSS/FSR)](Upscaling-System)
 
 ### Advanced
+- [Threading Model](Threading-Model)
 - [Build System and CMake Modules](Build-System-and-CMake-Modules)
 - [Profiler and Debugging](Profiler-and-Debugging)
 - [Utilities](Utilities)

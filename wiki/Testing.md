@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*94 test files, 1210+ test cases*
+*95 test files, 1241+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -495,6 +495,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestNavMesh` | 11 |
 | `TestNetBuffer` | 29 |
 | `TestNetworkEncryption` | 17 |
+| `TestNetworkIntegration` | 31 |
 | `TestNetworkInterpolation` | 12 |
 | `TestNoiseGenerator` | 7 |
 | `TestObjectPool` | 6 |

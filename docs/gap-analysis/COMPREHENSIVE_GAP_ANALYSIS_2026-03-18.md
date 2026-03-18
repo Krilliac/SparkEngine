@@ -23,13 +23,13 @@
 |--------|-------|
 | Total source files | 632 (.cpp + .h) |
 | Total lines of code | ~241K |
-| Test files | 86 (22K+ lines) |
+| Test files | 87 (23K+ lines) |
 | Wiki pages | 55 (29K lines) |
 | Functional core systems | 19 |
 | Orphaned singletons | 0 (all resolved — wired or reclassified as passive caches) |
 | TrinityCore systems (new) | 10 (all wired, none tested) |
 | Systems without tests | 14+ major subsystems |
-| Critical doc gaps | 8 (Camera + Persistence documented) |
+| Critical doc gaps | 5 (Camera, Persistence, Threading, Editor, API docs done) |
 | TODO/FIXME comments | 6 (all scoped, non-critical) |
 
 **Overall health: GOOD.** Core engine is functional. Primary gaps are in testing
@@ -171,7 +171,7 @@ Previous sessions deleted 12 header-only stubs (SkyAtmosphere, WaterSystem, Glob
 - [x] Lag compensation — **PARTIAL** — snapshots produced but not consumed
 - [x] Reliable channels — **PARTIAL** — tracked but no retransmit/ACK
 - [ ] Connection timeout detection — **MISSING**
-- [ ] Integration tests — **MISSING**
+- [x] Integration tests — **DONE** — TestNetworkIntegration.cpp (30 tests)
 
 ---
 
@@ -291,9 +291,9 @@ Previous sessions deleted 12 header-only stubs (SkyAtmosphere, WaterSystem, Glob
 5. **Editor Plugin System** — undocumented
 6. **OpenGL/Vulkan backend details** — missing dedicated pages
 7. **Performance Profiling** — minimal docs
-8. **12+ editor panels** — not in SparkEditor.md
-9. **Threading model** — deadlock/race risks undocumented
-10. **API docs not generated** — docs/api/ doesn't exist
+8. ~~**12+ editor panels**~~ — **DONE** All 32 panels documented in SparkEditor.md
+9. ~~**Threading model**~~ — **DONE** wiki/Threading-Model.md (comprehensive page)
+10. ~~**API docs not generated**~~ — **DONE** docs/api/ (370 pages from 382 headers)
 
 ---
 
@@ -361,11 +361,11 @@ Previous sessions deleted 12 header-only stubs (SkyAtmosphere, WaterSystem, Glob
 13. ~~Wire MusicManager Init/Update/Shutdown~~ → Added to gameplay system lifecycle
 14. ~~Add ConsoleRBAC test~~ → Tests/TestConsoleRBAC.cpp (22 tests)
 
-### P2 — Medium (Ongoing)
-11. Document threading model and concurrency rules
-12. Generate and commit API docs (`docs/generate-api-docs.sh generate`)
-13. Expand SparkEditor.md with 12+ missing panels
-14. Add networking integration tests
+### P2 — Medium (Completed 2026-03-18)
+11. ~~Document threading model and concurrency rules~~ → wiki/Threading-Model.md (comprehensive page)
+12. ~~Generate and commit API docs~~ → docs/api/ generated (370 pages from 382 headers)
+13. ~~Expand SparkEditor.md with 12+ missing panels~~ → 32 panels fully documented with descriptions
+14. ~~Add networking integration tests~~ → Tests/TestNetworkIntegration.cpp (30 tests: lifecycle, replication, serialization, lag compensation, edge cases)
 15. Implement terrain rendering system
 16. Implement connection timeout detection
 

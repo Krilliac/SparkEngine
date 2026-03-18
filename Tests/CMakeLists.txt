@@ -103,6 +103,7 @@ add_executable(SparkTests
     TestScriptHookManager.cpp
     TestModuleHotReload.cpp
     TestConsoleRBAC.cpp
+    TestNetworkIntegration.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
