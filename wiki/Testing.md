@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*79 test files, 1015+ test cases*
+*81 test files, 1029+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -484,6 +484,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestLocalizationSystem` | 6 |
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
+| `TestModuleDependency` | 5 |
 | `TestNavMesh` | 11 |
 | `TestNetBuffer` | 29 |
 | `TestNetworkEncryption` | 17 |
@@ -497,6 +498,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestPostProcessingPipeline` | 11 |
 | `TestQuestSystem` | 10 |
 | `TestRandomEngine` | 11 |
+| `TestReliableChannel` | 9 |
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
 | `TestSaveSystem` | 7 |

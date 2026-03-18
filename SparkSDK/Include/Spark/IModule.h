@@ -20,20 +20,26 @@
 #include "Version.h"
 #include <cstdint>
 
-namespace Spark {
+namespace Spark
+{
 
-/**
+    /**
  * @brief Metadata describing a loaded module
  */
-struct ModuleInfo
-{
-    const char* name    = "Unnamed";   ///< Module display name
-    const char* version = "1.0.0";     ///< Module version string
-    uint32_t sdkVersion = SPARK_SDK_VERSION; ///< SDK version this module was built against
-    int      loadOrder  = 1000;        ///< Lower values load first (default 1000)
-};
+    struct ModuleInfo
+    {
+        const char* name = "Unnamed";            ///< Module display name
+        const char* version = "1.0.0";           ///< Module version string
+        uint32_t sdkVersion = SPARK_SDK_VERSION; ///< SDK version this module was built against
+        int loadOrder = 1000;                    ///< Lower values load first (default 1000)
 
-/**
+        /// Module names this module depends on (loaded/initialized first).
+        /// Populated automatically by SPARK_MODULE_DEPENDENCY() or manually.
+        const char* const* dependencies = nullptr;
+        int dependencyCount = 0;
+    };
+
+    /**
  * @brief Interface that dynamically loaded modules implement
  *
  * Each module DLL exports a CreateModule() function returning an IModule*.
@@ -43,36 +49,40 @@ struct ModuleInfo
  *   3. OnRender() — called every frame after update
  *   4. OnUnload() — called before the DLL is unloaded
  */
-class IModule
-{
-public:
-    virtual ~IModule() = default;
+    class IModule
+    {
+      public:
+        virtual ~IModule() = default;
 
-    /** @brief Return metadata about this module */
-    virtual ModuleInfo GetModuleInfo() const = 0;
+        /** @brief Return metadata about this module */
+        virtual ModuleInfo GetModuleInfo() const = 0;
 
-    /**
+        /**
      * @brief Called after the DLL is loaded
      * @param context Engine service locator — store this pointer
      * @return true on success, false to abort loading this module
      */
-    virtual bool OnLoad(IEngineContext* context) = 0;
+        virtual bool OnLoad(IEngineContext* context) = 0;
 
-    /** @brief Called before the DLL is unloaded. Release all resources. */
-    virtual void OnUnload() = 0;
+        /** @brief Called before the DLL is unloaded. Release all resources. */
+        virtual void OnUnload() = 0;
 
-    /**
+        /**
      * @brief Called every frame to update module state
      * @param deltaTime Seconds since last frame
      */
-    virtual void OnUpdate(float deltaTime) = 0;
+        virtual void OnUpdate(float deltaTime) = 0;
 
-    /** @brief Called every frame after OnUpdate to render. Optional. */
-    virtual void OnRender() {}
+        /** @brief Called every frame after OnUpdate to render. Optional. */
+        virtual void OnRender() {}
 
-    /** @brief Called when the window is resized. Optional. */
-    virtual void OnResize(int width, int height) { (void)width; (void)height; }
-};
+        /** @brief Called when the window is resized. Optional. */
+        virtual void OnResize(int width, int height)
+        {
+            (void)width;
+            (void)height;
+        }
+    };
 
 } // namespace Spark
 
@@ -83,5 +93,5 @@ public:
  *   extern "C" SPARK_MODULE_API Spark::IModule* CreateModule();
  *   extern "C" SPARK_MODULE_API void DestroyModule(Spark::IModule*);
  */
-using CreateModuleFn  = Spark::IModule* (*)();
+using CreateModuleFn = Spark::IModule* (*)();
 using DestroyModuleFn = void (*)(Spark::IModule*);
