@@ -55,6 +55,8 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **RESOLVED: curl dependency** → Removed from .gitmodules and CMakeLists.txt.
 
+**RESOLVED: GraphicsEngine.cpp split** → From 4,949 lines to 5 focused modules (1,284 + 1,014 + 1,301 + 763 + 819 lines).
+
 **Active: 47 files violate size limits, 127 classes exceed method limit** → See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md).
 
 **Active: 66 functions exceed 50-line limit** → See [code-quality-violations.md](knowledge/code-quality-violations.md).

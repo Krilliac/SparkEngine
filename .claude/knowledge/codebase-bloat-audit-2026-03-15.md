@@ -12,7 +12,7 @@
 
 Comprehensive audit combining prior findings (March 14) with new deep analysis. The codebase has **269,770 total source lines** across all `.h` and `.cpp` files. This audit identifies **~10,000+ lines of confirmed removable code**, **17 orphaned singleton systems**, **127 classes exceeding the 15-public-method limit**, and multiple structural duplication issues.
 
-**Nothing from the March 14 audit has been fixed yet.** All prior findings remain active.
+**Progress (2026-03-18):** SparkConsole refactored (7,000→551), GraphicsEngine.cpp split (4,949→5 files, largest 1,301), MaterialSystem split in progress. VisualScriptingSystem deleted.
 
 ---
 
@@ -23,7 +23,7 @@ Comprehensive audit combining prior findings (March 14) with new deep analysis. 
 | File | Lines | Over by | Priority |
 |------|-------|---------|----------|
 | `Utils/SparkConsole.cpp` | **6,996** | +6,596 | P0 |
-| `Graphics/GraphicsEngine.cpp` | **4,579** | +4,179 | P0 |
+| `Graphics/GraphicsEngine.cpp` | ~~4,579~~ **1,284** | **RESOLVED** — split into 5 files | P0 ✅ |
 | `Graphics/MaterialSystem.cpp` | **4,326** | +3,926 | P0 |
 | `SparkEditor/VisualScripting/VisualScriptingSystem.cpp` | **4,067** | +3,667 | P0 |
 | `Graphics/AssetPipeline.cpp` | **2,557** | +2,157 | P1 |
