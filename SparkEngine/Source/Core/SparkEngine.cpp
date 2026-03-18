@@ -275,6 +275,37 @@ static void ShutdownPhysics()
 #endif
 }
 
+/**
+ * @brief Common engine shutdown sequence shared by all startup paths.
+ *
+ * Shuts down gameplay/debug systems, console, modules, audio, physics,
+ * and engine context in the correct order.
+ */
+static void ShutdownEngine()
+{
+    ShutdownGameplaySystems();
+    ShutdownDebugSystems();
+    Spark::ConsoleProcessManager::GetInstance().Shutdown();
+
+    if (g_moduleManager)
+    {
+        g_moduleManager->ShutdownAll();
+        g_moduleManager->UnloadAll();
+        g_moduleManager.reset();
+    }
+
+    g_audioEngine.reset();
+    ShutdownPhysics();
+
+    EngineContext::ResetOwned();
+    g_eventBus.reset();
+    g_input.reset();
+    g_graphics.reset();
+    g_timer.reset();
+
+    Spark::SimpleConsole::GetInstance().Shutdown();
+}
+
 // ============================================================================
 // Windows platform
 // ============================================================================
@@ -510,26 +541,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
         // Shutdown
         g_moduleHotReload.reset();
-        ShutdownGameplaySystems();
-        ShutdownDebugSystems();
-        Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
-
-        if (g_moduleManager)
-        {
-            g_moduleManager->ShutdownAll();
-            g_moduleManager->UnloadAll();
-            g_moduleManager.reset();
-        }
-
-        ShutdownPhysics();
-
         g_fileCache.reset();
-        EngineContext::ResetOwned();
-        g_eventBus.reset();
-        g_timer.reset();
-
-        console.Shutdown();
+        ShutdownEngine();
 
         FreeConsole();
         return 0;
@@ -711,30 +725,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
     // 10. Shutdown
     g_moduleHotReload.reset();
-    ShutdownGameplaySystems();
-    ShutdownDebugSystems();
-    Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
-
-    if (g_moduleManager)
-    {
-        g_moduleManager->ShutdownAll();
-        g_moduleManager->UnloadAll();
-        g_moduleManager.reset();
-    }
-
-    g_audioEngine.reset();
     g_fileCache.reset();
-
-    ShutdownPhysics();
-
-    EngineContext::ResetOwned();
-    g_eventBus.reset();
-    g_input.reset();
-    g_graphics.reset();
-    g_timer.reset();
-
-    console.Shutdown();
+    ShutdownEngine();
 
     return static_cast<int>(msg.wParam);
 }
@@ -1024,24 +1017,8 @@ int main(int argc, char* argv[])
         }
 
         g_moduleHotReload.reset();
-        ShutdownGameplaySystems();
-        ShutdownDebugSystems();
-        Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
-
-        if (g_moduleManager)
-        {
-            g_moduleManager->ShutdownAll();
-            g_moduleManager->UnloadAll();
-            g_moduleManager.reset();
-        }
-
-        ShutdownPhysics();
-
-        EngineContext::ResetOwned();
-        g_eventBus.reset();
-        g_timer.reset();
-        console.Shutdown();
+        ShutdownEngine();
 
         std::cout << "Headless server shut down cleanly." << std::endl;
         return 0;
@@ -1332,28 +1309,8 @@ int main(int argc, char* argv[])
 
     // 10. Shutdown
     g_moduleHotReload.reset();
-    ShutdownGameplaySystems();
-    ShutdownDebugSystems();
-    Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
-
-    if (g_moduleManager)
-    {
-        g_moduleManager->ShutdownAll();
-        g_moduleManager->UnloadAll();
-        g_moduleManager.reset();
-    }
-
-    g_audioEngine.reset();
-    ShutdownPhysics();
-
-    EngineContext::ResetOwned();
-    g_eventBus.reset();
-    g_input.reset();
-    g_graphics.reset();
-    g_timer.reset();
-
-    console.Shutdown();
+    ShutdownEngine();
 
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -1426,25 +1383,7 @@ int main(int argc, char* argv[])
     }
 
     g_moduleHotReload.reset();
-    ShutdownGameplaySystems();
-    ShutdownDebugSystems();
-    Spark::ConsoleProcessManager::GetInstance().Shutdown();
-
-    if (g_moduleManager)
-    {
-        g_moduleManager->ShutdownAll();
-        g_moduleManager->UnloadAll();
-        g_moduleManager.reset();
-    }
-
-    ShutdownPhysics();
-
-    EngineContext::ResetOwned();
-    g_graphics.reset();
-    g_input.reset();
-    g_timer.reset();
-    g_eventBus.reset();
-    console.Shutdown();
+    ShutdownEngine();
 #endif // SPARK_SDL2_AVAILABLE
 
     std::cout << "Spark Engine shut down cleanly." << std::endl;

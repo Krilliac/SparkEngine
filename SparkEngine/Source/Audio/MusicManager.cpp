@@ -383,7 +383,7 @@ namespace Spark::Audio
         m_dynamicState.currentIntensity = intensity;
     }
 
-    void MusicManager::AddReverbZone(const ReverbZone& zone)
+    void MusicManager::AddReverbZone(const MusicReverbZone& zone)
     {
         m_reverbZones.push_back(zone);
     }
@@ -391,7 +391,7 @@ namespace Spark::Audio
     void MusicManager::RemoveReverbZone(const std::string& name)
     {
         m_reverbZones.erase(std::remove_if(m_reverbZones.begin(), m_reverbZones.end(),
-                                           [&name](const ReverbZone& z) { return z.name == name; }),
+                                           [&name](const MusicReverbZone& z) { return z.name == name; }),
                             m_reverbZones.end());
     }
 
@@ -424,9 +424,9 @@ namespace Spark::Audio
         m_occlusionSettings = settings;
     }
 
-    OcclusionResult MusicManager::ComputeOcclusion(const XMFLOAT3& sourcePos, const XMFLOAT3& listenerPos) const
+    MusicOcclusionResult MusicManager::ComputeOcclusion(const XMFLOAT3& sourcePos, const XMFLOAT3& listenerPos) const
     {
-        OcclusionResult result{0.0f, 22000.0f};
+        MusicOcclusionResult result{0.0f, 22000.0f};
         if (!m_occlusionSettings.enabled)
             return result;
 
