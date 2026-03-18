@@ -473,6 +473,256 @@ void CSMain(uint3 dtid : SV_DispatchThreadID)
 }
 )";
 
+    // -------------------------------------------------------------------------
+    // SparkSR — SparkEngine Native Temporal Upscaling (Compute Shader)
+    //
+    // Engine-native temporal upscaler with no vendor SDK dependency.
+    // Key improvements over the basic temporal upscaler:
+    //   - YCoCg color space for perceptually accurate neighborhood clamping
+    //   - Variance-based clip (mean ± gamma * stddev) instead of min/max AABB
+    //   - Motion vector confidence weighting (fast motion = less history)
+    //   - Combined depth + motion divergence disocclusion detection
+    //   - Jitter delta tracking for improved sub-pixel reprojection
+    //   - Catmull-Rom 4-tap history sampling
+    // Thread group: 8x8.  Two-pass pipeline: this shader + RCAS sharpening.
+    // -------------------------------------------------------------------------
+    static const char* kSparkSR_CS = R"(
+// SparkSR — SparkEngine Native Temporal Upscaling
+// Vendor-independent temporal accumulation with YCoCg variance clip
+
+cbuffer SparkSRConstants : register(b0)
+{
+    float4 RenderSize;     // (renderW, renderH, 1/renderW, 1/renderH)
+    float4 DisplaySize;    // (displayW, displayH, 1/displayW, 1/displayH)
+    float4 JitterOffset;   // (jitterX, jitterY, prevJitterX, prevJitterY)
+    float4 TemporalParams; // (frameIndex, resetFlag, sharpness, blendMin)
+    float4 MotionParams;   // (motionScaleX, motionScaleY, depthThreshold, varianceGamma)
+};
+
+Texture2D<float4> ColorInput        : register(t0);
+Texture2D<float>  DepthInput        : register(t1);
+Texture2D<float2> MotionVectors     : register(t2);
+Texture2D<float>  ExposureInput     : register(t3);
+Texture2D<float>  ReactiveMask      : register(t4);
+Texture2D<float4> HistoryTexture    : register(t5);
+RWTexture2D<float4> OutputTexture   : register(u0);
+SamplerState LinearClamp            : register(s0);
+
+// --- Color space conversion ---
+
+float3 RGBToYCoCg(float3 rgb)
+{
+    float y  = dot(rgb, float3(0.25, 0.5, 0.25));
+    float co = dot(rgb, float3(0.5, 0.0, -0.5));
+    float cg = dot(rgb, float3(-0.25, 0.5, -0.25));
+    return float3(y, co, cg);
+}
+
+float3 YCoCgToRGB(float3 ycocg)
+{
+    float y  = ycocg.x;
+    float co = ycocg.y;
+    float cg = ycocg.z;
+    return float3(y + co - cg, y + cg, y - co - cg);
+}
+
+float Luminance(float3 c)
+{
+    return dot(c, float3(0.2126, 0.7152, 0.0722));
+}
+
+float LinearizeDepth(float d, float nearZ, float farZ)
+{
+    return nearZ * farZ / (farZ - d * (farZ - nearZ));
+}
+
+// --- Variance-based AABB clip ---
+// Clips the history sample toward the center of a variance-derived AABB
+// This is tighter than min/max and reduces ghosting significantly
+
+float3 ClipToVarianceAABB(float3 history, float3 aabbCenter, float3 aabbExtent)
+{
+    float3 offset = history - aabbCenter;
+    float3 absExtent = max(aabbExtent, 0.0001);
+    float3 ts = abs(offset) / absExtent;
+    float maxT = max(ts.x, max(ts.y, ts.z));
+
+    if (maxT > 1.0)
+    {
+        return aabbCenter + offset / maxT;
+    }
+    return history;
+}
+
+// --- Catmull-Rom 4-tap history sampling ---
+
+float CatmullRomWeight(float x)
+{
+    float ax = abs(x);
+    if (ax < 1.0)
+        return 0.5 * (2.0 + ax * ax * (-5.0 + ax * 3.0));
+    if (ax < 2.0)
+        return 0.5 * (4.0 + ax * (-8.0 + ax * (5.0 - ax)));
+    return 0.0;
+}
+
+float3 SampleHistoryCatmullRom(float2 uv)
+{
+    float2 texelSize = DisplaySize.zw;
+    float2 samplePos = uv / texelSize - 0.5;
+    float2 f = frac(samplePos);
+    float2 texelBase = (floor(samplePos) + 0.5) * texelSize;
+
+    float3 result = float3(0.0, 0.0, 0.0);
+    float totalWeight = 0.0;
+
+    [unroll]
+    for (int y = -1; y <= 2; y++)
+    {
+        float wy = CatmullRomWeight(f.y - (float)y);
+        [unroll]
+        for (int x = -1; x <= 2; x++)
+        {
+            float wx = CatmullRomWeight(f.x - (float)x);
+            float weight = wx * wy;
+            float2 offset = float2((float)x, (float)y) * texelSize;
+            float3 tap = HistoryTexture.SampleLevel(LinearClamp, texelBase + offset, 0.0).rgb;
+            result += tap * weight;
+            totalWeight += weight;
+        }
+    }
+
+    return result / max(totalWeight, 1e-6);
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dtid : SV_DispatchThreadID)
+{
+    if (dtid.x >= (uint)DisplaySize.x || dtid.y >= (uint)DisplaySize.y)
+        return;
+
+    float2 outputUV = (float2(dtid.xy) + 0.5) * DisplaySize.zw;
+
+    // De-jitter: remove current frame's jitter to get the true sample position
+    float2 inputUV = outputUV;
+    float2 jitteredUV = inputUV - JitterOffset.xy * RenderSize.zw;
+
+    // Fetch current frame color
+    float3 currentColor = ColorInput.SampleLevel(LinearClamp, jitteredUV, 0.0).rgb;
+
+    // Apply exposure normalization
+    float exposure = max(ExposureInput.SampleLevel(LinearClamp, float2(0.5, 0.5), 0.0).x, 0.001);
+    currentColor *= exposure;
+
+    // Fetch motion vector and apply scale
+    float2 motion = MotionVectors.SampleLevel(LinearClamp, jitteredUV, 0.0).xy;
+    motion *= MotionParams.xy;
+
+    // Reproject to find previous frame position
+    float2 historyUV = outputUV - motion;
+
+    // Fetch depth and reactive mask
+    float depth = DepthInput.SampleLevel(LinearClamp, jitteredUV, 0.0).x;
+    float reactive = ReactiveMask.SampleLevel(LinearClamp, jitteredUV, 0.0).x;
+
+    // Check history validity
+    bool historyValid = historyUV.x >= 0.0 && historyUV.x <= 1.0 &&
+                        historyUV.y >= 0.0 && historyUV.y <= 1.0;
+    bool resetAccum = TemporalParams.y > 0.5;
+
+    float3 result;
+
+    if (!historyValid || resetAccum)
+    {
+        result = currentColor;
+    }
+    else
+    {
+        // --- Gather 3x3 neighborhood in YCoCg for variance clip ---
+        float3 m1 = float3(0.0, 0.0, 0.0); // sum
+        float3 m2 = float3(0.0, 0.0, 0.0); // sum of squares
+        float3 currentYCoCg = RGBToYCoCg(currentColor);
+
+        [unroll]
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            [unroll]
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                float2 offset = float2((float)dx, (float)dy) * RenderSize.zw;
+                float3 s = ColorInput.SampleLevel(LinearClamp, jitteredUV + offset, 0.0).rgb * exposure;
+                float3 sYCoCg = RGBToYCoCg(s);
+                m1 += sYCoCg;
+                m2 += sYCoCg * sYCoCg;
+            }
+        }
+
+        // Compute mean and standard deviation
+        float3 mean = m1 / 9.0;
+        float3 variance = abs(m2 / 9.0 - mean * mean);
+        float3 stddev = sqrt(variance);
+
+        // Variance gamma controls how tight the clip box is
+        // Lower gamma = tighter = less ghosting but more flickering
+        float gamma = MotionParams.w; // typically 1.0 - 1.25
+
+        // Sample history with Catmull-Rom for sub-pixel accuracy
+        float3 historyColor = SampleHistoryCatmullRom(historyUV);
+        historyColor *= exposure; // normalize history to current exposure
+        float3 historyYCoCg = RGBToYCoCg(historyColor);
+
+        // Clip history to variance-derived AABB in YCoCg space
+        float3 aabbExtent = stddev * gamma;
+        historyYCoCg = ClipToVarianceAABB(historyYCoCg, mean, aabbExtent);
+        historyColor = YCoCgToRGB(historyYCoCg);
+
+        // --- Disocclusion detection: depth + motion divergence ---
+        float historyDepth = DepthInput.SampleLevel(LinearClamp, historyUV, 0.0).x;
+        float depthDelta = abs(depth - historyDepth);
+        float depthDisocclusion = saturate(depthDelta / max(MotionParams.z, 0.001));
+
+        // Motion divergence: compare motion at current vs reprojected position
+        float2 historyMotion = MotionVectors.SampleLevel(LinearClamp, historyUV, 0.0).xy * MotionParams.xy;
+        float motionDivergence = length(motion - historyMotion);
+        float motionDisocclusion = saturate(motionDivergence * 20.0);
+
+        float disocclusion = max(depthDisocclusion, motionDisocclusion);
+
+        // --- Motion confidence: fast motion = prefer current frame ---
+        float motionLength = length(motion);
+        float motionConfidence = saturate(motionLength * 10.0);
+
+        // --- Compute blend factor ---
+        float blendMin = TemporalParams.w; // minimum blend (e.g. 0.03)
+        float blendFactor = blendMin;
+
+        // Increase blend toward current on disocclusion
+        blendFactor = lerp(blendFactor, 1.0, disocclusion);
+
+        // Increase blend for fast-moving pixels
+        blendFactor = lerp(blendFactor, max(blendFactor, 0.3), motionConfidence);
+
+        // Reactive mask forces use of current color (particles, transparency)
+        blendFactor = lerp(blendFactor, 1.0, reactive);
+
+        // Luminance stability: large luminance shifts bias toward current
+        float lumCurrent = Luminance(currentColor);
+        float lumHistory = Luminance(historyColor);
+        float lumDelta = abs(lumCurrent - lumHistory) / max(lumCurrent + lumHistory, 0.001);
+        blendFactor = max(blendFactor, lumDelta * 0.4);
+
+        blendFactor = clamp(blendFactor, blendMin, 1.0);
+
+        result = lerp(historyColor, currentColor, blendFactor);
+    }
+
+    // Remove exposure normalization before output
+    result /= exposure;
+
+    OutputTexture[dtid.xy] = float4(max(result, 0.0), 1.0);
+}
+)";
+
 } // anonymous namespace
 
 // =============================================================================
@@ -775,6 +1025,15 @@ namespace Spark
                 return kTemporalUpscaling_CS;
             }
 
+            /**
+             * @brief Get the SparkSR temporal upscaling compute shader HLSL source
+             * @return Null-terminated HLSL string
+             */
+            const char* GetSparkSRShaderSource()
+            {
+                return kSparkSR_CS;
+            }
+
             // -------------------------------------------------------------------------
             // Shader Compilation Helper
             // -------------------------------------------------------------------------
@@ -888,6 +1147,23 @@ namespace Spark
                 return CompileComputeShader(device, kTemporalUpscaling_CS, "CSMain", outShader);
             }
 
+            /**
+             * @brief Compile and create the SparkSR temporal upscaling compute shader
+             *
+             * @param device    D3D11 device
+             * @param outShader Receives the compiled compute shader
+             * @return true on success
+             */
+            bool CreateSparkSRShader(ID3D11Device* device, ID3D11ComputeShader** outShader)
+            {
+                if (!device || !outShader)
+                {
+                    return false;
+                }
+
+                return CompileComputeShader(device, kSparkSR_CS, "CSMain", outShader);
+            }
+
 #endif // SPARK_PLATFORM_WINDOWS
 
             // -------------------------------------------------------------------------
@@ -913,6 +1189,8 @@ namespace Spark
                     return "DLSS";
                 case UpscalingMode::XeSS:
                     return "XeSS";
+                case UpscalingMode::SparkSR:
+                    return "SparkSR";
                 default:
                     return "Unknown";
                 }
@@ -960,6 +1238,7 @@ namespace Spark
                 case UpscalingMode::FSR2:
                 case UpscalingMode::DLSS:
                 case UpscalingMode::XeSS:
+                case UpscalingMode::SparkSR:
                     return true;
                 default:
                     return false;

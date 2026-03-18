@@ -524,7 +524,6 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `DestructionSystem` | `SparkEngine/Source/Engine/Destruction/DestructionSystem.h` |
 | `DialogueSystem` | `SparkEngine/Source/Engine/Dialogue/DialogueSystem.h` |
 | `FogSystem` | `SparkEngine/Source/Graphics/FogSystem.h` |
-| `ISystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
 | `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `LightChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
