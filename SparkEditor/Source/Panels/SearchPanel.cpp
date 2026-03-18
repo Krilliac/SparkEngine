@@ -324,7 +324,7 @@ namespace SparkEditor
         }
 
         // Contains
-        if (lowerText.find(query) != std::string::npos)
+        if (lowerText.contains(query))
         {
             return 0.7f;
         }

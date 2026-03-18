@@ -2,7 +2,7 @@
 
 ## Identity
 
-SparkEngine is a C++20 open-source 3D game engine targeting first-person shooters. It uses DirectX 11 for rendering, Bullet Physics 3 for simulation, XAudio2 for spatial audio, EnTT for ECS, AngelScript for scripting, and Dear ImGui for the editor. Primary platform is Windows 10+ (MSVC); Linux/macOS are experimental.
+SparkEngine is a C++23 open-source 3D game engine targeting first-person shooters. It uses DirectX 11 for rendering, Bullet Physics 3 for simulation, XAudio2 for spatial audio, EnTT for ECS, AngelScript for scripting, and Dear ImGui for the editor. Primary platform is Windows 10+ (MSVC); Linux/macOS are experimental.
 
 ## Architecture
 
@@ -64,7 +64,7 @@ ECS execution order: Physics → Animation → AI → Audio → Lifecycle → Re
 
 ## Coding Standards
 
-- **C++20**: `constexpr`, `enum class`, structured bindings, `std::format`, concepts where useful
+- **C++23**: `constexpr`, `enum class`, structured bindings, `std::format`, `std::expected`, `std::print`, concepts, deducing `this`
 - **Ownership**: `std::unique_ptr` for owning, raw pointers for non-owning references. No `new`/`delete`.
 - **RAII**: All resources (D3D11 objects via `ComPtr`, file handles, physics bodies) released in destructors
 - **Const-correctness**: `const` on all non-mutating methods and parameters

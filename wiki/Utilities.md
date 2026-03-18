@@ -49,9 +49,9 @@ SparkEngine ships a rich, header-only utility layer in `SparkEngine/Source/Utils
 
 ## New Utilities (added 2026)
 
-### `TypeTraits.h` — C++20 concept shorthands and type utilities
+### `TypeTraits.h` — C++23 concept shorthands and type utilities
 
-Provides reusable C++20 concept aliases and `TypeList<>` utilities.
+Provides reusable C++23 concept aliases and `TypeList<>` utilities.
 
 **Concepts:**
 

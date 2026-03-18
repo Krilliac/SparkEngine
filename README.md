@@ -3,12 +3,12 @@
 [![Build SparkEngine](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
 [![Release](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![Last Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine)](https://github.com/Krilliac/SparkEngine/commits/master)
 [![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/loc.json)](https://github.com/Krilliac/SparkEngine)
 [![Source Files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/files.json)](https://github.com/Krilliac/SparkEngine)
 
-**Spark Engine** is a free, open-source 3D game engine written in C++20. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Built-in support for DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Built-in support for DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
 
 > **Early Development** — SparkEngine is under active development. Systems are being built out and stabilized. Expect rough edges.
 
@@ -21,7 +21,7 @@
 - **Scalable multiplayer** — from single-player to MMO-scale via area-based server architecture
 - **Large world support** — seamless area streaming and floating-point origin rebasing for worlds of any size
 - **Truly open-source** — MIT license, no royalties, no strings attached
-- **Built for learning and modding** — clean C++20 codebase with 30+ toggleable CMake modules
+- **Built for learning and modding** — clean C++23 codebase with 30+ toggleable CMake modules
 - **Ready-to-download binaries** — pre-built Windows and Linux binaries on every commit
 
 ## Downloads
@@ -122,8 +122,8 @@ chmod +x generate.sh
 
 ### Requirements
 
-- **Compiler**: MSVC v143 (Visual Studio 2022), GCC 11+, or Clang 14+ with C++20 support
-- **Build System**: CMake 3.16+, Ninja (recommended on Linux)
+- **Compiler**: MSVC v143 (Visual Studio 2022 17.6+), GCC 13+, or Clang 17+ with C++23 support
+- **Build System**: CMake 3.25+, Ninja (recommended on Linux)
 - **Linux packages**: `build-essential`, `ninja-build`, `cmake` (e.g. `sudo apt install build-essential ninja-build cmake`)
 - **Graphics**: DirectX 11 capable GPU (Windows), Vulkan SDK (optional), OpenGL 4.5 (optional)
 - **Platform**: Windows 10+ (primary), Linux (experimental)
@@ -134,9 +134,9 @@ chmod +x generate.sh
 |---|:---:|---|
 | **Windows 10+ (MSVC v143)** | **Stable** | Primary development platform, fully tested in CI |
 | **Windows (MSVC v144 / VS 2026)** | Experimental | CI job included but skipped until runners ship v144 toolset |
-| **Linux (GCC 11+)** | Experimental | CI tested on ubuntu-24.04; pre-built binaries available |
-| **Linux (Clang 14+)** | Experimental | CI tested; some platform-specific features may be missing |
-| **macOS (Apple Clang)** | Experimental | Builds with C++20 support; no CI or pre-built binaries yet |
+| **Linux (GCC 13+)** | Experimental | CI tested on ubuntu-24.04; pre-built binaries available |
+| **Linux (Clang 17+)** | Experimental | CI tested; some platform-specific features may be missing |
+| **macOS (Apple Clang)** | Experimental | Builds with C++23 support; no CI or pre-built binaries yet |
 | **DirectX 11** | **Stable** | Primary rendering backend |
 | **Vulkan** | Experimental | Via RHI abstraction layer; requires Vulkan SDK |
 | **OpenGL 4.5** | Experimental | Via RHI abstraction layer; GLSL shaders in `Shaders/GLSL/` |

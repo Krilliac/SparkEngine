@@ -316,7 +316,7 @@ namespace SparkEditor
             std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-            if (lowerName.find(lowerSearchTerm) != std::string::npos)
+            if (lowerName.contains(lowerSearchTerm))
             {
                 result.push_back(&asset);
             }
@@ -423,7 +423,7 @@ namespace SparkEditor
                     std::string filePath = entry.path().string();
 
                     // Skip metadata files
-                    if (filePath.find("/.metadata/") != std::string::npos)
+                    if (filePath.contains("/.metadata/"))
                     {
                         continue;
                     }

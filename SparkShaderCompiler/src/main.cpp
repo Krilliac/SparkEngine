@@ -195,30 +195,29 @@ static Spark::RHI::RHIShaderStage InferStageFromFilename(const std::string& file
     std::string lower = filename;
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
-    if (lower.find("vs") != std::string::npos || lower.find("vert") != std::string::npos)
+    if (lower.contains("vs") || lower.contains("vert"))
         return Spark::RHI::RHIShaderStage::Vertex;
-    if (lower.find("ps") != std::string::npos || lower.find("frag") != std::string::npos ||
-        lower.find("pixel") != std::string::npos)
+    if (lower.contains("ps") || lower.contains("frag") || lower.contains("pixel"))
         return Spark::RHI::RHIShaderStage::Pixel;
-    if (lower.find("gs") != std::string::npos || lower.find("geom") != std::string::npos)
+    if (lower.contains("gs") || lower.contains("geom"))
         return Spark::RHI::RHIShaderStage::Geometry;
-    if (lower.find("hs") != std::string::npos || lower.find("hull") != std::string::npos)
+    if (lower.contains("hs") || lower.contains("hull"))
         return Spark::RHI::RHIShaderStage::Hull;
-    if (lower.find("ds") != std::string::npos || lower.find("domain") != std::string::npos)
+    if (lower.contains("ds") || lower.contains("domain"))
         return Spark::RHI::RHIShaderStage::Domain;
-    if (lower.find("cs") != std::string::npos || lower.find("compute") != std::string::npos)
+    if (lower.contains("cs") || lower.contains("compute"))
         return Spark::RHI::RHIShaderStage::Compute;
-    if (lower.find("raygen") != std::string::npos || lower.find("rgen") != std::string::npos)
+    if (lower.contains("raygen") || lower.contains("rgen"))
         return Spark::RHI::RHIShaderStage::RayGeneration;
-    if (lower.find("closesthit") != std::string::npos || lower.find("rchit") != std::string::npos)
+    if (lower.contains("closesthit") || lower.contains("rchit"))
         return Spark::RHI::RHIShaderStage::ClosestHit;
-    if (lower.find("miss") != std::string::npos || lower.find("rmiss") != std::string::npos)
+    if (lower.contains("miss") || lower.contains("rmiss"))
         return Spark::RHI::RHIShaderStage::Miss;
-    if (lower.find("anyhit") != std::string::npos || lower.find("rahit") != std::string::npos)
+    if (lower.contains("anyhit") || lower.contains("rahit"))
         return Spark::RHI::RHIShaderStage::AnyHit;
-    if (lower.find("intersection") != std::string::npos || lower.find("rint") != std::string::npos)
+    if (lower.contains("intersection") || lower.contains("rint"))
         return Spark::RHI::RHIShaderStage::Intersection;
-    if (lower.find("callable") != std::string::npos || lower.find("rcall") != std::string::npos)
+    if (lower.contains("callable") || lower.contains("rcall"))
         return Spark::RHI::RHIShaderStage::Callable;
 
     // Default

@@ -350,7 +350,7 @@ namespace SparkEditor
                 inFile.close();
 
                 // Replace placeholders
-                if (content.find(placeholder) == std::string::npos)
+                if (!content.contains(placeholder))
                     continue;
 
                 size_t pos = 0;
@@ -946,7 +946,7 @@ namespace SparkEditor
                 break;
 
             // Skip the outer object
-            if (content.find("\"recentProjects\"", 0) != std::string::npos && pos == 0)
+            if (content.contains("\"recentProjects\"") && pos == 0)
             {
                 pos++;
                 continue;

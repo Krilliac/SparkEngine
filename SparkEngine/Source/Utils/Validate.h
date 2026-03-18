@@ -43,6 +43,7 @@
 #include "LogMacros.h"
 #include <string>
 #include <type_traits>
+#include <utility>
 
 // ============================================================================
 // Internal helpers
@@ -371,8 +372,15 @@ namespace Spark::Validation
 
 /**
  * @def SPARK_UNREACHABLE(category, msg)
- * @brief Marks code paths that should never be reached — aborts if executed
+ * @brief Marks code paths that should never be reached — aborts in Debug, UB hint in Release
+ *
+ * In Debug builds: logs and asserts (fail-fast).
+ * In Release builds: calls std::unreachable() so the compiler can optimize assuming
+ * this path is never taken.
  */
+#ifdef NDEBUG
+#define SPARK_UNREACHABLE(category, msg) std::unreachable()
+#else
 #define SPARK_UNREACHABLE(category, msg)                                                                               \
     do                                                                                                                 \
     {                                                                                                                  \
@@ -380,6 +388,7 @@ namespace Spark::Validation
                                                 "Reached unreachable code", __FILE__, __LINE__, __FUNCTION__, msg);    \
         ASSERT_ALWAYS_MSG(false, "UNREACHABLE: %s", msg);                                                              \
     } while (0)
+#endif
 
 // ============================================================================
 // Diagnostic Logging — Function/scope tracing

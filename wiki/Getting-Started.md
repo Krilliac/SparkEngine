@@ -6,8 +6,8 @@ This guide covers everything you need to clone, build, and run SparkEngine from 
 
 | Requirement | Details |
 |-------------|---------|
-| **C++ Compiler** | MSVC v143 (Visual Studio 2022), GCC 11+, or Clang 14+ with C++20 support |
-| **CMake** | 3.16 or newer |
+| **C++ Compiler** | MSVC v143 (Visual Studio 2022 17.6+), GCC 13+, or Clang 17+ with C++23 support |
+| **CMake** | 3.25 or newer |
 | **Graphics** | DirectX 11 capable GPU (Windows). Vulkan SDK optional. OpenGL 4.5 optional. |
 | **Platform** | Windows 10+ (primary), Linux x64 (experimental) |
 | **Git** | For cloning with submodules |
@@ -401,11 +401,11 @@ sudo snap install cmake --classic
 brew upgrade cmake
 ```
 
-### MSVC C++20 Errors
+### MSVC C++23 Errors
 
-**Symptom:** Compiler errors about missing C++20 features, `std::format`, or `constexpr` issues.
+**Symptom:** Compiler errors about missing C++23 features, `std::expected`, `std::print`, or deducing `this`.
 
-**Fix:** Ensure you are using MSVC v143 (Visual Studio 2022) or newer. Open the Visual Studio Installer and update to the latest version. The engine requires full C++20 support.
+**Fix:** Ensure you are using MSVC v143 (Visual Studio 2022 version 17.6+) or newer. Open the Visual Studio Installer and update to the latest version. The engine requires full C++23 support.
 
 ### Linux: Missing X11/OpenGL Headers
 

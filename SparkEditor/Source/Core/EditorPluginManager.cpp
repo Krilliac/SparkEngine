@@ -71,7 +71,7 @@ namespace SparkEditor
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading plugin from '%s'", path.c_str());
 
         // Security: reject path traversal sequences
-        if (path.find("..") != std::string::npos)
+        if (path.contains(".."))
         {
             Spark::SimpleConsole::GetInstance().LogError("Plugin path rejected — contains '..' traversal: " + path);
             return false;

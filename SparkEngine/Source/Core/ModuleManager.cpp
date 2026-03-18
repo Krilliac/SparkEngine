@@ -114,7 +114,7 @@ bool ModuleManager::LoadModule(const std::string& path)
     auto& console = Spark::SimpleConsole::GetInstance();
 
     // Security: reject path traversal sequences
-    if (path.find("..") != std::string::npos)
+    if (path.contains(".."))
     {
         console.LogError("Module path rejected — contains '..' traversal: " + path);
         return false;
@@ -362,14 +362,12 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
 
         // Skip the engine executable's own DLLs that aren't modules
         // Look for common module naming patterns
-        bool isCandidate =
-            (filename.find("Game") != std::string::npos || filename.find("Module") != std::string::npos ||
-             filename.find("Plugin") != std::string::npos);
+        bool isCandidate = (filename.contains("Game") || filename.contains("Module") || filename.contains("Plugin"));
 
         // Skip system/runtime DLLs
-        bool isSystem = (filename.find("d3d") == 0 || filename.find("vcruntime") == 0 || filename.find("msvcp") == 0 ||
-                         filename.find("ucrtbase") == 0 || filename.find("SparkConsole") != std::string::npos ||
-                         filename.find("SparkEngine") != std::string::npos);
+        bool isSystem =
+            (filename.find("d3d") == 0 || filename.find("vcruntime") == 0 || filename.find("msvcp") == 0 ||
+             filename.find("ucrtbase") == 0 || filename.contains("SparkConsole") || filename.contains("SparkEngine"));
 
         if (isCandidate && !isSystem)
         {

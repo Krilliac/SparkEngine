@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 
 # ================================================================
 # Modern CMake Configuration - Cross-Platform Build
@@ -122,7 +122,7 @@ option(STRIP_DEBUG_SYMBOLS "Strip debug symbols from the final binary" OFF)
 # ---------------------------------------------------------------------
 # 4) C++ standard and in-source build guard
 # ---------------------------------------------------------------------
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -165,7 +165,7 @@ if(MSVC)
         add_compile_options(/Zc:__cplusplus /permissive-)
     endif()
 
-    # VS 2026 (v144, _MSC_VER >= 1940): enable additional C++23 readiness flags
+    # VS 2026 (v144, _MSC_VER >= 1940): enable C++26 readiness flags
     if(MSVC_VERSION GREATER_EQUAL 1940)
         add_compile_options(
             /Zc:preprocessor   # Standard-conforming preprocessor (fully enabled in v144)

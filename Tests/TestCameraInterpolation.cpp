@@ -27,7 +27,10 @@ namespace TestCameraInterp
         return {a.x + t * (b.x - a.x), a.y + t * (b.y - a.y), a.z + t * (b.z - a.z)};
     }
 
-    float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
+    float SmoothStep(float t)
+    {
+        return t * t * (3.0f - 2.0f * t);
+    }
 
     // ============================================================================
     // Simulated camera with smooth transition

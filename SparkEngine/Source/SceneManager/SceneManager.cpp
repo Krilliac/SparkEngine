@@ -69,7 +69,7 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
 
     // Security: reject path traversal attempts
     std::string narrowCheck = WideToNarrow(filepath);
-    if (narrowCheck.find("..") != std::string::npos)
+    if (narrowCheck.contains(".."))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Path traversal rejected: " + filepath, L"ERROR");
         return false;
@@ -609,7 +609,7 @@ bool SceneManager::LoadCustom(const std::wstring& path)
     std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
-    bool isINIFormat = (content.find("[Scene]") != std::string::npos || content.find("[Object]") != std::string::npos);
+    bool isINIFormat = (content.contains("[Scene]") || content.contains("[Object]"));
 
     if (isINIFormat)
     {

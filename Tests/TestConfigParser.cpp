@@ -170,8 +170,8 @@ TEST(ConfigParser_SaveToString)
     cfg.SetString("Section", "key", "value");
 
     std::string output = cfg.SaveToString();
-    EXPECT_TRUE(output.find("[Section]") != std::string::npos);
-    EXPECT_TRUE(output.find("key = value") != std::string::npos);
+    EXPECT_TRUE(output.contains("[Section]"));
+    EXPECT_TRUE(output.contains("key = value"));
 }
 
 TEST(ConfigParser_BoolVariants)

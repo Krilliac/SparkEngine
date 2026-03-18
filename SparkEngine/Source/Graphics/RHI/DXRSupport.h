@@ -27,6 +27,7 @@
 #include <unordered_map>
 #include <memory>
 #include <cstdint>
+#include <utility>
 
 // DXR lives in Spark::Graphics (not Spark::RHI) because it requires D3D12
 // and is an optional high-level feature, unlike the backend-agnostic RHI layer.
@@ -49,11 +50,11 @@ namespace Spark::Graphics
 
     inline RTFeature operator|(RTFeature a, RTFeature b)
     {
-        return static_cast<RTFeature>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+        return static_cast<RTFeature>(std::to_underlying(a) | std::to_underlying(b));
     }
     inline RTFeature operator&(RTFeature a, RTFeature b)
     {
-        return static_cast<RTFeature>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+        return static_cast<RTFeature>(std::to_underlying(a) & std::to_underlying(b));
     }
     inline bool operator!(RTFeature a)
     {

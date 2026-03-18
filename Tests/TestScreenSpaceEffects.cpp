@@ -222,9 +222,9 @@ TEST(SSE_ConsoleStatus)
     sse.Initialize();
 
     std::string status = sse.Console_GetStatus();
-    EXPECT_TRUE(status.find("Screen-Space Effects") != std::string::npos);
-    EXPECT_TRUE(status.find("SSAO") != std::string::npos);
-    EXPECT_TRUE(status.find("SSR") != std::string::npos);
+    EXPECT_TRUE(status.contains("Screen-Space Effects"));
+    EXPECT_TRUE(status.contains("SSAO"));
+    EXPECT_TRUE(status.contains("SSR"));
 
     sse.Shutdown();
 }

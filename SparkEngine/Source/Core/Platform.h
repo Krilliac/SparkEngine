@@ -76,6 +76,112 @@
 #endif
 
 // ============================================================================
+// C++ Standard Detection
+// Detects the active C++ standard level and defines SPARK_CPP_* macros.
+// ============================================================================
+
+// GCC 13/14 with -std=c++23 may report __cplusplus as 202100L (draft value)
+// rather than the final 202302L. We treat >= 202100L as C++23 since that
+// intermediate value is only emitted when the compiler is in C++23 mode.
+#if defined(__cplusplus)
+#if __cplusplus >= 202612L
+#define SPARK_CPP26 1
+#define SPARK_CPP23 1
+#define SPARK_CPP20 1
+#elif __cplusplus >= 202100L
+#define SPARK_CPP23 1
+#define SPARK_CPP20 1
+#elif __cplusplus >= 202002L
+#define SPARK_CPP20 1
+#endif
+#endif
+
+// MSVC reports __cplusplus correctly only with /Zc:__cplusplus (which we enable).
+// Double-check via _MSVC_LANG as a fallback for third-party code that omits the flag.
+#if defined(_MSVC_LANG) && !defined(SPARK_CPP23)
+#if _MSVC_LANG >= 202612L
+#define SPARK_CPP26 1
+#define SPARK_CPP23 1
+#define SPARK_CPP20 1
+#elif _MSVC_LANG >= 202100L
+#define SPARK_CPP23 1
+#define SPARK_CPP20 1
+#elif _MSVC_LANG >= 202002L && !defined(SPARK_CPP20)
+#define SPARK_CPP20 1
+#endif
+#endif
+
+// Minimum standard check — engine requires C++23
+#if !defined(SPARK_CPP23)
+#error "SparkEngine requires a C++23-capable compiler. Please use GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+)."
+#endif
+
+// ============================================================================
+// C++ Feature Detection (library features gated behind __cpp_lib_* / __has_include)
+// These allow gradual adoption of C++23 library features and forward-compat
+// with C++26 features that some compilers already ship.
+// ============================================================================
+
+// C++23 library features
+#if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202211L
+#define SPARK_HAS_EXPECTED 1
+#endif
+
+#if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L
+#define SPARK_HAS_PRINT 1
+#endif
+
+#if defined(__cpp_lib_flat_map) && __cpp_lib_flat_map >= 202207L
+#define SPARK_HAS_FLAT_MAP 1
+#endif
+
+#if defined(__cpp_lib_stacktrace) && __cpp_lib_stacktrace >= 202011L
+#define SPARK_HAS_STACKTRACE 1
+#endif
+
+#if defined(__cpp_lib_mdspan) && __cpp_lib_mdspan >= 202207L
+#define SPARK_HAS_MDSPAN 1
+#endif
+
+#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
+#define SPARK_HAS_GENERATOR 1
+#endif
+
+// C++23 language features
+#if defined(__cpp_if_consteval) && __cpp_if_consteval >= 202106L
+#define SPARK_HAS_IF_CONSTEVAL 1
+#endif
+
+#if defined(__cpp_deducing_this) && __cpp_deducing_this >= 202110L
+#define SPARK_HAS_DEDUCING_THIS 1
+#endif
+
+#if defined(__cpp_multidimensional_subscript) && __cpp_multidimensional_subscript >= 202211L
+#define SPARK_HAS_MULTIDIM_SUBSCRIPT 1
+#endif
+
+#if defined(__cpp_size_t_suffix) && __cpp_size_t_suffix >= 202011L
+#define SPARK_HAS_SIZE_T_SUFFIX 1
+#endif
+
+// C++26 forward-compatibility — features that some compilers already ship
+#if defined(__cpp_lib_optional_range_support) && __cpp_lib_optional_range_support >= 202406L
+#define SPARK_HAS_OPTIONAL_RANGE 1
+#endif
+
+#if defined(__cpp_contracts) && __cpp_contracts >= 202411L
+#define SPARK_HAS_CONTRACTS 1
+#endif
+
+#if defined(__cpp_pack_indexing) && __cpp_pack_indexing >= 202311L
+#define SPARK_HAS_PACK_INDEXING 1
+#endif
+
+#if defined(__cpp_reflection) && __cpp_reflection >= 202306L
+#define SPARK_HAS_REFLECTION 1
+#endif
+
+// ============================================================================
 // Platform Detection
 // ============================================================================
 

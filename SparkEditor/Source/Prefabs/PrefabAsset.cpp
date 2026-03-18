@@ -142,7 +142,7 @@ namespace SparkEditor
         std::string line;
         // Read header
         std::getline(file, line);
-        if (line.find("SPARKPREFAB") == std::string::npos)
+        if (!line.contains("SPARKPREFAB"))
         {
             return prefab;
         }

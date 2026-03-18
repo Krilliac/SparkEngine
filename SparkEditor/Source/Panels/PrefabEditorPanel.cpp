@@ -191,7 +191,7 @@ namespace SparkEditor
                 std::string lowerFilter = m_searchFilter;
                 std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
                 std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(), ::tolower);
-                if (lowerName.find(lowerFilter) == std::string::npos)
+                if (!lowerName.contains(lowerFilter))
                 {
                     continue;
                 }

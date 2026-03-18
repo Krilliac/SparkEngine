@@ -81,7 +81,7 @@ namespace SparkEditor
             {
                 auto& entry = m_strings[i];
 
-                if (hasFilter && entry.key.find(m_filterText) == std::string::npos)
+                if (hasFilter && !entry.key.contains(m_filterText))
                     continue;
 
                 ImGui::PushID(i);

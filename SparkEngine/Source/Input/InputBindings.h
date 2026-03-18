@@ -30,6 +30,7 @@
 #include <vector>
 #include <functional>
 #include <cstdint>
+#include <utility>
 
 namespace Spark
 {
@@ -74,17 +75,17 @@ namespace Spark
 
     inline AccessibilityFlags operator|(AccessibilityFlags a, AccessibilityFlags b)
     {
-        return static_cast<AccessibilityFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+        return static_cast<AccessibilityFlags>(std::to_underlying(a) | std::to_underlying(b));
     }
 
     inline AccessibilityFlags operator&(AccessibilityFlags a, AccessibilityFlags b)
     {
-        return static_cast<AccessibilityFlags>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+        return static_cast<AccessibilityFlags>(std::to_underlying(a) & std::to_underlying(b));
     }
 
     inline bool HasFlag(AccessibilityFlags flags, AccessibilityFlags flag)
     {
-        return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(flag)) != 0;
+        return (std::to_underlying(flags) & std::to_underlying(flag)) != 0;
     }
 
     // =============================================================================

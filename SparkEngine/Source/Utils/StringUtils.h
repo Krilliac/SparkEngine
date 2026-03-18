@@ -95,7 +95,7 @@ namespace Spark
 
         inline bool Contains(const std::string& str, const std::string& substr)
         {
-            return str.find(substr) != std::string::npos;
+            return str.contains(substr);
         }
 
         // =============================================================================

@@ -30,7 +30,7 @@ bool GameModuleLoader::Load(const std::string& path)
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading game module: %s", path.c_str());
 
     // Security: reject path traversal sequences
-    if (path.find("..") != std::string::npos)
+    if (path.contains(".."))
     {
         Spark::SimpleConsole::GetInstance().LogError("Game module path rejected — contains '..' traversal: " + path);
         return false;

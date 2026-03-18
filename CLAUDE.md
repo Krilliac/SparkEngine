@@ -2,7 +2,7 @@
 
 ## What is this?
 
-SparkEngine is a C++20 open-source 3D game engine. Originally focused on first-person shooters, it is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres.
+SparkEngine is a C++23 open-source 3D game engine (with C++26 forward-compatibility macros). Originally focused on first-person shooters, it is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres.
 - **Rendering**: Full RHI abstraction — D3D11 (primary), D3D12/Vulkan/Metal/OpenGL (experimental backends)
 - **Physics**: Bullet Physics 3
 - **Audio**: XAudio2
@@ -27,7 +27,7 @@ cmake --build build --config Release
 cd build && ctest --output-on-failure
 ```
 
-CMake 3.16+, C++20 required. Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (OFF by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`.
+CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (OFF by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`.
 
 ## Anti-Bloat Guidelines
 
@@ -108,7 +108,7 @@ When refactoring, aim to remove dead weight — but removal is a tool, not a man
 
 ## Coding Standards
 
-- **C++20**: `constexpr`, `enum class`, structured bindings, `std::format`, concepts
+- **C++23**: `constexpr`, `enum class`, structured bindings, `std::format`, `std::expected`, `std::print`, concepts, deducing `this`, `if consteval`, `std::unreachable`
 - **Ownership**: `std::unique_ptr` owning, raw pointers non-owning. No naked `new`/`delete`
 - **RAII**: D3D11 via `ComPtr`, all resources released in destructors
 - **Const-correctness**: `const` on all non-mutating methods and parameters

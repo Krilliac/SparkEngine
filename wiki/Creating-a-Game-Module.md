@@ -214,9 +214,9 @@ On Linux, `__declspec(dllexport)` is replaced with `__attribute__((visibility("d
 If your game module lives inside the SparkEngine source tree, use the `spark_add_game_module()` helper from `cmake/SparkGameModule.cmake`:
 
 ```cmake
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 project(MyGame LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 include(${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake)
 
@@ -235,7 +235,7 @@ The `spark_add_game_module(TARGET_NAME ...)` function performs the following:
 | 2 | Defines `SPARK_MODULE_DLL` and `SPARK_GAME_DLL` compile definitions |
 | 3 | Links against `Spark::SparkEngineLib` |
 | 4 | Sets up SDK include directories (`SPARK_ENGINE_INCLUDE_DIR`) |
-| 5 | Enforces C++20 standard (`cxx_std_20`) |
+| 5 | Enforces C++23 standard (`cxx_std_23`) |
 | 6 | On MSVC, sets the runtime library to `MultiThreadedDLL` / `MultiThreadedDebugDLL` |
 
 ### As a Standalone Project
@@ -243,9 +243,9 @@ The `spark_add_game_module(TARGET_NAME ...)` function performs the following:
 For standalone projects outside the engine tree, use `find_package`. Including the preflight check first gives clear diagnostics if the SDK installation is incomplete:
 
 ```cmake
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 project(MyGame LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 # Pre-flight validation (optional but recommended)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")

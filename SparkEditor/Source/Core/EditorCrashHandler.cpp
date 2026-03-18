@@ -264,7 +264,7 @@ namespace SparkEditor
             // Simple parser for our JSON-like format
             while (std::getline(file, line))
             {
-                if (line.find("\"currentLayout\"") != std::string::npos)
+                if (line.contains("\"currentLayout\""))
                 {
                     size_t start = line.find(": \"") + 3;
                     size_t end = line.find_last_of("\"");
@@ -273,7 +273,7 @@ namespace SparkEditor
                         data.currentLayout = line.substr(start, end - start);
                     }
                 }
-                else if (line.find("\"currentProject\"") != std::string::npos)
+                else if (line.contains("\"currentProject\""))
                 {
                     size_t start = line.find(": \"") + 3;
                     size_t end = line.find_last_of("\"");
@@ -282,7 +282,7 @@ namespace SparkEditor
                         data.currentProject = line.substr(start, end - start);
                     }
                 }
-                else if (line.find("\"lastSavedScene\"") != std::string::npos)
+                else if (line.contains("\"lastSavedScene\""))
                 {
                     size_t start = line.find(": \"") + 3;
                     size_t end = line.find_last_of("\"");
@@ -291,12 +291,12 @@ namespace SparkEditor
                         data.lastSavedScene = line.substr(start, end - start);
                     }
                 }
-                else if (line.find("\"openFiles\"") != std::string::npos)
+                else if (line.contains("\"openFiles\""))
                 {
                     std::string arrayLine;
                     while (std::getline(file, arrayLine))
                     {
-                        if (arrayLine.find(']') != std::string::npos)
+                        if (arrayLine.contains(']'))
                             break;
                         size_t qStart = arrayLine.find('\"');
                         if (qStart == std::string::npos)
@@ -307,12 +307,12 @@ namespace SparkEditor
                         data.openFiles.push_back(arrayLine.substr(qStart + 1, qEnd - qStart - 1));
                     }
                 }
-                else if (line.find("\"recentOperations\"") != std::string::npos)
+                else if (line.contains("\"recentOperations\""))
                 {
                     std::string arrayLine;
                     while (std::getline(file, arrayLine))
                     {
-                        if (arrayLine.find(']') != std::string::npos)
+                        if (arrayLine.contains(']'))
                             break;
                         size_t qStart = arrayLine.find('\"');
                         if (qStart == std::string::npos)

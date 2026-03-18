@@ -40,6 +40,7 @@
 #include "TypeTraits.h"
 #include <type_traits>
 #include <cstdint>
+#include <utility>
 
 namespace Spark
 {
@@ -60,12 +61,12 @@ namespace Spark
 
     inline CVarFlags operator|(CVarFlags a, CVarFlags b)
     {
-        return static_cast<CVarFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+        return static_cast<CVarFlags>(std::to_underlying(a) | std::to_underlying(b));
     }
 
     inline bool operator&(CVarFlags a, CVarFlags b)
     {
-        return (static_cast<uint32_t>(a) & static_cast<uint32_t>(b)) != 0;
+        return (std::to_underlying(a) & std::to_underlying(b)) != 0;
     }
 
     // ============================================================================

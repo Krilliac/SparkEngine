@@ -45,8 +45,7 @@ TEST(HybridRT_RTCapabilities_InDeviceCaps)
     // Verify RTCapabilities is accessible as a member
     deviceCaps.rayTracing.bestBackend = RayTracingBackend::Software_SDFGI;
     deviceCaps.rayTracing.supportsHardwareRT = false;
-    EXPECT_EQ(static_cast<int>(deviceCaps.rayTracing.bestBackend),
-              static_cast<int>(RayTracingBackend::Software_SDFGI));
+    EXPECT_EQ(static_cast<int>(deviceCaps.rayTracing.bestBackend), static_cast<int>(RayTracingBackend::Software_SDFGI));
     EXPECT_FALSE(deviceCaps.rayTracing.supportsHardwareRT);
 }
 
