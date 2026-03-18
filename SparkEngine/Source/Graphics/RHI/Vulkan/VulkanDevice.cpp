@@ -1467,7 +1467,7 @@ namespace Spark
                     return nullptr;
                 // Wrap an externally-owned VkImage — caller manages lifetime
                 auto image = static_cast<VkImage>(nativeHandle);
-                return new VulkanTexture(desc, image, VK_NULL_HANDLE, m_device);
+                return new VulkanTexture(desc, image, VK_NULL_HANDLE, VK_NULL_HANDLE, m_device, false);
             }
 
             IRHIShader* VulkanDevice::CreateShader(const RHIShaderDesc& desc)
