@@ -1,6 +1,6 @@
 # Input System
 
-The Input System handles keyboard, mouse, and gamepad input with frame-based state tracking, key bindings, accessibility features, and a cross-platform abstraction layer. It consists of four main classes: `InputManager` for direct keyboard/mouse input, `GamepadInput` for controller support, `InputBindingManager` for rebindable controls and presets, and `PlatformInputManager` for cross-platform unified input.
+The Input System handles keyboard, mouse, and gamepad input with frame-based state tracking, key bindings, and accessibility features. It consists of three main classes: `InputManager` for direct keyboard/mouse input, `GamepadInput` for controller support, and `InputBindingManager` for rebindable controls and presets.
 
 **Source:** `SparkEngine/Source/Input/`
 
@@ -12,22 +12,15 @@ The Input System handles keyboard, mouse, and gamepad input with frame-based sta
 ┌───────────────────────────────────────────────────────────────────┐
 │                         Game Code                                 │
 │  input.IsKeyDown('W')  |  input.IsActionDown("Jump")             │
-│  gamepad.GetLeftStick() |  platformInput.GetAxisValue("Move")     │
-└───────────────┬─────────────────┬─────────────────┬───────────────┘
-                │                 │                 │
-                ▼                 ▼                 ▼
-┌───────────────────┐  ┌──────────────────┐  ┌─────────────────────┐
-│   InputManager    │  │   GamepadInput   │  │ PlatformInputManager│
-│  (keyboard/mouse) │  │  (XInput gamepads│  │ (unified, singleton)│
-│  Win32 messages   │  │   up to 4)       │  │ action/axis mapping │
-└───────────────────┘  └──────────────────┘  │ event callbacks     │
-                                             ├─────────────────────┤
-                                             │ IPlatformInputBackend│
-                                             │  (interface)        │
-                                             ├──────────┬──────────┤
-                                             │Win32Input││SDL2Input │
-                                             │Backend   ││Backend  │
-                                             └──────────┘└──────────┘
+│  gamepad.GetLeftStick() |  bindings.IsActionActive("Sprint")      │
+└───────────────┬─────────────────┬───────────────────────────────┘
+                │                 │
+                ▼                 ▼
+┌───────────────────┐  ┌──────────────────┐
+│   InputManager    │  │   GamepadInput   │
+│  (keyboard/mouse) │  │  (XInput gamepads│
+│  Win32/SDL2 msgs  │  │   up to 4)       │
+└───────────────────┘  └──────────────────┘
 
 ┌───────────────────────────────────────────────────────────────────┐
 │                    InputBindingManager                             │
@@ -43,7 +36,6 @@ The Input System handles keyboard, mouse, and gamepad input with frame-based sta
 | `InputManager.h` | Keyboard and mouse input, frame-based state tracking, console integration |
 | `GamepadInput.h` | Xbox controller support via XInput, dead zones, vibration, action mapping |
 | `InputBindings.h` | Runtime rebinding, presets, accessibility flags, JSON serialization |
-| `PlatformInput.h` | Cross-platform abstraction layer with pluggable backends |
 
 ---
 
@@ -467,144 +459,6 @@ bindings.OnBindingChanged([](const std::string& action, const InputBinding& bind
 
 ---
 
-## PlatformInputManager (Cross-Platform)
-
-The `PlatformInputManager` is a singleton providing a unified input API over pluggable platform backends.
-
-### Unified KeyCode Enum
-
-```cpp
-enum class KeyCode : uint16_t {
-    Unknown = 0,
-
-    // Letters (ASCII values)
-    A = 'A', B = 'B', ..., Z = 'Z',
-
-    // Number row
-    Num0 = '0', Num1 = '1', ..., Num9 = '9',
-
-    // Function keys
-    F1 = 256, F2, F3, ..., F12,
-
-    // Navigation
-    Escape = 280, Enter, Tab, Backspace, Insert, Delete,
-    Right, Left, Down, Up, PageUp, PageDown, Home, End,
-
-    // Modifiers
-    LeftShift = 300, RightShift, LeftCtrl, RightCtrl,
-    LeftAlt, RightAlt, LeftSuper, RightSuper,
-
-    // Punctuation
-    Space = 320, Comma, Period, Slash, Semicolon, Apostrophe,
-    LeftBracket, RightBracket, Backslash, GraveAccent, Minus, Equal,
-
-    // Numpad
-    Numpad0 = 350, ..., Numpad9, NumpadDecimal, NumpadDivide,
-    NumpadMultiply, NumpadSubtract, NumpadAdd, NumpadEnter,
-
-    // Mouse buttons (unified with keyboard for binding convenience)
-    MouseLeft = 400, MouseRight, MouseMiddle, MouseButton4, MouseButton5,
-
-    MaxKeyCode = 512   // Sentinel for array sizing
-};
-```
-
-### Platform Backends
-
-| Backend | Class | Platform | Notes |
-|---------|-------|----------|-------|
-| Win32+XInput | `Win32InputBackend` | Windows | Default on Windows |
-| SDL2 | `SDL2InputBackend` | Cross-platform | Requires `SPARK_SDL2_AVAILABLE` |
-
-### Backend Interface
-
-```cpp
-class IPlatformInputBackend {
-    virtual bool Initialize(void* windowHandle) = 0;
-    virtual void Shutdown() = 0;
-    virtual void PollEvents() = 0;
-
-    virtual bool IsKeyDown(KeyCode key) const = 0;
-    virtual bool WasKeyPressed(KeyCode key) const = 0;
-    virtual bool WasKeyReleased(KeyCode key) const = 0;
-
-    virtual void GetMousePosition(int& x, int& y) const = 0;
-    virtual void GetMouseDelta(int& dx, int& dy) const = 0;
-    virtual float GetMouseScroll() const = 0;
-    virtual void SetMouseCapture(bool capture) = 0;
-    virtual bool IsMouseCaptured() const = 0;
-
-    virtual int GetGamepadCount() const = 0;
-    virtual const GamepadState* GetGamepadState(int index) const = 0;
-    virtual void SetVibration(int index, float left, float right, float duration) = 0;
-    virtual const char* GetBackendName() const = 0;
-};
-```
-
-### Action and Axis Mapping
-
-```cpp
-auto& input = PlatformInputManager::GetInstance();
-input.Initialize(hwnd);
-
-// Action bindings (digital: pressed/released/held)
-input.BindAction("Jump", KeyCode::Space, ActionTrigger::Pressed);
-input.BindAction("Jump", GamepadBtn::A, ActionTrigger::Pressed);
-input.BindAction("Fire", KeyCode::MouseLeft, ActionTrigger::Held);
-
-// Axis bindings (analog: [-1, 1])
-input.BindAxis("MoveForward", KeyCode::W, KeyCode::S);
-input.BindAxis("MoveRight", KeyCode::D, KeyCode::A);
-input.BindAxis("MoveForward", GamepadAxis::LeftStickY, 1.0f, 0.15f);
-
-// Query
-if (input.IsActionActive("Jump")) player.Jump();
-float forward = input.GetAxisValue("MoveForward");  // -1.0 to 1.0
-
-// Rebind at runtime
-input.RebindAction("Jump", KeyCode::Enter);
-input.RebindAxis("MoveForward", KeyCode::Up, KeyCode::Down);
-```
-
-### ActionTrigger Modes
-
-```cpp
-enum class ActionTrigger {
-    Pressed,   // Rising edge only (one frame)
-    Released,  // Falling edge only (one frame)
-    Held       // Every frame while held
-};
-```
-
-### Input Events (Callback-Based)
-
-```cpp
-struct InputEvent {
-    enum class Type {
-        KeyDown, KeyUp,
-        MouseMove, MouseScroll,
-        GamepadButton, GamepadAxis,
-        TextInput
-    };
-    Type type;
-    KeyCode key;
-    int mouseX, mouseY, mouseDeltaX, mouseDeltaY;
-    float scrollDelta;
-    int gamepadIndex;
-    GamepadBtn gamepadButton;
-    float axisValue;
-    char32_t textChar;   // Unicode character for text input
-};
-
-input.RegisterEventCallback([](const InputEvent& event) {
-    if (event.type == InputEvent::Type::KeyDown) {
-        LOG("Key pressed: " + input.GetKeyName(event.key));
-    }
-});
-```
-
----
-
 ## Default FPS Controls
 
 | Input | Action |
@@ -630,7 +484,6 @@ input.RegisterEventCallback([](const InputEvent& event) {
 | `InputManager` | Partial | Read access protected by `m_inputMutex`. `Update()` and `HandleMessage()` must be called from main thread only. |
 | `GamepadInput` | Single-threaded | Call all methods from main thread. XInput is not thread-safe. |
 | `InputBindingManager` | Single-threaded | Designed for main-thread access only. |
-| `PlatformInputManager` | Single-threaded | Singleton, main-thread access. Backend `PollEvents()` must be called from the same thread as `Update()`. |
 
 ---
 
@@ -639,8 +492,7 @@ input.RegisterEventCallback([](const InputEvent& event) {
 - `InputManager::Initialize()` requires a valid `HWND`. Passing `nullptr` will result in mouse capture failures.
 - `GamepadInput` returns safe defaults (0, false, {0,0}) for disconnected or out-of-range controller indices.
 - `InputBindingManager::LoadFromFile()` returns `false` if the JSON file is missing or malformed; existing bindings are preserved.
-- `PlatformInputManager::Initialize()` returns `false` if no suitable backend is available; `GetBackendName()` returns `nullptr` in that case.
-- Key name lookups (`GetKeyFromName()`) return `KeyCode::Unknown` for unrecognized names.
+- Key name lookups return `KeyCode::Unknown` (or equivalent) for unrecognized names.
 
 ---
 

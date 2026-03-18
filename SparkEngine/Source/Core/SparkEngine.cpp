@@ -233,6 +233,10 @@ static void UpdateGameplaySystems(float dt)
     // Music manager — crossfade, dynamic layering
     Spark::Audio::MusicManager::GetInstance().Update(dt);
 
+    // Weapon system — fire control, reload, recoil, ADS
+    static Spark::Gameplay::WeaponSystem s_weaponSystem;
+    s_weaponSystem.Update(dt);
+
     // Update destruction debris lifetimes and cleanup
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.SetWorld(world);

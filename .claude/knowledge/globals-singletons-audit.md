@@ -30,13 +30,19 @@
 20. ConditionSystem/AbilitySystem/InstanceManager/MovementSystem — All wired in Init/Update/ShutdownGameplaySystems() (TrinityCore, 2026-03-18)
 21. CoroutineScheduler — Update(dt) in UpdateGameplaySystems() (wired 2026-03-18)
 
-### Orphaned (6 — never initialized/called)
-1. **PlatformInputManager** — Full lifecycle (Init/Update/Shutdown) but never called; engine uses InputManager instead. **Recommendation: Delete (dead duplicate)**
-2. **AnimationManager** — Asset cache singleton; per-entity updates via ECS. No explicit Init/Update. **Recommendation: Acceptable as passive cache; no action needed**
-3. **NavMeshManager** — Passive registry (no Init/Update/Shutdown). AISystem queries it lazily. **Recommendation: Acceptable as passive registry; no action needed**
-4. **NavMeshObstacleManager** — Never called from any code. Comment says "wired at level load" but isn't. **Recommendation: Wire at level load or delete**
-5. **LODManager** — Passive cache (no Init/Update). Comment says "no init needed". **Recommendation: Acceptable as passive cache; no action needed**
-6. **DXRManager** — Gated behind ENABLE_DXR=OFF. Not orphaned, just disabled. **Recommendation: No action (feature flag)**
+22. WeaponSystem — Update(dt) via static local in UpdateGameplaySystems(); iterates WeaponInventoryComponent via EnTT view (wired 2026-03-18)
+
+### Passive Caches (no lifecycle methods — working as designed)
+1. **AnimationManager** — Asset cache singleton; GetClip()/GetSkeleton() called by AnimationSystem.cpp at runtime
+2. **NavMeshManager** — Passive registry. AISystem queries it lazily via CreateQuery("default")
+3. **NavMeshObstacleManager** — Passive manager for dynamic NavMesh carving. Wire SetNavMesh() when dynamic obstacles are needed
+4. **LODManager** — Passive cache for mesh LOD chains. SelectLOD() queried at render time when chains are registered
+5. **DXRManager** — Gated behind ENABLE_DXR=OFF. Not orphaned, just disabled by feature flag
+
+### Deleted
+- **PlatformInputManager** — Deleted 2026-03-18 (5 files, ~2,100 lines, dead duplicate of InputManager)
+- VisualScriptSystem — deleted (duplicate, 2026-03-17)
+- SequencerManager — class doesn't exist in codebase (was documentation-only reference)
 
 ### Deleted (confirmed removed in prior sessions)
 - VisualScriptSystem — deleted (duplicate, 2026-03-17)

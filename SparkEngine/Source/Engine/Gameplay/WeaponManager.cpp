@@ -4,7 +4,9 @@
  */
 
 #include "WeaponManager.h"
+#include "../../Core/EngineContext.h"
 #include "../../Utils/Validate.h"
+#include "../ECS/Components.h"
 
 #include <algorithm>
 #include <cmath>
@@ -202,11 +204,21 @@ namespace Spark::Gameplay
 
     WeaponSystem::WeaponSystem() = default;
 
-    void WeaponSystem::Update(float /*deltaTime*/)
+    void WeaponSystem::Update(float deltaTime)
     {
-        // In a real ECS integration, this would iterate over all entities
-        // with WeaponInventoryComponent using EnTT views.
-        // The per-entity processing is factored into ProcessWeapon() for testability.
+        auto* ctx = ::EngineContext::Get();
+        if (!ctx)
+            return;
+
+        auto* world = ctx->GetWorld();
+        if (!world)
+            return;
+
+        auto view = world->GetEntitiesWith<WeaponInventoryComponent>();
+        for (auto [entity, inv] : view.each())
+        {
+            ProcessWeapon(inv, deltaTime);
+        }
     }
 
     void WeaponSystem::ProcessWeapon(WeaponInventoryComponent& inv, float deltaTime)

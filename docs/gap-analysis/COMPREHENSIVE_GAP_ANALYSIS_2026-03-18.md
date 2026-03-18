@@ -23,13 +23,13 @@
 |--------|-------|
 | Total source files | 632 (.cpp + .h) |
 | Total lines of code | ~241K |
-| Test files | 85 (21.5K lines) |
+| Test files | 86 (22K+ lines) |
 | Wiki pages | 55 (29K lines) |
 | Functional core systems | 19 |
-| Orphaned singletons | 6 |
+| Orphaned singletons | 0 (all resolved — wired or reclassified as passive caches) |
 | TrinityCore systems (new) | 10 (all wired, none tested) |
 | Systems without tests | 14+ major subsystems |
-| Critical doc gaps | 10 |
+| Critical doc gaps | 8 (Camera + Persistence documented) |
 | TODO/FIXME comments | 6 (all scoped, non-critical) |
 
 **Overall health: GOOD.** Core engine is functional. Primary gaps are in testing
@@ -119,7 +119,7 @@ Previous sessions deleted 12 header-only stubs (SkyAtmosphere, WaterSystem, Glob
 ## 4. Audio
 
 - [x] AudioEngine (XAudio2) — **DONE** — 32 source voices, wired
-- [x] MusicManager — **DONE** — wired (confirmed via search)
+- [x] MusicManager — **DONE** — Initialize/Update/Shutdown wired into gameplay system lifecycle
 - [x] AudioMixer — **DONE** — renamed to AudioBusMixer to avoid ODR
 - [ ] Audio tests — **MISSING** — no dedicated tests for audio subsystem
 
@@ -179,7 +179,7 @@ Previous sessions deleted 12 header-only stubs (SkyAtmosphere, WaterSystem, Glob
 
 - [x] AngelScript VM — **DONE** — hot-reload, client/server context separation
 - [x] ScriptHookManager (TrinityCore) — **DONE** — 28 hook types, wired, **no tests**
-- [x] ConsoleRBAC (TrinityCore) — **DONE** — permission levels, wired
+- [x] ConsoleRBAC (TrinityCore) — **DONE** — permission levels, wired, **tested** (22 tests)
 
 ---
 
@@ -195,7 +195,7 @@ Previous sessions deleted 12 header-only stubs (SkyAtmosphere, WaterSystem, Glob
 - [x] UISystem — **DONE** — registered & updated
 - [x] ModSystem — **DONE** — registered
 - [x] SaveSystem — **DONE** — initialized, tested
-- [x] CoroutineScheduler — **DONE** — registered with EngineContext
+- [x] CoroutineScheduler — **DONE** — registered with EngineContext, Update(dt) called in gameplay loop
 - [x] Localization — **DONE** — restored from deletion
 - [ ] Inventory (engine-level) — **MISSING** — game-only in SparkGame
 - [ ] Quest (engine-level) — **MISSING** — game-only in SparkGame
@@ -284,9 +284,9 @@ Previous sessions deleted 12 header-only stubs (SkyAtmosphere, WaterSystem, Glob
 - 99.6% Doxygen coverage on headers
 
 ### 14.2 Critical Documentation Gaps
-1. **Camera System** — completely undocumented core system
+1. ~~**Camera System**~~ — **DONE** wiki/Camera-System.md
 2. **Core Platform Infrastructure** — scattered across CLAUDE.md
-3. **Persistence/AsyncDatabase** — zero docs
+3. ~~**Persistence/AsyncDatabase**~~ — **DONE** wiki/Persistence-System.md
 4. **Console & Logging** — scattered, incomplete
 5. **Editor Plugin System** — undocumented
 6. **OpenGL/Vulkan backend details** — missing dedicated pages
@@ -301,12 +301,12 @@ Previous sessions deleted 12 header-only stubs (SkyAtmosphere, WaterSystem, Glob
 
 | System | Action | Rationale |
 |--------|--------|-----------|
-| NavMeshManager | Wire into AI init path | AISystem queries it but it's never initialized |
-| NavMeshObstacleManager | Wire at level load | Comment in code says "wired at level load time" but it never is |
-| AnimationManager | Delete or merge | ECS AnimationSystem exists and works; standalone singleton is redundant |
-| LODManager (MeshLOD) | Wire into rendering | Passive system per comment, but Update() exists and is never called |
-| PlatformInputManager | Delete | InputManager is used everywhere; this is a dead duplicate |
-| WeaponManager | Evaluate | WeaponRegistry is wired; if WeaponManager has distinct functionality, wire it |
+| NavMeshManager | Leave as-is | Passive cache — no lifecycle methods. AISystem queries it on demand. Content (nav meshes) loaded at level load time |
+| NavMeshObstacleManager | Leave as-is | Passive manager — no lifecycle methods. Wire SetNavMesh() when dynamic obstacles are needed |
+| AnimationManager | Leave as-is | Working asset cache. AnimationSystem is a type alias for it. Used internally by AnimationSystem.cpp |
+| LODManager (MeshLOD) | Leave as-is | Passive cache — no Update() method. Queries only when meshes register LOD chains |
+| ~~PlatformInputManager~~ | **DELETED** | 5 files, ~2,100 lines removed (dead duplicate of InputManager) |
+| ~~WeaponSystem~~ | **WIRED** | Update() now iterates WeaponInventoryComponent via EnTT view; wired in UpdateGameplaySystems() |
 
 ---
 
@@ -348,14 +348,18 @@ Previous sessions deleted 12 header-only stubs (SkyAtmosphere, WaterSystem, Glob
 2. Update knowledge DB entries with current findings
 3. Create comprehensive gap analysis document (this file)
 
-### P1 — High (Next Session)
-4. Wire NavMeshManager into AI initialization path
-5. Wire LODManager into rendering update
-6. Delete PlatformInputManager (dead duplicate)
-7. Delete or merge AnimationManager singleton
-8. Write tests for remaining TrinityCore systems
-9. Create Camera System wiki page
-10. Create Persistence System wiki page
+### P1 — High (Completed 2026-03-18)
+4. ~~Wire NavMeshManager into AI initialization path~~ → Passive cache, no lifecycle methods needed
+5. ~~Wire LODManager into rendering update~~ → Passive cache, no Update() needed
+6. ~~Delete PlatformInputManager (dead duplicate)~~ → **DELETED** (5 files, ~2,100 lines)
+7. ~~Delete or merge AnimationManager singleton~~ → Working asset cache, used by AnimationSystem.cpp
+8. ~~Write tests for remaining TrinityCore systems~~ → Done (9 tests added)
+9. ~~Create Camera System wiki page~~ → wiki/Camera-System.md
+10. ~~Create Persistence System wiki page~~ → wiki/Persistence-System.md
+11. ~~Wire WeaponSystem ECS iteration~~ → Implemented Update() with EnTT view
+12. ~~Wire CoroutineScheduler::Update()~~ → Added to UpdateGameplaySystems()
+13. ~~Wire MusicManager Init/Update/Shutdown~~ → Added to gameplay system lifecycle
+14. ~~Add ConsoleRBAC test~~ → Tests/TestConsoleRBAC.cpp (22 tests)
 
 ### P2 — Medium (Ongoing)
 11. Document threading model and concurrency rules

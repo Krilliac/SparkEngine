@@ -15,9 +15,9 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Comprehensive bloat audit (P0 resolved) | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-18 |
 | 30 orphaned headers (27 deleted, 3 intentional) | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | **Resolved** | 2026-03-16 |
 | Duplicate systems (3/3 ODR risks fixed) | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
-| 94 tests (9 new TrinityCore tests added) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-18 |
+| 95 tests (10 new tests: 9 TrinityCore + ConsoleRBAC) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-18 |
 | CMake build (curl removed, dead options gone) | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
-| 26 singletons (6 orphaned/passive, 20 wired) | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | Active | 2026-03-18 |
+| 27 singletons (0 orphaned, 22 wired, 5 passive caches) | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | **Resolved** | 2026-03-18 |
 | 66 oversized functions, 7 private-method violations | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
 | MEMORY/ERRORS: 3 low-risk items remain | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Mostly Resolved | 2026-03-16 |
 | Rendering: 17 working, 12 header-only stubs (~15K dead lines) | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | Active | 2026-03-16 |
@@ -25,7 +25,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Editor: 24 working, all panels resolved | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | **Resolved** | 2026-03-16 |
 | SparkGame: 75% functional FPS, no AI enemies | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
 | SDK: unique_ptr fixed, ECS exposed, IGameModule gap | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
-| Docs: 55 wiki pages, 245/246 Doxygen, 10 critical gaps | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-18 |
+| Docs: 57 wiki pages, 245/246 Doxygen, 8 critical gaps | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-18 |
 | ThirdParty: 6 uninitialized submodules, curl removed | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-17 |
 
 ## Quick Reference by Topic
@@ -61,9 +61,10 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - TestSpatialGrid, TestReplicationFields, TestAsyncDatabase, TestScriptHookManager, TestModuleHotReload
 - All 9 added to Tests/CMakeLists.txt (94 total test files)
 
-**Full gap analysis completed (2026-03-18):**
+**Full gap analysis completed and P1 items resolved (2026-03-18):**
 - See `docs/gap-analysis/COMPREHENSIVE_GAP_ANALYSIS_2026-03-18.md`
 - Covers all 18 subsystem categories with DONE/PARTIAL/STUB/MISSING/ORPHANED status
+- P1 items completed: PlatformInputManager deleted, WeaponSystem wired, CoroutineScheduler wired, MusicManager wired, Camera + Persistence wiki pages created, ConsoleRBAC tested
 - Key remaining gaps: terrain rendering, audio tests, networking integration tests
 
 **RESOLVED: 10 TrinityCore-inspired systems (2026-03-18):**
