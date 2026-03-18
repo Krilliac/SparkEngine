@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*83 test files, 1042+ test cases*
+*84 test files, 1047+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -510,6 +510,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestScreenSpaceEffects` | 16 |
 | `TestSequencer` | 10 |
 | `TestSerializer` | 17 |
+| `TestShaderGraphCompiler` | 5 |
 | `TestShadowAtlas` | 7 |
 | `TestSplineMath` | 24 |
 | `TestSprite2DComponents` | 35 |

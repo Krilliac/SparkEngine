@@ -92,6 +92,7 @@ add_executable(SparkTests
     TestModuleDependency.cpp
     TestReflection.cpp
     TestPathCache.cpp
+    TestShaderGraphCompiler.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

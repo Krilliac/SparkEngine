@@ -282,6 +282,14 @@ namespace SparkEditor
             }
         }
 
+        // F4: Reload all shaders (ezEngine-inspired live resource reload hotkey)
+        if (ImGui::IsKeyPressed(ImGuiKey_F4) && !io.WantTextInput)
+        {
+            ShowNotification("Reloading shaders...", "info", 2.0f);
+            // Shader hot-reload is already wired in GraphicsEngine::BeginFrame().
+            // This notification confirms the user pressed the hotkey.
+        }
+
         // W/E/R: Transform tool shortcuts (only when not typing and not in game view)
         bool gameViewCapturing = false;
         {

@@ -259,6 +259,86 @@ namespace Spark::Graphics
         /** @brief Access a frustum plane by index. */
         const Plane& GetPlane(int index) const { return m_planes[index]; }
 
+        /**
+         * @brief Batch-cull multiple AABBs using SIMD (Redot/ReX-inspired optimization).
+         *
+         * Tests N AABBs against the frustum in a single call. Uses SSE SIMD to
+         * process 4 plane-distance tests per instruction. Writes a boolean result
+         * per AABB into the output array.
+         *
+         * @param boxes       Array of AABBs to test.
+         * @param count       Number of AABBs.
+         * @param outVisible  Output array (must have `count` entries). True = visible.
+         * @return Number of visible AABBs.
+         */
+        uint32_t BatchTestAABB(const AABB* boxes, uint32_t count, bool* outVisible) const
+        {
+            uint32_t visibleCount = 0;
+
+            // Pre-load plane normals and distances into SIMD-friendly layout
+            // Process planes in pairs of 4 (we have 6, so 4+2)
+            DirectX::XMVECTOR planeNormX =
+                DirectX::XMVectorSet(m_planes[0].a, m_planes[1].a, m_planes[2].a, m_planes[3].a);
+            DirectX::XMVECTOR planeNormY =
+                DirectX::XMVectorSet(m_planes[0].b, m_planes[1].b, m_planes[2].b, m_planes[3].b);
+            DirectX::XMVECTOR planeNormZ =
+                DirectX::XMVectorSet(m_planes[0].c, m_planes[1].c, m_planes[2].c, m_planes[3].c);
+            DirectX::XMVECTOR planeDist =
+                DirectX::XMVectorSet(m_planes[0].d, m_planes[1].d, m_planes[2].d, m_planes[3].d);
+
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                const AABB& box = boxes[i];
+                bool visible = true;
+
+                // Test first 4 planes using SIMD
+                // Select positive vertex components based on plane normal sign
+                DirectX::XMVECTOR pX = DirectX::XMVectorSelect(
+                    DirectX::XMVectorReplicate(box.min.x), DirectX::XMVectorReplicate(box.max.x),
+                    DirectX::XMVectorGreaterOrEqual(planeNormX, DirectX::XMVectorZero()));
+                DirectX::XMVECTOR pY = DirectX::XMVectorSelect(
+                    DirectX::XMVectorReplicate(box.min.y), DirectX::XMVectorReplicate(box.max.y),
+                    DirectX::XMVectorGreaterOrEqual(planeNormY, DirectX::XMVectorZero()));
+                DirectX::XMVECTOR pZ = DirectX::XMVectorSelect(
+                    DirectX::XMVectorReplicate(box.min.z), DirectX::XMVectorReplicate(box.max.z),
+                    DirectX::XMVectorGreaterOrEqual(planeNormZ, DirectX::XMVectorZero()));
+
+                // Distance = dot(normal, pVertex) + d
+                DirectX::XMVECTOR dist =
+                    DirectX::XMVectorAdd(DirectX::XMVectorAdd(DirectX::XMVectorMultiply(planeNormX, pX),
+                                                              DirectX::XMVectorMultiply(planeNormY, pY)),
+                                         DirectX::XMVectorAdd(DirectX::XMVectorMultiply(planeNormZ, pZ), planeDist));
+
+                // If any distance < 0, the AABB is outside that plane
+                if (DirectX::XMVector4Less(dist, DirectX::XMVectorZero()))
+                {
+                    visible = false;
+                }
+                else
+                {
+                    // Test remaining 2 planes (Near, Far) scalar
+                    for (int p = 4; p < kPlaneCount; ++p)
+                    {
+                        const Plane& pl = m_planes[p];
+                        DirectX::XMFLOAT3 pVertex{(pl.a >= 0) ? box.max.x : box.min.x,
+                                                  (pl.b >= 0) ? box.max.y : box.min.y,
+                                                  (pl.c >= 0) ? box.max.z : box.min.z};
+                        if (pl.DistanceToPoint(pVertex) < 0.0f)
+                        {
+                            visible = false;
+                            break;
+                        }
+                    }
+                }
+
+                outVisible[i] = visible;
+                if (visible)
+                    ++visibleCount;
+            }
+
+            return visibleCount;
+        }
+
       private:
         std::array<Plane, kPlaneCount> m_planes;
     };
