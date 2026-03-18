@@ -9,7 +9,6 @@
 #include "DXRSupport.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
-#include <iostream>
 #include <cstring>
 #include <algorithm>
 
@@ -142,8 +141,8 @@ namespace Spark::Graphics
         if (FAILED(hr))
         {
             if (error)
-                std::cerr << "[DXR] Root sig error: " << static_cast<const char*>(error->GetBufferPointer())
-                          << std::endl;
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "DXR root sig error: %s",
+                                static_cast<const char*>(error->GetBufferPointer()));
             return false;
         }
 
@@ -191,7 +190,7 @@ namespace Spark::Graphics
                                                             D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
                                                             nullptr, IID_PPV_ARGS(&blasBuffer))))
         {
-            std::cerr << "[DXR] Failed to create BLAS for '" << desc.meshName << "'" << std::endl;
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "DXR failed to create BLAS for '%s'", desc.meshName.c_str());
             return nullptr;
         }
 
@@ -285,7 +284,7 @@ namespace Spark::Graphics
         ComPtr<ID3D12Device5> dxrDevice;
         if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dxrDevice))))
         {
-            std::cerr << "[DXR] Device does not support ID3D12Device5" << std::endl;
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "DXR: Device does not support ID3D12Device5");
             m_isAvailable = false;
             return false;
         }
@@ -294,13 +293,13 @@ namespace Spark::Graphics
         HRESULT hr = dxrDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5));
         if (FAILED(hr) || options5.RaytracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
         {
-            std::cerr << "[DXR] GPU does not support DXR" << std::endl;
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "DXR: GPU does not support DXR");
             m_isAvailable = false;
             return false;
         }
 
-        std::cout << "[DXR] Raytracing Tier " << (options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_0 ? "1.0" : "1.1")
-                  << std::endl;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DXR: Raytracing Tier %s",
+                       options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_0 ? "1.0" : "1.1");
 
         s_dxrState = std::make_unique<DXRInternalState>();
         s_dxrState->dxrDevice = dxrDevice;
@@ -350,7 +349,7 @@ namespace Spark::Graphics
         BuildRTPSOs();
         BuildShaderTables();
 
-        std::cout << "[DXR] Initialized successfully" << std::endl;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DXR: Initialized successfully");
         return true;
 #else
         m_isAvailable = false;
@@ -413,8 +412,8 @@ namespace Spark::Graphics
 
             HRESULT hr = s_dxrState->dxrDevice->CreateStateObject(&stateObjectDesc, IID_PPV_ARGS(&s_dxrState->psos[i]));
             if (FAILED(hr))
-                std::cerr << "[DXR] Failed to create RTPSO " << i << " (hr=0x" << std::hex << hr << std::dec << ")"
-                          << std::endl;
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "DXR: Failed to create RTPSO %d (hr=0x%08lX)", i,
+                                static_cast<long>(hr));
         }
         return true;
 #else
@@ -724,8 +723,8 @@ namespace Spark::Graphics
         m_tlasInternalIndex = 0;
         m_tlasSize = prebuild.ResultDataMaxSizeInBytes;
 
-        std::cout << "[DXR] Built TLAS with " << instances.size() << " instances (" << (m_tlasSize / 1024) << " KB)"
-                  << std::endl;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DXR: Built TLAS with %zu instances (%llu KB)", instances.size(),
+                       static_cast<unsigned long long>(m_tlasSize / 1024));
 #endif
     }
 

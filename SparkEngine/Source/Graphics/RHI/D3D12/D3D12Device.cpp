@@ -13,13 +13,13 @@
 
 #include "D3D12Device.h"
 #include "../RHIFactory.h"
+#include "../RHIFormatUtils.h"
 #include "../../../Utils/LogMacros.h"
 #include "../../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cstring>
-#include <iostream>
 #include <sstream>
 
 #pragma comment(lib, "d3d12.lib")
@@ -67,7 +67,8 @@ namespace Spark
                 HRESULT hr = device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_heap));
                 if (FAILED(hr))
                 {
-                    std::cerr << "[D3D12] Failed to create descriptor heap (type=" << type << ")" << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create descriptor heap (type=%d)",
+                                    type);
                     return false;
                 }
 
@@ -100,7 +101,7 @@ namespace Spark
                 // Bump allocator
                 if (m_nextFreeIndex + count > m_capacity)
                 {
-                    std::cerr << "[D3D12] Descriptor heap exhausted" << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Descriptor heap exhausted");
                     return alloc;
                 }
 
@@ -137,7 +138,7 @@ namespace Spark
                 HRESULT hr = device->CreateFence(initialValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
                 if (FAILED(hr))
                 {
-                    std::cerr << "[D3D12] Failed to create fence" << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create fence");
                     return false;
                 }
                 m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
@@ -237,7 +238,8 @@ namespace Spark
                 DetectCapabilities();
                 DetectDXRSupport();
 
-                std::cout << "[D3D12] Device initialized: " << m_capabilities.deviceName << std::endl;
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12: Device initialized: %s",
+                               m_capabilities.deviceName.c_str());
                 return true;
             }
 
@@ -273,7 +275,7 @@ namespace Spark
                 HRESULT hr = CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&m_dxgiFactory));
                 if (FAILED(hr))
                 {
-                    std::cerr << "[D3D12] Failed to create DXGI factory" << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create DXGI factory");
                     return false;
                 }
 
@@ -303,7 +305,7 @@ namespace Spark
 
                 if (!bestAdapter)
                 {
-                    std::cerr << "[D3D12] No D3D12-capable GPU found" << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: No D3D12-capable GPU found");
                     return false;
                 }
                 m_adapter = bestAdapter;
@@ -312,7 +314,7 @@ namespace Spark
                 hr = D3D12CreateDevice(m_adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device));
                 if (FAILED(hr))
                 {
-                    std::cerr << "[D3D12] Failed to create D3D12 device" << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create D3D12 device");
                     return false;
                 }
 
@@ -722,8 +724,8 @@ namespace Spark
                     if (FAILED(hr))
                     {
                         if (errors)
-                            std::cerr << "[D3D12] Shader compile error: "
-                                      << static_cast<const char*>(errors->GetBufferPointer()) << std::endl;
+                            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Shader compile error: %s",
+                                            static_cast<const char*>(errors->GetBufferPointer()));
                         return nullptr;
                     }
                     return new D3D12Shader(desc, std::move(bytecode));
@@ -865,7 +867,7 @@ namespace Spark
                 HRESULT hr = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pso));
                 if (FAILED(hr))
                 {
-                    std::cerr << "[D3D12] Failed to create PSO" << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create PSO");
                     return nullptr;
                 }
 
@@ -988,7 +990,7 @@ namespace Spark
                                                                IID_PPV_ARGS(&uploadBuffer));
                 if (FAILED(hr))
                 {
-                    std::cerr << "[D3D12] Failed to create texture upload buffer" << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create texture upload buffer");
                     return;
                 }
 
@@ -1463,33 +1465,6 @@ namespace Spark
                     return DXGI_FORMAT_R8G8B8A8_SNORM;
                 default:
                     return DXGI_FORMAT_R32G32B32_FLOAT;
-                }
-            }
-
-            uint32_t D3D12Device::GetFormatSize(PixelFormat format) const
-            {
-                switch (format)
-                {
-                case PixelFormat::R8_UNORM:
-                    return 1;
-                case PixelFormat::R8G8_UNORM:
-                    return 2;
-                case PixelFormat::R16_FLOAT:
-                    return 2;
-                case PixelFormat::R8G8B8A8_UNORM:
-                case PixelFormat::R32_FLOAT:
-                case PixelFormat::D24_UNORM_S8_UINT:
-                case PixelFormat::D32_FLOAT:
-                    return 4;
-                case PixelFormat::R16G16B16A16_FLOAT:
-                case PixelFormat::R32G32_FLOAT:
-                    return 8;
-                case PixelFormat::R32G32B32_FLOAT:
-                    return 12;
-                case PixelFormat::R32G32B32A32_FLOAT:
-                    return 16;
-                default:
-                    return 4;
                 }
             }
 

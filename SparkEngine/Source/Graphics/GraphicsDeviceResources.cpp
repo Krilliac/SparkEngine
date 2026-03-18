@@ -830,8 +830,8 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
 
 #include "GraphicsEngine.h"
 #include "GraphicsEngineRHI.h"
+#include "../Utils/Validate.h"
 
-#include <iostream>
 #include <string>
 #include <cstring>
 
@@ -1077,7 +1077,7 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
 
     if (!vs || !ps)
     {
-        std::cerr << "[GraphicsEngine] Failed to load basic shaders via RHI." << std::endl;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load basic shaders via RHI");
         return E_FAIL;
     }
 
@@ -1119,7 +1119,7 @@ HRESULT GraphicsEngine::CompileShaderFromFile(const std::wstring& filename, cons
     Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
     if (!result.success)
     {
-        std::cerr << "[GraphicsEngine] Shader compile failed: " << result.errorMessage << std::endl;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader compile failed: %s", result.errorMessage.c_str());
         return E_FAIL;
     }
 
@@ -1157,7 +1157,7 @@ HRESULT GraphicsEngine::CreateDefaultTexture()
 
     if (!defaultTex)
     {
-        std::cerr << "[GraphicsEngine] Failed to create default texture via RHI." << std::endl;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create default texture via RHI");
         return E_FAIL;
     }
 
@@ -1206,7 +1206,7 @@ void main() {
     Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
     if (!result.success)
     {
-        std::cerr << "[GraphicsEngine] Embedded VS compile failed: " << result.errorMessage << std::endl;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Embedded VS compile failed: %s", result.errorMessage.c_str());
         return E_FAIL;
     }
 
@@ -1262,7 +1262,7 @@ void main() {
     Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
     if (!result.success)
     {
-        std::cerr << "[GraphicsEngine] Embedded PS compile failed: " << result.errorMessage << std::endl;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Embedded PS compile failed: %s", result.errorMessage.c_str());
         return E_FAIL;
     }
 

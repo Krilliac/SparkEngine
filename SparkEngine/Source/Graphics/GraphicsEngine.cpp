@@ -55,7 +55,6 @@ using Spark::Graphics::PostProcessingPipeline;
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
-#include <iostream>
 #include <chrono>
 #include <fstream>
 #include <thread>
@@ -912,7 +911,6 @@ using Spark::Graphics::PostProcessingPipeline;
 #include "../Game/GameObject.h"
 #include "RHI/RHI.h"
 #include "../Utils/Validate.h"
-#include <iostream>
 #include <sstream>
 #include <chrono>
 #include <cmath>
@@ -962,7 +960,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
     if (!ok)
     {
-        std::cerr << "[GraphicsEngine] RHI bridge initialization failed." << std::endl;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "RHI bridge initialization failed");
         return E_FAIL;
     }
 
@@ -978,7 +976,8 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_lightManager = std::make_unique<LightManager>();
     m_postProcessing = std::make_unique<PostProcessingPipeline>();
 
-    std::cout << "[GraphicsEngine] Initialized on Linux via RHI (" << rhi.bridge.GetBackendName() << ")" << std::endl;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initialized on Linux via RHI (%s)",
+                   rhi.bridge.GetBackendName().c_str());
 
     return S_OK;
 }
@@ -1008,7 +1007,7 @@ void GraphicsEngine::Shutdown()
     rhi.bridge.Shutdown();
     rhi.initialized = false;
 
-    std::cout << "[GraphicsEngine] Shutdown complete." << std::endl;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shutdown complete");
 }
 
 // ============================================================================

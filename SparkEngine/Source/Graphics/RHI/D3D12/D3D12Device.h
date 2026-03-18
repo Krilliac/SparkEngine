@@ -691,7 +691,7 @@ namespace Spark
                 D3D12_BLEND ConvertBlendFactor(RHIBlendFactor factor) const;
                 D3D12_BLEND_OP ConvertBlendOp(RHIBlendOp op) const;
                 DXGI_FORMAT ConvertVertexFormat(RHIVertexFormat format) const;
-                uint32_t GetFormatSize(PixelFormat format) const;
+
                 D3D12_RESOURCE_STATES GetInitialResourceState(RHIBufferAccess access) const;
 
                 /**

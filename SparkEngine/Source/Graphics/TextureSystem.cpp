@@ -2,7 +2,9 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file TextureSystem.cpp
- * @brief Implementation of advanced texture loading and management system
+ * @brief Core texture management: Texture class, TextureSystem construction/destruction,
+ *        initialization, shutdown, loading, cache lookup, quality settings, format helpers,
+ *        console integration, and default texture creation.
  */
 
 #include "TextureSystem.h"
@@ -54,126 +56,94 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* devic
     hr = pFactory->CreateDecoderFromFilename(std::wstring(filePath.begin(), filePath.end()).c_str(), nullptr,
                                              GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
     if (FAILED(hr))
+    {
+        pFactory->Release();
         return hr;
+    }
 
-    // Get the first frame
+    // Get frame
     hr = pDecoder->GetFrame(0, &pFrame);
     if (FAILED(hr))
+    {
+        pDecoder->Release();
+        pFactory->Release();
         return hr;
+    }
 
-    // Convert to RGBA format
+    pFrame->GetSize(&width, &height);
+    m_desc.width = width;
+    m_desc.height = height;
+
+    // Convert to RGBA
     hr = pFactory->CreateFormatConverter(&pConverter);
     if (FAILED(hr))
+    {
+        pFrame->Release();
+        pDecoder->Release();
+        pFactory->Release();
         return hr;
+    }
 
-    hr = pConverter->Initialize(pFrame, GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.f,
-                                WICBitmapPaletteTypeCustom);
+    hr = pConverter->Initialize(pFrame, GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0f,
+                                WICBitmapPaletteTypeMedianCut);
     if (FAILED(hr))
+    {
+        pConverter->Release();
+        pFrame->Release();
+        pDecoder->Release();
+        pFactory->Release();
         return hr;
+    }
 
-    // Get image dimensions
-    hr = pFrame->GetSize(&width, &height);
-    if (FAILED(hr))
-        return hr;
+    // Read pixel data
+    UINT stride = width * 4;
+    UINT bufferSize = stride * height;
+    std::vector<BYTE> buffer(bufferSize);
 
-    // Update descriptor
-    m_desc.width = static_cast<uint32_t>(width);
-    m_desc.height = static_cast<uint32_t>(height);
-    m_desc.mipLevels = 1;
-    m_desc.arraySize = 1;
-    m_desc.format = TextureFormat::R8G8B8A8_UNORM;
-
-    // Create texture
-    D3D11_TEXTURE2D_DESC texDesc = {};
-    texDesc.Width = m_desc.width;
-    texDesc.Height = m_desc.height;
-    texDesc.MipLevels = m_desc.mipLevels;
-    texDesc.ArraySize = m_desc.arraySize;
-    texDesc.Format = GetDXGIFormat(m_desc.format);
-    texDesc.SampleDesc.Count = m_desc.sampleCount;
-    texDesc.SampleDesc.Quality = m_desc.sampleQuality;
-    texDesc.Usage = D3D11_USAGE_DEFAULT;
-    texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-    D3D11_SUBRESOURCE_DATA initData = {};
-    initData.pSysMem = nullptr;
-    initData.SysMemPitch = m_desc.width * 4;
-    initData.SysMemSlicePitch = initData.SysMemPitch * m_desc.height;
-
-    // Create texture
-    ComPtr<ID3D11Texture2D> texture;
-    hr = device->CreateTexture2D(&texDesc, &initData, &texture);
-    if (FAILED(hr))
-        return hr;
-
-    m_resource = texture;
-
-    // Create shader resource view
-    hr = CreateViews(device);
+    hr = pConverter->CopyPixels(nullptr, stride, bufferSize, buffer.data());
     if (SUCCEEDED(hr))
     {
-        m_loaded = true;
-        m_memoryUsage = static_cast<size_t>(m_desc.width * m_desc.height * 4);
-        Spark::SimpleConsole::GetInstance().LogInfo("Loaded texture: " + filePath);
+        hr = CreateFromData(buffer.data(), bufferSize, device);
     }
 
     // Cleanup
-    if (pFactory)
-        pFactory->Release();
-    if (pDecoder)
-        pDecoder->Release();
-    if (pFrame)
-        pFrame->Release();
-    if (pConverter)
-        pConverter->Release();
+    pConverter->Release();
+    pFrame->Release();
+    pDecoder->Release();
+    pFactory->Release();
+
+    if (SUCCEEDED(hr))
+    {
+        m_loaded = true;
+        m_memoryUsage = bufferSize;
+    }
 
     return hr;
 }
 
 HRESULT Texture::CreateFromData(const void* data, size_t dataSize, ID3D11Device* device)
 {
-    if (!device || !data || dataSize == 0)
+    if (!device || !data)
         return E_INVALIDARG;
 
     D3D11_TEXTURE2D_DESC texDesc = {};
     texDesc.Width = m_desc.width;
     texDesc.Height = m_desc.height;
-    texDesc.MipLevels = m_desc.mipLevels;
-    texDesc.ArraySize = m_desc.arraySize;
+    texDesc.MipLevels = 1;
+    texDesc.ArraySize = 1;
     texDesc.Format = GetDXGIFormat(m_desc.format);
-    texDesc.SampleDesc.Count = m_desc.sampleCount;
-    texDesc.SampleDesc.Quality = m_desc.sampleQuality;
+    texDesc.SampleDesc.Count = 1;
     texDesc.Usage = D3D11_USAGE_DEFAULT;
     texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
-    if (static_cast<uint32_t>(m_desc.usage) & static_cast<uint32_t>(TextureUsage::RenderTarget))
-    {
-        texDesc.BindFlags |= D3D11_BIND_RENDER_TARGET;
-    }
-    if (static_cast<uint32_t>(m_desc.usage) & static_cast<uint32_t>(TextureUsage::DepthStencil))
-    {
-        texDesc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
-    }
-    if (static_cast<uint32_t>(m_desc.usage) & static_cast<uint32_t>(TextureUsage::UnorderedAccess))
-    {
-        texDesc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
-    }
-
     D3D11_SUBRESOURCE_DATA initData = {};
     initData.pSysMem = data;
-    initData.SysMemPitch = m_desc.width * GetFormatBytesPerPixel(m_desc.format);
-    initData.SysMemSlicePitch = initData.SysMemPitch * m_desc.height;
+    initData.SysMemPitch = m_desc.width * 4;
 
-    ComPtr<ID3D11Texture2D> texture;
-    HRESULT hr = device->CreateTexture2D(&texDesc, &initData, &texture);
-    if (FAILED(hr))
-        return hr;
-
-    m_resource = texture;
-
-    hr = CreateViews(device);
+    HRESULT hr = device->CreateTexture2D(&texDesc, &initData, m_texture.GetAddressOf());
     if (SUCCEEDED(hr))
     {
+        hr = CreateViews(device);
         m_loaded = true;
         m_memoryUsage = dataSize;
     }
@@ -183,31 +153,30 @@ HRESULT Texture::CreateFromData(const void* data, size_t dataSize, ID3D11Device*
 
 HRESULT Texture::CreateRenderTarget(ID3D11Device* device)
 {
-    ASSERT(device);
+    if (!device)
+        return E_INVALIDARG;
 
     D3D11_TEXTURE2D_DESC texDesc = {};
     texDesc.Width = m_desc.width;
     texDesc.Height = m_desc.height;
-    texDesc.MipLevels = m_desc.mipLevels;
-    texDesc.ArraySize = m_desc.arraySize;
+    texDesc.MipLevels = 1;
+    texDesc.ArraySize = 1;
     texDesc.Format = GetDXGIFormat(m_desc.format);
-    texDesc.SampleDesc.Count = m_desc.sampleCount;
-    texDesc.SampleDesc.Quality = m_desc.sampleQuality;
+    texDesc.SampleDesc.Count = 1;
     texDesc.Usage = D3D11_USAGE_DEFAULT;
     texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-    ComPtr<ID3D11Texture2D> texture;
-    HRESULT hr = device->CreateTexture2D(&texDesc, nullptr, &texture);
-    if (FAILED(hr))
-        return hr;
-
-    m_resource = texture;
-
-    hr = CreateViews(device);
+    HRESULT hr = device->CreateTexture2D(&texDesc, nullptr, m_texture.GetAddressOf());
     if (SUCCEEDED(hr))
     {
-        m_loaded = true;
-        m_memoryUsage = static_cast<size_t>(m_desc.width * m_desc.height * 4);
+        // Create render target view
+        hr = device->CreateRenderTargetView(m_texture.Get(), nullptr, m_rtv.GetAddressOf());
+        if (SUCCEEDED(hr))
+        {
+            hr = CreateViews(device);
+            m_loaded = true;
+            m_memoryUsage = static_cast<size_t>(m_desc.width * m_desc.height * 4);
+        }
     }
 
     return hr;
@@ -215,29 +184,23 @@ HRESULT Texture::CreateRenderTarget(ID3D11Device* device)
 
 HRESULT Texture::CreateDepthStencil(ID3D11Device* device)
 {
-    ASSERT(device);
+    if (!device)
+        return E_INVALIDARG;
 
     D3D11_TEXTURE2D_DESC texDesc = {};
     texDesc.Width = m_desc.width;
     texDesc.Height = m_desc.height;
     texDesc.MipLevels = 1;
     texDesc.ArraySize = 1;
-    texDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
-    texDesc.SampleDesc.Count = m_desc.sampleCount;
-    texDesc.SampleDesc.Quality = m_desc.sampleQuality;
+    texDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    texDesc.SampleDesc.Count = 1;
     texDesc.Usage = D3D11_USAGE_DEFAULT;
-    texDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+    texDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 
-    ComPtr<ID3D11Texture2D> texture;
-    HRESULT hr = device->CreateTexture2D(&texDesc, nullptr, &texture);
-    if (FAILED(hr))
-        return hr;
-
-    m_resource = texture;
-
-    hr = CreateViews(device);
+    HRESULT hr = device->CreateTexture2D(&texDesc, nullptr, m_texture.GetAddressOf());
     if (SUCCEEDED(hr))
     {
+        hr = device->CreateDepthStencilView(m_texture.Get(), nullptr, m_dsv.GetAddressOf());
         m_loaded = true;
         m_memoryUsage = static_cast<size_t>(m_desc.width * m_desc.height * 4);
     }
@@ -248,95 +211,79 @@ HRESULT Texture::CreateDepthStencil(ID3D11Device* device)
 void Texture::Release()
 {
     m_srv.Reset();
+    m_uav.Reset();
     m_rtv.Reset();
     m_dsv.Reset();
-    m_uav.Reset();
-    m_resource.Reset();
+    m_texture.Reset();
     m_loaded = false;
     m_memoryUsage = 0;
 }
 
 void Texture::Bind(ID3D11DeviceContext* context, uint32_t slot)
 {
-    ASSERT(context);
-    if (m_srv)
+    if (context && m_srv)
     {
-        context->PSSetShaderResources(slot, 1, m_srv.GetAddressOf());
+        ID3D11ShaderResourceView* srv = m_srv.Get();
+        context->PSSetShaderResources(slot, 1, &srv);
     }
 }
 
 void Texture::UnBind(ID3D11DeviceContext* context, uint32_t slot)
 {
-    ASSERT(context);
-    ID3D11ShaderResourceView* nullSRV = nullptr;
-    context->PSSetShaderResources(slot, 1, &nullSRV);
+    if (context)
+    {
+        ID3D11ShaderResourceView* nullSRV = nullptr;
+        context->PSSetShaderResources(slot, 1, &nullSRV);
+    }
 }
 
 HRESULT Texture::CreateViews(ID3D11Device* device)
 {
-    ASSERT(device && m_resource);
-
     HRESULT hr = S_OK;
 
-    // Create SRV
-    if (static_cast<uint32_t>(m_desc.usage) & static_cast<uint32_t>(TextureUsage::ShaderResource))
+    // Create Shader Resource View
+    D3D11_TEXTURE2D_DESC texDesc;
+    m_texture->GetDesc(&texDesc);
+
+    if (texDesc.BindFlags & D3D11_BIND_SHADER_RESOURCE)
     {
         D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Format = GetDXGIFormat(m_desc.format);
+        srvDesc.Format = texDesc.Format;
 
-        if (m_desc.type == TextureType::TextureCube)
+        if (texDesc.ArraySize > 1)
         {
-            srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
-            srvDesc.TextureCube.MipLevels = m_desc.mipLevels;
+            srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+            srvDesc.Texture2DArray.MostDetailedMip = 0;
+            srvDesc.Texture2DArray.MipLevels = texDesc.MipLevels;
+            srvDesc.Texture2DArray.FirstArraySlice = 0;
+            srvDesc.Texture2DArray.ArraySize = texDesc.ArraySize;
         }
         else
         {
             srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-            srvDesc.Texture2D.MipLevels = m_desc.mipLevels;
+            srvDesc.Texture2D.MostDetailedMip = 0;
+            srvDesc.Texture2D.MipLevels = texDesc.MipLevels;
         }
 
-        hr = device->CreateShaderResourceView(m_resource.Get(), &srvDesc, &m_srv);
+        hr = device->CreateShaderResourceView(m_texture.Get(), &srvDesc, m_srv.GetAddressOf());
         if (FAILED(hr))
             return hr;
     }
 
-    // Create RTV
-    if (static_cast<uint32_t>(m_desc.usage) & static_cast<uint32_t>(TextureUsage::RenderTarget))
-    {
-        D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.Format = GetDXGIFormat(m_desc.format);
-        rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-
-        hr = device->CreateRenderTargetView(m_resource.Get(), &rtvDesc, &m_rtv);
-        if (FAILED(hr))
-            return hr;
-    }
-
-    // Create DSV
-    if (static_cast<uint32_t>(m_desc.usage) & static_cast<uint32_t>(TextureUsage::DepthStencil))
-    {
-        D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-        dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-        dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-
-        hr = device->CreateDepthStencilView(m_resource.Get(), &dsvDesc, &m_dsv);
-        if (FAILED(hr))
-            return hr;
-    }
-
-    // Create UAV
-    if (static_cast<uint32_t>(m_desc.usage) & static_cast<uint32_t>(TextureUsage::UnorderedAccess))
+    // Create Unordered Access View if requested
+    if (texDesc.BindFlags & D3D11_BIND_UNORDERED_ACCESS)
     {
         D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-        uavDesc.Format = GetDXGIFormat(m_desc.format);
+        uavDesc.Format = texDesc.Format;
         uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+        uavDesc.Texture2D.MipSlice = 0;
 
-        hr = device->CreateUnorderedAccessView(m_resource.Get(), &uavDesc, &m_uav);
+        hr = device->CreateUnorderedAccessView(m_texture.Get(), &uavDesc, m_uav.GetAddressOf());
         if (FAILED(hr))
             return hr;
     }
 
-    return S_OK;
+    return hr;
 }
 
 DXGI_FORMAT Texture::GetDXGIFormat(TextureFormat format) const
@@ -347,6 +294,10 @@ DXGI_FORMAT Texture::GetDXGIFormat(TextureFormat format) const
         return DXGI_FORMAT_R8G8B8A8_UNORM;
     case TextureFormat::R8G8B8A8_SRGB:
         return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    case TextureFormat::R16G16B16A16_FLOAT:
+        return DXGI_FORMAT_R16G16B16A16_FLOAT;
+    case TextureFormat::R32G32B32A32_FLOAT:
+        return DXGI_FORMAT_R32G32B32A32_FLOAT;
     case TextureFormat::BC1_UNORM:
         return DXGI_FORMAT_BC1_UNORM;
     case TextureFormat::BC1_SRGB:
@@ -359,10 +310,6 @@ DXGI_FORMAT Texture::GetDXGIFormat(TextureFormat format) const
         return DXGI_FORMAT_BC7_UNORM;
     case TextureFormat::BC7_SRGB:
         return DXGI_FORMAT_BC7_UNORM_SRGB;
-    case TextureFormat::R16G16B16A16_FLOAT:
-        return DXGI_FORMAT_R16G16B16A16_FLOAT;
-    case TextureFormat::R32G32B32A32_FLOAT:
-        return DXGI_FORMAT_R32G32B32A32_FLOAT;
     case TextureFormat::D24_UNORM_S8_UINT:
         return DXGI_FORMAT_D24_UNORM_S8_UINT;
     case TextureFormat::R16_FLOAT:
@@ -375,7 +322,7 @@ DXGI_FORMAT Texture::GetDXGIFormat(TextureFormat format) const
 }
 
 // ============================================================================
-// TEXTURE SYSTEM IMPLEMENTATION
+// TEXTURE SYSTEM — CORE MANAGEMENT
 // ============================================================================
 
 TextureSystem::TextureSystem() : m_device(nullptr), m_context(nullptr) {}
@@ -445,166 +392,6 @@ void TextureSystem::Shutdown()
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "TextureSystem shutdown complete");
 }
 
-void TextureSystem::Update(float deltaTime)
-{
-    UpdateMetrics();
-
-    m_currentFrame++;
-
-    // Priority-based eviction: if over budget, evict lowest-priority LRU textures first
-    size_t currentUsage = GetMemoryUsage();
-    if (currentUsage > m_memoryBudget)
-    {
-        size_t overage = currentUsage - m_memoryBudget;
-        uint32_t evicted = EvictByPriority(overage);
-
-        // If priority eviction was not sufficient, fall back to simple GC
-        if (GetMemoryUsage() > m_memoryBudget)
-        {
-            GarbageCollect();
-        }
-    }
-}
-
-void TextureSystem::TouchTexture(const std::string& name, uint64_t currentFrame, float screenCoverage,
-                                 float distanceToCamera)
-{
-    ASSERT_MSG(!name.empty(), "TextureSystem::TouchTexture — name must not be empty");
-    ASSERT_MSG(screenCoverage >= 0.0f && screenCoverage <= 1.0f,
-               "TextureSystem::TouchTexture — screenCoverage must be in [0, 1]");
-    ASSERT_MSG(distanceToCamera >= 0.0f, "TextureSystem::TouchTexture — distanceToCamera must be non-negative");
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-
-    auto& lru = m_lruData[name];
-    lru.lastUsedFrame = currentFrame;
-    lru.lastUsedTime = std::chrono::steady_clock::now();
-    lru.screenCoverage = screenCoverage;
-    lru.distanceToCamera = distanceToCamera;
-}
-
-void TextureSystem::PinTexture(const std::string& name)
-{
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    m_lruData[name].pinned = true;
-    m_lruData[name].priority = 5;
-}
-
-void TextureSystem::UnpinTexture(const std::string& name)
-{
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    auto it = m_lruData.find(name);
-    if (it != m_lruData.end())
-    {
-        it->second.pinned = false;
-        it->second.priority = 2; // Reset to Normal
-    }
-}
-
-void TextureSystem::SetTexturePriority(const std::string& name, uint8_t priority)
-{
-    ASSERT_MSG(!name.empty(), "TextureSystem::SetTexturePriority — name must not be empty");
-    ASSERT_MSG(priority <= 5, "TextureSystem::SetTexturePriority — priority must be in [0, 5]");
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    m_lruData[name].priority = priority;
-    if (priority >= 5)
-    {
-        m_lruData[name].pinned = true;
-    }
-}
-
-uint32_t TextureSystem::EvictByPriority(size_t targetFreeBytes)
-{
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-
-    if (m_textures.empty())
-    {
-        return 0;
-    }
-
-    // Build scored candidate list: {name, eviction_score, memory_size}
-    struct EvictionCandidate
-    {
-        std::string name;
-        float score;
-        size_t memoryBytes;
-    };
-
-    std::vector<EvictionCandidate> candidates;
-    candidates.reserve(m_textures.size());
-
-    for (const auto& [name, texture] : m_textures)
-    {
-        // Skip default/internal textures
-        if (name.starts_with("__"))
-        {
-            continue;
-        }
-
-        // Skip textures held by external references (use_count > 1 means someone else needs it)
-        // But still consider them if they have low priority and are old
-        auto lruIt = m_lruData.find(name);
-        TextureLRUData lru;
-        if (lruIt != m_lruData.end())
-        {
-            lru = lruIt->second;
-        }
-
-        // Skip pinned textures
-        if (lru.pinned)
-        {
-            continue;
-        }
-
-        float score = lru.GetEvictionScore(m_currentFrame);
-        candidates.push_back({name, score, texture->GetMemoryUsage()});
-    }
-
-    // Sort by eviction score ascending — lowest score = evict first
-    std::sort(candidates.begin(), candidates.end(),
-              [](const EvictionCandidate& a, const EvictionCandidate& b) { return a.score < b.score; });
-
-    size_t freedBytes = 0;
-    uint32_t evictedCount = 0;
-
-    for (const auto& candidate : candidates)
-    {
-        if (targetFreeBytes > 0 && freedBytes >= targetFreeBytes)
-        {
-            break;
-        }
-
-        auto texIt = m_textures.find(candidate.name);
-        if (texIt == m_textures.end())
-        {
-            continue;
-        }
-
-        // Only evict textures not held externally (use_count == 1 means only the cache holds it)
-        if (texIt->second.use_count() <= 1)
-        {
-            freedBytes += candidate.memoryBytes;
-            m_lruData.erase(candidate.name);
-            m_textures.erase(texIt);
-            evictedCount++;
-        }
-    }
-
-    return evictedCount;
-}
-
-bool TextureSystem::GetTextureLRUData(const std::string& name, TextureLRUData& outData) const
-{
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-
-    auto it = m_lruData.find(name);
-    if (it != m_lruData.end())
-    {
-        outData = it->second;
-        return true;
-    }
-    return false;
-}
-
 std::shared_ptr<Texture> TextureSystem::LoadTexture(const std::string& filePath, const TextureDesc& desc)
 {
     ASSERT_MSG(!filePath.empty(), "TextureSystem::LoadTexture — filePath must not be empty");
@@ -662,39 +449,6 @@ std::shared_ptr<Texture> TextureSystem::CreateTexture(const std::string& name, c
     return texture;
 }
 
-void TextureSystem::LoadTextureAsync(const std::string& filePath,
-                                     std::function<void(std::shared_ptr<Texture>)> callback, const TextureDesc& desc)
-{
-    // Check if already loaded
-    {
-        std::lock_guard<std::mutex> lock(m_texturesMutex);
-        auto it = m_textures.find(filePath);
-        if (it != m_textures.end())
-        {
-            if (callback)
-            {
-                callback(it->second);
-            }
-            return;
-        }
-    }
-
-    // Queue for streaming
-    StreamingRequest request;
-    request.filePath = filePath;
-    request.desc = AdjustDescForQuality(desc);
-    request.callback = callback;
-    request.priority = 0;
-    request.urgent = false;
-
-    {
-        std::lock_guard<std::mutex> lock(m_streamingMutex);
-        m_streamingQueue.push(request);
-    }
-
-    m_streamingCondition.notify_one();
-}
-
 std::shared_ptr<Texture> TextureSystem::GetTexture(const std::string& name) const
 {
     std::lock_guard<std::mutex> lock(m_texturesMutex);
@@ -745,56 +499,6 @@ size_t TextureSystem::GetMemoryUsage() const
     }
 
     return totalMemory;
-}
-
-void TextureSystem::GarbageCollect()
-{
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-
-    // Remove textures that are only referenced by the texture system
-    size_t collected = 0;
-    auto it = m_textures.begin();
-    while (it != m_textures.end())
-    {
-        if (it->second.use_count() == 1)
-        {
-            it = m_textures.erase(it);
-            ++collected;
-        }
-        else
-        {
-            ++it;
-        }
-    }
-
-    if (collected > 0)
-    {
-        Spark::SimpleConsole::GetInstance().LogInfo("Garbage collected " + std::to_string(collected) + " texture(s)");
-    }
-}
-
-void TextureSystem::SetStreamingThreadCount(int count)
-{
-    // Stop existing threads
-    m_shouldStop = true;
-    m_streamingCondition.notify_all();
-
-    for (auto& thread : m_streamingThreads)
-    {
-        if (thread.joinable())
-        {
-            thread.join();
-        }
-    }
-
-    m_streamingThreads.clear();
-    m_shouldStop = false;
-
-    // Start new threads
-    for (int i = 0; i < count; ++i)
-    {
-        m_streamingThreads.emplace_back(&TextureSystem::StreamingThreadFunction, this);
-    }
 }
 
 // Console integration methods
@@ -969,74 +673,6 @@ HRESULT TextureSystem::CreateDefaultTextures()
     return S_OK;
 }
 
-void TextureSystem::StreamingThreadFunction()
-{
-    while (!m_shouldStop)
-    {
-        StreamingRequest request;
-        bool hasRequest = false;
-
-        // Get next request
-        {
-            std::unique_lock<std::mutex> lock(m_streamingMutex);
-            m_streamingCondition.wait(lock, [this] { return !m_streamingQueue.empty() || m_shouldStop; });
-
-            if (m_shouldStop)
-                break;
-
-            if (!m_streamingQueue.empty())
-            {
-                request = m_streamingQueue.front();
-                m_streamingQueue.pop();
-                hasRequest = true;
-            }
-        }
-
-        if (hasRequest)
-        {
-            // Load texture
-            auto texture = LoadTextureFromFile(request.filePath, request.desc);
-
-            if (texture)
-            {
-                // Add to cache
-                {
-                    std::lock_guard<std::mutex> lock(m_texturesMutex);
-                    m_textures[request.filePath] = texture;
-                }
-
-                // Call callback
-                if (request.callback)
-                {
-                    request.callback(texture);
-                }
-
-                std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
-                m_metrics.loadedTextures++;
-            }
-            else
-            {
-                // Call callback with null on failure
-                if (request.callback)
-                {
-                    request.callback(nullptr);
-                }
-            }
-        }
-    }
-}
-
-void TextureSystem::UpdateMetrics()
-{
-    // Compute memory usage outside the metrics lock to avoid ABBA deadlock:
-    // GetMemoryUsage() acquires m_texturesMutex, so we must not hold
-    // m_metricsMutex while calling it (other paths lock textures then metrics).
-    size_t memUsage = GetMemoryUsage();
-
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    m_metrics.totalMemoryUsage = memUsage;
-}
-
 TextureDesc TextureSystem::AdjustDescForQuality(const TextureDesc& desc) const
 {
     TextureDesc adjustedDesc = desc;
@@ -1199,7 +835,7 @@ DXGI_FORMAT Texture::GetDXGIFormat(TextureFormat /*format*/) const
 }
 
 // ============================================================================
-// TextureSystem (Linux stub)
+// TextureSystem — Core Management (Linux stub)
 // ============================================================================
 
 TextureSystem::TextureSystem() : m_device(nullptr), m_context(nullptr)
@@ -1285,159 +921,6 @@ void TextureSystem::Shutdown()
     m_context = nullptr;
 }
 
-void TextureSystem::Update(float /*deltaTime*/)
-{
-    UpdateMetrics();
-
-    m_currentFrame++;
-
-    // Priority-based eviction: if over budget, evict lowest-priority LRU textures first
-    size_t currentUsage = GetMemoryUsage();
-    if (currentUsage > m_memoryBudget)
-    {
-        size_t overage = currentUsage - m_memoryBudget;
-        uint32_t evicted = EvictByPriority(overage);
-
-        // If priority eviction was not sufficient, fall back to simple GC
-        if (GetMemoryUsage() > m_memoryBudget)
-        {
-            GarbageCollect();
-        }
-    }
-}
-
-void TextureSystem::TouchTexture(const std::string& name, uint64_t currentFrame, float screenCoverage,
-                                 float distanceToCamera)
-{
-    ASSERT_MSG(!name.empty(), "TextureSystem::TouchTexture — name must not be empty");
-    ASSERT_MSG(screenCoverage >= 0.0f && screenCoverage <= 1.0f,
-               "TextureSystem::TouchTexture — screenCoverage must be in [0, 1]");
-    ASSERT_MSG(distanceToCamera >= 0.0f, "TextureSystem::TouchTexture — distanceToCamera must be non-negative");
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    auto& lru = m_lruData[name];
-    lru.lastUsedFrame = currentFrame;
-    lru.lastUsedTime = std::chrono::steady_clock::now();
-    lru.screenCoverage = screenCoverage;
-    lru.distanceToCamera = distanceToCamera;
-}
-
-void TextureSystem::PinTexture(const std::string& name)
-{
-    ASSERT_MSG(!name.empty(), "TextureSystem::PinTexture — name must not be empty");
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    m_lruData[name].pinned = true;
-    m_lruData[name].priority = 5;
-}
-
-void TextureSystem::UnpinTexture(const std::string& name)
-{
-    ASSERT_MSG(!name.empty(), "TextureSystem::UnpinTexture — name must not be empty");
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    auto it = m_lruData.find(name);
-    if (it != m_lruData.end())
-    {
-        it->second.pinned = false;
-        it->second.priority = 2;
-    }
-}
-
-void TextureSystem::SetTexturePriority(const std::string& name, uint8_t priority)
-{
-    ASSERT_MSG(!name.empty(), "TextureSystem::SetTexturePriority — name must not be empty");
-    ASSERT_MSG(priority <= 5, "TextureSystem::SetTexturePriority — priority must be in [0, 5]");
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    m_lruData[name].priority = priority;
-    if (priority >= 5)
-    {
-        m_lruData[name].pinned = true;
-    }
-}
-
-uint32_t TextureSystem::EvictByPriority(size_t targetFreeBytes)
-{
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-
-    if (m_textures.empty())
-    {
-        return 0;
-    }
-
-    struct EvictionCandidate
-    {
-        std::string name;
-        float score;
-        size_t memoryBytes;
-    };
-
-    std::vector<EvictionCandidate> candidates;
-    candidates.reserve(m_textures.size());
-
-    for (const auto& [name, texture] : m_textures)
-    {
-        if (name.starts_with("__"))
-        {
-            continue;
-        }
-
-        auto lruIt = m_lruData.find(name);
-        TextureLRUData lru;
-        if (lruIt != m_lruData.end())
-        {
-            lru = lruIt->second;
-        }
-
-        if (lru.pinned)
-        {
-            continue;
-        }
-
-        float score = lru.GetEvictionScore(m_currentFrame);
-        candidates.push_back({name, score, texture->GetMemoryUsage()});
-    }
-
-    std::sort(candidates.begin(), candidates.end(),
-              [](const EvictionCandidate& a, const EvictionCandidate& b) { return a.score < b.score; });
-
-    size_t freedBytes = 0;
-    uint32_t evictedCount = 0;
-
-    for (const auto& candidate : candidates)
-    {
-        if (targetFreeBytes > 0 && freedBytes >= targetFreeBytes)
-        {
-            break;
-        }
-
-        auto texIt = m_textures.find(candidate.name);
-        if (texIt == m_textures.end())
-        {
-            continue;
-        }
-
-        if (texIt->second.use_count() <= 1)
-        {
-            freedBytes += candidate.memoryBytes;
-            m_lruData.erase(candidate.name);
-            m_textures.erase(texIt);
-            evictedCount++;
-        }
-    }
-
-    return evictedCount;
-}
-
-bool TextureSystem::GetTextureLRUData(const std::string& name, TextureLRUData& outData) const
-{
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    auto it = m_lruData.find(name);
-    if (it != m_lruData.end())
-    {
-        outData = it->second;
-        return true;
-    }
-    return false;
-}
-
 std::shared_ptr<Texture> TextureSystem::LoadTexture(const std::string& filePath, const TextureDesc& desc)
 {
     ASSERT_MSG(!filePath.empty(), "TextureSystem::LoadTexture — filePath must not be empty");
@@ -1488,17 +971,6 @@ std::shared_ptr<Texture> TextureSystem::CreateTexture(const std::string& name, c
     return texture;
 }
 
-void TextureSystem::LoadTextureAsync(const std::string& filePath,
-                                     std::function<void(std::shared_ptr<Texture>)> callback, const TextureDesc& desc)
-{
-    // On Linux, just load synchronously and invoke callback
-    auto texture = LoadTexture(filePath, desc);
-    if (callback)
-    {
-        callback(texture);
-    }
-}
-
 std::shared_ptr<Texture> TextureSystem::GetTexture(const std::string& name) const
 {
     std::lock_guard<std::mutex> lock(m_texturesMutex);
@@ -1547,28 +1019,6 @@ size_t TextureSystem::GetMemoryUsage() const
         totalMemory += pair.second->GetMemoryUsage();
     }
     return totalMemory;
-}
-
-void TextureSystem::GarbageCollect()
-{
-    std::lock_guard<std::mutex> lock(m_texturesMutex);
-    auto it = m_textures.begin();
-    while (it != m_textures.end())
-    {
-        if (it->second.use_count() == 1)
-        {
-            it = m_textures.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
-}
-
-void TextureSystem::SetStreamingThreadCount(int /*count*/)
-{
-    // No streaming threads on Linux
 }
 
 TextureSystem::TextureMetrics TextureSystem::Console_GetMetrics() const
@@ -1645,19 +1095,6 @@ void TextureSystem::Console_ReloadAllTextures()
 HRESULT TextureSystem::CreateDefaultTextures()
 {
     return S_OK;
-}
-
-void TextureSystem::StreamingThreadFunction()
-{
-    // No-op on Linux
-}
-
-void TextureSystem::UpdateMetrics()
-{
-    size_t memUsage = GetMemoryUsage();
-
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    m_metrics.totalMemoryUsage = memUsage;
 }
 
 TextureDesc TextureSystem::AdjustDescForQuality(const TextureDesc& desc) const

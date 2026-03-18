@@ -80,6 +80,29 @@ enum class RenderPath
 using RenderingPipeline = RenderPath;
 
 /**
+ * @brief Variable Rate Shading mode
+ *
+ * Controls how shading rate varies across the screen. Requires hardware
+ * support (D3D12 Tier 1/2 VRS, Vulkan VK_KHR_fragment_shading_rate).
+ */
+enum class VRSMode
+{
+    Off,     ///< No variable rate shading
+    PerDraw, ///< Shading rate set per draw call (Tier 1)
+    PerTile  ///< Shading rate varies per screen-space tile (Tier 2)
+};
+
+/**
+ * @brief Variable Rate Shading quality/rate
+ */
+enum class VRSShadingRate
+{
+    Full,   ///< 1x1 — full rate shading
+    Half,   ///< 2x2 — quarter rate (4 pixels per shading invocation)
+    Quarter ///< 4x4 — 1/16 rate (16 pixels per shading invocation)
+};
+
+/**
  * @brief Rendering quality presets
  */
 enum class QualityPreset
@@ -175,6 +198,10 @@ struct GraphicsSettings
     bool occlusionCulling = false;
     bool levelOfDetail = true;
     uint32_t maxDrawCalls = 1000;
+
+    // Variable Rate Shading
+    VRSMode vrsMode = VRSMode::Off;
+    VRSShadingRate vrsShadingRate = VRSShadingRate::Full;
 
     // Debug / display
     bool wireframeMode = false;

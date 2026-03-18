@@ -197,24 +197,12 @@ namespace Spark
         std::string GetShaderSearchPath(GraphicsBackend backend);
 
         /**
- * @brief Calculate the size of a pixel format in bytes
- */
-        uint32_t GetPixelFormatSize(PixelFormat format);
-
-        /**
- * @brief Check if a pixel format is a compressed format
- */
-        bool IsCompressedFormat(PixelFormat format);
-
-        /**
- * @brief Check if a pixel format is a depth/stencil format
- */
-        bool IsDepthStencilFormat(PixelFormat format);
-
-        /**
  * @brief Get a human-readable name for a pixel format
  */
         const char* GetPixelFormatName(PixelFormat format);
 
     } // namespace RHI
 } // namespace Spark
+
+// Format utility functions (GetFormatSize, IsCompressedFormat, etc.) are in RHIFormatUtils.h
+#include "RHIFormatUtils.h"

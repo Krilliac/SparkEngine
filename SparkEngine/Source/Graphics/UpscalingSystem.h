@@ -9,6 +9,17 @@
  * Intel XeSS. Manages render resolution calculation, GPU resources, and
  * per-mode input requirements.
  *
+ * @note VENDOR SDK INTEGRATION STATUS (March 2026):
+ * The upscaling framework (resolution scaling, quality presets, input routing)
+ * is fully implemented, but vendor SDK integration is NOT yet complete:
+ *   - NVIDIA DLSS: Requires DLSS SDK (nvngx_dlss.dll) — not linked
+ *   - AMD FSR 2.0+: Requires FidelityFX SDK — not linked
+ *   - Intel XeSS: Requires XeSS SDK (libxess.dll) — not linked
+ *   - FSR 1.0 (spatial): Uses a built-in shader approximation (functional)
+ * The Execute() path currently uses a temporal upsampling shader as fallback
+ * for all modes except FSR 1.0. To enable vendor upscaling, integrate the
+ * respective SDK and implement the vendor-specific dispatch in Execute().
+ *
  * ## Usage
  * @code
  *   UpscalingSystem upscaling;

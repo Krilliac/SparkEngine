@@ -100,6 +100,7 @@ option(ENABLE_PROFILING "Enable profiling tools" ON)
 option(ENABLE_NETWORKING "Enable networking features (experimental — requires socket libs)" OFF)
 option(ENABLE_VULKAN "Enable Vulkan graphics backend (experimental)" ON)
 option(ENABLE_OPENGL "Enable OpenGL graphics backend (experimental)" ON)
+option(ENABLE_METAL "Enable Metal graphics backend (macOS, experimental)" OFF)
 option(ENABLE_DXR "Enable DirectX Raytracing support (experimental)" OFF)
 option(ENABLE_HYBRID_RT "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)" ON)
 # SDL2 is auto-enabled on Linux for windowing + input; can be used on Windows too
@@ -400,6 +401,19 @@ if(ENABLE_OPENGL)
 else()
     set(SPARK_OPENGL_AVAILABLE FALSE)
     message(STATUS "OpenGL backend disabled by option")
+endif()
+
+# --- Metal ---
+if(ENABLE_METAL AND APPLE)
+    set(SPARK_METAL_AVAILABLE TRUE)
+    message(STATUS "Metal backend enabled (experimental)")
+else()
+    set(SPARK_METAL_AVAILABLE FALSE)
+    if(ENABLE_METAL AND NOT APPLE)
+        message(STATUS "Metal backend requires macOS — disabled on this platform")
+    else()
+        message(STATUS "Metal backend disabled by option")
+    endif()
 endif()
 
 # ---------------------------------------------------------------------
@@ -743,6 +757,13 @@ if(SPARK_OPENGL_AVAILABLE)
     endif()
 
     message(STATUS "SparkEngine: OpenGL backend ENABLED")
+endif()
+
+# --- Metal backend ---
+if(SPARK_METAL_AVAILABLE)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_METAL_SUPPORT)
+    target_link_libraries(SparkEngineLib PUBLIC "-framework Metal" "-framework QuartzCore" "-framework Foundation")
+    message(STATUS "SparkEngine: Metal backend ENABLED")
 endif()
 
 # --- Hybrid Ray Tracing ---

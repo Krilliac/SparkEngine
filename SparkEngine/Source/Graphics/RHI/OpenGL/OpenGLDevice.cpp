@@ -11,10 +11,10 @@
 #ifdef SPARK_OPENGL_SUPPORT
 
 #include "OpenGLDevice.h"
+#include "../RHIFormatUtils.h"
 #include "../../../Utils/Validate.h"
 #include <cassert>
 #include <cstring>
-#include <iostream>
 
 namespace Spark
 {
@@ -809,8 +809,8 @@ namespace Spark
 
                     if (glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
                     {
-                        std::cerr << "[OpenGL] Framebuffer incomplete for render target: " << desc.debugName
-                                  << std::endl;
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "OpenGL framebuffer incomplete for render target: {}", desc.debugName);
                     }
                 }
                 else if (desc.usage & RHITextureUsage::DepthStencil)
@@ -881,7 +881,7 @@ namespace Spark
                     {
                         char infoLog[1024];
                         glGetShaderInfoLog(shader, sizeof(infoLog), nullptr, infoLog);
-                        std::cerr << "[OpenGL] Shader compilation failed: " << infoLog << std::endl;
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OpenGL shader compilation failed: {}", infoLog);
                         glDeleteShader(shader);
                         return nullptr;
                     }
@@ -949,7 +949,7 @@ namespace Spark
                 {
                     char infoLog[1024];
                     glGetProgramInfoLog(program, sizeof(infoLog), nullptr, infoLog);
-                    std::cerr << "[OpenGL] Program link failed: " << infoLog << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OpenGL program link failed: {}", infoLog);
                     glDeleteProgram(program);
                     return nullptr;
                 }
@@ -1372,140 +1372,6 @@ namespace Spark
                 }
             }
 
-            GLenum GLDevice::ConvertFilter(RHIFilterMode mode) const
-            {
-                switch (mode)
-                {
-                case RHIFilterMode::Nearest:
-                    return GL_NEAREST;
-                case RHIFilterMode::Linear:
-                    return GL_LINEAR;
-                case RHIFilterMode::Anisotropic:
-                    return GL_LINEAR;
-                default:
-                    return GL_LINEAR;
-                }
-            }
-
-            GLenum GLDevice::ConvertCompareOp(RHICompareOp op) const
-            {
-                switch (op)
-                {
-                case RHICompareOp::Never:
-                    return GL_NEVER;
-                case RHICompareOp::Less:
-                    return GL_LESS;
-                case RHICompareOp::Equal:
-                    return GL_EQUAL;
-                case RHICompareOp::LessEqual:
-                    return GL_LEQUAL;
-                case RHICompareOp::Greater:
-                    return GL_GREATER;
-                case RHICompareOp::NotEqual:
-                    return GL_NOTEQUAL;
-                case RHICompareOp::GreaterEqual:
-                    return GL_GEQUAL;
-                case RHICompareOp::Always:
-                    return GL_ALWAYS;
-                default:
-                    return GL_LESS;
-                }
-            }
-
-            GLenum GLDevice::ConvertStencilOp(RHIStencilOp op) const
-            {
-                switch (op)
-                {
-                case RHIStencilOp::Keep:
-                    return GL_KEEP;
-                case RHIStencilOp::Zero:
-                    return GL_ZERO;
-                case RHIStencilOp::Replace:
-                    return GL_REPLACE;
-                case RHIStencilOp::IncrSat:
-                    return GL_INCR;
-                case RHIStencilOp::DecrSat:
-                    return GL_DECR;
-                case RHIStencilOp::Invert:
-                    return GL_INVERT;
-                case RHIStencilOp::IncrWrap:
-                    return GL_INCR_WRAP;
-                case RHIStencilOp::DecrWrap:
-                    return GL_DECR_WRAP;
-                default:
-                    return GL_KEEP;
-                }
-            }
-
-            GLenum GLDevice::ConvertBlendFactor(RHIBlendFactor factor) const
-            {
-                switch (factor)
-                {
-                case RHIBlendFactor::Zero:
-                    return GL_ZERO;
-                case RHIBlendFactor::One:
-                    return GL_ONE;
-                case RHIBlendFactor::SrcColor:
-                    return GL_SRC_COLOR;
-                case RHIBlendFactor::InvSrcColor:
-                    return GL_ONE_MINUS_SRC_COLOR;
-                case RHIBlendFactor::SrcAlpha:
-                    return GL_SRC_ALPHA;
-                case RHIBlendFactor::InvSrcAlpha:
-                    return GL_ONE_MINUS_SRC_ALPHA;
-                case RHIBlendFactor::DstAlpha:
-                    return GL_DST_ALPHA;
-                case RHIBlendFactor::InvDstAlpha:
-                    return GL_ONE_MINUS_DST_ALPHA;
-                case RHIBlendFactor::DstColor:
-                    return GL_DST_COLOR;
-                case RHIBlendFactor::InvDstColor:
-                    return GL_ONE_MINUS_DST_COLOR;
-                default:
-                    return GL_ONE;
-                }
-            }
-
-            GLenum GLDevice::ConvertBlendOp(RHIBlendOp op) const
-            {
-                switch (op)
-                {
-                case RHIBlendOp::Add:
-                    return GL_FUNC_ADD;
-                case RHIBlendOp::Subtract:
-                    return GL_FUNC_SUBTRACT;
-                case RHIBlendOp::RevSubtract:
-                    return GL_FUNC_REVERSE_SUBTRACT;
-                case RHIBlendOp::Min:
-                    return GL_MIN;
-                case RHIBlendOp::Max:
-                    return GL_MAX;
-                default:
-                    return GL_FUNC_ADD;
-                }
-            }
-
-            GLenum GLDevice::ConvertTopology(RHIPrimitiveTopology topology) const
-            {
-                switch (topology)
-                {
-                case RHIPrimitiveTopology::PointList:
-                    return GL_POINTS;
-                case RHIPrimitiveTopology::LineList:
-                    return GL_LINES;
-                case RHIPrimitiveTopology::LineStrip:
-                    return GL_LINE_STRIP;
-                case RHIPrimitiveTopology::TriangleList:
-                    return GL_TRIANGLES;
-                case RHIPrimitiveTopology::TriangleStrip:
-                    return GL_TRIANGLE_STRIP;
-                case RHIPrimitiveTopology::PatchList:
-                    return GL_PATCHES;
-                default:
-                    return GL_TRIANGLES;
-                }
-            }
-
             GLenum GLDevice::GetTextureTarget(const RHITextureDesc& desc) const
             {
                 switch (desc.type)
@@ -1528,40 +1394,6 @@ namespace Spark
                 }
             }
 
-            bool GLDevice::IsCompressedFormat(PixelFormat format) const
-            {
-                switch (format)
-                {
-                case PixelFormat::BC1_UNORM:
-                case PixelFormat::BC1_UNORM_SRGB:
-                case PixelFormat::BC2_UNORM:
-                case PixelFormat::BC3_UNORM:
-                case PixelFormat::BC3_UNORM_SRGB:
-                case PixelFormat::BC4_UNORM:
-                case PixelFormat::BC5_UNORM:
-                case PixelFormat::BC6H_UF16:
-                case PixelFormat::BC7_UNORM:
-                case PixelFormat::BC7_UNORM_SRGB:
-                    return true;
-                default:
-                    return false;
-                }
-            }
-
-            bool GLDevice::IsDepthFormat(PixelFormat format) const
-            {
-                switch (format)
-                {
-                case PixelFormat::D16_UNORM:
-                case PixelFormat::D24_UNORM_S8_UINT:
-                case PixelFormat::D32_FLOAT:
-                case PixelFormat::D32_FLOAT_S8_UINT:
-                    return true;
-                default:
-                    return false;
-                }
-            }
-
             GLenum GLDevice::GetDepthAttachmentType(PixelFormat format) const
             {
                 switch (format)
@@ -1573,56 +1405,6 @@ namespace Spark
                 case PixelFormat::D32_FLOAT:
                 default:
                     return GL_DEPTH_ATTACHMENT;
-                }
-            }
-
-            uint32_t GLDevice::GetFormatSize(PixelFormat format) const
-            {
-                switch (format)
-                {
-                case PixelFormat::R8_UNORM:
-                case PixelFormat::R8_SNORM:
-                case PixelFormat::R8_UINT:
-                    return 1;
-                case PixelFormat::R8G8_UNORM:
-                case PixelFormat::R16_FLOAT:
-                case PixelFormat::R16_UINT:
-                case PixelFormat::D16_UNORM:
-                    return 2;
-                case PixelFormat::R8G8B8A8_UNORM:
-                case PixelFormat::R8G8B8A8_UNORM_SRGB:
-                case PixelFormat::R8G8B8A8_SNORM:
-                case PixelFormat::B8G8R8A8_UNORM:
-                case PixelFormat::B8G8R8A8_UNORM_SRGB:
-                case PixelFormat::R10G10B10A2_UNORM:
-                case PixelFormat::R11G11B10_FLOAT:
-                case PixelFormat::R16G16_FLOAT:
-                case PixelFormat::R32_FLOAT:
-                case PixelFormat::R32_UINT:
-                case PixelFormat::D24_UNORM_S8_UINT:
-                case PixelFormat::D32_FLOAT:
-                    return 4;
-                case PixelFormat::R16G16B16A16_FLOAT:
-                case PixelFormat::R16G16B16A16_UNORM:
-                case PixelFormat::R32G32_FLOAT:
-                case PixelFormat::D32_FLOAT_S8_UINT:
-                    return 8;
-                case PixelFormat::R32G32B32_FLOAT:
-                    return 12;
-                case PixelFormat::R32G32B32A32_FLOAT:
-                    return 16;
-                default:
-                    return 4;
-                }
-            }
-
-            void GLDevice::CheckGLError(const char* operation) const
-            {
-                GLenum err;
-                while ((err = glGetError()) != GL_NO_ERROR)
-                {
-                    std::cerr << "[OpenGL] Error 0x" << std::hex << err << std::dec << " during: " << operation
-                              << std::endl;
                 }
             }
 
