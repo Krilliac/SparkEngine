@@ -51,6 +51,21 @@ namespace Spark
     ConsoleSeverity StringToConsoleSeverity(const std::string& str);
 
     // ========================================================================
+    // Command Permission Levels
+    // ========================================================================
+
+    enum class CommandPermission : uint8_t
+    {
+        Player = 0,    // Anyone
+        Moderator = 1, // Can kick, mute, warn
+        Admin = 2,     // Can ban, manage server
+        Developer = 3  // Full access
+    };
+
+    /** @brief Convert permission level to display string */
+    const char* CommandPermissionToString(CommandPermission permission);
+
+    // ========================================================================
     // SimpleConsole — log sink and command registry
     // ========================================================================
 
@@ -77,6 +92,7 @@ namespace Spark
             std::string category;
             std::string usage;
             uint64_t nameHash = 0;
+            CommandPermission requiredPermission = CommandPermission::Player;
         };
 
         struct ConsoleStats
@@ -108,9 +124,15 @@ namespace Spark
         // Commands
         void RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description = "",
                              const std::string& category = "General", const std::string& usage = "");
+        void RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
+                             const std::string& category, const std::string& usage, CommandPermission permission);
         bool UnregisterCommand(const std::string& name);
         bool HasCommand(const std::string& name) const;
         bool ExecuteCommand(const std::string& commandLine);
+
+        // Permission management
+        void SetCurrentPermissionLevel(CommandPermission level);
+        CommandPermission GetCurrentPermissionLevel() const;
 
         // Visibility (no-op stubs — external console handles its own window)
         void Show();
@@ -151,6 +173,7 @@ namespace Spark
         mutable std::mutex m_historyMutex;
 
         std::unordered_map<std::string, std::string> m_aliases;
+        CommandPermission m_currentPermission = CommandPermission::Developer;
 
         std::atomic<uint64_t> m_logSequence{0};
         ConsoleStats m_stats{};

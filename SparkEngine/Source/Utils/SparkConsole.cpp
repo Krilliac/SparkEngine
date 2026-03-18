@@ -64,6 +64,27 @@ namespace Spark
     }
 
     // ============================================================================
+    // CommandPermission helpers
+    // ============================================================================
+
+    const char* CommandPermissionToString(CommandPermission permission)
+    {
+        switch (permission)
+        {
+        case CommandPermission::Player:
+            return "Player";
+        case CommandPermission::Moderator:
+            return "Moderator";
+        case CommandPermission::Admin:
+            return "Admin";
+        case CommandPermission::Developer:
+            return "Developer";
+        default:
+            return "Unknown";
+        }
+    }
+
+    // ============================================================================
     // Levenshtein distance for fuzzy command matching
     // ============================================================================
 
@@ -253,6 +274,22 @@ namespace Spark
         m_stats.registeredCommands = static_cast<uint32_t>(m_commands.size());
     }
 
+    void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
+                                        const std::string& category, const std::string& usage,
+                                        CommandPermission permission)
+    {
+        std::lock_guard<std::mutex> lock(m_commandMutex);
+        CommandInfo info;
+        info.handler = std::move(handler);
+        info.description = description;
+        info.category = category;
+        info.usage = usage;
+        info.nameHash = FNV1a64(name);
+        info.requiredPermission = permission;
+        m_commands[name] = std::move(info);
+        m_stats.registeredCommands = static_cast<uint32_t>(m_commands.size());
+    }
+
     bool SimpleConsole::UnregisterCommand(const std::string& name)
     {
         std::lock_guard<std::mutex> lock(m_commandMutex);
@@ -367,6 +404,15 @@ namespace Spark
             return false;
         }
 
+        // Permission check
+        if (m_currentPermission < it->second.requiredPermission)
+        {
+            LogError("Permission denied: '" + command + "' requires " +
+                     CommandPermissionToString(it->second.requiredPermission) + " level");
+            m_stats.totalCommandsFailed++;
+            return false;
+        }
+
         try
         {
             std::string result = it->second.handler(args);
@@ -442,6 +488,20 @@ namespace Spark
     {
         m_aliases.erase(alias);
         m_stats.registeredAliases = static_cast<uint32_t>(m_aliases.size());
+    }
+
+    // ============================================================================
+    // Permission Management
+    // ============================================================================
+
+    void SimpleConsole::SetCurrentPermissionLevel(CommandPermission level)
+    {
+        m_currentPermission = level;
+    }
+
+    CommandPermission SimpleConsole::GetCurrentPermissionLevel() const
+    {
+        return m_currentPermission;
     }
 
     // ============================================================================

@@ -14,11 +14,15 @@ class ModuleManager;
 namespace Spark
 {
 
+    class ModuleHotReloadManager;
+
     /**
      * @brief Register all engine console commands (physics, audio, save, modules, architecture)
      * @param moduleManager Module manager for module_info/module_reload commands (may be null)
      * @param audioEngine Audio engine for audio_* commands (may be null)
+     * @param hotReload Module hot-reload manager for hot-reload commands (may be null)
      */
-    void RegisterEngineConsoleCommands(ModuleManager* moduleManager, AudioEngine* audioEngine);
+    void RegisterEngineConsoleCommands(ModuleManager* moduleManager, AudioEngine* audioEngine,
+                                       ModuleHotReloadManager* hotReload = nullptr);
 
 } // namespace Spark

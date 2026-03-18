@@ -119,6 +119,9 @@ class ModuleManager
     /** @brief Check if any modules are loaded */
     bool HasModules() const { return !m_modules.empty(); }
 
+    /** @brief Get paths and names of all loaded modules for hot-reload watching */
+    std::vector<std::pair<std::string, std::string>> GetModulePathsAndNames() const;
+
     /** @brief Set the file cache for manifest loading (non-owning). */
     void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
 

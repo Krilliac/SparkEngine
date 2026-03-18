@@ -10,6 +10,7 @@
 #include "EngineContext.h"
 #include "AssetIntegration.h"
 #include "ModuleManager.h"
+#include "ModuleHotReload.h"
 #include "Audio/AudioEngine.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Physics/PhysicsSystem.h"
@@ -22,7 +23,8 @@
 namespace Spark
 {
 
-    void RegisterEngineConsoleCommands(ModuleManager* moduleManager, AudioEngine* audioEngine)
+    void RegisterEngineConsoleCommands(ModuleManager* moduleManager, AudioEngine* audioEngine,
+                                       ModuleHotReloadManager* hotReload)
     {
         auto& console = SimpleConsole::GetInstance();
 
@@ -574,6 +576,53 @@ namespace Spark
                 return reg->Console_ListAssets();
             },
             "List all registered assets in the asset registry", "Engine");
+
+        // ---- Module hot-reload commands ----
+
+        console.RegisterCommand(
+            "module.hotreload.enable",
+            [hotReload](const std::vector<std::string>&) -> std::string
+            {
+                if (!hotReload)
+                    return "Module hot-reload not available";
+                hotReload->SetEnabled(true);
+                return "Module hot-reload enabled";
+            },
+            "Enable automatic module hot-reload", "Modules");
+
+        console.RegisterCommand(
+            "module.hotreload.disable",
+            [hotReload](const std::vector<std::string>&) -> std::string
+            {
+                if (!hotReload)
+                    return "Module hot-reload not available";
+                hotReload->SetEnabled(false);
+                return "Module hot-reload disabled";
+            },
+            "Disable automatic module hot-reload", "Modules");
+
+        console.RegisterCommand(
+            "module.reload",
+            [hotReload](const std::vector<std::string>& args) -> std::string
+            {
+                if (!hotReload)
+                    return "Module hot-reload not available";
+                if (args.empty())
+                    return "Usage: module.reload <module_name>";
+                bool ok = hotReload->ForceReload(args[0]);
+                return ok ? "Module '" + args[0] + "' reloaded" : "Failed to reload '" + args[0] + "'";
+            },
+            "Force reload a specific module (usage: module.reload <name>)", "Modules");
+
+        console.RegisterCommand(
+            "module.hotreload.status",
+            [hotReload](const std::vector<std::string>&) -> std::string
+            {
+                if (!hotReload)
+                    return "Module hot-reload not available";
+                return hotReload->GetStatus();
+            },
+            "Show module hot-reload status and watched modules", "Modules");
     }
 
 } // namespace Spark
