@@ -485,7 +485,7 @@ void Game::SetEventBus(Spark::EventBus* bus)
         return;
 
     // Entity killed → update gamemode scoring, quest progress, and HUD kill feed
-    bus->Subscribe<Spark::EntityKilledEvent>(
+    (void)bus->Subscribe<Spark::EntityKilledEvent>(
         [this](const Spark::EntityKilledEvent& e)
         {
             if (m_gameMode)
@@ -503,7 +503,7 @@ void Game::SetEventBus(Spark::EventBus* bus)
         });
 
     // Entity damaged → show damage indicator on HUD
-    bus->Subscribe<Spark::EntityDamagedEvent>(
+    (void)bus->Subscribe<Spark::EntityDamagedEvent>(
         [this](const Spark::EntityDamagedEvent& e)
         {
             if (m_hudSystem && m_player)
@@ -516,12 +516,12 @@ void Game::SetEventBus(Spark::EventBus* bus)
         });
 
     // Item pickup → add to player inventory
-    bus->Subscribe<Spark::ItemPickedUpEvent>(
+    (void)bus->Subscribe<Spark::ItemPickedUpEvent>(
         [this](const Spark::ItemPickedUpEvent& e)
         { Spark::InventoryOps::AddItem(m_playerInventory, m_itemRegistry, e.itemDefId, e.count); });
 
     // Player respawn → teleport to spawn point and reset HUD state
-    bus->Subscribe<Spark::PlayerRespawnEvent>(
+    (void)bus->Subscribe<Spark::PlayerRespawnEvent>(
         [this](const Spark::PlayerRespawnEvent& e)
         {
             // Teleport camera/player to spawn location

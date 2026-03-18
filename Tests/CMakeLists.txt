@@ -88,6 +88,11 @@ add_executable(SparkTests
     TestDestructionSystem.cpp
     TestShadowAtlas.cpp
     TestHybridRT.cpp
+    TestReliableChannel.cpp
+    TestModuleDependency.cpp
+    TestReflection.cpp
+    TestPathCache.cpp
+    TestShaderGraphCompiler.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

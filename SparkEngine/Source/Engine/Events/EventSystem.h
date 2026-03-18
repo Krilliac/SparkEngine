@@ -289,8 +289,8 @@ namespace Spark
 
         QueuedEventBus(const QueuedEventBus&) = delete;
         QueuedEventBus& operator=(const QueuedEventBus&) = delete;
-        QueuedEventBus(QueuedEventBus&&) = default;
-        QueuedEventBus& operator=(QueuedEventBus&&) = default;
+        QueuedEventBus(QueuedEventBus&&) = delete;
+        QueuedEventBus& operator=(QueuedEventBus&&) = delete;
 
         /**
          * @brief Queue an event for deferred dispatch. Thread-safe.

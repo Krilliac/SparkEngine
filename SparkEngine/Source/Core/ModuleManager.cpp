@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -538,8 +539,110 @@ Spark::IModule* ModuleManager::GetPrimaryModule() const
 
 void ModuleManager::SortModules()
 {
-    std::stable_sort(m_modules.begin(), m_modules.end(),
-                     [](const LoadedModule& a, const LoadedModule& b) { return a.loadOrder < b.loadOrder; });
+    auto& console = Spark::SimpleConsole::GetInstance();
+
+    // Check if any module declares dependencies
+    bool hasDependencies = false;
+    for (const auto& entry : m_modules)
+    {
+        if (!entry.instance)
+            continue;
+        auto info = entry.instance->GetModuleInfo();
+        if (info.dependencyCount > 0)
+        {
+            hasDependencies = true;
+            break;
+        }
+    }
+
+    if (!hasDependencies)
+    {
+        // Simple numeric sort when no dependencies declared
+        std::stable_sort(m_modules.begin(), m_modules.end(),
+                         [](const LoadedModule& a, const LoadedModule& b) { return a.loadOrder < b.loadOrder; });
+        return;
+    }
+
+    // Topological sort (Kahn's algorithm) respecting declared dependencies.
+    // Within the same dependency level, fall back to loadOrder.
+    const size_t count = m_modules.size();
+
+    // Build name → index map
+    std::unordered_map<std::string, size_t> nameToIndex;
+    for (size_t i = 0; i < count; ++i)
+        nameToIndex[m_modules[i].name] = i;
+
+    // Build adjacency list and compute in-degrees
+    std::vector<std::vector<size_t>> dependents(count); // dependents[dep] = modules that depend on dep
+    std::vector<int> inDegree(count, 0);
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        if (!m_modules[i].instance)
+            continue;
+        auto info = m_modules[i].instance->GetModuleInfo();
+        for (int d = 0; d < info.dependencyCount; ++d)
+        {
+            auto it = nameToIndex.find(info.dependencies[d]);
+            if (it != nameToIndex.end())
+            {
+                dependents[it->second].push_back(i);
+                inDegree[i]++;
+            }
+            else
+            {
+                console.LogWarning("Module '" + m_modules[i].name + "' depends on '" +
+                                   std::string(info.dependencies[d]) + "' which is not loaded");
+            }
+        }
+    }
+
+    // Kahn's algorithm: start with modules that have no unmet dependencies
+    std::vector<LoadedModule> sorted;
+    sorted.reserve(count);
+
+    // Collect ready modules, sorted by loadOrder for determinism
+    auto getReadyModules = [&]()
+    {
+        std::vector<size_t> ready;
+        for (size_t i = 0; i < count; ++i)
+        {
+            if (inDegree[i] == 0)
+                ready.push_back(i);
+        }
+        std::stable_sort(ready.begin(), ready.end(),
+                         [this](size_t a, size_t b) { return m_modules[a].loadOrder < m_modules[b].loadOrder; });
+        return ready;
+    };
+
+    std::vector<size_t> ready = getReadyModules();
+    // Mark processed with -1
+    while (!ready.empty())
+    {
+        for (size_t idx : ready)
+        {
+            sorted.push_back(std::move(m_modules[idx]));
+            inDegree[idx] = -1;
+            for (size_t dep : dependents[idx])
+            {
+                if (inDegree[dep] > 0)
+                    inDegree[dep]--;
+            }
+        }
+        ready = getReadyModules();
+    }
+
+    // Cycle detection: any remaining modules have circular dependencies
+    for (size_t i = 0; i < count; ++i)
+    {
+        if (inDegree[i] > 0)
+        {
+            console.LogError("Circular dependency detected involving module: " + m_modules[i].name);
+            sorted.push_back(std::move(m_modules[i]));
+        }
+    }
+
+    m_modules = std::move(sorted);
 }
 
 void ModuleManager::UnloadEntry(LoadedModule& entry)

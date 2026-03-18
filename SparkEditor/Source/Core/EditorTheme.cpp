@@ -276,16 +276,16 @@ namespace SparkEditor
         c[ImGuiCol_ResizeGripHovered] = theme.accent.WithAlpha(0.5f).ToImVec4();
         c[ImGuiCol_ResizeGripActive] = theme.accent.WithAlpha(0.8f).ToImVec4();
 
-        // Tabs
+        // Tabs — active tab blends into panel, inactive recedes
         c[ImGuiCol_Tab] = theme.tab.ToImVec4();
         c[ImGuiCol_TabHovered] = theme.tabHovered.ToImVec4();
         c[ImGuiCol_TabSelected] = theme.tabActive.ToImVec4();
         c[ImGuiCol_TabDimmed] = theme.tabUnfocused.ToImVec4();
-        c[ImGuiCol_TabDimmedSelected] = theme.tabActive.Darken(0.3f).ToImVec4();
+        c[ImGuiCol_TabDimmedSelected] = theme.tabActive.Darken(0.15f).ToImVec4();
 
-        // Docking
-        c[ImGuiCol_DockingPreview] = theme.accent.WithAlpha(0.7f).ToImVec4();
-        c[ImGuiCol_DockingEmptyBg] = theme.backgroundDark.ToImVec4();
+        // Docking — accent preview, deep empty background
+        c[ImGuiCol_DockingPreview] = theme.accent.WithAlpha(0.5f).ToImVec4();
+        c[ImGuiCol_DockingEmptyBg] = theme.backgroundDark.Darken(0.3f).ToImVec4();
 
         // Plot
         c[ImGuiCol_PlotLines] = theme.graph1.ToImVec4();
@@ -339,113 +339,113 @@ namespace SparkEditor
 
     // -------------------------------------------------------------------
     // SPARK PROFESSIONAL — Signature theme
-    // Dark blue-gray base, electric blue accent, orange-amber secondary
-    // Military-tech aesthetic for FPS game engine
+    // Deep charcoal base, refined teal-cyan accent, warm amber secondary
+    // Sleek dark techie aesthetic inspired by Unreal/Unity/Godot best practices
     // -------------------------------------------------------------------
     static EditorThemeData CreateSparkThemeImpl()
     {
         EditorThemeData t;
         t.name = "Spark Professional";
-        t.description = "Signature dark theme with electric blue and orange-amber accents";
+        t.description = "Sleek dark theme with teal-cyan accents and warm amber highlights";
         t.author = "Spark Engine Team";
 
-        // Backgrounds
-        t.background = ThemeColor::FromHex("#1A1D23");
-        t.backgroundDark = ThemeColor::FromHex("#141619");
-        t.backgroundLight = ThemeColor::FromHex("#22262E");
-        t.backgroundAccent = ThemeColor::FromHex("#1E3A5F");
-        t.backgroundHeader = ThemeColor::FromHex("#1E2128");
-        t.backgroundActive = ThemeColor::FromHex("#2D8CF0").WithAlpha(0.3f);
-        t.backgroundHover = ThemeColor::FromHex("#2A2E36");
-        t.backgroundSelected = ThemeColor::FromHex("#2D8CF0").WithAlpha(0.2f);
+        // Backgrounds — deep charcoal with subtle warm undertone (not blue-cold)
+        t.background = ThemeColor::FromHex("#1B1D22");
+        t.backgroundDark = ThemeColor::FromHex("#131518");
+        t.backgroundLight = ThemeColor::FromHex("#242730");
+        t.backgroundAccent = ThemeColor::FromHex("#0E3D4A");
+        t.backgroundHeader = ThemeColor::FromHex("#1E2028");
+        t.backgroundActive = ThemeColor::FromHex("#1AAFBC").WithAlpha(0.22f);
+        t.backgroundHover = ThemeColor::FromHex("#282C36");
+        t.backgroundSelected = ThemeColor::FromHex("#1AAFBC").WithAlpha(0.15f);
 
-        // Text
-        t.text = ThemeColor::FromHex("#E0E4EA");
-        t.textDisabled = ThemeColor::FromHex("#555B66");
-        t.textSecondary = ThemeColor::FromHex("#8B929E");
-        t.textAccent = ThemeColor::FromHex("#2D8CF0");
-        t.textWarning = ThemeColor::FromHex("#F5A623");
-        t.textError = ThemeColor::FromHex("#E53935");
-        t.textSuccess = ThemeColor::FromHex("#4CAF50");
+        // Text — high-contrast cool white, warm disabled tones
+        t.text = ThemeColor::FromHex("#D8DCE6");
+        t.textDisabled = ThemeColor::FromHex("#4E5462");
+        t.textSecondary = ThemeColor::FromHex("#8890A0");
+        t.textAccent = ThemeColor::FromHex("#36C8D6");
+        t.textWarning = ThemeColor::FromHex("#F0A830");
+        t.textError = ThemeColor::FromHex("#E84040");
+        t.textSuccess = ThemeColor::FromHex("#3DD68C");
 
-        // Buttons
-        t.button = ThemeColor::FromHex("#2A2E36");
-        t.buttonHovered = ThemeColor::FromHex("#353A44");
-        t.buttonActive = ThemeColor::FromHex("#2D8CF0");
-        t.buttonDisabled = ThemeColor::FromHex("#22262E");
+        // Buttons — slightly raised from background, not flat
+        t.button = ThemeColor::FromHex("#282C36");
+        t.buttonHovered = ThemeColor::FromHex("#323844");
+        t.buttonActive = ThemeColor::FromHex("#1AAFBC");
+        t.buttonDisabled = ThemeColor::FromHex("#1E2028");
 
-        // Frames (input fields)
-        t.frame = ThemeColor::FromHex("#1E2128");
-        t.frameHovered = ThemeColor::FromHex("#262B33");
-        t.frameActive = ThemeColor::FromHex("#2D8CF0").WithAlpha(0.4f);
+        // Frames (input fields) — recessed, darker than background
+        t.frame = ThemeColor::FromHex("#161820");
+        t.frameHovered = ThemeColor::FromHex("#1E222C");
+        t.frameActive = ThemeColor::FromHex("#1AAFBC").WithAlpha(0.35f);
 
-        // Borders
-        t.border = ThemeColor::FromHex("#2A2E36");
-        t.borderLight = ThemeColor::FromHex("#333842");
-        t.borderAccent = ThemeColor::FromHex("#2D8CF0");
-        t.borderSeparator = ThemeColor::FromHex("#262B33");
+        // Borders — barely visible on idle, accent on focus
+        t.border = ThemeColor::FromHex("#2A2E3A");
+        t.borderLight = ThemeColor::FromHex("#353A48");
+        t.borderAccent = ThemeColor::FromHex("#1AAFBC");
+        t.borderSeparator = ThemeColor::FromHex("#22252E");
 
-        // Title bar
-        t.titleBar = ThemeColor::FromHex("#141619");
-        t.titleBarActive = ThemeColor::FromHex("#1A3A5F");
-        t.titleBarText = ThemeColor::FromHex("#E0E4EA");
+        // Title bar — near-black, minimal contrast with background
+        t.titleBar = ThemeColor::FromHex("#131518");
+        t.titleBarActive = ThemeColor::FromHex("#0E3D4A");
+        t.titleBarText = ThemeColor::FromHex("#D8DCE6");
 
-        // Menu bar
-        t.menuBar = ThemeColor::FromHex("#1A1D23");
+        // Menu bar — seamless with main background
+        t.menuBar = ThemeColor::FromHex("#1B1D22");
         t.menuItem = ThemeColor(0, 0, 0, 0);
-        t.menuItemHovered = ThemeColor::FromHex("#2D8CF0").WithAlpha(0.5f);
+        t.menuItemHovered = ThemeColor::FromHex("#1AAFBC").WithAlpha(0.35f);
 
-        // Scrollbar
-        t.scrollbar = ThemeColor::FromHex("#141619");
-        t.scrollbarGrab = ThemeColor::FromHex("#3A3F48");
-        t.scrollbarGrabHovered = ThemeColor::FromHex("#4A4F58");
-        t.scrollbarGrabActive = ThemeColor::FromHex("#2D8CF0");
+        // Scrollbar — thin, subtle, only visible on hover
+        t.scrollbar = ThemeColor::FromHex("#131518");
+        t.scrollbarGrab = ThemeColor::FromHex("#363C4A");
+        t.scrollbarGrabHovered = ThemeColor::FromHex("#4A5266");
+        t.scrollbarGrabActive = ThemeColor::FromHex("#1AAFBC");
 
-        // Tabs
-        t.tab = ThemeColor::FromHex("#1A1D23");
-        t.tabHovered = ThemeColor::FromHex("#2D8CF0").WithAlpha(0.4f);
-        t.tabActive = ThemeColor::FromHex("#2D8CF0");
-        t.tabUnfocused = ThemeColor::FromHex("#141619");
+        // Tabs — active tab has accent underline feel
+        t.tab = ThemeColor::FromHex("#1B1D22");
+        t.tabHovered = ThemeColor::FromHex("#1AAFBC").WithAlpha(0.28f);
+        t.tabActive = ThemeColor::FromHex("#242730");
+        t.tabUnfocused = ThemeColor::FromHex("#131518");
 
-        // Accent colors
-        t.accent = ThemeColor::FromHex("#2D8CF0");          // Electric blue
-        t.accentSecondary = ThemeColor::FromHex("#F5A623"); // Orange-amber
-        t.focus = ThemeColor::FromHex("#2D8CF0");
-        t.selection = ThemeColor::FromHex("#2D8CF0").WithAlpha(0.3f);
-        t.drop = ThemeColor::FromHex("#F5A623").WithAlpha(0.8f);
+        // Accent colors — teal-cyan primary, warm amber secondary
+        t.accent = ThemeColor::FromHex("#1AAFBC");
+        t.accentSecondary = ThemeColor::FromHex("#F0A830");
+        t.focus = ThemeColor::FromHex("#1AAFBC");
+        t.selection = ThemeColor::FromHex("#1AAFBC").WithAlpha(0.25f);
+        t.drop = ThemeColor::FromHex("#F0A830").WithAlpha(0.75f);
 
-        // Graph colors
-        t.graph1 = ThemeColor::FromHex("#2D8CF0");
-        t.graph2 = ThemeColor::FromHex("#F5A623");
-        t.graph3 = ThemeColor::FromHex("#4CAF50");
-        t.graph4 = ThemeColor::FromHex("#E53935");
-        t.graph5 = ThemeColor::FromHex("#9C27B0");
+        // Graph colors — distinguishable, vibrant on dark
+        t.graph1 = ThemeColor::FromHex("#1AAFBC");
+        t.graph2 = ThemeColor::FromHex("#F0A830");
+        t.graph3 = ThemeColor::FromHex("#3DD68C");
+        t.graph4 = ThemeColor::FromHex("#E84040");
+        t.graph5 = ThemeColor::FromHex("#A86EDB");
 
-        // Style values
-        t.windowRounding = 2.0f;
-        t.childRounding = 2.0f;
-        t.frameRounding = 2.0f;
-        t.popupRounding = 3.0f;
+        // Style values — slightly more rounded than before for modern feel
+        t.windowRounding = 4.0f;
+        t.childRounding = 4.0f;
+        t.frameRounding = 4.0f;
+        t.popupRounding = 6.0f;
         t.scrollbarRounding = 12.0f;
-        t.grabRounding = 2.0f;
-        t.tabRounding = 3.0f;
+        t.grabRounding = 4.0f;
+        t.tabRounding = 4.0f;
 
         t.windowBorderSize = 1.0f;
         t.childBorderSize = 1.0f;
         t.popupBorderSize = 1.0f;
-        t.frameBorderSize = 1.0f;
+        t.frameBorderSize = 0.0f;
 
-        t.windowPaddingX = 8.0f;
-        t.windowPaddingY = 8.0f;
-        t.framePaddingX = 6.0f;
-        t.framePaddingY = 4.0f;
+        t.windowPaddingX = 10.0f;
+        t.windowPaddingY = 10.0f;
+        t.framePaddingX = 8.0f;
+        t.framePaddingY = 5.0f;
         t.itemSpacingX = 8.0f;
-        t.itemSpacingY = 4.0f;
-        t.itemInnerSpacingX = 4.0f;
-        t.itemInnerSpacingY = 4.0f;
+        t.itemSpacingY = 5.0f;
+        t.itemInnerSpacingX = 5.0f;
+        t.itemInnerSpacingY = 5.0f;
 
-        t.indentSpacing = 21.0f;
-        t.scrollbarSize = 14.0f;
+        t.indentSpacing = 20.0f;
+        t.scrollbarSize = 12.0f;
         t.grabMinSize = 10.0f;
 
         t.fontSize = 15.0f;

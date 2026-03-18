@@ -89,7 +89,8 @@ struct RuntimeLight
  */
 struct ViewFrustum
 {
-    XMFLOAT4 planes[6]; ///< Left, Right, Bottom, Top, Near, Far
+    XMFLOAT4 planes[6];               ///< Left, Right, Bottom, Top, Near, Far
+    DirectX::XMMATRIX viewProjMatrix; ///< Stored for screen-space projection in tile assignment
 
     bool TestSphere(const XMFLOAT3& center, float radius) const
     {
@@ -125,6 +126,7 @@ inline ViewFrustum ExtractFrustumPlanes(const XMFLOAT4X4& vp)
             f.planes[i].w /= len;
         }
     }
+    f.viewProjMatrix = DirectX::XMLoadFloat4x4(&vp);
     return f;
 }
 
@@ -380,12 +382,47 @@ class LightManager
   private:
     static constexpr int MAX_SHADOW_SLOTS = 16;
 
+    /// Project a light's bounding sphere to screen space and assign to overlapping tiles.
+    /// Directional lights affect all tiles. Point/spot lights use screen-space AABB.
     void AssignLightToTiles(uint32_t lightIndex, const RuntimeLight& light)
     {
-        // Simplified: assign to all tiles (production would project to screen space)
-        for (auto& tile : m_tileLightLists)
-            tile.AddLight(lightIndex);
-        (void)light;
+        if (light.type == RuntimeLightType::Directional)
+        {
+            for (auto& tile : m_tileLightLists)
+                tile.AddLight(lightIndex);
+            return;
+        }
+
+        // Transform light center to clip space using the stored view-projection matrix
+        DirectX::XMVECTOR lightPos = DirectX::XMVectorSet(light.position.x, light.position.y, light.position.z, 1.0f);
+        DirectX::XMVECTOR clipPos = DirectX::XMVector3Transform(lightPos, m_frustum.viewProjMatrix);
+        float w = DirectX::XMVectorGetW(clipPos);
+        if (w <= 0.0f)
+            return;
+
+        float ndcX = DirectX::XMVectorGetX(clipPos) / w;
+        float ndcY = DirectX::XMVectorGetY(clipPos) / w;
+
+        // Estimate screen-space radius from light range
+        float screenRadius = (light.range / w) * static_cast<float>(m_screenWidth) * 0.5f;
+
+        // NDC to pixel coordinates
+        float pixelX = (ndcX * 0.5f + 0.5f) * static_cast<float>(m_screenWidth);
+        float pixelY = (1.0f - (ndcY * 0.5f + 0.5f)) * static_cast<float>(m_screenHeight);
+
+        // Tile range for the light's screen-space AABB
+        int minTX = std::max(0, static_cast<int>((pixelX - screenRadius) / m_tileSize));
+        int maxTX = std::min(m_tilesX - 1, static_cast<int>((pixelX + screenRadius) / m_tileSize));
+        int minTY = std::max(0, static_cast<int>((pixelY - screenRadius) / m_tileSize));
+        int maxTY = std::min(m_tilesY - 1, static_cast<int>((pixelY + screenRadius) / m_tileSize));
+
+        for (int ty = minTY; ty <= maxTY; ++ty)
+        {
+            for (int tx = minTX; tx <= maxTX; ++tx)
+            {
+                m_tileLightLists[static_cast<size_t>(ty * m_tilesX + tx)].AddLight(lightIndex);
+            }
+        }
     }
 
     bool m_initialized = false;

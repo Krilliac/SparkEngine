@@ -113,6 +113,9 @@ namespace Spark::Net
         Disconnect,
         Heartbeat,
 
+        // Reliability
+        Ack, ///< Acknowledges receipt of reliable messages (carries sequence + bitfield)
+
         // Replication
         EntitySpawn,
         EntityDestroy,
@@ -486,6 +489,40 @@ namespace Spark::Net
         std::unordered_map<SequenceNumber, float>
             m_reliableOriginalSendTime; ///< Tracks when each reliable msg was first sent
         float m_reliableRetransmitInterval = 0.5f;
+
+        // ACK processing — tracks the highest received reliable sequence and a
+        // 32-bit bitfield of the previous 32 sequences for cumulative ACKs.
+        SequenceNumber m_remoteSequenceHighest = 0;        ///< Highest reliable sequence received
+        uint32_t m_ackBitfield = 0;                        ///< Bitfield for sequences (highest-1) to (highest-32)
+        float m_ackSendTimer = 0.0f;                       ///< Accumulate before sending ACK
+        static constexpr float ACK_SEND_INTERVAL = 0.033f; ///< ~30 Hz ACK rate
+
+        // Duplicate detection — set of recently received reliable sequence numbers.
+        // Bounded to prevent unbounded growth; old entries pruned periodically.
+        std::unordered_map<SequenceNumber, float> m_receivedSequences; ///< seq → receive time
+        static constexpr float RECEIVED_SEQ_EXPIRY = 30.0f;            ///< Prune after 30s
+
+        // Ordered delivery — buffer for out-of-order ReliableOrdered messages.
+        SequenceNumber m_expectedOrderedSequence = 1; ///< Next sequence to deliver in order
+        std::unordered_map<SequenceNumber, NetworkMessage> m_orderedBuffer;
+
+        /// Process an incoming ACK message: remove acknowledged messages from unack map
+        void HandleAck(const NetworkMessage& msg);
+
+        /// Send a cumulative ACK packet to the remote endpoint
+        void SendAckPacket();
+
+        /// Check for duplicate reliable message
+        bool IsDuplicateSequence(SequenceNumber seq) const;
+
+        /// Record a received reliable sequence and update ACK bitfield
+        void RecordReceivedSequence(SequenceNumber seq);
+
+        /// Deliver buffered ordered messages that are now in-sequence
+        void FlushOrderedBuffer();
+
+        /// Prune old entries from m_receivedSequences
+        void PruneReceivedSequences();
 
         // Replication
         std::unordered_map<uint32_t, ReplicatedEntity> m_replicatedEntities;

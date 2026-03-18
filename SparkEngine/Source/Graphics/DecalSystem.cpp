@@ -159,7 +159,7 @@ namespace Spark::Graphics
         // Compute random size if not specified
         if (size < 0.0f)
         {
-            float t = static_cast<float>(rand()) / RAND_MAX;
+            float t = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
             size = sizeRange.x + t * (sizeRange.y - sizeRange.x);
         }
 
@@ -167,7 +167,7 @@ namespace Spark::Graphics
         decal->normal = normal;
         decal->tangent = ComputeTangent(normal);
         decal->halfExtents = {size, size, size * 0.5f};
-        decal->rotation = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 2.0f * rotVariance;
+        decal->rotation = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX) - 0.5f) * 2.0f * rotVariance;
         decal->opacity = 1.0f;
         decal->fadeTimer = m_defaultFadeTime;
         decal->fadeDuration = m_defaultFadeDuration;
@@ -447,7 +447,7 @@ namespace Spark::Graphics
 
         if (size < 0.0f)
         {
-            float t = static_cast<float>(rand()) / RAND_MAX;
+            float t = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
             size = sizeRange.x + t * (sizeRange.y - sizeRange.x);
         }
 
@@ -455,7 +455,7 @@ namespace Spark::Graphics
         decal->normal = normal;
         decal->tangent = ComputeTangent(normal);
         decal->halfExtents = {size, size, size * 0.5f};
-        decal->rotation = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 2.0f * rotVariance;
+        decal->rotation = (static_cast<float>(rand()) / static_cast<float>(RAND_MAX) - 0.5f) * 2.0f * rotVariance;
         decal->opacity = 1.0f;
         decal->fadeTimer = m_defaultFadeTime;
         decal->fadeDuration = m_defaultFadeDuration;

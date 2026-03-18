@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*79 test files, 1015+ test cases*
+*84 test files, 1047+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -484,12 +484,14 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestLocalizationSystem` | 6 |
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
+| `TestModuleDependency` | 5 |
 | `TestNavMesh` | 11 |
 | `TestNetBuffer` | 29 |
 | `TestNetworkEncryption` | 17 |
 | `TestNetworkInterpolation` | 12 |
 | `TestNoiseGenerator` | 7 |
 | `TestObjectPool` | 6 |
+| `TestPathCache` | 6 |
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
 | `TestPhysicsInterpolation` | 8 |
@@ -497,6 +499,8 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestPostProcessingPipeline` | 11 |
 | `TestQuestSystem` | 10 |
 | `TestRandomEngine` | 11 |
+| `TestReflection` | 7 |
+| `TestReliableChannel` | 9 |
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
 | `TestSaveSystem` | 7 |
@@ -506,6 +510,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestScreenSpaceEffects` | 16 |
 | `TestSequencer` | 10 |
 | `TestSerializer` | 17 |
+| `TestShaderGraphCompiler` | 5 |
 | `TestShadowAtlas` | 7 |
 | `TestSplineMath` | 24 |
 | `TestSprite2DComponents` | 35 |
