@@ -43,6 +43,7 @@
 #include "Engine/UI/UISystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/Modding/ModSystem.h"
+#include "ModuleHotReload.h"
 #include "Utils/ChromeTracing.h"
 #include "Utils/MemoryDebugger.h"
 #include "Utils/FrameInspector.h"
@@ -95,6 +96,7 @@ std::unique_ptr<Timer> g_timer;
 std::unique_ptr<Spark::EventBus> g_eventBus;
 std::unique_ptr<ModuleManager> g_moduleManager;
 std::unique_ptr<AudioEngine> g_audioEngine;
+std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
 #endif
@@ -401,6 +403,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             console.LogWarning("No game modules found. Running engine-only headless mode.");
         }
 
+        // Module hot-reload watcher
+        g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+        g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
+        g_moduleHotReload->WatchAllLoadedModules();
+        g_moduleHotReload->Start();
+
         // SaveSystem
         Spark::SaveSystem::GetInstance().Initialize("Saves");
         EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
@@ -412,7 +420,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         // Register console commands
         if (g_graphics)
             Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-        Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get());
+        Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
 
         // Fixed 60 Hz server loop
         constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -428,6 +436,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             if (g_moduleManager && g_moduleManager->HasModules())
                 g_moduleManager->UpdateAll(dt);
 
+            if (g_moduleHotReload)
+                g_moduleHotReload->PollChanges();
+
             UpdateDebugSystems(dt);
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
@@ -438,6 +449,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         }
 
         // Shutdown
+        g_moduleHotReload.reset();
         ShutdownDebugSystems();
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
@@ -554,6 +566,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         console.LogInfo("or create a spark.modules.json manifest.");
     }
 
+    // 6b. Module hot-reload watcher
+    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
+    g_moduleHotReload->WatchAllLoadedModules();
+    g_moduleHotReload->Start();
+
     // 7. Initialize additional subsystems
     Spark::SaveSystem::GetInstance().Initialize("Saves");
     console.LogInfo("SaveSystem initialized");
@@ -573,7 +591,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // 8. Register engine console commands
     if (g_graphics)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get());
+    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
     // 8b. Log warnings for missing third-party modules
@@ -619,6 +637,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
                 g_graphics->EndFrame();
             }
 
+            if (g_moduleHotReload)
+                g_moduleHotReload->PollChanges();
+
             UpdateDebugSystems(dt);
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
@@ -626,6 +647,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     }
 
     // 10. Shutdown
+    g_moduleHotReload.reset();
     ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
@@ -898,12 +920,18 @@ int main(int argc, char* argv[])
             console.LogWarning("No game modules found. Running engine-only headless mode.");
         }
 
+        // Module hot-reload watcher
+        g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+        g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
+        g_moduleHotReload->WatchAllLoadedModules();
+        g_moduleHotReload->Start();
+
         Spark::SaveSystem::GetInstance().Initialize("Saves");
         EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
         if (g_graphics)
             Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-        Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get());
+        Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
         LogMissingModuleWarnings();
 
         constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -918,6 +946,9 @@ int main(int argc, char* argv[])
             if (g_moduleManager && g_moduleManager->HasModules())
                 g_moduleManager->UpdateAll(dt);
 
+            if (g_moduleHotReload)
+                g_moduleHotReload->PollChanges();
+
             UpdateDebugSystems(dt);
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
@@ -927,6 +958,7 @@ int main(int argc, char* argv[])
                 std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
         }
 
+        g_moduleHotReload.reset();
         ShutdownDebugSystems();
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
@@ -1062,6 +1094,12 @@ int main(int argc, char* argv[])
         console.LogInfo("or create a spark.modules.json manifest.");
     }
 
+    // 6b. Module hot-reload watcher
+    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
+    g_moduleHotReload->WatchAllLoadedModules();
+    g_moduleHotReload->Start();
+
     // 7. Additional subsystems
     Spark::SaveSystem::GetInstance().Initialize("Saves");
     console.LogInfo("SaveSystem initialized");
@@ -1081,7 +1119,7 @@ int main(int argc, char* argv[])
     // 8. Console commands
     if (g_graphics)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get());
+    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
     settings.RegisterConsoleCommands();
 
     // 8b. Log warnings for missing third-party modules
@@ -1216,12 +1254,16 @@ int main(int argc, char* argv[])
             g_graphics->EndFrame();
         }
 
+        if (g_moduleHotReload)
+            g_moduleHotReload->PollChanges();
+
         UpdateDebugSystems(dt);
         Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
         console.Update();
     }
 
     // 10. Shutdown
+    g_moduleHotReload.reset();
     ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
@@ -1293,18 +1335,27 @@ int main(int argc, char* argv[])
         console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
     }
 
+    // Module hot-reload watcher
+    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
+    g_moduleHotReload->WatchAllLoadedModules();
+    g_moduleHotReload->Start();
+
     // Minimal loop - process a few ticks then exit
     for (int frame = 0; frame < 10 && !g_shutdownRequested; ++frame)
     {
         float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
         if (g_moduleManager && g_moduleManager->HasModules())
             g_moduleManager->UpdateAll(dt);
+        if (g_moduleHotReload)
+            g_moduleHotReload->PollChanges();
         UpdateDebugSystems(dt);
         Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
         console.Update();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 
+    g_moduleHotReload.reset();
     ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
 

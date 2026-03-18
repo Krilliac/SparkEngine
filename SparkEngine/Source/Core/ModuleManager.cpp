@@ -530,6 +530,14 @@ Spark::IModule* ModuleManager::GetModule(const std::string& name) const
     return nullptr;
 }
 
+std::vector<std::pair<std::string, std::string>> ModuleManager::GetModulePathsAndNames() const
+{
+    std::vector<std::pair<std::string, std::string>> result;
+    for (const auto& entry : m_modules)
+        result.emplace_back(entry.name, entry.path);
+    return result;
+}
+
 Spark::IModule* ModuleManager::GetPrimaryModule() const
 {
     return m_modules.empty() ? nullptr : m_modules.front().instance;
