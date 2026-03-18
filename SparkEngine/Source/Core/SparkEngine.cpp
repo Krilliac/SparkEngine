@@ -53,6 +53,7 @@
 #include "Utils/FileLogger.h"
 #include "Graphics/DecalSystem.h"
 #include "Graphics/MeshLOD.h"
+#include "Audio/MusicManager.h"
 #include "Engine/Gameplay/WeaponManager.h"
 #include "Engine/Gameplay/AbilitySystem.h"
 #include "Engine/Gameplay/ConditionSystem.h"
@@ -191,6 +192,9 @@ static void InitGameplaySystems()
     // Movement generator stack (AI movement)
     Spark::AI::MovementSystem::GetInstance().Initialize();
 
+    // Music manager — dynamic music layering and crossfade
+    Spark::Audio::MusicManager::GetInstance().Initialize();
+
     // Destruction system — fracturing and debris spawning
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.Initialize();
@@ -223,6 +227,12 @@ static void UpdateGameplaySystems(float dt)
     Spark::Gameplay::InstanceManager::GetInstance().Update(dt);
     Spark::AI::MovementSystem::GetInstance().Update(*world, dt);
 
+    // Coroutine scheduler — resume pending coroutines
+    Spark::CoroutineScheduler::GetInstance().Update(dt);
+
+    // Music manager — crossfade, dynamic layering
+    Spark::Audio::MusicManager::GetInstance().Update(dt);
+
     // Update destruction debris lifetimes and cleanup
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.SetWorld(world);
@@ -231,6 +241,7 @@ static void UpdateGameplaySystems(float dt)
 
 static void ShutdownGameplaySystems()
 {
+    Spark::Audio::MusicManager::GetInstance().Shutdown();
     Spark::AI::MovementSystem::GetInstance().Shutdown();
     Spark::Gameplay::InstanceManager::GetInstance().Shutdown();
     Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();

@@ -13,7 +13,7 @@
 3. CoroutineScheduler — Registered with EngineContext
 4. EngineSettings — Load() called at startup
 5. NetworkManager — Initialized when ENABLE_NETWORKING=ON
-6. MusicManager — Initialize()/Update() called (confirmed 2026-03-18)
+6. MusicManager — Initialize()/Update()/Shutdown() in Init/Update/ShutdownGameplaySystems() (wired 2026-03-18)
 7. AudioMixer (AudioBusMixer) — Update() called from MusicManager
 8. AngelScriptEngine — Initialize() called
 9. SaveSystem — Initialize() called at startup
@@ -28,6 +28,7 @@
 18. FrameInspector — OnFrameEnd() in UpdateDebugSystems() (wired 2026-03-17)
 19. WeaponRegistry — RegisterDefaults() in InitDebugSystems() (wired 2026-03-17)
 20. ConditionSystem/AbilitySystem/InstanceManager/MovementSystem — All wired in Init/Update/ShutdownGameplaySystems() (TrinityCore, 2026-03-18)
+21. CoroutineScheduler — Update(dt) in UpdateGameplaySystems() (wired 2026-03-18)
 
 ### Orphaned (6 — never initialized/called)
 1. **PlatformInputManager** — Full lifecycle (Init/Update/Shutdown) but never called; engine uses InputManager instead. **Recommendation: Delete (dead duplicate)**
