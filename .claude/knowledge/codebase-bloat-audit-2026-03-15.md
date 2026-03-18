@@ -24,7 +24,7 @@ Comprehensive audit combining prior findings (March 14) with new deep analysis. 
 |------|-------|---------|----------|
 | `Utils/SparkConsole.cpp` | **6,996** | +6,596 | P0 |
 | `Graphics/GraphicsEngine.cpp` | ~~4,579~~ **1,284** | **RESOLVED** — split into 5 files | P0 ✅ |
-| `Graphics/MaterialSystem.cpp` | **4,326** | +3,926 | P0 |
+| `Graphics/MaterialSystem.cpp` | ~~4,326~~ **1,435** | **RESOLVED** — split into 3 files | P0 ✅ |
 | `SparkEditor/VisualScripting/VisualScriptingSystem.cpp` | **4,067** | +3,667 | P0 |
 | `Graphics/AssetPipeline.cpp` | **2,557** | +2,157 | P1 |
 | `SparkEditor/Core/EditorUI.cpp` | **2,353** | +1,953 | P1 |
