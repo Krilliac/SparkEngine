@@ -43,6 +43,7 @@
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
+#include <utility>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -74,12 +75,12 @@ namespace Spark::Graphics
 
     inline DirtyFlag operator|(DirtyFlag a, DirtyFlag b)
     {
-        return static_cast<DirtyFlag>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+        return static_cast<DirtyFlag>(std::to_underlying(a) | std::to_underlying(b));
     }
 
     inline DirtyFlag operator&(DirtyFlag a, DirtyFlag b)
     {
-        return static_cast<DirtyFlag>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+        return static_cast<DirtyFlag>(std::to_underlying(a) & std::to_underlying(b));
     }
 
     inline DirtyFlag& operator|=(DirtyFlag& a, DirtyFlag b)
@@ -90,7 +91,7 @@ namespace Spark::Graphics
 
     inline bool HasFlag(DirtyFlag flags, DirtyFlag test)
     {
-        return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(test)) != 0;
+        return (std::to_underlying(flags) & std::to_underlying(test)) != 0;
     }
 
     /**

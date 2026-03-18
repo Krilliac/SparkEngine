@@ -51,6 +51,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <utility>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -92,7 +93,7 @@ namespace Spark::Graphics
 
     inline InstanceFlags operator|(InstanceFlags a, InstanceFlags b)
     {
-        return static_cast<InstanceFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+        return static_cast<InstanceFlags>(std::to_underlying(a) | std::to_underlying(b));
     }
 
     /**

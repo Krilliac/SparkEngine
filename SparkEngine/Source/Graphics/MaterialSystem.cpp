@@ -832,14 +832,14 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                 else if (currentSection == "Textures")
                 {
                     // Parse texture entries
-                    if (key.substr(0, 7) == "Texture" && key.find("_") == std::string::npos)
+                    if (key.substr(0, 7) == "Texture" && !key.contains("_"))
                     {
                         // Main texture path
                         int textureType = std::stoi(key.substr(7));
                         LoadTexture(static_cast<MaterialTextureType>(textureType), value, device);
                     }
                     // Parse texture properties (enabled, intensity, tiling, offset)
-                    else if (key.find("_Enabled") != std::string::npos)
+                    else if (key.contains("_Enabled"))
                     {
                         std::string baseKey = key.substr(0, key.find("_Enabled"));
                         if (baseKey.substr(0, 7) == "Texture")
@@ -852,7 +852,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                             }
                         }
                     }
-                    else if (key.find("_Intensity") != std::string::npos)
+                    else if (key.contains("_Intensity"))
                     {
                         std::string baseKey = key.substr(0, key.find("_Intensity"));
                         if (baseKey.substr(0, 7) == "Texture")
@@ -865,7 +865,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                             }
                         }
                     }
-                    else if (key.find("_Tiling") != std::string::npos)
+                    else if (key.contains("_Tiling"))
                     {
                         std::string baseKey = key.substr(0, key.find("_Tiling"));
                         if (baseKey.substr(0, 7) == "Texture")
@@ -883,7 +883,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                             }
                         }
                     }
-                    else if (key.find("_Offset") != std::string::npos)
+                    else if (key.contains("_Offset"))
                     {
                         std::string baseKey = key.substr(0, key.find("_Offset"));
                         if (baseKey.substr(0, 7) == "Texture")

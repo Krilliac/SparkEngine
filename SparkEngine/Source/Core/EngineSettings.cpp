@@ -805,8 +805,7 @@ void EngineSettings::RegisterConsoleCommands()
                     std::string lowerKey = key;
                     std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
 
-                    if (lowerSection.find(lowerPattern) != std::string::npos ||
-                        lowerKey.find(lowerPattern) != std::string::npos)
+                    if (lowerSection.contains(lowerPattern) || lowerKey.contains(lowerPattern))
                     {
                         ss << "  " << section << "." << key << " = " << settings.GetValue(section, key) << "\n";
                         count++;

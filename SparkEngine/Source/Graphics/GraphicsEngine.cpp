@@ -4752,16 +4752,15 @@ HRESULT GraphicsEngine::CompileShaderFromFile(const std::wstring& filename, cons
     // Determine shader stage from entry point naming convention
     Spark::RHI::RHIShaderStage stage = Spark::RHI::RHIShaderStage::Vertex;
     std::string ep(entryPoint);
-    if (ep.find("PS") != std::string::npos || ep.find("pixel") != std::string::npos ||
-        ep.find("frag") != std::string::npos)
+    if (ep.contains("PS") || ep.contains("pixel") || ep.contains("frag"))
     {
         stage = Spark::RHI::RHIShaderStage::Pixel;
     }
-    else if (ep.find("CS") != std::string::npos || ep.find("compute") != std::string::npos)
+    else if (ep.contains("CS") || ep.contains("compute"))
     {
         stage = Spark::RHI::RHIShaderStage::Compute;
     }
-    else if (ep.find("GS") != std::string::npos || ep.find("geometry") != std::string::npos)
+    else if (ep.contains("GS") || ep.contains("geometry"))
     {
         stage = Spark::RHI::RHIShaderStage::Geometry;
     }

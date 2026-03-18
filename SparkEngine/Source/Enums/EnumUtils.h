@@ -15,6 +15,7 @@
 #include <vector>
 #include <unordered_map>
 #include <type_traits>
+#include <utility>
 #include <cassert>
 #include <stdexcept>
 #include <chrono>
@@ -204,38 +205,38 @@ namespace SparkEditor
         using UnderlyingType = std::underlying_type_t<EnumType>;
 
         EnumFlags() : m_value(0) {}
-        EnumFlags(EnumType flag) : m_value(static_cast<UnderlyingType>(flag)) {}
+        EnumFlags(EnumType flag) : m_value(std::to_underlying(flag)) {}
         EnumFlags(UnderlyingType value) : m_value(value) {}
 
         // Bitwise operations
-        EnumFlags operator|(EnumType flag) const { return EnumFlags(m_value | static_cast<UnderlyingType>(flag)); }
+        EnumFlags operator|(EnumType flag) const { return EnumFlags(m_value | std::to_underlying(flag)); }
 
-        EnumFlags operator&(EnumType flag) const { return EnumFlags(m_value & static_cast<UnderlyingType>(flag)); }
+        EnumFlags operator&(EnumType flag) const { return EnumFlags(m_value & std::to_underlying(flag)); }
 
-        EnumFlags operator^(EnumType flag) const { return EnumFlags(m_value ^ static_cast<UnderlyingType>(flag)); }
+        EnumFlags operator^(EnumType flag) const { return EnumFlags(m_value ^ std::to_underlying(flag)); }
 
         EnumFlags operator~() const { return EnumFlags(~m_value); }
 
         EnumFlags& operator|=(EnumType flag)
         {
-            m_value |= static_cast<UnderlyingType>(flag);
+            m_value |= std::to_underlying(flag);
             return *this;
         }
 
         EnumFlags& operator&=(EnumType flag)
         {
-            m_value &= static_cast<UnderlyingType>(flag);
+            m_value &= std::to_underlying(flag);
             return *this;
         }
 
         EnumFlags& operator^=(EnumType flag)
         {
-            m_value ^= static_cast<UnderlyingType>(flag);
+            m_value ^= std::to_underlying(flag);
             return *this;
         }
 
         // Test operations
-        bool HasFlag(EnumType flag) const { return (m_value & static_cast<UnderlyingType>(flag)) != 0; }
+        bool HasFlag(EnumType flag) const { return (m_value & std::to_underlying(flag)) != 0; }
 
         bool HasAllFlags(EnumFlags flags) const { return (m_value & flags.m_value) == flags.m_value; }
 
@@ -246,11 +247,11 @@ namespace SparkEditor
         {
             if (enabled)
             {
-                m_value |= static_cast<UnderlyingType>(flag);
+                m_value |= std::to_underlying(flag);
             }
             else
             {
-                m_value &= ~static_cast<UnderlyingType>(flag);
+                m_value &= ~std::to_underlying(flag);
             }
         }
 

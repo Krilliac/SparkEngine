@@ -230,7 +230,7 @@ TEST(Fog_ConsoleStatus)
     fog.Initialize();
     fog.SetMode(FogMode::Exponential);
     std::string status = fog.Console_GetStatus();
-    EXPECT_TRUE(status.find("Fog System") != std::string::npos);
-    EXPECT_TRUE(status.find("Exponential") != std::string::npos);
+    EXPECT_TRUE(status.contains("Fog System"));
+    EXPECT_TRUE(status.contains("Exponential"));
     fog.Shutdown();
 }

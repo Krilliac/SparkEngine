@@ -620,11 +620,11 @@ namespace SparkEditor
         }
 
         // Fallback: check name for hints
-        if (object->name.find("Camera") != std::string::npos)
+        if (object->name.contains("Camera"))
             return ICON_FA_CAMERA;
-        if (object->name.find("Light") != std::string::npos)
+        if (object->name.contains("Light"))
             return ICON_FA_LIGHTBULB;
-        if (object->name.find("Player") != std::string::npos)
+        if (object->name.contains("Player"))
             return ICON_FA_CROSSHAIRS;
 
         return ICON_FA_CUBE;
@@ -661,7 +661,7 @@ namespace SparkEditor
         std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-        return lowerName.find(lowerFilter) != std::string::npos;
+        return lowerName.contains(lowerFilter);
     }
 
     bool HierarchyPanel::ObjectOrDescendantPassesFilter(const SceneObject* object) const

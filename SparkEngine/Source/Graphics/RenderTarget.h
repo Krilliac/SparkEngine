@@ -23,6 +23,7 @@
 #include <memory>
 #include <unordered_map>
 #include <mutex>
+#include <utility>
 
 using Microsoft::WRL::ComPtr;
 
@@ -79,12 +80,12 @@ enum class RenderTargetUsage : uint32_t
 
 inline RenderTargetUsage operator|(RenderTargetUsage a, RenderTargetUsage b)
 {
-    return static_cast<RenderTargetUsage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+    return static_cast<RenderTargetUsage>(std::to_underlying(a) | std::to_underlying(b));
 }
 
 inline bool operator&(RenderTargetUsage a, RenderTargetUsage b)
 {
-    return (static_cast<uint32_t>(a) & static_cast<uint32_t>(b)) != 0;
+    return (std::to_underlying(a) & std::to_underlying(b)) != 0;
 }
 
 /**

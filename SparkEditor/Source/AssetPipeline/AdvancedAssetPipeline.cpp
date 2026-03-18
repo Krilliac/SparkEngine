@@ -1546,7 +1546,7 @@ namespace SparkEditor
                 // Apply search filter
                 if (!m_searchFilter.empty())
                 {
-                    if (path.find(m_searchFilter) == std::string::npos)
+                    if (!path.contains(m_searchFilter))
                     {
                         continue;
                     }

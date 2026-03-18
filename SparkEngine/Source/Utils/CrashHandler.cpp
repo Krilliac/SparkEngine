@@ -144,27 +144,27 @@ static bool UploadToGitHubIssue(const std::string& logContent, const std::string
         std::string line;
         while (std::getline(iss, line))
         {
-            if (line.find("ASSERTION FAILURE") != std::string::npos)
+            if (line.contains("ASSERTION FAILURE"))
             {
                 title = "Assertion Failure";
                 break;
             }
-            if (line.find("CRASH DETECTED") != std::string::npos)
+            if (line.contains("CRASH DETECTED"))
             {
                 title = "Crash Detected";
                 break;
             }
-            if (line.find("SIGSEGV") != std::string::npos)
+            if (line.contains("SIGSEGV"))
             {
                 title = "Crash: SIGSEGV (Segmentation fault)";
                 break;
             }
-            if (line.find("SIGABRT") != std::string::npos)
+            if (line.contains("SIGABRT"))
             {
                 title = "Crash: SIGABRT (Abort)";
                 break;
             }
-            if (line.find("SIGFPE") != std::string::npos)
+            if (line.contains("SIGFPE"))
             {
                 title = "Crash: SIGFPE (Floating point exception)";
                 break;
@@ -364,7 +364,7 @@ static bool UploadToGitHubIssue(const std::string& logContent, const std::string
     curl_slist_free_all(headers);
     curl_easy_cleanup(c);
 
-    return (res == CURLE_OK && issueResponse.find("\"id\"") != std::string::npos);
+    return (res == CURLE_OK && issueResponse.contains("\"id\""));
 }
 
 #endif // NETWORKING_ENABLED
@@ -1009,7 +1009,7 @@ static std::string LinuxSystemInfo()
         std::string line;
         while (std::getline(gpuFile, line))
         {
-            if (line.find("Model:") != std::string::npos)
+            if (line.contains("Model:"))
             {
                 s << "GPU: " << line << "\n";
                 break;

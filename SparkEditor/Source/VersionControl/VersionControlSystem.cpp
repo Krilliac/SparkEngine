@@ -1531,7 +1531,7 @@ namespace SparkEditor
             if (!line.empty() && line.back() == '\r')
                 line.pop_back();
 
-            if (line.find("COMMIT_SEP") != std::string::npos)
+            if (line.contains("COMMIT_SEP"))
             {
                 if (hasCommit && !current.hash.empty())
                 {
@@ -1616,7 +1616,7 @@ namespace SparkEditor
             }
 
             // Skip HEAD pointer entries
-            if (line.find("->") != std::string::npos)
+            if (line.contains("->"))
                 continue;
 
             // Check for remote branches

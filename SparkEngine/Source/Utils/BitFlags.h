@@ -37,6 +37,7 @@
 
 #include <cstdint>
 #include <type_traits>
+#include <utility>
 #include "TypeTraits.h"
 
 // =============================================================================
@@ -52,23 +53,19 @@
 #define SPARK_ENABLE_BITMASK_OPERATORS(EnumType)                                                                       \
     inline constexpr EnumType operator|(EnumType lhs, EnumType rhs)                                                    \
     {                                                                                                                  \
-        using T = std::underlying_type_t<EnumType>;                                                                    \
-        return static_cast<EnumType>(static_cast<T>(lhs) | static_cast<T>(rhs));                                       \
+        return static_cast<EnumType>(std::to_underlying(lhs) | std::to_underlying(rhs));                               \
     }                                                                                                                  \
     inline constexpr EnumType operator&(EnumType lhs, EnumType rhs)                                                    \
     {                                                                                                                  \
-        using T = std::underlying_type_t<EnumType>;                                                                    \
-        return static_cast<EnumType>(static_cast<T>(lhs) & static_cast<T>(rhs));                                       \
+        return static_cast<EnumType>(std::to_underlying(lhs) & std::to_underlying(rhs));                               \
     }                                                                                                                  \
     inline constexpr EnumType operator^(EnumType lhs, EnumType rhs)                                                    \
     {                                                                                                                  \
-        using T = std::underlying_type_t<EnumType>;                                                                    \
-        return static_cast<EnumType>(static_cast<T>(lhs) ^ static_cast<T>(rhs));                                       \
+        return static_cast<EnumType>(std::to_underlying(lhs) ^ std::to_underlying(rhs));                               \
     }                                                                                                                  \
     inline constexpr EnumType operator~(EnumType val)                                                                  \
     {                                                                                                                  \
-        using T = std::underlying_type_t<EnumType>;                                                                    \
-        return static_cast<EnumType>(~static_cast<T>(val));                                                            \
+        return static_cast<EnumType>(~std::to_underlying(val));                                                        \
     }                                                                                                                  \
     inline constexpr EnumType& operator|=(EnumType& lhs, EnumType rhs)                                                 \
     {                                                                                                                  \
@@ -104,26 +101,26 @@ namespace Spark
 
       public:
         constexpr BitFlags() : m_value(0) {}
-        constexpr BitFlags(E flag) : m_value(static_cast<Underlying>(flag)) {}
+        constexpr BitFlags(E flag) : m_value(std::to_underlying(flag)) {}
         constexpr explicit BitFlags(Underlying raw) : m_value(raw) {}
 
         /**
          * @brief Set one or more flags.
          * @param flag  Flag(s) to set.
          */
-        constexpr void Set(E flag) { m_value |= static_cast<Underlying>(flag); }
+        constexpr void Set(E flag) { m_value |= std::to_underlying(flag); }
 
         /**
          * @brief Clear one or more flags.
          * @param flag  Flag(s) to clear.
          */
-        constexpr void Clear(E flag) { m_value &= ~static_cast<Underlying>(flag); }
+        constexpr void Clear(E flag) { m_value &= ~std::to_underlying(flag); }
 
         /**
          * @brief Toggle one or more flags.
          * @param flag  Flag(s) to toggle.
          */
-        constexpr void Toggle(E flag) { m_value ^= static_cast<Underlying>(flag); }
+        constexpr void Toggle(E flag) { m_value ^= std::to_underlying(flag); }
 
         /**
          * @brief Check if all specified flags are set.
@@ -132,7 +129,7 @@ namespace Spark
          */
         constexpr bool Has(E flag) const
         {
-            auto f = static_cast<Underlying>(flag);
+            auto f = std::to_underlying(flag);
             return (m_value & f) == f;
         }
 
@@ -141,7 +138,7 @@ namespace Spark
          * @param flag  Flag(s) to test.
          * @return      true if any specified bit is set.
          */
-        constexpr bool HasAny(E flag) const { return (m_value & static_cast<Underlying>(flag)) != 0; }
+        constexpr bool HasAny(E flag) const { return (m_value & std::to_underlying(flag)) != 0; }
 
         /**
          * @brief Check if no flags are set.

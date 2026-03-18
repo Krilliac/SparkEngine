@@ -194,7 +194,7 @@ TEST(SceneSnapshotSerializer_GetSnapshotInfo_Invalid)
 {
     std::vector<uint8_t> empty;
     auto info = Spark::Editor::SceneSnapshotSerializer::GetSnapshotInfo(empty);
-    EXPECT_TRUE(info.find("Invalid") != std::string::npos);
+    EXPECT_TRUE(info.contains("Invalid"));
 }
 
 TEST(SceneSnapshotSerializer_GetSnapshotInfo_BadMagic)
@@ -206,7 +206,7 @@ TEST(SceneSnapshotSerializer_GetSnapshotInfo_BadMagic)
     writer.WriteU32(0);
 
     auto info = Spark::Editor::SceneSnapshotSerializer::GetSnapshotInfo(writer.GetData());
-    EXPECT_TRUE(info.find("bad magic") != std::string::npos);
+    EXPECT_TRUE(info.contains("bad magic"));
 }
 
 TEST(SceneSnapshotSerializer_GetSnapshotInfo_Valid)
@@ -218,8 +218,8 @@ TEST(SceneSnapshotSerializer_GetSnapshotInfo_Valid)
     writer.WriteU32(3);  // component types
 
     auto info = Spark::Editor::SceneSnapshotSerializer::GetSnapshotInfo(writer.GetData());
-    EXPECT_TRUE(info.find("42 entities") != std::string::npos);
-    EXPECT_TRUE(info.find("3 component types") != std::string::npos);
+    EXPECT_TRUE(info.contains("42 entities"));
+    EXPECT_TRUE(info.contains("3 component types"));
 }
 
 // ============================================================================

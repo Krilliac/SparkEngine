@@ -532,7 +532,7 @@ namespace SparkEditor
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                 std::transform(filterLower.begin(), filterLower.end(), filterLower.begin(),
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                if (nameLower.find(filterLower) == std::string::npos)
+                if (!nameLower.contains(filterLower))
                 {
                     continue;
                 }

@@ -193,11 +193,11 @@ TEST(PlayMode_ConsoleStatus)
     Spark::Editor::PlayModeManager pm;
 
     std::string status = pm.Console_GetStatus();
-    EXPECT_TRUE(status.find("Stopped") != std::string::npos);
+    EXPECT_TRUE(status.contains("Stopped"));
 
     pm.EnterPlayMode();
     status = pm.Console_GetStatus();
-    EXPECT_TRUE(status.find("Playing") != std::string::npos);
+    EXPECT_TRUE(status.contains("Playing"));
 
     pm.ExitPlayMode();
 }
@@ -253,13 +253,13 @@ TEST(PlayMode_SubsystemStatusString)
 {
     Spark::Editor::PlayModeManager pm;
     std::string status = pm.GetSubsystemStatusString();
-    EXPECT_TRUE(status.find("[Physics]") != std::string::npos);
-    EXPECT_TRUE(status.find("[AI]") != std::string::npos);
+    EXPECT_TRUE(status.contains("[Physics]"));
+    EXPECT_TRUE(status.contains("[AI]"));
 
     pm.SetSubsystemEnabled(Spark::Editor::SimulationSubsystem::AI, false);
     status = pm.GetSubsystemStatusString();
-    EXPECT_TRUE(status.find("[AI]") == std::string::npos);
-    EXPECT_TRUE(status.find("[Physics]") != std::string::npos);
+    EXPECT_TRUE(!status.contains("[AI]"));
+    EXPECT_TRUE(status.contains("[Physics]"));
 }
 
 TEST(PlayMode_CameraMode_Default)
@@ -503,8 +503,8 @@ TEST(PlayMode_ConsoleStatus_Extended)
     pm.RecordLiveEdit(1, "T", "x", "0", "1");
 
     std::string status = pm.Console_GetStatus();
-    EXPECT_TRUE(status.find("FPS:") != std::string::npos);
-    EXPECT_TRUE(status.find("LiveEdits: 1") != std::string::npos);
+    EXPECT_TRUE(status.contains("FPS:"));
+    EXPECT_TRUE(status.contains("LiveEdits: 1"));
 
     pm.ExitPlayMode();
 }

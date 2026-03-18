@@ -306,12 +306,12 @@ static bool UploadToGitHubIssue(const std::string& logContent, const std::string
         std::string line;
         while (std::getline(iss, line))
         {
-            if (line.find("ASSERTION FAILURE") != std::string::npos)
+            if (line.contains("ASSERTION FAILURE"))
             {
                 title = "Assertion Failure";
                 break;
             }
-            if (line.find("CRASH DETECTED") != std::string::npos)
+            if (line.contains("CRASH DETECTED"))
             {
                 title = "Crash Detected";
                 break;
@@ -500,7 +500,7 @@ static bool UploadToGitHubIssue(const std::string& logContent, const std::string
     curl_slist_free_all(headers);
     curl_easy_cleanup(c);
 
-    return (res == CURLE_OK && issueResponse.find("\"id\"") != std::string::npos);
+    return (res == CURLE_OK && issueResponse.contains("\"id\""));
 }
 
 #endif // NETWORKING_ENABLED

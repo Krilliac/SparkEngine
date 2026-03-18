@@ -232,7 +232,7 @@ TEST(LightManager_ConsoleStatus)
     LightManager mgr;
     mgr.Initialize(800, 600, 16);
     std::string status = mgr.Console_GetStatus();
-    EXPECT_TRUE(status.find("Light Manager") != std::string::npos);
+    EXPECT_TRUE(status.contains("Light Manager"));
     mgr.Shutdown();
 }
 

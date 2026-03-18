@@ -441,7 +441,7 @@ namespace SparkEditor
             while (std::getline(file, line))
             {
                 // Detect frame boundaries
-                if (line.find("\"frameNumber\"") != std::string::npos || line.find("Frame:") != std::string::npos)
+                if (line.contains("\"frameNumber\"") || line.contains("Frame:"))
                 {
                     if (frame)
                     {

@@ -20,6 +20,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 
 namespace Spark::Editor
 {
@@ -56,22 +57,22 @@ namespace Spark::Editor
 
     inline SimulationSubsystem operator|(SimulationSubsystem a, SimulationSubsystem b)
     {
-        return static_cast<SimulationSubsystem>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+        return static_cast<SimulationSubsystem>(std::to_underlying(a) | std::to_underlying(b));
     }
 
     inline SimulationSubsystem operator&(SimulationSubsystem a, SimulationSubsystem b)
     {
-        return static_cast<SimulationSubsystem>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+        return static_cast<SimulationSubsystem>(std::to_underlying(a) & std::to_underlying(b));
     }
 
     inline SimulationSubsystem operator~(SimulationSubsystem a)
     {
-        return static_cast<SimulationSubsystem>(~static_cast<uint32_t>(a));
+        return static_cast<SimulationSubsystem>(~std::to_underlying(a));
     }
 
     inline bool HasFlag(SimulationSubsystem flags, SimulationSubsystem flag)
     {
-        return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(flag)) != 0;
+        return (std::to_underlying(flags) & std::to_underlying(flag)) != 0;
     }
 
     // ============================================================================

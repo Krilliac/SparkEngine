@@ -15,6 +15,7 @@
 #include <array>
 #include <memory>
 #include <functional>
+#include <utility>
 
 namespace Spark
 {
@@ -141,11 +142,11 @@ namespace Spark
 
         inline RHIBufferUsage operator|(RHIBufferUsage a, RHIBufferUsage b)
         {
-            return static_cast<RHIBufferUsage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+            return static_cast<RHIBufferUsage>(std::to_underlying(a) | std::to_underlying(b));
         }
         inline bool operator&(RHIBufferUsage a, RHIBufferUsage b)
         {
-            return (static_cast<uint32_t>(a) & static_cast<uint32_t>(b)) != 0;
+            return (std::to_underlying(a) & std::to_underlying(b)) != 0;
         }
 
         enum class RHIBufferAccess
@@ -182,11 +183,11 @@ namespace Spark
 
         inline RHITextureUsage operator|(RHITextureUsage a, RHITextureUsage b)
         {
-            return static_cast<RHITextureUsage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+            return static_cast<RHITextureUsage>(std::to_underlying(a) | std::to_underlying(b));
         }
         inline bool operator&(RHITextureUsage a, RHITextureUsage b)
         {
-            return (static_cast<uint32_t>(a) & static_cast<uint32_t>(b)) != 0;
+            return (std::to_underlying(a) & std::to_underlying(b)) != 0;
         }
 
         // ============================================================================
@@ -511,15 +512,15 @@ namespace Spark
 
         inline RTEffect operator|(RTEffect a, RTEffect b)
         {
-            return static_cast<RTEffect>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+            return static_cast<RTEffect>(std::to_underlying(a) | std::to_underlying(b));
         }
         inline RTEffect operator&(RTEffect a, RTEffect b)
         {
-            return static_cast<RTEffect>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+            return static_cast<RTEffect>(std::to_underlying(a) & std::to_underlying(b));
         }
         inline bool HasEffect(RTEffect flags, RTEffect effect)
         {
-            return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(effect)) != 0;
+            return (std::to_underlying(flags) & std::to_underlying(effect)) != 0;
         }
 
         /// @brief Detailed ray tracing capabilities queried from the device

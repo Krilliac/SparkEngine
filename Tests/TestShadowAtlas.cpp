@@ -57,8 +57,8 @@ TEST(ShadowAtlas_MultipleTiles)
     // Tiles should not overlap
     const auto* t1 = atlas.GetTile(1);
     const auto* t2 = atlas.GetTile(2);
-    bool overlaps = (t1->x < t2->x + t2->size && t1->x + t1->size > t2->x && t1->y < t2->y + t2->size &&
-                     t1->y + t1->size > t2->y);
+    bool overlaps =
+        (t1->x < t2->x + t2->size && t1->x + t1->size > t2->x && t1->y < t2->y + t2->size && t1->y + t1->size > t2->y);
     EXPECT_FALSE(overlaps);
 
     atlas.EndFrame();
@@ -114,8 +114,8 @@ TEST(ShadowAtlas_ConsoleStatus)
     atlas.RequestTile(1, 1.0f, 1024);
 
     std::string status = atlas.Console_GetStatus();
-    EXPECT_TRUE(status.find("ShadowAtlas") != std::string::npos);
-    EXPECT_TRUE(status.find("4096") != std::string::npos);
+    EXPECT_TRUE(status.contains("ShadowAtlas"));
+    EXPECT_TRUE(status.contains("4096"));
 
     atlas.EndFrame();
     atlas.Shutdown();

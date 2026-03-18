@@ -45,8 +45,8 @@ TEST(FileUtils_JoinPath)
 {
     std::string joined = JoinPath("assets", "model.fbx");
     // Should contain both parts with a separator
-    EXPECT_TRUE(joined.find("assets") != std::string::npos);
-    EXPECT_TRUE(joined.find("model.fbx") != std::string::npos);
+    EXPECT_TRUE(joined.contains("assets"));
+    EXPECT_TRUE(joined.contains("model.fbx"));
 }
 
 #if SPARK_HAS_FILESYSTEM
@@ -54,14 +54,14 @@ TEST(FileUtils_JoinPath)
 TEST(FileUtils_ChangeExtension)
 {
     std::string changed = ChangeExtension("model.fbx", ".obj");
-    EXPECT_TRUE(changed.find(".obj") != std::string::npos);
-    EXPECT_TRUE(changed.find(".fbx") == std::string::npos);
+    EXPECT_TRUE(changed.contains(".obj"));
+    EXPECT_TRUE(!changed.contains(".fbx"));
 }
 
 TEST(FileUtils_NormalizePath)
 {
     std::string norm = NormalizePath("a/b/../c");
-    EXPECT_TRUE(norm.find("..") == std::string::npos);
+    EXPECT_TRUE(!norm.contains(".."));
 }
 
 #endif
