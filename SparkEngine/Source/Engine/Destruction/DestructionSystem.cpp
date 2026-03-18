@@ -4,9 +4,11 @@
  */
 
 #include "DestructionSystem.h"
+#include "../ECS/Components.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 
 namespace Spark
@@ -57,15 +59,27 @@ namespace Spark
             debris.remainingLifetime -= deltaTime;
         }
 
-        // Remove expired debris
-        size_t before = m_debris.size();
+        // Destroy expired debris entities from the ECS world and remove from our list
         m_debris.erase(std::remove_if(m_debris.begin(), m_debris.end(),
-                                      [](const DebrisInstance& d) { return d.remainingLifetime <= 0.0f; }),
+                                      [this](const DebrisInstance& d)
+                                      {
+                                          if (d.remainingLifetime <= 0.0f)
+                                          {
+                                              if (m_world && d.debrisEntity != 0)
+                                              {
+                                                  auto entId = static_cast<entt::entity>(d.debrisEntity);
+                                                  if (m_world->GetRegistry().valid(entId))
+                                                  {
+                                                      m_world->DestroyEntity(entId);
+                                                  }
+                                              }
+                                              return true;
+                                          }
+                                          return false;
+                                      }),
                        m_debris.end());
 
         m_activeDebrisCount = m_debris.size();
-
-        (void)before;
     }
 
     void DestructionSystem::RegisterPattern(const std::string& name, const FracturePattern& pattern)
@@ -85,11 +99,6 @@ namespace Spark
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
         SPARK_WARN_IF(Spark::LogCategory::Physics, damage < 0.0f, "ApplyDamage called with negative damage value");
-        // Damage application is handled via DestructibleComponent::ApplyDamage
-        // This method handles the fracturing/debris spawning after destruction
-
-        // The ECS system or game code calls DestructibleComponent::ApplyDamage first,
-        // then if isDestroyed becomes true, calls this to spawn debris
 
         DestructionEvent event;
         event.entityId = entityId;
@@ -97,13 +106,69 @@ namespace Spark
         event.impactDir = hitDir;
         event.impactForce = damage;
 
-        // Spawn debris pieces if under the limit
-        // (Actual debris entity creation would happen via the ECS World)
-        if (m_activeDebrisCount < m_maxDebris)
+        // Look up the fracture pattern for this entity
+        std::string patternName;
+        if (m_world)
         {
-            // Placeholder: real implementation creates debris entities
+            auto entId = static_cast<entt::entity>(entityId);
+            auto* destComp = m_world->GetComponent<DestructibleComponent>(entId);
+            if (destComp)
+            {
+                patternName = destComp->patternName;
+            }
+        }
+        event.patternName = patternName;
+
+        // Spawn debris pieces from the fracture pattern
+        const FracturePattern* pattern = patternName.empty() ? nullptr : GetPattern(patternName);
+        if (pattern && m_world)
+        {
+            for (const auto& piece : pattern->GetPieces())
+            {
+                if (m_activeDebrisCount >= m_maxDebris)
+                    break;
+
+                // Create a new ECS entity for each debris piece
+                auto debrisEntity = m_world->CreateEntity("debris_" + piece.name);
+
+                // Position debris at hit point + piece offset, scattered by impact direction
+                auto& transform = m_world->AddComponent<Transform>(debrisEntity);
+                transform.position.x = hitPoint.x + piece.localOffset.x;
+                transform.position.y = hitPoint.y + piece.localOffset.y;
+                transform.position.z = hitPoint.z + piece.localOffset.z;
+
+                // Assign debris mesh
+                auto& renderer = m_world->AddComponent<MeshRenderer>(debrisEntity);
+                renderer.meshPath = piece.meshName;
+                renderer.castShadows = false;
+
+                // Give debris physics so it scatters realistically
+                auto& rb = m_world->AddComponent<RigidBodyComponent>(debrisEntity);
+                rb.type = RigidBodyComponent::Type::Dynamic;
+                rb.mass = piece.mass;
+                rb.linearDamping = 0.3f;
+                rb.angularDamping = 0.4f;
+
+                // Apply scatter force in the impact direction
+                float forceScale = piece.scatterForce * (damage / 100.0f);
+                rb.linearVelocity.x = hitDir.x * forceScale + piece.localOffset.x * 2.0f;
+                rb.linearVelocity.y = std::abs(hitDir.y) * forceScale + 3.0f;
+                rb.linearVelocity.z = hitDir.z * forceScale + piece.localOffset.z * 2.0f;
+
+                DebrisInstance debrisInst;
+                debrisInst.entityId = entityId;
+                debrisInst.debrisEntity = static_cast<uint32_t>(debrisEntity);
+                debrisInst.remainingLifetime = piece.lifetime * m_debrisLifetimeMultiplier;
+                m_debris.push_back(debrisInst);
+                m_activeDebrisCount = m_debris.size();
+            }
+        }
+        else if (m_activeDebrisCount < m_maxDebris)
+        {
+            // Fallback: create a single generic debris entity
             DebrisInstance debris;
             debris.entityId = entityId;
+            debris.debrisEntity = 0;
             debris.remainingLifetime = 10.0f * m_debrisLifetimeMultiplier;
             m_debris.push_back(debris);
             m_activeDebrisCount = m_debris.size();

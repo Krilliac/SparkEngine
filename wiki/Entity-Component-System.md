@@ -512,11 +512,13 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 |--------|--------|
 | `AISystem` | `SparkEngine/Source/Engine/AI/AISystem.h` |
 | `AIUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `AbilitySystem` | `SparkEngine/Source/Engine/Gameplay/AbilitySystem.h` |
 | `AbilityUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AnimationUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AudioUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Camera2DFollowSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `CollisionSystem` | `SparkEngine/Source/Physics/CollisionSystem.h` |
+| `ConditionSystem` | `SparkEngine/Source/Engine/Gameplay/ConditionSystem.h` |
 | `DecalSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `DecalSystem` | `SparkEngine/Source/Graphics/DecalSystem.h` |
 | `DestructionSystem` | `SparkEngine/Source/Engine/Destruction/DestructionSystem.h` |
@@ -531,6 +533,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `MaterialChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
 | `MaterialSystem` | `SparkEngine/Source/Graphics/MaterialSystem.h` |
 | `ModSystem` | `SparkEngine/Source/Engine/Modding/ModSystem.h` |
+| `MovementSystem` | `SparkEngine/Source/Engine/AI/MovementSystem.h` |
 | `ParallaxSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `ParticleSystem` | `SparkEngine/Source/Graphics/ParticleSystem.h` |
 | `ParticleUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |

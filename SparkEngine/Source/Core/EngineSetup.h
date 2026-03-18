@@ -19,6 +19,7 @@
 #include "EngineContext.h"
 #include "EngineBootstrap.h"
 #include "../Engine/ECS/Systems/PhaseSystemManager.h"
+#include "../Engine/ECS/Systems/TerrainSystem.h"
 #include "../Utils/JobSystem.h"
 
 // Forward declarations
@@ -191,6 +192,10 @@ namespace Spark::EngineSetup
         // Animation phase
         mgr.AddSystem<AnimationUpdateSystem>(Phase::Animation);
 
+        // Spline followers — after animation, before AI (so spline-following entities
+        // have updated positions before AI reads them)
+        mgr.AddSystem<SplineFollowerSystem>(Phase::PostPhysics);
+
         // AI phase
         mgr.AddSystem<AIUpdateSystem>(Phase::AI);
 
@@ -200,8 +205,15 @@ namespace Spark::EngineSetup
             mgr.AddSystem<AudioUpdateSystem>(Phase::Audio, audio);
         }
 
-        // Gameplay phase (lifecycle management)
+        // Gameplay phase — lifecycle, ability cooldowns, projectiles
         mgr.AddSystem<LifecycleSystem>(Phase::Gameplay);
+        mgr.AddSystem<AbilityUpdateSystem>(Phase::Gameplay);
+        mgr.AddSystem<ProjectileSystem>(Phase::Gameplay);
+
+        // Pre-render phase — particles, decals, terrain LOD
+        mgr.AddSystem<ParticleUpdateSystem>(Phase::PreRender);
+        mgr.AddSystem<DecalSystem>(Phase::PreRender);
+        mgr.AddSystem<TerrainSystem>(Phase::PreRender);
 
         // Render phase
         if (auto* graphics = ctx.GetGraphics())

@@ -47,7 +47,7 @@ TEST(Destructible_DamageStages)
 
 TEST(Destruction_RegisterPattern)
 {
-    Spark::DestructionSystem sys;
+    auto& sys = Spark::DestructionSystem::GetInstance();
     Spark::FracturePattern pattern;
     pattern.AddPiece({"piece1", "mesh1", {0, 0, 0}, 1.0f, 10.0f, 5.0f});
     pattern.AddPiece({"piece2", "mesh2", {1, 0, 0}, 1.0f, 10.0f, 5.0f});
@@ -63,7 +63,7 @@ TEST(Destruction_RegisterPattern)
 
 TEST(Destruction_DebrisCleanup)
 {
-    Spark::DestructionSystem sys;
+    auto& sys = Spark::DestructionSystem::GetInstance();
     sys.Initialize();
     sys.SetMaxDebris(100);
 

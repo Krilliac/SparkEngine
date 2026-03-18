@@ -46,6 +46,8 @@
 #include <functional>
 #include <cstdint>
 
+class World; // Forward-declare ECS World
+
 namespace Spark
 {
 
@@ -178,11 +180,20 @@ namespace Spark
     class DestructionSystem
     {
       public:
-        DestructionSystem();
+        /** @brief Get the singleton instance. */
+        static DestructionSystem& GetInstance()
+        {
+            static DestructionSystem instance;
+            return instance;
+        }
+
         ~DestructionSystem() = default;
 
         /** @brief Initialize the destruction system. */
         void Initialize();
+
+        /** @brief Set the ECS World pointer for entity creation. Must be called before ApplyDamage. */
+        void SetWorld(World* world) { m_world = world; }
 
         /**
      * @brief Update the system — clean up expired debris.
@@ -250,9 +261,12 @@ namespace Spark
         std::string Console_GetStatus() const;
 
       private:
+        DestructionSystem();
+
         struct DebrisInstance
         {
-            uint32_t entityId = 0;
+            uint32_t entityId = 0;     ///< Original source entity
+            uint32_t debrisEntity = 0; ///< ECS entity for this debris piece
             float remainingLifetime = 10.0f;
         };
 
@@ -263,6 +277,7 @@ namespace Spark
         size_t m_maxDebris = 500;
         float m_debrisLifetimeMultiplier = 1.0f;
         size_t m_totalDestructions = 0;
+        World* m_world = nullptr;
     };
 
 } // namespace Spark
