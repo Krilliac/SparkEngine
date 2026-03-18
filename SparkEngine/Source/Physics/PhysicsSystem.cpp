@@ -155,6 +155,9 @@ btCollisionShape* PhysicsSystem::CreateMeshShape(const std::vector<XMFLOAT3>& ve
         triMesh->addTriangle(btVector3(v0.x, v0.y, v0.z), btVector3(v1.x, v1.y, v1.z), btVector3(v2.x, v2.y, v2.z));
     }
 
+    // Track the triangle mesh for cleanup — btBvhTriangleMeshShape does not own it
+    m_triangleMeshes.push_back(triMesh);
+
     btBvhTriangleMeshShape* meshShape = new btBvhTriangleMeshShape(triMesh, true);
     return meshShape;
 }
@@ -657,6 +660,10 @@ PhysicsConstraint::PhysicsConstraint(ConstraintType type, btTypedConstraint* bul
 
 PhysicsConstraint::~PhysicsConstraint()
 {
+    // WARNING: The constraint MUST be removed from the dynamics world via
+    // PhysicsSystem::RemoveConstraint() BEFORE this destructor runs.
+    // Deleting a constraint that is still registered in a btDynamicsWorld
+    // causes use-after-free on the next simulation step.
     if (m_bulletConstraint)
     {
         delete m_bulletConstraint;
@@ -774,12 +781,20 @@ void PhysicsSystem::Shutdown()
     m_bodies.clear();
     m_namedBodies.clear();
 
-    // Delete cached collision shapes
+    // Delete cached collision shapes (must happen before deleting triangle meshes
+    // since btBvhTriangleMeshShape references the btTriangleMesh data)
     for (auto& [hash, shape] : m_shapeCache)
     {
         delete shape;
     }
     m_shapeCache.clear();
+
+    // Delete triangle mesh data used by btBvhTriangleMeshShape instances
+    for (auto* triMesh : m_triangleMeshes)
+    {
+        delete triMesh;
+    }
+    m_triangleMeshes.clear();
 
     // Delete Bullet world components in reverse order
     delete m_dynamicsWorld;

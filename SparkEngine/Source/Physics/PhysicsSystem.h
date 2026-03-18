@@ -83,6 +83,7 @@ class btCollisionShape;
 class btMotionState;
 class btTypedConstraint;
 class btGhostPairCallback;
+class btTriangleMesh;
 
 // Physics enums, data structs, and utility functions
 #include "PhysicsTypes.h"
@@ -1370,6 +1371,9 @@ class PhysicsSystem
      * identical objects (e.g. 500 boxes of the same size).
      */
     std::unordered_map<size_t, btCollisionShape*> m_shapeCache;
+
+    /** @brief Triangle mesh data used by btBvhTriangleMeshShape (owned here, freed in Shutdown). */
+    std::vector<btTriangleMesh*> m_triangleMeshes;
 
     // =========================================================================
     // Material presets
