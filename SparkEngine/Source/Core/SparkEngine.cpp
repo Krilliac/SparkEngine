@@ -54,6 +54,10 @@
 #include "Graphics/DecalSystem.h"
 #include "Graphics/MeshLOD.h"
 #include "Engine/Gameplay/WeaponManager.h"
+#include "Engine/Gameplay/AbilitySystem.h"
+#include "Engine/Gameplay/ConditionSystem.h"
+#include "Engine/Gameplay/InstanceManager.h"
+#include "Engine/AI/MovementSystem.h"
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
 #endif
@@ -162,6 +166,46 @@ static void InitDebugSystems()
     Spark::Gameplay::WeaponRegistry::GetInstance().RegisterDefaults();
 }
 
+// ============================================================================
+// Gameplay system lifecycle (TC-inspired systems from this session)
+// ============================================================================
+
+static void InitGameplaySystems()
+{
+    // Condition system (stateless evaluator — no frame update needed)
+    Spark::Gameplay::ConditionSystem::GetInstance().Initialize();
+
+    // Ability system (spells/auras/procs — needs EventBus)
+    auto* eventBus = EngineContext::Get()->GetEventBus();
+    Spark::Gameplay::AbilitySystem::GetInstance().Initialize(eventBus);
+
+    // Instance/dungeon manager
+    Spark::Gameplay::InstanceManager::GetInstance().Initialize();
+
+    // Movement generator stack (AI movement)
+    Spark::AI::MovementSystem::GetInstance().Initialize();
+}
+
+static void UpdateGameplaySystems(float dt)
+{
+    // Get world from context — may be null during startup/shutdown
+    auto* world = EngineContext::Get()->GetWorld();
+    if (!world)
+        return;
+
+    Spark::Gameplay::AbilitySystem::GetInstance().Update(*world, dt);
+    Spark::Gameplay::InstanceManager::GetInstance().Update(dt);
+    Spark::AI::MovementSystem::GetInstance().Update(*world, dt);
+}
+
+static void ShutdownGameplaySystems()
+{
+    Spark::AI::MovementSystem::GetInstance().Shutdown();
+    Spark::Gameplay::InstanceManager::GetInstance().Shutdown();
+    Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();
+    Spark::Gameplay::ConditionSystem::GetInstance().Shutdown();
+}
+
 static void UpdateDebugSystems(float dt)
 {
     Spark::TweenManager::GetInstance().Update(dt);
@@ -203,6 +247,7 @@ static void InitConsole()
     console.Initialize();
     Spark::ConsoleProcessManager::GetInstance().Initialize();
     InitDebugSystems();
+    InitGameplaySystems();
 }
 
 static void ShutdownPhysics()
@@ -439,6 +484,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             if (g_moduleHotReload)
                 g_moduleHotReload->PollChanges();
 
+            UpdateGameplaySystems(dt);
             UpdateDebugSystems(dt);
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
@@ -450,6 +496,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
         // Shutdown
         g_moduleHotReload.reset();
+        ShutdownGameplaySystems();
         ShutdownDebugSystems();
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
@@ -599,6 +646,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
     // 8c. Initialize debug/utility systems
     InitDebugSystems();
+    InitGameplaySystems();
 
     // 9. Message loop + tick
     HACCEL accel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SparkEngine));
@@ -640,6 +688,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
             if (g_moduleHotReload)
                 g_moduleHotReload->PollChanges();
 
+            UpdateGameplaySystems(dt);
             UpdateDebugSystems(dt);
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
@@ -648,6 +697,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
     // 10. Shutdown
     g_moduleHotReload.reset();
+    ShutdownGameplaySystems();
     ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
@@ -949,6 +999,7 @@ int main(int argc, char* argv[])
             if (g_moduleHotReload)
                 g_moduleHotReload->PollChanges();
 
+            UpdateGameplaySystems(dt);
             UpdateDebugSystems(dt);
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
@@ -959,6 +1010,7 @@ int main(int argc, char* argv[])
         }
 
         g_moduleHotReload.reset();
+        ShutdownGameplaySystems();
         ShutdownDebugSystems();
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
@@ -1127,6 +1179,7 @@ int main(int argc, char* argv[])
 
     // 8c. Initialize debug/utility systems
     InitDebugSystems();
+    InitGameplaySystems();
 
     // 9. Main event loop (SDL2)
     console.LogInfo("Starting main engine loop (SDL2)...");
@@ -1257,6 +1310,7 @@ int main(int argc, char* argv[])
         if (g_moduleHotReload)
             g_moduleHotReload->PollChanges();
 
+        UpdateGameplaySystems(dt);
         UpdateDebugSystems(dt);
         Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
         console.Update();
@@ -1264,6 +1318,7 @@ int main(int argc, char* argv[])
 
     // 10. Shutdown
     g_moduleHotReload.reset();
+    ShutdownGameplaySystems();
     ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
@@ -1349,6 +1404,7 @@ int main(int argc, char* argv[])
             g_moduleManager->UpdateAll(dt);
         if (g_moduleHotReload)
             g_moduleHotReload->PollChanges();
+        UpdateGameplaySystems(dt);
         UpdateDebugSystems(dt);
         Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
         console.Update();
@@ -1356,6 +1412,7 @@ int main(int argc, char* argv[])
     }
 
     g_moduleHotReload.reset();
+    ShutdownGameplaySystems();
     ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
 

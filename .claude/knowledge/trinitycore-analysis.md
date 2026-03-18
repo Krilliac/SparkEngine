@@ -1,8 +1,8 @@
 # TrinityCore Architecture Analysis — What to Bring to SparkEngine
 
 **Last updated:** 2026-03-18
-**Type:** Observation
-**Status:** Active
+**Type:** Decision
+**Status:** Resolved (all 10 systems implemented and wired in)
 
 ## Description
 

@@ -6,7 +6,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 | Topic | File | Type | Status | Last Updated |
 |-------|------|------|--------|--------------|
-| TrinityCore architecture analysis | [knowledge/trinitycore-analysis.md](knowledge/trinitycore-analysis.md) | Observation | Active | 2026-03-18 |
+| TrinityCore architecture analysis | [knowledge/trinitycore-analysis.md](knowledge/trinitycore-analysis.md) | Decision | **Resolved** | 2026-03-18 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
@@ -55,6 +55,13 @@ _Read this at every session start (after git sync). Each row links to a detailed
 **RESOLVED: SDK unique_ptr** → Changed to raw pointer with manual lifecycle. ECS World exposed via GetWorld().
 
 **RESOLVED: curl dependency** → Removed from .gitmodules and CMakeLists.txt.
+
+**RESOLVED: 10 TrinityCore-inspired systems (2026-03-18):**
+- AbilitySystem (spells/auras/procs), SpatialGrid (cell partitioning), AsyncDatabase (persistence)
+- ReplicationFields + EntityReplicator (dirty tracking), ScriptHookManager (28 hook types)
+- MovementSystem (priority generator stack), ConditionSystem (universal conditions)
+- InstanceManager (encounters/lockouts), ConsoleRBAC (permission levels), ModuleHotReload (DLL watcher)
+- All wired into SparkEngine.cpp Init/Update/Shutdown paths. AbilitySystem.cpp split into 2 files.
 
 **RESOLVED: 12 major file splits (2026-03-18):**
 - GraphicsEngine.cpp (4,949 → 5 files), MaterialSystem.cpp (4,283 → 3 files)
