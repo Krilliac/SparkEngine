@@ -160,8 +160,9 @@ static void InitDebugSystems()
 
     // Graphics utility singletons
     Spark::Graphics::DecalSystem::GetInstance().Initialize();
-    // LODManager is passive (no init needed)
-    // NavMeshObstacleManager is wired at level load time when a navmesh is available
+    // LODManager is a passive cache (no init/update needed; queries only)
+    // NavMeshObstacleManager is a passive registry (SetNavMesh + Add/Remove at level load time)
+    // NavMeshManager is a passive registry (Load/Build at level load time, queried by AISystem)
 
     // Register default weapon definitions
     Spark::Gameplay::WeaponRegistry::GetInstance().RegisterDefaults();

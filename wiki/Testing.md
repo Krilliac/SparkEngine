@@ -438,13 +438,15 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*84 test files, 1052+ test cases*
+*93 test files, 1189+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
 | `TestAIBehaviorTree` | 16 |
+| `TestAbilitySystem` | 15 |
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationSystem` | 17 |
+| `TestAsyncDatabase` | 23 |
 | `TestBitFlags` | 14 |
 | `TestCameraInterpolation` | 9 |
 | `TestChromeTracing` | 5 |
@@ -452,6 +454,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestClothSimulation` | 4 |
 | `TestColorUtils` | 18 |
 | `TestCommandHistory` | 10 |
+| `TestConditionSystem` | 12 |
 | `TestConfigParser` | 16 |
 | `TestCooldown` | 14 |
 | `TestCoroutineScheduler` | 10 |
@@ -477,6 +480,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestHybridRT` | 20 |
 | `TestInputBindings` | 5 |
 | `TestInputSystem` | 11 |
+| `TestInstanceManager` | 14 |
 | `TestInventorySystem` | 11 |
 | `TestLightManager` | 13 |
 | `TestLoadingScreen` | 4 |
@@ -485,6 +489,8 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestModuleDependency` | 5 |
+| `TestModuleHotReload` | 15 |
+| `TestMovementSystem` | 12 |
 | `TestNavMesh` | 11 |
 | `TestNetBuffer` | 29 |
 | `TestNetworkEncryption` | 17 |
@@ -501,6 +507,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestRandomEngine` | 11 |
 | `TestReflection` | 7 |
 | `TestReliableChannel` | 9 |
+| `TestReplicationFields` | 15 |
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
 | `TestSaveSystem` | 7 |
@@ -508,10 +515,12 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestScopeGuard` | 13 |
 | `TestScopedTimer` | 3 |
 | `TestScreenSpaceEffects` | 16 |
+| `TestScriptHookManager` | 15 |
 | `TestSequencer` | 10 |
 | `TestSerializer` | 17 |
 | `TestShaderGraphCompiler` | 5 |
 | `TestShadowAtlas` | 7 |
+| `TestSpatialGrid` | 16 |
 | `TestSplineMath` | 24 |
 | `TestSprite2DComponents` | 35 |
 | `TestStateMachine` | 16 |

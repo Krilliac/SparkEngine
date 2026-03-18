@@ -93,6 +93,15 @@ add_executable(SparkTests
     TestReflection.cpp
     TestPathCache.cpp
     TestShaderGraphCompiler.cpp
+    TestAbilitySystem.cpp
+    TestConditionSystem.cpp
+    TestInstanceManager.cpp
+    TestMovementSystem.cpp
+    TestSpatialGrid.cpp
+    TestReplicationFields.cpp
+    TestAsyncDatabase.cpp
+    TestScriptHookManager.cpp
+    TestModuleHotReload.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

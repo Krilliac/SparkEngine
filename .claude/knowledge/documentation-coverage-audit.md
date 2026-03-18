@@ -1,6 +1,6 @@
 # Documentation Coverage Audit
 
-**Last updated:** 2026-03-16
+**Last updated:** 2026-03-18
 **Type:** Observation
 **Status:** Active
 **Severity:** Medium
@@ -102,11 +102,26 @@ Missing: `docs/api/` (auto-generated), `FEATURE_ROADMAP.md`, `PROJECT_STATUS.md`
 
 ---
 
+## Gap Analyses (updated 2026-03-18)
+
+```
+docs/gap-analysis/
+├── GAP_ANALYSIS_TEMPLATE.md (735 lines)
+├── NETWORKING_GAP_ANALYSIS.md (104 lines)
+├── NEW_FEATURES_GAP_ANALYSIS.md (113 lines)
+└── COMPREHENSIVE_GAP_ANALYSIS_2026-03-18.md (NEW — full project audit)
+```
+
+The comprehensive gap analysis covers all 18 subsystem categories with DONE/PARTIAL/STUB/MISSING/ORPHANED status for every system.
+
+---
+
 ## What's Done Right
 
-- 53 wiki pages covering all major subsystems
+- 55 wiki pages covering all major subsystems
 - 99.6% header Doxygen coverage
 - No stale documentation detected
 - CLAUDE.md accurately reflects codebase
 - Comprehensive README with build instructions
 - Gap analysis infrastructure exists
+- Full project gap analysis completed 2026-03-18
