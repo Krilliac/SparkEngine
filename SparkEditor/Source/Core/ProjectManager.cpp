@@ -946,7 +946,7 @@ namespace SparkEditor
                 break;
 
             // Skip the outer object
-            if (content.contains("\"recentProjects\"", 0) && pos == 0)
+            if (content.contains("\"recentProjects\"") && pos == 0)
             {
                 pos++;
                 continue;
