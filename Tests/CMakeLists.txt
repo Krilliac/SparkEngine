@@ -91,6 +91,7 @@ add_executable(SparkTests
     TestReliableChannel.cpp
     TestModuleDependency.cpp
     TestReflection.cpp
+    TestPathCache.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

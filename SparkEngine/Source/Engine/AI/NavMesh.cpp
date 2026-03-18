@@ -889,4 +889,76 @@ namespace Spark::AI
         return ss.str();
     }
 
+    // ========================================================================
+    // Path Cache (Redot-inspired optimization)
+    // ========================================================================
+
+    uint64_t NavMeshQuery::HashPathKey(const XMFLOAT3& start, const XMFLOAT3& goal)
+    {
+        // Quantize positions to 0.5m grid to allow cache hits for nearby queries
+        constexpr float quantGrid = 0.5f;
+        auto quantize = [quantGrid](float v) -> int32_t { return static_cast<int32_t>(std::floor(v / quantGrid)); };
+
+        uint64_t hash = 14695981039346656037ULL; // FNV-1a offset basis
+        constexpr uint64_t prime = 1099511628211ULL;
+
+        auto mix = [&](int32_t val)
+        {
+            hash ^= static_cast<uint64_t>(static_cast<uint32_t>(val));
+            hash *= prime;
+        };
+
+        mix(quantize(start.x));
+        mix(quantize(start.y));
+        mix(quantize(start.z));
+        mix(quantize(goal.x));
+        mix(quantize(goal.y));
+        mix(quantize(goal.z));
+
+        return hash;
+    }
+
+    PathResult NavMeshQuery::FindPathCached(const PathRequest& request, float currentTime) const
+    {
+        uint64_t key = HashPathKey(request.start, request.end);
+
+        // Check cache
+        auto it = m_pathCache.find(key);
+        if (it != m_pathCache.end())
+        {
+            const auto& cached = it->second;
+            if (currentTime - cached.timestamp < PATH_CACHE_EXPIRY)
+            {
+                return cached.result;
+            }
+            m_pathCache.erase(it);
+        }
+
+        // Cache miss — compute path
+        PathResult result = FindPath(request);
+
+        // Evict oldest entry if cache is full
+        if (m_pathCache.size() >= MAX_CACHED_PATHS)
+        {
+            float oldestTime = currentTime;
+            uint64_t oldestKey = 0;
+            for (const auto& [k, v] : m_pathCache)
+            {
+                if (v.timestamp < oldestTime)
+                {
+                    oldestTime = v.timestamp;
+                    oldestKey = k;
+                }
+            }
+            m_pathCache.erase(oldestKey);
+        }
+
+        CachedPath entry;
+        entry.result = result;
+        entry.timestamp = currentTime;
+        m_pathCache[key] = std::move(entry);
+
+        return result;
+    }
+
 } // namespace Spark::AI

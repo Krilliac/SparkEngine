@@ -529,6 +529,51 @@ namespace Spark::AI
      * @return          The projected point on the triangle's plane, clamped to the triangle's bounds.
      */
         XMFLOAT3 ProjectPointToTriangle(const XMFLOAT3& point, uint32_t triIndex) const;
+
+        // ====================================================================
+        // Path Cache (Redot/ReX-inspired optimization)
+        // ====================================================================
+
+        /// Hash a start+goal position pair for path cache lookup.
+        /// Quantizes positions to a grid to allow cache hits for nearby queries.
+        static uint64_t HashPathKey(const XMFLOAT3& start, const XMFLOAT3& goal);
+
+        /// Cached path entry with expiry tracking.
+        struct CachedPath
+        {
+            PathResult result;
+            float timestamp = 0.0f;    ///< Time when cached
+            uint32_t navMeshVersion{}; ///< NavMesh version at cache time
+        };
+
+        /// Cache of recent path queries. Key = hashed (start, goal).
+        mutable std::unordered_map<uint64_t, CachedPath> m_pathCache;
+
+        /// Maximum number of cached paths before LRU eviction.
+        static constexpr size_t MAX_CACHED_PATHS = 64;
+
+        /// Cache validity duration in seconds.
+        static constexpr float PATH_CACHE_EXPIRY = 5.0f;
+
+      public:
+        /**
+         * @brief Find a path with caching (Redot-inspired optimization).
+         *
+         * Checks the cache first. If a valid cached path exists for the
+         * same quantized start+goal, returns it immediately. Otherwise
+         * runs FindPath() and caches the result.
+         *
+         * @param request  Path query parameters.
+         * @param currentTime  Current game time for cache expiry.
+         * @return PathResult (may be from cache).
+         */
+        PathResult FindPathCached(const PathRequest& request, float currentTime) const;
+
+        /** @brief Clear all cached paths (call when NavMesh changes). */
+        void ClearPathCache() { m_pathCache.clear(); }
+
+        /** @brief Get current cache size. */
+        size_t GetPathCacheSize() const { return m_pathCache.size(); }
     };
 
     // =============================================================================

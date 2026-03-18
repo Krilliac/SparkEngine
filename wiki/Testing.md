@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*82 test files, 1036+ test cases*
+*83 test files, 1042+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -491,6 +491,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestNetworkInterpolation` | 12 |
 | `TestNoiseGenerator` | 7 |
 | `TestObjectPool` | 6 |
+| `TestPathCache` | 6 |
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
 | `TestPhysicsInterpolation` | 8 |
