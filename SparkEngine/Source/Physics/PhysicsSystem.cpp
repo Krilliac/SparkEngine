@@ -730,8 +730,9 @@ HRESULT PhysicsSystem::Initialize()
     m_dynamicsWorld = new btDiscreteDynamicsWorld(m_dispatcher, m_broadphase, m_solver, m_collisionConfig);
     m_dynamicsWorld->setGravity(btVector3(0, -9.8f, 0));
 
-    // Enable ghost object pair callback for overlap tests
-    m_broadphase->getOverlappingPairCache()->setInternalGhostPairCallback(new btGhostPairCallback());
+    // Enable ghost object pair callback for overlap tests (owned by us, freed in Shutdown)
+    m_ghostPairCallback = new btGhostPairCallback();
+    m_broadphase->getOverlappingPairCache()->setInternalGhostPairCallback(m_ghostPairCallback);
 
     Spark::SimpleConsole::GetInstance().LogSuccess("PhysicsSystem initialized successfully (Bullet Physics)");
     return S_OK;
@@ -786,6 +787,10 @@ void PhysicsSystem::Shutdown()
 
     delete m_solver;
     m_solver = nullptr;
+
+    // Ghost pair callback must be deleted before the broadphase that references it
+    delete m_ghostPairCallback;
+    m_ghostPairCallback = nullptr;
 
     delete m_broadphase;
     m_broadphase = nullptr;

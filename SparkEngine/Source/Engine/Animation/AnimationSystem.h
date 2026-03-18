@@ -514,4 +514,10 @@ namespace Spark::Animation
                                 const IKChain& chain);
     };
 
+    /**
+     * @brief Type alias so EngineContext/EngineSetup can reference "AnimationSystem"
+     *        when the actual singleton class is AnimationManager.
+     */
+    using AnimationSystem = AnimationManager;
+
 } // namespace Spark::Animation

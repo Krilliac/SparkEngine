@@ -173,11 +173,15 @@ static void InitDebugSystems()
 
 static void InitGameplaySystems()
 {
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+        return;
+
     // Condition system (stateless evaluator — no frame update needed)
     Spark::Gameplay::ConditionSystem::GetInstance().Initialize();
 
     // Ability system (spells/auras/procs — needs EventBus)
-    auto* eventBus = EngineContext::Get()->GetEventBus();
+    auto* eventBus = ctx->GetEventBus();
     Spark::Gameplay::AbilitySystem::GetInstance().Initialize(eventBus);
 
     // Instance/dungeon manager
@@ -189,7 +193,7 @@ static void InitGameplaySystems()
     // Destruction system — fracturing and debris spawning
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.Initialize();
-    if (auto* world = EngineContext::Get()->GetWorld())
+    if (auto* world = ctx->GetWorld())
     {
         destruction.SetWorld(world);
     }
@@ -198,7 +202,10 @@ static void InitGameplaySystems()
 static void UpdateGameplaySystems(float dt)
 {
     // Get world from context — may be null during startup/shutdown
-    auto* world = EngineContext::Get()->GetWorld();
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+        return;
+    auto* world = ctx->GetWorld();
     if (!world)
         return;
 

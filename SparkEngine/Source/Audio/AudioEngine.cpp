@@ -773,7 +773,7 @@ void AudioEngine::Update3DAudio()
 
 void AudioEngine::Apply3DAudioToSource(AudioSource* source)
 {
-    if (!source || !source->Voice || !source->Is3D)
+    if (!source || !source->Voice || !source->Is3D || !m_masterVoice)
         return;
 
     // Calculate relative position from listener to source

@@ -82,6 +82,7 @@ class btRigidBody;
 class btCollisionShape;
 class btMotionState;
 class btTypedConstraint;
+class btGhostPairCallback;
 
 // Physics enums, data structs, and utility functions
 #include "PhysicsTypes.h"
@@ -1335,6 +1336,9 @@ class PhysicsSystem
 
     /** @brief Bullet constraint/contact solver (Sequential Impulse method). */
     btSequentialImpulseConstraintSolver* m_solver;
+
+    /** @brief Ghost pair callback for overlap tests (owned; must be deleted in Shutdown). */
+    btGhostPairCallback* m_ghostPairCallback = nullptr;
 
     // =========================================================================
     // Body and constraint registries
