@@ -13,6 +13,12 @@
 
 #include "Platform.h"
 
+// On Windows, framework.h must come before any header that uses Win32 types
+// (HINSTANCE, HMODULE, HWND, etc.) because it pulls in <windows.h>.
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "framework.h"
+#endif
+
 // ============================================================================
 // Common includes (shared between all platforms)
 // ============================================================================
@@ -65,7 +71,6 @@
 
 // Platform-specific includes
 #ifdef SPARK_PLATFORM_WINDOWS
-#include "framework.h"
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 #include "Utils/Validate.h"
@@ -73,8 +78,6 @@
 #include "Utils/CrashHandler.h"
 #include "Utils/D3DUtils.h"
 #include "Utils/LocalFileCache.h"
-#include <Windows.h>
-#include <DirectXMath.h>
 #else
 #include <csignal>
 #include <cstring>

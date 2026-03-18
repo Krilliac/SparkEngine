@@ -140,7 +140,7 @@ namespace SparkEditor
 
     void LevelStreamingSystem::Render()
     {
-        if (!ImGui::Begin(GetName().c_str(), &m_visible))
+        if (!ImGui::Begin(GetName().c_str(), &m_isVisible))
         {
             ImGui::End();
             return;
@@ -360,7 +360,7 @@ namespace SparkEditor
         return file.good();
     }
 
-    bool LevelStreamingSystem::AddTile(const WorldTile& tile)
+    bool LevelStreamingSystem::AddTile(WorldTile tile)
     {
         // Check for duplicate name
         for (const auto& t : m_tiles)
@@ -368,7 +368,7 @@ namespace SparkEditor
             if (t.name == tile.name)
                 return false;
         }
-        m_tiles.push_back(tile);
+        m_tiles.push_back(std::move(tile));
         m_tiles.back().state = StreamingState::UNLOADED;
         SetModified(true);
         return true;
@@ -551,7 +551,7 @@ namespace SparkEditor
                 tile.streamingDistance = m_worldSettings.defaultStreamingDistance;
                 tile.unloadingDistance = m_worldSettings.defaultUnloadingDistance;
                 tile.streamingMethod = m_worldSettings.defaultStreamingMethod;
-                if (AddTile(tile))
+                if (AddTile(std::move(tile)))
                     ++count;
             }
         }
@@ -744,7 +744,7 @@ namespace SparkEditor
             newTile.name = "Tile_" + std::to_string(m_tiles.size());
             newTile.streamingDistance = m_worldSettings.defaultStreamingDistance;
             newTile.unloadingDistance = m_worldSettings.defaultUnloadingDistance;
-            AddTile(newTile);
+            AddTile(std::move(newTile));
         }
 
         ImGui::Separator();

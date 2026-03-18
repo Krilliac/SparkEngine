@@ -329,7 +329,7 @@ namespace SparkEditor
      * @param tile Tile to add
      * @return true if tile was added successfully
      */
-        bool AddTile(const WorldTile& tile);
+        bool AddTile(WorldTile tile);
 
         /**
      * @brief Remove tile from world
