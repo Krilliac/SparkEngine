@@ -446,6 +446,7 @@ list(REMOVE_ITEM SPARK_ENGINE_LIB_SOURCES "${SPARK_ENGINE_ENTRY_POINT}")
 # Exclude source files whose third-party dependencies are missing
 if(NOT BULLET_FOUND)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSystem\\.cpp$")
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsConsoleOps\\.cpp$")
     message(STATUS "Bullet Physics not found - using PhysicsSystemStub.cpp")
 else()
     # When the real PhysicsSystem is built, exclude the stub

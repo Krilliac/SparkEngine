@@ -1,6 +1,6 @@
 # Codebase Bloat Audit — March 15, 2026
 
-**Last updated:** 2026-03-15
+**Last updated:** 2026-03-18
 **Type:** Observation
 **Status:** Active
 **Severity:** Critical
@@ -12,7 +12,7 @@
 
 Comprehensive audit combining prior findings (March 14) with new deep analysis. The codebase has **269,770 total source lines** across all `.h` and `.cpp` files. This audit identifies **~10,000+ lines of confirmed removable code**, **17 orphaned singleton systems**, **127 classes exceeding the 15-public-method limit**, and multiple structural duplication issues.
 
-**Nothing from the March 14 audit has been fixed yet.** All prior findings remain active.
+**Progress (2026-03-18):** All P0 targets resolved. SparkConsole refactored (7,000→551). Five major file splits completed: GraphicsEngine.cpp (4,949→5 files), MaterialSystem.cpp (4,283→3 files), EditorUI.cpp (2,691→3 files), AssetPipeline.cpp (2,557→3 files), Shader.cpp (2,344→2 files). VisualScriptingSystem deleted. ~16,800 lines redistributed from 5 monolithic files into 17 focused modules.
 
 ---
 
@@ -23,12 +23,12 @@ Comprehensive audit combining prior findings (March 14) with new deep analysis. 
 | File | Lines | Over by | Priority |
 |------|-------|---------|----------|
 | `Utils/SparkConsole.cpp` | **6,996** | +6,596 | P0 |
-| `Graphics/GraphicsEngine.cpp` | **4,579** | +4,179 | P0 |
-| `Graphics/MaterialSystem.cpp` | **4,326** | +3,926 | P0 |
-| `SparkEditor/VisualScripting/VisualScriptingSystem.cpp` | **4,067** | +3,667 | P0 |
-| `Graphics/AssetPipeline.cpp` | **2,557** | +2,157 | P1 |
-| `SparkEditor/Core/EditorUI.cpp` | **2,353** | +1,953 | P1 |
-| `Graphics/Shader.cpp` | **2,334** | +1,934 | P1 |
+| `Graphics/GraphicsEngine.cpp` | ~~4,579~~ **1,284** | **RESOLVED** — split into 5 files | P0 ✅ |
+| `Graphics/MaterialSystem.cpp` | ~~4,326~~ **1,435** | **RESOLVED** — split into 3 files | P0 ✅ |
+| `SparkEditor/VisualScripting/VisualScriptingSystem.cpp` | ~~4,067~~ **DELETED** | **RESOLVED** — duplicate system removed | P0 ✅ |
+| `Graphics/AssetPipeline.cpp` | ~~2,557~~ **1,595** | **RESOLVED** — split into 3 files | P1 ✅ |
+| `SparkEditor/Core/EditorUI.cpp` | ~~2,353~~ **1,358** | **RESOLVED** — split into 3 files | P1 ✅ |
+| `Graphics/Shader.cpp` | ~~2,334~~ **1,922** | **RESOLVED** — console ops extracted | P1 ✅ |
 | `SparkEditor/AssetPipeline/AdvancedAssetPipeline.cpp` | **2,324** | +1,924 | P1 |
 | `Graphics/LightingSystem.cpp` | **2,231** | +1,831 | P1 |
 | `Graphics/RHI/Vulkan/VulkanDevice.cpp` | **2,203** | +1,803 | P1 |
