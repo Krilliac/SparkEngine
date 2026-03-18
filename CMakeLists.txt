@@ -501,12 +501,21 @@ if(BULLET_FOUND)
             BulletDynamics BulletCollision LinearMath
             BulletSoftBody BulletInverseDynamics
             Bullet3Common Bullet3Collision Bullet3Dynamics Bullet3Geometry
+            Bullet3OpenCL_clew Bullet2FileLoader
         )
             if(TARGET ${_bullet_target})
                 target_compile_options(${_bullet_target} PRIVATE
                     -Wno-deprecated-copy
                     -Wno-implicit-fallthrough
+                    -Wno-unused-but-set-variable
+                    -Wno-deprecated-volatile
                 )
+                if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|IntelLLVM")
+                    target_compile_options(${_bullet_target} PRIVATE
+                        -Wno-single-bit-bitfield-constant-conversion
+                        -Wno-null-pointer-subtraction
+                    )
+                endif()
             endif()
         endforeach()
     endif()
