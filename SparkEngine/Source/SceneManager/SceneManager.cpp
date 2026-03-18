@@ -132,10 +132,16 @@ void SceneManager::LoadSceneAsync(const std::wstring& filepath, SceneLoadCallbac
         m_asyncLoadThread.join();
     }
 
+    m_asyncLoading = true;
     m_asyncLoadThread = std::thread(
         [this, filepath, callback]()
         {
-            bool success = LoadScene(filepath);
+            bool success = false;
+            {
+                std::lock_guard<std::mutex> lock(m_sceneMutex);
+                success = LoadScene(filepath);
+            }
+            m_asyncLoading = false;
             if (callback)
                 callback(success, std::string(filepath.begin(), filepath.end()));
         });
@@ -361,7 +367,8 @@ std::vector<std::string> SceneManager::GetAvailableScenes(const std::wstring& di
     if (!std::filesystem::exists(directory))
         return scenes;
 
-    for (const auto& entry : std::filesystem::directory_iterator(directory))
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(directory, ec))
     {
         auto ext = entry.path().extension();
         if (ext == L".scene" || ext == L".json")
@@ -436,18 +443,11 @@ bool SceneManager::LoadJSON(const std::wstring& path)
         SceneNode node;
         ls >> node.type >> node.name >> node.position.x >> node.position.y >> node.position.z;
 
-        // Try to parse extended fields (rotation, scale, parentIndex)
+        // Try to parse optional extended fields (rotation, scale, parentIndex).
+        // If not present the stream fails silently and defaults are kept
+        // (rotation=0, scale=1, parent=-1).
         ls >> node.rotation.x >> node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >> node.scale.z >>
             node.parentIndex;
-        // If extended fields aren't present, defaults are fine (rotation=0, scale=1, parent=-1)
-
-        // Try to read optional rotation, scale, and parent fields (written by SaveJSON)
-        if (ls >> node.rotation.x >> node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >>
-            node.scale.z >> node.parentIndex)
-        {
-            // All 12 fields parsed successfully
-        }
-        // Otherwise keep defaults (zero rotation, unit scale, no parent)
 
         if (!node.type.empty())
             AddNode(node);
