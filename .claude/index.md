@@ -55,18 +55,16 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **RESOLVED: curl dependency** → Removed from .gitmodules and CMakeLists.txt.
 
-**RESOLVED: 8 major file splits (2026-03-18):**
-- GraphicsEngine.cpp (4,949 → 5 files, largest 1,284)
-- MaterialSystem.cpp (4,283 → 3 files, largest 1,435)
-- EditorUI.cpp (2,691 → 3 files, largest 1,358)
-- AssetPipeline.cpp (2,557 → 3 files, largest 1,595)
-- Shader.cpp (2,344 → 2 files, largest 1,922)
-- LightingSystem.cpp (2,239 → 2 files, largest 1,282)
-- PhysicsSystem.cpp (2,029 → 2 files, largest 1,733)
-- InspectorPanel.cpp (2,373 → 2 files, largest 1,486)
+**RESOLVED: 12 major file splits (2026-03-18):**
+- GraphicsEngine.cpp (4,949 → 5 files), MaterialSystem.cpp (4,283 → 3 files)
+- EditorUI.cpp (2,691 → 3 files), AssetPipeline.cpp (2,557 → 3 files)
+- Shader.cpp (2,344 → 2 files), LightingSystem.cpp (2,239 → 2 files)
+- PhysicsSystem.cpp (2,029 → 2 files), InspectorPanel.cpp (2,373 → 2 files)
+- VulkanDevice.cpp (2,327 → 3 files), D3D12Device.cpp (1,893 → 2 files)
+- AdvancedAssetPipeline.cpp (2,324 → 3 files), Game.cpp (2,042 → 2 files)
+- LightingTools.cpp (1,963 → 2 files)
 - Pattern: extract Console_* methods + class implementations + private helpers into separate TUs
-
-**Active: Remaining oversized files (P2)** — VulkanDevice (2,327), AdvancedAssetPipeline (2,324), Game.cpp (2,042), LightingTools (1,963). No files over 2,400 lines remain. See [codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md).
+- **No files over 2,000 lines remain.** Largest: Shader.cpp (1,922).
 
 **Active: 66 functions exceed 50-line limit** → See [code-quality-violations.md](knowledge/code-quality-violations.md).
 
@@ -121,7 +119,7 @@ _These issues were fully resolved. Key learnings are preserved inline above._
 - **ECS not in SDK** — GetWorld() added to IEngineContext
 - **curl dead dependency** — Removed from .gitmodules and CMakeLists.txt
 - **Dead CMake options** — ENABLE_LUA, ENABLE_PHYSX and 6 unused flags removed
-- **8 major file splits** — GraphicsEngine, MaterialSystem, EditorUI, AssetPipeline, Shader, LightingSystem, PhysicsSystem, InspectorPanel
+- **12 major file splits** — No files over 2,000 lines remain (was 4,949)
 - **Startup path analysis** — 3 platform entry points (WinMain/headless/SDL2) verified correct, not duplicate
 - **Orphaned system triage** — DecalSystem wired; DXRManager partially gated; NavMesh/AnimationSystem/Sequencer need deeper integration
 - **GitHub API/PR checks**, **CI failures**, **rebase conflicts**, **clang-format**, **CMake Linux builds**, **MSVC /W4 warnings** — all resolved
