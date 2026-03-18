@@ -1,10 +1,10 @@
 /**
  * @file TypeTraits.h
- * @brief C++20 concept shorthands and compile-time type utilities
+ * @brief C++23 concept shorthands and compile-time type utilities
  * @author Spark Engine Team
  * @date 2026
  *
- * Provides reusable C++20 concept aliases and TypeList utilities that reduce
+ * Provides reusable C++23 concept aliases and TypeList utilities that reduce
  * boilerplate across the engine. Concepts enforce template constraints at the
  * call site, improving error messages and documentation. TypeList enables
  * compile-time type enumeration for variant dispatch and component indexing.

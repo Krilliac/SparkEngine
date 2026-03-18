@@ -53,8 +53,8 @@ SparkEngine (exe), SparkEditor (exe), SparkGame (DLL/SO), SparkConsole (exe), Sp
 | Platform | Compiler | Status |
 |----------|----------|--------|
 | Windows 10+ | MSVC v143/v144 | Primary |
-| Linux | GCC 11+, Clang 14+ | Experimental |
-| macOS | Apple Clang (C++20) | Experimental |
+| Linux | GCC 13+, Clang 17+ | Experimental |
+| macOS | Apple Clang (C++23) | Experimental |
 
 ---
 

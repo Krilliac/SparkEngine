@@ -8,8 +8,8 @@ SparkEngine uses CMake 3.16+ as its build system with 30+ toggleable feature mod
 
 ### Minimum Requirements
 
-- CMake 3.16+
-- C++20 standard (enforced via `cxx_std_20`, no extensions)
+- CMake 3.25+
+- C++23 standard (enforced via `cxx_std_23`, no extensions)
 - CMP0091 policy for consistent MSVC runtime library selection
 
 ### Quick Configuration
@@ -34,8 +34,8 @@ cmake --build --preset windows-release
 ```
 cmake -B build [options]
     │
-    ├── Check CMake version (>= 3.16)
-    ├── Set C++20 standard (no extensions)
+    ├── Check CMake version (>= 3.25)
+    ├── Set C++23 standard (no extensions)
     ├── Apply CMP0091 policy (MSVC runtime)
     │
     ├── Evaluate feature flags (-DENABLE_*)
@@ -237,7 +237,7 @@ spark_add_game_module(MyGame ${GAME_SOURCES})
 | 2 | Defines `SPARK_MODULE_DLL` and `SPARK_GAME_DLL` compile definitions |
 | 3 | Links against `Spark::SparkEngineLib` (private) |
 | 4 | Sets SDK include directories (`SPARK_ENGINE_INCLUDE_DIR`, `Spark/`, `SparkEngine/`) |
-| 5 | Enforces C++20 via `target_compile_features(cxx_std_20)` |
+| 5 | Enforces C++23 via `target_compile_features(cxx_std_23)` |
 | 6 | On MSVC: sets runtime library to `MultiThreaded$<$<CONFIG:Debug>:Debug>DLL` |
 
 See [Creating a Game Module](Creating-a-Game-Module) for a complete usage guide.
@@ -414,9 +414,9 @@ Runs weekly (every Monday at 06:00 UTC) or on manual dispatch:
 |----------|---------|----------|--------|
 | MSVC | v143 (VS 2022) | Windows | Fully supported |
 | MSVC | v144 (VS 2026) | Windows | Experimental (`continue-on-error`) |
-| GCC | 11+ | Linux | Fully supported |
-| Clang | 14+ | Linux | Fully supported |
-| Apple Clang | C++20 capable | macOS | Experimental |
+| GCC | 13+ | Linux | Fully supported |
+| Clang | 17+ | Linux | Fully supported |
+| Apple Clang | C++23 capable | macOS | Experimental |
 
 ### Compiler Flags
 

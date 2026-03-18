@@ -32,8 +32,8 @@ function(spark_add_game_module TARGET_NAME)
         ${SPARK_ENGINE_INCLUDE_DIR}/SparkEngine
     )
 
-    # C++20
-    target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)
+    # C++23
+    target_compile_features(${TARGET_NAME} PRIVATE cxx_std_23)
 
     # Platform-specific settings
     if(MSVC)

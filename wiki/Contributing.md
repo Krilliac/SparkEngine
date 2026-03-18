@@ -68,7 +68,7 @@ All checks must pass before submitting a PR.
 
 ### Language Standard
 
-- **C++20** — All code must compile with C++20 enabled
+- **C++23** — All code must compile with C++23 enabled
 - No compiler-specific extensions (`CMAKE_CXX_EXTENSIONS OFF`)
 
 ### Naming Conventions

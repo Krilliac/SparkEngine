@@ -1,6 +1,6 @@
 # Spark Engine
 
-**Spark Engine** is a free, open-source 3D game engine written in C++20. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an EnTT-based ECS architecture, an ImGui visual editor, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an EnTT-based ECS architecture, an ImGui visual editor, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
 
 > **Early Development** — SparkEngine is under active development. Expect rough edges.
 
@@ -9,8 +9,8 @@
 | Platform | Status | Compiler |
 |----------|--------|----------|
 | Windows 10+ | Primary | MSVC v143 (VS 2022), v144 (VS 2026) |
-| Linux x64 | Experimental | GCC 11+, Clang 14+ |
-| macOS | Experimental | Apple Clang with C++20 |
+| Linux x64 | Experimental | GCC 13+, Clang 17+ |
+| macOS | Experimental | Apple Clang with C++23 |
 
 ## Feature Highlights
 
@@ -130,5 +130,5 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 | Test files | 84 |
 | Test cases | 1047+ |
 | Wiki pages | 55 |
-| *Last synced* | *2026-03-18 10:00* |
+| *Last synced* | *2026-03-18 11:09* |
 <!-- /AUTO:stats -->

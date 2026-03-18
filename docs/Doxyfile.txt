@@ -7,7 +7,7 @@
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NAME           = "Spark Engine"
 PROJECT_NUMBER         = "0.1.0-dev"
-PROJECT_BRIEF          = "A modular, high-performance C++20 open-source game engine for 3D FPS titles"
+PROJECT_BRIEF          = "A modular, high-performance C++23 open-source game engine for 3D FPS titles"
 PROJECT_LOGO           = 
 OUTPUT_DIRECTORY       = ./output
 CREATE_SUBDIRS         = NO

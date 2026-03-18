@@ -89,17 +89,17 @@ SparkEngine requires CMake 3.16+. Check your version:
 cmake --version
 ```
 
-### Missing C++20 Support
+### Missing C++23 Support
 
-**Symptom:** Compilation errors on `constexpr`, `std::format`, concepts, or structured bindings.
+**Symptom:** Compilation errors on `std::expected`, `std::print`, deducing `this`, or `if consteval`.
 
-Ensure your compiler supports C++20:
+Ensure your compiler supports C++23:
 
 | Compiler | Minimum Version |
 |----------|----------------|
-| MSVC | Visual Studio 2022 (v143) |
-| GCC | Version 11 |
-| Clang | Version 14 |
+| MSVC | Visual Studio 2022 17.6+ (v143, _MSC_VER >= 1936) |
+| GCC | Version 13 |
+| Clang | Version 17 |
 
 ### Incomplete SparkEngine Installation (Standalone Projects)
 

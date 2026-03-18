@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 
 project(SparkEditor VERSION 1.0.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -176,7 +176,7 @@ target_compile_definitions(SparkEditor PRIVATE
 # Compiler options
 if(MSVC)
     target_compile_options(SparkEditor PRIVATE
-        /W3 /MP /bigobj /std:c++20
+        /W3 /MP /bigobj /std:c++latest
         /wd4005 /wd4996 /wd4244 /wd4267 /wd4251 /wd4275
         $<$<CONFIG:Release>:/O2 /Oi /Ot /Oy /GL>
         $<$<CONFIG:Debug>:/Od /RTC1>
