@@ -324,8 +324,8 @@ HRESULT AudioAsset::Load(ID3D11Device* device)
             if (file.is_open())
             {
                 // Read RIFF header
-                char riff[4], wave[4], fmt[4];
-                uint32_t fileSize, fmtSize, dataSize;
+                char riff[4], wave[4];
+                uint32_t fileSize, dataSize;
                 uint16_t audioFormat, numChannels, bitsPerSample;
                 uint32_t sampleRate, byteRate;
                 uint16_t blockAlign;

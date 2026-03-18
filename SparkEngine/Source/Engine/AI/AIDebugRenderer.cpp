@@ -33,11 +33,11 @@ namespace Spark::AI
             XMFLOAT3 p2(v2.x, v2.y + 0.05f, v2.z);
 
             // Color based on triangle flags (walkable=cyan, hazard=red, water=blue)
-            XMFLOAT4 color(0.0f, 0.8f, 0.8f, 1.0f);
+            DebugColor color{0.0f, 0.8f, 0.8f, 1.0f};
             if (tri.flags & 0x02)
-                color = XMFLOAT4(1.0f, 0.2f, 0.2f, 1.0f);
+                color = {1.0f, 0.2f, 0.2f, 1.0f};
             else if (tri.flags & 0x04)
-                color = XMFLOAT4(0.2f, 0.4f, 1.0f, 1.0f);
+                color = {0.2f, 0.4f, 1.0f, 1.0f};
 
             DEBUG_DRAW_LINE(p0, p1, color);
             DEBUG_DRAW_LINE(p1, p2, color);
@@ -47,8 +47,7 @@ namespace Spark::AI
 
     void AIDebugRenderer::RenderNavMeshBounds(const NavMeshData& navMesh)
     {
-        XMFLOAT4 yellow(1.0f, 1.0f, 0.0f, 1.0f);
-        DEBUG_DRAW_AABB(navMesh.boundsMin, navMesh.boundsMax, yellow);
+        DEBUG_DRAW_AABB(navMesh.boundsMin, navMesh.boundsMax, DebugColor::Yellow());
     }
 
     void AIDebugRenderer::RenderPath(const std::vector<PathPoint>& path, size_t currentIndex)
@@ -56,9 +55,9 @@ namespace Spark::AI
         if (path.size() < 2)
             return;
 
-        XMFLOAT4 pathColor(0.0f, 1.0f, 0.0f, 1.0f);
-        XMFLOAT4 activeColor(1.0f, 1.0f, 0.0f, 1.0f);
-        XMFLOAT4 visitedColor(0.5f, 0.5f, 0.5f, 1.0f);
+        DebugColor pathColor{0.0f, 1.0f, 0.0f, 1.0f};
+        DebugColor activeColor = DebugColor::Yellow();
+        DebugColor visitedColor{0.5f, 0.5f, 0.5f, 1.0f};
 
         for (size_t i = 0; i < path.size() - 1; ++i)
         {
@@ -67,7 +66,7 @@ namespace Spark::AI
             from.y += 0.1f;
             to.y += 0.1f;
 
-            XMFLOAT4 segColor = (i < currentIndex) ? visitedColor : pathColor;
+            DebugColor segColor = (i < currentIndex) ? visitedColor : pathColor;
             DEBUG_DRAW_LINE(from, to, segColor);
         }
 
@@ -76,7 +75,7 @@ namespace Spark::AI
             XMFLOAT3 pos = path[i].position;
             pos.y += 0.1f;
 
-            XMFLOAT4 color = (i == currentIndex) ? activeColor : pathColor;
+            DebugColor color = (i == currentIndex) ? activeColor : pathColor;
             float size = (i == currentIndex) ? 0.3f : 0.15f;
             DEBUG_DRAW_SPHERE(pos, size, color);
         }
@@ -88,13 +87,13 @@ namespace Spark::AI
         XMFLOAT3 tip = position;
         tip.y += 1.0f;
 
-        XMFLOAT4 coneColor(1.0f, 0.8f, 0.0f, 0.5f);
+        DebugColor coneColor{1.0f, 0.8f, 0.0f, 0.5f};
         DEBUG_DRAW_CONE(tip, direction, range, halfAngle, coneColor);
     }
 
     void AIDebugRenderer::RenderAgentMarker(const XMFLOAT3& position, const XMFLOAT3& direction)
     {
-        XMFLOAT4 agentColor(0.0f, 1.0f, 0.5f, 1.0f);
+        DebugColor agentColor{0.0f, 1.0f, 0.5f, 1.0f};
         DEBUG_DRAW_CROSS(position, 0.5f, agentColor);
 
         // Draw direction ray from agent
