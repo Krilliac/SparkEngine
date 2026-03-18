@@ -416,12 +416,12 @@ namespace SparkEditor
         ImGuiID dockMain = dockspaceId;
         ImGuiID dockLeft, dockRight, dockBottom, dockCenter;
 
-        // Split: left 20% for Hierarchy
-        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.20f, &dockLeft, &dockMain);
-        // Split: right 25% for Inspector
-        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.25f, &dockRight, &dockMain);
-        // Split: bottom 28% for Console + Asset Browser (tabbed)
-        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.28f, &dockBottom, &dockCenter);
+        // Split: left 18% for Hierarchy (slim, like Unity/Unreal)
+        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.18f, &dockLeft, &dockMain);
+        // Split: right 22% for Inspector (narrower, properties focused)
+        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.22f, &dockRight, &dockMain);
+        // Split: bottom 25% for Console + Asset Browser (shorter, more viewport)
+        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.25f, &dockBottom, &dockCenter);
 
         // Dock panels — use ###panel_id to match stable IDs from BeginPanel()
         ImGui::DockBuilderDockWindow("###simple_hierarchy_panel", dockLeft);
@@ -1648,30 +1648,44 @@ namespace SparkEditor
         ImGuiWindowFlags toolbarFlags =
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3, 4));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
 
         if (ImGui::Begin("##Toolbar", nullptr, toolbarFlags))
         {
-            float btnSize = 28.0f;
+            float btnSize = 30.0f;
             ImVec2 btnDim(btnSize, btnSize);
+            ImDrawList* dl = ImGui::GetWindowDrawList();
 
-            // Accent colors
-            ImVec4 accentBlue(0.176f, 0.549f, 0.941f, 1.0f);  // #2D8CF0
-            ImVec4 accentAmber(0.961f, 0.651f, 0.137f, 1.0f); // #F5A623
-            ImVec4 playGreen(0.298f, 0.686f, 0.314f, 1.0f);   // #4CAF50
-            ImVec4 stopRed(0.898f, 0.224f, 0.208f, 1.0f);     // #E53935
+            // Accent palette (matches redesigned Spark Professional theme)
+            ImVec4 accentTeal(0.102f, 0.686f, 0.737f, 1.0f);  // #1AAFBC
+            ImVec4 accentAmber(0.941f, 0.659f, 0.188f, 1.0f); // #F0A830
+            ImVec4 playGreen(0.239f, 0.839f, 0.549f, 1.0f);   // #3DD68C
+            ImVec4 stopRed(0.910f, 0.251f, 0.251f, 1.0f);     // #E84040
+            ImVec4 pillBg(0.157f, 0.173f, 0.212f, 1.0f);      // #282C36
 
-            // === Transform Tools ===
+            // === Transform Tools (grouped in a pill-shaped region) ===
+            ImVec2 groupStart = ImGui::GetCursorScreenPos();
+
             auto ToolButton = [&](const char* icon, TransformTool tool, const char* tooltip)
             {
                 bool active = (m_currentTool == tool);
                 if (active)
-                    ImGui::PushStyleColor(ImGuiCol_Button, accentBlue);
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, accentTeal);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                          ImVec4(accentTeal.x * 1.1f, accentTeal.y * 1.1f, accentTeal.z * 1.1f, 1.0f));
+                }
+                else
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                          ImVec4(pillBg.x + 0.06f, pillBg.y + 0.06f, pillBg.z + 0.06f, 1.0f));
+                }
                 if (ImGui::Button(icon, btnDim))
                     m_currentTool = tool;
-                if (active)
-                    ImGui::PopStyleColor();
+                ImGui::PopStyleColor(2);
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("%s", tooltip);
                 ImGui::SameLine();
@@ -1681,33 +1695,61 @@ namespace SparkEditor
             ToolButton(ICON_FA_SYNC_ALT, TransformTool::Rotate, "Rotate (E)");
             ToolButton(ICON_FA_EXPAND, TransformTool::Scale, "Scale (R)");
 
-            ImGui::Text("|");
-            ImGui::SameLine();
+            // Subtle vertical separator with accent glow
+            {
+                ImGui::SameLine(0, 8);
+                ImVec2 sepPos = ImGui::GetCursorScreenPos();
+                float sepH = btnSize;
+                dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + sepH - 2),
+                            ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
+                ImGui::Dummy(ImVec2(2, btnSize));
+                ImGui::SameLine(0, 8);
+            }
 
-            // === Space Toggle ===
+            // === Space Toggle (pill button) ===
             bool isLocal = (m_transformSpace == TransformSpace::Local);
-            if (ImGui::Button(isLocal ? "Local" : "World", ImVec2(50, btnSize)))
+            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                  ImVec4(pillBg.x + 0.06f, pillBg.y + 0.06f, pillBg.z + 0.06f, 1.0f));
+            if (ImGui::Button(isLocal ? ICON_FA_CUBE " Local" : ICON_FA_GLOBE " World", ImVec2(80, btnSize)))
             {
                 m_transformSpace = isLocal ? TransformSpace::World : TransformSpace::Local;
             }
+            ImGui::PopStyleColor(2);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Toggle World/Local space");
 
-            ImGui::SameLine();
-            ImGui::Text("|");
-            ImGui::SameLine();
+            ImGui::SameLine(0, 8);
+
+            // Separator
+            {
+                ImVec2 sepPos = ImGui::GetCursorScreenPos();
+                dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
+                            ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
+                ImGui::Dummy(ImVec2(2, btnSize));
+                ImGui::SameLine(0, 8);
+            }
 
             // === Play Controls (centered) ===
             float windowWidth = ImGui::GetWindowContentRegionMax().x;
-            float playWidth = btnSize * 3 + 8;
+            float playWidth = btnSize * 3 + 12;
             float cursorX = (windowWidth - playWidth) * 0.5f;
             if (cursorX > ImGui::GetCursorPosX())
                 ImGui::SetCursorPosX(cursorX);
 
-            // Play (delegates to PlayModeManager)
+            // Play
             bool isPlaying = (m_playMode == PlayMode::Playing);
             if (isPlaying)
+            {
                 ImGui::PushStyleColor(ImGuiCol_Button, playGreen);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(playGreen.x, playGreen.y, playGreen.z, 0.85f));
+            }
+            else
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                      ImVec4(playGreen.x * 0.4f, playGreen.y * 0.4f, playGreen.z * 0.4f, 1.0f));
+            }
             if (ImGui::Button(ICON_FA_PLAY, btnDim))
             {
                 m_playModeManager.TogglePlayMode();
@@ -1715,16 +1757,25 @@ namespace SparkEditor
                 ShowNotification(m_playModeManager.IsInPlayMode() ? "Playing..." : "Stopped",
                                  m_playModeManager.IsInPlayMode() ? "success" : "info", 2.0f);
             }
-            if (isPlaying)
-                ImGui::PopStyleColor();
+            ImGui::PopStyleColor(2);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Play (F5)");
             ImGui::SameLine();
 
-            // Pause (delegates to PlayModeManager)
+            // Pause
             bool isPaused = (m_playMode == PlayMode::Paused);
             if (isPaused)
+            {
                 ImGui::PushStyleColor(ImGuiCol_Button, accentAmber);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                      ImVec4(accentAmber.x, accentAmber.y, accentAmber.z, 0.85f));
+            }
+            else
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                      ImVec4(accentAmber.x * 0.3f, accentAmber.y * 0.3f, accentAmber.z * 0.3f, 1.0f));
+            }
             if (ImGui::Button(ICON_FA_PAUSE, btnDim))
             {
                 m_playModeManager.TogglePause();
@@ -1733,13 +1784,15 @@ namespace SparkEditor
                 else if (m_playModeManager.IsInPlayMode())
                     m_playMode = PlayMode::Playing;
             }
-            if (isPaused)
-                ImGui::PopStyleColor();
+            ImGui::PopStyleColor(2);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Pause");
             ImGui::SameLine();
 
-            // Stop (delegates to PlayModeManager)
+            // Stop
+            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                  ImVec4(stopRed.x * 0.3f, stopRed.y * 0.3f, stopRed.z * 0.3f, 1.0f));
             if (ImGui::Button(ICON_FA_STOP, btnDim))
             {
                 if (m_playMode != PlayMode::Stopped)
@@ -1749,15 +1802,25 @@ namespace SparkEditor
                     ShowNotification("Stopped", "info", 2.0f);
                 }
             }
+            ImGui::PopStyleColor(2);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Stop (Shift+F5)");
 
-            ImGui::SameLine();
-            ImGui::Text("|");
-            ImGui::SameLine();
+            ImGui::SameLine(0, 8);
 
-            // === Snap Controls (right side) ===
-            ImGui::Checkbox("Snap", &m_snapEnabled);
+            // Separator
+            {
+                ImVec2 sepPos = ImGui::GetCursorScreenPos();
+                dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
+                            ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
+                ImGui::Dummy(ImVec2(2, btnSize));
+                ImGui::SameLine(0, 8);
+            }
+
+            // === Snap Controls (right section) ===
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(pillBg.x, pillBg.y, pillBg.z, 1.0f));
+            ImGui::Checkbox(ICON_FA_MAGNET " Snap", &m_snapEnabled);
+            ImGui::PopStyleColor();
             if (m_snapEnabled)
             {
                 ImGui::SameLine();
@@ -1766,13 +1829,13 @@ namespace SparkEditor
             }
         }
         ImGui::End();
-        ImGui::PopStyleVar(2);
+        ImGui::PopStyleVar(3);
     }
 
     void EditorUI::RenderStatusBar()
     {
         ImGuiViewport* viewport = ImGui::GetMainViewport();
-        float statusBarHeight = 24.0f;
+        float statusBarHeight = 26.0f;
         ImVec2 statusBarPos(viewport->WorkPos.x, viewport->WorkPos.y + viewport->WorkSize.y - statusBarHeight);
         ImVec2 statusBarSize(viewport->WorkSize.x, statusBarHeight);
 
@@ -1782,67 +1845,86 @@ namespace SparkEditor
                                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
                                  ImGuiWindowFlags_NoDocking;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 3));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 4));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.075f, 0.082f, 0.094f, 1.0f)); // Darker than main bg
         if (ImGui::Begin("##StatusBar", nullptr, flags))
         {
-            // Left: engine connection status
-            ImVec4 statusColor = m_engineConnected ? ImVec4(0.3f, 0.8f, 0.3f, 1.0f) : ImVec4(0.8f, 0.3f, 0.3f, 1.0f);
-            ImGui::TextColored(statusColor, ICON_FA_CIRCLE);
-            ImGui::SameLine();
-            ImGui::Text("Engine: %s", m_engineConnected ? "Connected" : "Disconnected");
+            ImDrawList* dl = ImGui::GetWindowDrawList();
 
-            // Project name
+            // Top edge accent line (subtle teal glow)
+            ImVec2 wp = ImGui::GetWindowPos();
+            ImVec2 ws = ImGui::GetWindowSize();
+            dl->AddLine(wp, ImVec2(wp.x + ws.x, wp.y),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(0.102f, 0.686f, 0.737f, 0.35f)), 1.0f);
+
+            // Left: engine connection chip badge
+            ImVec4 statusColor =
+                m_engineConnected ? ImVec4(0.239f, 0.839f, 0.549f, 1.0f) : ImVec4(0.910f, 0.251f, 0.251f, 1.0f);
+            ImGui::TextColored(statusColor, ICON_FA_CIRCLE);
+            ImGui::SameLine(0, 4);
+            ImGui::TextColored(ImVec4(0.533f, 0.565f, 0.627f, 1.0f), "%s",
+                               m_engineConnected ? "Connected" : "Disconnected");
+
+            // Project name (dimmed secondary text)
             if (m_projectManager && m_projectManager->HasOpenProject())
             {
-                ImGui::SameLine();
-                ImGui::Text("|");
-                ImGui::SameLine();
-                ImGui::Text("Project: %s", m_projectManager->GetCurrentProject().name.c_str());
+                ImGui::SameLine(0, 12);
+                ImGui::TextColored(ImVec4(0.306f, 0.329f, 0.384f, 1.0f), ICON_FA_CIRCLE);
+                ImGui::SameLine(0, 12);
+                ImGui::TextColored(ImVec4(0.533f, 0.565f, 0.627f, 1.0f), ICON_FA_FOLDER " %s",
+                                   m_projectManager->GetCurrentProject().name.c_str());
             }
 
             // Scene name
-            ImGui::SameLine();
-            ImGui::Text("|");
-            ImGui::SameLine();
-            ImGui::Text("Scene: %s%s", m_currentSceneName.c_str(), m_sceneModified ? "*" : "");
+            ImGui::SameLine(0, 12);
+            ImGui::TextColored(ImVec4(0.306f, 0.329f, 0.384f, 1.0f), ICON_FA_CIRCLE);
+            ImGui::SameLine(0, 12);
+            ImGui::TextColored(ImVec4(0.847f, 0.863f, 0.902f, 1.0f), ICON_FA_MAP " %s%s", m_currentSceneName.c_str(),
+                               m_sceneModified ? " *" : "");
 
-            ImGui::SameLine();
-            ImGui::Text("|");
-            ImGui::SameLine();
+            ImGui::SameLine(0, 12);
+            ImGui::TextColored(ImVec4(0.306f, 0.329f, 0.384f, 1.0f), ICON_FA_CIRCLE);
+            ImGui::SameLine(0, 12);
 
-            // Center: tool + selection
+            // Center: tool + selection (secondary text)
             const char* toolNames[] = {"Move", "Rotate", "Scale"};
-            ImGui::Text(ICON_FA_ARROWS_ALT " %s | Objects: %d | Selected: %d", toolNames[(int)m_currentTool],
-                        m_sceneObjectCount, m_selectedObjectCount);
+            ImGui::TextColored(ImVec4(0.533f, 0.565f, 0.627f, 1.0f), "%s | %d obj | %d sel",
+                               toolNames[(int)m_currentTool], m_sceneObjectCount, m_selectedObjectCount);
 
             // Right: FPS + frame info
             float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
-            ImVec4 fpsColor = fps >= 60.0f   ? ImVec4(0.3f, 0.8f, 0.3f, 1.0f)
-                              : fps >= 30.0f ? ImVec4(0.9f, 0.9f, 0.3f, 1.0f)
-                                             : ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
+            ImVec4 fpsColor = fps >= 60.0f   ? ImVec4(0.239f, 0.839f, 0.549f, 1.0f)
+                              : fps >= 30.0f ? ImVec4(0.941f, 0.659f, 0.188f, 1.0f)
+                                             : ImVec4(0.910f, 0.251f, 0.251f, 1.0f);
 
-            float rightOffset = ImGui::GetWindowWidth() - 360;
+            float rightOffset = ImGui::GetWindowWidth() - 380;
             if (rightOffset > ImGui::GetCursorPosX())
             {
                 ImGui::SameLine(rightOffset);
             }
-            ImGui::TextColored(fpsColor, "%.0f FPS", fps);
-            ImGui::SameLine();
-            ImGui::Text("| %.1fms | Assets: %d | Frame: %llu", m_stats.frameTime, m_assetDatabaseSize,
-                        (unsigned long long)m_frameNumber);
+            ImGui::TextColored(fpsColor, ICON_FA_TACHOMETER_ALT " %.0f", fps);
+            ImGui::SameLine(0, 4);
+            ImGui::TextColored(ImVec4(0.533f, 0.565f, 0.627f, 1.0f), "FPS");
+            ImGui::SameLine(0, 12);
+            ImGui::TextColored(ImVec4(0.416f, 0.443f, 0.502f, 1.0f), "%.1fms", m_stats.frameTime);
+            ImGui::SameLine(0, 12);
+            ImGui::TextColored(ImVec4(0.416f, 0.443f, 0.502f, 1.0f), ICON_FA_DATABASE " %d", m_assetDatabaseSize);
+            ImGui::SameLine(0, 12);
+            ImGui::TextColored(ImVec4(0.306f, 0.329f, 0.384f, 1.0f), "#%llu", (unsigned long long)m_frameNumber);
         }
         ImGui::End();
+        ImGui::PopStyleColor();
         ImGui::PopStyleVar();
     }
 
     void EditorUI::RenderNotifications()
     {
-        const float NOTIFICATION_WIDTH = 320.0f;
-        const float NOTIFICATION_HEIGHT = 52.0f;
-        const float NOTIFICATION_SPACING = 6.0f;
+        const float NOTIFICATION_WIDTH = 340.0f;
+        const float NOTIFICATION_HEIGHT = 56.0f;
+        const float NOTIFICATION_SPACING = 8.0f;
 
         ImGuiViewport* viewport = ImGui::GetMainViewport();
-        float yOffset = viewport->WorkPos.y + 8.0f;
+        float yOffset = viewport->WorkPos.y + 12.0f;
 
         for (size_t i = 0; i < m_notifications.size(); ++i)
         {
@@ -1855,12 +1937,12 @@ namespace SparkEditor
                 alpha = std::max(0.0f, notification.timeLeft / 0.5f);
             }
 
-            ImVec2 notificationPos(viewport->WorkPos.x + viewport->WorkSize.x - NOTIFICATION_WIDTH - 12.0f,
+            ImVec2 notificationPos(viewport->WorkPos.x + viewport->WorkSize.x - NOTIFICATION_WIDTH - 16.0f,
                                    yOffset + i * (NOTIFICATION_HEIGHT + NOTIFICATION_SPACING));
 
             ImGui::SetNextWindowPos(notificationPos);
             ImGui::SetNextWindowSize(ImVec2(NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT));
-            ImGui::SetNextWindowBgAlpha(0.92f * alpha);
+            ImGui::SetNextWindowBgAlpha(0.95f * alpha);
 
             std::string windowName = "##Notification" + std::to_string(i);
             ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
@@ -1868,46 +1950,56 @@ namespace SparkEditor
                                      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
                                      ImGuiWindowFlags_NoSavedSettings;
 
-            // Determine stripe and icon color
-            ImVec4 stripeColor(0.176f, 0.549f, 0.941f, alpha); // blue default
+            // Theme-matched accent colors
+            ImVec4 accentColor(0.102f, 0.686f, 0.737f, alpha); // teal (info)
             const char* icon = ICON_FA_INFO_CIRCLE;
             if (notification.type == "error")
             {
-                stripeColor = ImVec4(0.898f, 0.224f, 0.208f, alpha);
+                accentColor = ImVec4(0.910f, 0.251f, 0.251f, alpha);
                 icon = ICON_FA_TIMES;
             }
             else if (notification.type == "warning")
             {
-                stripeColor = ImVec4(0.961f, 0.651f, 0.137f, alpha);
+                accentColor = ImVec4(0.941f, 0.659f, 0.188f, alpha);
                 icon = ICON_FA_EXCLAMATION;
             }
             else if (notification.type == "success")
             {
-                stripeColor = ImVec4(0.298f, 0.686f, 0.314f, alpha);
+                accentColor = ImVec4(0.239f, 0.839f, 0.549f, alpha);
                 icon = ICON_FA_CHECK;
             }
 
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.118f, 0.129f, 0.161f, 0.95f * alpha));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(accentColor.x, accentColor.y, accentColor.z, 0.25f * alpha));
             if (ImGui::Begin(windowName.c_str(), nullptr, flags))
             {
                 ImDrawList* dl = ImGui::GetWindowDrawList();
                 ImVec2 wp = ImGui::GetWindowPos();
                 ImVec2 ws = ImGui::GetWindowSize();
 
-                // Colored left stripe
-                dl->AddRectFilled(wp, ImVec2(wp.x + 4, wp.y + ws.y), ImGui::ColorConvertFloat4ToU32(stripeColor), 4.0f,
+                // Left accent stripe (3px, rounded left corners)
+                dl->AddRectFilled(wp, ImVec2(wp.x + 3, wp.y + ws.y), ImGui::ColorConvertFloat4ToU32(accentColor), 8.0f,
                                   ImDrawFlags_RoundCornersLeft);
 
+                // Subtle background gradient overlay (darker at bottom)
+                dl->AddRectFilledMultiColor(wp, ImVec2(wp.x + ws.x, wp.y + ws.y),
+                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0)),
+                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0)),
+                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0.1f * alpha)),
+                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0.1f * alpha)));
+
                 // Content with padding past the stripe
-                ImGui::SetCursorPos(ImVec2(12, (NOTIFICATION_HEIGHT - ImGui::GetTextLineHeight()) * 0.5f));
-                ImGui::TextColored(ImVec4(stripeColor.x, stripeColor.y, stripeColor.z, alpha), "%s", icon);
-                ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.88f, 0.89f, 0.92f, alpha));
+                ImGui::SetCursorPos(ImVec2(14, (NOTIFICATION_HEIGHT - ImGui::GetTextLineHeight()) * 0.5f));
+                ImGui::TextColored(accentColor, "%s", icon);
+                ImGui::SameLine(0, 8);
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.847f, 0.863f, 0.902f, alpha));
                 ImGui::TextWrapped("%s", notification.message.c_str());
                 ImGui::PopStyleColor();
             }
             ImGui::End();
+            ImGui::PopStyleColor(2);
             ImGui::PopStyleVar(2);
         }
     }
