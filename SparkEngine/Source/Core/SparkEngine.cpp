@@ -58,6 +58,7 @@
 #include "Engine/Gameplay/ConditionSystem.h"
 #include "Engine/Gameplay/InstanceManager.h"
 #include "Engine/AI/MovementSystem.h"
+#include "Engine/Destruction/DestructionSystem.h"
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
 #endif
@@ -184,6 +185,14 @@ static void InitGameplaySystems()
 
     // Movement generator stack (AI movement)
     Spark::AI::MovementSystem::GetInstance().Initialize();
+
+    // Destruction system — fracturing and debris spawning
+    auto& destruction = Spark::DestructionSystem::GetInstance();
+    destruction.Initialize();
+    if (auto* world = EngineContext::Get()->GetWorld())
+    {
+        destruction.SetWorld(world);
+    }
 }
 
 static void UpdateGameplaySystems(float dt)
@@ -196,6 +205,11 @@ static void UpdateGameplaySystems(float dt)
     Spark::Gameplay::AbilitySystem::GetInstance().Update(*world, dt);
     Spark::Gameplay::InstanceManager::GetInstance().Update(dt);
     Spark::AI::MovementSystem::GetInstance().Update(*world, dt);
+
+    // Update destruction debris lifetimes and cleanup
+    auto& destruction = Spark::DestructionSystem::GetInstance();
+    destruction.SetWorld(world);
+    destruction.Update(dt);
 }
 
 static void ShutdownGameplaySystems()

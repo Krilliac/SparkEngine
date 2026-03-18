@@ -5,7 +5,9 @@
 
 #include "MovementSystem.h"
 #include "../ECS/Components.h"
+#include "../ECS/Components/CoreComponents.h"
 #include <cmath>
+#include <algorithm>
 
 namespace Spark::AI
 {
@@ -103,7 +105,8 @@ namespace Spark::AI
             return true;
         }
 
-        // Move toward the wander target (placeholder: would read/write Transform via ECS)
+        // Movement is applied by MovementSystem::Update which reads generator target
+        // and writes to the entity's Transform via ECS
         float dist = Distance3D(originX, originY, originZ, targetX, targetY, targetZ);
         if (dist < kArrivalThreshold)
         {
@@ -348,6 +351,175 @@ namespace Spark::AI
         for (auto& [entityId, controller] : m_controllers)
         {
             controller.Update(entityId, deltaTime);
+
+            // Apply movement from the active generator to the entity's Transform
+            auto* gen = controller.GetActiveGenerator();
+            if (!gen)
+                continue;
+
+            auto entId = static_cast<entt::entity>(entityId);
+            auto* transform = world.GetComponent<Transform>(entId);
+            if (!transform)
+                continue;
+
+            float speed = kDefaultMoveSpeed;
+
+            switch (gen->GetType())
+            {
+            case MovementType::RandomWander:
+            {
+                auto* wander = static_cast<RandomWanderGenerator*>(gen);
+                if (!wander->hasTarget)
+                    break;
+                float step = speed * deltaTime;
+                MoveToward(transform->position.x, transform->position.y, transform->position.z, wander->targetX,
+                           wander->targetY, wander->targetZ, step);
+                // Update origin tracking so distance check works
+                wander->originX = transform->position.x;
+                wander->originY = transform->position.y;
+                wander->originZ = transform->position.z;
+                // Face movement direction
+                float dx = wander->targetX - transform->position.x;
+                float dz = wander->targetZ - transform->position.z;
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                break;
+            }
+
+            case MovementType::Chase:
+            {
+                auto* chase = static_cast<ChaseGenerator*>(gen);
+                auto* targetTf = world.GetComponent<Transform>(static_cast<entt::entity>(chase->target));
+                if (!targetTf)
+                    break;
+                float dist = Distance3D(transform->position.x, transform->position.y, transform->position.z,
+                                        targetTf->position.x, targetTf->position.y, targetTf->position.z);
+                if (dist > chase->minDist)
+                {
+                    float step = speed * deltaTime;
+                    MoveToward(transform->position.x, transform->position.y, transform->position.z,
+                               targetTf->position.x, targetTf->position.y, targetTf->position.z, step);
+                }
+                // Face the target
+                float dx = targetTf->position.x - transform->position.x;
+                float dz = targetTf->position.z - transform->position.z;
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                break;
+            }
+
+            case MovementType::Follow:
+            {
+                auto* follow = static_cast<FollowGenerator*>(gen);
+                auto* targetTf = world.GetComponent<Transform>(static_cast<entt::entity>(follow->target));
+                if (!targetTf)
+                    break;
+                // Compute offset position behind target at desired distance
+                float angleRad = follow->angle * (3.14159265f / 180.0f);
+                float followX = targetTf->position.x - std::sin(angleRad) * follow->distance;
+                float followY = targetTf->position.y;
+                float followZ = targetTf->position.z - std::cos(angleRad) * follow->distance;
+                float step = speed * deltaTime;
+                MoveToward(transform->position.x, transform->position.y, transform->position.z, followX, followY,
+                           followZ, step);
+                // Face the target
+                float dx = targetTf->position.x - transform->position.x;
+                float dz = targetTf->position.z - transform->position.z;
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                break;
+            }
+
+            case MovementType::Flee:
+            {
+                auto* flee = static_cast<FleeGenerator*>(gen);
+                auto* threatTf = world.GetComponent<Transform>(static_cast<entt::entity>(flee->threatEntity));
+                if (!threatTf)
+                    break;
+                // Move directly away from threat
+                float dx = transform->position.x - threatTf->position.x;
+                float dy = transform->position.y - threatTf->position.y;
+                float dz = transform->position.z - threatTf->position.z;
+                float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < flee->fleeDistance && dist > 0.001f)
+                {
+                    float step = speed * deltaTime;
+                    float ratio = step / dist;
+                    transform->position.x += dx * ratio;
+                    transform->position.y += dy * ratio;
+                    transform->position.z += dz * ratio;
+                }
+                // Face away from threat
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                break;
+            }
+
+            case MovementType::Point:
+            {
+                auto* point = static_cast<PointGenerator*>(gen);
+                float step = point->speed * deltaTime;
+                float remaining = MoveToward(transform->position.x, transform->position.y, transform->position.z,
+                                             point->targetX, point->targetY, point->targetZ, step);
+                // Face movement direction
+                float dx = point->targetX - transform->position.x;
+                float dz = point->targetZ - transform->position.z;
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                (void)remaining;
+                break;
+            }
+
+            case MovementType::Patrol:
+            {
+                auto* patrol = static_cast<PatrolGenerator*>(gen);
+                if (patrol->waypoints.empty())
+                    break;
+                int idx = patrol->currentIndex % static_cast<int>(patrol->waypoints.size());
+                const auto& wp = patrol->waypoints[idx];
+                float step = patrol->speed * deltaTime;
+                float remaining = MoveToward(transform->position.x, transform->position.y, transform->position.z, wp[0],
+                                             wp[1], wp[2], step);
+                // Face waypoint
+                float dx = wp[0] - transform->position.x;
+                float dz = wp[2] - transform->position.z;
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                // Advance to next waypoint if arrived
+                if (remaining < kArrivalThreshold)
+                {
+                    patrol->currentIndex++;
+                    if (patrol->currentIndex >= static_cast<int>(patrol->waypoints.size()))
+                    {
+                        if (patrol->loop)
+                            patrol->currentIndex = 0;
+                        else
+                            patrol->currentIndex = static_cast<int>(patrol->waypoints.size()) - 1;
+                    }
+                }
+                break;
+            }
+
+            case MovementType::Home:
+            {
+                auto* home = static_cast<HomeGenerator*>(gen);
+                float step = home->speed * deltaTime;
+                MoveToward(transform->position.x, transform->position.y, transform->position.z, home->homeX,
+                           home->homeY, home->homeZ, step);
+                float dx = home->homeX - transform->position.x;
+                float dz = home->homeZ - transform->position.z;
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                break;
+            }
+
+            case MovementType::Idle:
+            case MovementType::Charge:
+            case MovementType::Spline:
+            case MovementType::Waypoint:
+            case MovementType::Count:
+                break;
+            }
         }
     }
 
