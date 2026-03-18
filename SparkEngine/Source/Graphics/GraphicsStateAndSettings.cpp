@@ -26,7 +26,6 @@
 #include <string>
 #include <chrono>
 #include <cstring>
-#include <iostream>
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -563,8 +562,8 @@ HRESULT GraphicsEngine::SaveScreenshot(const std::string& filename)
 #include "TextureSystem.h"
 #include "MaterialSystem.h"
 #include "LightingSystem.h"
+#include "../Utils/Validate.h"
 
-#include <iostream>
 #include <string>
 
 using namespace Spark::Graphics::Detail;
@@ -812,7 +811,7 @@ void GraphicsEngine::ResetStatistics()
 
 HRESULT GraphicsEngine::SaveScreenshot(const std::string& filename)
 {
-    std::cerr << "[GraphicsEngine] SaveScreenshot not implemented on Linux: " << filename << std::endl;
+    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "SaveScreenshot not implemented on Linux: %s", filename.c_str());
     return E_NOTIMPL;
 }
 

@@ -72,6 +72,8 @@
 #include <functional>
 #include <filesystem>
 #include <unordered_map>
+#include <atomic>
+#include <mutex>
 #include <thread>
 
 
@@ -600,6 +602,14 @@ class SceneManager
     const std::vector<std::unique_ptr<GameObject>>& GetObjects() const;
 
     /**
+     * @brief Check if an asynchronous scene load is in progress.
+     *
+     * Callers should avoid iterating GetObjects() while this returns true,
+     * as the background thread may be modifying the objects vector.
+     */
+    bool IsAsyncLoading() const { return m_asyncLoading.load(std::memory_order_relaxed); }
+
+    /**
      * @brief Enumerate all scene files found in a directory.
      *
      * Recursively scans `directory` for files with `.scene` or `.json` extensions
@@ -776,6 +786,12 @@ class SceneManager
 
     /** @brief Background thread for async scene loading (joined in destructor). */
     std::thread m_asyncLoadThread;
+
+    /** @brief Guards m_objects and m_sceneNodes during async scene loading. */
+    mutable std::mutex m_sceneMutex;
+
+    /** @brief True while an async load is in progress; main thread should skip object access. */
+    std::atomic<bool> m_asyncLoading{false};
 
     /** @brief Optional file cache for scene I/O (non-owning). */
     Spark::LocalFileCache* m_fileCache = nullptr;

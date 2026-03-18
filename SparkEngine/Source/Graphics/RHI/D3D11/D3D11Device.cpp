@@ -8,6 +8,7 @@
  */
 
 #include "D3D11Device.h"
+#include "../RHIFormatUtils.h"
 #include "../../../Utils/Validate.h"
 #include <algorithm>
 #include <cassert>
@@ -1053,7 +1054,7 @@ namespace Spark
             {
                 auto* d3dTex = static_cast<D3D11Texture*>(texture);
                 uint32_t subresource = D3D11CalcSubresource(mipLevel, arraySlice, d3dTex->GetMipLevels());
-                uint32_t rowPitch = d3dTex->GetWidth() * GetFormatSize(d3dTex->GetFormat());
+                uint32_t rowPitch = d3dTex->GetWidth() * Spark::RHI::GetFormatSize(d3dTex->GetFormat());
                 m_immediateContext->UpdateSubresource(d3dTex->GetD3D11Resource(), subresource, nullptr, data, rowPitch,
                                                       0);
             }
@@ -1159,47 +1160,6 @@ namespace Spark
                     return DXGI_FORMAT_D32_FLOAT;
                 default:
                     return DXGI_FORMAT_UNKNOWN;
-                }
-            }
-
-            uint32_t D3D11Device::GetFormatSize(PixelFormat format) const
-            {
-                switch (format)
-                {
-                case PixelFormat::R8_UNORM:
-                    return 1;
-                case PixelFormat::R8G8_UNORM:
-                    return 2;
-                case PixelFormat::R16_FLOAT:
-                    return 2;
-                case PixelFormat::R8G8B8A8_UNORM:
-                    return 4;
-                case PixelFormat::R8G8B8A8_UNORM_SRGB:
-                    return 4;
-                case PixelFormat::B8G8R8A8_UNORM:
-                    return 4;
-                case PixelFormat::R10G10B10A2_UNORM:
-                    return 4;
-                case PixelFormat::R11G11B10_FLOAT:
-                    return 4;
-                case PixelFormat::R32_FLOAT:
-                    return 4;
-                case PixelFormat::R16G16_FLOAT:
-                    return 4;
-                case PixelFormat::D24_UNORM_S8_UINT:
-                    return 4;
-                case PixelFormat::D32_FLOAT:
-                    return 4;
-                case PixelFormat::R16G16B16A16_FLOAT:
-                    return 8;
-                case PixelFormat::R32G32_FLOAT:
-                    return 8;
-                case PixelFormat::R32G32B32_FLOAT:
-                    return 12;
-                case PixelFormat::R32G32B32A32_FLOAT:
-                    return 16;
-                default:
-                    return 4;
                 }
             }
 

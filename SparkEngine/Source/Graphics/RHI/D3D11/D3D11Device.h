@@ -325,7 +325,6 @@ namespace Spark
                 D3D11_BLEND ConvertBlendFactor(RHIBlendFactor factor) const;
                 D3D11_BLEND_OP ConvertBlendOp(RHIBlendOp op) const;
                 DXGI_FORMAT ConvertVertexFormat(RHIVertexFormat format) const;
-                uint32_t GetFormatSize(PixelFormat format) const;
 
                 ComPtr<ID3D11Device1> m_device;
                 ComPtr<ID3D11DeviceContext1> m_immediateContext;

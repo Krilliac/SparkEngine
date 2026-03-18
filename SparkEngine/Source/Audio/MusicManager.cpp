@@ -383,15 +383,19 @@ namespace Spark::Audio
         m_dynamicState.currentIntensity = intensity;
     }
 
-    void MusicManager::AddReverbZone(const ReverbZone& zone)
+    void MusicManager::AddReverbZone(const MusicReverbZone& zone)
     {
+        // Invalidate cached pointer — push_back may reallocate the vector
+        m_activeReverbZone = nullptr;
         m_reverbZones.push_back(zone);
     }
 
     void MusicManager::RemoveReverbZone(const std::string& name)
     {
+        // Invalidate cached pointer — erase invalidates iterators/pointers into the vector
+        m_activeReverbZone = nullptr;
         m_reverbZones.erase(std::remove_if(m_reverbZones.begin(), m_reverbZones.end(),
-                                           [&name](const ReverbZone& z) { return z.name == name; }),
+                                           [&name](const MusicReverbZone& z) { return z.name == name; }),
                             m_reverbZones.end());
     }
 
@@ -424,9 +428,9 @@ namespace Spark::Audio
         m_occlusionSettings = settings;
     }
 
-    OcclusionResult MusicManager::ComputeOcclusion(const XMFLOAT3& sourcePos, const XMFLOAT3& listenerPos) const
+    MusicOcclusionResult MusicManager::ComputeOcclusion(const XMFLOAT3& sourcePos, const XMFLOAT3& listenerPos) const
     {
-        OcclusionResult result{0.0f, 22000.0f};
+        MusicOcclusionResult result{0.0f, 22000.0f};
         if (!m_occlusionSettings.enabled)
             return result;
 
@@ -466,8 +470,10 @@ namespace Spark::Audio
         ss << "Paused: " << (m_isPaused ? "Yes" : "No") << "\n";
         ss << "Current Track: " << (m_currentTrack.empty() ? "None" : m_currentTrack) << "\n";
         if (m_isCrossfading)
-            ss << "Crossfading to: " << m_nextTrack << " (" << (m_crossfadeProgress / m_crossfadeDuration * 100.0f)
-               << "%)\n";
+        {
+            float pct = (m_crossfadeDuration > 0.0f) ? (m_crossfadeProgress / m_crossfadeDuration * 100.0f) : 100.0f;
+            ss << "Crossfading to: " << m_nextTrack << " (" << pct << "%)\n";
+        }
         ss << "Active Playlist: " << (m_activePlaylist.empty() ? "None" : m_activePlaylist) << "\n";
         ss << "Combat Intensity: ";
         switch (m_dynamicState.currentIntensity)

@@ -267,8 +267,6 @@ namespace Spark
                 void SetMarker(const char* name) override;
 
               private:
-                uint32_t EstimateVertexCount(uint32_t primitiveCount) const;
-
                 bool m_isImmediate;
                 RHIStatistics* m_statistics = nullptr;
                 GLenum m_currentTopology = GL_TRIANGLES;
@@ -334,21 +332,11 @@ namespace Spark
                 GLenum ConvertFormat(PixelFormat format) const;
                 GLenum ConvertInternalFormat(PixelFormat format) const;
                 GLenum ConvertFormatType(PixelFormat format) const;
-                GLenum ConvertFilter(RHIFilterMode mode) const;
                 GLenum ConvertAddressMode(RHIAddressMode mode) const;
-                GLenum ConvertCompareOp(RHICompareOp op) const;
-                GLenum ConvertStencilOp(RHIStencilOp op) const;
-                GLenum ConvertBlendFactor(RHIBlendFactor factor) const;
-                GLenum ConvertBlendOp(RHIBlendOp op) const;
-                GLenum ConvertTopology(RHIPrimitiveTopology topology) const;
-                uint32_t GetFormatSize(PixelFormat format) const;
                 GLenum GetTextureTarget(const RHITextureDesc& desc) const;
-                bool IsCompressedFormat(PixelFormat format) const;
-                bool IsDepthFormat(PixelFormat format) const;
                 GLenum GetDepthAttachmentType(PixelFormat format) const;
 
                 void QueryCapabilities();
-                void CheckGLError(const char* operation) const;
 
                 std::unique_ptr<GLCommandList> m_immediateCommandList;
                 RHIDeviceCapabilities m_capabilities;

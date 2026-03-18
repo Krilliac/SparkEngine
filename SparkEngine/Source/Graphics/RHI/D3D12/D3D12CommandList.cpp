@@ -8,7 +8,7 @@
 #ifdef _WIN32
 
 #include "D3D12Device.h"
-#include <iostream>
+#include "../../../Utils/Validate.h"
 
 namespace Spark
 {
@@ -46,7 +46,7 @@ namespace Spark
                 }
                 else
                 {
-                    std::cerr << "[D3D12] Failed to create swap chain" << std::endl;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create swap chain");
                 }
             }
 

@@ -7,7 +7,6 @@
 
 #include "RHIFactory.h"
 #include "../../Utils/Validate.h"
-#include <iostream>
 #include <fstream>
 #include <algorithm>
 
@@ -23,6 +22,10 @@
 
 #ifdef SPARK_OPENGL_SUPPORT
 #include "OpenGL/OpenGLDevice.h"
+#endif
+
+#ifdef SPARK_METAL_SUPPORT
+#include "Metal/MetalDevice.h"
 #endif
 
 namespace Spark
@@ -54,6 +57,10 @@ namespace Spark
             backends.push_back(GraphicsBackend::OpenGL);
 #endif
 
+#ifdef SPARK_METAL_SUPPORT
+            backends.push_back(GraphicsBackend::Metal);
+#endif
+
             return backends;
         }
 
@@ -63,15 +70,19 @@ namespace Spark
 
             if (backends.empty())
             {
-                std::cerr << "[RHI] No graphics backends available on this platform." << std::endl;
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "No graphics backends available on this platform");
                 return GraphicsBackend::None;
             }
 
-            // Priority: D3D11 on Windows, Vulkan on Linux, OpenGL as fallback
+            // Priority: D3D11 on Windows, Metal on Apple, Vulkan on Linux, OpenGL as fallback
 #ifdef _WIN32
             for (auto b : backends)
                 if (b == GraphicsBackend::D3D11)
                     return GraphicsBackend::D3D11;
+#elif defined(__APPLE__)
+            for (auto b : backends)
+                if (b == GraphicsBackend::Metal)
+                    return GraphicsBackend::Metal;
 #else
             for (auto b : backends)
                 if (b == GraphicsBackend::Vulkan)
@@ -89,7 +100,8 @@ namespace Spark
 
             if (backend == GraphicsBackend::None)
             {
-                std::cerr << "[RHI] No graphics backend available. Engine will run without rendering." << std::endl;
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "No graphics backend available. Engine will run without rendering");
                 return nullptr;
             }
 
@@ -118,9 +130,15 @@ namespace Spark
                 break;
 #endif
 
+#ifdef SPARK_METAL_SUPPORT
+            case GraphicsBackend::Metal:
+                device = std::make_unique<Metal::MetalDevice>();
+                break;
+#endif
+
             default:
-                std::cerr << "[RHI] Backend '" << GetBackendName(backend) << "' is not available on this platform."
-                          << std::endl;
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Backend '%s' is not available on this platform",
+                                GetBackendName(backend));
                 return nullptr;
             }
 
@@ -370,8 +388,8 @@ namespace Spark
             if (hlslSource.empty())
                 return {};
 
-            std::cerr << "[RHI] CrossCompileHLSLtoSPIRV: DXC not integrated. "
-                      << "Link dxcompiler.dll to enable HLSL→SPIR-V compilation." << std::endl;
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "CrossCompileHLSLtoSPIRV: DXC not integrated. Link dxcompiler.dll to enable");
             return {};
         }
 
@@ -383,8 +401,8 @@ namespace Spark
             if (glslSource.empty())
                 return {};
 
-            std::cerr << "[RHI] CompileGLSLtoSPIRV: glslang not integrated. "
-                      << "Link glslang to enable GLSL→SPIR-V compilation." << std::endl;
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "CompileGLSLtoSPIRV: glslang not integrated. Link glslang to enable");
             return {};
         }
 
@@ -403,8 +421,8 @@ namespace Spark
                 {
                     // Valid SPIR-V — full reflection requires SPIRV-Reflect or spirv-cross
                     // For now, return empty but valid reflection data
-                    std::cerr << "[RHI] ReflectSPIRV: SPIRV-Reflect not integrated. "
-                              << "Returning empty reflection data." << std::endl;
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "ReflectSPIRV: SPIRV-Reflect not integrated. Returning empty reflection data");
                 }
             }
 
@@ -444,74 +462,6 @@ namespace Spark
                 return "Shaders/GLSL/";
             default:
                 return "Shaders/";
-            }
-        }
-
-        uint32_t GetPixelFormatSize(PixelFormat format)
-        {
-            switch (format)
-            {
-            case PixelFormat::R8_UNORM:
-                return 1;
-            case PixelFormat::R8G8_UNORM:
-                return 2;
-            case PixelFormat::R16_FLOAT:
-                return 2;
-            case PixelFormat::D16_UNORM:
-                return 2;
-            case PixelFormat::R8G8B8A8_UNORM:
-            case PixelFormat::R8G8B8A8_UNORM_SRGB:
-            case PixelFormat::B8G8R8A8_UNORM:
-            case PixelFormat::R10G10B10A2_UNORM:
-            case PixelFormat::R11G11B10_FLOAT:
-            case PixelFormat::R16G16_FLOAT:
-            case PixelFormat::R32_FLOAT:
-            case PixelFormat::D24_UNORM_S8_UINT:
-            case PixelFormat::D32_FLOAT:
-                return 4;
-            case PixelFormat::R16G16B16A16_FLOAT:
-            case PixelFormat::R32G32_FLOAT:
-                return 8;
-            case PixelFormat::R32G32B32_FLOAT:
-                return 12;
-            case PixelFormat::R32G32B32A32_FLOAT:
-                return 16;
-            default:
-                return 4;
-            }
-        }
-
-        bool IsCompressedFormat(PixelFormat format)
-        {
-            switch (format)
-            {
-            case PixelFormat::BC1_UNORM:
-            case PixelFormat::BC1_UNORM_SRGB:
-            case PixelFormat::BC2_UNORM:
-            case PixelFormat::BC3_UNORM:
-            case PixelFormat::BC3_UNORM_SRGB:
-            case PixelFormat::BC4_UNORM:
-            case PixelFormat::BC5_UNORM:
-            case PixelFormat::BC6H_UF16:
-            case PixelFormat::BC7_UNORM:
-            case PixelFormat::BC7_UNORM_SRGB:
-                return true;
-            default:
-                return false;
-            }
-        }
-
-        bool IsDepthStencilFormat(PixelFormat format)
-        {
-            switch (format)
-            {
-            case PixelFormat::D16_UNORM:
-            case PixelFormat::D24_UNORM_S8_UINT:
-            case PixelFormat::D32_FLOAT:
-            case PixelFormat::D32_FLOAT_S8_UINT:
-                return true;
-            default:
-                return false;
             }
         }
 

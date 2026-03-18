@@ -12,12 +12,12 @@
 #ifdef SPARK_VULKAN_SUPPORT
 
 #include "VulkanDevice.h"
+#include "../RHIFormatUtils.h"
 #include "../../../Utils/Validate.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <set>
-#include <iostream>
 
 namespace Spark
 {
@@ -36,7 +36,7 @@ namespace Spark
             {
                 if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
                 {
-                    std::cerr << "[Vulkan Validation] " << callbackData->pMessage << std::endl;
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Vulkan Validation: %s", callbackData->pMessage);
                 }
                 return VK_FALSE;
             }
@@ -1023,7 +1023,7 @@ namespace Spark
                 std::unordered_map<uint32_t, uint32_t> bindingStrides;
                 for (const auto& elem : desc.inputLayout.elements)
                 {
-                    uint32_t elemSize = GetVertexFormatSize(elem.format);
+                    uint32_t elemSize = Spark::RHI::GetVertexFormatSize(elem.format);
                     uint32_t elemEnd = elem.byteOffset + elemSize;
                     auto it = bindingStrides.find(elem.inputSlot);
                     if (it == bindingStrides.end() || elemEnd > it->second)

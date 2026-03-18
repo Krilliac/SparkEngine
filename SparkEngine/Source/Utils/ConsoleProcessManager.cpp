@@ -102,6 +102,7 @@ namespace Spark
             },
             "Trigger a test assertion", "assert_test");
 
+#ifndef NDEBUG
         m_commandRegistry->RegisterCommand(
             "crash_test",
             [](const std::vector<std::string>& args) -> std::string
@@ -110,7 +111,8 @@ namespace Spark
                 *nullPtr = 42;
                 return "This should not be reached";
             },
-            "Trigger a test crash", "crash_test");
+            "Trigger a test crash (debug builds only)", "crash_test");
+#endif
 
         m_commandRegistry->RegisterCommand(
             "assert_mode",

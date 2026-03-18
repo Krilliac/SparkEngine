@@ -5,7 +5,8 @@
  * @brief Core MaterialSystem implementation — lifecycle, CRUD, texture loading, utilities
  *
  * Material class implementation is in PBRMaterial.cpp.
- * Console integration methods are in MaterialConsoleOps.cpp.
+ * Console inspection/listing/validation commands are in MaterialConsoleOps.cpp.
+ * Console editing/texture/hot-reload commands are in MaterialConsoleEdit.cpp.
  */
 
 #include "MaterialSystem.h"

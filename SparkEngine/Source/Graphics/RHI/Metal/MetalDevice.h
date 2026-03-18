@@ -521,7 +521,6 @@ namespace Spark
                 MTLVertexFormat ConvertVertexFormat(RHIVertexFormat format) const;
                 MTLResourceOptions ConvertBufferAccess(RHIBufferAccess access) const;
                 MTLTextureType ConvertTextureType(RHITextureType type) const;
-                uint32_t GetFormatSize(PixelFormat format) const;
 
                 ObjCHandle<id<MTLDevice>> m_device;
                 ObjCHandle<id<MTLCommandQueue>> m_commandQueue;

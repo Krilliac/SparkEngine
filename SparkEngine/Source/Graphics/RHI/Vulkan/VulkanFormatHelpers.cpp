@@ -8,6 +8,7 @@
 #ifdef SPARK_VULKAN_SUPPORT
 
 #include "VulkanDevice.h"
+#include "../RHIFormatUtils.h"
 
 namespace Spark
 {
@@ -19,34 +20,6 @@ namespace Spark
             // ============================================================================
             // FORMAT CONVERSION HELPERS
             // ============================================================================
-
-            uint32_t VulkanDevice::GetVertexFormatSize(RHIVertexFormat format) const
-            {
-                switch (format)
-                {
-                case RHIVertexFormat::Float1:
-                case RHIVertexFormat::Int1:
-                case RHIVertexFormat::UInt1:
-                    return 4;
-                case RHIVertexFormat::Float2:
-                case RHIVertexFormat::Int2:
-                case RHIVertexFormat::UInt2:
-                    return 8;
-                case RHIVertexFormat::Float3:
-                case RHIVertexFormat::Int3:
-                case RHIVertexFormat::UInt3:
-                    return 12;
-                case RHIVertexFormat::Float4:
-                case RHIVertexFormat::Int4:
-                case RHIVertexFormat::UInt4:
-                    return 16;
-                case RHIVertexFormat::UNorm8x4:
-                case RHIVertexFormat::SNorm8x4:
-                    return 4;
-                default:
-                    return 4;
-                }
-            }
 
             VkBorderColor VulkanDevice::ConvertBorderColor(const float borderColor[4]) const
             {

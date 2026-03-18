@@ -12,27 +12,21 @@
 #include "Mesh.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
-//#include "Utils/Debug.h"
 #include <tiny_obj_loader.h>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <fstream>
-#include <filesystem> // C++17 for path handling
+#include <filesystem>
 #include <cmath>
-#include <iostream>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
 using namespace DirectX;
 
-Mesh::Mesh()
-{
-    std::wcout << L"[INFO] Mesh constructed." << std::endl;
-}
+Mesh::Mesh() {}
 Mesh::~Mesh()
 {
-    std::wcout << L"[INFO] Mesh destructor called." << std::endl;
     Shutdown();
 }
 
@@ -49,7 +43,6 @@ HRESULT Mesh::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 
 void Mesh::Shutdown()
 {
-    std::wcout << L"[OPERATION] Mesh::Shutdown called." << std::endl;
     if (m_ib)
     {
         m_ib->Release();
@@ -65,7 +58,6 @@ void Mesh::Shutdown()
     m_vertexCount = m_indexCount = 0;
     m_device = nullptr;
     m_context = nullptr;
-    std::wcout << L"[INFO] Mesh shutdown complete." << std::endl;
 }
 
 /// Loads an OBJ mesh from disk using tinyobjloader. Converts wide path to UTF-8,
@@ -80,9 +72,6 @@ bool Mesh::LoadFromFile(const std::wstring& path)
     auto u8path_u8 = std::filesystem::path(path).u8string(); // basic_string<char8_t>
     std::string u8Path(u8path_u8.begin(), u8path_u8.end());  // convert to std::string
 
-    // Debug: report attempt
-    std::wcerr << L"[DEBUG] Attempting to load mesh from: " << path << std::endl;
-
     // Reader config
     tinyobj::ObjReader reader;
     tinyobj::ObjReaderConfig cfg;
@@ -92,28 +81,18 @@ bool Mesh::LoadFromFile(const std::wstring& path)
         cfg.mtl_search_path = mtlSearch; // now a std::string
     }
 
-    // Replace the fallback section in LoadFromFile with this:
     if (!reader.ParseFromFile(u8Path, cfg))
     {
-        // Report tinyobj error
         if (!reader.Error().empty())
         {
-            std::string err = "tinyobj error: " + reader.Error() + "\n";
-            OutputDebugStringA(err.c_str());
-            std::cerr << err;
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "tinyobj error: %s", reader.Error().c_str());
         }
-
-        // Do NOT create placeholder here - let the calling code handle it
-        std::wcerr << L"[DEBUG] Failed to load mesh from file." << std::endl;
-        return false; // Return false so placeholder creation happens in calling code
+        return false;
     }
 
-    // Report tinyobj warnings
     if (!reader.Warning().empty())
     {
-        std::string warn = "tinyobj warning: " + reader.Warning() + "\n";
-        OutputDebugStringA(warn.c_str());
-        std::cerr << warn;
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "tinyobj warning: %s", reader.Warning().c_str());
     }
 
     // Parse geometry
@@ -176,11 +155,10 @@ bool Mesh::LoadFromFile(const std::wstring& path)
     HRESULT hr = CreateBuffers();
     if (FAILED(hr))
     {
-        std::wcerr << L"[ERROR] CreateBuffers failed in LoadFromFile!" << std::endl;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CreateBuffers failed in LoadFromFile");
         return false;
     }
 
-    std::wcout << L"[INFO] Mesh loaded from file: " << path << std::endl;
     return true;
 }
 
@@ -266,20 +244,9 @@ HRESULT Mesh::CreateCube(float size)
     m_vertexCount = static_cast<UINT>(m_vertices.size());
     m_indexCount = static_cast<UINT>(m_indices.size());
 
-    std::wcout << L"[INFO] Cube mesh created. Vertices=" << m_vertexCount << L" Indices=" << m_indexCount << std::endl;
-
     ASSERT_ALWAYS_MSG(m_vertexCount > 0 && m_indexCount > 0, "CreateCube produced empty mesh");
 
-    // Create GPU buffers
-    HRESULT hr = CreateBuffers();
-    if (FAILED(hr))
-    {
-        std::wcerr << L"[ERROR] CreateBuffers failed in CreateCube!" << std::endl;
-        return hr;
-    }
-
-    std::wcout << L"[DEBUG] CreateCube completed successfully" << std::endl;
-    return S_OK;
+    return CreateBuffers();
 }
 
 HRESULT Mesh::CreateTriangle(float size)
@@ -311,8 +278,6 @@ HRESULT Mesh::CreateTriangle(float size)
     // Triangle indices
     indices = {0, 1, 2};
 
-    std::wcout << L"[INFO] Triangle mesh created." << std::endl;
-
     ASSERT_ALWAYS_MSG(!vertices.empty() && !indices.empty(), "CreateTriangle produced empty mesh");
 
     return CreateFromVertices(vertices, indices);
@@ -336,8 +301,6 @@ HRESULT Mesh::CreatePlane(float width, float depth)
     }
 
     ASSERT_ALWAYS_MSG(!md.vertices.empty() && !md.indices.empty(), "CreatePlane produced empty mesh");
-
-    std::wcout << L"[INFO] Plane mesh created." << std::endl;
 
     return CreateFromVertices(md.vertices, md.indices);
 }
@@ -382,8 +345,6 @@ HRESULT Mesh::CreateSphere(float radius, int slices, int stacks)
 
     ASSERT_ALWAYS_MSG(!md.vertices.empty() && !md.indices.empty(), "CreateSphere produced empty mesh");
 
-    std::wcout << L"[INFO] Sphere mesh created." << std::endl;
-
     return CreateFromVertices(md.vertices, md.indices);
 }
 
@@ -426,10 +387,7 @@ HRESULT Mesh::CreatePyramid(float size, float height)
     // Left face (negative X)
     indices.insert(indices.end(), {3, 0, 4});
 
-    std::wcout << L"[INFO] Pyramid base mesh created with " << vertices.size() << L" vertices and " << indices.size()
-               << L" indices." << std::endl;
-
-    // Now compute proper normals for the side faces
+    // Compute proper normals for the side faces
     // For each triangle, calculate face normal and assign to all vertices of that triangle
     for (size_t i = 6; i < indices.size(); i += 3) // Skip base triangles (indices 0-5)
     {
@@ -456,8 +414,6 @@ HRESULT Mesh::CreatePyramid(float size, float height)
 
     ASSERT_ALWAYS_MSG(!vertices.empty() && !indices.empty(), "CreatePyramid produced empty mesh");
 
-    std::wcout << L"[INFO] Pyramid mesh created successfully." << std::endl;
-
     return CreateFromVertices(vertices, indices);
 }
 
@@ -481,13 +437,6 @@ void Mesh::CalculateNormals()
         m_vertices[i0].Normal = nf;
         m_vertices[i1].Normal = nf;
         m_vertices[i2].Normal = nf;
-    }
-
-    // **ONLY log normal calculations occasionally for debugging**
-    static int normalCalcCount = 0;
-    if (++normalCalcCount % 5 == 0)
-    { // Every 5th normal calculation
-        std::wcout << L"[DEBUG] Calculated normals " << normalCalcCount << L" times" << std::endl;
     }
 }
 
@@ -536,13 +485,6 @@ HRESULT Mesh::CreateBuffers()
     if (FAILED(hr))
         return hr;
 
-    // **ONLY log buffer creation occasionally for debugging**
-    static int bufferCreateCount = 0;
-    if (++bufferCreateCount % 10 == 0)
-    { // Every 10th buffer creation
-        std::wcout << L"[DEBUG] Created " << bufferCreateCount << L" mesh buffers" << std::endl;
-    }
-
     return S_OK;
 }
 
@@ -559,14 +501,6 @@ void Mesh::Render(ID3D11DeviceContext* ctx)
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     ctx->DrawIndexed(m_indexCount, 0, 0);
-
-    // **ONLY log rendering statistics occasionally for debugging**
-    static int renderCallCount = 0;
-    if (++renderCallCount % 3600 == 0)
-    { // Every 60 seconds at 60fps
-        std::wcout << L"[DEBUG] Mesh rendered " << renderCallCount << L" times. IndexCount=" << m_indexCount
-                   << std::endl;
-    }
 }
 
 #else // !SPARK_PLATFORM_WINDOWS
@@ -576,7 +510,6 @@ void Mesh::Render(ID3D11DeviceContext* ctx)
 // ============================================================================
 #include "Mesh.h"
 #include "../Utils/Validate.h"
-#include <iostream>
 #include <cstring>
 #include <unordered_map>
 #include <tiny_obj_loader.h>
@@ -856,7 +789,8 @@ bool Mesh::LoadFromFile(const std::wstring& path)
 
     if (ext != ".obj")
     {
-        std::cerr << "[Mesh] LoadFromFile: unsupported format '" << ext << "' on Linux: " << narrowPath << std::endl;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "LoadFromFile: unsupported format '%s' on Linux: %s", ext.c_str(),
+                        narrowPath.c_str());
         return false;
     }
 
@@ -868,9 +802,9 @@ bool Mesh::LoadFromFile(const std::wstring& path)
     bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, narrowPath.c_str());
 
     if (!warn.empty())
-        std::cerr << "[Mesh] tinyobj warning: " << warn << std::endl;
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "tinyobj warning: %s", warn.c_str());
     if (!err.empty())
-        std::cerr << "[Mesh] tinyobj error: " << err << std::endl;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "tinyobj error: %s", err.c_str());
     if (!ret)
         return false;
 
@@ -930,8 +864,8 @@ bool Mesh::LoadFromFile(const std::wstring& path)
     if (attrib.normals.empty())
         CalculateNormals();
 
-    std::cerr << "[Mesh] Loaded OBJ: " << narrowPath << " (" << m_vertices.size() << " vertices, "
-              << m_indices.size() / 3 << " triangles)" << std::endl;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded OBJ: %s (%zu vertices, %zu triangles)", narrowPath.c_str(),
+                   m_vertices.size(), m_indices.size() / 3);
 
     return CreateBuffers() == S_OK;
 }

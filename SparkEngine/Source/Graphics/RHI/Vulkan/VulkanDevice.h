@@ -404,7 +404,6 @@ namespace Spark
                 QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) const;
                 bool CheckDeviceExtensionSupport(VkPhysicalDevice device) const;
                 void QueryCapabilities();
-                uint32_t GetVertexFormatSize(RHIVertexFormat format) const;
 
                 // Format conversion
                 VkFormat ConvertFormat(PixelFormat format) const;

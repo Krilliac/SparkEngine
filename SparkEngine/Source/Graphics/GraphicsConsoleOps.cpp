@@ -507,8 +507,8 @@ void GraphicsEngine::Console_SetRenderScale(float scale)
 #include "GraphicsEngineRHI.h"
 #include "TextureSystem.h"
 #include "AssetPipeline.h"
+#include "../Utils/Validate.h"
 
-#include <iostream>
 #include <sstream>
 #include <chrono>
 
@@ -535,7 +535,7 @@ void GraphicsEngine::Console_SetQuality(const std::string& preset)
     else if (preset == "ultra")
         SetQualityPreset(QualityPreset::Ultra);
     else
-        std::cerr << "[Console] Unknown quality preset: " << preset << std::endl;
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Unknown quality preset: %s", preset.c_str());
 }
 
 void GraphicsEngine::Console_SetRenderPath(const std::string& path)
@@ -551,7 +551,7 @@ void GraphicsEngine::Console_SetRenderPath(const std::string& path)
     else if (path == "clustered")
         SetRenderPath(RenderPath::Clustered);
     else
-        std::cerr << "[Console] Unknown render path: " << path << std::endl;
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Unknown render path: %s", path.c_str());
 }
 
 void GraphicsEngine::Console_EnableFeature(const std::string& feature, bool enabled)
@@ -573,7 +573,7 @@ void GraphicsEngine::Console_EnableFeature(const std::string& feature, bool enab
     else if (feature == "wireframe")
         m_settings.wireframeMode = enabled;
     else
-        std::cerr << "[Console] Unknown feature: " << feature << std::endl;
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Unknown feature: %s", feature.c_str());
 }
 
 void GraphicsEngine::Console_SetSetting(const std::string& setting, float value)
@@ -587,7 +587,7 @@ void GraphicsEngine::Console_SetSetting(const std::string& setting, float value)
     else if (setting == "maxdrawcalls")
         m_settings.maxDrawCalls = static_cast<uint32_t>(value);
     else
-        std::cerr << "[Console] Unknown setting: " << setting << std::endl;
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Unknown setting: %s", setting.c_str());
 }
 
 void GraphicsEngine::Console_ReloadShaders()
@@ -596,7 +596,7 @@ void GraphicsEngine::Console_ReloadShaders()
     if (rhi.initialized)
     {
         rhi.bridge.GetShaderCache().ReloadAll(rhi.bridge.GetDevice());
-        std::cout << "[Console] Shaders reloaded." << std::endl;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shaders reloaded");
     }
 }
 
@@ -710,7 +710,7 @@ void GraphicsEngine::Console_ResetDevice()
     auto savedHwnd = m_hwnd;
     Shutdown();
     Initialize(savedHwnd);
-    std::cout << "[Console] Device reset complete." << std::endl;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Device reset complete");
 }
 
 void GraphicsEngine::Console_ForceGarbageCollection()
@@ -721,7 +721,7 @@ void GraphicsEngine::Console_ForceGarbageCollection()
     {
         rhi.bridge.GetShaderCache().Clear(rhi.bridge.GetDevice());
     }
-    std::cout << "[Console] Garbage collection complete." << std::endl;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Garbage collection complete");
 }
 
 void GraphicsEngine::Console_ApplySettings(const GraphicsSettings& settings)
@@ -739,7 +739,7 @@ void GraphicsEngine::Console_ResetToDefaults()
     m_ssaoSettings = SSAOSettings{};
     m_ssrSettings = SSRSettings{};
     m_volumetricSettings = VolumetricSettings{};
-    std::cout << "[Console] Settings reset to defaults." << std::endl;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Settings reset to defaults");
 }
 
 void GraphicsEngine::Console_RegisterStateCallback(std::function<void()> callback)

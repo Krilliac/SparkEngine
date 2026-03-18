@@ -173,11 +173,15 @@ static void InitDebugSystems()
 
 static void InitGameplaySystems()
 {
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+        return;
+
     // Condition system (stateless evaluator — no frame update needed)
     Spark::Gameplay::ConditionSystem::GetInstance().Initialize();
 
     // Ability system (spells/auras/procs — needs EventBus)
-    auto* eventBus = EngineContext::Get()->GetEventBus();
+    auto* eventBus = ctx->GetEventBus();
     Spark::Gameplay::AbilitySystem::GetInstance().Initialize(eventBus);
 
     // Instance/dungeon manager
@@ -189,7 +193,7 @@ static void InitGameplaySystems()
     // Destruction system — fracturing and debris spawning
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.Initialize();
-    if (auto* world = EngineContext::Get()->GetWorld())
+    if (auto* world = ctx->GetWorld())
     {
         destruction.SetWorld(world);
     }
@@ -197,8 +201,20 @@ static void InitGameplaySystems()
 
 static void UpdateGameplaySystems(float dt)
 {
-    // Get world from context — may be null during startup/shutdown
-    auto* world = EngineContext::Get()->GetWorld();
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+        return;
+
+    // Update gameplay subsystems that don't require the ECS world
+    if (auto* weather = ctx->GetSystem<Spark::WeatherSystem>())
+        weather->Update(dt);
+    if (auto* dialogue = ctx->GetSystem<Spark::DialogueSystem>())
+        dialogue->Update(dt);
+    if (auto* ui = ctx->GetSystem<Spark::UI::UISystem>())
+        ui->Update(dt);
+
+    // ECS-dependent systems require a valid world
+    auto* world = ctx->GetWorld();
     if (!world)
         return;
 
@@ -259,7 +275,11 @@ static void InitConsole()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
     console.Initialize();
-    Spark::ConsoleProcessManager::GetInstance().Initialize();
+
+    if (!Spark::ConsoleProcessManager::GetInstance().Initialize())
+    {
+        console.LogWarning("ConsoleProcessManager failed to initialize — SparkConsole subprocess unavailable");
+    }
     InitDebugSystems();
     InitGameplaySystems();
 }
@@ -273,6 +293,37 @@ static void ShutdownPhysics()
         g_physicsOwned.reset();
     }
 #endif
+}
+
+/**
+ * @brief Common engine shutdown sequence shared by all startup paths.
+ *
+ * Shuts down gameplay/debug systems, console, modules, audio, physics,
+ * and engine context in the correct order.
+ */
+static void ShutdownEngine()
+{
+    ShutdownGameplaySystems();
+    ShutdownDebugSystems();
+    Spark::ConsoleProcessManager::GetInstance().Shutdown();
+
+    if (g_moduleManager)
+    {
+        g_moduleManager->ShutdownAll();
+        g_moduleManager->UnloadAll();
+        g_moduleManager.reset();
+    }
+
+    g_audioEngine.reset();
+    ShutdownPhysics();
+
+    EngineContext::ResetOwned();
+    g_eventBus.reset();
+    g_input.reset();
+    g_graphics.reset();
+    g_timer.reset();
+
+    Spark::SimpleConsole::GetInstance().Shutdown();
 }
 
 // ============================================================================
@@ -469,7 +520,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         g_moduleHotReload->Start();
 
         // SaveSystem
-        Spark::SaveSystem::GetInstance().Initialize("Saves");
+        if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+        }
         EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         console.LogInfo("SaveSystem initialized");
 
@@ -510,26 +564,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
         // Shutdown
         g_moduleHotReload.reset();
-        ShutdownGameplaySystems();
-        ShutdownDebugSystems();
-        Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
-
-        if (g_moduleManager)
-        {
-            g_moduleManager->ShutdownAll();
-            g_moduleManager->UnloadAll();
-            g_moduleManager.reset();
-        }
-
-        ShutdownPhysics();
-
         g_fileCache.reset();
-        EngineContext::ResetOwned();
-        g_eventBus.reset();
-        g_timer.reset();
-
-        console.Shutdown();
+        ShutdownEngine();
 
         FreeConsole();
         return 0;
@@ -634,7 +671,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_moduleHotReload->Start();
 
     // 7. Initialize additional subsystems
-    Spark::SaveSystem::GetInstance().Initialize("Saves");
+    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+    }
     console.LogInfo("SaveSystem initialized");
 
     g_audioEngine = std::make_unique<AudioEngine>();
@@ -711,30 +751,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
     // 10. Shutdown
     g_moduleHotReload.reset();
-    ShutdownGameplaySystems();
-    ShutdownDebugSystems();
-    Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
-
-    if (g_moduleManager)
-    {
-        g_moduleManager->ShutdownAll();
-        g_moduleManager->UnloadAll();
-        g_moduleManager.reset();
-    }
-
-    g_audioEngine.reset();
     g_fileCache.reset();
-
-    ShutdownPhysics();
-
-    EngineContext::ResetOwned();
-    g_eventBus.reset();
-    g_input.reset();
-    g_graphics.reset();
-    g_timer.reset();
-
-    console.Shutdown();
+    ShutdownEngine();
 
     return static_cast<int>(msg.wParam);
 }
@@ -990,7 +1009,10 @@ int main(int argc, char* argv[])
         g_moduleHotReload->WatchAllLoadedModules();
         g_moduleHotReload->Start();
 
-        Spark::SaveSystem::GetInstance().Initialize("Saves");
+        if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+        }
         EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
         EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
         if (g_graphics)
@@ -1024,24 +1046,8 @@ int main(int argc, char* argv[])
         }
 
         g_moduleHotReload.reset();
-        ShutdownGameplaySystems();
-        ShutdownDebugSystems();
-        Spark::ConsoleProcessManager::GetInstance().Shutdown();
         console.LogInfo("Headless server shutting down...");
-
-        if (g_moduleManager)
-        {
-            g_moduleManager->ShutdownAll();
-            g_moduleManager->UnloadAll();
-            g_moduleManager.reset();
-        }
-
-        ShutdownPhysics();
-
-        EngineContext::ResetOwned();
-        g_eventBus.reset();
-        g_timer.reset();
-        console.Shutdown();
+        ShutdownEngine();
 
         std::cout << "Headless server shut down cleanly." << std::endl;
         return 0;
@@ -1167,7 +1173,10 @@ int main(int argc, char* argv[])
     g_moduleHotReload->Start();
 
     // 7. Additional subsystems
-    Spark::SaveSystem::GetInstance().Initialize("Saves");
+    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+    }
     console.LogInfo("SaveSystem initialized");
 
     g_audioEngine = std::make_unique<AudioEngine>();
@@ -1332,28 +1341,8 @@ int main(int argc, char* argv[])
 
     // 10. Shutdown
     g_moduleHotReload.reset();
-    ShutdownGameplaySystems();
-    ShutdownDebugSystems();
-    Spark::ConsoleProcessManager::GetInstance().Shutdown();
     console.LogInfo("Shutting down...");
-
-    if (g_moduleManager)
-    {
-        g_moduleManager->ShutdownAll();
-        g_moduleManager->UnloadAll();
-        g_moduleManager.reset();
-    }
-
-    g_audioEngine.reset();
-    ShutdownPhysics();
-
-    EngineContext::ResetOwned();
-    g_eventBus.reset();
-    g_input.reset();
-    g_graphics.reset();
-    g_timer.reset();
-
-    console.Shutdown();
+    ShutdownEngine();
 
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -1367,7 +1356,9 @@ int main(int argc, char* argv[])
     g_timer = std::make_unique<Timer>();
     g_input = std::make_unique<InputManager>();
     g_graphics = std::make_unique<GraphicsEngine>();
-    g_graphics->Initialize(nullptr);
+    HRESULT hr = g_graphics->Initialize(nullptr);
+    if (FAILED(hr))
+        std::cerr << "Graphics initialization failed (fallback mode)." << std::endl;
 
     EngineContext::SetOwned(
         std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
@@ -1377,7 +1368,10 @@ int main(int argc, char* argv[])
     // Register core subsystems with dependency metadata
     Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
     Spark::EngineSetup::InitializeJobSystem();
-    Spark::SaveSystem::GetInstance().Initialize("Saves");
+    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+    }
     EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
@@ -1426,25 +1420,7 @@ int main(int argc, char* argv[])
     }
 
     g_moduleHotReload.reset();
-    ShutdownGameplaySystems();
-    ShutdownDebugSystems();
-    Spark::ConsoleProcessManager::GetInstance().Shutdown();
-
-    if (g_moduleManager)
-    {
-        g_moduleManager->ShutdownAll();
-        g_moduleManager->UnloadAll();
-        g_moduleManager.reset();
-    }
-
-    ShutdownPhysics();
-
-    EngineContext::ResetOwned();
-    g_graphics.reset();
-    g_input.reset();
-    g_timer.reset();
-    g_eventBus.reset();
-    console.Shutdown();
+    ShutdownEngine();
 #endif // SPARK_SDL2_AVAILABLE
 
     std::cout << "Spark Engine shut down cleanly." << std::endl;

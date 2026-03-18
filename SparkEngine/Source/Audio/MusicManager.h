@@ -164,17 +164,31 @@ namespace Spark::Audio
         int maxRays = 4;                    ///< Number of occlusion rays to cast
     };
 
-    struct OcclusionResult
+    /**
+     * @brief Simplified occlusion result for music system.
+     *
+     * Unlike AudioMixer::OcclusionResult (which has 4 fields), this only carries
+     * the two values the music system needs. Named differently to avoid ODR
+     * conflicts when both AudioMixer.h and MusicManager.h are included.
+     */
+    struct MusicOcclusionResult
     {
         float occlusionFactor; ///< 0 = no occlusion, 1 = fully occluded
         float lowPassCutoff;   ///< Resulting low-pass filter cutoff
     };
 
     // ============================================================================
-    // Reverb Zone
+    // Reverb Zone (Music)
     // ============================================================================
 
-    struct ReverbZone
+    /**
+     * @brief Music-specific reverb zone with inline parameters.
+     *
+     * Unlike AudioMixer::ReverbZone (which references a separate ReverbParameters
+     * struct), this inlines all reverb fields and adds a Type enum for presets.
+     * Named differently to avoid ODR conflicts.
+     */
+    struct MusicReverbZone
     {
         std::string name;
         XMFLOAT3 position;
@@ -241,13 +255,13 @@ namespace Spark::Audio
         CombatIntensity GetCombatIntensity() const { return m_dynamicState.currentIntensity; }
 
         // Reverb zones
-        void AddReverbZone(const ReverbZone& zone);
+        void AddReverbZone(const MusicReverbZone& zone);
         void RemoveReverbZone(const std::string& name);
         void UpdateListenerReverbZone(const XMFLOAT3& listenerPosition);
 
         // Audio occlusion
         void SetOcclusionSettings(const OcclusionSettings& settings);
-        OcclusionResult ComputeOcclusion(const XMFLOAT3& sourcePos, const XMFLOAT3& listenerPos) const;
+        MusicOcclusionResult ComputeOcclusion(const XMFLOAT3& sourcePos, const XMFLOAT3& listenerPos) const;
 
         /// Console integration
         std::string Console_GetStatus() const;
@@ -282,8 +296,8 @@ namespace Spark::Audio
         CombatIntensity m_targetIntensity = CombatIntensity::Exploration;
 
         // Reverb zones
-        std::vector<ReverbZone> m_reverbZones;
-        const ReverbZone* m_activeReverbZone = nullptr;
+        std::vector<MusicReverbZone> m_reverbZones;
+        const MusicReverbZone* m_activeReverbZone = nullptr;
 
         // Occlusion
         OcclusionSettings m_occlusionSettings;

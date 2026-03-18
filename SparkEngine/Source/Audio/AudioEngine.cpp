@@ -115,6 +115,17 @@ void AudioEngine::Shutdown()
     Spark::SimpleConsole::GetInstance().Log("AudioEngine::Shutdown called.", "INFO");
     StopAllSounds();
     m_soundEffects.clear();
+
+    // Destroy all source voices before clearing — XAudio2 requires DestroyVoice()
+    // to be called before the IXAudio2 engine is released
+    for (auto& source : m_audioSources)
+    {
+        if (source && source->Voice)
+        {
+            source->Voice->DestroyVoice();
+            source->Voice = nullptr;
+        }
+    }
     m_audioSources.clear();
     m_availableSources.clear();
 
@@ -773,7 +784,7 @@ void AudioEngine::Update3DAudio()
 
 void AudioEngine::Apply3DAudioToSource(AudioSource* source)
 {
-    if (!source || !source->Voice || !source->Is3D)
+    if (!source || !source->Voice || !source->Is3D || !m_masterVoice)
         return;
 
     // Calculate relative position from listener to source
