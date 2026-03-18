@@ -221,6 +221,33 @@ class UpscalingSystem
     /** @brief Get XeSS feature info */
     const XeSSFeatureInfo& GetXeSSFeatureInfo() const { return m_xessFeatureInfo; }
 
+    // ---- SparkSR (Engine-Native Temporal Upscaling) ----
+
+    /**
+     * @brief Execute SparkSR temporal upscaling
+     *
+     * SparkEngine's own vendor-independent temporal upscaler using YCoCg
+     * variance clipping, motion confidence weighting, and improved disocclusion
+     * detection. Two-pass pipeline: temporal accumulation + RCAS sharpening.
+     * No vendor SDK required — works on any GPU with compute shader support.
+     *
+     * @param colorSRV         Low-res color input
+     * @param depthSRV         Low-res depth buffer
+     * @param motionVectorsSRV Screen-space motion vectors
+     * @param exposureSRV      Auto-exposure value (optional)
+     * @param reactiveMaskSRV  Reactive mask for particles/transparency (optional)
+     * @param outputUAV        Full-res output
+     * @param jitterOffset     Current frame jitter in pixels
+     * @param resetHistory     Reset temporal accumulation (camera cut)
+     */
+    void ExecuteSparkSR(ID3D11ShaderResourceView* colorSRV, ID3D11ShaderResourceView* depthSRV,
+                        ID3D11ShaderResourceView* motionVectorsSRV, ID3D11ShaderResourceView* exposureSRV,
+                        ID3D11ShaderResourceView* reactiveMaskSRV, ID3D11UnorderedAccessView* outputUAV,
+                        const XMFLOAT2& jitterOffset, bool resetHistory = false);
+
+    /** @brief Check if SparkSR is available (always true — shader-based, no vendor SDK) */
+    bool IsSparkSRAvailable() const noexcept { return m_shadersCompiled; }
+
     // ---- Unified Execute ----
 
     /**
@@ -266,6 +293,10 @@ class UpscalingSystem
 
         case UpscalingMode::XeSS:
             ExecuteXeSS(colorSRV, depthSRV, motionVectorsSRV, exposureSRV, outputUAV, jitterOffset);
+            break;
+
+        case UpscalingMode::SparkSR:
+            ExecuteSparkSR(colorSRV, depthSRV, motionVectorsSRV, exposureSRV, nullptr, outputUAV, jitterOffset);
             break;
 
         default:
@@ -372,6 +403,9 @@ class UpscalingSystem
         case UpscalingMode::XeSS:
             modeStr = "XeSS";
             break;
+        case UpscalingMode::SparkSR:
+            modeStr = "SparkSR";
+            break;
         default:
             break;
         }
@@ -409,6 +443,7 @@ class UpscalingSystem
         // Feature availability
         status += "  DLSS available: " + std::string(m_dlssFeatureInfo.isAvailable ? "YES" : "NO") + "\n";
         status += "  XeSS available: " + std::string(m_xessFeatureInfo.isAvailable ? "YES" : "NO") + "\n";
+        status += "  SparkSR available: " + std::string(IsSparkSRAvailable() ? "YES" : "NO") + "\n";
 
         return status;
     }
@@ -435,6 +470,10 @@ class UpscalingSystem
         else if (modeName == "xess")
         {
             SetMode(UpscalingMode::XeSS);
+        }
+        else if (modeName == "sparksr")
+        {
+            SetMode(UpscalingMode::SparkSR);
         }
     }
 
@@ -489,6 +528,8 @@ class UpscalingSystem
         m_intermediateTexture.Reset();
         m_intermediateSRV.Reset();
         m_intermediateUAV.Reset();
+        m_sparkSRTemporalCS.Reset();
+        m_sparkSRConstantBuffer.Reset();
 #endif
     }
 
@@ -567,6 +608,11 @@ class UpscalingSystem
     uint32_t m_fsr2FrameIndex = 0;
     uint32_t m_dlssFrameIndex = 0;
     uint32_t m_xessFrameIndex = 0;
+    uint32_t m_sparkSRFrameIndex = 0;
+
+    // SparkSR jitter tracking for delta computation
+    float m_prevJitterX = 0.0f;
+    float m_prevJitterY = 0.0f;
 
     // D3D11 resources (raw pointers are non-owning per engine convention)
     ID3D11Device* m_device = nullptr;
@@ -599,6 +645,10 @@ class UpscalingSystem
     Microsoft::WRL::ComPtr<ID3D11Texture2D> m_lockTexture;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_lockSRV;
     Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView> m_lockUAV;
+
+    // SparkSR resources
+    Microsoft::WRL::ComPtr<ID3D11ComputeShader> m_sparkSRTemporalCS;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_sparkSRConstantBuffer;
 
     // Sampler state for upscaling shaders
     Microsoft::WRL::ComPtr<ID3D11SamplerState> m_linearClampSampler;

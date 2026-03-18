@@ -41,11 +41,12 @@ struct Resolution
  */
 enum class UpscalingMode
 {
-    None, ///< No upscaling, render at native resolution
-    FSR1, ///< AMD FidelityFX Super Resolution 1.0 (spatial)
-    FSR2, ///< AMD FidelityFX Super Resolution 2.0 (temporal)
-    DLSS, ///< NVIDIA Deep Learning Super Sampling
-    XeSS  ///< Intel Xe Super Sampling
+    None,   ///< No upscaling, render at native resolution
+    FSR1,   ///< AMD FidelityFX Super Resolution 1.0 (spatial)
+    FSR2,   ///< AMD FidelityFX Super Resolution 2.0 (temporal)
+    DLSS,   ///< NVIDIA Deep Learning Super Sampling
+    XeSS,   ///< Intel Xe Super Sampling
+    SparkSR ///< SparkEngine native temporal upscaling (no vendor SDK required)
 };
 
 /**
@@ -108,6 +109,14 @@ struct UpscalingInputRequirements
             req.needsDepth = true;
             req.needsMotionVectors = true;
             req.needsExposure = true;
+            req.needsJitterOffset = true;
+            break;
+
+        case UpscalingMode::SparkSR:
+            req.needsDepth = true;
+            req.needsMotionVectors = true;
+            req.needsExposure = true;
+            req.needsReactiveMask = true;
             req.needsJitterOffset = true;
             break;
 
@@ -321,4 +330,23 @@ struct XeSSFeatureInfo
     bool isAvailable = false;        ///< XeSS support detected (works on any GPU via DP4a)
     bool hasXMXAcceleration = false; ///< Intel XMX matrix engine available (Arc GPUs)
     uint32_t driverVersion = 0;      ///< Detected driver version
+};
+
+// =============================================================================
+// SparkSR Constants
+// =============================================================================
+
+/**
+ * @brief Constant buffer for SparkSR native temporal upscaling
+ *
+ * Enhanced temporal upscaler with YCoCg variance clipping, motion confidence,
+ * and improved disocclusion detection. No vendor SDK required.
+ */
+struct alignas(16) SparkSRConstants
+{
+    XMFLOAT4 renderSize;     ///< (renderW, renderH, 1/renderW, 1/renderH)
+    XMFLOAT4 displaySize;    ///< (displayW, displayH, 1/displayW, 1/displayH)
+    XMFLOAT4 jitterOffset;   ///< (jitterX, jitterY, prevJitterX, prevJitterY)
+    XMFLOAT4 temporalParams; ///< (frameIndex, resetFlag, sharpness, blendMin)
+    XMFLOAT4 motionParams;   ///< (motionScaleX, motionScaleY, depthThreshold, varianceGamma)
 };

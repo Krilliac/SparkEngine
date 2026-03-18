@@ -1,6 +1,6 @@
 /**
  * @file TestUpscalingSystem.cpp
- * @brief Unit tests for the DLSS/FSR/XeSS upscaling system
+ * @brief Unit tests for the DLSS/FSR/XeSS/SparkSR upscaling system
  */
 
 #include "TestFramework.h"
@@ -99,4 +99,93 @@ TEST(Upscaling_SettingsDefaults)
     auto [w, h] = settings.CalculateRenderResolution(1920, 1080);
     EXPECT_EQ(w, 1920u);
     EXPECT_EQ(h, 1080u);
+}
+
+// =============================================================================
+// SparkSR Tests
+// =============================================================================
+
+TEST(SparkSR_InputRequirements)
+{
+    // SparkSR is a temporal upscaler — needs all temporal inputs
+    auto reqs = UpscalingInputRequirements::ForMode(UpscalingMode::SparkSR);
+    EXPECT_TRUE(reqs.needsColor);
+    EXPECT_TRUE(reqs.needsDepth);
+    EXPECT_TRUE(reqs.needsMotionVectors);
+    EXPECT_TRUE(reqs.needsExposure);
+    EXPECT_TRUE(reqs.needsReactiveMask);
+    EXPECT_TRUE(reqs.needsJitterOffset);
+}
+
+TEST(SparkSR_RenderResolutionCalculation)
+{
+    // SparkSR uses the same quality presets as other temporal modes
+    UpscalingSettings settings;
+    settings.mode = UpscalingMode::SparkSR;
+    settings.quality = UpscalingQuality::Quality;
+
+    auto [w, h] = settings.CalculateRenderResolution(1920, 1080);
+
+    // Quality (~67%): 1920x1080 -> ~1286x724
+    EXPECT_GT(w, 1200u);
+    EXPECT_LT(w, 1400u);
+    EXPECT_GT(h, 680u);
+    EXPECT_LT(h, 780u);
+
+    // Performance (~50%): 3840x2160 -> ~1920x1080
+    settings.quality = UpscalingQuality::Performance;
+    auto [w2, h2] = settings.CalculateRenderResolution(3840, 2160);
+    EXPECT_GT(w2, 1800u);
+    EXPECT_LT(w2, 2000u);
+    EXPECT_GT(h2, 1000u);
+    EXPECT_LT(h2, 1150u);
+}
+
+TEST(SparkSR_ConstantsAlignment)
+{
+    // SparkSRConstants must be 16-byte aligned for GPU constant buffers
+    static_assert(alignof(SparkSRConstants) == 16, "SparkSRConstants must be 16-byte aligned");
+    static_assert(sizeof(SparkSRConstants) % 16 == 0, "SparkSRConstants size must be multiple of 16");
+
+    // Verify struct can be populated correctly
+    SparkSRConstants constants{};
+    constants.renderSize = {960.0f, 540.0f, 1.0f / 960.0f, 1.0f / 540.0f};
+    constants.displaySize = {1920.0f, 1080.0f, 1.0f / 1920.0f, 1.0f / 1080.0f};
+    constants.jitterOffset = {0.25f, -0.125f, 0.0f, 0.0f};
+    constants.temporalParams = {0.0f, 0.0f, 0.5f, 0.03f};
+    constants.motionParams = {1.0f, 1.0f, 0.05f, 1.0f};
+
+    EXPECT_NEAR(constants.renderSize.x, 960.0f, 0.01f);
+    EXPECT_NEAR(constants.displaySize.z, 1.0f / 1920.0f, 0.0001f);
+    EXPECT_NEAR(constants.motionParams.w, 1.0f, 0.01f); // varianceGamma
+}
+
+TEST(SparkSR_ModeEnumExists)
+{
+    // SparkSR should be a valid UpscalingMode value distinct from other modes
+    UpscalingSettings settings;
+    settings.mode = UpscalingMode::SparkSR;
+
+    EXPECT_TRUE(settings.mode == UpscalingMode::SparkSR);
+    EXPECT_FALSE(settings.mode == UpscalingMode::None);
+    EXPECT_FALSE(settings.mode == UpscalingMode::FSR1);
+    EXPECT_FALSE(settings.mode == UpscalingMode::FSR2);
+    EXPECT_FALSE(settings.mode == UpscalingMode::DLSS);
+    EXPECT_FALSE(settings.mode == UpscalingMode::XeSS);
+}
+
+TEST(SparkSR_ModeIsTemporalUpscaler)
+{
+    // SparkSR should use the same render scale as other modes
+    UpscalingSettings settings;
+    settings.mode = UpscalingMode::SparkSR;
+    settings.quality = UpscalingQuality::UltraPerformance;
+
+    auto [w, h] = settings.CalculateRenderResolution(1920, 1080);
+
+    // Ultra Performance (~33%): should render significantly below native
+    EXPECT_LT(w, 700u);
+    EXPECT_LT(h, 400u);
+    EXPECT_GT(w, 500u);
+    EXPECT_GT(h, 300u);
 }
