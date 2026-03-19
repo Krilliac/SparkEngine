@@ -1,0 +1,24 @@
+# SparkEngine Third-Party Dependency Versions
+#
+# This file documents the pinned git commits for all submodules.
+# Run `git submodule update --init --recursive` to initialize them.
+#
+# Last updated: 2026-03-19
+
+# ECS Framework
+entt                    9c5281c79a241ec810f999ad9675fa32f51f934f   ThirdParty/ECS/entt
+
+# Physics Engine
+bullet3                 63c4d67e337017f9d8b298c900e9aabdb69296e7   ThirdParty/Physics/bullet3
+
+# Editor UI
+imgui (docking branch)  60d7fb207eeb46d6363dd4bde10b35991bae0ce7   ThirdParty/UI/imgui
+
+# Scripting
+angelscript-mirror      c81df254037524b18cd41a57805cfec76acd05bf   ThirdParty/Scripting/angelscript-mirror
+
+# AI / Navigation
+recastnavigation        9f4ce64458dfae86e1239c525ddc219c4e9e06f1   ThirdParty/AI/recastnavigation
+
+# Compression
+miniz                   4b9fcf1df525114484be49f3216169b061c07ac6   ThirdParty/Utils/miniz
