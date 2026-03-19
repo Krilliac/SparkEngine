@@ -62,12 +62,19 @@
 
 ### Advanced
 - [Threading Model](Threading-Model)
+- [Memory Management Patterns](Memory-Management-Patterns)
 - [Build System and CMake Modules](Build-System-and-CMake-Modules)
 - [Profiler and Debugging](Profiler-and-Debugging)
+- [Performance Profiling Guide](Performance-Profiling-Guide)
 - [Utilities](Utilities)
 - [Testing](Testing)
 - [Troubleshooting](Troubleshooting)
 - [Contributing](Contributing)
+
+### Specifications
+- [Networking Wire Format](Networking-Wire-Format)
+- [Asset Format Specifications](Asset-Format-Specifications)
+- [Editor Plugin Development](Editor-Plugin-Development)
 
 ### Reference
 - [API Docs (Doxygen)](../docs/README.md)
