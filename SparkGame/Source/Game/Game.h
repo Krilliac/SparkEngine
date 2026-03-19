@@ -25,6 +25,7 @@
 #include "HUDSystem.h"
 #include "InventorySystem.h"
 #include "QuestSystem.h"
+#include "Enemy.h"
 #include "Engine/Networking/NetworkManager.h"
 #include <memory>
 #include <vector>
@@ -374,6 +375,21 @@ class SPARK_GAME_API Game
     bool PlayerExitVehicle();
 
     /**
+     * @brief Spawn an enemy at a position
+     * @param type Enemy archetype
+     * @param x X coordinate
+     * @param y Y coordinate
+     * @param z Z coordinate
+     * @return Pointer to spawned enemy (null on failure)
+     */
+    Enemy* SpawnEnemy(EnemyType type, float x, float y, float z);
+
+    /**
+     * @brief Get the number of alive enemies
+     */
+    size_t GetAliveEnemyCount() const;
+
+    /**
      * @brief Get current scene object count
      * @return Number of active game objects in scene
      */
@@ -528,6 +544,9 @@ class SPARK_GAME_API Game
     /// @brief Initialize respawn points and spawn vehicles
     void InitializeRespawnAndVehicles();
 
+    /// @brief Spawn enemy waves in the arena
+    void InitializeEnemies();
+
     // Engine-side pointers (not owned)
     GraphicsEngine* m_graphics{nullptr}; ///< Reference to graphics engine
     InputManager* m_input{nullptr};      ///< Reference to input manager
@@ -561,6 +580,7 @@ class SPARK_GAME_API Game
 
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene
+    std::vector<Enemy*> m_enemies;                          ///< Non-owning refs to enemies in m_gameObjects
 
     bool m_isPaused{false};   ///< Current pause state of the game
     bool m_isShutDown{false}; ///< Guards against double-shutdown

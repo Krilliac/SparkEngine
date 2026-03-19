@@ -776,6 +776,7 @@ cmake --build build --config Release
 | `AIEditorPanel` | `SparkEditor/Source/Panels/AIEditorPanel.h` |
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
+| `CinematicSequencerPanel` | `SparkEditor/Source/Panels/CinematicSequencerPanel.h` |
 | `ConsolePanel` | `SparkEditor/Source/Panels/ConsolePanel.h` |
 | `DebugVisualizerPanel` | `SparkEditor/Source/Panels/DebugVisualizerPanel.h` |
 | `DedicatedServerPanel` | `SparkEditor/Source/Panels/DedicatedServerPanel.h` |
@@ -794,6 +795,7 @@ cmake --build build --config Release
 | `PostProcessingPanel` | `SparkEditor/Source/Panels/PostProcessingPanel.h` |
 | `PrefabEditorPanel` | `SparkEditor/Source/Panels/PrefabEditorPanel.h` |
 | `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |
+| `ProjectSettingsPanel` | `SparkEditor/Source/Panels/ProjectSettingsPanel.h` |
 | `SaveSystemPanel` | `SparkEditor/Source/Panels/SaveSystemPanel.h` |
 | `SceneStatisticsPanel` | `SparkEditor/Source/Panels/SceneStatisticsPanel.h` |
 | `SceneViewPanel` | `SparkEditor/Source/Panels/SceneViewPanel.h` |

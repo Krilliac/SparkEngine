@@ -112,6 +112,7 @@ endif()
 option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON)
 option(ENABLE_RECAST "Enable Recast/Detour navmesh generation (improved voxel-based builder)" ON)
 option(BUILD_TESTS "Build test suite" ON)
+option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Bullet3, ImGui, EnTT)" OFF)
 
 # Editor available on Windows (Win32+DX11) and Linux (SDL2+OpenGL3)
 option(ENABLE_EDITOR "Enable editor features" ON)
@@ -1139,6 +1140,22 @@ if(_SPARK_MISSING_COUNT GREATER 0)
         "    # Linux: sudo apt install libsdl2-dev    (for SDL2)\n"
         "  See README.md 'Dependencies' section for details."
     )
+
+    # Strict mode: fail the build if critical deps are missing
+    if(SPARK_STRICT_DEPS)
+        if(NOT BULLET_FOUND)
+            message(FATAL_ERROR "SPARK_STRICT_DEPS: Bullet Physics is required but not found. "
+                "Run: git submodule update --init ThirdParty/Physics/bullet3")
+        endif()
+        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.cpp")
+            message(FATAL_ERROR "SPARK_STRICT_DEPS: Dear ImGui is required but not found. "
+                "Run: git submodule update --init ThirdParty/UI/imgui")
+        endif()
+        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include/entt/entt.hpp")
+            message(FATAL_ERROR "SPARK_STRICT_DEPS: EnTT is required but not found. "
+                "Run: git submodule update --init ThirdParty/ECS/entt")
+        endif()
+    endif()
 else()
     message(STATUS "")
     message(STATUS "All third-party dependencies found. Full engine functionality available.")
