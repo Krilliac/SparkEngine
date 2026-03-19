@@ -15,7 +15,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Comprehensive bloat audit (P0 resolved) | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-18 |
 | 30 orphaned headers (27 deleted, 3 intentional) | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | **Resolved** | 2026-03-16 |
 | Duplicate systems (3/3 ODR risks fixed) | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
-| 96 tests (11 new: 9 TrinityCore + ConsoleRBAC + NetworkIntegration) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-18 |
+| 97 tests (12 new: 9 TrinityCore + ConsoleRBAC + NetworkIntegration) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-19 |
 | CMake build (curl removed, dead options gone) | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
 | 27 singletons (0 orphaned, 22 wired, 5 passive caches) | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | **Resolved** | 2026-03-18 |
 | 66 oversized functions, 7 private-method violations | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
@@ -25,7 +25,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Editor: 24 working, all panels resolved | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | **Resolved** | 2026-03-16 |
 | SparkGame: 75% functional FPS, no AI enemies | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
 | SDK: unique_ptr fixed, ECS exposed, IGameModule gap | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
-| Docs: 57 wiki pages, 245/246 Doxygen, 8 critical gaps | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-18 |
+| Docs: 58 wiki pages, 245/246 Doxygen, 5 critical gaps remaining | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-19 |
 | ThirdParty: 6 uninitialized submodules, curl removed | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-17 |
 
 ## Quick Reference by Topic

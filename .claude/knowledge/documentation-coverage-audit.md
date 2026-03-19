@@ -7,7 +7,7 @@
 
 ## Description
 
-53 wiki pages (29,583 lines), 245/246 headers with Doxygen comments, near-complete API coverage. However, critical reference docs are missing: threading model, memory management rules, networking protocol spec, asset format specs. 19 editor subsystems have no dedicated wiki page.
+56 wiki pages (32K+ lines), 245/246 headers with Doxygen comments, near-complete API coverage. Threading model documented, SparkEditor.md expanded with all 32 panels, API docs generated. Remaining gaps: networking protocol spec, asset format specs, memory management rules.
 
 ---
 
@@ -42,7 +42,7 @@ All 25+ engine subsystems have wiki pages. No stale documentation detected — a
 - **245/246 headers** have `@file` + `@brief` (99.6%)
 - **Missing**: UISystem.h (1 file, zero Doxygen)
 - **Quality**: All sampled headers have comprehensive `@param`, `@return`, `@code` examples
-- **Auto-generated API docs**: Infrastructure exists (`generate-api-docs.sh`) but `docs/api/` not yet generated
+- **Auto-generated API docs**: `docs/api/` generated (370 pages from 382 headers)
 
 ---
 
@@ -64,14 +64,14 @@ Verified: All listed directories exist, no critical omissions. Architecture sect
 
 | Priority | Gap | Impact |
 |----------|-----|--------|
-| 1 | **Threading model & concurrency rules** | Deadlocks, race conditions |
+| ~~1~~ | ~~**Threading model & concurrency rules**~~ | **DONE** wiki/Threading-Model.md |
 | 2 | **Networking protocol wire format** | Can't build external clients |
 | 3 | **Asset format specifications** | Can't build external tools |
 | 4 | **Memory management patterns** | Leaks, fragmentation |
 | 5 | **Plugin ABI stability & versioning** | Breaking module changes |
 | 6 | **Shader compilation constraints** | Cross-platform failures |
 | 7 | **Save system binary layout** | Version migration unclear |
-| 8 | **19 editor subsystem pages** | Can't extend editor |
+| ~~8~~ | ~~**19 editor subsystem pages**~~ | **DONE** 32 panels documented in SparkEditor.md |
 | 9 | **Physics solver tuning guide** | Instability in complex scenes |
 | 10 | **AI behavior tree serialization** | Can't author trees externally |
 
@@ -81,7 +81,7 @@ Verified: All listed directories exist, no critical omissions. Architecture sect
 
 Animation, AssetBrowser, AssetPipeline (editor), Gizmos, Integration, LevelStreaming, Lighting, MaterialEditor, Panels base, Prefabs, Profiler (editor UI), Reflection, SceneSystem (editor), Search, Terrain (editor tools), UndoRedo, VersionControl, VisualScripting (editor UI)
 
-Only `SparkEditor.md` (504 lines) covers the editor — all 19 subsystems are undocumented.
+SparkEditor.md now covers all 32 panels with full descriptions, sources, and line counts.
 
 ---
 
@@ -98,7 +98,7 @@ docs/
     └── NEW_FEATURES_GAP_ANALYSIS.md (113 lines)
 ```
 
-Missing: `docs/api/` (auto-generated), `FEATURE_ROADMAP.md`, `PROJECT_STATUS.md` (referenced in README but not found).
+Missing: `FEATURE_ROADMAP.md`, `PROJECT_STATUS.md` (referenced in README but not found). `docs/api/` now generated.
 
 ---
 
