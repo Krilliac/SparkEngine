@@ -260,6 +260,20 @@ namespace SparkEditor
         void CreatePanels();
         void InitializeCommandPalette();
         void HandleKeyboardShortcuts();
+
+        // Initialize() helpers — split for readability
+        void InitializeManagers(const EditorConfig& config);
+        void WireCallbacks();
+
+        // InitializeCommandPalette() helpers — grouped by domain
+        void RegisterPanelToggleCommands();
+        void RegisterEditCommands();
+        void RegisterSceneCommands();
+        void RegisterToolCommands();
+
+        // Update() helpers — separate input from tick logic
+        void ProcessInputShortcuts();
+        void UpdateNotifications(float deltaTime);
     };
 
 } // namespace SparkEditor
