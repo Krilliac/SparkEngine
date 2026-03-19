@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*100 test files, 1295+ test cases*
+*102 test files, 1329+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -479,6 +479,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestFrameAllocator` | 8 |
 | `TestFrustumCulling` | 11 |
 | `TestGameMode` | 5 |
+| `TestGraphicsEngine` | 10 |
 | `TestHash` | 18 |
 | `TestHybridRT` | 20 |
 | `TestInputBindings` | 5 |
@@ -513,6 +514,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestRecastIntegration` | 6 |
 | `TestReflection` | 7 |
 | `TestReliableChannel` | 9 |
+| `TestRenderGraph` | 24 |
 | `TestReplicationFields` | 15 |
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
