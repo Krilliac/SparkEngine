@@ -37,20 +37,20 @@ namespace Spark
  */
     struct DamageZone
     {
-        std::string name;
-        DamageZoneType type = DamageZoneType::LAVA;
+        std::string name;                           ///< Human-readable zone name (for editor and kill feed).
+        DamageZoneType type = DamageZoneType::LAVA; ///< Hazard type (affects VFX, SFX, and damage behavior).
 
         // Shape (axis-aligned box)
-        XMFLOAT3 center = {0, 0, 0};
-        XMFLOAT3 halfExtents = {5, 1, 5};
+        XMFLOAT3 center = {0, 0, 0};      ///< World-space center of the damage volume.
+        XMFLOAT3 halfExtents = {5, 1, 5}; ///< Half-dimensions of the AABB (meters).
 
         // Damage parameters
-        float damagePerSecond = 25.0f;
-        float tickInterval = 0.5f; ///< How often damage is applied
-        bool instantKill = false;  ///< True = kill immediately on contact
-        float slowFactor = 0.5f;   ///< Speed multiplier while in zone
+        float damagePerSecond = 25.0f; ///< Damage dealt per second while inside the zone.
+        float tickInterval = 0.5f;     ///< How often damage is applied (seconds between ticks).
+        bool instantKill = false;      ///< True = kill immediately on contact (e.g. death pit).
+        float slowFactor = 0.5f;       ///< Speed multiplier while in zone (1.0 = no slowdown).
 
-        bool isActive = true;
+        bool isActive = true; ///< Runtime toggle (false = zone is dormant).
 
         /**
      * @brief Check if a point is inside this zone
@@ -63,12 +63,12 @@ namespace Spark
  */
     struct RespawnPoint
     {
-        std::string name;
-        XMFLOAT3 position = {0, 2, 0};
-        XMFLOAT3 rotation = {0, 0, 0}; ///< Camera look direction on spawn
-        bool isActive = true;
-        int teamID = -1;  ///< -1 = any team, 0+ = specific team
-        int priority = 0; ///< Higher = preferred spawn point
+        std::string name;              ///< Spawn point name (for editor labeling and selection).
+        XMFLOAT3 position = {0, 2, 0}; ///< World-space spawn position.
+        XMFLOAT3 rotation = {0, 0, 0}; ///< Initial camera euler angles (pitch, yaw, roll) on spawn.
+        bool isActive = true;          ///< Whether this spawn point is currently usable.
+        int teamID = -1;               ///< Team restriction: -1 = any team, 0+ = specific team only.
+        int priority = 0;              ///< Selection weight: higher = preferred by the spawn algorithm.
     };
 
     /**
@@ -76,12 +76,12 @@ namespace Spark
  */
     struct KillRecord
     {
-        std::string killerName;
-        std::string victimName;
-        std::string weaponName;
-        bool headshot = false;
-        float distance = 0.0f;
-        std::chrono::steady_clock::time_point timestamp;
+        std::string killerName; ///< Display name of the player who got the kill.
+        std::string victimName; ///< Display name of the player who was killed.
+        std::string weaponName; ///< Weapon or cause of death (e.g. "AK-47", "Fall Damage").
+        bool headshot = false;  ///< Whether this was a headshot kill (for bonus scoring).
+        float distance = 0.0f;  ///< Distance between killer and victim at time of kill (meters).
+        std::chrono::steady_clock::time_point timestamp; ///< When the kill occurred (for kill feed expiry).
     };
 
     /**
@@ -89,18 +89,18 @@ namespace Spark
  */
     struct KillTrackerScore
     {
-        int kills = 0;
-        int deaths = 0;
-        int assists = 0;
-        int score = 0;
-        int longestStreak = 0;
-        int currentStreak = 0;
-        float totalDamageDealt = 0.0f;
-        float totalDamageReceived = 0.0f;
-        float totalHealingDone = 0.0f;
-        int vehicleKills = 0;
-        int vehiclesDestroyed = 0;
-        int objectivesCompleted = 0;
+        int kills = 0;                    ///< Total kills this match.
+        int deaths = 0;                   ///< Total deaths this match.
+        int assists = 0;                  ///< Damage-assist kills (dealt damage but didn't finish).
+        int score = 0;                    ///< Composite score (kills, objectives, bonuses).
+        int longestStreak = 0;            ///< Best killstreak achieved this match.
+        int currentStreak = 0;            ///< Active killstreak (reset on death).
+        float totalDamageDealt = 0.0f;    ///< Cumulative damage dealt to other players.
+        float totalDamageReceived = 0.0f; ///< Cumulative damage taken from all sources.
+        float totalHealingDone = 0.0f;    ///< Cumulative healing applied to self or teammates.
+        int vehicleKills = 0;             ///< Kills scored while in a vehicle.
+        int vehiclesDestroyed = 0;        ///< Enemy vehicles destroyed.
+        int objectivesCompleted = 0;      ///< Objective captures, flag returns, etc.
 
         float GetKDRatio() const { return deaths > 0 ? (float)kills / deaths : (float)kills; }
     };

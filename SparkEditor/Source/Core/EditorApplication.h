@@ -35,14 +35,14 @@ namespace SparkEditor
  */
     struct EditorConfig
     {
-        std::string projectPath = ".";
-        std::string layoutDirectory = "Layouts";
-        std::string logDirectory = "Logs";
-        bool enableLogging = true;
-        bool startMaximized = true;
-        float autoSaveInterval = 30.0f;
-        int windowWidth = 1600;
-        int windowHeight = 900;
+        std::string projectPath = ".";           ///< Root directory of the project being edited.
+        std::string layoutDirectory = "Layouts"; ///< Directory for saved ImGui layout files (.ini).
+        std::string logDirectory = "Logs";       ///< Directory for editor log output files.
+        bool enableLogging = true;               ///< Whether to write log files to disk.
+        bool startMaximized = true;              ///< Whether to maximize the window on startup.
+        float autoSaveInterval = 30.0f;          ///< Seconds between auto-save of the current scene.
+        int windowWidth = 1600;                  ///< Initial window width (pixels).
+        int windowHeight = 900;                  ///< Initial window height (pixels).
     };
 
     /**
@@ -56,8 +56,8 @@ namespace SparkEditor
      */
         struct PerformanceMetrics
         {
-            float fps = 0.0f;
-            float frameTime = 0.0f;
+            float fps = 0.0f;       ///< Frames per second (smoothed over recent frames).
+            float frameTime = 0.0f; ///< Last frame duration in milliseconds.
         };
 
       public:
