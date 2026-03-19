@@ -1,4 +1,4 @@
-// TestFiveEngineFeatures.cpp — Tests for all 20 five-engine-inspired systems
+// TestExtendedSystems.cpp — Tests for networking, rendering, core, and utility subsystems
 // Standalone reimplementations to avoid platform-specific header dependencies
 
 #include "TestFramework.h"

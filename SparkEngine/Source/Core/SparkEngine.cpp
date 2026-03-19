@@ -75,7 +75,7 @@
 #include "Graphics/SkyAtmosphere.h"
 #include "Graphics/WaterRenderer.h"
 #include "Graphics/OcclusionCulling.h"
-// Five-engine-inspired systems (2026-03-19)
+// Extended engine systems
 #include "FixedTimestepAccumulator.h"
 #include "PluginRegistry.h"
 #include "ResourceVersionTracker.h"
@@ -239,7 +239,7 @@ static void InitGameplaySystems()
         destruction.SetWorld(world);
     }
 
-    // CryEngine-inspired systems (2026-03-19)
+    // AI, environment, and world systems
     Spark::AI::TacticalPointSystem::GetInstance().Initialize();
     Spark::AI::CoverSystem::GetInstance().Initialize();
     Spark::AI::FormationSystem::GetInstance().Initialize();
@@ -253,7 +253,7 @@ static void InitGameplaySystems()
     Spark::Graphics::WaterRenderer::GetInstance().Initialize();
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Initialize();
 
-    // Five-engine-inspired systems (2026-03-19)
+    // Extended engine systems
     Spark::FixedTimestepAccumulator::GetInstance().Initialize();
     Spark::TweenSystem::GetInstance().Initialize();
     Spark::VirtualFileSystem::GetInstance().Initialize();
@@ -319,14 +319,14 @@ static void UpdateGameplaySystems(float dt)
     static Spark::ECS::TerrainSystem s_terrainSystem;
     s_terrainSystem.Update(*world, dt);
 
-    // CryEngine-inspired systems (2026-03-19)
+    // AI, environment, and world systems
     Spark::AI::FormationSystem::GetInstance().Update(dt);
     Spark::AI::GroupAISystem::GetInstance().Update(dt);
     Spark::Dialogue::DynamicResponseSystem::GetInstance().Update(dt);
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt);
     Spark::Graphics::WaterRenderer::GetInstance().Update(dt);
 
-    // Five-engine-inspired systems (2026-03-19)
+    // Extended engine systems
     Spark::TweenSystem::GetInstance().Update(dt);
     Spark::UI::UIFactory::GetInstance().UpdateAllBindings();
     Spark::PluginRegistry::UpdateAll(dt);
@@ -337,7 +337,7 @@ static void UpdateGameplaySystems(float dt)
 
 static void ShutdownGameplaySystems()
 {
-    // CryEngine-inspired systems (reverse order)
+    // AI, environment, and world systems (reverse order)
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Shutdown();
     Spark::Graphics::WaterRenderer::GetInstance().Shutdown();
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Shutdown();
@@ -351,7 +351,7 @@ static void ShutdownGameplaySystems()
     Spark::AI::CoverSystem::GetInstance().Shutdown();
     Spark::AI::TacticalPointSystem::GetInstance().Shutdown();
 
-    // Five-engine-inspired systems (reverse order)
+    // Extended engine systems (reverse order)
     Spark::PluginRegistry::ShutdownAll();
 #ifndef NDEBUG
     Spark::ProfileProperties::GetInstance().Shutdown();
