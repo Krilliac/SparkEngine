@@ -216,38 +216,39 @@ namespace Spark::Physics2D
     // Physics body definition
     // =========================================================================
 
+    /// @brief A 2D rigid body with shape, mass, and simulation properties.
     struct PhysicsBody2D
     {
-        uint32_t entityID = 0;
-        Vec2 position;
-        float rotation = 0.0f;
-        Vec2 velocity;
-        float angularVelocity = 0.0f;
-        float mass = 1.0f;
-        float invMass = 1.0f;
-        float inertia = 1.0f;
-        float invInertia = 1.0f;
-        float friction = 0.3f;
-        float restitution = 0.0f;
-        float linearDamping = 0.0f;
-        float angularDamping = 0.05f;
-        float gravityScale = 1.0f;
-        bool isStatic = false;
-        bool isKinematic = false;
-        bool fixedRotation = false;
-        bool isBullet = false;
-        bool isTrigger = false;
-        AABB2D aabb;
-        uint32_t layerMask = 0xFFFFFFFF;
+        uint32_t entityID = 0;           ///< ECS entity this body belongs to.
+        Vec2 position;                   ///< World-space center position.
+        float rotation = 0.0f;           ///< Rotation angle (radians).
+        Vec2 velocity;                   ///< Linear velocity (units/s).
+        float angularVelocity = 0.0f;    ///< Angular velocity (radians/s).
+        float mass = 1.0f;               ///< Mass (kg). 0 for static bodies.
+        float invMass = 1.0f;            ///< Precomputed 1/mass (0 for static).
+        float inertia = 1.0f;            ///< Rotational inertia.
+        float invInertia = 1.0f;         ///< Precomputed 1/inertia.
+        float friction = 0.3f;           ///< Surface friction coefficient [0, 1].
+        float restitution = 0.0f;        ///< Bounciness [0, 1] (0 = no bounce).
+        float linearDamping = 0.0f;      ///< Linear velocity decay per second.
+        float angularDamping = 0.05f;    ///< Angular velocity decay per second.
+        float gravityScale = 1.0f;       ///< Gravity multiplier (0 = no gravity).
+        bool isStatic = false;           ///< True for immovable bodies (walls, floors).
+        bool isKinematic = false;        ///< True for script-driven bodies (platforms).
+        bool fixedRotation = false;      ///< Prevent rotation from physics forces.
+        bool isBullet = false;           ///< Use CCD to prevent tunneling.
+        bool isTrigger = false;          ///< Detect overlaps without physical response.
+        AABB2D aabb;                     ///< Broadphase bounding box (updated each step).
+        uint32_t layerMask = 0xFFFFFFFF; ///< Collision layer bitmask.
 
         enum class ShapeType
         {
-            Box,
-            Circle
+            Box,   ///< Axis-aligned box defined by halfExtents.
+            Circle ///< Circle defined by radius.
         };
-        ShapeType shapeType = ShapeType::Box;
-        Vec2 halfExtents{0.5f, 0.5f};
-        float radius = 0.5f;
+        ShapeType shapeType = ShapeType::Box; ///< Collision shape type.
+        Vec2 halfExtents{0.5f, 0.5f};         ///< Half-size for Box shapes.
+        float radius = 0.5f;                  ///< Radius for Circle shapes.
     };
 
 } // namespace Spark::Physics2D
