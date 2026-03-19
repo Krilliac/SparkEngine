@@ -1,0 +1,247 @@
+/**
+ * @file DynamicResponseSystem.cpp
+ * @brief Implementation of the CryEngine-inspired dynamic response system
+ */
+
+#include "DynamicResponseSystem.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace Spark::Dialogue
+{
+
+    // =========================================================================
+    // Lifecycle
+    // =========================================================================
+
+    void DynamicResponseSystem::Initialize()
+    {
+        m_variables.clear();
+        m_rules.clear();
+        m_pendingActions.clear();
+        m_gameTime = 0.0f;
+        m_initialized = true;
+    }
+
+    void DynamicResponseSystem::Shutdown()
+    {
+        m_variables.clear();
+        m_rules.clear();
+        m_pendingActions.clear();
+        m_initialized = false;
+    }
+
+    // =========================================================================
+    // Variables
+    // =========================================================================
+
+    void DynamicResponseSystem::SetVariable(const std::string& name, float value)
+    {
+        m_variables[name] = value;
+    }
+
+    float DynamicResponseSystem::GetVariable(const std::string& name) const
+    {
+        auto it = m_variables.find(name);
+        return (it != m_variables.end()) ? it->second : 0.0f;
+    }
+
+    // =========================================================================
+    // Rules
+    // =========================================================================
+
+    void DynamicResponseSystem::RegisterRule(const ResponseRule& rule)
+    {
+        if (!m_initialized)
+        {
+            return;
+        }
+        m_rules.push_back(rule);
+    }
+
+    // =========================================================================
+    // Signal Processing
+    // =========================================================================
+
+    void DynamicResponseSystem::SendSignal(const std::string& signalName, uint32_t senderEntity)
+    {
+        if (!m_initialized)
+        {
+            return;
+        }
+
+        // Find all rules matching this signal, pick highest priority that passes conditions
+        ResponseRule* bestRule = nullptr;
+
+        for (auto& rule : m_rules)
+        {
+            if (rule.signalName != signalName)
+            {
+                continue;
+            }
+
+            // Check cooldown
+            if (rule.cooldown > 0.0f && (m_gameTime - rule.lastTriggeredTime) < rule.cooldown)
+            {
+                continue;
+            }
+
+            // Check conditions
+            if (!EvaluateConditions(rule.conditions))
+            {
+                continue;
+            }
+
+            // Pick highest priority
+            if (bestRule == nullptr || rule.priority > bestRule->priority)
+            {
+                bestRule = &rule;
+            }
+        }
+
+        if (bestRule == nullptr)
+        {
+            return;
+        }
+
+        // Mark the rule as triggered
+        bestRule->lastTriggeredTime = m_gameTime;
+
+        // Execute actions (Wait actions queue remaining actions as pending)
+        for (size_t i = 0; i < bestRule->actions.size(); ++i)
+        {
+            const auto& action = bestRule->actions[i];
+
+            if (action.type == ResponseAction::Type::Wait)
+            {
+                // Queue all remaining actions with accumulated delay
+                float delay = action.floatParam;
+                for (size_t j = i + 1; j < bestRule->actions.size(); ++j)
+                {
+                    const auto& deferred = bestRule->actions[j];
+                    if (deferred.type == ResponseAction::Type::Wait)
+                    {
+                        delay += deferred.floatParam;
+                    }
+                    else
+                    {
+                        PendingAction pending;
+                        pending.action = deferred;
+                        pending.senderEntity = senderEntity;
+                        pending.remainingDelay = delay;
+                        m_pendingActions.push_back(std::move(pending));
+                    }
+                }
+                break; // All remaining actions are now pending
+            }
+
+            ExecuteAction(action, senderEntity);
+        }
+    }
+
+    // =========================================================================
+    // Update
+    // =========================================================================
+
+    void DynamicResponseSystem::Update(float deltaTime)
+    {
+        if (!m_initialized)
+        {
+            return;
+        }
+
+        m_gameTime += deltaTime;
+
+        // Process pending (delayed) actions
+        auto it = m_pendingActions.begin();
+        while (it != m_pendingActions.end())
+        {
+            it->remainingDelay -= deltaTime;
+            if (it->remainingDelay <= 0.0f)
+            {
+                ExecuteAction(it->action, it->senderEntity);
+                it = m_pendingActions.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    // =========================================================================
+    // Condition Evaluation
+    // =========================================================================
+
+    bool DynamicResponseSystem::EvaluateConditions(const std::vector<ResponseCondition>& conditions) const
+    {
+        for (const auto& cond : conditions)
+        {
+            float varValue = GetVariable(cond.variableName);
+
+            bool passes = false;
+            switch (cond.op)
+            {
+            case ResponseCondition::Op::Equal:
+                passes = (std::fabs(varValue - cond.value) < 0.0001f);
+                break;
+            case ResponseCondition::Op::NotEqual:
+                passes = (std::fabs(varValue - cond.value) >= 0.0001f);
+                break;
+            case ResponseCondition::Op::GreaterThan:
+                passes = (varValue > cond.value);
+                break;
+            case ResponseCondition::Op::LessThan:
+                passes = (varValue < cond.value);
+                break;
+            case ResponseCondition::Op::InRange:
+                passes = (varValue >= cond.value && varValue <= cond.rangeMax);
+                break;
+            }
+
+            if (!passes)
+            {
+                return false;
+            }
+        }
+
+        return true; // All conditions passed (empty conditions = always true)
+    }
+
+    // =========================================================================
+    // Action Execution
+    // =========================================================================
+
+    void DynamicResponseSystem::ExecuteAction(const ResponseAction& action, uint32_t senderEntity)
+    {
+        switch (action.type)
+        {
+        case ResponseAction::Type::Speak:
+            // In a full integration, this would send the text to the UI system
+            // or audio system for playback. For now, the action is acknowledged.
+            break;
+
+        case ResponseAction::Type::SetVariable:
+            SetVariable(action.stringParam, action.floatParam);
+            break;
+
+        case ResponseAction::Type::SendSignal:
+            // Recursive signal — triggers another round of rule evaluation
+            SendSignal(action.stringParam, senderEntity);
+            break;
+
+        case ResponseAction::Type::Wait:
+            // Wait is handled in SendSignal's action loop; should not reach here
+            break;
+
+        case ResponseAction::Type::Custom:
+            if (action.customAction)
+            {
+                action.customAction(senderEntity);
+            }
+            break;
+        }
+    }
+
+} // namespace Spark::Dialogue

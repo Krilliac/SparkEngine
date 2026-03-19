@@ -63,6 +63,18 @@
 #include "Engine/ECS/Systems/TerrainSystem.h"
 #include "Graphics/TerrainRenderer.h"
 #include "Engine/Networking/ClientPrediction.h"
+#include "Engine/AI/TacticalPointSystem.h"
+#include "Engine/AI/CoverSystem.h"
+#include "Engine/AI/FormationSystem.h"
+#include "Engine/AI/GroupAI.h"
+#include "Engine/AI/CollisionAvoidance.h"
+#include "Engine/Gameplay/MaterialEffects.h"
+#include "Engine/Dialogue/DynamicResponseSystem.h"
+#include "Engine/ECS/EntityArchetype.h"
+#include "Engine/World/ProximityTriggerSystem.h"
+#include "Graphics/SkyAtmosphere.h"
+#include "Graphics/WaterRenderer.h"
+#include "Graphics/OcclusionCulling.h"
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
 #endif
@@ -211,6 +223,20 @@ static void InitGameplaySystems()
     {
         destruction.SetWorld(world);
     }
+
+    // CryEngine-inspired systems (2026-03-19)
+    Spark::AI::TacticalPointSystem::GetInstance().Initialize();
+    Spark::AI::CoverSystem::GetInstance().Initialize();
+    Spark::AI::FormationSystem::GetInstance().Initialize();
+    Spark::AI::GroupAISystem::GetInstance().Initialize();
+    Spark::AI::CollisionAvoidanceSystem::GetInstance().Initialize();
+    Spark::Gameplay::MaterialEffectSystem::GetInstance().Initialize();
+    Spark::Dialogue::DynamicResponseSystem::GetInstance().Initialize();
+    Spark::ECS::EntityArchetypeSystem::GetInstance().Initialize();
+    Spark::World::ProximityTriggerSystem::GetInstance().Initialize();
+    Spark::Graphics::SkyAtmosphereSystem::GetInstance().Initialize();
+    Spark::Graphics::WaterRenderer::GetInstance().Initialize();
+    Spark::Graphics::OcclusionCullingSystem::GetInstance().Initialize();
 }
 
 /**
@@ -262,10 +288,32 @@ static void UpdateGameplaySystems(float dt)
     // Terrain system — LOD selection based on camera distance
     static Spark::ECS::TerrainSystem s_terrainSystem;
     s_terrainSystem.Update(*world, dt);
+
+    // CryEngine-inspired systems (2026-03-19)
+    Spark::AI::FormationSystem::GetInstance().Update(dt);
+    Spark::AI::GroupAISystem::GetInstance().Update(dt);
+    Spark::Dialogue::DynamicResponseSystem::GetInstance().Update(dt);
+    Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt);
+    Spark::Graphics::WaterRenderer::GetInstance().Update(dt);
 }
 
 static void ShutdownGameplaySystems()
 {
+    // CryEngine-inspired systems (reverse order)
+    Spark::Graphics::OcclusionCullingSystem::GetInstance().Shutdown();
+    Spark::Graphics::WaterRenderer::GetInstance().Shutdown();
+    Spark::Graphics::SkyAtmosphereSystem::GetInstance().Shutdown();
+    Spark::World::ProximityTriggerSystem::GetInstance().Shutdown();
+    Spark::ECS::EntityArchetypeSystem::GetInstance().Shutdown();
+    Spark::Dialogue::DynamicResponseSystem::GetInstance().Shutdown();
+    Spark::Gameplay::MaterialEffectSystem::GetInstance().Shutdown();
+    Spark::AI::CollisionAvoidanceSystem::GetInstance().Shutdown();
+    Spark::AI::GroupAISystem::GetInstance().Shutdown();
+    Spark::AI::FormationSystem::GetInstance().Shutdown();
+    Spark::AI::CoverSystem::GetInstance().Shutdown();
+    Spark::AI::TacticalPointSystem::GetInstance().Shutdown();
+
+    // TrinityCore systems
     Spark::Audio::MusicManager::GetInstance().Shutdown();
     Spark::AI::MovementSystem::GetInstance().Shutdown();
     Spark::Gameplay::InstanceManager::GetInstance().Shutdown();
