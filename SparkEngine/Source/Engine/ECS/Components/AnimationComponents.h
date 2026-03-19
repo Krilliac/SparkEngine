@@ -20,17 +20,23 @@
 // ParticleEmitterComponent
 // =============================================================================
 
+/**
+ * @brief Spawns particles from the entity's position using a named effect preset.
+ *
+ * The ParticleUpdateSystem manages emitter lifetime. The actual particle
+ * simulation runs on the GPU via the underlying particle system handle.
+ */
 struct ParticleEmitterComponent
 {
-    std::string effectName;
-    bool autoPlay = true;
-    bool isPlaying = false;
-    float emissionRate = 10.0f;
-    float lifetime = 1.0f;
-    DirectX::XMFLOAT4 startColor{1, 1, 1, 1};
-    float startSize = 0.1f;
-    float startSpeed = 1.0f;
-    Spark::ParticleHandle emitterHandle;
+    std::string effectName;                   ///< Name of the particle effect preset (e.g. "fire", "sparks").
+    bool autoPlay = true;                     ///< Start emitting automatically on entity creation.
+    bool isPlaying = false;                   ///< Runtime state: whether the emitter is actively spawning.
+    float emissionRate = 10.0f;               ///< Particles spawned per second.
+    float lifetime = 1.0f;                    ///< Lifetime of each particle (seconds).
+    DirectX::XMFLOAT4 startColor{1, 1, 1, 1}; ///< Initial particle color (RGBA).
+    float startSize = 0.1f;                   ///< Initial particle size (world units).
+    float startSpeed = 1.0f;                  ///< Initial emission velocity (units/second).
+    Spark::ParticleHandle emitterHandle;      ///< Opaque handle to the GPU-side particle system.
 
     /**
      * @brief Validate that particle parameters are within sane ranges.
@@ -49,16 +55,23 @@ struct ParticleEmitterComponent
 // AnimationController
 // =============================================================================
 
+/**
+ * @brief Controls skeletal animation playback on an entity.
+ *
+ * The AnimationUpdateSystem advances `currentTime` each frame, handles
+ * looping/completion, and computes `normalizedTime` for blend weights
+ * and gameplay synchronization (e.g. attack hit windows).
+ */
 struct AnimationController
 {
-    std::string currentAnimation;
-    std::string defaultAnimation;
-    float playbackSpeed = 1.0f;
-    float currentTime = 0.0f;
-    bool playing = true;
-    bool loop = true;
-    float duration = 0.0f;
-    float normalizedTime = 0.0f;
-    std::vector<std::string> availableAnimations;
-    Spark::AnimationHandle animInstanceHandle;
+    std::string currentAnimation;                 ///< Name of the currently playing animation clip.
+    std::string defaultAnimation;                 ///< Fallback animation when no other is active (e.g. "idle").
+    float playbackSpeed = 1.0f;                   ///< Speed multiplier (negative = reverse playback).
+    float currentTime = 0.0f;                     ///< Elapsed time within the current clip (seconds).
+    bool playing = true;                          ///< Whether the animation is actively advancing.
+    bool loop = true;                             ///< Restart from the beginning when the clip ends.
+    float duration = 0.0f;                        ///< Total clip duration (seconds); 0 = not yet loaded.
+    float normalizedTime = 0.0f;                  ///< Progress through the clip [0, 1]; useful for gameplay sync.
+    std::vector<std::string> availableAnimations; ///< List of animation clip names this entity can play.
+    Spark::AnimationHandle animInstanceHandle;    ///< Opaque handle to the runtime AnimationInstance.
 };

@@ -1,4 +1,18 @@
-// ECSystems.cpp
+/**
+ * @file ECSystems.cpp
+ * @brief ECS system implementations — the runtime logic that processes components each frame.
+ *
+ * Systems run in a fixed order defined by SystemManager registration in SparkEngine.cpp:
+ *   Physics -> Animation -> AI -> Audio -> Lifecycle -> Render
+ *
+ * This order matters:
+ * - Physics runs first so transforms reflect the latest simulation state.
+ * - Animation runs after physics so procedural animation can override physics poses.
+ * - AI runs after animation so behavior trees see up-to-date world state.
+ * - Audio runs after AI/physics so 3D positions and Doppler are accurate.
+ * - Lifecycle runs near the end so death processing sees the final frame state.
+ * - Render runs last to submit draw commands with fully resolved transforms.
+ */
 #include "../../../Core/Platform.h"
 #include "ECSystems.h"
 #include "Graphics/GraphicsEngine.h"
@@ -42,10 +56,12 @@ namespace Spark::ECS
             if (active && !active->active)
                 continue;
 
-            // Compute the world matrix, walking the parent hierarchy if present
+            // Compute the world matrix, walking the parent hierarchy if present.
+            // Cache it on the component so other systems (physics debug draw, culling)
+            // can read the matrix without recomputing it.
             XMMATRIX worldMtx = transform.GetWorldMatrix(registry);
             XMStoreFloat4x4(&renderer.cachedWorldMatrix, worldMtx);
-            renderer.worldMatrixDirty = false;
+            renderer.worldMatrixDirty = false; // Signal to other systems that the cached matrix is current
 
             // Submit draw call to GraphicsEngine
             m_graphics->SubmitMeshForRendering(renderer.meshPath, renderer.materialPath, worldMtx,
@@ -81,19 +97,23 @@ namespace Spark::ECS
 
             if (rb.type == RigidBodyComponent::Type::Dynamic)
             {
-                // Read position/rotation back from physics simulation
+                // Dynamic bodies are authority-owned by the physics engine:
+                // read the simulated position/rotation back into the ECS Transform.
                 DirectX::XMFLOAT3 physPos = physBody->GetPosition();
                 DirectX::XMFLOAT3 physRot = physBody->GetRotation();
                 transform.position = physPos;
                 transform.rotation = physRot;
 
-                // Update velocity cache
+                // Cache velocity so gameplay code (damage, knockback) can read it
+                // without querying the physics engine directly.
                 rb.linearVelocity = physBody->GetLinearVelocity();
                 rb.angularVelocity = physBody->GetAngularVelocity();
             }
             else if (rb.type == RigidBodyComponent::Type::Kinematic)
             {
-                // Push transform to physics
+                // Kinematic bodies are authority-owned by game code:
+                // push the ECS Transform into the physics engine so it can
+                // resolve collisions with dynamic bodies.
                 physBody->SetPosition(transform.position);
                 physBody->SetRotation(transform.rotation);
             }
@@ -122,7 +142,10 @@ namespace Spark::ECS
             if (!source)
                 continue;
 
-            // Compute velocity from position delta for Doppler effects
+            // XAudio2 uses source velocity relative to the listener to compute
+            // Doppler frequency shift. We derive velocity from the position delta
+            // rather than reading physics velocity, because non-physics entities
+            // (e.g. scripted movers) also need accurate Doppler.
             if (deltaTime > 0.0f)
             {
                 source->Velocity.x = (transform.position.x - audio.previousPosition.x) / deltaTime;
@@ -130,7 +153,7 @@ namespace Spark::ECS
                 source->Velocity.z = (transform.position.z - audio.previousPosition.z) / deltaTime;
             }
 
-            // Update position and track for next frame's velocity calculation
+            // Update 3D position and store for next frame's velocity derivation
             source->Position = transform.position;
             audio.previousPosition = transform.position;
         }
@@ -143,8 +166,9 @@ namespace Spark::ECS
     void LifecycleSystem::Update(World& world, float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
-        // Collect dead entities first, then fire callbacks to avoid
-        // iterator invalidation if the callback destroys the entity.
+        // Two-phase death processing: collect first, then fire callbacks.
+        // This avoids iterator invalidation if a death callback destroys
+        // the entity or modifies HealthComponent on other entities.
         std::vector<entt::entity> deadEntities;
 
         auto healthView = world.GetEntitiesWith<HealthComponent>();
@@ -273,8 +297,10 @@ namespace Spark::ECS
                 float dz = target.z - transform.position.z;
                 float distSq = dx * dx + dz * dz;
 
+                // 0.25 = 0.5m squared; waypoint is "reached" when agent is within 0.5m.
+                // Using squared distance avoids an sqrt per-agent-per-frame.
                 if (distSq < 0.25f)
-                { // Waypoint reached
+                {
                     ai.currentPathIndex++;
                     if (ai.currentPathIndex >= ai.currentPath.size())
                     {
@@ -497,7 +523,8 @@ namespace Spark::ECS
             // Advance age
             proj.age += deltaTime;
 
-            // Apply gravity for ballistic projectiles
+            // Apply gravity to the direction vector (not position directly),
+            // so the projectile follows a natural parabolic arc.
             constexpr float kGravity = 9.81f;
             proj.direction.y -= kGravity * proj.gravityScale * deltaTime;
 

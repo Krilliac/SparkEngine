@@ -176,6 +176,12 @@ static void InitDebugSystems()
 // Gameplay system lifecycle (TC-inspired systems from this session)
 // ============================================================================
 
+/**
+ * @brief Initialize gameplay subsystems (called once during engine startup).
+ *
+ * @pre EngineContext must be initialized with a valid EventBus before calling.
+ *      AbilitySystem depends on EventBus for spell/aura proc events.
+ */
 static void InitGameplaySystems()
 {
     auto* ctx = EngineContext::Get();
@@ -185,7 +191,7 @@ static void InitGameplaySystems()
     // Condition system (stateless evaluator — no frame update needed)
     Spark::Gameplay::ConditionSystem::GetInstance().Initialize();
 
-    // Ability system (spells/auras/procs — needs EventBus)
+    // Ability system requires EventBus for proc/aura event dispatch
     auto* eventBus = ctx->GetEventBus();
     Spark::Gameplay::AbilitySystem::GetInstance().Initialize(eventBus);
 
@@ -207,13 +213,21 @@ static void InitGameplaySystems()
     }
 }
 
+/**
+ * @brief Per-frame update for all gameplay subsystems.
+ *
+ * Called after module Update (which runs the ECS system pipeline: Physics ->
+ * Animation -> AI -> Audio -> Lifecycle -> Render) so gameplay systems see
+ * the latest ECS state. Non-ECS systems update first (Weather, Dialogue, UI),
+ * then ECS-dependent systems (AbilitySystem, InstanceManager, etc.).
+ */
 static void UpdateGameplaySystems(float dt)
 {
     auto* ctx = EngineContext::Get();
     if (!ctx)
         return;
 
-    // Update gameplay subsystems that don't require the ECS world
+    // Phase 1: Non-ECS systems (no World dependency)
     if (auto* weather = ctx->GetSystem<Spark::WeatherSystem>())
         weather->Update(dt);
     if (auto* dialogue = ctx->GetSystem<Spark::DialogueSystem>())
@@ -221,7 +235,7 @@ static void UpdateGameplaySystems(float dt)
     if (auto* ui = ctx->GetSystem<Spark::UI::UISystem>())
         ui->Update(dt);
 
-    // ECS-dependent systems require a valid world
+    // Phase 2: ECS-dependent systems (require a valid World)
     auto* world = ctx->GetWorld();
     if (!world)
         return;
@@ -294,6 +308,14 @@ static void InitPhysics()
 #endif
 }
 
+/**
+ * @brief Initialize the console subsystem and all dependent debug/gameplay systems.
+ *
+ * Must be called after EngineContext is set up (for EventBus, Physics, etc.)
+ * but before module loading (so modules can register console commands).
+ * ConsoleProcessManager launches the SparkConsole.exe subprocess and owns the
+ * stdin/stdout pipe used for command I/O.
+ */
 static void InitConsole()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -729,6 +751,9 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Starting main engine loop...");
 
+    // Win32 message pump: PeekMessage with PM_REMOVE gives us non-blocking
+    // message processing — the engine ticks in the else branch whenever
+    // there are no pending OS messages (resize, input, focus, etc.).
     while (msg.message != WM_QUIT)
     {
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -741,6 +766,9 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
         }
         else
         {
+            // Smooth delta time over the last N frames to prevent physics/animation
+            // jitter caused by single-frame spikes (e.g. shader compilation stalls,
+            // OS scheduling delays). Raw dt is preserved for profiling accuracy.
             float rawDt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
             float dt = g_deltaSmoother.Smooth(rawDt);
 
