@@ -106,6 +106,9 @@ add_executable(SparkTests
     TestNetworkIntegration.cpp
     TestConnectionTimeout.cpp
     TestRecastIntegration.cpp
+    TestAudioEngine.cpp
+    TestSceneManager.cpp
+    TestPhysicsSystem.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*97 test files, 1256+ test cases*
+*100 test files, 1295+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -447,6 +447,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationSystem` | 17 |
 | `TestAsyncDatabase` | 23 |
+| `TestAudioEngine` | 10 |
 | `TestBitFlags` | 14 |
 | `TestCameraInterpolation` | 9 |
 | `TestChromeTracing` | 5 |
@@ -504,6 +505,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
 | `TestPhysicsInterpolation` | 8 |
+| `TestPhysicsSystem` | 15 |
 | `TestPlayModeManager` | 33 |
 | `TestPostProcessingPipeline` | 11 |
 | `TestQuestSystem` | 10 |
@@ -515,6 +517,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
 | `TestSaveSystem` | 7 |
+| `TestSceneManager` | 14 |
 | `TestSceneSnapshotSerializer` | 19 |
 | `TestScopeGuard` | 13 |
 | `TestScopedTimer` | 3 |
