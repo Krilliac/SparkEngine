@@ -111,6 +111,22 @@ add_executable(SparkTests
     TestPhysicsSystem.cpp
     TestGraphicsEngine.cpp
     TestRenderGraph.cpp
+    TestTerrainRenderer.cpp
+    TestMaterialEffects.cpp
+    TestTacticalPointSystem.cpp
+    TestCoverSystem.cpp
+    TestProximityTriggerSystem.cpp
+    TestFormationSystem.cpp
+    TestGroupAI.cpp
+    TestCollisionAvoidance.cpp
+    TestDynamicResponseSystem.cpp
+    TestEntityArchetype.cpp
+    TestSkyAtmosphere.cpp
+    TestWaterRenderer.cpp
+    TestOcclusionCulling.cpp
+    TestPoseModifier.cpp
+    TestAnimationCompression.cpp
+    TestBlendSpace.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

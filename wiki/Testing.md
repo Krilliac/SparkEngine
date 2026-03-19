@@ -438,21 +438,24 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*102 test files, 1329+ test cases*
+*118 test files, 1409+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
 | `TestAIBehaviorTree` | 16 |
 | `TestAbilitySystem` | 15 |
+| `TestAnimationCompression` | 6 |
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationSystem` | 17 |
 | `TestAsyncDatabase` | 23 |
 | `TestAudioEngine` | 10 |
 | `TestBitFlags` | 14 |
+| `TestBlendSpace` | 6 |
 | `TestCameraInterpolation` | 9 |
 | `TestChromeTracing` | 5 |
 | `TestClientPrediction` | 5 |
 | `TestClothSimulation` | 4 |
+| `TestCollisionAvoidance` | 4 |
 | `TestColorUtils` | 18 |
 | `TestCommandHistory` | 10 |
 | `TestConditionSystem` | 12 |
@@ -461,25 +464,30 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestConsoleRBAC` | 21 |
 | `TestCooldown` | 14 |
 | `TestCoroutineScheduler` | 10 |
+| `TestCoverSystem` | 4 |
 | `TestDayNightCycle` | 10 |
 | `TestDebugTools` | 31 |
 | `TestDedicatedServer` | 27 |
 | `TestDeltaSmoother` | 10 |
 | `TestDestructionSystem` | 5 |
 | `TestDialogueSystem` | 4 |
+| `TestDynamicResponseSystem` | 6 |
 | `TestECSIntegration` | 9 |
 | `TestECSWorld` | 11 |
 | `TestEngineContext` | 18 |
+| `TestEntityArchetype` | 6 |
 | `TestEnvironmentQuery` | 12 |
 | `TestEventBus` | 15 |
 | `TestEventSystem` | 10 |
 | `TestFPSComponents` | 23 |
 | `TestFileUtils` | 15 |
 | `TestFogSystem` | 17 |
+| `TestFormationSystem` | 4 |
 | `TestFrameAllocator` | 8 |
 | `TestFrustumCulling` | 11 |
 | `TestGameMode` | 5 |
 | `TestGraphicsEngine` | 10 |
+| `TestGroupAI` | 5 |
 | `TestHash` | 18 |
 | `TestHybridRT` | 20 |
 | `TestInputBindings` | 5 |
@@ -490,6 +498,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestLoadingScreen` | 4 |
 | `TestLocalFileCache` | 15 |
 | `TestLocalizationSystem` | 6 |
+| `TestMaterialEffects` | 5 |
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestModuleDependency` | 5 |
@@ -502,13 +511,16 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestNetworkInterpolation` | 12 |
 | `TestNoiseGenerator` | 7 |
 | `TestObjectPool` | 6 |
+| `TestOcclusionCulling` | 6 |
 | `TestPathCache` | 6 |
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
 | `TestPhysicsInterpolation` | 8 |
 | `TestPhysicsSystem` | 15 |
 | `TestPlayModeManager` | 33 |
+| `TestPoseModifier` | 4 |
 | `TestPostProcessingPipeline` | 11 |
+| `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 10 |
 | `TestRandomEngine` | 11 |
 | `TestRecastIntegration` | 6 |
@@ -529,19 +541,23 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestSerializer` | 17 |
 | `TestShaderGraphCompiler` | 5 |
 | `TestShadowAtlas` | 7 |
+| `TestSkyAtmosphere` | 5 |
 | `TestSpatialGrid` | 16 |
 | `TestSplineMath` | 24 |
 | `TestSprite2DComponents` | 35 |
 | `TestStateMachine` | 16 |
 | `TestSteeringBehaviors` | 15 |
 | `TestStringUtils` | 19 |
+| `TestTacticalPointSystem` | 4 |
 | `TestTemporalEffects` | 11 |
+| `TestTerrainRenderer` | 5 |
 | `TestThreadSafeQueue` | 10 |
 | `TestTween` | 14 |
 | `TestTypeTraits` | 11 |
 | `TestUISystem` | 6 |
 | `TestUUID` | 12 |
 | `TestUpscalingSystem` | 10 |
+| `TestWaterRenderer` | 6 |
 | `TestWeaponSystem` | 18 |
 | `TestWeatherSystem` | 8 |
 <!-- /AUTO:test_inventory -->
