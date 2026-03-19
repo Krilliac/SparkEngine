@@ -109,6 +109,8 @@ add_executable(SparkTests
     TestAudioEngine.cpp
     TestSceneManager.cpp
     TestPhysicsSystem.cpp
+    TestGraphicsEngine.cpp
+    TestRenderGraph.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

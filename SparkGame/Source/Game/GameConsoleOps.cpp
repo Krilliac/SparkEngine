@@ -512,16 +512,54 @@ void Game::CyclePrevClass()
 // ENHANCED COMBAT ARENA LEVEL
 // ============================================================================
 
+namespace
+{
+
+    /// Helper: create a ModelObject, initialize it, set position/name, and add to the list
+    void PlaceModel(const wchar_t* modelPath, const std::string& name, XMFLOAT3 pos, ID3D11Device* device,
+                    ID3D11DeviceContext* context, std::vector<std::unique_ptr<GameObject>>& objects,
+                    XMFLOAT3 scale = {1.0f, 1.0f, 1.0f})
+    {
+        auto obj = std::make_unique<ModelObject>(modelPath);
+        if (!obj)
+            return;
+        HRESULT hr = obj->Initialize(device, context);
+        if (FAILED(hr))
+            return;
+        obj->SetPosition(pos);
+        obj->SetName(name);
+        if (scale.x != 1.0f || scale.y != 1.0f || scale.z != 1.0f)
+            obj->SetScale(scale);
+        objects.push_back(std::move(obj));
+    }
+
+    /// Helper: place an array of models at listed positions with indexed names
+    template <size_t N>
+    void PlaceModelsAt(const wchar_t* modelPath, const std::string& prefix, const float (&positions)[N][3],
+                       ID3D11Device* device, ID3D11DeviceContext* context,
+                       std::vector<std::unique_ptr<GameObject>>& objects)
+    {
+        for (size_t i = 0; i < N; ++i)
+        {
+            PlaceModel(modelPath, prefix + std::to_string(i + 1), {positions[i][0], positions[i][1], positions[i][2]},
+                       device, context, objects);
+        }
+    }
+
+} // anonymous namespace
+
 void Game::CreateCombatArena()
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Creating enhanced combat arena level...", L"INFO");
+
+    auto* device = m_graphics->GetDevice();
+    auto* context = m_graphics->GetContext();
 
     // === LARGE GROUND PLANE (200x200 arena) ===
     {
         auto ground = std::make_unique<PlaneObject>(100.0f, 100.0f);
         ASSERT(ground);
-        HRESULT hr = ground->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(ground->Initialize(device, context)))
         {
             ground->SetPosition({0.0f, -1.0f, 0.0f});
             ground->SetName("Arena_Ground");
@@ -530,337 +568,91 @@ void Game::CreateCombatArena()
     }
 
     // === ALPHA BASE (south, z = -70) ===
+    PlaceModel(L"../Assets/Models/building_small.obj", "Alpha_HQ", {-8.0f, 0.0f, -70.0f}, device, context,
+               m_gameObjects);
+    for (int i = -1; i <= 1; ++i)
     {
-        // HQ Building
-        auto hq = std::make_unique<ModelObject>(L"../Assets/Models/building_small.obj");
-        if (hq)
-        {
-            HRESULT hr = hq->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-            if (SUCCEEDED(hr))
-            {
-                hq->SetPosition({-8.0f, 0.0f, -70.0f});
-                hq->SetName("Alpha_HQ");
-                m_gameObjects.push_back(std::move(hq));
-            }
-        }
-
-        // Defensive barriers
-        for (int i = -1; i <= 1; ++i)
-        {
-            auto barrier = std::make_unique<ModelObject>(L"../Assets/Models/barrier.obj");
-            if (barrier)
-            {
-                HRESULT hr = barrier->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    barrier->SetPosition({i * 15.0f, 0.0f, -65.0f});
-                    barrier->SetName("Alpha_Barrier_" + std::to_string(i + 2));
-                    m_gameObjects.push_back(std::move(barrier));
-                }
-            }
-        }
-
-        // Supply crates
-        for (int i = 0; i < 2; ++i)
-        {
-            auto crate = std::make_unique<ModelObject>(L"../Assets/Models/crate.obj");
-            if (crate)
-            {
-                HRESULT hr = crate->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    crate->SetPosition({(i == 0 ? -5.0f : 5.0f), 0.0f, -68.0f});
-                    crate->SetName("Alpha_Crate_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(crate));
-                }
-            }
-        }
+        PlaceModel(L"../Assets/Models/barrier.obj", "Alpha_Barrier_" + std::to_string(i + 2), {i * 15.0f, 0.0f, -65.0f},
+                   device, context, m_gameObjects);
     }
+    PlaceModel(L"../Assets/Models/crate.obj", "Alpha_Crate_1", {-5.0f, 0.0f, -68.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/crate.obj", "Alpha_Crate_2", {5.0f, 0.0f, -68.0f}, device, context, m_gameObjects);
 
     // === BRAVO BASE (north, z = 70) ===
+    PlaceModel(L"../Assets/Models/building_small.obj", "Bravo_HQ", {8.0f, 0.0f, 70.0f}, device, context, m_gameObjects);
+    for (int i = -1; i <= 1; ++i)
     {
-        auto hq = std::make_unique<ModelObject>(L"../Assets/Models/building_small.obj");
-        if (hq)
-        {
-            HRESULT hr = hq->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-            if (SUCCEEDED(hr))
-            {
-                hq->SetPosition({8.0f, 0.0f, 70.0f});
-                hq->SetName("Bravo_HQ");
-                m_gameObjects.push_back(std::move(hq));
-            }
-        }
-
-        for (int i = -1; i <= 1; ++i)
-        {
-            auto barrier = std::make_unique<ModelObject>(L"../Assets/Models/barrier.obj");
-            if (barrier)
-            {
-                HRESULT hr = barrier->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    barrier->SetPosition({i * 15.0f, 0.0f, 65.0f});
-                    barrier->SetName("Bravo_Barrier_" + std::to_string(i + 2));
-                    m_gameObjects.push_back(std::move(barrier));
-                }
-            }
-        }
-
-        for (int i = 0; i < 2; ++i)
-        {
-            auto crate = std::make_unique<ModelObject>(L"../Assets/Models/crate.obj");
-            if (crate)
-            {
-                HRESULT hr = crate->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    crate->SetPosition({(i == 0 ? -5.0f : 5.0f), 0.0f, 68.0f});
-                    crate->SetName("Bravo_Crate_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(crate));
-                }
-            }
-        }
+        PlaceModel(L"../Assets/Models/barrier.obj", "Bravo_Barrier_" + std::to_string(i + 2), {i * 15.0f, 0.0f, 65.0f},
+                   device, context, m_gameObjects);
     }
+    PlaceModel(L"../Assets/Models/crate.obj", "Bravo_Crate_1", {-5.0f, 0.0f, 68.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/crate.obj", "Bravo_Crate_2", {5.0f, 0.0f, 68.0f}, device, context, m_gameObjects);
 
     // === CENTER OBJECTIVE (z = 0) ===
+    PlaceModel(L"../Assets/Models/building_small.obj", "Center_Building", {0.0f, 0.0f, 0.0f}, device, context,
+               m_gameObjects, {1.2f, 1.0f, 1.2f});
     {
-        // Central building
-        auto centerBldg = std::make_unique<ModelObject>(L"../Assets/Models/building_small.obj");
-        if (centerBldg)
-        {
-            HRESULT hr = centerBldg->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-            if (SUCCEEDED(hr))
-            {
-                centerBldg->SetPosition({0.0f, 0.0f, 0.0f});
-                centerBldg->SetScale({1.2f, 1.0f, 1.2f});
-                centerBldg->SetName("Center_Building");
-                m_gameObjects.push_back(std::move(centerBldg));
-            }
-        }
-
-        // Cover around center
-        const float coverPositions[][3] = {
+        const float coverPos[][3] = {
             {-8.0f, 0.0f, -3.0f}, {8.0f, 0.0f, 3.0f}, {-3.0f, 0.0f, 8.0f}, {3.0f, 0.0f, -8.0f}};
-        for (int i = 0; i < 4; ++i)
-        {
-            auto barrier = std::make_unique<ModelObject>(L"../Assets/Models/barrier.obj");
-            if (barrier)
-            {
-                HRESULT hr = barrier->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    barrier->SetPosition({coverPositions[i][0], coverPositions[i][1], coverPositions[i][2]});
-                    barrier->SetName("Center_Barrier_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(barrier));
-                }
-            }
-        }
+        PlaceModelsAt(L"../Assets/Models/barrier.obj", "Center_Barrier_", coverPos, device, context, m_gameObjects);
 
-        // Crates around center
-        const float cratePositions[][3] = {
+        const float cratePos[][3] = {
             {-3.0f, 0.0f, 5.0f}, {3.0f, 0.0f, -5.0f}, {-6.0f, 0.0f, -6.0f}, {6.0f, 0.0f, 6.0f}};
-        for (int i = 0; i < 4; ++i)
-        {
-            auto crate = std::make_unique<ModelObject>(L"../Assets/Models/crate.obj");
-            if (crate)
-            {
-                HRESULT hr = crate->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    crate->SetPosition({cratePositions[i][0], cratePositions[i][1], cratePositions[i][2]});
-                    crate->SetName("Center_Crate_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(crate));
-                }
-            }
-        }
+        PlaceModelsAt(L"../Assets/Models/crate.obj", "Center_Crate_", cratePos, device, context, m_gameObjects);
     }
 
     // === WEST OUTPOST (x = -45) ===
-    {
-        auto tower = std::make_unique<ModelObject>(L"../Assets/Models/watchtower.obj");
-        if (tower)
-        {
-            HRESULT hr = tower->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-            if (SUCCEEDED(hr))
-            {
-                tower->SetPosition({-45.0f, 0.0f, 0.0f});
-                tower->SetName("West_Tower");
-                m_gameObjects.push_back(std::move(tower));
-            }
-        }
-
-        for (int i = 0; i < 2; ++i)
-        {
-            auto barrier = std::make_unique<ModelObject>(L"../Assets/Models/barrier.obj");
-            if (barrier)
-            {
-                HRESULT hr = barrier->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    barrier->SetPosition({-40.0f, 0.0f, (i == 0 ? -5.0f : 5.0f)});
-                    barrier->SetName("West_Cover_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(barrier));
-                }
-            }
-        }
-
-        for (int i = 0; i < 2; ++i)
-        {
-            auto crate = std::make_unique<ModelObject>(L"../Assets/Models/crate.obj");
-            if (crate)
-            {
-                HRESULT hr = crate->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    crate->SetPosition({-48.0f, 0.0f, (i == 0 ? -2.0f : 2.0f)});
-                    crate->SetName("West_Crate_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(crate));
-                }
-            }
-        }
-    }
+    PlaceModel(L"../Assets/Models/watchtower.obj", "West_Tower", {-45.0f, 0.0f, 0.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/barrier.obj", "West_Cover_1", {-40.0f, 0.0f, -5.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/barrier.obj", "West_Cover_2", {-40.0f, 0.0f, 5.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/crate.obj", "West_Crate_1", {-48.0f, 0.0f, -2.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/crate.obj", "West_Crate_2", {-48.0f, 0.0f, 2.0f}, device, context, m_gameObjects);
 
     // === EAST OUTPOST (x = 45) ===
-    {
-        auto tower = std::make_unique<ModelObject>(L"../Assets/Models/watchtower.obj");
-        if (tower)
-        {
-            HRESULT hr = tower->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-            if (SUCCEEDED(hr))
-            {
-                tower->SetPosition({45.0f, 0.0f, 0.0f});
-                tower->SetName("East_Tower");
-                m_gameObjects.push_back(std::move(tower));
-            }
-        }
-
-        for (int i = 0; i < 2; ++i)
-        {
-            auto barrier = std::make_unique<ModelObject>(L"../Assets/Models/barrier.obj");
-            if (barrier)
-            {
-                HRESULT hr = barrier->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    barrier->SetPosition({40.0f, 0.0f, (i == 0 ? -5.0f : 5.0f)});
-                    barrier->SetName("East_Cover_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(barrier));
-                }
-            }
-        }
-
-        for (int i = 0; i < 2; ++i)
-        {
-            auto crate = std::make_unique<ModelObject>(L"../Assets/Models/crate.obj");
-            if (crate)
-            {
-                HRESULT hr = crate->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    crate->SetPosition({48.0f, 0.0f, (i == 0 ? -2.0f : 2.0f)});
-                    crate->SetName("East_Crate_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(crate));
-                }
-            }
-        }
-    }
+    PlaceModel(L"../Assets/Models/watchtower.obj", "East_Tower", {45.0f, 0.0f, 0.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/barrier.obj", "East_Cover_1", {40.0f, 0.0f, -5.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/barrier.obj", "East_Cover_2", {40.0f, 0.0f, 5.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/crate.obj", "East_Crate_1", {48.0f, 0.0f, -2.0f}, device, context, m_gameObjects);
+    PlaceModel(L"../Assets/Models/crate.obj", "East_Crate_2", {48.0f, 0.0f, 2.0f}, device, context, m_gameObjects);
 
     // === MID-FIELD COVER (scattered barriers and crates) ===
     {
-        const float fieldBarrierPos[][3] = {{-25.0f, 0.0f, -30.0f}, {25.0f, 0.0f, -30.0f}, {-25.0f, 0.0f, 30.0f},
-                                            {25.0f, 0.0f, 30.0f},   {-20.0f, 0.0f, 0.0f},  {20.0f, 0.0f, 0.0f},
-                                            {0.0f, 0.0f, -35.0f},   {0.0f, 0.0f, 35.0f}};
-        for (int i = 0; i < 8; ++i)
-        {
-            auto barrier = std::make_unique<ModelObject>(L"../Assets/Models/barrier.obj");
-            if (barrier)
-            {
-                HRESULT hr = barrier->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    barrier->SetPosition({fieldBarrierPos[i][0], fieldBarrierPos[i][1], fieldBarrierPos[i][2]});
-                    barrier->SetName("Field_Barrier_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(barrier));
-                }
-            }
-        }
+        const float barrierPos[][3] = {{-25.0f, 0.0f, -30.0f}, {25.0f, 0.0f, -30.0f}, {-25.0f, 0.0f, 30.0f},
+                                       {25.0f, 0.0f, 30.0f},   {-20.0f, 0.0f, 0.0f},  {20.0f, 0.0f, 0.0f},
+                                       {0.0f, 0.0f, -35.0f},   {0.0f, 0.0f, 35.0f}};
+        PlaceModelsAt(L"../Assets/Models/barrier.obj", "Field_Barrier_", barrierPos, device, context, m_gameObjects);
 
-        const float fieldCratePos[][3] = {{-15.0f, 0.0f, -15.0f}, {15.0f, 0.0f, -15.0f},  {-15.0f, 0.0f, 15.0f},
-                                          {15.0f, 0.0f, 15.0f},   {-30.0f, 0.0f, -50.0f}, {30.0f, 0.0f, -50.0f},
-                                          {-30.0f, 0.0f, 50.0f},  {30.0f, 0.0f, 50.0f}};
-        for (int i = 0; i < 8; ++i)
-        {
-            auto crate = std::make_unique<ModelObject>(L"../Assets/Models/crate.obj");
-            if (crate)
-            {
-                HRESULT hr = crate->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    crate->SetPosition({fieldCratePos[i][0], fieldCratePos[i][1], fieldCratePos[i][2]});
-                    crate->SetName("Field_Crate_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(crate));
-                }
-            }
-        }
+        const float cratePos[][3] = {{-15.0f, 0.0f, -15.0f}, {15.0f, 0.0f, -15.0f},  {-15.0f, 0.0f, 15.0f},
+                                     {15.0f, 0.0f, 15.0f},   {-30.0f, 0.0f, -50.0f}, {30.0f, 0.0f, -50.0f},
+                                     {-30.0f, 0.0f, 50.0f},  {30.0f, 0.0f, 50.0f}};
+        PlaceModelsAt(L"../Assets/Models/crate.obj", "Field_Crate_", cratePos, device, context, m_gameObjects);
     }
 
     // === TARGET PRACTICE AREA (west side) ===
+    for (int i = 0; i < 5; ++i)
     {
-        for (int i = 0; i < 5; ++i)
-        {
-            auto target = std::make_unique<ModelObject>(L"../Assets/Models/target.obj");
-            if (target)
-            {
-                HRESULT hr = target->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    target->SetPosition({-55.0f, 0.0f, -10.0f + i * 5.0f});
-                    target->SetName("Target_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(target));
-                }
-            }
-        }
+        PlaceModel(L"../Assets/Models/target.obj", "Target_" + std::to_string(i + 1), {-55.0f, 0.0f, -10.0f + i * 5.0f},
+                   device, context, m_gameObjects);
     }
 
     // === CHARACTER MODELS (NPCs / bots placeholder) ===
     {
-        const float npcPositions[][3] = {
+        const float npcPos[][3] = {
             {0.0f, 0.0f, 20.0f}, {10.0f, 0.0f, -20.0f}, {-10.0f, 0.0f, 30.0f}, {20.0f, 0.0f, -40.0f}};
-        for (int i = 0; i < 4; ++i)
-        {
-            auto npc = std::make_unique<ModelObject>(L"../Assets/Models/character.obj");
-            if (npc)
-            {
-                HRESULT hr = npc->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    npc->SetPosition({npcPositions[i][0], npcPositions[i][1], npcPositions[i][2]});
-                    npc->SetName("NPC_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(npc));
-                }
-            }
-        }
+        PlaceModelsAt(L"../Assets/Models/character.obj", "NPC_", npcPos, device, context, m_gameObjects);
     }
 
-    // === DECORATIVE SPHERES (represent control point markers) ===
+    // === DECORATIVE SPHERES (control point markers) ===
     {
-        const float cpPositions[][3] = {
-            {0.0f, 3.0f, 0.0f},   // Center (Point A)
-            {-45.0f, 3.0f, 0.0f}, // West   (Point B)
-            {45.0f, 3.0f, 0.0f},  // East   (Point C)
-        };
+        const float cpPositions[][3] = {{0.0f, 3.0f, 0.0f}, {-45.0f, 3.0f, 0.0f}, {45.0f, 3.0f, 0.0f}};
         for (int i = 0; i < 3; ++i)
         {
             auto sphere = std::make_unique<SphereObject>(0.5f, 12, 12);
-            if (sphere)
+            if (sphere && SUCCEEDED(sphere->Initialize(device, context)))
             {
-                HRESULT hr = sphere->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    sphere->SetPosition({cpPositions[i][0], cpPositions[i][1], cpPositions[i][2]});
-                    sphere->SetName("ControlPoint_" + std::to_string(i + 1));
-                    m_gameObjects.push_back(std::move(sphere));
-                }
+                sphere->SetPosition({cpPositions[i][0], cpPositions[i][1], cpPositions[i][2]});
+                sphere->SetName("ControlPoint_" + std::to_string(i + 1));
+                m_gameObjects.push_back(std::move(sphere));
             }
         }
     }
@@ -874,18 +666,8 @@ void Game::CreateCombatArena()
                                      "Pistol_Display"};
         for (int i = 0; i < 5; ++i)
         {
-            auto wpn = std::make_unique<ModelObject>(weaponModels[i]);
-            if (wpn)
-            {
-                HRESULT hr = wpn->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
-                if (SUCCEEDED(hr))
-                {
-                    wpn->SetPosition({-3.0f + i * 1.5f, 1.2f, -72.0f});
-                    wpn->SetScale({3.0f, 3.0f, 3.0f});
-                    wpn->SetName(weaponNames[i]);
-                    m_gameObjects.push_back(std::move(wpn));
-                }
-            }
+            PlaceModel(weaponModels[i], weaponNames[i], {-3.0f + i * 1.5f, 1.2f, -72.0f}, device, context,
+                       m_gameObjects, {3.0f, 3.0f, 3.0f});
         }
     }
 
