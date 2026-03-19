@@ -45,8 +45,8 @@ namespace Spark::World
 
     struct CellCoord
     {
-        int32_t x = 0;
-        int32_t z = 0;
+        int32_t x = 0; ///< Grid column index (world X axis).
+        int32_t z = 0; ///< Grid row index (world Z axis).
 
         bool operator==(const CellCoord& other) const { return x == other.x && z == other.z; }
     };
@@ -75,10 +75,10 @@ namespace Spark::World
 
     struct Cell
     {
-        CellCoord coord;
-        CellState state = CellState::Unloaded;
-        std::unordered_set<entt::entity> entities;
-        float timeSincePlayerNearby = 0.0f;
+        CellCoord coord;                           ///< Grid coordinates of this cell.
+        CellState state = CellState::Unloaded;     ///< Current simulation state.
+        std::unordered_set<entt::entity> entities; ///< Entities currently within this cell's bounds.
+        float timeSincePlayerNearby = 0.0f;        ///< Seconds since a player was last in or adjacent to this cell.
 
         bool IsEmpty() const { return entities.empty(); }
         int GetEntityCount() const { return static_cast<int>(entities.size()); }

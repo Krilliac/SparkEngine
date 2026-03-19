@@ -76,13 +76,13 @@ namespace Spark::Net
      */
     struct PlayerSession
     {
-        ClientID clientId = INVALID_CLIENT;
-        std::string playerName;
-        AreaID currentArea = INVALID_AREA;
-        AreaID pendingArea = INVALID_AREA; ///< Area being transferred to
-        XMFLOAT3 lastKnownPosition{0, 0, 0};
-        float sessionDuration = 0.0f;
-        bool isTransferring = false; ///< Currently being migrated between areas
+        ClientID clientId = INVALID_CLIENT;  ///< Unique client identifier.
+        std::string playerName;              ///< Display name for logging and admin tools.
+        AreaID currentArea = INVALID_AREA;   ///< Area the player is currently simulated in.
+        AreaID pendingArea = INVALID_AREA;   ///< Area being transferred to (INVALID if not migrating).
+        XMFLOAT3 lastKnownPosition{0, 0, 0}; ///< Most recent position (for proximity checks).
+        float sessionDuration = 0.0f;        ///< Total time connected this session (seconds).
+        bool isTransferring = false;         ///< True while migrating between area servers.
     };
 
     // ============================================================================
@@ -94,34 +94,35 @@ namespace Spark::Net
      */
     struct AreaRegistration
     {
-        AreaID areaId = INVALID_AREA;
-        std::string areaName;
-        std::string hostAddress;      ///< Host machine address
-        uint16_t port = 0;            ///< Client-facing port
-        uint16_t interServerPort = 0; ///< Inter-server port
-        int currentClients = 0;
-        int maxClients = 64;
-        float cpuLoad = 0.0f; ///< CPU usage (0.0 - 1.0)
-        size_t memoryUsageMB = 0;
-        bool isOnline = false;
-        std::chrono::steady_clock::time_point lastHeartbeat;
-        XMFLOAT3 areaPosition{0.0f, 0.0f, 0.0f};      ///< World-space origin of the area region
-        XMFLOAT3 areaSize{1000.0f, 1000.0f, 1000.0f}; ///< Extent of the area region
+        AreaID areaId = INVALID_AREA;                        ///< Unique area identifier.
+        std::string areaName;                                ///< Human-readable area name (for logging and admin).
+        std::string hostAddress;                             ///< Host machine address (IP or hostname).
+        uint16_t port = 0;                                   ///< Client-facing UDP port.
+        uint16_t interServerPort = 0;                        ///< Inter-server communication port.
+        int currentClients = 0;                              ///< Number of players currently in this area.
+        int maxClients = 64;                                 ///< Maximum concurrent players for this area.
+        float cpuLoad = 0.0f;                                ///< CPU usage [0, 1] for load-balancing decisions.
+        size_t memoryUsageMB = 0;                            ///< Reported memory usage (MB).
+        bool isOnline = false;                               ///< True while the area server is accepting connections.
+        std::chrono::steady_clock::time_point lastHeartbeat; ///< Time of most recent heartbeat (for timeout detection).
+        XMFLOAT3 areaPosition{0.0f, 0.0f, 0.0f};             ///< World-space origin of the area region
+        XMFLOAT3 areaSize{1000.0f, 1000.0f, 1000.0f};        ///< Extent of the area region
     };
 
     // ============================================================================
     // World Server Statistics
     // ============================================================================
 
+    /// @brief Aggregate metrics across all area servers managed by the world server.
     struct WorldServerStats
     {
-        float uptimeSeconds = 0.0f;
-        uint32_t totalPlayers = 0;
-        uint32_t peakPlayers = 0;
-        uint32_t activeAreas = 0;
-        uint32_t totalAreaTransfers = 0;
-        uint32_t failedTransfers = 0;
-        float averageAreaLoad = 0.0f;
+        float uptimeSeconds = 0.0f;          ///< Seconds since the world server started.
+        uint32_t totalPlayers = 0;           ///< Current total players across all areas.
+        uint32_t peakPlayers = 0;            ///< High-water mark for simultaneous players.
+        uint32_t activeAreas = 0;            ///< Number of area servers currently online.
+        uint32_t totalAreaTransfers = 0;     ///< Successful player migrations between areas.
+        uint32_t failedTransfers = 0;        ///< Failed migration attempts.
+        float averageAreaLoad = 0.0f;        ///< Mean CPU load across all area servers [0, 1].
         uint32_t loadBalanceEvents = 0;      ///< Number of load balance passes performed
         uint32_t totalEntityMigrations = 0;  ///< Number of entity migrations completed
         uint32_t totalMessagesProcessed = 0; ///< Total world messages processed

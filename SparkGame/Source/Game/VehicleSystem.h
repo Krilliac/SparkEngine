@@ -39,17 +39,17 @@ namespace Spark
  */
     struct VehicleSeat
     {
-        VehicleSeatRole role = VehicleSeatRole::PASSENGER;
-        XMFLOAT3 localOffset = {0, 0, 0}; ///< Seat position relative to vehicle center
-        float yawMin = -180.0f;           ///< Turret/look yaw limits (degrees)
-        float yawMax = 180.0f;
-        float pitchMin = -45.0f;
-        float pitchMax = 45.0f;
-        WeaponType mountedWeapon = WeaponType::PISTOL; ///< Weapon for gunner seats
-        float weaponFireRate = 5.0f;                   ///< Rounds per second
-        float weaponDamage = 25.0f;
-        Player* occupant = nullptr; ///< Currently seated player (not owned)
-        bool isOccupied = false;
+        VehicleSeatRole role = VehicleSeatRole::PASSENGER; ///< Seat role (driver, gunner, passenger).
+        XMFLOAT3 localOffset = {0, 0, 0};                  ///< Seat position relative to vehicle center.
+        float yawMin = -180.0f;                            ///< Minimum turret/look yaw (degrees).
+        float yawMax = 180.0f;                             ///< Maximum turret/look yaw (degrees).
+        float pitchMin = -45.0f;                           ///< Minimum turret/look pitch (degrees).
+        float pitchMax = 45.0f;                            ///< Maximum turret/look pitch (degrees).
+        WeaponType mountedWeapon = WeaponType::PISTOL;     ///< Weapon type for gunner seats.
+        float weaponFireRate = 5.0f;                       ///< Rounds per second for mounted weapon.
+        float weaponDamage = 25.0f;                        ///< Damage per hit from mounted weapon.
+        Player* occupant = nullptr;                        ///< Currently seated player (non-owning pointer).
+        bool isOccupied = false;                           ///< Whether a player is in this seat.
 
         VehicleSeat() = default;
         VehicleSeat(VehicleSeatRole r, const XMFLOAT3& off) : role(r), localOffset(off) {}
@@ -83,25 +83,25 @@ namespace Spark
  */
     struct VehicleDefinition
     {
-        VehicleType type = VehicleType::BUGGY;
-        std::string name;
-        std::string description;
+        VehicleType type = VehicleType::BUGGY; ///< Vehicle archetype.
+        std::string name;                      ///< Display name (e.g. "M1 Abrams", "Apache").
+        std::string description;               ///< Tooltip description for vehicle selection UI.
 
         // Stats
-        float maxHealth = 500.0f;
-        float maxArmor = 100.0f;
+        float maxHealth = 500.0f;       ///< Maximum hit points.
+        float maxArmor = 100.0f;        ///< Armor hit points (absorbs damage before health).
         float explosionDamage = 200.0f; ///< Damage dealt on destruction
         float explosionRadius = 10.0f;  ///< Explosion radius on destruction
 
         // Handling
-        VehicleHandling handling;
+        VehicleHandling handling; ///< Physics and handling parameters.
 
         // Seats
-        std::vector<VehicleSeat> seats;
+        std::vector<VehicleSeat> seats; ///< All available seats (driver, gunner, passenger).
 
         // Visual
-        XMFLOAT3 dimensions = {2, 1.5f, 4}; ///< Bounding box dimensions
-        float meshScale = 1.0f;
+        XMFLOAT3 dimensions = {2, 1.5f, 4}; ///< Bounding box dimensions (width, height, length).
+        float meshScale = 1.0f;             ///< Scale multiplier applied to the vehicle mesh.
 
         bool isAerial = false; ///< Ground vs aerial vehicle
     };

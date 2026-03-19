@@ -42,10 +42,10 @@ namespace Spark::AI
 
     struct EQSItem
     {
-        XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
-        float score = 0.0f;          ///< Accumulated weighted score
-        bool filtered = false;       ///< If true, excluded by a test
-        uint32_t sourceEntityId = 0; ///< Optional entity associated with this point
+        XMFLOAT3 position = {0.0f, 0.0f, 0.0f}; ///< Candidate world-space position to evaluate.
+        float score = 0.0f;                     ///< Accumulated weighted score from all tests.
+        bool filtered = false;                  ///< If true, excluded by a test
+        uint32_t sourceEntityId = 0;            ///< Optional entity associated with this point
     };
 
     // ============================================================================

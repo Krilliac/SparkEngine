@@ -103,10 +103,10 @@ namespace SparkEditor
         void RemoveComponent(ComponentType type);
 
       private:
-        SceneFile* m_scene = nullptr;
-        ObjectID m_inspectedObjectID = INVALID_OBJECT_ID;
-        std::string m_inspectedObject;
-        bool m_showAddComponentMenu = false;
+        SceneFile* m_scene = nullptr;                     ///< Non-owning pointer to the active scene.
+        ObjectID m_inspectedObjectID = INVALID_OBJECT_ID; ///< Currently inspected object (by ID).
+        std::string m_inspectedObject;                    ///< Legacy string-based object identifier.
+        bool m_showAddComponentMenu = false;              ///< Whether the "Add Component" popup is open.
     };
 
 } // namespace SparkEditor

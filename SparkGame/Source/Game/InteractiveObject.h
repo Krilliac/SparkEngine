@@ -92,11 +92,12 @@ namespace Spark
         }
 
       protected:
-        InteractiveObjectType m_objectType = InteractiveObjectType::SWITCH;
-        float m_interactionRange = 3.0f;
-        bool m_isInteractable = true;
-        bool m_isHighlighted = false;
-        std::function<void(InteractiveObject*, Player*)> m_interactionCallback;
+        InteractiveObjectType m_objectType =
+            InteractiveObjectType::SWITCH; ///< What kind of interactive object this is.
+        float m_interactionRange = 3.0f;   ///< Distance (meters) at which the player can interact.
+        bool m_isInteractable = true;      ///< Whether interaction is currently enabled.
+        bool m_isHighlighted = false;      ///< Whether the object is highlighted in the HUD.
+        std::function<void(InteractiveObject*, Player*)> m_interactionCallback; ///< Optional callback on interaction.
     };
 
     /**
