@@ -563,53 +563,53 @@ class TemporalEffects
 #endif
     }
 
-    // ---- GPU Constant Buffer ----
+    // ---- GPU Constant Buffer (mapped per-frame) ----
     struct TemporalCB
     {
-        XMFLOAT4 screenSize;
-        XMFLOAT4 taaParams;
-        XMFLOAT4 jitterOffset;
-        XMFLOAT4 motionBlurParams;
+        XMFLOAT4 screenSize;       ///< (width, height, 1/width, 1/height).
+        XMFLOAT4 taaParams;        ///< (blendFactor, varianceClipGamma, reserved, reserved).
+        XMFLOAT4 jitterOffset;     ///< (jitterX, jitterY, prevJitterX, prevJitterY) in pixels.
+        XMFLOAT4 motionBlurParams; ///< (intensity, maxSamples, velocityScale, reserved).
     };
 
-    // ---- State ----
-    bool m_initialized = false;
-    uint32_t m_width = 1920;
-    uint32_t m_height = 1080;
-    uint32_t m_frameIndex = 0;
-    float m_totalTime = 0.0f;
-    int m_currentHistoryIndex = 0;
+    // ---- Pipeline state ----
+    bool m_initialized = false;    ///< Whether Initialize() completed successfully.
+    uint32_t m_width = 1920;       ///< Current render target width (pixels).
+    uint32_t m_height = 1080;      ///< Current render target height (pixels).
+    uint32_t m_frameIndex = 0;     ///< Monotonic frame counter (drives Halton jitter sequence).
+    float m_totalTime = 0.0f;      ///< Accumulated wall-clock time (seconds).
+    int m_currentHistoryIndex = 0; ///< Ping-pong index into history color buffers (0 or 1).
 
-    // Settings
+    // Per-effect settings
     TAASettings m_taaSettings;
     MotionBlurSettings m_motionBlurSettings;
 
-    // Frame history
+    // Frame history for reprojection
     FrameHistory m_frameHistory;
 
-    // Current frame jitter
-    XMFLOAT2 m_currentJitter = {0.0f, 0.0f};
-    XMFLOAT2 m_currentJitterNDC = {0.0f, 0.0f};
+    // Sub-pixel jitter for TAA (Halton 2,3 sequence)
+    XMFLOAT2 m_currentJitter = {0.0f, 0.0f};    ///< Jitter offset in pixels.
+    XMFLOAT2 m_currentJitterNDC = {0.0f, 0.0f}; ///< Jitter offset in NDC [-1, 1] space.
 
-    // GPU Resources
-    ID3D11Device* m_device = nullptr;
-    ID3D11DeviceContext* m_context = nullptr;
-    ID3D11ShaderResourceView* m_currentFrameSRV = nullptr;
-    ID3D11ShaderResourceView* m_depthSRV = nullptr;
-    ID3D11ShaderResourceView* m_motionVectorsSRV = nullptr;
+    // GPU resources (non-owning pointers to GraphicsEngine-owned objects)
+    ID3D11Device* m_device = nullptr;                       ///< D3D11 device for resource creation.
+    ID3D11DeviceContext* m_context = nullptr;               ///< Immediate context for draw calls.
+    ID3D11ShaderResourceView* m_currentFrameSRV = nullptr;  ///< Current frame's HDR color input.
+    ID3D11ShaderResourceView* m_depthSRV = nullptr;         ///< Scene depth buffer for reprojection.
+    ID3D11ShaderResourceView* m_motionVectorsSRV = nullptr; ///< Per-pixel motion vectors (G-buffer output).
 
-    // History color buffers (ping-pong)
-    ComPtr<ID3D11Texture2D> m_historyColorTextures[2];
-    ID3D11RenderTargetView* m_historyColorRTVs[2] = {};
-    ID3D11ShaderResourceView* m_historyColorSRVs[2] = {};
+    // History color buffers (ping-pong for temporal accumulation)
+    ComPtr<ID3D11Texture2D> m_historyColorTextures[2];    ///< Backing textures for TAA history.
+    ID3D11RenderTargetView* m_historyColorRTVs[2] = {};   ///< RTVs for writing resolved TAA output.
+    ID3D11ShaderResourceView* m_historyColorSRVs[2] = {}; ///< SRVs for reading previous frame's result.
 
-    // Shaders
-    ComPtr<ID3D11VertexShader> m_fullscreenVS;
-    ComPtr<ID3D11PixelShader> m_taaResolvePS;
-    ComPtr<ID3D11PixelShader> m_motionBlurPS;
+    // Per-pass shaders
+    ComPtr<ID3D11VertexShader> m_fullscreenVS; ///< Shared fullscreen triangle vertex shader.
+    ComPtr<ID3D11PixelShader> m_taaResolvePS;  ///< TAA resolve: blend current + history with neighborhood clamp.
+    ComPtr<ID3D11PixelShader> m_motionBlurPS;  ///< Per-pixel motion blur using motion vectors.
 
-    // Resources
-    ComPtr<ID3D11Buffer> m_constantBuffer;
-    ComPtr<ID3D11SamplerState> m_linearSampler;
-    ComPtr<ID3D11SamplerState> m_pointSampler;
+    // Shared GPU resources
+    ComPtr<ID3D11Buffer> m_constantBuffer;      ///< TemporalCB constant buffer.
+    ComPtr<ID3D11SamplerState> m_linearSampler; ///< Bilinear sampler for history reprojection.
+    ComPtr<ID3D11SamplerState> m_pointSampler;  ///< Point sampler for exact-texel velocity reads.
 };

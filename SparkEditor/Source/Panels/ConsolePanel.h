@@ -32,11 +32,11 @@ namespace SparkEditor
  */
     struct ConsoleCommand
     {
-        std::string name;
-        std::string description;
-        std::string usage;
-        std::function<std::string(const std::vector<std::string>&)> handler;
-        bool isEngineCommand = false; // Whether to forward to engine
+        std::string name;        ///< Command name (e.g. "help", "clear").
+        std::string description; ///< One-line help text for listing.
+        std::string usage;       ///< Usage pattern string (e.g. "help [command]").
+        std::function<std::string(const std::vector<std::string>&)> handler; ///< Callback returning a result string.
+        bool isEngineCommand = false;                                        ///< True = forward to engine via pipe.
     };
 
     /**
@@ -44,10 +44,10 @@ namespace SparkEditor
  */
     struct ConsoleHistoryEntry
     {
-        std::string command;
-        std::string result;
-        std::chrono::system_clock::time_point timestamp;
-        bool wasSuccessful = true;
+        std::string command;                             ///< The command string that was executed.
+        std::string result;                              ///< Output/result returned by the handler.
+        std::chrono::system_clock::time_point timestamp; ///< When the command was executed.
+        bool wasSuccessful = true;                       ///< False if the command failed or was unknown.
     };
 
     /**
@@ -55,24 +55,24 @@ namespace SparkEditor
  */
     struct ConsoleFilter
     {
-        LogLevel minLevel = LogLevel::TRACE;
-        std::vector<std::string> enabledCategories;
-        bool enableAllCategories = true;
-        std::string searchPattern;
-        bool showTimestamps = true;
-        bool showCategories = true;
-        bool showThreadIds = false;
-        bool showFileInfo = false;
-        bool colorCodeLevels = true;
-        bool autoScroll = true;
-        bool wordWrap = true;
-        int maxDisplayEntries = 1000;
+        LogLevel minLevel = LogLevel::TRACE;        ///< Minimum severity to display.
+        std::vector<std::string> enabledCategories; ///< Whitelist of visible log categories.
+        bool enableAllCategories = true;            ///< True = ignore enabledCategories and show all.
+        std::string searchPattern;                  ///< Regex/substring pattern for filtering log text.
+        bool showTimestamps = true;                 ///< Show timestamps in log entries.
+        bool showCategories = true;                 ///< Show category tags in log entries.
+        bool showThreadIds = false;                 ///< Show thread IDs in log entries.
+        bool showFileInfo = false;                  ///< Show source file:line in log entries.
+        bool colorCodeLevels = true;                ///< Color-code log lines by severity.
+        bool autoScroll = true;                     ///< Auto-scroll to latest log entry.
+        bool wordWrap = true;                       ///< Wrap long lines instead of clipping.
+        int maxDisplayEntries = 1000;               ///< Max visible entries (performance cap).
 
-        // Additional properties for simplified filter UI
-        bool showInfo = true;
-        bool showWarning = true;
-        bool showError = true;
-        std::string searchText;
+        // Simplified filter UI toggles
+        bool showInfo = true;    ///< Show INFO-level entries.
+        bool showWarning = true; ///< Show WARNING-level entries.
+        bool showError = true;   ///< Show ERROR-level entries.
+        std::string searchText;  ///< Quick-search text for the filter bar.
     };
 
     /**
@@ -172,14 +172,14 @@ namespace SparkEditor
      */
         struct ConsoleStats
         {
-            size_t totalLogEntries = 0;
-            size_t visibleLogEntries = 0;
-            size_t commandsExecuted = 0;
-            size_t engineCommandsExecuted = 0;
-            float averageCommandTime = 0.0f;
-            std::chrono::system_clock::time_point lastActivity;
-            std::unordered_map<LogLevel, size_t> entriesByLevel;
-            std::unordered_map<std::string, size_t> entriesByCategory;
+            size_t totalLogEntries = 0;                                ///< Total log entries received since startup.
+            size_t visibleLogEntries = 0;                              ///< Entries currently passing the active filter.
+            size_t commandsExecuted = 0;                               ///< Total commands executed (editor + engine).
+            size_t engineCommandsExecuted = 0;                         ///< Commands forwarded to the engine process.
+            float averageCommandTime = 0.0f;                           ///< Mean command execution time (ms).
+            std::chrono::system_clock::time_point lastActivity;        ///< Time of last command or log entry.
+            std::unordered_map<LogLevel, size_t> entriesByLevel;       ///< Entry count per severity level.
+            std::unordered_map<std::string, size_t> entriesByCategory; ///< Entry count per category.
         };
         ConsoleStats GetStats() const;
 
@@ -268,41 +268,41 @@ namespace SparkEditor
 
       private:
         // Log display
-        std::vector<LogEntry> m_logEntries;
-        std::vector<size_t> m_filteredIndices; // Indices of entries that pass filter
-        size_t m_maxLogEntries = 10000;
-        mutable std::mutex m_logMutex;
+        std::vector<LogEntry> m_logEntries;    ///< All received log entries.
+        std::vector<size_t> m_filteredIndices; ///< Indices of entries that pass the active filter.
+        size_t m_maxLogEntries = 10000;        ///< Max entries before oldest are discarded.
+        mutable std::mutex m_logMutex;         ///< Guards m_logEntries (logger writes from any thread).
 
         // Commands
-        std::unordered_map<std::string, ConsoleCommand> m_commands;
-        std::vector<ConsoleHistoryEntry> m_commandHistory;
-        std::string m_currentCommand;
-        int m_historyIndex = -1;
-        std::vector<std::string> m_completionSuggestions;
-        int m_completionIndex = -1;
+        std::unordered_map<std::string, ConsoleCommand> m_commands; ///< Registered command lookup table.
+        std::vector<ConsoleHistoryEntry> m_commandHistory;          ///< Ordered list of executed commands.
+        std::string m_currentCommand;                               ///< In-progress command text.
+        int m_historyIndex = -1;                                    ///< Arrow-key position in command history.
+        std::vector<std::string> m_completionSuggestions;           ///< Tab-completion candidates.
+        int m_completionIndex = -1;                                 ///< Current tab-completion selection.
 
         // Filtering
-        ConsoleFilter m_filter;
-        std::string m_searchBuffer;
-        bool m_filterChanged = true;
+        ConsoleFilter m_filter;      ///< Active filter configuration.
+        std::string m_searchBuffer;  ///< Text in the search input field.
+        bool m_filterChanged = true; ///< True when filter needs reapplication.
 
         // UI state
-        bool m_showFilterControls = false;
-        bool m_showContextMenu = false;
-        bool m_scrollToBottom = false;
-        bool m_commandInputActive = false;
-        ImVec2 m_lastWindowSize;
+        bool m_showFilterControls = false; ///< Whether the filter panel is expanded.
+        bool m_showContextMenu = false;    ///< Whether the right-click context menu is open.
+        bool m_scrollToBottom = false;     ///< Request to scroll to the newest entry next frame.
+        bool m_commandInputActive = false; ///< Whether the command input field has focus.
+        ImVec2 m_lastWindowSize;           ///< Cached window size for layout calculations.
 
         // Statistics
-        mutable ConsoleStats m_stats;
-        std::atomic<size_t> m_commandCounter{0};
-        std::atomic<size_t> m_engineCommandCounter{0};
-        std::chrono::steady_clock::time_point m_lastStatsUpdate;
+        mutable ConsoleStats m_stats;                            ///< Cached statistics snapshot.
+        std::atomic<size_t> m_commandCounter{0};                 ///< Thread-safe total command count.
+        std::atomic<size_t> m_engineCommandCounter{0};           ///< Thread-safe engine command count.
+        std::chrono::steady_clock::time_point m_lastStatsUpdate; ///< Last time stats were recomputed.
 
         // Integration
-        EditorLogger* m_logger = nullptr;
-        bool m_isLoggerIntegrated = false;
-        size_t m_lastPolledLogIndex = 0; ///< Tracks how many logger entries we've already consumed
+        EditorLogger* m_logger = nullptr;  ///< Non-owning pointer to the editor logger singleton.
+        bool m_isLoggerIntegrated = false; ///< True once the logger callback is registered.
+        size_t m_lastPolledLogIndex = 0;   ///< Tracks how many logger entries we've already consumed
 
         // Performance
         static constexpr size_t MAX_VISIBLE_ENTRIES = 1000;

@@ -59,11 +59,11 @@ namespace Spark::Persistence
     /// @brief Result of a database query or transaction.
     struct QueryResult
     {
-        bool success = false;
-        std::string errorMessage;
-        std::vector<QueryRow> rows;
-        int affectedRows = 0;
-        int64_t lastInsertId = 0;
+        bool success = false;       ///< True if the query executed without error.
+        std::string errorMessage;   ///< Error description (empty on success).
+        std::vector<QueryRow> rows; ///< Result rows (empty for INSERT/UPDATE/DELETE).
+        int affectedRows = 0;       ///< Number of rows modified by the query.
+        int64_t lastInsertId = 0;   ///< Auto-incremented ID from the last INSERT.
 
         bool HasRows() const { return !rows.empty(); }
         size_t RowCount() const { return rows.size(); }

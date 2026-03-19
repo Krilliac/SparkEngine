@@ -140,12 +140,12 @@ namespace Spark::Net
 
     struct NetworkMessage
     {
-        MessageType type;
-        ChannelType channel = ChannelType::Unreliable;
-        ClientID senderID = INVALID_CLIENT;
-        SequenceNumber sequence = 0;
-        std::vector<uint8_t> payload;
-        float timestamp = 0.0f;
+        MessageType type;                              ///< What kind of network event this message represents.
+        ChannelType channel = ChannelType::Unreliable; ///< Delivery guarantee (reliable ordered, unreliable, etc.).
+        ClientID senderID = INVALID_CLIENT; ///< Client that originated this message (INVALID on server-sent).
+        SequenceNumber sequence = 0;        ///< Monotonic counter for reliable-ordered delivery.
+        std::vector<uint8_t> payload;       ///< Raw serialized message body.
+        float timestamp = 0.0f;             ///< Server time when the message was created (seconds).
     };
 
     // ============================================================================
@@ -200,7 +200,7 @@ namespace Spark::Net
 
     struct ReplicatedProperty
     {
-        std::string name;
+        std::string name; ///< Property identifier (must match between client and server).
         enum class Type
         {
             Int,
@@ -208,23 +208,23 @@ namespace Spark::Net
             Vector3,
             String,
             Bool
-        } type;
-        std::function<void(NetBuffer&)> serialize;
-        std::function<void(NetBuffer&)> deserialize;
-        bool dirty = false;
+        } type;                                      ///< Wire-format type discriminator.
+        std::function<void(NetBuffer&)> serialize;   ///< Writes the current value into a NetBuffer.
+        std::function<void(NetBuffer&)> deserialize; ///< Reads and applies a value from a NetBuffer.
+        bool dirty = false;                          ///< True when the value has changed since last replication.
     };
 
     struct ReplicatedEntity
     {
-        uint32_t networkID;
-        ClientID ownerID;
-        std::string entityType;
-        std::vector<ReplicatedProperty> properties;
-        XMFLOAT3 position{0, 0, 0};
-        XMFLOAT3 rotation{0, 0, 0};
-        XMFLOAT3 velocity{0, 0, 0};
-        float lastUpdateTime = 0.0f;
-        bool needsFullSync = true;
+        uint32_t networkID;                         ///< Unique network-wide entity identifier.
+        ClientID ownerID;                           ///< Client that owns/controls this entity.
+        std::string entityType;                     ///< Type name for spawning on remote clients.
+        std::vector<ReplicatedProperty> properties; ///< Replicated property list (delta-compressed).
+        XMFLOAT3 position{0, 0, 0};                 ///< Last known world-space position.
+        XMFLOAT3 rotation{0, 0, 0};                 ///< Last known euler rotation (degrees).
+        XMFLOAT3 velocity{0, 0, 0};                 ///< Velocity for dead-reckoning extrapolation.
+        float lastUpdateTime = 0.0f;                ///< Server time of the most recent state update.
+        bool needsFullSync = true;                  ///< True = send all properties, not just dirty ones.
 
         /// @brief Client-side interpolation buffer for smooth remote entity rendering.
         NetworkInterpolationBuffer interpolationBuffer;
@@ -236,18 +236,18 @@ namespace Spark::Net
 
     struct ClientInputState
     {
-        SequenceNumber inputSequence;
-        float moveForward = 0.0f;
-        float moveRight = 0.0f;
-        float lookYaw = 0.0f;
-        float lookPitch = 0.0f;
-        bool jump = false;
-        bool fire = false;
-        bool reload = false;
-        bool sprint = false;
-        bool crouch = false;
-        float deltaTime = 0.0f;
-        float timestamp = 0.0f;
+        SequenceNumber inputSequence; ///< Monotonic input frame number (for server reconciliation).
+        float moveForward = 0.0f;     ///< Forward/backward axis [-1, 1] (W/S keys).
+        float moveRight = 0.0f;       ///< Strafe axis [-1, 1] (A/D keys).
+        float lookYaw = 0.0f;         ///< Horizontal look delta (degrees).
+        float lookPitch = 0.0f;       ///< Vertical look delta (degrees).
+        bool jump = false;            ///< Jump button pressed this frame.
+        bool fire = false;            ///< Primary fire button held.
+        bool reload = false;          ///< Reload button pressed this frame.
+        bool sprint = false;          ///< Sprint button held.
+        bool crouch = false;          ///< Crouch button held.
+        float deltaTime = 0.0f;       ///< Client frame delta (seconds) for deterministic replay.
+        float timestamp = 0.0f;       ///< Client-local time when this input was sampled.
     };
 
     // ============================================================================
@@ -256,16 +256,16 @@ namespace Spark::Net
 
     struct HistorySnapshot
     {
-        float timestamp;
+        float timestamp; ///< Server time this snapshot was recorded.
         struct EntityState
         {
-            uint32_t networkID;
-            XMFLOAT3 position;
-            XMFLOAT3 rotation;
-            XMFLOAT3 boundsMin; ///< AABB for hitbox
-            XMFLOAT3 boundsMax;
+            uint32_t networkID; ///< Network ID of the entity in this state.
+            XMFLOAT3 position;  ///< World-space position at snapshot time.
+            XMFLOAT3 rotation;  ///< Euler rotation at snapshot time.
+            XMFLOAT3 boundsMin; ///< AABB minimum for hitbox rewinding.
+            XMFLOAT3 boundsMax; ///< AABB maximum for hitbox rewinding.
         };
-        std::vector<EntityState> entities;
+        std::vector<EntityState> entities; ///< All entity states captured this frame.
     };
 
     class LagCompensator
@@ -290,16 +290,16 @@ namespace Spark::Net
 
     struct NetworkStats
     {
-        float ping = 0.0f;       ///< Round-trip time in ms
-        float jitter = 0.0f;     ///< Ping variance in ms
-        float packetLoss = 0.0f; ///< 0.0 - 1.0
-        uint64_t bytesSent = 0;
-        uint64_t bytesReceived = 0;
-        uint32_t packetsSent = 0;
-        uint32_t packetsReceived = 0;
-        uint32_t packetsDropped = 0;
-        float bandwidthUp = 0.0f;   ///< KB/s
-        float bandwidthDown = 0.0f; ///< KB/s
+        float ping = 0.0f;            ///< Round-trip time in ms
+        float jitter = 0.0f;          ///< Ping variance in ms
+        float packetLoss = 0.0f;      ///< 0.0 - 1.0
+        uint64_t bytesSent = 0;       ///< Total bytes transmitted since connection.
+        uint64_t bytesReceived = 0;   ///< Total bytes received since connection.
+        uint32_t packetsSent = 0;     ///< Total UDP packets sent.
+        uint32_t packetsReceived = 0; ///< Total UDP packets received.
+        uint32_t packetsDropped = 0;  ///< Packets detected as lost (sequence gaps).
+        float bandwidthUp = 0.0f;     ///< KB/s
+        float bandwidthDown = 0.0f;   ///< KB/s
     };
 
     // ============================================================================
@@ -308,12 +308,12 @@ namespace Spark::Net
 
     struct ClientInfo
     {
-        ClientID id = INVALID_CLIENT;
-        std::string name;
-        ConnectionState state = ConnectionState::Disconnected;
-        NetworkStats stats;
-        float lastHeartbeatTime = 0.0f;
-        uint32_t playerEntityNetworkID = 0;
+        ClientID id = INVALID_CLIENT;                          ///< Unique client identifier assigned on connect.
+        std::string name;                                      ///< Player display name.
+        ConnectionState state = ConnectionState::Disconnected; ///< Current connection lifecycle state.
+        NetworkStats stats;                                    ///< Per-client network statistics.
+        float lastHeartbeatTime = 0.0f;                        ///< Server time of most recent heartbeat (for timeout).
+        uint32_t playerEntityNetworkID = 0;                    ///< Network ID of this client's player entity.
     };
 
     // ============================================================================

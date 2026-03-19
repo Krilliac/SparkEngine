@@ -108,38 +108,42 @@ namespace Spark::Net
     /// @brief Callbacks fired by the dedicated server during its lifecycle
     struct ServerCallbacks
     {
-        std::function<void()> onServerStarted;
-        std::function<void()> onServerStopped;
-        std::function<void(ClientID, const std::string&)> onClientConnected;
-        std::function<void(ClientID, const std::string&)> onClientDisconnected;
-        std::function<void(const std::string&)> onMapChanged;
-        std::function<void(const std::string&)> onChatMessage;
-        std::function<void(const std::string&, const std::string&)> onRconCommand; ///< (command, response)
-        std::function<void(const std::string&)> onLogMessage;
+        std::function<void()> onServerStarted; ///< Fired after the server binds and begins listening.
+        std::function<void()> onServerStopped; ///< Fired after the server shuts down cleanly.
+        std::function<void(ClientID, const std::string&)>
+            onClientConnected; ///< Fired when a client completes handshake (id, name).
+        std::function<void(ClientID, const std::string&)>
+            onClientDisconnected; ///< Fired when a client disconnects or times out (id, reason).
+        std::function<void(const std::string&)> onMapChanged;  ///< Fired after a map change completes (new map name).
+        std::function<void(const std::string&)> onChatMessage; ///< Fired on incoming chat (formatted message string).
+        std::function<void(const std::string&, const std::string&)>
+            onRconCommand;                                    ///< Fired on RCON command (command, response).
+        std::function<void(const std::string&)> onLogMessage; ///< Fired on server log output (message).
     };
 
     // ============================================================================
     // Server Statistics
     // ============================================================================
 
+    /// @brief Aggregate server performance and match-state metrics.
     struct ServerStats
     {
-        float uptimeSeconds = 0.0f;
-        uint64_t totalTicksProcessed = 0;
-        float averageTickMs = 0.0f;
-        float peakTickMs = 0.0f;
-        uint32_t currentPlayers = 0;
-        uint32_t peakPlayers = 0;
-        uint64_t totalBytesIn = 0;
-        uint64_t totalBytesOut = 0;
-        uint32_t totalConnectionsServed = 0;
-        float currentTickRate = 0.0f;
+        float uptimeSeconds = 0.0f;          ///< Seconds since the server started.
+        uint64_t totalTicksProcessed = 0;    ///< Total simulation ticks completed.
+        float averageTickMs = 0.0f;          ///< Rolling average tick duration (ms).
+        float peakTickMs = 0.0f;             ///< Worst-case tick duration seen (ms).
+        uint32_t currentPlayers = 0;         ///< Number of currently connected players.
+        uint32_t peakPlayers = 0;            ///< High-water mark for simultaneous players.
+        uint64_t totalBytesIn = 0;           ///< Cumulative inbound traffic (bytes).
+        uint64_t totalBytesOut = 0;          ///< Cumulative outbound traffic (bytes).
+        uint32_t totalConnectionsServed = 0; ///< Lifetime connection count (including disconnected).
+        float currentTickRate = 0.0f;        ///< Actual ticks per second (may differ from target).
 
-        // Match
-        std::string currentMap;
-        int currentMapIndex = 0;
-        float matchTimeRemaining = 0.0f;
-        int currentRound = 1;
+        // Match state
+        std::string currentMap;          ///< Name of the active map (e.g. "de_dust2").
+        int currentMapIndex = 0;         ///< Index into the map rotation list.
+        float matchTimeRemaining = 0.0f; ///< Seconds remaining in the current match.
+        int currentRound = 1;            ///< Current round number (1-based).
     };
 
     // ============================================================================

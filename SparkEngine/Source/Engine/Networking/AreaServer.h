@@ -82,31 +82,32 @@ namespace Spark::Net
      */
     struct MigratingEntity
     {
-        uint32_t networkID = 0;
-        ClientID ownerID = INVALID_CLIENT;
-        std::string entityType;
-        std::vector<uint8_t> serializedState; ///< Serialized ECS components
-        XMFLOAT3 position{0, 0, 0};
-        XMFLOAT3 velocity{0, 0, 0};
-        float timestamp = 0.0f;
+        uint32_t networkID = 0;               ///< Network ID to preserve across the migration.
+        ClientID ownerID = INVALID_CLIENT;    ///< Client that owns/controls this entity.
+        std::string entityType;               ///< Type name for re-spawning on the destination server.
+        std::vector<uint8_t> serializedState; ///< Serialized ECS components (full snapshot).
+        XMFLOAT3 position{0, 0, 0};           ///< World-space position at the moment of migration.
+        XMFLOAT3 velocity{0, 0, 0};           ///< Velocity for seamless motion continuity.
+        float timestamp = 0.0f;               ///< Server time when migration was initiated.
     };
 
     // ============================================================================
     // Area Server Statistics
     // ============================================================================
 
+    /// @brief Runtime performance metrics for a single area server instance.
     struct AreaServerStats
     {
-        float uptimeSeconds = 0.0f;
-        uint64_t totalTicks = 0;
-        float averageTickMs = 0.0f;
-        float peakTickMs = 0.0f;
-        uint32_t entityCount = 0;
-        uint32_t clientCount = 0;
-        size_t memoryUsageMB = 0;
-        float cpuUsagePercent = 0.0f;
-        uint32_t entitiesMigratedIn = 0;
-        uint32_t entitiesMigratedOut = 0;
+        float uptimeSeconds = 0.0f;       ///< Seconds since this area server started.
+        uint64_t totalTicks = 0;          ///< Total simulation ticks completed.
+        float averageTickMs = 0.0f;       ///< Rolling average tick duration (ms).
+        float peakTickMs = 0.0f;          ///< Worst-case tick duration seen (ms).
+        uint32_t entityCount = 0;         ///< Current number of entities in this area.
+        uint32_t clientCount = 0;         ///< Current number of connected clients.
+        size_t memoryUsageMB = 0;         ///< Estimated memory usage (MB).
+        float cpuUsagePercent = 0.0f;     ///< CPU load [0, 100] for load-balancing decisions.
+        uint32_t entitiesMigratedIn = 0;  ///< Entities received from other area servers.
+        uint32_t entitiesMigratedOut = 0; ///< Entities sent to other area servers.
     };
 
     // ============================================================================

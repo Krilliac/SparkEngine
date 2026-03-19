@@ -103,14 +103,14 @@ namespace Spark::Mobile
  */
     struct MobileQualitySettings
     {
-        float renderScale = 1.0f;   ///< Render resolution scale (0.5 - 1.0)
-        int shadowResolution = 512; ///< Shadow map resolution
-        bool enablePostProcessing = true;
-        bool enableParticles = true;
-        int maxDrawCalls = 500;
-        int textureQuality = 2; ///< 0=low, 1=medium, 2=high
-        bool enableSSAO = false;
-        float lodBias = 0.0f; ///< Positive = lower quality LOD sooner
+        float renderScale = 1.0f;         ///< Render resolution scale (0.5 - 1.0).
+        int shadowResolution = 512;       ///< Shadow map resolution (texels).
+        bool enablePostProcessing = true; ///< Whether to run the post-processing pipeline.
+        bool enableParticles = true;      ///< Whether to render particle effects.
+        int maxDrawCalls = 500;           ///< Per-frame draw call budget before LOD/culling kicks in.
+        int textureQuality = 2;           ///< Texture mip bias: 0=low, 1=medium, 2=high.
+        bool enableSSAO = false;          ///< Screen-space ambient occlusion (expensive on mobile).
+        float lodBias = 0.0f;             ///< Positive = switch to lower LOD sooner (saves GPU).
     };
 
     // =============================================================================
@@ -135,10 +135,10 @@ namespace Spark::Mobile
  */
     struct SafeArea
     {
-        float top = 0.0f;
-        float bottom = 0.0f;
-        float left = 0.0f;
-        float right = 0.0f;
+        float top = 0.0f;    ///< Inset from top edge (pixels) to avoid notch/status bar.
+        float bottom = 0.0f; ///< Inset from bottom edge (pixels) to avoid home indicator.
+        float left = 0.0f;   ///< Inset from left edge (pixels) for rounded corners.
+        float right = 0.0f;  ///< Inset from right edge (pixels) for rounded corners.
     };
 
     // =============================================================================

@@ -97,12 +97,12 @@ namespace Spark::Gameplay
 
     struct AbilityEffect
     {
-        EffectType type = EffectType::Damage;
-        float baseValue = 0.0f;
-        float scaling = 1.0f; ///< Multiplier for attribute scaling
-        AbilitySchool school = AbilitySchool::Physical;
-        uint32_t auraId = 0;      ///< For ApplyAura/RemoveAura effects
-        uint32_t customParam = 0; ///< For Custom effects
+        EffectType type = EffectType::Damage;           ///< What this effect does (damage, heal, apply aura, etc.).
+        float baseValue = 0.0f;                         ///< Base amount (damage, healing, attribute change).
+        float scaling = 1.0f;                           ///< Multiplier for attribute scaling.
+        AbilitySchool school = AbilitySchool::Physical; ///< Damage school (for resistance calculations).
+        uint32_t auraId = 0;                            ///< Aura ID for ApplyAura/RemoveAura effects.
+        uint32_t customParam = 0;                       ///< User-defined parameter for Custom effects.
     };
 
     // ============================================================================
@@ -111,27 +111,27 @@ namespace Spark::Gameplay
 
     struct AbilityDefinition
     {
-        AbilityID id = 0;
-        std::string name;
-        std::string description;
+        AbilityID id = 0;        ///< Unique ability identifier.
+        std::string name;        ///< Display name (e.g. "Fireball", "Heal").
+        std::string description; ///< Tooltip description.
 
-        AbilityTargetType targetType = AbilityTargetType::SingleTarget;
-        float range = 10.0f;
-        float radius = 0.0f;   ///< For AoE abilities
-        float castTime = 0.0f; ///< 0 = instant cast
-        float cooldown = 1.0f;
-        float resourceCost = 0.0f; ///< Mana/stamina/energy cost
+        AbilityTargetType targetType = AbilityTargetType::SingleTarget; ///< Targeting mode.
+        float range = 10.0f;                                            ///< Maximum cast range (meters).
+        float radius = 0.0f;       ///< Effect radius for AoE abilities (0 = single target).
+        float castTime = 0.0f;     ///< Cast bar duration (0 = instant cast).
+        float cooldown = 1.0f;     ///< Seconds before the ability can be used again.
+        float resourceCost = 0.0f; ///< Mana/stamina/energy cost to cast.
 
-        std::vector<AbilityEffect> effects; ///< Up to 3 effects per ability (like TC)
+        std::vector<AbilityEffect> effects; ///< Up to 3 effects per ability (like TC).
 
-        bool requiresTarget = true;
-        bool canCastWhileMoving = false;
-        bool isChanneled = false;
-        float channelDuration = 0.0f;
+        bool requiresTarget = true;      ///< Whether a valid target must be selected.
+        bool canCastWhileMoving = false; ///< Whether the caster can move during the cast.
+        bool isChanneled = false;        ///< Whether this is a channeled spell.
+        float channelDuration = 0.0f;    ///< Duration of the channel (seconds).
 
-        uint32_t iconIndex = 0;
-        uint32_t animationId = 0;
-        uint32_t soundId = 0;
+        uint32_t iconIndex = 0;   ///< UI icon index for the ability bar.
+        uint32_t animationId = 0; ///< Cast animation to play.
+        uint32_t soundId = 0;     ///< Sound effect to play on cast.
     };
 
     // ============================================================================

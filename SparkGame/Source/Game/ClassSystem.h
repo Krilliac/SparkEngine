@@ -46,10 +46,10 @@ namespace Spark
  */
     struct ClassLoadout
     {
-        LoadoutSlot primary;
-        LoadoutSlot secondary;
-        LoadoutSlot sidearm;
-        LoadoutSlot tool; ///< Class-specific tool (med tool, repair tool, etc.)
+        LoadoutSlot primary;   ///< Primary weapon slot (assault rifle, SMG, LMG, etc.).
+        LoadoutSlot secondary; ///< Secondary weapon slot (shotgun, launcher, etc.).
+        LoadoutSlot sidearm;   ///< Sidearm slot (pistol, machine pistol).
+        LoadoutSlot tool;      ///< Class-specific tool (med tool, repair tool, turret, etc.).
 
         ClassLoadout() = default;
     };
@@ -93,31 +93,31 @@ namespace Spark
  */
     struct ClassDefinition
     {
-        PlayerClass classType = PlayerClass::SCOUT;
-        std::string name;
-        std::string description;
+        PlayerClass classType = PlayerClass::SCOUT; ///< Archetype enum value.
+        std::string name;                           ///< Display name (e.g. "Scout", "Medic").
+        std::string description;                    ///< Tooltip description for class selection UI.
 
         // Base stats
-        float baseHealth = 100.0f;
-        float baseArmor = 0.0f;
-        float baseShield = 0.0f; ///< Rechargeable energy shield
-        float shieldRechargeRate = 10.0f;
-        float shieldRechargeDelay = 6.0f;
-        float baseSpeed = 5.0f;
-        float sprintMultiplier = 2.0f;
-        float crouchMultiplier = 0.5f;
-        float baseJumpHeight = 3.0f;
-        float baseStamina = 100.0f;
-        float staminaRegenRate = 50.0f;
+        float baseHealth = 100.0f;        ///< Maximum health points.
+        float baseArmor = 0.0f;           ///< Damage reduction from armor (flat HP buffer).
+        float baseShield = 0.0f;          ///< Rechargeable energy shield capacity.
+        float shieldRechargeRate = 10.0f; ///< Shield recovery per second after delay.
+        float shieldRechargeDelay = 6.0f; ///< Seconds after last hit before shield starts recharging.
+        float baseSpeed = 5.0f;           ///< Walk speed (m/s).
+        float sprintMultiplier = 2.0f;    ///< Speed multiplier when sprinting.
+        float crouchMultiplier = 0.5f;    ///< Speed multiplier when crouching.
+        float baseJumpHeight = 3.0f;      ///< Jump height (meters).
+        float baseStamina = 100.0f;       ///< Maximum stamina for sprinting/abilities.
+        float staminaRegenRate = 50.0f;   ///< Stamina recovered per second.
 
         // Movement modifiers
-        float adsSpeedMultiplier = 0.5f; ///< Speed while aiming down sights
-        float strafeSpeedMultiplier = 0.8f;
-        bool canSprint = true;
+        float adsSpeedMultiplier = 0.5f;    ///< Speed multiplier while aiming down sights.
+        float strafeSpeedMultiplier = 0.8f; ///< Speed multiplier for lateral movement.
+        bool canSprint = true;              ///< Whether this class can sprint.
 
         // Damage modifiers
-        float damageResistance = 0.0f; ///< % damage reduction
-        float headshotMultiplier = 2.0f;
+        float damageResistance = 0.0f;   ///< Percentage damage reduction [0, 1].
+        float headshotMultiplier = 2.0f; ///< Damage multiplier for headshots.
         float explosiveResistance = 0.0f;
 
         // Loadout

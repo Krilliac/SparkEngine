@@ -36,8 +36,8 @@ namespace Spark::AI
     /// A simple sphere obstacle used by ObstacleAvoidance
     struct Obstacle
     {
-        XMFLOAT3 position;
-        float radius = 1.0f;
+        XMFLOAT3 position;   ///< World-space center of the obstacle.
+        float radius = 1.0f; ///< Bounding sphere radius (meters).
     };
 
     // ============================================================================

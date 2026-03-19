@@ -123,14 +123,14 @@ namespace Spark::Scripting
  */
     struct HookContext
     {
-        HookType type{};
-        EntityID sourceEntity = 0;
-        EntityID targetEntity = 0;
-        uint32_t param1 = 0;
-        uint32_t param2 = 0;
-        float floatParam1 = 0.0f;
-        float floatParam2 = 0.0f;
-        std::string stringParam;
+        HookType type{};           ///< Which hook point triggered this dispatch.
+        EntityID sourceEntity = 0; ///< Entity that initiated the action (e.g. attacker).
+        EntityID targetEntity = 0; ///< Entity receiving the action (e.g. target being damaged).
+        uint32_t param1 = 0;       ///< Generic integer parameter (meaning depends on hook type).
+        uint32_t param2 = 0;       ///< Second generic integer parameter.
+        float floatParam1 = 0.0f;  ///< Generic float parameter (e.g. damage amount).
+        float floatParam2 = 0.0f;  ///< Second generic float parameter (e.g. distance).
+        std::string stringParam;   ///< Generic string parameter (e.g. weapon name).
 
         bool cancelled = false;     ///< Script can set this to cancel the action
         float modifiedValue = 0.0f; ///< Script can modify damage/heal amounts

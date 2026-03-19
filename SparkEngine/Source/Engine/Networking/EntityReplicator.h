@@ -62,10 +62,10 @@ namespace Spark::Net
      */
     struct ReplicatedEntityEntry
     {
-        NetworkEntityID entityID = 0;
-        ReplicatedFieldSet fieldSet;
-        FieldSerializer serializer;
-        FieldDeserializer deserializer;
+        NetworkEntityID entityID = 0;   ///< Unique network ID matching NetworkIdentity::networkID.
+        ReplicatedFieldSet fieldSet;    ///< Dirty-bit tracking and visibility masks for all fields.
+        FieldSerializer serializer;     ///< User callback to write a field's value into a byte buffer.
+        FieldDeserializer deserializer; ///< User callback to read a field's value from a byte buffer.
     };
 
     // ============================================================================

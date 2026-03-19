@@ -46,9 +46,9 @@ namespace Spark::Scripting
 
     struct FileChangeEvent
     {
-        std::string filePath;
-        FileChangeType type;
-        std::chrono::system_clock::time_point timestamp;
+        std::string filePath;                            ///< Absolute path to the changed script file.
+        FileChangeType type;                             ///< Kind of change (Modified, Created, Deleted, Renamed).
+        std::chrono::system_clock::time_point timestamp; ///< When the change was detected.
     };
 
     // ============================================================================
@@ -57,11 +57,11 @@ namespace Spark::Scripting
 
     struct RecompileResult
     {
-        bool success = false;
-        std::string filePath;
-        std::string errorMessage;
-        int errorLine = 0;
-        float compileTimeMs = 0.0f;
+        bool success = false;       ///< True if the script compiled without errors.
+        std::string filePath;       ///< Path to the script that was recompiled.
+        std::string errorMessage;   ///< Compiler error text (empty on success).
+        int errorLine = 0;          ///< Line number of the first error (0 on success).
+        float compileTimeMs = 0.0f; ///< Time spent compiling (milliseconds).
     };
 
     // ============================================================================

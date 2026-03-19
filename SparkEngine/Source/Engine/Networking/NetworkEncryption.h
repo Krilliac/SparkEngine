@@ -158,13 +158,13 @@ namespace Spark::Net
       private:
         struct ClientRateInfo
         {
-            uint32_t packetCount = 0;
-            std::chrono::steady_clock::time_point windowStart;
+            uint32_t packetCount = 0;                          ///< Packets counted in the current window.
+            std::chrono::steady_clock::time_point windowStart; ///< Start of the current 1-second counting window.
         };
 
-        uint32_t m_maxPacketsPerSecond;
-        uint32_t m_burstAllowance;
-        std::unordered_map<uint64_t, ClientRateInfo> m_clients;
+        uint32_t m_maxPacketsPerSecond;                         ///< Hard limit before packets are dropped.
+        uint32_t m_burstAllowance;                              ///< Extra packets allowed in short bursts.
+        std::unordered_map<uint64_t, ClientRateInfo> m_clients; ///< Per-client rate tracking (keyed by address hash).
     };
 
     // ============================================================================

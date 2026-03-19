@@ -17,6 +17,7 @@
 namespace SparkEditor
 {
 
+    /** @brief In-editor game viewport with full FPS HUD preview and simulated player state. */
     class GameViewPanel : public EditorPanel
     {
       public:
@@ -75,41 +76,41 @@ namespace SparkEditor
         bool m_maximized = false;
 
         // Simulated player state
-        float m_health = 85.0f;
-        float m_maxHealth = 100.0f;
-        float m_armor = 60.0f;
-        float m_maxArmor = 100.0f;
-        float m_stamina = 100.0f;
-        int m_ammo = 24;
-        int m_maxAmmo = 30;
-        int m_reserveAmmo = 90;
-        int m_currentWeaponSlot = 2;
-        std::string m_currentWeaponName = "Assault Rifle";
-        bool m_isReloading = false;
-        float m_reloadProgress = 0.0f;
+        float m_health = 85.0f;                            ///< Current player health for HUD preview.
+        float m_maxHealth = 100.0f;                        ///< Max health.
+        float m_armor = 60.0f;                             ///< Current armor.
+        float m_maxArmor = 100.0f;                         ///< Max armor.
+        float m_stamina = 100.0f;                          ///< Current stamina.
+        int m_ammo = 24;                                   ///< Rounds remaining in magazine.
+        int m_maxAmmo = 30;                                ///< Magazine capacity.
+        int m_reserveAmmo = 90;                            ///< Reserve ammo pool.
+        int m_currentWeaponSlot = 2;                       ///< Active weapon slot index.
+        std::string m_currentWeaponName = "Assault Rifle"; ///< Display name.
+        bool m_isReloading = false;                        ///< Whether reload animation is playing.
+        float m_reloadProgress = 0.0f;                     ///< Reload progress [0, 1].
 
         // Kill feed simulation
         struct SimKillFeedEntry
         {
-            std::string killer;
-            std::string victim;
-            std::string weapon;
-            bool headshot;
-            float timer;
+            std::string killer; ///< Killer player name.
+            std::string victim; ///< Victim player name.
+            std::string weapon; ///< Weapon used for the kill.
+            bool headshot;      ///< Whether it was a headshot.
+            float timer;        ///< Time remaining before the entry fades out.
         };
-        std::deque<SimKillFeedEntry> m_killFeed;
-        float m_killFeedSpawnTimer = 0.0f;
+        std::deque<SimKillFeedEntry> m_killFeed; ///< Active kill feed entries.
+        float m_killFeedSpawnTimer = 0.0f;       ///< Timer for spawning simulated kills.
 
         // Damage indicators
         struct SimDamageIndicator
         {
-            float angle;
-            float intensity;
-            float timer;
-            float maxTime;
+            float angle;     ///< Direction the damage came from (radians).
+            float intensity; ///< Visual intensity [0, 1].
+            float timer;     ///< Time remaining before fade-out.
+            float maxTime;   ///< Total display duration.
         };
-        std::vector<SimDamageIndicator> m_damageIndicators;
-        float m_damageSpawnTimer = 0.0f;
+        std::vector<SimDamageIndicator> m_damageIndicators; ///< Active damage direction indicators.
+        float m_damageSpawnTimer = 0.0f;                    ///< Timer for spawning simulated damage.
 
         // Hit marker
         float m_hitMarkerTimer = 0.0f;
@@ -135,9 +136,9 @@ namespace SparkEditor
         // Scoreboard entries
         struct SimScoreEntry
         {
-            std::string name;
-            int kills, deaths, score, ping;
-            bool isLocal;
+            std::string name;               ///< Player name.
+            int kills, deaths, score, ping; ///< Stats columns.
+            bool isLocal;                   ///< True for the local player (highlighted).
         };
         std::vector<SimScoreEntry> m_scoreboardEntries;
 

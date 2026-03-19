@@ -266,9 +266,9 @@ class Profiler
     // Memory tracking
     struct MemoryCategory
     {
-        size_t currentBytes = 0;
-        size_t peakBytes = 0;
-        size_t totalAllocations = 0;
+        size_t currentBytes = 0;     ///< Currently allocated bytes in this category.
+        size_t peakBytes = 0;        ///< High-water mark of allocated bytes.
+        size_t totalAllocations = 0; ///< Lifetime count of allocations (for leak detection).
     };
     std::unordered_map<std::string, MemoryCategory> m_memoryCategories;
 

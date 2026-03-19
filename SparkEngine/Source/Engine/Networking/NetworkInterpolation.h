@@ -27,9 +27,9 @@ namespace Spark::Net
      */
     struct InterpolationSnapshot
     {
-        XMFLOAT3 position{0, 0, 0};
-        XMFLOAT4 rotation{0, 0, 0, 1}; ///< Quaternion (x, y, z, w)
-        float timestamp = 0.0f;
+        XMFLOAT3 position{0, 0, 0};    ///< World-space position at this point in time.
+        XMFLOAT4 rotation{0, 0, 0, 1}; ///< Orientation quaternion (x, y, z, w).
+        float timestamp = 0.0f;        ///< Server time when this state was authoritative.
     };
 
     /**
