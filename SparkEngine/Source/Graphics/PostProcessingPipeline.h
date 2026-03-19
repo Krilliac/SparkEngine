@@ -913,18 +913,18 @@ namespace Spark::Graphics
             m_passTimings[static_cast<int>(pass)] = ms;
         }
 
-        // ---- State ----
-        bool m_initialized = false;
-        uint32_t m_width = 1920;
-        uint32_t m_height = 1080;
-        float m_totalTime = 0.0f;
-        int m_activePassCount = 0;
-        int m_currentTarget = 0;
+        // ---- Pipeline state ----
+        bool m_initialized = false; ///< Whether Initialize() has been called successfully.
+        uint32_t m_width = 1920;    ///< Current render target width (pixels).
+        uint32_t m_height = 1080;   ///< Current render target height (pixels).
+        float m_totalTime = 0.0f;   ///< Accumulated time for animated effects (film grain, etc.).
+        int m_activePassCount = 0;  ///< Number of currently enabled post-process passes.
+        int m_currentTarget = 0;    ///< Ping-pong index (0 or 1) for the next write target.
 
-        bool m_passEnabled[static_cast<int>(PostProcessPass::Count)] = {};
-        float m_passTimings[static_cast<int>(PostProcessPass::Count)] = {};
+        bool m_passEnabled[static_cast<int>(PostProcessPass::Count)] = {};  ///< Per-pass enable flags.
+        float m_passTimings[static_cast<int>(PostProcessPass::Count)] = {}; ///< Per-pass GPU time (ms).
 
-        // Settings
+        // Per-effect settings (each struct defined above)
         FXAASettings m_fxaaSettings;
         DepthOfFieldSettings m_dofSettings;
         VignetteSettings m_vignetteSettings;
@@ -935,19 +935,19 @@ namespace Spark::Graphics
         LensFlareSettings m_lensFlareSettings;
         SharpenSettings m_sharpenSettings;
 
-        // GPU Resources
-        ID3D11Device* m_device = nullptr;
-        ID3D11DeviceContext* m_context = nullptr;
-        ID3D11ShaderResourceView* m_depthSRV = nullptr;
-        ID3D11ShaderResourceView* m_inputSRV = nullptr;
+        // GPU resources (non-owning pointers to GraphicsEngine-owned objects)
+        ID3D11Device* m_device = nullptr;               ///< D3D11 device for resource creation.
+        ID3D11DeviceContext* m_context = nullptr;       ///< Immediate context for draw calls.
+        ID3D11ShaderResourceView* m_depthSRV = nullptr; ///< Scene depth buffer SRV (for DoF, light shafts).
+        ID3D11ShaderResourceView* m_inputSRV = nullptr; ///< HDR scene color input SRV.
 
-        // Ping-pong render targets
-        ComPtr<ID3D11Texture2D> m_pingPongTextures[2];
-        ID3D11RenderTargetView* m_pingPongRTVs[2] = {};
-        ID3D11ShaderResourceView* m_pingPongSRVs[2] = {};
+        // Ping-pong render targets: alternating read/write for chaining effects
+        ComPtr<ID3D11Texture2D> m_pingPongTextures[2];    ///< Backing textures for ping-pong.
+        ID3D11RenderTargetView* m_pingPongRTVs[2] = {};   ///< RTVs for writing the current pass output.
+        ID3D11ShaderResourceView* m_pingPongSRVs[2] = {}; ///< SRVs for reading the previous pass output.
 
-        // Shaders
-        ComPtr<ID3D11VertexShader> m_fullscreenVS;
+        // Per-pass pixel shaders (fullscreen quad technique)
+        ComPtr<ID3D11VertexShader> m_fullscreenVS; ///< Shared fullscreen triangle vertex shader.
         ComPtr<ID3D11PixelShader> m_fxaaPS;
         ComPtr<ID3D11PixelShader> m_dofPS;
         ComPtr<ID3D11PixelShader> m_motionBlurPS;
@@ -959,10 +959,10 @@ namespace Spark::Graphics
         ComPtr<ID3D11PixelShader> m_lensFlarePS;
         ComPtr<ID3D11PixelShader> m_sharpenPS;
 
-        // Resources
-        ComPtr<ID3D11Buffer> m_constantBuffer;
-        ComPtr<ID3D11SamplerState> m_linearSampler;
-        ComPtr<ID3D11SamplerState> m_pointSampler;
+        // Shared GPU resources
+        ComPtr<ID3D11Buffer> m_constantBuffer;      ///< PostProcessCB constant buffer (per-pass parameters).
+        ComPtr<ID3D11SamplerState> m_linearSampler; ///< Bilinear sampler for texture reads.
+        ComPtr<ID3D11SamplerState> m_pointSampler;  ///< Point sampler for exact-texel reads.
     };
 
 } // namespace Spark::Graphics

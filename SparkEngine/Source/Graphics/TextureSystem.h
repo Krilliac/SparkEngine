@@ -213,16 +213,16 @@ class TextureSystem
      */
     struct TextureMetrics
     {
-        uint32_t loadedTextures;
-        uint32_t streamingTextures;
-        size_t totalMemoryUsage;
-        size_t systemMemoryUsage;
-        size_t videoMemoryUsage;
-        uint32_t textureBinds;
-        uint32_t textureSwitches;
-        float averageLoadTime;
-        uint32_t compressionRatio;
-        uint32_t mipLevelsGenerated;
+        uint32_t loadedTextures;     ///< Number of textures currently resident in memory.
+        uint32_t streamingTextures;  ///< Number of textures queued for async streaming.
+        size_t totalMemoryUsage;     ///< Combined system + video memory usage (bytes).
+        size_t systemMemoryUsage;    ///< CPU-side staging memory usage (bytes).
+        size_t videoMemoryUsage;     ///< GPU VRAM usage for texture resources (bytes).
+        uint32_t textureBinds;       ///< Per-frame count of texture bind calls.
+        uint32_t textureSwitches;    ///< Per-frame count of texture state changes (cache misses).
+        float averageLoadTime;       ///< Rolling average texture load time (milliseconds).
+        uint32_t compressionRatio;   ///< Average compression ratio across loaded textures (percent).
+        uint32_t mipLevelsGenerated; ///< Total mip chain levels generated this session.
     };
 
     TextureSystem();

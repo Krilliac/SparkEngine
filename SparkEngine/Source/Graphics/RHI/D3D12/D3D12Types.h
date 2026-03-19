@@ -69,10 +69,11 @@ namespace Spark
              */
             struct DescriptorAllocation
             {
-                D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = {};
-                D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = {};
-                uint32_t index = 0;
-                uint32_t count = 0;
+                D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = {}; ///< CPU-side handle for resource binding and copying.
+                D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle =
+                    {};             ///< GPU-side handle for shader-visible heaps (0 if non-visible).
+                uint32_t index = 0; ///< Zero-based index into the parent DescriptorHeapAllocator.
+                uint32_t count = 0; ///< Number of contiguous descriptors in this allocation.
 
                 bool IsValid() const { return count > 0; }
             };
@@ -101,14 +102,14 @@ namespace Spark
                 uint32_t GetDescriptorSize() const { return m_descriptorSize; }
 
               private:
-                ComPtr<ID3D12DescriptorHeap> m_heap;
-                D3D12_CPU_DESCRIPTOR_HANDLE m_cpuStart = {};
-                D3D12_GPU_DESCRIPTOR_HANDLE m_gpuStart = {};
-                uint32_t m_descriptorSize = 0;
-                uint32_t m_capacity = 0;
-                uint32_t m_nextFreeIndex = 0;
-                std::vector<uint32_t> m_freeList;
-                std::mutex m_mutex;
+                ComPtr<ID3D12DescriptorHeap> m_heap;         ///< Underlying D3D12 descriptor heap.
+                D3D12_CPU_DESCRIPTOR_HANDLE m_cpuStart = {}; ///< CPU handle of descriptor 0 in the heap.
+                D3D12_GPU_DESCRIPTOR_HANDLE m_gpuStart = {}; ///< GPU handle of descriptor 0 (0 if non-shader-visible).
+                uint32_t m_descriptorSize = 0;               ///< Byte stride between consecutive descriptors.
+                uint32_t m_capacity = 0;                     ///< Total descriptor count in the heap.
+                uint32_t m_nextFreeIndex = 0;                ///< Bump-pointer for sequential allocation.
+                std::vector<uint32_t> m_freeList;            ///< Returned indices available for reuse.
+                std::mutex m_mutex;                          ///< Guards concurrent Allocate/Free calls.
             };
 
             // ============================================================================
@@ -149,9 +150,9 @@ namespace Spark
                 ID3D12Fence* GetFence() const { return m_fence.Get(); }
 
               private:
-                ComPtr<ID3D12Fence> m_fence;
-                HANDLE m_fenceEvent = nullptr;
-                uint64_t m_currentValue = 0;
+                ComPtr<ID3D12Fence> m_fence;   ///< The underlying D3D12 fence object.
+                HANDLE m_fenceEvent = nullptr; ///< Win32 event used to block CPU in WaitForValue().
+                uint64_t m_currentValue = 0;   ///< Last value passed to Signal(); monotonically increasing.
             };
 
             // ============================================================================

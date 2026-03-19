@@ -46,11 +46,11 @@ namespace Spark::VR
  */
     struct VRController
     {
-        bool connected = false;
-        DirectX::XMFLOAT3 position{0, 0, 0};
-        DirectX::XMFLOAT4 orientation{0, 0, 0, 1};
-        DirectX::XMFLOAT3 velocity{0, 0, 0};
-        DirectX::XMFLOAT3 angularVelocity{0, 0, 0};
+        bool connected = false;                     ///< Whether this controller is tracked and active.
+        DirectX::XMFLOAT3 position{0, 0, 0};        ///< World-space position (meters, tracking origin).
+        DirectX::XMFLOAT4 orientation{0, 0, 0, 1};  ///< Orientation quaternion (x, y, z, w).
+        DirectX::XMFLOAT3 velocity{0, 0, 0};        ///< Linear velocity (m/s) — used for throw physics.
+        DirectX::XMFLOAT3 angularVelocity{0, 0, 0}; ///< Angular velocity (rad/s) — used for throw spin.
 
         float triggerValue = 0.0f;          ///< Trigger axis (0-1)
         float gripValue = 0.0f;             ///< Grip axis (0-1)
@@ -171,16 +171,16 @@ namespace Spark::VR
         std::string Console_GetStatus() const;
 
       private:
-        std::atomic<bool> m_initialized{false};
-        DirectX::XMFLOAT3 m_headPosition{0, 0, 0};
-        DirectX::XMFLOAT4 m_headOrientation{0, 0, 0, 1};
-        VREye m_leftEye;
-        VREye m_rightEye;
-        VRController m_leftController;
-        VRController m_rightController;
-        VRTrackingSpace m_trackingSpace = VRTrackingSpace::RoomScale;
-        int m_recommendedWidth = 1440;
-        int m_recommendedHeight = 1600;
+        std::atomic<bool> m_initialized{false};                       ///< Whether VR hardware is connected and ready.
+        DirectX::XMFLOAT3 m_headPosition{0, 0, 0};                    ///< HMD position in tracking space (meters).
+        DirectX::XMFLOAT4 m_headOrientation{0, 0, 0, 1};              ///< HMD orientation quaternion (x, y, z, w).
+        VREye m_leftEye;                                              ///< Left eye view/projection data.
+        VREye m_rightEye;                                             ///< Right eye view/projection data.
+        VRController m_leftController;                                ///< Left motion controller state.
+        VRController m_rightController;                               ///< Right motion controller state.
+        VRTrackingSpace m_trackingSpace = VRTrackingSpace::RoomScale; ///< Active tracking space mode.
+        int m_recommendedWidth = 1440;                                ///< HMD-recommended render target width per eye.
+        int m_recommendedHeight = 1600;                               ///< HMD-recommended render target height per eye.
     };
 
 } // namespace Spark::VR

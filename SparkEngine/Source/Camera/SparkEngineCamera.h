@@ -260,13 +260,21 @@ class SparkEngineCamera
      */
     struct CameraState
     {
-        XMFLOAT3 position;
-        XMFLOAT3 rotation;
-        XMFLOAT3 forward, right, up;
-        float moveSpeed, rotationSpeed, mouseSensitivity;
-        float defaultFov, zoomedFov, currentFov;
-        float aspectRatio, nearPlane, farPlane;
-        bool invertY, smoothMovement, isZoomed;
+        XMFLOAT3 position;           ///< World-space position.
+        XMFLOAT3 rotation;           ///< Euler angles (pitch, yaw, roll) in degrees.
+        XMFLOAT3 forward, right, up; ///< Orthonormal basis vectors derived from rotation.
+        float moveSpeed;             ///< Movement speed (units/second).
+        float rotationSpeed;         ///< Keyboard rotation speed multiplier.
+        float mouseSensitivity;      ///< Mouse look sensitivity multiplier.
+        float defaultFov;            ///< Default vertical FOV in degrees.
+        float zoomedFov;             ///< FOV when zoomed/ADS (degrees).
+        float currentFov;            ///< Active FOV (interpolated between default and zoomed).
+        float aspectRatio;           ///< Viewport width / height.
+        float nearPlane;             ///< Near clipping plane distance (meters).
+        float farPlane;              ///< Far clipping plane distance (meters).
+        bool invertY;                ///< Whether vertical mouse movement is inverted.
+        bool smoothMovement;         ///< Whether position is interpolated for smooth movement.
+        bool isZoomed;               ///< Whether the camera is currently zoomed/ADS.
     };
 
     /**
