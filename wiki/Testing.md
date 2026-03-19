@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*96 test files, 1250+ test cases*
+*97 test files, 1256+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -508,6 +508,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestPostProcessingPipeline` | 11 |
 | `TestQuestSystem` | 10 |
 | `TestRandomEngine` | 11 |
+| `TestRecastIntegration` | 6 |
 | `TestReflection` | 7 |
 | `TestReliableChannel` | 9 |
 | `TestReplicationFields` | 15 |

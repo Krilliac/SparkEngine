@@ -14,3 +14,6 @@
 [submodule "ThirdParty/Scripting/angelscript-mirror"]
 	path = ThirdParty/Scripting/angelscript-mirror
 	url = https://github.com/codecat/angelscript-mirror.git
+[submodule "ThirdParty/AI/recastnavigation"]
+	path = ThirdParty/AI/recastnavigation
+	url = https://github.com/recastnavigation/recastnavigation.git

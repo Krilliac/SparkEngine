@@ -105,6 +105,7 @@ add_executable(SparkTests
     TestConsoleRBAC.cpp
     TestNetworkIntegration.cpp
     TestConnectionTimeout.cpp
+    TestRecastIntegration.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

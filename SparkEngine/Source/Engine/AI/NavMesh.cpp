@@ -4,6 +4,7 @@
  */
 
 #include "NavMesh.h"
+#include "RecastDetourBackend.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
 #include <fstream>
@@ -570,6 +571,23 @@ namespace Spark::AI
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         SPARK_WARN_IF(Spark::LogCategory::AI, vertices.empty(), "NavMeshBuilder::Build called with empty vertices");
+
+        // Prefer Recast if available — produces higher quality navmeshes via
+        // proper voxelization, region building, and contour simplification.
+        if (IsRecastAvailable())
+        {
+            auto result = BuildNavMeshWithRecast(vertices, indices, settings);
+            if (result && !result->triangles.empty())
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::AI, "NavMeshBuilder: used Recast backend (%zu tris)",
+                               result->triangles.size());
+                return result;
+            }
+            SPARK_LOG_WARN(Spark::LogCategory::AI,
+                           "NavMeshBuilder: Recast build failed, falling back to triangle-soup builder");
+        }
+
+        // Fallback: simple triangle-soup builder (slope filtering + O(n^2) adjacency)
         auto navMesh = std::make_unique<NavMeshData>();
         navMesh->cellSize = settings.cellSize;
         navMesh->cellHeight = settings.cellHeight;
