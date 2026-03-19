@@ -1,28 +1,30 @@
 /**
  * @file PlayerTypes.h
- * @brief Type definitions used by the Player class
+ * @brief Player-related type definitions and state structures
  * @author Spark Engine Team
  * @date 2025
  *
- * Contains standalone data types extracted from Player.h to reduce header
- * coupling and allow other systems to reference player types without pulling
- * in the full Player class definition.
+ * Contains the PlayerState struct and any supporting types extracted from
+ * Player.h to reduce header weight for code that only needs the data types.
+ *
+ * @see Player.h
  */
 
 #pragma once
 
 #include "Core/Platform.h"
-#include "ClassSystem.h"
-#include "Projectiles/WeaponStats.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
-#endif // SPARK_PLATFORM_WINDOWS
+#endif
+
+#include "ClassSystem.h"
+#include "Projectiles/WeaponStats.h"
 
 using SparkEditor::WeaponType;
 
 /**
- * @brief Get comprehensive player state for console display
+ * @brief Comprehensive player state for console display and serialization
  */
 struct PlayerState
 {

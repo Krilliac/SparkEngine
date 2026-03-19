@@ -161,8 +161,8 @@ namespace JitterGenerator
         {
             // 8-sample rotated grid
             static const XMFLOAT2 offsets[8] = {{-0.375f, -0.375f}, {0.125f, -0.375f}, {-0.125f, -0.125f},
-                                                 {0.375f, -0.125f},  {-0.375f, 0.125f}, {0.125f, 0.125f},
-                                                 {-0.125f, 0.375f},  {0.375f, 0.375f}};
+                                                {0.375f, -0.125f},  {-0.375f, 0.125f}, {0.125f, 0.125f},
+                                                {-0.125f, 0.375f},  {0.375f, 0.375f}};
             return offsets[idx % 8];
         }
 

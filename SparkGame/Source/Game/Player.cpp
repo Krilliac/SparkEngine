@@ -1222,7 +1222,7 @@ void Player::Console_ChangeWeapon(WeaponType weaponType)
     LOG_TO_CONSOLE_IMMEDIATE(L"Player weapon changed via console", L"SUCCESS");
 }
 
-Player::PlayerState Player::Console_GetState() const
+PlayerState Player::Console_GetState() const
 {
     return GetStateThreadSafe();
 }
@@ -1259,7 +1259,7 @@ void Player::NotifyStateChange()
     }
 }
 
-Player::PlayerState Player::GetStateThreadSafe() const
+PlayerState Player::GetStateThreadSafe() const
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     PlayerState state;
