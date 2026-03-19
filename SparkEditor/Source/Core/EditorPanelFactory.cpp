@@ -39,6 +39,8 @@
 #include "../Panels/SaveSystemPanel.h"
 #include "../Panels/LocalizationPanel.h"
 #include "../Panels/WeatherFogPanel.h"
+#include "../Panels/CinematicSequencerPanel.h"
+#include "../Panels/ProjectSettingsPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include <imgui.h>
@@ -520,6 +522,30 @@ namespace SparkEditor
             console.LogError("Failed to create Weather & Fog panel: " + std::string(e.what()));
         }
 
+        // Create Cinematic Sequencer Panel
+        try
+        {
+            auto cinematicPanel = std::shared_ptr<CinematicSequencerPanel>(new CinematicSequencerPanel());
+            m_panels["CinematicSequencer"] = cinematicPanel;
+            console.LogSuccess("Created Cinematic Sequencer panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Cinematic Sequencer panel: " + std::string(e.what()));
+        }
+
+        // Create Project Settings Panel
+        try
+        {
+            auto projectSettingsPanel = std::shared_ptr<ProjectSettingsPanel>(new ProjectSettingsPanel());
+            m_panels["ProjectSettings"] = projectSettingsPanel;
+            console.LogSuccess("Created Project Settings panel");
+        }
+        catch (const std::exception& e)
+        {
+            console.LogError("Failed to create Project Settings panel: " + std::string(e.what()));
+        }
+
         // Initialize all panels
         for (auto& [name, panel] : m_panels)
         {
@@ -573,6 +599,10 @@ namespace SparkEditor
             m_panels["DedicatedServer"]->SetIcon(ICON_FA_SERVER);
         if (m_panels.count("TerrainEditor"))
             m_panels["TerrainEditor"]->SetIcon(ICON_FA_MOUNTAIN);
+        if (m_panels.count("CinematicSequencer"))
+            m_panels["CinematicSequencer"]->SetIcon(ICON_FA_FILM);
+        if (m_panels.count("ProjectSettings"))
+            m_panels["ProjectSettings"]->SetIcon(ICON_FA_COGS);
 
         // Hide secondary panels by default (accessible via menus)
         if (m_panels.count("UndoHistory"))
@@ -654,6 +684,10 @@ namespace SparkEditor
             m_panels["WeatherFog"]->SetIcon(ICON_FA_CLOUD_SUN);
             m_panels["WeatherFog"]->SetVisible(false);
         }
+        if (m_panels.count("CinematicSequencer"))
+            m_panels["CinematicSequencer"]->SetVisible(false);
+        if (m_panels.count("ProjectSettings"))
+            m_panels["ProjectSettings"]->SetVisible(false);
 
         console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
     }

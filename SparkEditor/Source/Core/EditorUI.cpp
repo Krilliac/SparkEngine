@@ -1306,6 +1306,8 @@ namespace SparkEditor
         RegisterPanelToggle("SaveSystem", "Save System");
         RegisterPanelToggle("Localization", "Localization");
         RegisterPanelToggle("WeatherFog", "Weather & Fog");
+        RegisterPanelToggle("CinematicSequencer", "Cinematic Sequencer");
+        RegisterPanelToggle("ProjectSettings", "Project Settings");
     }
 
     void EditorUI::RegisterEditCommands()
