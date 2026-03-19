@@ -1,6 +1,7 @@
 #include "Core/Platform.h"
 #include "SoundEffect.h"
 #include "Utils/Assert.h"
+#include "Utils/MathUtils.h"
 #include "../Utils/Validate.h"
 #include <fstream>
 #include <cmath>
@@ -124,7 +125,6 @@ HRESULT SoundEffect::ReadChunkData(const BYTE* src, DWORD pos, void* dst, DWORD 
 //------------------------------------------------------------------------------
 //  SoundEffectFactory implementation
 //------------------------------------------------------------------------------
-static constexpr float PI = 3.14159265358979f;
 
 void SoundEffectFactory::GenerateWaveform(std::vector<short>& samples, float freq, float dur, float (*wave)(float))
 {
@@ -136,7 +136,7 @@ void SoundEffectFactory::GenerateWaveform(std::vector<short>& samples, float fre
     for (DWORD i = 0; i < count; ++i)
     {
         float t = static_cast<float>(i) / SR;
-        float phase = 2.f * PI * freq * t;
+        float phase = MathUtils::TWO_PI * freq * t;
         float sample = wave(phase);
         samples[i] = static_cast<short>(std::clamp(sample, -1.f, 1.f) * 32767.f);
     }
@@ -233,7 +233,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateExplosion()
     {
         float t = static_cast<float>(i) / SR;
         float env = std::exp(-t * 3.f);
-        float rumble = std::sin(2.f * PI * 60.f * t) * 0.5f;
+        float rumble = std::sin(MathUtils::TWO_PI * 60.f * t) * 0.5f;
         float noise = rnd(rng) * 0.35f;
         s[i] = static_cast<short>((rumble + noise) * env * 32767.f);
     }
@@ -251,7 +251,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateFootstep()
     {
         float t = static_cast<float>(i) / SR;
         float env = std::exp(-t * 22.f);
-        float thp = std::sin(2.f * PI * 110.f * t);
+        float thp = std::sin(MathUtils::TWO_PI * 110.f * t);
         s[i] = static_cast<short>(thp * env * 16383.f); // half volume
     }
     return CreateFromSamples(s, SR);
@@ -274,12 +274,12 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateReload()
 
         // metallic click at start
         if (t < 0.05f)
-            sample = std::sin(2.f * PI * 2000.f * t) * std::exp(-t * 60.f);
+            sample = std::sin(MathUtils::TWO_PI * 2000.f * t) * std::exp(-t * 60.f);
         // metallic click at end
         else if (t > 0.28f)
         {
             float tt = t - 0.28f;
-            sample = std::sin(2.f * PI * 1600.f * tt) * std::exp(-tt * 55.f);
+            sample = std::sin(MathUtils::TWO_PI * 1600.f * tt) * std::exp(-tt * 55.f);
         }
         // add subtle noise
         sample += rnd(rng) * 0.08f * std::exp(-t * 6.f);
@@ -301,7 +301,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreatePickup()
         float prog = t / DUR;
         float freq = 440.f + 440.f * prog; // glide 440->880
         float env = 1.f - prog;            // fade out
-        float samp = std::sin(2.f * PI * freq * t) * env;
+        float samp = std::sin(MathUtils::TWO_PI * freq * t) * env;
         s[i] = static_cast<short>(samp * 16383.f);
     }
     return CreateFromSamples(s, SR);

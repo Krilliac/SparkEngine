@@ -3,6 +3,7 @@
 #include "Player.h"
 #include "Input/InputManager.h"
 #include "Utils/Assert.h"
+#include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
@@ -137,7 +138,7 @@ namespace Spark
         {
             // Rotating door
             XMFLOAT3 rot = GetRotation();
-            rot.y = m_closedRotationY + (m_rotationAngle * 3.14159f / 180.0f) * m_openProgress;
+            rot.y = m_closedRotationY + (MathUtils::DegreesToRadians(m_rotationAngle)) * m_openProgress;
             SetRotation(rot);
         }
 

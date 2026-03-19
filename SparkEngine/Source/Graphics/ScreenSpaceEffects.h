@@ -28,6 +28,7 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "../Utils/MathUtils.h"
 
 #include <vector>
 #include <cmath>
@@ -186,7 +187,7 @@ namespace Spark
                 for (int i = 0; i < sampleCount; ++i)
                 {
                     // Random point in hemisphere
-                    float theta = 2.0f * 3.14159265f * dist(rng);
+                    float theta = MathUtils::TWO_PI * dist(rng);
                     float cosPhi = dist(rng); // Cosine-weighted
                     float sinPhi = std::sqrt(1.0f - cosPhi * cosPhi);
 

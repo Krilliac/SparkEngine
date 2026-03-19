@@ -1,4 +1,5 @@
 #include "Core/Platform.h"
+#include "Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file DecalSystem.cpp
@@ -138,7 +139,7 @@ namespace Spark::Graphics
         // Find appropriate material from surface mapping
         std::string materialName;
         XMFLOAT2 sizeRange = {0.05f, 0.2f};
-        float rotVariance = 3.14159f;
+        float rotVariance = MathUtils::PI;
 
         for (const auto& mapping : m_surfaceMappings)
         {
@@ -427,7 +428,7 @@ namespace Spark::Graphics
     {
         std::string materialName;
         XMFLOAT2 sizeRange = {0.05f, 0.2f};
-        float rotVariance = 3.14159f;
+        float rotVariance = MathUtils::PI;
 
         for (const auto& mapping : m_surfaceMappings)
         {

@@ -507,11 +507,26 @@ class SPARK_GAME_API Game
 
     /**
      * @brief Create initial test objects for the scene
-     * 
+     *
      * Populates the scene with basic objects for testing and demonstration
      * purposes. Called during initialization.
      */
     void CreateTestObjects();
+
+    /// @brief Initialize interactive objects (doors, pickups, jump pads, etc.)
+    void InitializeInteractionObjects();
+
+    /// @brief Initialize GameMode, HUD, and wire event callbacks
+    void InitializeGameModeAndHUD();
+
+    /// @brief Register item definitions and configure player inventory
+    void InitializeInventorySystem();
+
+    /// @brief Register quest definitions and start initial quests
+    void InitializeQuestSystem();
+
+    /// @brief Initialize respawn points and spawn vehicles
+    void InitializeRespawnAndVehicles();
 
     // Engine-side pointers (not owned)
     GraphicsEngine* m_graphics{nullptr}; ///< Reference to graphics engine

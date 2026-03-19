@@ -461,6 +461,37 @@ class MathUtils : public MathUtilsExtended
      */
     static float Length(const XMFLOAT3& v);
 
+    // =========================================================================
+    // Quaternion / Euler conversion
+    // =========================================================================
+
+    /**
+     * @brief Convert a quaternion to Euler angles in degrees (roll, pitch, yaw).
+     *
+     * Uses the standard ZYX convention. Returns angles in degrees.
+     * Handles gimbal lock near ±90° pitch.
+     *
+     * @param qx  X component of the quaternion.
+     * @param qy  Y component of the quaternion.
+     * @param qz  Z component of the quaternion.
+     * @param qw  W component of the quaternion.
+     * @return     XMFLOAT3 with (roll, pitch, yaw) in degrees.
+     */
+    static XMFLOAT3 QuaternionToEulerDegrees(float qx, float qy, float qz, float qw);
+
+    /**
+     * @brief Convert Euler angles in degrees to a quaternion.
+     *
+     * Uses the ZYX convention matching QuaternionToEulerDegrees.
+     *
+     * @param rollDeg   Roll angle in degrees (X axis).
+     * @param pitchDeg  Pitch angle in degrees (Y axis).
+     * @param yawDeg    Yaw angle in degrees (Z axis).
+     * @return          XMFLOAT4 quaternion (x, y, z, w).
+     */
+    static XMFLOAT4 EulerDegreesToQuaternion(float rollDeg, float pitchDeg, float yawDeg);
+
+
     /**
      * @brief Compute the squared length of a 3D vector.
      *

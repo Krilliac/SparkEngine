@@ -23,6 +23,7 @@
 #pragma once
 
 #include "../../Core/Platform.h"
+#include "../../Utils/MathUtils.h"
 
 #include <algorithm>
 #include <chrono>
@@ -161,7 +162,7 @@ namespace Spark::AI
       public:
         ConeGenerator(XMFLOAT3 origin, XMFLOAT3 direction, float distance, float halfAngleDeg, int numPoints)
             : m_origin(origin), m_direction(direction), m_distance(distance),
-              m_halfAngleRad(halfAngleDeg * 3.14159265f / 180.0f), m_numPoints(numPoints)
+              m_halfAngleRad(halfAngleDeg * MathUtils::DEG_TO_RAD), m_numPoints(numPoints)
         {
         }
 

@@ -29,6 +29,7 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "../Utils/MathUtils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -167,7 +168,7 @@ namespace Spark
                 float denom = 1.0f + g2 - 2.0f * g * cosTheta;
                 if (denom < 0.0001f)
                     return 1.0f;
-                return (1.0f - g2) / (4.0f * 3.14159265f * std::pow(denom, 1.5f));
+                return (1.0f - g2) / (4.0f * MathUtils::PI * std::pow(denom, 1.5f));
             }
 
             /// Beer-Lambert transmittance

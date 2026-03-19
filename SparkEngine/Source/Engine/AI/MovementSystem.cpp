@@ -6,6 +6,7 @@
 #include "MovementSystem.h"
 #include "../ECS/Components.h"
 #include "../ECS/Components/CoreComponents.h"
+#include "../../Utils/MathUtils.h"
 #include <cmath>
 #include <algorithm>
 
@@ -382,7 +383,7 @@ namespace Spark::AI
                 float dx = wander->targetX - transform->position.x;
                 float dz = wander->targetZ - transform->position.z;
                 if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
-                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
                 break;
             }
 
@@ -404,7 +405,7 @@ namespace Spark::AI
                 float dx = targetTf->position.x - transform->position.x;
                 float dz = targetTf->position.z - transform->position.z;
                 if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
-                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
                 break;
             }
 
@@ -415,7 +416,7 @@ namespace Spark::AI
                 if (!targetTf)
                     break;
                 // Compute offset position behind target at desired distance
-                float angleRad = follow->angle * (3.14159265f / 180.0f);
+                float angleRad = follow->angle * MathUtils::DEG_TO_RAD;
                 float followX = targetTf->position.x - std::sin(angleRad) * follow->distance;
                 float followY = targetTf->position.y;
                 float followZ = targetTf->position.z - std::cos(angleRad) * follow->distance;
@@ -426,7 +427,7 @@ namespace Spark::AI
                 float dx = targetTf->position.x - transform->position.x;
                 float dz = targetTf->position.z - transform->position.z;
                 if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
-                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
                 break;
             }
 
@@ -451,7 +452,7 @@ namespace Spark::AI
                 }
                 // Face away from threat
                 if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
-                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
                 break;
             }
 
@@ -465,7 +466,7 @@ namespace Spark::AI
                 float dx = point->targetX - transform->position.x;
                 float dz = point->targetZ - transform->position.z;
                 if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
-                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
                 (void)remaining;
                 break;
             }
@@ -484,7 +485,7 @@ namespace Spark::AI
                 float dx = wp[0] - transform->position.x;
                 float dz = wp[2] - transform->position.z;
                 if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
-                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
                 // Advance to next waypoint if arrived
                 if (remaining < kArrivalThreshold)
                 {
@@ -509,7 +510,7 @@ namespace Spark::AI
                 float dx = home->homeX - transform->position.x;
                 float dz = home->homeZ - transform->position.z;
                 if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
-                    transform->rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
                 break;
             }
 

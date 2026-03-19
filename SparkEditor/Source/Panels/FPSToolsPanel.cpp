@@ -7,6 +7,7 @@
 
 #include "FPSToolsPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/MathUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
@@ -209,7 +210,7 @@ namespace SparkEditor
                 }
 
                 // Direction arrow
-                float rad = s.rotY * 3.14159f / 180.0f;
+                float rad = MathUtils::DegreesToRadians(s.rotY);
                 float arrowLen = 8.0f;
                 dl->AddCircleFilled(ImVec2(sx, sy), 4.0f, col, 8);
                 dl->AddLine(ImVec2(sx, sy), ImVec2(sx + sinf(rad) * arrowLen, sy - cosf(rad) * arrowLen), col, 2.0f);

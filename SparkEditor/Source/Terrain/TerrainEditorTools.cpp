@@ -7,6 +7,7 @@
  */
 
 #include "TerrainEditor.h"
+#include "Utils/MathUtils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -330,7 +331,7 @@ namespace SparkEditor
     {
         XMFLOAT3 normal = CalculateTerrainNormal(x, y);
         float dot = normal.y;
-        return std::acos(std::clamp(dot, -1.0f, 1.0f)) * (180.0f / 3.14159265f);
+        return std::acos(std::clamp(dot, -1.0f, 1.0f)) * MathUtils::RAD_TO_DEG;
     }
 
     bool TerrainEditor::WorldToHeightmapCoords(const XMFLOAT3& worldPosition, int& outX, int& outY) const

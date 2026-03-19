@@ -1,4 +1,5 @@
 #include "Core/Platform.h"
+#include "Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file LightingSystem.cpp
@@ -877,7 +878,7 @@ LightData Light::GetShaderData() const
     LightData data;
     memset(&data, 0, sizeof(data));
     data.position = XMFLOAT4(m_position.x, m_position.y, m_position.z, static_cast<float>(m_type));
-    data.direction = XMFLOAT4(m_direction.x, m_direction.y, m_direction.z, m_spotAngle * 3.14159f / 180.0f);
+    data.direction = XMFLOAT4(m_direction.x, m_direction.y, m_direction.z, MathUtils::DegreesToRadians(m_spotAngle));
     data.color = XMFLOAT4(m_color.x, m_color.y, m_color.z, m_intensity);
     data.attenuation = XMFLOAT4(m_attenuation.x, m_attenuation.y, m_attenuation.z, m_range);
     data.shadowParams = XMFLOAT4(m_castShadows ? 1.0f : 0.0f, m_shadowBias, 0.0f, 0.0f);

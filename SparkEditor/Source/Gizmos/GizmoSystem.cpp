@@ -11,6 +11,7 @@
  */
 
 #include "GizmoSystem.h"
+#include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
 #include <cmath>
@@ -31,7 +32,6 @@ namespace SparkEditor
     static constexpr int GIZMO_RING_SEGMENTS = 64;
     static constexpr float GIZMO_ARROW_SIZE = 10.0f; // pixels
     static constexpr float GIZMO_CUBE_SIZE = 6.0f;   // pixels
-    static constexpr float PI = 3.14159265358979323846f;
 
     // ========================================================================
     // Helpers
@@ -455,8 +455,8 @@ namespace SparkEditor
             ImU32 col = XMFloat4ToImU32(color);
             for (int i = 0; i < GIZMO_RING_SEGMENTS; ++i)
             {
-                float a0 = (static_cast<float>(i) / GIZMO_RING_SEGMENTS) * 2.0f * PI;
-                float a1 = (static_cast<float>(i + 1) / GIZMO_RING_SEGMENTS) * 2.0f * PI;
+                float a0 = (static_cast<float>(i) / GIZMO_RING_SEGMENTS) * MathUtils::TWO_PI;
+                float a1 = (static_cast<float>(i + 1) / GIZMO_RING_SEGMENTS) * MathUtils::TWO_PI;
                 ImVec2 p0 = {center.x + std::cos(a0) * radius * 0.3f, center.y + std::sin(a0) * radius};
                 ImVec2 p1 = {center.x + std::cos(a1) * radius * 0.3f, center.y + std::sin(a1) * radius};
                 drawList->AddLine(p0, p1, col, 2.0f);
@@ -470,8 +470,8 @@ namespace SparkEditor
             ImU32 col = XMFloat4ToImU32(color);
             for (int i = 0; i < GIZMO_RING_SEGMENTS; ++i)
             {
-                float a0 = (static_cast<float>(i) / GIZMO_RING_SEGMENTS) * 2.0f * PI;
-                float a1 = (static_cast<float>(i + 1) / GIZMO_RING_SEGMENTS) * 2.0f * PI;
+                float a0 = (static_cast<float>(i) / GIZMO_RING_SEGMENTS) * MathUtils::TWO_PI;
+                float a1 = (static_cast<float>(i + 1) / GIZMO_RING_SEGMENTS) * MathUtils::TWO_PI;
                 ImVec2 p0 = {center.x + std::cos(a0) * radius, center.y + std::sin(a0) * radius * 0.3f};
                 ImVec2 p1 = {center.x + std::cos(a1) * radius, center.y + std::sin(a1) * radius * 0.3f};
                 drawList->AddLine(p0, p1, col, 2.0f);
@@ -763,7 +763,7 @@ namespace SparkEditor
         {
             return angle;
         }
-        float snapRad = m_rotationSnapAngle * (PI / 180.0f);
+        float snapRad = MathUtils::DegreesToRadians(m_rotationSnapAngle);
         return std::round(angle / snapRad) * snapRad;
     }
 

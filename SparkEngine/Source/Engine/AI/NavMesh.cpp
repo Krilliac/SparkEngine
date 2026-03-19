@@ -5,6 +5,7 @@
 
 #include "NavMesh.h"
 #include "RecastDetourBackend.h"
+#include "../../Utils/MathUtils.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
 #include <fstream>
@@ -618,7 +619,7 @@ namespace Spark::AI
 
             XMFLOAT3 n;
             XMStoreFloat3(&n, normal);
-            float slopeAngle = std::acos((std::max)(-1.0f, (std::min)(1.0f, std::abs(n.y)))) * (180.0f / 3.14159265f);
+            float slopeAngle = std::acos((std::max)(-1.0f, (std::min)(1.0f, std::abs(n.y)))) * MathUtils::RAD_TO_DEG;
 
             if (slopeAngle > settings.agentMaxSlope)
                 continue;

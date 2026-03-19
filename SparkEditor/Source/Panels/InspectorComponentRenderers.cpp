@@ -10,6 +10,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../CommandHistory.h"
+#include "Utils/MathUtils.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
@@ -38,24 +39,9 @@ namespace SparkEditor
                 // Read actual transform data
                 float position[3] = {obj->transform.position.x, obj->transform.position.y, obj->transform.position.z};
                 // Convert quaternion to Euler angles for display
-                // Simplified extraction (roll, pitch, yaw from quaternion)
                 const auto& q = obj->transform.rotation;
-                float sinrCosp = 2.0f * (q.w * q.x + q.y * q.z);
-                float cosrCosp = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
-                float roll = std::atan2(sinrCosp, cosrCosp) * (180.0f / 3.14159265f);
-
-                float sinp = 2.0f * (q.w * q.y - q.z * q.x);
-                float pitch = 0.0f;
-                if (std::abs(sinp) >= 1.0f)
-                    pitch = std::copysign(90.0f, sinp);
-                else
-                    pitch = std::asin(sinp) * (180.0f / 3.14159265f);
-
-                float sinyCosp = 2.0f * (q.w * q.z + q.x * q.y);
-                float cosyCosp = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
-                float yaw = std::atan2(sinyCosp, cosyCosp) * (180.0f / 3.14159265f);
-
-                float rotation[3] = {roll, pitch, yaw};
+                XMFLOAT3 euler = MathUtils::QuaternionToEulerDegrees(q.x, q.y, q.z, q.w);
+                float rotation[3] = {euler.x, euler.y, euler.z};
                 float scale[3] = {obj->transform.scale.x, obj->transform.scale.y, obj->transform.scale.z};
 
                 // Save old values for undo
@@ -78,15 +64,7 @@ namespace SparkEditor
                     XMFLOAT3 newScale = {scale[0], scale[1], scale[2]};
 
                     // Convert Euler back to quaternion
-                    float radX = rotation[0] * (3.14159265f / 180.0f);
-                    float radY = rotation[1] * (3.14159265f / 180.0f);
-                    float radZ = rotation[2] * (3.14159265f / 180.0f);
-                    float cx = std::cos(radX * 0.5f), sx = std::sin(radX * 0.5f);
-                    float cy = std::cos(radY * 0.5f), sy = std::sin(radY * 0.5f);
-                    float cz = std::cos(radZ * 0.5f), sz = std::sin(radZ * 0.5f);
-
-                    XMFLOAT4 newRot = {sx * cy * cz - cx * sy * sz, cx * sy * cz + sx * cy * sz,
-                                       cx * cy * sz - sx * sy * cz, cx * cy * cz + sx * sy * sz};
+                    XMFLOAT4 newRot = MathUtils::EulerDegreesToQuaternion(rotation[0], rotation[1], rotation[2]);
 
                     Transform oldTransform = obj->transform;
                     SceneFile* capturedScene = m_scene;
