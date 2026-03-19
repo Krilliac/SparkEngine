@@ -54,13 +54,13 @@ namespace Spark::Gameplay
      */
     struct EncounterDefinition
     {
-        EncounterID id = 0;
-        std::string name;
-        std::string description;
-        uint32_t bossEntityTemplate = 0; ///< Template ID for the boss entity
-        int requiredPlayers = 1;
-        float enrageTimer = 0.0f; ///< 0 = no enrage
-        bool optional = false;    ///< Must complete to finish instance?
+        EncounterID id = 0;              ///< Unique encounter identifier.
+        std::string name;                ///< Boss/encounter name (e.g. "Lich King").
+        std::string description;         ///< Encounter description for the journal UI.
+        uint32_t bossEntityTemplate = 0; ///< Template ID for the boss entity to spawn.
+        int requiredPlayers = 1;         ///< Minimum players needed to start the encounter.
+        float enrageTimer = 0.0f;        ///< Seconds before soft enrage (0 = no enrage).
+        bool optional = false;           ///< If false, must complete to finish the instance.
     };
 
     // ============================================================================

@@ -63,66 +63,66 @@ namespace Spark
     /** @brief Fired when an entity takes damage. */
     struct EntityDamagedEvent
     {
-        uint32_t entityId = 0;
-        float damage = 0.0f;
-        std::string damageSource;
+        uint32_t entityId = 0;    ///< Entity that took damage.
+        float damage = 0.0f;      ///< Amount of damage dealt.
+        std::string damageSource; ///< Source description (weapon name, hazard type, etc.).
     };
 
     /** @brief Fired when an entity is killed/destroyed. */
     struct EntityKilledEvent
     {
-        uint32_t entityId = 0;
-        uint32_t killerId = 0;
-        std::string cause;
+        uint32_t entityId = 0; ///< Entity that was killed.
+        uint32_t killerId = 0; ///< Entity responsible for the kill (0 = environment).
+        std::string cause;     ///< Cause of death (weapon name, "FallDamage", etc.).
     };
 
     /** @brief Fired when an item is picked up by an entity. */
     struct ItemPickedUpEvent
     {
-        uint32_t entityId = 0;
-        uint32_t itemDefId = 0;
-        int count = 1;
+        uint32_t entityId = 0;  ///< Entity that picked up the item.
+        uint32_t itemDefId = 0; ///< Item definition ID from the item database.
+        int count = 1;          ///< Number of items picked up (for stackable items).
     };
 
     /** @brief Fired when a quest is completed. */
     struct QuestCompletedEvent
     {
-        uint32_t entityId = 0;
-        uint32_t questId = 0;
-        std::string questName;
+        uint32_t entityId = 0; ///< Entity that completed the quest.
+        uint32_t questId = 0;  ///< Unique quest identifier.
+        std::string questName; ///< Human-readable quest name.
     };
 
     /** @brief Fired when the weather changes. */
     struct WeatherChangedEvent
     {
-        int previousType = 0;
-        int newType = 0;
-        float intensity = 0.0f;
+        int previousType = 0;   ///< Previous weather type enum value.
+        int newType = 0;        ///< New weather type enum value.
+        float intensity = 0.0f; ///< Weather intensity [0, 1].
     };
 
     /** @brief Fired when the time of day changes significantly (e.g. dawn, dusk). */
     struct TimeOfDayChangedEvent
     {
-        float previousHour = 0.0f;
-        float currentHour = 0.0f;
-        int dayCount = 0;
+        float previousHour = 0.0f; ///< Previous hour (0-24, fractional).
+        float currentHour = 0.0f;  ///< New hour (0-24, fractional).
+        int dayCount = 0;          ///< Number of in-game days elapsed.
     };
 
     /** @brief Fired when a collision occurs between two entities. */
     struct CollisionEvent
     {
-        uint32_t entityA = 0;
-        uint32_t entityB = 0;
-        float impactForce = 0.0f;
+        uint32_t entityA = 0;     ///< First entity involved in the collision.
+        uint32_t entityB = 0;     ///< Second entity involved in the collision.
+        float impactForce = 0.0f; ///< Magnitude of the collision impact (Newtons).
     };
 
     /** @brief Fired when a player respawns. */
     struct PlayerRespawnEvent
     {
-        uint32_t entityId = 0;
-        float spawnX = 0.0f;
-        float spawnY = 0.0f;
-        float spawnZ = 0.0f;
+        uint32_t entityId = 0; ///< Entity ID of the respawned player.
+        float spawnX = 0.0f;   ///< Spawn position X coordinate.
+        float spawnY = 0.0f;   ///< Spawn position Y coordinate.
+        float spawnZ = 0.0f;   ///< Spawn position Z coordinate.
     };
 
     // =============================================================================

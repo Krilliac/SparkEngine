@@ -72,10 +72,10 @@ namespace Spark::Gameplay
 
     struct Condition
     {
-        ConditionType type = ConditionType::AlwaysTrue;
-        ConditionParam param1;
-        ConditionParam param2;
-        bool negated = false; // NOT this condition
+        ConditionType type = ConditionType::AlwaysTrue; ///< What to evaluate (see ConditionType comments for params).
+        ConditionParam param1;                          ///< First parameter (type depends on ConditionType).
+        ConditionParam param2;                          ///< Second parameter (type depends on ConditionType).
+        bool negated = false;                           ///< If true, the result is inverted (NOT logic).
     };
 
     enum class ConditionGroupLogic : uint8_t
