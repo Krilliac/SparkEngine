@@ -6,6 +6,7 @@
  */
 
 #include "LightingTools.h"
+#include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
 #include <cmath>
@@ -13,10 +14,6 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 using namespace DirectX;
 

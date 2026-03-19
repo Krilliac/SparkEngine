@@ -1,4 +1,5 @@
 #include "Core/Platform.h"
+#include "Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file ParticleSystem.cpp
@@ -343,7 +344,7 @@ XMFLOAT3 ParticleEmitter::GetRandomSpawnPosition() const
     case EmitterShape::Cone:
     {
         float angle = RandomFloat(0.0f, 6.28318f);
-        float coneRad = m_desc.coneAngle * 3.14159f / 180.0f;
+        float coneRad = m_desc.coneAngle * MathUtils::DEG_TO_RAD;
         float r = m_desc.shapeRadius * sqrtf(RandomFloat01());
         float spread = tanf(coneRad * 0.5f) * r;
         pos.x += spread * cosf(angle);
@@ -368,7 +369,7 @@ XMFLOAT3 ParticleEmitter::GetRandomSpawnDirection() const
 
     case EmitterShape::Cone:
     {
-        float coneRad = m_desc.coneAngle * 3.14159f / 180.0f;
+        float coneRad = m_desc.coneAngle * MathUtils::DEG_TO_RAD;
         float angle = RandomFloat(0.0f, 6.28318f);
         float spread = tanf(coneRad * 0.5f) * RandomFloat01();
         float y = 1.0f / sqrtf(1.0f + spread * spread);
@@ -942,7 +943,7 @@ XMFLOAT3 ParticleEmitter::GetRandomSpawnPosition() const
     case EmitterShape::Cone:
     {
         float angle = RandomFloat(0.0f, 6.28318f);
-        float coneRad = m_desc.coneAngle * 3.14159f / 180.0f;
+        float coneRad = m_desc.coneAngle * MathUtils::DEG_TO_RAD;
         float r = m_desc.shapeRadius * sqrtf(RandomFloat01());
         float spread = tanf(coneRad * 0.5f) * r;
         pos.x += spread * cosf(angle);
@@ -966,7 +967,7 @@ XMFLOAT3 ParticleEmitter::GetRandomSpawnDirection() const
     }
     case EmitterShape::Cone:
     {
-        float coneRad = m_desc.coneAngle * 3.14159f / 180.0f;
+        float coneRad = m_desc.coneAngle * MathUtils::DEG_TO_RAD;
         float angle = RandomFloat(0.0f, 6.28318f);
         float spread = tanf(coneRad * 0.5f) * RandomFloat01();
         float y = 1.0f / sqrtf(1.0f + spread * spread);

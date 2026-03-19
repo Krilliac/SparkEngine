@@ -8,6 +8,7 @@
 #include "Engine/ECS/Components/FPSComponents.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Utils/Cooldown.h"
+#include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
 #include <sstream>
 #include <cmath>
@@ -287,7 +288,7 @@ namespace Spark::ECS
                     float speed = ai.config.moveSpeed * deltaTime;
                     transform.position.x += (dx / dist) * speed;
                     transform.position.z += (dz / dist) * speed;
-                    transform.rotation.y = std::atan2(dx, dz) * (180.0f / 3.14159265f);
+                    transform.rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
                 }
             }
         }
@@ -378,9 +379,9 @@ namespace Spark::ECS
                 float tangentLen = std::sqrt(tangent.x * tangent.x + tangent.y * tangent.y + tangent.z * tangent.z);
                 if (tangentLen > 0.0001f)
                 {
-                    float yaw = std::atan2(tangent.x, tangent.z) * (180.0f / 3.14159265f);
+                    float yaw = std::atan2(tangent.x, tangent.z) * MathUtils::RAD_TO_DEG;
                     float pitch = std::atan2(-tangent.y, std::sqrt(tangent.x * tangent.x + tangent.z * tangent.z)) *
-                                  (180.0f / 3.14159265f);
+                                  MathUtils::RAD_TO_DEG;
                     transform.rotation.x = pitch;
                     transform.rotation.y = yaw;
                 }
@@ -518,10 +519,10 @@ namespace Spark::ECS
                 proj.distanceTraveled += moveDist;
 
                 // Orient projectile along its direction
-                transform.rotation.y = std::atan2(proj.direction.x, proj.direction.z) * (180.0f / 3.14159265f);
+                transform.rotation.y = std::atan2(proj.direction.x, proj.direction.z) * MathUtils::RAD_TO_DEG;
                 transform.rotation.x = std::atan2(-proj.direction.y, std::sqrt(proj.direction.x * proj.direction.x +
                                                                                proj.direction.z * proj.direction.z)) *
-                                       (180.0f / 3.14159265f);
+                                       MathUtils::RAD_TO_DEG;
             }
 
             // Check expiration

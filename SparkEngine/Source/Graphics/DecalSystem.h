@@ -14,6 +14,7 @@
 
 #pragma once
 #include "../Core/Platform.h"
+#include "../Utils/MathUtils.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -101,8 +102,8 @@ namespace Spark::Graphics
         SurfaceType surface;
         DecalType decalType;
         std::string materialName;
-        XMFLOAT2 sizeRange{0.1f, 0.3f};    ///< Random size between min and max
-        float rotationVariance = 3.14159f; ///< Max random rotation
+        XMFLOAT2 sizeRange{0.1f, 0.3f};         ///< Random size between min and max
+        float rotationVariance = MathUtils::PI; ///< Max random rotation
     };
 
     // ============================================================================

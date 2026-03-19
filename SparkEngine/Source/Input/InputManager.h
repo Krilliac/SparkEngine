@@ -403,6 +403,9 @@ class InputManager
      * @param key Virtual key code to update
      * @param isDown true if key is pressed, false if released
      */
+    /// @brief Consolidated handler for mouse button down/up messages.
+    void HandleMouseButtonMessage(int button, bool isDown);
+
     void UpdateKeyState(int key, bool isDown);
 
     /**

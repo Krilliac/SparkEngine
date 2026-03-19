@@ -23,6 +23,7 @@
 #include "../../2D/Physics2D.h"
 #include "../../../Graphics/2D/SpriteBatch.h"
 #include "ECSystems.h"
+#include "../../../Utils/MathUtils.h"
 #include <cmath>
 
 namespace Spark::ECS
@@ -84,7 +85,7 @@ namespace Spark::ECS
                 float z = transform.position.z;
 
                 // Convert rotation.z to radians
-                float rotRad = transform.rotation.z * (3.14159265f / 180.0f);
+                float rotRad = transform.rotation.z * MathUtils::DEG_TO_RAD;
 
                 m_batch->Draw(sprite.texturePath, {transform.position.x, transform.position.y, z}, worldSize,
                               sourceRect, sprite.color, rotRad, sprite.pivot, sprite.flipX, sprite.flipY, sortKey);
@@ -225,7 +226,7 @@ namespace Spark::ECS
                     Physics2D::PhysicsBody2D newBody;
                     newBody.entityID = static_cast<uint32_t>(entity);
                     newBody.position = {transform.position.x, transform.position.y};
-                    newBody.rotation = transform.rotation.z * (3.14159265f / 180.0f);
+                    newBody.rotation = transform.rotation.z * MathUtils::DEG_TO_RAD;
                     newBody.velocity = {rb.linearVelocity.x, rb.linearVelocity.y};
                     newBody.angularVelocity = rb.angularVelocity;
                     newBody.mass = rb.mass;
@@ -259,7 +260,7 @@ namespace Spark::ECS
                 if (rb.bodyType == RigidBody2D::BodyType::Kinematic)
                 {
                     body->position = {transform.position.x, transform.position.y};
-                    body->rotation = transform.rotation.z * (3.14159265f / 180.0f);
+                    body->rotation = transform.rotation.z * MathUtils::DEG_TO_RAD;
                 }
             }
 
@@ -281,7 +282,7 @@ namespace Spark::ECS
 
                 transform.position.x = body->position.x;
                 transform.position.y = body->position.y;
-                transform.rotation.z = body->rotation * (180.0f / 3.14159265f);
+                transform.rotation.z = body->rotation * MathUtils::RAD_TO_DEG;
                 rb.linearVelocity = body->velocity.ToXMFLOAT2();
                 rb.angularVelocity = body->angularVelocity;
             }

@@ -306,6 +306,19 @@ namespace Spark
 
     bool SimpleConsole::ExecuteCommand(const std::string& commandLine)
     {
+        std::string command;
+        std::vector<std::string> args;
+        if (!ParseCommandLine(commandLine, command, args))
+        {
+            return false;
+        }
+
+        return DispatchCommand(command, args);
+    }
+
+    bool SimpleConsole::ParseCommandLine(const std::string& commandLine, std::string& outCommand,
+                                         std::vector<std::string>& outArgs)
+    {
         if (commandLine.empty())
         {
             return false;
@@ -314,14 +327,14 @@ namespace Spark
         // Resolve aliases before parsing
         std::string resolved = ResolveAliases(commandLine);
 
-        auto args = ParseCommand(resolved);
-        if (args.empty())
+        auto tokens = ParseCommand(resolved);
+        if (tokens.empty())
         {
             return false;
         }
 
-        std::string command = args[0];
-        args.erase(args.begin());
+        outCommand = tokens[0];
+        outArgs.assign(tokens.begin() + 1, tokens.end());
 
         // Record in command history
         {
@@ -333,6 +346,11 @@ namespace Spark
             }
         }
 
+        return true;
+    }
+
+    bool SimpleConsole::DispatchCommand(const std::string& command, const std::vector<std::string>& args)
+    {
         // Check CVars first: if the command matches a cvar name, handle get/set
         auto* cvar = CVarRegistry::Get().Find(command);
         if (cvar)

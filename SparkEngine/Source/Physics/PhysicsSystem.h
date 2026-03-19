@@ -1510,6 +1510,13 @@ class PhysicsSystem
 
     void UpdateMetrics();
     void ProcessCollisions();
+
+    /// @brief Walk all contact manifolds and fire collision/trigger-enter callbacks.
+    void DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody*, PhysicsBody*>>& outTriggerPairs);
+
+    /// @brief Detect trigger pairs that exited since last frame and fire exit callbacks.
+    void UpdateTriggerExitEvents(const std::vector<std::pair<PhysicsBody*, PhysicsBody*>>& currentTriggerPairs);
+
     size_t HashShape(const CollisionShapeDesc& desc) const;
 };
 

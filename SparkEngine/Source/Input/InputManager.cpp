@@ -121,6 +121,20 @@ void InputManager::Update()
     }
 }
 
+void InputManager::HandleMouseButtonMessage(int button, bool isDown)
+{
+    // Mouse button event codes start at 1000 (1000=LMB, 1001=RMB, 1002=MMB)
+    UpdateMouseButton(button, isDown);
+    if (m_inputLogging)
+    {
+        LogInputEvent(1000 + button, isDown);
+    }
+    if (isDown)
+    {
+        m_mousePressCount++;
+    }
+}
+
 void InputManager::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
@@ -141,51 +155,24 @@ void InputManager::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam)
         }
         break;
     case WM_LBUTTONDOWN:
-        UpdateMouseButton(0, true);
-        if (m_inputLogging)
-        {
-            LogInputEvent(1000, true); // Use 1000+ for mouse buttons
-        }
-        m_mousePressCount++;
+        HandleMouseButtonMessage(0, true);
         if (!m_mouseCaptured)
             CaptureMouse(true);
         break;
     case WM_LBUTTONUP:
-        UpdateMouseButton(0, false);
-        if (m_inputLogging)
-        {
-            LogInputEvent(1000, false);
-        }
+        HandleMouseButtonMessage(0, false);
         break;
     case WM_RBUTTONDOWN:
-        UpdateMouseButton(1, true);
-        if (m_inputLogging)
-        {
-            LogInputEvent(1001, true);
-        }
-        m_mousePressCount++;
+        HandleMouseButtonMessage(1, true);
         break;
     case WM_RBUTTONUP:
-        UpdateMouseButton(1, false);
-        if (m_inputLogging)
-        {
-            LogInputEvent(1001, false);
-        }
+        HandleMouseButtonMessage(1, false);
         break;
     case WM_MBUTTONDOWN:
-        UpdateMouseButton(2, true);
-        if (m_inputLogging)
-        {
-            LogInputEvent(1002, true);
-        }
-        m_mousePressCount++;
+        HandleMouseButtonMessage(2, true);
         break;
     case WM_MBUTTONUP:
-        UpdateMouseButton(2, false);
-        if (m_inputLogging)
-        {
-            LogInputEvent(1002, false);
-        }
+        HandleMouseButtonMessage(2, false);
         break;
     case WM_MOUSEMOVE:
         if (!m_mouseCaptured)

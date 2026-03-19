@@ -460,14 +460,14 @@ static bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
 }
 
 // ===================================================================================
-//                                    wWinMain
+//                       Windows extracted helpers
 // ===================================================================================
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
-{
-    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-    ASSERT(hInstance != nullptr);
 
-    // 1. Crash handler
+/**
+ * @brief Configure and install the crash handler with GitHub upload support.
+ */
+static void SetupCrashHandler()
+{
     CrashConfig crashCfg{};
     crashCfg.dumpPrefix = L"SparkCrash";
     crashCfg.uploadURL = "";
@@ -487,162 +487,153 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     }
 
     InstallCrashHandler(crashCfg);
+}
 
-    // 2. Check for headless/dedicated server mode
 #ifdef SPARK_HEADLESS_SUPPORT
-    g_headlessMode = ParseHeadlessFlag(lpCmdLine);
-    if (g_headlessMode)
+/**
+ * @brief Run the engine in headless/dedicated server mode (Windows).
+ *
+ * Allocates a console, initializes server-only subsystems, runs a fixed 60 Hz
+ * tick loop, and shuts down cleanly on Ctrl+C.
+ */
+static int RunHeadlessWindows(LPWSTR lpCmdLine)
+{
+    // Allocate a console for stdout/stderr output
+    AllocConsole();
+    FILE* fp = nullptr;
+    freopen_s(&fp, "CONOUT$", "w", stdout);
+    freopen_s(&fp, "CONOUT$", "w", stderr);
+    freopen_s(&fp, "CONIN$", "r", stdin);
+
+    // Install Ctrl+C handler for graceful shutdown
+    SetConsoleCtrlHandler(HeadlessCtrlHandler, TRUE);
+
+    std::cout << "=== Spark Engine (Headless/Dedicated Server) ===" << std::endl;
+
+    // Initialize only the subsystems needed for headless operation
+    g_timer = std::make_unique<Timer>();
+    g_eventBus = std::make_unique<Spark::EventBus>();
+    EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get()));
+
+    // File cache
+    g_fileCache = std::make_unique<Spark::LocalFileCache>();
+    EngineContext::Get()->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
+
+    InitPhysics();
+
+    // Register core subsystems with dependency metadata
+    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+    Spark::EngineSetup::InitializeJobSystem();
+
+    // Module loading
+    g_moduleManager = std::make_unique<ModuleManager>();
+
+    InitConsole();
+    auto& console = Spark::SimpleConsole::GetInstance();
+
+    if (LoadGameModules(*g_moduleManager, lpCmdLine))
     {
-        // Allocate a console for stdout/stderr output
-        AllocConsole();
-        FILE* fp = nullptr;
-        freopen_s(&fp, "CONOUT$", "w", stdout);
-        freopen_s(&fp, "CONOUT$", "w", stderr);
-        freopen_s(&fp, "CONIN$", "r", stdin);
-
-        // Install Ctrl+C handler for graceful shutdown
-        SetConsoleCtrlHandler(HeadlessCtrlHandler, TRUE);
-
-        std::cout << "=== Spark Engine (Headless/Dedicated Server) ===" << std::endl;
-
-        // Initialize only the subsystems needed for headless operation
-        g_timer = std::make_unique<Timer>();
-        g_eventBus = std::make_unique<Spark::EventBus>();
-        EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get()));
-
-        // File cache
-        g_fileCache = std::make_unique<Spark::LocalFileCache>();
-        EngineContext::Get()->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
-
-        InitPhysics();
-
-        // Register core subsystems with dependency metadata
-        Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
-        Spark::EngineSetup::InitializeJobSystem();
-
-        // Module loading
-        g_moduleManager = std::make_unique<ModuleManager>();
-
-        InitConsole();
-        auto& console = Spark::SimpleConsole::GetInstance();
-
-        if (LoadGameModules(*g_moduleManager, lpCmdLine))
-        {
-            g_moduleManager->InitializeAll(EngineContext::Get());
-            console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
-        }
-        else
-        {
-            console.LogWarning("No game modules found. Running engine-only headless mode.");
-        }
-
-        // Module hot-reload watcher
-        g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
-        g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
-        g_moduleHotReload->WatchAllLoadedModules();
-        g_moduleHotReload->Start();
-
-        // SaveSystem
-        if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
-        {
-            Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
-        }
-        EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
-        console.LogInfo("SaveSystem initialized");
-
-        // CoroutineScheduler
-        EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
-
-        // Register console commands
-        if (g_graphics)
-            Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-        Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
-
-        // Fixed 60 Hz server loop
-        constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
-        console.LogInfo("Starting headless server loop (60 Hz)...");
-        console.LogInfo("Press Ctrl+C or type 'quit' to stop.");
-
-        while (!g_shutdownRequested)
-        {
-            auto tickStart = std::chrono::steady_clock::now();
-
-            float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
-
-            if (g_moduleManager && g_moduleManager->HasModules())
-                g_moduleManager->UpdateAll(dt);
-
-            if (g_moduleHotReload)
-                g_moduleHotReload->PollChanges();
-
-            UpdateGameplaySystems(dt);
-            UpdateDebugSystems(dt);
-            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-            console.Update();
-
-            auto elapsed = std::chrono::steady_clock::now() - tickStart;
-            if (elapsed < TICK_INTERVAL)
-                std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
-        }
-
-        // Shutdown
-        g_moduleHotReload.reset();
-        console.LogInfo("Headless server shutting down...");
-        g_fileCache.reset();
-        ShutdownEngine();
-
-        FreeConsole();
-        return 0;
+        g_moduleManager->InitializeAll(EngineContext::Get());
+        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
     }
+    else
+    {
+        console.LogWarning("No game modules found. Running engine-only headless mode.");
+    }
+
+    // Module hot-reload watcher
+    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
+    g_moduleHotReload->WatchAllLoadedModules();
+    g_moduleHotReload->Start();
+
+    // SaveSystem
+    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+    }
+    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+    console.LogInfo("SaveSystem initialized");
+
+    // CoroutineScheduler
+    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+
+    // Register console commands
+    if (g_graphics)
+        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
+    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
+
+    // Fixed 60 Hz server loop
+    constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
+    console.LogInfo("Starting headless server loop (60 Hz)...");
+    console.LogInfo("Press Ctrl+C or type 'quit' to stop.");
+
+    while (!g_shutdownRequested)
+    {
+        auto tickStart = std::chrono::steady_clock::now();
+
+        float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
+
+        if (g_moduleManager && g_moduleManager->HasModules())
+            g_moduleManager->UpdateAll(dt);
+
+        if (g_moduleHotReload)
+            g_moduleHotReload->PollChanges();
+
+        UpdateGameplaySystems(dt);
+        UpdateDebugSystems(dt);
+        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+        console.Update();
+
+        auto elapsed = std::chrono::steady_clock::now() - tickStart;
+        if (elapsed < TICK_INTERVAL)
+            std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
+    }
+
+    // Shutdown
+    g_moduleHotReload.reset();
+    console.LogInfo("Headless server shutting down...");
+    g_fileCache.reset();
+    ShutdownEngine();
+
+    FreeConsole();
+    return 0;
+}
 #endif // SPARK_HEADLESS_SUPPORT
 
-    // 2b. Class & window title (normal windowed mode)
-    ASSERT(MAX_LOADSTRING <= _countof(g_szClass) && MAX_LOADSTRING <= _countof(g_szTitle));
-    wcscpy_s(g_szClass, MAX_LOADSTRING, L"SparkEngineWindowClass");
-    wcscpy_s(g_szTitle, MAX_LOADSTRING, L"Spark Engine");
-
-    // 3. Register window class
-    ATOM cls = MyRegisterClass(hInstance);
-    ASSERT_MSG(cls != 0, "MyRegisterClass failed");
-    if (cls == 0)
-    {
-        MessageBoxW(nullptr, L"RegisterClassExW failed", L"Fatal Error", MB_ICONERROR);
-        return -1;
-    }
-
-    // 4. Create window & init engine subsystems
-    if (!InitInstance(hInstance, nCmdShow))
-        return -1;
-
-    // 5. Create event bus and engine context (service locator for modules)
+/**
+ * @brief Initialize windowed-mode subsystems: engine context, physics, modules,
+ *        audio, save system, console commands, and debug/gameplay systems.
+ *
+ * Called after the Win32 window has been created and InitInstance() succeeded.
+ */
+static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
+{
+    // Engine context (service locator for modules)
     g_eventBus = std::make_unique<Spark::EventBus>();
     EngineContext::SetOwned(
         std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
 
-    // 5b. File cache (registered via generic system registry)
+    // File cache (registered via generic system registry)
     g_fileCache = std::make_unique<Spark::LocalFileCache>();
     EngineContext::Get()->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
 
-    // 5c. Create PhysicsSystem (owned here, not by GraphicsEngine)
+    // PhysicsSystem (owned here, not by GraphicsEngine)
     InitPhysics();
 
-    // 5d. Register core subsystems with dependency metadata (EngineSetup)
+    // Register core subsystems with dependency metadata (EngineSetup)
     Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
-
-    // 5e. Initialize JobSystem for parallel AI/perception/system execution
     Spark::EngineSetup::InitializeJobSystem();
 
-    // 5f. Register SaveSystem with EngineContext
+    // SaveSystem & CoroutineScheduler
     EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
-
-    // 5g. Register CoroutineScheduler with EngineContext
     EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
-    // 5h. Register AssetRegistry for handle-based asset lookups
+    // AssetRegistry for handle-based asset lookups
     static Spark::AssetRegistry g_assetRegistry;
     EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&g_assetRegistry);
 
-    // 5i. Register gameplay subsystems (Weather, UI, Dialogue, Modding)
+    // Gameplay subsystems (Weather, UI, Dialogue, Modding)
     g_weatherSystem = std::make_unique<Spark::WeatherSystem>();
     EngineContext::Get()->RegisterSystem<Spark::WeatherSystem>(g_weatherSystem.get());
 
@@ -655,7 +646,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_modSystem = std::make_unique<Spark::ModSystem>();
     EngineContext::Get()->RegisterSystem<Spark::ModSystem>(g_modSystem.get());
 
-    // 6. Load game modules via ModuleManager
+    // Load game modules via ModuleManager
     g_moduleManager = std::make_unique<ModuleManager>();
 
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -687,19 +678,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         console.LogInfo("or create a spark.modules.json manifest.");
     }
 
-    // 6b. Module hot-reload watcher
+    // Module hot-reload watcher
     g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
     g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
     g_moduleHotReload->WatchAllLoadedModules();
     g_moduleHotReload->Start();
 
-    // 7. Initialize additional subsystems
+    // SaveSystem initialization
     if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
     {
         Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
     }
     console.LogInfo("SaveSystem initialized");
 
+    // Audio engine
     g_audioEngine = std::make_unique<AudioEngine>();
     if (SUCCEEDED(g_audioEngine->Initialize(32)))
     {
@@ -712,24 +704,29 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         g_audioEngine.reset();
     }
 
-    // 8. Register engine console commands
+    // Console commands
     if (g_graphics)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
     Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
-    // 8b. Log warnings for missing third-party modules
     LogMissingModuleWarnings();
-
-    // 8c. Initialize debug/utility systems
     InitDebugSystems();
     InitGameplaySystems();
+}
 
-    // 9. Message loop + tick
+/**
+ * @brief Run the Win32 message pump and per-frame engine tick loop.
+ *
+ * Returns the wParam from the WM_QUIT message for use as the process exit code.
+ */
+static int RunWindowedMainLoop(HINSTANCE hInstance)
+{
     HACCEL accel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SparkEngine));
     MSG msg = {};
     ASSERT(g_timer);
 
+    auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Starting main engine loop...");
 
     while (msg.message != WM_QUIT)
@@ -772,13 +769,53 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         }
     }
 
-    // 10. Shutdown
+    // Shutdown
     g_moduleHotReload.reset();
     console.LogInfo("Shutting down...");
     g_fileCache.reset();
     ShutdownEngine();
 
     return static_cast<int>(msg.wParam);
+}
+
+// ===================================================================================
+//                                    wWinMain
+// ===================================================================================
+int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
+{
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    ASSERT(hInstance != nullptr);
+
+    SetupCrashHandler();
+
+#ifdef SPARK_HEADLESS_SUPPORT
+    g_headlessMode = ParseHeadlessFlag(lpCmdLine);
+    if (g_headlessMode)
+        return RunHeadlessWindows(lpCmdLine);
+#endif
+
+    // Register window class and title
+    ASSERT(MAX_LOADSTRING <= _countof(g_szClass) && MAX_LOADSTRING <= _countof(g_szTitle));
+    wcscpy_s(g_szClass, MAX_LOADSTRING, L"SparkEngineWindowClass");
+    wcscpy_s(g_szTitle, MAX_LOADSTRING, L"Spark Engine");
+
+    ATOM cls = MyRegisterClass(hInstance);
+    ASSERT_MSG(cls != 0, "MyRegisterClass failed");
+    if (cls == 0)
+    {
+        MessageBoxW(nullptr, L"RegisterClassExW failed", L"Fatal Error", MB_ICONERROR);
+        return -1;
+    }
+
+    // Create window and init graphics/input/timer
+    if (!InitInstance(hInstance, nCmdShow))
+        return -1;
+
+    // Initialize all engine subsystems, load modules, register commands
+    InitializeWindowedSubsystems(hInstance, lpCmdLine);
+
+    // Run the message pump + tick loop until WM_QUIT
+    return RunWindowedMainLoop(hInstance);
 }
 
 // ===================================================================================
@@ -985,135 +1022,356 @@ static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
 }
 
 
-int main(int argc, char* argv[])
+// ===================================================================================
+//                    Linux extracted helpers
+// ===================================================================================
+
+/**
+ * @brief Common per-frame tick logic shared by SDL2 windowed and no-SDL2 fallback modes.
+ *
+ * Updates input, modules, gameplay/debug systems, and console processing.
+ */
+static void TickFrame(float dt)
 {
-    std::signal(SIGINT, SignalHandler);
-    std::signal(SIGTERM, SignalHandler);
+    if (g_input)
+        g_input->Update();
 
-#ifdef SPARK_HEADLESS_SUPPORT
-    bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");
-    g_headlessMode = headless;
-#else
-    bool headless = false;
-#endif
-
-    if (headless)
+    if (g_moduleManager && g_moduleManager->HasModules())
     {
-#ifdef SPARK_HEADLESS_SUPPORT
-        std::cout << "=== Spark Engine (Headless/Dedicated Server - Linux) ===" << std::endl;
+        g_moduleManager->UpdateAll(dt);
+        g_moduleManager->RenderAll();
+    }
+    else if (g_graphics)
+    {
+        g_graphics->BeginFrame();
+        g_graphics->EndFrame();
+    }
 
-        g_eventBus = std::make_unique<Spark::EventBus>();
-        g_timer = std::make_unique<Timer>();
-        EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get()));
+    if (g_moduleHotReload)
+        g_moduleHotReload->PollChanges();
 
-        InitPhysics();
+    UpdateGameplaySystems(dt);
+    UpdateDebugSystems(dt);
+    Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+    Spark::SimpleConsole::GetInstance().Update();
+}
 
-        // Register core subsystems with dependency metadata
-        Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
-        Spark::EngineSetup::InitializeJobSystem();
+/**
+ * @brief Register gameplay subsystems (Weather, UI, Dialogue, Modding) with EngineContext.
+ *
+ * Uses function-local statics so these objects live for the process lifetime
+ * without polluting the global namespace.
+ */
+static void RegisterGameplaySubsystems()
+{
+    static Spark::WeatherSystem s_weatherSystem;
+    EngineContext::Get()->RegisterSystem<Spark::WeatherSystem>(&s_weatherSystem);
 
-        g_moduleManager = std::make_unique<ModuleManager>();
-        InitConsole();
-        auto& console = Spark::SimpleConsole::GetInstance();
+    static Spark::UI::UISystem s_uiSystem;
+    EngineContext::Get()->RegisterSystem<Spark::UI::UISystem>(&s_uiSystem);
 
-        if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
+    static Spark::DialogueSystem s_dialogueSystem;
+    EngineContext::Get()->RegisterSystem<Spark::DialogueSystem>(&s_dialogueSystem);
+
+    static Spark::ModSystem s_modSystem;
+    EngineContext::Get()->RegisterSystem<Spark::ModSystem>(&s_modSystem);
+}
+
+/**
+ * @brief Initialize engine core subsystems common to all Linux startup paths.
+ *
+ * Creates EngineContext, physics, core subsystem registration, save system,
+ * coroutine scheduler, and gameplay subsystem registration.
+ *
+ * @param registerGameplay If true, registers Weather/UI/Dialogue/Modding and AssetRegistry.
+ */
+static void InitLinuxCoreSubsystems(bool registerGameplay)
+{
+    EngineContext::SetOwned(
+        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
+
+    InitPhysics();
+
+    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+    Spark::EngineSetup::InitializeJobSystem();
+
+    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+    }
+    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+
+    if (registerGameplay)
+    {
+        static Spark::AssetRegistry s_assetRegistry;
+        EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&s_assetRegistry);
+        RegisterGameplaySubsystems();
+    }
+}
+
+/**
+ * @brief Load game modules, initialize hot-reload watcher, and register console commands.
+ *
+ * Shared by all Linux startup paths. Handles module loading via LoadGameModulesLinux,
+ * hot-reload setup, audio engine init (if windowed), and console command registration.
+ *
+ * @param argc Argument count from main().
+ * @param argv Argument values from main().
+ * @param initAudio If true, creates and initializes AudioEngine.
+ */
+static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
+{
+    g_moduleManager = std::make_unique<ModuleManager>();
+    auto& console = Spark::SimpleConsole::GetInstance();
+
+    if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
+    {
+        g_moduleManager->InitializeAll(EngineContext::Get());
+        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
+    }
+    else
+    {
+        console.LogWarning("No game modules found. Running engine-only mode.");
+    }
+
+    // Module hot-reload watcher
+    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
+    g_moduleHotReload->WatchAllLoadedModules();
+    g_moduleHotReload->Start();
+
+    // Audio engine (windowed modes only — headless has no audio output)
+    if (initAudio)
+    {
+        g_audioEngine = std::make_unique<AudioEngine>();
+        if (SUCCEEDED(g_audioEngine->Initialize(32)))
         {
-            g_moduleManager->InitializeAll(EngineContext::Get());
-            console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
+            console.LogInfo("AudioEngine initialized (32 sources)");
+            EngineContext::Get()->SetAudio(g_audioEngine.get());
         }
         else
         {
-            console.LogWarning("No game modules found. Running engine-only headless mode.");
+            console.LogWarning("AudioEngine initialization failed");
+            g_audioEngine.reset();
         }
-
-        // Module hot-reload watcher
-        g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
-        g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
-        g_moduleHotReload->WatchAllLoadedModules();
-        g_moduleHotReload->Start();
-
-        if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
-        {
-            Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
-        }
-        EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
-        EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
-        if (g_graphics)
-            Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-        Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
-        LogMissingModuleWarnings();
-
-        constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
-        console.LogInfo("Starting headless server loop (60 Hz)...");
-        console.LogInfo("Press Ctrl+C to stop.");
-
-        while (!g_shutdownRequested)
-        {
-            auto tickStart = std::chrono::steady_clock::now();
-            float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
-
-            if (g_moduleManager && g_moduleManager->HasModules())
-                g_moduleManager->UpdateAll(dt);
-
-            if (g_moduleHotReload)
-                g_moduleHotReload->PollChanges();
-
-            UpdateGameplaySystems(dt);
-            UpdateDebugSystems(dt);
-            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-            console.Update();
-
-            auto elapsed = std::chrono::steady_clock::now() - tickStart;
-            if (elapsed < TICK_INTERVAL)
-                std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
-        }
-
-        g_moduleHotReload.reset();
-        console.LogInfo("Headless server shutting down...");
-        ShutdownEngine();
-
-        std::cout << "Headless server shut down cleanly." << std::endl;
-        return 0;
-#endif // SPARK_HEADLESS_SUPPORT
     }
 
-    // =================================================================
-    // Normal (windowed) mode - SDL2 window + event loop
-    // =================================================================
-    std::cout << "=== Spark Engine (Linux Build) ===" << std::endl;
+    // Console commands
+    if (g_graphics)
+        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
+    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
+
+    LogMissingModuleWarnings();
+}
+
+/**
+ * @brief Common shutdown sequence for all Linux startup paths.
+ */
+static void ShutdownLinux()
+{
+    g_moduleHotReload.reset();
+    Spark::SimpleConsole::GetInstance().LogInfo("Shutting down...");
+    ShutdownEngine();
+}
+
+#ifdef SPARK_HEADLESS_SUPPORT
+/**
+ * @brief Run the engine in headless/dedicated server mode (Linux).
+ *
+ * Initializes server-only subsystems (no graphics, no audio), runs a fixed 60 Hz
+ * tick loop, and shuts down cleanly on SIGINT/SIGTERM.
+ */
+static int RunHeadlessLinux(int argc, char* argv[])
+{
+    std::cout << "=== Spark Engine (Headless/Dedicated Server - Linux) ===" << std::endl;
+
+    g_eventBus = std::make_unique<Spark::EventBus>();
+    g_timer = std::make_unique<Timer>();
+
+    // Headless: no gameplay subsystems (no Weather/UI/Dialogue/Modding)
+    InitLinuxCoreSubsystems(/*registerGameplay=*/false);
+
+    InitConsole();
+
+    InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
+
+    // Fixed 60 Hz server loop
+    constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("Starting headless server loop (60 Hz)...");
+    console.LogInfo("Press Ctrl+C to stop.");
+
+    while (!g_shutdownRequested)
+    {
+        auto tickStart = std::chrono::steady_clock::now();
+        float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
+
+        if (g_moduleManager && g_moduleManager->HasModules())
+            g_moduleManager->UpdateAll(dt);
+
+        if (g_moduleHotReload)
+            g_moduleHotReload->PollChanges();
+
+        UpdateGameplaySystems(dt);
+        UpdateDebugSystems(dt);
+        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+        console.Update();
+
+        auto elapsed = std::chrono::steady_clock::now() - tickStart;
+        if (elapsed < TICK_INTERVAL)
+            std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
+    }
+
+    ShutdownLinux();
+    std::cout << "Headless server shut down cleanly." << std::endl;
+    return 0;
+}
+#endif // SPARK_HEADLESS_SUPPORT
 
 #ifdef SPARK_SDL2_AVAILABLE
-    // 1. Initialize SDL2
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0)
+/**
+ * @brief Translate an SDL key symbol to a Win32 virtual key code.
+ *
+ * InputManager uses WM_KEYDOWN/WM_KEYUP style messages internally,
+ * so SDL key events must be translated to VK_* codes for consistent handling.
+ *
+ * @return The corresponding VK_* code, or 0 if the key is not mapped.
+ */
+static int TranslateSDLKeyToVK(SDL_Keycode sym)
+{
+    // Alphabetic keys
+    if (sym >= SDLK_a && sym <= SDLK_z)
+        return 'A' + (sym - SDLK_a);
+
+    // Numeric keys
+    if (sym >= SDLK_0 && sym <= SDLK_9)
+        return '0' + (sym - SDLK_0);
+
+    // Function keys
+    if (sym >= SDLK_F1 && sym <= SDLK_F12)
+        return VK_F1 + (sym - SDLK_F1);
+
+    // Named keys
+    switch (sym)
     {
-        std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
-        return -1;
+    case SDLK_SPACE:
+        return VK_SPACE;
+    case SDLK_ESCAPE:
+        return VK_ESCAPE;
+    case SDLK_RETURN:
+        return VK_RETURN;
+    case SDLK_TAB:
+        return VK_TAB;
+    case SDLK_BACKSPACE:
+        return VK_BACK;
+    case SDLK_UP:
+        return VK_UP;
+    case SDLK_DOWN:
+        return VK_DOWN;
+    case SDLK_LEFT:
+        return VK_LEFT;
+    case SDLK_RIGHT:
+        return VK_RIGHT;
+    case SDLK_LSHIFT:
+        return VK_LSHIFT;
+    case SDLK_RSHIFT:
+        return VK_RSHIFT;
+    case SDLK_LCTRL:
+        return VK_LCONTROL;
+    case SDLK_RCTRL:
+        return VK_RCONTROL;
+    case SDLK_LALT:
+        return VK_LMENU;
+    case SDLK_RALT:
+        return VK_RMENU;
+    case SDLK_DELETE:
+        return VK_DELETE;
+    default:
+        return 0;
+    }
+}
+
+/**
+ * @brief Dispatch a single SDL event to the appropriate engine subsystem.
+ *
+ * Handles window close/resize, keyboard, and mouse events by translating
+ * them into the InputManager's message format.
+ *
+ * @param event The SDL event to process.
+ * @return false if the application should quit, true otherwise.
+ */
+static bool HandleSDLEvent(const SDL_Event& event)
+{
+    switch (event.type)
+    {
+    case SDL_QUIT:
+        return false;
+
+    case SDL_WINDOWEVENT:
+        if (event.window.event == SDL_WINDOWEVENT_CLOSE)
+            return false;
+        if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+        {
+            int w = event.window.data1;
+            int h = event.window.data2;
+            if (g_graphics)
+                g_graphics->OnResize(w, h);
+            if (g_moduleManager)
+                g_moduleManager->ResizeAll(w, h);
+        }
+        break;
+
+    case SDL_KEYDOWN:
+    case SDL_KEYUP:
+        if (g_input)
+        {
+            UINT msg = (event.type == SDL_KEYDOWN) ? WM_KEYDOWN : WM_KEYUP;
+            int vk = TranslateSDLKeyToVK(event.key.keysym.sym);
+            if (vk != 0)
+                g_input->HandleMessage(msg, static_cast<WPARAM>(vk), 0);
+        }
+        break;
+
+    case SDL_MOUSEMOTION:
+        if (g_input)
+            g_input->HandleMessage(WM_MOUSEMOVE, 0,
+                                   static_cast<LPARAM>((event.motion.y << 16) | (event.motion.x & 0xFFFF)));
+        break;
+
+    case SDL_MOUSEBUTTONDOWN:
+    case SDL_MOUSEBUTTONUP:
+        if (g_input)
+        {
+            UINT msg = 0;
+            if (event.button.button == SDL_BUTTON_LEFT)
+                msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_LBUTTONDOWN : WM_LBUTTONUP;
+            else if (event.button.button == SDL_BUTTON_RIGHT)
+                msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_RBUTTONDOWN : WM_RBUTTONUP;
+            else if (event.button.button == SDL_BUTTON_MIDDLE)
+                msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_MBUTTONDOWN : WM_MBUTTONUP;
+            if (msg)
+                g_input->HandleMessage(msg, 0, 0);
+        }
+        break;
     }
 
-    // 2. Load engine settings
+    return true;
+}
+
+/**
+ * @brief Initialize SDL2 windowed-mode subsystems: window, graphics, input,
+ *        engine context, modules, audio, and console commands.
+ *
+ * @param window The SDL2 window (already created by the caller).
+ * @param argc Argument count from main().
+ * @param argv Argument values from main().
+ */
+static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
+{
     auto& settings = EngineSettings::GetInstance();
-    settings.Load();
 
-    int winW = settings.Graphics().windowWidth;
-    int winH = settings.Graphics().windowHeight;
-
-    Uint32 windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
-    if (settings.Graphics().fullscreen)
-        windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-
-    // Request an OpenGL context if the RHI may use it
-    windowFlags |= SDL_WINDOW_OPENGL;
-
-    SDL_Window* window =
-        SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
-    if (!window)
-    {
-        std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
-        SDL_Quit();
-        return -1;
-    }
-
-    // 3. Create engine subsystems
+    // Core engine objects
     g_timer = std::make_unique<Timer>();
     g_eventBus = std::make_unique<Spark::EventBus>();
     g_input = std::make_unique<InputManager>();
@@ -1126,51 +1384,24 @@ int main(int argc, char* argv[])
     else
         std::cout << "Graphics engine initialization deferred (headless fallback)." << std::endl;
 
-    // 4. Engine context (service locator)
-    EngineContext::SetOwned(
-        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
+    // Engine context, physics, core subsystems, gameplay subsystems
+    InitLinuxCoreSubsystems(/*registerGameplay=*/true);
 
-    // 5. Physics
-    InitPhysics();
-
-    // 5b. Register core subsystems with dependency metadata (EngineSetup)
-    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
-    Spark::EngineSetup::InitializeJobSystem();
-    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
-    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
-    static Spark::AssetRegistry g_linuxAssetRegistry;
-    EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&g_linuxAssetRegistry);
-
-    // 5c. Register gameplay subsystems (Weather, UI, Dialogue, Modding)
-    static Spark::WeatherSystem g_linuxWeatherSystem;
-    EngineContext::Get()->RegisterSystem<Spark::WeatherSystem>(&g_linuxWeatherSystem);
-
-    static Spark::UI::UISystem g_linuxUISystem;
-    EngineContext::Get()->RegisterSystem<Spark::UI::UISystem>(&g_linuxUISystem);
-
-    static Spark::DialogueSystem g_linuxDialogueSystem;
-    EngineContext::Get()->RegisterSystem<Spark::DialogueSystem>(&g_linuxDialogueSystem);
-
-    static Spark::ModSystem g_linuxModSystem;
-    EngineContext::Get()->RegisterSystem<Spark::ModSystem>(&g_linuxModSystem);
-
-    // 6. Module loading
-    g_moduleManager = std::make_unique<ModuleManager>();
-
+    // Console + debug/gameplay systems
     auto& console = Spark::SimpleConsole::GetInstance();
     if (console.Initialize())
     {
         console.LogSuccess("Spark Engine runtime initialized (Linux/SDL2)");
         console.LogInfo("Settings loaded from " + settings.GetFilePath());
     }
-
-    // Launch SparkConsole subprocess for command IPC
     Spark::ConsoleProcessManager::GetInstance().Initialize();
 
-    if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
-    {
-        g_moduleManager->InitializeAll(EngineContext::Get());
+    // Modules, audio, console commands
+    InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/true);
 
+    // Update window title with primary module name
+    if (g_moduleManager)
+    {
         auto* primary = g_moduleManager->GetPrimaryModule();
         if (primary)
         {
@@ -1178,157 +1409,33 @@ int main(int argc, char* argv[])
             std::string title = std::string("Spark Engine - ") + info.name;
             SDL_SetWindowTitle(window, title.c_str());
         }
-
-        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
-    }
-    else
-    {
-        console.LogWarning("No game modules found. Running engine-only mode.");
-        console.LogInfo("Place a game .so (e.g. libSparkGame.so) next to the engine executable,");
-        console.LogInfo("use -game <path> on the command line,");
-        console.LogInfo("or create a spark.modules.json manifest.");
     }
 
-    // 6b. Module hot-reload watcher
-    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
-    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
-    g_moduleHotReload->WatchAllLoadedModules();
-    g_moduleHotReload->Start();
-
-    // 7. Additional subsystems
-    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
-    {
-        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
-    }
-    console.LogInfo("SaveSystem initialized");
-
-    g_audioEngine = std::make_unique<AudioEngine>();
-    if (SUCCEEDED(g_audioEngine->Initialize(32)))
-    {
-        console.LogInfo("AudioEngine initialized (32 sources)");
-        EngineContext::Get()->SetAudio(g_audioEngine.get());
-    }
-    else
-    {
-        console.LogWarning("AudioEngine initialization failed");
-        g_audioEngine.reset();
-    }
-
-    // 8. Console commands
-    if (g_graphics)
-        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
     settings.RegisterConsoleCommands();
-
-    // 8b. Log warnings for missing third-party modules
-    LogMissingModuleWarnings();
-
-    // 8c. Initialize debug/utility systems
     InitDebugSystems();
     InitGameplaySystems();
+}
 
-    // 9. Main event loop (SDL2)
-    console.LogInfo("Starting main engine loop (SDL2)...");
-    bool running = true;
+/**
+ * @brief Run the SDL2 event pump and per-frame engine tick loop.
+ *
+ * Processes SDL events via HandleSDLEvent(), then calls TickFrame() for
+ * the engine update. Returns when the window is closed or SIGINT is received.
+ */
+static void RunSDL2MainLoop()
+{
+    Spark::SimpleConsole::GetInstance().LogInfo("Starting main engine loop (SDL2)...");
 
-    while (running && !g_shutdownRequested)
+    while (!g_shutdownRequested)
     {
         SDL_Event event;
+        bool running = true;
+
         while (SDL_PollEvent(&event))
         {
-            switch (event.type)
+            if (!HandleSDLEvent(event))
             {
-            case SDL_QUIT:
                 running = false;
-                break;
-
-            case SDL_WINDOWEVENT:
-                if (event.window.event == SDL_WINDOWEVENT_CLOSE)
-                    running = false;
-                else if (event.window.event == SDL_WINDOWEVENT_RESIZED)
-                {
-                    int w = event.window.data1;
-                    int h = event.window.data2;
-                    if (g_graphics)
-                        g_graphics->OnResize(w, h);
-                    if (g_moduleManager)
-                        g_moduleManager->ResizeAll(w, h);
-                }
-                break;
-
-            case SDL_KEYDOWN:
-            case SDL_KEYUP:
-                if (g_input)
-                {
-                    // Translate SDL key events to WM_KEYDOWN/WM_KEYUP style messages
-                    // so InputManager::HandleMessage works consistently
-                    UINT msg = (event.type == SDL_KEYDOWN) ? WM_KEYDOWN : WM_KEYUP;
-                    int vk = 0;
-                    auto sym = event.key.keysym.sym;
-                    if (sym >= SDLK_a && sym <= SDLK_z)
-                        vk = 'A' + (sym - SDLK_a);
-                    else if (sym >= SDLK_0 && sym <= SDLK_9)
-                        vk = '0' + (sym - SDLK_0);
-                    else if (sym == SDLK_SPACE)
-                        vk = VK_SPACE;
-                    else if (sym == SDLK_ESCAPE)
-                        vk = VK_ESCAPE;
-                    else if (sym == SDLK_RETURN)
-                        vk = VK_RETURN;
-                    else if (sym == SDLK_TAB)
-                        vk = VK_TAB;
-                    else if (sym == SDLK_BACKSPACE)
-                        vk = VK_BACK;
-                    else if (sym == SDLK_UP)
-                        vk = VK_UP;
-                    else if (sym == SDLK_DOWN)
-                        vk = VK_DOWN;
-                    else if (sym == SDLK_LEFT)
-                        vk = VK_LEFT;
-                    else if (sym == SDLK_RIGHT)
-                        vk = VK_RIGHT;
-                    else if (sym == SDLK_LSHIFT)
-                        vk = VK_LSHIFT;
-                    else if (sym == SDLK_RSHIFT)
-                        vk = VK_RSHIFT;
-                    else if (sym == SDLK_LCTRL)
-                        vk = VK_LCONTROL;
-                    else if (sym == SDLK_RCTRL)
-                        vk = VK_RCONTROL;
-                    else if (sym == SDLK_LALT)
-                        vk = VK_LMENU;
-                    else if (sym == SDLK_RALT)
-                        vk = VK_RMENU;
-                    else if (sym == SDLK_DELETE)
-                        vk = VK_DELETE;
-                    else if (sym >= SDLK_F1 && sym <= SDLK_F12)
-                        vk = VK_F1 + (sym - SDLK_F1);
-
-                    if (vk != 0)
-                        g_input->HandleMessage(msg, static_cast<WPARAM>(vk), 0);
-                }
-                break;
-
-            case SDL_MOUSEMOTION:
-                if (g_input)
-                    g_input->HandleMessage(WM_MOUSEMOVE, 0,
-                                           static_cast<LPARAM>((event.motion.y << 16) | (event.motion.x & 0xFFFF)));
-                break;
-
-            case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEBUTTONUP:
-                if (g_input)
-                {
-                    UINT msg = 0;
-                    if (event.button.button == SDL_BUTTON_LEFT)
-                        msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_LBUTTONDOWN : WM_LBUTTONUP;
-                    else if (event.button.button == SDL_BUTTON_RIGHT)
-                        msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_RBUTTONDOWN : WM_RBUTTONUP;
-                    else if (event.button.button == SDL_BUTTON_MIDDLE)
-                        msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_MBUTTONDOWN : WM_MBUTTONUP;
-                    if (msg)
-                        g_input->HandleMessage(msg, 0, 0);
-                }
                 break;
             }
         }
@@ -1336,42 +1443,68 @@ int main(int argc, char* argv[])
         if (!running)
             break;
 
-        // Tick
         float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
+        TickFrame(dt);
+    }
+}
 
-        if (g_input)
-            g_input->Update();
+/**
+ * @brief Run the engine in SDL2 windowed mode (Linux).
+ *
+ * Creates an SDL2 window, initializes all engine subsystems, runs the
+ * main loop, and cleans up SDL resources on exit.
+ */
+static int RunSDL2Windowed(int argc, char* argv[])
+{
+    std::cout << "=== Spark Engine (Linux Build) ===" << std::endl;
 
-        if (g_moduleManager && g_moduleManager->HasModules())
-        {
-            g_moduleManager->UpdateAll(dt);
-            g_moduleManager->RenderAll();
-        }
-        else if (g_graphics)
-        {
-            g_graphics->BeginFrame();
-            g_graphics->EndFrame();
-        }
-
-        if (g_moduleHotReload)
-            g_moduleHotReload->PollChanges();
-
-        UpdateGameplaySystems(dt);
-        UpdateDebugSystems(dt);
-        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-        console.Update();
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0)
+    {
+        std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
+        return -1;
     }
 
-    // 10. Shutdown
-    g_moduleHotReload.reset();
-    console.LogInfo("Shutting down...");
-    ShutdownEngine();
+    auto& settings = EngineSettings::GetInstance();
+    settings.Load();
 
+    int winW = settings.Graphics().windowWidth;
+    int winH = settings.Graphics().windowHeight;
+
+    Uint32 windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    if (settings.Graphics().fullscreen)
+        windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+    windowFlags |= SDL_WINDOW_OPENGL;
+
+    SDL_Window* window =
+        SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
+    if (!window)
+    {
+        std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
+        SDL_Quit();
+        return -1;
+    }
+
+    InitializeSDL2Subsystems(window, argc, argv);
+    RunSDL2MainLoop();
+
+    ShutdownLinux();
     SDL_DestroyWindow(window);
     SDL_Quit();
+    return 0;
+}
+#endif // SPARK_SDL2_AVAILABLE
 
-#else  // !SPARK_SDL2_AVAILABLE
-    // Fallback: no SDL2 available, run without a window (headless-like)
+#ifndef SPARK_SDL2_AVAILABLE
+/**
+ * @brief Run the engine without SDL2 (no-window fallback).
+ *
+ * Initializes engine subsystems in headless-like mode, processes a few ticks
+ * to validate initialization, then exits. Used when SDL2 is not available
+ * and the engine was not explicitly started in headless mode.
+ */
+static int RunNoSDL2Fallback(int argc, char* argv[])
+{
+    std::cout << "=== Spark Engine (Linux Build) ===" << std::endl;
     std::cerr << "Warning: SDL2 not available. Running without a window." << std::endl;
     std::cerr << "Install SDL2 and rebuild with -DENABLE_SDL2=ON for windowed mode." << std::endl;
 
@@ -1379,74 +1512,55 @@ int main(int argc, char* argv[])
     g_timer = std::make_unique<Timer>();
     g_input = std::make_unique<InputManager>();
     g_graphics = std::make_unique<GraphicsEngine>();
+
     HRESULT hr = g_graphics->Initialize(nullptr);
     if (FAILED(hr))
         std::cerr << "Graphics initialization failed (fallback mode)." << std::endl;
 
-    EngineContext::SetOwned(
-        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
-
-    InitPhysics();
-
-    // Register core subsystems with dependency metadata
-    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
-    Spark::EngineSetup::InitializeJobSystem();
-    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
-    {
-        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
-    }
-    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
-    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
-
-    // Register gameplay subsystems (Weather, UI, Dialogue, Modding)
-    static Spark::WeatherSystem g_fallbackWeatherSystem;
-    EngineContext::Get()->RegisterSystem<Spark::WeatherSystem>(&g_fallbackWeatherSystem);
-    static Spark::UI::UISystem g_fallbackUISystem;
-    EngineContext::Get()->RegisterSystem<Spark::UI::UISystem>(&g_fallbackUISystem);
-    static Spark::DialogueSystem g_fallbackDialogueSystem;
-    EngineContext::Get()->RegisterSystem<Spark::DialogueSystem>(&g_fallbackDialogueSystem);
-    static Spark::ModSystem g_fallbackModSystem;
-    EngineContext::Get()->RegisterSystem<Spark::ModSystem>(&g_fallbackModSystem);
-
-    g_moduleManager = std::make_unique<ModuleManager>();
+    // Engine context, physics, core subsystems, gameplay subsystems
+    InitLinuxCoreSubsystems(/*registerGameplay=*/true);
 
     InitConsole();
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogWarning("No SDL2 - engine will exit after initialization.");
-    LogMissingModuleWarnings();
+    Spark::SimpleConsole::GetInstance().LogWarning("No SDL2 - engine will exit after initialization.");
 
-    if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
-    {
-        g_moduleManager->InitializeAll(EngineContext::Get());
-        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
-    }
+    InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
 
-    // Module hot-reload watcher
-    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
-    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
-    g_moduleHotReload->WatchAllLoadedModules();
-    g_moduleHotReload->Start();
-
-    // Minimal loop - process a few ticks then exit
+    // Minimal loop — process a few ticks to validate initialization, then exit
     for (int frame = 0; frame < 10 && !g_shutdownRequested; ++frame)
     {
         float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
-        if (g_moduleManager && g_moduleManager->HasModules())
-            g_moduleManager->UpdateAll(dt);
-        if (g_moduleHotReload)
-            g_moduleHotReload->PollChanges();
-        UpdateGameplaySystems(dt);
-        UpdateDebugSystems(dt);
-        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-        console.Update();
+        TickFrame(dt);
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 
-    g_moduleHotReload.reset();
-    ShutdownEngine();
-#endif // SPARK_SDL2_AVAILABLE
+    ShutdownLinux();
+    return 0;
+}
+#endif // !SPARK_SDL2_AVAILABLE
+
+// ===================================================================================
+//                                    main
+// ===================================================================================
+
+int main(int argc, char* argv[])
+{
+    std::signal(SIGINT, SignalHandler);
+    std::signal(SIGTERM, SignalHandler);
+
+#ifdef SPARK_HEADLESS_SUPPORT
+    bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");
+    g_headlessMode = headless;
+    if (headless)
+        return RunHeadlessLinux(argc, argv);
+#endif
+
+#ifdef SPARK_SDL2_AVAILABLE
+    int result = RunSDL2Windowed(argc, argv);
+#else
+    int result = RunNoSDL2Fallback(argc, argv);
+#endif
 
     std::cout << "Spark Engine shut down cleanly." << std::endl;
-    return 0;
+    return result;
 }
 #endif // !SPARK_PLATFORM_WINDOWS

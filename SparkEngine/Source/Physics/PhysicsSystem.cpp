@@ -922,9 +922,16 @@ void PhysicsSystem::ProcessCollisions()
     if (!m_dynamicsWorld || !m_dispatcher)
         return;
 
-    // Build the set of trigger pairs active this frame
     std::vector<std::pair<PhysicsBody*, PhysicsBody*>> currentTriggerPairs;
+    DispatchCollisionCallbacks(currentTriggerPairs);
+    UpdateTriggerExitEvents(currentTriggerPairs);
 
+    // Swap the current pairs into the tracking set for the next frame
+    m_activeTriggerPairs = std::move(currentTriggerPairs);
+}
+
+void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody*, PhysicsBody*>>& outTriggerPairs)
+{
     int numManifolds = m_dispatcher->getNumManifolds();
     for (int i = 0; i < numManifolds; i++)
     {
@@ -953,7 +960,7 @@ void PhysicsSystem::ProcessCollisions()
             // Canonical ordering to ensure consistent pair identity
             PhysicsBody* first = (bodyA < bodyB) ? bodyA : bodyB;
             PhysicsBody* second = (bodyA < bodyB) ? bodyB : bodyA;
-            currentTriggerPairs.push_back({first, second});
+            outTriggerPairs.push_back({first, second});
 
             // Check if this pair is new (trigger enter)
             if (m_triggerCallback)
@@ -995,30 +1002,30 @@ void PhysicsSystem::ProcessCollisions()
             }
         }
     }
+}
 
-    // Detect trigger exit events: pairs that were active last frame but not this frame
-    if (m_triggerCallback)
+void PhysicsSystem::UpdateTriggerExitEvents(
+    const std::vector<std::pair<PhysicsBody*, PhysicsBody*>>& currentTriggerPairs)
+{
+    if (!m_triggerCallback)
+        return;
+
+    for (const auto& prev : m_activeTriggerPairs)
     {
-        for (const auto& prev : m_activeTriggerPairs)
+        bool stillActive = false;
+        for (const auto& curr : currentTriggerPairs)
         {
-            bool stillActive = false;
-            for (const auto& curr : currentTriggerPairs)
+            if (curr.first == prev.first && curr.second == prev.second)
             {
-                if (curr.first == prev.first && curr.second == prev.second)
-                {
-                    stillActive = true;
-                    break;
-                }
-            }
-            if (!stillActive)
-            {
-                m_triggerCallback(prev.first, prev.second, false);
+                stillActive = true;
+                break;
             }
         }
+        if (!stillActive)
+        {
+            m_triggerCallback(prev.first, prev.second, false);
+        }
     }
-
-    // Swap the current pairs into the tracking set for the next frame
-    m_activeTriggerPairs = std::move(currentTriggerPairs);
 }
 
 void PhysicsSystem::SetGravity(const XMFLOAT3& gravity)

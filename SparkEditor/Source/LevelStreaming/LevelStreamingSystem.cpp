@@ -1,4 +1,5 @@
 #include "LevelStreamingSystem.h"
+#include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
 #include <cmath>
@@ -91,7 +92,7 @@ namespace SparkEditor
 
         // Dot product with forward vector
         float dot = (dx * forward.x + dy * forward.y + dz * forward.z) / dist;
-        float halfAngleRad = (fieldOfView * 0.5f) * (3.14159265f / 180.0f);
+        float halfAngleRad = MathUtils::DegreesToRadians(fieldOfView * 0.5f);
         float cosHalf = std::cos(halfAngleRad);
 
         // Expand cone by object radius

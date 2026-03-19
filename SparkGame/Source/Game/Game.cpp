@@ -156,7 +156,27 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_gravitySystem->CreateReverseGravityZone("Reverse_Chamber", {-25.0f, 10.0f, 0.0f}, {6.0f, 10.0f, 6.0f}, 12.0f);
     LOG_TO_CONSOLE_IMMEDIATE(L"Gravity system initialized with 3 sample zones", L"SUCCESS");
 
-    /* Interaction System --------------------------------*/
+    InitializeInteractionObjects();
+    InitializeRespawnAndVehicles();
+    InitializeGameModeAndHUD();
+    InitializeInventorySystem();
+    InitializeQuestSystem();
+
+    /* Register Advanced Console Commands */
+    SparkConsole::RegisterAdvancedCommands(this, m_graphics);
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"All systems online - gamemode, HUD, inventory, quests, vehicles, gravity, interactions, "
+                             L"damage zones, respawn",
+                             L"SUCCESS");
+
+    return S_OK;
+}
+
+/*-------------------------------------------------------------
+  Extracted init helpers
+--------------------------------------------------------------*/
+void Game::InitializeInteractionObjects()
+{
     m_interactionSystem = std::make_unique<Spark::InteractionSystem>();
     m_interactionSystem->Initialize();
     m_player->SetInteractionSystem(m_interactionSystem.get());
@@ -201,15 +221,17 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Interaction system initialized with arena objects", L"SUCCESS");
 
-    /* Damage Zone System --------------------------------*/
+    // Damage zones
     m_damageZoneSystem = std::make_unique<Spark::DamageZoneSystem>();
     m_damageZoneSystem->Initialize();
     m_damageZoneSystem->CreateLavaZone("Arena_Lava_Pit", {0.0f, -2.0f, 0.0f}, {3.0f, 2.0f, 3.0f});
     m_damageZoneSystem->CreateVoidZone("Arena_Boundary", {0.0f, -20.0f, 0.0f}, {100.0f, 5.0f, 100.0f});
     m_damageZoneSystem->CreateElectricZone("Electric_Trap", {15.0f, 0.5f, -15.0f}, {3.0f, 2.0f, 3.0f});
     LOG_TO_CONSOLE_IMMEDIATE(L"Damage zone system initialized with hazards", L"SUCCESS");
+}
 
-    /* Respawn System ------------------------------------*/
+void Game::InitializeRespawnAndVehicles()
+{
     m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
     m_respawnSystem->Initialize();
 
@@ -237,13 +259,17 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     LOG_TO_CONSOLE_IMMEDIATE(L"Respawn system initialized with 4 spawn points", L"SUCCESS");
 
     // Spawn initial vehicles in the arena
+    auto* dev = m_graphics->GetDevice();
+    auto* ctx = m_graphics->GetContext();
     m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::BUGGY, {25.0f, 0.5f, 0.0f}, dev, ctx);
     m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::MOTORCYCLE, {-25.0f, 0.5f, 0.0f}, dev, ctx);
     m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::TANK, {0.0f, 0.5f, 25.0f}, dev, ctx);
     m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::HELICOPTER, {0.0f, 5.0f, -25.0f}, dev, ctx);
     LOG_TO_CONSOLE_IMMEDIATE(L"Spawned 4 vehicles in combat arena", L"SUCCESS");
+}
 
-    /* GameMode System --------------------------------*/
+void Game::InitializeGameModeAndHUD()
+{
     m_gameMode = std::make_unique<Spark::GameMode>();
     Spark::GameModeRules rules = Spark::GameMode::GetPreset(Spark::GameModeType::Deathmatch);
     m_gameMode->Initialize(rules);
@@ -251,93 +277,92 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_gameMode->StartMatch();
     LOG_TO_CONSOLE_IMMEDIATE(L"GameMode initialized (Deathmatch)", L"SUCCESS");
 
-    /* HUD System ------------------------------------*/
     m_hudSystem = std::make_unique<Spark::HUDSystem>();
     m_hudSystem->Initialize();
     m_hudSystem->SetPlayer(m_player.get());
     m_hudSystem->SetCurrentClass(GetPlayerClass());
     LOG_TO_CONSOLE_IMMEDIATE(L"HUD system initialized", L"SUCCESS");
 
-    /* Wire GameMode event callbacks → HUD system ---*/
+    // Wire GameMode event callbacks to HUD system
+    auto& events = m_gameMode->GetEvents();
+
+    events.onPlayerKill = [this](const std::string&)
     {
-        auto& events = m_gameMode->GetEvents();
+        if (m_hudSystem)
+            m_hudSystem->ShowHitMarker(false);
+    };
 
-        events.onPlayerKill = [this](const std::string& player)
-        {
-            if (m_hudSystem)
-                m_hudSystem->ShowHitMarker(false);
-        };
+    events.onPlayerDeath = [this](const std::string&)
+    {
+        if (m_hudSystem)
+            m_hudSystem->AddDamageIndicator(0.0f, 1.0f, 2.0f);
+    };
 
-        events.onPlayerDeath = [this](const std::string& player)
-        {
-            if (m_hudSystem)
-                m_hudSystem->AddDamageIndicator(0.0f, 1.0f, 2.0f);
-        };
+    events.onRoundStart = [this](int roundNum)
+    {
+        std::wstring msg = L"Round " + std::to_wstring(roundNum) + L" started";
+        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+    };
 
-        events.onRoundStart = [this](int roundNum)
-        {
-            std::wstring msg = L"Round " + std::to_wstring(roundNum) + L" started";
-            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
-        };
+    events.onRoundEnd = [this](const Spark::RoundResult& result)
+    {
+        std::wstring msg = L"Round " + std::to_wstring(result.roundNumber) + L" ended - MVP: " +
+                           std::wstring(result.mvpPlayer.begin(), result.mvpPlayer.end());
+        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+    };
 
-        events.onRoundEnd = [this](const Spark::RoundResult& result)
-        {
-            std::wstring msg = L"Round " + std::to_wstring(result.roundNumber) + L" ended - MVP: " +
-                               std::wstring(result.mvpPlayer.begin(), result.mvpPlayer.end());
-            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
-        };
+    events.onMatchEnd = [this](Spark::Team winner)
+    {
+        const char* teamName = (winner == Spark::Team::Alpha)   ? "Alpha"
+                               : (winner == Spark::Team::Bravo) ? "Bravo"
+                                                                : "None";
+        std::string tn(teamName);
+        std::wstring msg = L"Match ended - Winner: " + std::wstring(tn.begin(), tn.end());
+        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+    };
 
-        events.onMatchEnd = [this](Spark::Team winner)
+    events.onKillStreak = [this](const std::string& player, int streak)
+    {
+        if (m_hudSystem)
         {
-            const char* teamName = (winner == Spark::Team::Alpha)   ? "Alpha"
-                                   : (winner == Spark::Team::Bravo) ? "Bravo"
-                                                                    : "None";
-            std::string tn(teamName);
-            std::wstring msg = L"Match ended - Winner: " + std::wstring(tn.begin(), tn.end());
-            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
-        };
+            std::string streakMsg = player + " is on a " + std::to_string(streak) + " kill streak!";
+            m_hudSystem->AddKillFeedEntry("", player, streakMsg);
+        }
+    };
 
-        events.onKillStreak = [this](const std::string& player, int streak)
+    events.onFirstBlood = [this](const std::string& player)
+    {
+        if (m_hudSystem)
+            m_hudSystem->AddKillFeedEntry(player, "", "First Blood");
+    };
+
+    events.onScoreUpdate = [this](Spark::Team, int)
+    {
+        if (m_hudSystem && m_gameMode)
         {
-            if (m_hudSystem)
+            auto scores = m_gameMode->GetScoreboard();
+            std::vector<Spark::ScoreboardEntry> entries;
+            entries.reserve(scores.size());
+            for (const auto& ps : scores)
             {
-                std::string streakMsg = player + " is on a " + std::to_string(streak) + " kill streak!";
-                m_hudSystem->AddKillFeedEntry("", player, streakMsg);
+                Spark::ScoreboardEntry entry;
+                entry.playerName = ps.playerName;
+                entry.kills = ps.kills;
+                entry.deaths = ps.deaths;
+                entry.assists = ps.assists;
+                entry.score = ps.totalScore;
+                entry.isLocalPlayer = (ps.playerName == "Player1");
+                entries.push_back(std::move(entry));
             }
-        };
+            m_hudSystem->SetScoreboard(entries);
+        }
+    };
 
-        events.onFirstBlood = [this](const std::string& player)
-        {
-            if (m_hudSystem)
-                m_hudSystem->AddKillFeedEntry(player, "", "First Blood");
-        };
-
-        events.onScoreUpdate = [this](Spark::Team team, int score)
-        {
-            // Update scoreboard on HUD from current gamemode data
-            if (m_hudSystem && m_gameMode)
-            {
-                auto scores = m_gameMode->GetScoreboard();
-                std::vector<Spark::ScoreboardEntry> entries;
-                entries.reserve(scores.size());
-                for (const auto& ps : scores)
-                {
-                    Spark::ScoreboardEntry entry;
-                    entry.playerName = ps.playerName;
-                    entry.kills = ps.kills;
-                    entry.deaths = ps.deaths;
-                    entry.assists = ps.assists;
-                    entry.score = ps.totalScore;
-                    entry.isLocalPlayer = (ps.playerName == "Player1");
-                    entries.push_back(std::move(entry));
-                }
-                m_hudSystem->SetScoreboard(entries);
-            }
-        };
-    }
     LOG_TO_CONSOLE_IMMEDIATE(L"GameMode events wired to HUD", L"SUCCESS");
+}
 
-    /* Inventory System - Register base items --------*/
+void Game::InitializeInventorySystem()
+{
     Spark::ItemDef healthPotion;
     healthPotion.id = 1;
     healthPotion.name = "Health Potion";
@@ -381,8 +406,10 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_playerInventory.maxSlots = 20;
     m_playerInventory.maxWeight = 50.0f;
     LOG_TO_CONSOLE_IMMEDIATE(L"Inventory system initialized (4 item types)", L"SUCCESS");
+}
 
-    /* Quest System - Register starter quests --------*/
+void Game::InitializeQuestSystem()
+{
     Spark::QuestDef arenaQuest;
     arenaQuest.id = 1;
     arenaQuest.name = "Arena Champion";
@@ -415,15 +442,6 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     // Auto-start the first quest
     Spark::QuestOps::StartQuest(m_playerQuests, m_questRegistry, 1);
     LOG_TO_CONSOLE_IMMEDIATE(L"Quest system initialized (3 quests, 1 active)", L"SUCCESS");
-
-    /* Register Advanced Console Commands */
-    SparkConsole::RegisterAdvancedCommands(this, m_graphics);
-
-    LOG_TO_CONSOLE_IMMEDIATE(L"All systems online - gamemode, HUD, inventory, quests, vehicles, gravity, interactions, "
-                             L"damage zones, respawn",
-                             L"SUCCESS");
-
-    return S_OK;
 }
 
 /*-------------------------------------------------------------

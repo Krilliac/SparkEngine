@@ -1,4 +1,5 @@
 #include "Core/Platform.h"
+#include "Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file LightingSystemInternal.cpp
@@ -553,9 +554,9 @@ HRESULT LightingSystem::GenerateIrradianceMap(ID3D11ShaderResourceView* environm
     };
 
     // Fill with sky color scaled by PI (Lambertian diffuse integral)
-    float skyR = m_environmentLighting.skyColor.x * m_environmentLighting.skyIntensity * 3.14159f;
-    float skyG = m_environmentLighting.skyColor.y * m_environmentLighting.skyIntensity * 3.14159f;
-    float skyB = m_environmentLighting.skyColor.z * m_environmentLighting.skyIntensity * 3.14159f;
+    float skyR = m_environmentLighting.skyColor.x * m_environmentLighting.skyIntensity * MathUtils::PI;
+    float skyG = m_environmentLighting.skyColor.y * m_environmentLighting.skyIntensity * MathUtils::PI;
+    float skyB = m_environmentLighting.skyColor.z * m_environmentLighting.skyIntensity * MathUtils::PI;
     for (UINT i = 0; i < irradianceSize * irradianceSize; ++i)
     {
         faceData[i * 4 + 0] = floatToHalf(skyR);
@@ -743,7 +744,7 @@ HRESULT LightingSystem::GenerateBRDFLUT()
                 float u2 = static_cast<float>(bits2) * 2.3283064365386963e-10f;
 
                 // GGX importance sampling
-                float phi = 2.0f * 3.14159265f * u1;
+                float phi = MathUtils::TWO_PI * u1;
                 float cosTheta = std::sqrt((1.0f - u2) / (1.0f + (alpha * alpha - 1.0f) * u2));
                 float sinTheta = std::sqrt(1.0f - cosTheta * cosTheta);
 

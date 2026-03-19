@@ -1,4 +1,5 @@
 #include "Core/Platform.h"
+#include "Utils/MathUtils.h"
 // AudioEngine.cpp
 #include "AudioEngine.h"
 #include "Utils/Assert.h"
@@ -818,7 +819,7 @@ void AudioEngine::Apply3DAudioToSource(AudioSource* source)
 
         // Convert pan to left/right channel volumes using equal-power panning
         // pan: -1 = full left, 0 = center, +1 = full right
-        float angle = (pan + 1.0f) * 0.5f * 3.14159265f * 0.5f;
+        float angle = (pan + 1.0f) * 0.5f * MathUtils::HALF_PI;
         float leftGain = cosf(angle);
         float rightGain = sinf(angle);
 

@@ -197,3 +197,44 @@ float MathUtils::LengthSquared(const XMFLOAT3& v)
 {
     return v.x * v.x + v.y * v.y + v.z * v.z;
 }
+
+// =============================================================================
+// QUATERNION / EULER CONVERSION
+// =============================================================================
+
+XMFLOAT3 MathUtils::QuaternionToEulerDegrees(float qx, float qy, float qz, float qw)
+{
+    // Roll (X axis)
+    float sinrCosp = 2.0f * (qw * qx + qy * qz);
+    float cosrCosp = 1.0f - 2.0f * (qx * qx + qy * qy);
+    float roll = std::atan2(sinrCosp, cosrCosp) * RAD_TO_DEG;
+
+    // Pitch (Y axis) — handle gimbal lock
+    float sinp = 2.0f * (qw * qy - qz * qx);
+    float pitch = 0.0f;
+    if (std::abs(sinp) >= 1.0f)
+        pitch = std::copysign(90.0f, sinp);
+    else
+        pitch = std::asin(sinp) * RAD_TO_DEG;
+
+    // Yaw (Z axis)
+    float sinyCosp = 2.0f * (qw * qz + qx * qy);
+    float cosyCosp = 1.0f - 2.0f * (qy * qy + qz * qz);
+    float yaw = std::atan2(sinyCosp, cosyCosp) * RAD_TO_DEG;
+
+    return XMFLOAT3(roll, pitch, yaw);
+}
+
+XMFLOAT4 MathUtils::EulerDegreesToQuaternion(float rollDeg, float pitchDeg, float yawDeg)
+{
+    float rx = rollDeg * DEG_TO_RAD * 0.5f;
+    float ry = pitchDeg * DEG_TO_RAD * 0.5f;
+    float rz = yawDeg * DEG_TO_RAD * 0.5f;
+
+    float cx = std::cos(rx), sx = std::sin(rx);
+    float cy = std::cos(ry), sy = std::sin(ry);
+    float cz = std::cos(rz), sz = std::sin(rz);
+
+    return XMFLOAT4(sx * cy * cz - cx * sy * sz, cx * sy * cz + sx * cy * sz, cx * cy * sz - sx * sy * cz,
+                    cx * cy * cz + sx * sy * sz);
+}

@@ -979,33 +979,29 @@ namespace Spark::Net
 #endif // ENABLE_NETWORKING
     }
 
+    std::vector<ClientID> NetworkManager::GetConnectedClientIDs() const
+    {
+        std::lock_guard<std::mutex> lock(m_clientsMutex);
+        std::vector<ClientID> clientIDs;
+        clientIDs.reserve(m_clients.size());
+        for (const auto& [id, info] : m_clients)
+            clientIDs.push_back(id);
+        return clientIDs;
+    }
+
     void NetworkManager::SendToAll(const NetworkMessage& msg)
     {
-        std::vector<ClientID> clientIDs;
-        {
-            std::lock_guard<std::mutex> lock(m_clientsMutex);
-            clientIDs.reserve(m_clients.size());
-            for (const auto& [id, info] : m_clients)
-                clientIDs.push_back(id);
-        }
-        for (ClientID id : clientIDs)
+        for (ClientID id : GetConnectedClientIDs())
             SendToClient(id, msg);
     }
 
     void NetworkManager::SendToAllExcept(ClientID excludeClient, const NetworkMessage& msg)
     {
-        std::vector<ClientID> clientIDs;
+        for (ClientID id : GetConnectedClientIDs())
         {
-            std::lock_guard<std::mutex> lock(m_clientsMutex);
-            clientIDs.reserve(m_clients.size());
-            for (const auto& [id, info] : m_clients)
-            {
-                if (id != excludeClient)
-                    clientIDs.push_back(id);
-            }
+            if (id != excludeClient)
+                SendToClient(id, msg);
         }
-        for (ClientID id : clientIDs)
-            SendToClient(id, msg);
     }
 
     void NetworkManager::BroadcastMessage(const NetworkMessage& msg)
@@ -1353,6 +1349,12 @@ namespace Spark::Net
 
     void NetworkManager::ProcessOutgoing()
     {
+        FlushOutgoingQueue();
+        HandleRetransmissions();
+    }
+
+    void NetworkManager::FlushOutgoingQueue()
+    {
         std::queue<NetworkMessage> toSend;
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -1389,7 +1391,18 @@ namespace Spark::Net
 
             toSend.pop();
         }
+#else
+        // Without networking, just discard
+        while (!toSend.empty())
+        {
+            toSend.pop();
+        }
+#endif // ENABLE_NETWORKING
+    }
 
+    void NetworkManager::HandleRetransmissions()
+    {
+#ifdef ENABLE_NETWORKING
         // Retransmit unacknowledged reliable messages with exponential backoff
         std::vector<SequenceNumber> toRetransmit;
         for (auto& [seq, unacked] : m_unacknowledgedMessages)
@@ -1447,12 +1460,6 @@ namespace Spark::Net
                     SendRawTo(serialized, addr);
                 }
             }
-        }
-#else
-        // Without networking, just discard
-        while (!toSend.empty())
-        {
-            toSend.pop();
         }
 #endif // ENABLE_NETWORKING
     }

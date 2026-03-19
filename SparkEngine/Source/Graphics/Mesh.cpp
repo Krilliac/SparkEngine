@@ -1,4 +1,5 @@
 #include "../Core/Platform.h"
+#include "../Utils/MathUtils.h"
 /**
  * @file Mesh.cpp
  * @brief CPU-side mesh geometry and D3D11 GPU buffer management
@@ -675,14 +676,13 @@ HRESULT Mesh::CreateSphere(float radius, int slices, int stacks)
     m_vertices.clear();
     m_indices.clear();
 
-    const float PI = 3.14159265358979323846f;
     for (int i = 0; i <= stacks; ++i)
     {
-        float phi = PI * i / stacks;
+        float phi = MathUtils::PI * i / stacks;
         float sinPhi = sinf(phi), cosPhi = cosf(phi);
         for (int j = 0; j <= slices; ++j)
         {
-            float theta = 2.0f * PI * j / slices;
+            float theta = MathUtils::TWO_PI * j / slices;
             float sinTheta = sinf(theta), cosTheta = cosf(theta);
             XMFLOAT3 normal = {sinPhi * cosTheta, cosPhi, sinPhi * sinTheta};
             XMFLOAT3 pos = {radius * normal.x, radius * normal.y, radius * normal.z};
