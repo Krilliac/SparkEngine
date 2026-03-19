@@ -10,6 +10,10 @@
  */
 
 #pragma once
+
+// Subsystem headers
+#include "PlayerTypes.h"
+
 #include "Spark/SparkExport.h"
 #include "Core/Platform.h"
 
@@ -542,25 +546,7 @@ class SPARK_GAME_API Player : public GameObject
      */
     void Console_ChangeWeapon(WeaponType weaponType);
 
-    /**
-     * @brief Get comprehensive player state for console display
-     * @return Structure containing all relevant player state information
-     */
-    struct PlayerState
-    {
-        float health, maxHealth, armor, maxArmor, stamina, maxStamina;
-        float shield, maxShield, energy, maxEnergy;
-        DirectX::XMFLOAT3 position, velocity;
-        WeaponType currentWeapon;
-        int currentAmmo, maxAmmo;
-        bool isAlive, isGrounded, isReloading, isRunning, isCrouching;
-        bool godMode, noclip, infiniteAmmo;
-        float fireTimer, reloadTimer;
-        float speed, jumpHeight;
-        PlayerClass playerClass;
-        int activeLoadoutSlot;
-        bool primaryAbilityActive, secondaryAbilityActive;
-    };
+    // PlayerState struct is defined in PlayerTypes.h (included at the top of this file)
 
     /**
      * @brief Get complete player state (console integration)
