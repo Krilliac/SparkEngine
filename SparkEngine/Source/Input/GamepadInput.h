@@ -31,7 +31,7 @@
  * @endcode
  *
  * @note Requires the XInput library (linked via #pragma comment).
- * @see InputManager, PlatformInput
+ * @see InputManager
  */
 
 #pragma once

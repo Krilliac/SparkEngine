@@ -409,6 +409,12 @@ namespace Spark::Net
         const std::unordered_map<ClientID, ClientInfo>& GetClients() const { return m_clients; }
         void KickClient(ClientID client, const std::string& reason = "");
 
+        /// Register a callback for client timeout events (server-side).
+        void SetTimeoutHandler(std::function<void(ClientID)> handler) { m_timeoutHandler = std::move(handler); }
+
+        /// Get estimated round-trip time in milliseconds.
+        float GetEstimatedRTT() const { return m_smoothedRTT * 1000.0f; }
+
         /// Console integration
         std::string Console_GetStatus() const;
         std::string Console_ListClients() const;
@@ -488,7 +494,27 @@ namespace Spark::Net
         std::unordered_map<SequenceNumber, NetworkMessage> m_unacknowledgedMessages;
         std::unordered_map<SequenceNumber, float>
             m_reliableOriginalSendTime; ///< Tracks when each reliable msg was first sent
-        float m_reliableRetransmitInterval = 0.5f;
+        /// @brief Per-message retransmit count for exponential backoff.
+        std::unordered_map<SequenceNumber, int> m_retransmitCounts;
+        float m_reliableRetransmitInterval = 0.5f; ///< Base interval; doubles per retry
+
+        // RTT estimation (Jacobson/Karels algorithm)
+        float m_smoothedRTT = 0.0f;    ///< SRTT (smoothed round-trip time)
+        float m_rttVariance = 0.0f;    ///< RTTVAR (RTT variance)
+        bool m_rttInitialized = false; ///< First RTT sample taken?
+
+        /// Update RTT estimate from an ACK (called when an ACKed message's send time is known)
+        void UpdateRTTEstimate(float sampleRTT);
+
+        /// Get the adaptive retransmit timeout (RTO)
+        float GetRetransmitTimeout() const;
+
+        // Connection timeout — handler + notification
+        using TimeoutHandler = std::function<void(ClientID)>;
+        TimeoutHandler m_timeoutHandler; ///< Called when a client times out (server) or server times out (client)
+
+        /// @brief Checks heartbeat freshness and fires timeout callbacks.
+        void CheckConnectionTimeouts();
 
         // ACK processing — tracks the highest received reliable sequence and a
         // 32-bit bitfield of the previous 32 sequences for cumulative ACKs.

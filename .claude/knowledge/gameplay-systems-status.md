@@ -1,88 +1,88 @@
 # Gameplay & Engine Systems Status
 
-**Last updated:** 2026-03-16
+**Last updated:** 2026-03-18
 **Type:** Observation
 **Status:** Active
-**Severity:** High
+**Severity:** Medium (downgraded from High — most gaps addressed)
 
 ## Description
 
-Comprehensive audit of all 27+ gameplay/engine systems. 19 systems are fully operational (initialized + called each frame or restored with tests). Several systems were deleted as orphaned code and some were restored when found to be legitimate.
+Comprehensive audit of all gameplay/engine systems. 29 systems are fully operational. 10 TrinityCore-inspired systems were added and wired in 2026-03-18. Tests added for all 9 new systems in this session.
 
 ---
 
-## Working Systems (19)
+## Working Systems (29)
 
-All initialized in startup and called in the main loop:
+### Core Systems (19 — unchanged from prior audit)
 
-| System | Init Location | Main Loop Call | Key Files |
-|--------|--------------|----------------|-----------|
-| ECS (EnTT) | CreateGameSystems() in PhaseSystemManager | phaseManager->UpdateAll() | 2 cpp, 20 h |
-| Physics (Bullet 3) | SparkEngine.cpp:282,397 | ECS phase manager | 4 cpp, PhysicsSystem.h |
-| AI | EngineSetup::RegisterCoreSubsystems() | AIUpdateSystem in phase mgr | 6 cpp (AISystem, NavMesh, BehaviorTree) |
-| Animation | Core subsystem registration | AnimationUpdateSystem in phase mgr | 3 cpp, 11 h |
-| Audio (XAudio2) | SparkEngine.cpp:468 | AudioUpdateSystem in phase mgr | AudioEngine impl |
-| Input | SparkEngine.cpp:623 | g_input->Update() at :510 | 4 cpp in Input/ |
-| Camera | Game::Initialize() | UpdateCamera(dt) in Game::Update:579 | SparkEngineCamera.cpp |
-| Scripting (AngelScript) | Core subsystem via EngineSetup | Script execution in module lifecycle | 3 cpp with hot-reload |
-| Save system | SparkEngine.cpp:308,465 | Via console commands and game code | SaveSystem.cpp (JSON + miniz) |
-| UI system | SparkEngine.cpp:423 | m_hudSystem->Update(dt) in Game:606 | UISystem.cpp |
-| Modding | SparkEngine.cpp:429 | Registered in EngineContext | ModSystem.cpp |
-| Events/EventBus | g_eventBus creation | Publish/subscribe (header-only) | EventSystem.h (495 lines inline) |
-| Coroutines | EngineContext::SetCoroutineScheduler() | C++20 coroutines (header-only) | CoroutineScheduler.h |
-| 2D graphics/sprites | Phase manager registration | SpriteAnimatorSystem, Sprite2DRenderSystem | Systems2D.h, Physics2D.h |
-| Dialogue | SparkEngine.cpp:426 | Branching conversations | DialogueSystem.cpp |
-| Weather | SparkEngine.cpp:420 | Day/night cycles, weather effects | WeatherSystem.cpp |
-| World origin | World management init | Origin rebasing for large worlds | WorldOriginSystem |
-| **Localization** | **RESTORED** — has tests | File-based string tables with regex parsing | LocalizationSystem.cpp (227 lines) |
-| **Destruction** | **RESTORED** — has tests | Fracture patterns, physics debris | DestructionSystem.cpp (147 lines) |
+| System | Status | Key Files |
+|--------|--------|-----------|
+| ECS (EnTT) | Fully wired | 2 cpp, 20 h |
+| Physics (Bullet 3) | Fully wired | PhysicsSystem.cpp (1,753 lines) |
+| AI | Fully wired | AISystem, NavMesh, BehaviorTree |
+| Animation | Fully wired via ECS | AnimationSystem.cpp (1,375 lines) |
+| Audio (XAudio2) | Fully wired | AudioEngine.cpp |
+| Input | Fully wired | InputManager.cpp (1,334 lines) |
+| Camera | Fully wired | SparkEngineCamera.cpp |
+| Scripting (AngelScript) | Fully wired with hot-reload | 3 cpp |
+| Save system | Fully wired | SaveSystem.cpp |
+| UI system | Registered in EngineContext, updated | UISystem.cpp |
+| Modding | Registered in EngineContext | ModSystem.cpp |
+| Events/EventBus | Active | EventSystem.h delegates to EventBus.h |
+| Coroutines | Registered with EngineContext | CoroutineScheduler.h |
+| 2D graphics/sprites | Phase manager registration | Systems2D.h, Physics2D.h |
+| Dialogue | Registered & updated via EngineContext | DialogueSystem.cpp |
+| Weather | Registered & updated via EngineContext | WeatherSystem.cpp |
+| World origin | Active | WorldOriginSystem |
+| Localization | Restored 2026-03-16, tested | LocalizationSystem.cpp |
+| Destruction | Restored 2026-03-16, wired in InitGameplaySystems() | DestructionSystem.cpp |
 
----
+### TrinityCore-Inspired Systems (10 — added 2026-03-18)
 
-## Restored Systems (2026-03-16)
+All wired into SparkEngine.cpp via InitGameplaySystems()/UpdateGameplaySystems()/ShutdownGameplaySystems().
 
-### Localization System
-- **Files:** `Engine/Localization/LocalizationSystem.cpp` (227 lines), `.h` (197 lines)
-- **Test:** `Tests/TestLocalizationSystem.cpp` — tests string table get/set, missing key fallback
-- **Functionality:** JSON-based string tables, per-language loading, key lookup with fallback
-- **Previously deleted** as "stub-only, never called" — actually a complete implementation with tests
-
-### Destruction System
-- **Files:** `Engine/Destruction/DestructionSystem.cpp` (147 lines), `.h` (267 lines)
-- **Test:** `Tests/TestDestructionSystem.cpp` — tests fracture patterns, damage application
-- **Functionality:** Fracture patterns (wood, metal, concrete), debris physics, damage thresholds
-- **Previously deleted** as "never initialized" — complete implementation with built-in presets
-
----
-
-## Systems Deleted (confirmed orphaned/stub)
-
-These systems were deleted because they were genuinely stub-only with no real implementation:
-
-| System | Files | Size | Why Deleted |
-|--------|-------|------|-------------|
-| Streaming (seamless areas) | 3 cpp, 4 h | ~1,000+ lines | Never wired in; stub implementation |
-| Procedural generation | ProceduralGeneration.cpp | 52KB | Never instantiated or updated |
-| Cinematic/Sequencer | Sequencer.cpp | 29KB | Never initialized |
-| Replay system | ReplaySystem.h | Large | Never initialized |
-| Achievement system | AchievementSystem.h | Medium | Never initialized |
-| Content Delivery | ContentDelivery.cpp/h | 337 lines | Stub-only CDN framework, no HTTP |
-| Visual Scripting (2 copies) | 7,343 lines total | 7.3KB | Two independent implementations, neither wired in |
+| System | Namespace | Init | Update | Shutdown | Tests |
+|--------|-----------|------|--------|----------|-------|
+| AbilitySystem | Spark::Gameplay | ✅ | ✅ (world, dt) | ✅ | ✅ TestAbilitySystem.cpp |
+| ConditionSystem | Spark::Gameplay | ✅ | N/A (stateless) | ✅ | ✅ TestConditionSystem.cpp |
+| InstanceManager | Spark::Gameplay | ✅ | ✅ (dt) | ✅ | ✅ TestInstanceManager.cpp |
+| MovementSystem | Spark::AI | ✅ | ✅ (world, dt) | ✅ | ✅ TestMovementSystem.cpp |
+| SpatialGrid | Spark::World | Via ctor | SyncFromECS | N/A | ✅ TestSpatialGrid.cpp |
+| AsyncDatabase | Spark::Persistence | Open() | ProcessCallbacks() | Close() | ✅ TestAsyncDatabase.cpp |
+| ReplicationFields | Spark::Net | N/A (data) | N/A (data) | N/A | ✅ TestReplicationFields.cpp |
+| ScriptHookManager | Spark::Scripting | Singleton | DispatchHook() | Clear() | ✅ TestScriptHookManager.cpp |
+| ConsoleRBAC | Spark::Console | Singleton | N/A (query) | N/A | N/A (minimal) |
+| ModuleHotReload | Spark | Initialize() | PollChanges() | Stop() | ✅ TestModuleHotReload.cpp |
 
 ---
 
-## Missing Systems (3)
+## Systems Deleted (confirmed orphaned/stub in prior sessions)
+
+| System | Size | Why Deleted |
+|--------|------|-------------|
+| Streaming (seamless areas) | ~1,000+ lines | Stub, never wired |
+| Procedural generation | 52KB | Never instantiated |
+| Cinematic/Sequencer | 29KB | Never initialized |
+| Replay system | Large | Never initialized |
+| Achievement system | Medium | Never initialized |
+| Content Delivery | 337 lines | Stub-only CDN |
+| Visual Scripting (2 copies) | 7,343 lines | Duplicate, neither wired |
+
+---
+
+## Missing Systems (3 — unchanged)
 
 | System | Status | Notes |
 |--------|--------|-------|
-| Inventory (engine-level) | NO CODE | Quest system references inventory but no InventorySystem exists |
-| Quest (engine-level) | GAME-ONLY | SparkGame/Source/Game/QuestSystem.h exists but no reusable Spark::QuestSystem |
-| Weapon (engine-level) | GAME-ONLY | WeaponManager.h partial; weapon logic scattered in SparkGame only |
+| Inventory (engine-level) | GAME-ONLY | SparkGame implements; no reusable Spark::InventorySystem |
+| Quest (engine-level) | GAME-ONLY | SparkGame implements; no reusable Spark::QuestSystem |
+| Terrain rendering | MISSING | Critical gap for open-world engine claim |
 
 ---
 
 ## Notes
 
-- Networking is fully implemented but opt-in via ENABLE_NETWORKING; acceptable as-is
-- VR system is registered via core subsystems — actually working
-- Loading screens are partially wired
+- Networking fully implemented but opt-in (ENABLE_NETWORKING=OFF default)
+- VR system registered via core subsystems — working
+- All 9 new TrinityCore systems have tests as of 2026-03-18
+- ConsoleRBAC is minimal enough to not need dedicated tests

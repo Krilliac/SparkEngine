@@ -53,12 +53,16 @@
 #include "Utils/FileLogger.h"
 #include "Graphics/DecalSystem.h"
 #include "Graphics/MeshLOD.h"
+#include "Audio/MusicManager.h"
 #include "Engine/Gameplay/WeaponManager.h"
 #include "Engine/Gameplay/AbilitySystem.h"
 #include "Engine/Gameplay/ConditionSystem.h"
 #include "Engine/Gameplay/InstanceManager.h"
 #include "Engine/AI/MovementSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
+#include "Engine/ECS/Systems/TerrainSystem.h"
+#include "Graphics/TerrainRenderer.h"
+#include "Engine/Networking/ClientPrediction.h"
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
 #endif
@@ -160,8 +164,9 @@ static void InitDebugSystems()
 
     // Graphics utility singletons
     Spark::Graphics::DecalSystem::GetInstance().Initialize();
-    // LODManager is passive (no init needed)
-    // NavMeshObstacleManager is wired at level load time when a navmesh is available
+    // LODManager is a passive cache (no init/update needed; queries only)
+    // NavMeshObstacleManager is a passive registry (SetNavMesh + Add/Remove at level load time)
+    // NavMeshManager is a passive registry (Load/Build at level load time, queried by AISystem)
 
     // Register default weapon definitions
     Spark::Gameplay::WeaponRegistry::GetInstance().RegisterDefaults();
@@ -189,6 +194,9 @@ static void InitGameplaySystems()
 
     // Movement generator stack (AI movement)
     Spark::AI::MovementSystem::GetInstance().Initialize();
+
+    // Music manager — dynamic music layering and crossfade
+    Spark::Audio::MusicManager::GetInstance().Initialize();
 
     // Destruction system — fracturing and debris spawning
     auto& destruction = Spark::DestructionSystem::GetInstance();
@@ -222,14 +230,29 @@ static void UpdateGameplaySystems(float dt)
     Spark::Gameplay::InstanceManager::GetInstance().Update(dt);
     Spark::AI::MovementSystem::GetInstance().Update(*world, dt);
 
+    // Coroutine scheduler — resume pending coroutines
+    Spark::CoroutineScheduler::GetInstance().Update(dt);
+
+    // Music manager — crossfade, dynamic layering
+    Spark::Audio::MusicManager::GetInstance().Update(dt);
+
+    // Weapon system — fire control, reload, recoil, ADS
+    static Spark::Gameplay::WeaponSystem s_weaponSystem;
+    s_weaponSystem.Update(dt);
+
     // Update destruction debris lifetimes and cleanup
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.SetWorld(world);
     destruction.Update(dt);
+
+    // Terrain system — LOD selection based on camera distance
+    static Spark::ECS::TerrainSystem s_terrainSystem;
+    s_terrainSystem.Update(*world, dt);
 }
 
 static void ShutdownGameplaySystems()
 {
+    Spark::Audio::MusicManager::GetInstance().Shutdown();
     Spark::AI::MovementSystem::GetInstance().Shutdown();
     Spark::Gameplay::InstanceManager::GetInstance().Shutdown();
     Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();

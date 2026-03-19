@@ -221,30 +221,333 @@ Features:
 - Memory usage tracking
 - Frame time history
 
-### Additional Panels
+### Console Panel
 
-| Panel | Description |
-|-------|-------------|
-| `ConsolePanel` | Debug console output window |
-| `SimpleConsolePanel` | Lightweight console with command input |
-| `SearchPanel` / `CommandPalette` | Ctrl+P quick-search for commands, entities, files |
-| `BuildCookPanel` | Build and deployment settings |
-| `DedicatedServerPanel` | Server configuration and launch |
-| `DialogueEditorPanel` | Dialogue tree authoring |
-| `DebugVisualizerPanel` | Debug visualization overlays |
-| `SceneStatisticsPanel` / `SceneStatsPanel` | Entity counts, draw calls, triangle budgets |
-| `PrefabEditorPanel` | Prefab creation and editing |
-| `ParticleEditorPanel` | Particle system authoring |
-| `Physics2DPanel` | 2D physics debugging tools |
-| `SpriteEditorPanel` | Sprite sheet and atlas editing |
-| `SpriteAnimationEditorPanel` | Sprite animation clip authoring |
-| `TilemapEditorPanel` | 2D tilemap editing |
-| `UndoHistoryPanel` | Visual undo/redo history browser |
-| `RuntimeInspectorPanel` | Live property inspection during play mode |
-| `FPSToolsPanel` | FPS-specific game design tools |
-| `ProjectBrowserPanel` | Project-level file management |
-| `AudioMixerPanel` | Audio bus mixing and routing |
-| `MaterialEditorPanel` | Material property editor panel |
+Full-featured debug console with real-time log streaming, severity filtering, and command execution.
+
+- Real-time log output with color-coded severity (Info, Warning, Error, Fatal)
+- Command input with auto-completion and history
+- Text search and regex filtering across log output
+- Export logs to txt, csv, or json formats
+- Configurable scroll behavior (auto-scroll, pause on hover)
+
+**Source:** `SparkEditor/Source/Panels/ConsolePanel.cpp` (821 lines)
+
+### Scene View
+
+3D viewport for editing the scene with editor camera controls.
+
+- Orbit, pan, and fly-through camera modes
+- Grid overlay with configurable spacing
+- Multiple render modes (lit, wireframe, unlit, normals)
+- Gizmo rendering for selected entities
+- Click-to-select entities via raycasting
+
+**Source:** `SparkEditor/Source/Panels/SceneViewPanel.cpp` (404 lines)
+
+### Play Mode Toolbar
+
+Transport controls for play-in-editor (PIE) sessions.
+
+- Play, Pause, Stop, and Step-Frame buttons
+- Time-scale slider (0.1x to 10x)
+- Per-subsystem toggle (physics, AI, audio, particles)
+- Camera mode switching (editor camera vs. game camera)
+- Frame statistics overlay during play
+
+**Source:** `SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp` (644 lines)
+
+### Build & Cook Panel
+
+Build configuration and packaging pipeline.
+
+- Profile selection: Debug, Development, Release, Shipping
+- Asset cooking with progress tracking
+- Platform targeting (Windows, Linux, macOS stubs)
+- Output directory configuration
+- Build log with error/warning highlights
+
+**Source:** `SparkEditor/Source/Panels/BuildCookPanel.cpp` (591 lines)
+
+### Dedicated Server Panel
+
+Server management for multiplayer testing and deployment.
+
+- Server cook settings and map rotation configuration
+- PIE server launch for local testing
+- LAN server browser with auto-discovery
+- RCON console for remote administration
+- Player list with kick/ban controls
+
+**Source:** `SparkEditor/Source/Panels/DedicatedServerPanel.cpp` (999 lines)
+
+### Debug Visualizer Panel
+
+Toggle debug overlays for various engine subsystems.
+
+- Grid, wireframe, and collider visualization
+- Physics contacts and constraint rendering
+- Navigation mesh overlay
+- Light radius and attenuation spheres
+- Audio source range indicators
+
+**Source:** `SparkEditor/Source/Panels/DebugVisualizerPanel.cpp` (245 lines)
+
+### Event Monitor Panel
+
+Real-time [EventBus](Event-System) inspector for debugging event-driven systems.
+
+- Live event stream during play mode
+- Filter by event type or source
+- Event payload inspection
+- Pause/resume event capture
+
+**Source:** `SparkEditor/Source/Panels/EventMonitorPanel.cpp` (97 lines)
+
+### Dialogue Editor Panel
+
+Visual [dialogue tree](Dialogue-System) authoring tool.
+
+- Node types: Text, Choice, Branch, Event, End
+- Speaker name and voice clip assignment per node
+- Branching condition configuration
+- Preview dialogue flow in-editor
+
+**Source:** `SparkEditor/Source/Panels/DialogueEditorPanel.cpp` (175 lines)
+
+### FPS Tools Panel
+
+Specialized tools for first-person shooter level design and balancing.
+
+- Spawn point placement and team assignment
+- Game mode configuration (Deathmatch, CTF, Domination)
+- Player stats testing (health, armor, speed)
+- Combat simulation for balance testing
+- Level design helpers (cover analysis, sight lines)
+
+**Source:** `SparkEditor/Source/Panels/FPSToolsPanel.cpp` (630 lines)
+
+### Scene Statistics Panel
+
+Real-time performance and scene metrics dashboard.
+
+- Entity and component counts by type
+- Render statistics: draw calls, triangles, batches
+- Physics statistics: rigid bodies, contacts, constraints
+- Memory usage breakdown
+- Per-frame performance graphs with history
+
+**Source:** `SparkEditor/Source/Panels/SceneStatisticsPanel.cpp` (391 lines)
+
+### Search Panel
+
+Global fuzzy search across the entire project.
+
+- Search entities by name, tag, or component type
+- Search assets by filename or type
+- Search components by property values
+- Result filtering and sorting
+- Search history with recent queries
+
+**Source:** `SparkEditor/Source/Panels/SearchPanel.cpp` (435 lines)
+
+### Object Placement Panel
+
+Level editing tools for placing and arranging objects in the scene.
+
+- Placement modes: Single, Brush, Line, Grid, Scatter
+- Grid and surface snapping
+- Prefab library with drag-and-drop
+- Randomization controls (rotation, scale jitter)
+
+**Source:** `SparkEditor/Source/Panels/ObjectPlacementPanel.cpp` (364 lines)
+
+### Prefab Editor Panel
+
+Create, edit, and manage [prefab](Scene-Management) assets.
+
+- Prefab browser with search
+- Component editing within prefab context
+- Property serialization and override tracking
+- Create prefab from selected entities
+- Apply prefab changes to all instances
+
+**Source:** `SparkEditor/Source/Panels/PrefabEditorPanel.cpp` (393 lines)
+
+### Project Browser Panel
+
+Project-level hub for opening, creating, and managing projects.
+
+- Recent projects list with last-opened timestamps
+- New project wizard with templates (FPS, RPG, Blank)
+- Existing project browser with folder navigation
+- Project settings quick-access
+
+**Source:** `SparkEditor/Source/Panels/ProjectBrowserPanel.cpp` (540 lines)
+
+### Particle Editor Panel
+
+Visual [particle system](Rendering-and-Graphics) authoring.
+
+- Emission rate, lifetime, and burst configuration
+- Emitter shapes: Point, Sphere, Cone, Box
+- Color gradient editor over particle lifetime
+- Physics integration (gravity, wind, collision)
+- Live preview in viewport
+
+**Source:** `SparkEditor/Source/Panels/ParticleEditorPanel.cpp` (147 lines)
+
+### Post-Processing Panel
+
+[Post-processing](Rendering-and-Graphics) effect configuration.
+
+- Bloom intensity and threshold
+- Tonemapping operator selection
+- Fog density, color, and falloff
+- Sky and atmospheric parameters
+- Wind direction and strength
+
+**Source:** `SparkEditor/Source/Panels/PostProcessingPanel.cpp` (166 lines)
+
+### Localization Panel
+
+String table editor for [multi-language support](Localization).
+
+- Supported languages: English, Spanish, French, German, Japanese, Chinese
+- Key/value translation table with inline editing
+- Missing translation highlighting
+- Import/export CSV for translator workflows
+
+**Source:** `SparkEditor/Source/Panels/LocalizationPanel.cpp` (149 lines)
+
+### Save System Panel
+
+[Save/Load](Save-System) slot manager.
+
+- View save slot metadata (timestamp, playtime, level)
+- Create and delete save slots
+- Autosave interval configuration
+- Save file location management
+
+**Source:** `SparkEditor/Source/Panels/SaveSystemPanel.cpp` (141 lines)
+
+### Spline Editor Panel
+
+[Spline](Terrain-and-Procedural-Generation) path authoring for cameras, AI, and procedural content.
+
+- Control point creation and editing
+- Curve types: Catmull-Rom, Bezier
+- Closed loop toggle
+- Tension parameter adjustment
+- Visual preview in scene view
+
+**Source:** `SparkEditor/Source/Panels/SplineEditorPanel.cpp` (140 lines)
+
+### Weather & Fog Panel
+
+[Weather](Day-Night-Cycle-and-Weather) preset editor.
+
+- Preset types: Clear, Rain, Snow, Storm
+- Precipitation intensity and particle density
+- Wind speed and direction
+- Fog distance and color
+- Lighting adjustments per weather type
+
+**Source:** `SparkEditor/Source/Panels/WeatherFogPanel.cpp` (184 lines)
+
+### Undo History Panel
+
+Visual timeline of the [undo/redo](#undoredo-system) command stack.
+
+- Chronological command list with descriptions
+- Click to jump to any point in history
+- Current position indicator
+- Saved state marker
+
+**Source:** `SparkEditor/Source/Panels/UndoHistoryPanel.cpp` (161 lines)
+
+### AI Editor Panel
+
+[Behavior tree](AI-and-Navigation) visual editor.
+
+- Node creation for Selector, Sequence, Decorator, Action types
+- Template management for reusable tree patterns
+- Agent inspection with live blackboard values
+- Tree validation and error highlighting
+
+**Source:** `SparkEditor/Source/Panels/AIEditorPanel.cpp` (201 lines)
+
+### AI Debug Panel
+
+Real-time [AI agent](AI-and-Navigation) runtime inspector for play-mode debugging.
+
+- Agent list with color-coded state (Idle, Patrol, Alert, Combat, Flee, Dead)
+- Per-agent blackboard variable viewer with type-aware display
+- Behavior tree execution trace with active node highlighting
+- Perception overlay toggles (detection ranges, attack ranges, nav paths, target lines)
+- AI system statistics (agent counts by state, targets)
+- State filtering and configurable refresh rate
+
+**Source:** `SparkEditor/Source/Panels/AIDebugPanel.cpp` (290 lines)
+
+### 2D Panels
+
+#### Physics 2D Panel
+
+[2D physics](2D-Systems) configuration and debugging.
+
+- Gravity vector configuration
+- Collision layer matrix editor
+- Debug visualization: AABBs, contacts, grid
+- Interactive raycast testing tool
+
+**Source:** `SparkEditor/Source/Panels/Physics2DPanel.cpp` (308 lines)
+
+#### Sprite Editor Panel
+
+[Sprite](2D-Systems) configuration for 2D rendering.
+
+- Texture selection and source rectangle editing
+- Pivot point setup with visual indicator
+- Sorting layer and order assignment
+- Color tint and flip controls
+
+**Source:** `SparkEditor/Source/Panels/SpriteEditorPanel.cpp` (329 lines)
+
+#### Sprite Animation Editor Panel
+
+[2D animation](2D-Systems) clip authoring.
+
+- Frame-by-frame timeline with keyframe editing
+- Per-frame duration control
+- Preview with play/pause/step controls
+- Onion skinning for animation reference
+
+**Source:** `SparkEditor/Source/Panels/SpriteAnimationEditorPanel.cpp` (534 lines)
+
+#### Tilemap Editor Panel
+
+[Tile-based](2D-Systems) map editing.
+
+- Tools: Paint, Erase, Fill, Rectangle
+- Collision layer painting
+- Auto-tiling rules configuration
+- Zoom and pan viewport
+- Full undo/redo support
+
+**Source:** `SparkEditor/Source/Panels/TilemapEditorPanel.cpp` (540 lines)
+
+### Game View Panel
+
+Full game viewport with FPS HUD preview.
+
+- Crosshair rendering with customizable styles
+- Health and armor bar overlays
+- Ammo counter and magazine display
+- Minimap with configurable zoom
+- Kill feed, damage indicators, and scoreboard
+
+**Source:** `SparkEditor/Source/Panels/GameViewPanel.cpp` (1,163 lines)
 
 ## Collaborative Editing
 
@@ -469,6 +772,7 @@ cmake --build build --config Release
 <!-- AUTO:panel_list -->
 | Panel | Header |
 |-------|--------|
+| `AIDebugPanel` | `SparkEditor/Source/Panels/AIDebugPanel.h` |
 | `AIEditorPanel` | `SparkEditor/Source/Panels/AIEditorPanel.h` |
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |

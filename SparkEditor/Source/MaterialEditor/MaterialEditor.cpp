@@ -5,6 +5,7 @@
 
 #include "MaterialEditor.h"
 #include "Utils/Validate.h"
+#include "Graphics/ShaderGraph/ShaderGraphCompiler.h"
 
 #include <imgui.h>
 
@@ -149,13 +150,52 @@ namespace SparkEditor
             return false;
         }
 
-        // Generate shader code
-        if (!GenerateShaderCode(m_materialGraph.vertexShaderCode, m_materialGraph.pixelShaderCode))
+        // Build ShaderGraphInput from MaterialGraph for the engine compiler
+        Spark::Graphics::ShaderGraphInput graphInput;
+        graphInput.materialName = m_materialGraph.name.empty() ? "Material" : m_materialGraph.name;
+        graphInput.surfaceOutputNodeID = m_materialGraph.surfaceOutputNodeID;
+        graphInput.unlitOutputNodeID = m_materialGraph.unlitOutputNodeID;
+
+        for (const auto& node : m_materialGraph.nodes)
         {
-            m_materialGraph.compilationErrors.push_back("Shader code generation failed");
+            Spark::Graphics::ShaderNode sn;
+            sn.id = node->id;
+            sn.type = static_cast<Spark::Graphics::ShaderNodeType>(static_cast<uint32_t>(node->type));
+            for (const auto& socket : node->inputs)
+            {
+                Spark::Graphics::ShaderNodeInput si;
+                si.defaultValue[0] = socket.defaultValue.x;
+                si.defaultValue[1] = socket.defaultValue.y;
+                si.defaultValue[2] = socket.defaultValue.z;
+                si.defaultValue[3] = socket.defaultValue.w;
+                si.isConnected = socket.isConnected;
+                sn.inputs.push_back(si);
+            }
+            graphInput.nodes.push_back(sn);
+        }
+
+        for (const auto& conn : m_materialGraph.connections)
+        {
+            Spark::Graphics::ShaderConnection sc;
+            sc.fromNodeID = conn.fromNodeID;
+            sc.fromSocketIndex = conn.fromSocketIndex;
+            sc.toNodeID = conn.toNodeID;
+            sc.toSocketIndex = conn.toSocketIndex;
+            graphInput.connections.push_back(sc);
+        }
+
+        // Compile using the engine ShaderGraphCompiler
+        auto result = Spark::Graphics::ShaderGraphCompiler::Compile(graphInput);
+        if (!result.success)
+        {
+            m_materialGraph.compilationErrors = result.errors;
+            if (m_materialGraph.compilationErrors.empty())
+                m_materialGraph.compilationErrors.push_back("Shader graph compilation failed");
             return false;
         }
 
+        m_materialGraph.vertexShaderCode = result.vertexShader;
+        m_materialGraph.pixelShaderCode = result.pixelShader;
         m_materialGraph.isCompiled = true;
         return true;
     }
