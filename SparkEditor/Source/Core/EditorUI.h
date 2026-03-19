@@ -250,6 +250,13 @@ namespace SparkEditor
 
         // Helper methods
         void RenderMainMenuBar();
+        void RenderFileMenu();
+        void RenderEditMenu();
+        void RenderGameObjectMenu();
+        void RenderWindowMenu();
+        void RenderFPSToolsMenu();
+        void RenderBuildMenu();
+        void RenderHelpMenu();
         void RenderToolbar();
         void RenderStatusBar();
         void RenderNotifications();
