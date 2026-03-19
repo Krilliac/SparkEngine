@@ -1,6 +1,6 @@
 /**
  * @file EntityArchetype.h
- * @brief CryEngine-inspired entity archetype/template system
+ * @brief Entity archetype/template system
  * @author Spark Engine Team
  * @date 2026
  *

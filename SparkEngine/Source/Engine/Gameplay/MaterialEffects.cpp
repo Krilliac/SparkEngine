@@ -1,6 +1,6 @@
 /**
  * @file MaterialEffects.cpp
- * @brief Implementation of the CryEngine-inspired material interaction effect system
+ * @brief Material interaction effect system implementation
  */
 
 #include "MaterialEffects.h"

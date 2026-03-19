@@ -1,6 +1,6 @@
 /**
  * @file WaterRenderer.h
- * @brief CryEngine-inspired water surface rendering with Gerstner wave simulation
+ * @brief Water surface rendering with Gerstner wave simulation
  * @author Spark Engine Team
  * @date 2026
  *

@@ -1,6 +1,6 @@
 /**
  * @file DynamicResponseSystem.h
- * @brief CryEngine-inspired signal/condition-driven response system
+ * @brief Signal/condition-driven dynamic response system
  * @author Spark Engine Team
  * @date 2026
  *

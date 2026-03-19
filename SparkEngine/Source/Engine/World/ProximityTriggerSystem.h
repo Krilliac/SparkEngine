@@ -1,6 +1,6 @@
 /**
  * @file ProximityTriggerSystem.h
- * @brief CryEngine-inspired spatial trigger volume system
+ * @brief Spatial trigger volume system
  * @author Spark Engine Team
  * @date 2026
  *

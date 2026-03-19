@@ -1,6 +1,6 @@
 /**
  * @file CoverSystem.h
- * @brief CryEngine-inspired cover analysis and querying for AI agents
+ * @brief Cover analysis and querying for AI agents
  * @author Spark Engine Team
  * @date 2026
  *

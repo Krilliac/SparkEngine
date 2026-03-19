@@ -1,6 +1,6 @@
 /**
  * @file CollisionAvoidance.h
- * @brief CryEngine-inspired ORCA collision avoidance for AI crowds
+ * @brief ORCA collision avoidance for AI crowds
  * @author Spark Engine Team
  * @date 2026
  *

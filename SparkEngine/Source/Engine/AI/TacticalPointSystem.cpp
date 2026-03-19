@@ -1,6 +1,6 @@
 /**
  * @file TacticalPointSystem.cpp
- * @brief Implementation of CryEngine-inspired tactical point evaluation
+ * @brief Tactical point evaluation implementation
  */
 
 #include "TacticalPointSystem.h"

@@ -1,6 +1,6 @@
 /**
  * @file BlendSpace.h
- * @brief CryEngine-inspired parametric 2D blend space for animation blending
+ * @brief Parametric 2D blend space for animation blending
  * @author Spark Engine Team
  * @date 2026
  *

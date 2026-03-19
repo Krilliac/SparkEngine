@@ -1,6 +1,6 @@
 /**
  * @file ProximityTriggerSystem.cpp
- * @brief Implementation of CryEngine-inspired spatial trigger volume system
+ * @brief Spatial trigger volume system implementation
  */
 
 #include "ProximityTriggerSystem.h"
