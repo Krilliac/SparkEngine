@@ -1,6 +1,6 @@
 /**
  * @file SkyAtmosphere.h
- * @brief CryEngine-inspired sky and atmosphere rendering using a simplified Preetham sky model
+ * @brief Sky and atmosphere rendering using a simplified Preetham sky model
  * @author Spark Engine Team
  * @date 2026
  *

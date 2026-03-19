@@ -1,6 +1,6 @@
 /**
  * @file OcclusionCulling.h
- * @brief CryEngine-inspired CPU software occlusion culling with a low-resolution depth buffer
+ * @brief CPU software occlusion culling with a low-resolution depth buffer
  * @author Spark Engine Team
  * @date 2026
  *

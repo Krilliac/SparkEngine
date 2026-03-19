@@ -1,6 +1,6 @@
 /**
  * @file TacticalPointSystem.h
- * @brief CryEngine-inspired tactical point evaluation for AI combat positioning
+ * @brief Tactical point evaluation for AI combat positioning
  * @author Spark Engine Team
  * @date 2026
  *

@@ -1,6 +1,6 @@
 /**
  * @file MaterialEffects.h
- * @brief CryEngine-inspired material interaction effect system
+ * @brief Material interaction effect system
  * @author Spark Engine Team
  * @date 2026
  *

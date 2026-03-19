@@ -8,6 +8,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 |-------|------|------|--------|--------------|
 | TrinityCore architecture analysis | [knowledge/trinitycore-analysis.md](knowledge/trinitycore-analysis.md) | Decision | **Resolved** | 2026-03-18 |
 | CryEngine feature analysis (16 systems adopted) | [knowledge/cryengine-analysis.md](knowledge/cryengine-analysis.md) | Decision | **Resolved** | 2026-03-19 |
+| Five-engine analysis (Cocos/Defold/Panda3D/S&box/Halley — 20 recommendations) | [knowledge/five-engine-analysis.md](knowledge/five-engine-analysis.md) | Decision | Active | 2026-03-19 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
@@ -68,6 +69,13 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - P1 items completed: PlatformInputManager deleted, WeaponSystem wired, CoroutineScheduler wired, MusicManager wired, Camera + Persistence wiki pages created, ConsoleRBAC tested
 - P2 items completed: Threading wiki page, SparkEditor.md expanded (32 panels), network integration tests (30 tests), API docs generated
 - Key remaining gaps: terrain rendering, audio tests, connection timeout detection
+
+**Active: 20 recommendations from 5-engine analysis (2026-03-19):**
+- Cocos Engine, Defold, Panda3D, S&box, Halley
+- Top 5 quick wins: DrawMask visibility, FixedUpdate accumulator, network instability simulator, interpolation buffer, plugin registration macros
+- Top networking: delta snapshots, interpolation buffer, instability simulator, FROM/INTO collision masks
+- Top rendering: clustered light culling, light probes + SH, RHI validation layer, age-based resource pooling
+- See [five-engine-analysis.md](knowledge/five-engine-analysis.md) for full prioritized list
 
 **RESOLVED: 16 CryEngine-inspired systems (2026-03-19):**
 - TerrainRenderer, TacticalPointSystem, CoverSystem, MaterialEffectSystem (HIGH)

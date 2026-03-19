@@ -1,6 +1,6 @@
 /**
  * @file DynamicResponseSystem.cpp
- * @brief Implementation of the CryEngine-inspired dynamic response system
+ * @brief Dynamic response system implementation
  */
 
 #include "DynamicResponseSystem.h"

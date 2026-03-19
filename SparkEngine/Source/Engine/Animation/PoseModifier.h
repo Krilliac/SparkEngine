@@ -1,6 +1,6 @@
 /**
  * @file PoseModifier.h
- * @brief CryEngine-inspired post-animation pose modification pipeline
+ * @brief Post-animation pose modification pipeline
  * @author Spark Engine Team
  * @date 2026
  *

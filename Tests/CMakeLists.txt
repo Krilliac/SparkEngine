@@ -127,6 +127,7 @@ add_executable(SparkTests
     TestPoseModifier.cpp
     TestAnimationCompression.cpp
     TestBlendSpace.cpp
+    TestExtendedSystems.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

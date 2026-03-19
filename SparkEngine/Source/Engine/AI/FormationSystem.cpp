@@ -1,6 +1,6 @@
 /**
  * @file FormationSystem.cpp
- * @brief Implementation of the CryEngine-inspired formation management system
+ * @brief Formation management system implementation
  */
 
 #include "FormationSystem.h"

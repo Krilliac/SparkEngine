@@ -1,6 +1,6 @@
 /**
  * @file EntityArchetype.cpp
- * @brief Implementation of the CryEngine-inspired entity archetype system
+ * @brief Entity archetype system implementation
  */
 
 #include "EntityArchetype.h"

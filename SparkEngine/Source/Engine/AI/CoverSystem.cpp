@@ -1,6 +1,6 @@
 /**
  * @file CoverSystem.cpp
- * @brief Implementation of CryEngine-inspired cover analysis and querying
+ * @brief Cover analysis and querying implementation
  */
 
 #include "CoverSystem.h"

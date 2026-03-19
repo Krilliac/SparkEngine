@@ -1,6 +1,6 @@
 /**
  * @file PoseModifier.cpp
- * @brief Implementation of CryEngine-inspired pose modification pipeline
+ * @brief Post-animation pose modification pipeline implementation
  * @author Spark Engine Team
  * @date 2026
  */

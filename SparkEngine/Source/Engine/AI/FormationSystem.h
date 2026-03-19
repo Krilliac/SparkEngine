@@ -1,6 +1,6 @@
 /**
  * @file FormationSystem.h
- * @brief CryEngine-inspired formation management for AI groups
+ * @brief Formation management for AI groups
  * @author Spark Engine Team
  * @date 2026
  *

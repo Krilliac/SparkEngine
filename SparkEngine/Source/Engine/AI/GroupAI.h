@@ -1,6 +1,6 @@
 /**
  * @file GroupAI.h
- * @brief CryEngine-inspired group/squad AI coordination system
+ * @brief Group/squad AI coordination system
  * @author Spark Engine Team
  * @date 2026
  *

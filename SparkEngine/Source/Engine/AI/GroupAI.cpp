@@ -1,6 +1,6 @@
 /**
  * @file GroupAI.cpp
- * @brief Implementation of the CryEngine-inspired group/squad AI coordination system
+ * @brief Group/squad AI coordination system implementation
  */
 
 #include "GroupAI.h"

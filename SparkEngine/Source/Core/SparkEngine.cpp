@@ -75,6 +75,21 @@
 #include "Graphics/SkyAtmosphere.h"
 #include "Graphics/WaterRenderer.h"
 #include "Graphics/OcclusionCulling.h"
+// Extended engine systems
+#include "FixedTimestepAccumulator.h"
+#include "PluginRegistry.h"
+#include "ResourceVersionTracker.h"
+#include "Utils/ProfileProperties.h"
+#include "Engine/Networking/DeltaSnapshotManager.h"
+#include "Engine/Networking/InstabilitySimulator.h"
+#include "Engine/Tween/TweenSystem.h"
+#include "Engine/Modding/VirtualFileSystem.h"
+#include "Engine/UI/UIFactory.h"
+#include "Graphics/ClusteredLightCulling.h"
+#include "Graphics/LightProbeSystem.h"
+#include "Graphics/MaterialPropertyHandle.h"
+#include "Graphics/RHI/PipelineStateCache.h"
+#include "Graphics/RenderGraph/TransientResourcePool.h"
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
 #endif
@@ -224,7 +239,7 @@ static void InitGameplaySystems()
         destruction.SetWorld(world);
     }
 
-    // CryEngine-inspired systems (2026-03-19)
+    // AI, environment, and world systems
     Spark::AI::TacticalPointSystem::GetInstance().Initialize();
     Spark::AI::CoverSystem::GetInstance().Initialize();
     Spark::AI::FormationSystem::GetInstance().Initialize();
@@ -237,6 +252,21 @@ static void InitGameplaySystems()
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Initialize();
     Spark::Graphics::WaterRenderer::GetInstance().Initialize();
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Initialize();
+
+    // Extended engine systems
+    Spark::FixedTimestepAccumulator::GetInstance().Initialize();
+    Spark::TweenSystem::GetInstance().Initialize();
+    Spark::VirtualFileSystem::GetInstance().Initialize();
+    Spark::UI::UIFactory::GetInstance().Initialize();
+    Spark::Graphics::ClusteredLightCulling::GetInstance().Initialize();
+    Spark::Graphics::LightProbeSystem::GetInstance().Initialize();
+    // MaterialPropertyRegistry needs no Initialize — it's ready after construction
+    Spark::Graphics::PipelineStateCache::GetInstance().Initialize();
+    Spark::Graphics::TransientResourcePool::GetInstance().Initialize();
+#ifndef NDEBUG
+    Spark::ProfileProperties::GetInstance().Initialize();
+#endif
+    Spark::PluginRegistry::InitializeAll();
 }
 
 /**
@@ -289,17 +319,25 @@ static void UpdateGameplaySystems(float dt)
     static Spark::ECS::TerrainSystem s_terrainSystem;
     s_terrainSystem.Update(*world, dt);
 
-    // CryEngine-inspired systems (2026-03-19)
+    // AI, environment, and world systems
     Spark::AI::FormationSystem::GetInstance().Update(dt);
     Spark::AI::GroupAISystem::GetInstance().Update(dt);
     Spark::Dialogue::DynamicResponseSystem::GetInstance().Update(dt);
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt);
     Spark::Graphics::WaterRenderer::GetInstance().Update(dt);
+
+    // Extended engine systems
+    Spark::TweenSystem::GetInstance().Update(dt);
+    Spark::UI::UIFactory::GetInstance().UpdateAllBindings();
+    Spark::PluginRegistry::UpdateAll(dt);
+#ifndef NDEBUG
+    Spark::ProfileProperties::GetInstance().ResetFrameProperties();
+#endif
 }
 
 static void ShutdownGameplaySystems()
 {
-    // CryEngine-inspired systems (reverse order)
+    // AI, environment, and world systems (reverse order)
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Shutdown();
     Spark::Graphics::WaterRenderer::GetInstance().Shutdown();
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Shutdown();
@@ -312,6 +350,24 @@ static void ShutdownGameplaySystems()
     Spark::AI::FormationSystem::GetInstance().Shutdown();
     Spark::AI::CoverSystem::GetInstance().Shutdown();
     Spark::AI::TacticalPointSystem::GetInstance().Shutdown();
+
+    // Extended engine systems (reverse order)
+    Spark::PluginRegistry::ShutdownAll();
+#ifndef NDEBUG
+    Spark::ProfileProperties::GetInstance().Shutdown();
+#endif
+    Spark::Graphics::TransientResourcePool::GetInstance().Shutdown();
+    Spark::Graphics::PipelineStateCache::GetInstance().Shutdown();
+    Spark::Graphics::MaterialPropertyRegistry::GetInstance().Shutdown();
+    Spark::Graphics::LightProbeSystem::GetInstance().Shutdown();
+    Spark::Graphics::ClusteredLightCulling::GetInstance().Shutdown();
+    Spark::UI::UIFactory::GetInstance().Shutdown();
+    Spark::VirtualFileSystem::GetInstance().Shutdown();
+    Spark::TweenSystem::GetInstance().Shutdown();
+    Spark::Net::InstabilitySimulator::GetInstance().Shutdown();
+    Spark::Net::DeltaSnapshotManager::GetInstance().Shutdown();
+    Spark::ResourceVersionTracker::GetInstance().Shutdown();
+    Spark::FixedTimestepAccumulator::GetInstance().Shutdown();
 
     // TrinityCore systems
     Spark::Audio::MusicManager::GetInstance().Shutdown();
