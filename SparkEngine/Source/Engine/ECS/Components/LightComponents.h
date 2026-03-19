@@ -17,23 +17,31 @@
 // LightComponent
 // =============================================================================
 
+/**
+ * @brief Light source attached to an entity, consumed by the LightingSystem.
+ *
+ * Directional lights illuminate the entire scene (sun/moon). Point lights
+ * radiate in all directions with distance attenuation. Spot lights project
+ * a cone with configurable inner/outer angles for soft falloff.
+ */
 struct LightComponent
 {
+    /// Light source type, determines which parameters are active.
     enum class Type
     {
-        Directional,
-        Point,
-        Spot
+        Directional, ///< Infinite-distance parallel rays (sun). Ignores range.
+        Point,       ///< Omnidirectional with distance attenuation.
+        Spot         ///< Cone-shaped with inner/outer angle falloff.
     };
 
-    Type type = Type::Point;
-    DirectX::XMFLOAT3 color{1, 1, 1};
-    float intensity = 1.0f;
-    float range = 10.0f;
-    float spotAngle = 45.0f;
-    float spotInnerAngle = 30.0f;
-    bool castShadows = false;
-    int shadowMapResolution = 1024;
+    Type type = Type::Point;          ///< Light source type.
+    DirectX::XMFLOAT3 color{1, 1, 1}; ///< Light color (linear RGB, not sRGB).
+    float intensity = 1.0f;           ///< Brightness multiplier (candelas for point/spot, lux for directional).
+    float range = 10.0f;              ///< Maximum influence distance in meters (Point/Spot only).
+    float spotAngle = 45.0f;          ///< Outer cone angle in degrees (Spot only); full falloff at this angle.
+    float spotInnerAngle = 30.0f;     ///< Inner cone angle in degrees (Spot only); full intensity within this angle.
+    bool castShadows = false;         ///< Generate a shadow map for this light (expensive for point lights).
+    int shadowMapResolution = 1024;   ///< Shadow map width/height in texels (must be power of 2).
 
     /**
      * @brief Validate that light parameters are within sane ranges.

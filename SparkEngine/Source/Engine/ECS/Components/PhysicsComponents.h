@@ -18,25 +18,33 @@
 // RigidBodyComponent
 // =============================================================================
 
+/**
+ * @brief Links an entity to a Bullet Physics rigid body.
+ *
+ * Dynamic bodies read position/rotation back from the physics simulation each
+ * frame (physics -> Transform). Kinematic bodies push their Transform into
+ * physics (Transform -> physics). Static bodies never move.
+ */
 struct RigidBodyComponent
 {
+    /// Determines how the physics engine treats this body.
     enum class Type
     {
-        Static,
-        Kinematic,
-        Dynamic
+        Static,    ///< Immovable collider (walls, floors). Zero mass.
+        Kinematic, ///< Moved by game code, pushes dynamic bodies but ignores forces.
+        Dynamic    ///< Fully simulated: responds to gravity, forces, and collisions.
     };
 
-    Type type = Type::Dynamic;
-    float mass = 1.0f;
-    float friction = 0.5f;
-    float restitution = 0.1f;
-    float linearDamping = 0.1f;
-    float angularDamping = 0.1f;
-    bool isTrigger = false;
-    DirectX::XMFLOAT3 linearVelocity{0, 0, 0};
-    DirectX::XMFLOAT3 angularVelocity{0, 0, 0};
-    Spark::PhysicsHandle physicsBodyHandle;
+    Type type = Type::Dynamic;                  ///< Body simulation mode.
+    float mass = 1.0f;                          ///< Mass in kg (ignored for Static/Kinematic).
+    float friction = 0.5f;                      ///< Surface friction coefficient [0, 1].
+    float restitution = 0.1f;                   ///< Bounciness [0, 1]; 0 = no bounce, 1 = perfectly elastic.
+    float linearDamping = 0.1f;                 ///< Velocity drag per second (simulates air resistance).
+    float angularDamping = 0.1f;                ///< Rotational drag per second.
+    bool isTrigger = false;                     ///< When true, detects overlaps but doesn't physically collide.
+    DirectX::XMFLOAT3 linearVelocity{0, 0, 0};  ///< Cached linear velocity (m/s), synced from physics each frame.
+    DirectX::XMFLOAT3 angularVelocity{0, 0, 0}; ///< Cached angular velocity (rad/s), synced from physics each frame.
+    Spark::PhysicsHandle physicsBodyHandle;     ///< Opaque handle to the underlying Bullet Physics body.
 
     /**
      * @brief Validate that all physics parameters are within sane ranges.
@@ -77,21 +85,28 @@ struct RigidBodyComponent
 // ColliderComponent
 // =============================================================================
 
+/**
+ * @brief Defines the collision shape attached to a rigid body.
+ *
+ * Only the fields relevant to the chosen `shape` are used by physics.
+ * For example, `radius` is only meaningful for Sphere and Capsule shapes.
+ */
 struct ColliderComponent
 {
+    /// Primitive collision shape type.
     enum class Shape
     {
-        Box,
-        Sphere,
-        Capsule,
-        Mesh
+        Box,     ///< Axis-aligned box defined by halfExtents.
+        Sphere,  ///< Sphere defined by radius.
+        Capsule, ///< Capsule (cylinder + hemisphere caps) defined by radius and height.
+        Mesh     ///< Triangle mesh loaded from the entity's MeshRenderer asset.
     };
 
-    Shape shape = Shape::Box;
-    DirectX::XMFLOAT3 halfExtents{0.5f, 0.5f, 0.5f};
-    float radius = 0.5f;
-    float height = 1.0f;
-    DirectX::XMFLOAT3 offset{0, 0, 0};
+    Shape shape = Shape::Box;                        ///< Collision primitive type.
+    DirectX::XMFLOAT3 halfExtents{0.5f, 0.5f, 0.5f}; ///< Box half-dimensions in local space (meters).
+    float radius = 0.5f;                             ///< Sphere/Capsule radius (meters).
+    float height = 1.0f;                             ///< Capsule total height including hemispherical caps (meters).
+    DirectX::XMFLOAT3 offset{0, 0, 0};               ///< Local-space offset from the entity's Transform origin.
 
     /**
      * @brief Validate that all collider dimensions are positive.

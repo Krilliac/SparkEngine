@@ -19,9 +19,15 @@
 // TagComponent
 // =============================================================================
 
+/**
+ * @brief Arbitrary string tags for entity classification and querying.
+ *
+ * Game code can filter entities by tag (e.g. "enemy", "pickup", "destructible")
+ * without needing a dedicated component for each category.
+ */
 struct TagComponent
 {
-    std::unordered_set<std::string> tags;
+    std::unordered_set<std::string> tags; ///< Set of tag strings (case-sensitive).
 
     bool HasTag(const std::string& tag) const { return tags.count(tag) > 0; }
 
@@ -34,21 +40,34 @@ struct TagComponent
 // ActiveComponent
 // =============================================================================
 
+/**
+ * @brief Master enable/disable toggle for an entity.
+ *
+ * When `active` is false, most systems (Render, Audio, AI, Physics) skip
+ * this entity. Useful for object pooling — deactivate instead of destroying.
+ */
 struct ActiveComponent
 {
-    bool active = true;
+    bool active = true; ///< When false, the entity is treated as dormant by all systems.
 };
 
 // =============================================================================
 // HealthComponent
 // =============================================================================
 
+/**
+ * @brief Tracks entity health, death state, and provides damage/heal/revive operations.
+ *
+ * The LifecycleSystem watches for `isDead` transitions and fires death
+ * callbacks. Once `deathProcessed` is set, the entity won't trigger
+ * the callback again (prevents double-processing).
+ */
 struct HealthComponent
 {
-    float health = 100.0f;
-    float maxHealth = 100.0f;
-    bool isDead = false;
-    bool deathProcessed = false;
+    float health = 100.0f;       ///< Current health points.
+    float maxHealth = 100.0f;    ///< Maximum health cap (Heal cannot exceed this).
+    bool isDead = false;         ///< Set to true when health reaches zero.
+    bool deathProcessed = false; ///< Set by LifecycleSystem after firing the death callback.
 
     void TakeDamage(float amount)
     {
@@ -102,12 +121,12 @@ struct HealthComponent
  */
 struct WeatherComponent
 {
-    int weatherType = 0;
-    float intensity = 0.0f;
-    float windX = 1.0f, windY = 0.0f, windZ = 0.0f;
-    float windSpeed = 0.0f;
-    float transitionTime = 3.0f;
-    bool enabled = true;
+    int weatherType = 0;    ///< Weather preset index (0 = clear, 1 = rain, 2 = snow, etc.).
+    float intensity = 0.0f; ///< Effect intensity [0, 1]; controls particle density and sound volume.
+    float windX = 1.0f, windY = 0.0f, windZ = 0.0f; ///< Wind direction vector (not normalized).
+    float windSpeed = 0.0f;                         ///< Wind speed in m/s; affects particle drift and vegetation sway.
+    float transitionTime = 3.0f; ///< Blend duration when entering/leaving this weather zone (seconds).
+    bool enabled = true;         ///< Runtime toggle for this weather zone.
 };
 
 // =============================================================================
@@ -125,10 +144,10 @@ struct WeatherComponent
  */
 struct InventoryTag
 {
-    int maxSlots = 20;
-    float maxWeight = 100.0f;
-    int currency = 0;
-    bool hasInventory = true;
+    int maxSlots = 20;        ///< Maximum number of item slots in this inventory.
+    float maxWeight = 100.0f; ///< Maximum carry weight (kg); excess items are rejected.
+    int currency = 0;         ///< Currency balance (gold/credits) carried by this entity.
+    bool hasInventory = true; ///< False to temporarily disable inventory access (e.g. during cutscenes).
 };
 
 // =============================================================================
@@ -145,9 +164,9 @@ struct InventoryTag
  */
 struct QuestTrackerTag
 {
-    int activeQuestCount = 0;
-    int completedQuestCount = 0;
-    bool questLogOpen = false;
+    int activeQuestCount = 0;    ///< Number of in-progress quests tracked by this entity.
+    int completedQuestCount = 0; ///< Lifetime count of completed quests (for statistics/achievements).
+    bool questLogOpen = false;   ///< Whether the quest log UI is currently visible for this entity.
 };
 
 // =============================================================================

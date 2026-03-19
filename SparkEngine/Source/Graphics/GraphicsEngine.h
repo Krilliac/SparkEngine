@@ -23,7 +23,7 @@
 #endif // SPARK_PLATFORM_WINDOWS
 #include "../Core/framework.h"
 #include "GraphicsEngineTypes.h"
-#include "Shader.h" // ✅ ADD: Include for PerObjectConstants and PerFrameConstants
+#include "Shader.h" // PerObjectConstants and PerFrameConstants struct definitions
 #include "DrawSortKey.h"
 #include "PipelineStateCache.h"
 #include "RenderTargetPool.h"
@@ -40,7 +40,7 @@
 #include <vector>
 #include <unordered_map>
 #include <memory>
-#include <atomic> // **CRITICAL FIX: Added for atomic frame state**
+#include <atomic> // Thread-safe frame state management
 
 using Microsoft::WRL::ComPtr;
 
@@ -487,7 +487,8 @@ class GraphicsEngine
     ComPtr<ID3D11DepthStencilView> m_depthStencilView;
 
     // Advanced render targets for deferred/forward+ rendering
-    ComPtr<ID3D11Texture2D> m_gBufferTextures[4]; // Albedo, Normal, Material, Motion
+    // G-buffer layout: [0]=Albedo (RGBA8), [1]=Normal (RGB10A2), [2]=Material (RGBA8: roughness/metallic/AO), [3]=Motion vectors (RG16F)
+    ComPtr<ID3D11Texture2D> m_gBufferTextures[4];
     ComPtr<ID3D11RenderTargetView> m_gBufferRTVs[4];
     ComPtr<ID3D11ShaderResourceView> m_gBufferSRVs[4];
     ComPtr<ID3D11Texture2D> m_hdrTexture;
@@ -557,7 +558,7 @@ class GraphicsEngine
     mutable std::mutex m_metricsMutex;
     std::function<void()> m_stateCallback;
 
-    // **CRITICAL FIX: Added atomic frame state for thread-safe frame management**
+    // Atomic: frame state is queried from multiple threads (render + main loop)
     std::atomic<bool> m_frameInProgress;
 
     // Resource tracking
@@ -582,58 +583,63 @@ class GraphicsEngine
 #endif                                                            // SPARK_PLATFORM_WINDOWS
     std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList; ///< Sorted draw list per frame
 
-    // ✅ ADD: Basic shader system resources
+    // Basic shader system resources (fallback rendering pipeline)
     ComPtr<ID3D11VertexShader> m_basicVertexShader;
     ComPtr<ID3D11PixelShader> m_basicPixelShader;
     ComPtr<ID3D11InputLayout> m_basicInputLayout;
     ComPtr<ID3D11Buffer> m_basicConstantBuffer;
-    ComPtr<ID3D11Buffer> m_basicFrameConstantBuffer; // ✅ ADD: Per-frame constant buffer
+    ComPtr<ID3D11Buffer> m_basicFrameConstantBuffer; ///< Per-frame constant buffer (camera, lighting)
     ComPtr<ID3D11SamplerState> m_basicSamplerState;
-    ComPtr<ID3D11Texture2D> m_defaultTexture;      // ✅ ADD: Default white texture
-    ComPtr<ID3D11ShaderResourceView> m_defaultSRV; // ✅ ADD: Default texture SRV
+    ComPtr<ID3D11Texture2D> m_defaultTexture;      ///< 1x1 white texture used when no material is assigned
+    ComPtr<ID3D11ShaderResourceView> m_defaultSRV; ///< SRV for the default white texture
 
     // ========================================================================
     // PRIVATE METHODS
     // ========================================================================
 
-    HRESULT CreateDeviceAndSwapChain(HWND hWnd);
+    // --- Device and resource creation (called once during Initialize) ---
+    HRESULT CreateDeviceAndSwapChain(HWND hWnd); ///< Create D3D11 device, context, and DXGI swap chain.
     HRESULT CreateDevice(HWND hwnd, uint32_t width, uint32_t height, bool fullscreen);
-    HRESULT CreateRenderTargetView();
-    HRESULT CreateDepthStencilView();
-    HRESULT CreateRenderTargets();
-    HRESULT CreateAdvancedRenderTargets();
-    HRESULT CreateRenderStates();
-    void SetViewport();
-    void UpdateMetrics();
-    void UpdateAdvancedMetrics();
-    void ApplyGraphicsState();
-    void ApplyAdvancedGraphicsState();
-    void ApplyQualityPreset(QualityPreset preset);
-    void NotifyStateChange();
-    void SetupDeferredPipeline();
-    void SetupForwardPlusPipeline();
+    HRESULT CreateRenderTargetView();      ///< Create the back buffer RTV from the swap chain.
+    HRESULT CreateDepthStencilView();      ///< Create the depth/stencil texture and DSV.
+    HRESULT CreateRenderTargets();         ///< Create standard render targets (HDR, resolve).
+    HRESULT CreateAdvancedRenderTargets(); ///< Create G-buffer textures for deferred rendering.
+    HRESULT CreateRenderStates();          ///< Create rasterizer, depth-stencil, and blend states.
+    void SetViewport();                    ///< Set the D3D11 viewport to match window dimensions.
 
-    // Advanced rendering methods
+    // --- Per-frame state management ---
+    void UpdateMetrics();                          ///< Update basic render statistics (draw calls, triangles).
+    void UpdateAdvancedMetrics();                  ///< Update GPU timing and memory usage metrics.
+    void ApplyGraphicsState();                     ///< Bind rasterizer/depth/blend states based on current settings.
+    void ApplyAdvancedGraphicsState();             ///< Configure advanced states (MSAA, HDR tone mapping).
+    void ApplyQualityPreset(QualityPreset preset); ///< Set all graphics settings to match a named quality level.
+    void NotifyStateChange();                      ///< Fire the state callback (used by editor for UI refresh).
+    void SetupDeferredPipeline();                  ///< Configure G-buffer layout and lighting pass for deferred path.
+    void SetupForwardPlusPipeline();               ///< Configure light grid and tiled culling for Forward+ path.
+
+    // --- Rendering paths (one is active per frame based on m_currentPipeline) ---
     void RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix, const std::vector<GameObject*>& objects);
     void RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
                         const std::vector<GameObject*>& objects);
     void RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
                            const std::vector<GameObject*>& objects);
+
+    // --- Deferred rendering sub-passes ---
     void FillGBuffer(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix);
     void LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix);
     void CullObjects(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
-                     std::vector<GameObject*>& visibleObjects);
-    void RenderGeometryPass();
-    void RenderLightingPass();
-    void RenderPostProcessing();
-    void RenderTemporalEffects();
+                     std::vector<GameObject*>& visibleObjects); ///< Frustum cull via BVH, output visible set.
+    void RenderGeometryPass();    ///< Draw opaque geometry into G-buffer (Albedo, Normal, Material, Motion).
+    void RenderLightingPass();    ///< Full-screen quad resolving G-buffer with accumulated lighting.
+    void RenderPostProcessing();  ///< HDR tone mapping, bloom, SSAO, SSR, volumetrics.
+    void RenderTemporalEffects(); ///< TAA jitter resolve and motion-vector-based ghosting reduction.
 
-    // ✅ ADD: Basic shader system methods
+    // Basic shader system methods (fallback pipeline)
     HRESULT InitializeBasicShaders();
     HRESULT CompileShaderFromFile(const std::wstring& filename, const char* entryPoint, const char* shaderModel,
                                   ID3DBlob** blobOut);
     HRESULT CreateBasicConstantBuffer();
-    HRESULT CreateDefaultTexture();                          // ✅ ADD: Default texture creation
-    HRESULT CompileEmbeddedVertexShader(ID3DBlob** blobOut); // ✅ ADD: Embedded vertex shader
-    HRESULT CompileEmbeddedPixelShader(ID3DBlob** blobOut);  // ✅ ADD: Embedded pixel shader
+    HRESULT CreateDefaultTexture();                          ///< Create 1x1 white fallback texture
+    HRESULT CompileEmbeddedVertexShader(ID3DBlob** blobOut); ///< Compile built-in vertex shader from source string
+    HRESULT CompileEmbeddedPixelShader(ID3DBlob** blobOut);  ///< Compile built-in pixel shader from source string
 };
