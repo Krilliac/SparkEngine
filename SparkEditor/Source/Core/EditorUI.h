@@ -272,7 +272,8 @@ namespace SparkEditor
         void RegisterToolCommands();
 
         // Update() helpers — separate input from tick logic
-        void ProcessInputShortcuts();
+        void ProcessSceneShortcuts();
+        void ProcessGlobalHotkeys();
         void UpdateNotifications(float deltaTime);
     };
 

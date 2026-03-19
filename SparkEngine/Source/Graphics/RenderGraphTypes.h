@@ -1,15 +1,14 @@
 /**
  * @file RenderGraphTypes.h
- * @brief Type definitions, enums, and small structs for the render graph system
+ * @brief Resource descriptors, enums, and handles for the render graph system
  * @author Spark Engine Team
  * @date 2026
  *
- * Contains all lightweight types used by the render graph: resource handles,
- * descriptors, enums, internal bookkeeping nodes, and statistics. Separated
- * from RenderGraph.h so that code needing only the types does not pull in the
- * full graph, pass, builder, and blackboard class definitions.
+ * Contains the foundational types used by the render graph: resource handles,
+ * texture/buffer descriptors, resource lifetime and type enums, and the
+ * internal resource node bookkeeping struct.
  *
- * @see RenderGraph.h
+ * @see RenderGraphPass.h, RenderGraphBlackboard.h, RenderGraph.h
  */
 
 #pragma once
@@ -20,33 +19,25 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace Spark::Graphics
 {
-
-    // ============================================================================
-    // Forward Declarations
-    // ============================================================================
-
-    class RenderGraph;
-    class RenderGraphBuilder;
-    class RenderGraphPass;
-    class RenderGraphResourceRegistry;
 
     // ============================================================================
     // RenderGraphResource — Typed handle to a graph-managed resource
     // ============================================================================
 
     /**
- * @brief Opaque handle representing a resource within the render graph.
- *
- * Resources are never accessed directly through this handle. Instead, the
- * handle is resolved to concrete GPU objects (render targets, buffers) via
- * RenderGraphResourceRegistry during pass execution.
- *
- * A resource handle carries a version number so that write-after-write
- * hazards produce distinct handles, enabling correct dependency tracking.
- */
+     * @brief Opaque handle representing a resource within the render graph.
+     *
+     * Resources are never accessed directly through this handle. Instead, the
+     * handle is resolved to concrete GPU objects (render targets, buffers) via
+     * RenderGraphResourceRegistry during pass execution.
+     *
+     * A resource handle carries a version number so that write-after-write
+     * hazards produce distinct handles, enabling correct dependency tracking.
+     */
     struct RenderGraphResource
     {
         static constexpr uint32_t INVALID_INDEX = ~0u;
@@ -65,9 +56,9 @@ namespace Spark::Graphics
     };
 
     /**
- * @brief Hash support for RenderGraphResource so it can be used in
- *        unordered containers.
- */
+     * @brief Hash support for RenderGraphResource so it can be used in
+     *        unordered containers.
+     */
     struct RenderGraphResourceHash
     {
         size_t operator()(const RenderGraphResource& r) const
@@ -81,11 +72,11 @@ namespace Spark::Graphics
     // ============================================================================
 
     /**
- * @brief Descriptor for a texture resource managed by the render graph.
- *
- * Mirrors the fields in RenderTargetDesc but is decoupled so that the graph
- * can reason about resources without creating GPU objects up front.
- */
+     * @brief Descriptor for a texture resource managed by the render graph.
+     *
+     * Mirrors the fields in RenderTargetDesc but is decoupled so that the graph
+     * can reason about resources without creating GPU objects up front.
+     */
     struct RenderGraphTextureDesc
     {
         uint32_t width = 1;
@@ -101,10 +92,10 @@ namespace Spark::Graphics
         uint8_t clearStencil = 0;
 
         /**
-     * @brief Compute the approximate memory footprint in bytes.
-     *
-     * This is used by the graph compiler for aliasing decisions.
-     */
+         * @brief Compute the approximate memory footprint in bytes.
+         *
+         * This is used by the graph compiler for aliasing decisions.
+         */
         size_t EstimateMemoryBytes() const
         {
             // Rough per-pixel byte count based on format
@@ -152,8 +143,8 @@ namespace Spark::Graphics
     };
 
     /**
- * @brief Descriptor for a buffer resource managed by the render graph.
- */
+     * @brief Descriptor for a buffer resource managed by the render graph.
+     */
     struct RenderGraphBufferDesc
     {
         size_t sizeBytes = 0; ///< Total buffer size
@@ -168,9 +159,9 @@ namespace Spark::Graphics
     // ============================================================================
 
     /**
- * @brief Indicates whether a resource is graph-managed (transient) or
- *        externally owned (imported).
- */
+     * @brief Indicates whether a resource is graph-managed (transient) or
+     *        externally owned (imported).
+     */
     enum class RenderGraphResourceLifetime
     {
         Transient, ///< Created and destroyed within a single graph execution
@@ -178,8 +169,8 @@ namespace Spark::Graphics
     };
 
     /**
- * @brief The kind of GPU resource a handle points to.
- */
+     * @brief The kind of GPU resource a handle points to.
+     */
     enum class RenderGraphResourceType
     {
         Texture,
@@ -187,15 +178,30 @@ namespace Spark::Graphics
     };
 
     // ============================================================================
+    // RenderGraphPassType
+    // ============================================================================
+
+    /**
+     * @brief Classifies a render pass for scheduling purposes.
+     */
+    enum class RenderGraphPassType
+    {
+        Graphics,    ///< Rasterization pass (vertex/pixel shaders, render targets)
+        Compute,     ///< Compute-shader dispatch
+        Copy,        ///< Resource copy / blit
+        AsyncCompute ///< Compute work eligible for async compute queue
+    };
+
+    // ============================================================================
     // Internal Resource Node
     // ============================================================================
 
     /**
- * @brief Internal bookkeeping for a single resource inside the graph.
- *
- * Users never interact with this directly; they use RenderGraphResource
- * handles and resolve them through the registry at execution time.
- */
+     * @brief Internal bookkeeping for a single resource inside the graph.
+     *
+     * Users never interact with this directly; they use RenderGraphResource
+     * handles and resolve them through the registry at execution time.
+     */
     struct RenderGraphResourceNode
     {
         std::string name;
@@ -224,24 +230,65 @@ namespace Spark::Graphics
         uint32_t lastUsePass = 0;
 
         /**
-     * @brief Imported texture pointer. Non-null only when lifetime == Imported.
-     */
+         * @brief Imported texture pointer. Non-null only when lifetime == Imported.
+         */
         RenderTarget* importedTexture = nullptr;
     };
 
     // ============================================================================
-    // RenderGraphPassType
+    // RenderGraphResourceRegistry — resolves handles during execution
     // ============================================================================
 
     /**
- * @brief Classifies a render pass for scheduling purposes.
- */
-    enum class RenderGraphPassType
+     * @brief Passed to the execute callback of each pass so that it can
+     *        resolve RenderGraphResource handles to concrete GPU objects.
+     */
+    class RenderGraphResourceRegistry
     {
-        Graphics,    ///< Rasterization pass (vertex/pixel shaders, render targets)
-        Compute,     ///< Compute-shader dispatch
-        Copy,        ///< Resource copy / blit
-        AsyncCompute ///< Compute work eligible for async compute queue
+      public:
+        explicit RenderGraphResourceRegistry(const std::vector<RenderGraphResourceNode>& resources)
+            : m_resources(resources)
+        {
+        }
+
+        /**
+         * @brief Resolve a resource handle to its physical RenderTarget.
+         * @param handle The resource handle obtained during pass setup.
+         * @return Non-owning pointer to the render target, or nullptr if
+         *         the resource is not backed by a texture.
+         */
+        RenderTarget* GetTexture(RenderGraphResource handle) const
+        {
+            if (!handle.IsValid() || handle.index >= m_resources.size())
+            {
+                return nullptr;
+            }
+            const auto& node = m_resources[handle.index];
+            if (node.lifetime == RenderGraphResourceLifetime::Imported)
+            {
+                return node.importedTexture;
+            }
+            return node.physicalTexture.get();
+        }
+
+        /**
+         * @brief Get the texture descriptor for a resource.
+         */
+        const RenderGraphTextureDesc& GetTextureDesc(RenderGraphResource handle) const
+        {
+            return m_resources[handle.index].textureDesc;
+        }
+
+        /**
+         * @brief Get the buffer descriptor for a resource.
+         */
+        const RenderGraphBufferDesc& GetBufferDesc(RenderGraphResource handle) const
+        {
+            return m_resources[handle.index].bufferDesc;
+        }
+
+      private:
+        const std::vector<RenderGraphResourceNode>& m_resources;
     };
 
     // ============================================================================
@@ -249,8 +296,8 @@ namespace Spark::Graphics
     // ============================================================================
 
     /**
- * @brief Statistics collected during graph compilation and execution.
- */
+     * @brief Statistics collected during graph compilation and execution.
+     */
     struct RenderGraphStats
     {
         uint32_t totalPasses = 0;        ///< Total declared passes

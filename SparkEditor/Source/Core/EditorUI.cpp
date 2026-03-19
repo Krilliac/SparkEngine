@@ -232,7 +232,8 @@ namespace SparkEditor
             return;
 
         // Input handling (scene shortcuts, play mode, transform tools)
-        ProcessInputShortcuts();
+        ProcessSceneShortcuts();
+        ProcessGlobalHotkeys();
 
         // Tick notification lifetimes and remove expired ones
         UpdateNotifications(deltaTime);
@@ -244,7 +245,7 @@ namespace SparkEditor
         HandleKeyboardShortcuts();
     }
 
-    void EditorUI::ProcessInputShortcuts()
+    void EditorUI::ProcessSceneShortcuts()
     {
         ImGuiIO& io = ImGui::GetIO();
 
@@ -288,6 +289,11 @@ namespace SparkEditor
                 }
             }
         }
+    }
+
+    void EditorUI::ProcessGlobalHotkeys()
+    {
+        ImGuiIO& io = ImGui::GetIO();
 
         // F5: Toggle play mode (delegates to PlayModeManager)
         if (ImGui::IsKeyPressed(ImGuiKey_F5) && !io.WantTextInput)
