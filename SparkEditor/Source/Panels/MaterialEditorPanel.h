@@ -43,32 +43,32 @@ namespace SparkEditor
     /// @brief A single editable shader parameter.
     struct ShaderParameter
     {
-        std::string name;
-        std::string displayName;
-        ShaderParamType type = ShaderParamType::Float;
-        std::string group; ///< UI grouping (e.g., "Surface", "Normal", "Emission")
+        std::string name;                              ///< HLSL/GLSL parameter name.
+        std::string displayName;                       ///< Human-readable label for the UI.
+        ShaderParamType type = ShaderParamType::Float; ///< Data type.
+        std::string group;                             ///< UI grouping (e.g., "Surface", "Normal", "Emission").
 
         // Values stored as floats for numeric types
-        float floatValues[16] = {};
-        int intValue = 0;
-        bool boolValue = false;
-        std::string texturePath;
+        float floatValues[16] = {}; ///< Numeric value storage (float, vec, matrix).
+        int intValue = 0;           ///< Integer parameter value.
+        bool boolValue = false;     ///< Boolean toggle value.
+        std::string texturePath;    ///< Path to assigned texture (for Texture types).
 
         // UI hints
-        float minValue = 0.0f;
-        float maxValue = 1.0f;
-        float step = 0.01f;
-        std::string tooltip;
-        bool isHDR = false; ///< For color parameters
+        float minValue = 0.0f; ///< Minimum slider value.
+        float maxValue = 1.0f; ///< Maximum slider value.
+        float step = 0.01f;    ///< Slider step increment.
+        std::string tooltip;   ///< Tooltip text shown on hover.
+        bool isHDR = false;    ///< True for HDR color parameters (unclamped range).
     };
 
     /// @brief Texture slot in a material.
     struct TextureSlot
     {
-        std::string name; ///< Slot name (e.g., "Albedo", "Normal", "Roughness")
-        std::string texturePath;
-        int bindSlot = 0; ///< Shader register slot
-        bool isAssigned = false;
+        std::string name;        ///< Slot name (e.g., "Albedo", "Normal", "Roughness")
+        std::string texturePath; ///< Path to the assigned texture asset.
+        int bindSlot = 0;        ///< Shader texture register slot (t0, t1, ...).
+        bool isAssigned = false; ///< Whether a texture is currently bound.
 
         // Sampling options
         enum class FilterMode
@@ -90,10 +90,10 @@ namespace SparkEditor
         WrapMode wrapU = WrapMode::Repeat;
         WrapMode wrapV = WrapMode::Repeat;
 
-        float tilingU = 1.0f;
-        float tilingV = 1.0f;
-        float offsetU = 0.0f;
-        float offsetV = 0.0f;
+        float tilingU = 1.0f; ///< Horizontal texture tiling.
+        float tilingV = 1.0f; ///< Vertical texture tiling.
+        float offsetU = 0.0f; ///< Horizontal texture offset.
+        float offsetV = 0.0f; ///< Vertical texture offset.
     };
 
     /// @brief Render state configuration for a material.
@@ -117,12 +117,12 @@ namespace SparkEditor
         };
         CullMode cullMode = CullMode::Back;
 
-        bool depthWrite = true;
-        bool depthTest = true;
-        bool castShadows = true;
-        bool receiveShadows = true;
-        float alphaClipThreshold = 0.5f;
-        int renderQueue = 2000; ///< Sorting order
+        bool depthWrite = true;          ///< Write to the depth buffer.
+        bool depthTest = true;           ///< Test against the depth buffer.
+        bool castShadows = true;         ///< Whether this material casts shadows.
+        bool receiveShadows = true;      ///< Whether this material receives shadows.
+        float alphaClipThreshold = 0.5f; ///< Alpha value below which pixels are discarded.
+        int renderQueue = 2000;          ///< Sorting order
     };
 
     /// @brief Complete material definition.

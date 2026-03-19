@@ -53,46 +53,46 @@ namespace SparkEditor
         // Entity statistics
         struct EntityStats
         {
-            int totalEntities = 0;
-            int activeEntities = 0;
-            int inactiveEntities = 0;
-            std::unordered_map<std::string, int> componentCounts;
+            int totalEntities = 0;                                ///< Total entities in the scene.
+            int activeEntities = 0;                               ///< Entities currently active and updating.
+            int inactiveEntities = 0;                             ///< Entities disabled or dormant.
+            std::unordered_map<std::string, int> componentCounts; ///< Per-type component counts.
         };
         EntityStats m_entityStats;
 
         // Render statistics
         struct RenderStats
         {
-            int drawCalls = 0;
-            int triangleCount = 0;
-            int vertexCount = 0;
-            int shaderCount = 0;
-            float textureMemoryMB = 0.0f;
-            int renderTargetCount = 0;
-            int batchCount = 0;
+            int drawCalls = 0;            ///< GPU draw calls this frame.
+            int triangleCount = 0;        ///< Total triangles rendered.
+            int vertexCount = 0;          ///< Total vertices submitted.
+            int shaderCount = 0;          ///< Unique shaders bound this frame.
+            float textureMemoryMB = 0.0f; ///< Total texture VRAM usage (MB).
+            int renderTargetCount = 0;    ///< Active render targets.
+            int batchCount = 0;           ///< Batched draw call groups.
         };
         RenderStats m_renderStats;
 
         // Physics statistics
         struct PhysicsStats
         {
-            int activeRigidBodies = 0;
-            int staticBodies = 0;
-            int collisionPairs = 0;
-            int raycastsPerFrame = 0;
-            float simulationTimeMs = 0.0f;
+            int activeRigidBodies = 0;     ///< Dynamic rigid bodies currently simulated.
+            int staticBodies = 0;          ///< Static collision bodies in the scene.
+            int collisionPairs = 0;        ///< Active collision pairs this frame.
+            int raycastsPerFrame = 0;      ///< Physics raycasts performed this frame.
+            float simulationTimeMs = 0.0f; ///< Time spent in physics simulation (ms).
         };
         PhysicsStats m_physicsStats;
 
         // Memory statistics
         struct MemoryStats
         {
-            float totalSceneMemoryMB = 0.0f;
-            float meshMemoryMB = 0.0f;
-            float textureMemoryMB = 0.0f;
-            float audioMemoryMB = 0.0f;
-            float assetCacheMemoryMB = 0.0f;
-            float scriptMemoryMB = 0.0f;
+            float totalSceneMemoryMB = 0.0f; ///< Total memory used by the scene (MB).
+            float meshMemoryMB = 0.0f;       ///< Memory used by mesh data (MB).
+            float textureMemoryMB = 0.0f;    ///< Memory used by textures (MB).
+            float audioMemoryMB = 0.0f;      ///< Memory used by audio buffers (MB).
+            float assetCacheMemoryMB = 0.0f; ///< Memory used by the asset cache (MB).
+            float scriptMemoryMB = 0.0f;     ///< Memory used by script VMs (MB).
         };
         MemoryStats m_memoryStats;
 
