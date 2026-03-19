@@ -14,17 +14,19 @@
 namespace SparkEditor
 {
 
+    /** @brief Editor panel for toggling debug visualization overlays (wireframe, colliders, nav mesh, etc.). */
     class DebugVisualizerPanel : public EditorPanel
     {
       public:
+        /// Per-frame count of debug draw primitives rendered.
         struct DebugDrawStats
         {
-            int gridLines = 0;
-            int colliderShapes = 0;
-            int boundingBoxes = 0;
-            int navMeshPolygons = 0;
-            int lightGizmos = 0;
-            int audioSources = 0;
+            int gridLines = 0;       ///< Grid lines drawn.
+            int colliderShapes = 0;  ///< Collider shapes drawn.
+            int boundingBoxes = 0;   ///< AABB bounding boxes drawn.
+            int navMeshPolygons = 0; ///< NavMesh polygons drawn.
+            int lightGizmos = 0;     ///< Light radius/direction gizmos drawn.
+            int audioSources = 0;    ///< Audio source radius gizmos drawn.
         };
 
         DebugVisualizerPanel();

@@ -14,6 +14,7 @@
 namespace SparkEditor
 {
 
+    /** @brief Editor panel for placing, scattering, and snapping objects in the scene. */
     class ObjectPlacementPanel : public EditorPanel
     {
       public:
@@ -34,25 +35,27 @@ namespace SparkEditor
             Vertex
         };
 
+        /// Configuration for brush-mode object placement.
         struct PlacementBrush
         {
-            float radius = 5.0f;
-            float density = 1.0f;
-            float minScale = 0.8f;
-            float maxScale = 1.2f;
-            float minRotation = 0.0f;
-            float maxRotation = 360.0f;
-            bool randomizeRotation = true;
-            bool randomizeScale = true;
-            bool alignToSurface = true;
+            float radius = 5.0f;           ///< Brush radius (meters).
+            float density = 1.0f;          ///< Objects per square meter.
+            float minScale = 0.8f;         ///< Minimum random scale.
+            float maxScale = 1.2f;         ///< Maximum random scale.
+            float minRotation = 0.0f;      ///< Minimum random Y rotation (degrees).
+            float maxRotation = 360.0f;    ///< Maximum random Y rotation (degrees).
+            bool randomizeRotation = true; ///< Apply random rotation to placed objects.
+            bool randomizeScale = true;    ///< Apply random scale to placed objects.
+            bool alignToSurface = true;    ///< Align placed objects to the surface normal.
         };
 
+        /// Entry in the prefab library sidebar.
         struct PrefabEntry
         {
-            std::string name;
-            std::string path;
-            std::string category;
-            bool isFavorite = false;
+            std::string name;        ///< Prefab display name.
+            std::string path;        ///< Asset path to the prefab file.
+            std::string category;    ///< Category for filtering (e.g. "Props", "Foliage").
+            bool isFavorite = false; ///< Whether this prefab is bookmarked.
         };
 
         ObjectPlacementPanel();

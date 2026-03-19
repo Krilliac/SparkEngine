@@ -41,47 +41,49 @@ namespace SparkEditor
             End
         };
 
+        /// A single player-selectable choice within a dialogue node.
         struct DialogueChoice
         {
-            char text[256] = {};
-            char nextNodeId[64] = {};
-            char condition[128] = {};
+            char text[256] = {};      ///< Choice display text.
+            char nextNodeId[64] = {}; ///< Node ID to jump to when selected.
+            char condition[128] = {}; ///< Condition expression (empty = always available).
         };
 
+        /// A single node in the dialogue tree being edited.
         struct DialogueNode
         {
-            char id[64] = {};
-            NodeType type = NodeType::Text;
-            char speakerName[128] = {};
-            char text[512] = {};
-            char nextNodeId[64] = {};
-            float displayDuration = 3.0f;
+            char id[64] = {};               ///< Unique node identifier.
+            NodeType type = NodeType::Text; ///< Node behavior type.
+            char speakerName[128] = {};     ///< NPC name shown above the text.
+            char text[512] = {};            ///< Dialogue text content.
+            char nextNodeId[64] = {};       ///< Default next node (for Text nodes).
+            float displayDuration = 3.0f;   ///< Auto-advance time (0 = wait for input).
 
             // Choice node
-            std::vector<DialogueChoice> choices;
+            std::vector<DialogueChoice> choices; ///< Available player choices.
 
             // Branch node
-            char condition[128] = {};
-            char trueNodeId[64] = {};
-            char falseNodeId[64] = {};
+            char condition[128] = {};  ///< Branch condition expression.
+            char trueNodeId[64] = {};  ///< Node if condition is true.
+            char falseNodeId[64] = {}; ///< Node if condition is false.
 
             // Event node
-            char eventName[128] = {};
-            char eventData[256] = {};
+            char eventName[128] = {}; ///< Event to fire (e.g. "GiveItem").
+            char eventData[256] = {}; ///< Event payload data (JSON string).
 
             // Presentation
-            char animation[128] = {};
-            char voiceClip[256] = {};
+            char animation[128] = {}; ///< NPC animation to play during this node.
+            char voiceClip[256] = {}; ///< Voice-over audio clip path.
         };
 
-        void RenderNodeList();
-        void RenderNodeEditor();
-        void RenderToolbar();
+        void RenderNodeList();   ///< Draw the left-side node list.
+        void RenderNodeEditor(); ///< Draw the right-side node property editor.
+        void RenderToolbar();    ///< Draw the top toolbar (new, save, load).
 
-        std::vector<DialogueNode> m_nodes;
-        int m_selectedNode = -1;
-        char m_treeName[128] = "NewDialogue";
-        bool m_modified = false;
+        std::vector<DialogueNode> m_nodes;    ///< All nodes in the current dialogue tree.
+        int m_selectedNode = -1;              ///< Index of the selected node (-1 = none).
+        char m_treeName[128] = "NewDialogue"; ///< Name of the dialogue tree being edited.
+        bool m_modified = false;              ///< True if unsaved changes exist.
     };
 
 } // namespace SparkEditor
