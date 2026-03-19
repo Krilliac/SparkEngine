@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*95 test files, 1241+ test cases*
+*96 test files, 1250+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -456,6 +456,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestCommandHistory` | 10 |
 | `TestConditionSystem` | 12 |
 | `TestConfigParser` | 16 |
+| `TestConnectionTimeout` | 9 |
 | `TestConsoleRBAC` | 21 |
 | `TestCooldown` | 14 |
 | `TestCoroutineScheduler` | 10 |

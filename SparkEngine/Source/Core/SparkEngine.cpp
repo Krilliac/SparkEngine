@@ -60,6 +60,9 @@
 #include "Engine/Gameplay/InstanceManager.h"
 #include "Engine/AI/MovementSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
+#include "Engine/ECS/Systems/TerrainSystem.h"
+#include "Graphics/TerrainRenderer.h"
+#include "Engine/Networking/ClientPrediction.h"
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
 #endif
@@ -241,6 +244,10 @@ static void UpdateGameplaySystems(float dt)
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.SetWorld(world);
     destruction.Update(dt);
+
+    // Terrain system — LOD selection based on camera distance
+    static Spark::ECS::TerrainSystem s_terrainSystem;
+    s_terrainSystem.Update(*world, dt);
 }
 
 static void ShutdownGameplaySystems()

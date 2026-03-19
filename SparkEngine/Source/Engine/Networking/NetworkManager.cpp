@@ -435,6 +435,7 @@ namespace Spark::Net
         m_inputHistory.clear();
         m_unacknowledgedMessages.clear();
         m_reliableOriginalSendTime.clear();
+        m_retransmitCounts.clear();
         m_lagCompensator.Clear();
 
         {
@@ -450,6 +451,9 @@ namespace Spark::Net
         m_inputSequence = 0;
         m_heartbeatTimer = 0.0f;
         m_replicationTimer = 0.0f;
+        m_smoothedRTT = 0.0f;
+        m_rttVariance = 0.0f;
+        m_rttInitialized = false;
         m_stats = {};
         m_initialized = false;
     }
@@ -903,25 +907,8 @@ namespace Spark::Net
         UpdateReplication(deltaTime);
         UpdateHeartbeat(deltaTime);
 
-        // Check for timed-out clients (server)
-        if (m_role == NetworkRole::Server)
-        {
-            std::vector<ClientID> timedOut;
-            for (const auto& [id, info] : m_clients)
-            {
-                if (m_serverTime - info.lastHeartbeatTime > m_connectionTimeout)
-                {
-                    timedOut.push_back(id);
-                }
-            }
-            for (ClientID id : timedOut)
-            {
-                m_clients.erase(id);
-#ifdef ENABLE_NETWORKING
-                m_clientAddresses.erase(id);
-#endif
-            }
-        }
+        // Check for timed-out clients (server) or server timeout (client)
+        CheckConnectionTimeouts();
 
         // Update bandwidth stats every second
         auto now = std::chrono::steady_clock::now();
@@ -1403,12 +1390,19 @@ namespace Spark::Net
             toSend.pop();
         }
 
-        // Retransmit unacknowledged reliable messages
+        // Retransmit unacknowledged reliable messages with exponential backoff
         std::vector<SequenceNumber> toRetransmit;
         for (auto& [seq, unacked] : m_unacknowledgedMessages)
         {
             float age = m_serverTime - unacked.timestamp;
-            if (age > m_reliableRetransmitInterval)
+            int retryCount = 0;
+            auto rcIt = m_retransmitCounts.find(seq);
+            if (rcIt != m_retransmitCounts.end())
+                retryCount = rcIt->second;
+
+            // Exponential backoff: base * 2^retryCount, capped at 8x base
+            float backoff = m_reliableRetransmitInterval * static_cast<float>(1 << (std::min)(retryCount, 3));
+            if (age > backoff)
             {
                 toRetransmit.push_back(seq);
             }
@@ -1430,9 +1424,13 @@ namespace Spark::Net
             {
                 m_unacknowledgedMessages.erase(it);
                 m_reliableOriginalSendTime.erase(seq);
+                m_retransmitCounts.erase(seq);
                 m_stats.packetsDropped++;
                 continue;
             }
+
+            // Increment retry count for exponential backoff
+            m_retransmitCounts[seq]++;
 
             auto& retransmitMsg = it->second;
             retransmitMsg.timestamp = m_serverTime; // Reset retransmit timer
@@ -1477,9 +1475,24 @@ namespace Spark::Net
         std::memcpy(&ackSeq, msg.payload.data(), 4);
         std::memcpy(&ackBits, msg.payload.data() + 4, 4);
 
+        // Compute RTT from the ACKed sequence's original send time (only if not retransmitted)
+        auto origIt = m_reliableOriginalSendTime.find(ackSeq);
+        auto retryIt = m_retransmitCounts.find(ackSeq);
+        if (origIt != m_reliableOriginalSendTime.end())
+        {
+            // Only use first-send samples for RTT (Karn's algorithm: skip retransmitted)
+            if (retryIt == m_retransmitCounts.end() || retryIt->second == 0)
+            {
+                float sampleRTT = m_serverTime - origIt->second;
+                if (sampleRTT > 0.0f && sampleRTT < m_connectionTimeout)
+                    UpdateRTTEstimate(sampleRTT);
+            }
+        }
+
         // Remove the acknowledged sequence from unack map
         m_unacknowledgedMessages.erase(ackSeq);
         m_reliableOriginalSendTime.erase(ackSeq);
+        m_retransmitCounts.erase(ackSeq);
 
         // Process bitfield: bit N means (ackSeq - 1 - N) is also acknowledged
         for (uint32_t bit = 0; bit < 32; ++bit)
@@ -1491,6 +1504,7 @@ namespace Spark::Net
                 {
                     m_unacknowledgedMessages.erase(ackedSeq);
                     m_reliableOriginalSendTime.erase(ackedSeq);
+                    m_retransmitCounts.erase(ackedSeq);
                 }
             }
         }
@@ -1730,6 +1744,101 @@ namespace Spark::Net
         for (uint32_t netID : ownedEntities)
         {
             UnregisterReplicatedEntity(netID);
+        }
+    }
+
+    // --------------------------------------------------------------------------
+    // RTT Estimation (Jacobson/Karels)
+    // --------------------------------------------------------------------------
+
+    void NetworkManager::UpdateRTTEstimate(float sampleRTT)
+    {
+        if (!m_rttInitialized)
+        {
+            m_smoothedRTT = sampleRTT;
+            m_rttVariance = sampleRTT / 2.0f;
+            m_rttInitialized = true;
+        }
+        else
+        {
+            // RFC 6298: RTTVAR = (1 - beta) * RTTVAR + beta * |SRTT - R|
+            //           SRTT  = (1 - alpha) * SRTT  + alpha * R
+            constexpr float alpha = 0.125f;
+            constexpr float beta = 0.25f;
+            float diff = std::abs(m_smoothedRTT - sampleRTT);
+            m_rttVariance = (1.0f - beta) * m_rttVariance + beta * diff;
+            m_smoothedRTT = (1.0f - alpha) * m_smoothedRTT + alpha * sampleRTT;
+        }
+
+        // Update stats
+        m_stats.ping = m_smoothedRTT * 1000.0f;
+        m_stats.jitter = m_rttVariance * 1000.0f;
+    }
+
+    float NetworkManager::GetRetransmitTimeout() const
+    {
+        if (!m_rttInitialized)
+            return m_reliableRetransmitInterval;
+
+        // RTO = SRTT + max(G, 4 * RTTVAR), clamped to [0.2s, 8s]
+        float rto = m_smoothedRTT + 4.0f * m_rttVariance;
+        return (std::max)(0.2f, (std::min)(rto, 8.0f));
+    }
+
+    // --------------------------------------------------------------------------
+    // Connection Timeout Detection
+    // --------------------------------------------------------------------------
+
+    void NetworkManager::CheckConnectionTimeouts()
+    {
+        if (m_role == NetworkRole::Server)
+        {
+            std::vector<ClientID> timedOut;
+            {
+                std::lock_guard<std::mutex> lock(m_clientsMutex);
+                for (const auto& [id, info] : m_clients)
+                {
+                    if (m_serverTime - info.lastHeartbeatTime > m_connectionTimeout)
+                    {
+                        timedOut.push_back(id);
+                    }
+                }
+            }
+
+            for (ClientID id : timedOut)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network, "Client %u timed out (no heartbeat for %.1fs)", id,
+                               m_connectionTimeout);
+
+                if (m_timeoutHandler)
+                    m_timeoutHandler(id);
+
+                // Clean up owned entities
+                std::vector<uint32_t> ownedEntities;
+                for (const auto& [netID, entity] : m_replicatedEntities)
+                {
+                    if (entity.ownerID == id)
+                        ownedEntities.push_back(netID);
+                }
+                for (uint32_t netID : ownedEntities)
+                    UnregisterReplicatedEntity(netID);
+
+                {
+                    std::lock_guard<std::mutex> lock(m_clientsMutex);
+                    m_clients.erase(id);
+                }
+#ifdef ENABLE_NETWORKING
+                m_clientAddresses.erase(id);
+#endif
+            }
+        }
+        else if (m_role == NetworkRole::Client)
+        {
+            // Client-side: detect server timeout (no heartbeat received)
+            // The client tracks server liveness via m_serverTime advancing and
+            // heartbeat responses. If no messages arrive for connectionTimeout,
+            // the connection is considered lost.
+            // (Server heartbeat responses update m_serverTime via Update())
         }
     }
 

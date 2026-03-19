@@ -477,6 +477,19 @@ Visual timeline of the [undo/redo](#undoredo-system) command stack.
 
 **Source:** `SparkEditor/Source/Panels/AIEditorPanel.cpp` (201 lines)
 
+### AI Debug Panel
+
+Real-time [AI agent](AI-and-Navigation) runtime inspector for play-mode debugging.
+
+- Agent list with color-coded state (Idle, Patrol, Alert, Combat, Flee, Dead)
+- Per-agent blackboard variable viewer with type-aware display
+- Behavior tree execution trace with active node highlighting
+- Perception overlay toggles (detection ranges, attack ranges, nav paths, target lines)
+- AI system statistics (agent counts by state, targets)
+- State filtering and configurable refresh rate
+
+**Source:** `SparkEditor/Source/Panels/AIDebugPanel.cpp` (290 lines)
+
 ### 2D Panels
 
 #### Physics 2D Panel
@@ -759,6 +772,7 @@ cmake --build build --config Release
 <!-- AUTO:panel_list -->
 | Panel | Header |
 |-------|--------|
+| `AIDebugPanel` | `SparkEditor/Source/Panels/AIDebugPanel.h` |
 | `AIEditorPanel` | `SparkEditor/Source/Panels/AIEditorPanel.h` |
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
