@@ -88,107 +88,16 @@ namespace SparkEditor
 
         try
         {
-            // Store config
             m_config = std::unique_ptr<EditorConfig>(new EditorConfig(config));
 
-            console.LogInfo("Using enhanced initialization for production use");
-
-            // Initialize crash handler
-            console.LogInfo("Initializing crash handler...");
-            if (m_crashHandler && m_crashHandler->Initialize())
-            {
-                console.LogSuccess("Crash handler initialized successfully");
-            }
-            else
-            {
-                console.LogWarning("Crash handler initialization failed");
-            }
-
-            // Initialize project manager
-            console.LogInfo("Initializing project manager...");
-            m_projectManager = std::make_unique<ProjectManager>();
-            if (m_projectManager->Initialize())
-            {
-                console.LogSuccess("Project manager initialized");
-            }
-            else
-            {
-                console.LogWarning("Project manager initialization failed");
-            }
-
-            // Create project browser panel
-            m_projectBrowserPanel = std::make_shared<ProjectBrowserPanel>(m_projectManager.get());
-            m_projectBrowserPanel->Initialize();
-
-            // Initialize undo/redo manager
-            console.LogInfo("Initializing undo/redo manager...");
-            m_undoRedoManager = std::make_unique<UndoRedoManager>();
-            console.LogSuccess("Undo/redo manager initialized");
-
-            // Initialize prefab manager
-            console.LogInfo("Initializing prefab manager...");
-            m_prefabManager = std::make_unique<PrefabManager>();
-            m_prefabManager->Initialize();
-            console.LogSuccess("Prefab manager initialized");
-
-            // Initialize command palette
-            console.LogInfo("Initializing command palette...");
-            m_commandPalette = std::make_unique<CommandPalette>();
-            console.LogSuccess("Command palette initialized");
-
-            // Create panels
-            console.LogInfo("Creating editor panels...");
-            CreatePanels();
-            console.LogSuccess("Panels created successfully");
+            // Stand up all subsystem managers and create panels
+            InitializeManagers(config);
 
             // Register command palette actions (after panels are created)
             InitializeCommandPalette();
 
-            // Wire up project callbacks to update other panels
-            m_projectManager->SetOnProjectOpened(
-                [this](const ProjectInfo& project)
-                {
-                    // Update asset browser path
-                    auto it = m_panels.find("AssetBrowser");
-                    if (it != m_panels.end())
-                    {
-                        auto* assetBrowser = dynamic_cast<AssetBrowserPanel*>(it->second.get());
-                        if (assetBrowser)
-                        {
-                            assetBrowser->SetProjectPath(m_projectManager->GetProjectAssetsPath());
-                        }
-                    }
-
-                    // Reset hierarchy for new project and set scene name
-                    auto hierIt = m_panels.find("Hierarchy");
-                    if (hierIt != m_panels.end())
-                    {
-                        auto* hierarchy = dynamic_cast<HierarchyPanel*>(hierIt->second.get());
-                        if (hierarchy)
-                        {
-                            hierarchy->ResetToDefault();
-                        }
-                    }
-
-                    // Set scene name from project's default scene
-                    if (!project.defaultScene.empty())
-                    {
-                        std::filesystem::path scenePath(project.defaultScene);
-                        m_currentSceneName = scenePath.stem().string();
-                        m_currentScenePath = (std::filesystem::path(project.path) / project.defaultScene).string();
-                    }
-                    else
-                    {
-                        m_currentSceneName = "Default";
-                        m_currentScenePath.clear();
-                    }
-                    m_sceneModified = false;
-
-                    ShowNotification("Project opened: " + project.name, "success");
-                });
-
-            m_projectManager->SetOnProjectClosed([this](const ProjectInfo& project)
-                                                 { ShowNotification("Project closed: " + project.name, "info"); });
+            // Wire project-opened / project-closed callbacks into panels
+            WireCallbacks();
 
             // Show project browser on startup if no project is loaded
             if (!m_projectManager->HasOpenProject())
@@ -217,18 +126,133 @@ namespace SparkEditor
         }
     }
 
+    void EditorUI::InitializeManagers(const EditorConfig& /*config*/)
+    {
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("Using enhanced initialization for production use");
+
+        // Crash handler
+        console.LogInfo("Initializing crash handler...");
+        if (m_crashHandler && m_crashHandler->Initialize())
+        {
+            console.LogSuccess("Crash handler initialized successfully");
+        }
+        else
+        {
+            console.LogWarning("Crash handler initialization failed");
+        }
+
+        // Project manager + browser panel
+        console.LogInfo("Initializing project manager...");
+        m_projectManager = std::make_unique<ProjectManager>();
+        if (m_projectManager->Initialize())
+        {
+            console.LogSuccess("Project manager initialized");
+        }
+        else
+        {
+            console.LogWarning("Project manager initialization failed");
+        }
+        m_projectBrowserPanel = std::make_shared<ProjectBrowserPanel>(m_projectManager.get());
+        m_projectBrowserPanel->Initialize();
+
+        // Undo/redo
+        console.LogInfo("Initializing undo/redo manager...");
+        m_undoRedoManager = std::make_unique<UndoRedoManager>();
+        console.LogSuccess("Undo/redo manager initialized");
+
+        // Prefab manager
+        console.LogInfo("Initializing prefab manager...");
+        m_prefabManager = std::make_unique<PrefabManager>();
+        m_prefabManager->Initialize();
+        console.LogSuccess("Prefab manager initialized");
+
+        // Command palette
+        console.LogInfo("Initializing command palette...");
+        m_commandPalette = std::make_unique<CommandPalette>();
+        console.LogSuccess("Command palette initialized");
+
+        // Editor panels
+        console.LogInfo("Creating editor panels...");
+        CreatePanels();
+        console.LogSuccess("Panels created successfully");
+    }
+
+    void EditorUI::WireCallbacks()
+    {
+        m_projectManager->SetOnProjectOpened(
+            [this](const ProjectInfo& project)
+            {
+                // Update asset browser path
+                auto it = m_panels.find("AssetBrowser");
+                if (it != m_panels.end())
+                {
+                    auto* assetBrowser = dynamic_cast<AssetBrowserPanel*>(it->second.get());
+                    if (assetBrowser)
+                    {
+                        assetBrowser->SetProjectPath(m_projectManager->GetProjectAssetsPath());
+                    }
+                }
+
+                // Reset hierarchy for new project
+                auto hierIt = m_panels.find("Hierarchy");
+                if (hierIt != m_panels.end())
+                {
+                    auto* hierarchy = dynamic_cast<HierarchyPanel*>(hierIt->second.get());
+                    if (hierarchy)
+                    {
+                        hierarchy->ResetToDefault();
+                    }
+                }
+
+                // Set scene name from project's default scene
+                if (!project.defaultScene.empty())
+                {
+                    std::filesystem::path scenePath(project.defaultScene);
+                    m_currentSceneName = scenePath.stem().string();
+                    m_currentScenePath = (std::filesystem::path(project.path) / project.defaultScene).string();
+                }
+                else
+                {
+                    m_currentSceneName = "Default";
+                    m_currentScenePath.clear();
+                }
+                m_sceneModified = false;
+
+                ShowNotification("Project opened: " + project.name, "success");
+            });
+
+        m_projectManager->SetOnProjectClosed([this](const ProjectInfo& project)
+                                             { ShowNotification("Project closed: " + project.name, "info"); });
+    }
+
     void EditorUI::Update(float deltaTime)
     {
         if (!m_isInitialized)
             return;
 
-        // Process global keyboard shortcuts
+        // Input handling (scene shortcuts, play mode, transform tools)
+        ProcessInputShortcuts();
+
+        // Tick notification lifetimes and remove expired ones
+        UpdateNotifications(deltaTime);
+
+        // Update stats
+        UpdateStats(deltaTime);
+
+        // Handle keyboard shortcuts for undo/redo, command palette, search
+        HandleKeyboardShortcuts();
+    }
+
+    void EditorUI::ProcessInputShortcuts()
+    {
         ImGuiIO& io = ImGui::GetIO();
+
+        // Ctrl+N / Ctrl+S: Scene shortcuts
         if (io.KeyCtrl && !io.WantTextInput)
         {
             if (ImGui::IsKeyPressed(ImGuiKey_N))
             {
-                // Ctrl+N: New Scene
                 auto it = m_panels.find("Hierarchy");
                 if (it != m_panels.end())
                 {
@@ -245,7 +269,6 @@ namespace SparkEditor
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_S))
             {
-                // Ctrl+S: Save Scene
                 if (m_projectManager && m_projectManager->HasOpenProject())
                 {
                     if (m_currentScenePath.empty())
@@ -283,12 +306,10 @@ namespace SparkEditor
             }
         }
 
-        // F4: Reload all shaders (ezEngine-inspired live resource reload hotkey)
+        // F4: Reload all shaders
         if (ImGui::IsKeyPressed(ImGuiKey_F4) && !io.WantTextInput)
         {
             ShowNotification("Reloading shaders...", "info", 2.0f);
-            // Shader hot-reload is already wired in GraphicsEngine::BeginFrame().
-            // This notification confirms the user pressed the hotkey.
         }
 
         // W/E/R: Transform tool shortcuts (only when not typing and not in game view)
@@ -319,8 +340,10 @@ namespace SparkEditor
                 m_currentTool = TransformTool::Scale;
             }
         }
+    }
 
-        // Update notifications
+    void EditorUI::UpdateNotifications(float deltaTime)
+    {
         auto it = m_notifications.begin();
         while (it != m_notifications.end())
         {
@@ -334,12 +357,6 @@ namespace SparkEditor
                 ++it;
             }
         }
-
-        // Update stats
-        UpdateStats(deltaTime);
-
-        // Handle keyboard shortcuts for new features
-        HandleKeyboardShortcuts();
     }
 
     void EditorUI::Render()
@@ -1234,13 +1251,21 @@ namespace SparkEditor
             return;
         }
 
-        // Register panel toggle actions
+        RegisterPanelToggleCommands();
+        RegisterEditCommands();
+        RegisterSceneCommands();
+        RegisterToolCommands();
+    }
+
+    void EditorUI::RegisterPanelToggleCommands()
+    {
         auto RegisterPanelToggle = [this](const std::string& panelKey, const std::string& displayName)
         {
             m_commandPalette->RegisterAction("Toggle " + displayName, "Panel", [this, panelKey]()
                                              { SetPanelVisible(panelKey, !IsPanelVisible(panelKey)); });
         };
 
+        // Core panels
         RegisterPanelToggle("SceneView", "Scene View");
         RegisterPanelToggle("Console", "Console");
         RegisterPanelToggle("Hierarchy", "Hierarchy");
@@ -1248,17 +1273,25 @@ namespace SparkEditor
         RegisterPanelToggle("AssetBrowser", "Asset Browser");
         RegisterPanelToggle("GameView", "Game View");
         RegisterPanelToggle("Profiler", "Profiler");
+
+        // FPS / gameplay panels
         RegisterPanelToggle("WeaponEditor", "Weapon Editor");
         RegisterPanelToggle("FPSTools", "FPS Tools");
+
+        // 2D panels
         RegisterPanelToggle("SpriteEditor", "Sprite Editor");
         RegisterPanelToggle("TilemapEditor", "Tilemap Editor");
         RegisterPanelToggle("SpriteAnimEditor", "Sprite Animation Editor");
         RegisterPanelToggle("Physics2D", "Physics 2D");
+
+        // Editor utility panels
         RegisterPanelToggle("UndoHistory", "Undo History");
         RegisterPanelToggle("SceneStats", "Scene Statistics");
         RegisterPanelToggle("PrefabEditor", "Prefab Editor");
         RegisterPanelToggle("Search", "Search");
         RegisterPanelToggle("PostProcessing", "Post Processing");
+
+        // Domain-specific panels
         RegisterPanelToggle("DialogueEditor", "Dialogue Editor");
         RegisterPanelToggle("AIEditor", "AI Editor");
         RegisterPanelToggle("SplineEditor", "Spline Editor");
@@ -1267,8 +1300,11 @@ namespace SparkEditor
         RegisterPanelToggle("SaveSystem", "Save System");
         RegisterPanelToggle("Localization", "Localization");
         RegisterPanelToggle("WeatherFog", "Weather & Fog");
+    }
 
-        // Register undo/redo commands
+    void EditorUI::RegisterEditCommands()
+    {
+        // Undo / redo
         m_commandPalette->RegisterAction(
             "Undo", "Command",
             [this]()
@@ -1291,19 +1327,32 @@ namespace SparkEditor
             },
             "Ctrl+Y");
 
-        // Register layout commands
+        // Layout commands
         m_commandPalette->RegisterAction("Reset Layout", "Layout", [this]() { ResetToDefaultLayout(); });
-
         m_commandPalette->RegisterAction("Save Layout", "Layout", [this]() { SaveLayout("Quick Save"); });
 
-        // Register scene commands
+        // Prefab commands
+        m_commandPalette->RegisterAction("Create Empty Prefab", "Command",
+                                         [this]()
+                                         {
+                                             if (m_prefabManager)
+                                             {
+                                                 m_prefabManager->CreateEmptyPrefab("New Prefab");
+                                                 SetPanelVisible("PrefabEditor", true);
+                                                 ShowNotification("Created new prefab", "success");
+                                             }
+                                         });
+    }
+
+    void EditorUI::RegisterSceneCommands()
+    {
         m_commandPalette->RegisterAction("New Scene", "Scene",
                                          [this]() { ShowNotification("New Scene created!", "success"); });
 
         m_commandPalette->RegisterAction("Save Scene", "Scene",
                                          [this]() { ShowNotification("Scene saved!", "success"); });
 
-        // Register play mode commands
+        // Play mode
         m_commandPalette->RegisterAction(
             "Play", "Command",
             [this]()
@@ -1321,34 +1370,21 @@ namespace SparkEditor
                 ShowNotification("Stopped", "info");
             },
             "Shift+F5");
+    }
 
-        // Register prefab commands
-        m_commandPalette->RegisterAction("Create Empty Prefab", "Command",
-                                         [this]()
-                                         {
-                                             if (m_prefabManager)
-                                             {
-                                                 m_prefabManager->CreateEmptyPrefab("New Prefab");
-                                                 SetPanelVisible("PrefabEditor", true);
-                                                 ShowNotification("Created new prefab", "success");
-                                             }
-                                         });
-
-        // Register theme commands
+    void EditorUI::RegisterToolCommands()
+    {
+        // Theme commands
         m_commandPalette->RegisterAction("Theme: Spark Professional", "Command",
                                          [this]() { ApplyTheme("Spark Professional"); });
-
         m_commandPalette->RegisterAction("Theme: Dark", "Command", [this]() { ApplyTheme("Dark"); });
-
         m_commandPalette->RegisterAction("Theme: Light", "Command", [this]() { ApplyTheme("Light"); });
 
-        // Register tool commands
+        // Transform tool commands
         m_commandPalette->RegisterAction(
             "Tool: Move", "Command", [this]() { m_currentTool = TransformTool::Move; }, "W");
-
         m_commandPalette->RegisterAction(
             "Tool: Rotate", "Command", [this]() { m_currentTool = TransformTool::Rotate; }, "E");
-
         m_commandPalette->RegisterAction(
             "Tool: Scale", "Command", [this]() { m_currentTool = TransformTool::Scale; }, "R");
 

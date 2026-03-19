@@ -430,6 +430,9 @@ namespace Spark::Net
 
         void ProcessIncoming();
         void ProcessOutgoing();
+        void FlushOutgoingQueue();
+        void HandleRetransmissions();
+        std::vector<ClientID> GetConnectedClientIDs() const;
         void UpdateReplication(float deltaTime);
         void UpdateHeartbeat(float deltaTime);
         void HandleConnect(const NetworkMessage& msg);
