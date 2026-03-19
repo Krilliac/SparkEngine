@@ -543,165 +543,7 @@ uint64_t MaterialSystem::GetFileTimestamp(const std::string& filePath) const
     return 0;
 }
 
-// LoadTextureFromFile implementation with proper WIC loading and mipmap support
-ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::string& filePath)
-{
-    ComPtr<ID3D11ShaderResourceView> texture;
-
-    if (!m_device || filePath.empty())
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Invalid device or empty file path in LoadTextureFromFile");
-        return texture;
-    }
-
-    if (!std::filesystem::exists(filePath))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Texture file not found: " + filePath);
-        return texture;
-    }
-
-    try
-    {
-        // Initialize WIC factory
-        ComPtr<IWICImagingFactory> wicFactory;
-        HRESULT hr =
-            CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wicFactory));
-        if (FAILED(hr))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC Imaging Factory for: " + filePath);
-            return texture;
-        }
-
-        // Create decoder
-        ComPtr<IWICBitmapDecoder> decoder;
-        std::wstring wideFilePath(filePath.begin(), filePath.end());
-        hr = wicFactory->CreateDecoderFromFilename(wideFilePath.c_str(), nullptr, GENERIC_READ,
-                                                   WICDecodeMetadataCacheOnLoad, &decoder);
-        if (FAILED(hr))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC decoder for: " + filePath);
-            return texture;
-        }
-
-        // Get first frame
-        ComPtr<IWICBitmapFrameDecode> frame;
-        hr = decoder->GetFrame(0, &frame);
-        if (FAILED(hr))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to get frame from decoder for: " + filePath);
-            return texture;
-        }
-
-        // Get original size for mipmap calculation
-        UINT originalWidth, originalHeight;
-        hr = frame->GetSize(&originalWidth, &originalHeight);
-        if (FAILED(hr))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to get frame size for: " + filePath);
-            return texture;
-        }
-
-        // Calculate mip levels (power of 2 textures get full mip chain)
-        UINT mipLevels = 1;
-        if ((originalWidth & (originalWidth - 1)) == 0 && (originalHeight & (originalHeight - 1)) == 0)
-        {
-            // Power of 2 texture - calculate full mip chain
-            UINT maxDimension = std::max(originalWidth, originalHeight);
-            while (maxDimension > 1)
-            {
-                maxDimension >>= 1;
-                mipLevels++;
-            }
-        }
-
-        // Create format converter
-        ComPtr<IWICFormatConverter> converter;
-        hr = wicFactory->CreateFormatConverter(&converter);
-        if (FAILED(hr))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to create format converter for: " + filePath);
-            return texture;
-        }
-
-        // Convert to RGBA format
-        hr = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0,
-                                   WICBitmapPaletteTypeCustom);
-        if (FAILED(hr))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to initialize format converter for: " + filePath);
-            return texture;
-        }
-
-        // Create texture description
-        D3D11_TEXTURE2D_DESC texDesc = {};
-        texDesc.Width = originalWidth;
-        texDesc.Height = originalHeight;
-        texDesc.MipLevels = mipLevels;
-        texDesc.ArraySize = 1;
-        texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        texDesc.SampleDesc.Count = 1;
-        texDesc.SampleDesc.Quality = 0;
-        texDesc.Usage = D3D11_USAGE_DEFAULT;
-        texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-        texDesc.CPUAccessFlags = 0;
-        texDesc.MiscFlags = (mipLevels > 1) ? D3D11_RESOURCE_MISC_GENERATE_MIPS : 0;
-
-        // Prepare initial data for base mip level
-        std::vector<BYTE> imageData(originalWidth * originalHeight * 4);
-        hr = converter->CopyPixels(nullptr, originalWidth * 4, static_cast<UINT>(imageData.size()), imageData.data());
-        if (FAILED(hr))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to copy pixels for: " + filePath);
-            return texture;
-        }
-
-        D3D11_SUBRESOURCE_DATA initData = {};
-        initData.pSysMem = imageData.data();
-        initData.SysMemPitch = originalWidth * 4;
-        initData.SysMemSlicePitch = 0;
-
-        // Create texture
-        ComPtr<ID3D11Texture2D> tex2D;
-        hr = m_device->CreateTexture2D(&texDesc, &initData, &tex2D);
-        if (FAILED(hr))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to create Direct3D texture for: " + filePath);
-            return texture;
-        }
-
-        // Create shader resource view
-        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Format = texDesc.Format;
-        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Texture2D.MostDetailedMip = 0;
-        srvDesc.Texture2D.MipLevels = mipLevels;
-
-        hr = m_device->CreateShaderResourceView(tex2D.Get(), &srvDesc, &texture);
-        if (FAILED(hr))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to create shader resource view for: " + filePath);
-            return texture;
-        }
-
-        // Generate mipmaps if enabled
-        if (mipLevels > 1 && m_context)
-        {
-            m_context->GenerateMips(texture.Get());
-        }
-
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "Successfully loaded texture: " + filePath + " (" + std::to_string(originalWidth) + "x" +
-            std::to_string(originalHeight) + ", " + std::to_string(mipLevels) + " mips)");
-    }
-    catch (const std::exception& e)
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Exception loading texture " + filePath + ": " +
-                                                     std::string(e.what()));
-        texture.Reset();
-    }
-
-    return texture;
-}
+// LoadTextureFromFile is in MaterialTextureLoading.cpp (WIC-based, Windows only)
 
 void MaterialSystem::UpdateMetrics()
 {
@@ -778,96 +620,7 @@ void MaterialSystem::PerformPeriodicMaintenance()
     }
 }
 
-std::string MaterialSystem::TextureTypeToString(MaterialTextureType type) const
-{
-    switch (type)
-    {
-    case MaterialTextureType::Albedo:
-        return "Albedo";
-    case MaterialTextureType::Normal:
-        return "Normal";
-    case MaterialTextureType::Metallic:
-        return "Metallic";
-    case MaterialTextureType::Roughness:
-        return "Roughness";
-    case MaterialTextureType::Occlusion:
-        return "Occlusion";
-    case MaterialTextureType::Emissive:
-        return "Emissive";
-    case MaterialTextureType::Height:
-        return "Height";
-    case MaterialTextureType::DetailAlbedo:
-        return "DetailAlbedo";
-    case MaterialTextureType::DetailNormal:
-        return "DetailNormal";
-    case MaterialTextureType::Subsurface:
-        return "Subsurface";
-    case MaterialTextureType::Transmission:
-        return "Transmission";
-    case MaterialTextureType::Clearcoat:
-        return "Clearcoat";
-    case MaterialTextureType::ClearcoatRoughness:
-        return "ClearcoatRoughness";
-    case MaterialTextureType::Anisotropy:
-        return "Anisotropy";
-    case MaterialTextureType::Custom0:
-        return "Custom0";
-    case MaterialTextureType::Custom1:
-        return "Custom1";
-    case MaterialTextureType::Custom2:
-        return "Custom2";
-    case MaterialTextureType::Custom3:
-        return "Custom3";
-    default:
-        return "Unknown";
-    }
-}
-
-MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) const
-{
-    using namespace Spark::HashLiterals;
-    switch (Spark::FNV1a64(str))
-    {
-    case "Albedo"_hash64:
-        return MaterialTextureType::Albedo;
-    case "Normal"_hash64:
-        return MaterialTextureType::Normal;
-    case "Metallic"_hash64:
-        return MaterialTextureType::Metallic;
-    case "Roughness"_hash64:
-        return MaterialTextureType::Roughness;
-    case "Occlusion"_hash64:
-        return MaterialTextureType::Occlusion;
-    case "Emissive"_hash64:
-        return MaterialTextureType::Emissive;
-    case "Height"_hash64:
-        return MaterialTextureType::Height;
-    case "DetailAlbedo"_hash64:
-        return MaterialTextureType::DetailAlbedo;
-    case "DetailNormal"_hash64:
-        return MaterialTextureType::DetailNormal;
-    case "Subsurface"_hash64:
-        return MaterialTextureType::Subsurface;
-    case "Transmission"_hash64:
-        return MaterialTextureType::Transmission;
-    case "Clearcoat"_hash64:
-        return MaterialTextureType::Clearcoat;
-    case "ClearcoatRoughness"_hash64:
-        return MaterialTextureType::ClearcoatRoughness;
-    case "Anisotropy"_hash64:
-        return MaterialTextureType::Anisotropy;
-    case "Custom0"_hash64:
-        return MaterialTextureType::Custom0;
-    case "Custom1"_hash64:
-        return MaterialTextureType::Custom1;
-    case "Custom2"_hash64:
-        return MaterialTextureType::Custom2;
-    case "Custom3"_hash64:
-        return MaterialTextureType::Custom3;
-    default:
-        return MaterialTextureType::Albedo;
-    }
-}
+// TextureTypeToString and StringToTextureType are in the platform-independent section below
 
 #endif // inner SPARK_PLATFORM_WINDOWS
 
@@ -1325,6 +1078,14 @@ void MaterialSystem::PerformPeriodicMaintenance()
     // No-op on Linux - no GPU resources to manage
 }
 
+// TextureTypeToString and StringToTextureType are in the platform-independent section below
+
+#endif // SPARK_PLATFORM_WINDOWS
+
+// ============================================================================
+// PLATFORM-INDEPENDENT IMPLEMENTATIONS
+// ============================================================================
+
 std::string MaterialSystem::TextureTypeToString(MaterialTextureType type) const
 {
     switch (type)
@@ -1372,6 +1133,7 @@ std::string MaterialSystem::TextureTypeToString(MaterialTextureType type) const
 
 MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) const
 {
+    // Case-insensitive comparison using lowercase hash
     std::string lower = str;
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
 
@@ -1418,12 +1180,6 @@ MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) 
         return MaterialTextureType::Albedo;
     }
 }
-
-#endif // SPARK_PLATFORM_WINDOWS
-
-// ============================================================================
-// PLATFORM-INDEPENDENT IMPLEMENTATIONS
-// ============================================================================
 
 std::vector<std::string> MaterialSystem::GetShaderPermutation(const std::string& name) const
 {

@@ -3,7 +3,8 @@
  * @brief Engine-wide console command registration
  *
  * Consolidates all non-graphics console commands: modules, save system,
- * physics, audio, and engine architecture queries.
+ * physics, audio, and engine architecture queries. Each subsystem has its
+ * own static registration function to keep individual functions manageable.
  */
 
 #include "EngineConsoleCommands.h"
@@ -23,13 +24,12 @@
 namespace Spark
 {
 
-    void RegisterEngineConsoleCommands(ModuleManager* moduleManager, AudioEngine* audioEngine,
-                                       ModuleHotReloadManager* hotReload)
+    // ============================================================================
+    // Module commands
+    // ============================================================================
+
+    static void RegisterModuleCommands(SimpleConsole& console, ModuleManager* moduleManager)
     {
-        auto& console = SimpleConsole::GetInstance();
-
-        // ---- Module commands ----
-
         console.RegisterCommand(
             "module_info",
             [moduleManager](const std::vector<std::string>&) -> std::string
@@ -75,9 +75,14 @@ namespace Spark
                 return "Failed to reload module '" + name + "'";
             },
             "Hot-reload a module (usage: module_reload [name])");
+    }
 
-        // ---- SaveSystem commands ----
+    // ============================================================================
+    // SaveSystem commands
+    // ============================================================================
 
+    static void RegisterSaveCommands(SimpleConsole& console)
+    {
         console.RegisterCommand(
             "save_list",
             [](const std::vector<std::string>&) -> std::string
@@ -109,9 +114,14 @@ namespace Spark
                 }
             },
             "Show details for a save slot", "Save");
+    }
 
-        // ---- PhysicsSystem commands ----
+    // ============================================================================
+    // PhysicsSystem commands
+    // ============================================================================
 
+    static void RegisterPhysicsCommands(SimpleConsole& console)
+    {
         console.RegisterCommand(
             "physics_metrics",
             [](const std::vector<std::string>&) -> std::string
@@ -347,9 +357,14 @@ namespace Spark
                 return "Physics world reset";
             },
             "Reset physics world to initial state", "Physics");
+    }
 
-        // ---- AudioEngine commands ----
+    // ============================================================================
+    // AudioEngine commands
+    // ============================================================================
 
+    static void RegisterAudioCommands(SimpleConsole& console, AudioEngine* audioEngine)
+    {
         console.RegisterCommand(
             "audio_master_volume",
             [audioEngine](const std::vector<std::string>& args) -> std::string
@@ -522,9 +537,14 @@ namespace Spark
                 return audioEngine->Console_GetSourceInfo(static_cast<uint32_t>(std::stoul(args[0])));
             },
             "Get info about an audio source", "Audio");
+    }
 
-        // ---- Architecture / engine subsystem commands ----
+    // ============================================================================
+    // Architecture / engine subsystem commands
+    // ============================================================================
 
+    static void RegisterArchitectureCommands(SimpleConsole& console)
+    {
         console.RegisterCommand(
             "engine_subsystems",
             [](const std::vector<std::string>&) -> std::string
@@ -576,9 +596,14 @@ namespace Spark
                 return reg->Console_ListAssets();
             },
             "List all registered assets in the asset registry", "Engine");
+    }
 
-        // ---- Module hot-reload commands ----
+    // ============================================================================
+    // Module hot-reload commands
+    // ============================================================================
 
+    static void RegisterHotReloadCommands(SimpleConsole& console, ModuleHotReloadManager* hotReload)
+    {
         console.RegisterCommand(
             "module.hotreload.enable",
             [hotReload](const std::vector<std::string>&) -> std::string
@@ -623,6 +648,23 @@ namespace Spark
                 return hotReload->GetStatus();
             },
             "Show module hot-reload status and watched modules", "Modules");
+    }
+
+    // ============================================================================
+    // Public API — delegates to per-subsystem registrations
+    // ============================================================================
+
+    void RegisterEngineConsoleCommands(ModuleManager* moduleManager, AudioEngine* audioEngine,
+                                       ModuleHotReloadManager* hotReload)
+    {
+        auto& console = SimpleConsole::GetInstance();
+
+        RegisterModuleCommands(console, moduleManager);
+        RegisterSaveCommands(console);
+        RegisterPhysicsCommands(console);
+        RegisterAudioCommands(console, audioEngine);
+        RegisterArchitectureCommands(console);
+        RegisterHotReloadCommands(console, hotReload);
     }
 
 } // namespace Spark
