@@ -83,8 +83,8 @@ namespace Spark::Physics2D
 
     struct AABB2D
     {
-        Vec2 min;
-        Vec2 max;
+        Vec2 min; ///< Lower-left corner of the bounding box.
+        Vec2 max; ///< Upper-right corner of the bounding box.
 
         bool Overlaps(const AABB2D& other) const
         {
