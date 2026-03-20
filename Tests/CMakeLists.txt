@@ -144,6 +144,9 @@ add_executable(SparkTests
     TestTransientBufferAllocator.cpp
     TestDrawIndirect.cpp
     TestParallelCulling.cpp
+    TestConnectionScope.cpp
+    TestDatablockRegistry.cpp
+    TestEntityEventBus.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
