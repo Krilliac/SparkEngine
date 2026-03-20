@@ -75,7 +75,7 @@
 #include "Graphics/SkyAtmosphere.h"
 #include "Graphics/WaterRenderer.h"
 #include "Graphics/OcclusionCulling.h"
-// PCSX2-inspired systems
+// Serialization, rendering, and utility systems
 #include "Engine/SaveSystem/FreezeSystem.h"
 #include "Graphics/RenderCommandRing.h"
 #include "Graphics/ConstantBufferDiff.h"
@@ -262,7 +262,7 @@ static void InitGameplaySystems()
     Spark::Graphics::WaterRenderer::GetInstance().Initialize();
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Initialize();
 
-    // PCSX2-inspired systems
+    // Serialization, rendering, and utility systems
     Spark::FreezeSystem::GetInstance().Initialize();
     Spark::Graphics::RenderCommandQueue::GetInstance().Initialize();
     Spark::Graphics::ConstantBufferDiffManager::GetInstance().Initialize();
@@ -343,7 +343,7 @@ static void UpdateGameplaySystems(float dt)
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt);
     Spark::Graphics::WaterRenderer::GetInstance().Update(dt);
 
-    // PCSX2-inspired systems — per-frame bookkeeping
+    // Per-frame bookkeeping
     Spark::Graphics::ConstantBufferDiffManager::GetInstance().BeginFrame();
     Spark::Graphics::GPUPerfCounters::GetInstance().EndFrame();
 
@@ -372,7 +372,7 @@ static void ShutdownGameplaySystems()
     Spark::AI::CoverSystem::GetInstance().Shutdown();
     Spark::AI::TacticalPointSystem::GetInstance().Shutdown();
 
-    // PCSX2-inspired systems (reverse order)
+    // Serialization, rendering, and utility systems (reverse order)
     Spark::SceneConfigDatabase::GetInstance().Shutdown();
     Spark::Graphics::GPUPerfCounters::GetInstance().Shutdown();
     Spark::Graphics::ConstantBufferDiffManager::GetInstance().Shutdown();

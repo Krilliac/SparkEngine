@@ -2,7 +2,6 @@
  * @file FreezeSystem.h
  * @brief Tag-validated, per-subsystem save state serialization
  *
- * Inspired by PCSX2's Freeze/Thaw architecture with FreezeTag validation.
  * Provides subsystem-level save state registration, tag-based integrity
  * checking, and backward-compatible struct evolution via FreezeLegacy.
  */

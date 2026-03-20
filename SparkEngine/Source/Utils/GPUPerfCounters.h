@@ -2,7 +2,7 @@
  * @file GPUPerfCounters.h
  * @brief Categorized GPU performance counter tracking
  *
- * Inspired by PCSX2's GSPerfMon. Tracks categorized GPU counters
+ * Tracks categorized GPU counters
  * (draw calls, state changes, texture uploads, barriers, render passes)
  * with frame-based aggregation and delta monitoring.
  */

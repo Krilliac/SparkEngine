@@ -2,7 +2,7 @@
  * @file AlignedHeapArray.h
  * @brief SIMD-aligned heap arrays with move semantics
  *
- * Inspired by PCSX2's HeapArray.h. Provides FixedHeapArray and
+ * Provides FixedHeapArray and
  * DynamicHeapArray with guaranteed alignment for SIMD operations.
  * Cleaner than manual aligned allocation scattered across the codebase.
  */

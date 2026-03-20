@@ -2,8 +2,8 @@
  * @file RenderCommandRing.h
  * @brief Thread-decoupled render command ring buffer
  *
- * Inspired by PCSX2's MTGS ring buffer. Decouples the game thread
- * from the render thread via a typed command queue with power-of-2
+ * Decouples the game thread from the render thread via a typed command
+ * queue with power-of-2
  * ring sizing and bitmask wrapping.
  */
 

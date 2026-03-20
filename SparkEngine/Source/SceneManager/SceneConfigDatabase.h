@@ -2,7 +2,7 @@
  * @file SceneConfigDatabase.h
  * @brief Per-scene configuration override database
  *
- * Inspired by PCSX2's GameDatabase. Stores per-scene/per-level overrides
+ * Stores per-scene/per-level overrides
  * for render settings, physics parameters, audio configuration, and
  * known workarounds. Overrides are applied at scene load time.
  */

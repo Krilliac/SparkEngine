@@ -2,8 +2,8 @@
  * @file MultiISA.h
  * @brief Multi-ISA function dispatch for CPU hot paths
  *
- * Inspired by PCSX2's MultiISA.h. Compiles hot-path functions for
- * multiple SIMD instruction sets and selects the optimal version at
+ * Compiles hot-path functions for multiple SIMD instruction sets
+ * and selects the optimal version at
  * startup based on detected CPU capabilities. Zero runtime branching
  * in inner loops after initialization.
  */

@@ -2,8 +2,8 @@
  * @file ConstantBufferDiff.h
  * @brief Content-diff constant buffer uploads to skip redundant GPU updates
  *
- * Inspired by PCSX2's D3D11 backend CB caching. Caches the last-uploaded
- * constant buffer contents and memcmp's before UpdateSubresource() to skip
+ * Caches the last-uploaded constant buffer contents and memcmp's before
+ * UpdateSubresource() to skip
  * uploads when data hasn't changed.
  */
 

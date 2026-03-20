@@ -2,7 +2,7 @@
  * @file DirtyRectTracker.h
  * @brief Dirty rectangle tracking for partial texture updates
  *
- * Inspired by PCSX2's GSDirtyRect/GSDirtyRectList. Tracks modified
+ * Tracks modified
  * sub-regions of textures so only dirty rectangles are re-uploaded,
  * avoiding full texture updates for localized changes.
  */

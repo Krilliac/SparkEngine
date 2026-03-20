@@ -2,7 +2,7 @@
  * @file WorkSema.h
  * @brief Spin-before-sleep work queue semaphore
  *
- * Inspired by PCSX2's WorkSema. Designed for high-frequency wake/sleep
+ * Designed for high-frequency wake/sleep
  * patterns in job systems. Spins briefly before transitioning to kernel
  * sleep, reducing synchronization overhead for short-lived tasks.
  */

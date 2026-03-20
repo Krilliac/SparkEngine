@@ -2,7 +2,7 @@
  * @file LockFreeRingAllocator.h
  * @brief Lock-free ring buffer allocator for producer-consumer patterns
  *
- * Inspired by PCSX2's GSRingHeap. Optimized for single-writer/multi-reader
+ * Optimized for single-writer/multi-reader
  * patterns using relaxed atomics. Allocations include a size prefix for
  * O(1) deallocation. Ideal for per-frame render command data.
  */
