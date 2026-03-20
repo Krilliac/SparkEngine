@@ -601,6 +601,7 @@ namespace Spark
             {
                 SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D11Device::Shutdown");
+                m_deletionQueue.FlushAll();
                 m_immediateCommandList.reset();
                 m_immediateContext.Reset();
                 m_dxgiFactory.Reset();
@@ -998,23 +999,28 @@ namespace Spark
 
             void D3D11Device::DestroyBuffer(IRHIBuffer* buffer)
             {
-                delete buffer;
+                if (buffer)
+                    m_deletionQueue.Enqueue([buffer] { delete buffer; });
             }
             void D3D11Device::DestroyTexture(IRHITexture* texture)
             {
-                delete texture;
+                if (texture)
+                    m_deletionQueue.Enqueue([texture] { delete texture; });
             }
             void D3D11Device::DestroyShader(IRHIShader* shader)
             {
-                delete shader;
+                if (shader)
+                    m_deletionQueue.Enqueue([shader] { delete shader; });
             }
             void D3D11Device::DestroySampler(IRHISampler* sampler)
             {
-                delete sampler;
+                if (sampler)
+                    m_deletionQueue.Enqueue([sampler] { delete sampler; });
             }
             void D3D11Device::DestroyPipelineState(IRHIPipelineState* state)
             {
-                delete state;
+                if (state)
+                    m_deletionQueue.Enqueue([state] { delete state; });
             }
 
             void* D3D11Device::MapBuffer(IRHIBuffer* buffer)
@@ -1082,6 +1088,7 @@ namespace Spark
             void D3D11Device::BeginFrame()
             {
                 ResetStatistics();
+                m_deletionQueue.ProcessQueue();
             }
             void D3D11Device::EndFrame() {}
             void D3D11Device::WaitForIdle()

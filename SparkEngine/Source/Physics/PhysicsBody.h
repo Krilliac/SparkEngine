@@ -153,6 +153,9 @@ class PhysicsBody
     void UpdateCurrentState();
 
   private:
+    /// @brief Push m_collisionGroup/m_collisionMask to Bullet's broadphase proxy.
+    void ApplyCollisionFilter();
+
     PhysicsBodyDesc m_desc;
     btRigidBody* m_bulletBody;
     uint16_t m_collisionGroup = 1;

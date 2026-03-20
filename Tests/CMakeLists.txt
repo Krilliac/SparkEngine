@@ -139,6 +139,9 @@ add_executable(SparkTests
     TestGPUPerfCounters.cpp
     TestWorkSema.cpp
     TestAlignedHeapArray.cpp
+    TestDeferredDeletion.cpp
+    TestCollisionLayers.cpp
+    TestTransientBufferAllocator.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
