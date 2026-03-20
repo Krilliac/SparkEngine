@@ -75,6 +75,15 @@
 #include "Graphics/SkyAtmosphere.h"
 #include "Graphics/WaterRenderer.h"
 #include "Graphics/OcclusionCulling.h"
+// PCSX2-inspired systems
+#include "Engine/SaveSystem/FreezeSystem.h"
+#include "Graphics/RenderCommandRing.h"
+#include "Graphics/ConstantBufferDiff.h"
+#include "Graphics/DirtyRectTracker.h"
+#include "Utils/MultiISA.h"
+#include "Utils/GPUPerfCounters.h"
+#include "Utils/LockFreeRingAllocator.h"
+#include "SceneManager/SceneConfigDatabase.h"
 // Extended engine systems
 #include "FixedTimestepAccumulator.h"
 #include "PluginRegistry.h"
@@ -253,6 +262,14 @@ static void InitGameplaySystems()
     Spark::Graphics::WaterRenderer::GetInstance().Initialize();
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Initialize();
 
+    // PCSX2-inspired systems
+    Spark::FreezeSystem::GetInstance().Initialize();
+    Spark::Graphics::RenderCommandQueue::GetInstance().Initialize();
+    Spark::Graphics::ConstantBufferDiffManager::GetInstance().Initialize();
+    Spark::Graphics::GPUPerfCounters::GetInstance().Initialize();
+    Spark::MultiISADispatch::GetInstance().Initialize();
+    Spark::SceneConfigDatabase::GetInstance().Initialize();
+
     // Extended engine systems
     Spark::FixedTimestepAccumulator::GetInstance().Initialize();
     Spark::TweenSystem::GetInstance().Initialize();
@@ -326,6 +343,10 @@ static void UpdateGameplaySystems(float dt)
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt);
     Spark::Graphics::WaterRenderer::GetInstance().Update(dt);
 
+    // PCSX2-inspired systems — per-frame bookkeeping
+    Spark::Graphics::ConstantBufferDiffManager::GetInstance().BeginFrame();
+    Spark::Graphics::GPUPerfCounters::GetInstance().EndFrame();
+
     // Extended engine systems
     Spark::TweenSystem::GetInstance().Update(dt);
     Spark::UI::UIFactory::GetInstance().UpdateAllBindings();
@@ -350,6 +371,13 @@ static void ShutdownGameplaySystems()
     Spark::AI::FormationSystem::GetInstance().Shutdown();
     Spark::AI::CoverSystem::GetInstance().Shutdown();
     Spark::AI::TacticalPointSystem::GetInstance().Shutdown();
+
+    // PCSX2-inspired systems (reverse order)
+    Spark::SceneConfigDatabase::GetInstance().Shutdown();
+    Spark::Graphics::GPUPerfCounters::GetInstance().Shutdown();
+    Spark::Graphics::ConstantBufferDiffManager::GetInstance().Shutdown();
+    Spark::Graphics::RenderCommandQueue::GetInstance().Shutdown();
+    Spark::FreezeSystem::GetInstance().Shutdown();
 
     // Extended engine systems (reverse order)
     Spark::PluginRegistry::ShutdownAll();
