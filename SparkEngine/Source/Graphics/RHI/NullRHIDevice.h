@@ -49,6 +49,11 @@ namespace Spark
             void DrawIndexedInstanced(uint32_t, uint32_t, uint32_t, int32_t, uint32_t) override { m_drawCalls++; }
 
             void Dispatch(uint32_t, uint32_t, uint32_t) override { m_dispatchCalls++; }
+
+            void DrawInstancedIndirect(IRHIBuffer*, uint32_t) override { m_drawCalls++; }
+            void DrawIndexedInstancedIndirect(IRHIBuffer*, uint32_t) override { m_drawCalls++; }
+            void DispatchIndirect(IRHIBuffer*, uint32_t) override { m_dispatchCalls++; }
+
             void CopyTexture(IRHITexture*, IRHITexture*) override {}
 
             void BeginEvent(const char*) override {}

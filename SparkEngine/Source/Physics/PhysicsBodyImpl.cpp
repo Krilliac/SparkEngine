@@ -425,11 +425,27 @@ bool PhysicsBody::IsTrigger() const
 void PhysicsBody::SetCollisionGroup(uint16_t group)
 {
     m_collisionGroup = group;
+    ApplyCollisionFilter();
 }
 
 void PhysicsBody::SetCollisionMask(uint16_t mask)
 {
     m_collisionMask = mask;
+    ApplyCollisionFilter();
+}
+
+void PhysicsBody::ApplyCollisionFilter()
+{
+    if (!m_bulletBody)
+        return;
+
+    // Update Bullet's broadphase proxy with the new group/mask
+    btBroadphaseProxy* proxy = m_bulletBody->getBroadphaseProxy();
+    if (proxy)
+    {
+        proxy->m_collisionFilterGroup = m_collisionGroup;
+        proxy->m_collisionFilterMask = m_collisionMask;
+    }
 }
 
 std::string PhysicsBody::GetInfo() const

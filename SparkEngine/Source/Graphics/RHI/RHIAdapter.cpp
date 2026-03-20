@@ -292,6 +292,28 @@ namespace Spark::RHI
     }
 
     // ========================================================================
+    // Indirect draw/dispatch
+    // ========================================================================
+
+    void RHIAdapter::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+    {
+        assert(m_commandList);
+        m_commandList->DrawInstancedIndirect(argsBuffer, argsOffset);
+    }
+
+    void RHIAdapter::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+    {
+        assert(m_commandList);
+        m_commandList->DrawIndexedInstancedIndirect(argsBuffer, argsOffset);
+    }
+
+    void RHIAdapter::DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+    {
+        assert(m_commandList);
+        m_commandList->DispatchIndirect(argsBuffer, argsOffset);
+    }
+
+    // ========================================================================
     // Resource creation -- buffers
     // ========================================================================
 

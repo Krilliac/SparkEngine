@@ -249,11 +249,18 @@ bool PhysicsBody::IsTrigger() const
 void PhysicsBody::SetCollisionGroup(uint16_t group)
 {
     m_collisionGroup = group;
+    ApplyCollisionFilter();
 }
 
 void PhysicsBody::SetCollisionMask(uint16_t mask)
 {
     m_collisionMask = mask;
+    ApplyCollisionFilter();
+}
+
+void PhysicsBody::ApplyCollisionFilter()
+{
+    // Stub: no Bullet broadphase to update
 }
 
 std::string PhysicsBody::GetInfo() const

@@ -90,13 +90,13 @@ std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& de
         bulletBody->setAngularVelocity(ToBullet(desc.angularVelocity));
     }
 
-    // Add to dynamics world with collision filtering
-    uint16_t group = 1;
-    uint16_t mask = 0xFFFF;
-    m_dynamicsWorld->addRigidBody(bulletBody, group, mask);
+    // Add to dynamics world with collision filtering from desc
+    m_dynamicsWorld->addRigidBody(bulletBody, desc.collisionGroup, desc.collisionMask);
 
-    // Create the PhysicsBody wrapper
+    // Create the PhysicsBody wrapper (inherits group/mask from desc)
     auto body = std::make_shared<PhysicsBody>(desc, bulletBody);
+    body->SetCollisionGroup(desc.collisionGroup);
+    body->SetCollisionMask(desc.collisionMask);
 
     // Store user data pointer on the bullet body for lookup during collision
     bulletBody->setUserPointer(body.get());

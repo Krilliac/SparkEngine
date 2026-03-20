@@ -378,6 +378,23 @@ struct PhysicsBodyDesc
     bool isKinematic = false;
 
     /**
+     * @brief Collision filter group bitmask (what this body IS).
+     *
+     * Used by Bullet's broadphase to filter collision pairs. Body A collides
+     * with body B only if `(A.group & B.mask) != 0 && (B.group & A.mask) != 0`.
+     * Default: 1 (default group). Set to 0 to disable all collisions.
+     */
+    uint16_t collisionGroup = 1;
+
+    /**
+     * @brief Collision filter mask bitmask (what this body DETECTS).
+     *
+     * Bodies whose group bits overlap this mask will be considered for collision.
+     * Default: 0xFFFF (collide with everything).
+     */
+    uint16_t collisionMask = 0xFFFF;
+
+    /**
      * @brief Human-readable identifier for debugging and console queries.
      *
      * Named bodies can be retrieved by name via PhysicsSystem::Console_GetBodyInfo().

@@ -613,6 +613,42 @@ namespace Spark
                 }
             }
 
+            void GLCommandList::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                auto* glBuf = static_cast<GLBuffer*>(argsBuffer);
+                glBindBuffer(GL_DRAW_INDIRECT_BUFFER, glBuf->GetGLBuffer());
+                glDrawArraysIndirect(m_currentTopology,
+                                     reinterpret_cast<const void*>(static_cast<uintptr_t>(argsOffset)));
+                if (m_statistics)
+                    m_statistics->drawCalls++;
+            }
+
+            void GLCommandList::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                auto* glBuf = static_cast<GLBuffer*>(argsBuffer);
+                glBindBuffer(GL_DRAW_INDIRECT_BUFFER, glBuf->GetGLBuffer());
+                glDrawElementsIndirect(m_currentTopology, GL_UNSIGNED_INT,
+                                       reinterpret_cast<const void*>(static_cast<uintptr_t>(argsOffset)));
+                if (m_statistics)
+                    m_statistics->drawCalls++;
+            }
+
+            void GLCommandList::DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                auto* glBuf = static_cast<GLBuffer*>(argsBuffer);
+                glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, glBuf->GetGLBuffer());
+                glDispatchComputeIndirect(static_cast<GLintptr>(argsOffset));
+                glMemoryBarrier(GL_ALL_BARRIER_BITS);
+                if (m_statistics)
+                    m_statistics->dispatchCalls++;
+            }
+
             void GLCommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
             {
                 if (!dst || !src)

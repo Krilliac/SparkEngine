@@ -333,6 +333,33 @@ namespace Spark
                 m_commandList->Dispatch(x, y, z);
             }
 
+            void D3D12CommandList::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                FlushBarriers();
+                auto* d3dBuf = static_cast<D3D12Buffer*>(argsBuffer);
+                m_commandList->ExecuteIndirect(nullptr, 1, d3dBuf->GetD3D12Resource(), argsOffset, nullptr, 0);
+            }
+
+            void D3D12CommandList::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                FlushBarriers();
+                auto* d3dBuf = static_cast<D3D12Buffer*>(argsBuffer);
+                m_commandList->ExecuteIndirect(nullptr, 1, d3dBuf->GetD3D12Resource(), argsOffset, nullptr, 0);
+            }
+
+            void D3D12CommandList::DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                FlushBarriers();
+                auto* d3dBuf = static_cast<D3D12Buffer*>(argsBuffer);
+                m_commandList->ExecuteIndirect(nullptr, 1, d3dBuf->GetD3D12Resource(), argsOffset, nullptr, 0);
+            }
+
             void D3D12CommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
             {
                 if (!dst || !src)

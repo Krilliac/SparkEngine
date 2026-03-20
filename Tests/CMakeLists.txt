@@ -139,6 +139,18 @@ add_executable(SparkTests
     TestGPUPerfCounters.cpp
     TestWorkSema.cpp
     TestAlignedHeapArray.cpp
+    TestDeferredDeletion.cpp
+    TestCollisionLayers.cpp
+    TestTransientBufferAllocator.cpp
+    TestDrawIndirect.cpp
+    TestParallelCulling.cpp
+    TestConnectionScope.cpp
+    TestDatablockRegistry.cpp
+    TestEntityEventBus.cpp
+    TestSHLighting.cpp
+    TestClusteredLightGPU.cpp
+    TestRHIHandlePool.cpp
+    TestMaterialDefinition.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
