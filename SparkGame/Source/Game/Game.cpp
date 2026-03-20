@@ -35,6 +35,10 @@
 #include "Console/AdvancedConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
 #include "Core/EngineContext.h"
+#include "Audio/MusicManager.h"
+#include "Graphics/WeatherSystem.h"
+#include "Engine/Cinematic/Sequencer.h"
+#include "Engine/Replay/ReplaySystem.h"
 #include <filesystem>
 
 // Pull in game-specific globals defined in Main.cpp (SparkGame entry point)
@@ -166,8 +170,11 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     /* Register Advanced Console Commands */
     SparkConsole::RegisterAdvancedCommands(this, m_graphics);
 
+    /* Engine system integration — audio, weather, destruction, dialogue, save */
+    InitializeEngineSystems();
+
     LOG_TO_CONSOLE_IMMEDIATE(L"All systems online - gamemode, HUD, inventory, quests, vehicles, gravity, interactions, "
-                             L"damage zones, respawn",
+                             L"damage zones, respawn, audio, weather, destruction, dialogue, save",
                              L"SUCCESS");
 
     return S_OK;
@@ -352,6 +359,51 @@ void Game::Update(float dt)
     if (m_hudSystem)
         m_hudSystem->Update(dt);
     Spark::QuestOps::UpdateTimers(m_playerQuests, m_questRegistry, dt);
+
+    // Track play time for save metadata
+    m_playTime += dt;
+
+    // Update dynamic music intensity based on nearby enemies
+    if (m_audioInitialized)
+    {
+        size_t aliveEnemies = GetAliveEnemyCount();
+        auto intensity = (aliveEnemies > 4)   ? Spark::Audio::CombatIntensity::Combat
+                         : (aliveEnemies > 0) ? Spark::Audio::CombatIntensity::LowThreat
+                                              : Spark::Audio::CombatIntensity::Exploration;
+        Spark::Audio::MusicManager::GetInstance().SetCombatIntensity(intensity);
+    }
+
+    // Cycle weather presets periodically to showcase the system
+    if (m_weatherActive)
+    {
+        m_weatherTransitionTimer += dt;
+        if (m_weatherTransitionTimer > 120.0f) // Every 2 minutes
+        {
+            m_weatherTransitionTimer = 0.0f;
+            auto* ctx = EngineContext::Get();
+            if (auto* weather = ctx ? ctx->GetSystem<Spark::WeatherSystem>() : nullptr)
+            {
+                // Cycle: Clear → Rain → Fog → Storm → Clear
+                static int weatherCycle = 0;
+                constexpr Spark::WeatherType cycle[] = {
+                    Spark::WeatherType::Rain,
+                    Spark::WeatherType::Fog,
+                    Spark::WeatherType::Storm,
+                    Spark::WeatherType::Clear,
+                };
+                weather->SetWeather(cycle[weatherCycle % 4], 0.8f, 5.0f);
+                weatherCycle++;
+            }
+        }
+    }
+
+    // Update cinematic sequencer — advances all playing sequences
+    Spark::Cinematic::SequencerManager::GetInstance().Update(dt);
+
+    // Update replay playback if active
+    auto& replay = Spark::ReplaySystem::GetInstance();
+    if (replay.GetPlaybackState() == Spark::PlaybackState::Playing)
+        replay.UpdatePlayback(dt);
 
 #ifdef ENABLE_NETWORKING
     // Update networking - process incoming messages, send outgoing state

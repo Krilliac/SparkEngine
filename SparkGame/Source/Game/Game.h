@@ -30,6 +30,18 @@
 #include <memory>
 #include <vector>
 
+// Forward declarations for engine systems wired into the game
+namespace Spark
+{
+    class WeatherSystem;
+    class DialogueSystem;
+    class DestructionSystem;
+    class SaveSystem;
+    class AudioEngine;
+    class MusicManager;
+    class CoroutineScheduler;
+} // namespace Spark
+
 // Forward declarations
 class GraphicsEngine;
 class InputManager;
@@ -547,6 +559,9 @@ class SPARK_GAME_API Game
     /// @brief Spawn enemy waves in the arena
     void InitializeEnemies();
 
+    /// @brief Wire audio, weather, destruction, dialogue, and save systems
+    void InitializeEngineSystems();
+
     // Engine-side pointers (not owned)
     GraphicsEngine* m_graphics{nullptr}; ///< Reference to graphics engine
     InputManager* m_input{nullptr};      ///< Reference to input manager
@@ -591,6 +606,14 @@ class SPARK_GAME_API Game
     bool m_noclipEnabled{false};       ///< Noclip state for console debugging
     bool m_infiniteAmmoEnabled{false}; ///< Infinite ammo state for console debugging
     bool m_showFPS{false};             ///< Whether to display FPS counter
+
+    // Engine system integration state
+    bool m_audioInitialized{false};       ///< Audio engine is available and wired
+    bool m_weatherActive{false};          ///< Weather system is providing environment data
+    bool m_dialogueActive{false};         ///< A dialogue conversation is in progress
+    bool m_saveSystemReady{false};        ///< Save system initialized and available
+    float m_playTime{0.0f};               ///< Total play time for save metadata (seconds)
+    float m_weatherTransitionTimer{0.0f}; ///< Timer for cycling weather presets
 };
 
 #ifdef _MSC_VER
