@@ -469,9 +469,11 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `AnimationController` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
 | `AudioSourceComponent` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |
 | `Camera2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `CameraDrawMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/VisibilityComponents.h` |
 | `Camera` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
 | `Collider2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ColliderComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
+| `CollisionMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/CollisionMaskComponents.h` |
 | `Config` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
 | `DecalComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `HealthComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
@@ -502,6 +504,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `TilemapComponent` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `TilesetInfo` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `Transform` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `VisibilityMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/VisibilityComponents.h` |
 | `WeatherComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 <!-- /AUTO:component_list -->
 
@@ -527,9 +530,11 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `DynamicResponseSystem` | `SparkEngine/Source/Engine/Dialogue/DynamicResponseSystem.h` |
 | `FogSystem` | `SparkEngine/Source/Graphics/FogSystem.h` |
 | `FormationSystem` | `SparkEngine/Source/Engine/AI/FormationSystem.h` |
+| `FreezeSystem` | `SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h` |
 | `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
 | `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `LightChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
+| `LightProbeSystem` | `SparkEngine/Source/Graphics/LightProbeSystem.h` |
 | `LightingSystem` | `SparkEngine/Source/Graphics/LightingSystem.h` |
 | `LocalizationSystem` | `SparkEngine/Source/Engine/Localization/LocalizationSystem.h` |
 | `MaterialChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
@@ -556,9 +561,11 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `TerrainSystem` | `SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.h` |
 | `TextureSystem` | `SparkEngine/Source/Graphics/TextureSystem.h` |
 | `TilemapRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `TweenSystem` | `SparkEngine/Source/Engine/Tween/TweenSystem.h` |
 | `UISystem` | `SparkEngine/Source/Engine/UI/UISystem.h` |
 | `UpscalingSystem` | `SparkEngine/Source/Graphics/UpscalingSystem.h` |
 | `VRSystem` | `SparkEngine/Source/Engine/VR/VRSystem.h` |
+| `VirtualFileSystem` | `SparkEngine/Source/Engine/Modding/VirtualFileSystem.h` |
 | `WeatherSystem` | `SparkEngine/Source/Graphics/WeatherSystem.h` |
 | `WorldOriginSystem` | `SparkEngine/Source/Engine/World/WorldOriginSystem.h` |
 <!-- /AUTO:system_list -->

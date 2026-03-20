@@ -128,6 +128,17 @@ add_executable(SparkTests
     TestAnimationCompression.cpp
     TestBlendSpace.cpp
     TestExtendedSystems.cpp
+    TestFreezeSystem.cpp
+    TestNullRHIDevice.cpp
+    TestRenderCommandRing.cpp
+    TestMultiISADispatch.cpp
+    TestConstantBufferDiff.cpp
+    TestDirtyRectTracker.cpp
+    TestLockFreeRingAllocator.cpp
+    TestSceneConfigDatabase.cpp
+    TestGPUPerfCounters.cpp
+    TestWorkSema.cpp
+    TestAlignedHeapArray.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

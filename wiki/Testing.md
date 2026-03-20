@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*118 test files, 1409+ test cases*
+*120 test files, 1483+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -479,6 +479,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestEnvironmentQuery` | 12 |
 | `TestEventBus` | 15 |
 | `TestEventSystem` | 10 |
+| `TestExtendedSystems` | 38 |
 | `TestFPSComponents` | 23 |
 | `TestFileUtils` | 15 |
 | `TestFogSystem` | 17 |
@@ -512,6 +513,17 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestNoiseGenerator` | 7 |
 | `TestObjectPool` | 6 |
 | `TestOcclusionCulling` | 6 |
+| `TestFreezeSystem` | 5 |
+| `TestNullRHIDevice` | 3 |
+| `TestRenderCommandRing` | 4 |
+| `TestMultiISADispatch` | 2 |
+| `TestConstantBufferDiff` | 2 |
+| `TestDirtyRectTracker` | 4 |
+| `TestLockFreeRingAllocator` | 3 |
+| `TestSceneConfigDatabase` | 3 |
+| `TestGPUPerfCounters` | 2 |
+| `TestWorkSema` | 2 |
+| `TestAlignedHeapArray` | 6 |
 | `TestPathCache` | 6 |
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
