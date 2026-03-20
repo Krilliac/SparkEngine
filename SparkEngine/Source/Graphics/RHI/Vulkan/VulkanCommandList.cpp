@@ -518,6 +518,36 @@ namespace Spark
                 }
             }
 
+            void VulkanCommandList::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                auto* vkBuf = static_cast<VulkanBuffer*>(argsBuffer);
+                vkCmdDrawIndirect(m_commandBuffer, vkBuf->GetVkBuffer(), argsOffset, 1, 0);
+                if (m_statistics)
+                    m_statistics->drawCalls++;
+            }
+
+            void VulkanCommandList::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                auto* vkBuf = static_cast<VulkanBuffer*>(argsBuffer);
+                vkCmdDrawIndexedIndirect(m_commandBuffer, vkBuf->GetVkBuffer(), argsOffset, 1, 0);
+                if (m_statistics)
+                    m_statistics->drawCalls++;
+            }
+
+            void VulkanCommandList::DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                auto* vkBuf = static_cast<VulkanBuffer*>(argsBuffer);
+                vkCmdDispatchIndirect(m_commandBuffer, vkBuf->GetVkBuffer(), argsOffset);
+                if (m_statistics)
+                    m_statistics->dispatchCalls++;
+            }
+
             void VulkanCommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
             {
                 if (!dst || !src)

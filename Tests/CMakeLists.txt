@@ -142,6 +142,8 @@ add_executable(SparkTests
     TestDeferredDeletion.cpp
     TestCollisionLayers.cpp
     TestTransientBufferAllocator.cpp
+    TestDrawIndirect.cpp
+    TestParallelCulling.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

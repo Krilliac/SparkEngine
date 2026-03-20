@@ -384,6 +384,10 @@ namespace Spark
 
                 void Dispatch(uint32_t x, uint32_t y, uint32_t z) override;
 
+                void DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset) override;
+                void DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset) override;
+                void DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset) override;
+
                 void BeginEvent(const char* name) override;
                 void EndEvent() override;
                 void SetMarker(const char* name) override;

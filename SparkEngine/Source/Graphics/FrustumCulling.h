@@ -33,7 +33,11 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #include <array>
+#include <atomic>
 #include <cmath>
+#include <vector>
+
+#include "../Utils/JobSystem.h"
 
 namespace Spark::Graphics
 {
@@ -337,6 +341,52 @@ namespace Spark::Graphics
             }
 
             return visibleCount;
+        }
+
+        /**
+         * @brief Parallel batch-cull AABBs across worker threads (Ogre-Next-inspired).
+         *
+         * Splits the AABB array into chunks and dispatches each to the JobSystem.
+         * Each worker runs BatchTestAABB on its slice. Blocks until all workers finish.
+         * Falls back to single-threaded BatchTestAABB if the JobSystem is not initialized
+         * or the count is below minBatchSize.
+         *
+         * @param boxes       Array of AABBs to test.
+         * @param count       Number of AABBs.
+         * @param outVisible  Output array (must have `count` entries). True = visible.
+         * @param minBatchSize Minimum items per worker (default 256).
+         * @return Number of visible AABBs.
+         */
+        uint32_t ParallelBatchCull(const AABB* boxes, uint32_t count, bool* outVisible,
+                                   uint32_t minBatchSize = 256) const
+        {
+            auto& jobs = Spark::JobSystem::Get();
+
+            // Fall back to single-threaded if JobSystem unavailable or small count
+            if (!jobs.IsInitialized() || count <= minBatchSize)
+            {
+                return BatchTestAABB(boxes, count, outVisible);
+            }
+
+            std::atomic<uint32_t> totalVisible{0};
+            int total = static_cast<int>(count);
+            int batch = static_cast<int>(minBatchSize);
+
+            jobs.ParallelFor(
+                0, total,
+                [&](int i)
+                {
+                    const AABB& box = boxes[i];
+                    bool visible = (TestAABB(box) != CullResult::Outside);
+                    outVisible[i] = visible;
+                    if (visible)
+                    {
+                        totalVisible.fetch_add(1, std::memory_order_relaxed);
+                    }
+                },
+                batch);
+
+            return totalVisible.load(std::memory_order_relaxed);
         }
 
       private:

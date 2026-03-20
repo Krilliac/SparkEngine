@@ -108,6 +108,11 @@ namespace Spark
             // Compute
             virtual void Dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
 
+            // Indirect draw/dispatch — GPU-driven rendering (The Forge / bgfx pattern)
+            virtual void DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset) = 0;
+            virtual void DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset) = 0;
+            virtual void DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset) = 0;
+
             // Resource copy
             virtual void CopyTexture(IRHITexture* dst, IRHITexture* src) = 0;
 

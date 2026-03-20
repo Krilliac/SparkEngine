@@ -489,6 +489,30 @@ namespace Spark
                 m_context->Dispatch(x, y, z);
             }
 
+            void D3D11CommandList::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                auto* d3dBuf = static_cast<D3D11Buffer*>(argsBuffer);
+                m_context->DrawInstancedIndirect(d3dBuf->GetD3D11Buffer(), argsOffset);
+            }
+
+            void D3D11CommandList::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                auto* d3dBuf = static_cast<D3D11Buffer*>(argsBuffer);
+                m_context->DrawIndexedInstancedIndirect(d3dBuf->GetD3D11Buffer(), argsOffset);
+            }
+
+            void D3D11CommandList::DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
+            {
+                if (!argsBuffer)
+                    return;
+                auto* d3dBuf = static_cast<D3D11Buffer*>(argsBuffer);
+                m_context->DispatchIndirect(d3dBuf->GetD3D11Buffer(), argsOffset);
+            }
+
             void D3D11CommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
             {
                 if (!dst || !src)

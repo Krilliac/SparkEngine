@@ -257,6 +257,15 @@ namespace Spark::RHI
          */
         void Dispatch(uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ);
 
+        /** @brief Issue an indirect draw call from GPU-filled argument buffer. */
+        void DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset);
+
+        /** @brief Issue an indirect indexed draw call from GPU-filled argument buffer. */
+        void DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset);
+
+        /** @brief Issue an indirect compute dispatch from GPU-filled argument buffer. */
+        void DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset);
+
         // -- Resource creation (convenience wrappers) -------------------------
 
         /**
