@@ -10,6 +10,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | CryEngine feature analysis (16 systems adopted) | [knowledge/cryengine-analysis.md](knowledge/cryengine-analysis.md) | Decision | **Resolved** | 2026-03-19 |
 | Five-engine analysis (Cocos/Defold/Panda3D/S&box/Halley — 20 recommendations) | [knowledge/five-engine-analysis.md](knowledge/five-engine-analysis.md) | Decision | Active | 2026-03-19 |
 | PCSX2 analysis (12 recommendations: save tags, null RHI, render ring, multi-ISA) | [knowledge/pcsx2-analysis.md](knowledge/pcsx2-analysis.md) | Decision | **Resolved** | 2026-03-20 |
+| 11-engine + 3-framework analysis (30 recommendations, ~20 engines total) | [knowledge/eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) | Decision | Active | 2026-03-20 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
@@ -70,6 +71,13 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - P1 items completed: PlatformInputManager deleted, WeaponSystem wired, CoroutineScheduler wired, MusicManager wired, Camera + Persistence wiki pages created, ConsoleRBAC tested
 - P2 items completed: Threading wiki page, SparkEditor.md expanded (32 panels), network integration tests (30 tests), API docs generated
 - Key remaining gaps: terrain rendering, audio tests, connection timeout detection
+
+**Active: 30 recommendations from 11-engine + 3-framework analysis (2026-03-20):**
+- Godot, O3DE, Wicked, Flax, Bevy, Stride, Torque3D, Ogre-Next, The Forge, Filament, bgfx
+- Top 10 HIGH: job system, frame-delayed destruction, collision layers, per-connection scoping, handle-based resources, texture streaming, transient buffers, prefab system, SH-based IBL, parallel culling
+- Top 10 MEDIUM: clustered forward lighting, tween system, datablock registry, per-entity EventBus, feature processors, material format, DrawIndirect, ResourceManager, VFS, CVars
+- Strongest cross-engine signals: job system (5 engines), prefabs (4), handle resources (4), asset pipeline (4)
+- See [eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) for full prioritized list
 
 **Active: 20 recommendations from 5-engine analysis (2026-03-19):**
 - Cocos Engine, Defold, Panda3D, S&box, Halley
