@@ -9,6 +9,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | TrinityCore architecture analysis | [knowledge/trinitycore-analysis.md](knowledge/trinitycore-analysis.md) | Decision | **Resolved** | 2026-03-18 |
 | CryEngine feature analysis (16 systems adopted) | [knowledge/cryengine-analysis.md](knowledge/cryengine-analysis.md) | Decision | **Resolved** | 2026-03-19 |
 | Five-engine analysis (Cocos/Defold/Panda3D/S&box/Halley — 20 recommendations) | [knowledge/five-engine-analysis.md](knowledge/five-engine-analysis.md) | Decision | Active | 2026-03-19 |
+| PCSX2 analysis (12 recommendations: save tags, null RHI, render ring, multi-ISA) | [knowledge/pcsx2-analysis.md](knowledge/pcsx2-analysis.md) | Decision | **Resolved** | 2026-03-20 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
@@ -76,6 +77,13 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - Top networking: delta snapshots, interpolation buffer, instability simulator, FROM/INTO collision masks
 - Top rendering: clustered light culling, light probes + SH, RHI validation layer, age-based resource pooling
 - See [five-engine-analysis.md](knowledge/five-engine-analysis.md) for full prioritized list
+
+**RESOLVED: 12 PCSX2-inspired recommendations (2026-03-20):**
+- 5 HIGH: save tag validation, null RHI backend, render thread command ring, multi-ISA dispatch, per-subsystem freeze
+- 5 MEDIUM: CB content diff, dirty rect tracking, lock-free ring allocator, scene config DB, GPU perf counters
+- 2 LOW: WorkSema spin-before-sleep, aligned heap arrays
+- 10 PCSX2 features already covered by SparkEngine (PSO cache, texture pool, descriptor heap, etc.)
+- See [pcsx2-analysis.md](knowledge/pcsx2-analysis.md) for full details
 
 **RESOLVED: 16 CryEngine-inspired systems (2026-03-19):**
 - TerrainRenderer, TacticalPointSystem, CoverSystem, MaterialEffectSystem (HIGH)
