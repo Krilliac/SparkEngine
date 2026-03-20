@@ -41,6 +41,14 @@
 #include "../Panels/WeatherFogPanel.h"
 #include "../Panels/CinematicSequencerPanel.h"
 #include "../Panels/ProjectSettingsPanel.h"
+#include "../Panels/AudioMixerPanel.h"
+#include "../Panels/ScriptEditorPanel.h"
+#include "../Panels/DestructionEditorPanel.h"
+#include "../Panels/ReplayPanel.h"
+#include "../Panels/VRConfigPanel.h"
+#include "../Panels/StreamingPanel.h"
+#include "../Panels/ModdingPanel.h"
+#include "../Panels/CoroutineDebugPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include <imgui.h>
@@ -128,6 +136,16 @@ namespace SparkEditor
             registerPanel("WeatherFog", std::make_shared<WeatherFogPanel>());
             registerPanel("CinematicSequencer", std::make_shared<CinematicSequencerPanel>());
             registerPanel("ProjectSettings", std::make_shared<ProjectSettingsPanel>());
+
+            // Engine system panels
+            registerPanel("AudioMixer", std::make_shared<AudioMixerPanel>());
+            registerPanel("ScriptEditor", std::make_shared<ScriptEditorPanel>());
+            registerPanel("DestructionEditor", std::make_shared<DestructionEditorPanel>());
+            registerPanel("Replay", std::make_shared<ReplayPanel>());
+            registerPanel("VRConfig", std::make_shared<VRConfigPanel>());
+            registerPanel("Streaming", std::make_shared<StreamingPanel>());
+            registerPanel("Modding", std::make_shared<ModdingPanel>());
+            registerPanel("CoroutineDebug", std::make_shared<CoroutineDebugPanel>());
         }
 
         // Initialize all panels
@@ -158,21 +176,43 @@ namespace SparkEditor
             const char* icon;
         };
         constexpr PanelIcon panelIcons[] = {
-            {"SceneView", ICON_FA_CAMERA},       {"Console", ICON_FA_TERMINAL},
-            {"Hierarchy", ICON_FA_SITEMAP},      {"Inspector", ICON_FA_SLIDERS},
-            {"AssetBrowser", ICON_FA_FOLDER},    {"GameView", ICON_FA_GAMEPAD},
-            {"Profiler", ICON_FA_CHART_BAR},     {"WeaponEditor", ICON_FA_CROSSHAIRS},
-            {"FPSTools", ICON_FA_ROCKET},        {"DebugVisualizer", ICON_FA_BUG},
-            {"SceneStats", ICON_FA_CHART_BAR},   {"ObjectPlacement", ICON_FA_CUBE},
-            {"BuildCook", ICON_FA_HAMMER},       {"DedicatedServer", ICON_FA_SERVER},
-            {"TerrainEditor", ICON_FA_MOUNTAIN}, {"CinematicSequencer", ICON_FA_FILM},
-            {"ProjectSettings", ICON_FA_COGS},   {"UndoHistory", ICON_FA_UNDO},
-            {"PrefabEditor", ICON_FA_CUBE},      {"Search", ICON_FA_SEARCH},
-            {"PostProcessing", ICON_FA_MAGIC},   {"DialogueEditor", ICON_FA_COMMENTS},
-            {"AIEditor", ICON_FA_BRAIN},         {"SplineEditor", ICON_FA_BEZIER_CURVE},
-            {"ParticleEditor", ICON_FA_FIRE},    {"EventMonitor", ICON_FA_BOLT},
-            {"SaveSystem", ICON_FA_SAVE},        {"Localization", ICON_FA_GLOBE},
+            {"SceneView", ICON_FA_CAMERA},
+            {"Console", ICON_FA_TERMINAL},
+            {"Hierarchy", ICON_FA_SITEMAP},
+            {"Inspector", ICON_FA_SLIDERS},
+            {"AssetBrowser", ICON_FA_FOLDER},
+            {"GameView", ICON_FA_GAMEPAD},
+            {"Profiler", ICON_FA_CHART_BAR},
+            {"WeaponEditor", ICON_FA_CROSSHAIRS},
+            {"FPSTools", ICON_FA_ROCKET},
+            {"DebugVisualizer", ICON_FA_BUG},
+            {"SceneStats", ICON_FA_CHART_BAR},
+            {"ObjectPlacement", ICON_FA_CUBE},
+            {"BuildCook", ICON_FA_HAMMER},
+            {"DedicatedServer", ICON_FA_SERVER},
+            {"TerrainEditor", ICON_FA_MOUNTAIN},
+            {"CinematicSequencer", ICON_FA_FILM},
+            {"ProjectSettings", ICON_FA_COGS},
+            {"UndoHistory", ICON_FA_UNDO},
+            {"PrefabEditor", ICON_FA_CUBE},
+            {"Search", ICON_FA_SEARCH},
+            {"PostProcessing", ICON_FA_MAGIC},
+            {"DialogueEditor", ICON_FA_COMMENTS},
+            {"AIEditor", ICON_FA_BRAIN},
+            {"SplineEditor", ICON_FA_BEZIER_CURVE},
+            {"ParticleEditor", ICON_FA_FIRE},
+            {"EventMonitor", ICON_FA_BOLT},
+            {"SaveSystem", ICON_FA_SAVE},
+            {"Localization", ICON_FA_GLOBE},
             {"WeatherFog", ICON_FA_CLOUD_SUN},
+            {"AudioMixer", ICON_FA_VOLUME_UP},
+            {"ScriptEditor", ICON_FA_CODE},
+            {"DestructionEditor", ICON_FA_BOMB},
+            {"Replay", ICON_FA_FILM},
+            {"VRConfig", ICON_FA_GAMEPAD},
+            {"Streaming", ICON_FA_MAP},
+            {"Modding", ICON_FA_BOXES},
+            {"CoroutineDebug", ICON_FA_CLOCK},
         };
 
         for (const auto& [name, icon] : panelIcons)
@@ -183,11 +223,16 @@ namespace SparkEditor
 
         // Panels hidden by default (accessible via menus)
         const char* hiddenPanels[] = {
-            "WeaponEditor",       "FPSTools",        "DebugVisualizer", "SceneStats",   "ObjectPlacement",
-            "BuildCook",          "UndoHistory",     "PrefabEditor",    "Search",       "DedicatedServer",
-            "TerrainEditor",      "PostProcessing",  "DialogueEditor",  "AIEditor",     "SplineEditor",
-            "ParticleEditor",     "EventMonitor",    "SaveSystem",      "Localization", "WeatherFog",
-            "CinematicSequencer", "ProjectSettings",
+            "WeaponEditor",      "FPSTools",        "DebugVisualizer",
+            "SceneStats",        "ObjectPlacement", "BuildCook",
+            "UndoHistory",       "PrefabEditor",    "Search",
+            "DedicatedServer",   "TerrainEditor",   "PostProcessing",
+            "DialogueEditor",    "AIEditor",        "SplineEditor",
+            "ParticleEditor",    "EventMonitor",    "SaveSystem",
+            "Localization",      "WeatherFog",      "CinematicSequencer",
+            "ProjectSettings",   "AudioMixer",      "ScriptEditor",
+            "DestructionEditor", "Replay",          "VRConfig",
+            "Streaming",         "Modding",         "CoroutineDebug",
         };
 
         for (const char* name : hiddenPanels)

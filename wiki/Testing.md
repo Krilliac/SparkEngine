@@ -438,12 +438,13 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*120 test files, 1483+ test cases*
+*130 test files, 1483+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
 | `TestAIBehaviorTree` | 16 |
 | `TestAbilitySystem` | 15 |
+| `TestAlignedHeapArray` | 6 |
 | `TestAnimationCompression` | 6 |
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationSystem` | 17 |
@@ -462,6 +463,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestConfigParser` | 16 |
 | `TestConnectionTimeout` | 9 |
 | `TestConsoleRBAC` | 21 |
+| `TestConstantBufferDiff` | 2 |
 | `TestCooldown` | 14 |
 | `TestCoroutineScheduler` | 10 |
 | `TestCoverSystem` | 4 |
@@ -471,6 +473,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestDeltaSmoother` | 10 |
 | `TestDestructionSystem` | 5 |
 | `TestDialogueSystem` | 4 |
+| `TestDirtyRectTracker` | 4 |
 | `TestDynamicResponseSystem` | 6 |
 | `TestECSIntegration` | 9 |
 | `TestECSWorld` | 11 |
@@ -485,7 +488,9 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestFogSystem` | 17 |
 | `TestFormationSystem` | 4 |
 | `TestFrameAllocator` | 8 |
+| `TestFreezeSystem` | 5 |
 | `TestFrustumCulling` | 11 |
+| `TestGPUPerfCounters` | 2 |
 | `TestGameMode` | 5 |
 | `TestGraphicsEngine` | 10 |
 | `TestGroupAI` | 5 |
@@ -499,31 +504,23 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestLoadingScreen` | 4 |
 | `TestLocalFileCache` | 15 |
 | `TestLocalizationSystem` | 6 |
+| `TestLockFreeRingAllocator` | 3 |
 | `TestMaterialEffects` | 5 |
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestModuleDependency` | 5 |
 | `TestModuleHotReload` | 15 |
 | `TestMovementSystem` | 12 |
+| `TestMultiISADispatch` | 2 |
 | `TestNavMesh` | 11 |
 | `TestNetBuffer` | 29 |
 | `TestNetworkEncryption` | 17 |
 | `TestNetworkIntegration` | 31 |
 | `TestNetworkInterpolation` | 12 |
 | `TestNoiseGenerator` | 7 |
+| `TestNullRHIDevice` | 3 |
 | `TestObjectPool` | 6 |
 | `TestOcclusionCulling` | 6 |
-| `TestFreezeSystem` | 5 |
-| `TestNullRHIDevice` | 3 |
-| `TestRenderCommandRing` | 4 |
-| `TestMultiISADispatch` | 2 |
-| `TestConstantBufferDiff` | 2 |
-| `TestDirtyRectTracker` | 4 |
-| `TestLockFreeRingAllocator` | 3 |
-| `TestSceneConfigDatabase` | 3 |
-| `TestGPUPerfCounters` | 2 |
-| `TestWorkSema` | 2 |
-| `TestAlignedHeapArray` | 6 |
 | `TestPathCache` | 6 |
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
@@ -538,11 +535,13 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestRecastIntegration` | 6 |
 | `TestReflection` | 7 |
 | `TestReliableChannel` | 9 |
+| `TestRenderCommandRing` | 4 |
 | `TestRenderGraph` | 24 |
 | `TestReplicationFields` | 15 |
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
 | `TestSaveSystem` | 7 |
+| `TestSceneConfigDatabase` | 3 |
 | `TestSceneManager` | 14 |
 | `TestSceneSnapshotSerializer` | 19 |
 | `TestScopeGuard` | 13 |
@@ -572,4 +571,5 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestWaterRenderer` | 6 |
 | `TestWeaponSystem` | 18 |
 | `TestWeatherSystem` | 8 |
+| `TestWorkSema` | 2 |
 <!-- /AUTO:test_inventory -->

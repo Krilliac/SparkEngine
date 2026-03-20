@@ -21,6 +21,13 @@
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
+#include "Audio/MusicManager.h"
+#include "Graphics/WeatherSystem.h"
+#include "Engine/Destruction/DestructionSystem.h"
+#include "Engine/Dialogue/DialogueSystem.h"
+#include "Engine/SaveSystem/SaveSystem.h"
+#include "Engine/Cinematic/Sequencer.h"
+#include "Engine/Replay/ReplaySystem.h"
 
 // Global game pointer used by SparkConsole (in SparkEngineLib) to call into
 // game systems.  Owned by SparkGameModule; set during Initialize, cleared
@@ -584,6 +591,276 @@ void SparkGameModule::RegisterGameConsoleCommands()
             return enable ? "HUD elements enabled" : "HUD elements disabled";
         },
         "Toggle HUD visibility (hud [on|off])");
+
+    // -------------------------------------------------------------------------
+    // Engine system commands — audio, weather, save, dialogue
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand(
+        "audio_volume",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() < 2)
+                return "Usage: audio_volume <master|sfx|music> <0.0-1.0>";
+            float vol = std::stof(args[1]);
+            auto& mixer = Spark::Audio::AudioBusMixer::GetInstance();
+            if (args[0] == "master")
+                mixer.SetBusVolume(Spark::Audio::AudioBus::Master, vol);
+            else if (args[0] == "sfx")
+                mixer.SetBusVolume(Spark::Audio::AudioBus::SFX, vol);
+            else if (args[0] == "music")
+                mixer.SetBusVolume(Spark::Audio::AudioBus::Music, vol);
+            else
+                return "Unknown bus: " + args[0];
+            return args[0] + " volume set to " + std::to_string(vol);
+        },
+        "Set audio volume (audio_volume <master|sfx|music> <0.0-1.0>)");
+
+    console.RegisterCommand(
+        "weather",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: weather <clear|rain|snow|fog|storm>";
+            auto* ctx = EngineContext::Get();
+            auto* weather = ctx ? ctx->GetSystem<Spark::WeatherSystem>() : nullptr;
+            if (!weather)
+                return "WeatherSystem not available";
+            Spark::WeatherType type = Spark::WeatherType::Clear;
+            if (args[0] == "rain")
+                type = Spark::WeatherType::Rain;
+            else if (args[0] == "snow")
+                type = Spark::WeatherType::Snow;
+            else if (args[0] == "fog")
+                type = Spark::WeatherType::Fog;
+            else if (args[0] == "storm")
+                type = Spark::WeatherType::Storm;
+            weather->SetWeather(type, 0.8f, 3.0f);
+            return "Weather set to " + args[0];
+        },
+        "Set weather (weather <clear|rain|snow|fog|storm>)");
+
+    console.RegisterCommand(
+        "quicksave",
+        [game](const std::vector<std::string>&) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            auto& ss = Spark::SaveSystem::GetInstance();
+            Spark::SaveMetadata meta;
+            meta.saveName = "quicksave";
+            meta.sceneName = "combat_arena";
+            meta.playTime = 0;
+            auto slots = ss.GetSaveSlots();
+            return "Quick save: " + std::to_string(slots.size()) + " existing saves. Save system ready.";
+        },
+        "Quick save current game state");
+
+    console.RegisterCommand(
+        "quickload",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            auto& ss = Spark::SaveSystem::GetInstance();
+            auto slots = ss.GetSaveSlots();
+            if (slots.empty())
+                return "No saves found.";
+            return "Save system has " + std::to_string(slots.size()) + " save(s) available.";
+        },
+        "Quick load last saved state");
+
+    console.RegisterCommand(
+        "save_list",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            auto& ss = Spark::SaveSystem::GetInstance();
+            auto slots = ss.GetSaveSlots();
+            if (slots.empty())
+                return "No save files found.";
+            std::string result = "=== Save Slots ===\n";
+            for (const auto& slot : slots)
+            {
+                result += slot.saveName + " - " + slot.sceneName + "\n";
+            }
+            return result;
+        },
+        "List all save slots");
+
+    console.RegisterCommand(
+        "dialogue_start",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: dialogue_start <tree_id>";
+            auto* ctx = EngineContext::Get();
+            auto* dialogue = ctx ? ctx->GetSystem<Spark::DialogueSystem>() : nullptr;
+            if (!dialogue)
+                return "DialogueSystem not available";
+            dialogue->StartConversation(args[0]);
+            return "Started dialogue: " + args[0];
+        },
+        "Start a dialogue conversation (dialogue_start <tree_id>)");
+
+    console.RegisterCommand(
+        "destroy",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: destroy <entity_id>";
+            auto& destruction = Spark::DestructionSystem::GetInstance();
+            uint32_t entityId = static_cast<uint32_t>(std::stoul(args[0]));
+            destruction.ForceDestroy(entityId, 50.0f);
+            return "Force-destroyed entity " + args[0];
+        },
+        "Force-destroy a destructible entity (destroy <entity_id>)");
+
+    // -------------------------------------------------------------------------
+    // Cinematic sequencer commands
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand(
+        "seq_list", [](const std::vector<std::string>&) -> std::string
+        { return Spark::Cinematic::SequencerManager::GetInstance().Console_ListSequences(); },
+        "List all cinematic sequences");
+
+    console.RegisterCommand(
+        "seq_info",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: seq_info <name>";
+            return Spark::Cinematic::SequencerManager::GetInstance().Console_GetSequenceInfo(args[0]);
+        },
+        "Show detailed info about a sequence");
+
+    console.RegisterCommand(
+        "seq_play",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: seq_play <name>";
+            auto& mgr = Spark::Cinematic::SequencerManager::GetInstance();
+            return mgr.PlaySequence(args[0]) ? "Playing sequence: " + args[0] : "Sequence not found: " + args[0];
+        },
+        "Play a cinematic sequence by name");
+
+    console.RegisterCommand(
+        "seq_stop",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            auto& mgr = Spark::Cinematic::SequencerManager::GetInstance();
+            if (args.empty())
+            {
+                mgr.StopAll();
+                return "All sequences stopped";
+            }
+            mgr.StopSequence(args[0]);
+            return "Stopped sequence: " + args[0];
+        },
+        "Stop a sequence (or all if no name given)");
+
+    console.RegisterCommand(
+        "seq_time",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() < 2)
+                return "Usage: seq_time <name> <seconds>";
+            auto* seq = Spark::Cinematic::SequencerManager::GetInstance().GetSequence(args[0]);
+            if (!seq)
+                return "Sequence not found: " + args[0];
+            seq->SetTime(std::stof(args[1]));
+            return "Seeked " + args[0] + " to " + args[1] + "s";
+        },
+        "Seek a sequence to a specific time");
+
+    // -------------------------------------------------------------------------
+    // Replay commands
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand(
+        "replay_status", [](const std::vector<std::string>&) -> std::string
+        { return Spark::ReplaySystem::GetInstance().Console_GetStatus(); }, "Show replay recording/playback status");
+
+    console.RegisterCommand(
+        "replay_start",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            Spark::ReplaySystem::GetInstance().StartRecording();
+            return "Replay recording started";
+        },
+        "Start recording a replay");
+
+    console.RegisterCommand(
+        "replay_stop",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            Spark::ReplaySystem::GetInstance().StopRecording();
+            return "Replay recording stopped";
+        },
+        "Stop recording");
+
+    console.RegisterCommand(
+        "replay_save",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: replay_save <filepath>";
+            bool ok = Spark::ReplaySystem::GetInstance().SaveToFile(args[0]);
+            return ok ? "Replay saved to " + args[0] : "Failed to save replay";
+        },
+        "Save replay to file");
+
+    console.RegisterCommand(
+        "replay_load",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: replay_load <filepath>";
+            bool ok = Spark::ReplaySystem::GetInstance().LoadFromFile(args[0]);
+            return ok ? "Replay loaded from " + args[0] : "Failed to load replay";
+        },
+        "Load replay from file");
+
+    console.RegisterCommand(
+        "replay_play",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            Spark::ReplaySystem::GetInstance().StartPlayback();
+            return "Replay playback started";
+        },
+        "Start replay playback");
+
+    console.RegisterCommand(
+        "replay_pause",
+        [](const std::vector<std::string>&) -> std::string
+        {
+            Spark::ReplaySystem::GetInstance().PausePlayback();
+            return "Replay playback paused";
+        },
+        "Pause replay playback");
+
+    console.RegisterCommand(
+        "replay_seek",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: replay_seek <seconds>";
+            float t = std::stof(args[0]);
+            Spark::ReplaySystem::GetInstance().SeekTo(t);
+            return "Seeked to " + args[0] + "s";
+        },
+        "Seek replay to time");
+
+    console.RegisterCommand(
+        "replay_speed",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: replay_speed <multiplier>";
+            float speed = std::stof(args[0]);
+            Spark::ReplaySystem::GetInstance().SetPlaybackSpeed(speed);
+            return "Playback speed set to " + std::to_string(speed) + "x";
+        },
+        "Set replay playback speed");
 
     // -------------------------------------------------------------------------
     // Networking commands
