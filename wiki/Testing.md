@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*130 test files, 1483+ test cases*
+*142 test files, 1583+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -456,29 +456,36 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestChromeTracing` | 5 |
 | `TestClientPrediction` | 5 |
 | `TestClothSimulation` | 4 |
+| `TestClusteredLightGPU` | 7 |
 | `TestCollisionAvoidance` | 4 |
+| `TestCollisionLayers` | 10 |
 | `TestColorUtils` | 18 |
 | `TestCommandHistory` | 10 |
 | `TestConditionSystem` | 12 |
 | `TestConfigParser` | 16 |
+| `TestConnectionScope` | 8 |
 | `TestConnectionTimeout` | 9 |
 | `TestConsoleRBAC` | 21 |
 | `TestConstantBufferDiff` | 2 |
 | `TestCooldown` | 14 |
 | `TestCoroutineScheduler` | 10 |
 | `TestCoverSystem` | 4 |
+| `TestDatablockRegistry` | 10 |
 | `TestDayNightCycle` | 10 |
 | `TestDebugTools` | 31 |
 | `TestDedicatedServer` | 27 |
+| `TestDeferredDeletion` | 6 |
 | `TestDeltaSmoother` | 10 |
 | `TestDestructionSystem` | 5 |
 | `TestDialogueSystem` | 4 |
 | `TestDirtyRectTracker` | 4 |
+| `TestDrawIndirect` | 6 |
 | `TestDynamicResponseSystem` | 6 |
 | `TestECSIntegration` | 9 |
 | `TestECSWorld` | 11 |
 | `TestEngineContext` | 18 |
 | `TestEntityArchetype` | 6 |
+| `TestEntityEventBus` | 11 |
 | `TestEnvironmentQuery` | 12 |
 | `TestEventBus` | 15 |
 | `TestEventSystem` | 10 |
@@ -505,6 +512,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestLocalFileCache` | 15 |
 | `TestLocalizationSystem` | 6 |
 | `TestLockFreeRingAllocator` | 3 |
+| `TestMaterialDefinition` | 10 |
 | `TestMaterialEffects` | 5 |
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
@@ -521,6 +529,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestNullRHIDevice` | 3 |
 | `TestObjectPool` | 6 |
 | `TestOcclusionCulling` | 6 |
+| `TestParallelCulling` | 5 |
 | `TestPathCache` | 6 |
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
@@ -531,6 +540,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestPostProcessingPipeline` | 11 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 10 |
+| `TestRHIHandlePool` | 10 |
 | `TestRandomEngine` | 11 |
 | `TestRecastIntegration` | 6 |
 | `TestReflection` | 7 |
@@ -540,6 +550,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestReplicationFields` | 15 |
 | `TestResult` | 8 |
 | `TestRingBuffer` | 14 |
+| `TestSHLighting` | 7 |
 | `TestSaveSystem` | 7 |
 | `TestSceneConfigDatabase` | 3 |
 | `TestSceneManager` | 14 |
@@ -563,6 +574,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestTemporalEffects` | 11 |
 | `TestTerrainRenderer` | 5 |
 | `TestThreadSafeQueue` | 10 |
+| `TestTransientBufferAllocator` | 10 |
 | `TestTween` | 14 |
 | `TestTypeTraits` | 11 |
 | `TestUISystem` | 6 |

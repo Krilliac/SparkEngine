@@ -147,6 +147,10 @@ add_executable(SparkTests
     TestConnectionScope.cpp
     TestDatablockRegistry.cpp
     TestEntityEventBus.cpp
+    TestSHLighting.cpp
+    TestClusteredLightGPU.cpp
+    TestRHIHandlePool.cpp
+    TestMaterialDefinition.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
