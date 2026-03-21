@@ -228,18 +228,18 @@ bool ModuleManager::LoadModule(const std::string& path)
             return false;
         }
 
-        // Wrap in adapter
-        auto* adapter = new LegacyModuleAdapter(legacyModule, legacyDestroyFn);
+        // Wrap in adapter (unique_ptr for exception safety)
+        auto adapterOwner = std::make_unique<LegacyModuleAdapter>(legacyModule, legacyDestroyFn);
 
         // For legacy modules, we use adapter's destroy which handles cleanup
-        auto info = adapter->GetModuleInfo();
+        auto info = adapterOwner->GetModuleInfo();
 
         LoadedModule entry{};
         entry.name = info.name;
         entry.path = path;
         entry.libraryHandle = handle;
-        entry.instance = adapter;
-        entry.createFn = nullptr; // managed by adapter
+        entry.instance = adapterOwner.release(); // transfer ownership to entry
+        entry.createFn = nullptr;                // managed by adapter
         entry.destroyFn = [](Spark::IModule* mod) { delete mod; };
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = true;

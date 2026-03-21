@@ -147,8 +147,11 @@ namespace Spark::AI
             if (ai.behaviorTreeHandle && health)
             {
                 auto* bt = ai.behaviorTreeHandle.As<BehaviorTree>();
-                float healthPct = health->maxHealth > 0.0f ? health->health / health->maxHealth : 1.0f;
-                bt->GetBlackboard().Set("healthPercent", healthPct);
+                if (bt)
+                {
+                    float healthPct = health->maxHealth > 0.0f ? health->health / health->maxHealth : 1.0f;
+                    bt->GetBlackboard().Set("healthPercent", healthPct);
+                }
             }
 
             liveAgents.push_back({entity});
@@ -374,6 +377,8 @@ namespace Spark::AI
             return;
 
         auto* bt = ai.behaviorTreeHandle.As<BehaviorTree>();
+        if (!bt)
+            return;
         auto& bb = bt->GetBlackboard();
 
         // Push AI state to blackboard for condition nodes
@@ -492,6 +497,8 @@ namespace Spark::AI
         if (needNewPath && ai.navQueryHandle)
         {
             auto* navQuery = ai.navQueryHandle.As<NavMeshQuery>();
+            if (!navQuery)
+                return;
             PathRequest request;
             request.start = transform.position;
             request.end = moveGoal;

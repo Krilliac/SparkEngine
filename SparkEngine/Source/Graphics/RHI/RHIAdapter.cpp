@@ -135,13 +135,8 @@ namespace Spark::RHI
     {
         assert(m_commandList);
 
-        // The RHI command list expects a raw pointer-to-pointer.  Because
-        // std::span guarantees contiguous storage we can use data() directly,
-        // but we need to cast away the const on the pointer-to-pointer level
-        // since the RHI interface takes IRHITexture** (non-const array of
-        // non-const pointers).
         auto count = static_cast<uint32_t>(renderTargets.size());
-        m_commandList->SetRenderTargets(const_cast<IRHITexture**>(renderTargets.data()), count, depthStencil);
+        m_commandList->SetRenderTargets(renderTargets.data(), count, depthStencil);
     }
 
     void RHIAdapter::ClearRenderTarget(IRHITexture* target, const float color[4])

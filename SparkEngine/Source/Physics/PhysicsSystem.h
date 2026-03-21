@@ -28,6 +28,11 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+
+namespace Spark
+{
+    class EventBus;
+}
 #include <functional>
 #include <mutex>
 
@@ -484,6 +489,12 @@ class PhysicsSystem
         m_triggerCallback = callback;
     }
 
+    /**
+     * @brief Set the EventBus for publishing CollisionEvent, TriggerEnterEvent, and TriggerExitEvent.
+     * @param bus Non-owning pointer to the global EventBus (or nullptr to disable).
+     */
+    void SetEventBus(Spark::EventBus* bus) { m_eventBus = bus; }
+
     // =========================================================================
     // Debug rendering
     // =========================================================================
@@ -881,6 +892,8 @@ class PhysicsSystem
      * `true` on enter, `false` on exit.
      */
     std::function<void(PhysicsBody*, PhysicsBody*, bool)> m_triggerCallback;
+
+    Spark::EventBus* m_eventBus = nullptr; ///< Optional EventBus for publishing collision/trigger events.
 
     /**
      * @brief Set of active trigger overlap pairs from the previous frame.

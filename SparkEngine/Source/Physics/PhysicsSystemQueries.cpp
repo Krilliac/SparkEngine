@@ -397,6 +397,7 @@ RaycastHit PhysicsSystem::Raycast(const XMFLOAT3& origin, const XMFLOAT3& direct
             if (hit.body)
             {
                 hit.userData = hit.body->GetUserData();
+                hit.entityId = hit.body->GetEntityID();
             }
         }
     }
@@ -441,6 +442,7 @@ std::vector<RaycastHit> PhysicsSystem::RaycastAll(const XMFLOAT3& origin, const 
                 if (hit.body)
                 {
                     hit.userData = hit.body->GetUserData();
+                    hit.entityId = hit.body->GetEntityID();
                 }
             }
 
@@ -593,6 +595,7 @@ RaycastHit PhysicsSystem::SphereCast(float radius, const XMFLOAT3& from, const X
             if (hit.body)
             {
                 hit.userData = hit.body->GetUserData();
+                hit.entityId = hit.body->GetEntityID();
             }
         }
     }
@@ -640,6 +643,7 @@ RaycastHit PhysicsSystem::BoxCast(const XMFLOAT3& halfExtents, const XMFLOAT3& f
             if (hit.body)
             {
                 hit.userData = hit.body->GetUserData();
+                hit.entityId = hit.body->GetEntityID();
             }
         }
     }
@@ -687,6 +691,7 @@ RaycastHit PhysicsSystem::CapsuleCast(float radius, float height, const XMFLOAT3
             if (hit.body)
             {
                 hit.userData = hit.body->GetUserData();
+                hit.entityId = hit.body->GetEntityID();
             }
         }
     }

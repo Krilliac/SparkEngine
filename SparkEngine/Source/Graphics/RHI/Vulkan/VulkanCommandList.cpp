@@ -267,7 +267,7 @@ namespace Spark
                 m_isRecording = false;
             }
 
-            void VulkanCommandList::SetRenderTargets(IRHITexture** renderTargets, uint32_t count,
+            void VulkanCommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                                      IRHITexture* depthStencil)
             {
                 // Dynamic rendering (Vulkan 1.3) approach

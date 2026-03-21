@@ -128,6 +128,12 @@ class PhysicsBody
     void* GetUserData() const { return m_desc.userData; }
     const std::string& GetName() const { return m_desc.name; }
 
+    /** @brief Get the ECS entity ID that owns this body (0 = no entity). */
+    uint32_t GetEntityID() const { return m_desc.entityId; }
+
+    /** @brief Set the ECS entity ID that owns this body. */
+    void SetEntityID(uint32_t id) { m_desc.entityId = id; }
+
     // =========================================================================
     // Internal / low-level access
     // =========================================================================

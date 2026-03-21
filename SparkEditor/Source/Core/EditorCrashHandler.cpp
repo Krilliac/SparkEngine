@@ -37,16 +37,14 @@
 namespace SparkEditor
 {
 
-    // Static instance for singleton
+    // Static instance for singleton (Meyer's — no leak, thread-safe since C++11)
     EditorCrashHandler* EditorCrashHandler::s_instance = nullptr;
 
     EditorCrashHandler& EditorCrashHandler::GetInstance()
     {
-        if (!s_instance)
-        {
-            s_instance = new EditorCrashHandler();
-        }
-        return *s_instance;
+        static EditorCrashHandler instance;
+        s_instance = &instance;
+        return instance;
     }
 
     EditorCrashHandler::~EditorCrashHandler()

@@ -680,18 +680,27 @@ void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath, const s
     cmd.materialPath = materialPath;
     XMStoreFloat4x4(&cmd.worldMatrix, worldMatrix);
     cmd.castShadows = castShadows;
-    m_drawList.push_back(std::move(cmd));
+    {
+        std::lock_guard<std::mutex> lock(m_drawListMutex);
+        m_drawList.push_back(std::move(cmd));
+    }
 }
 
 void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
 {
-    if (m_drawList.empty())
+    // Swap draw list under lock so Submit calls don't block during processing
+    std::vector<MeshDrawCommand> localDrawList;
+    {
+        std::lock_guard<std::mutex> lock(m_drawListMutex);
+        localDrawList.swap(m_drawList);
+    }
+    if (localDrawList.empty())
         return;
 
     // Set up shaders for ECS mesh rendering
     SetBasicShaders();
 
-    for (const auto& cmd : m_drawList)
+    for (const auto& cmd : localDrawList)
     {
         XMMATRIX world = XMLoadFloat4x4(&cmd.worldMatrix);
 
@@ -708,8 +717,6 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
 
         m_statistics.drawCalls++;
     }
-
-    m_drawList.clear();
 }
 
 // ============================================================================
@@ -1204,15 +1211,23 @@ void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath, const s
     cmd.materialPath = materialPath;
     DirectX::XMStoreFloat4x4(&cmd.worldMatrix, worldMatrix);
     cmd.castShadows = castShadows;
-    m_drawList.push_back(std::move(cmd));
+    {
+        std::lock_guard<std::mutex> lock(m_drawListMutex);
+        m_drawList.push_back(std::move(cmd));
+    }
 }
 
 void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
 {
-    if (m_drawList.empty())
+    std::vector<MeshDrawCommand> localDrawList;
+    {
+        std::lock_guard<std::mutex> lock(m_drawListMutex);
+        localDrawList.swap(m_drawList);
+    }
+    if (localDrawList.empty())
         return;
 
-    for (const auto& cmd : m_drawList)
+    for (const auto& cmd : localDrawList)
     {
         if (m_assetPipeline)
         {
@@ -1222,8 +1237,6 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
         }
         m_statistics.drawCalls++;
     }
-
-    m_drawList.clear();
 }
 
 // ============================================================================

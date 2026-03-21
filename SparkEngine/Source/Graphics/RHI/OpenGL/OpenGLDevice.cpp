@@ -381,7 +381,8 @@ namespace Spark
             }
             void GLCommandList::Reset() {}
 
-            void GLCommandList::SetRenderTargets(IRHITexture** renderTargets, uint32_t count, IRHITexture* depthStencil)
+            void GLCommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
+                                                 IRHITexture* depthStencil)
             {
                 if (count == 0 || !renderTargets[0])
                 {

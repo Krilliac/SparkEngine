@@ -669,7 +669,7 @@ HRESULT GraphicsEngine::CompileShaderFromFile(const std::wstring& filename, cons
     {
         if (errorBlob)
         {
-            std::string errorMsg = (char*)errorBlob->GetBufferPointer();
+            std::string errorMsg(static_cast<const char*>(errorBlob->GetBufferPointer()));
             std::wstring wErrorMsg(errorMsg.begin(), errorMsg.end());
             LOG_TO_CONSOLE_IMMEDIATE(L"Shader compilation error: " + wErrorMsg, L"ERROR");
         }
@@ -739,7 +739,7 @@ HRESULT GraphicsEngine::CompileEmbeddedVertexShader(ID3DBlob** blobOut)
     {
         if (errorBlob)
         {
-            std::string errorMsg = (char*)errorBlob->GetBufferPointer();
+            std::string errorMsg(static_cast<const char*>(errorBlob->GetBufferPointer()));
             std::wstring wErrorMsg(errorMsg.begin(), errorMsg.end());
             LOG_TO_CONSOLE_IMMEDIATE(L"Embedded vertex shader compilation error: " + wErrorMsg, L"ERROR");
         }
@@ -820,7 +820,7 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
     {
         if (errorBlob)
         {
-            std::string errorMsg = (char*)errorBlob->GetBufferPointer();
+            std::string errorMsg(static_cast<const char*>(errorBlob->GetBufferPointer()));
             std::wstring wErrorMsg(errorMsg.begin(), errorMsg.end());
             LOG_TO_CONSOLE_IMMEDIATE(L"Embedded pixel shader compilation error: " + wErrorMsg, L"ERROR");
         }

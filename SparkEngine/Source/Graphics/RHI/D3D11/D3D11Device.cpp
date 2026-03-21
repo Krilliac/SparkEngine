@@ -250,7 +250,7 @@ namespace Spark
             void D3D11CommandList::End() {}
             void D3D11CommandList::Reset() {}
 
-            void D3D11CommandList::SetRenderTargets(IRHITexture** renderTargets, uint32_t count,
+            void D3D11CommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                                     IRHITexture* depthStencil)
             {
                 ID3D11RenderTargetView* rtvs[8] = {};

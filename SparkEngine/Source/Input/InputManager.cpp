@@ -111,7 +111,7 @@ void InputManager::Update()
 
         // Track total mouse movement for metrics
         float distance = sqrtf(static_cast<float>(m_mouseDeltaX * m_mouseDeltaX + m_mouseDeltaY * m_mouseDeltaY));
-        m_totalMouseDistance += distance;
+        m_totalMouseDistance.fetch_add(distance, std::memory_order_relaxed);
     }
     else
     {

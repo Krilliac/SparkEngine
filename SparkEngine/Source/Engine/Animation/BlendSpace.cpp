@@ -113,7 +113,7 @@ namespace Spark::Animation
         // Ensure triangulation is current
         if (m_dirty)
         {
-            const_cast<BlendSpace2D*>(this)->Retriangulate();
+            Retriangulate();
         }
 
         // Find containing triangle
@@ -154,7 +154,7 @@ namespace Spark::Animation
     // Triangulation (Simplified Bowyer-Watson)
     // =========================================================================
 
-    void BlendSpace2D::Retriangulate()
+    void BlendSpace2D::Retriangulate() const
     {
         m_triangles.clear();
         m_dirty = false;

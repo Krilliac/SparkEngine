@@ -435,7 +435,7 @@ namespace Spark::ECS
                 auto& camTf = camView.get<Transform>(camEntity);
                 auto& cam = camView.get<Camera2D>(camEntity);
 
-                if (cam.followTarget == 0xFFFFFFFF)
+                if (cam.followTarget == Camera2D::INVALID_FOLLOW_TARGET)
                     continue;
 
                 auto targetEntity = static_cast<EntityID>(cam.followTarget);

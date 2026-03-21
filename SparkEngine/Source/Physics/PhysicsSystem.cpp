@@ -11,6 +11,7 @@
  */
 
 #include "PhysicsSystem.h"
+#include "Engine/Events/EventSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
@@ -301,6 +302,13 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
                 if (!wasActive)
                 {
                     m_triggerCallback(bodyA, bodyB, true);
+
+                    if (m_eventBus)
+                    {
+                        auto idA = bodyA->GetEntityID();
+                        auto idB = bodyB->GetEntityID();
+                        m_eventBus->Publish(Spark::TriggerEnterEvent{idA, idB});
+                    }
                 }
             }
         }
@@ -320,8 +328,17 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
                     info.contactNormal = FromBullet(pt.m_normalWorldOnB);
                     info.penetrationDepth = -pt.getDistance();
                     info.appliedImpulse = pt.getAppliedImpulse();
+                    info.entityIdA = bodyA->GetEntityID();
+                    info.entityIdB = bodyB->GetEntityID();
 
                     m_collisionCallback(info);
+                }
+
+                if (m_eventBus)
+                {
+                    auto idA = bodyA->GetEntityID();
+                    auto idB = bodyB->GetEntityID();
+                    m_eventBus->Publish(Spark::CollisionEvent{idA, idB, pt.getAppliedImpulse()});
                 }
             }
         }
@@ -348,6 +365,13 @@ void PhysicsSystem::UpdateTriggerExitEvents(
         if (!stillActive)
         {
             m_triggerCallback(prev.first, prev.second, false);
+
+            if (m_eventBus)
+            {
+                auto idA = prev.first->GetEntityID();
+                auto idB = prev.second->GetEntityID();
+                m_eventBus->Publish(Spark::TriggerExitEvent{idA, idB});
+            }
         }
     }
 }

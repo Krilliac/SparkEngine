@@ -242,21 +242,15 @@ namespace Spark
                  */
                 void* GetShaderResourceView() const override
                 {
-                    return m_srvDescriptor.IsValid()
-                               ? const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_srvDescriptor.cpuHandle)
-                               : nullptr;
+                    return m_srvDescriptor.IsValid() ? &m_srvDescriptor.cpuHandle : nullptr;
                 }
                 void* GetRenderTargetView() const override
                 {
-                    return m_rtvDescriptor.IsValid()
-                               ? const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_rtvDescriptor.cpuHandle)
-                               : nullptr;
+                    return m_rtvDescriptor.IsValid() ? &m_rtvDescriptor.cpuHandle : nullptr;
                 }
                 void* GetDepthStencilView() const override
                 {
-                    return m_dsvDescriptor.IsValid()
-                               ? const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_dsvDescriptor.cpuHandle)
-                               : nullptr;
+                    return m_dsvDescriptor.IsValid() ? &m_dsvDescriptor.cpuHandle : nullptr;
                 }
 
                 ID3D12Resource* GetD3D12Resource() const { return m_resource.Get(); }
@@ -277,10 +271,10 @@ namespace Spark
               private:
                 RHITextureDesc m_desc;
                 ComPtr<ID3D12Resource> m_resource;
-                DescriptorAllocation m_srvDescriptor;
-                DescriptorAllocation m_rtvDescriptor;
-                DescriptorAllocation m_dsvDescriptor;
-                DescriptorAllocation m_uavDescriptor;
+                mutable DescriptorAllocation m_srvDescriptor;
+                mutable DescriptorAllocation m_rtvDescriptor;
+                mutable DescriptorAllocation m_dsvDescriptor;
+                mutable DescriptorAllocation m_uavDescriptor;
                 D3D12_RESOURCE_STATES m_currentState = D3D12_RESOURCE_STATE_COMMON;
             };
 
@@ -333,16 +327,13 @@ namespace Spark
                 bool IsValid() const override { return m_descriptor.IsValid(); }
 
                 const RHISamplerDesc& GetDesc() const override { return m_desc; }
-                void* GetNativeHandle() const override
-                {
-                    return const_cast<D3D12_CPU_DESCRIPTOR_HANDLE*>(&m_descriptor.cpuHandle);
-                }
+                void* GetNativeHandle() const override { return &m_descriptor.cpuHandle; }
 
                 const DescriptorAllocation& GetDescriptor() const { return m_descriptor; }
 
               private:
                 RHISamplerDesc m_desc;
-                DescriptorAllocation m_descriptor;
+                mutable DescriptorAllocation m_descriptor;
                 std::string m_debugName;
             };
 
@@ -448,7 +439,8 @@ namespace Spark
                 void End() override;
                 void Reset() override;
 
-                void SetRenderTargets(IRHITexture** renderTargets, uint32_t count, IRHITexture* depthStencil) override;
+                void SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
+                                      IRHITexture* depthStencil) override;
                 void ClearRenderTarget(IRHITexture* target, const float color[4]) override;
                 void ClearDepthStencil(IRHITexture* target, float depth, uint8_t stencil) override;
 

@@ -15,6 +15,7 @@
 #include "Utils/Assert.h"
 #include "../Core/framework.h"
 #include "InputTypes.h"
+#include <atomic>
 #include <unordered_map>
 #include <functional>
 #include <mutex>
@@ -74,9 +75,9 @@ class InputManager
     std::unordered_map<int, std::string> m_reverseBindings; ///< Key to action name mappings
 
     // Input metrics and monitoring
-    size_t m_keyPressCount;                                ///< Total key press count this session
-    size_t m_mousePressCount;                              ///< Total mouse press count this session
-    float m_totalMouseDistance;                            ///< Total mouse movement distance
+    std::atomic<size_t> m_keyPressCount{0};                ///< Total key press count this session
+    std::atomic<size_t> m_mousePressCount{0};              ///< Total mouse press count this session
+    std::atomic<float> m_totalMouseDistance{0.0f};         ///< Total mouse movement distance
     std::vector<std::pair<int, bool>> m_recentInputEvents; ///< Recent input events for debugging
 
     mutable std::mutex m_inputMutex;                ///< Thread safety for input access
