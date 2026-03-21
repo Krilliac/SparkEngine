@@ -14,6 +14,7 @@
 #pragma once
 
 #include "Spark/SparkExport.h"
+#include "Spark/IEngineContext.h"
 #include "Core/framework.h" // XMFLOAT3, XMMATRIX, HRESULT
 #include "Utils/Assert.h"
 #include "ClassSystem.h"
@@ -318,6 +319,15 @@ class SPARK_GAME_API Game
     // INTEGRATED SYSTEMS - GameMode, HUD, Inventory, Quests, Events
     // ============================================================================
 
+    /**
+     * @brief Set the engine context for SDK v2 subsystem access
+     * @param context Engine service locator — stored for lifetime of Game
+     */
+    void SetEngineContext(Spark::IEngineContext* context) { m_engineContext = context; }
+
+    /** @brief Get the engine context */
+    Spark::IEngineContext* GetEngineContext() const { return m_engineContext; }
+
     /** @brief Set physics system on all projectile pools */
     void SetPhysicsSystem(PhysicsSystem* ps);
 
@@ -563,8 +573,9 @@ class SPARK_GAME_API Game
     void InitializeEngineSystems();
 
     // Engine-side pointers (not owned)
-    GraphicsEngine* m_graphics{nullptr}; ///< Reference to graphics engine
-    InputManager* m_input{nullptr};      ///< Reference to input manager
+    Spark::IEngineContext* m_engineContext{nullptr}; ///< SDK v2 engine context
+    GraphicsEngine* m_graphics{nullptr};             ///< Reference to graphics engine
+    InputManager* m_input{nullptr};                  ///< Reference to input manager
 
     // Sub-systems owned by Game (unified system - no separate shader management)
     std::unique_ptr<SparkEngineCamera> m_camera;       ///< First-person camera system

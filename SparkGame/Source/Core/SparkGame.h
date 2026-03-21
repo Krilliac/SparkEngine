@@ -39,13 +39,17 @@ class SparkGameModule : public Spark::IModule, public IGameModule
     SparkGameModule();
     ~SparkGameModule() override;
 
-    // --- Spark::IModule interface (new) ---
+    // --- Spark::IModule interface (new, SDK v2) ---
     Spark::ModuleInfo GetModuleInfo() const override;
     bool OnLoad(Spark::IEngineContext* context) override;
     void OnUnload() override;
     void OnUpdate(float deltaTime) override;
+    void OnFixedUpdate(float fixedDeltaTime) override;
     void OnRender() override;
     void OnResize(int width, int height) override;
+    void OnPause() override;
+    void OnResume() override;
+    void OnImGui() override;
 
     // --- IGameModule interface (legacy) ---
     const char* GetGameName() const override;

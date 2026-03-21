@@ -3,6 +3,7 @@
  * @brief Engine system integration — wires audio, weather, destruction,
  *        dialogue, save, and coroutine systems into the game loop
  *
+ * Uses IEngineContext (SDK v2) for subsystem access instead of singletons.
  * Extracted from Game.cpp to keep engine-integration code separate from
  * core gameplay logic.
  */
@@ -20,7 +21,6 @@
 #include "Player.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
-#include "Core/EngineContext.h"
 
 // Engine systems
 #include "Audio/AudioEngine.h"
@@ -40,51 +40,46 @@ using namespace DirectX;
 --------------------------------------------------------------*/
 void Game::InitializeEngineSystems()
 {
-    auto* ctx = EngineContext::Get();
-    if (!ctx)
+    if (!m_engineContext)
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"EngineContext not available - skipping engine system wiring", L"WARNING");
         return;
     }
 
     // ---- Audio --------------------------------------------------------
-    // The AudioEngine and MusicManager are initialized by SparkEngine.cpp.
-    // Here we set up game-specific audio: register tracks and start ambient music.
+    if (auto* music = m_engineContext->GetMusic())
     {
-        auto& musicMgr = Spark::Audio::MusicManager::GetInstance();
-
         // Register game music tracks for the combat arena
         Spark::Audio::MusicTrack explorationTrack;
         explorationTrack.name = "arena_ambient";
         explorationTrack.filepath = "Assets/Audio/Music/arena_ambient.ogg";
         explorationTrack.bpm = 90.0f;
         explorationTrack.loop = true;
-        musicMgr.RegisterTrack(explorationTrack);
+        music->RegisterTrack(explorationTrack);
 
         Spark::Audio::MusicTrack combatTrack;
         combatTrack.name = "arena_combat";
         combatTrack.filepath = "Assets/Audio/Music/arena_combat.ogg";
         combatTrack.bpm = 140.0f;
         combatTrack.loop = true;
-        musicMgr.RegisterTrack(combatTrack);
+        music->RegisterTrack(combatTrack);
 
         // Set dynamic music states: exploration → combat as enemies engage
         Spark::Audio::DynamicMusicState dynamicState;
         dynamicState.explorationTrack = "arena_ambient";
         dynamicState.combatTrack = "arena_combat";
         dynamicState.transitionDuration = 2.0f;
-        musicMgr.SetDynamicMusicState(dynamicState);
+        music->SetDynamicMusicState(dynamicState);
 
         // Start with exploration music
-        musicMgr.Play("arena_ambient", 1.0f);
+        music->Play("arena_ambient", 1.0f);
 
         m_audioInitialized = true;
         LOG_TO_CONSOLE_IMMEDIATE(L"Audio: game music tracks registered, ambient playing", L"SUCCESS");
     }
 
     // ---- Weather ------------------------------------------------------
-    // Access the WeatherSystem registered by SparkEngine and set initial weather
-    if (auto* weather = ctx->GetWeather())
+    if (auto* weather = m_engineContext->GetWeather())
     {
         weather->SetWeather(Spark::WeatherType::Clear, 1.0f, 0.0f);
         m_weatherActive = true;
@@ -92,10 +87,8 @@ void Game::InitializeEngineSystems()
     }
 
     // ---- Destruction --------------------------------------------------
-    // Register game-specific fracture patterns for arena objects
+    if (auto* destruction = m_engineContext->GetDestruction())
     {
-        auto& destruction = Spark::DestructionSystem::GetInstance();
-
         Spark::FracturePattern cratePattern;
         Spark::FracturePiece topPlank;
         topPlank.name = "top_plank";
@@ -117,7 +110,7 @@ void Game::InitializeEngineSystems()
 
         cratePattern.SetDestructionSound("sfx_wood_break");
         cratePattern.SetParticleEffect("vfx_splinters");
-        destruction.RegisterPattern("wooden_crate", cratePattern);
+        destruction->RegisterPattern("wooden_crate", cratePattern);
 
         Spark::FracturePattern barrelPattern;
         Spark::FracturePiece barrelTop;
@@ -140,14 +133,13 @@ void Game::InitializeEngineSystems()
 
         barrelPattern.SetDestructionSound("sfx_metal_break");
         barrelPattern.SetParticleEffect("vfx_sparks");
-        destruction.RegisterPattern("metal_barrel", barrelPattern);
+        destruction->RegisterPattern("metal_barrel", barrelPattern);
 
         LOG_TO_CONSOLE_IMMEDIATE(L"Destruction: 2 fracture patterns registered (crate, barrel)", L"SUCCESS");
     }
 
     // ---- Dialogue -----------------------------------------------------
-    // Register sample NPC dialogue trees for arena vendors
-    if (auto* dialogue = ctx->GetDialogue())
+    if (auto* dialogue = m_engineContext->GetDialogue())
     {
         auto vendorTree = std::make_unique<Spark::DialogueTree>();
         vendorTree->SetId("arena_vendor");
@@ -208,10 +200,9 @@ void Game::InitializeEngineSystems()
     }
 
     // ---- Cinematic Sequencer ------------------------------------------
-    // Create a sample intro sequence to demonstrate the cinematic system
+    if (auto* cinematic = m_engineContext->GetCinematic())
     {
-        auto& seqMgr = Spark::Cinematic::SequencerManager::GetInstance();
-        auto* intro = seqMgr.CreateSequence("arena_intro");
+        auto* intro = cinematic->CreateSequence("arena_intro");
 
         // Camera track: dolly from above to player start position
         auto* camTrack = intro->AddCameraTrack("MainCamera");
@@ -237,8 +228,8 @@ void Game::InitializeEngineSystems()
 
         // Fade track: fade from black
         auto* fadeTrack = intro->AddFadeTrack("ScreenFade");
-        fadeTrack->AddKeyframe({0.0f, 1.0f, {0, 0, 0}, Spark::Cinematic::InterpolationMode::Linear}); // Start black
-        fadeTrack->AddKeyframe({1.5f, 0.0f, {0, 0, 0}, Spark::Cinematic::InterpolationMode::Linear}); // Fade in
+        fadeTrack->AddKeyframe({0.0f, 1.0f, {0, 0, 0}, Spark::Cinematic::InterpolationMode::Linear});
+        fadeTrack->AddKeyframe({1.5f, 0.0f, {0, 0, 0}, Spark::Cinematic::InterpolationMode::Linear});
 
         // Event track: enable controls after intro
         auto* eventTrack = intro->AddEventTrack("GameEvents");
@@ -248,11 +239,10 @@ void Game::InitializeEngineSystems()
     }
 
     // ---- Replay System ------------------------------------------------
-    // Configure the replay system for match recording
+    if (auto* replay = m_engineContext->GetReplay())
     {
-        auto& replay = Spark::ReplaySystem::GetInstance();
-        replay.SetRecordInterval(1.0f / 20.0f); // 20 fps recording
-        replay.SetMetadata("combat_arena", "freeplay");
+        replay->SetRecordInterval(1.0f / 20.0f); // 20 fps recording
+        replay->SetMetadata("combat_arena", "freeplay");
         LOG_TO_CONSOLE_IMMEDIATE(L"Replay: system configured (20fps, combat_arena)", L"SUCCESS");
     }
 
