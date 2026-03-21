@@ -1,0 +1,9 @@
+{
+    "name": "NPC_Guard",
+    "shader": "PBR",
+    "albedo": "Textures/MMO/npc_guard_diffuse.png",
+    "normal": "Textures/Default/normal_flat.png",
+    "metallic": 0.3,
+    "roughness": 0.6,
+    "ao": 0.8
+}

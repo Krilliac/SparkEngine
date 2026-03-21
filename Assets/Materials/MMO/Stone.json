@@ -1,0 +1,9 @@
+{
+    "name": "Stone",
+    "shader": "PBR",
+    "albedo": "Textures/MMO/stone_diffuse.png",
+    "normal": "Textures/MMO/stone_normal.png",
+    "metallic": 0.0,
+    "roughness": 0.9,
+    "ao": 0.7
+}

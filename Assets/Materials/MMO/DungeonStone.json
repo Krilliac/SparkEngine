@@ -1,0 +1,11 @@
+{
+    "name": "DungeonStone",
+    "shader": "PBR",
+    "albedo": "Textures/MMO/dungeon_stone_diffuse.png",
+    "normal": "Textures/MMO/dungeon_stone_normal.png",
+    "metallic": 0.0,
+    "roughness": 0.95,
+    "ao": 0.5,
+    "emissive": [0.02, 0.0, 0.04],
+    "tiling": [2.0, 2.0]
+}

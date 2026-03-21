@@ -1,0 +1,10 @@
+{
+    "name": "ArenaSand",
+    "shader": "PBR",
+    "albedo": "Textures/Terrain/sand_diffuse.png",
+    "normal": "Textures/Default/normal_flat.png",
+    "metallic": 0.0,
+    "roughness": 0.95,
+    "ao": 0.9,
+    "tiling": [8.0, 8.0]
+}

@@ -1,0 +1,160 @@
+{
+  "name": "SparkGameMMO Assets",
+  "version": "1.0.0",
+  "description": "Placeholder assets for the SparkGameMMO module",
+  "license": "CC0 (procedurally generated, no third-party content)",
+  "generator": "tools/generate_mmo_assets.py",
+  "recommended_replacements": {
+    "models": [
+      {
+        "source": "Kenney.nl",
+        "url": "https://kenney.nl/assets",
+        "license": "CC0",
+        "packs": [
+          "Fantasy Town Kit",
+          "Nature Kit",
+          "Dungeon Pack"
+        ]
+      },
+      {
+        "source": "Quaternius",
+        "url": "https://quaternius.com/packs/",
+        "license": "CC0",
+        "packs": [
+          "Ultimate Fantasy Pack",
+          "Ultimate Modular Dungeon"
+        ]
+      },
+      {
+        "source": "Kay Lousberg",
+        "url": "https://kaylousberg.com/game-assets",
+        "license": "CC0",
+        "packs": [
+          "Fantasy Characters",
+          "Dungeon Assets"
+        ]
+      }
+    ],
+    "textures": [
+      {
+        "source": "ambientCG",
+        "url": "https://ambientcg.com/",
+        "license": "CC0",
+        "note": "PBR materials: ground, stone, metal, wood, fabric"
+      },
+      {
+        "source": "Polyhaven Textures",
+        "url": "https://polyhaven.com/textures",
+        "license": "CC0",
+        "note": "High-quality PBR texture sets"
+      },
+      {
+        "source": "Kenney.nl",
+        "url": "https://kenney.nl/assets/category:Textures",
+        "license": "CC0",
+        "note": "Pixel-art and stylized texture packs"
+      }
+    ],
+    "audio": [
+      {
+        "source": "Kenney.nl",
+        "url": "https://kenney.nl/assets/category:Audio",
+        "license": "CC0",
+        "packs": [
+          "RPG Audio",
+          "UI Audio",
+          "Impact Sounds"
+        ]
+      },
+      {
+        "source": "Freesound.org",
+        "url": "https://freesound.org/",
+        "license": "CC0 (filter)",
+        "note": "Filter by CC0 license for royalty-free sounds"
+      },
+      {
+        "source": "OpenGameArt.org",
+        "url": "https://opengameart.org/art-search-advanced?keys=&field_art_type_tid%5B%5D=13",
+        "license": "Various CC",
+        "note": "RPG/Fantasy sound effects and music"
+      }
+    ],
+    "fonts": [
+      {
+        "source": "Google Fonts",
+        "url": "https://fonts.google.com/",
+        "license": "OFL/Apache",
+        "note": "Cinzel for fantasy headings, Roboto for UI"
+      },
+      {
+        "source": "Font Squirrel",
+        "url": "https://www.fontsquirrel.com/",
+        "license": "Various",
+        "note": "Many free commercial-use fonts"
+      }
+    ]
+  },
+  "categories": {
+    "textures": {
+      "environment": [
+        "Textures/MMO/cobblestone_diffuse.png",
+        "Textures/MMO/stone_diffuse.png",
+        "Textures/MMO/dungeon_stone_diffuse.png",
+        "Textures/MMO/foliage_diffuse.png",
+        "Textures/MMO/fabric_diffuse.png"
+      ],
+      "ui": [
+        "Textures/MMO/UI/panel_bg.png",
+        "Textures/MMO/UI/health_bar.png",
+        "Textures/MMO/UI/mana_bar.png",
+        "Textures/MMO/UI/xp_bar.png"
+      ],
+      "icons": [
+        "Textures/MMO/UI/icon_warrior.png",
+        "Textures/MMO/UI/icon_ranger.png",
+        "Textures/MMO/UI/icon_mage.png",
+        "Textures/MMO/UI/icon_healer.png",
+        "Textures/MMO/UI/icon_engineer.png"
+      ]
+    },
+    "audio": {
+      "ambient": [
+        "Audio/MMO/ambient_town.wav",
+        "Audio/MMO/ambient_wilderness.wav",
+        "Audio/MMO/ambient_dungeon.wav",
+        "Audio/MMO/ambient_arena.wav"
+      ],
+      "music": [
+        "Audio/MMO/music_town.wav",
+        "Audio/MMO/music_combat.wav",
+        "Audio/MMO/music_dungeon.wav",
+        "Audio/MMO/music_boss.wav"
+      ],
+      "ui": [
+        "Audio/MMO/ui_login.wav",
+        "Audio/MMO/ui_levelup.wav",
+        "Audio/MMO/ui_achievement.wav",
+        "Audio/MMO/ui_craft_complete.wav"
+      ],
+      "combat": [
+        "Audio/MMO/combat_sword_hit.wav",
+        "Audio/MMO/combat_magic_cast.wav",
+        "Audio/MMO/combat_heal.wav",
+        "Audio/MMO/combat_crit.wav"
+      ]
+    },
+    "models": [
+      "Models/MMO/fountain.obj",
+      "Models/MMO/market_stall.obj",
+      "Models/MMO/guild_hall.obj",
+      "Models/MMO/tree_pine.obj",
+      "Models/MMO/torch.obj"
+    ],
+    "scenes": [
+      "Scenes/MMO/town_square.scene",
+      "Scenes/MMO/wilderness.scene",
+      "Scenes/MMO/shadow_crypt.scene",
+      "Scenes/MMO/battleground.scene"
+    ]
+  }
+}

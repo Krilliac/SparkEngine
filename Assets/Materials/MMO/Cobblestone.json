@@ -1,0 +1,10 @@
+{
+    "name": "Cobblestone",
+    "shader": "PBR",
+    "albedo": "Textures/MMO/cobblestone_diffuse.png",
+    "normal": "Textures/MMO/cobblestone_normal.png",
+    "metallic": 0.0,
+    "roughness": 0.85,
+    "ao": 0.8,
+    "tiling": [4.0, 4.0]
+}

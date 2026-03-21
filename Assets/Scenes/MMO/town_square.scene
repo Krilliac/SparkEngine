@@ -1,0 +1,250 @@
+{
+    "name": "TownSquare",
+    "version": 1,
+    "description": "Safe zone social hub - the heart of the MMO world. Markets, guilds, and NPCs.",
+    "areaId": 1,
+    "maxPlayers": 128,
+    "pvpEnabled": false,
+    "entities": [
+        {
+            "name": "SunLight",
+            "components": {
+                "Transform": {
+                    "position": [0, 50, 0],
+                    "rotation": [45, -30, 0],
+                    "scale": [1, 1, 1]
+                },
+                "Light": {
+                    "type": "Directional",
+                    "color": [1.0, 0.95, 0.9],
+                    "intensity": 1.2,
+                    "castShadows": true
+                }
+            }
+        },
+        {
+            "name": "PlayerCamera",
+            "components": {
+                "Transform": {
+                    "position": [0, 3, -8],
+                    "rotation": [10, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "Camera": {
+                    "fov": 70.0,
+                    "near": 0.1,
+                    "far": 2000.0,
+                    "primary": true
+                }
+            }
+        },
+        {
+            "name": "Ground",
+            "components": {
+                "Transform": {
+                    "position": [0, 0, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [500, 1, 500]
+                },
+                "MeshRenderer": {
+                    "mesh": "Primitive/Cube",
+                    "material": "Materials/MMO/Cobblestone.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [250, 0.5, 250] }
+            }
+        },
+        {
+            "name": "TownCenter_Fountain",
+            "components": {
+                "Transform": {
+                    "position": [0, 0, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [4, 3, 4]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/fountain.obj",
+                    "material": "Materials/MMO/Stone.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [4, 1.5, 4] }
+            }
+        },
+        {
+            "name": "MarketStall_Weapons",
+            "components": {
+                "Transform": {
+                    "position": [15, 0, 8],
+                    "rotation": [0, 45, 0],
+                    "scale": [3, 3, 2]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/market_stall.obj",
+                    "material": "Materials/Wood.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 }
+            }
+        },
+        {
+            "name": "MarketStall_Potions",
+            "components": {
+                "Transform": {
+                    "position": [-15, 0, 8],
+                    "rotation": [0, -45, 0],
+                    "scale": [3, 3, 2]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/market_stall.obj",
+                    "material": "Materials/Wood.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 }
+            }
+        },
+        {
+            "name": "GuildHall",
+            "components": {
+                "Transform": {
+                    "position": [0, 0, 40],
+                    "rotation": [0, 0, 0],
+                    "scale": [12, 8, 10]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/guild_hall.obj",
+                    "material": "Materials/MMO/Stone.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [12, 4, 10] }
+            }
+        },
+        {
+            "name": "Forge",
+            "components": {
+                "Transform": {
+                    "position": [30, 0, -10],
+                    "rotation": [0, 90, 0],
+                    "scale": [5, 4, 5]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/forge.obj",
+                    "material": "Materials/MMO/Stone.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "Light": {
+                    "type": "Point",
+                    "color": [1.0, 0.6, 0.2],
+                    "intensity": 2.0,
+                    "range": 15.0,
+                    "castShadows": false
+                }
+            }
+        },
+        {
+            "name": "AlchemyShop",
+            "components": {
+                "Transform": {
+                    "position": [-30, 0, -10],
+                    "rotation": [0, -90, 0],
+                    "scale": [5, 4, 5]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/alchemy_shop.obj",
+                    "material": "Materials/Wood.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 }
+            }
+        },
+        {
+            "name": "TownGate_North",
+            "components": {
+                "Transform": {
+                    "position": [0, 0, 80],
+                    "rotation": [0, 0, 0],
+                    "scale": [6, 8, 2]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/gate.obj",
+                    "material": "Materials/MMO/Stone.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [6, 4, 1] }
+            }
+        },
+        {
+            "name": "SpawnPoint_Default",
+            "components": {
+                "Transform": {
+                    "position": [0, 1, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 0, "index": 0 }
+            }
+        },
+        {
+            "name": "SpawnPoint_Dwarf",
+            "components": {
+                "Transform": {
+                    "position": [50, 1, 50],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 0, "index": 1 }
+            }
+        },
+        {
+            "name": "AmbientSound_Town",
+            "components": {
+                "Transform": {
+                    "position": [0, 5, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "AudioSource": {
+                    "sound": "Audio/MMO/ambient_town.wav",
+                    "volume": 0.4,
+                    "spatial": false,
+                    "loop": true,
+                    "playOnAwake": true
+                }
+            }
+        },
+        {
+            "name": "NPC_Guard_01",
+            "components": {
+                "Transform": {
+                    "position": [5, 0, 75],
+                    "rotation": [0, 180, 0],
+                    "scale": [1, 1, 1]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/character.obj",
+                    "material": "Materials/MMO/NPC_Guard.json"
+                },
+                "Tag": { "tags": ["NPC", "Guard", "TownGuard"] }
+            }
+        },
+        {
+            "name": "NPC_Guard_02",
+            "components": {
+                "Transform": {
+                    "position": [-5, 0, 75],
+                    "rotation": [0, 180, 0],
+                    "scale": [1, 1, 1]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/character.obj",
+                    "material": "Materials/MMO/NPC_Guard.json"
+                },
+                "Tag": { "tags": ["NPC", "Guard", "TownGuard"] }
+            }
+        }
+    ],
+    "environment": {
+        "ambientColor": [0.2, 0.2, 0.25],
+        "skyTexture": "Textures/Sky/sky_gradient.png",
+        "fogEnabled": true,
+        "fogColor": [0.7, 0.75, 0.85],
+        "fogStart": 200.0,
+        "fogEnd": 500.0
+    }
+}

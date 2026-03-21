@@ -1,0 +1,9 @@
+{
+    "name": "Rock",
+    "shader": "PBR",
+    "albedo": "Textures/Terrain/rock_diffuse.png",
+    "normal": "Textures/Default/normal_flat.png",
+    "metallic": 0.0,
+    "roughness": 0.92,
+    "ao": 0.75
+}
