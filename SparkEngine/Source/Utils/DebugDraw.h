@@ -351,6 +351,82 @@ namespace Spark
         /** @brief Get number of active draw requests */
         size_t GetRequestCount() const { return m_requests.size(); }
 
+        // ========================================================================
+        // Physics Debug Heatmap
+        // ========================================================================
+
+        /**
+         * @brief Draw a grid-based heatmap of collision pair density
+         *
+         * Renders a flat grid on the XZ plane where each cell is colored
+         * based on the number of collision pairs in that region. Colors
+         * gradient from green (0 collisions) through yellow to red (hot).
+         *
+         * @param center       World-space center of the heatmap grid
+         * @param cellSize     Size of each grid cell in world units
+         * @param gridExtent   Number of cells along each axis (total grid = 2*gridExtent+1)
+         * @param densityData  Flat array of collision counts per cell, row-major.
+         *                     Size must be (2*gridExtent+1) * (2*gridExtent+1).
+         * @param maxDensity   Density value that maps to full red. Values above are clamped.
+         * @param yOffset      Y offset above the grid center for the overlay
+         * @param lifetime     Display duration (0 = single frame)
+         */
+        void DrawPhysicsHeatmap(const DirectX::XMFLOAT3& center, float cellSize, int gridExtent,
+                                const std::vector<uint32_t>& densityData, uint32_t maxDensity, float yOffset = 0.1f,
+                                float lifetime = 0.0f)
+        {
+            if (!m_enabled || maxDensity == 0)
+                return;
+
+            int side = 2 * gridExtent + 1;
+            if (static_cast<int>(densityData.size()) != side * side)
+                return;
+
+            for (int row = 0; row < side; ++row)
+            {
+                for (int col = 0; col < side; ++col)
+                {
+                    uint32_t density = densityData[static_cast<size_t>(row * side + col)];
+                    if (density == 0)
+                        continue;
+
+                    // Normalized intensity [0, 1]
+                    float t = static_cast<float>(std::min(density, maxDensity)) / static_cast<float>(maxDensity);
+
+                    // Green -> Yellow -> Red gradient
+                    DebugColor cellColor;
+                    if (t < 0.5f)
+                    {
+                        // Green to Yellow
+                        float s = t * 2.0f;
+                        cellColor = {s, 1.0f, 0.0f, 0.6f};
+                    }
+                    else
+                    {
+                        // Yellow to Red
+                        float s = (t - 0.5f) * 2.0f;
+                        cellColor = {1.0f, 1.0f - s, 0.0f, 0.6f};
+                    }
+
+                    // Compute cell corners on the XZ plane
+                    float cx = center.x + (col - gridExtent) * cellSize;
+                    float cz = center.z + (row - gridExtent) * cellSize;
+                    float y = center.y + yOffset;
+
+                    DirectX::XMFLOAT3 p0{cx, y, cz};
+                    DirectX::XMFLOAT3 p1{cx + cellSize, y, cz};
+                    DirectX::XMFLOAT3 p2{cx + cellSize, y, cz + cellSize};
+                    DirectX::XMFLOAT3 p3{cx, y, cz + cellSize};
+
+                    // Draw the cell as four line segments (wireframe quad)
+                    DrawLine(p0, p1, cellColor, lifetime, 2.0f, false);
+                    DrawLine(p1, p2, cellColor, lifetime, 2.0f, false);
+                    DrawLine(p2, p3, cellColor, lifetime, 2.0f, false);
+                    DrawLine(p3, p0, cellColor, lifetime, 2.0f, false);
+                }
+            }
+        }
+
       private:
         DebugDrawManager() = default;
         DebugDrawManager(const DebugDrawManager&) = delete;

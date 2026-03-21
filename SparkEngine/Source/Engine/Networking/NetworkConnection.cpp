@@ -10,6 +10,8 @@
  */
 
 #include "NetworkManager.h"
+#include "DeltaSnapshotManager.h"
+#include "InstabilitySimulator.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
@@ -532,6 +534,9 @@ namespace Spark::Net
             m_clients[newID] = info;
         }
 
+        // Register the new connection for delta snapshot tracking
+        DeltaSnapshotManager::GetInstance().RegisterConnection(newID);
+
         // Send acceptance with assigned client ID
         NetworkMessage accept;
         accept.type = MessageType::ConnectAccepted;
@@ -546,6 +551,10 @@ namespace Spark::Net
     void NetworkManager::HandleDisconnect(const NetworkMessage& msg)
     {
         ClientID clientID = msg.senderID;
+
+        // Unregister from delta snapshot tracking before removing the client
+        DeltaSnapshotManager::GetInstance().UnregisterConnection(clientID);
+
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients.erase(clientID);
@@ -713,20 +722,75 @@ namespace Spark::Net
         }
 
 #ifdef ENABLE_NETWORKING
+        auto& instability = InstabilitySimulator::GetInstance();
+        float currentTimeMs = m_serverTime * 1000.0f;
+
+        // First, flush any delayed packets that are now ready for transmission
+        if (instability.GetSettings().enabled)
+        {
+            auto readyPackets = instability.GetReadyPackets(currentTimeMs);
+            for (auto& pktData : readyPackets)
+            {
+                if (m_role == NetworkRole::Client)
+                {
+                    SendRawTo(pktData, m_serverAddress);
+                }
+                else if (m_role == NetworkRole::Server)
+                {
+                    for (const auto& [id, addr] : m_clientAddresses)
+                    {
+                        SendRawTo(pktData, addr);
+                    }
+                }
+            }
+        }
+
         while (!toSend.empty())
         {
             const auto& msg = toSend.front();
             auto serialized = SerializeMessage(msg);
 
+            // Apply instability simulation if enabled
+            if (instability.GetSettings().enabled)
+            {
+                // Simulated packet loss
+                if (instability.ShouldDropPacket())
+                {
+                    m_stats.packetsDropped++;
+                    // Track reliable messages even if "dropped" (for retransmission)
+                    if (msg.channel != ChannelType::Unreliable && msg.sequence > 0)
+                    {
+                        m_unacknowledgedMessages[msg.sequence] = msg;
+                        m_reliableOriginalSendTime.try_emplace(msg.sequence, m_serverTime);
+                    }
+                    toSend.pop();
+                    continue;
+                }
+
+                // Simulated latency + jitter: queue for delayed delivery
+                float delayMs = instability.GetDelayMs();
+                if (delayMs > 0.0f)
+                {
+                    instability.QueuePacket(serialized, currentTimeMs + delayMs);
+
+                    // Track reliable messages for retransmission
+                    if (msg.channel != ChannelType::Unreliable && msg.sequence > 0)
+                    {
+                        m_unacknowledgedMessages[msg.sequence] = msg;
+                        m_reliableOriginalSendTime.try_emplace(msg.sequence, m_serverTime);
+                    }
+                    toSend.pop();
+                    continue;
+                }
+            }
+
+            // No instability or zero delay — send immediately
             if (m_role == NetworkRole::Client)
             {
-                // Client sends everything to the server
                 SendRawTo(serialized, m_serverAddress);
             }
             else if (m_role == NetworkRole::Server)
             {
-                // Server messages queued via SendMessage (not SendToClient)
-                // are broadcast to all clients
                 for (const auto& [id, addr] : m_clientAddresses)
                 {
                     SendRawTo(serialized, addr);

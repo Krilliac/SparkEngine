@@ -7,6 +7,7 @@
  */
 
 #include "NetworkManager.h"
+#include "DeltaSnapshotManager.h"
 #include "../../Utils/Assert.h"
 #include <algorithm>
 
@@ -230,6 +231,8 @@ namespace Spark::Net
             return;
         m_replicationTimer = 0.0f;
 
+        auto& deltaManager = DeltaSnapshotManager::GetInstance();
+
         for (auto& [netID, entity] : m_replicatedEntities)
         {
             bool hasDirty = entity.needsFullSync;
@@ -247,14 +250,58 @@ namespace Spark::Net
 
             if (hasDirty)
             {
-                NetworkMessage msg;
-                msg.type = MessageType::EntityStateUpdate;
-                msg.channel = entity.needsFullSync ? ChannelType::Reliable : ChannelType::Unreliable;
+                // Record the current entity state for delta snapshot tracking.
+                // This builds FieldSnapshot entries from the entity's serialized properties.
+                std::vector<FieldSnapshot> fieldSnapshots;
+                fieldSnapshots.reserve(entity.properties.size());
 
-                NetBuffer buf;
-                SerializeEntityState(netID, buf);
-                msg.payload = buf.GetData();
-                SendToAll(msg);
+                for (uint8_t i = 0; i < entity.properties.size(); ++i)
+                {
+                    const auto& prop = entity.properties[i];
+                    if (!prop.dirty && !entity.needsFullSync)
+                        continue;
+
+                    FieldSnapshot fs;
+                    fs.fieldIndex = i;
+                    if (prop.serialize)
+                    {
+                        NetBuffer fieldBuf;
+                        prop.serialize(fieldBuf);
+                        fs.serializedValue = fieldBuf.GetData();
+                    }
+                    fieldSnapshots.push_back(std::move(fs));
+                }
+
+                deltaManager.RecordEntityState(netID, fieldSnapshots);
+
+                if (entity.needsFullSync)
+                {
+                    // Full sync: send all properties via the standard path
+                    NetworkMessage msg;
+                    msg.type = MessageType::EntityStateUpdate;
+                    msg.channel = ChannelType::Reliable;
+
+                    NetBuffer buf;
+                    SerializeEntityState(netID, buf);
+                    msg.payload = buf.GetData();
+                    SendToAll(msg);
+                }
+                else
+                {
+                    // Delta sync: build per-connection delta packets
+                    for (const auto& [clientId, info] : m_clients)
+                    {
+                        auto deltaPacket = deltaManager.BuildDeltaPacket(clientId, netID);
+                        if (!deltaPacket.empty())
+                        {
+                            NetworkMessage msg;
+                            msg.type = MessageType::EntityStateUpdate;
+                            msg.channel = ChannelType::Unreliable;
+                            msg.payload = std::move(deltaPacket);
+                            SendToClient(clientId, msg);
+                        }
+                    }
+                }
 
                 entity.needsFullSync = false;
                 for (auto& prop : entity.properties)
