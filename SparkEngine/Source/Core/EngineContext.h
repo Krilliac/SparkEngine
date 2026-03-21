@@ -231,6 +231,19 @@ class EngineContext : public Spark::IEngineContext
         return GetSystem<Spark::Gameplay::InstanceManager>();
     }
 
+    Spark::Streaming::SeamlessAreaManager* GetAreaStreaming() override
+    {
+        return GetSystem<Spark::Streaming::SeamlessAreaManager>();
+    }
+    const Spark::Streaming::SeamlessAreaManager* GetAreaStreaming() const override
+    {
+        return GetSystem<Spark::Streaming::SeamlessAreaManager>();
+    }
+    Spark::Audio::MusicManager* GetMusic() override { return GetSystem<Spark::Audio::MusicManager>(); }
+    const Spark::Audio::MusicManager* GetMusic() const override { return GetSystem<Spark::Audio::MusicManager>(); }
+    Spark::VirtualFileSystem* GetVFS() override { return GetSystem<Spark::VirtualFileSystem>(); }
+    const Spark::VirtualFileSystem* GetVFS() const override { return GetSystem<Spark::VirtualFileSystem>(); }
+
     bool IsHeadless() const override;
 
     // =========================================================================
@@ -269,6 +282,12 @@ class EngineContext : public Spark::IEngineContext
     void SetWeapons(Spark::Gameplay::WeaponSystem* w) { RegisterSystem<Spark::Gameplay::WeaponSystem>(w); }
     void SetConditions(Spark::Gameplay::ConditionSystem* c) { RegisterSystem<Spark::Gameplay::ConditionSystem>(c); }
     void SetInstances(Spark::Gameplay::InstanceManager* i) { RegisterSystem<Spark::Gameplay::InstanceManager>(i); }
+    void SetAreaStreaming(Spark::Streaming::SeamlessAreaManager* a)
+    {
+        RegisterSystem<Spark::Streaming::SeamlessAreaManager>(a);
+    }
+    void SetMusic(Spark::Audio::MusicManager* m) { RegisterSystem<Spark::Audio::MusicManager>(m); }
+    void SetVFS(Spark::VirtualFileSystem* v) { RegisterSystem<Spark::VirtualFileSystem>(v); }
 
     // =========================================================================
     // Generic system registry (R1.1 — single source of truth)

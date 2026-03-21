@@ -61,6 +61,17 @@ namespace Spark
         class VRSystem;
     }
 
+    namespace Streaming
+    {
+        class SeamlessAreaManager;
+    }
+
+    namespace Audio
+    {
+        class MusicManager;
+    }
+
+    class VirtualFileSystem;
     class NetworkManager;
     class SaveSystem;
     class CoroutineScheduler;
@@ -233,6 +244,18 @@ namespace Spark
         /** @brief Get the instance manager (encounters, lockouts) */
         virtual Gameplay::InstanceManager* GetInstances() { return nullptr; }
         virtual const Gameplay::InstanceManager* GetInstances() const { return nullptr; }
+
+        /** @brief Get the seamless area streaming manager */
+        virtual Streaming::SeamlessAreaManager* GetAreaStreaming() { return nullptr; }
+        virtual const Streaming::SeamlessAreaManager* GetAreaStreaming() const { return nullptr; }
+
+        /** @brief Get the music manager (crossfading, playlists, combat intensity) */
+        virtual Audio::MusicManager* GetMusic() { return nullptr; }
+        virtual const Audio::MusicManager* GetMusic() const { return nullptr; }
+
+        /** @brief Get the virtual file system (mount-priority layered filesystem) */
+        virtual VirtualFileSystem* GetVFS() { return nullptr; }
+        virtual const VirtualFileSystem* GetVFS() const { return nullptr; }
 
         // =====================================================================
         // Engine state queries
