@@ -32,6 +32,7 @@ class AudioEngine;
 class PhysicsSystem;
 class SceneManager;
 class AngelScriptEngine;
+class AssetPipeline;
 class World;
 
 // ============================================================================
@@ -166,6 +167,8 @@ class EngineContext : public Spark::IEngineContext
     const SceneManager* GetSceneManager() const override { return GetSystem<SceneManager>(); }
     AngelScriptEngine* GetScriptEngine() override { return GetSystem<AngelScriptEngine>(); }
     const AngelScriptEngine* GetScriptEngine() const override { return GetSystem<AngelScriptEngine>(); }
+    ::AssetPipeline* GetAssetPipeline() override { return GetSystem<::AssetPipeline>(); }
+    const ::AssetPipeline* GetAssetPipeline() const override { return GetSystem<::AssetPipeline>(); }
     Spark::SaveSystem* GetSaveSystem() override { return GetSystem<Spark::SaveSystem>(); }
     const Spark::SaveSystem* GetSaveSystem() const override { return GetSystem<Spark::SaveSystem>(); }
     Spark::CoroutineScheduler* GetCoroutineScheduler() override { return GetSystem<Spark::CoroutineScheduler>(); }
@@ -173,6 +176,18 @@ class EngineContext : public Spark::IEngineContext
     {
         return GetSystem<Spark::CoroutineScheduler>();
     }
+    Spark::LocalFileCache* GetFileCache() override { return GetSystem<Spark::LocalFileCache>(); }
+    const Spark::LocalFileCache* GetFileCache() const override { return GetSystem<Spark::LocalFileCache>(); }
+    Spark::AssetRegistry* GetAssetRegistry() override { return GetSystem<Spark::AssetRegistry>(); }
+    const Spark::AssetRegistry* GetAssetRegistry() const override { return GetSystem<Spark::AssetRegistry>(); }
+    Spark::WeatherSystem* GetWeather() override { return GetSystem<Spark::WeatherSystem>(); }
+    const Spark::WeatherSystem* GetWeather() const override { return GetSystem<Spark::WeatherSystem>(); }
+    Spark::UI::UISystem* GetUI() override { return GetSystem<Spark::UI::UISystem>(); }
+    const Spark::UI::UISystem* GetUI() const override { return GetSystem<Spark::UI::UISystem>(); }
+    Spark::DialogueSystem* GetDialogue() override { return GetSystem<Spark::DialogueSystem>(); }
+    const Spark::DialogueSystem* GetDialogue() const override { return GetSystem<Spark::DialogueSystem>(); }
+    Spark::ModSystem* GetModSystem() override { return GetSystem<Spark::ModSystem>(); }
+    const Spark::ModSystem* GetModSystem() const override { return GetSystem<Spark::ModSystem>(); }
 
     bool IsHeadless() const override;
 
@@ -192,8 +207,15 @@ class EngineContext : public Spark::IEngineContext
     void SetWorld(World* w) { RegisterSystem<World>(w); }
     void SetSceneManager(SceneManager* s) { RegisterSystem<SceneManager>(s); }
     void SetScriptEngine(AngelScriptEngine* s) { RegisterSystem<AngelScriptEngine>(s); }
+    void SetAssetPipeline(::AssetPipeline* a) { RegisterSystem<::AssetPipeline>(a); }
     void SetSaveSystem(Spark::SaveSystem* s) { RegisterSystem<Spark::SaveSystem>(s); }
     void SetCoroutineScheduler(Spark::CoroutineScheduler* c) { RegisterSystem<Spark::CoroutineScheduler>(c); }
+    void SetFileCache(Spark::LocalFileCache* f) { RegisterSystem<Spark::LocalFileCache>(f); }
+    void SetAssetRegistry(Spark::AssetRegistry* a) { RegisterSystem<Spark::AssetRegistry>(a); }
+    void SetWeather(Spark::WeatherSystem* w) { RegisterSystem<Spark::WeatherSystem>(w); }
+    void SetUI(Spark::UI::UISystem* u) { RegisterSystem<Spark::UI::UISystem>(u); }
+    void SetDialogue(Spark::DialogueSystem* d) { RegisterSystem<Spark::DialogueSystem>(d); }
+    void SetModSystem(Spark::ModSystem* m) { RegisterSystem<Spark::ModSystem>(m); }
 
     // =========================================================================
     // Generic system registry (R1.1 — single source of truth)

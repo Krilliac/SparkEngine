@@ -301,11 +301,11 @@ static void UpdateGameplaySystems(float dt)
         return;
 
     // Phase 1: Non-ECS systems (no World dependency)
-    if (auto* weather = ctx->GetSystem<Spark::WeatherSystem>())
+    if (auto* weather = ctx->GetWeather())
         weather->Update(dt);
-    if (auto* dialogue = ctx->GetSystem<Spark::DialogueSystem>())
+    if (auto* dialogue = ctx->GetDialogue())
         dialogue->Update(dt);
-    if (auto* ui = ctx->GetSystem<Spark::UI::UISystem>())
+    if (auto* ui = ctx->GetUI())
         ui->Update(dt);
 
     // Phase 2: ECS-dependent systems (require a valid World)
@@ -671,7 +671,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
     // File cache
     g_fileCache = std::make_unique<Spark::LocalFileCache>();
-    EngineContext::Get()->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
+    EngineContext::Get()->SetFileCache(g_fileCache.get());
 
     InitPhysics();
 
@@ -770,7 +770,7 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 
     // File cache (registered via generic system registry)
     g_fileCache = std::make_unique<Spark::LocalFileCache>();
-    EngineContext::Get()->RegisterSystem<Spark::LocalFileCache>(g_fileCache.get());
+    EngineContext::Get()->SetFileCache(g_fileCache.get());
 
     // PhysicsSystem (owned here, not by GraphicsEngine)
     InitPhysics();
@@ -785,20 +785,26 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 
     // AssetRegistry for handle-based asset lookups
     static Spark::AssetRegistry g_assetRegistry;
-    EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&g_assetRegistry);
+    EngineContext::Get()->SetAssetRegistry(&g_assetRegistry);
+
+    // AssetPipeline (owned by GraphicsEngine, exposed via EngineContext for SDK access)
+    if (g_graphics && g_graphics->GetAssetPipeline())
+    {
+        EngineContext::Get()->SetAssetPipeline(g_graphics->GetAssetPipeline());
+    }
 
     // Gameplay subsystems (Weather, UI, Dialogue, Modding)
     g_weatherSystem = std::make_unique<Spark::WeatherSystem>();
-    EngineContext::Get()->RegisterSystem<Spark::WeatherSystem>(g_weatherSystem.get());
+    EngineContext::Get()->SetWeather(g_weatherSystem.get());
 
     g_uiSystem = std::make_unique<Spark::UI::UISystem>();
-    EngineContext::Get()->RegisterSystem<Spark::UI::UISystem>(g_uiSystem.get());
+    EngineContext::Get()->SetUI(g_uiSystem.get());
 
     g_dialogueSystem = std::make_unique<Spark::DialogueSystem>();
-    EngineContext::Get()->RegisterSystem<Spark::DialogueSystem>(g_dialogueSystem.get());
+    EngineContext::Get()->SetDialogue(g_dialogueSystem.get());
 
     g_modSystem = std::make_unique<Spark::ModSystem>();
-    EngineContext::Get()->RegisterSystem<Spark::ModSystem>(g_modSystem.get());
+    EngineContext::Get()->SetModSystem(g_modSystem.get());
 
     // Load game modules via ModuleManager
     g_moduleManager = std::make_unique<ModuleManager>();
@@ -1225,16 +1231,16 @@ static void TickFrame(float dt)
 static void RegisterGameplaySubsystems()
 {
     static Spark::WeatherSystem s_weatherSystem;
-    EngineContext::Get()->RegisterSystem<Spark::WeatherSystem>(&s_weatherSystem);
+    EngineContext::Get()->SetWeather(&s_weatherSystem);
 
     static Spark::UI::UISystem s_uiSystem;
-    EngineContext::Get()->RegisterSystem<Spark::UI::UISystem>(&s_uiSystem);
+    EngineContext::Get()->SetUI(&s_uiSystem);
 
     static Spark::DialogueSystem s_dialogueSystem;
-    EngineContext::Get()->RegisterSystem<Spark::DialogueSystem>(&s_dialogueSystem);
+    EngineContext::Get()->SetDialogue(&s_dialogueSystem);
 
     static Spark::ModSystem s_modSystem;
-    EngineContext::Get()->RegisterSystem<Spark::ModSystem>(&s_modSystem);
+    EngineContext::Get()->SetModSystem(&s_modSystem);
 }
 
 /**
@@ -1262,10 +1268,16 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
     EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
+    // AssetPipeline (owned by GraphicsEngine, exposed via EngineContext for SDK access)
+    if (g_graphics && g_graphics->GetAssetPipeline())
+    {
+        EngineContext::Get()->SetAssetPipeline(g_graphics->GetAssetPipeline());
+    }
+
     if (registerGameplay)
     {
         static Spark::AssetRegistry s_assetRegistry;
-        EngineContext::Get()->RegisterSystem<Spark::AssetRegistry>(&s_assetRegistry);
+        EngineContext::Get()->SetAssetRegistry(&s_assetRegistry);
         RegisterGameplaySubsystems();
     }
 }

@@ -84,7 +84,7 @@ void Game::InitializeEngineSystems()
 
     // ---- Weather ------------------------------------------------------
     // Access the WeatherSystem registered by SparkEngine and set initial weather
-    if (auto* weather = ctx->GetSystem<Spark::WeatherSystem>())
+    if (auto* weather = ctx->GetWeather())
     {
         weather->SetWeather(Spark::WeatherType::Clear, 1.0f, 0.0f);
         m_weatherActive = true;
@@ -147,7 +147,7 @@ void Game::InitializeEngineSystems()
 
     // ---- Dialogue -----------------------------------------------------
     // Register sample NPC dialogue trees for arena vendors
-    if (auto* dialogue = ctx->GetSystem<Spark::DialogueSystem>())
+    if (auto* dialogue = ctx->GetDialogue())
     {
         auto vendorTree = std::make_unique<Spark::DialogueTree>();
         vendorTree->SetId("arena_vendor");

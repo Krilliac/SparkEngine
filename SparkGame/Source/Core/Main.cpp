@@ -623,7 +623,7 @@ void SparkGameModule::RegisterGameConsoleCommands()
             if (args.empty())
                 return "Usage: weather <clear|rain|snow|fog|storm>";
             auto* ctx = EngineContext::Get();
-            auto* weather = ctx ? ctx->GetSystem<Spark::WeatherSystem>() : nullptr;
+            auto* weather = ctx ? ctx->GetWeather() : nullptr;
             if (!weather)
                 return "WeatherSystem not available";
             Spark::WeatherType type = Spark::WeatherType::Clear;
@@ -692,7 +692,7 @@ void SparkGameModule::RegisterGameConsoleCommands()
             if (args.empty())
                 return "Usage: dialogue_start <tree_id>";
             auto* ctx = EngineContext::Get();
-            auto* dialogue = ctx ? ctx->GetSystem<Spark::DialogueSystem>() : nullptr;
+            auto* dialogue = ctx ? ctx->GetDialogue() : nullptr;
             if (!dialogue)
                 return "DialogueSystem not available";
             dialogue->StartConversation(args[0]);

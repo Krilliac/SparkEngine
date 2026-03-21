@@ -145,25 +145,25 @@ namespace Spark::EngineSetup
         }
 
         // WeatherSystem depends on Timer (weather transitions are time-based)
-        if (auto* weather = ctx.GetSystem<Spark::WeatherSystem>())
+        if (auto* weather = ctx.GetWeather())
         {
             ctx.RegisterSubsystem<Spark::WeatherSystem>(weather, DependsOn<Timer>{});
         }
 
         // UISystem depends on Timer and EventBus
-        if (auto* ui = ctx.GetSystem<Spark::UI::UISystem>())
+        if (auto* ui = ctx.GetUI())
         {
             ctx.RegisterSubsystem<Spark::UI::UISystem>(ui, DependsOn<Timer, Spark::EventBus>{});
         }
 
         // DialogueSystem depends on Timer and EventBus (fires events, tracks timing)
-        if (auto* dialogue = ctx.GetSystem<Spark::DialogueSystem>())
+        if (auto* dialogue = ctx.GetDialogue())
         {
             ctx.RegisterSubsystem<Spark::DialogueSystem>(dialogue, DependsOn<Timer, Spark::EventBus>{});
         }
 
         // ModSystem depends on nothing (scans filesystem)
-        if (auto* mods = ctx.GetSystem<Spark::ModSystem>())
+        if (auto* mods = ctx.GetModSystem())
         {
             ctx.RegisterSubsystem<Spark::ModSystem>(mods, DependsOn<>{});
         }
