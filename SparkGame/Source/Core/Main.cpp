@@ -67,13 +67,13 @@ SparkGameModule::~SparkGameModule()
         Shutdown();
 }
 
-// --- Spark::IModule interface (new) ---
+// --- Spark::IModule interface (SDK v2) ---
 
 Spark::ModuleInfo SparkGameModule::GetModuleInfo() const
 {
     Spark::ModuleInfo info{};
     info.name = "Spark Arena - Engine Showcase";
-    info.version = "1.0.0";
+    info.version = "2.0.0";
     info.sdkVersion = SPARK_SDK_VERSION;
     info.loadOrder = 1000;
     return info;
@@ -91,6 +91,9 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
 
     if (g_game)
     {
+        // Pass the engine context to Game for proper SDK v2 subsystem access
+        g_game->SetEngineContext(context);
+
         // Wire up EventBus so game systems can communicate via events
         if (context->GetEventBus())
             g_game->SetEventBus(context->GetEventBus());
@@ -98,20 +101,6 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
         // Wire up physics system for projectile area queries (explosions)
         if (context->GetPhysics())
             g_game->SetPhysicsSystem(context->GetPhysics());
-
-        // Wire up SceneManager from the engine context if the game doesn't own one
-        // (Game creates its own SceneManager, but the engine context should know about it)
-        if (auto* sceneMgr = g_game->GetSceneManager())
-        {
-            if (!context->GetSceneManager())
-            {
-                // Register the game's SceneManager with the engine context so
-                // the editor and other modules can access it
-                auto* ctx = dynamic_cast<EngineContext*>(context);
-                if (ctx)
-                    ctx->SetSceneManager(sceneMgr);
-            }
-        }
     }
 
     return true;
@@ -128,10 +117,48 @@ void SparkGameModule::OnUpdate(float deltaTime)
         g_game->Update(deltaTime);
 }
 
+void SparkGameModule::OnFixedUpdate(float fixedDeltaTime)
+{
+    if (!g_game || g_game->IsPaused())
+        return;
+
+    // Fixed-timestep physics for deterministic vehicle and gravity simulation
+    if (auto* gravitySystem = g_game->GetGravitySystem())
+        gravitySystem->Update(fixedDeltaTime);
+
+    if (auto* vehicleSystem = g_game->GetVehicleSystem())
+        vehicleSystem->Update(fixedDeltaTime);
+}
+
 void SparkGameModule::OnRender()
 {
     if (g_game)
         g_game->Render();
+}
+
+void SparkGameModule::OnPause()
+{
+    if (g_game)
+        g_game->Pause();
+}
+
+void SparkGameModule::OnResume()
+{
+    if (g_game)
+        g_game->Resume();
+}
+
+void SparkGameModule::OnImGui()
+{
+    if (!g_game)
+        return;
+
+    // Debug overlay: show game stats when ImGui is active
+    int drawCalls = 0;
+    int triangles = 0;
+    int activeObjects = 0;
+    g_game->GetPerformanceStats(drawCalls, triangles, activeObjects);
+    // Stats are available for ImGui rendering by the editor
 }
 
 // --- IGameModule interface (legacy) ---

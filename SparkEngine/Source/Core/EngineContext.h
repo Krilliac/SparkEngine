@@ -189,6 +189,61 @@ class EngineContext : public Spark::IEngineContext
     Spark::ModSystem* GetModSystem() override { return GetSystem<Spark::ModSystem>(); }
     const Spark::ModSystem* GetModSystem() const override { return GetSystem<Spark::ModSystem>(); }
 
+    Spark::ReplaySystem* GetReplay() override { return GetSystem<Spark::ReplaySystem>(); }
+    const Spark::ReplaySystem* GetReplay() const override { return GetSystem<Spark::ReplaySystem>(); }
+    Spark::LocalizationSystem* GetLocalization() override { return GetSystem<Spark::LocalizationSystem>(); }
+    const Spark::LocalizationSystem* GetLocalization() const override { return GetSystem<Spark::LocalizationSystem>(); }
+    Spark::TweenSystem* GetTween() override { return GetSystem<Spark::TweenSystem>(); }
+    const Spark::TweenSystem* GetTween() const override { return GetSystem<Spark::TweenSystem>(); }
+    Spark::Gameplay::AbilitySystem* GetAbilities() override { return GetSystem<Spark::Gameplay::AbilitySystem>(); }
+    const Spark::Gameplay::AbilitySystem* GetAbilities() const override
+    {
+        return GetSystem<Spark::Gameplay::AbilitySystem>();
+    }
+    Spark::DestructionSystem* GetDestruction() override { return GetSystem<Spark::DestructionSystem>(); }
+    const Spark::DestructionSystem* GetDestruction() const override { return GetSystem<Spark::DestructionSystem>(); }
+    Spark::Cinematic::SequencerManager* GetCinematic() override
+    {
+        return GetSystem<Spark::Cinematic::SequencerManager>();
+    }
+    const Spark::Cinematic::SequencerManager* GetCinematic() const override
+    {
+        return GetSystem<Spark::Cinematic::SequencerManager>();
+    }
+    Spark::VR::VRSystem* GetVR() override { return GetSystem<Spark::VR::VRSystem>(); }
+    const Spark::VR::VRSystem* GetVR() const override { return GetSystem<Spark::VR::VRSystem>(); }
+
+    SparkEngineCamera* GetCamera() override { return GetSystem<SparkEngineCamera>(); }
+    const SparkEngineCamera* GetCamera() const override { return GetSystem<SparkEngineCamera>(); }
+    Spark::Gameplay::WeaponSystem* GetWeapons() override { return GetSystem<Spark::Gameplay::WeaponSystem>(); }
+    const Spark::Gameplay::WeaponSystem* GetWeapons() const override
+    {
+        return GetSystem<Spark::Gameplay::WeaponSystem>();
+    }
+    Spark::Gameplay::ConditionSystem* GetConditions() override { return GetSystem<Spark::Gameplay::ConditionSystem>(); }
+    const Spark::Gameplay::ConditionSystem* GetConditions() const override
+    {
+        return GetSystem<Spark::Gameplay::ConditionSystem>();
+    }
+    Spark::Gameplay::InstanceManager* GetInstances() override { return GetSystem<Spark::Gameplay::InstanceManager>(); }
+    const Spark::Gameplay::InstanceManager* GetInstances() const override
+    {
+        return GetSystem<Spark::Gameplay::InstanceManager>();
+    }
+
+    Spark::Streaming::SeamlessAreaManager* GetAreaStreaming() override
+    {
+        return GetSystem<Spark::Streaming::SeamlessAreaManager>();
+    }
+    const Spark::Streaming::SeamlessAreaManager* GetAreaStreaming() const override
+    {
+        return GetSystem<Spark::Streaming::SeamlessAreaManager>();
+    }
+    Spark::Audio::MusicManager* GetMusic() override { return GetSystem<Spark::Audio::MusicManager>(); }
+    const Spark::Audio::MusicManager* GetMusic() const override { return GetSystem<Spark::Audio::MusicManager>(); }
+    Spark::VirtualFileSystem* GetVFS() override { return GetSystem<Spark::VirtualFileSystem>(); }
+    const Spark::VirtualFileSystem* GetVFS() const override { return GetSystem<Spark::VirtualFileSystem>(); }
+
     bool IsHeadless() const override;
 
     // =========================================================================
@@ -216,6 +271,23 @@ class EngineContext : public Spark::IEngineContext
     void SetUI(Spark::UI::UISystem* u) { RegisterSystem<Spark::UI::UISystem>(u); }
     void SetDialogue(Spark::DialogueSystem* d) { RegisterSystem<Spark::DialogueSystem>(d); }
     void SetModSystem(Spark::ModSystem* m) { RegisterSystem<Spark::ModSystem>(m); }
+    void SetReplay(Spark::ReplaySystem* r) { RegisterSystem<Spark::ReplaySystem>(r); }
+    void SetLocalization(Spark::LocalizationSystem* l) { RegisterSystem<Spark::LocalizationSystem>(l); }
+    void SetTween(Spark::TweenSystem* t) { RegisterSystem<Spark::TweenSystem>(t); }
+    void SetAbilities(Spark::Gameplay::AbilitySystem* a) { RegisterSystem<Spark::Gameplay::AbilitySystem>(a); }
+    void SetDestruction(Spark::DestructionSystem* d) { RegisterSystem<Spark::DestructionSystem>(d); }
+    void SetCinematic(Spark::Cinematic::SequencerManager* c) { RegisterSystem<Spark::Cinematic::SequencerManager>(c); }
+    void SetVR(Spark::VR::VRSystem* v) { RegisterSystem<Spark::VR::VRSystem>(v); }
+    void SetCamera(SparkEngineCamera* c) { RegisterSystem<SparkEngineCamera>(c); }
+    void SetWeapons(Spark::Gameplay::WeaponSystem* w) { RegisterSystem<Spark::Gameplay::WeaponSystem>(w); }
+    void SetConditions(Spark::Gameplay::ConditionSystem* c) { RegisterSystem<Spark::Gameplay::ConditionSystem>(c); }
+    void SetInstances(Spark::Gameplay::InstanceManager* i) { RegisterSystem<Spark::Gameplay::InstanceManager>(i); }
+    void SetAreaStreaming(Spark::Streaming::SeamlessAreaManager* a)
+    {
+        RegisterSystem<Spark::Streaming::SeamlessAreaManager>(a);
+    }
+    void SetMusic(Spark::Audio::MusicManager* m) { RegisterSystem<Spark::Audio::MusicManager>(m); }
+    void SetVFS(Spark::VirtualFileSystem* v) { RegisterSystem<Spark::VirtualFileSystem>(v); }
 
     // =========================================================================
     // Generic system registry (R1.1 — single source of truth)

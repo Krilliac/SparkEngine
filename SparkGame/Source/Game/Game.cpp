@@ -34,7 +34,6 @@
 #include "Utils/SparkConsole.h"
 #include "Console/AdvancedConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
-#include "Core/EngineContext.h"
 #include "Audio/MusicManager.h"
 #include "Graphics/WeatherSystem.h"
 #include "Engine/Cinematic/Sequencer.h"
@@ -367,24 +366,26 @@ void Game::Update(float dt)
     m_playTime += dt;
 
     // Update dynamic music intensity based on nearby enemies
-    if (m_audioInitialized)
+    if (m_audioInitialized && m_engineContext)
     {
-        size_t aliveEnemies = GetAliveEnemyCount();
-        auto intensity = (aliveEnemies > 4)   ? Spark::Audio::CombatIntensity::Combat
-                         : (aliveEnemies > 0) ? Spark::Audio::CombatIntensity::LowThreat
-                                              : Spark::Audio::CombatIntensity::Exploration;
-        Spark::Audio::MusicManager::GetInstance().SetCombatIntensity(intensity);
+        if (auto* music = m_engineContext->GetMusic())
+        {
+            size_t aliveEnemies = GetAliveEnemyCount();
+            auto intensity = (aliveEnemies > 4)   ? Spark::Audio::CombatIntensity::Combat
+                             : (aliveEnemies > 0) ? Spark::Audio::CombatIntensity::LowThreat
+                                                  : Spark::Audio::CombatIntensity::Exploration;
+            music->SetCombatIntensity(intensity);
+        }
     }
 
     // Cycle weather presets periodically to showcase the system
-    if (m_weatherActive)
+    if (m_weatherActive && m_engineContext)
     {
         m_weatherTransitionTimer += dt;
         if (m_weatherTransitionTimer > 120.0f) // Every 2 minutes
         {
             m_weatherTransitionTimer = 0.0f;
-            auto* ctx = EngineContext::Get();
-            if (auto* weather = ctx ? ctx->GetWeather() : nullptr)
+            if (auto* weather = m_engineContext->GetWeather())
             {
                 // Cycle: Clear → Rain → Fog → Storm → Clear
                 static int weatherCycle = 0;
@@ -400,13 +401,18 @@ void Game::Update(float dt)
         }
     }
 
-    // Update cinematic sequencer — advances all playing sequences
-    Spark::Cinematic::SequencerManager::GetInstance().Update(dt);
+    // Update cinematic sequencer via context
+    if (m_engineContext)
+    {
+        if (auto* cinematic = m_engineContext->GetCinematic())
+            cinematic->Update(dt);
 
-    // Update replay playback if active
-    auto& replay = Spark::ReplaySystem::GetInstance();
-    if (replay.GetPlaybackState() == Spark::PlaybackState::Playing)
-        replay.UpdatePlayback(dt);
+        if (auto* replay = m_engineContext->GetReplay())
+        {
+            if (replay->GetPlaybackState() == Spark::PlaybackState::Playing)
+                replay->UpdatePlayback(dt);
+        }
+    }
 
 #ifdef ENABLE_NETWORKING
     // Update networking - process incoming messages, send outgoing state
@@ -440,10 +446,13 @@ void Game::Update(float dt)
         {
             assetPipeline->Update(dt);
         }
-        if (auto physicsSystem = EngineContext::Get() ? EngineContext::Get()->GetPhysics() : nullptr)
-        {
-            physicsSystem->Update(dt);
-        }
+    }
+
+    // Update physics via engine context
+    if (m_engineContext)
+    {
+        if (auto* physics = m_engineContext->GetPhysics())
+            physics->Update(dt);
     }
 }
 
