@@ -527,7 +527,7 @@ namespace Spark::Gameplay
             auto* ctx = EngineContext::Get();
             if (ctx)
             {
-                auto* weatherSys = ctx->GetSystem<Spark::WeatherSystem>();
+                auto* weatherSys = ctx->GetWeather();
                 if (weatherSys)
                 {
                     return static_cast<int>(weatherSys->GetCurrentState().type) == targetType;

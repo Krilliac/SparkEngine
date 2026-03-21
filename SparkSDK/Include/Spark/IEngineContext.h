@@ -45,6 +45,16 @@ namespace Spark
     class NetworkManager;
     class SaveSystem;
     class CoroutineScheduler;
+    class LocalFileCache;
+    class AssetRegistry;
+    class WeatherSystem;
+    class DialogueSystem;
+    class ModSystem;
+
+    namespace UI
+    {
+        class UISystem;
+    }
 
     /**
      * @brief Service locator providing access to all engine subsystems
@@ -121,6 +131,30 @@ namespace Spark
         /** @brief Get the coroutine scheduler (may return nullptr if not initialized) */
         virtual CoroutineScheduler* GetCoroutineScheduler() { return nullptr; }
         virtual const CoroutineScheduler* GetCoroutineScheduler() const { return nullptr; }
+
+        /** @brief Get the local file cache (may return nullptr if not initialized) */
+        virtual LocalFileCache* GetFileCache() { return nullptr; }
+        virtual const LocalFileCache* GetFileCache() const { return nullptr; }
+
+        /** @brief Get the asset registry for handle-based asset lookups (may return nullptr) */
+        virtual AssetRegistry* GetAssetRegistry() { return nullptr; }
+        virtual const AssetRegistry* GetAssetRegistry() const { return nullptr; }
+
+        /** @brief Get the weather system (may return nullptr if not initialized) */
+        virtual WeatherSystem* GetWeather() { return nullptr; }
+        virtual const WeatherSystem* GetWeather() const { return nullptr; }
+
+        /** @brief Get the UI system (may return nullptr if not initialized) */
+        virtual UI::UISystem* GetUI() { return nullptr; }
+        virtual const UI::UISystem* GetUI() const { return nullptr; }
+
+        /** @brief Get the dialogue system (may return nullptr if not initialized) */
+        virtual DialogueSystem* GetDialogue() { return nullptr; }
+        virtual const DialogueSystem* GetDialogue() const { return nullptr; }
+
+        /** @brief Get the modding system (may return nullptr if not initialized) */
+        virtual ModSystem* GetModSystem() { return nullptr; }
+        virtual const ModSystem* GetModSystem() const { return nullptr; }
 
         /** @brief Check if the engine is running in headless/dedicated server mode */
         virtual bool IsHeadless() const { return false; }

@@ -381,7 +381,7 @@ void Game::Update(float dt)
         {
             m_weatherTransitionTimer = 0.0f;
             auto* ctx = EngineContext::Get();
-            if (auto* weather = ctx ? ctx->GetSystem<Spark::WeatherSystem>() : nullptr)
+            if (auto* weather = ctx ? ctx->GetWeather() : nullptr)
             {
                 // Cycle: Clear → Rain → Fog → Storm → Clear
                 static int weatherCycle = 0;
