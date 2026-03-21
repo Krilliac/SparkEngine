@@ -19,6 +19,7 @@
 #include "Reputation/MMOReputationSystem.h"
 #include "Dungeon/MMODungeonSystem.h"
 #include "WorldBoss/MMOWorldBossSystem.h"
+#include "Persistence/MMOPersistenceSystem.h"
 #include "Utils/SparkConsole.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -164,10 +165,17 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    m_persistenceSystem = std::make_unique<MMO::MMOPersistenceSystem>();
+    if (!m_persistenceSystem->Initialize(context))
+    {
+        console.LogWarning("[MMO] Persistence system unavailable (non-fatal)");
+        m_persistenceSystem.reset();
+    }
+
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[MMO] Spark MMO module loaded successfully (12 subsystems)");
+    console.LogInfo("[MMO] Spark MMO module loaded successfully (13 subsystems)");
     console.LogInfo("[MMO] World areas: " + std::to_string(m_worldSetup->GetAreaCount()));
     console.LogInfo("[MMO] Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
                     " | Recipes: " + std::to_string(m_craftingSystem->GetRecipeCount()) +
@@ -185,6 +193,13 @@ void SparkGameMMOModule::OnUnload()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[MMO] Unloading Spark MMO module...");
+
+    // Shutdown persistence first (final save)
+    if (m_persistenceSystem)
+    {
+        m_persistenceSystem->Shutdown();
+        m_persistenceSystem.reset();
+    }
 
     // Shutdown gameplay systems in reverse order
     if (m_worldBossSystem)
@@ -270,6 +285,9 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
     m_partySystem->Update(deltaTime);
     m_dungeonSystem->Update(deltaTime);
     m_worldBossSystem->Update(deltaTime);
+
+    if (m_persistenceSystem)
+        m_persistenceSystem->Update(deltaTime);
 }
 
 void SparkGameMMOModule::OnFixedUpdate(float fixedDeltaTime)
@@ -321,25 +339,33 @@ void SparkGameMMOModule::OnImGui()
     m_reputationSystem->RenderDebugUI();
     m_dungeonSystem->RenderDebugUI();
     m_worldBossSystem->RenderDebugUI();
+    if (m_persistenceSystem)
+        m_persistenceSystem->RenderDebugUI();
 }
 
 void SparkGameMMOModule::RegisterConsoleCommands()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    console.RegisterCommand("mmo_status",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                if (!m_worldSetup)
-                                    return "MMO module not initialized";
+    console.RegisterCommand(
+        "mmo_status",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_worldSetup)
+                return "MMO module not initialized";
 
-                                std::string status = "=== Spark MMO Status ===\n";
-                                status += "Areas: " + std::to_string(m_worldSetup->GetAreaCount()) + "\n";
-                                status += "Players: " + std::to_string(m_playerSystem->GetPlayerCount()) + "\n";
-                                status += "Chat channels: " + std::to_string(m_chatSystem->GetChannelCount()) + "\n";
-                                status += m_worldSetup->GetWorldStatusString();
-                                return status;
-                            });
+            std::string status = "=== Spark MMO Status ===\n";
+            status += "Areas: " + std::to_string(m_worldSetup->GetAreaCount()) + "\n";
+            status += "Players: " + std::to_string(m_playerSystem->GetPlayerCount()) + "\n";
+            status += "Chat channels: " + std::to_string(m_chatSystem->GetChannelCount()) + "\n";
+            status += "Guilds: " + std::to_string(m_guildSystem->GetGuildCount()) + "\n";
+            status += "Dungeons: " + std::to_string(m_dungeonSystem->GetDungeonCount()) + "\n";
+            status += "Items: " + std::to_string(m_inventorySystem->GetItemCount()) + "\n";
+            status += "Achievements: " + std::to_string(m_achievementSystem->GetAchievementCount()) + "\n";
+            status += "DB: " + std::string(m_persistenceSystem ? "Connected" : "Offline") + "\n";
+            status += m_worldSetup->GetWorldStatusString();
+            return status;
+        });
 
     console.RegisterCommand("mmo_chat",
                             [this](const std::vector<std::string>& args) -> std::string
@@ -400,5 +426,13 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                                 std::string result = "Crafting Recipes:\n";
                                 // List all recipes briefly
                                 return result + "Total recipes: " + std::to_string(m_craftingSystem->GetRecipeCount());
+                            });
+
+    console.RegisterCommand("mmo_db_status",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                if (!m_persistenceSystem)
+                                    return "Persistence system not available";
+                                return m_persistenceSystem->GetStatusString();
                             });
 }
