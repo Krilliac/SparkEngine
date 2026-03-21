@@ -11,6 +11,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Five-engine analysis (Cocos/Defold/Panda3D/S&box/Halley — 20 recommendations) | [knowledge/five-engine-analysis.md](knowledge/five-engine-analysis.md) | Decision | Active | 2026-03-19 |
 | PCSX2 analysis (12 recommendations: save tags, null RHI, render ring, multi-ISA) | [knowledge/pcsx2-analysis.md](knowledge/pcsx2-analysis.md) | Decision | **Resolved** | 2026-03-20 |
 | 11-engine + 3-framework analysis (30 recommendations, ~20 engines total) | [knowledge/eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) | Decision | Active | 2026-03-20 |
+| 13 closed/proprietary engine analysis (15 recommendations, Blizzard/Havok/Frostbite/RAGE/id Tech/etc.) | [knowledge/closed-engines-analysis.md](knowledge/closed-engines-analysis.md) | Decision | Active | 2026-03-21 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
@@ -78,6 +79,14 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - Top 10 MEDIUM: clustered forward lighting, tween system, datablock registry, per-entity EventBus, feature processors, material format, DrawIndirect, ResourceManager, VFS, CVars
 - Strongest cross-engine signals: job system (5 engines), prefabs (4), handle resources (4), asset pipeline (4)
 - See [eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) for full prioritized list
+
+**Active: 15 recommendations from 13 closed/proprietary engines (2026-03-21):**
+- Blizzard, Havok, Frostbite, RAGE, Decima, id Tech, Snowdrop, Fox Engine, Naughty Dog, REDengine, Luminous, Creation Engine, Source 2
+- Top 5 HIGH: integrate RenderGraph (dead code), parallelize ECS via JobSystem, fixed timestep physics, predictive asset streaming, sub-tick networking
+- Top 5 MEDIUM: virtual texturing, weather→gameplay integration, data-driven entities, clipmap terrain, physics debug heatmaps
+- Strongest cross-engine signal: job system now validated by 9 engines total (5 open + 4 closed)
+- Key insight: SparkEngine already has many right systems (RenderGraph, JobSystem, ClusteredLighting) but they're unintegrated — #1 priority is wiring in what exists
+- See [closed-engines-analysis.md](knowledge/closed-engines-analysis.md) for full details
 
 **Active: 20 recommendations from 5-engine analysis (2026-03-19):**
 - Cocos Engine, Defold, Panda3D, S&box, Halley
