@@ -33,6 +33,9 @@ namespace MMO
     class MMODungeonSystem;
     class MMOWorldBossSystem;
     class MMOPersistenceSystem;
+    class MMOAccountSystem;
+    class MMOCharacterSystem;
+    class MMOLoginUI;
 } // namespace MMO
 
 /**
@@ -87,6 +90,9 @@ class SparkGameMMOModule : public Spark::IModule
     std::unique_ptr<MMO::MMODungeonSystem> m_dungeonSystem;
     std::unique_ptr<MMO::MMOWorldBossSystem> m_worldBossSystem;
     std::unique_ptr<MMO::MMOPersistenceSystem> m_persistenceSystem;
+    std::unique_ptr<MMO::MMOAccountSystem> m_accountSystem;
+    std::unique_ptr<MMO::MMOCharacterSystem> m_characterSystem;
+    std::unique_ptr<MMO::MMOLoginUI> m_loginUI;
 };
 
 // Module exports

@@ -20,6 +20,9 @@
 #include "Dungeon/MMODungeonSystem.h"
 #include "WorldBoss/MMOWorldBossSystem.h"
 #include "Persistence/MMOPersistenceSystem.h"
+#include "Account/MMOAccountSystem.h"
+#include "Character/MMOCharacterSystem.h"
+#include "UI/MMOLoginUI.h"
 #include "Utils/SparkConsole.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -172,10 +175,31 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
         m_persistenceSystem.reset();
     }
 
+    m_accountSystem = std::make_unique<MMO::MMOAccountSystem>();
+    if (!m_accountSystem->Initialize(context))
+    {
+        console.LogError("[MMO] Failed to initialize account system");
+        return false;
+    }
+
+    m_characterSystem = std::make_unique<MMO::MMOCharacterSystem>();
+    if (!m_characterSystem->Initialize(context))
+    {
+        console.LogError("[MMO] Failed to initialize character system");
+        return false;
+    }
+
+    m_loginUI = std::make_unique<MMO::MMOLoginUI>();
+    if (!m_loginUI->Initialize(context, m_accountSystem.get(), m_characterSystem.get()))
+    {
+        console.LogError("[MMO] Failed to initialize login UI");
+        return false;
+    }
+
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[MMO] Spark MMO module loaded successfully (13 subsystems)");
+    console.LogInfo("[MMO] Spark MMO module loaded successfully (16 subsystems)");
     console.LogInfo("[MMO] World areas: " + std::to_string(m_worldSetup->GetAreaCount()));
     console.LogInfo("[MMO] Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
                     " | Recipes: " + std::to_string(m_craftingSystem->GetRecipeCount()) +
@@ -194,7 +218,24 @@ void SparkGameMMOModule::OnUnload()
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[MMO] Unloading Spark MMO module...");
 
-    // Shutdown persistence first (final save)
+    // Shutdown login UI and account/character systems
+    if (m_loginUI)
+    {
+        m_loginUI->Shutdown();
+        m_loginUI.reset();
+    }
+    if (m_characterSystem)
+    {
+        m_characterSystem->Shutdown();
+        m_characterSystem.reset();
+    }
+    if (m_accountSystem)
+    {
+        m_accountSystem->Shutdown();
+        m_accountSystem.reset();
+    }
+
+    // Shutdown persistence (final save)
     if (m_persistenceSystem)
     {
         m_persistenceSystem->Shutdown();
@@ -286,6 +327,8 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
     m_dungeonSystem->Update(deltaTime);
     m_worldBossSystem->Update(deltaTime);
 
+    m_accountSystem->Update(deltaTime);
+
     if (m_persistenceSystem)
         m_persistenceSystem->Update(deltaTime);
 }
@@ -341,6 +384,9 @@ void SparkGameMMOModule::OnImGui()
     m_worldBossSystem->RenderDebugUI();
     if (m_persistenceSystem)
         m_persistenceSystem->RenderDebugUI();
+    m_accountSystem->RenderDebugUI();
+    m_characterSystem->RenderDebugUI();
+    m_loginUI->RenderUI();
 }
 
 void SparkGameMMOModule::RegisterConsoleCommands()
@@ -434,5 +480,38 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                                 if (!m_persistenceSystem)
                                     return "Persistence system not available";
                                 return m_persistenceSystem->GetStatusString();
+                            });
+
+    console.RegisterCommand("mmo_register",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.size() < 2)
+                                    return "Usage: mmo_register <username> <password>";
+                                auto result = m_accountSystem->Register(args[0], args[1]);
+                                return result.success ? "Account created (ID " + std::to_string(result.accountId) + ")"
+                                                      : "Error: " + result.errorMessage;
+                            });
+
+    console.RegisterCommand("mmo_login",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.size() < 2)
+                                    return "Usage: mmo_login <username> <password>";
+                                auto result = m_accountSystem->Login(args[0], args[1]);
+                                return result.success
+                                           ? "Logged in (Session " + std::to_string(result.sessionToken) + ")"
+                                           : "Error: " + result.errorMessage;
+                            });
+
+    console.RegisterCommand("mmo_online", [this](const std::vector<std::string>&) -> std::string
+                            { return m_accountSystem->GetOnlineListString(); });
+
+    console.RegisterCommand("mmo_characters",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.empty())
+                                    return "Usage: mmo_characters <account_id>";
+                                uint32_t acctId = static_cast<uint32_t>(std::stoi(args[0]));
+                                return m_characterSystem->GetCharacterListString(acctId);
                             });
 }
