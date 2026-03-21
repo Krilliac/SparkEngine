@@ -269,6 +269,12 @@ namespace SparkEditor
         }
     }
 
+    void PerformanceProfiler::SetDevice(ID3D11Device* device, ID3D11DeviceContext* context)
+    {
+        m_device = device;
+        m_context = context;
+    }
+
     void PerformanceProfiler::BeginGPUSample(const std::string& name, const std::string& shaderName)
     {
         if (!m_isProfiling)
@@ -278,12 +284,61 @@ namespace SparkEditor
         sample.name = name;
         sample.shaderName = shaderName;
         m_activeGPUSamples[name] = sample;
+
+        // Issue a D3D11 timestamp query if device is available
+        if (m_device && m_context)
+        {
+            // Start the per-frame disjoint query if not already active
+            if (!m_disjointActive)
+            {
+                D3D11_QUERY_DESC disjointDesc = {};
+                disjointDesc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+                HRESULT hr = m_device->CreateQuery(&disjointDesc, m_disjointQuery.ReleaseAndGetAddressOf());
+                if (SUCCEEDED(hr))
+                {
+                    m_context->Begin(m_disjointQuery.Get());
+                    m_disjointActive = true;
+                }
+            }
+
+            GPUQueryPair queryPair;
+            queryPair.name = name;
+            queryPair.shaderName = shaderName;
+
+            D3D11_QUERY_DESC tsDesc = {};
+            tsDesc.Query = D3D11_QUERY_TIMESTAMP;
+
+            HRESULT hr = m_device->CreateQuery(&tsDesc, queryPair.beginQuery.GetAddressOf());
+            if (SUCCEEDED(hr))
+            {
+                hr = m_device->CreateQuery(&tsDesc, queryPair.endQuery.GetAddressOf());
+            }
+
+            if (SUCCEEDED(hr))
+            {
+                m_context->End(queryPair.beginQuery.Get()); // Timestamp queries use End(), not Begin()
+                queryPair.begun = true;
+                m_pendingGPUQueries[name] = std::move(queryPair);
+            }
+        }
     }
 
     void PerformanceProfiler::EndGPUSample(const std::string& name)
     {
         if (!m_isProfiling)
             return;
+
+        // Issue the end timestamp query
+        if (m_context)
+        {
+            auto it = m_pendingGPUQueries.find(name);
+            if (it != m_pendingGPUQueries.end() && it->second.begun)
+            {
+                m_context->End(it->second.endQuery.Get());
+                it->second.ended = true;
+            }
+        }
+
         m_activeGPUSamples.erase(name);
     }
 
@@ -1059,31 +1114,79 @@ namespace SparkEditor
 
     void PerformanceProfiler::ProcessGPUQueries()
     {
-        // Process pending GPU timestamp queries and compute durations
         if (!m_currentFrame)
             return;
 
+        // Collect results from D3D11 timestamp queries
+        if (m_context && m_disjointActive && m_disjointQuery)
+        {
+            // End the disjoint query for this frame
+            m_context->End(m_disjointQuery.Get());
+            m_disjointActive = false;
+
+            // Retrieve the disjoint query data (contains GPU frequency)
+            D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjointData = {};
+            HRESULT hr = m_context->GetData(m_disjointQuery.Get(), &disjointData, sizeof(disjointData), 0);
+
+            if (SUCCEEDED(hr) && !disjointData.Disjoint && disjointData.Frequency > 0)
+            {
+                // Collect timestamp results for all completed query pairs
+                for (auto it = m_pendingGPUQueries.begin(); it != m_pendingGPUQueries.end();)
+                {
+                    auto& [name, queryPair] = *it;
+                    if (!queryPair.begun || !queryPair.ended)
+                    {
+                        ++it;
+                        continue;
+                    }
+
+                    UINT64 beginTimestamp = 0;
+                    UINT64 endTimestamp = 0;
+
+                    HRESULT hrBegin =
+                        m_context->GetData(queryPair.beginQuery.Get(), &beginTimestamp, sizeof(UINT64), 0);
+                    HRESULT hrEnd = m_context->GetData(queryPair.endQuery.Get(), &endTimestamp, sizeof(UINT64), 0);
+
+                    if (SUCCEEDED(hrBegin) && SUCCEEDED(hrEnd) && endTimestamp > beginTimestamp)
+                    {
+                        float durationMs = static_cast<float>(endTimestamp - beginTimestamp) /
+                                           static_cast<float>(disjointData.Frequency) * 1000.0f;
+
+                        GPUProfileSample sample;
+                        sample.name = queryPair.name;
+                        sample.shaderName = queryPair.shaderName;
+                        sample.startTimestamp = beginTimestamp;
+                        sample.endTimestamp = endTimestamp;
+                        sample.duration = durationMs;
+
+                        m_currentFrame->gpuSamples.push_back(sample);
+                    }
+
+                    it = m_pendingGPUQueries.erase(it);
+                }
+            }
+            else
+            {
+                // Disjoint or failed — discard all pending queries
+                m_pendingGPUQueries.clear();
+            }
+        }
+
+        // Fallback: process any samples with manually-set timestamps (non-D3D11 path)
         for (auto& [name, sample] : m_activeGPUSamples)
         {
-            // In a real implementation, we'd query D3D11 timestamp queries here
-            // For now, add the sample data to the current frame
             if (sample.endTimestamp > sample.startTimestamp)
             {
                 sample.duration =
                     static_cast<float>(sample.endTimestamp - sample.startTimestamp) / 1000000.0f; // ns to ms
+                if (sample.duration > 0.0f)
+                {
+                    m_currentFrame->gpuSamples.push_back(sample);
+                }
             }
         }
 
-        // Move completed GPU samples to current frame
-        for (const auto& [name, sample] : m_activeGPUSamples)
-        {
-            if (sample.duration > 0.0f)
-            {
-                m_currentFrame->gpuSamples.push_back(sample);
-            }
-        }
-
-        // Calculate total GPU time
+        // Calculate total GPU time from all collected samples
         float totalGpuTime = 0.0f;
         for (const auto& sample : m_currentFrame->gpuSamples)
         {

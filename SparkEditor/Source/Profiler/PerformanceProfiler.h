@@ -140,6 +140,13 @@ namespace SparkEditor
         void EndGPUSample(const std::string& name);
 
         /**
+     * @brief Set the D3D11 device and context for GPU timestamp queries
+     * @param device D3D11 device for creating query objects
+     * @param context D3D11 device context for issuing and collecting queries
+     */
+        void SetDevice(ID3D11Device* device, ID3D11DeviceContext* context);
+
+        /**
      * @brief Record memory allocation
      * @param category Memory category
      * @param bytes Number of bytes allocated
@@ -375,6 +382,21 @@ namespace SparkEditor
         Microsoft::WRL::ComPtr<ID3D11Device> m_device;                        ///< DirectX device
         Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context;                ///< DirectX context
         std::vector<Microsoft::WRL::ComPtr<ID3D11Query>> m_gpuQueries;        ///< GPU timing queries
+
+        /// @brief Tracks a pair of D3D11 timestamp queries for a named GPU sample
+        struct GPUQueryPair
+        {
+            Microsoft::WRL::ComPtr<ID3D11Query> beginQuery; ///< Timestamp at sample start
+            Microsoft::WRL::ComPtr<ID3D11Query> endQuery;   ///< Timestamp at sample end
+            std::string name;                               ///< Sample name
+            std::string shaderName;                         ///< Associated shader
+            bool begun = false;                             ///< Whether begin was issued
+            bool ended = false;                             ///< Whether end was issued
+        };
+
+        std::unordered_map<std::string, GPUQueryPair> m_pendingGPUQueries; ///< In-flight GPU queries
+        Microsoft::WRL::ComPtr<ID3D11Query> m_disjointQuery;               ///< Per-frame disjoint query
+        bool m_disjointActive = false;                                     ///< Whether disjoint query is active
 
         // Memory profiling
         std::unordered_map<void*, std::pair<std::string, size_t>> m_memoryAllocations; ///< Active allocations

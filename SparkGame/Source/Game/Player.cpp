@@ -12,7 +12,8 @@
 #include "Utils/MathUtils.h"
 #include "Game/Console.h"
 #include "Utils/ConsoleProcessManager.h"
-#include "Game/Model.h" // Add Model class for weapon rendering
+#include "Game/Model.h"
+#include "Graphics/GraphicsEngine.h"
 #include <algorithm>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -221,14 +222,10 @@ void Player::RenderWeapon(const XMMATRIX& view, const XMMATRIX& proj)
         XMMATRIX cameraRotation = XMMatrixInverse(nullptr, view);
         weaponWorld = weaponWorld * cameraRotation;
 
-        // Set up constant buffer for weapon rendering (simplified)
-        // In a real implementation, you'd set shader constants here
-        // For now, we'll just assume the shaders are already bound
-
-        // Render the weapon model
+        // Set up shaders and constant buffers, then render the weapon model
         try
         {
-            currentWeaponModel->Render(m_context);
+            currentWeaponModel->Render(m_context, m_graphics, &weaponWorld, &view, &proj);
         }
         catch (...)
         {
