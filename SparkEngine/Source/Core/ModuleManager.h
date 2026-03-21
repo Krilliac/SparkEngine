@@ -34,6 +34,20 @@ using CreateGameModuleFn = IGameModule* (*)();
 using DestroyGameModuleFn = void (*)(IGameModule*);
 
 /**
+ * @brief Metadata about a module DLL discovered on disk (before loading)
+ *
+ * Used by the editor's GameModuleSelectorPanel to show available modules
+ * without actually loading them. Populated by DiscoverModules().
+ */
+struct DiscoveredModule
+{
+    std::string name;      ///< Module name (from ModuleInfo or filename)
+    std::string path;      ///< Full path to the DLL/SO
+    std::string version;   ///< Module version string
+    bool isLoaded = false; ///< Whether this module is currently loaded
+};
+
+/**
  * @brief Manages the lifecycle of multiple dynamically loaded modules
  */
 class ModuleManager
@@ -124,6 +138,23 @@ class ModuleManager
 
     /** @brief Set the file cache for manifest loading (non-owning). */
     void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
+
+    /**
+     * @brief Scan a directory for module DLLs and return metadata without loading
+     *
+     * Temporarily loads each candidate DLL, calls CreateModule() to get its name
+     * and version, then immediately unloads. Marks modules that are already loaded.
+     *
+     * @param directory Directory to scan (defaults to executable directory)
+     * @return List of discovered modules
+     */
+    std::vector<DiscoveredModule> DiscoverModules(const std::string& directory) const;
+
+    /**
+     * @brief Get info about all currently loaded modules
+     * @return List of loaded module names, paths, and versions
+     */
+    std::vector<DiscoveredModule> GetLoadedModuleInfo() const;
 
   private:
     struct LoadedModule

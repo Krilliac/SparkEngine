@@ -1038,6 +1038,8 @@ namespace SparkEditor
             return "Top Down";
         case ProjectTemplate::Blank3D:
             return "Blank 3D";
+        case ProjectTemplate::MMO:
+            return "MMO";
         default:
             return "Unknown";
         }
@@ -1057,6 +1059,9 @@ namespace SparkEditor
             return "Top-down camera template suitable for strategy or adventure games.";
         case ProjectTemplate::Blank3D:
             return "A single empty 3D scene with default lighting and a ground plane.";
+        case ProjectTemplate::MMO:
+            return "MMO template with WorldServer/AreaServer architecture, seamless area "
+                   "streaming, entity replication, chat channels, and large-world support.";
         default:
             return "";
         }

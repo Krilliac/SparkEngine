@@ -45,7 +45,8 @@ namespace SparkEditor
         FirstPerson, ///< FPS template with player controller and basic level
         ThirdPerson, ///< Third person template
         TopDown,     ///< Top-down camera template
-        Blank3D      ///< Single empty scene with default lighting
+        Blank3D,     ///< Single empty scene with default lighting
+        MMO          ///< MMO template with area servers, world server, chat
     };
 
     /**

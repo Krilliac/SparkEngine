@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*142 test files, 1583+ test cases*
+*143 test files, 1589+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -517,6 +517,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestMathUtils` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestModuleDependency` | 5 |
+| `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 15 |
 | `TestMovementSystem` | 12 |
 | `TestMultiISADispatch` | 2 |

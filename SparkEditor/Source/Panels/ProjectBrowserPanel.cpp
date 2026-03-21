@@ -315,12 +315,12 @@ namespace SparkEditor
             int cols = std::max(1, static_cast<int>((totalWidth + spacing) / (cardWidth + spacing)));
 
             int idx = 0;
-            ProjectTemplate templates[] = {ProjectTemplate::Blank3D, ProjectTemplate::FirstPerson,
+            ProjectTemplate templates[] = {ProjectTemplate::Blank3D,     ProjectTemplate::FirstPerson,
                                            ProjectTemplate::ThirdPerson, ProjectTemplate::TopDown,
-                                           ProjectTemplate::Empty};
-            const char* icons[] = {"[ ]", "[FP]", "[TP]", "[TD]", "[ ]"};
+                                           ProjectTemplate::MMO,         ProjectTemplate::Empty};
+            const char* icons[] = {"[ ]", "[FP]", "[TP]", "[TD]", "[MMO]", "[ ]"};
 
-            for (int i = 0; i < 5; ++i)
+            for (int i = 0; i < 6; ++i)
             {
                 if (idx > 0 && (idx % cols) != 0)
                 {

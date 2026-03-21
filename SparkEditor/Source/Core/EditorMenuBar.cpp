@@ -427,6 +427,13 @@ namespace SparkEditor
             SetPanelVisible("Physics2D", !IsPanelVisible("Physics2D"));
         }
         ImGui::Separator();
+        ImGui::TextDisabled("Game Modules");
+        if (ImGui::MenuItem(ICON_FA_PUZZLE_PIECE " Game Module Selector", nullptr,
+                            IsPanelVisible("GameModuleSelector")))
+        {
+            SetPanelVisible("GameModuleSelector", !IsPanelVisible("GameModuleSelector"));
+        }
+        ImGui::Separator();
         ImGui::TextDisabled("FPS Panels");
         if (ImGui::MenuItem("Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
         {

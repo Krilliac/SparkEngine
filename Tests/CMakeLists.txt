@@ -90,6 +90,7 @@ add_executable(SparkTests
     TestHybridRT.cpp
     TestReliableChannel.cpp
     TestModuleDependency.cpp
+    TestModuleDiscovery.cpp
     TestReflection.cpp
     TestPathCache.cpp
     TestShaderGraphCompiler.cpp

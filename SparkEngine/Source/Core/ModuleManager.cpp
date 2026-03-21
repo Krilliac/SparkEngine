@@ -672,3 +672,139 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
         entry.libraryHandle = nullptr;
     }
 }
+
+std::vector<DiscoveredModule> ModuleManager::DiscoverModules(const std::string& directory) const
+{
+    std::vector<DiscoveredModule> result;
+
+    if (!std::filesystem::exists(directory))
+        return result;
+
+#ifdef _WIN32
+    const std::string ext = ".dll";
+#elif defined(__APPLE__)
+    const std::string ext = ".dylib";
+#else
+    const std::string ext = ".so";
+#endif
+
+    for (auto& entry : std::filesystem::directory_iterator(directory))
+    {
+        if (!entry.is_regular_file())
+            continue;
+
+        auto filePath = entry.path();
+        if (filePath.extension() != ext)
+            continue;
+
+        auto filename = filePath.filename().string();
+
+        bool isCandidate = (filename.contains("Game") || filename.contains("Module") || filename.contains("Plugin"));
+        bool isSystem =
+            (filename.find("d3d") == 0 || filename.find("vcruntime") == 0 || filename.find("msvcp") == 0 ||
+             filename.find("ucrtbase") == 0 || filename.contains("SparkConsole") || filename.contains("SparkEngine"));
+
+        if (!isCandidate || isSystem)
+            continue;
+
+        DiscoveredModule discovered;
+        discovered.path = filePath.string();
+        discovered.name = filePath.stem().string();
+        discovered.version = "unknown";
+        discovered.isLoaded = false;
+
+        // Check if already loaded
+        for (const auto& loaded : m_modules)
+        {
+            if (loaded.path == discovered.path || std::filesystem::equivalent(loaded.path, discovered.path))
+            {
+                discovered.isLoaded = true;
+                discovered.name = loaded.name;
+                if (loaded.instance)
+                {
+                    auto info = loaded.instance->GetModuleInfo();
+                    discovered.version = info.version;
+                }
+                break;
+            }
+        }
+
+        // If not loaded, try to probe the DLL for metadata
+        if (!discovered.isLoaded)
+        {
+#ifdef _WIN32
+            HMODULE hLib = LoadLibraryExA(discovered.path.c_str(), nullptr, DONT_RESOLVE_DLL_REFERENCES);
+            if (hLib)
+            {
+                auto createFn = reinterpret_cast<CreateModuleFn>(GetProcAddress(hLib, "CreateModule"));
+                auto destroyFn = reinterpret_cast<DestroyModuleFn>(GetProcAddress(hLib, "DestroyModule"));
+
+                if (createFn && destroyFn)
+                {
+                    auto* mod = createFn();
+                    if (mod)
+                    {
+                        auto info = mod->GetModuleInfo();
+                        discovered.name = info.name;
+                        discovered.version = info.version;
+                        destroyFn(mod);
+                    }
+                }
+                FreeLibrary(hLib);
+            }
+#else
+            void* handle = dlopen(discovered.path.c_str(), RTLD_LAZY | RTLD_LOCAL);
+            if (handle)
+            {
+                auto createFn = reinterpret_cast<CreateModuleFn>(dlsym(handle, "CreateModule"));
+                auto destroyFn = reinterpret_cast<DestroyModuleFn>(dlsym(handle, "DestroyModule"));
+
+                if (createFn && destroyFn)
+                {
+                    auto* mod = createFn();
+                    if (mod)
+                    {
+                        auto info = mod->GetModuleInfo();
+                        discovered.name = info.name;
+                        discovered.version = info.version;
+                        destroyFn(mod);
+                    }
+                }
+                dlclose(handle);
+            }
+#endif
+        }
+
+        result.push_back(std::move(discovered));
+    }
+
+    return result;
+}
+
+std::vector<DiscoveredModule> ModuleManager::GetLoadedModuleInfo() const
+{
+    std::vector<DiscoveredModule> result;
+    result.reserve(m_modules.size());
+
+    for (const auto& entry : m_modules)
+    {
+        DiscoveredModule info;
+        info.name = entry.name;
+        info.path = entry.path;
+        info.isLoaded = true;
+
+        if (entry.instance)
+        {
+            auto modInfo = entry.instance->GetModuleInfo();
+            info.version = modInfo.version;
+        }
+        else
+        {
+            info.version = "unknown";
+        }
+
+        result.push_back(std::move(info));
+    }
+
+    return result;
+}
