@@ -32,6 +32,7 @@ class AudioEngine;
 class PhysicsSystem;
 class SceneManager;
 class AngelScriptEngine;
+class AssetPipeline;
 class World;
 
 // ============================================================================
@@ -166,6 +167,8 @@ class EngineContext : public Spark::IEngineContext
     const SceneManager* GetSceneManager() const override { return GetSystem<SceneManager>(); }
     AngelScriptEngine* GetScriptEngine() override { return GetSystem<AngelScriptEngine>(); }
     const AngelScriptEngine* GetScriptEngine() const override { return GetSystem<AngelScriptEngine>(); }
+    ::AssetPipeline* GetAssetPipeline() override { return GetSystem<::AssetPipeline>(); }
+    const ::AssetPipeline* GetAssetPipeline() const override { return GetSystem<::AssetPipeline>(); }
     Spark::SaveSystem* GetSaveSystem() override { return GetSystem<Spark::SaveSystem>(); }
     const Spark::SaveSystem* GetSaveSystem() const override { return GetSystem<Spark::SaveSystem>(); }
     Spark::CoroutineScheduler* GetCoroutineScheduler() override { return GetSystem<Spark::CoroutineScheduler>(); }
@@ -192,6 +195,7 @@ class EngineContext : public Spark::IEngineContext
     void SetWorld(World* w) { RegisterSystem<World>(w); }
     void SetSceneManager(SceneManager* s) { RegisterSystem<SceneManager>(s); }
     void SetScriptEngine(AngelScriptEngine* s) { RegisterSystem<AngelScriptEngine>(s); }
+    void SetAssetPipeline(::AssetPipeline* a) { RegisterSystem<::AssetPipeline>(a); }
     void SetSaveSystem(Spark::SaveSystem* s) { RegisterSystem<Spark::SaveSystem>(s); }
     void SetCoroutineScheduler(Spark::CoroutineScheduler* c) { RegisterSystem<Spark::CoroutineScheduler>(c); }
 

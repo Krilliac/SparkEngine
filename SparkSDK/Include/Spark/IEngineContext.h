@@ -24,6 +24,7 @@ class AudioEngine;
 class PhysicsSystem;
 class SceneManager;
 class AngelScriptEngine;
+class AssetPipeline;
 class World;
 
 namespace Spark
@@ -112,6 +113,10 @@ namespace Spark
         /** @brief Get the save system (may return nullptr if not initialized) */
         virtual SaveSystem* GetSaveSystem() { return nullptr; }
         virtual const SaveSystem* GetSaveSystem() const { return nullptr; }
+
+        /** @brief Get the asset pipeline for model/texture/audio loading (may return nullptr if not initialized) */
+        virtual ::AssetPipeline* GetAssetPipeline() { return nullptr; }
+        virtual const ::AssetPipeline* GetAssetPipeline() const { return nullptr; }
 
         /** @brief Get the coroutine scheduler (may return nullptr if not initialized) */
         virtual CoroutineScheduler* GetCoroutineScheduler() { return nullptr; }
