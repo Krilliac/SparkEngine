@@ -436,7 +436,8 @@ struct RaycastHit
     XMFLOAT3 normal = {0, 1, 0};       ///< Hit surface normal
     float distance = 0.0f;             ///< Distance from ray origin
     class PhysicsBody* body = nullptr; ///< Hit physics body
-    void* userData = nullptr;          ///< User data from hit body
+    void* userData = nullptr;          ///< User data from hit body (legacy, prefer entityId)
+    uint32_t entityId = 0;             ///< ECS entity ID of the hit body (0 = no entity)
 };
 
 /**
@@ -450,6 +451,8 @@ struct ContactInfo
     XMFLOAT3 contactNormal = {0, 1, 0}; ///< Contact normal
     float penetrationDepth = 0.0f;      ///< Penetration depth
     float appliedImpulse = 0.0f;        ///< Applied impulse
+    uint32_t entityIdA = 0;             ///< ECS entity ID of bodyA (0 = no entity)
+    uint32_t entityIdB = 0;             ///< ECS entity ID of bodyB (0 = no entity)
 };
 
 // =============================================================================

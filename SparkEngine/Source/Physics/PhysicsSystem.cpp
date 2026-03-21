@@ -328,6 +328,8 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
                     info.contactNormal = FromBullet(pt.m_normalWorldOnB);
                     info.penetrationDepth = -pt.getDistance();
                     info.appliedImpulse = pt.getAppliedImpulse();
+                    info.entityIdA = bodyA->GetEntityID();
+                    info.entityIdB = bodyB->GetEntityID();
 
                     m_collisionCallback(info);
                 }
