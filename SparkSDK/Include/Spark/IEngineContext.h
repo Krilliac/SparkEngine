@@ -26,6 +26,7 @@ class SceneManager;
 class AngelScriptEngine;
 class AssetPipeline;
 class World;
+class SparkEngineCamera;
 
 namespace Spark
 {
@@ -50,7 +51,10 @@ namespace Spark
     namespace Gameplay
     {
         class AbilitySystem;
-    }
+        class WeaponSystem;
+        class ConditionSystem;
+        class InstanceManager;
+    } // namespace Gameplay
 
     namespace VR
     {
@@ -213,6 +217,22 @@ namespace Spark
         /** @brief Get the VR system (requires ENABLE_VR) */
         virtual VR::VRSystem* GetVR() { return nullptr; }
         virtual const VR::VRSystem* GetVR() const { return nullptr; }
+
+        /** @brief Get the active camera */
+        virtual ::SparkEngineCamera* GetCamera() { return nullptr; }
+        virtual const ::SparkEngineCamera* GetCamera() const { return nullptr; }
+
+        /** @brief Get the weapon system (weapon definitions, fire modes, recoil) */
+        virtual Gameplay::WeaponSystem* GetWeapons() { return nullptr; }
+        virtual const Gameplay::WeaponSystem* GetWeapons() const { return nullptr; }
+
+        /** @brief Get the condition system (universal gameplay conditions) */
+        virtual Gameplay::ConditionSystem* GetConditions() { return nullptr; }
+        virtual const Gameplay::ConditionSystem* GetConditions() const { return nullptr; }
+
+        /** @brief Get the instance manager (encounters, lockouts) */
+        virtual Gameplay::InstanceManager* GetInstances() { return nullptr; }
+        virtual const Gameplay::InstanceManager* GetInstances() const { return nullptr; }
 
         // =====================================================================
         // Engine state queries

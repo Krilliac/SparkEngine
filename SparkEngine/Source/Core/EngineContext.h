@@ -213,6 +213,24 @@ class EngineContext : public Spark::IEngineContext
     Spark::VR::VRSystem* GetVR() override { return GetSystem<Spark::VR::VRSystem>(); }
     const Spark::VR::VRSystem* GetVR() const override { return GetSystem<Spark::VR::VRSystem>(); }
 
+    SparkEngineCamera* GetCamera() override { return GetSystem<SparkEngineCamera>(); }
+    const SparkEngineCamera* GetCamera() const override { return GetSystem<SparkEngineCamera>(); }
+    Spark::Gameplay::WeaponSystem* GetWeapons() override { return GetSystem<Spark::Gameplay::WeaponSystem>(); }
+    const Spark::Gameplay::WeaponSystem* GetWeapons() const override
+    {
+        return GetSystem<Spark::Gameplay::WeaponSystem>();
+    }
+    Spark::Gameplay::ConditionSystem* GetConditions() override { return GetSystem<Spark::Gameplay::ConditionSystem>(); }
+    const Spark::Gameplay::ConditionSystem* GetConditions() const override
+    {
+        return GetSystem<Spark::Gameplay::ConditionSystem>();
+    }
+    Spark::Gameplay::InstanceManager* GetInstances() override { return GetSystem<Spark::Gameplay::InstanceManager>(); }
+    const Spark::Gameplay::InstanceManager* GetInstances() const override
+    {
+        return GetSystem<Spark::Gameplay::InstanceManager>();
+    }
+
     bool IsHeadless() const override;
 
     // =========================================================================
@@ -247,6 +265,10 @@ class EngineContext : public Spark::IEngineContext
     void SetDestruction(Spark::DestructionSystem* d) { RegisterSystem<Spark::DestructionSystem>(d); }
     void SetCinematic(Spark::Cinematic::SequencerManager* c) { RegisterSystem<Spark::Cinematic::SequencerManager>(c); }
     void SetVR(Spark::VR::VRSystem* v) { RegisterSystem<Spark::VR::VRSystem>(v); }
+    void SetCamera(SparkEngineCamera* c) { RegisterSystem<SparkEngineCamera>(c); }
+    void SetWeapons(Spark::Gameplay::WeaponSystem* w) { RegisterSystem<Spark::Gameplay::WeaponSystem>(w); }
+    void SetConditions(Spark::Gameplay::ConditionSystem* c) { RegisterSystem<Spark::Gameplay::ConditionSystem>(c); }
+    void SetInstances(Spark::Gameplay::InstanceManager* i) { RegisterSystem<Spark::Gameplay::InstanceManager>(i); }
 
     // =========================================================================
     // Generic system registry (R1.1 — single source of truth)
