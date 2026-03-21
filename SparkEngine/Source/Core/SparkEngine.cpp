@@ -63,6 +63,9 @@
 #include "Engine/ECS/Systems/TerrainSystem.h"
 #include "Graphics/TerrainRenderer.h"
 #include "Engine/Networking/ClientPrediction.h"
+#include "Engine/Networking/ConnectionScopeFilter.h"
+#include "Engine/Streaming/SeamlessAreaManager.h"
+#include "Engine/ECS/Systems/ParallelSystemExecutor.h"
 #include "Engine/AI/TacticalPointSystem.h"
 #include "Engine/AI/CoverSystem.h"
 #include "Engine/AI/FormationSystem.h"
@@ -71,6 +74,9 @@
 #include "Engine/Gameplay/MaterialEffects.h"
 #include "Engine/Dialogue/DynamicResponseSystem.h"
 #include "Engine/ECS/EntityArchetype.h"
+#include "Engine/ECS/EntityArchetypeLoader.h"
+#include "Engine/Gameplay/WeatherGameplayIntegration.h"
+#include "Graphics/MaterialLoader.h"
 #include "Engine/World/ProximityTriggerSystem.h"
 #include "Graphics/SkyAtmosphere.h"
 #include "Graphics/WaterRenderer.h"
@@ -96,6 +102,10 @@
 #include "Engine/UI/UIFactory.h"
 #include "Graphics/ClusteredLightCulling.h"
 #include "Graphics/LightProbeSystem.h"
+#include "Graphics/ClipmapTerrain.h"
+#include "Graphics/VirtualTexture.h"
+#include "Engine/ECS/Components/LightComponents.h"
+#include "Engine/ECS/Components/CoreComponents.h"
 #include "Graphics/MaterialPropertyHandle.h"
 #include "Graphics/RHI/PipelineStateCache.h"
 #include "Graphics/RenderGraph/TransientResourcePool.h"
@@ -257,6 +267,7 @@ static void InitGameplaySystems()
     Spark::Gameplay::MaterialEffectSystem::GetInstance().Initialize();
     Spark::Dialogue::DynamicResponseSystem::GetInstance().Initialize();
     Spark::ECS::EntityArchetypeSystem::GetInstance().Initialize();
+    Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Initialize(eventBus);
     Spark::World::ProximityTriggerSystem::GetInstance().Initialize();
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Initialize();
     Spark::Graphics::WaterRenderer::GetInstance().Initialize();
@@ -280,10 +291,19 @@ static void InitGameplaySystems()
     // MaterialPropertyRegistry needs no Initialize — it's ready after construction
     Spark::Graphics::PipelineStateCache::GetInstance().Initialize();
     Spark::Graphics::TransientResourcePool::GetInstance().Initialize();
+    Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
+    Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
 #ifndef NDEBUG
     Spark::ProfileProperties::GetInstance().Initialize();
 #endif
     Spark::PluginRegistry::InitializeAll();
+
+    // Predictive area streaming
+    Spark::Streaming::SeamlessAreaManager::GetInstance().Initialize();
+
+    // Stage-based parallel ECS executor
+    // Systems are registered by each subsystem; the executor is ready after Initialize
+    // (individual systems register themselves via RegisterSystem when they come online)
 }
 
 /**
@@ -303,6 +323,10 @@ static void UpdateGameplaySystems(float dt)
     // Phase 1: Non-ECS systems (no World dependency)
     if (auto* weather = ctx->GetWeather())
         weather->Update(dt);
+
+    // Weather → gameplay bridge (wind forces, AI perception, audio state)
+    Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, ctx->GetWeather(), ctx->GetPhysics());
+
     if (auto* dialogue = ctx->GetDialogue())
         dialogue->Update(dt);
     if (auto* ui = ctx->GetUI())
@@ -347,6 +371,40 @@ static void UpdateGameplaySystems(float dt)
     Spark::Graphics::ConstantBufferDiffManager::GetInstance().BeginFrame();
     Spark::Graphics::GPUPerfCounters::GetInstance().EndFrame();
 
+    // Clustered light culling — feed ECS lights into the 3D frustum grid
+    {
+        auto& clustering = Spark::Graphics::ClusteredLightCulling::GetInstance();
+        clustering.ClearLights();
+
+        auto& reg = world->GetRegistry();
+        auto lightView = reg.view<LightComponent, Transform>();
+        for (auto entity : lightView)
+        {
+            const auto& lc = lightView.get<LightComponent>(entity);
+            const auto& xform = lightView.get<Transform>(entity);
+
+            Spark::Graphics::LightData ld;
+            ld.position = xform.position;
+            ld.color = lc.color;
+            ld.intensity = lc.intensity;
+            ld.radius = lc.range;
+            ld.type = (lc.type == LightComponent::Type::Point) ? 0u : 1u;
+            clustering.AddLight(ld);
+        }
+
+        // Update with stored per-frame camera matrices from GraphicsEngine
+        if (g_graphics)
+        {
+            XMFLOAT4X4 viewMat, projMat;
+            XMStoreFloat4x4(&viewMat, g_graphics->GetFrameViewMatrix());
+            XMStoreFloat4x4(&projMat, g_graphics->GetFrameProjectionMatrix());
+            clustering.Update(viewMat, projMat, g_graphics->GetNearPlane(), g_graphics->GetFarPlane());
+        }
+    }
+
+    // Predictive area streaming
+    Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt);
+
     // Extended engine systems
     Spark::TweenSystem::GetInstance().Update(dt);
     Spark::UI::UIFactory::GetInstance().UpdateAllBindings();
@@ -358,11 +416,22 @@ static void UpdateGameplaySystems(float dt)
 
 static void ShutdownGameplaySystems()
 {
+    // Stage-based parallel ECS executor
+    Spark::ECS::StageBasedExecutor::GetInstance().Shutdown();
+
+    // Predictive area streaming
+    Spark::Streaming::SeamlessAreaManager::GetInstance().Shutdown();
+
+    // Per-connection replication scope filter
+    Spark::Net::ConnectionScopeFilter::GetInstance().Shutdown();
+
     // AI, environment, and world systems (reverse order)
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Shutdown();
     Spark::Graphics::WaterRenderer::GetInstance().Shutdown();
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Shutdown();
     Spark::World::ProximityTriggerSystem::GetInstance().Shutdown();
+    Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Shutdown();
+    Spark::Graphics::MaterialLoader::GetInstance().Shutdown();
     Spark::ECS::EntityArchetypeSystem::GetInstance().Shutdown();
     Spark::Dialogue::DynamicResponseSystem::GetInstance().Shutdown();
     Spark::Gameplay::MaterialEffectSystem::GetInstance().Shutdown();
@@ -384,6 +453,8 @@ static void ShutdownGameplaySystems()
 #ifndef NDEBUG
     Spark::ProfileProperties::GetInstance().Shutdown();
 #endif
+    Spark::Graphics::VirtualTextureManager::GetInstance().Shutdown();
+    Spark::Graphics::ClipmapTerrain::GetInstance().Shutdown();
     Spark::Graphics::TransientResourcePool::GetInstance().Shutdown();
     Spark::Graphics::PipelineStateCache::GetInstance().Shutdown();
     Spark::Graphics::MaterialPropertyRegistry::GetInstance().Shutdown();
@@ -728,6 +799,8 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
         float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
 
+        Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
+
         if (g_moduleManager && g_moduleManager->HasModules())
             g_moduleManager->UpdateAll(dt);
 
@@ -909,6 +982,10 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
             // OS scheduling delays). Raw dt is preserved for profiling accuracy.
             float rawDt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
             float dt = g_deltaSmoother.Smooth(rawDt);
+
+            // Advance the global fixed-timestep accumulator so all systems can
+            // query GetFixedStepCount() for deterministic fixed-rate updates.
+            Spark::FixedTimestepAccumulator::GetInstance().Advance(rawDt);
 
             if (g_input)
                 g_input->Update();
@@ -1199,6 +1276,9 @@ static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
  */
 static void TickFrame(float dt)
 {
+    // Advance the global fixed-timestep accumulator for deterministic fixed-rate updates.
+    Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
+
     if (g_input)
         g_input->Update();
 
@@ -1378,6 +1458,8 @@ static int RunHeadlessLinux(int argc, char* argv[])
     {
         auto tickStart = std::chrono::steady_clock::now();
         float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
+
+        Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
         if (g_moduleManager && g_moduleManager->HasModules())
             g_moduleManager->UpdateAll(dt);

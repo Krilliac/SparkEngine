@@ -123,6 +123,7 @@ GraphicsEngine::GraphicsEngine()
         m_assetPipeline = std::make_unique<AssetPipeline>();
 
         m_lightManager = std::make_unique<LightManager>();
+        m_renderPipeline = std::make_unique<Spark::Graphics::RenderPipeline>();
         m_postProcessing = std::make_unique<PostProcessingPipeline>();
         m_temporalEffects = std::make_unique<TemporalEffects>();
         m_shadowAtlas = std::make_unique<Spark::Graphics::ShadowAtlas>();
@@ -475,6 +476,10 @@ void GraphicsEngine::Shutdown()
     m_gpuTimestampQuery.Shutdown();
 
     // Shutdown legacy systems
+    if (m_renderPipeline)
+    {
+        m_renderPipeline->Shutdown();
+    }
     if (m_lightManager)
     {
         m_lightManager->Shutdown();
@@ -760,6 +765,20 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
     case RenderingPipeline::Clustered:
         RenderForwardPlus(viewMatrix, projMatrix, visibleObjects);
         break;
+    case RenderingPipeline::RenderGraphBased:
+        if (m_renderPipeline)
+        {
+            XMMATRIX invView = XMMatrixInverse(nullptr, viewMatrix);
+            XMFLOAT3 cameraPos;
+            XMStoreFloat3(&cameraPos, invView.r[3]);
+            UpdateFrameConstants(viewMatrix, projMatrix, cameraPos);
+            m_renderPipeline->ExecuteFrame(viewMatrix, projMatrix, cameraPos);
+        }
+        else
+        {
+            RenderForward(viewMatrix, projMatrix, visibleObjects);
+        }
+        break;
     default:
         RenderForward(viewMatrix, projMatrix, visibleObjects);
         break;
@@ -974,6 +993,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_lightingSystem = std::make_unique<LightingSystem>();
     m_assetPipeline = std::make_unique<AssetPipeline>();
     m_lightManager = std::make_unique<LightManager>();
+    m_renderPipeline = std::make_unique<Spark::Graphics::RenderPipeline>();
     m_postProcessing = std::make_unique<PostProcessingPipeline>();
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initialized on Linux via RHI (%s)",

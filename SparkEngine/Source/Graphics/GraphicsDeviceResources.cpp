@@ -570,6 +570,11 @@ void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX&
 
 void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& view, const XMMATRIX& proj, const XMFLOAT3& cameraPos)
 {
+    // Store per-frame camera state for system queries (e.g. ClusteredLightCulling)
+    m_frameViewMatrix = view;
+    m_frameProjMatrix = proj;
+    m_frameCameraPos = cameraPos;
+
     if (!m_basicFrameConstantBuffer || !m_context)
     {
         return;
@@ -1292,9 +1297,12 @@ void GraphicsEngine::UpdateBasicConstants(const DirectX::XMMATRIX& /*world*/, co
     // Constant buffer updates go through the RHI bridge on Linux.
 }
 
-void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& /*view*/, const XMMATRIX& /*proj*/,
-                                          const XMFLOAT3& /*cameraPos*/)
+void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& view, const XMMATRIX& proj, const XMFLOAT3& cameraPos)
 {
+    // Store per-frame camera state for system queries (e.g. ClusteredLightCulling)
+    m_frameViewMatrix = view;
+    m_frameProjMatrix = proj;
+    m_frameCameraPos = cameraPos;
     // Frame constants are managed per-subsystem through the RHI on Linux.
 }
 
