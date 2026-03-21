@@ -58,7 +58,7 @@ namespace SparkEditor
                 // Display scene texture
                 if (m_srv)
                 {
-                    ImGui::Image((void*)m_srv.Get(), viewportSize);
+                    ImGui::Image(static_cast<void*>(m_srv.Get()), viewportSize);
                 }
                 else
                 {

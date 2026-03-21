@@ -359,7 +359,7 @@ namespace Spark
                 void End() override;
                 void Reset() override;
 
-                void SetRenderTargets(IRHITexture** renderTargets, uint32_t count, IRHITexture* depthStencil) override;
+                void SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count, IRHITexture* depthStencil) override;
                 void ClearRenderTarget(IRHITexture* target, const float color[4]) override;
                 void ClearDepthStencil(IRHITexture* target, float depth, uint8_t stencil) override;
 

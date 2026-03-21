@@ -152,8 +152,8 @@ namespace Spark::Animation
         const std::vector<BlendSpaceSample>& GetSamples() const { return m_samples; }
 
       private:
-        /** @brief Rebuild the Delaunay triangulation from current samples. */
-        void Retriangulate();
+        /** @brief Rebuild the Delaunay triangulation from current samples (logically const — lazy cache). */
+        void Retriangulate() const;
 
         /**
          * @brief Find the triangle containing a point and compute barycentric coords.
@@ -179,8 +179,8 @@ namespace Spark::Animation
 
         std::string m_name;
         std::vector<BlendSpaceSample> m_samples;
-        std::vector<BlendTriangle> m_triangles;
-        bool m_dirty = true;
+        mutable std::vector<BlendTriangle> m_triangles;
+        mutable bool m_dirty = true;
     };
 
     // =========================================================================

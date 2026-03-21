@@ -165,7 +165,7 @@ namespace Spark
                 m_currentRootSignature = nullptr;
             }
 
-            void D3D12CommandList::SetRenderTargets(IRHITexture** renderTargets, uint32_t count,
+            void D3D12CommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                                     IRHITexture* depthStencil)
             {
                 D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[8] = {};

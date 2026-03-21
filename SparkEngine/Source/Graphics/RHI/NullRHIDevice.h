@@ -27,7 +27,7 @@ namespace Spark
             void End() override {}
             void Reset() override { m_drawCalls = 0; }
 
-            void SetRenderTargets(IRHITexture**, uint32_t, IRHITexture*) override {}
+            void SetRenderTargets(IRHITexture* const*, uint32_t, IRHITexture*) override {}
             void ClearRenderTarget(IRHITexture*, const float[4]) override {}
             void ClearDepthStencil(IRHITexture*, float, uint8_t) override {}
 

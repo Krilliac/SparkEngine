@@ -78,7 +78,8 @@ namespace Spark
             virtual void Reset() = 0;
 
             // Render targets
-            virtual void SetRenderTargets(IRHITexture** renderTargets, uint32_t count, IRHITexture* depthStencil) = 0;
+            virtual void SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
+                                          IRHITexture* depthStencil) = 0;
             virtual void ClearRenderTarget(IRHITexture* target, const float color[4]) = 0;
             virtual void ClearDepthStencil(IRHITexture* target, float depth, uint8_t stencil) = 0;
 
