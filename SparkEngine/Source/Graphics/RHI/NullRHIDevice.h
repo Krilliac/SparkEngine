@@ -88,12 +88,12 @@ namespace Spark
                 m_caps.deviceName = "Null Device";
                 m_caps.vendorName = "SparkEngine";
                 m_caps.apiVersion = "Null 1.0";
-                m_caps.videoMemoryMB = 0;
+                m_caps.dedicatedVideoMemory = 0;
                 m_caps.maxTextureSize = 16384;
                 m_caps.maxRenderTargets = 8;
-                m_caps.supportsTessellation = false;
-                m_caps.supportsComputeShaders = true;
-                m_caps.supportsGeometryShaders = false;
+                m_caps.tessellationSupport = false;
+                m_caps.computeShaderSupport = true;
+                m_caps.geometryShaderSupport = false;
                 m_initialized = true;
                 return true;
             }

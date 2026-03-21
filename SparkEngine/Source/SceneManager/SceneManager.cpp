@@ -9,6 +9,8 @@
 #include "Game/RampObject.h"
 #include "Game/WallObject.h"
 #include "Graphics/GraphicsEngine.h"
+#include "Engine/Events/EventSystem.h"
+#include "Core/EngineContext.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
@@ -101,6 +103,16 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
         LOG_TO_CONSOLE_IMMEDIATE(L"Scene loaded: " + std::to_wstring(m_objects.size()) + L" objects, " +
                                      std::to_wstring(m_sceneNodes.size()) + L" nodes",
                                  L"SUCCESS");
+
+        // Publish SceneLoadedEvent
+        if (auto* ctx = EngineContext::Get())
+        {
+            if (auto* bus = ctx->GetEventBus())
+            {
+                std::string narrowPath(filepath.begin(), filepath.end());
+                bus->Publish(Spark::SceneLoadedEvent{narrowPath});
+            }
+        }
     }
     return loaded;
 }
@@ -355,6 +367,19 @@ void SceneManager::NewScene(const std::string& name)
 
 void SceneManager::Clear()
 {
+    // Publish SceneUnloadedEvent before clearing
+    if (!m_currentFilePath.empty())
+    {
+        if (auto* ctx = EngineContext::Get())
+        {
+            if (auto* bus = ctx->GetEventBus())
+            {
+                std::string narrowPath(m_currentFilePath.begin(), m_currentFilePath.end());
+                bus->Publish(Spark::SceneUnloadedEvent{narrowPath});
+            }
+        }
+    }
+
     m_objects.clear();
     m_sceneNodes.clear();
     m_nodeNameIndex.clear();

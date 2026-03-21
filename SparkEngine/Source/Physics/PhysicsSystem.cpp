@@ -11,6 +11,7 @@
  */
 
 #include "PhysicsSystem.h"
+#include "Engine/Events/EventSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
@@ -301,6 +302,13 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
                 if (!wasActive)
                 {
                     m_triggerCallback(bodyA, bodyB, true);
+
+                    if (m_eventBus)
+                    {
+                        auto idA = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyA->GetUserData()));
+                        auto idB = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyB->GetUserData()));
+                        m_eventBus->Publish(Spark::TriggerEnterEvent{idA, idB});
+                    }
                 }
             }
         }
@@ -322,6 +330,13 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
                     info.appliedImpulse = pt.getAppliedImpulse();
 
                     m_collisionCallback(info);
+                }
+
+                if (m_eventBus)
+                {
+                    auto idA = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyA->GetUserData()));
+                    auto idB = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyB->GetUserData()));
+                    m_eventBus->Publish(Spark::CollisionEvent{idA, idB, pt.getAppliedImpulse()});
                 }
             }
         }
@@ -348,6 +363,13 @@ void PhysicsSystem::UpdateTriggerExitEvents(
         if (!stillActive)
         {
             m_triggerCallback(prev.first, prev.second, false);
+
+            if (m_eventBus)
+            {
+                auto idA = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(prev.first->GetUserData()));
+                auto idB = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(prev.second->GetUserData()));
+                m_eventBus->Publish(Spark::TriggerExitEvent{idA, idB});
+            }
         }
     }
 }

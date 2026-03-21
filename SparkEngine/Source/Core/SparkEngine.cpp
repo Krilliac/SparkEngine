@@ -97,9 +97,21 @@
 #include "Utils/ProfileProperties.h"
 #include "Engine/Networking/DeltaSnapshotManager.h"
 #include "Engine/Networking/InstabilitySimulator.h"
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/AreaServer.h"
+#include "Engine/Networking/WorldServer.h"
+#include "Engine/Networking/DedicatedServer.h"
+#endif
 #include "Engine/Tween/TweenSystem.h"
 #include "Engine/Modding/VirtualFileSystem.h"
 #include "Engine/UI/UIFactory.h"
+#include "Engine/Scripting/AngelScriptEngine.h"
+#include "Engine/Scripting/LuaScriptEngine.h"
+#include "Engine/Animation/BlendSpace.h"
+#include "Utils/Profiler.h"
+#include "Graphics/RHI/DXRSupport.h"
+#include "Graphics/RHI/NullRHIDevice.h"
+#include "Graphics/RHI/RHIValidationLayer.h"
 #include "Graphics/ClusteredLightCulling.h"
 #include "Graphics/LightProbeSystem.h"
 #include "Graphics/ClipmapTerrain.h"
@@ -258,6 +270,11 @@ static void InitGameplaySystems()
         destruction.SetWorld(world);
     }
 
+    // Wire destruction events into DynamicResponseSystem for signal-based responses
+    destruction.OnDestruction(
+        [](const Spark::DestructionEvent& e)
+        { Spark::Dialogue::DynamicResponseSystem::GetInstance().SendSignal("OnDestruction", e.entityId); });
+
     // AI, environment, and world systems
     Spark::AI::TacticalPointSystem::GetInstance().Initialize();
     Spark::AI::CoverSystem::GetInstance().Initialize();
@@ -298,8 +315,52 @@ static void InitGameplaySystems()
 #endif
     Spark::PluginRegistry::InitializeAll();
 
+    // AngelScript scripting engine
+    {
+        static AngelScriptEngine s_angelScript;
+        if (s_angelScript.Initialize())
+        {
+            AngelScriptEngine::BindWorld(ctx->GetWorld());
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "AngelScriptEngine initialized");
+        }
+    }
+
+    // Lua scripting engine (optional, guarded by SPARK_LUA_AVAILABLE internally)
+    if (Spark::Scripting::LuaScriptEngine::GetInstance().Initialize())
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "LuaScriptEngine initialized");
+    }
+
+    // BlendSpaceManager — force singleton construction so it's ready for animation queries
+    (void)Spark::Animation::BlendSpaceManager::GetInstance();
+
+    // Profiler — frame timing, GPU queries, memory tracking
+    Profiler::GetInstance().SetEnabled(true);
+
+#ifdef ENABLE_DXR
+    // DXR raytracing — Initialize is a no-op stub when no D3D12 device is available.
+    // The DXRManager gracefully handles nullptr by returning false.
+    Spark::Graphics::DXRManager::GetInstance().Initialize(nullptr);
+#endif
+
+#ifndef NDEBUG
+    // RHI validation layer (debug builds only)
+    Spark::Graphics::RHIValidationLayer::GetInstance().Initialize();
+
+    // NullRHI device — construct singleton for headless test availability
+    (void)Spark::RHI::NullRHIDevice::GetInstance();
+#endif
+
     // Predictive area streaming
     Spark::Streaming::SeamlessAreaManager::GetInstance().Initialize();
+
+#ifdef ENABLE_NETWORKING
+    // Networking servers — initialized and ready for Start() from game code or console.
+    // AreaServer/WorldServer/DedicatedServer run their own internal tick threads once started.
+    // They are NOT auto-started; game modules call Start() with appropriate configs.
+    SPARK_LOG_INFO(Spark::LogCategory::Core,
+                   "Networking enabled — AreaServer, WorldServer, and DedicatedServer are available");
+#endif
 
     // Stage-based parallel ECS executor
     // Systems are registered by each subsystem; the executor is ready after Initialize
@@ -319,6 +380,15 @@ static void UpdateGameplaySystems(float dt)
     auto* ctx = EngineContext::Get();
     if (!ctx)
         return;
+
+    // Profiler frame boundary
+    Profiler::GetInstance().BeginFrame();
+
+    // Publish FrameBeginEvent so subscribers know a new frame has started
+    if (auto* bus = ctx->GetEventBus())
+    {
+        bus->Publish(Spark::FrameBeginEvent{dt});
+    }
 
     // Phase 1: Non-ECS systems (no World dependency)
     if (auto* weather = ctx->GetWeather())
@@ -412,6 +482,18 @@ static void UpdateGameplaySystems(float dt)
 #ifndef NDEBUG
     Spark::ProfileProperties::GetInstance().ResetFrameProperties();
 #endif
+
+    // Stage-based parallel ECS executor — runs all registered systems by stage
+    Spark::ECS::StageBasedExecutor::GetInstance().ExecuteAll(dt);
+
+    // Profiler frame boundary (end)
+    Profiler::GetInstance().EndFrame();
+
+    // Publish FrameEndEvent so subscribers know the frame is complete
+    if (auto* bus = ctx->GetEventBus())
+    {
+        bus->Publish(Spark::FrameEndEvent{dt});
+    }
 }
 
 static void ShutdownGameplaySystems()
@@ -474,6 +556,24 @@ static void ShutdownGameplaySystems()
     Spark::Gameplay::InstanceManager::GetInstance().Shutdown();
     Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();
     Spark::Gameplay::ConditionSystem::GetInstance().Shutdown();
+
+    // Scripting engines
+    if (auto* as = AngelScriptEngine::GetInstance())
+    {
+        as->Shutdown();
+    }
+    Spark::Scripting::LuaScriptEngine::GetInstance().Shutdown();
+
+    // Profiler
+    Profiler::GetInstance().Shutdown();
+
+#ifdef ENABLE_DXR
+    Spark::Graphics::DXRManager::GetInstance().Shutdown();
+#endif
+
+#ifndef NDEBUG
+    Spark::Graphics::RHIValidationLayer::GetInstance().Shutdown();
+#endif
 }
 
 static void UpdateDebugSystems(float dt)
@@ -508,6 +608,8 @@ static void InitPhysics()
     EngineContext::Get()->SetPhysics(g_physicsOwned.get());
     if (g_graphics)
         g_graphics->SetPhysicsSystem(g_physicsOwned.get());
+    if (g_eventBus)
+        g_physicsOwned->SetEventBus(g_eventBus.get());
 #endif
 }
 
@@ -530,6 +632,12 @@ static void InitConsole()
     }
     InitDebugSystems();
     InitGameplaySystems();
+
+    // Publish EngineStartEvent — all systems initialized
+    if (g_eventBus)
+    {
+        g_eventBus->Publish(Spark::EngineStartEvent{});
+    }
 }
 
 static void ShutdownPhysics()
@@ -551,6 +659,12 @@ static void ShutdownPhysics()
  */
 static void ShutdownEngine()
 {
+    // Publish EngineShutdownEvent before tearing down systems
+    if (g_eventBus)
+    {
+        g_eventBus->Publish(Spark::EngineShutdownEvent{});
+    }
+
     ShutdownGameplaySystems();
     ShutdownDebugSystems();
     Spark::ConsoleProcessManager::GetInstance().Shutdown();
@@ -946,6 +1060,18 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     LogMissingModuleWarnings();
     InitDebugSystems();
     InitGameplaySystems();
+
+    // Wire WeatherSystem to EventBus for WeatherChangedEvent publishing
+    if (g_weatherSystem && g_eventBus)
+    {
+        g_weatherSystem->SetEventBus(g_eventBus.get());
+    }
+
+    // Publish EngineStartEvent — all systems initialized, ready to run
+    if (g_eventBus)
+    {
+        g_eventBus->Publish(Spark::EngineStartEvent{});
+    }
 }
 
 /**
@@ -1177,6 +1303,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_graphics->OnResize(LOWORD(lParam), HIWORD(lParam));
         if (g_moduleManager)
             g_moduleManager->ResizeAll(LOWORD(lParam), HIWORD(lParam));
+        if (g_eventBus)
+            g_eventBus->Publish(Spark::WindowResizeEvent{LOWORD(lParam), HIWORD(lParam)});
         break;
 
     case WM_DESTROY:
@@ -1312,6 +1440,12 @@ static void RegisterGameplaySubsystems()
 {
     static Spark::WeatherSystem s_weatherSystem;
     EngineContext::Get()->SetWeather(&s_weatherSystem);
+
+    // Wire WeatherSystem to EventBus for WeatherChangedEvent publishing
+    if (g_eventBus)
+    {
+        s_weatherSystem.SetEventBus(g_eventBus.get());
+    }
 
     static Spark::UI::UISystem s_uiSystem;
     EngineContext::Get()->SetUI(&s_uiSystem);
@@ -1573,6 +1707,8 @@ static bool HandleSDLEvent(const SDL_Event& event)
                 g_graphics->OnResize(w, h);
             if (g_moduleManager)
                 g_moduleManager->ResizeAll(w, h);
+            if (g_eventBus)
+                g_eventBus->Publish(Spark::WindowResizeEvent{static_cast<uint32_t>(w), static_cast<uint32_t>(h)});
         }
         break;
 
@@ -1668,6 +1804,12 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     settings.RegisterConsoleCommands();
     InitDebugSystems();
     InitGameplaySystems();
+
+    // Publish EngineStartEvent — all systems initialized
+    if (g_eventBus)
+    {
+        g_eventBus->Publish(Spark::EngineStartEvent{});
+    }
 }
 
 /**
