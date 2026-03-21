@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <format>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -564,11 +565,11 @@ namespace Spark::Net
                                     ClientID id = static_cast<ClientID>(std::stoul(args[0]));
                                     std::string reason = (args.size() > 1) ? args[1] : "Kicked by admin";
                                     KickPlayer(id, reason);
-                                    return std::string("Kicked client ") + std::to_string(id);
+                                    return std::format("Kicked client {}", id);
                                 }
                                 catch (const std::exception&)
                                 {
-                                    return std::string("Invalid client ID: ") + args[0];
+                                    return std::format("Invalid client ID: {}", args[0]);
                                 }
                             });
 
@@ -582,11 +583,11 @@ namespace Spark::Net
                                     ClientID id = static_cast<ClientID>(std::stoul(args[0]));
                                     std::string reason = (args.size() > 1) ? args[1] : "Banned by admin";
                                     BanPlayer(id, reason);
-                                    return std::string("Banned client ") + std::to_string(id);
+                                    return std::format("Banned client {}", id);
                                 }
                                 catch (const std::exception&)
                                 {
-                                    return std::string("Invalid client ID: ") + args[0];
+                                    return std::format("Invalid client ID: {}", args[0]);
                                 }
                             });
 
@@ -594,9 +595,9 @@ namespace Spark::Net
                             [this](const std::vector<std::string>& args)
                             {
                                 if (args.empty())
-                                    return std::string("Current map: ") + m_currentMap;
+                                    return std::format("Current map: {}", m_currentMap);
                                 ChangeMap(args[0]);
-                                return std::string("Changing map to ") + args[0];
+                                return std::format("Changing map to {}", args[0]);
                             });
 
         RegisterRconCommand("say", "Broadcast server message: say <text>",
@@ -618,7 +619,7 @@ namespace Spark::Net
                                 buf.WriteString("[SERVER] " + text);
                                 msg.payload = buf.GetData();
                                 NetworkManager::GetInstance().SendToAll(msg);
-                                return std::string("Broadcast: ") + text;
+                                return std::format("Broadcast: {}", text);
                             });
 
         RegisterRconCommand("players", "List connected players",
@@ -646,7 +647,7 @@ namespace Spark::Net
                             {
                                 RotateToNextMap();
                                 StartMatch();
-                                return std::string("Rotated to map: ") + m_currentMap;
+                                return std::format("Rotated to map: {}", m_currentMap);
                             });
 
         RegisterRconCommand("quit", "Shut down the server",

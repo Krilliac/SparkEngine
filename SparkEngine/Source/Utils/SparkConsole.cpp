@@ -164,7 +164,11 @@ namespace Spark
                 {
                     result += "\n[" + cat + "]\n";
                     for (const auto& cmd : cmds)
-                        result += "  " + cmd + " - " + m_commands.at(cmd).description + "\n";
+                    {
+                        auto cmdIt = m_commands.find(cmd);
+                        if (cmdIt != m_commands.end())
+                            result += "  " + cmd + " - " + cmdIt->second.description + "\n";
+                    }
                 }
                 return result;
             },

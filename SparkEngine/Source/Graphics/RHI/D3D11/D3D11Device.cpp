@@ -763,7 +763,9 @@ namespace Spark
                     srvDesc.Format = ConvertFormat(desc.format);
                     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
                     srvDesc.Texture2D.MipLevels = desc.mipLevels;
-                    m_device->CreateShaderResourceView(resource.Get(), &srvDesc, &srv);
+                    HRESULT srvHr = m_device->CreateShaderResourceView(resource.Get(), &srvDesc, &srv);
+                    if (FAILED(srvHr))
+                        return nullptr;
                 }
 
                 return std::make_unique<D3D11Texture>(desc, resource, std::move(srv)).release();
