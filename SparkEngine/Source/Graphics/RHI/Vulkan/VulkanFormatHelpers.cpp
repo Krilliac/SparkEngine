@@ -300,9 +300,6 @@ namespace Spark
 
         } // namespace Vulkan
     } // namespace RHI
-
-} // namespace Vulkan
-} // namespace RHI
 } // namespace Spark
 
 #endif // SPARK_VULKAN_SUPPORT

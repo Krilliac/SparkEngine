@@ -310,9 +310,7 @@ static void InitGameplaySystems()
     Spark::Graphics::TransientResourcePool::GetInstance().Initialize();
     Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
     Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
-#ifndef NDEBUG
-    Spark::ProfileProperties::GetInstance().Initialize();
-#endif
+    // ProfileProperties is ready after GetInstance() — no Initialize() needed
     Spark::PluginRegistry::InitializeAll();
 
     // AngelScript scripting engine
