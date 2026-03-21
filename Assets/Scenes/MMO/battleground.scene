@@ -1,0 +1,154 @@
+{
+    "name": "Battleground",
+    "version": 1,
+    "description": "PvP arena zone with cover, objectives, and elevated terrain.",
+    "areaId": 4,
+    "maxPlayers": 40,
+    "pvpEnabled": true,
+    "instanced": true,
+    "entities": [
+        {
+            "name": "SunLight",
+            "components": {
+                "Transform": {
+                    "position": [0, 50, 3000],
+                    "rotation": [60, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "Light": {
+                    "type": "Directional",
+                    "color": [1.0, 0.85, 0.7],
+                    "intensity": 1.5,
+                    "castShadows": true
+                }
+            }
+        },
+        {
+            "name": "PlayerCamera",
+            "components": {
+                "Transform": {
+                    "position": [0, 3, 2992],
+                    "rotation": [10, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "Camera": {
+                    "fov": 75.0,
+                    "near": 0.1,
+                    "far": 3000.0,
+                    "primary": true
+                }
+            }
+        },
+        {
+            "name": "ArenaFloor",
+            "components": {
+                "Transform": {
+                    "position": [0, 0, 3000],
+                    "rotation": [0, 0, 0],
+                    "scale": [500, 1, 500]
+                },
+                "MeshRenderer": {
+                    "mesh": "Primitive/Cube",
+                    "material": "Materials/MMO/ArenaSand.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [500, 0.5, 500] }
+            }
+        },
+        {
+            "name": "Cover_Wall_01",
+            "components": {
+                "Transform": {
+                    "position": [20, 0, 2980],
+                    "rotation": [0, 30, 0],
+                    "scale": [6, 3, 1]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/barrier.obj",
+                    "material": "Materials/MMO/Stone.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [3, 1.5, 0.5] }
+            }
+        },
+        {
+            "name": "Cover_Wall_02",
+            "components": {
+                "Transform": {
+                    "position": [-20, 0, 3020],
+                    "rotation": [0, -30, 0],
+                    "scale": [6, 3, 1]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/barrier.obj",
+                    "material": "Materials/MMO/Stone.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [3, 1.5, 0.5] }
+            }
+        },
+        {
+            "name": "CenterPillar",
+            "components": {
+                "Transform": {
+                    "position": [0, 0, 3000],
+                    "rotation": [0, 0, 0],
+                    "scale": [3, 8, 3]
+                },
+                "MeshRenderer": {
+                    "mesh": "Primitive/Cube",
+                    "material": "Materials/MMO/Stone.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [1.5, 4, 1.5] }
+            }
+        },
+        {
+            "name": "SpawnPoint_TeamA_01",
+            "components": {
+                "Transform": {
+                    "position": [-80, 1, 3000],
+                    "rotation": [0, 90, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 1, "index": 0 }
+            }
+        },
+        {
+            "name": "SpawnPoint_TeamB_01",
+            "components": {
+                "Transform": {
+                    "position": [80, 1, 3000],
+                    "rotation": [0, -90, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 2, "index": 0 }
+            }
+        },
+        {
+            "name": "AmbientSound_Arena",
+            "components": {
+                "Transform": {
+                    "position": [0, 10, 3000],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "AudioSource": {
+                    "sound": "Audio/MMO/ambient_arena.wav",
+                    "volume": 0.3,
+                    "spatial": false,
+                    "loop": true,
+                    "playOnAwake": true
+                }
+            }
+        }
+    ],
+    "environment": {
+        "ambientColor": [0.25, 0.18, 0.12],
+        "skyTexture": "Textures/Sky/sky_gradient.png",
+        "fogEnabled": true,
+        "fogColor": [0.6, 0.5, 0.4],
+        "fogStart": 150.0,
+        "fogEnd": 500.0
+    }
+}

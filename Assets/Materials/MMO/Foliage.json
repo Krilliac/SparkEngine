@@ -1,0 +1,12 @@
+{
+    "name": "Foliage",
+    "shader": "PBR",
+    "albedo": "Textures/MMO/foliage_diffuse.png",
+    "normal": "Textures/Default/normal_flat.png",
+    "metallic": 0.0,
+    "roughness": 0.7,
+    "ao": 0.6,
+    "alphaTest": true,
+    "alphaCutoff": 0.5,
+    "doubleSided": true
+}

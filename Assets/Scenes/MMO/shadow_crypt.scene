@@ -1,0 +1,166 @@
+{
+    "name": "ShadowCrypt",
+    "version": 1,
+    "description": "Instanced dungeon - dark underground crypt with shadow creatures and bosses.",
+    "areaId": 3,
+    "maxPlayers": 5,
+    "pvpEnabled": false,
+    "instanced": true,
+    "entities": [
+        {
+            "name": "DungeonLight_Ambient",
+            "components": {
+                "Transform": {
+                    "position": [0, -100, 0],
+                    "rotation": [90, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "Light": {
+                    "type": "Directional",
+                    "color": [0.2, 0.15, 0.3],
+                    "intensity": 0.3,
+                    "castShadows": false
+                }
+            }
+        },
+        {
+            "name": "PlayerCamera",
+            "components": {
+                "Transform": {
+                    "position": [0, -148, -8],
+                    "rotation": [10, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "Camera": {
+                    "fov": 70.0,
+                    "near": 0.1,
+                    "far": 500.0,
+                    "primary": true
+                }
+            }
+        },
+        {
+            "name": "CryptFloor",
+            "components": {
+                "Transform": {
+                    "position": [0, -150, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [200, 1, 200]
+                },
+                "MeshRenderer": {
+                    "mesh": "Primitive/Cube",
+                    "material": "Materials/MMO/DungeonStone.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [100, 0.5, 100] }
+            }
+        },
+        {
+            "name": "Torch_01",
+            "components": {
+                "Transform": {
+                    "position": [5, -147, 10],
+                    "rotation": [0, 0, 0],
+                    "scale": [0.3, 1.5, 0.3]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/torch.obj",
+                    "material": "Materials/Wood.json"
+                },
+                "Light": {
+                    "type": "Point",
+                    "color": [1.0, 0.6, 0.2],
+                    "intensity": 3.0,
+                    "range": 20.0,
+                    "castShadows": true
+                },
+                "ParticleEmitter": {
+                    "effect": "fire",
+                    "autoPlay": true,
+                    "emissionRate": 20
+                }
+            }
+        },
+        {
+            "name": "Torch_02",
+            "components": {
+                "Transform": {
+                    "position": [-5, -147, 10],
+                    "rotation": [0, 0, 0],
+                    "scale": [0.3, 1.5, 0.3]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/torch.obj",
+                    "material": "Materials/Wood.json"
+                },
+                "Light": {
+                    "type": "Point",
+                    "color": [1.0, 0.5, 0.15],
+                    "intensity": 2.5,
+                    "range": 18.0,
+                    "castShadows": true
+                }
+            }
+        },
+        {
+            "name": "CryptKeeper_Spawn",
+            "components": {
+                "Transform": {
+                    "position": [0, -149, 60],
+                    "rotation": [0, 180, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 1, "index": 20 },
+                "Tag": { "tags": ["Boss", "CryptKeeper", "SpawnPoint"] }
+            }
+        },
+        {
+            "name": "ShadowLord_Spawn",
+            "components": {
+                "Transform": {
+                    "position": [0, -149, 150],
+                    "rotation": [0, 180, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 1, "index": 21 },
+                "Tag": { "tags": ["Boss", "ShadowLord", "FinalBoss", "SpawnPoint"] }
+            }
+        },
+        {
+            "name": "SpawnPoint_Party",
+            "components": {
+                "Transform": {
+                    "position": [0, -149, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 0, "index": 0 }
+            }
+        },
+        {
+            "name": "AmbientSound_Dungeon",
+            "components": {
+                "Transform": {
+                    "position": [0, -140, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "AudioSource": {
+                    "sound": "Audio/MMO/ambient_dungeon.wav",
+                    "volume": 0.6,
+                    "spatial": false,
+                    "loop": true,
+                    "playOnAwake": true
+                }
+            }
+        }
+    ],
+    "environment": {
+        "ambientColor": [0.05, 0.03, 0.08],
+        "skyTexture": "",
+        "fogEnabled": true,
+        "fogColor": [0.05, 0.02, 0.08],
+        "fogStart": 20.0,
+        "fogEnd": 80.0
+    }
+}

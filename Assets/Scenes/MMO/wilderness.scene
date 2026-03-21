@@ -1,0 +1,176 @@
+{
+    "name": "Wilderness",
+    "version": 1,
+    "description": "Open-world PvE zone with rolling terrain, forests, and roaming enemies.",
+    "areaId": 2,
+    "maxPlayers": 200,
+    "pvpEnabled": false,
+    "entities": [
+        {
+            "name": "SunLight",
+            "components": {
+                "Transform": {
+                    "position": [0, 100, 0],
+                    "rotation": [55, -45, 0],
+                    "scale": [1, 1, 1]
+                },
+                "Light": {
+                    "type": "Directional",
+                    "color": [1.0, 0.98, 0.92],
+                    "intensity": 1.0,
+                    "castShadows": true
+                }
+            }
+        },
+        {
+            "name": "PlayerCamera",
+            "components": {
+                "Transform": {
+                    "position": [550, 3, -8],
+                    "rotation": [10, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "Camera": {
+                    "fov": 75.0,
+                    "near": 0.1,
+                    "far": 5000.0,
+                    "primary": true
+                }
+            }
+        },
+        {
+            "name": "Terrain_Base",
+            "components": {
+                "Transform": {
+                    "position": [2750, 0, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [2250, 1, 2000]
+                },
+                "MeshRenderer": {
+                    "mesh": "Primitive/Cube",
+                    "material": "Materials/Terrain_Grass.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [2250, 0.5, 2000] }
+            }
+        },
+        {
+            "name": "TreeCluster_01",
+            "components": {
+                "Transform": {
+                    "position": [800, 0, 200],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/tree_pine.obj",
+                    "material": "Materials/MMO/Foliage.json"
+                }
+            }
+        },
+        {
+            "name": "TreeCluster_02",
+            "components": {
+                "Transform": {
+                    "position": [1200, 0, -400],
+                    "rotation": [0, 60, 0],
+                    "scale": [1.2, 1.2, 1.2]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/tree_pine.obj",
+                    "material": "Materials/MMO/Foliage.json"
+                }
+            }
+        },
+        {
+            "name": "RockFormation_01",
+            "components": {
+                "Transform": {
+                    "position": [1500, 0, 500],
+                    "rotation": [0, 30, 0],
+                    "scale": [5, 4, 3]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/rock_large.obj",
+                    "material": "Materials/MMO/Rock.json"
+                },
+                "RigidBody": { "type": "Static", "mass": 0 },
+                "BoxCollider": { "halfExtents": [5, 2, 3] }
+            }
+        },
+        {
+            "name": "AncientGolem_SpawnPoint",
+            "components": {
+                "Transform": {
+                    "position": [2500, 1, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 1, "index": 10 },
+                "Tag": { "tags": ["WorldBoss", "AncientGolem", "SpawnPoint"] }
+            }
+        },
+        {
+            "name": "RangerCamp",
+            "components": {
+                "Transform": {
+                    "position": [1000, 0, -200],
+                    "rotation": [0, 0, 0],
+                    "scale": [3, 2, 3]
+                },
+                "MeshRenderer": {
+                    "mesh": "Models/MMO/tent.obj",
+                    "material": "Materials/MMO/Fabric.json"
+                },
+                "Tag": { "tags": ["WildernessRangers", "Camp", "SafeZone"] }
+            }
+        },
+        {
+            "name": "SpawnPoint_Elf",
+            "components": {
+                "Transform": {
+                    "position": [550, 1, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 0, "index": 2 }
+            }
+        },
+        {
+            "name": "SpawnPoint_Orc",
+            "components": {
+                "Transform": {
+                    "position": [600, 1, -50],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "SpawnPoint": { "team": 0, "index": 3 }
+            }
+        },
+        {
+            "name": "AmbientSound_Wilderness",
+            "components": {
+                "Transform": {
+                    "position": [2750, 5, 0],
+                    "rotation": [0, 0, 0],
+                    "scale": [1, 1, 1]
+                },
+                "AudioSource": {
+                    "sound": "Audio/MMO/ambient_wilderness.wav",
+                    "volume": 0.5,
+                    "spatial": false,
+                    "loop": true,
+                    "playOnAwake": true
+                }
+            }
+        }
+    ],
+    "environment": {
+        "ambientColor": [0.12, 0.15, 0.1],
+        "skyTexture": "Textures/Sky/sky_gradient.png",
+        "fogEnabled": true,
+        "fogColor": [0.6, 0.7, 0.65],
+        "fogStart": 400.0,
+        "fogEnd": 2000.0
+    }
+}

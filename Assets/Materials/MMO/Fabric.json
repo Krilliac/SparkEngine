@@ -1,0 +1,9 @@
+{
+    "name": "Fabric",
+    "shader": "PBR",
+    "albedo": "Textures/MMO/fabric_diffuse.png",
+    "normal": "Textures/Default/normal_flat.png",
+    "metallic": 0.0,
+    "roughness": 0.8,
+    "ao": 0.9
+}
