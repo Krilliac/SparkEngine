@@ -23,6 +23,15 @@ namespace MMO
     class MMOWorldSetup;
     class MMOPlayerSystem;
     class MMOChatSystem;
+    class MMOInventorySystem;
+    class MMOCraftingSystem;
+    class MMOGuildSystem;
+    class MMOTradingSystem;
+    class MMOPartySystem;
+    class MMOAchievementSystem;
+    class MMOReputationSystem;
+    class MMODungeonSystem;
+    class MMOWorldBossSystem;
 } // namespace MMO
 
 /**
@@ -65,6 +74,17 @@ class SparkGameMMOModule : public Spark::IModule
     std::unique_ptr<MMO::MMOWorldSetup> m_worldSetup;
     std::unique_ptr<MMO::MMOPlayerSystem> m_playerSystem;
     std::unique_ptr<MMO::MMOChatSystem> m_chatSystem;
+
+    // MMO gameplay systems
+    std::unique_ptr<MMO::MMOInventorySystem> m_inventorySystem;
+    std::unique_ptr<MMO::MMOCraftingSystem> m_craftingSystem;
+    std::unique_ptr<MMO::MMOGuildSystem> m_guildSystem;
+    std::unique_ptr<MMO::MMOTradingSystem> m_tradingSystem;
+    std::unique_ptr<MMO::MMOPartySystem> m_partySystem;
+    std::unique_ptr<MMO::MMOAchievementSystem> m_achievementSystem;
+    std::unique_ptr<MMO::MMOReputationSystem> m_reputationSystem;
+    std::unique_ptr<MMO::MMODungeonSystem> m_dungeonSystem;
+    std::unique_ptr<MMO::MMOWorldBossSystem> m_worldBossSystem;
 };
 
 // Module exports
