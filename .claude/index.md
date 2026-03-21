@@ -29,7 +29,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine: 29 working (10 TrinityCore new), 0 orphaned | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-18 |
 | Editor: 24 working, all panels resolved | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | **Resolved** | 2026-03-16 |
 | SparkGame: 75% functional FPS, no AI enemies | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
-| SDK: unique_ptr fixed, ECS exposed, IGameModule gap | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
+| SDK v2: 10 headers, 26 getters, math/input/event/logger types | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | **Resolved** | 2026-03-21 |
 | Docs: 58 wiki pages, 245/246 Doxygen, 5 critical gaps remaining | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-19 |
 | ThirdParty: 6 uninitialized submodules, curl removed | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-17 |
 
@@ -57,7 +57,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 **RESOLVED: EventBus ODR** → EventSystem.h now delegates to Utils/EventBus.h. Single canonical implementation.
 
-**RESOLVED: SDK unique_ptr** → Changed to raw pointer with manual lifecycle. ECS World exposed via GetWorld().
+**RESOLVED: SDK v2 (2026-03-21)** → Extended from 6→10 headers, 19→26 subsystem getters. Added ILogger, MathTypes, InputTypes, EventTypes. IModule gained OnFixedUpdate/OnPause/OnResume/OnImGui. SDK ABI version bumped to 2. String ownership documented. EngineContext.h updated with matching getters/setters.
 
 **RESOLVED: curl dependency** → Removed from .gitmodules and CMakeLists.txt.
 

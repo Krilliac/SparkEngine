@@ -189,6 +189,30 @@ class EngineContext : public Spark::IEngineContext
     Spark::ModSystem* GetModSystem() override { return GetSystem<Spark::ModSystem>(); }
     const Spark::ModSystem* GetModSystem() const override { return GetSystem<Spark::ModSystem>(); }
 
+    Spark::ReplaySystem* GetReplay() override { return GetSystem<Spark::ReplaySystem>(); }
+    const Spark::ReplaySystem* GetReplay() const override { return GetSystem<Spark::ReplaySystem>(); }
+    Spark::LocalizationSystem* GetLocalization() override { return GetSystem<Spark::LocalizationSystem>(); }
+    const Spark::LocalizationSystem* GetLocalization() const override { return GetSystem<Spark::LocalizationSystem>(); }
+    Spark::TweenSystem* GetTween() override { return GetSystem<Spark::TweenSystem>(); }
+    const Spark::TweenSystem* GetTween() const override { return GetSystem<Spark::TweenSystem>(); }
+    Spark::Gameplay::AbilitySystem* GetAbilities() override { return GetSystem<Spark::Gameplay::AbilitySystem>(); }
+    const Spark::Gameplay::AbilitySystem* GetAbilities() const override
+    {
+        return GetSystem<Spark::Gameplay::AbilitySystem>();
+    }
+    Spark::DestructionSystem* GetDestruction() override { return GetSystem<Spark::DestructionSystem>(); }
+    const Spark::DestructionSystem* GetDestruction() const override { return GetSystem<Spark::DestructionSystem>(); }
+    Spark::Cinematic::SequencerManager* GetCinematic() override
+    {
+        return GetSystem<Spark::Cinematic::SequencerManager>();
+    }
+    const Spark::Cinematic::SequencerManager* GetCinematic() const override
+    {
+        return GetSystem<Spark::Cinematic::SequencerManager>();
+    }
+    Spark::VR::VRSystem* GetVR() override { return GetSystem<Spark::VR::VRSystem>(); }
+    const Spark::VR::VRSystem* GetVR() const override { return GetSystem<Spark::VR::VRSystem>(); }
+
     bool IsHeadless() const override;
 
     // =========================================================================
@@ -216,6 +240,13 @@ class EngineContext : public Spark::IEngineContext
     void SetUI(Spark::UI::UISystem* u) { RegisterSystem<Spark::UI::UISystem>(u); }
     void SetDialogue(Spark::DialogueSystem* d) { RegisterSystem<Spark::DialogueSystem>(d); }
     void SetModSystem(Spark::ModSystem* m) { RegisterSystem<Spark::ModSystem>(m); }
+    void SetReplay(Spark::ReplaySystem* r) { RegisterSystem<Spark::ReplaySystem>(r); }
+    void SetLocalization(Spark::LocalizationSystem* l) { RegisterSystem<Spark::LocalizationSystem>(l); }
+    void SetTween(Spark::TweenSystem* t) { RegisterSystem<Spark::TweenSystem>(t); }
+    void SetAbilities(Spark::Gameplay::AbilitySystem* a) { RegisterSystem<Spark::Gameplay::AbilitySystem>(a); }
+    void SetDestruction(Spark::DestructionSystem* d) { RegisterSystem<Spark::DestructionSystem>(d); }
+    void SetCinematic(Spark::Cinematic::SequencerManager* c) { RegisterSystem<Spark::Cinematic::SequencerManager>(c); }
+    void SetVR(Spark::VR::VRSystem* v) { RegisterSystem<Spark::VR::VRSystem>(v); }
 
     // =========================================================================
     // Generic system registry (R1.1 — single source of truth)

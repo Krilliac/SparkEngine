@@ -10,11 +10,11 @@
 #pragma once
 
 #ifdef _WIN32
-    #define SPARK_EXPORT __declspec(dllexport)
-    #define SPARK_IMPORT __declspec(dllimport)
+#define SPARK_EXPORT __declspec(dllexport)
+#define SPARK_IMPORT __declspec(dllimport)
 #else
-    #define SPARK_EXPORT __attribute__((visibility("default")))
-    #define SPARK_IMPORT
+#define SPARK_EXPORT __attribute__((visibility("default")))
+#define SPARK_IMPORT
 #endif
 
 /**
@@ -24,9 +24,9 @@
  * This ensures CreateModule and DestroyModule are exported.
  */
 #ifdef SPARK_MODULE_DLL
-    #define SPARK_MODULE_API SPARK_EXPORT
+#define SPARK_MODULE_API SPARK_EXPORT
 #else
-    #define SPARK_MODULE_API SPARK_IMPORT
+#define SPARK_MODULE_API SPARK_IMPORT
 #endif
 
 /**
@@ -36,7 +36,7 @@
  * SPARK_GAME_DLL and use SPARK_GAME_API.
  */
 #ifdef SPARK_GAME_DLL
-    #define SPARK_GAME_API SPARK_EXPORT
+#define SPARK_GAME_API SPARK_EXPORT
 #else
-    #define SPARK_GAME_API SPARK_IMPORT
+#define SPARK_GAME_API SPARK_IMPORT
 #endif

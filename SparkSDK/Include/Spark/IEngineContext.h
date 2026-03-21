@@ -42,6 +42,21 @@ namespace Spark
         class AISystem;
     }
 
+    namespace Cinematic
+    {
+        class SequencerManager;
+    }
+
+    namespace Gameplay
+    {
+        class AbilitySystem;
+    }
+
+    namespace VR
+    {
+        class VRSystem;
+    }
+
     class NetworkManager;
     class SaveSystem;
     class CoroutineScheduler;
@@ -50,6 +65,10 @@ namespace Spark
     class WeatherSystem;
     class DialogueSystem;
     class ModSystem;
+    class ReplaySystem;
+    class LocalizationSystem;
+    class TweenSystem;
+    class DestructionSystem;
 
     namespace UI
     {
@@ -66,11 +85,18 @@ namespace Spark
      *
      * Prefer using IEngineContext over global variables (g_graphics, g_input, etc.)
      * which are deprecated and will be removed in a future release.
+     *
+     * All optional getters return nullptr when the subsystem is not initialized
+     * or disabled. Always null-check before use.
      */
     class IEngineContext
     {
       public:
         virtual ~IEngineContext() = default;
+
+        // =====================================================================
+        // Core subsystems (always available after engine init)
+        // =====================================================================
 
         /** @brief Get the graphics/rendering engine */
         virtual GraphicsEngine* GetGraphics() = 0;
@@ -88,73 +114,109 @@ namespace Spark
         virtual EventBus* GetEventBus() = 0;
         virtual const EventBus* GetEventBus() const = 0;
 
-        /** @brief Get the audio engine (may return nullptr if audio init failed) */
+        // =====================================================================
+        // Optional subsystems (may return nullptr if not initialized/disabled)
+        // =====================================================================
+
+        /** @brief Get the audio engine */
         virtual ::AudioEngine* GetAudio() = 0;
         virtual const ::AudioEngine* GetAudio() const = 0;
 
-        /** @brief Get the physics system (may return nullptr if not initialized) */
+        /** @brief Get the physics system */
         virtual PhysicsSystem* GetPhysics() = 0;
         virtual const PhysicsSystem* GetPhysics() const = 0;
 
-        /** @brief Get the animation system (may return nullptr if not initialized) */
+        /** @brief Get the animation system */
         virtual Animation::AnimationSystem* GetAnimation() { return nullptr; }
         virtual const Animation::AnimationSystem* GetAnimation() const { return nullptr; }
 
-        /** @brief Get the AI system (may return nullptr if not initialized) */
+        /** @brief Get the AI system */
         virtual AI::AISystem* GetAI() { return nullptr; }
         virtual const AI::AISystem* GetAI() const { return nullptr; }
 
-        /** @brief Get the network manager (may return nullptr if networking is disabled) */
+        /** @brief Get the network manager (requires ENABLE_NETWORKING) */
         virtual NetworkManager* GetNetwork() { return nullptr; }
         virtual const NetworkManager* GetNetwork() const { return nullptr; }
 
-        /** @brief Get the ECS world (may return nullptr if not initialized) */
+        /** @brief Get the ECS world for entity/component access */
         virtual World* GetWorld() { return nullptr; }
         virtual const World* GetWorld() const { return nullptr; }
 
-        /** @brief Get the scene manager (may return nullptr if not initialized) */
+        /** @brief Get the scene manager */
         virtual SceneManager* GetSceneManager() { return nullptr; }
         virtual const SceneManager* GetSceneManager() const { return nullptr; }
 
-        /** @brief Get the AngelScript engine (may return nullptr if scripting is disabled) */
+        /** @brief Get the AngelScript engine (requires scripting enabled) */
         virtual AngelScriptEngine* GetScriptEngine() { return nullptr; }
         virtual const AngelScriptEngine* GetScriptEngine() const { return nullptr; }
 
-        /** @brief Get the save system (may return nullptr if not initialized) */
+        /** @brief Get the save system */
         virtual SaveSystem* GetSaveSystem() { return nullptr; }
         virtual const SaveSystem* GetSaveSystem() const { return nullptr; }
 
-        /** @brief Get the asset pipeline for model/texture/audio loading (may return nullptr if not initialized) */
+        /** @brief Get the asset pipeline for model/texture/audio loading */
         virtual ::AssetPipeline* GetAssetPipeline() { return nullptr; }
         virtual const ::AssetPipeline* GetAssetPipeline() const { return nullptr; }
 
-        /** @brief Get the coroutine scheduler (may return nullptr if not initialized) */
+        /** @brief Get the coroutine scheduler for async tasks */
         virtual CoroutineScheduler* GetCoroutineScheduler() { return nullptr; }
         virtual const CoroutineScheduler* GetCoroutineScheduler() const { return nullptr; }
 
-        /** @brief Get the local file cache (may return nullptr if not initialized) */
+        /** @brief Get the local file cache */
         virtual LocalFileCache* GetFileCache() { return nullptr; }
         virtual const LocalFileCache* GetFileCache() const { return nullptr; }
 
-        /** @brief Get the asset registry for handle-based asset lookups (may return nullptr) */
+        /** @brief Get the asset registry for handle-based asset lookups */
         virtual AssetRegistry* GetAssetRegistry() { return nullptr; }
         virtual const AssetRegistry* GetAssetRegistry() const { return nullptr; }
 
-        /** @brief Get the weather system (may return nullptr if not initialized) */
+        /** @brief Get the weather system */
         virtual WeatherSystem* GetWeather() { return nullptr; }
         virtual const WeatherSystem* GetWeather() const { return nullptr; }
 
-        /** @brief Get the UI system (may return nullptr if not initialized) */
+        /** @brief Get the UI system */
         virtual UI::UISystem* GetUI() { return nullptr; }
         virtual const UI::UISystem* GetUI() const { return nullptr; }
 
-        /** @brief Get the dialogue system (may return nullptr if not initialized) */
+        /** @brief Get the dialogue system */
         virtual DialogueSystem* GetDialogue() { return nullptr; }
         virtual const DialogueSystem* GetDialogue() const { return nullptr; }
 
-        /** @brief Get the modding system (may return nullptr if not initialized) */
+        /** @brief Get the modding system */
         virtual ModSystem* GetModSystem() { return nullptr; }
         virtual const ModSystem* GetModSystem() const { return nullptr; }
+
+        /** @brief Get the replay recording/playback system */
+        virtual ReplaySystem* GetReplay() { return nullptr; }
+        virtual const ReplaySystem* GetReplay() const { return nullptr; }
+
+        /** @brief Get the localization/i18n system */
+        virtual LocalizationSystem* GetLocalization() { return nullptr; }
+        virtual const LocalizationSystem* GetLocalization() const { return nullptr; }
+
+        /** @brief Get the tween/interpolation system */
+        virtual TweenSystem* GetTween() { return nullptr; }
+        virtual const TweenSystem* GetTween() const { return nullptr; }
+
+        /** @brief Get the ability system (spells, auras, procs) */
+        virtual Gameplay::AbilitySystem* GetAbilities() { return nullptr; }
+        virtual const Gameplay::AbilitySystem* GetAbilities() const { return nullptr; }
+
+        /** @brief Get the destruction system for destructible objects */
+        virtual DestructionSystem* GetDestruction() { return nullptr; }
+        virtual const DestructionSystem* GetDestruction() const { return nullptr; }
+
+        /** @brief Get the cinematic sequencer manager */
+        virtual Cinematic::SequencerManager* GetCinematic() { return nullptr; }
+        virtual const Cinematic::SequencerManager* GetCinematic() const { return nullptr; }
+
+        /** @brief Get the VR system (requires ENABLE_VR) */
+        virtual VR::VRSystem* GetVR() { return nullptr; }
+        virtual const VR::VRSystem* GetVR() const { return nullptr; }
+
+        // =====================================================================
+        // Engine state queries
+        // =====================================================================
 
         /** @brief Check if the engine is running in headless/dedicated server mode */
         virtual bool IsHeadless() const { return false; }
@@ -164,6 +226,22 @@ namespace Spark
 
         /** @brief Get the SDK ABI version */
         virtual uint32_t GetSDKVersion() const = 0;
+
+        /**
+         * @brief Get elapsed time since engine start in seconds
+         * @return Total runtime in seconds, or 0.0 if not available
+         */
+        virtual double GetElapsedTime() const { return 0.0; }
+
+        /**
+         * @brief Get the current frame number (monotonically increasing)
+         * @return Frame count since engine start, or 0 if not available
+         */
+        virtual uint64_t GetFrameNumber() const { return 0; }
+
+        // =====================================================================
+        // Subsystem lifecycle
+        // =====================================================================
 
         /**
          * @brief Initialize all registered subsystems in dependency order
