@@ -182,7 +182,8 @@ namespace Spark
                 // Create pipeline cache
                 VkPipelineCacheCreateInfo cacheInfo = {};
                 cacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-                vkCreatePipelineCache(m_device, &cacheInfo, nullptr, &m_pipelineCache);
+                if (vkCreatePipelineCache(m_device, &cacheInfo, nullptr, &m_pipelineCache) != VK_SUCCESS)
+                    return false;
 
                 // Create descriptor pool
                 VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
@@ -197,7 +198,8 @@ namespace Spark
                 poolInfo.pPoolSizes = poolSizes;
                 poolInfo.maxSets = 2000;
 
-                vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool);
+                if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
+                    return false;
 
                 // Create descriptor set layout and default pipeline layout
                 if (!CreateDescriptorSetLayout())
@@ -216,8 +218,11 @@ namespace Spark
 
                 for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
                 {
-                    vkCreateFence(m_device, &fenceInfo, nullptr, &m_frameFences[i]);
-                    vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]);
+                    if (vkCreateFence(m_device, &fenceInfo, nullptr, &m_frameFences[i]) != VK_SUCCESS)
+                        return false;
+                    if (vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) !=
+                        VK_SUCCESS)
+                        return false;
                 }
 
                 // Load debug utility function pointers if validation is enabled
@@ -706,7 +711,8 @@ namespace Spark
                 surfaceInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
                 surfaceInfo.hwnd = static_cast<HWND>(desc.windowHandle);
                 surfaceInfo.hinstance = GetModuleHandle(nullptr);
-                vkCreateWin32SurfaceKHR(m_instance, &surfaceInfo, nullptr, &surface);
+                if (vkCreateWin32SurfaceKHR(m_instance, &surfaceInfo, nullptr, &surface) != VK_SUCCESS)
+                    return nullptr;
 #endif
 
                 return std::make_unique<VulkanSwapChain>(m_device, m_physicalDevice, surface, desc, m_queueFamilies,

@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
@@ -127,7 +128,7 @@ bool ModuleManager::LoadModule(const std::string& path)
     if (!handle)
     {
         DWORD err = GetLastError();
-        console.LogError("Failed to load module '" + path + "' (error " + std::to_string(err) + ")");
+        console.LogError(std::format("Failed to load module '{}' (error {})", path, err));
         return false;
     }
 #else
@@ -135,7 +136,7 @@ bool ModuleManager::LoadModule(const std::string& path)
     if (!handle)
     {
         const char* err = dlerror();
-        console.LogError(std::string("Failed to load module '") + path + "': " + (err ? err : "unknown"));
+        console.LogError(std::format("Failed to load module '{}': {}", path, err ? err : "unknown"));
         return false;
     }
 #endif
@@ -158,7 +159,7 @@ bool ModuleManager::LoadModule(const std::string& path)
         Spark::IModule* instance = createFn();
         if (!instance)
         {
-            console.LogError("CreateModule() returned null for '" + path + "'");
+            console.LogError(std::format("CreateModule() returned null for '{}'", path));
 #ifdef _WIN32
             FreeLibrary(static_cast<HMODULE>(handle));
 #else
@@ -172,8 +173,8 @@ bool ModuleManager::LoadModule(const std::string& path)
         // SDK version compatibility check
         if (!Spark::IsSDKCompatible(info.sdkVersion))
         {
-            console.LogError(std::string("Module '") + info.name + "' SDK version mismatch (module=" +
-                             std::to_string(info.sdkVersion) + ", engine=" + std::to_string(SPARK_SDK_VERSION) + ")");
+            console.LogError(std::format("Module '{}' SDK version mismatch (module={}, engine={})", info.name,
+                                         info.sdkVersion, SPARK_SDK_VERSION));
             destroyFn(instance);
 #ifdef _WIN32
             FreeLibrary(static_cast<HMODULE>(handle));
@@ -193,7 +194,7 @@ bool ModuleManager::LoadModule(const std::string& path)
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = false;
 
-        console.LogSuccess(std::string("Loaded module: ") + info.name + " v" + info.version);
+        console.LogSuccess(std::format("Loaded module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
         SortModules();
         return true;
@@ -243,14 +244,14 @@ bool ModuleManager::LoadModule(const std::string& path)
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = true;
 
-        console.LogSuccess(std::string("Loaded legacy module: ") + info.name + " v" + info.version);
+        console.LogSuccess(std::format("Loaded legacy module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
         SortModules();
         return true;
     }
 
     // No recognized exports
-    console.LogError("Module '" + path + "' has no recognized exports (CreateModule or CreateGameModule)");
+    console.LogError(std::format("Module '{}' has no recognized exports (CreateModule or CreateGameModule)", path));
 #ifdef _WIN32
     FreeLibrary(static_cast<HMODULE>(handle));
 #else

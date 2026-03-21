@@ -18,8 +18,6 @@
 #include <cmath>
 #include <sstream>
 
-#ifdef SPARK_PLATFORM_WINDOWS
-
 using namespace DirectX;
 /// Thread-local Mersenne Twister RNG seeded from hardware entropy.
 /// Thread-local avoids contention when multiple emitters update in parallel.
@@ -669,8 +667,6 @@ void ParticleSystem::Console_SpawnEffect(const std::string& effectType, float x,
     else if (effectType == "trail")
         SpawnTrail(pos);
 }
-
-#endif // SPARK_PLATFORM_WINDOWS
 
 #else // !SPARK_PLATFORM_WINDOWS
 

@@ -355,10 +355,12 @@ bool InputManager::Console_BindKey(const std::string& action, const std::string&
     if (existingIt != m_keyBindings.end())
     {
         m_reverseBindings.erase(existingIt->second);
+        existingIt->second = virtualKey;
     }
-
-    // Add new binding
-    m_keyBindings[action] = virtualKey;
+    else
+    {
+        m_keyBindings.emplace(action, virtualKey);
+    }
     m_reverseBindings[virtualKey] = action;
 
     NotifyStateChange();
