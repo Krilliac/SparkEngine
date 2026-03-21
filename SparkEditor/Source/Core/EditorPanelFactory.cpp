@@ -49,6 +49,7 @@
 #include "../Panels/StreamingPanel.h"
 #include "../Panels/ModdingPanel.h"
 #include "../Panels/CoroutineDebugPanel.h"
+#include "../Panels/GameModuleSelectorPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include <imgui.h>
@@ -146,6 +147,9 @@ namespace SparkEditor
             registerPanel("Streaming", std::make_shared<StreamingPanel>());
             registerPanel("Modding", std::make_shared<ModdingPanel>());
             registerPanel("CoroutineDebug", std::make_shared<CoroutineDebugPanel>());
+
+            // Multi-game module management
+            registerPanel("GameModuleSelector", std::make_shared<GameModuleSelectorPanel>());
         }
 
         // Initialize all panels
@@ -213,6 +217,7 @@ namespace SparkEditor
             {"Streaming", ICON_FA_MAP},
             {"Modding", ICON_FA_BOXES},
             {"CoroutineDebug", ICON_FA_CLOCK},
+            {"GameModuleSelector", ICON_FA_PUZZLE_PIECE},
         };
 
         for (const auto& [name, icon] : panelIcons)
@@ -223,16 +228,17 @@ namespace SparkEditor
 
         // Panels hidden by default (accessible via menus)
         const char* hiddenPanels[] = {
-            "WeaponEditor",      "FPSTools",        "DebugVisualizer",
-            "SceneStats",        "ObjectPlacement", "BuildCook",
-            "UndoHistory",       "PrefabEditor",    "Search",
-            "DedicatedServer",   "TerrainEditor",   "PostProcessing",
-            "DialogueEditor",    "AIEditor",        "SplineEditor",
-            "ParticleEditor",    "EventMonitor",    "SaveSystem",
-            "Localization",      "WeatherFog",      "CinematicSequencer",
-            "ProjectSettings",   "AudioMixer",      "ScriptEditor",
-            "DestructionEditor", "Replay",          "VRConfig",
-            "Streaming",         "Modding",         "CoroutineDebug",
+            "WeaponEditor",       "FPSTools",        "DebugVisualizer",
+            "SceneStats",         "ObjectPlacement", "BuildCook",
+            "UndoHistory",        "PrefabEditor",    "Search",
+            "DedicatedServer",    "TerrainEditor",   "PostProcessing",
+            "DialogueEditor",     "AIEditor",        "SplineEditor",
+            "ParticleEditor",     "EventMonitor",    "SaveSystem",
+            "Localization",       "WeatherFog",      "CinematicSequencer",
+            "ProjectSettings",    "AudioMixer",      "ScriptEditor",
+            "DestructionEditor",  "Replay",          "VRConfig",
+            "Streaming",          "Modding",         "CoroutineDebug",
+            "GameModuleSelector",
         };
 
         for (const char* name : hiddenPanels)

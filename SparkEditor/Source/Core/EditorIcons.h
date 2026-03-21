@@ -202,3 +202,6 @@
 // === Path / Spline Icons ===
 #define ICON_FA_BEZIER_CURVE "\xef\x95\x9b" // U+F55B
 #define ICON_FA_ROUTE "\xef\x93\x97"        // U+F4D7
+
+// === Module / Plugin Icons ===
+#define ICON_FA_PUZZLE_PIECE "\xef\x84\xae" // U+F12E

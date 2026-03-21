@@ -786,6 +786,7 @@ cmake --build build --config Release
 | `DialogueEditorPanel` | `SparkEditor/Source/Panels/DialogueEditorPanel.h` |
 | `EventMonitorPanel` | `SparkEditor/Source/Panels/EventMonitorPanel.h` |
 | `FPSToolsPanel` | `SparkEditor/Source/Panels/FPSToolsPanel.h` |
+| `GameModuleSelectorPanel` | `SparkEditor/Source/Panels/GameModuleSelectorPanel.h` |
 | `GameViewPanel` | `SparkEditor/Source/Panels/GameViewPanel.h` |
 | `HierarchyPanel` | `SparkEditor/Source/Panels/HierarchyPanel.h` |
 | `InspectorPanel` | `SparkEditor/Source/Panels/InspectorPanel.h` |

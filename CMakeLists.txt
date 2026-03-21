@@ -627,6 +627,25 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGame/CMakeLists.txt")
 endif()
 
 # ---------------------------------------------------------------------
+# 9.55) Build SparkGameMMO (MMO networking showcase module DLL)
+# ---------------------------------------------------------------------
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGameMMO/CMakeLists.txt")
+    message(STATUS "Adding SparkGameMMO game module to build...")
+    add_subdirectory(SparkGameMMO)
+
+    if(TARGET SparkGameMMO)
+        # Copy SparkGameMMO DLL next to the engine executable after build.
+        add_custom_command(TARGET SparkEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SparkGameMMO>
+                $<TARGET_FILE_DIR:SparkEngine>
+            COMMENT "Copying SparkGameMMO DLL to engine output directory"
+            VERBATIM
+        )
+    endif()
+endif()
+
+# ---------------------------------------------------------------------
 # 9.6) Build SparkEditor if enabled and exists
 # ---------------------------------------------------------------------
 set(SPARK_EDITOR_DEPS_OK TRUE)
