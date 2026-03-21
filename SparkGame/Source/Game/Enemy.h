@@ -32,10 +32,12 @@ class Player;
  */
 enum class EnemyType
 {
-    Grunt, ///< Basic patrol + attack
-    Guard, ///< Stationary sentry
-    Scout, ///< Fast, low-health flanker
-    Heavy  ///< Slow, high-health tank
+    Grunt,  ///< Basic patrol + attack
+    Guard,  ///< Stationary sentry
+    Scout,  ///< Fast, low-health flanker
+    Heavy,  ///< Slow, high-health tank
+    Sniper, ///< Long-range, high damage, low health
+    Medic   ///< Heals nearby allies, moderate combat
 };
 
 /**
@@ -95,8 +97,10 @@ class SPARK_GAME_API Enemy : public GameObject
     void BuildBehaviorTree();
     void UpdatePerception(float dt);
     void MoveToward(const DirectX::XMFLOAT3& target, float dt);
+    void MoveAwayFrom(const DirectX::XMFLOAT3& target, float dt);
     void FaceTarget(const DirectX::XMFLOAT3& target, float dt);
     void Attack(float dt);
+    void HealNearby(float dt);
 
     // AI
     std::unique_ptr<Spark::AI::BehaviorTree> m_behaviorTree;
@@ -117,6 +121,12 @@ class SPARK_GAME_API Enemy : public GameObject
     DirectX::XMFLOAT3 m_velocity{};
     float m_moveSpeed{5.0f};
     float m_turnSpeed{180.0f};
+
+    // Medic-specific
+    float m_healRange{15.0f};
+    float m_healAmount{5.0f};
+    float m_healCooldown{2.0f};
+    float m_healTimer{0.0f};
 };
 
 #ifdef _MSC_VER

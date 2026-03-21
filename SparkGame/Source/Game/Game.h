@@ -27,6 +27,9 @@
 #include "InventorySystem.h"
 #include "QuestSystem.h"
 #include "Enemy.h"
+#include "WaveSpawner.h"
+#include "ProgressionSystem.h"
+#include "LootSystem.h"
 #include "Engine/Networking/NetworkManager.h"
 #include <memory>
 #include <vector>
@@ -411,6 +414,22 @@ class SPARK_GAME_API Game
      */
     size_t GetAliveEnemyCount() const;
 
+    // ============================================================================
+    // NEW GAMEPLAY SYSTEMS - Waves, Progression, Loot
+    // ============================================================================
+
+    /** @brief Get the wave spawner system */
+    Spark::WaveSpawner* GetWaveSpawner() const { return m_waveSpawner.get(); }
+
+    /** @brief Get the progression/leveling system */
+    Spark::ProgressionSystem* GetProgression() const { return m_progression.get(); }
+
+    /** @brief Get the loot drop/power-up system */
+    Spark::LootSystem* GetLootSystem() const { return m_lootSystem.get(); }
+
+    /** @brief Start wave-based survival mode */
+    void StartWaves();
+
     /**
      * @brief Get current scene object count
      * @return Number of active game objects in scene
@@ -569,6 +588,9 @@ class SPARK_GAME_API Game
     /// @brief Spawn enemy waves in the arena
     void InitializeEnemies();
 
+    /// @brief Initialize wave spawner, progression, and loot systems
+    void InitializeGameplaySystems();
+
     /// @brief Wire audio, weather, destruction, dialogue, and save systems
     void InitializeEngineSystems();
 
@@ -590,6 +612,11 @@ class SPARK_GAME_API Game
     std::unique_ptr<Spark::InteractionSystem> m_interactionSystem; ///< Interactive objects
     std::unique_ptr<Spark::DamageZoneSystem> m_damageZoneSystem;   ///< Environmental hazards
     std::unique_ptr<Spark::RespawnSystem> m_respawnSystem;         ///< Respawn & scoring
+
+    // Gameplay systems - Waves, Progression, Loot
+    std::unique_ptr<Spark::WaveSpawner> m_waveSpawner;       ///< Wave-based enemy spawning
+    std::unique_ptr<Spark::ProgressionSystem> m_progression; ///< XP and leveling
+    std::unique_ptr<Spark::LootSystem> m_lootSystem;         ///< Loot drops and power-ups
 
     // Integrated systems - GameMode, HUD, Inventory, Quests
     std::unique_ptr<Spark::GameMode> m_gameMode;   ///< FPS game mode (scoring, rounds)

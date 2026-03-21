@@ -18,6 +18,10 @@
 #include "Game.h"
 #include "ClassSystem.h"
 #include "Enemy.h"
+#include "WaveSpawner.h"
+#include "ProgressionSystem.h"
+#include "LootSystem.h"
+#include "ArenaBuilder.h"
 #include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
@@ -27,6 +31,7 @@
 #include "WallObject.h"
 #include "ModelObject.h"
 #include "Player.h"
+#include "Engine/Events/EventSystem.h"
 
 #include "Utils/LogMacros.h"
 
@@ -367,5 +372,134 @@ void Game::InitializeEnemies()
     // Heavy — arena boss near the back
     SpawnEnemy(EnemyType::Heavy, 0.0f, 1.0f, 18.0f);
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Enemy system initialized (8 enemies spawned)", L"SUCCESS");
+    // Snipers — long-range on platforms
+    SpawnEnemy(EnemyType::Sniper, 22.0f, 4.0f, 0.0f);
+    SpawnEnemy(EnemyType::Sniper, -22.0f, 4.0f, 0.0f);
+
+    // Medic — stays near guards
+    SpawnEnemy(EnemyType::Medic, 2.0f, 1.0f, -8.0f);
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Enemy system initialized (11 enemies spawned)", L"SUCCESS");
+}
+
+/*-------------------------------------------------------------
+  Wave Spawner, Progression, and Loot Systems
+--------------------------------------------------------------*/
+
+void Game::InitializeGameplaySystems()
+{
+    // --- Wave Spawner ---
+    m_waveSpawner = std::make_unique<Spark::WaveSpawner>();
+    std::vector<XMFLOAT3> enemySpawnPoints = {
+        {20.0f, 1.0f, 20.0f}, {-20.0f, 1.0f, 20.0f},  {20.0f, 1.0f, -20.0f}, {-20.0f, 1.0f, -20.0f},
+        {25.0f, 1.0f, 0.0f},  {-25.0f, 1.0f, 0.0f},   {0.0f, 1.0f, 25.0f},   {0.0f, 1.0f, -25.0f},
+        {15.0f, 1.0f, 10.0f}, {-15.0f, 1.0f, -10.0f},
+    };
+    m_waveSpawner->Initialize(enemySpawnPoints);
+
+    // --- Progression ---
+    m_progression = std::make_unique<Spark::ProgressionSystem>();
+    m_progression->Initialize();
+
+    // Wire progression callbacks to HUD
+    m_progression->GetCallbacks().onLevelUp = [this](int newLevel, const Spark::LevelBonuses& bonuses)
+    {
+        if (m_hudSystem)
+            m_hudSystem->AddKillFeedEntry("", "Player1", "LEVEL UP: " + std::to_string(newLevel));
+
+        // Apply level bonuses to player
+        if (m_player)
+        {
+            m_player->Console_SetMaxHealth(100.0f + bonuses.healthBonus);
+            m_player->Console_SetHealth(m_player->GetMaxHealth()); // Full heal on level up
+        }
+    };
+
+    m_progression->GetCallbacks().onUnlock = [this](const Spark::LevelUnlock& unlock)
+    {
+        if (m_hudSystem)
+            m_hudSystem->AddKillFeedEntry("", "UNLOCK", unlock.name + " - " + unlock.description);
+    };
+
+    // --- Loot System ---
+    m_lootSystem = std::make_unique<Spark::LootSystem>();
+    m_lootSystem->Initialize();
+
+    // Wire loot callbacks
+    m_lootSystem->GetCallbacks().onPowerUpCollected = [this](Spark::PowerUpType type, float duration)
+    {
+        if (m_hudSystem)
+        {
+            std::string msg =
+                std::string(Spark::LootSystem::GetPowerUpName(type)) + " (" + std::to_string((int)duration) + "s)";
+            m_hudSystem->AddKillFeedEntry("", "POWER-UP", msg);
+        }
+    };
+
+    // Wire wave callbacks
+    m_waveSpawner->GetCallbacks().onWaveStart = [this](int waveNum, const std::string& announcement)
+    {
+        if (m_hudSystem)
+            m_hudSystem->AddKillFeedEntry("", "WAVE", announcement);
+        LOG_TO_CONSOLE_IMMEDIATE(std::wstring(announcement.begin(), announcement.end()) + L" starting!", L"INFO");
+    };
+
+    m_waveSpawner->GetCallbacks().onWaveComplete = [this](int waveNum, int killed)
+    {
+        // Award XP for wave clear
+        if (m_progression)
+            m_progression->AwardXP(Spark::ProgressionSystem::XP_PER_WAVE_CLEAR, "wave_clear");
+
+        if (m_hudSystem)
+        {
+            std::string msg = "Wave " + std::to_string(waveNum) + " cleared! +" +
+                              std::to_string(Spark::ProgressionSystem::XP_PER_WAVE_CLEAR) + " XP";
+            m_hudSystem->AddKillFeedEntry("", "WAVE", msg);
+        }
+    };
+
+    m_waveSpawner->GetCallbacks().onAllWavesComplete = [this](int totalWaves)
+    {
+        if (m_hudSystem)
+            m_hudSystem->AddKillFeedEntry("", "VICTORY", "All " + std::to_string(totalWaves) + " waves cleared!");
+    };
+
+    // Wire enemy kill events to progression and loot
+    if (m_eventBus)
+    {
+        (void)m_eventBus->Subscribe<Spark::EntityKilledEvent>(
+            [this](const Spark::EntityKilledEvent& e)
+            {
+                // Award XP for kills
+                if (m_progression)
+                {
+                    int xp = Spark::ProgressionSystem::XP_PER_KILL;
+                    if (m_lootSystem && m_lootSystem->HasBuff(Spark::PowerUpType::DoubleXP))
+                        xp *= 2;
+                    m_progression->AwardXP(xp, "kill");
+                }
+
+                // Spawn loot near player as we don't have enemy position in the event
+                if (m_lootSystem && m_player)
+                {
+                    XMFLOAT3 deathPos = m_player->GetPosition();
+                    // Offset slightly so drops don't stack on player
+                    deathPos.x += 2.0f;
+                    deathPos.z += 2.0f;
+                    bool isBoss = m_waveSpawner && m_waveSpawner->IsBossWave();
+                    m_lootSystem->SpawnEnemyLoot(deathPos, 0, isBoss);
+                }
+            });
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Gameplay systems initialized (waves, progression, loot)", L"SUCCESS");
+}
+
+void Game::StartWaves()
+{
+    if (m_waveSpawner)
+    {
+        m_waveSpawner->Start();
+        LOG_TO_CONSOLE_IMMEDIATE(L"Wave mode started!", L"SUCCESS");
+    }
 }
