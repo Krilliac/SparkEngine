@@ -21,10 +21,11 @@
  */
 enum class RenderPath
 {
-    Forward,     ///< Forward rendering
-    Deferred,    ///< Deferred rendering
-    ForwardPlus, ///< Forward+ (tiled forward) rendering
-    Clustered    ///< Clustered rendering
+    Forward,         ///< Forward rendering
+    Deferred,        ///< Deferred rendering
+    ForwardPlus,     ///< Forward+ (tiled forward) rendering
+    Clustered,       ///< Clustered rendering
+    RenderGraphBased ///< DAG-based render graph pipeline (Shadow->GBuffer->Lighting->PostProcess->UI)
 };
 
 /// @brief Legacy alias - use RenderPath directly for new code

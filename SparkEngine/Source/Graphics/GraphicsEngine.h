@@ -34,6 +34,7 @@
 #include "MakeDesc.h"
 #include "GPUTimestampQuery.h"
 #include "RHI/RHIBridge.h"
+#include "RenderPipeline.h"
 #include <functional>
 #include <mutex>
 #include <chrono>
@@ -449,6 +450,21 @@ class GraphicsEngine
      */
     void UpdateFrameConstants(const XMMATRIX& view, const XMMATRIX& proj, const XMFLOAT3& cameraPos);
 
+    /// @brief Get the view matrix from the most recent frame.
+    const DirectX::XMMATRIX& GetFrameViewMatrix() const { return m_frameViewMatrix; }
+
+    /// @brief Get the projection matrix from the most recent frame.
+    const DirectX::XMMATRIX& GetFrameProjectionMatrix() const { return m_frameProjMatrix; }
+
+    /// @brief Get the camera position from the most recent frame.
+    const DirectX::XMFLOAT3& GetFrameCameraPosition() const { return m_frameCameraPos; }
+
+    /// @brief Get near clip plane distance.
+    float GetNearPlane() const { return m_nearPlane; }
+
+    /// @brief Get far clip plane distance.
+    float GetFarPlane() const { return m_farPlane; }
+
   private:
     // ========================================================================
     // ADVANCED RENDERING SUBSYSTEMS
@@ -464,6 +480,9 @@ class GraphicsEngine
 
     // Shader system
     std::unique_ptr<class Shader> m_shader;
+
+    // Render graph pipeline (DAG-based alternative to hardcoded render paths)
+    std::unique_ptr<Spark::Graphics::RenderPipeline> m_renderPipeline;
 
     // Legacy rendering subsystems
     std::unique_ptr<LightManager> m_lightManager;
@@ -642,4 +661,11 @@ class GraphicsEngine
     HRESULT CreateDefaultTexture();                          ///< Create 1x1 white fallback texture
     HRESULT CompileEmbeddedVertexShader(ID3DBlob** blobOut); ///< Compile built-in vertex shader from source string
     HRESULT CompileEmbeddedPixelShader(ID3DBlob** blobOut);  ///< Compile built-in pixel shader from source string
+
+    // Per-frame camera state (stored during UpdateFrameConstants for system queries)
+    DirectX::XMMATRIX m_frameViewMatrix = DirectX::XMMatrixIdentity();
+    DirectX::XMMATRIX m_frameProjMatrix = DirectX::XMMatrixIdentity();
+    DirectX::XMFLOAT3 m_frameCameraPos{0.0f, 0.0f, 0.0f};
+    float m_nearPlane = 0.1f;
+    float m_farPlane = 1000.0f;
 };

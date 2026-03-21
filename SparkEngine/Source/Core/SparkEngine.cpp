@@ -96,6 +96,8 @@
 #include "Engine/UI/UIFactory.h"
 #include "Graphics/ClusteredLightCulling.h"
 #include "Graphics/LightProbeSystem.h"
+#include "Engine/ECS/Components/LightComponents.h"
+#include "Engine/ECS/Components/CoreComponents.h"
 #include "Graphics/MaterialPropertyHandle.h"
 #include "Graphics/RHI/PipelineStateCache.h"
 #include "Graphics/RenderGraph/TransientResourcePool.h"
@@ -346,6 +348,37 @@ static void UpdateGameplaySystems(float dt)
     // Per-frame bookkeeping
     Spark::Graphics::ConstantBufferDiffManager::GetInstance().BeginFrame();
     Spark::Graphics::GPUPerfCounters::GetInstance().EndFrame();
+
+    // Clustered light culling — feed ECS lights into the 3D frustum grid
+    {
+        auto& clustering = Spark::Graphics::ClusteredLightCulling::GetInstance();
+        clustering.ClearLights();
+
+        auto& reg = world->GetRegistry();
+        auto lightView = reg.view<LightComponent, Transform>();
+        for (auto entity : lightView)
+        {
+            const auto& lc = lightView.get<LightComponent>(entity);
+            const auto& xform = lightView.get<Transform>(entity);
+
+            Spark::Graphics::LightData ld;
+            ld.position = xform.position;
+            ld.color = lc.color;
+            ld.intensity = lc.intensity;
+            ld.radius = lc.range;
+            ld.type = (lc.type == LightComponent::Type::Point) ? 0u : 1u;
+            clustering.AddLight(ld);
+        }
+
+        // Update with stored per-frame camera matrices from GraphicsEngine
+        if (g_graphics)
+        {
+            XMFLOAT4X4 viewMat, projMat;
+            XMStoreFloat4x4(&viewMat, g_graphics->GetFrameViewMatrix());
+            XMStoreFloat4x4(&projMat, g_graphics->GetFrameProjectionMatrix());
+            clustering.Update(viewMat, projMat, g_graphics->GetNearPlane(), g_graphics->GetFarPlane());
+        }
+    }
 
     // Extended engine systems
     Spark::TweenSystem::GetInstance().Update(dt);
@@ -728,6 +761,8 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
         float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
 
+        Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
+
         if (g_moduleManager && g_moduleManager->HasModules())
             g_moduleManager->UpdateAll(dt);
 
@@ -909,6 +944,10 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
             // OS scheduling delays). Raw dt is preserved for profiling accuracy.
             float rawDt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
             float dt = g_deltaSmoother.Smooth(rawDt);
+
+            // Advance the global fixed-timestep accumulator so all systems can
+            // query GetFixedStepCount() for deterministic fixed-rate updates.
+            Spark::FixedTimestepAccumulator::GetInstance().Advance(rawDt);
 
             if (g_input)
                 g_input->Update();
@@ -1199,6 +1238,9 @@ static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
  */
 static void TickFrame(float dt)
 {
+    // Advance the global fixed-timestep accumulator for deterministic fixed-rate updates.
+    Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
+
     if (g_input)
         g_input->Update();
 
@@ -1378,6 +1420,8 @@ static int RunHeadlessLinux(int argc, char* argv[])
     {
         auto tickStart = std::chrono::steady_clock::now();
         float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
+
+        Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
         if (g_moduleManager && g_moduleManager->HasModules())
             g_moduleManager->UpdateAll(dt);
