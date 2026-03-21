@@ -413,6 +413,17 @@ struct PhysicsBodyDesc
      * Accessible later via PhysicsBody::GetUserData() in collision callbacks.
      */
     void* userData = nullptr;
+
+    /**
+     * @brief ECS entity ID that owns this physics body.
+     *
+     * Set automatically by the ECS physics integration when a RigidBodyComponent
+     * is created. Used by PhysicsSystem to populate EventBus collision/trigger
+     * events with correct entity IDs.
+     *
+     * Zero means "no entity" (standalone body not tied to the ECS).
+     */
+    uint32_t entityId = 0;
 };
 
 /**

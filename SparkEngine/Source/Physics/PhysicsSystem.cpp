@@ -305,8 +305,8 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
 
                     if (m_eventBus)
                     {
-                        auto idA = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyA->GetUserData()));
-                        auto idB = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyB->GetUserData()));
+                        auto idA = bodyA->GetEntityID();
+                        auto idB = bodyB->GetEntityID();
                         m_eventBus->Publish(Spark::TriggerEnterEvent{idA, idB});
                     }
                 }
@@ -334,8 +334,8 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
 
                 if (m_eventBus)
                 {
-                    auto idA = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyA->GetUserData()));
-                    auto idB = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bodyB->GetUserData()));
+                    auto idA = bodyA->GetEntityID();
+                    auto idB = bodyB->GetEntityID();
                     m_eventBus->Publish(Spark::CollisionEvent{idA, idB, pt.getAppliedImpulse()});
                 }
             }
@@ -366,8 +366,8 @@ void PhysicsSystem::UpdateTriggerExitEvents(
 
             if (m_eventBus)
             {
-                auto idA = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(prev.first->GetUserData()));
-                auto idB = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(prev.second->GetUserData()));
+                auto idA = prev.first->GetEntityID();
+                auto idB = prev.second->GetEntityID();
                 m_eventBus->Publish(Spark::TriggerExitEvent{idA, idB});
             }
         }

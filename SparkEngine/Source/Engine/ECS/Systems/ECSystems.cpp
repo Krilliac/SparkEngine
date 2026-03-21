@@ -21,6 +21,7 @@
 #include "Engine/AI/BehaviorTree.h"
 #include "Engine/ECS/Components/FPSComponents.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/PhysicsComponents.h"
 #include "Utils/Cooldown.h"
 #include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
@@ -88,8 +89,69 @@ namespace Spark::ECS
             auto& transform = view.get<Transform>(entity);
             auto& rb = view.get<RigidBodyComponent>(entity);
 
+            // Auto-create physics body if one doesn't exist yet
             if (!rb.physicsBodyHandle)
+            {
+                PhysicsBodyDesc desc;
+                desc.position = transform.position;
+                desc.rotation = transform.rotation;
+                desc.mass = (rb.type == RigidBodyComponent::Type::Dynamic) ? rb.mass : 0.0f;
+                desc.material.friction = rb.friction;
+                desc.material.restitution = rb.restitution;
+                desc.material.linearDamping = rb.linearDamping;
+                desc.material.angularDamping = rb.angularDamping;
+                desc.isTrigger = rb.isTrigger;
+                desc.entityId = static_cast<uint32_t>(entity);
+
+                switch (rb.type)
+                {
+                case RigidBodyComponent::Type::Static:
+                    desc.type = PhysicsBodyType::Static;
+                    break;
+                case RigidBodyComponent::Type::Kinematic:
+                    desc.type = PhysicsBodyType::Kinematic;
+                    break;
+                case RigidBodyComponent::Type::Dynamic:
+                default:
+                    desc.type = PhysicsBodyType::Dynamic;
+                    break;
+                }
+
+                // Use ColliderComponent shape if present, otherwise default box
+                auto* collider = world.GetComponent<ColliderComponent>(entity);
+                if (collider)
+                {
+                    switch (collider->shape)
+                    {
+                    case ColliderComponent::Shape::Sphere:
+                        desc.shape.type = CollisionShapeType::Sphere;
+                        desc.shape.radius = collider->radius;
+                        break;
+                    case ColliderComponent::Shape::Capsule:
+                        desc.shape.type = CollisionShapeType::Capsule;
+                        desc.shape.radius = collider->radius;
+                        desc.shape.height = collider->height;
+                        break;
+                    case ColliderComponent::Shape::Box:
+                    default:
+                        desc.shape.type = CollisionShapeType::Box;
+                        desc.shape.dimensions = collider->halfExtents;
+                        break;
+                    }
+                }
+                else
+                {
+                    desc.shape.type = CollisionShapeType::Box;
+                    desc.shape.dimensions = {0.5f, 0.5f, 0.5f};
+                }
+
+                auto body = m_physics->CreateBody(desc);
+                if (body)
+                {
+                    rb.physicsBodyHandle = Spark::PhysicsHandle(body.get());
+                }
                 continue;
+            }
 
             auto* physBody = rb.physicsBodyHandle.As<PhysicsBody>();
             if (!physBody)
