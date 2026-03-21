@@ -265,7 +265,8 @@ namespace SparkEditor
         HRESULT hr = m_device->CreateTexture2D(&textureDesc, nullptr, &m_renderTarget);
         if (FAILED(hr))
         {
-            std::cout << "Failed to create render texture\n";
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SceneViewPanel: CreateTexture2D failed (HR=0x%08X)",
+                            static_cast<unsigned>(hr));
             return;
         }
 
@@ -273,7 +274,8 @@ namespace SparkEditor
         hr = m_device->CreateRenderTargetView(m_renderTarget.Get(), nullptr, &m_rtv);
         if (FAILED(hr))
         {
-            std::cout << "Failed to create render target view\n";
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SceneViewPanel: CreateRenderTargetView failed (HR=0x%08X)",
+                            static_cast<unsigned>(hr));
             return;
         }
 
@@ -281,7 +283,8 @@ namespace SparkEditor
         hr = m_device->CreateShaderResourceView(m_renderTarget.Get(), nullptr, &m_srv);
         if (FAILED(hr))
         {
-            std::cout << "Failed to create shader resource view\n";
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SceneViewPanel: CreateShaderResourceView failed (HR=0x%08X)",
+                            static_cast<unsigned>(hr));
             return;
         }
 

@@ -171,8 +171,11 @@ struct Camera2D
     /// Dead zone for smooth follow (in world units)
     DirectX::XMFLOAT2 deadZone{0.5f, 0.5f};
 
-    /// Follow target entity (entt::null = no follow)
-    uint32_t followTarget = 0xFFFFFFFF; // entt::null equivalent
+    /// Invalid entity sentinel (no follow target)
+    static constexpr uint32_t INVALID_FOLLOW_TARGET = 0xFFFFFFFF;
+
+    /// Follow target entity (INVALID_FOLLOW_TARGET = no follow)
+    uint32_t followTarget = INVALID_FOLLOW_TARGET;
 
     /// Follow smoothing factor (0 = instant, 1 = no movement)
     float followSmoothing = 0.1f;

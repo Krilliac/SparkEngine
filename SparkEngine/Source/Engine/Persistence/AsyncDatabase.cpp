@@ -4,6 +4,7 @@
  */
 
 #include "AsyncDatabase.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -121,7 +122,14 @@ namespace Spark::Persistence
         auto parentPath = std::filesystem::path(m_dbPath).parent_path();
         if (!parentPath.empty())
         {
-            std::filesystem::create_directories(parentPath);
+            std::error_code ec;
+            std::filesystem::create_directories(parentPath, ec);
+            if (ec)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to create directory '%s': %s",
+                                parentPath.string().c_str(), ec.message().c_str());
+                return false;
+            }
         }
 
         LoadFromDisk();
@@ -323,12 +331,20 @@ namespace Spark::Persistence
         std::ofstream file(m_dbPath, std::ios::trunc);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to open '%s' for writing",
+                            m_dbPath.c_str());
             return;
         }
 
         for (const auto& [key, value] : m_kvStore)
         {
             file << key << '\t' << value << '\n';
+        }
+
+        if (file.fail())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: write error flushing '%s' (%zu entries)",
+                            m_dbPath.c_str(), m_kvStore.size());
         }
     }
 
@@ -339,6 +355,8 @@ namespace Spark::Persistence
         std::ifstream file(m_dbPath);
         if (!file.is_open())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "AsyncDatabase: '%s' not found — starting with empty store",
+                           m_dbPath.c_str());
             return;
         }
 
@@ -352,6 +370,11 @@ namespace Spark::Persistence
                 std::string value = line.substr(tabPos + 1);
                 m_kvStore[key] = value;
             }
+        }
+
+        if (file.bad())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: read error loading '%s'", m_dbPath.c_str());
         }
     }
 

@@ -128,10 +128,13 @@ namespace SparkEditor
                             if (m_stdinWrite)
                             {
                                 std::string exitMsg = "exit\n";
-                                DWORD bytesWritten;
-                                WriteFile(m_stdinWrite, exitMsg.c_str(), static_cast<DWORD>(exitMsg.length()),
-                                          &bytesWritten, NULL);
-                                FlushFileBuffers(m_stdinWrite);
+                                DWORD bytesWritten = 0;
+                                BOOL writeOk = WriteFile(m_stdinWrite, exitMsg.c_str(),
+                                                         static_cast<DWORD>(exitMsg.length()), &bytesWritten, NULL);
+                                if (writeOk)
+                                {
+                                    FlushFileBuffers(m_stdinWrite);
+                                }
                             }
 
                             // Wait for graceful shutdown
@@ -176,7 +179,12 @@ namespace SparkEditor
                     if (m_stdinWriteFd >= 0)
                     {
                         const char* exitMsg = "exit\n";
-                        (void)write(m_stdinWriteFd, exitMsg, strlen(exitMsg));
+                        ssize_t written = write(m_stdinWriteFd, exitMsg, strlen(exitMsg));
+                        if (written < 0)
+                        {
+                            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                                           "ExternalConsole: failed to send exit command to subprocess");
+                        }
                     }
 
                     // Wait briefly for graceful shutdown

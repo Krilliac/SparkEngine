@@ -184,12 +184,20 @@ class GraphicsEngine
      * @brief Return the per-frame draw list (read-only).
      * @return  Const reference to the current frame's draw commands.
      */
-    const std::vector<MeshDrawCommand>& GetDrawList() const { return m_drawList; }
+    std::vector<MeshDrawCommand> GetDrawList() const
+    {
+        std::lock_guard<std::mutex> lock(m_drawListMutex);
+        return m_drawList;
+    }
 
     /**
      * @brief Clear all pending draw commands without processing them.
      */
-    void ClearDrawList() { m_drawList.clear(); }
+    void ClearDrawList()
+    {
+        std::lock_guard<std::mutex> lock(m_drawListMutex);
+        m_drawList.clear();
+    }
 
     // ========================================================================
     // ADVANCED SYSTEM ACCESSORS
@@ -586,6 +594,7 @@ class GraphicsEngine
 
     // Per-frame ECS draw list populated by SubmitMeshForRendering(), consumed by ProcessDrawList()
     std::vector<MeshDrawCommand> m_drawList;
+    mutable std::mutex m_drawListMutex; ///< Guards m_drawList for concurrent Submit/Process access
 
     // ========================================================================
     // RENDERER INTEGRATION SYSTEMS
