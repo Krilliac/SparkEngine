@@ -136,18 +136,99 @@ namespace SparkEditor
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "EngineInterface connecting (timeout: %.1fs)", timeoutSeconds);
         std::cout << "Attempting to connect to engine (timeout: " << timeoutSeconds << "s)\n";
 
-        // For now, simulate a connection
-        // In a real implementation, this would attempt to connect to a named pipe
+        m_connectionStats.connectionAttempts++;
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Simulate connection time
+        // Create the named pipe for engine communication
+        if (!CreateCommPipe())
+        {
+            std::cerr << "Connect failed: could not create named pipe '" << m_pipeName << "'\n";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create named pipe: %s", m_pipeName.c_str());
+            return false;
+        }
+
+        // Wait for the engine process to connect to our pipe, with timeout
+        auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::milliseconds(static_cast<int64_t>(timeoutSeconds * 1000.0f));
+
+#ifdef _WIN32
+        // Use overlapped I/O for timeout support on Windows
+        HANDLE hPipe = static_cast<HANDLE>(m_pipeHandle);
+        OVERLAPPED overlapped = {};
+        overlapped.hEvent = ::CreateEventA(nullptr, TRUE, FALSE, nullptr);
+        if (!overlapped.hEvent)
+        {
+            std::cerr << "Connect failed: could not create event for overlapped I/O\n";
+            ::CloseHandle(hPipe);
+            m_pipeHandle = nullptr;
+            return false;
+        }
+
+        BOOL connected = ::ConnectNamedPipe(hPipe, &overlapped);
+        if (!connected)
+        {
+            DWORD err = ::GetLastError();
+            if (err == ERROR_PIPE_CONNECTED)
+            {
+                // Client connected between CreateNamedPipe and ConnectNamedPipe
+                std::cout << "Engine already connected to pipe\n";
+            }
+            else if (err == ERROR_IO_PENDING)
+            {
+                // Wait for connection with timeout
+                DWORD remainingMs = static_cast<DWORD>(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now())
+                        .count());
+                DWORD waitResult = ::WaitForSingleObject(overlapped.hEvent, remainingMs);
+                if (waitResult == WAIT_TIMEOUT)
+                {
+                    std::cerr << "Connect timed out after " << timeoutSeconds << "s\n";
+                    SPARK_LOG_WARNING(Spark::LogCategory::Editor, "Pipe connection timed out after %.1fs",
+                                      timeoutSeconds);
+                    ::CancelIo(hPipe);
+                    ::CloseHandle(overlapped.hEvent);
+                    ::CloseHandle(hPipe);
+                    m_pipeHandle = nullptr;
+                    return false;
+                }
+                else if (waitResult != WAIT_OBJECT_0)
+                {
+                    std::cerr << "Connect failed: WaitForSingleObject returned " << waitResult << "\n";
+                    ::CancelIo(hPipe);
+                    ::CloseHandle(overlapped.hEvent);
+                    ::CloseHandle(hPipe);
+                    m_pipeHandle = nullptr;
+                    return false;
+                }
+                // Connection succeeded via overlapped completion
+            }
+            else
+            {
+                std::cerr << "ConnectNamedPipe failed with error " << err << "\n";
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "ConnectNamedPipe failed: %lu", err);
+                ::CloseHandle(overlapped.hEvent);
+                ::CloseHandle(hPipe);
+                m_pipeHandle = nullptr;
+                return false;
+            }
+        }
+
+        ::CloseHandle(overlapped.hEvent);
+#else
+        // On non-Windows platforms, ConnectToNamedPipe handles the blocking wait
+        if (!ConnectToNamedPipe())
+        {
+            std::cerr << "Connect failed: engine did not connect to pipe\n";
+            return false;
+        }
+#endif
 
         m_isConnected = true;
         m_connectionStartTime = std::chrono::steady_clock::now();
-        m_connectionStats.connectionAttempts++;
 
-        std::cout << "Successfully connected to engine\n";
+        std::cout << "Successfully connected to engine via named pipe '" << m_pipeName << "'\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Connected to engine via pipe: %s", m_pipeName.c_str());
 
-        // Start communication thread
+        // Start communication thread for async command/event I/O
         if (!m_commThread)
         {
             m_commThread = std::make_unique<std::thread>(&EngineInterface::CommunicationThread, this);
@@ -167,11 +248,16 @@ namespace SparkEditor
 
         if (m_pipeHandle)
         {
-            // Close pipe handle (platform-specific cleanup would go here)
+#ifdef _WIN32
+            ::FlushFileBuffers(static_cast<HANDLE>(m_pipeHandle));
+            ::DisconnectNamedPipe(static_cast<HANDLE>(m_pipeHandle));
+            ::CloseHandle(static_cast<HANDLE>(m_pipeHandle));
+#endif
             m_pipeHandle = nullptr;
         }
 
         std::cout << "Disconnected from engine\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Disconnected from engine");
     }
 
     uint64_t EngineInterface::SendCommand(const EngineCommand& command)

@@ -695,10 +695,69 @@ namespace Spark
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLDevice::Initialize starting");
                 m_debugEnabled = desc.enableDebugLayer;
 
-                // GLAD must be loaded before any GL calls
-                // In a real implementation, context creation happens first
+                // OpenGL requires a current context before any GL calls (including GLAD loading).
+                // Create a temporary hidden window and context to bootstrap GLAD, then tear it down.
+                // The real context is created later by GLSwapChain with the application window.
+#ifdef _WIN32
+                WNDCLASSA wc = {};
+                wc.lpfnWndProc = DefWindowProcA;
+                wc.hInstance = GetModuleHandleA(nullptr);
+                wc.lpszClassName = "SparkGLBootstrap";
+                RegisterClassA(&wc);
+
+                HWND bootstrapWindow = CreateWindowExA(0, wc.lpszClassName, "SparkGLBootstrap", 0, 0, 0, 1, 1, nullptr,
+                                                       nullptr, wc.hInstance, nullptr);
+                if (!bootstrapWindow)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create bootstrap window");
+                    return false;
+                }
+
+                HDC bootstrapDC = GetDC(bootstrapWindow);
+
+                PIXELFORMATDESCRIPTOR pfd = {};
+                pfd.nSize = sizeof(pfd);
+                pfd.nVersion = 1;
+                pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+                pfd.iPixelType = PFD_TYPE_RGBA;
+                pfd.cColorBits = 32;
+                pfd.cDepthBits = 24;
+                pfd.cStencilBits = 8;
+
+                int pixelFormat = ChoosePixelFormat(bootstrapDC, &pfd);
+                if (!pixelFormat || !SetPixelFormat(bootstrapDC, pixelFormat, &pfd))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to set pixel format on bootstrap context");
+                    ReleaseDC(bootstrapWindow, bootstrapDC);
+                    DestroyWindow(bootstrapWindow);
+                    UnregisterClassA(wc.lpszClassName, wc.hInstance);
+                    return false;
+                }
+
+                HGLRC bootstrapContext = wglCreateContext(bootstrapDC);
+                if (!bootstrapContext)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create bootstrap GL context");
+                    ReleaseDC(bootstrapWindow, bootstrapDC);
+                    DestroyWindow(bootstrapWindow);
+                    UnregisterClassA(wc.lpszClassName, wc.hInstance);
+                    return false;
+                }
+
+                wglMakeCurrent(bootstrapDC, bootstrapContext);
+#endif
+
+                // GLAD can now load OpenGL function pointers from the current context
                 if (!gladLoadGL())
                 {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "gladLoadGL failed — no valid GL context");
+#ifdef _WIN32
+                    wglMakeCurrent(nullptr, nullptr);
+                    wglDeleteContext(bootstrapContext);
+                    ReleaseDC(bootstrapWindow, bootstrapDC);
+                    DestroyWindow(bootstrapWindow);
+                    UnregisterClassA(wc.lpszClassName, wc.hInstance);
+#endif
                     return false;
                 }
 
@@ -706,11 +765,52 @@ namespace Spark
                 {
                     glEnable(GL_DEBUG_OUTPUT);
                     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+
+                    // Register debug message callback for driver error/warning reporting
+                    glDebugMessageCallback(
+                        [](GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei /*length*/,
+                           const GLchar* message, const void* /*userParam*/)
+                        {
+                            // Skip verbose notifications to avoid log spam
+                            if (severity == GL_DEBUG_SEVERITY_NOTIFICATION)
+                                return;
+
+                            const char* severityStr = "INFO";
+                            if (severity == GL_DEBUG_SEVERITY_HIGH)
+                                severityStr = "HIGH";
+                            else if (severity == GL_DEBUG_SEVERITY_MEDIUM)
+                                severityStr = "MEDIUM";
+                            else if (severity == GL_DEBUG_SEVERITY_LOW)
+                                severityStr = "LOW";
+
+                            SPARK_LOG_WARNING(Spark::LogCategory::Graphics, "GL Debug [%s] src=%u type=%u id=%u: %s",
+                                              severityStr, source, type, id, message);
+                        },
+                        nullptr);
+
+                    // Enable all debug messages except notifications
+                    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr,
+                                          GL_FALSE);
+                    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_LOW, 0, nullptr, GL_TRUE);
+                    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_MEDIUM, 0, nullptr, GL_TRUE);
+                    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_HIGH, 0, nullptr, GL_TRUE);
                 }
 
                 QueryCapabilities();
 
+                // Tear down the bootstrap context — the real context will be created by GLSwapChain
+#ifdef _WIN32
+                wglMakeCurrent(nullptr, nullptr);
+                wglDeleteContext(bootstrapContext);
+                ReleaseDC(bootstrapWindow, bootstrapDC);
+                DestroyWindow(bootstrapWindow);
+                UnregisterClassA(wc.lpszClassName, wc.hInstance);
+#endif
+
                 m_immediateCommandList = std::make_unique<GLCommandList>(true, &m_statistics);
+
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLDevice initialized: %s (%s)",
+                               m_capabilities.deviceName.c_str(), m_capabilities.apiVersion.c_str());
 
                 return true;
             }

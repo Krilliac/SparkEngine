@@ -115,6 +115,9 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         return hr;
     }
 
+    // Set graphics engine for weapon rendering shader setup
+    m_player->SetGraphicsEngine(m_graphics);
+
     // Set default class (Scout)
     m_player->SetClass(PlayerClass::SCOUT, m_classSystem.get());
     LOG_TO_CONSOLE_IMMEDIATE(L"Player class set to Scout (default)", L"SUCCESS");

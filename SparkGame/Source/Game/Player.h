@@ -35,6 +35,7 @@
 using SparkEditor::WeaponType;
 
 // Forward declarations
+class GraphicsEngine;
 namespace Spark
 {
     class SimpleConsole;
@@ -474,6 +475,12 @@ class SPARK_GAME_API Player : public GameObject
      */
     void SetInteractionSystem(Spark::InteractionSystem* interactSystem) { m_interactionSystem = interactSystem; }
 
+    /**
+     * @brief Set the graphics engine for weapon rendering shader setup
+     * @param graphics Graphics engine pointer (not owned)
+     */
+    void SetGraphicsEngine(GraphicsEngine* graphics) { m_graphics = graphics; }
+
     // ============================================================================
     // CONSOLE INTEGRATION METHODS - Full Cross-Code Hooking
     // ============================================================================
@@ -655,6 +662,7 @@ class SPARK_GAME_API Player : public GameObject
     // External references (not owned)
     SparkEngineCamera* m_camera{nullptr};                  ///< Reference to camera system
     InputManager* m_input{nullptr};                        ///< Reference to input manager
+    GraphicsEngine* m_graphics{nullptr};                   ///< Reference to graphics engine
     ProjectilePool* m_projectilePool{nullptr};             ///< Reference to projectile pool
     std::unique_ptr<ProjectilePool> m_ownedProjectilePool; ///< Owned pool if created by Player
 
