@@ -17,6 +17,10 @@
 #include "Game/GameMode.h"
 #include "Game/InventorySystem.h"
 #include "Game/QuestSystem.h"
+#include "Game/WaveSpawner.h"
+#include "Game/ProgressionSystem.h"
+#include "Game/LootSystem.h"
+#include "Game/Player.h"
 #include "Core/EngineContext.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
@@ -888,6 +892,149 @@ void SparkGameModule::RegisterGameConsoleCommands()
             return "Playback speed set to " + std::to_string(speed) + "x";
         },
         "Set replay playback speed");
+
+    // -------------------------------------------------------------------------
+    // Wave Spawner commands
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand(
+        "wave_start",
+        [game](const std::vector<std::string>&) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            game->StartWaves();
+            return "Wave mode started!";
+        },
+        "Start wave-based survival mode");
+
+    console.RegisterCommand(
+        "wave_status",
+        [game](const std::vector<std::string>&) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            auto* ws = game->GetWaveSpawner();
+            return ws ? ws->Console_GetStatus() : "Wave spawner not initialized";
+        },
+        "Show wave spawner status");
+
+    console.RegisterCommand(
+        "wave_skip",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            auto* ws = game->GetWaveSpawner();
+            if (!ws)
+                return "Wave spawner not initialized";
+            int wave = args.empty() ? ws->GetCurrentWave() + 1 : std::stoi(args[0]);
+            ws->SkipToWave(wave);
+            return "Skipping to wave " + std::to_string(wave);
+        },
+        "Skip to a specific wave (wave_skip [number])");
+
+    console.RegisterCommand(
+        "wave_difficulty",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: wave_difficulty <scale>";
+            if (!game)
+                return "Game not available";
+            auto* ws = game->GetWaveSpawner();
+            if (!ws)
+                return "Wave spawner not initialized";
+            float scale = std::stof(args[0]);
+            ws->SetDifficultyScale(scale);
+            return "Difficulty scale set to " + std::to_string(scale);
+        },
+        "Set wave difficulty scale (wave_difficulty <1.0-3.0>)");
+
+    // -------------------------------------------------------------------------
+    // Progression commands
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand(
+        "level",
+        [game](const std::vector<std::string>&) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            auto* prog = game->GetProgression();
+            return prog ? prog->Console_GetStatus() : "Progression not initialized";
+        },
+        "Show player level and XP status");
+
+    console.RegisterCommand(
+        "xp",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: xp <amount>";
+            if (!game)
+                return "Game not available";
+            auto* prog = game->GetProgression();
+            if (!prog)
+                return "Progression not initialized";
+            int amount = std::stoi(args[0]);
+            prog->AwardXP(amount, "console");
+            return "Awarded " + std::to_string(amount) + " XP (level " + std::to_string(prog->GetLevel()) + ")";
+        },
+        "Award XP to player (xp <amount>)");
+
+    // -------------------------------------------------------------------------
+    // Loot/Power-up commands
+    // -------------------------------------------------------------------------
+
+    console.RegisterCommand(
+        "loot_status",
+        [game](const std::vector<std::string>&) -> std::string
+        {
+            if (!game)
+                return "Game not available";
+            auto* loot = game->GetLootSystem();
+            return loot ? loot->Console_GetStatus() : "Loot system not initialized";
+        },
+        "Show loot system status and active buffs");
+
+    console.RegisterCommand(
+        "powerup",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "Usage: powerup <speed|damage|shield|ammo|xp|invis>";
+            if (!game)
+                return "Game not available";
+            auto* loot = game->GetLootSystem();
+            if (!loot)
+                return "Loot system not initialized";
+
+            Spark::PowerUpType type = Spark::PowerUpType::SpeedBoost;
+            if (args[0] == "speed")
+                type = Spark::PowerUpType::SpeedBoost;
+            else if (args[0] == "damage")
+                type = Spark::PowerUpType::DamageBoost;
+            else if (args[0] == "shield")
+                type = Spark::PowerUpType::ShieldRegen;
+            else if (args[0] == "ammo")
+                type = Spark::PowerUpType::InfiniteAmmo;
+            else if (args[0] == "xp")
+                type = Spark::PowerUpType::DoubleXP;
+            else if (args[0] == "invis")
+                type = Spark::PowerUpType::Invisibility;
+            else
+                return "Unknown power-up: " + args[0];
+
+            auto* player = game->GetPlayer();
+            if (player)
+            {
+                DirectX::XMFLOAT3 pos = player->GetPosition();
+                loot->SpawnPowerUp(type, pos, 20.0f);
+            }
+            return std::string("Spawned ") + Spark::LootSystem::GetPowerUpName(type) + " power-up";
+        },
+        "Spawn a power-up (powerup <speed|damage|shield|ammo|xp|invis>)");
 
     // -------------------------------------------------------------------------
     // Networking commands

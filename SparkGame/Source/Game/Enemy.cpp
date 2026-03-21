@@ -100,6 +100,34 @@ HRESULT Enemy::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, En
         m_aiConfig.reactionTime = 0.5f;
         m_aiConfig.canSprint = false;
         break;
+
+    case EnemyType::Sniper:
+        m_health = m_maxHealth = 70.0f;
+        m_damage = 30.0f;
+        m_moveSpeed = 3.5f;
+        m_attackCooldown = 2.5f;
+        m_aiConfig.detectionRange = 50.0f;
+        m_aiConfig.attackRange = 40.0f;
+        m_aiConfig.moveSpeed = 3.5f;
+        m_aiConfig.accuracy = 0.9f;
+        m_aiConfig.reactionTime = 0.6f;
+        m_aiConfig.canStrafe = true;
+        break;
+
+    case EnemyType::Medic:
+        m_health = m_maxHealth = 120.0f;
+        m_damage = 8.0f;
+        m_moveSpeed = 5.5f;
+        m_attackCooldown = 1.5f;
+        m_aiConfig.detectionRange = 30.0f;
+        m_aiConfig.attackRange = 14.0f;
+        m_aiConfig.moveSpeed = 5.5f;
+        m_aiConfig.accuracy = 0.55f;
+        m_aiConfig.reactionTime = 0.3f;
+        m_healRange = 15.0f;
+        m_healAmount = 5.0f;
+        m_healCooldown = 2.0f;
+        break;
     }
 
     m_turnSpeed = m_aiConfig.turnSpeed;
@@ -137,11 +165,23 @@ void Enemy::BuildBehaviorTree()
 
                                                          FaceTarget(targetPos, dt);
 
+                                                         // Sniper: retreat if player gets too close
+                                                         if (m_type == EnemyType::Sniper &&
+                                                             dist < m_aiConfig.attackRange * 0.4f)
+                                                         {
+                                                             MoveAwayFrom(targetPos, dt);
+                                                             return NodeStatus::Running;
+                                                         }
+
                                                          if (dist > m_aiConfig.attackRange)
                                                          {
                                                              MoveToward(targetPos, dt);
                                                              return NodeStatus::Running;
                                                          }
+
+                                                         // Medic: alternate between healing and attacking
+                                                         if (m_type == EnemyType::Medic)
+                                                             HealNearby(dt);
 
                                                          Attack(dt);
                                                          return NodeStatus::Running;
@@ -198,9 +238,11 @@ void Enemy::Update(float dt)
     if (m_behaviorTree)
         m_behaviorTree->Tick(dt);
 
-    // Decrement attack timer
+    // Decrement timers
     if (m_attackTimer > 0.0f)
         m_attackTimer -= dt;
+    if (m_healTimer > 0.0f)
+        m_healTimer -= dt;
 
     // Apply velocity
     XMFLOAT3 pos = GetPosition();
@@ -268,6 +310,33 @@ void Enemy::MoveToward(const XMFLOAT3& target, float dt)
     }
 
     (void)dt;
+}
+
+void Enemy::MoveAwayFrom(const XMFLOAT3& target, float dt)
+{
+    XMFLOAT3 pos = GetPosition();
+    float dx = pos.x - target.x;
+    float dz = pos.z - target.z;
+    float len = std::sqrt(dx * dx + dz * dz);
+
+    if (len > 0.01f)
+    {
+        float invLen = 1.0f / len;
+        m_velocity.x = dx * invLen * m_moveSpeed;
+        m_velocity.z = dz * invLen * m_moveSpeed;
+    }
+    (void)dt;
+}
+
+void Enemy::HealNearby(float dt)
+{
+    (void)dt;
+    if (m_healTimer > 0.0f)
+        return;
+
+    // Medic heals are a no-op in single-player without an ally list,
+    // but the timer resets so the medic alternates between attacking and "healing"
+    m_healTimer = m_healCooldown;
 }
 
 void Enemy::FaceTarget(const XMFLOAT3& target, float dt)

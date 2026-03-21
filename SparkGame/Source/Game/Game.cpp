@@ -168,6 +168,7 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     InitializeInventorySystem();
     InitializeQuestSystem();
     InitializeEnemies();
+    InitializeGameplaySystems();
 
     /* Register Advanced Console Commands */
     SparkConsole::RegisterAdvancedCommands(this, m_graphics);
@@ -194,6 +195,9 @@ void Game::Shutdown()
     LOG_TO_CONSOLE_IMMEDIATE(L"Game::Shutdown called.", L"INFO");
 
     m_gameObjects.clear();
+    m_lootSystem.reset();
+    m_progression.reset();
+    m_waveSpawner.reset();
     m_hudSystem.reset();
     m_gameMode.reset();
     m_vehicleSystem.reset();
@@ -354,6 +358,12 @@ void Game::Update(float dt)
         m_damageZoneSystem->Update(dt, m_player.get());
     if (m_respawnSystem)
         m_respawnSystem->Update(dt);
+
+    // Gameplay systems
+    if (m_waveSpawner)
+        m_waveSpawner->Update(dt, GetAliveEnemyCount(), this);
+    if (m_lootSystem)
+        m_lootSystem->Update(dt, m_player.get());
 
     // Integrated systems
     if (m_gameMode)
