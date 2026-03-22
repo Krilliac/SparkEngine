@@ -23,6 +23,8 @@ namespace Spark
         std::ifstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "StringTable: failed to open localization file: %s",
+                            filePath.c_str());
             return false;
         }
 

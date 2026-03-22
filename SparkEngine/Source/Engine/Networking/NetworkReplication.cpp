@@ -26,6 +26,8 @@ namespace Spark::Net
     uint32_t NetworkManager::RegisterReplicatedEntity(const ReplicatedEntity& entity)
     {
         uint32_t netID = m_nextNetworkID.fetch_add(1, std::memory_order_relaxed);
+
+        std::lock_guard<std::mutex> lock(m_replicationMutex);
         m_replicatedEntities[netID] = entity;
         m_replicatedEntities[netID].networkID = netID;
         m_replicatedEntities[netID].needsFullSync = true;
@@ -57,6 +59,7 @@ namespace Spark::Net
 
     void NetworkManager::UnregisterReplicatedEntity(uint32_t networkID)
     {
+        std::lock_guard<std::mutex> lock(m_replicationMutex);
         auto it = m_replicatedEntities.find(networkID);
         if (it == m_replicatedEntities.end())
             return;
@@ -79,6 +82,7 @@ namespace Spark::Net
 
     void NetworkManager::MarkPropertyDirty(uint32_t networkID, const std::string& propertyName)
     {
+        std::lock_guard<std::mutex> lock(m_replicationMutex);
         auto it = m_replicatedEntities.find(networkID);
         if (it == m_replicatedEntities.end())
             return;
@@ -94,6 +98,7 @@ namespace Spark::Net
 
     ReplicatedEntity* NetworkManager::GetReplicatedEntity(uint32_t networkID)
     {
+        std::lock_guard<std::mutex> lock(m_replicationMutex);
         auto it = m_replicatedEntities.find(networkID);
         return (it != m_replicatedEntities.end()) ? &it->second : nullptr;
     }
@@ -103,6 +108,7 @@ namespace Spark::Net
         if (m_role != NetworkRole::Server)
             return;
 
+        std::lock_guard<std::mutex> lock(m_replicationMutex);
         for (const auto& [netID, entity] : m_replicatedEntities)
         {
             // Send spawn message
@@ -133,6 +139,7 @@ namespace Spark::Net
 
     void NetworkManager::SerializeEntityState(uint32_t networkID, NetBuffer& outBuffer) const
     {
+        std::lock_guard<std::mutex> lock(m_replicationMutex);
         auto it = m_replicatedEntities.find(networkID);
         if (it == m_replicatedEntities.end())
             return;
@@ -170,6 +177,8 @@ namespace Spark::Net
     void NetworkManager::DeserializeEntityState(NetBuffer& inBuffer)
     {
         uint32_t networkID = inBuffer.ReadUint32();
+
+        std::lock_guard<std::mutex> lock(m_replicationMutex);
         auto it = m_replicatedEntities.find(networkID);
         if (it == m_replicatedEntities.end())
         {

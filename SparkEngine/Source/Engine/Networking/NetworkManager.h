@@ -469,7 +469,7 @@ namespace Spark::Net
         ConnectionState m_connectionState = ConnectionState::Disconnected;
         ClientID m_localClientID = INVALID_CLIENT;
         /// @brief Protects m_role, m_connectionState, m_localClientID.
-        /// Lock ordering: m_stateMutex → m_queueMutex → m_handlerMutex (never reverse).
+        /// Lock ordering: m_stateMutex → m_clientsMutex → m_queueMutex → m_replicationMutex → m_inputMutex → m_handlerMutex (never reverse).
         mutable std::mutex m_stateMutex;
         float m_serverTime = 0.0f;
         float m_heartbeatInterval = 1.0f;
@@ -554,6 +554,7 @@ namespace Spark::Net
         void PruneReceivedSequences();
 
         // Replication
+        mutable std::mutex m_replicationMutex; ///< Protects m_replicatedEntities
         std::unordered_map<uint32_t, ReplicatedEntity> m_replicatedEntities;
         std::atomic<uint32_t> m_nextNetworkID{1};
         float m_replicationInterval = 0.05f; ///< 20 Hz replication rate
@@ -561,7 +562,7 @@ namespace Spark::Net
 
         // Client input
         std::vector<ClientInputState> m_pendingInputs;
-        mutable std::mutex m_inputMutex; ///< Protects m_pendingInputs
+        mutable std::mutex m_inputMutex; ///< Protects m_pendingInputs and m_inputHistory
         SequenceNumber m_inputSequence = 0;
 
         // Prediction

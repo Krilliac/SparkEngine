@@ -7,6 +7,8 @@
 #include "MaterialSystem.h"
 #include "../Utils/SparkConsole.h"
 
+#include "../Utils/StringUtils.h"
+
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -132,17 +134,17 @@ namespace Spark::Graphics
             else if (key == "blendMode")
                 outDef.blendMode = value;
             else if (key == "metallic")
-                outDef.metallic = std::stof(value);
+                outDef.metallic = Spark::StringUtils::ParseFloat(value).value_or(outDef.metallic);
             else if (key == "roughness")
-                outDef.roughness = std::stof(value);
+                outDef.roughness = Spark::StringUtils::ParseFloat(value).value_or(outDef.roughness);
             else if (key == "normalScale")
-                outDef.normalScale = std::stof(value);
+                outDef.normalScale = Spark::StringUtils::ParseFloat(value).value_or(outDef.normalScale);
             else if (key == "occlusionStrength")
-                outDef.occlusionStrength = std::stof(value);
+                outDef.occlusionStrength = Spark::StringUtils::ParseFloat(value).value_or(outDef.occlusionStrength);
             else if (key == "emissiveFactor")
-                outDef.emissiveFactor = std::stof(value);
+                outDef.emissiveFactor = Spark::StringUtils::ParseFloat(value).value_or(outDef.emissiveFactor);
             else if (key == "alphaCutoff")
-                outDef.alphaCutoff = std::stof(value);
+                outDef.alphaCutoff = Spark::StringUtils::ParseFloat(value).value_or(outDef.alphaCutoff);
             else if (key == "albedoTexture")
                 outDef.albedoTexture = value;
             else if (key == "normalTexture")

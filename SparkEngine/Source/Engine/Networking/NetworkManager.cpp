@@ -444,11 +444,14 @@ namespace Spark::Net
         timestamped.inputSequence = m_inputSequence++;
         timestamped.timestamp = m_serverTime;
 
-        m_inputHistory.push_back(timestamped);
+        {
+            std::lock_guard<std::mutex> lock(m_inputMutex);
+            m_inputHistory.push_back(timestamped);
 
-        // Cap history size
-        if (m_inputHistory.size() > 120)
-            m_inputHistory.erase(m_inputHistory.begin());
+            // Cap history size
+            if (m_inputHistory.size() > 120)
+                m_inputHistory.erase(m_inputHistory.begin());
+        }
 
         NetworkMessage msg;
         msg.type = MessageType::ClientInput;

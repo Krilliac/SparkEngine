@@ -477,7 +477,8 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
                              cg.gamma.z > 0.01f ? 1.0f / cg.gamma.z : 1.0f, cg.contrast};
             cb.colorGain = {cg.gain.x, cg.gain.y, cg.gain.z, 0.0f};
             cb.whiteBalance = {cg.temperature, cg.tint, 0.0f, 0.0f};
-            cb.texelSize = {1.0f / m_width, 1.0f / m_height, 0.0f, 0.0f};
+            cb.texelSize = {(m_width > 0) ? (1.0f / m_width) : 0.0f, (m_height > 0) ? (1.0f / m_height) : 0.0f, 0.0f,
+                            0.0f};
 
             D3D11_MAPPED_SUBRESOURCE mapped;
             m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
