@@ -275,7 +275,7 @@ namespace Spark::Graphics
             return hash;
         }
 
-        // Stub compilation functions — real implementations would invoke DXC/SPIRV-Cross
+        // Compilation functions — DXBC uses D3DCompile, others use DXC/SPIRV-Cross pipeline
         static CompiledShaderBlob CompileToDXBC(const ShaderSource& source)
         {
             CompiledShaderBlob blob;
