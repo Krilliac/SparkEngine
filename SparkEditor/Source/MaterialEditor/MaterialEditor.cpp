@@ -161,7 +161,7 @@ namespace SparkEditor
             Spark::Graphics::ShaderNode sn;
             sn.id = node->id;
             sn.type = static_cast<Spark::Graphics::ShaderNodeType>(static_cast<uint32_t>(node->type));
-            for (const auto& socket : node->inputs)
+            for (const auto& socket : node->inputSockets)
             {
                 Spark::Graphics::ShaderNodeInput si;
                 si.defaultValue[0] = socket.defaultValue.x;

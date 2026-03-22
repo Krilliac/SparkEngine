@@ -81,21 +81,21 @@ namespace SparkEditor
     // Agent List
     // =========================================================================
 
-    static const char* AgentStateToString(AIDebugPanel::AgentState state)
+    const char* AIDebugPanel::AgentStateToString(AgentState state)
     {
         switch (state)
         {
-        case AIDebugPanel::AgentState::Idle:
+        case AgentState::Idle:
             return "Idle";
-        case AIDebugPanel::AgentState::Patrolling:
+        case AgentState::Patrolling:
             return "Patrol";
-        case AIDebugPanel::AgentState::Alert:
+        case AgentState::Alert:
             return "Alert";
-        case AIDebugPanel::AgentState::Combat:
+        case AgentState::Combat:
             return "Combat";
-        case AIDebugPanel::AgentState::Fleeing:
+        case AgentState::Fleeing:
             return "Flee";
-        case AIDebugPanel::AgentState::Dead:
+        case AgentState::Dead:
             return "Dead";
         }
         return "Unknown";

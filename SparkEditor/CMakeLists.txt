@@ -124,6 +124,7 @@ target_include_directories(SparkEditor PRIVATE
     "Source"
     "${CMAKE_SOURCE_DIR}/Shared"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+    "${CMAKE_SOURCE_DIR}/SparkSDK/Include"
 )
 
 if(IMGUI_FOUND)
