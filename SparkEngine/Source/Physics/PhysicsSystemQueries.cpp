@@ -613,6 +613,185 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePulleyConstraint(
     return constraint;
 }
 
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateGearConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                       std::shared_ptr<PhysicsBody> bodyB,
+                                                                       std::shared_ptr<PhysicsConstraint> hingeA,
+                                                                       std::shared_ptr<PhysicsConstraint> hingeB,
+                                                                       float ratio)
+{
+    if (!m_joltSystem || !bodyA || !bodyB || !hingeA || !hingeB)
+        return nullptr;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
+
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
+
+    auto* joltHingeA = static_cast<JPH::HingeConstraint*>(hingeA->GetJoltConstraint());
+    auto* joltHingeB = static_cast<JPH::HingeConstraint*>(hingeB->GetJoltConstraint());
+
+    JPH::GearConstraintSettings settings;
+    settings.mRatio = ratio;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    static_cast<JPH::GearConstraint*>(joltConstraint)->SetConstraints(joltHingeA, joltHingeB);
+    m_joltSystem->AddConstraint(joltConstraint);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Gear, joltConstraint);
+    m_constraints.push_back(constraint);
+    return constraint;
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateRackAndPinionConstraint(
+    std::shared_ptr<PhysicsBody> bodyA, std::shared_ptr<PhysicsBody> bodyB, std::shared_ptr<PhysicsConstraint> slider,
+    std::shared_ptr<PhysicsConstraint> hinge, float ratio)
+{
+    if (!m_joltSystem || !bodyA || !bodyB || !slider || !hinge)
+        return nullptr;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
+
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
+
+    JPH::RackAndPinionConstraintSettings settings;
+    settings.mRatio = ratio;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    static_cast<JPH::RackAndPinionConstraint*>(joltConstraint)
+        ->SetConstraints(static_cast<JPH::SliderConstraint*>(slider->GetJoltConstraint()),
+                         static_cast<JPH::HingeConstraint*>(hinge->GetJoltConstraint()));
+    m_joltSystem->AddConstraint(joltConstraint);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::RackAndPinion, joltConstraint);
+    m_constraints.push_back(constraint);
+    return constraint;
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePathConstraint(std::shared_ptr<PhysicsBody> body,
+                                                                       const std::vector<XMFLOAT3>& pathPoints,
+                                                                       const std::vector<XMFLOAT3>& pathTangents)
+{
+    if (!m_joltSystem || !body || pathPoints.size() < 2)
+        return nullptr;
+    if (pathPoints.size() != pathTangents.size())
+        return nullptr;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID bodyID(body->GetJoltBodyID());
+    if (!bodyInterface.IsAdded(bodyID))
+        return nullptr;
+
+    // Build Hermite spline path
+    auto* path = new JPH::PathConstraintPathHermite;
+    for (size_t i = 0; i < pathPoints.size(); i++)
+    {
+        const auto& p = pathPoints[i];
+        const auto& t = pathTangents[i];
+        path->AddPoint(JPH::Vec3(p.x, p.y, p.z), JPH::Vec3(t.x, t.y, t.z), JPH::Vec3(0, 1, 0));
+    }
+
+    JPH::PathConstraintSettings settings;
+    settings.mPath = path;
+    settings.mPathPosition = JPH::Vec3::sZero();
+    settings.mPathRotation = JPH::Quat::sIdentity();
+
+    JPH::Body* joltBody = m_joltSystem->GetBodyLockInterface().TryGetBody(bodyID);
+    if (!joltBody)
+        return nullptr;
+
+    JPH::Constraint* joltConstraint = settings.Create(*joltBody, JPH::Body::sFixedToWorld);
+    m_joltSystem->AddConstraint(joltConstraint);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Path, joltConstraint);
+    m_constraints.push_back(constraint);
+    return constraint;
+}
+
+// ============================================================================
+// CONSTRAINT MOTORS
+// ============================================================================
+
+void PhysicsSystem::SetHingeMotorVelocity(std::shared_ptr<PhysicsConstraint> constraint, float targetVelocity,
+                                          float maxTorque)
+{
+    if (!constraint || !constraint->GetJoltConstraint())
+        return;
+    auto* hinge = static_cast<JPH::HingeConstraint*>(constraint->GetJoltConstraint());
+    hinge->GetMotorSettings().mMaxTorqueLimit = maxTorque;
+    hinge->GetMotorSettings().mMinTorqueLimit = -maxTorque;
+    hinge->SetMotorState(JPH::EMotorState::Velocity);
+    hinge->SetTargetAngularVelocity(targetVelocity);
+}
+
+void PhysicsSystem::SetHingeMotorPosition(std::shared_ptr<PhysicsConstraint> constraint, float targetAngle,
+                                          float maxTorque)
+{
+    if (!constraint || !constraint->GetJoltConstraint())
+        return;
+    auto* hinge = static_cast<JPH::HingeConstraint*>(constraint->GetJoltConstraint());
+    hinge->GetMotorSettings().mMaxTorqueLimit = maxTorque;
+    hinge->GetMotorSettings().mMinTorqueLimit = -maxTorque;
+    hinge->SetMotorState(JPH::EMotorState::Position);
+    hinge->SetTargetAngle(targetAngle);
+}
+
+void PhysicsSystem::SetSliderMotorVelocity(std::shared_ptr<PhysicsConstraint> constraint, float targetVelocity,
+                                           float maxForce)
+{
+    if (!constraint || !constraint->GetJoltConstraint())
+        return;
+    auto* slider = static_cast<JPH::SliderConstraint*>(constraint->GetJoltConstraint());
+    slider->GetMotorSettings().mMaxForceLimit = maxForce;
+    slider->GetMotorSettings().mMinForceLimit = -maxForce;
+    slider->SetMotorState(JPH::EMotorState::Velocity);
+    slider->SetTargetVelocity(targetVelocity);
+}
+
+void PhysicsSystem::SetSliderMotorPosition(std::shared_ptr<PhysicsConstraint> constraint, float targetPosition,
+                                           float maxForce)
+{
+    if (!constraint || !constraint->GetJoltConstraint())
+        return;
+    auto* slider = static_cast<JPH::SliderConstraint*>(constraint->GetJoltConstraint());
+    slider->GetMotorSettings().mMaxForceLimit = maxForce;
+    slider->GetMotorSettings().mMinForceLimit = -maxForce;
+    slider->SetMotorState(JPH::EMotorState::Position);
+    slider->SetTargetPosition(targetPosition);
+}
+
+void PhysicsSystem::DisableConstraintMotor(std::shared_ptr<PhysicsConstraint> constraint)
+{
+    if (!constraint || !constraint->GetJoltConstraint())
+        return;
+
+    switch (constraint->GetType())
+    {
+    case ConstraintType::Hinge:
+        static_cast<JPH::HingeConstraint*>(constraint->GetJoltConstraint())->SetMotorState(JPH::EMotorState::Off);
+        break;
+    case ConstraintType::Slider:
+        static_cast<JPH::SliderConstraint*>(constraint->GetJoltConstraint())->SetMotorState(JPH::EMotorState::Off);
+        break;
+    default:
+        break;
+    }
+}
+
 void PhysicsSystem::RemoveConstraint(std::shared_ptr<PhysicsConstraint> constraint)
 {
     if (!constraint)
@@ -980,4 +1159,196 @@ PhysicsSystem::PhysicsMetrics PhysicsSystem::GetMetrics() const
 {
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     return m_metrics;
+}
+
+// ============================================================================
+// BUOYANCY
+// ============================================================================
+
+void PhysicsSystem::ApplyBuoyancy(std::shared_ptr<PhysicsBody> body, const XMFLOAT3& waterSurface,
+                                  const XMFLOAT3& waterNormal, float waterDensity, float linearDrag, float angularDrag)
+{
+    if (!m_joltSystem || !body)
+        return;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID bodyID(body->GetJoltBodyID());
+    if (!bodyInterface.IsAdded(bodyID))
+        return;
+
+    JPH::Body* joltBody = const_cast<JPH::Body*>(m_joltSystem->GetBodyLockInterface().TryGetBody(bodyID));
+    if (!joltBody || !joltBody->IsDynamic())
+        return;
+
+    // Use Jolt's built-in buoyancy application
+    JPH::Vec3 gravity = m_joltSystem->GetGravity();
+    JPH::RVec3 surfacePos(waterSurface.x, waterSurface.y, waterSurface.z);
+    JPH::Vec3 surfaceNorm(waterNormal.x, waterNormal.y, waterNormal.z);
+
+    // ApplyBuoyancyImpulse(surfacePosition, surfaceNormal, buoyancy, linearDrag, angularDrag, fluidVelocity, gravity,
+    // dt)
+    joltBody->ApplyBuoyancyImpulse(surfacePos, surfaceNorm, waterDensity, linearDrag, angularDrag, JPH::Vec3::sZero(),
+                                   gravity, m_timeStep);
+}
+
+// ============================================================================
+// STATE SERIALIZATION
+// ============================================================================
+
+bool PhysicsSystem::SaveState(std::vector<uint8_t>& outBuffer) const
+{
+    if (!m_joltSystem)
+        return false;
+
+    // Serialize body positions, rotations, velocities, and activation state
+    outBuffer.clear();
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    uint32_t bodyCount = static_cast<uint32_t>(m_bodies.size());
+
+    // Reserve header + per-body data
+    // Header: [bodyCount:4]
+    // Per body: [joltID:4][posX:4][posY:4][posZ:4][rotX:4][rotY:4][rotZ:4][rotW:4]
+    //           [linVelX:4][linVelY:4][linVelZ:4][angVelX:4][angVelY:4][angVelZ:4][active:1]
+    size_t perBodySize = 4 + 3 * 4 + 4 * 4 + 3 * 4 + 3 * 4 + 1; // 57 bytes
+    outBuffer.resize(4 + bodyCount * perBodySize);
+
+    uint8_t* ptr = outBuffer.data();
+    std::memcpy(ptr, &bodyCount, 4);
+    ptr += 4;
+
+    for (const auto& body : m_bodies)
+    {
+        if (!body)
+            continue;
+
+        uint32_t id = body->GetJoltBodyID();
+        std::memcpy(ptr, &id, 4);
+        ptr += 4;
+
+        JPH::BodyID bodyID(id);
+        if (bodyInterface.IsAdded(bodyID))
+        {
+            JPH::RVec3 pos = bodyInterface.GetPosition(bodyID);
+            float px = static_cast<float>(pos.GetX()), py = static_cast<float>(pos.GetY()),
+                  pz = static_cast<float>(pos.GetZ());
+            std::memcpy(ptr, &px, 4);
+            ptr += 4;
+            std::memcpy(ptr, &py, 4);
+            ptr += 4;
+            std::memcpy(ptr, &pz, 4);
+            ptr += 4;
+
+            JPH::Quat rot = bodyInterface.GetRotation(bodyID);
+            float rx = rot.GetX(), ry = rot.GetY(), rz = rot.GetZ(), rw = rot.GetW();
+            std::memcpy(ptr, &rx, 4);
+            ptr += 4;
+            std::memcpy(ptr, &ry, 4);
+            ptr += 4;
+            std::memcpy(ptr, &rz, 4);
+            ptr += 4;
+            std::memcpy(ptr, &rw, 4);
+            ptr += 4;
+
+            JPH::Vec3 linVel = bodyInterface.GetLinearVelocity(bodyID);
+            float lvx = linVel.GetX(), lvy = linVel.GetY(), lvz = linVel.GetZ();
+            std::memcpy(ptr, &lvx, 4);
+            ptr += 4;
+            std::memcpy(ptr, &lvy, 4);
+            ptr += 4;
+            std::memcpy(ptr, &lvz, 4);
+            ptr += 4;
+
+            JPH::Vec3 angVel = bodyInterface.GetAngularVelocity(bodyID);
+            float avx = angVel.GetX(), avy = angVel.GetY(), avz = angVel.GetZ();
+            std::memcpy(ptr, &avx, 4);
+            ptr += 4;
+            std::memcpy(ptr, &avy, 4);
+            ptr += 4;
+            std::memcpy(ptr, &avz, 4);
+            ptr += 4;
+
+            uint8_t active = bodyInterface.IsActive(bodyID) ? 1 : 0;
+            *ptr++ = active;
+        }
+        else
+        {
+            std::memset(ptr, 0, perBodySize - 4);
+            ptr += perBodySize - 4;
+        }
+    }
+
+    return true;
+}
+
+bool PhysicsSystem::LoadState(const std::vector<uint8_t>& buffer)
+{
+    if (!m_joltSystem || buffer.size() < 4)
+        return false;
+
+    const uint8_t* ptr = buffer.data();
+    uint32_t bodyCount = 0;
+    std::memcpy(&bodyCount, ptr, 4);
+    ptr += 4;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    size_t perBodySize = 4 + 3 * 4 + 4 * 4 + 3 * 4 + 3 * 4 + 1;
+
+    for (uint32_t i = 0; i < bodyCount; i++)
+    {
+        if (static_cast<size_t>(ptr - buffer.data()) + perBodySize > buffer.size())
+            break;
+
+        uint32_t id;
+        std::memcpy(&id, ptr, 4);
+        ptr += 4;
+
+        float px, py, pz;
+        std::memcpy(&px, ptr, 4);
+        ptr += 4;
+        std::memcpy(&py, ptr, 4);
+        ptr += 4;
+        std::memcpy(&pz, ptr, 4);
+        ptr += 4;
+
+        float rx, ry, rz, rw;
+        std::memcpy(&rx, ptr, 4);
+        ptr += 4;
+        std::memcpy(&ry, ptr, 4);
+        ptr += 4;
+        std::memcpy(&rz, ptr, 4);
+        ptr += 4;
+        std::memcpy(&rw, ptr, 4);
+        ptr += 4;
+
+        float lvx, lvy, lvz;
+        std::memcpy(&lvx, ptr, 4);
+        ptr += 4;
+        std::memcpy(&lvy, ptr, 4);
+        ptr += 4;
+        std::memcpy(&lvz, ptr, 4);
+        ptr += 4;
+
+        float avx, avy, avz;
+        std::memcpy(&avx, ptr, 4);
+        ptr += 4;
+        std::memcpy(&avy, ptr, 4);
+        ptr += 4;
+        std::memcpy(&avz, ptr, 4);
+        ptr += 4;
+
+        uint8_t active = *ptr++;
+
+        // Find matching body and restore state
+        JPH::BodyID bodyID(id);
+        if (bodyInterface.IsAdded(bodyID))
+        {
+            bodyInterface.SetPositionAndRotation(bodyID, JPH::RVec3(px, py, pz), JPH::Quat(rx, ry, rz, rw),
+                                                 active ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+            bodyInterface.SetLinearVelocity(bodyID, JPH::Vec3(lvx, lvy, lvz));
+            bodyInterface.SetAngularVelocity(bodyID, JPH::Vec3(avx, avy, avz));
+        }
+    }
+
+    return true;
 }

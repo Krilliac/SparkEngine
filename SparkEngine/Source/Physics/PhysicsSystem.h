@@ -196,7 +196,84 @@ class PhysicsSystem
                                                               const XMFLOAT3& bodyPointA, const XMFLOAT3& bodyPointB,
                                                               float ratio = 1.0f);
 
+    /**
+     * @brief Create a gear constraint coupling rotation of two hinge constraints.
+     * @param bodyA     First body (must have a hinge constraint).
+     * @param bodyB     Second body (must have a hinge constraint).
+     * @param hingeA    The hinge constraint on bodyA.
+     * @param hingeB    The hinge constraint on bodyB.
+     * @param ratio     Gear ratio (bodyB rotates ratio times faster than bodyA).
+     */
+    std::shared_ptr<PhysicsConstraint> CreateGearConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                            std::shared_ptr<PhysicsBody> bodyB,
+                                                            std::shared_ptr<PhysicsConstraint> hingeA,
+                                                            std::shared_ptr<PhysicsConstraint> hingeB,
+                                                            float ratio = 1.0f);
+
+    /**
+     * @brief Create a rack-and-pinion constraint coupling hinge rotation to slider translation.
+     * @param bodyA     Rack body (with slider constraint).
+     * @param bodyB     Pinion body (with hinge constraint).
+     * @param slider    The slider constraint on bodyA.
+     * @param hinge     The hinge constraint on bodyB.
+     * @param ratio     Ratio of slider movement per hinge rotation (m/rad).
+     */
+    std::shared_ptr<PhysicsConstraint> CreateRackAndPinionConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                     std::shared_ptr<PhysicsBody> bodyB,
+                                                                     std::shared_ptr<PhysicsConstraint> slider,
+                                                                     std::shared_ptr<PhysicsConstraint> hinge,
+                                                                     float ratio = 1.0f);
+
+    /**
+     * @brief Create a path constraint — body follows a spline path.
+     * @param body      Body to constrain to the path.
+     * @param pathPoints Control points for a Hermite spline path (world space).
+     * @param pathTangents Tangent vectors at each control point.
+     */
+    std::shared_ptr<PhysicsConstraint> CreatePathConstraint(std::shared_ptr<PhysicsBody> body,
+                                                            const std::vector<XMFLOAT3>& pathPoints,
+                                                            const std::vector<XMFLOAT3>& pathTangents);
+
     void RemoveConstraint(std::shared_ptr<PhysicsConstraint> constraint);
+
+    // =========================================================================
+    // Constraint motors
+    // =========================================================================
+
+    /**
+     * @brief Set a velocity motor on a hinge constraint.
+     * @param constraint   Hinge constraint to motorize.
+     * @param targetVelocity Target angular velocity (rad/s).
+     * @param maxTorque    Maximum torque the motor can apply (N*m).
+     */
+    void SetHingeMotorVelocity(std::shared_ptr<PhysicsConstraint> constraint, float targetVelocity, float maxTorque);
+
+    /**
+     * @brief Set a position (servo) motor on a hinge constraint.
+     * @param constraint   Hinge constraint to motorize.
+     * @param targetAngle  Target angle (radians).
+     * @param maxTorque    Maximum torque the motor can apply (N*m).
+     */
+    void SetHingeMotorPosition(std::shared_ptr<PhysicsConstraint> constraint, float targetAngle, float maxTorque);
+
+    /**
+     * @brief Set a velocity motor on a slider constraint.
+     * @param constraint       Slider constraint to motorize.
+     * @param targetVelocity   Target linear velocity (m/s).
+     * @param maxForce         Maximum force the motor can apply (N).
+     */
+    void SetSliderMotorVelocity(std::shared_ptr<PhysicsConstraint> constraint, float targetVelocity, float maxForce);
+
+    /**
+     * @brief Set a position (servo) motor on a slider constraint.
+     * @param constraint       Slider constraint to motorize.
+     * @param targetPosition   Target position along slider axis (m).
+     * @param maxForce         Maximum force the motor can apply (N).
+     */
+    void SetSliderMotorPosition(std::shared_ptr<PhysicsConstraint> constraint, float targetPosition, float maxForce);
+
+    /** @brief Disable any active motor on a constraint. */
+    void DisableConstraintMotor(std::shared_ptr<PhysicsConstraint> constraint);
 
     // =========================================================================
     // Spatial queries
@@ -322,6 +399,50 @@ class PhysicsSystem
      * @param velocity Surface velocity vector in world space (m/s).
      */
     void SetSurfaceVelocity(std::shared_ptr<PhysicsBody> body, const XMFLOAT3& velocity);
+
+    // =========================================================================
+    // Buoyancy
+    // =========================================================================
+
+    /**
+     * @brief Apply buoyancy force to a body based on a water plane.
+     *
+     * Calculates the submerged volume of the body's shape below the water surface
+     * and applies an upward buoyancy force proportional to the displaced water.
+     *
+     * @param body          Body to apply buoyancy to.
+     * @param waterSurface  Point on the water surface (world space).
+     * @param waterNormal   Normal of the water surface (typically {0, 1, 0}).
+     * @param waterDensity  Density of the water (kg/m³, default 1000 for freshwater).
+     * @param linearDrag    Linear drag coefficient in water.
+     * @param angularDrag   Angular drag coefficient in water.
+     */
+    void ApplyBuoyancy(std::shared_ptr<PhysicsBody> body, const XMFLOAT3& waterSurface,
+                       const XMFLOAT3& waterNormal = {0, 1, 0}, float waterDensity = 1000.0f, float linearDrag = 0.3f,
+                       float angularDrag = 0.05f);
+
+    // =========================================================================
+    // State serialization
+    // =========================================================================
+
+    /**
+     * @brief Save the current physics state to a binary buffer.
+     *
+     * Captures positions, rotations, velocities, and activation state
+     * of all bodies. Useful for save games and network state snapshots.
+     *
+     * @param outBuffer  Output buffer filled with serialized physics state.
+     * @return true on success.
+     */
+    bool SaveState(std::vector<uint8_t>& outBuffer) const;
+
+    /**
+     * @brief Restore physics state from a previously saved binary buffer.
+     *
+     * @param buffer  Buffer containing serialized physics state.
+     * @return true on success.
+     */
+    bool LoadState(const std::vector<uint8_t>& buffer);
 
   private:
     // =========================================================================

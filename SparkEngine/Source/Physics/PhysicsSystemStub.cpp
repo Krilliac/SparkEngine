@@ -494,6 +494,104 @@ RaycastHit PhysicsSystem::CapsuleCast(float /*radius*/, float /*height*/, const 
     return RaycastHit{};
 }
 
+// New constraint stubs
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateGearConstraint(std::shared_ptr<PhysicsBody>,
+                                                                       std::shared_ptr<PhysicsBody>,
+                                                                       std::shared_ptr<PhysicsConstraint>,
+                                                                       std::shared_ptr<PhysicsConstraint>, float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Gear, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateRackAndPinionConstraint(std::shared_ptr<PhysicsBody>,
+                                                                                std::shared_ptr<PhysicsBody>,
+                                                                                std::shared_ptr<PhysicsConstraint>,
+                                                                                std::shared_ptr<PhysicsConstraint>,
+                                                                                float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::RackAndPinion, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePathConstraint(std::shared_ptr<PhysicsBody>,
+                                                                       const std::vector<XMFLOAT3>&,
+                                                                       const std::vector<XMFLOAT3>&)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Path, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateDistanceConstraint(std::shared_ptr<PhysicsBody>,
+                                                                           std::shared_ptr<PhysicsBody>,
+                                                                           const XMFLOAT3&, const XMFLOAT3&, float,
+                                                                           float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Distance, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateConeConstraint(std::shared_ptr<PhysicsBody>,
+                                                                       std::shared_ptr<PhysicsBody>, const XMFLOAT3&,
+                                                                       const XMFLOAT3&, float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Cone, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateSixDOFConstraint(std::shared_ptr<PhysicsBody>,
+                                                                         std::shared_ptr<PhysicsBody>, const XMMATRIX&,
+                                                                         const XMMATRIX&)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Generic6DOF, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePulleyConstraint(std::shared_ptr<PhysicsBody>,
+                                                                         std::shared_ptr<PhysicsBody>, const XMFLOAT3&,
+                                                                         const XMFLOAT3&, const XMFLOAT3&,
+                                                                         const XMFLOAT3&, float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Pulley, nullptr);
+}
+
+// Motor stubs
+void PhysicsSystem::SetHingeMotorVelocity(std::shared_ptr<PhysicsConstraint>, float, float) {}
+void PhysicsSystem::SetHingeMotorPosition(std::shared_ptr<PhysicsConstraint>, float, float) {}
+void PhysicsSystem::SetSliderMotorVelocity(std::shared_ptr<PhysicsConstraint>, float, float) {}
+void PhysicsSystem::SetSliderMotorPosition(std::shared_ptr<PhysicsConstraint>, float, float) {}
+void PhysicsSystem::DisableConstraintMotor(std::shared_ptr<PhysicsConstraint>) {}
+
+// Character/Vehicle/Ragdoll/SoftBody factory stubs
+std::unique_ptr<CharacterController> PhysicsSystem::CreateCharacterController(const CharacterControllerDesc&)
+{
+    return nullptr;
+}
+std::unique_ptr<VehiclePhysics> PhysicsSystem::CreateVehicle(std::shared_ptr<PhysicsBody>, const VehicleDesc&)
+{
+    return nullptr;
+}
+std::unique_ptr<Ragdoll> PhysicsSystem::CreateRagdoll(const RagdollDesc&)
+{
+    return nullptr;
+}
+std::unique_ptr<SoftBody> PhysicsSystem::CreateSoftBody(const SoftBodyDesc&)
+{
+    return nullptr;
+}
+
+// Surface velocity stub
+void PhysicsSystem::SetSurfaceVelocity(std::shared_ptr<PhysicsBody>, const XMFLOAT3&) {}
+
+// Buoyancy stub
+void PhysicsSystem::ApplyBuoyancy(std::shared_ptr<PhysicsBody>, const XMFLOAT3&, const XMFLOAT3&, float, float, float)
+{
+}
+
+// State serialization stubs
+bool PhysicsSystem::SaveState(std::vector<uint8_t>&) const
+{
+    return false;
+}
+bool PhysicsSystem::LoadState(const std::vector<uint8_t>&)
+{
+    return false;
+}
+
 void PhysicsSystem::SetDebugDrawMode(int /*mode*/) {}
 
 void PhysicsSystem::RenderDebug() {}
@@ -656,6 +754,10 @@ void PhysicsSystem::UpdateMetrics()
 }
 
 void PhysicsSystem::ProcessCollisions() {}
+
+void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody*, PhysicsBody*>>&) {}
+
+void PhysicsSystem::UpdateTriggerExitEvents(const std::vector<std::pair<PhysicsBody*, PhysicsBody*>>&) {}
 
 PhysicsBody* PhysicsSystem::FindBodyByJoltID(uint32_t /*joltBodyID*/) const
 {
