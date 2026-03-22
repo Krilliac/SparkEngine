@@ -63,6 +63,43 @@ SoftBody::SoftBody(PhysicsSystem* physicsSystem, const SoftBodyDesc& desc)
             JPH::SoftBodySharedSettings::Face(desc.triangles[i], desc.triangles[i + 1], desc.triangles[i + 2]));
     }
 
+    // Add skinned constraints (attach cloth vertices to skeleton bones)
+    if (!desc.skinnedConstraints.empty() && !desc.invBindMatrices.empty())
+    {
+        // Add inverse bind matrices
+        for (const auto& invBind : desc.invBindMatrices)
+        {
+            JPH::SoftBodySharedSettings::InvBind ib;
+            // Convert from our column-major float[16] to Jolt's Mat44
+            ib.mJointIndex = static_cast<uint32_t>(&invBind - desc.invBindMatrices.data());
+            ib.mInvBind =
+                JPH::Mat44(JPH::Vec4(invBind.matrix[0], invBind.matrix[1], invBind.matrix[2], invBind.matrix[3]),
+                           JPH::Vec4(invBind.matrix[4], invBind.matrix[5], invBind.matrix[6], invBind.matrix[7]),
+                           JPH::Vec4(invBind.matrix[8], invBind.matrix[9], invBind.matrix[10], invBind.matrix[11]),
+                           JPH::Vec4(invBind.matrix[12], invBind.matrix[13], invBind.matrix[14], invBind.matrix[15]));
+            sharedSettings->mInvBindMatrices.push_back(ib);
+        }
+
+        // Add skinned vertex constraints
+        for (const auto& sc : desc.skinnedConstraints)
+        {
+            JPH::SoftBodySharedSettings::Skinned skinned(sc.vertexIndex, sc.maxDistance, sc.backStopDistance,
+                                                         sc.backStopRadius);
+            for (int w = 0; w < 4; w++)
+            {
+                if (sc.weights[w].weight <= 0.0f)
+                    break;
+                skinned.mWeights[w] =
+                    JPH::SoftBodySharedSettings::SkinWeight(sc.weights[w].boneIndex, sc.weights[w].weight);
+            }
+            skinned.NormalizeWeights();
+            sharedSettings->mSkinnedConstraints.push_back(skinned);
+        }
+
+        // Calculate normals needed for backstop constraints
+        sharedSettings->CalculateSkinnedConstraintNormals();
+    }
+
     // Optimize shared settings
     sharedSettings->Optimize();
 
@@ -210,6 +247,36 @@ void SoftBody::SetPinnedVertexPosition(uint32_t index, const XMFLOAT3& position)
     {
         mp->GetVertex(index).mPosition = JPH::Vec3(position.x, position.y, position.z);
     }
+}
+
+void SoftBody::UpdateSkeletonMatrices(const float* matrices, uint32_t count)
+{
+    if (!m_physicsSystem || !m_physicsSystem->GetJoltSystem() || !matrices || count == 0)
+        return;
+
+    auto* joltSystem = m_physicsSystem->GetJoltSystem();
+    JPH::BodyID bodyID(m_joltBodyID);
+    JPH::Body* body = const_cast<JPH::Body*>(joltSystem->GetBodyLockInterface().TryGetBody(bodyID));
+    if (!body)
+        return;
+
+    JPH::SoftBodyMotionProperties* mp = static_cast<JPH::SoftBodyMotionProperties*>(body->GetMotionProperties());
+    if (!mp)
+        return;
+
+    // Build array of Jolt RMat44 from flat float arrays (each 16 floats, column-major)
+    JPH::Array<JPH::RMat44> joltMatrices;
+    joltMatrices.reserve(count);
+    for (uint32_t i = 0; i < count; i++)
+    {
+        const float* m = matrices + i * 16;
+        joltMatrices.push_back(JPH::RMat44(JPH::Vec4(m[0], m[1], m[2], m[3]), JPH::Vec4(m[4], m[5], m[6], m[7]),
+                                           JPH::Vec4(m[8], m[9], m[10], m[11]), JPH::Vec3(m[12], m[13], m[14])));
+    }
+
+    JPH::RMat44 comTransform = body->GetCenterOfMassTransform();
+    mp->SkinVertices(comTransform, joltMatrices.data(), static_cast<uint32_t>(joltMatrices.size()), true,
+                     *m_physicsSystem->GetTempAllocator());
 }
 
 void SoftBody::ApplyWindForce(const XMFLOAT3& windDirection, float windStrength)

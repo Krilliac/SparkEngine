@@ -133,6 +133,22 @@ class PhysicsSystem
     void SetMaxSubsteps(int maxSubsteps) { m_maxSubsteps = maxSubsteps; }
     int GetMaxSubsteps() const { return m_maxSubsteps; }
 
+    /**
+     * @brief Enable deterministic simulation mode.
+     *
+     * When enabled, Jolt processes bodies and constraints in a deterministic order
+     * so that identical inputs produce bit-identical outputs across runs and machines.
+     * Required for lockstep networking and replay systems.
+     *
+     * Performance impact: ~10-15% slower due to sorting overhead.
+     *
+     * @param enabled  true to enable deterministic mode.
+     */
+    void SetDeterministicSimulation(bool enabled);
+
+    /** @brief Check if deterministic simulation is enabled. */
+    bool IsDeterministicSimulation() const { return m_deterministicMode; }
+
     // =========================================================================
     // Interpolation
     // =========================================================================
@@ -580,6 +596,7 @@ class PhysicsSystem
     float m_timeStep = 1.0f / 60.0f;
     int m_maxSubsteps = 10;
     bool m_paused = false;
+    bool m_deterministicMode = false;
 
     // =========================================================================
     // Interpolation

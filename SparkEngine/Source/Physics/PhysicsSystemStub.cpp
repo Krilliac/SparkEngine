@@ -612,6 +612,12 @@ uint32_t PhysicsSystem::AddSubShape(std::shared_ptr<PhysicsBody>, const MutableS
 }
 void PhysicsSystem::RemoveSubShape(std::shared_ptr<PhysicsBody>, uint32_t) {}
 
+// Deterministic simulation stub
+void PhysicsSystem::SetDeterministicSimulation(bool enabled)
+{
+    m_deterministicMode = enabled;
+}
+
 // Offset center of mass stub
 void PhysicsSystem::SetCenterOfMassOffset(std::shared_ptr<PhysicsBody>, const XMFLOAT3&) {}
 

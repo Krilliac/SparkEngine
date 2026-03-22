@@ -653,6 +653,17 @@ XMFLOAT3 PhysicsSystem::GetGravity() const
     return XMFLOAT3(g.GetX(), g.GetY(), g.GetZ());
 }
 
+void PhysicsSystem::SetDeterministicSimulation(bool enabled)
+{
+    m_deterministicMode = enabled;
+    if (m_joltSystem)
+    {
+        JPH::PhysicsSettings settings = m_joltSystem->GetPhysicsSettings();
+        settings.mDeterministicSimulation = enabled;
+        m_joltSystem->SetPhysicsSettings(settings);
+    }
+}
+
 PhysicsBody* PhysicsSystem::FindBodyByJoltID(uint32_t joltBodyID) const
 {
     auto it = m_bodyIDMap.find(joltBodyID);

@@ -240,6 +240,20 @@ std::string CollisionShapeTypeToString(CollisionShapeType type)
         return "Heightfield";
     case CollisionShapeType::Compound:
         return "Compound";
+    case CollisionShapeType::TaperedCapsule:
+        return "TaperedCapsule";
+    case CollisionShapeType::TaperedCylinder:
+        return "TaperedCylinder";
+    case CollisionShapeType::Plane:
+        return "Plane";
+    case CollisionShapeType::Scaled:
+        return "Scaled";
+    case CollisionShapeType::OffsetCenterOfMass:
+        return "OffsetCenterOfMass";
+    case CollisionShapeType::MutableCompound:
+        return "MutableCompound";
+    case CollisionShapeType::Empty:
+        return "Empty";
     default:
         return "Unknown";
     }
@@ -265,6 +279,20 @@ CollisionShapeType StringToCollisionShapeType(const std::string& str)
         return CollisionShapeType::Heightfield;
     if (str == "Compound" || str == "compound")
         return CollisionShapeType::Compound;
+    if (str == "TaperedCapsule" || str == "taperedcapsule")
+        return CollisionShapeType::TaperedCapsule;
+    if (str == "TaperedCylinder" || str == "taperedcylinder")
+        return CollisionShapeType::TaperedCylinder;
+    if (str == "Plane" || str == "plane")
+        return CollisionShapeType::Plane;
+    if (str == "Scaled" || str == "scaled")
+        return CollisionShapeType::Scaled;
+    if (str == "OffsetCenterOfMass" || str == "offsetcenterofmass")
+        return CollisionShapeType::OffsetCenterOfMass;
+    if (str == "MutableCompound" || str == "mutablecompound")
+        return CollisionShapeType::MutableCompound;
+    if (str == "Empty" || str == "empty")
+        return CollisionShapeType::Empty;
     return CollisionShapeType::Box; // Default
 }
 
@@ -284,6 +312,18 @@ std::string ConstraintTypeToString(ConstraintType type)
         return "Generic6DOF";
     case ConstraintType::Fixed:
         return "Fixed";
+    case ConstraintType::Distance:
+        return "Distance";
+    case ConstraintType::Cone:
+        return "Cone";
+    case ConstraintType::Gear:
+        return "Gear";
+    case ConstraintType::RackAndPinion:
+        return "RackAndPinion";
+    case ConstraintType::Pulley:
+        return "Pulley";
+    case ConstraintType::Path:
+        return "Path";
     default:
         return "Unknown";
     }
@@ -303,5 +343,17 @@ ConstraintType StringToConstraintType(const std::string& str)
         return ConstraintType::Generic6DOF;
     if (str == "Fixed" || str == "fixed")
         return ConstraintType::Fixed;
+    if (str == "Distance" || str == "distance")
+        return ConstraintType::Distance;
+    if (str == "Cone" || str == "cone")
+        return ConstraintType::Cone;
+    if (str == "Gear" || str == "gear")
+        return ConstraintType::Gear;
+    if (str == "RackAndPinion" || str == "rackandpinion")
+        return ConstraintType::RackAndPinion;
+    if (str == "Pulley" || str == "pulley")
+        return ConstraintType::Pulley;
+    if (str == "Path" || str == "path")
+        return ConstraintType::Path;
     return ConstraintType::Fixed; // Default
 }

@@ -46,6 +46,36 @@ struct SoftBodyEdge
 };
 
 /**
+ * @brief Skin weight for attaching a soft body vertex to a skeletal bone.
+ */
+struct SoftBodySkinWeight
+{
+    uint32_t boneIndex = 0; ///< Index into the inverse bind matrices array
+    float weight = 0.0f;    ///< Skinning weight (should sum to 1.0 across all weights)
+};
+
+/**
+ * @brief Skinned vertex constraint — constrains a soft body vertex to follow
+ * a skeletal mesh pose, with optional max-distance slack for natural draping.
+ */
+struct SkinnedVertexDesc
+{
+    uint32_t vertexIndex = 0;                              ///< Index in soft body vertex list
+    SoftBodySkinWeight weights[4] = {};                    ///< Up to 4 bone weights (first zero weight = end)
+    float maxDistance = std::numeric_limits<float>::max(); ///< Max distance from skinned position (FLT_MAX = unlimited)
+    float backStopDistance = std::numeric_limits<float>::max(); ///< Backstop sphere start distance
+    float backStopRadius = 40.0f;                               ///< Backstop sphere radius
+};
+
+/**
+ * @brief Inverse bind matrix for skeletal skinning of soft bodies.
+ */
+struct SoftBodyInvBind
+{
+    float matrix[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}; ///< 4x4 column-major inverse bind matrix
+};
+
+/**
  * @brief Configuration for creating a soft body.
  */
 struct SoftBodyDesc
@@ -62,6 +92,10 @@ struct SoftBodyDesc
 
     uint32_t numIterations = 4;  ///< XPBD solver iterations (more = stiffer, slower)
     bool enableCollision = true; ///< Enable collision with rigid bodies
+
+    // Skeletal skinning (cloth attached to animated characters)
+    std::vector<SkinnedVertexDesc> skinnedConstraints; ///< Vertices constrained to skeleton pose
+    std::vector<SoftBodyInvBind> invBindMatrices;      ///< Inverse bind matrices for bones
 };
 
 /**
@@ -138,6 +172,22 @@ class SoftBody
 
     /** @brief Apply a force to all vertices (e.g., wind). */
     void ApplyWindForce(const XMFLOAT3& windDirection, float windStrength);
+
+    // =========================================================================
+    // Skeletal skinning
+    // =========================================================================
+
+    /**
+     * @brief Update skeleton bind matrices for skinned constraints.
+     *
+     * Call each frame after updating your skeleton's bone transforms.
+     * Provides the current world-space transforms that the skinned constraint
+     * solver will use as targets for the constrained vertices.
+     *
+     * @param matrices  Array of 4x4 column-major world-space bone matrices.
+     * @param count     Number of matrices (must match invBindMatrices count).
+     */
+    void UpdateSkeletonMatrices(const float* matrices, uint32_t count);
 
     /** @brief Get the Jolt body ID for the soft body. */
     uint32_t GetJoltBodyID() const { return m_joltBodyID; }

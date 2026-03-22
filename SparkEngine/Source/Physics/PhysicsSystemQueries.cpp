@@ -144,6 +144,17 @@ std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& de
     bodySettings.mMaxLinearVelocity = desc.maxLinearVelocity;
     bodySettings.mMaxAngularVelocity = desc.maxAngularVelocity;
 
+    // Set collision group filtering (GroupFilterTable)
+    if (desc.collisionGroupDesc.groupFilterID != 0 &&
+        desc.collisionGroupDesc.groupFilterID <= m_groupFilterTables.size())
+    {
+        auto* tableRef = static_cast<JPH::Ref<JPH::GroupFilterTable>*>(
+            m_groupFilterTables[desc.collisionGroupDesc.groupFilterID - 1]);
+        bodySettings.mCollisionGroup.SetGroupFilter(tableRef->GetPtr());
+        bodySettings.mCollisionGroup.SetGroupID(desc.collisionGroupDesc.groupID);
+        bodySettings.mCollisionGroup.SetSubGroupID(desc.collisionGroupDesc.subGroupID);
+    }
+
     // Create the body via Jolt
     auto& bodyInterface = m_joltSystem->GetBodyInterface();
     JPH::BodyID bodyID = bodyInterface.CreateAndAddBody(bodySettings, JPH::EActivation::Activate);
