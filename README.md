@@ -8,7 +8,7 @@
 [![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/loc.json)](https://github.com/Krilliac/SparkEngine)
 [![Source Files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/files.json)](https://github.com/Krilliac/SparkEngine)
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Built-in support for DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Built-in support for DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
 
 > **Early Development** — SparkEngine is under active development. Systems are being built out and stabilized. Expect rough edges.
 
@@ -51,7 +51,7 @@ DirectX 11 with multiple render paths (forward, deferred, forward+, clustered). 
 
 ### Physics
 
-Bullet Physics 3 integration with rigid bodies (static/kinematic/dynamic), collision shapes (box, sphere, capsule, cylinder, cone, mesh, convex hull, heightfield, compound), constraints (hinge, slider, fixed, generic), raycasting (single/multi-hit), sphere and box overlap queries, named physics materials, collision and trigger callbacks, and debug draw overlay.
+Jolt Physics integration with rigid bodies (static/kinematic/dynamic), 15 collision shapes (box, sphere, capsule, cylinder, cone, mesh, convex hull, heightfield, compound), 12 constraint types (hinge, slider, fixed, generic), raycasting (single/multi-hit), sphere and box overlap queries, named physics materials, collision and trigger callbacks, character controller with CCD, vehicle physics, ragdoll system, soft body/cloth simulation, deterministic mode for replay/networking, multi-threaded job dispatch, and debug draw overlay.
 
 ### Audio
 
@@ -63,7 +63,7 @@ ECS architecture (EnTT) with FPS player controller, weapon system (bullet/rocket
 
 ### AI & Navigation
 
-Behavior tree framework (composite, decorator, and action nodes), NavMesh A* pathfinding with binary `.snav` format loading, perception system (vision cones, hearing ranges, memory), and steering behaviors (seek, flee, pursue, evade, flocking).
+Behavior tree framework (composite, decorator, and action nodes), NavMesh A* pathfinding (Recast/Detour) with dynamic obstacles and off-mesh links, perception system (vision cones, hearing ranges, memory), steering behaviors (seek, flee, pursue, evade, flocking), tactical point system (EQS-like environmental queries), cover system, formation system, group AI coordination, AI budget limiter for 100+ agents, AI director for scripted events, and collision avoidance.
 
 ### Animation
 
@@ -71,9 +71,7 @@ Skeletal animation with bone hierarchies, keyframe clips, state machines with cr
 
 ### Networking
 
-> **Status: Experimental — disabled by default** (`ENABLE_NETWORKING=OFF`). See [Networking Configuration](#networking-configuration) below.
-
-UDP client/server architecture with entity replication, client-side prediction with server reconciliation, lag compensation (hitbox rewinding with 1-second history), reliable/unreliable/ordered message channels, and network statistics (ping, jitter, packet loss, bandwidth). Area-based server architecture (inspired by HeroEngine) with WorldServer coordination, per-area AreaServer instances, cross-area entity migration, dynamic load balancing, and player session management across area transitions — enabling MMO-scale multiplayer worlds.
+UDP client/server architecture with entity replication, client-side prediction with server reconciliation, lag compensation (hitbox rewinding with 1-second history), reliable/unreliable/ordered message channels, delta snapshot compression, sub-tick input precision, connection scope filtering, network instability simulation (for testing), and network statistics (ping, jitter, packet loss, bandwidth). Area-based server architecture (inspired by HeroEngine) with WorldServer coordination, per-area AreaServer instances, cross-area entity migration, dynamic load balancing, and player session management across area transitions — enabling MMO-scale multiplayer worlds.
 
 ### Scripting
 
@@ -81,7 +79,7 @@ AngelScript with Unity-style hot-reload (file watcher with debouncing and state 
 
 ### Editor
 
-ImGui-powered visual editor with scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor, visual scripting, terrain editing, weapon editor, profiler, version control integration, build/deployment system, level streaming, collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness), docking, and theming.
+ImGui-powered visual editor with 32 specialized panels: scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor, terrain editing, weapon editor, profiler, AI editor, physics debug, 2D editors, FPS tools, version control integration, build/deployment system, level streaming, search, prefab system, project management, scene statistics, collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness), docking, and theming. Full undo/redo support and play-mode editing.
 
 ### Procedural Generation
 
@@ -141,7 +139,7 @@ chmod +x generate.sh
 | **Vulkan** | Experimental | Via RHI abstraction layer; requires Vulkan SDK |
 | **OpenGL 4.5** | Experimental | Via RHI abstraction layer; GLSL shaders in `Shaders/GLSL/` |
 | **DirectX Raytracing (DXR)** | Experimental | Requires D3D12; disabled by default (`ENABLE_DXR=OFF`) |
-| **Networking (UDP)** | Experimental | Disabled by default (`ENABLE_NETWORKING=OFF`); see [Networking](#networking-configuration) |
+| **Networking (UDP)** | Experimental | Enabled by default (`ENABLE_NETWORKING=ON`); see [Networking](#networking-configuration) |
 
 > **What does "Experimental" mean?** These platforms and backends compile and have basic functionality, but are not yet fully tested, may have missing features, and are not guaranteed to work in all configurations. Bug reports are welcome!
 
@@ -199,7 +197,7 @@ Standalone debug console application that communicates with SparkEngine via name
 |    Rendering      |     Physics       |      Audio        |
 |                   |                   |                   |
 |  GraphicsEngine   |  PhysicsSystem    |  AudioEngine      |
-|  ShaderManager    |  Bullet3 World    |  XAudio2 / mini   |
+|  ShaderManager    |  Jolt Physics     |  XAudio2 / mini   |
 |  PostProcessing   |  Collision        |  3D Spatial       |
 |  PBR Materials    |  Raycasting       |  Object Pool      |
 +-------------------+-------------------+-------------------+
@@ -253,12 +251,12 @@ SparkEngine/
 |       |-- Game/            # Player, weapons, vehicles, HUD, terrain, inventory
 |       |-- Graphics/        # DX11 renderer, PBR, post-processing, particles, RHI
 |       |-- Input/           # Keyboard, mouse, gamepad input
-|       |-- Physics/         # Bullet Physics integration
+|       |-- Physics/         # Jolt Physics integration
 |       |-- Projectiles/     # Weapon projectile system
 |       |-- SceneManager/    # Scene and level management
 |       |-- Utils/           # Logging, profiler, crash handler, console, debug tools
 |-- SparkEditor/
-|   |-- Source/              # ImGui editor (22 subsystems)
+|   |-- Source/              # ImGui editor (32 panels)
 |-- SparkConsole/
 |   |-- src/                 # Standalone debug console application
 |-- SparkShaderCompiler/
@@ -272,7 +270,7 @@ SparkEngine/
 |   |-- Models/             # 3D model files (.obj)
 |   |-- Scenes/             # Level/scene JSON files
 |   |-- Scripts/            # AngelScript game scripts
-|-- Tests/                   # 35 unit tests (CTest integration)
+|-- Tests/                   # 145 unit tests (CTest integration)
 |-- tools/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
@@ -294,9 +292,8 @@ All external dependencies are managed as git submodules under `ThirdParty/`. Dep
 |---|---|---|
 | [Dear ImGui](https://github.com/ocornut/imgui) | `UI/imgui` | Immediate-mode GUI (docking branch) |
 | [EnTT](https://github.com/skypjack/entt) | `ECS/entt` | Entity component system |
-| [Bullet Physics](https://github.com/bulletphysics/bullet3) | `Physics/bullet3` | Physics engine |
+| [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | `Physics/JoltPhysics` | Physics engine |
 | [AngelScript](https://github.com/codecat/angelscript-mirror) | `Scripting/angelscript-mirror` | Scripting language |
-| [curl](https://github.com/curl/curl) | `Networking/curl` | HTTP client (disabled by default) |
 | [miniz](https://github.com/richgel999/miniz) | `Utils/miniz` | Compression (zlib-compatible) |
 | [tinyobjloader](https://github.com/tinyobjloader/tinyobjloader) | `Utils/tinyobjloader` | OBJ file loader |
 
@@ -316,7 +313,7 @@ The following libraries are included directly in the source tree:
 
 ## Tests
 
-35 unit tests covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
+145 unit tests covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
 
 ```bash
 # Build and run tests
@@ -325,7 +322,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Test coverage includes: math utilities, object pool, ECS world, game modes, AI behavior trees, animation, NavMesh, physics, input, save system, event system, weather, inventory, quests, day/night cycle, performance stats, light manager, fog, screen-space effects, post-processing pipeline, sequencer, mesh LOD, console command history, debug tools, noise generator, string utilities, ring buffer, UUID, file utilities, config parser, frustum culling, coroutine scheduler, tweening, and temporal effects.
+Test coverage includes: math utilities, object pool, ECS world, game modes, AI behavior trees, animation, NavMesh, physics, input, save system, event system, weather, inventory, quests, day/night cycle, performance stats, light manager, fog, screen-space effects, post-processing pipeline, sequencer, mesh LOD, console command history, debug tools, noise generator, string utilities, ring buffer, UUID, file utilities, config parser, frustum culling, coroutine scheduler, tweening, temporal effects, ability system, condition system, instance manager, movement system, spatial grid, replication fields, async database, script hook manager, module hot-reload, console RBAC, networking integration (30 tests), and cryptography.
 
 ## Build Options
 
@@ -336,8 +333,7 @@ All options are passed to CMake via `-D<OPTION>=ON/OFF`.
 | `BUILD_TESTS` | OFF | Unit tests (CTest) |
 | `ENABLE_EDITOR` | ON | ImGui visual editor |
 | `ENABLE_GRAPHICS` | ON | Graphics rendering system |
-| `ENABLE_PHYSX` | ON | Physics engine (Bullet) |
-| `ENABLE_LUA` | ON | Lua scripting support |
+| `ENABLE_PHYSX` | ON | Physics engine (Jolt Physics) |
 | `ENABLE_PROFILING` | ON | Performance profiling |
 | `ENABLE_VULKAN` | ON | Vulkan graphics backend (experimental) |
 | `ENABLE_OPENGL` | ON | OpenGL graphics backend (experimental) |
@@ -362,13 +358,13 @@ All options are passed to CMake via `-D<OPTION>=ON/OFF`.
 | `ENABLE_DAY_NIGHT` | ON | Day/night cycle |
 | `ENABLE_SCREEN_SPACE` | ON | Screen-space effects |
 | `ENABLE_FOG_SYSTEM` | ON | Volumetric fog |
-| `ENABLE_NETWORKING` | OFF | UDP networking (experimental, disabled by default) |
+| `ENABLE_NETWORKING` | ON | UDP networking (client/server, area servers, replication) |
 | `ENABLE_DXR` | OFF | DirectX Raytracing (experimental, needs D3D12) |
 | `ENABLE_SDL2` | OFF | SDL2 cross-platform input |
 
 ```bash
-# Example: minimal build without editor or scripting
-cmake -B build -DENABLE_EDITOR=OFF -DENABLE_LUA=OFF
+# Example: minimal build without editor
+cmake -B build -DENABLE_EDITOR=OFF
 ```
 
 ## CI/CD
@@ -439,12 +435,7 @@ For additional templates covering physics, AI, networking, procedural generation
 
 ## Networking Configuration
 
-The networking system is **disabled by default** because it is experimental. Here is how to enable and configure it:
-
-```bash
-# Enable networking at configure time
-cmake -B build -DENABLE_NETWORKING=ON
-```
+The networking system is **enabled by default** (`ENABLE_NETWORKING=ON`). It uses raw UDP sockets — no external networking dependencies are required.
 
 ### What you get
 
@@ -471,7 +462,6 @@ cmake -B build -DENABLE_NETWORKING=ON
 
 ### Troubleshooting
 
-- **CURL errors at build time** — The networking system uses raw UDP sockets, not CURL. If you see CURL-related errors, ensure no other option is pulling in the CURL submodule. CURL is an optional HTTP dependency and is not required for UDP networking.
 - **Connection refused** — Ensure the server is running and firewall rules allow UDP traffic on your chosen port.
 - **High packet loss** — Check `NetworkStats` via the console command `net_stats` for diagnostics.
 

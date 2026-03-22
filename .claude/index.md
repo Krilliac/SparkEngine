@@ -35,6 +35,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | SDK v2: 10 headers, 26 getters, math/input/event/logger types | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | **Resolved** | 2026-03-21 |
 | Docs: 58 wiki pages, 245/246 Doxygen, 5 critical gaps remaining | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-19 |
 | ThirdParty: 6 uninitialized submodules, curl removed | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-17 |
+| Engine next steps: 5-phase roadmap (wire-in → infrastructure → graphics → gameplay → polish) | [knowledge/engine-next-steps-2026-03-22.md](knowledge/engine-next-steps-2026-03-22.md) | Decision | Active | 2026-03-22 |
 
 ## Quick Reference by Topic
 

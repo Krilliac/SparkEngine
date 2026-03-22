@@ -76,7 +76,7 @@ All flags can be set during CMake configuration with `-D<FLAG>=ON|OFF`.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `ENABLE_PHYSX` | ON | Physics engine (Bullet Physics 3) |
+| `ENABLE_PHYSX` | ON | Physics engine (Jolt Physics) |
 | `ENABLE_AI` | ON | AI and navigation (behavior trees, NavMesh) |
 | `ENABLE_ANIMATION` | ON | Skeletal animation (blending, IK, state machines) |
 | `ENABLE_TERRAIN_SYSTEM` | ON | Heightmap terrain rendering and generation |
@@ -99,14 +99,13 @@ All flags can be set during CMake configuration with `-D<FLAG>=ON|OFF`.
 | `ENABLE_ASSET_STREAMING` | ON | Runtime asset streaming |
 | `ENABLE_ADVANCED_INPUT` | ON | Advanced input features (rebinding, combos) |
 | `ENABLE_PERF_STATS` | ON | Performance statistics overlay |
-| `ENABLE_LUA` | ON | Lua scripting support |
 | `ENABLE_COLLABORATIVE` | ON | Collaborative editing features |
 
 ### External / Disabled by Default
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `ENABLE_NETWORKING` | OFF | Networking subsystem (CURL dependency issues on some platforms) |
+| `ENABLE_NETWORKING` | ON | Networking subsystem (UDP sockets, no external dependencies) |
 | `ENABLE_SDL2` | OFF | SDL2 cross-platform input (alternative to native) |
 | `BUILD_TESTS` | ON | Unit test suite (see [Testing](Testing)) |
 
@@ -286,7 +285,7 @@ spark_define_component_libraries()
 | `SparkUtils` | `Utils/*.cpp/.h` | SparkCore | Console, Profiler, JobSystem, Octree |
 | `SparkECS` | `Engine/ECS/**/*.cpp/.h` | SparkCore | Components, Systems, World, ReactiveSystem |
 | `SparkGraphics` | `Graphics/**/*.cpp/.h` | SparkCore, SparkUtils | GraphicsEngine, RHI, Shaders, PostProcessing |
-| `SparkPhysics` | `Engine/Physics/**/*.cpp/.h` | SparkCore, SparkECS | PhysicsSystem, Bullet integration |
+| `SparkPhysics` | `Engine/Physics/**/*.cpp/.h` | SparkCore, SparkECS | PhysicsSystem, Jolt Physics integration |
 | `SparkAudio` | `Engine/Audio/**/*.cpp/.h` | SparkCore, SparkECS | AudioEngine, XAudio2 |
 | `SparkAI` | `Engine/AI/**/*.cpp/.h` | SparkCore, SparkECS, SparkUtils | AISystem, BehaviorTree, NavMesh |
 | `SparkAnimation` | `Engine/Animation/**/*.cpp/.h` | SparkCore, SparkECS | Skeleton, Clips, Blending, IK |

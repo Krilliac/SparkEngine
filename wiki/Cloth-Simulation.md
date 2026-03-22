@@ -667,7 +667,7 @@ Instances: 3
 
 ## See Also
 
-- [Physics](Physics) -- Rigid body simulation with Bullet Physics
+- [Physics](Physics) -- Rigid body simulation with Jolt Physics
 - [Animation](Animation) -- Character capes and cloth attachments
 - [Rendering and Graphics](Rendering-and-Graphics) -- Rendering deformable meshes
 - [Entity Component System](Entity-Component-System) -- Integrating cloth with ECS

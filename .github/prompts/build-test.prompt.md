@@ -19,12 +19,11 @@ Presets: `cmake --preset <name>` (see `CMakePresets.json`).
 |--------|---------|----------|
 | `ENABLE_EDITOR` | ON | ImGui editor |
 | `ENABLE_GRAPHICS` | ON | DirectX 11 |
-| `ENABLE_PHYSX` | ON | Bullet Physics 3 |
+| `ENABLE_PHYSX` | ON | Jolt Physics |
 | `ENABLE_AI` | ON | Behavior trees, NavMesh |
 | `ENABLE_ANIMATION` | ON | Skeletal animation |
-| `ENABLE_NETWORKING` | OFF | UDP multiplayer (requires CURL) |
-| `ENABLE_LUA` | ON | Lua scripting |
-| `ENABLE_VULKAN` | OFF | Vulkan (experimental) |
+| `ENABLE_NETWORKING` | ON | UDP multiplayer (raw sockets) |
+| `ENABLE_VULKAN` | ON | Vulkan (experimental) |
 | `ENABLE_OPENGL` | OFF | OpenGL (experimental) |
 | `ENABLE_DXR` | OFF | DXR (requires D3D12) |
 | `BUILD_TESTS` | ON | CTest unit tests |
@@ -38,7 +37,7 @@ SparkEngine (exe), SparkEditor (exe), SparkGame (DLL/SO), SparkConsole (exe), Sp
 | Library | Purpose |
 |---------|---------|
 | EnTT | ECS |
-| Bullet3 | Physics |
+| Jolt Physics | Physics |
 | Dear ImGui | Editor UI (docking branch) |
 | Assimp | 3D model import |
 | DirectXTK | DX11 toolkit |
@@ -66,7 +65,7 @@ Builds on every push/PR: Windows MSVC + Linux GCC + Linux Clang (Debug + Release
 
 ## Testing
 
-35 unit tests in `Tests/` with internal framework + CTest.
+145 unit tests in `Tests/` with internal framework + CTest.
 
 ```bash
 cd build && ctest --output-on-failure          # all tests
