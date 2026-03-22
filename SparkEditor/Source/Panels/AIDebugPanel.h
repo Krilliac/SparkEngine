@@ -71,6 +71,9 @@ namespace SparkEditor
             std::string value;
         };
 
+        // Helpers
+        static const char* AgentStateToString(AgentState state);
+
         // UI rendering
         void RenderAgentList();
         void RenderBlackboardInspector();
