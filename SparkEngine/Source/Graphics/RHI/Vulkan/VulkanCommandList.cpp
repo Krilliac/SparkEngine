@@ -9,6 +9,7 @@
 
 #include "VulkanDevice.h"
 #include <algorithm>
+#include <cstring>
 #include <iostream>
 
 namespace Spark

@@ -113,6 +113,7 @@ option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON
 option(ENABLE_RECAST "Enable Recast/Detour navmesh generation (improved voxel-based builder)" ON)
 option(BUILD_TESTS "Build test suite" ON)
 option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Bullet3, ImGui, EnTT)" OFF)
+option(SPARK_SUPPRESS_THIRDPARTY_WARNINGS "Suppress compiler warnings from third-party libraries (Bullet3, etc.)" ON)
 
 # Editor available on Windows (Win32+DX11) and Linux (SDL2+OpenGL3)
 option(ENABLE_EDITOR "Enable editor features" ON)
@@ -515,8 +516,8 @@ if(BULLET_FOUND)
     set(USE_GRAPHICAL_BENCHMARK OFF CACHE BOOL "" FORCE)
     set(USE_MSVC_RUNTIME_LIBRARY_DLL ON CACHE BOOL "" FORCE)
     add_subdirectory("${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3" "${CMAKE_BINARY_DIR}/bullet3")
-    # Suppress warnings in third-party bullet3 code (deprecated-copy triggers on GCC 12+)
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
+    # Suppress warnings in third-party bullet3 code
+    if(SPARK_SUPPRESS_THIRDPARTY_WARNINGS)
         foreach(_bullet_target
             BulletDynamics BulletCollision LinearMath
             BulletSoftBody BulletInverseDynamics
@@ -524,20 +525,17 @@ if(BULLET_FOUND)
             Bullet3OpenCL_clew Bullet2FileLoader
         )
             if(TARGET ${_bullet_target})
-                target_compile_options(${_bullet_target} PRIVATE
-                    -Wno-deprecated-copy
-                    -Wno-implicit-fallthrough
-                    -Wno-unused-but-set-variable
-                )
-                if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-                    target_compile_options(${_bullet_target} PRIVATE -Wno-volatile)
-                elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|IntelLLVM")
-                    target_compile_options(${_bullet_target} PRIVATE -Wno-deprecated-volatile)
-                endif()
-                if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|IntelLLVM")
+                if(MSVC)
+                    # Strip /W3 set by Bullet's CMakeLists to avoid D9025 override warning
+                    get_target_property(_bullet_opts ${_bullet_target} COMPILE_OPTIONS)
+                    if(_bullet_opts)
+                        list(REMOVE_ITEM _bullet_opts "/W3")
+                        set_target_properties(${_bullet_target} PROPERTIES COMPILE_OPTIONS "${_bullet_opts}")
+                    endif()
+                    target_compile_options(${_bullet_target} PRIVATE /w)
+                elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
                     target_compile_options(${_bullet_target} PRIVATE
-                        -Wno-single-bit-bitfield-constant-conversion
-                        -Wno-null-pointer-subtraction
+                        -w
                     )
                 endif()
             endif()

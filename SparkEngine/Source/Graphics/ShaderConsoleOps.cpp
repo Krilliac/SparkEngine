@@ -9,6 +9,7 @@
  */
 
 #include "Shader.h"
+#include "RHI/RHI.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/LogMacros.h"
 #include <sstream>

@@ -6,6 +6,7 @@
  * Split from EditorUI.cpp for maintainability.
  */
 #include "EditorUI.h"
+#include "EditorIcons.h"
 #include "../Utils/SparkConsole.h"
 #include "EditorApplication.h"
 #include <imgui.h>

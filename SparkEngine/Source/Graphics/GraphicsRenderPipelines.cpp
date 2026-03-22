@@ -15,6 +15,7 @@
 #include "TemporalEffects.h"
 #include "../Game/GameObject.h"
 #include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
 #ifdef SPARK_HYBRID_RT
 #include "HybridRT/HybridRTManager.h"
 #ifdef SPARK_HARDWARE_RT
