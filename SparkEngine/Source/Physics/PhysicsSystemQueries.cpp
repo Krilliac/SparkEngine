@@ -631,6 +631,15 @@ void PhysicsSystem::RemoveConstraint(std::shared_ptr<PhysicsConstraint> constrai
 }
 
 // ============================================================================
+// CHARACTER CONTROLLER
+// ============================================================================
+
+std::unique_ptr<CharacterController> PhysicsSystem::CreateCharacterController(const CharacterControllerDesc& desc)
+{
+    return std::make_unique<CharacterController>(this, desc);
+}
+
+// ============================================================================
 // RAYCASTING AND OVERLAP QUERIES
 // ============================================================================
 

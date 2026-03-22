@@ -18,6 +18,7 @@
 
 // Subsystem headers
 #include "PhysicsBody.h"
+#include "CharacterController.h"
 
 #include "../Core/Platform.h"
 
@@ -262,6 +263,25 @@ class PhysicsSystem
 
     /** @brief Get the Jolt physics system (for internal use by PhysicsBody). */
     JPH::PhysicsSystem* GetJoltSystem() const { return m_joltSystem.get(); }
+
+    /** @brief Get the temp allocator (used by CharacterController). */
+    JPH::TempAllocator* GetTempAllocator() const { return m_tempAllocator.get(); }
+
+    // =========================================================================
+    // Character controller
+    // =========================================================================
+
+    /**
+     * @brief Create a character controller for player/NPC movement.
+     *
+     * Uses Jolt's CharacterVirtual for precise collision response without
+     * physics simulation forces. Supports walking, jumping, slopes, stairs,
+     * and moving platform detection.
+     *
+     * @param desc  Character controller configuration.
+     * @return      Unique pointer to the new CharacterController.
+     */
+    std::unique_ptr<class CharacterController> CreateCharacterController(const struct CharacterControllerDesc& desc);
 
   private:
     // =========================================================================
