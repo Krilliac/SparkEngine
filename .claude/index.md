@@ -12,6 +12,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | PCSX2 analysis (12 recommendations: save tags, null RHI, render ring, multi-ISA) | [knowledge/pcsx2-analysis.md](knowledge/pcsx2-analysis.md) | Decision | **Resolved** | 2026-03-20 |
 | 11-engine + 3-framework analysis (30 recommendations, ~20 engines total) | [knowledge/eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) | Decision | Active | 2026-03-20 |
 | 13 closed/proprietary engine analysis (15 recommendations, Blizzard/Havok/Frostbite/RAGE/id Tech/etc.) | [knowledge/closed-engines-analysis.md](knowledge/closed-engines-analysis.md) | Decision | Active | 2026-03-21 |
+| CI log access without gh CLI | [knowledge/ci-log-access.md](knowledge/ci-log-access.md) | Issue | **Resolved** | 2026-03-22 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
@@ -37,7 +38,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Fixing problems (Issues)
 
-**Checking PR / CI status** → Use `gh run list` + `gh run view`, NOT `gh pr checks --watch`.
+**Checking PR / CI status** → Use `gh run list` + `gh run view`, NOT `gh pr checks --watch`. If `gh` unavailable, ask user for error text or reproduce locally with submodules. See [ci-log-access.md](knowledge/ci-log-access.md).
 
 **CI check failed** → Identify blocking vs. non-blocking jobs first. See CLAUDE.md CI jobs table.
 

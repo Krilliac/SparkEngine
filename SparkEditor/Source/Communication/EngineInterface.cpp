@@ -147,10 +147,9 @@ namespace SparkEditor
         }
 
         // Wait for the engine process to connect to our pipe, with timeout
+#ifdef _WIN32
         auto deadline = std::chrono::steady_clock::now() +
                         std::chrono::milliseconds(static_cast<int64_t>(timeoutSeconds * 1000.0f));
-
-#ifdef _WIN32
         // Use overlapped I/O for timeout support on Windows
         HANDLE hPipe = static_cast<HANDLE>(m_pipeHandle);
         OVERLAPPED overlapped = {};

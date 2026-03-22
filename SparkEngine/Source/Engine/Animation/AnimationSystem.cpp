@@ -1225,7 +1225,7 @@ namespace Spark::Animation
         auto currentClip = mgr.GetClip(currentClipName);
         if (currentClip)
         {
-            AnimationEvaluator::SampleClip(*currentClip, *skeleton, stateMachine.GetCurrentTime(),
+            AnimationEvaluator::SampleClip(*currentClip, *skeleton, stateMachine.GetCurrentPlaybackTime(),
                                            blendResult.localTransforms);
         }
 

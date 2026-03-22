@@ -14,6 +14,11 @@
 #include <imgui.h>
 #endif
 
+// Windows.h defines SendMessage as SendMessageA/SendMessageW — undo that
+#ifdef SendMessage
+#undef SendMessage
+#endif
+
 namespace MMO
 {
 
