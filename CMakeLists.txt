@@ -114,6 +114,7 @@ option(ENABLE_RECAST "Enable Recast/Detour navmesh generation (improved voxel-ba
 option(BUILD_TESTS "Build test suite" ON)
 option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)" OFF)
 option(SPARK_SUPPRESS_THIRDPARTY_WARNINGS "Suppress compiler warnings from third-party libraries (Jolt, etc.)" ON)
+option(SPARK_DOUBLE_PRECISION_PHYSICS "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds" OFF)
 
 # Editor available on Windows (Win32+DX11) and Linux (SDL2+OpenGL3)
 option(ENABLE_EDITOR "Enable editor features" ON)
@@ -520,6 +521,12 @@ if(JOLT_FOUND)
     set(FLOATING_POINT_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
     set(CPP_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
     set(CPP_RTTI_ENABLED OFF CACHE BOOL "" FORCE)
+
+    # Double precision physics for large-world support (MMO, open-world)
+    if(SPARK_DOUBLE_PRECISION_PHYSICS)
+        set(DOUBLE_PRECISION ON CACHE BOOL "" FORCE)
+        message(STATUS "Jolt Physics: double precision enabled (JPH_DOUBLE_PRECISION)")
+    endif()
 
     add_subdirectory("${JOLT_PHYSICS_SOURCE_DIR}/Build" "${CMAKE_BINARY_DIR}/JoltPhysics")
 

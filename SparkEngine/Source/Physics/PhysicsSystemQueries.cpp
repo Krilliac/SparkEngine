@@ -44,6 +44,11 @@
 #include <Jolt/Physics/Constraints/SixDOFConstraint.h>
 #include <Jolt/Physics/Constraints/MotorSettings.h>
 #include <Jolt/Physics/Constraints/SpringSettings.h>
+#include <Jolt/Physics/Collision/CollisionGroup.h>
+#include <Jolt/Physics/Collision/GroupFilterTable.h>
+#include <Jolt/Physics/Collision/Shape/MutableCompoundShape.h>
+#include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
+#include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 
 JPH_SUPPRESS_WARNINGS
 
@@ -835,21 +840,24 @@ std::unique_ptr<SoftBody> PhysicsSystem::CreateSoftBody(const SoftBodyDesc& desc
 
 void PhysicsSystem::SetSurfaceVelocity(std::shared_ptr<PhysicsBody> body, const XMFLOAT3& velocity)
 {
-    if (!m_joltSystem || !body)
+    if (!body)
         return;
 
-    auto& bodyInterface = m_joltSystem->GetBodyInterface();
-    JPH::BodyID bodyID(body->GetJoltBodyID());
-    if (!bodyInterface.IsAdded(bodyID))
-        return;
+    uint32_t bodyID = body->GetJoltBodyID();
 
-    // Jolt doesn't have a direct surface velocity API on BodyInterface.
-    // Surface velocity is applied via the ContactListener by modifying
-    // ContactSettings in OnContactAdded/OnContactPersisted.
-    // Store the velocity on the body's user data for lookup in the listener.
-    // For a complete implementation, extend the contact listener to check
-    // for surface velocity and apply it to the contact settings.
-    (void)velocity;
+    // Store surface velocity for lookup by the contact listener.
+    // The SparkContactListener reads this map during OnContactAdded/OnContactPersisted
+    // and applies it to ContactSettings::mRelativeLinearSurfaceVelocity.
+    std::lock_guard<std::mutex> lock(m_surfaceVelocityMutex);
+
+    if (velocity.x == 0.0f && velocity.y == 0.0f && velocity.z == 0.0f)
+    {
+        m_surfaceVelocities.erase(bodyID);
+    }
+    else
+    {
+        m_surfaceVelocities[bodyID] = velocity;
+    }
 }
 
 // ============================================================================
@@ -1351,4 +1359,189 @@ bool PhysicsSystem::LoadState(const std::vector<uint8_t>& buffer)
     }
 
     return true;
+}
+
+// ============================================================================
+// GROUP FILTER TABLE
+// ============================================================================
+
+uint32_t PhysicsSystem::CreateGroupFilterTable(uint32_t numSubGroups)
+{
+    auto* tableRef = new JPH::Ref<JPH::GroupFilterTable>(new JPH::GroupFilterTable(numSubGroups));
+    m_groupFilterTables.push_back(tableRef);
+    return static_cast<uint32_t>(m_groupFilterTables.size()); // 1-based ID
+}
+
+void PhysicsSystem::DisableGroupCollision(uint32_t filterID, uint32_t subGroup1, uint32_t subGroup2)
+{
+    if (filterID == 0 || filterID > m_groupFilterTables.size())
+        return;
+    auto* tableRef = static_cast<JPH::Ref<JPH::GroupFilterTable>*>(m_groupFilterTables[filterID - 1]);
+    (*tableRef)->DisableCollision(subGroup1, subGroup2);
+}
+
+void PhysicsSystem::EnableGroupCollision(uint32_t filterID, uint32_t subGroup1, uint32_t subGroup2)
+{
+    if (filterID == 0 || filterID > m_groupFilterTables.size())
+        return;
+    auto* tableRef = static_cast<JPH::Ref<JPH::GroupFilterTable>*>(m_groupFilterTables[filterID - 1]);
+    (*tableRef)->EnableCollision(subGroup1, subGroup2);
+}
+
+// ============================================================================
+// MUTABLE COMPOUND SHAPE
+// ============================================================================
+
+std::shared_ptr<PhysicsBody> PhysicsSystem::CreateMutableCompoundBody(const PhysicsBodyDesc& desc,
+                                                                      const std::vector<MutableSubShapeDesc>& subShapes)
+{
+    if (!m_joltSystem)
+        return nullptr;
+
+    // Build the MutableCompoundShape from sub-shapes
+    JPH::MutableCompoundShapeSettings compoundSettings;
+    for (const auto& sub : subShapes)
+    {
+        void* shapePtr = CreateCollisionShape(sub.shape);
+        if (!shapePtr)
+            continue;
+        auto* shapeRef = static_cast<JPH::ShapeRefC*>(shapePtr);
+
+        float pitch = sub.rotation.x * (3.14159265f / 180.0f);
+        float yaw = sub.rotation.y * (3.14159265f / 180.0f);
+        float roll = sub.rotation.z * (3.14159265f / 180.0f);
+        JPH::Quat rot = JPH::Quat::sEulerAngles(JPH::Vec3(pitch, yaw, roll));
+
+        compoundSettings.AddShape(JPH::Vec3(sub.position.x, sub.position.y, sub.position.z), rot, shapeRef->GetPtr());
+    }
+
+    auto compoundResult = compoundSettings.Create();
+    if (compoundResult.HasError())
+        return nullptr;
+
+    // Determine body layer and motion type
+    JPH::EMotionType motionType = JPH::EMotionType::Dynamic;
+    JPH::ObjectLayer layer = 1; // MOVING
+    if (desc.type == PhysicsBodyType::Static)
+    {
+        motionType = JPH::EMotionType::Static;
+        layer = 0; // NON_MOVING
+    }
+    else if (desc.type == PhysicsBodyType::Kinematic || desc.isKinematic)
+    {
+        motionType = JPH::EMotionType::Kinematic;
+    }
+
+    float pitch = desc.rotation.x * (3.14159265f / 180.0f);
+    float yaw = desc.rotation.y * (3.14159265f / 180.0f);
+    float roll = desc.rotation.z * (3.14159265f / 180.0f);
+
+    JPH::BodyCreationSettings bodySettings(compoundResult.Get(),
+                                           JPH::RVec3(desc.position.x, desc.position.y, desc.position.z),
+                                           JPH::Quat::sEulerAngles(JPH::Vec3(pitch, yaw, roll)), motionType, layer);
+    if (motionType == JPH::EMotionType::Dynamic)
+    {
+        bodySettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        bodySettings.mMassPropertiesOverride.mMass = desc.mass;
+    }
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID bodyID = bodyInterface.CreateAndAddBody(bodySettings, JPH::EActivation::Activate);
+
+    auto body = std::make_shared<PhysicsBody>(desc, bodyID.GetIndexAndSequenceNumber());
+
+    m_bodies.push_back(body);
+    m_bodyIDMap[bodyID.GetIndexAndSequenceNumber()] = body.get();
+    if (!desc.name.empty())
+        m_namedBodies[desc.name] = body;
+
+    return body;
+}
+
+uint32_t PhysicsSystem::AddSubShape(std::shared_ptr<PhysicsBody> body, const MutableSubShapeDesc& subShape)
+{
+    if (!m_joltSystem || !body)
+        return UINT32_MAX;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID bodyID(body->GetJoltBodyID());
+    if (!bodyInterface.IsAdded(bodyID))
+        return UINT32_MAX;
+
+    JPH::Body* joltBody = const_cast<JPH::Body*>(m_joltSystem->GetBodyLockInterface().TryGetBody(bodyID));
+    if (!joltBody)
+        return UINT32_MAX;
+
+    auto* compound =
+        const_cast<JPH::MutableCompoundShape*>(static_cast<const JPH::MutableCompoundShape*>(joltBody->GetShape()));
+    if (!compound)
+        return UINT32_MAX;
+
+    void* shapePtr = CreateCollisionShape(subShape.shape);
+    if (!shapePtr)
+        return UINT32_MAX;
+
+    auto* shapeRef = static_cast<JPH::ShapeRefC*>(shapePtr);
+
+    float pitch = subShape.rotation.x * (3.14159265f / 180.0f);
+    float yaw = subShape.rotation.y * (3.14159265f / 180.0f);
+    float roll = subShape.rotation.z * (3.14159265f / 180.0f);
+    JPH::Quat rot = JPH::Quat::sEulerAngles(JPH::Vec3(pitch, yaw, roll));
+
+    uint32_t index = compound->AddShape(JPH::Vec3(subShape.position.x, subShape.position.y, subShape.position.z), rot,
+                                        shapeRef->GetPtr(), subShape.userData);
+
+    compound->AdjustCenterOfMass();
+    bodyInterface.NotifyShapeChanged(bodyID, JPH::Vec3::sZero(), true, JPH::EActivation::Activate);
+
+    return index;
+}
+
+void PhysicsSystem::RemoveSubShape(std::shared_ptr<PhysicsBody> body, uint32_t index)
+{
+    if (!m_joltSystem || !body)
+        return;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID bodyID(body->GetJoltBodyID());
+    if (!bodyInterface.IsAdded(bodyID))
+        return;
+
+    JPH::Body* joltBody = const_cast<JPH::Body*>(m_joltSystem->GetBodyLockInterface().TryGetBody(bodyID));
+    if (!joltBody)
+        return;
+
+    auto* compound =
+        const_cast<JPH::MutableCompoundShape*>(static_cast<const JPH::MutableCompoundShape*>(joltBody->GetShape()));
+    if (!compound)
+        return;
+
+    compound->RemoveShape(index);
+    compound->AdjustCenterOfMass();
+    bodyInterface.NotifyShapeChanged(bodyID, JPH::Vec3::sZero(), true, JPH::EActivation::Activate);
+}
+
+// ============================================================================
+// OFFSET CENTER OF MASS
+// ============================================================================
+
+void PhysicsSystem::SetCenterOfMassOffset(std::shared_ptr<PhysicsBody> body, const XMFLOAT3& offset)
+{
+    if (!m_joltSystem || !body)
+        return;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID bodyID(body->GetJoltBodyID());
+    if (!bodyInterface.IsAdded(bodyID))
+        return;
+
+    // Get current shape and wrap it with OffsetCenterOfMassShape
+    JPH::RefConst<JPH::Shape> currentShape = bodyInterface.GetShape(bodyID);
+
+    JPH::OffsetCenterOfMassShapeSettings settings(JPH::Vec3(offset.x, offset.y, offset.z), currentShape.GetPtr());
+    auto result = settings.Create();
+    if (result.HasError())
+        return;
+
+    bodyInterface.SetShape(bodyID, result.Get(), true, JPH::EActivation::Activate);
 }

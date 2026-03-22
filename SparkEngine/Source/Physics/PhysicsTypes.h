@@ -40,20 +40,22 @@ enum class PhysicsBodyType
  */
 enum class CollisionShapeType
 {
-    Box,             ///< Box collision shape
-    Sphere,          ///< Sphere collision shape
-    Capsule,         ///< Capsule collision shape
-    Cylinder,        ///< Cylinder collision shape
-    Cone,            ///< Cone collision shape (approximated as convex hull in Jolt)
-    Mesh,            ///< Triangle mesh shape (static geometry only)
-    ConvexHull,      ///< Convex hull shape
-    Heightfield,     ///< Heightfield terrain shape (optimized grid)
-    Compound,        ///< Compound shape (multiple sub-shapes)
-    TaperedCapsule,  ///< Capsule with different top/bottom radii
-    TaperedCylinder, ///< Cylinder with different top/bottom radii
-    Plane,           ///< Infinite plane shape
-    Scaled,          ///< Scaled wrapper around another shape
-    Empty            ///< Empty shape (no collision geometry)
+    Box,                ///< Box collision shape
+    Sphere,             ///< Sphere collision shape
+    Capsule,            ///< Capsule collision shape
+    Cylinder,           ///< Cylinder collision shape
+    Cone,               ///< Cone collision shape (approximated as convex hull in Jolt)
+    Mesh,               ///< Triangle mesh shape (static geometry only)
+    ConvexHull,         ///< Convex hull shape
+    Heightfield,        ///< Heightfield terrain shape (optimized grid)
+    Compound,           ///< Compound shape (multiple sub-shapes)
+    TaperedCapsule,     ///< Capsule with different top/bottom radii
+    TaperedCylinder,    ///< Cylinder with different top/bottom radii
+    Plane,              ///< Infinite plane shape
+    Scaled,             ///< Scaled wrapper around another shape
+    OffsetCenterOfMass, ///< Shape with offset center of mass
+    MutableCompound,    ///< Mutable compound shape (runtime add/remove sub-shapes)
+    Empty               ///< Empty shape (no collision geometry)
 };
 
 /**
@@ -345,6 +347,45 @@ struct CollisionShapeDesc
     float planeDistance = 0.0f;
 };
 
+// =============================================================================
+// Collision group filtering
+// =============================================================================
+
+/**
+ * @brief Collision group assignment for a physics body.
+ *
+ * Used with GroupFilterTable for fine-grained per-body collision filtering
+ * beyond object layer filtering. Two bodies with the same groupFilterID
+ * share a GroupFilterTable that determines which sub-group pairs collide.
+ *
+ * @code
+ *   // Create a filter table with 4 sub-groups
+ *   auto filterID = physics.CreateGroupFilterTable(4);
+ *   physics.DisableGroupCollision(filterID, 0, 1); // sub-group 0 doesn't collide with 1
+ *
+ *   bodyDesc.collisionGroupDesc.groupFilterID = filterID;
+ *   bodyDesc.collisionGroupDesc.groupID = 0;
+ *   bodyDesc.collisionGroupDesc.subGroupID = 0;
+ * @endcode
+ */
+struct CollisionGroupDesc
+{
+    uint32_t groupFilterID = 0; ///< ID of the GroupFilterTable (0 = no group filtering)
+    uint32_t groupID = 0;       ///< Group identifier
+    uint32_t subGroupID = 0;    ///< Sub-group within the group
+};
+
+/**
+ * @brief Descriptor for a sub-shape within a MutableCompoundShape.
+ */
+struct MutableSubShapeDesc
+{
+    CollisionShapeDesc shape;      ///< Shape geometry
+    XMFLOAT3 position = {0, 0, 0}; ///< Local position relative to compound center
+    XMFLOAT3 rotation = {0, 0, 0}; ///< Euler rotation in degrees
+    uint32_t userData = 0;         ///< Per-sub-shape user data
+};
+
 /**
  * @brief Complete descriptor for creating a PhysicsBody.
  *
@@ -483,6 +524,14 @@ struct PhysicsBodyDesc
      * Default: 0xFFFF (collide with everything).
      */
     uint16_t collisionMask = 0xFFFF;
+
+    /**
+     * @brief Advanced collision group filtering (GroupFilterTable).
+     *
+     * When groupFilterID != 0, the body participates in sub-group-based
+     * collision filtering. See CreateGroupFilterTable() / DisableGroupCollision().
+     */
+    CollisionGroupDesc collisionGroupDesc;
 
     /**
      * @brief Human-readable identifier for debugging and console queries.

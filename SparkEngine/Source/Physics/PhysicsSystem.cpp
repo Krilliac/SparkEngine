@@ -160,9 +160,37 @@ class SparkContactListener final : public JPH::ContactListener
         return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
     }
 
+    // Surface velocity lookup — set by PhysicsSystem::SetSurfaceVelocity()
+    std::unordered_map<uint32_t, XMFLOAT3>* m_surfaceVelocities = nullptr;
+    std::mutex* m_surfaceVelocityMutex = nullptr;
+
+    void ApplySurfaceVelocity(const JPH::Body& inBody1, const JPH::Body& inBody2,
+                              JPH::ContactSettings& ioSettings) const
+    {
+        if (!m_surfaceVelocities || !m_surfaceVelocityMutex)
+            return;
+
+        std::lock_guard<std::mutex> lock(*m_surfaceVelocityMutex);
+
+        auto it1 = m_surfaceVelocities->find(inBody1.GetID().GetIndexAndSequenceNumber());
+        if (it1 != m_surfaceVelocities->end())
+        {
+            ioSettings.mRelativeLinearSurfaceVelocity += JPH::Vec3(it1->second.x, it1->second.y, it1->second.z);
+        }
+
+        auto it2 = m_surfaceVelocities->find(inBody2.GetID().GetIndexAndSequenceNumber());
+        if (it2 != m_surfaceVelocities->end())
+        {
+            ioSettings.mRelativeLinearSurfaceVelocity -= JPH::Vec3(it2->second.x, it2->second.y, it2->second.z);
+        }
+    }
+
     void OnContactAdded(const JPH::Body& inBody1, const JPH::Body& inBody2, const JPH::ContactManifold& inManifold,
                         JPH::ContactSettings& ioSettings) override
     {
+        // Apply surface velocity (conveyor belts, moving walkways)
+        ApplySurfaceVelocity(inBody1, inBody2, ioSettings);
+
         PendingContact contact;
         contact.bodyID1 = inBody1.GetID().GetIndexAndSequenceNumber();
         contact.bodyID2 = inBody2.GetID().GetIndexAndSequenceNumber();
@@ -185,6 +213,9 @@ class SparkContactListener final : public JPH::ContactListener
     void OnContactPersisted(const JPH::Body& inBody1, const JPH::Body& inBody2, const JPH::ContactManifold& inManifold,
                             JPH::ContactSettings& ioSettings) override
     {
+        // Apply surface velocity on persistent contacts too
+        ApplySurfaceVelocity(inBody1, inBody2, ioSettings);
+
         // Persistent contacts for trigger tracking
         if (inBody1.IsSensor() || inBody2.IsSensor())
         {
@@ -323,6 +354,8 @@ HRESULT PhysicsSystem::Initialize()
     // Install contact listener
     auto contactListener = std::make_unique<SparkContactListener>();
     contactListener->m_physicsSystem = this;
+    contactListener->m_surfaceVelocities = &m_surfaceVelocities;
+    contactListener->m_surfaceVelocityMutex = &m_surfaceVelocityMutex;
     m_contactListener = std::move(contactListener);
     m_joltSystem->SetContactListener(static_cast<SparkContactListener*>(m_contactListener.get()));
 

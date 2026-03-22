@@ -132,8 +132,54 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
             shape = new JPH::ShapeRefC(result.Get());
         break;
     }
-    case CollisionShapeType::Compound:
     case CollisionShapeType::Scaled:
+    {
+        // Create inner shape from the same descriptor but as a Box (most common base)
+        CollisionShapeDesc innerDesc = desc;
+        innerDesc.type = CollisionShapeType::Box;
+        void* innerShape = CreateCollisionShape(innerDesc);
+        if (innerShape)
+        {
+            auto* innerRef = static_cast<JPH::ShapeRefC*>(innerShape);
+            JPH::ScaledShapeSettings scaledSettings(innerRef->GetPtr(),
+                                                    JPH::Vec3(desc.scale.x, desc.scale.y, desc.scale.z));
+            auto result = scaledSettings.Create();
+            if (!result.HasError())
+                shape = new JPH::ShapeRefC(result.Get());
+            else
+                shape = innerShape;
+        }
+        else
+        {
+            shape = CreateBoxShape(desc.dimensions);
+        }
+        break;
+    }
+    case CollisionShapeType::OffsetCenterOfMass:
+    {
+        // Create inner shape as a Box, then wrap with offset
+        CollisionShapeDesc innerDesc = desc;
+        innerDesc.type = CollisionShapeType::Box;
+        void* innerShape = CreateCollisionShape(innerDesc);
+        if (innerShape)
+        {
+            auto* innerRef = static_cast<JPH::ShapeRefC*>(innerShape);
+            JPH::OffsetCenterOfMassShapeSettings offsetSettings(
+                JPH::Vec3(desc.localOffset.x, desc.localOffset.y, desc.localOffset.z), innerRef->GetPtr());
+            auto result = offsetSettings.Create();
+            if (!result.HasError())
+                shape = new JPH::ShapeRefC(result.Get());
+            else
+                shape = innerShape;
+        }
+        else
+        {
+            shape = CreateBoxShape(desc.dimensions);
+        }
+        break;
+    }
+    case CollisionShapeType::MutableCompound:
+    case CollisionShapeType::Compound:
     default:
         shape = CreateBoxShape(desc.dimensions);
         break;

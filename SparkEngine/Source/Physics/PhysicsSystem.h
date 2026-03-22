@@ -52,7 +52,11 @@ namespace JPH
     class Shape;
     class ContactListener;
     class BodyActivationListener;
+    class GroupFilterTable;
+    class MutableCompoundShape;
 } // namespace JPH
+
+class PhysicsDebugRenderer;
 
 /**
  * @class PhysicsSystem
@@ -386,6 +390,80 @@ class PhysicsSystem
     std::unique_ptr<SoftBody> CreateSoftBody(const SoftBodyDesc& desc);
 
     // =========================================================================
+    // Collision group filtering (GroupFilterTable)
+    // =========================================================================
+
+    /**
+     * @brief Create a GroupFilterTable for sub-group-based collision filtering.
+     * @param numSubGroups  Number of sub-groups in the table.
+     * @return A filter table ID to assign to bodies via CollisionGroupDesc.
+     */
+    uint32_t CreateGroupFilterTable(uint32_t numSubGroups);
+
+    /**
+     * @brief Disable collision between two sub-groups in a filter table.
+     * @param filterID   Filter table ID returned by CreateGroupFilterTable().
+     * @param subGroup1  First sub-group index.
+     * @param subGroup2  Second sub-group index.
+     */
+    void DisableGroupCollision(uint32_t filterID, uint32_t subGroup1, uint32_t subGroup2);
+
+    /**
+     * @brief Enable collision between two sub-groups in a filter table.
+     * @param filterID   Filter table ID returned by CreateGroupFilterTable().
+     * @param subGroup1  First sub-group index.
+     * @param subGroup2  Second sub-group index.
+     */
+    void EnableGroupCollision(uint32_t filterID, uint32_t subGroup1, uint32_t subGroup2);
+
+    // =========================================================================
+    // Mutable compound shape (runtime sub-shape modification)
+    // =========================================================================
+
+    /**
+     * @brief Create a body with a MutableCompoundShape that supports runtime modifications.
+     *
+     * Unlike a static compound shape, sub-shapes can be added, removed, or repositioned
+     * at runtime — useful for destructible objects, modular vehicles, or building systems.
+     *
+     * @param desc      Body descriptor (shape field is ignored; sub-shapes come from subShapes).
+     * @param subShapes Initial sub-shapes to include.
+     * @return The new physics body.
+     */
+    std::shared_ptr<PhysicsBody> CreateMutableCompoundBody(const PhysicsBodyDesc& desc,
+                                                           const std::vector<MutableSubShapeDesc>& subShapes);
+
+    /**
+     * @brief Add a sub-shape to a MutableCompoundShape body at runtime.
+     * @param body       Body with a MutableCompoundShape.
+     * @param subShape   Sub-shape to add.
+     * @return Index of the newly added sub-shape, or UINT32_MAX on failure.
+     */
+    uint32_t AddSubShape(std::shared_ptr<PhysicsBody> body, const MutableSubShapeDesc& subShape);
+
+    /**
+     * @brief Remove a sub-shape from a MutableCompoundShape body by index.
+     * @param body   Body with a MutableCompoundShape.
+     * @param index  Sub-shape index to remove.
+     */
+    void RemoveSubShape(std::shared_ptr<PhysicsBody> body, uint32_t index);
+
+    // =========================================================================
+    // Offset center of mass
+    // =========================================================================
+
+    /**
+     * @brief Wrap a body's shape with an offset center of mass.
+     *
+     * Shifts the center of mass without changing collision geometry — useful
+     * for making top-heavy objects more stable (e.g. boats, vehicles).
+     *
+     * @param body    Body to modify.
+     * @param offset  Center-of-mass offset in local space.
+     */
+    void SetCenterOfMassOffset(std::shared_ptr<PhysicsBody> body, const XMFLOAT3& offset);
+
+    // =========================================================================
     // Surface velocity
     // =========================================================================
 
@@ -481,6 +559,19 @@ class PhysicsSystem
 
     std::unordered_map<std::string, PhysicsMaterial> m_materials;
     PhysicsMaterial m_defaultMaterial;
+
+    // =========================================================================
+    // Group filter tables
+    // =========================================================================
+
+    std::vector<void*> m_groupFilterTables; // JPH::Ref<JPH::GroupFilterTable> stored as void*
+
+    // =========================================================================
+    // Surface velocity map (bodyID -> velocity, read by contact listener)
+    // =========================================================================
+
+    std::unordered_map<uint32_t, XMFLOAT3> m_surfaceVelocities;
+    std::mutex m_surfaceVelocityMutex;
 
     // =========================================================================
     // Simulation settings

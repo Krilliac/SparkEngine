@@ -592,6 +592,29 @@ bool PhysicsSystem::LoadState(const std::vector<uint8_t>&)
     return false;
 }
 
+// Group filter table stubs
+uint32_t PhysicsSystem::CreateGroupFilterTable(uint32_t)
+{
+    return 0;
+}
+void PhysicsSystem::DisableGroupCollision(uint32_t, uint32_t, uint32_t) {}
+void PhysicsSystem::EnableGroupCollision(uint32_t, uint32_t, uint32_t) {}
+
+// Mutable compound shape stubs
+std::shared_ptr<PhysicsBody> PhysicsSystem::CreateMutableCompoundBody(const PhysicsBodyDesc&,
+                                                                      const std::vector<MutableSubShapeDesc>&)
+{
+    return nullptr;
+}
+uint32_t PhysicsSystem::AddSubShape(std::shared_ptr<PhysicsBody>, const MutableSubShapeDesc&)
+{
+    return UINT32_MAX;
+}
+void PhysicsSystem::RemoveSubShape(std::shared_ptr<PhysicsBody>, uint32_t) {}
+
+// Offset center of mass stub
+void PhysicsSystem::SetCenterOfMassOffset(std::shared_ptr<PhysicsBody>, const XMFLOAT3&) {}
+
 void PhysicsSystem::SetDebugDrawMode(int /*mode*/) {}
 
 void PhysicsSystem::RenderDebug() {}
