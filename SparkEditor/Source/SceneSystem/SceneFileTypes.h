@@ -512,6 +512,166 @@ namespace SparkEditor
         bool isLocalAuthority = false;  ///< Local authority flag
     };
 
+    // =========================================================================
+    // Spatial / Volume Component Data
+    // =========================================================================
+
+    /**
+     * @brief Trigger volume scene data (sphere or AABB proximity trigger)
+     */
+    struct TriggerVolumeData
+    {
+        int shape = 0;                             ///< 0=Sphere, 1=AABB
+        float radius = 5.0f;                       ///< Sphere radius
+        XMFLOAT3 halfExtents = {5.0f, 5.0f, 5.0f}; ///< AABB half-extents
+        char onEnterEvent[128] = {};               ///< Script event on enter
+        char onExitEvent[128] = {};                ///< Script event on exit
+        bool enabled = true;                       ///< Active state
+        bool oneShot = false;                      ///< Fire only once then disable
+    };
+
+    /**
+     * @brief Post-processing volume scene data
+     */
+    struct PostProcessVolumeData
+    {
+        bool isGlobal = false;      ///< Global (always-active) or local (bounded)
+        int priority = 0;           ///< Higher priority wins on overlap
+        float weight = 1.0f;        ///< Blend weight [0,1]
+        float blendDistance = 2.0f; ///< Fade-in distance for local volumes
+
+        // Exposure
+        bool overrideExposure = false; ///< Override exposure settings
+        float exposure = 0.0f;         ///< Fixed exposure value
+        float minEV = -2.0f;           ///< Auto-exposure minimum EV
+        float maxEV = 14.0f;           ///< Auto-exposure maximum EV
+
+        // Bloom
+        bool overrideBloom = false;  ///< Override bloom settings
+        float bloomIntensity = 1.0f; ///< Bloom intensity
+        float bloomThreshold = 0.9f; ///< Bloom threshold
+
+        // Color Grading
+        bool overrideColorGrading = false; ///< Override color grading
+        float saturation = 1.0f;           ///< Color saturation
+        float contrast = 1.0f;             ///< Contrast
+        float temperature = 0.0f;          ///< Color temperature offset
+
+        // Fog
+        bool overrideFog = false; ///< Override fog settings
+        float fogDensity = 0.01f; ///< Fog density
+        float fogHeight = 0.2f;   ///< Height-based fog falloff
+    };
+
+    /**
+     * @brief Reflection probe scene data
+     */
+    struct ReflectionProbeData
+    {
+        int resolution = 256;                        ///< Cubemap resolution (128/256/512/1024)
+        float influenceRadius = 10.0f;               ///< Influence sphere radius
+        XMFLOAT3 boxExtents = {5.0f, 5.0f, 5.0f};    ///< Box projection extents
+        bool useBoxProjection = false;               ///< Enable parallax correction
+        bool isDynamic = false;                      ///< Re-render each frame vs baked
+        float refreshInterval = 0.0f;                ///< Dynamic refresh interval (0=every frame)
+        int importance = 1;                          ///< Priority for probe blending
+        XMFLOAT3 captureOffset = {0.0f, 0.0f, 0.0f}; ///< Offset from entity position
+    };
+
+    /**
+     * @brief Light probe scene data (SH-encoded indirect illumination)
+     */
+    struct LightProbeData
+    {
+        float influenceRadius = 10.0f;             ///< Probe influence radius
+        XMFLOAT3 gridSpacing = {4.0f, 4.0f, 4.0f}; ///< Auto-placement grid spacing
+        bool baked = false;                        ///< Whether SH coefficients are baked
+        int shOrder = 2;                           ///< Spherical harmonics order (1 or 2)
+    };
+
+    /**
+     * @brief NavMesh obstacle scene data
+     */
+    struct NavObstacleData
+    {
+        int shape = 0;                             ///< 0=Box, 1=Cylinder
+        XMFLOAT3 halfExtents = {1.0f, 1.0f, 1.0f}; ///< Box half-extents
+        float radius = 1.0f;                       ///< Cylinder radius
+        float height = 2.0f;                       ///< Cylinder height
+        bool carveOnMove = true;                   ///< Re-carve when entity moves
+    };
+
+    /**
+     * @brief Water plane scene data
+     */
+    struct WaterPlaneData
+    {
+        XMFLOAT2 size = {100.0f, 100.0f};                 ///< Water surface size
+        XMFLOAT4 shallowColor = {0.2f, 0.5f, 0.6f, 0.8f}; ///< Shallow water color
+        XMFLOAT4 deepColor = {0.05f, 0.1f, 0.2f, 0.95f};  ///< Deep water color
+        float waveHeight = 0.3f;                          ///< Gerstner wave height
+        float waveSpeed = 1.0f;                           ///< Wave animation speed
+        float waveFrequency = 0.5f;                       ///< Wave frequency
+        float reflectionStrength = 0.5f;                  ///< Reflection intensity [0,1]
+        float refractionStrength = 0.3f;                  ///< Refraction intensity [0,1]
+        bool receiveShadows = true;                       ///< Receive shadows from above
+    };
+
+    /**
+     * @brief Fog volume scene data (local volumetric fog region)
+     */
+    struct FogVolumeData
+    {
+        XMFLOAT3 halfExtents = {10.0f, 5.0f, 10.0f}; ///< Volume half-extents
+        float density = 0.05f;                       ///< Local fog density
+        XMFLOAT4 color = {0.7f, 0.7f, 0.7f, 1.0f};   ///< Fog color + opacity
+        float falloff = 1.0f;                        ///< Edge falloff exponent
+        float heightFalloff = 0.0f;                  ///< Height-based density falloff
+    };
+
+    /**
+     * @brief LOD group scene data
+     */
+    struct LODGroupData
+    {
+        float lodDistance0 = 10.0f;     ///< Distance to switch from LOD0 to LOD1
+        float lodDistance1 = 25.0f;     ///< Distance to switch from LOD1 to LOD2
+        float lodDistance2 = 50.0f;     ///< Distance to switch from LOD2 to LOD3
+        float lodDistance3 = 100.0f;    ///< Distance to switch from LOD3 to cull
+        int lodCount = 3;               ///< Number of LOD levels (1-4)
+        float crossFadeDuration = 0.5f; ///< Crossfade transition time (seconds)
+        bool autoGenerate = true;       ///< Auto-generate LODs from highest detail mesh
+    };
+
+    /**
+     * @brief Spawn point scene data
+     */
+    struct SpawnPointData
+    {
+        char spawnTag[64] = "default"; ///< Tag for spawn group selection (e.g. "team_a", "boss")
+        int teamID = 0;                ///< Team assignment (0=neutral)
+        float spawnRadius = 1.0f;      ///< Random offset radius around point
+        float respawnDelay = 5.0f;     ///< Delay before reuse (seconds)
+        int maxConcurrent = -1;        ///< Max simultaneous spawns (-1=unlimited)
+        bool enabled = true;           ///< Active state
+        int priority = 0;              ///< Selection priority (higher = preferred)
+    };
+
+    /**
+     * @brief Audio reverb zone scene data
+     */
+    struct AudioReverbZoneData
+    {
+        float innerRadius = 5.0f;      ///< Full-effect radius
+        float outerRadius = 15.0f;     ///< Fade-out radius
+        int reverbPreset = 0;          ///< 0=Generic,1=Room,2=Hall,3=Cave,4=Arena,5=Forest,6=Underwater
+        float decayTime = 1.5f;        ///< Reverb decay time (seconds)
+        float earlyReflections = 0.5f; ///< Early reflection level [0,1]
+        float lateReverbLevel = 0.5f;  ///< Late reverb level [0,1]
+        float diffusion = 1.0f;        ///< Reverb diffusion [0,1]
+        float roomSize = 0.5f;         ///< Room size factor [0,1]
+    };
+
     // ComponentType is defined in ../Enums/SceneSystemEnums.h to avoid ODR violations
 
     /**

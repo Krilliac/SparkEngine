@@ -52,6 +52,18 @@ namespace SparkEditor
         WEATHER = 27,          ///< Weather zone component
         NETWORK_IDENTITY = 28, ///< Network replication identity
 
+        // Spatial / volume components
+        TRIGGER_VOLUME = 29,      ///< Proximity trigger volume (sphere/AABB)
+        POST_PROCESS_VOLUME = 30, ///< Post-processing parameter volume
+        REFLECTION_PROBE = 31,    ///< Reflection probe (cubemap capture)
+        LIGHT_PROBE = 32,         ///< Light probe (SH indirect lighting)
+        NAV_OBSTACLE = 33,        ///< NavMesh dynamic obstacle
+        WATER_PLANE = 34,         ///< Water surface plane
+        FOG_VOLUME = 35,          ///< Local volumetric fog region
+        LOD_GROUP = 36,           ///< LOD distance switching group
+        SPAWN_POINT = 37,         ///< Generic spawn point marker
+        AUDIO_REVERB_ZONE = 38,   ///< Audio reverb/echo zone
+
         CUSTOM = 1000 ///< Custom components start at 1000
     };
 

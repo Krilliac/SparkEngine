@@ -328,6 +328,36 @@ namespace SparkEditor
                 createObject("Camera");
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Volume"))
+        {
+            if (ImGui::MenuItem("Trigger Volume"))
+                createObject("Trigger Volume");
+            if (ImGui::MenuItem("Post-Process Volume"))
+                createObject("Post-Process Volume");
+            if (ImGui::MenuItem("Fog Volume"))
+                createObject("Fog Volume");
+            if (ImGui::MenuItem("Audio Reverb Zone"))
+                createObject("Audio Reverb Zone");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Probe"))
+        {
+            if (ImGui::MenuItem("Reflection Probe"))
+                createObject("Reflection Probe");
+            if (ImGui::MenuItem("Light Probe"))
+                createObject("Light Probe");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Environment"))
+        {
+            if (ImGui::MenuItem("Water Plane"))
+                createObject("Water Plane");
+            if (ImGui::MenuItem("Spawn Point"))
+                createObject("Spawn Point");
+            if (ImGui::MenuItem("NavMesh Obstacle"))
+                createObject("NavMesh Obstacle");
+            ImGui::EndMenu();
+        }
         ImGui::EndMenu();
     }
 

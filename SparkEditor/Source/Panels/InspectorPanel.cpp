@@ -278,6 +278,36 @@ namespace SparkEditor
                     case ComponentType::PARALLAX_BG:
                         comp.SetData(ParallaxLayerData{});
                         break;
+                    case ComponentType::TRIGGER_VOLUME:
+                        comp.SetData(TriggerVolumeData{});
+                        break;
+                    case ComponentType::POST_PROCESS_VOLUME:
+                        comp.SetData(PostProcessVolumeData{});
+                        break;
+                    case ComponentType::REFLECTION_PROBE:
+                        comp.SetData(ReflectionProbeData{});
+                        break;
+                    case ComponentType::LIGHT_PROBE:
+                        comp.SetData(LightProbeData{});
+                        break;
+                    case ComponentType::NAV_OBSTACLE:
+                        comp.SetData(NavObstacleData{});
+                        break;
+                    case ComponentType::WATER_PLANE:
+                        comp.SetData(WaterPlaneData{});
+                        break;
+                    case ComponentType::FOG_VOLUME:
+                        comp.SetData(FogVolumeData{});
+                        break;
+                    case ComponentType::LOD_GROUP:
+                        comp.SetData(LODGroupData{});
+                        break;
+                    case ComponentType::SPAWN_POINT:
+                        comp.SetData(SpawnPointData{});
+                        break;
+                    case ComponentType::AUDIO_REVERB_ZONE:
+                        comp.SetData(AudioReverbZoneData{});
+                        break;
                     default:
                         break;
                     }
@@ -840,11 +870,75 @@ namespace SparkEditor
                 }
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu(ICON_FA_CUBE " Volumes"))
+            {
+                if (ImGui::MenuItem("Trigger Volume", nullptr, false, !HasComponent(ComponentType::TRIGGER_VOLUME)))
+                {
+                    AddComponent(ComponentType::TRIGGER_VOLUME);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Post-Process Volume", nullptr, false,
+                                    !HasComponent(ComponentType::POST_PROCESS_VOLUME)))
+                {
+                    AddComponent(ComponentType::POST_PROCESS_VOLUME);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Fog Volume", nullptr, false, !HasComponent(ComponentType::FOG_VOLUME)))
+                {
+                    AddComponent(ComponentType::FOG_VOLUME);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Audio Reverb Zone", nullptr, false,
+                                    !HasComponent(ComponentType::AUDIO_REVERB_ZONE)))
+                {
+                    AddComponent(ComponentType::AUDIO_REVERB_ZONE);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu(ICON_FA_LIGHTBULB " Probes"))
+            {
+                if (ImGui::MenuItem("Reflection Probe", nullptr, false, !HasComponent(ComponentType::REFLECTION_PROBE)))
+                {
+                    AddComponent(ComponentType::REFLECTION_PROBE);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Light Probe", nullptr, false, !HasComponent(ComponentType::LIGHT_PROBE)))
+                {
+                    AddComponent(ComponentType::LIGHT_PROBE);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu(ICON_FA_WATER " Environment"))
+            {
+                if (ImGui::MenuItem("Water Plane", nullptr, false, !HasComponent(ComponentType::WATER_PLANE)))
+                {
+                    AddComponent(ComponentType::WATER_PLANE);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("LOD Group", nullptr, false, !HasComponent(ComponentType::LOD_GROUP)))
+                {
+                    AddComponent(ComponentType::LOD_GROUP);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("NavMesh Obstacle", nullptr, false, !HasComponent(ComponentType::NAV_OBSTACLE)))
+                {
+                    AddComponent(ComponentType::NAV_OBSTACLE);
+                    m_showAddComponentMenu = false;
+                }
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu(ICON_FA_HEART " Gameplay"))
             {
                 if (ImGui::MenuItem("Health", nullptr, false, !HasComponent(ComponentType::HEALTH)))
                 {
                     AddComponent(ComponentType::HEALTH);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Spawn Point", nullptr, false, !HasComponent(ComponentType::SPAWN_POINT)))
+                {
+                    AddComponent(ComponentType::SPAWN_POINT);
                     m_showAddComponentMenu = false;
                 }
                 if (ImGui::MenuItem("Interaction", nullptr, false, !HasComponent(ComponentType::INTERACTION)))

@@ -72,6 +72,10 @@
 // Spline: SplineComponent, SplineFollowerComponent
 #include "Components/SplineComponents.h"
 
+// Volumes & Probes: TriggerVolume, PostProcessVolume, ReflectionProbe, LightProbe,
+// NavObstacle, WaterPlane, FogVolume, LODGroup, SpawnPoint, AudioReverbZone
+#include "Components/VolumeComponents.h"
+
 // =============================================================================
 // World
 // =============================================================================

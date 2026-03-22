@@ -467,6 +467,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `AbilityComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `ActiveComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `AnimationController` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
+| `AudioReverbZoneComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `AudioSourceComponent` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |
 | `Camera2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `CameraDrawMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/VisibilityComponents.h` |
@@ -476,23 +477,30 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `CollisionMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/CollisionMaskComponents.h` |
 | `Config` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
 | `DecalComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
+| `FogVolumeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `HealthComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `InteractionComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `InventoryTag` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `LODGroupComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `LightComponent` | `SparkEngine/Source/Engine/ECS/Components/LightComponents.h` |
+| `LightProbeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `MeshRenderer` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
 | `NameComponent` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `NavObstacleComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `NetworkIdentity` | `SparkEngine/Source/Engine/ECS/Components/NetworkComponents.h` |
 | `NineSliceSprite` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ParallaxBackground` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ParallaxLayer` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ParticleEmitterComponent` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
 | `PixelPerfectComponent` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `PostProcessVolumeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `ProjectileComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `QuestTrackerTag` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `ReflectionProbeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `RigidBody2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `RigidBodyComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
 | `Script` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `SpawnPointComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `SplineComponent` | `SparkEngine/Source/Engine/ECS/Components/SplineComponents.h` |
 | `SplineFollowerComponent` | `SparkEngine/Source/Engine/ECS/Components/SplineComponents.h` |
 | `SpriteAnimationClip` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
@@ -504,7 +512,9 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `TilemapComponent` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `TilesetInfo` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `Transform` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `TriggerVolumeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `VisibilityMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/VisibilityComponents.h` |
+| `WaterPlaneComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `WeatherComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 <!-- /AUTO:component_list -->
 
@@ -523,6 +533,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `CollisionSystem` | `SparkEngine/Source/Physics/CollisionSystem.h` |
 | `ConditionSystem` | `SparkEngine/Source/Engine/Gameplay/ConditionSystem.h` |
 | `CoverSystem` | `SparkEngine/Source/Engine/AI/CoverSystem.h` |
+| `DDGIProbeSystem` | `SparkEngine/Source/Graphics/DDGIProbeSystem.h` |
 | `DecalSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `DecalSystem` | `SparkEngine/Source/Graphics/DecalSystem.h` |
 | `DestructionSystem` | `SparkEngine/Source/Engine/Destruction/DestructionSystem.h` |
@@ -531,6 +542,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `FogSystem` | `SparkEngine/Source/Graphics/FogSystem.h` |
 | `FormationSystem` | `SparkEngine/Source/Engine/AI/FormationSystem.h` |
 | `FreezeSystem` | `SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h` |
+| `JobSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
 | `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
 | `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `LightChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
@@ -547,14 +559,18 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `Physics2DUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `PhysicsSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `PhysicsSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
+| `PhysicsSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
+| `PhysicsSystem` | `SparkEngine/Source/Physics/RagdollSystem.h` |
 | `PhysicsUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ProbeSystem` | `SparkEngine/Source/Graphics/HybridRT/ProbeSystem.h` |
 | `ProjectileSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ProximityTriggerSystem` | `SparkEngine/Source/Engine/World/ProximityTriggerSystem.h` |
+| `RTHandleSystem` | `SparkEngine/Source/Graphics/RTHandleSystem.h` |
 | `RagdollSystem` | `SparkEngine/Source/Engine/Animation/RagdollSystem.h` |
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ReplaySystem` | `SparkEngine/Source/Engine/Replay/ReplaySystem.h` |
 | `SaveSystem` | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h` |
+| `ShaderVariantSystem` | `SparkEngine/Source/Graphics/ShaderVariantSystem.h` |
 | `SplineFollowerSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Sprite2DRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `SpriteAnimatorSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |

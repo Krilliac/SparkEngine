@@ -279,8 +279,7 @@ namespace Spark::Graphics
          * @param indexCount   Number of indices
          * @param vertexCount  Number of vertices
          */
-        void Build(const uint32_t* indices, const float* positions,
-                   uint32_t indexCount, uint32_t vertexCount);
+        void Build(const uint32_t* indices, const float* positions, uint32_t indexCount, uint32_t vertexCount);
 
       private:
         std::vector<MeshCluster> m_clusters;
@@ -311,7 +310,7 @@ namespace Spark::Graphics
          * @return Vector of clusters covering the entire mesh
          */
         static std::vector<MeshCluster> BuildClusters(const uint32_t* indices, const float* positions,
-                                                       uint32_t indexCount, uint32_t vertexCount)
+                                                      uint32_t indexCount, uint32_t vertexCount)
         {
             std::vector<MeshCluster> clusters;
             uint32_t triangleCount = indexCount / 3;

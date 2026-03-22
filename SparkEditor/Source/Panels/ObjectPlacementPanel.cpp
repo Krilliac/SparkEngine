@@ -51,6 +51,18 @@ namespace SparkEditor
         m_prefabs.push_back({"Crate", "Environment/Crate", "Environment", false});
         m_prefabs.push_back({"Barrel", "Environment/Barrel", "Environment", false});
 
+        m_prefabs.push_back({"Trigger Volume", "Volumes/TriggerVolume", "Volumes", false});
+        m_prefabs.push_back({"Post-Process Volume", "Volumes/PostProcessVolume", "Volumes", false});
+        m_prefabs.push_back({"Fog Volume", "Volumes/FogVolume", "Volumes", false});
+        m_prefabs.push_back({"Audio Reverb Zone", "Volumes/AudioReverbZone", "Volumes", false});
+
+        m_prefabs.push_back({"Reflection Probe", "Probes/ReflectionProbe", "Probes", false});
+        m_prefabs.push_back({"Light Probe", "Probes/LightProbe", "Probes", false});
+
+        m_prefabs.push_back({"Water Plane", "Environment/WaterPlane", "Environment", false});
+        m_prefabs.push_back({"Spawn Point", "Gameplay/SpawnPoint", "Gameplay", false});
+        m_prefabs.push_back({"NavMesh Obstacle", "AI/NavMeshObstacle", "AI", false});
+
         return true;
     }
 
@@ -310,6 +322,14 @@ namespace SparkEditor
                 icon = ICON_FA_CROSSHAIRS;
             else if (prefab.category == "Environment")
                 icon = ICON_FA_TREE;
+            else if (prefab.category == "Volumes")
+                icon = ICON_FA_VECTOR_SQUARE;
+            else if (prefab.category == "Probes")
+                icon = ICON_FA_DOT_CIRCLE;
+            else if (prefab.category == "Gameplay")
+                icon = ICON_FA_FLAG;
+            else if (prefab.category == "AI")
+                icon = ICON_FA_BRAIN;
 
             std::string label = std::string(icon) + "  " + prefab.name;
             if (ImGui::Selectable(label.c_str(), isSelected))
