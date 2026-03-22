@@ -41,7 +41,15 @@ namespace MMO
     {
         m_areas.clear();
 
-        // Area 1: TownSquare - social hub, safe zone, vendors/NPCs
+        // NOTE: Area bounds and metadata are also defined in each area's scene file
+        // (Assets/Scenes/MMO/*.scene) as JSON header fields (areaId, maxPlayers, pvpEnabled).
+        // Area boundary volumes can be placed as [AreaBoundary] entities in the editor.
+        // The code below defines the server-side authoritative area list.
+        // Both approaches work — the scene files provide visual editor placement,
+        // while this code provides the server topology.
+
+        // Area 1: TownSquare — social hub, safe zone, vendors/NPCs
+        // Editor: place AreaBoundary entity in town_square.scene with matching bounds
         MMOAreaInfo town{};
         town.areaId = 1;
         town.name = "TownSquare";
@@ -57,7 +65,8 @@ namespace MMO
         town.description = "Central hub - safe zone with vendors and quest givers";
         m_areas.push_back(town);
 
-        // Area 2: Wilderness - open world PvE exploration
+        // Area 2: Wilderness — open world PvE exploration
+        // Editor: place AreaBoundary entity in wilderness.scene with matching bounds
         MMOAreaInfo wilderness{};
         wilderness.areaId = 2;
         wilderness.name = "Wilderness";
@@ -73,7 +82,8 @@ namespace MMO
         wilderness.description = "Open-world PvE zone with mob spawns and resource nodes";
         m_areas.push_back(wilderness);
 
-        // Area 3: Dungeon - instanced PvE content
+        // Area 3: Dungeon — instanced PvE content
+        // Editor: place AreaBoundary entity in shadow_crypt.scene with matching bounds
         MMOAreaInfo dungeon{};
         dungeon.areaId = 3;
         dungeon.name = "ShadowCrypt";
@@ -89,7 +99,8 @@ namespace MMO
         dungeon.description = "5-player instanced dungeon with boss encounters";
         m_areas.push_back(dungeon);
 
-        // Area 4: Battleground - PvP arena
+        // Area 4: Battleground — PvP arena
+        // Editor: place AreaBoundary entity in battleground.scene with matching bounds
         MMOAreaInfo battleground{};
         battleground.areaId = 4;
         battleground.name = "Battleground";

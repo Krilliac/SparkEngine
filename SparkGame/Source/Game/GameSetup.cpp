@@ -47,53 +47,62 @@ void Game::InitializeInteractionObjects()
     m_interactionSystem->Initialize();
     m_player->SetInteractionSystem(m_interactionSystem.get());
 
-    auto* dev = m_graphics->GetDevice();
-    auto* ctx = m_graphics->GetContext();
+    // NOTE: Interactive objects and damage zones are now defined in the scene file
+    // (Assets/Scenes/level1.scene) as [Interaction] and [TriggerVolume] entries.
+    // They can be placed and edited in the SparkEditor without recompiling.
+    // The code below shows the equivalent C++ approach for reference.
 
-    // Doors
-    auto* door1 = m_interactionSystem->SpawnDoor({10.0f, 1.5f, 0.0f}, {0.2f, 3.0f, 2.0f}, dev, ctx);
-    if (door1)
-        door1->SetSlideDirection({0, 1, 0});
-    m_interactionSystem->SpawnDoor({-10.0f, 1.5f, 5.0f}, {0.2f, 3.0f, 2.0f}, dev, ctx);
+    // --- Code-based approach (kept for reference; scene file is now primary) ---
+    // auto* dev = m_graphics->GetDevice();
+    // auto* ctx = m_graphics->GetContext();
+    //
+    // // Doors
+    // auto* door1 = m_interactionSystem->SpawnDoor({10.0f, 1.5f, 0.0f}, {0.2f, 3.0f, 2.0f}, dev, ctx);
+    // if (door1) door1->SetSlideDirection({0, 1, 0});
+    // m_interactionSystem->SpawnDoor({-10.0f, 1.5f, 5.0f}, {0.2f, 3.0f, 2.0f}, dev, ctx);
+    //
+    // // Class change terminals
+    // m_interactionSystem->SpawnClassTerminal({0.0f, 0.5f, -15.0f}, m_classSystem.get(), dev, ctx);
+    // m_interactionSystem->SpawnClassTerminal({15.0f, 0.5f, 15.0f}, m_classSystem.get(), dev, ctx);
+    //
+    // // Pickups
+    // m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::HEALTH_PICKUP,
+    //                                  {5.0f, 0.5f, 10.0f}, 50.0f, dev, ctx);
+    // m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::ARMOR_PICKUP,
+    //                                  {-5.0f, 0.5f, 10.0f}, 50.0f, dev, ctx);
+    // m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::AMMO_PICKUP,
+    //                                  {0.0f, 0.5f, 20.0f}, 60.0f, dev, ctx);
+    // m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::HEALTH_PICKUP,
+    //                                  {-15.0f, 0.5f, -10.0f}, 25.0f, dev, ctx);
+    //
+    // // Jump pads
+    // m_interactionSystem->SpawnJumpPad({12.0f, 0.1f, 12.0f}, 18.0f, dev, ctx);
+    // m_interactionSystem->SpawnJumpPad({-12.0f, 0.1f, -12.0f}, 15.0f, dev, ctx);
+    //
+    // // Teleporter pair
+    // m_interactionSystem->SpawnTeleporterPair({-20.0f, 0.5f, -20.0f}, {20.0f, 0.5f, 20.0f}, dev, ctx);
+    //
+    // // Elevator
+    // m_interactionSystem->SpawnElevator({-8.0f, 0.0f, 0.0f}, {-8.0f, 12.0f, 0.0f}, dev, ctx);
+    //
+    // // Destructible barrels
+    // m_interactionSystem->SpawnDestructible({7.0f, 0.5f, -5.0f}, 50.0f, dev, ctx);
+    // m_interactionSystem->SpawnDestructible({8.0f, 0.5f, -5.0f}, 50.0f, dev, ctx);
+    // m_interactionSystem->SpawnDestructible({7.5f, 1.3f, -5.0f}, 30.0f, dev, ctx);
 
-    // Class change terminals
-    m_interactionSystem->SpawnClassTerminal({0.0f, 0.5f, -15.0f}, m_classSystem.get(), dev, ctx);
-    m_interactionSystem->SpawnClassTerminal({15.0f, 0.5f, 15.0f}, m_classSystem.get(), dev, ctx);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Interaction objects loaded from scene file", L"SUCCESS");
 
-    // Pickups
-    m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::HEALTH_PICKUP, {5.0f, 0.5f, 10.0f}, 50.0f, dev,
-                                     ctx);
-    m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::ARMOR_PICKUP, {-5.0f, 0.5f, 10.0f}, 50.0f, dev,
-                                     ctx);
-    m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::AMMO_PICKUP, {0.0f, 0.5f, 20.0f}, 60.0f, dev,
-                                     ctx);
-    m_interactionSystem->SpawnPickup(SparkEditor::InteractiveObjectType::HEALTH_PICKUP, {-15.0f, 0.5f, -10.0f}, 25.0f,
-                                     dev, ctx);
-
-    // Jump pads
-    m_interactionSystem->SpawnJumpPad({12.0f, 0.1f, 12.0f}, 18.0f, dev, ctx);
-    m_interactionSystem->SpawnJumpPad({-12.0f, 0.1f, -12.0f}, 15.0f, dev, ctx);
-
-    // Teleporter pair
-    m_interactionSystem->SpawnTeleporterPair({-20.0f, 0.5f, -20.0f}, {20.0f, 0.5f, 20.0f}, dev, ctx);
-
-    // Elevator
-    m_interactionSystem->SpawnElevator({-8.0f, 0.0f, 0.0f}, {-8.0f, 12.0f, 0.0f}, dev, ctx);
-
-    // Destructible barrels
-    m_interactionSystem->SpawnDestructible({7.0f, 0.5f, -5.0f}, 50.0f, dev, ctx);
-    m_interactionSystem->SpawnDestructible({8.0f, 0.5f, -5.0f}, 50.0f, dev, ctx);
-    m_interactionSystem->SpawnDestructible({7.5f, 1.3f, -5.0f}, 30.0f, dev, ctx);
-
-    LOG_TO_CONSOLE_IMMEDIATE(L"Interaction system initialized with arena objects", L"SUCCESS");
-
-    // Damage zones
+    // Damage zone system still needs runtime initialization for callbacks
     m_damageZoneSystem = std::make_unique<Spark::DamageZoneSystem>();
     m_damageZoneSystem->Initialize();
-    m_damageZoneSystem->CreateLavaZone("Arena_Lava_Pit", {0.0f, -2.0f, 0.0f}, {3.0f, 2.0f, 3.0f});
-    m_damageZoneSystem->CreateVoidZone("Arena_Boundary", {0.0f, -20.0f, 0.0f}, {100.0f, 5.0f, 100.0f});
-    m_damageZoneSystem->CreateElectricZone("Electric_Trap", {15.0f, 0.5f, -15.0f}, {3.0f, 2.0f, 3.0f});
-    LOG_TO_CONSOLE_IMMEDIATE(L"Damage zone system initialized with hazards", L"SUCCESS");
+
+    // NOTE: Damage zones are now defined in the scene file as [TriggerVolume] entries.
+    // The code below shows the equivalent C++ approach for reference.
+    // m_damageZoneSystem->CreateLavaZone("Arena_Lava_Pit", {0.0f, -2.0f, 0.0f}, {3.0f, 2.0f, 3.0f});
+    // m_damageZoneSystem->CreateVoidZone("Arena_Boundary", {0.0f, -20.0f, 0.0f}, {100.0f, 5.0f, 100.0f});
+    // m_damageZoneSystem->CreateElectricZone("Electric_Trap", {15.0f, 0.5f, -15.0f}, {3.0f, 2.0f, 3.0f});
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Damage zones loaded from scene file", L"SUCCESS");
 }
 
 void Game::InitializeRespawnAndVehicles()
@@ -101,37 +110,46 @@ void Game::InitializeRespawnAndVehicles()
     m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
     m_respawnSystem->Initialize();
 
-    Spark::RespawnPoint spawn1;
-    spawn1.name = "North Spawn";
-    spawn1.position = {0.0f, 2.0f, -20.0f};
-    spawn1.priority = 1;
-    m_respawnSystem->AddSpawnPoint(spawn1);
+    // NOTE: Spawn points are now defined in the scene file (Assets/Scenes/level1.scene)
+    // as [SpawnPoint] entries with position, tag, and priority. They can be placed and
+    // edited in the SparkEditor without recompiling.
+    // The code below shows the equivalent C++ approach for reference.
+    //
+    // Spark::RespawnPoint spawn1;
+    // spawn1.name = "North Spawn";
+    // spawn1.position = {0.0f, 2.0f, -20.0f};
+    // spawn1.priority = 1;
+    // m_respawnSystem->AddSpawnPoint(spawn1);
+    //
+    // Spark::RespawnPoint spawn2;
+    // spawn2.name = "South Spawn";
+    // spawn2.position = {0.0f, 2.0f, 20.0f};
+    // spawn2.priority = 1;
+    // m_respawnSystem->AddSpawnPoint(spawn2);
+    //
+    // Spark::RespawnPoint spawn3;
+    // spawn3.name = "East Spawn";
+    // spawn3.position = {20.0f, 2.0f, 0.0f};
+    // m_respawnSystem->AddSpawnPoint(spawn3);
+    //
+    // Spark::RespawnPoint spawn4;
+    // spawn4.name = "West Spawn";
+    // spawn4.position = {-20.0f, 2.0f, 0.0f};
+    // m_respawnSystem->AddSpawnPoint(spawn4);
 
-    Spark::RespawnPoint spawn2;
-    spawn2.name = "South Spawn";
-    spawn2.position = {0.0f, 2.0f, 20.0f};
-    spawn2.priority = 1;
-    m_respawnSystem->AddSpawnPoint(spawn2);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Spawn points loaded from scene file", L"SUCCESS");
 
-    Spark::RespawnPoint spawn3;
-    spawn3.name = "East Spawn";
-    spawn3.position = {20.0f, 2.0f, 0.0f};
-    m_respawnSystem->AddSpawnPoint(spawn3);
+    // NOTE: Vehicles are now defined in the scene file as [Vehicle] entries.
+    // The code below shows the equivalent C++ approach for reference.
+    //
+    // auto* dev = m_graphics->GetDevice();
+    // auto* ctx = m_graphics->GetContext();
+    // m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::BUGGY, {25.0f, 0.5f, 0.0f}, dev, ctx);
+    // m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::MOTORCYCLE, {-25.0f, 0.5f, 0.0f}, dev, ctx);
+    // m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::TANK, {0.0f, 0.5f, 25.0f}, dev, ctx);
+    // m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::HELICOPTER, {0.0f, 5.0f, -25.0f}, dev, ctx);
 
-    Spark::RespawnPoint spawn4;
-    spawn4.name = "West Spawn";
-    spawn4.position = {-20.0f, 2.0f, 0.0f};
-    m_respawnSystem->AddSpawnPoint(spawn4);
-    LOG_TO_CONSOLE_IMMEDIATE(L"Respawn system initialized with 4 spawn points", L"SUCCESS");
-
-    // Spawn initial vehicles in the arena
-    auto* dev = m_graphics->GetDevice();
-    auto* ctx = m_graphics->GetContext();
-    m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::BUGGY, {25.0f, 0.5f, 0.0f}, dev, ctx);
-    m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::MOTORCYCLE, {-25.0f, 0.5f, 0.0f}, dev, ctx);
-    m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::TANK, {0.0f, 0.5f, 25.0f}, dev, ctx);
-    m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::HELICOPTER, {0.0f, 5.0f, -25.0f}, dev, ctx);
-    LOG_TO_CONSOLE_IMMEDIATE(L"Spawned 4 vehicles in combat arena", L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(L"Vehicles loaded from scene file", L"SUCCESS");
 }
 
 void Game::InitializeGameModeAndHUD()
@@ -346,40 +364,41 @@ size_t Game::GetAliveEnemyCount() const
 
 void Game::InitializeEnemies()
 {
-    // Wave 1: Grunts at cardinal positions
-    auto* g1 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, 15.0f);
-    auto* g2 = SpawnEnemy(EnemyType::Grunt, -15.0f, 1.0f, 15.0f);
-    auto* g3 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, -15.0f);
-    auto* g4 = SpawnEnemy(EnemyType::Grunt, -15.0f, 1.0f, -15.0f);
+    // NOTE: Enemies are now defined in the scene file (Assets/Scenes/level1.scene)
+    // as [Enemy] entries with type, position, and patrol routes. They can be placed
+    // and edited in the SparkEditor without recompiling.
+    // The code below shows the equivalent C++ approach for reference.
+    //
+    // // Wave 1: Grunts at cardinal positions
+    // auto* g1 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, 15.0f);
+    // auto* g2 = SpawnEnemy(EnemyType::Grunt, -15.0f, 1.0f, 15.0f);
+    // auto* g3 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, -15.0f);
+    // auto* g4 = SpawnEnemy(EnemyType::Grunt, -15.0f, 1.0f, -15.0f);
+    //
+    // // Give grunts patrol routes
+    // if (g1) g1->SetPatrolPoints({{15,1,15}, {15,1,-5}, {5,1,-5}});
+    // if (g2) g2->SetPatrolPoints({{-15,1,15}, {-15,1,-5}, {-5,1,-5}});
+    // if (g3) g3->SetPatrolPoints({{15,1,-15}, {5,1,-15}, {5,1,-5}});
+    // if (g4) g4->SetPatrolPoints({{-15,1,-15}, {-5,1,-15}, {-5,1,-5}});
+    //
+    // // Scouts — fast flankers
+    // SpawnEnemy(EnemyType::Scout, 10.0f, 1.0f, 0.0f);
+    // SpawnEnemy(EnemyType::Scout, -10.0f, 1.0f, 0.0f);
+    //
+    // // Guard — stationary sentry at arena center
+    // SpawnEnemy(EnemyType::Guard, 0.0f, 1.0f, -10.0f);
+    //
+    // // Heavy — arena boss near the back
+    // SpawnEnemy(EnemyType::Heavy, 0.0f, 1.0f, 18.0f);
+    //
+    // // Snipers — long-range on platforms
+    // SpawnEnemy(EnemyType::Sniper, 22.0f, 4.0f, 0.0f);
+    // SpawnEnemy(EnemyType::Sniper, -22.0f, 4.0f, 0.0f);
+    //
+    // // Medic — stays near guards
+    // SpawnEnemy(EnemyType::Medic, 2.0f, 1.0f, -8.0f);
 
-    // Give grunts patrol routes
-    if (g1)
-        g1->SetPatrolPoints({{15.0f, 1.0f, 15.0f}, {15.0f, 1.0f, -5.0f}, {5.0f, 1.0f, -5.0f}});
-    if (g2)
-        g2->SetPatrolPoints({{-15.0f, 1.0f, 15.0f}, {-15.0f, 1.0f, -5.0f}, {-5.0f, 1.0f, -5.0f}});
-    if (g3)
-        g3->SetPatrolPoints({{15.0f, 1.0f, -15.0f}, {5.0f, 1.0f, -15.0f}, {5.0f, 1.0f, -5.0f}});
-    if (g4)
-        g4->SetPatrolPoints({{-15.0f, 1.0f, -15.0f}, {-5.0f, 1.0f, -15.0f}, {-5.0f, 1.0f, -5.0f}});
-
-    // Scouts — fast flankers
-    SpawnEnemy(EnemyType::Scout, 10.0f, 1.0f, 0.0f);
-    SpawnEnemy(EnemyType::Scout, -10.0f, 1.0f, 0.0f);
-
-    // Guard — stationary sentry at arena center
-    SpawnEnemy(EnemyType::Guard, 0.0f, 1.0f, -10.0f);
-
-    // Heavy — arena boss near the back
-    SpawnEnemy(EnemyType::Heavy, 0.0f, 1.0f, 18.0f);
-
-    // Snipers — long-range on platforms
-    SpawnEnemy(EnemyType::Sniper, 22.0f, 4.0f, 0.0f);
-    SpawnEnemy(EnemyType::Sniper, -22.0f, 4.0f, 0.0f);
-
-    // Medic — stays near guards
-    SpawnEnemy(EnemyType::Medic, 2.0f, 1.0f, -8.0f);
-
-    LOG_TO_CONSOLE_IMMEDIATE(L"Enemy system initialized (11 enemies spawned)", L"SUCCESS");
+    LOG_TO_CONSOLE_IMMEDIATE(L"Enemies loaded from scene file", L"SUCCESS");
 }
 
 /*-------------------------------------------------------------
@@ -390,11 +409,20 @@ void Game::InitializeGameplaySystems()
 {
     // --- Wave Spawner ---
     m_waveSpawner = std::make_unique<Spark::WaveSpawner>();
-    std::vector<XMFLOAT3> enemySpawnPoints = {
-        {20.0f, 1.0f, 20.0f}, {-20.0f, 1.0f, 20.0f},  {20.0f, 1.0f, -20.0f}, {-20.0f, 1.0f, -20.0f},
-        {25.0f, 1.0f, 0.0f},  {-25.0f, 1.0f, 0.0f},   {0.0f, 1.0f, 25.0f},   {0.0f, 1.0f, -25.0f},
-        {15.0f, 1.0f, 10.0f}, {-15.0f, 1.0f, -10.0f},
-    };
+
+    // NOTE: Wave spawn points are now defined in the scene file (Assets/Scenes/level1.scene)
+    // as [SpawnPoint] entries with tag=wave_spawn. They can be placed and edited in the
+    // SparkEditor without recompiling.
+    // The code below shows the equivalent C++ approach for reference.
+    //
+    // std::vector<XMFLOAT3> enemySpawnPoints = {
+    //     {20.0f, 1.0f, 20.0f}, {-20.0f, 1.0f, 20.0f},  {20.0f, 1.0f, -20.0f}, {-20.0f, 1.0f, -20.0f},
+    //     {25.0f, 1.0f, 0.0f},  {-25.0f, 1.0f, 0.0f},   {0.0f, 1.0f, 25.0f},   {0.0f, 1.0f, -25.0f},
+    //     {15.0f, 1.0f, 10.0f}, {-15.0f, 1.0f, -10.0f},
+    // };
+
+    // Initialize with empty points — scene loader will populate from [SpawnPoint] tag=wave_spawn
+    std::vector<XMFLOAT3> enemySpawnPoints;
     m_waveSpawner->Initialize(enemySpawnPoints);
 
     // --- Progression ---
