@@ -512,6 +512,493 @@ namespace SparkEditor
         bool isLocalAuthority = false;  ///< Local authority flag
     };
 
+    // =========================================================================
+    // Spatial / Volume Component Data
+    // =========================================================================
+
+    /**
+     * @brief Trigger volume scene data (sphere or AABB proximity trigger)
+     */
+    struct TriggerVolumeData
+    {
+        int shape = 0;                             ///< 0=Sphere, 1=AABB
+        float radius = 5.0f;                       ///< Sphere radius
+        XMFLOAT3 halfExtents = {5.0f, 5.0f, 5.0f}; ///< AABB half-extents
+        char onEnterEvent[128] = {};               ///< Script event on enter
+        char onExitEvent[128] = {};                ///< Script event on exit
+        bool enabled = true;                       ///< Active state
+        bool oneShot = false;                      ///< Fire only once then disable
+    };
+
+    /**
+     * @brief Post-processing volume scene data
+     */
+    struct PostProcessVolumeData
+    {
+        bool isGlobal = false;      ///< Global (always-active) or local (bounded)
+        int priority = 0;           ///< Higher priority wins on overlap
+        float weight = 1.0f;        ///< Blend weight [0,1]
+        float blendDistance = 2.0f; ///< Fade-in distance for local volumes
+
+        // Exposure
+        bool overrideExposure = false; ///< Override exposure settings
+        float exposure = 0.0f;         ///< Fixed exposure value
+        float minEV = -2.0f;           ///< Auto-exposure minimum EV
+        float maxEV = 14.0f;           ///< Auto-exposure maximum EV
+
+        // Bloom
+        bool overrideBloom = false;  ///< Override bloom settings
+        float bloomIntensity = 1.0f; ///< Bloom intensity
+        float bloomThreshold = 0.9f; ///< Bloom threshold
+
+        // Color Grading
+        bool overrideColorGrading = false; ///< Override color grading
+        float saturation = 1.0f;           ///< Color saturation
+        float contrast = 1.0f;             ///< Contrast
+        float temperature = 0.0f;          ///< Color temperature offset
+
+        // Fog
+        bool overrideFog = false; ///< Override fog settings
+        float fogDensity = 0.01f; ///< Fog density
+        float fogHeight = 0.2f;   ///< Height-based fog falloff
+    };
+
+    /**
+     * @brief Reflection probe scene data
+     */
+    struct ReflectionProbeData
+    {
+        int resolution = 256;                        ///< Cubemap resolution (128/256/512/1024)
+        float influenceRadius = 10.0f;               ///< Influence sphere radius
+        XMFLOAT3 boxExtents = {5.0f, 5.0f, 5.0f};    ///< Box projection extents
+        bool useBoxProjection = false;               ///< Enable parallax correction
+        bool isDynamic = false;                      ///< Re-render each frame vs baked
+        float refreshInterval = 0.0f;                ///< Dynamic refresh interval (0=every frame)
+        int importance = 1;                          ///< Priority for probe blending
+        XMFLOAT3 captureOffset = {0.0f, 0.0f, 0.0f}; ///< Offset from entity position
+    };
+
+    /**
+     * @brief Light probe scene data (SH-encoded indirect illumination)
+     */
+    struct LightProbeData
+    {
+        float influenceRadius = 10.0f;             ///< Probe influence radius
+        XMFLOAT3 gridSpacing = {4.0f, 4.0f, 4.0f}; ///< Auto-placement grid spacing
+        bool baked = false;                        ///< Whether SH coefficients are baked
+        int shOrder = 2;                           ///< Spherical harmonics order (1 or 2)
+    };
+
+    /**
+     * @brief NavMesh obstacle scene data
+     */
+    struct NavObstacleData
+    {
+        int shape = 0;                             ///< 0=Box, 1=Cylinder
+        XMFLOAT3 halfExtents = {1.0f, 1.0f, 1.0f}; ///< Box half-extents
+        float radius = 1.0f;                       ///< Cylinder radius
+        float height = 2.0f;                       ///< Cylinder height
+        bool carveOnMove = true;                   ///< Re-carve when entity moves
+    };
+
+    /**
+     * @brief Water plane scene data
+     */
+    struct WaterPlaneData
+    {
+        XMFLOAT2 size = {100.0f, 100.0f};                 ///< Water surface size
+        XMFLOAT4 shallowColor = {0.2f, 0.5f, 0.6f, 0.8f}; ///< Shallow water color
+        XMFLOAT4 deepColor = {0.05f, 0.1f, 0.2f, 0.95f};  ///< Deep water color
+        float waveHeight = 0.3f;                          ///< Gerstner wave height
+        float waveSpeed = 1.0f;                           ///< Wave animation speed
+        float waveFrequency = 0.5f;                       ///< Wave frequency
+        float reflectionStrength = 0.5f;                  ///< Reflection intensity [0,1]
+        float refractionStrength = 0.3f;                  ///< Refraction intensity [0,1]
+        bool receiveShadows = true;                       ///< Receive shadows from above
+    };
+
+    /**
+     * @brief Fog volume scene data (local volumetric fog region)
+     */
+    struct FogVolumeData
+    {
+        XMFLOAT3 halfExtents = {10.0f, 5.0f, 10.0f}; ///< Volume half-extents
+        float density = 0.05f;                       ///< Local fog density
+        XMFLOAT4 color = {0.7f, 0.7f, 0.7f, 1.0f};   ///< Fog color + opacity
+        float falloff = 1.0f;                        ///< Edge falloff exponent
+        float heightFalloff = 0.0f;                  ///< Height-based density falloff
+    };
+
+    /**
+     * @brief LOD group scene data
+     */
+    struct LODGroupData
+    {
+        float lodDistance0 = 10.0f;     ///< Distance to switch from LOD0 to LOD1
+        float lodDistance1 = 25.0f;     ///< Distance to switch from LOD1 to LOD2
+        float lodDistance2 = 50.0f;     ///< Distance to switch from LOD2 to LOD3
+        float lodDistance3 = 100.0f;    ///< Distance to switch from LOD3 to cull
+        int lodCount = 3;               ///< Number of LOD levels (1-4)
+        float crossFadeDuration = 0.5f; ///< Crossfade transition time (seconds)
+        bool autoGenerate = true;       ///< Auto-generate LODs from highest detail mesh
+    };
+
+    /**
+     * @brief Spawn point scene data
+     */
+    struct SpawnPointData
+    {
+        char spawnTag[64] = "default"; ///< Tag for spawn group selection (e.g. "team_a", "boss")
+        int teamID = 0;                ///< Team assignment (0=neutral)
+        float spawnRadius = 1.0f;      ///< Random offset radius around point
+        float respawnDelay = 5.0f;     ///< Delay before reuse (seconds)
+        int maxConcurrent = -1;        ///< Max simultaneous spawns (-1=unlimited)
+        bool enabled = true;           ///< Active state
+        int priority = 0;              ///< Selection priority (higher = preferred)
+    };
+
+    /**
+     * @brief Audio reverb zone scene data
+     */
+    struct AudioReverbZoneData
+    {
+        float innerRadius = 5.0f;      ///< Full-effect radius
+        float outerRadius = 15.0f;     ///< Fade-out radius
+        int reverbPreset = 0;          ///< 0=Generic,1=Room,2=Hall,3=Cave,4=Arena,5=Forest,6=Underwater
+        float decayTime = 1.5f;        ///< Reverb decay time (seconds)
+        float earlyReflections = 0.5f; ///< Early reflection level [0,1]
+        float lateReverbLevel = 0.5f;  ///< Late reverb level [0,1]
+        float diffusion = 1.0f;        ///< Reverb diffusion [0,1]
+        float roomSize = 0.5f;         ///< Room size factor [0,1]
+    };
+
+    // =========================================================================
+    // Gameplay / AI Placement Data
+    // =========================================================================
+
+    /**
+     * @brief Wind zone scene data (directional or spherical wind force)
+     */
+    struct WindZoneData
+    {
+        int mode = 0;                            ///< 0=Directional, 1=Spherical
+        XMFLOAT3 direction = {1.0f, 0.0f, 0.0f}; ///< Wind direction (Directional mode)
+        float mainStrength = 1.0f;               ///< Main wind strength (m/s)
+        float turbulenceStrength = 0.5f;         ///< Turbulence intensity
+        float pulseFrequency = 0.0f;             ///< Pulsing frequency (Hz, 0=constant)
+        float radius = 10.0f;                    ///< Effect radius (Spherical mode)
+        bool affectsParticles = true;            ///< Influence particle systems
+        bool affectsVegetation = true;           ///< Influence vegetation sway
+        bool affectsCloth = true;                ///< Influence cloth simulation
+    };
+
+    /**
+     * @brief Physics joint/constraint scene data
+     */
+    struct PhysicsJointData
+    {
+        int jointType = 0;                    ///< 0=Fixed, 1=Hinge, 2=Slider, 3=BallSocket, 4=Distance, 5=Cone
+        uint64_t connectedBody = 0;           ///< ObjectID of the connected rigid body (0=world anchor)
+        XMFLOAT3 anchor = {0.0f, 0.0f, 0.0f}; ///< Local-space anchor point
+        XMFLOAT3 axis = {0.0f, 1.0f, 0.0f};   ///< Joint axis (for hinge/slider/cone)
+        float lowerLimit = 0.0f;              ///< Lower angular/linear limit
+        float upperLimit = 0.0f;              ///< Upper angular/linear limit
+        bool enableLimits = false;            ///< Enable joint limits
+        bool enableMotor = false;             ///< Enable joint motor
+        float motorSpeed = 0.0f;              ///< Motor target speed
+        float motorMaxForce = 100.0f;         ///< Motor maximum force
+        float breakForce = 0.0f;              ///< Force to break joint (0=unbreakable)
+        float breakTorque = 0.0f;             ///< Torque to break joint (0=unbreakable)
+    };
+
+    /**
+     * @brief Occluder proxy scene data (for software occlusion culling)
+     */
+    struct OccluderData
+    {
+        int shape = 0;                             ///< 0=Box, 1=Quad
+        XMFLOAT3 halfExtents = {1.0f, 1.0f, 0.1f}; ///< Box half-extents or quad size
+        bool doubleSided = false;                  ///< Cull from both sides
+    };
+
+    /**
+     * @brief AI cover point scene data
+     */
+    struct CoverPointData
+    {
+        int height = 0;                            ///< 0=Low (crouch), 1=High (standing)
+        float width = 1.0f;                        ///< Cover width (meters)
+        XMFLOAT3 coverNormal = {0.0f, 0.0f, 1.0f}; ///< Direction entity faces when in cover
+        bool canLeanLeft = true;                   ///< Can lean left to fire
+        bool canLeanRight = true;                  ///< Can lean right to fire
+        bool canFireOver = false;                  ///< Can fire over top (low cover)
+        int maxOccupants = 1;                      ///< Max AI using this point simultaneously
+    };
+
+    /**
+     * @brief AI tactical point scene data
+     */
+    struct TacticalPointData
+    {
+        int pointType = 0;         ///< 0=Cover, 1=Vantage, 2=Ambush, 3=Flank, 4=Retreat, 5=Rally
+        float qualityScore = 1.0f; ///< Base quality score [0,1] for AI evaluation
+        float radius = 2.0f;       ///< Effective radius of this tactical position
+        bool enabled = true;       ///< Whether this point is currently available
+    };
+
+    /**
+     * @brief Destructible object scene data
+     */
+    struct DestructibleData
+    {
+        float health = 100.0f;                ///< Object health before destruction
+        int damageStages = 3;                 ///< Number of visual damage stages (1-5)
+        char fracturePattern[64] = "default"; ///< Fracture pattern name
+        float debrisLifetime = 10.0f;         ///< How long debris persists (seconds)
+        float explosionForce = 5.0f;          ///< Force applied to debris on fracture
+        float minDamageThreshold = 5.0f;      ///< Minimum damage to cause any effect
+        bool generateColliders = true;        ///< Generate colliders for debris pieces
+        bool chainReaction = false;           ///< Can trigger nearby destructibles
+    };
+
+    /**
+     * @brief Cinematic trigger scene data (starts a cinematic sequence)
+     */
+    struct CinematicTriggerData
+    {
+        char sequenceName[128] = {};               ///< Name of the cinematic sequence to play
+        int triggerShape = 0;                      ///< 0=Sphere, 1=AABB
+        float radius = 5.0f;                       ///< Sphere radius
+        XMFLOAT3 halfExtents = {5.0f, 5.0f, 5.0f}; ///< AABB half-extents
+        bool playOnce = true;                      ///< Only trigger once per play session
+        bool skipable = true;                      ///< Player can skip the cinematic
+        bool pauseGameplay = true;                 ///< Freeze gameplay during cinematic
+    };
+
+    /**
+     * @brief Dialogue trigger scene data (starts a dialogue tree)
+     */
+    struct DialogueTriggerData
+    {
+        char dialogueTreeName[128] = {}; ///< Name of the dialogue tree to start
+        char speakerName[64] = {};       ///< NPC speaker name
+        float interactionRadius = 3.0f;  ///< Max distance to start dialogue
+        bool requiresInteract = true;    ///< Requires player input vs. auto-start
+        bool oneShot = false;            ///< Only trigger once
+        bool facePlayer = true;          ///< NPC turns to face player during dialogue
+    };
+
+    /**
+     * @brief Area boundary scene data (level streaming boundary)
+     */
+    struct AreaBoundaryData
+    {
+        char areaName[64] = {};               ///< Area identifier name
+        char scenePath[256] = {};             ///< Scene file to stream in
+        XMFLOAT3 boundsMin = {0, 0, 0};       ///< AABB minimum corner
+        XMFLOAT3 boundsMax = {100, 100, 100}; ///< AABB maximum corner
+        int priority = 0;                     ///< Loading priority
+        float loadRadius = 50.0f;             ///< Distance to start loading
+        float unloadRadius = 100.0f;          ///< Distance to unload
+        bool alwaysLoaded = false;            ///< Keep loaded regardless of distance
+    };
+
+    /**
+     * @brief Billboard scene data (always-face-camera sprite)
+     */
+    struct BillboardData
+    {
+        char texturePath[256] = {};                ///< Texture path
+        XMFLOAT4 color = {1.0f, 1.0f, 1.0f, 1.0f}; ///< Tint color
+        XMFLOAT2 size = {1.0f, 1.0f};              ///< Billboard size (world units)
+        int lockAxis = 0;                          ///< 0=Full, 1=Y-axis only, 2=None(flat)
+        float fadeStartDistance = 50.0f;           ///< Distance to start fading
+        float fadeEndDistance = 100.0f;            ///< Distance to fully fade out
+        int sortingLayer = 0;                      ///< Render sort order
+    };
+
+    // =========================================================================
+    // Advanced Placement Data (Physics, Rendering, Navigation)
+    // =========================================================================
+
+    struct AudioListenerData
+    {
+        bool isActive = true;
+        float volumeScale = 1.0f;
+    };
+
+    struct CharacterControllerData
+    {
+        float height = 1.8f;
+        float radius = 0.3f;
+        float stepHeight = 0.35f;
+        float slopeLimit = 50.0f;
+        float skinWidth = 0.08f;
+        float gravity = -9.81f;
+        float moveSpeed = 5.0f;
+        float jumpForce = 5.0f;
+    };
+
+    struct NavRegionData
+    {
+        XMFLOAT3 halfExtents = {25.0f, 10.0f, 25.0f};
+        float agentRadius = 0.3f;
+        float agentHeight = 1.8f;
+        float maxSlope = 45.0f;
+        float cellSize = 0.3f;
+        bool autoRebuild = true;
+    };
+
+    struct NavLinkData
+    {
+        XMFLOAT3 endOffset = {0.0f, 0.0f, 5.0f};
+        float radius = 0.5f;
+        int traversalType = 0; ///< 0=Walk,1=Jump,2=Drop,3=Climb,4=Teleport
+        float traversalCost = 1.0f;
+        bool bidirectional = true;
+        bool enabled = true;
+    };
+
+    struct SkyboxData
+    {
+        int mode = 0; ///< 0=Procedural,1=Cubemap,2=Gradient,3=SolidColor
+        char cubemapPath[256] = {};
+        XMFLOAT4 topColor = {0.2f, 0.4f, 0.8f, 1.0f};
+        XMFLOAT4 bottomColor = {0.8f, 0.9f, 1.0f, 1.0f};
+        float turbidity = 2.0f;
+        float sunSize = 1.0f;
+        float exposure = 1.0f;
+        float rotation = 0.0f;
+    };
+
+    struct ConstantForceData
+    {
+        XMFLOAT3 force = {0.0f, 0.0f, 0.0f};
+        XMFLOAT3 torque = {0.0f, 0.0f, 0.0f};
+        bool relativeForce = false;
+        bool relativeTorque = false;
+        bool enabled = true;
+    };
+
+    struct ForceRegionData
+    {
+        int forceType = 0; ///< 0=Directional,1=Point,2=Buoyancy
+        XMFLOAT3 halfExtents = {5.0f, 5.0f, 5.0f};
+        XMFLOAT3 forceDirection = {0.0f, 1.0f, 0.0f};
+        float forceMagnitude = 10.0f;
+        float damping = 0.0f;
+        bool enabled = true;
+    };
+
+    struct RagdollData
+    {
+        int mode = 0; ///< 0=Animated,1=Blended,2=Physics
+        char definitionName[128] = {};
+        float blendWeight = 0.5f;
+        float jointStiffness = 1.0f;
+        float linearDamping = 0.1f;
+        float angularDamping = 0.5f;
+        bool selfCollision = false;
+    };
+
+    struct SoftBodyData
+    {
+        float mass = 1.0f;
+        float stiffness = 0.8f;
+        float damping = 0.02f;
+        float windInfluence = 1.0f;
+        float gravityScale = 1.0f;
+        int solverIterations = 4;
+        bool selfCollision = false;
+        bool twoSided = false;
+    };
+
+    struct VehicleData
+    {
+        int vehicleType = 0; ///< 0=Wheeled,1=Tracked,2=Motorcycle
+        int wheelCount = 4;
+        float mass = 1500.0f;
+        float maxEngineTorque = 500.0f;
+        float maxSteerAngle = 35.0f;
+        float maxBrakeForce = 5000.0f;
+        float suspensionLength = 0.3f;
+        float suspensionStiffness = 30000.0f;
+        float suspensionDamping = 4000.0f;
+        int gearCount = 6;
+        bool antiRollBar = true;
+    };
+
+    struct BuoyancyVolumeData
+    {
+        XMFLOAT3 halfExtents = {10.0f, 5.0f, 10.0f};
+        float waterDensity = 1000.0f;
+        float linearDrag = 0.3f;
+        float angularDrag = 0.05f;
+        float flowSpeed = 0.0f;
+        XMFLOAT3 flowDirection = {1.0f, 0.0f, 0.0f};
+        bool enabled = true;
+    };
+
+    struct SpringArmData
+    {
+        float targetLength = 5.0f;
+        float probeRadius = 0.2f;
+        float smoothSpeed = 10.0f;
+        float minLength = 0.5f;
+        bool doCollisionTest = true;
+    };
+
+    struct LineRendererData
+    {
+        float startWidth = 0.1f;
+        float endWidth = 0.1f;
+        XMFLOAT4 startColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        XMFLOAT4 endColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        bool useWorldSpace = true;
+        bool loop = false;
+        int sortingLayer = 0;
+    };
+
+    struct TrailRendererData
+    {
+        float lifetime = 2.0f;
+        float minVertexDistance = 0.1f;
+        float startWidth = 0.5f;
+        float endWidth = 0.0f;
+        XMFLOAT4 startColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        XMFLOAT4 endColor = {1.0f, 1.0f, 1.0f, 0.0f};
+        bool emitting = true;
+        int sortingLayer = 0;
+    };
+
+    struct Text3DData
+    {
+        char text[256] = {};
+        char fontPath[256] = {};
+        float fontSize = 1.0f;
+        XMFLOAT4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+        bool faceCamera = true;
+        bool castShadows = false;
+        int alignment = 1; ///< 0=Left,1=Center,2=Right
+        float maxWidth = 0.0f;
+        int sortingLayer = 0;
+    };
+
+    struct FoliageVolumeData
+    {
+        XMFLOAT3 halfExtents = {50.0f, 50.0f, 50.0f};
+        int seed = 0;
+        float densityScale = 1.0f;
+        float minSlopeAngle = 0.0f;
+        float maxSlopeAngle = 45.0f;
+        float minAltitude = -1000.0f;
+        float maxAltitude = 1000.0f;
+        bool alignToSurface = true;
+        bool castShadows = true;
+        float cullDistance = 100.0f;
+        bool enabled = true;
+    };
+
     // ComponentType is defined in ../Enums/SceneSystemEnums.h to avoid ODR violations
 
     /**

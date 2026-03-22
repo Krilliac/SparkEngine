@@ -72,6 +72,19 @@
 // Spline: SplineComponent, SplineFollowerComponent
 #include "Components/SplineComponents.h"
 
+// Volumes & Probes: TriggerVolume, PostProcessVolume, ReflectionProbe, LightProbe,
+// NavObstacle, WaterPlane, FogVolume, LODGroup, SpawnPoint, AudioReverbZone
+#include "Components/VolumeComponents.h"
+
+// Placement: WindZone, PhysicsJoint, Occluder, CoverPoint, TacticalPoint,
+// Destructible, CinematicTrigger, DialogueTrigger, AreaBoundary, Billboard
+#include "Components/PlacementComponents.h"
+
+// Advanced: AudioListener, CharacterController, NavRegion, NavLink, Skybox,
+// ConstantForce, ForceRegion, Ragdoll, SoftBody, Vehicle, BuoyancyVolume,
+// SpringArm, LineRenderer, TrailRenderer, Text3D, FoliageVolume
+#include "Components/AdvancedPlacementComponents.h"
+
 // =============================================================================
 // World
 // =============================================================================

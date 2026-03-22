@@ -796,6 +796,7 @@ cmake --build build --config Release
 | `ObjectPlacementPanel` | `SparkEditor/Source/Panels/ObjectPlacementPanel.h` |
 | `ParticleEditorPanel` | `SparkEditor/Source/Panels/ParticleEditorPanel.h` |
 | `Physics2DPanel` | `SparkEditor/Source/Panels/Physics2DPanel.h` |
+| `Physics3DPanel` | `SparkEditor/Source/Panels/Physics3DPanel.h` |
 | `PlayModeToolbarPanel` | `SparkEditor/Source/Panels/PlayModeToolbarPanel.h` |
 | `PostProcessingPanel` | `SparkEditor/Source/Panels/PostProcessingPanel.h` |
 | `PrefabEditorPanel` | `SparkEditor/Source/Panels/PrefabEditorPanel.h` |

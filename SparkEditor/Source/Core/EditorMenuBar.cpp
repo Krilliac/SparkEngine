@@ -328,6 +328,104 @@ namespace SparkEditor
                 createObject("Camera");
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Volume"))
+        {
+            if (ImGui::MenuItem("Trigger Volume"))
+                createObject("Trigger Volume");
+            if (ImGui::MenuItem("Post-Process Volume"))
+                createObject("Post-Process Volume");
+            if (ImGui::MenuItem("Fog Volume"))
+                createObject("Fog Volume");
+            if (ImGui::MenuItem("Audio Reverb Zone"))
+                createObject("Audio Reverb Zone");
+            if (ImGui::MenuItem("Wind Zone"))
+                createObject("Wind Zone");
+            if (ImGui::MenuItem("Cinematic Trigger"))
+                createObject("Cinematic Trigger");
+            if (ImGui::MenuItem("Area Boundary"))
+                createObject("Area Boundary");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Probe"))
+        {
+            if (ImGui::MenuItem("Reflection Probe"))
+                createObject("Reflection Probe");
+            if (ImGui::MenuItem("Light Probe"))
+                createObject("Light Probe");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Environment"))
+        {
+            if (ImGui::MenuItem("Water Plane"))
+                createObject("Water Plane");
+            if (ImGui::MenuItem("Spawn Point"))
+                createObject("Spawn Point");
+            if (ImGui::MenuItem("NavMesh Obstacle"))
+                createObject("NavMesh Obstacle");
+            if (ImGui::MenuItem("Occluder"))
+                createObject("Occluder");
+            if (ImGui::MenuItem("Billboard"))
+                createObject("Billboard");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Gameplay"))
+        {
+            if (ImGui::MenuItem("Destructible"))
+                createObject("Destructible");
+            if (ImGui::MenuItem("Dialogue Trigger"))
+                createObject("Dialogue Trigger");
+            if (ImGui::MenuItem("Physics Joint"))
+                createObject("Physics Joint");
+            if (ImGui::MenuItem("Character Controller"))
+                createObject("Character Controller");
+            if (ImGui::MenuItem("Vehicle"))
+                createObject("Vehicle");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("AI"))
+        {
+            if (ImGui::MenuItem("Cover Point"))
+                createObject("Cover Point");
+            if (ImGui::MenuItem("Tactical Point"))
+                createObject("Tactical Point");
+            if (ImGui::MenuItem("Nav Region"))
+                createObject("Nav Region");
+            if (ImGui::MenuItem("Nav Link"))
+                createObject("Nav Link");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Rendering"))
+        {
+            if (ImGui::MenuItem("Skybox"))
+                createObject("Skybox");
+            if (ImGui::MenuItem("Line Renderer"))
+                createObject("Line Renderer");
+            if (ImGui::MenuItem("Trail Renderer"))
+                createObject("Trail Renderer");
+            if (ImGui::MenuItem("Text 3D"))
+                createObject("Text 3D");
+            if (ImGui::MenuItem("Billboard"))
+                createObject("Billboard");
+            if (ImGui::MenuItem("Foliage Volume"))
+                createObject("Foliage Volume");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Physics"))
+        {
+            if (ImGui::MenuItem("Ragdoll"))
+                createObject("Ragdoll");
+            if (ImGui::MenuItem("Soft Body / Cloth"))
+                createObject("Soft Body");
+            if (ImGui::MenuItem("Constant Force"))
+                createObject("Constant Force");
+            if (ImGui::MenuItem("Force Region"))
+                createObject("Force Region");
+            if (ImGui::MenuItem("Buoyancy Volume"))
+                createObject("Buoyancy Volume");
+            if (ImGui::MenuItem("Spring Arm"))
+                createObject("Spring Arm");
+            ImGui::EndMenu();
+        }
         ImGui::EndMenu();
     }
 

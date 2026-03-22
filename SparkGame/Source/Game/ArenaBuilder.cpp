@@ -45,14 +45,20 @@ namespace Spark
         if (!game || !graphics)
             return;
 
-        BuildFloor(game, graphics);
-        BuildWalls(game, graphics);
-        BuildCover(game, graphics);
-        BuildPlatforms(game, graphics);
-        BuildRamps(game, graphics);
-        BuildCorridors(game, graphics);
+        // NOTE: Arena geometry is now defined in the scene file (Assets/Scenes/level1.scene)
+        // as [Object] entries. The entire arena layout — floors, walls, cover, platforms,
+        // ramps, and corridors — can be placed and edited in the SparkEditor without
+        // recompiling. The BuildXxx() methods below show the equivalent C++ approach.
+        //
+        // To use the code-based approach instead of scene file, uncomment:
+        // BuildFloor(game, graphics);
+        // BuildWalls(game, graphics);
+        // BuildCover(game, graphics);
+        // BuildPlatforms(game, graphics);
+        // BuildRamps(game, graphics);
+        // BuildCorridors(game, graphics);
 
-        LOG_TO_CONSOLE_IMMEDIATE(L"Arena construction complete - multi-room combat map", L"SUCCESS");
+        LOG_TO_CONSOLE_IMMEDIATE(L"Arena geometry loaded from scene file (code builder available)", L"SUCCESS");
     }
 
     void ArenaBuilder::BuildFloor(Game* game, GraphicsEngine* graphics)

@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*143 test files, 1589+ test cases*
+*144 test files, 1630+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -500,6 +500,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestGPUPerfCounters` | 2 |
 | `TestGameMode` | 5 |
 | `TestGraphicsEngine` | 10 |
+| `TestGraphicsIntegration` | 27 |
 | `TestGroupAI` | 5 |
 | `TestHash` | 18 |
 | `TestHybridRT` | 20 |
@@ -535,7 +536,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
 | `TestPhysicsInterpolation` | 8 |
-| `TestPhysicsSystem` | 15 |
+| `TestPhysicsSystem` | 29 |
 | `TestPlayModeManager` | 33 |
 | `TestPoseModifier` | 4 |
 | `TestPostProcessingPipeline` | 11 |

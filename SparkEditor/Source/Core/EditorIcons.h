@@ -203,5 +203,9 @@
 #define ICON_FA_BEZIER_CURVE "\xef\x95\x9b" // U+F55B
 #define ICON_FA_ROUTE "\xef\x93\x97"        // U+F4D7
 
+// === Volume / Probe Icons ===
+#define ICON_FA_WATER "\xef\x9d\xb3"      // U+F773
+#define ICON_FA_DOT_CIRCLE "\xef\x86\x92" // U+F192
+
 // === Module / Plugin Icons ===
 #define ICON_FA_PUZZLE_PIECE "\xef\x84\xae" // U+F12E

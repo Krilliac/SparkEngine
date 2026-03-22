@@ -51,6 +51,50 @@ namespace SparkEditor
         m_prefabs.push_back({"Crate", "Environment/Crate", "Environment", false});
         m_prefabs.push_back({"Barrel", "Environment/Barrel", "Environment", false});
 
+        m_prefabs.push_back({"Trigger Volume", "Volumes/TriggerVolume", "Volumes", false});
+        m_prefabs.push_back({"Post-Process Volume", "Volumes/PostProcessVolume", "Volumes", false});
+        m_prefabs.push_back({"Fog Volume", "Volumes/FogVolume", "Volumes", false});
+        m_prefabs.push_back({"Audio Reverb Zone", "Volumes/AudioReverbZone", "Volumes", false});
+
+        m_prefabs.push_back({"Reflection Probe", "Probes/ReflectionProbe", "Probes", false});
+        m_prefabs.push_back({"Light Probe", "Probes/LightProbe", "Probes", false});
+
+        m_prefabs.push_back({"Water Plane", "Environment/WaterPlane", "Environment", false});
+        m_prefabs.push_back({"Spawn Point", "Gameplay/SpawnPoint", "Gameplay", false});
+        m_prefabs.push_back({"NavMesh Obstacle", "AI/NavMeshObstacle", "AI", false});
+
+        m_prefabs.push_back({"Wind Zone", "Volumes/WindZone", "Volumes", false});
+        m_prefabs.push_back({"Cinematic Trigger", "Volumes/CinematicTrigger", "Volumes", false});
+        m_prefabs.push_back({"Area Boundary", "Volumes/AreaBoundary", "Volumes", false});
+
+        m_prefabs.push_back({"Occluder", "Environment/Occluder", "Environment", false});
+        m_prefabs.push_back({"Billboard", "Environment/Billboard", "Environment", false});
+
+        m_prefabs.push_back({"Physics Joint", "Physics/Joint", "Physics", false});
+        m_prefabs.push_back({"Destructible", "Gameplay/Destructible", "Gameplay", false});
+        m_prefabs.push_back({"Dialogue Trigger", "Gameplay/DialogueTrigger", "Gameplay", false});
+
+        m_prefabs.push_back({"Cover Point", "AI/CoverPoint", "AI", false});
+        m_prefabs.push_back({"Tactical Point", "AI/TacticalPoint", "AI", false});
+        m_prefabs.push_back({"Nav Region", "AI/NavRegion", "AI", false});
+        m_prefabs.push_back({"Nav Link", "AI/NavLink", "AI", false});
+
+        m_prefabs.push_back({"Character Controller", "Gameplay/CharacterController", "Gameplay", false});
+        m_prefabs.push_back({"Vehicle", "Gameplay/Vehicle", "Gameplay", false});
+
+        m_prefabs.push_back({"Ragdoll", "Physics/Ragdoll", "Physics", false});
+        m_prefabs.push_back({"Soft Body", "Physics/SoftBody", "Physics", false});
+        m_prefabs.push_back({"Constant Force", "Physics/ConstantForce", "Physics", false});
+        m_prefabs.push_back({"Force Region", "Volumes/ForceRegion", "Volumes", false});
+        m_prefabs.push_back({"Buoyancy Volume", "Volumes/BuoyancyVolume", "Volumes", false});
+        m_prefabs.push_back({"Spring Arm", "Physics/SpringArm", "Physics", false});
+
+        m_prefabs.push_back({"Skybox", "Rendering/Skybox", "Rendering", false});
+        m_prefabs.push_back({"Line Renderer", "Rendering/LineRenderer", "Rendering", false});
+        m_prefabs.push_back({"Trail Renderer", "Rendering/TrailRenderer", "Rendering", false});
+        m_prefabs.push_back({"Text 3D", "Rendering/Text3D", "Rendering", false});
+        m_prefabs.push_back({"Foliage Volume", "Environment/FoliageVolume", "Environment", false});
+
         return true;
     }
 
@@ -310,6 +354,18 @@ namespace SparkEditor
                 icon = ICON_FA_CROSSHAIRS;
             else if (prefab.category == "Environment")
                 icon = ICON_FA_TREE;
+            else if (prefab.category == "Volumes")
+                icon = ICON_FA_VECTOR_SQUARE;
+            else if (prefab.category == "Probes")
+                icon = ICON_FA_DOT_CIRCLE;
+            else if (prefab.category == "Gameplay")
+                icon = ICON_FA_FLAG;
+            else if (prefab.category == "AI")
+                icon = ICON_FA_BRAIN;
+            else if (prefab.category == "Physics")
+                icon = ICON_FA_VECTOR_SQUARE;
+            else if (prefab.category == "Rendering")
+                icon = ICON_FA_IMAGE;
 
             std::string label = std::string(icon) + "  " + prefab.name;
             if (ImGui::Selectable(label.c_str(), isSelected))

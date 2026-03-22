@@ -52,6 +52,48 @@ namespace SparkEditor
         WEATHER = 27,          ///< Weather zone component
         NETWORK_IDENTITY = 28, ///< Network replication identity
 
+        // Spatial / volume components
+        TRIGGER_VOLUME = 29,      ///< Proximity trigger volume (sphere/AABB)
+        POST_PROCESS_VOLUME = 30, ///< Post-processing parameter volume
+        REFLECTION_PROBE = 31,    ///< Reflection probe (cubemap capture)
+        LIGHT_PROBE = 32,         ///< Light probe (SH indirect lighting)
+        NAV_OBSTACLE = 33,        ///< NavMesh dynamic obstacle
+        WATER_PLANE = 34,         ///< Water surface plane
+        FOG_VOLUME = 35,          ///< Local volumetric fog region
+        LOD_GROUP = 36,           ///< LOD distance switching group
+        SPAWN_POINT = 37,         ///< Generic spawn point marker
+        AUDIO_REVERB_ZONE = 38,   ///< Audio reverb/echo zone
+
+        // Gameplay / AI placement components
+        WIND_ZONE = 39,         ///< Directional/spherical wind force
+        PHYSICS_JOINT = 40,     ///< Physics constraint between bodies
+        OCCLUDER = 41,          ///< Occlusion culling proxy geometry
+        COVER_POINT = 42,       ///< AI cover position marker
+        TACTICAL_POINT = 43,    ///< AI tactical position marker
+        DESTRUCTIBLE = 44,      ///< Destructible object with fracture
+        CINEMATIC_TRIGGER = 45, ///< Starts a cinematic sequence on enter
+        DIALOGUE_TRIGGER = 46,  ///< Starts dialogue tree on interaction
+        AREA_BOUNDARY = 47,     ///< Level streaming area boundary
+        BILLBOARD = 48,         ///< Always-face-camera sprite
+
+        // Physics / rendering / navigation placement
+        AUDIO_LISTENER = 49,       ///< Spatial audio listener position
+        CHARACTER_CONTROLLER = 50, ///< Jolt character controller (walking/sliding)
+        NAV_REGION = 51,           ///< NavMesh baking region bounds
+        NAV_LINK = 52,             ///< Off-mesh navigation link (jumps, ladders)
+        SKYBOX = 53,               ///< Sky/atmosphere rendering
+        CONSTANT_FORCE = 54,       ///< Persistent force on a rigidbody
+        FORCE_REGION = 55,         ///< Physics volume applying forces to bodies
+        RAGDOLL = 56,              ///< Ragdoll physics on skeletal mesh
+        SOFT_BODY = 57,            ///< Soft body / cloth simulation
+        VEHICLE = 58,              ///< Vehicle physics (wheeled/tracked/motorcycle)
+        BUOYANCY_VOLUME = 59,      ///< Water buoyancy region
+        SPRING_ARM = 60,           ///< Camera collision avoidance arm
+        LINE_RENDERER = 61,        ///< World-space line/polyline rendering
+        TRAIL_RENDERER = 62,       ///< Trail effect behind moving objects
+        TEXT_3D = 63,              ///< World-space 3D text rendering
+        FOLIAGE_VOLUME = 64,       ///< Vegetation scatter/placement region
+
         CUSTOM = 1000 ///< Custom components start at 1000
     };
 

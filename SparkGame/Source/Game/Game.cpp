@@ -92,8 +92,12 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     ASSERT_MSG(aspect > 0.0f, "Invalid aspect ratio");
 
     m_camera->Initialize(aspect);
-    m_camera->SetPosition({0.0f, 2.0f, -5.0f});
-    LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized and positioned", L"INFO");
+    // NOTE: Camera position is now defined in the scene file (Assets/Scenes/level1.scene)
+    // as a [Camera] entry. It can be placed and edited in the SparkEditor.
+    // The code below shows the equivalent C++ approach for reference.
+    // m_camera->SetPosition({0.0f, 2.0f, -5.0f});
+    m_camera->SetPosition({0.0f, 2.0f, -5.0f}); // Fallback if scene camera not loaded
+    LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized (scene override available)", L"INFO");
 
     /* Class System -----------------------------------------*/
     m_classSystem = std::make_unique<Spark::ClassSystem>();
@@ -156,11 +160,18 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_gravitySystem->Initialize({0, -20.0f, 0});
     m_player->SetGravitySystem(m_gravitySystem.get());
 
-    // Create sample gravity zones for the arena
-    m_gravitySystem->CreateLowGravityZone("LowG_Platform", {20.0f, 5.0f, 20.0f}, {8.0f, 8.0f, 8.0f}, -5.0f);
-    m_gravitySystem->CreateZeroGravityZone("ZeroG_Corridor", {0.0f, 15.0f, 30.0f}, {5.0f, 5.0f, 15.0f});
-    m_gravitySystem->CreateReverseGravityZone("Reverse_Chamber", {-25.0f, 10.0f, 0.0f}, {6.0f, 10.0f, 6.0f}, 12.0f);
-    LOG_TO_CONSOLE_IMMEDIATE(L"Gravity system initialized with 3 sample zones", L"SUCCESS");
+    // NOTE: Gravity zones are now defined in the scene file (Assets/Scenes/level1.scene)
+    // as [ForceRegion] entries. They can be placed and edited in the SparkEditor without
+    // recompiling. The code below shows the equivalent C++ approach for reference.
+    //
+    // m_gravitySystem->CreateLowGravityZone("LowG_Platform", {20.0f, 5.0f, 20.0f},
+    //                                       {8.0f, 8.0f, 8.0f}, -5.0f);
+    // m_gravitySystem->CreateZeroGravityZone("ZeroG_Corridor", {0.0f, 15.0f, 30.0f},
+    //                                        {5.0f, 5.0f, 15.0f});
+    // m_gravitySystem->CreateReverseGravityZone("Reverse_Chamber", {-25.0f, 10.0f, 0.0f},
+    //                                           {6.0f, 10.0f, 6.0f}, 12.0f);
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Gravity zones loaded from scene file", L"SUCCESS");
 
     InitializeInteractionObjects();
     InitializeRespawnAndVehicles();
