@@ -76,6 +76,24 @@ namespace SparkEditor
 
         m_prefabs.push_back({"Cover Point", "AI/CoverPoint", "AI", false});
         m_prefabs.push_back({"Tactical Point", "AI/TacticalPoint", "AI", false});
+        m_prefabs.push_back({"Nav Region", "AI/NavRegion", "AI", false});
+        m_prefabs.push_back({"Nav Link", "AI/NavLink", "AI", false});
+
+        m_prefabs.push_back({"Character Controller", "Gameplay/CharacterController", "Gameplay", false});
+        m_prefabs.push_back({"Vehicle", "Gameplay/Vehicle", "Gameplay", false});
+
+        m_prefabs.push_back({"Ragdoll", "Physics/Ragdoll", "Physics", false});
+        m_prefabs.push_back({"Soft Body", "Physics/SoftBody", "Physics", false});
+        m_prefabs.push_back({"Constant Force", "Physics/ConstantForce", "Physics", false});
+        m_prefabs.push_back({"Force Region", "Volumes/ForceRegion", "Volumes", false});
+        m_prefabs.push_back({"Buoyancy Volume", "Volumes/BuoyancyVolume", "Volumes", false});
+        m_prefabs.push_back({"Spring Arm", "Physics/SpringArm", "Physics", false});
+
+        m_prefabs.push_back({"Skybox", "Rendering/Skybox", "Rendering", false});
+        m_prefabs.push_back({"Line Renderer", "Rendering/LineRenderer", "Rendering", false});
+        m_prefabs.push_back({"Trail Renderer", "Rendering/TrailRenderer", "Rendering", false});
+        m_prefabs.push_back({"Text 3D", "Rendering/Text3D", "Rendering", false});
+        m_prefabs.push_back({"Foliage Volume", "Environment/FoliageVolume", "Environment", false});
 
         return true;
     }
@@ -346,6 +364,8 @@ namespace SparkEditor
                 icon = ICON_FA_BRAIN;
             else if (prefab.category == "Physics")
                 icon = ICON_FA_VECTOR_SQUARE;
+            else if (prefab.category == "Rendering")
+                icon = ICON_FA_IMAGE;
 
             std::string label = std::string(icon) + "  " + prefab.name;
             if (ImGui::Selectable(label.c_str(), isSelected))

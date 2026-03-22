@@ -376,6 +376,10 @@ namespace SparkEditor
                 createObject("Dialogue Trigger");
             if (ImGui::MenuItem("Physics Joint"))
                 createObject("Physics Joint");
+            if (ImGui::MenuItem("Character Controller"))
+                createObject("Character Controller");
+            if (ImGui::MenuItem("Vehicle"))
+                createObject("Vehicle");
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("AI"))
@@ -384,6 +388,42 @@ namespace SparkEditor
                 createObject("Cover Point");
             if (ImGui::MenuItem("Tactical Point"))
                 createObject("Tactical Point");
+            if (ImGui::MenuItem("Nav Region"))
+                createObject("Nav Region");
+            if (ImGui::MenuItem("Nav Link"))
+                createObject("Nav Link");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Rendering"))
+        {
+            if (ImGui::MenuItem("Skybox"))
+                createObject("Skybox");
+            if (ImGui::MenuItem("Line Renderer"))
+                createObject("Line Renderer");
+            if (ImGui::MenuItem("Trail Renderer"))
+                createObject("Trail Renderer");
+            if (ImGui::MenuItem("Text 3D"))
+                createObject("Text 3D");
+            if (ImGui::MenuItem("Billboard"))
+                createObject("Billboard");
+            if (ImGui::MenuItem("Foliage Volume"))
+                createObject("Foliage Volume");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Physics"))
+        {
+            if (ImGui::MenuItem("Ragdoll"))
+                createObject("Ragdoll");
+            if (ImGui::MenuItem("Soft Body / Cloth"))
+                createObject("Soft Body");
+            if (ImGui::MenuItem("Constant Force"))
+                createObject("Constant Force");
+            if (ImGui::MenuItem("Force Region"))
+                createObject("Force Region");
+            if (ImGui::MenuItem("Buoyancy Volume"))
+                createObject("Buoyancy Volume");
+            if (ImGui::MenuItem("Spring Arm"))
+                createObject("Spring Arm");
             ImGui::EndMenu();
         }
         ImGui::EndMenu();

@@ -80,6 +80,11 @@
 // Destructible, CinematicTrigger, DialogueTrigger, AreaBoundary, Billboard
 #include "Components/PlacementComponents.h"
 
+// Advanced: AudioListener, CharacterController, NavRegion, NavLink, Skybox,
+// ConstantForce, ForceRegion, Ragdoll, SoftBody, Vehicle, BuoyancyVolume,
+// SpringArm, LineRenderer, TrailRenderer, Text3D, FoliageVolume
+#include "Components/AdvancedPlacementComponents.h"
+
 // =============================================================================
 // World
 // =============================================================================

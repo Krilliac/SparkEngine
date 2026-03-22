@@ -76,6 +76,24 @@ namespace SparkEditor
         AREA_BOUNDARY = 47,     ///< Level streaming area boundary
         BILLBOARD = 48,         ///< Always-face-camera sprite
 
+        // Physics / rendering / navigation placement
+        AUDIO_LISTENER = 49,       ///< Spatial audio listener position
+        CHARACTER_CONTROLLER = 50, ///< Jolt character controller (walking/sliding)
+        NAV_REGION = 51,           ///< NavMesh baking region bounds
+        NAV_LINK = 52,             ///< Off-mesh navigation link (jumps, ladders)
+        SKYBOX = 53,               ///< Sky/atmosphere rendering
+        CONSTANT_FORCE = 54,       ///< Persistent force on a rigidbody
+        FORCE_REGION = 55,         ///< Physics volume applying forces to bodies
+        RAGDOLL = 56,              ///< Ragdoll physics on skeletal mesh
+        SOFT_BODY = 57,            ///< Soft body / cloth simulation
+        VEHICLE = 58,              ///< Vehicle physics (wheeled/tracked/motorcycle)
+        BUOYANCY_VOLUME = 59,      ///< Water buoyancy region
+        SPRING_ARM = 60,           ///< Camera collision avoidance arm
+        LINE_RENDERER = 61,        ///< World-space line/polyline rendering
+        TRAIL_RENDERER = 62,       ///< Trail effect behind moving objects
+        TEXT_3D = 63,              ///< World-space 3D text rendering
+        FOLIAGE_VOLUME = 64,       ///< Vegetation scatter/placement region
+
         CUSTOM = 1000 ///< Custom components start at 1000
     };
 

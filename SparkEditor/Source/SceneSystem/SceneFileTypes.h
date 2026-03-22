@@ -817,6 +817,188 @@ namespace SparkEditor
         int sortingLayer = 0;                      ///< Render sort order
     };
 
+    // =========================================================================
+    // Advanced Placement Data (Physics, Rendering, Navigation)
+    // =========================================================================
+
+    struct AudioListenerData
+    {
+        bool isActive = true;
+        float volumeScale = 1.0f;
+    };
+
+    struct CharacterControllerData
+    {
+        float height = 1.8f;
+        float radius = 0.3f;
+        float stepHeight = 0.35f;
+        float slopeLimit = 50.0f;
+        float skinWidth = 0.08f;
+        float gravity = -9.81f;
+        float moveSpeed = 5.0f;
+        float jumpForce = 5.0f;
+    };
+
+    struct NavRegionData
+    {
+        XMFLOAT3 halfExtents = {25.0f, 10.0f, 25.0f};
+        float agentRadius = 0.3f;
+        float agentHeight = 1.8f;
+        float maxSlope = 45.0f;
+        float cellSize = 0.3f;
+        bool autoRebuild = true;
+    };
+
+    struct NavLinkData
+    {
+        XMFLOAT3 endOffset = {0.0f, 0.0f, 5.0f};
+        float radius = 0.5f;
+        int traversalType = 0; ///< 0=Walk,1=Jump,2=Drop,3=Climb,4=Teleport
+        float traversalCost = 1.0f;
+        bool bidirectional = true;
+        bool enabled = true;
+    };
+
+    struct SkyboxData
+    {
+        int mode = 0; ///< 0=Procedural,1=Cubemap,2=Gradient,3=SolidColor
+        char cubemapPath[256] = {};
+        XMFLOAT4 topColor = {0.2f, 0.4f, 0.8f, 1.0f};
+        XMFLOAT4 bottomColor = {0.8f, 0.9f, 1.0f, 1.0f};
+        float turbidity = 2.0f;
+        float sunSize = 1.0f;
+        float exposure = 1.0f;
+        float rotation = 0.0f;
+    };
+
+    struct ConstantForceData
+    {
+        XMFLOAT3 force = {0.0f, 0.0f, 0.0f};
+        XMFLOAT3 torque = {0.0f, 0.0f, 0.0f};
+        bool relativeForce = false;
+        bool relativeTorque = false;
+        bool enabled = true;
+    };
+
+    struct ForceRegionData
+    {
+        int forceType = 0; ///< 0=Directional,1=Point,2=Buoyancy
+        XMFLOAT3 halfExtents = {5.0f, 5.0f, 5.0f};
+        XMFLOAT3 forceDirection = {0.0f, 1.0f, 0.0f};
+        float forceMagnitude = 10.0f;
+        float damping = 0.0f;
+        bool enabled = true;
+    };
+
+    struct RagdollData
+    {
+        int mode = 0; ///< 0=Animated,1=Blended,2=Physics
+        char definitionName[128] = {};
+        float blendWeight = 0.5f;
+        float jointStiffness = 1.0f;
+        float linearDamping = 0.1f;
+        float angularDamping = 0.5f;
+        bool selfCollision = false;
+    };
+
+    struct SoftBodyData
+    {
+        float mass = 1.0f;
+        float stiffness = 0.8f;
+        float damping = 0.02f;
+        float windInfluence = 1.0f;
+        float gravityScale = 1.0f;
+        int solverIterations = 4;
+        bool selfCollision = false;
+        bool twoSided = false;
+    };
+
+    struct VehicleData
+    {
+        int vehicleType = 0; ///< 0=Wheeled,1=Tracked,2=Motorcycle
+        int wheelCount = 4;
+        float mass = 1500.0f;
+        float maxEngineTorque = 500.0f;
+        float maxSteerAngle = 35.0f;
+        float maxBrakeForce = 5000.0f;
+        float suspensionLength = 0.3f;
+        float suspensionStiffness = 30000.0f;
+        float suspensionDamping = 4000.0f;
+        int gearCount = 6;
+        bool antiRollBar = true;
+    };
+
+    struct BuoyancyVolumeData
+    {
+        XMFLOAT3 halfExtents = {10.0f, 5.0f, 10.0f};
+        float waterDensity = 1000.0f;
+        float linearDrag = 0.3f;
+        float angularDrag = 0.05f;
+        float flowSpeed = 0.0f;
+        XMFLOAT3 flowDirection = {1.0f, 0.0f, 0.0f};
+        bool enabled = true;
+    };
+
+    struct SpringArmData
+    {
+        float targetLength = 5.0f;
+        float probeRadius = 0.2f;
+        float smoothSpeed = 10.0f;
+        float minLength = 0.5f;
+        bool doCollisionTest = true;
+    };
+
+    struct LineRendererData
+    {
+        float startWidth = 0.1f;
+        float endWidth = 0.1f;
+        XMFLOAT4 startColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        XMFLOAT4 endColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        bool useWorldSpace = true;
+        bool loop = false;
+        int sortingLayer = 0;
+    };
+
+    struct TrailRendererData
+    {
+        float lifetime = 2.0f;
+        float minVertexDistance = 0.1f;
+        float startWidth = 0.5f;
+        float endWidth = 0.0f;
+        XMFLOAT4 startColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        XMFLOAT4 endColor = {1.0f, 1.0f, 1.0f, 0.0f};
+        bool emitting = true;
+        int sortingLayer = 0;
+    };
+
+    struct Text3DData
+    {
+        char text[256] = {};
+        char fontPath[256] = {};
+        float fontSize = 1.0f;
+        XMFLOAT4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+        bool faceCamera = true;
+        bool castShadows = false;
+        int alignment = 1; ///< 0=Left,1=Center,2=Right
+        float maxWidth = 0.0f;
+        int sortingLayer = 0;
+    };
+
+    struct FoliageVolumeData
+    {
+        XMFLOAT3 halfExtents = {50.0f, 50.0f, 50.0f};
+        int seed = 0;
+        float densityScale = 1.0f;
+        float minSlopeAngle = 0.0f;
+        float maxSlopeAngle = 45.0f;
+        float minAltitude = -1000.0f;
+        float maxAltitude = 1000.0f;
+        bool alignToSurface = true;
+        bool castShadows = true;
+        float cullDistance = 100.0f;
+        bool enabled = true;
+    };
+
     // ComponentType is defined in ../Enums/SceneSystemEnums.h to avoid ODR violations
 
     /**
