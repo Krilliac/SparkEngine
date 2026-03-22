@@ -751,7 +751,7 @@ namespace Spark::Cinematic
         std::ostringstream ss;
         ss << "=== Sequence: " << name << " ===\n";
         ss << "Duration: " << seq->GetDuration() << "s\n";
-        ss << "Current Time: " << seq->GetCurrentTime() << "s\n";
+        ss << "Current Time: " << seq->GetCurrentPlaybackTime() << "s\n";
         ss << "Speed: " << seq->GetPlaybackSpeed() << "x\n";
         ss << "Looping: " << (seq->IsLooping() ? "Yes" : "No") << "\n";
         ss << "Tracks: " << seq->GetTracks().size() << "\n";

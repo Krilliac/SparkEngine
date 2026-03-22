@@ -278,7 +278,7 @@ namespace Spark::Cinematic
 
         // State queries
         const std::string& GetName() const { return m_name; }
-        float GetCurrentTime() const { return m_currentTime; }
+        float GetCurrentPlaybackTime() const { return m_currentTime; }
         float GetDuration() const;
         SequencePlayState GetPlayState() const { return m_playState; }
         float GetPlaybackSpeed() const { return m_playbackSpeed; }

@@ -143,7 +143,7 @@ namespace Spark::Animation
      * @brief Get the current playback time within the active clip (seconds).
      * @return  Elapsed time within the current clip.
      */
-        float GetCurrentTime() const { return m_currentTime; }
+        float GetCurrentPlaybackTime() const { return m_currentTime; }
 
         /**
      * @brief Get the crossfade blend factor in [0, 1] during a transition.

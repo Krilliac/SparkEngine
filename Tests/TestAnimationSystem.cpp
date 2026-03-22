@@ -350,7 +350,7 @@ namespace TestAnim
         }
 
         const std::string& GetCurrentStateName() const { return m_currentState; }
-        float GetCurrentTime() const { return m_currentTime; }
+        float GetCurrentPlaybackTime() const { return m_currentTime; }
         float GetBlendFactor() const { return m_blendFactor; }
         bool IsTransitioning() const { return m_isTransitioning; }
         const std::string& GetTargetStateName() const { return m_targetState; }
