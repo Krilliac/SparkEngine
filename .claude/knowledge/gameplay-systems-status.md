@@ -7,7 +7,7 @@
 
 ## Description
 
-Comprehensive audit of all gameplay/engine systems. 29 systems are fully operational. 10 TrinityCore-inspired systems were added and wired in 2026-03-18. Tests added for all 9 new systems in this session.
+Comprehensive audit of all gameplay/engine systems. 29 systems are fully operational (Physics migrated from Bullet3 to Jolt Physics in 2026-03-22). 10 TrinityCore-inspired systems were added and wired in 2026-03-18. Tests added for all 9 new systems.
 
 ---
 
@@ -18,7 +18,7 @@ Comprehensive audit of all gameplay/engine systems. 29 systems are fully operati
 | System | Status | Key Files |
 |--------|--------|-----------|
 | ECS (EnTT) | Fully wired | 2 cpp, 20 h |
-| Physics (Bullet 3) | Fully wired | PhysicsSystem.cpp (1,753 lines) |
+| Physics (Jolt) | Fully wired | PhysicsSystem.cpp + PhysicsSystemQueries.cpp + PhysicsShapeFactory.cpp |
 | AI | Fully wired | AISystem, NavMesh, BehaviorTree |
 | Animation | Fully wired via ECS | AnimationSystem.cpp (1,375 lines) |
 | Audio (XAudio2) | Fully wired | AudioEngine.cpp |

@@ -1,203 +1,64 @@
 # Persistence Context — Index
 
-_Read this at every session start (after git sync). Each row links to a detailed knowledge file. If a topic matches your current task or domain, read the full file before proceeding._
+_Read this at every session start (after git sync). Each row links to a detailed knowledge file._
 
 ## Knowledge Index
 
 | Topic | File | Type | Status | Last Updated |
 |-------|------|------|--------|--------------|
-| TrinityCore architecture analysis | [knowledge/trinitycore-analysis.md](knowledge/trinitycore-analysis.md) | Decision | **Resolved** | 2026-03-18 |
-| CryEngine feature analysis (16 systems adopted) | [knowledge/cryengine-analysis.md](knowledge/cryengine-analysis.md) | Decision | **Resolved** | 2026-03-19 |
-| Five-engine analysis (Cocos/Defold/Panda3D/S&box/Halley — 20 recommendations) | [knowledge/five-engine-analysis.md](knowledge/five-engine-analysis.md) | Decision | Active | 2026-03-19 |
-| PCSX2 analysis (12 recommendations: save tags, null RHI, render ring, multi-ISA) | [knowledge/pcsx2-analysis.md](knowledge/pcsx2-analysis.md) | Decision | **Resolved** | 2026-03-20 |
-| 11-engine + 3-framework analysis (30 recommendations, ~20 engines total) | [knowledge/eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) | Decision | Active | 2026-03-20 |
-| 13 closed/proprietary engine analysis (15 recommendations, Blizzard/Havok/Frostbite/RAGE/id Tech/etc.) | [knowledge/closed-engines-analysis.md](knowledge/closed-engines-analysis.md) | Decision | Active | 2026-03-21 |
-| ThorVG + Unity Graphics + 33 libraries analysis (35 recommendations: volumes, bloom, MSDF fonts, meshoptimizer) | [knowledge/thorvg-unity-graphics-analysis.md](knowledge/thorvg-unity-graphics-analysis.md) | Decision | Active | 2026-03-22 |
-| Jolt Physics integration (Bullet3 → Jolt, 7 commits, ~6500 lines) | [knowledge/jolt-physics-integration.md](knowledge/jolt-physics-integration.md) | Observation | Active | 2026-03-22 |
-| CI log access without gh CLI | [knowledge/ci-log-access.md](knowledge/ci-log-access.md) | Issue | **Resolved** | 2026-03-22 |
+| Five-engine analysis (Cocos/Defold/Panda3D/S&box/Halley) | [knowledge/five-engine-analysis.md](knowledge/five-engine-analysis.md) | Decision | Active | 2026-03-19 |
+| 11-engine + 3-framework analysis (30 recommendations) | [knowledge/eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) | Decision | Active | 2026-03-20 |
+| 13 closed/proprietary engine analysis (15 recommendations) | [knowledge/closed-engines-analysis.md](knowledge/closed-engines-analysis.md) | Decision | **Resolved** | 2026-03-21 |
+| ThorVG + Unity Graphics + 33 libraries analysis | [knowledge/thorvg-unity-graphics-analysis.md](knowledge/thorvg-unity-graphics-analysis.md) | Decision | Active | 2026-03-22 |
+| Engine next steps: 5-phase roadmap (Phases 1-4 complete) | [knowledge/engine-next-steps-2026-03-22.md](knowledge/engine-next-steps-2026-03-22.md) | Decision | Mostly Resolved | 2026-03-22 |
+| Jolt Physics integration (migrated from Bullet3) | [knowledge/jolt-physics-integration.md](knowledge/jolt-physics-integration.md) | Observation | Active | 2026-03-22 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
-| SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
 | Codebase non-obvious facts | [knowledge/codebase-observations.md](knowledge/codebase-observations.md) | Observation | Active | 2026-03-14 |
 | Build and CI workflow speedups | [knowledge/build-optimizations.md](knowledge/build-optimizations.md) | Optimization | Active | 2026-03-14 |
 | AI bloat pattern and countermeasures | [knowledge/ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md) | Observation | Active | 2026-03-14 |
-| Comprehensive bloat audit (P0 resolved) | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-18 |
-| 30 orphaned headers (27 deleted, 3 intentional) | [knowledge/orphaned-headers-audit.md](knowledge/orphaned-headers-audit.md) | Observation | **Resolved** | 2026-03-16 |
-| Duplicate systems (3/3 ODR risks fixed) | [knowledge/duplicate-systems-audit.md](knowledge/duplicate-systems-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
-| 97 tests (12 new: 9 TrinityCore + ConsoleRBAC + NetworkIntegration) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-19 |
-| CMake build (curl removed, dead options gone) | [knowledge/cmake-build-audit.md](knowledge/cmake-build-audit.md) | Observation | **Mostly Resolved** | 2026-03-17 |
-| 27 singletons (0 orphaned, 22 wired, 5 passive caches) | [knowledge/globals-singletons-audit.md](knowledge/globals-singletons-audit.md) | Observation | **Resolved** | 2026-03-18 |
+| Comprehensive bloat audit | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-18 |
+| 145 tests (suite audit) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-19 |
 | 66 oversized functions, 7 private-method violations | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
-| MEMORY/ERRORS: 3 low-risk items remain | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Mostly Resolved | 2026-03-16 |
-| Rendering: 17 working, 12 header-only stubs (~15K dead lines) | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | Active | 2026-03-16 |
-| Engine: 29 working (10 TrinityCore new), 0 orphaned | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-18 |
-| Editor: 24 working, all panels resolved | [knowledge/editor-functionality-status.md](knowledge/editor-functionality-status.md) | Observation | **Resolved** | 2026-03-16 |
-| SparkGame: 75% functional FPS, no AI enemies | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-16 |
-| SDK v2: 10 headers, 26 getters, math/input/event/logger types | [knowledge/sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md) | Observation | **Resolved** | 2026-03-21 |
-| Docs: 58 wiki pages, 245/246 Doxygen, 5 critical gaps remaining | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-19 |
-| ThirdParty: 6 uninitialized submodules, curl removed | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-17 |
-| Engine next steps: 5-phase roadmap (wire-in → infrastructure → graphics → gameplay → polish) | [knowledge/engine-next-steps-2026-03-22.md](knowledge/engine-next-steps-2026-03-22.md) | Decision | Active | 2026-03-22 |
+| Memory/error handling (3 low-risk items) | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Mostly Resolved | 2026-03-16 |
+| Rendering pipeline (all 12 stubs now implemented) | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | **Resolved** | 2026-03-22 |
+| Engine systems (29+ working, all wired) | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-22 |
+| SparkGame module (AI enemies now wired) | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-22 |
+| Documentation coverage (58 wiki pages, 99.6% Doxygen) | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-19 |
+| ThirdParty dependencies | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-17 |
 
-## Quick Reference by Topic
+## Quick Reference
 
-### Fixing problems (Issues)
+### Current Engine State (2026-03-22)
 
-**Checking PR / CI status** → Use `gh run list` + `gh run view`, NOT `gh pr checks --watch`. If `gh` unavailable, ask user for error text or reproduce locally with submodules. See [ci-log-access.md](knowledge/ci-log-access.md).
+- **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
+- **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
+- **Tests**: 145 test files, 1235+ tests passing
+- **Editor**: 32 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer
+- **Rendering**: All 12 former stubs now have .cpp implementations (ShadowAtlas, ScreenSpaceEffects, GPUOcclusionCulling, FroxelVolumetricFog, DynamicQualityScaler, DDGIProbeSystem, AdaptiveProbeVolumes, LightProbeSystem, SkyAtmosphere, WaterRenderer, ClusteredLightCulling, DynamicQualityTypes)
+- **Post-processing**: Bloom, auto-exposure, tonemapping (ACES/Filmic/Neutral/Reinhard), color grading (LGG)
+- **Infrastructure**: JobSystem wired, DeferredDeletionQueue in RHI, collision layer filtering, EntityEventBus cleanup, archetype spawn overrides
+- **Gameplay**: TimeOfDaySystem, AI enemies in SparkGame, WeatherSystem integration
 
-**CI check failed** → Identify blocking vs. non-blocking jobs first. See CLAUDE.md CI jobs table.
+### Before Writing Code
 
-**Rebase conflict** → `<!-- AUTO:* -->` and `docs/api/` always take upstream.
+1. Check file size — if over 500 lines (.cpp) or 300 lines (.h), consider splitting
+2. Search for existing implementations before adding new ones
+3. Use `EngineContext` service locator, not deprecated globals
+4. Run `clang-format -i` on modified files before committing
 
-**clang-format failure** → Match CI's Metal exclusion; don't use `head -50` shortcut.
+### CI Quick Reference
 
-**CMake configure/build fails on Linux** → Check submodules, apt packages, cache conflicts.
+- `gh run list` + `gh run view <ID> --log-failed` for CI failures
+- Metal files excluded from clang-format checks
+- `build-windows-vs2026` and `clang-tidy` are `continue-on-error` (not blockers)
 
-**Windows CI fails but Linux passes** → MSVC `/W4` warnings. See CLAUDE.md CI section.
+### Phase 5 Remaining Work
 
-**MOSTLY RESOLVED: Memory/error handling** → 3 low-risk items remain open. See [memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md).
-
-### Doing things well (Patterns & Optimizations)
-
-**RESOLVED: SparkConsole** → Refactored from ~7,000 to 551 lines. Now a clean log sink + command registry.
-
-**RESOLVED: EventBus ODR** → EventSystem.h now delegates to Utils/EventBus.h. Single canonical implementation.
-
-**RESOLVED: SDK v2 (2026-03-21)** → Extended from 6→10 headers, 19→26 subsystem getters. Added ILogger, MathTypes, InputTypes, EventTypes. IModule gained OnFixedUpdate/OnPause/OnResume/OnImGui. SDK ABI version bumped to 2. String ownership documented. EngineContext.h updated with matching getters/setters.
-
-**RESOLVED: curl dependency** → Removed from .gitmodules and CMakeLists.txt.
-
-**RESOLVED: 9 TrinityCore systems now have tests (2026-03-18):**
-- TestAbilitySystem, TestConditionSystem, TestInstanceManager, TestMovementSystem
-- TestSpatialGrid, TestReplicationFields, TestAsyncDatabase, TestScriptHookManager, TestModuleHotReload
-- All 9 added to Tests/CMakeLists.txt (94 total test files)
-
-**Full gap analysis completed and P1 items resolved (2026-03-18):**
-- See `docs/gap-analysis/COMPREHENSIVE_GAP_ANALYSIS_2026-03-18.md`
-- Covers all 18 subsystem categories with DONE/PARTIAL/STUB/MISSING/ORPHANED status
-- P1 items completed: PlatformInputManager deleted, WeaponSystem wired, CoroutineScheduler wired, MusicManager wired, Camera + Persistence wiki pages created, ConsoleRBAC tested
-- P2 items completed: Threading wiki page, SparkEditor.md expanded (32 panels), network integration tests (30 tests), API docs generated
-- Key remaining gaps: terrain rendering, audio tests, connection timeout detection
-
-**Active: 30 recommendations from 11-engine + 3-framework analysis (2026-03-20):**
-- Godot, O3DE, Wicked, Flax, Bevy, Stride, Torque3D, Ogre-Next, The Forge, Filament, bgfx
-- Top 10 HIGH: job system, frame-delayed destruction, collision layers, per-connection scoping, handle-based resources, texture streaming, transient buffers, prefab system, SH-based IBL, parallel culling
-- Top 10 MEDIUM: clustered forward lighting, tween system, datablock registry, per-entity EventBus, feature processors, material format, DrawIndirect, ResourceManager, VFS, CVars
-- Strongest cross-engine signals: job system (5 engines), prefabs (4), handle resources (4), asset pipeline (4)
-- See [eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) for full prioritized list
-
-**RESOLVED: 15 recommendations from 13 closed/proprietary engines (2026-03-21):**
-- All 15 recommendations implemented across 5 phases:
-- Phase 1 (wired dead code): FixedTimestepAccumulator→main loop, ClusteredLightCulling→ECS lights, RenderGraph/RenderPipeline→GraphicsEngine
-- Phase 2 (infrastructure): ParallelSystemExecutor (stage-based ECS), SeamlessAreaManager (predictive streaming), ConnectionScopeFilter, physics debug heatmaps
-- Phase 3 (data-driven): WeatherGameplayIntegration (physics wind/AI perception/audio), MaterialLoader (.sparkmat), EntityArchetypeLoader (.archetype + spawn API)
-- Phase 4 (networking): DeltaSnapshotManager+InstabilitySimulator wired into NetworkManager, SubTickInput (sub-tick precision)
-- Phase 5 (advanced): ClipmapTerrain (multi-level LOD), VirtualTextureManager (page cache + LRU eviction)
-- 16 new files, 3,480 lines added. All compiled, tested, formatted.
-- See [closed-engines-analysis.md](knowledge/closed-engines-analysis.md) for original analysis
-
-**Active: 35 recommendations from ThorVG + Unity Graphics + 33 libraries (2026-03-22):**
-- Sources: ThorVG (vector graphics), Unity SRP/HDRP (render pipeline), awesome-graphics-libraries (33+ libraries)
-- Top 12 HIGH: volume system, bloom, auto-exposure, tonemapping, color grading, meshoptimizer, Basis Universal, MSDF fonts, cached shadows, UI dirty tracking, shader variant keywords, FastNoiseLite HLSL
-- Top 13 MEDIUM: PCSS, light layers, 2D scene graph, UI compositor, persistent GPU CBs, GPU occlusion, OIDN denoiser, tinyexr, ShaderConductor, RTHandle scaling, SSAO temporal, bilateral upsample, reflection probe cache
-- Top 10 LOW/FUTURE: VCT GI, DDGI, froxel volumetric fog, APV, Jolt Physics, ThorVG/Lottie, GTAO, FastNoise2, Slang, Nanite-like clusters
-- Quick wins (days): FastNoiseLite HLSL, tinyexr, tonemapping, SSAO temporal, bilateral upsample, light layers
-- See [thorvg-unity-graphics-analysis.md](knowledge/thorvg-unity-graphics-analysis.md) for full prioritized list
-
-**Active: 20 recommendations from 5-engine analysis (2026-03-19):**
-- Cocos Engine, Defold, Panda3D, S&box, Halley
-- Top 5 quick wins: DrawMask visibility, FixedUpdate accumulator, network instability simulator, interpolation buffer, plugin registration macros
-- Top networking: delta snapshots, interpolation buffer, instability simulator, FROM/INTO collision masks
-- Top rendering: clustered light culling, light probes + SH, RHI validation layer, age-based resource pooling
-- See [five-engine-analysis.md](knowledge/five-engine-analysis.md) for full prioritized list
-
-**RESOLVED: 12 PCSX2-inspired recommendations (2026-03-20):**
-- 5 HIGH: save tag validation, null RHI backend, render thread command ring, multi-ISA dispatch, per-subsystem freeze
-- 5 MEDIUM: CB content diff, dirty rect tracking, lock-free ring allocator, scene config DB, GPU perf counters
-- 2 LOW: WorkSema spin-before-sleep, aligned heap arrays
-- 10 PCSX2 features already covered by SparkEngine (PSO cache, texture pool, descriptor heap, etc.)
-- See [pcsx2-analysis.md](knowledge/pcsx2-analysis.md) for full details
-
-**RESOLVED: 16 CryEngine-inspired systems (2026-03-19):**
-- TerrainRenderer, TacticalPointSystem, CoverSystem, MaterialEffectSystem (HIGH)
-- FormationSystem, GroupAISystem, CollisionAvoidanceSystem, DynamicResponseSystem, EntityArchetypeSystem, ProximityTriggerSystem (MEDIUM)
-- SkyAtmosphereSystem, WaterRenderer, OcclusionCullingSystem, PoseModifierStack, AnimCompression, BlendSpace2D (LOW)
-- All wired into SparkEngine.cpp Init/Update/Shutdown paths with tests
-
-**RESOLVED: 10 TrinityCore-inspired systems (2026-03-18):**
-- AbilitySystem (spells/auras/procs), SpatialGrid (cell partitioning), AsyncDatabase (persistence)
-- ReplicationFields + EntityReplicator (dirty tracking), ScriptHookManager (28 hook types)
-- MovementSystem (priority generator stack), ConditionSystem (universal conditions)
-- InstanceManager (encounters/lockouts), ConsoleRBAC (permission levels), ModuleHotReload (DLL watcher)
-- All wired into SparkEngine.cpp Init/Update/Shutdown paths. AbilitySystem.cpp split into 2 files.
-
-**RESOLVED: 12 major file splits (2026-03-18):**
-- GraphicsEngine.cpp (4,949 → 5 files), MaterialSystem.cpp (4,283 → 3 files)
-- EditorUI.cpp (2,691 → 3 files), AssetPipeline.cpp (2,557 → 3 files)
-- Shader.cpp (2,344 → 2 files), LightingSystem.cpp (2,239 → 2 files)
-- PhysicsSystem.cpp (2,029 → 2 files), InspectorPanel.cpp (2,373 → 2 files)
-- VulkanDevice.cpp (2,327 → 3 files), D3D12Device.cpp (1,893 → 2 files)
-- AdvancedAssetPipeline.cpp (2,324 → 3 files), Game.cpp (2,042 → 2 files)
-- LightingTools.cpp (1,963 → 2 files)
-- Pattern: extract Console_* methods + class implementations + private helpers into separate TUs
-- **No files over 2,000 lines remain.** Largest: Shader.cpp (1,922).
-
-**Active: 66 functions exceed 50-line limit** → See [code-quality-violations.md](knowledge/code-quality-violations.md).
-
-**BEFORE writing any code** → Check file size. If over 500 lines (.cpp) or 300 lines (.h), consider splitting. See [ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md).
-
-**BEFORE adding a new method/class** → Search for existing one. See [workflow-patterns.md](knowledge/workflow-patterns.md).
-
-### Working faster (Optimizations)
-
-**Slow cmake build** → Add `--parallel $(nproc)`. See [build-optimizations.md](knowledge/build-optimizations.md).
-
-**CI failure log is huge** → Use `gh run view <RUN_ID> --log-failed` for just the failures.
-
-**About to rebase** → Check `git log --oneline HEAD..origin/Working | wc -l` first.
-
-### Understanding the codebase (Observations)
-
-**Networking/graphics don't compile** → Likely disabled by CMake toggles. See [codebase-observations.md](knowledge/codebase-observations.md).
-
-**Using legacy globals like `g_graphics`** → Deprecated; use `EngineContext`. See [codebase-observations.md](knowledge/codebase-observations.md).
-
-### Functional audit — what works vs scaffolding
-
-**All 9 core subsystems are FUNCTIONAL** (confirmed 2026-03-22): Graphics (D3D11), Physics (Jolt Physics — migrated from Bullet3), Audio (XAudio2), ECS (EnTT), Input, Scene Management, AI (behavior trees + NavMesh), Animation (skeletal + IK), Main Game Loop.
-
-**Rendering pipeline**: 17 working, 12 header-only stubs (~15K dead lines). See [rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md).
-
-**Engine systems**: 29 working (10 TrinityCore new), all tested. See [gameplay-systems-status.md](knowledge/gameplay-systems-status.md).
-
-**Editor**: 24 working panels, all resolved. See [editor-functionality-status.md](knowledge/editor-functionality-status.md).
-
-**SparkGame**: 75% functional FPS. See [sparkgame-module-status.md](knowledge/sparkgame-module-status.md).
-
-**SDK/API**: unique_ptr fixed, ECS exposed. See [sdk-api-surface-audit.md](knowledge/sdk-api-surface-audit.md).
-
-**Documentation**: 53 wiki pages, 99.6% Doxygen coverage. See [documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md).
-
-**Third-party deps**: 5 uninitialized submodules (curl removed). See [thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md).
-
-## Resolved Issues (cleaned up 2026-03-17)
-
-_These issues were fully resolved. Key learnings are preserved inline above._
-
-- **Security vulnerabilities** (9/9 fixed) — DLL injection, command injection, path traversal, deserialization all patched
-- **Thread safety** — 11 atomic conversions, EventBus m_nextId atomic, recursion guard, lock ordering documented
-- **ConsoleProcessManager** — Wired into all startup paths
-- **Editor panel bloat** — 4 panels restored, 9 deleted, all duplicate pairs resolved
-- **Feature restoration** — 5 wrongly deleted features restored
-- **SparkConsole refactor** — From ~7,000 to 551 lines
-- **EventBus ODR violation** — EventSystem.h now delegates to canonical EventBus.h
-- **SDK unique_ptr DLL export** — Changed to raw pointer, ABI crash risk eliminated
-- **ECS not in SDK** — GetWorld() added to IEngineContext
-- **curl dead dependency** — Removed from .gitmodules and CMakeLists.txt
-- **Dead CMake options** — ENABLE_LUA, ENABLE_PHYSX and 6 unused flags removed
-- **12 major file splits** — No files over 2,000 lines remain (was 4,949)
-- **Startup path analysis** — 3 platform entry points (WinMain/headless/SDL2) verified correct, not duplicate
-- **Orphaned system triage** — DecalSystem wired; DXRManager partially gated; NavMesh/AnimationSystem/Sequencer need deeper integration
-- **GitHub API/PR checks**, **CI failures**, **rebase conflicts**, **clang-format**, **CMake Linux builds**, **MSVC /W4 warnings** — all resolved
+- Refactor 66 oversized functions (see code-quality-violations.md)
+- Fix duplicate functions in MaterialSystem.cpp
+- Add AudioEngine and SceneManager test suites
+- Documentation specs (networking wire format, asset format, plugin ABI)
 
 ---
 
-_To add a new entry: create a file in `knowledge/`, add a row to the table above, add a quick-reference line if relevant, then commit both files. See `.claude/README.md` for entry format._
+_To add a new entry: create a file in `knowledge/`, add a row to the table above, then commit both._
