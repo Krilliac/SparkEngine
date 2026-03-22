@@ -153,7 +153,11 @@ class Texture
     ID3D11RenderTargetView* GetRTV() const { return m_rtv.Get(); }
     ID3D11DepthStencilView* GetDSV() const { return m_dsv.Get(); }
     ID3D11UnorderedAccessView* GetUAV() const { return m_uav.Get(); }
-    ID3D11Resource* GetResource() const { return m_resource.Get(); }
+#ifdef SPARK_PLATFORM_WINDOWS
+    ID3D11Resource* GetResource() const { return m_texture.Get(); }
+#else
+    ID3D11Resource* GetResource() const { return reinterpret_cast<ID3D11Resource*>(m_texture.Get()); }
+#endif
 
     // Status
     bool IsLoaded() const { return m_loaded; }
@@ -174,7 +178,7 @@ class Texture
   private:
     std::string m_name;
     TextureDesc m_desc;
-    ComPtr<ID3D11Resource> m_resource;
+    ComPtr<ID3D11Texture2D> m_texture;
     ComPtr<ID3D11ShaderResourceView> m_srv;
     ComPtr<ID3D11RenderTargetView> m_rtv;
     ComPtr<ID3D11DepthStencilView> m_dsv;
