@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <thread>
 
 JPH_SUPPRESS_WARNINGS
 
@@ -289,11 +290,17 @@ HRESULT PhysicsSystem::Initialize()
     JPH::Factory::sInstance = new JPH::Factory();
     JPH::RegisterTypes();
 
-    // Create temp allocator (10 MB)
-    m_tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(10 * 1024 * 1024);
+    // Create temp allocator (16 MB — enough for complex scenes with many contacts)
+    m_tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(16 * 1024 * 1024);
 
-    // Create job system (use single-threaded for simplicity, matches Bullet's single-thread model)
-    m_jobSystem = std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 0);
+    // Create multi-threaded job system — use all available cores minus one (for game thread)
+    // Jolt scales nearly linearly: 4.9x speedup at 8 threads, 5.7x at 16 (with SMT)
+    int numThreads = static_cast<int>(std::thread::hardware_concurrency()) - 1;
+    if (numThreads < 1)
+        numThreads = 0; // 0 = run on calling thread only
+    m_jobSystem =
+        std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, numThreads);
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Jolt job system: {} worker threads", numThreads);
 
     // Create broadphase layer interface and filters
     m_broadPhaseLayerInterface = std::make_unique<SparkBPLayerInterface>();

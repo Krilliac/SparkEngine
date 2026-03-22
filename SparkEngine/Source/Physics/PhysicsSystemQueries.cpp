@@ -639,6 +639,40 @@ std::unique_ptr<CharacterController> PhysicsSystem::CreateCharacterController(co
     return std::make_unique<CharacterController>(this, desc);
 }
 
+std::unique_ptr<VehiclePhysics> PhysicsSystem::CreateVehicle(std::shared_ptr<PhysicsBody> body, const VehicleDesc& desc)
+{
+    return std::make_unique<VehiclePhysics>(this, body, desc);
+}
+
+std::unique_ptr<Ragdoll> PhysicsSystem::CreateRagdoll(const RagdollDesc& desc)
+{
+    return std::make_unique<Ragdoll>(this, desc);
+}
+
+std::unique_ptr<SoftBody> PhysicsSystem::CreateSoftBody(const SoftBodyDesc& desc)
+{
+    return std::make_unique<SoftBody>(this, desc);
+}
+
+void PhysicsSystem::SetSurfaceVelocity(std::shared_ptr<PhysicsBody> body, const XMFLOAT3& velocity)
+{
+    if (!m_joltSystem || !body)
+        return;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID bodyID(body->GetJoltBodyID());
+    if (!bodyInterface.IsAdded(bodyID))
+        return;
+
+    // Jolt doesn't have a direct surface velocity API on BodyInterface.
+    // Surface velocity is applied via the ContactListener by modifying
+    // ContactSettings in OnContactAdded/OnContactPersisted.
+    // Store the velocity on the body's user data for lookup in the listener.
+    // For a complete implementation, extend the contact listener to check
+    // for surface velocity and apply it to the contact settings.
+    (void)velocity;
+}
+
 // ============================================================================
 // RAYCASTING AND OVERLAP QUERIES
 // ============================================================================

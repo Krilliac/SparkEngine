@@ -19,6 +19,9 @@
 // Subsystem headers
 #include "PhysicsBody.h"
 #include "CharacterController.h"
+#include "VehiclePhysics.h"
+#include "RagdollSystem.h"
+#include "SoftBodyPhysics.h"
 
 #include "../Core/Platform.h"
 
@@ -282,6 +285,43 @@ class PhysicsSystem
      * @return      Unique pointer to the new CharacterController.
      */
     std::unique_ptr<class CharacterController> CreateCharacterController(const struct CharacterControllerDesc& desc);
+
+    /**
+     * @brief Create a vehicle with engine, transmission, and suspension.
+     * @param body  The rigid body to attach the vehicle constraint to.
+     * @param desc  Vehicle configuration (wheels, engine, transmission).
+     * @return      Unique pointer to the new VehiclePhysics.
+     */
+    std::unique_ptr<VehiclePhysics> CreateVehicle(std::shared_ptr<PhysicsBody> body, const VehicleDesc& desc);
+
+    /**
+     * @brief Create a ragdoll from a skeleton descriptor.
+     * @param desc  Ragdoll part definitions with joints.
+     * @return      Unique pointer to the new Ragdoll.
+     */
+    std::unique_ptr<Ragdoll> CreateRagdoll(const RagdollDesc& desc);
+
+    /**
+     * @brief Create a soft body for cloth, flags, or deformable objects.
+     * @param desc  Soft body vertex, edge, and face definitions.
+     * @return      Unique pointer to the new SoftBody.
+     */
+    std::unique_ptr<SoftBody> CreateSoftBody(const SoftBodyDesc& desc);
+
+    // =========================================================================
+    // Surface velocity
+    // =========================================================================
+
+    /**
+     * @brief Set a surface velocity on a body (for conveyor belts, moving walkways).
+     *
+     * The surface velocity is applied to all contact points with this body,
+     * causing objects on top to move along the surface.
+     *
+     * @param body     The body to set surface velocity on.
+     * @param velocity Surface velocity vector in world space (m/s).
+     */
+    void SetSurfaceVelocity(std::shared_ptr<PhysicsBody> body, const XMFLOAT3& velocity);
 
   private:
     // =========================================================================

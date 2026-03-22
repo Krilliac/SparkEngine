@@ -554,6 +554,141 @@ struct PhysicsBodyDesc
     float maxAngularVelocity = 47.12389f;
 };
 
+// =============================================================================
+// Motor and spring settings
+// =============================================================================
+
+/**
+ * @brief Motor state for constraint motors.
+ */
+enum class MotorState
+{
+    Off,      ///< Motor disabled
+    Velocity, ///< Motor drives to target velocity
+    Position  ///< Motor drives to target position (servo)
+};
+
+/**
+ * @brief Spring configuration for constraints with spring behavior.
+ *
+ * Springs can be configured with either frequency+damping (intuitive) or
+ * stiffness+damping (precise control). Frequency mode: frequency in Hz,
+ * damping ratio 0-1 (1 = critically damped). Stiffness mode: N/m or N*m.
+ */
+struct PhysicsSpringSettings
+{
+    bool useFrequencyMode = true; ///< true = frequency+damping, false = stiffness+damping
+    float frequency = 1.0f;       ///< Spring frequency in Hz (frequency mode)
+    float damping = 0.5f;         ///< Damping ratio [0-1] (frequency) or absolute damping (stiffness mode)
+    float stiffness = 100.0f;     ///< Spring stiffness N/m (stiffness mode only)
+};
+
+/**
+ * @brief Motor configuration for motorized constraints.
+ */
+struct PhysicsMotorSettings
+{
+    PhysicsSpringSettings spring;  ///< Spring settings for the motor
+    float minForceLimit = -1e10f;  ///< Minimum force the motor can apply (N)
+    float maxForceLimit = 1e10f;   ///< Maximum force the motor can apply (N)
+    float minTorqueLimit = -1e10f; ///< Minimum torque the motor can apply (N*m)
+    float maxTorqueLimit = 1e10f;  ///< Maximum torque the motor can apply (N*m)
+};
+
+// =============================================================================
+// Vehicle types
+// =============================================================================
+
+/**
+ * @brief Vehicle type enumeration.
+ */
+enum class PhysicsVehicleType
+{
+    Wheeled,   ///< Standard wheeled vehicle (car, truck)
+    Tracked,   ///< Tracked vehicle (tank, bulldozer)
+    Motorcycle ///< Two-wheeled motorcycle with lean stabilization
+};
+
+/**
+ * @brief Wheel configuration for vehicle physics.
+ */
+struct VehicleWheelDesc
+{
+    XMFLOAT3 position = {0, 0, 0};       ///< Wheel attachment position relative to vehicle body
+    XMFLOAT3 suspensionDir = {0, -1, 0}; ///< Suspension direction (typically down)
+    XMFLOAT3 steeringAxis = {0, 1, 0};   ///< Axis around which the wheel steers
+    XMFLOAT3 wheelForward = {0, 0, 1};   ///< Forward direction of the wheel
+    XMFLOAT3 wheelUp = {0, 1, 0};        ///< Up direction of the wheel
+    float radius = 0.3f;                 ///< Wheel radius (metres)
+    float width = 0.1f;                  ///< Wheel width (metres)
+    float suspensionMinLength = 0.3f;    ///< Minimum suspension spring length
+    float suspensionMaxLength = 0.5f;    ///< Maximum suspension spring length
+    float suspensionFrequency = 1.5f;    ///< Suspension spring frequency (Hz)
+    float suspensionDamping = 0.5f;      ///< Suspension damping ratio [0-1]
+    float maxSteerAngle = 0.0f;          ///< Maximum steering angle (radians, 0 = non-steering)
+    float maxBrakeTorque = 1500.0f;      ///< Maximum braking torque (N*m)
+    float maxHandBrakeTorque = 4000.0f;  ///< Handbrake torque (N*m)
+    float lateralFriction = 1.0f;        ///< Lateral (side) friction multiplier
+    float longitudinalFriction = 1.0f;   ///< Longitudinal (forward/backward) friction multiplier
+};
+
+/**
+ * @brief Vehicle configuration descriptor.
+ */
+struct VehicleDesc
+{
+    PhysicsVehicleType type = PhysicsVehicleType::Wheeled;
+    std::vector<VehicleWheelDesc> wheels;
+
+    // Engine
+    float maxEngineTorque = 500.0f; ///< Maximum engine torque (N*m)
+    float minRPM = 1000.0f;         ///< Engine idle RPM
+    float maxRPM = 6000.0f;         ///< Engine redline RPM
+
+    // Transmission
+    std::vector<float> gearRatios = {2.66f, 1.78f, 1.30f, 1.0f, 0.74f}; ///< Forward gear ratios
+    float reverseGearRatio = -2.90f;                                    ///< Reverse gear ratio
+    float clutchStrength = 10.0f;                                       ///< Clutch strength
+
+    // Differentials
+    float differentialRatio = 3.42f; ///< Final drive ratio
+
+    // Anti-roll bars
+    float antiRollBarStiffness = 1000.0f; ///< Anti-roll bar stiffness (N/m, 0 = disabled)
+
+    // Motorcycle-specific
+    float leanSpringConstant = 5000.0f; ///< Lean stabilization spring (motorcycle only)
+    float leanSpringDamping = 1000.0f;  ///< Lean stabilization damping (motorcycle only)
+};
+
+// =============================================================================
+// Ragdoll types
+// =============================================================================
+
+/**
+ * @brief Ragdoll limb/part descriptor.
+ */
+struct RagdollPartDesc
+{
+    std::string name;                                          ///< Bone/joint name (e.g., "LeftUpperArm")
+    int parentIndex = -1;                                      ///< Index of parent part (-1 = root)
+    PhysicsBodyDesc bodyDesc;                                  ///< Body configuration for this limb
+    ConstraintType constraintType = ConstraintType::ConeTwist; ///< Joint type connecting to parent
+    XMFLOAT3 constraintPivot = {0, 0, 0};                      ///< Joint pivot in parent's local space
+    XMFLOAT3 constraintAxis = {0, 1, 0};                       ///< Primary joint axis
+    float swingLimit1 = 0.5f;                                  ///< Swing limit 1 (radians)
+    float swingLimit2 = 0.5f;                                  ///< Swing limit 2 (radians)
+    float twistLimit = 0.3f;                                   ///< Twist limit (radians)
+};
+
+/**
+ * @brief Ragdoll descriptor — a collection of connected parts.
+ */
+struct RagdollDesc
+{
+    std::vector<RagdollPartDesc> parts;
+};
+
 /**
  * @brief Raycast hit information
  */
