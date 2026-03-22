@@ -52,6 +52,7 @@
 #include "../Panels/GameModuleSelectorPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
+#include "EditorIcons.h"
 #include <imgui.h>
 
 namespace SparkEditor
