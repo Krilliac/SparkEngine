@@ -143,10 +143,10 @@ SparkEngine/Source/Engine/Loading/       — Loading screens and management
 SparkEngine/Source/Engine/Localization/  — Localization system
 SparkEngine/Source/Engine/Mobile/        — Mobile platform support
 SparkEngine/Source/Engine/Modding/       — Game modding support
-SparkEngine/Source/Engine/Procedural/    — Procedural generation, noise, splines
+SparkEngine/Source/Engine/Procedural/    — (planned) Procedural generation — ENABLE_PROCEDURAL toggle exists but no implementation yet
 SparkEngine/Source/Engine/Replay/        — Record/playback system
 SparkEngine/Source/Engine/SaveSystem/    — Save/load persistence
-SparkEngine/Source/Engine/Stats/         — Performance telemetry
+SparkEngine/Source/Engine/Stats/         — (planned) Performance telemetry — not yet implemented
 SparkEngine/Source/Engine/UI/            — UI system
 SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking
 SparkEngine/Source/Utils/                — Console, Logger, Profiler, Assert
@@ -166,7 +166,7 @@ Physics → Animation → AI → Audio → Lifecycle → Render
 ## Thread safety rules
 
 - `SimpleConsole` — thread-safe (mutex)
-- `PhysicsSystem` — main thread only
+- `PhysicsSystem` — Jolt physics; supports multithreaded job dispatch
 - `GraphicsEngine` — main thread render, `std::atomic` frame state
 - `NetworkManager` — queue mutex for message I/O and handler registration
 
@@ -519,19 +519,20 @@ If you discover a system that is built but not wired in: **either wire it in imm
 
 These are confirmed bloat problems discovered during audit. They must be fixed before new features are added in the relevant areas.
 
-| File | Problem | Action Required |
-|------|---------|-----------------|
-| `SparkEngine/Source/Utils/SparkConsole.cpp` | 261KB — embedded console UI that's no longer used (cursor handling, ANSI colors, tab state, Win32 console) | Strip all local UI code; keep only Log(), severity helpers |
-| `SparkEngine/Source/Utils/SparkConsole.h` | 25+ `Register*()` methods scattered across subsystems | Consolidate into ≤3: Engine, Game, Debug |
-| `SparkEngine/Source/Utils/ConsoleProcessManager` | Built but never initialized; `ProcessCommands()` never called | Wire into startup and main loop |
-| `SparkEngine/Source/Core/SparkEngine.cpp` | `SimpleConsole::Initialize()` called 5 times in different code paths | Call it once, correctly |
+| File | Problem | Status |
+|------|---------|--------|
+| `SparkEngine/Source/Utils/SparkConsole.cpp` | Was 261KB with embedded console UI | **Resolved** — refactored to 551 lines |
+| `SparkEngine/Source/Utils/ConsoleProcessManager` | Was initialized multiple times | **Resolved** — consolidated to single `InitConsole()` call |
+| `SparkEngine/Source/Core/SparkEngine.cpp` | `SimpleConsole::Initialize()` called 3 times | **Resolved** — all paths now use `InitConsole()` |
+| `SparkEngine/Source/Physics/PhysicsBodyImpl.cpp` | Used `extern g_physicsSystem` global alias | **Resolved** — migrated to `EngineContext::Get()->GetPhysics()` |
+| RHI backends (D3D11/D3D12/Vulkan/OpenGL) | Factory methods returned raw `new` pointers | **Resolved** — migrated to `std::unique_ptr` returns |
 
 ## Things to know
 
 - Use `EngineContext` service locator, not deprecated `g_graphics`/`g_input` globals
 - Cross-platform types live in `Core/Platform.h` (DirectXMath stubs on Linux)
 - Networking is disabled in default builds (`ENABLE_NETWORKING=OFF`)
-- VR is implemented (`SparkEngine/Source/Engine/VR/`); DXR raytracing is optional (`ENABLE_DXR=OFF` by default); DLSS/FSR are not implemented
+- VR framework exists (`SparkEngine/Source/Engine/VR/`) — OpenXR-ready stub, wired into engine init/update loop. Requires OpenXR SDK for actual VR hardware. DXR raytracing is optional (`ENABLE_DXR=OFF` by default); DLSS/FSR are not implemented
 - `.clang-format` enforces Microsoft-based style (Allman braces, 120-col, 4-space indent)
 - `.clang-tidy` checks for bugprone, modernize, performance, and readability issues
 - Doxygen config lives in `docs/Doxyfile.txt`; wiki pages in `wiki/`

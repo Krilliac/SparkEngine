@@ -63,7 +63,7 @@ namespace Spark
 
           private:
             std::unordered_map<std::string, ShaderEntry> m_entries;
-            std::unordered_map<std::string, IRHIShader*> m_loadedShaders;
+            std::unordered_map<std::string, std::unique_ptr<IRHIShader>> m_loadedShaders;
         };
 
         // ============================================================================
@@ -114,7 +114,7 @@ namespace Spark
             IRHISwapChain* GetSwapChain() const { return m_swapChain.get(); }
             IRHICommandList* GetCommandList() const;
             IRHITexture* GetBackBuffer() const;
-            IRHITexture* GetDepthBuffer() const { return m_depthBuffer; }
+            IRHITexture* GetDepthBuffer() const { return m_depthBuffer.get(); }
             GraphicsBackend GetActiveBackend() const;
 
             // ========================================================================
@@ -124,43 +124,43 @@ namespace Spark
             /**
      * @brief Create a vertex buffer from data
      */
-            IRHIBuffer* CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride);
+            std::unique_ptr<IRHIBuffer> CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride);
 
             /**
      * @brief Create an index buffer from data
      */
-            IRHIBuffer* CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride = 4);
+            std::unique_ptr<IRHIBuffer> CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride = 4);
 
             /**
      * @brief Create a constant buffer
      */
-            IRHIBuffer* CreateConstantBuffer(uint64_t size);
+            std::unique_ptr<IRHIBuffer> CreateConstantBuffer(uint64_t size);
 
             /**
      * @brief Create a 2D texture with optional initial data
      */
-            IRHITexture* CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format, RHITextureUsage usage,
-                                         const void* data = nullptr);
+            std::unique_ptr<IRHITexture> CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format,
+                                                         RHITextureUsage usage, const void* data = nullptr);
 
             /**
      * @brief Create a depth buffer
      */
-            IRHITexture* CreateDepthBuffer(uint32_t width, uint32_t height,
-                                           PixelFormat format = PixelFormat::D24_UNORM_S8_UINT);
+            std::unique_ptr<IRHITexture> CreateDepthBuffer(uint32_t width, uint32_t height,
+                                                           PixelFormat format = PixelFormat::D24_UNORM_S8_UINT);
 
             /**
      * @brief Create a render target texture
      */
-            IRHITexture* CreateRenderTarget(uint32_t width, uint32_t height,
-                                            PixelFormat format = PixelFormat::R8G8B8A8_UNORM);
+            std::unique_ptr<IRHITexture> CreateRenderTarget(uint32_t width, uint32_t height,
+                                                            PixelFormat format = PixelFormat::R8G8B8A8_UNORM);
 
             /**
      * @brief Create a sampler state with common presets
      */
-            IRHISampler* CreateSamplerLinearWrap();
-            IRHISampler* CreateSamplerLinearClamp();
-            IRHISampler* CreateSamplerPointClamp();
-            IRHISampler* CreateSamplerAnisotropic(uint32_t maxAnisotropy = 16);
+            std::unique_ptr<IRHISampler> CreateSamplerLinearWrap();
+            std::unique_ptr<IRHISampler> CreateSamplerLinearClamp();
+            std::unique_ptr<IRHISampler> CreateSamplerPointClamp();
+            std::unique_ptr<IRHISampler> CreateSamplerAnisotropic(uint32_t maxAnisotropy = 16);
 
             // ========================================================================
             // SHADER CACHE
@@ -210,7 +210,7 @@ namespace Spark
 
             std::unique_ptr<IRHIDevice> m_device;
             std::unique_ptr<IRHISwapChain> m_swapChain;
-            IRHITexture* m_depthBuffer = nullptr;
+            std::unique_ptr<IRHITexture> m_depthBuffer;
             ShaderCache m_shaderCache;
 
             void* m_windowHandle = nullptr;

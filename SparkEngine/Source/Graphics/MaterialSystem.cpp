@@ -1013,7 +1013,7 @@ HRESULT MaterialSystem::CreateSampler(const TextureSampling& sampling, ID3D11Sam
     desc.borderColor[2] = sampling.borderColor.z;
     desc.borderColor[3] = sampling.borderColor.w;
 
-    Spark::RHI::IRHISampler* rhiSampler = rhiDevice->CreateSampler(desc);
+    auto rhiSampler = rhiDevice->CreateSampler(desc);
     if (!rhiSampler)
         return E_FAIL;
 

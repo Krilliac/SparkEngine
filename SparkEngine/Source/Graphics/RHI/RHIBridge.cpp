@@ -30,7 +30,7 @@ namespace Spark
         {
             auto cached = m_loadedShaders.find(name);
             if (cached != m_loadedShaders.end())
-                return cached->second;
+                return cached->second.get();
 
             auto entry = m_entries.find(name);
             if (entry == m_entries.end())
@@ -82,10 +82,11 @@ namespace Spark
                 desc.bytecode = buffer.data();
                 desc.bytecodeSize = size;
 
-                IRHIShader* shader = device->CreateShader(desc);
+                auto shader = device->CreateShader(desc);
+                IRHIShader* raw = shader.get();
                 if (shader)
-                    m_loadedShaders[name] = shader;
-                return shader;
+                    m_loadedShaders[name] = std::move(shader);
+                return raw;
             }
             else
             {
@@ -96,19 +97,16 @@ namespace Spark
                 desc.sourceCode = std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
                 desc.filePath = filePath;
 
-                IRHIShader* shader = device->CreateShader(desc);
+                auto shader = device->CreateShader(desc);
+                IRHIShader* raw = shader.get();
                 if (shader)
-                    m_loadedShaders[name] = shader;
-                return shader;
+                    m_loadedShaders[name] = std::move(shader);
+                return raw;
             }
         }
 
-        void ShaderCache::Clear(IRHIDevice* device)
+        void ShaderCache::Clear([[maybe_unused]] IRHIDevice* device)
         {
-            for (auto& [name, shader] : m_loadedShaders)
-            {
-                device->DestroyShader(shader);
-            }
             m_loadedShaders.clear();
         }
 
@@ -209,11 +207,7 @@ namespace Spark
 
             m_shaderCache.Clear(m_device.get());
 
-            if (m_depthBuffer)
-            {
-                m_device->DestroyTexture(m_depthBuffer);
-                m_depthBuffer = nullptr;
-            }
+            m_depthBuffer.reset();
 
             m_swapChain.reset();
 
@@ -236,12 +230,8 @@ namespace Spark
 
             m_device->WaitForIdle();
 
-            // Destroy old depth buffer
-            if (m_depthBuffer)
-            {
-                m_device->DestroyTexture(m_depthBuffer);
-                m_depthBuffer = nullptr;
-            }
+            // Release old depth buffer
+            m_depthBuffer.reset();
 
             // Resize swap chain
             if (!m_swapChain->Resize(width, height))
@@ -290,7 +280,7 @@ namespace Spark
         // RESOURCE CONVENIENCE METHODS
         // ============================================================================
 
-        IRHIBuffer* RHIBridge::CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride)
+        std::unique_ptr<IRHIBuffer> RHIBridge::CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride)
         {
             RHIBufferDesc desc;
             desc.size = size;
@@ -301,7 +291,7 @@ namespace Spark
             return m_device->CreateBuffer(desc);
         }
 
-        IRHIBuffer* RHIBridge::CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride)
+        std::unique_ptr<IRHIBuffer> RHIBridge::CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride)
         {
             RHIBufferDesc desc;
             desc.size = size;
@@ -312,7 +302,7 @@ namespace Spark
             return m_device->CreateBuffer(desc);
         }
 
-        IRHIBuffer* RHIBridge::CreateConstantBuffer(uint64_t size)
+        std::unique_ptr<IRHIBuffer> RHIBridge::CreateConstantBuffer(uint64_t size)
         {
             RHIBufferDesc desc;
             desc.size = size;
@@ -321,8 +311,8 @@ namespace Spark
             return m_device->CreateBuffer(desc);
         }
 
-        IRHITexture* RHIBridge::CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format,
-                                                RHITextureUsage usage, const void* data)
+        std::unique_ptr<IRHITexture> RHIBridge::CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format,
+                                                                RHITextureUsage usage, const void* data)
         {
             RHITextureDesc desc;
             desc.width = width;
@@ -333,7 +323,7 @@ namespace Spark
             return m_device->CreateTexture(desc);
         }
 
-        IRHITexture* RHIBridge::CreateDepthBuffer(uint32_t width, uint32_t height, PixelFormat format)
+        std::unique_ptr<IRHITexture> RHIBridge::CreateDepthBuffer(uint32_t width, uint32_t height, PixelFormat format)
         {
             RHITextureDesc desc;
             desc.width = width;
@@ -344,7 +334,7 @@ namespace Spark
             return m_device->CreateTexture(desc);
         }
 
-        IRHITexture* RHIBridge::CreateRenderTarget(uint32_t width, uint32_t height, PixelFormat format)
+        std::unique_ptr<IRHITexture> RHIBridge::CreateRenderTarget(uint32_t width, uint32_t height, PixelFormat format)
         {
             RHITextureDesc desc;
             desc.width = width;
@@ -355,7 +345,7 @@ namespace Spark
             return m_device->CreateTexture(desc);
         }
 
-        IRHISampler* RHIBridge::CreateSamplerLinearWrap()
+        std::unique_ptr<IRHISampler> RHIBridge::CreateSamplerLinearWrap()
         {
             RHISamplerDesc desc;
             desc.minFilter = RHIFilterMode::Linear;
@@ -367,7 +357,7 @@ namespace Spark
             return m_device->CreateSampler(desc);
         }
 
-        IRHISampler* RHIBridge::CreateSamplerLinearClamp()
+        std::unique_ptr<IRHISampler> RHIBridge::CreateSamplerLinearClamp()
         {
             RHISamplerDesc desc;
             desc.minFilter = RHIFilterMode::Linear;
@@ -379,7 +369,7 @@ namespace Spark
             return m_device->CreateSampler(desc);
         }
 
-        IRHISampler* RHIBridge::CreateSamplerPointClamp()
+        std::unique_ptr<IRHISampler> RHIBridge::CreateSamplerPointClamp()
         {
             RHISamplerDesc desc;
             desc.minFilter = RHIFilterMode::Nearest;
@@ -391,7 +381,7 @@ namespace Spark
             return m_device->CreateSampler(desc);
         }
 
-        IRHISampler* RHIBridge::CreateSamplerAnisotropic(uint32_t maxAnisotropy)
+        std::unique_ptr<IRHISampler> RHIBridge::CreateSamplerAnisotropic(uint32_t maxAnisotropy)
         {
             RHISamplerDesc desc;
             desc.minFilter = RHIFilterMode::Anisotropic;

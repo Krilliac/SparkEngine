@@ -30,6 +30,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -113,10 +114,10 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
 
         // Wrap D3D11 GBuffer textures as RHI handles for the hybrid RT system
         auto* device = m_rhiBridge->GetDevice();
-        Spark::RHI::IRHITexture* rhiNormals = nullptr;
-        Spark::RHI::IRHITexture* rhiDepth = nullptr;
-        Spark::RHI::IRHITexture* rhiAlbedo = nullptr;
-        Spark::RHI::IRHITexture* rhiLighting = nullptr;
+        std::unique_ptr<Spark::RHI::IRHITexture> rhiNormals;
+        std::unique_ptr<Spark::RHI::IRHITexture> rhiDepth;
+        std::unique_ptr<Spark::RHI::IRHITexture> rhiAlbedo;
+        std::unique_ptr<Spark::RHI::IRHITexture> rhiLighting;
 
         if (device)
         {
@@ -164,21 +165,8 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
             }
         }
 
-        m_hybridRT->Execute(cmd, viewMatrix, projMatrix, camPos, lightDir, rhiNormals, rhiDepth, rhiAlbedo, nullptr,
-                            nullptr, rhiLighting, ssrDefaults);
-
-        // Clean up wrapped textures (non-owning wrappers)
-        if (device)
-        {
-            if (rhiNormals)
-                device->DestroyTexture(rhiNormals);
-            if (rhiDepth)
-                device->DestroyTexture(rhiDepth);
-            if (rhiAlbedo)
-                device->DestroyTexture(rhiAlbedo);
-            if (rhiLighting)
-                device->DestroyTexture(rhiLighting);
-        }
+        m_hybridRT->Execute(cmd, viewMatrix, projMatrix, camPos, lightDir, rhiNormals.get(), rhiDepth.get(),
+                            rhiAlbedo.get(), nullptr, nullptr, rhiLighting.get(), ssrDefaults);
     }
 #endif
 

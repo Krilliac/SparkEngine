@@ -98,22 +98,11 @@ namespace Spark::Graphics
         if (!m_device)
             return;
 
-        if (m_primitiveBuffer)
-            m_device->DestroyBuffer(m_primitiveBuffer);
-        if (m_traceConstantBuffer)
-            m_device->DestroyBuffer(m_traceConstantBuffer);
-        if (m_traceReflectionsCS)
-            m_device->DestroyShader(m_traceReflectionsCS);
-        if (m_traceGICS)
-            m_device->DestroyShader(m_traceGICS);
-        if (m_traceShadowsCS)
-            m_device->DestroyShader(m_traceShadowsCS);
-
-        m_primitiveBuffer = nullptr;
-        m_traceConstantBuffer = nullptr;
-        m_traceReflectionsCS = nullptr;
-        m_traceGICS = nullptr;
-        m_traceShadowsCS = nullptr;
+        m_primitiveBuffer.reset();
+        m_traceConstantBuffer.reset();
+        m_traceReflectionsCS.reset();
+        m_traceGICS.reset();
+        m_traceShadowsCS.reset();
         m_device = nullptr;
         m_initialized = false;
     }
@@ -133,7 +122,7 @@ namespace Spark::Graphics
 
         if (m_primitiveCount > 0)
         {
-            m_device->UpdateBuffer(m_primitiveBuffer, primitives.data(), sizeof(SDFPrimitive) * m_primitiveCount);
+            m_device->UpdateBuffer(m_primitiveBuffer.get(), primitives.data(), sizeof(SDFPrimitive) * m_primitiveCount);
         }
     }
 
@@ -145,7 +134,7 @@ namespace Spark::Graphics
             return;
 
         RHI::IRHITexture* srvs[] = {gbufferNormals, gbufferDepth};
-        DispatchTrace(cmd, m_traceReflectionsCS, constants, srvs, 2, output);
+        DispatchTrace(cmd, m_traceReflectionsCS.get(), constants, srvs, 2, output);
     }
 
     void SDFSceneManager::TraceGI(RHI::IRHICommandList* cmd, const SDFTraceConstants& constants,
@@ -156,7 +145,7 @@ namespace Spark::Graphics
             return;
 
         RHI::IRHITexture* srvs[] = {gbufferNormals, gbufferDepth, gbufferAlbedo};
-        DispatchTrace(cmd, m_traceGICS, constants, srvs, 3, output);
+        DispatchTrace(cmd, m_traceGICS.get(), constants, srvs, 3, output);
     }
 
     void SDFSceneManager::TraceShadows(RHI::IRHICommandList* cmd, const SDFTraceConstants& constants,
@@ -167,7 +156,7 @@ namespace Spark::Graphics
             return;
 
         RHI::IRHITexture* srvs[] = {gbufferNormals, gbufferDepth};
-        DispatchTrace(cmd, m_traceShadowsCS, constants, srvs, 2, output);
+        DispatchTrace(cmd, m_traceShadowsCS.get(), constants, srvs, 2, output);
     }
 
     void SDFSceneManager::DispatchTrace(RHI::IRHICommandList* cmd, RHI::IRHIShader* shader,
@@ -180,7 +169,7 @@ namespace Spark::Graphics
         cmd->BeginEvent("SDFGI_Trace");
 
         // Update constant buffer with trace parameters
-        m_device->UpdateBuffer(m_traceConstantBuffer, &constants, sizeof(SDFTraceConstants));
+        m_device->UpdateBuffer(m_traceConstantBuffer.get(), &constants, sizeof(SDFTraceConstants));
 
         // Bind resources:
         // t0 = SDF primitive structured buffer (bound as shader resource on the buffer)
@@ -188,7 +177,7 @@ namespace Spark::Graphics
         // u0 = Output UAV texture
         // b0 = Trace constants
 
-        cmd->SetConstantBuffer(RHI::RHIShaderStage::Compute, 0, m_traceConstantBuffer);
+        cmd->SetConstantBuffer(RHI::RHIShaderStage::Compute, 0, m_traceConstantBuffer.get());
 
         // Bind GBuffer SRVs starting at slot 1 (slot 0 is the structured buffer, bound separately)
         for (uint32_t i = 0; i < srvCount; ++i)

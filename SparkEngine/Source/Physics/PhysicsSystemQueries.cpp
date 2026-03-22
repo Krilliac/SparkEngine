@@ -57,8 +57,7 @@ JPH_SUPPRESS_WARNINGS
 
 using namespace DirectX;
 
-// Global physics system pointer (defined in engine startup code)
-::PhysicsSystem* g_physicsSystem = nullptr;
+// Legacy global removed — PhysicsBodyImpl now uses EngineContext::Get()->GetPhysics()
 
 // ============================================================================
 // BODY CREATION / REMOVAL
@@ -69,7 +68,7 @@ std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& de
     SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Physics, m_joltSystem, nullptr);
 
-    g_physicsSystem = this;
+    // PhysicsSystem is registered with EngineContext at engine startup
 
     // Create collision shape
     void* shapePtr = CreateCollisionShape(desc.shape);

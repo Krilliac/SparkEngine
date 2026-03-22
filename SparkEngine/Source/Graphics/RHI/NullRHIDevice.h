@@ -106,39 +106,34 @@ namespace Spark
 
             std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc&) override { return nullptr; }
 
-            IRHIBuffer* CreateBuffer(const RHIBufferDesc&) override
+            std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc&) override
             {
                 m_stats.buffersCreated++;
                 return nullptr;
             }
 
-            IRHITexture* CreateTexture(const RHITextureDesc&) override
+            std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc&) override
             {
                 m_stats.texturesCreated++;
                 return nullptr;
             }
 
-            IRHIShader* CreateShader(const RHIShaderDesc&) override
+            std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc&) override
             {
                 m_stats.shadersCreated++;
                 return nullptr;
             }
 
-            IRHISampler* CreateSampler(const RHISamplerDesc&) override { return nullptr; }
+            std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc&) override { return nullptr; }
 
-            IRHIPipelineState* CreatePipelineState(const RHIPipelineStateDesc&, IRHIShader*, IRHIShader*) override
+            std::unique_ptr<IRHIPipelineState> CreatePipelineState(const RHIPipelineStateDesc&, IRHIShader*,
+                                                                   IRHIShader*) override
             {
                 m_stats.pipelinesCreated++;
                 return nullptr;
             }
 
-            IRHITexture* WrapNativeTexture(void*, const RHITextureDesc&) override { return nullptr; }
-
-            void DestroyBuffer(IRHIBuffer*) override { m_stats.buffersDestroyed++; }
-            void DestroyTexture(IRHITexture*) override { m_stats.texturesDestroyed++; }
-            void DestroyShader(IRHIShader*) override { m_stats.shadersDestroyed++; }
-            void DestroySampler(IRHISampler*) override {}
-            void DestroyPipelineState(IRHIPipelineState*) override { m_stats.pipelinesDestroyed++; }
+            std::unique_ptr<IRHITexture> WrapNativeTexture(void*, const RHITextureDesc&) override { return nullptr; }
 
             void* MapBuffer(IRHIBuffer*) override { return nullptr; }
             void UnmapBuffer(IRHIBuffer*) override {}
@@ -146,9 +141,8 @@ namespace Spark
             void UpdateTexture(IRHITexture*, const void*, uint32_t, uint32_t) override {}
 
             IRHICommandList* GetImmediateCommandList() override { return &m_commandList; }
-            IRHICommandList* CreateDeferredCommandList() override { return &m_commandList; }
+            std::unique_ptr<IRHICommandList> CreateDeferredCommandList() override { return nullptr; }
             void ExecuteCommandList(IRHICommandList*) override { m_stats.commandListsExecuted++; }
-            void DestroyCommandList(IRHICommandList*) override {}
 
             void BeginFrame() override { m_stats.framesRendered++; }
             void EndFrame() override {}
@@ -166,13 +160,9 @@ namespace Spark
             struct NullStats
             {
                 uint32_t buffersCreated = 0;
-                uint32_t buffersDestroyed = 0;
                 uint32_t texturesCreated = 0;
-                uint32_t texturesDestroyed = 0;
                 uint32_t shadersCreated = 0;
-                uint32_t shadersDestroyed = 0;
                 uint32_t pipelinesCreated = 0;
-                uint32_t pipelinesDestroyed = 0;
                 uint32_t commandListsExecuted = 0;
                 uint32_t framesRendered = 0;
             };

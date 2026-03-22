@@ -76,21 +76,21 @@ namespace Spark
 
                 // -- IRHIDevice: Resource creation ----------------------------------------
 
-                IRHIBuffer* CreateBuffer(const RHIBufferDesc& desc) override;
-                IRHITexture* CreateTexture(const RHITextureDesc& desc) override;
-                IRHITexture* WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc) override;
-                IRHIShader* CreateShader(const RHIShaderDesc& desc) override;
-                IRHISampler* CreateSampler(const RHISamplerDesc& desc) override;
-                IRHIPipelineState* CreatePipelineState(const RHIPipelineStateDesc& desc, IRHIShader* vertexShader,
-                                                       IRHIShader* pixelShader) override;
+                std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc& desc) override;
+                std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc& desc) override;
+                std::unique_ptr<IRHITexture> WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc) override;
+                std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc& desc) override;
+                std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc& desc) override;
+                std::unique_ptr<IRHIPipelineState> CreatePipelineState(const RHIPipelineStateDesc& desc,
+                                                                       IRHIShader* vertexShader,
+                                                                       IRHIShader* pixelShader) override;
 
-                // -- IRHIDevice: Resource destruction -------------------------------------
+                // -- D3D12-specific: Deferred GPU resource release ----------------------
+                // These enqueue GPU resources for deferred deletion (fence-synchronized)
+                // since D3D12 resources may still be in-flight on the GPU when destroyed.
 
-                void DestroyBuffer(IRHIBuffer* buffer) override;
-                void DestroyTexture(IRHITexture* texture) override;
-                void DestroyShader(IRHIShader* shader) override;
-                void DestroySampler(IRHISampler* sampler) override;
-                void DestroyPipelineState(IRHIPipelineState* state) override;
+                void DeferredReleaseBuffer(D3D12Buffer* buffer);
+                void DeferredReleaseTexture(D3D12Texture* texture);
 
                 // -- IRHIDevice: Resource updates -----------------------------------------
 
@@ -103,9 +103,8 @@ namespace Spark
                 // -- IRHIDevice: Command lists --------------------------------------------
 
                 IRHICommandList* GetImmediateCommandList() override;
-                IRHICommandList* CreateDeferredCommandList() override;
+                std::unique_ptr<IRHICommandList> CreateDeferredCommandList() override;
                 void ExecuteCommandList(IRHICommandList* commandList) override;
-                void DestroyCommandList(IRHICommandList* commandList) override;
 
                 // -- IRHIDevice: Frame management -----------------------------------------
 

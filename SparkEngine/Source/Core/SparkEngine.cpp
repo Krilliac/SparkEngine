@@ -90,6 +90,13 @@
 #include "Utils/GPUPerfCounters.h"
 #include "Utils/LockFreeRingAllocator.h"
 #include "SceneManager/SceneConfigDatabase.h"
+// Cinematic, replay, VR, mobile, ragdoll systems
+#include "Engine/Cinematic/Sequencer.h"
+#include "Engine/Replay/ReplaySystem.h"
+#include "Engine/VR/VRSystem.h"
+#include "Engine/Animation/RagdollSystem.h"
+#include "Engine/Mobile/MobilePlatform.h"
+
 // Extended engine systems
 #include "FixedTimestepAccumulator.h"
 #include "PluginRegistry.h"
@@ -135,7 +142,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <thread>
-#include <iostream>
 
 // Platform-specific includes
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -363,6 +369,43 @@ static void InitGameplaySystems()
     // Stage-based parallel ECS executor
     // Systems are registered by each subsystem; the executor is ready after Initialize
     // (individual systems register themselves via RegisterSystem when they come online)
+
+    // Cinematic sequencer — timeline playback for cutscenes (no init needed, ready after construction)
+    ctx->SetCinematic(&Spark::Cinematic::SequencerManager::GetInstance());
+
+    // Replay system — recording/playback for match replays and kill cams
+    // No explicit Initialize() — ready after GetInstance(). Register with EngineContext.
+    ctx->SetReplay(&Spark::ReplaySystem::GetInstance());
+
+    // Animation ragdoll system — blending between animation and physics ragdoll
+    {
+        static Spark::Animation::RagdollSystem s_ragdollSystem;
+        s_ragdollSystem.Initialize();
+    }
+
+    // VR system — OpenXR-ready framework (stub until OpenXR SDK is linked)
+    {
+        static Spark::VR::VRSystem s_vrSystem;
+        if (s_vrSystem.Initialize())
+        {
+            ctx->SetVR(&s_vrSystem);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "VRSystem initialized — VR hardware detected");
+        }
+        else
+        {
+            // VR not available — system stays registered but inactive
+            ctx->SetVR(&s_vrSystem);
+        }
+    }
+
+    // Mobile platform — touch input, GPU quality presets, battery-aware scaling
+    {
+        static Spark::Mobile::MobilePlatform s_mobilePlatform;
+        if (s_mobilePlatform.Initialize())
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "MobilePlatform initialized");
+        }
+    }
 }
 
 /**
@@ -481,6 +524,16 @@ static void UpdateGameplaySystems(float dt)
     Spark::ProfileProperties::GetInstance().ResetFrameProperties();
 #endif
 
+    // Cinematic sequencer — update active sequences (camera paths, events, fades)
+    Spark::Cinematic::SequencerManager::GetInstance().Update(dt);
+
+    // Replay playback — only advances if a replay is actively playing
+    Spark::ReplaySystem::GetInstance().UpdatePlayback(dt);
+
+    // VR tracking update (no-op if VR not available)
+    if (auto* vr = ctx->GetVR())
+        vr->UpdateTracking();
+
     // Stage-based parallel ECS executor — runs all registered systems by stage
     Spark::ECS::StageBasedExecutor::GetInstance().ExecuteAll(dt);
 
@@ -496,6 +549,15 @@ static void UpdateGameplaySystems(float dt)
 
 static void ShutdownGameplaySystems()
 {
+    // VR system (if initialized)
+    if (auto* ctx = EngineContext::Get())
+    {
+        if (auto* vr = ctx->GetVR())
+            vr->Shutdown();
+    }
+
+    // Cinematic sequencer (no explicit shutdown needed)
+
     // Stage-based parallel ECS executor
     Spark::ECS::StageBasedExecutor::GetInstance().Shutdown();
 
@@ -623,6 +685,7 @@ static void InitConsole()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
     console.Initialize();
+    console.LogSuccess("Spark Engine runtime initialized");
 
     if (!Spark::ConsoleProcessManager::GetInstance().Initialize())
     {
@@ -845,7 +908,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     // Install Ctrl+C handler for graceful shutdown
     SetConsoleCtrlHandler(HeadlessCtrlHandler, TRUE);
 
-    std::cout << "=== Spark Engine (Headless/Dedicated Server) ===" << std::endl;
+    Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Headless/Dedicated Server) ===");
 
     // Initialize only the subsystems needed for headless operation
     g_timer = std::make_unique<Timer>();
@@ -1056,8 +1119,6 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
     LogMissingModuleWarnings();
-    InitDebugSystems();
-    InitGameplaySystems();
 
     // Wire WeatherSystem to EventBus for WeatherChangedEvent publishing
     if (g_weatherSystem && g_eventBus)
@@ -1065,11 +1126,9 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         g_weatherSystem->SetEventBus(g_eventBus.get());
     }
 
-    // Publish EngineStartEvent — all systems initialized, ready to run
-    if (g_eventBus)
-    {
-        g_eventBus->Publish(Spark::EngineStartEvent{});
-    }
+    // Initialize console, debug, and gameplay systems in one call
+    // (also publishes EngineStartEvent when complete)
+    InitConsole();
 }
 
 /**
@@ -1259,17 +1318,7 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
     g_input->Console_SetRawMouseInput(settings.Controls().rawMouseInput);
     g_input->Console_SetMouseAcceleration(settings.Controls().mouseAcceleration);
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    if (console.Initialize())
-    {
-        console.LogSuccess("Spark Engine runtime initialized");
-        console.LogInfo("Settings loaded from " + settings.GetFilePath());
-        console.LogInfo("Type 'help' for complete command reference");
-    }
-
-    // Launch SparkConsole subprocess for command IPC
-    Spark::ConsoleProcessManager::GetInstance().Initialize();
-
+    // Console init is handled by InitConsole() in InitializeWindowedSubsystems()
     ShowWindow(hWnd, nCmdShow);
     UpdateWindow(hWnd);
     SetForegroundWindow(hWnd);
@@ -1568,7 +1617,7 @@ static void ShutdownLinux()
  */
 static int RunHeadlessLinux(int argc, char* argv[])
 {
-    std::cout << "=== Spark Engine (Headless/Dedicated Server - Linux) ===" << std::endl;
+    Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Headless/Dedicated Server - Linux) ===");
 
     g_eventBus = std::make_unique<Spark::EventBus>();
     g_timer = std::make_unique<Timer>();
@@ -1610,7 +1659,7 @@ static int RunHeadlessLinux(int argc, char* argv[])
     }
 
     ShutdownLinux();
-    std::cout << "Headless server shut down cleanly." << std::endl;
+    Spark::SimpleConsole::GetInstance().LogInfo("Headless server shut down cleanly.");
     return 0;
 }
 #endif // SPARK_HEADLESS_SUPPORT
@@ -1767,22 +1816,14 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     g_graphics = std::make_unique<GraphicsEngine>();
 
     HRESULT hr = g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
+    auto& console = Spark::SimpleConsole::GetInstance();
     if (SUCCEEDED(hr))
-        std::cout << "Graphics engine initialized (RHI backend)." << std::endl;
+        console.LogInfo("Graphics engine initialized (RHI backend).");
     else
-        std::cout << "Graphics engine initialization deferred (headless fallback)." << std::endl;
+        console.LogWarning("Graphics engine initialization deferred (headless fallback).");
 
     // Engine context, physics, core subsystems, gameplay subsystems
     InitLinuxCoreSubsystems(/*registerGameplay=*/true);
-
-    // Console + debug/gameplay systems
-    auto& console = Spark::SimpleConsole::GetInstance();
-    if (console.Initialize())
-    {
-        console.LogSuccess("Spark Engine runtime initialized (Linux/SDL2)");
-        console.LogInfo("Settings loaded from " + settings.GetFilePath());
-    }
-    Spark::ConsoleProcessManager::GetInstance().Initialize();
 
     // Modules, audio, console commands
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/true);
@@ -1800,14 +1841,10 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     }
 
     settings.RegisterConsoleCommands();
-    InitDebugSystems();
-    InitGameplaySystems();
 
-    // Publish EngineStartEvent — all systems initialized
-    if (g_eventBus)
-    {
-        g_eventBus->Publish(Spark::EngineStartEvent{});
-    }
+    // Initialize console, debug, and gameplay systems in one call
+    // (also publishes EngineStartEvent when complete)
+    InitConsole();
 }
 
 /**
@@ -1850,11 +1887,11 @@ static void RunSDL2MainLoop()
  */
 static int RunSDL2Windowed(int argc, char* argv[])
 {
-    std::cout << "=== Spark Engine (Linux Build) ===" << std::endl;
+    Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Linux Build) ===");
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0)
     {
-        std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
+        Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_Init failed: ") + SDL_GetError());
         return -1;
     }
 
@@ -1873,7 +1910,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
         SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
     if (!window)
     {
-        std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
+        Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
         SDL_Quit();
         return -1;
     }
@@ -1898,9 +1935,10 @@ static int RunSDL2Windowed(int argc, char* argv[])
  */
 static int RunNoSDL2Fallback(int argc, char* argv[])
 {
-    std::cout << "=== Spark Engine (Linux Build) ===" << std::endl;
-    std::cerr << "Warning: SDL2 not available. Running without a window." << std::endl;
-    std::cerr << "Install SDL2 and rebuild with -DENABLE_SDL2=ON for windowed mode." << std::endl;
+    auto& noSdlConsole = Spark::SimpleConsole::GetInstance();
+    noSdlConsole.LogInfo("=== Spark Engine (Linux Build) ===");
+    noSdlConsole.LogWarning("SDL2 not available. Running without a window.");
+    noSdlConsole.LogWarning("Install SDL2 and rebuild with -DENABLE_SDL2=ON for windowed mode.");
 
     g_eventBus = std::make_unique<Spark::EventBus>();
     g_timer = std::make_unique<Timer>();
@@ -1909,7 +1947,7 @@ static int RunNoSDL2Fallback(int argc, char* argv[])
 
     HRESULT hr = g_graphics->Initialize(nullptr);
     if (FAILED(hr))
-        std::cerr << "Graphics initialization failed (fallback mode)." << std::endl;
+        noSdlConsole.LogWarning("Graphics initialization failed (fallback mode).");
 
     // Engine context, physics, core subsystems, gameplay subsystems
     InitLinuxCoreSubsystems(/*registerGameplay=*/true);
@@ -1954,7 +1992,7 @@ int main(int argc, char* argv[])
     int result = RunNoSDL2Fallback(argc, argv);
 #endif
 
-    std::cout << "Spark Engine shut down cleanly." << std::endl;
+    Spark::SimpleConsole::GetInstance().LogInfo("Spark Engine shut down cleanly.");
     return result;
 }
 #endif // !SPARK_PLATFORM_WINDOWS

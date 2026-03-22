@@ -90,22 +90,11 @@ namespace Spark::Graphics
         if (!m_device)
             return;
 
-        if (m_probeBuffer)
-            m_device->DestroyBuffer(m_probeBuffer);
-        if (m_updateConstants)
-            m_device->DestroyBuffer(m_updateConstants);
-        if (m_interpConstants)
-            m_device->DestroyBuffer(m_interpConstants);
-        if (m_updateCS)
-            m_device->DestroyShader(m_updateCS);
-        if (m_interpolateCS)
-            m_device->DestroyShader(m_interpolateCS);
-
-        m_probeBuffer = nullptr;
-        m_updateConstants = nullptr;
-        m_interpConstants = nullptr;
-        m_updateCS = nullptr;
-        m_interpolateCS = nullptr;
+        m_probeBuffer.reset();
+        m_updateConstants.reset();
+        m_interpConstants.reset();
+        m_updateCS.reset();
+        m_interpolateCS.reset();
         m_device = nullptr;
         m_initialized = false;
     }
@@ -158,7 +147,7 @@ namespace Spark::Graphics
 
         if (m_probeBuffer && m_device)
         {
-            m_device->UpdateBuffer(m_probeBuffer, probes.data(), sizeof(ProbeData) * probeCount);
+            m_device->UpdateBuffer(m_probeBuffer.get(), probes.data(), sizeof(ProbeData) * probeCount);
         }
     }
 
@@ -191,8 +180,8 @@ namespace Spark::Graphics
         constants.hysteresis = m_config.hysteresis;
         constants.pad = {0, 0, 0};
 
-        m_device->UpdateBuffer(m_updateConstants, &constants, sizeof(constants));
-        cmd->SetConstantBuffer(RHI::RHIShaderStage::Compute, 0, m_updateConstants);
+        m_device->UpdateBuffer(m_updateConstants.get(), &constants, sizeof(constants));
+        cmd->SetConstantBuffer(RHI::RHIShaderStage::Compute, 0, m_updateConstants.get());
 
         // Dispatch: ceil(probeCount / 64) x 1 x 1
         uint32_t dispatchX = (GetProbeCount() + 63) / 64;
@@ -237,8 +226,8 @@ namespace Spark::Graphics
         constants.screenHeight = static_cast<float>(screenHeight);
         constants.pad[0] = constants.pad[1] = 0.0f;
 
-        m_device->UpdateBuffer(m_interpConstants, &constants, sizeof(constants));
-        cmd->SetConstantBuffer(RHI::RHIShaderStage::Compute, 0, m_interpConstants);
+        m_device->UpdateBuffer(m_interpConstants.get(), &constants, sizeof(constants));
+        cmd->SetConstantBuffer(RHI::RHIShaderStage::Compute, 0, m_interpConstants.get());
         cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 1, gbufferNormals);
         cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 2, gbufferDepth);
 

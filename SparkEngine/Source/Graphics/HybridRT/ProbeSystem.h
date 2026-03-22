@@ -25,6 +25,7 @@
 #endif
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace Spark::RHI
@@ -87,11 +88,11 @@ namespace Spark::Graphics
         void BuildProbeGrid();
 
         RHI::IRHIDevice* m_device = nullptr;
-        RHI::IRHIBuffer* m_probeBuffer = nullptr; ///< RW structured buffer of ProbeData
-        RHI::IRHIBuffer* m_updateConstants = nullptr;
-        RHI::IRHIBuffer* m_interpConstants = nullptr;
-        RHI::IRHIShader* m_updateCS = nullptr;
-        RHI::IRHIShader* m_interpolateCS = nullptr;
+        std::unique_ptr<RHI::IRHIBuffer> m_probeBuffer; ///< RW structured buffer of ProbeData
+        std::unique_ptr<RHI::IRHIBuffer> m_updateConstants;
+        std::unique_ptr<RHI::IRHIBuffer> m_interpConstants;
+        std::unique_ptr<RHI::IRHIShader> m_updateCS;
+        std::unique_ptr<RHI::IRHIShader> m_interpolateCS;
 
         ProbeGridConfig m_config;
 

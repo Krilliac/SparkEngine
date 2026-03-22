@@ -96,6 +96,7 @@ namespace Spark
         if (actualPath.empty())
         {
             m_initialized = true;
+            // SparkConsole binary not found — use stderr as fallback since SimpleConsole may not be initialized yet
             std::cerr << "[ConsoleProcessManager] SparkConsole not found. Using fallback logging.\n";
             return true;
         }

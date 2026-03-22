@@ -637,7 +637,7 @@ namespace Spark
                 return std::make_unique<D3D11SwapChain>(m_device.Get(), desc);
             }
 
-            IRHIBuffer* D3D11Device::CreateBuffer(const RHIBufferDesc& desc)
+            std::unique_ptr<IRHIBuffer> D3D11Device::CreateBuffer(const RHIBufferDesc& desc)
             {
                 D3D11_BUFFER_DESC d3dDesc = {};
                 d3dDesc.ByteWidth = static_cast<UINT>(desc.size);
@@ -681,10 +681,10 @@ namespace Spark
                 if (FAILED(hr))
                     return nullptr;
 
-                return std::make_unique<D3D11Buffer>(desc, std::move(buffer)).release();
+                return std::make_unique<D3D11Buffer>(desc, std::move(buffer));
             }
 
-            IRHITexture* D3D11Device::CreateTexture(const RHITextureDesc& desc)
+            std::unique_ptr<IRHITexture> D3D11Device::CreateTexture(const RHITextureDesc& desc)
             {
                 DXGI_FORMAT format = ConvertFormat(desc.format);
 
@@ -743,11 +743,10 @@ namespace Spark
                         return nullptr;
                 }
 
-                return std::make_unique<D3D11Texture>(desc, texture, std::move(srv), std::move(rtv), std::move(dsv))
-                    .release();
+                return std::make_unique<D3D11Texture>(desc, texture, std::move(srv), std::move(rtv), std::move(dsv));
             }
 
-            IRHITexture* D3D11Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            std::unique_ptr<IRHITexture> D3D11Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
             {
                 if (!nativeHandle)
                     return nullptr;
@@ -768,10 +767,10 @@ namespace Spark
                         return nullptr;
                 }
 
-                return std::make_unique<D3D11Texture>(desc, resource, std::move(srv)).release();
+                return std::make_unique<D3D11Texture>(desc, resource, std::move(srv));
             }
 
-            IRHIShader* D3D11Device::CreateShader(const RHIShaderDesc& desc)
+            std::unique_ptr<IRHIShader> D3D11Device::CreateShader(const RHIShaderDesc& desc)
             {
                 ComPtr<ID3DBlob> bytecodeBlob;
                 ComPtr<ID3DBlob> errorBlob;
@@ -890,10 +889,10 @@ namespace Spark
                 if (FAILED(hr) || !shaderObj)
                     return nullptr;
 
-                return std::make_unique<D3D11Shader>(desc, std::move(shaderObj), std::move(bytecodeBlob)).release();
+                return std::make_unique<D3D11Shader>(desc, std::move(shaderObj), std::move(bytecodeBlob));
             }
 
-            IRHISampler* D3D11Device::CreateSampler(const RHISamplerDesc& desc)
+            std::unique_ptr<IRHISampler> D3D11Device::CreateSampler(const RHISamplerDesc& desc)
             {
                 D3D11_SAMPLER_DESC d3dDesc = {};
                 d3dDesc.Filter = ConvertFilter(desc);
@@ -912,11 +911,12 @@ namespace Spark
                 if (FAILED(hr))
                     return nullptr;
 
-                return std::make_unique<D3D11Sampler>(desc, std::move(sampler)).release();
+                return std::make_unique<D3D11Sampler>(desc, std::move(sampler));
             }
 
-            IRHIPipelineState* D3D11Device::CreatePipelineState(const RHIPipelineStateDesc& desc,
-                                                                IRHIShader* vertexShader, IRHIShader* pixelShader)
+            std::unique_ptr<IRHIPipelineState> D3D11Device::CreatePipelineState(const RHIPipelineStateDesc& desc,
+                                                                                IRHIShader* vertexShader,
+                                                                                IRHIShader* pixelShader)
             {
                 auto* d3dVS = static_cast<D3D11Shader*>(vertexShader);
                 auto* d3dPS = static_cast<D3D11Shader*>(pixelShader);
@@ -1019,34 +1019,7 @@ namespace Spark
 
                 return std::make_unique<D3D11PipelineState>(desc, std::move(inputLayout), std::move(rasterizerState),
                                                             std::move(depthStencilState), std::move(blendState), d3dVS,
-                                                            d3dPS)
-                    .release();
-            }
-
-            void D3D11Device::DestroyBuffer(IRHIBuffer* buffer)
-            {
-                if (buffer)
-                    m_deletionQueue.Enqueue([buffer] { delete buffer; });
-            }
-            void D3D11Device::DestroyTexture(IRHITexture* texture)
-            {
-                if (texture)
-                    m_deletionQueue.Enqueue([texture] { delete texture; });
-            }
-            void D3D11Device::DestroyShader(IRHIShader* shader)
-            {
-                if (shader)
-                    m_deletionQueue.Enqueue([shader] { delete shader; });
-            }
-            void D3D11Device::DestroySampler(IRHISampler* sampler)
-            {
-                if (sampler)
-                    m_deletionQueue.Enqueue([sampler] { delete sampler; });
-            }
-            void D3D11Device::DestroyPipelineState(IRHIPipelineState* state)
-            {
-                if (state)
-                    m_deletionQueue.Enqueue([state] { delete state; });
+                                                            d3dPS);
             }
 
             void* D3D11Device::MapBuffer(IRHIBuffer* buffer)
@@ -1096,20 +1069,16 @@ namespace Spark
                 return m_immediateCommandList.get();
             }
 
-            IRHICommandList* D3D11Device::CreateDeferredCommandList()
+            std::unique_ptr<IRHICommandList> D3D11Device::CreateDeferredCommandList()
             {
                 ComPtr<ID3D11DeviceContext> deferredContext;
                 HRESULT hr = m_device->CreateDeferredContext(0, &deferredContext);
                 if (FAILED(hr))
                     return nullptr;
-                return std::make_unique<D3D11CommandList>(deferredContext.Get(), false).release();
+                return std::make_unique<D3D11CommandList>(deferredContext.Get(), false);
             }
 
             void D3D11Device::ExecuteCommandList(IRHICommandList*) {}
-            void D3D11Device::DestroyCommandList(IRHICommandList* commandList)
-            {
-                delete commandList;
-            }
 
             void D3D11Device::BeginFrame()
             {

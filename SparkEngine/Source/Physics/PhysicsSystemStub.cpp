@@ -14,8 +14,7 @@
 #include "Utils/Validate.h"
 #include <sstream>
 
-// Global physics system pointer (stub — always null)
-::PhysicsSystem* g_physicsSystem = nullptr;
+// Legacy global removed — PhysicsBodyImpl now uses EngineContext::Get()->GetPhysics()
 
 // ============================================================================
 // Utility functions

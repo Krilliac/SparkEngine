@@ -63,7 +63,7 @@ namespace Spark::Graphics
         rtWidth = std::max(rtWidth, 1u);
         rtHeight = std::max(rtHeight, 1u);
 
-        auto createRT = [&](const char* name) -> RHI::IRHITexture*
+        auto createRT = [&](const char* name) -> std::unique_ptr<RHI::IRHITexture>
         {
             RHI::RHITextureDesc desc;
             desc.width = rtWidth;
@@ -127,19 +127,9 @@ namespace Spark::Graphics
         m_compositor.reset();
         m_probes.reset();
 
-        if (m_device)
-        {
-            if (m_rtReflections)
-                m_device->DestroyTexture(m_rtReflections);
-            if (m_rtGI)
-                m_device->DestroyTexture(m_rtGI);
-            if (m_rtShadows)
-                m_device->DestroyTexture(m_rtShadows);
-        }
-
-        m_rtReflections = nullptr;
-        m_rtGI = nullptr;
-        m_rtShadows = nullptr;
+        m_rtReflections.reset();
+        m_rtGI.reset();
+        m_rtShadows.reset();
         m_device = nullptr;
         m_initialized = false;
     }
@@ -159,10 +149,8 @@ namespace Spark::Graphics
         // Recreate RT textures at new resolution
         if (m_device)
         {
-            auto recreateRT = [&](RHI::IRHITexture*& tex, const char* name)
+            auto recreateRT = [&](std::unique_ptr<RHI::IRHITexture>& tex, const char* name)
             {
-                if (tex)
-                    m_device->DestroyTexture(tex);
                 RHI::RHITextureDesc desc;
                 desc.width = rtW;
                 desc.height = rtH;
@@ -262,8 +250,8 @@ namespace Spark::Graphics
         // Composite RT results with screen-space effects
         if (m_compositor && lightingOutput)
         {
-            m_compositor->Composite(cmd, m_rtReflections, m_rtGI, m_rtShadows, ssReflections, ssao, lightingOutput,
-                                    gbufferNormals, gbufferAlbedo, lightingOutput, ssrSettings,
+            m_compositor->Composite(cmd, m_rtReflections.get(), m_rtGI.get(), m_rtShadows.get(), ssReflections, ssao,
+                                    lightingOutput, gbufferNormals, gbufferAlbedo, lightingOutput, ssrSettings,
                                     static_cast<float>(m_frameIndex));
         }
 
@@ -305,19 +293,19 @@ namespace Spark::Graphics
         if (RHI::HasEffect(m_enabledEffects, RHI::RTEffect::Reflections) && m_rtReflections)
         {
             constants.traceMode = 0;
-            m_sdfScene->TraceReflections(cmd, constants, gbufferNormals, gbufferDepth, m_rtReflections);
+            m_sdfScene->TraceReflections(cmd, constants, gbufferNormals, gbufferDepth, m_rtReflections.get());
         }
 
         if (RHI::HasEffect(m_enabledEffects, RHI::RTEffect::GlobalIllumination) && m_rtGI)
         {
             constants.traceMode = 1;
-            m_sdfScene->TraceGI(cmd, constants, gbufferNormals, gbufferDepth, gbufferAlbedo, m_rtGI);
+            m_sdfScene->TraceGI(cmd, constants, gbufferNormals, gbufferDepth, gbufferAlbedo, m_rtGI.get());
         }
 
         if (RHI::HasEffect(m_enabledEffects, RHI::RTEffect::Shadows) && m_rtShadows)
         {
             constants.traceMode = 2;
-            m_sdfScene->TraceShadows(cmd, constants, gbufferNormals, gbufferDepth, m_rtShadows);
+            m_sdfScene->TraceShadows(cmd, constants, gbufferNormals, gbufferDepth, m_rtShadows.get());
         }
     }
 

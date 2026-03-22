@@ -25,6 +25,7 @@
 #include "RHIDevice.h"
 #include <cstdint>
 #include <cstring>
+#include <memory>
 
 namespace Spark::RHI
 {
@@ -94,21 +95,10 @@ namespace Spark::RHI
         /**
          * @brief Destroy GPU buffers. Call at shutdown.
          */
-        void Shutdown(IRHIDevice* device)
+        void Shutdown([[maybe_unused]] IRHIDevice* device)
         {
-            if (device)
-            {
-                if (m_vertexBuffer)
-                {
-                    device->DestroyBuffer(m_vertexBuffer);
-                    m_vertexBuffer = nullptr;
-                }
-                if (m_indexBuffer)
-                {
-                    device->DestroyBuffer(m_indexBuffer);
-                    m_indexBuffer = nullptr;
-                }
-            }
+            m_vertexBuffer.reset();
+            m_indexBuffer.reset();
         }
 
         /**
@@ -120,9 +110,9 @@ namespace Spark::RHI
             m_indexOffset = 0;
 
             if (device && m_vertexBuffer)
-                m_vertexMapped = static_cast<uint8_t*>(device->MapBuffer(m_vertexBuffer));
+                m_vertexMapped = static_cast<uint8_t*>(device->MapBuffer(m_vertexBuffer.get()));
             if (device && m_indexBuffer)
-                m_indexMapped = static_cast<uint8_t*>(device->MapBuffer(m_indexBuffer));
+                m_indexMapped = static_cast<uint8_t*>(device->MapBuffer(m_indexBuffer.get()));
         }
 
         /**
@@ -131,9 +121,9 @@ namespace Spark::RHI
         void EndFrame(IRHIDevice* device)
         {
             if (device && m_vertexBuffer && m_vertexMapped)
-                device->UnmapBuffer(m_vertexBuffer);
+                device->UnmapBuffer(m_vertexBuffer.get());
             if (device && m_indexBuffer && m_indexMapped)
-                device->UnmapBuffer(m_indexBuffer);
+                device->UnmapBuffer(m_indexBuffer.get());
 
             m_vertexMapped = nullptr;
             m_indexMapped = nullptr;
@@ -156,7 +146,7 @@ namespace Spark::RHI
                 return {}; // Over budget
 
             TransientAllocation alloc;
-            alloc.buffer = m_vertexBuffer;
+            alloc.buffer = m_vertexBuffer.get();
             alloc.data = m_vertexMapped + alignedOffset;
             alloc.offsetBytes = alignedOffset;
             alloc.sizeBytes = sizeBytes;
@@ -182,7 +172,7 @@ namespace Spark::RHI
                 return {};
 
             TransientAllocation alloc;
-            alloc.buffer = m_indexBuffer;
+            alloc.buffer = m_indexBuffer.get();
             alloc.data = m_indexMapped + alignedOffset;
             alloc.offsetBytes = alignedOffset;
             alloc.sizeBytes = sizeBytes;
@@ -225,8 +215,8 @@ namespace Spark::RHI
         uint32_t GetIndexBudget() const { return m_indexBudget; }
 
       private:
-        IRHIBuffer* m_vertexBuffer = nullptr;
-        IRHIBuffer* m_indexBuffer = nullptr;
+        std::unique_ptr<IRHIBuffer> m_vertexBuffer;
+        std::unique_ptr<IRHIBuffer> m_indexBuffer;
 
         uint8_t* m_vertexMapped = nullptr;
         uint8_t* m_indexMapped = nullptr;
