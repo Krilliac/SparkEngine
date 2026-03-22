@@ -14,6 +14,7 @@
 #include "LightingSystem.h"
 #include "AssetPipeline.h"
 #include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
 
 #include <Windows.h>
 #include <d3d11_1.h>

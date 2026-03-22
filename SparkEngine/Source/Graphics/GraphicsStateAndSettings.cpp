@@ -17,6 +17,7 @@
 #include "TemporalEffects.h"
 #include "ScreenSpaceEffects.h"
 #include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
 
 #include <Windows.h>
 #include <d3d11_1.h>
