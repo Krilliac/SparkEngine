@@ -232,7 +232,14 @@ namespace Spark::Graphics
                 if (!hasDigit)
                     return false;
 
-                out = std::stof(pathData.substr(start, pos - start));
+                try
+                {
+                    out = std::stof(pathData.substr(start, pos - start));
+                }
+                catch (const std::exception&)
+                {
+                    return false;
+                }
                 return true;
             };
 

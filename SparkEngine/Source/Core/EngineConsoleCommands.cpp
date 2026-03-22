@@ -206,9 +206,16 @@ namespace Spark
                 auto* physics = EngineContext::Get()->GetPhysics();
                 if (!physics)
                     return "Physics system not available";
-                float x = std::stof(args[2]), y = std::stof(args[3]), z = std::stof(args[4]);
-                bool ok = physics->Console_CreateBody(args[0], args[1], x, y, z);
-                return ok ? "Body '" + args[0] + "' created" : "Failed to create body (invalid type?)";
+                try
+                {
+                    float x = std::stof(args[2]), y = std::stof(args[3]), z = std::stof(args[4]);
+                    bool ok = physics->Console_CreateBody(args[0], args[1], x, y, z);
+                    return ok ? "Body '" + args[0] + "' created" : "Failed to create body (invalid type?)";
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Create a physics body (type: static/kinematic/dynamic)", "Physics");
 
@@ -239,8 +246,15 @@ namespace Spark
                 auto* physics = EngineContext::Get()->GetPhysics();
                 if (!physics)
                     return "Physics system not available";
-                physics->Console_SetBodyProperty(args[0], args[1], std::stof(args[2]));
-                return args[1] + " set to " + args[2] + " on '" + args[0] + "'";
+                try
+                {
+                    physics->Console_SetBodyProperty(args[0], args[1], std::stof(args[2]));
+                    return args[1] + " set to " + args[2] + " on '" + args[0] + "'";
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Set body property (mass/friction/restitution/linearDamping/angularDamping)", "Physics");
 
@@ -255,8 +269,15 @@ namespace Spark
                 auto* physics = EngineContext::Get()->GetPhysics();
                 if (!physics)
                     return "Physics system not available";
-                physics->Console_ApplyForce(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
-                return "Force applied to '" + args[0] + "'";
+                try
+                {
+                    physics->Console_ApplyForce(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
+                    return "Force applied to '" + args[0] + "'";
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Apply force to a physics body", "Physics");
 
@@ -271,8 +292,15 @@ namespace Spark
                 auto* physics = EngineContext::Get()->GetPhysics();
                 if (!physics)
                     return "Physics system not available";
-                physics->Console_ApplyImpulse(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
-                return "Impulse applied to '" + args[0] + "'";
+                try
+                {
+                    physics->Console_ApplyImpulse(args[0], std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
+                    return "Impulse applied to '" + args[0] + "'";
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Apply impulse to a physics body", "Physics");
 
@@ -321,9 +349,16 @@ namespace Spark
                 auto* physics = EngineContext::Get()->GetPhysics();
                 if (!physics)
                     return "Physics system not available";
-                float ts = std::stof(args[0]);
-                physics->Console_SetTimeStep(ts);
-                return "Physics timestep set to " + args[0] + "s";
+                try
+                {
+                    float ts = std::stof(args[0]);
+                    physics->Console_SetTimeStep(ts);
+                    return "Physics timestep set to " + args[0] + "s";
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Set physics fixed timestep", "Physics");
 
@@ -338,9 +373,16 @@ namespace Spark
                 auto* physics = EngineContext::Get()->GetPhysics();
                 if (!physics)
                     return "Physics system not available";
-                return physics->Console_Raycast(std::stof(args[0]), std::stof(args[1]), std::stof(args[2]),
-                                                std::stof(args[3]), std::stof(args[4]), std::stof(args[5]),
-                                                std::stof(args[6]));
+                try
+                {
+                    return physics->Console_Raycast(std::stof(args[0]), std::stof(args[1]), std::stof(args[2]),
+                                                    std::stof(args[3]), std::stof(args[4]), std::stof(args[5]),
+                                                    std::stof(args[6]));
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Perform a physics raycast", "Physics");
 
@@ -393,8 +435,15 @@ namespace Spark
                     return "Usage: audio_sfx_volume <0.0-1.0>";
                 if (!audioEngine)
                     return "Audio engine not available";
-                audioEngine->Console_SetSFXVolume(std::stof(args[0]));
-                return "SFX volume set to " + args[0];
+                try
+                {
+                    audioEngine->Console_SetSFXVolume(std::stof(args[0]));
+                    return "SFX volume set to " + args[0];
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid number format");
+                }
             },
             "Set SFX volume", "Audio");
 
@@ -406,8 +455,15 @@ namespace Spark
                     return "Usage: audio_music_volume <0.0-1.0>";
                 if (!audioEngine)
                     return "Audio engine not available";
-                audioEngine->Console_SetMusicVolume(std::stof(args[0]));
-                return "Music volume set to " + args[0];
+                try
+                {
+                    audioEngine->Console_SetMusicVolume(std::stof(args[0]));
+                    return "Music volume set to " + args[0];
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid number format");
+                }
             },
             "Set music volume", "Audio");
 
@@ -447,8 +503,15 @@ namespace Spark
                     return "Usage: audio_stop <source_id>";
                 if (!audioEngine)
                     return "Audio engine not available";
-                audioEngine->Console_StopSound(static_cast<uint32_t>(std::stoul(args[0])));
-                return "Sound stopped";
+                try
+                {
+                    audioEngine->Console_StopSound(static_cast<uint32_t>(std::stoul(args[0])));
+                    return std::string("Sound stopped");
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid source ID");
+                }
             },
             "Stop a playing sound by ID", "Audio");
 
@@ -508,8 +571,16 @@ namespace Spark
                     return "Usage: audio_listener_pos <x> <y> <z>";
                 if (!audioEngine)
                     return "Audio engine not available";
-                audioEngine->Console_SetListenerPosition(std::stof(args[0]), std::stof(args[1]), std::stof(args[2]));
-                return "Listener position set";
+                try
+                {
+                    audioEngine->Console_SetListenerPosition(std::stof(args[0]), std::stof(args[1]),
+                                                             std::stof(args[2]));
+                    return std::string("Listener position set");
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Set 3D audio listener position", "Audio");
 
@@ -521,8 +592,15 @@ namespace Spark
                     return "Usage: audio_doppler <scale>";
                 if (!audioEngine)
                     return "Audio engine not available";
-                audioEngine->Console_SetDopplerScale(std::stof(args[0]));
-                return "Doppler scale set to " + args[0];
+                try
+                {
+                    audioEngine->Console_SetDopplerScale(std::stof(args[0]));
+                    return "Doppler scale set to " + args[0];
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Set Doppler effect scale", "Audio");
 
@@ -534,7 +612,14 @@ namespace Spark
                     return "Usage: audio_source_info <source_id>";
                 if (!audioEngine)
                     return "Audio engine not available";
-                return audioEngine->Console_GetSourceInfo(static_cast<uint32_t>(std::stoul(args[0])));
+                try
+                {
+                    return audioEngine->Console_GetSourceInfo(static_cast<uint32_t>(std::stoul(args[0])));
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid source ID");
+                }
             },
             "Get info about an audio source", "Audio");
     }

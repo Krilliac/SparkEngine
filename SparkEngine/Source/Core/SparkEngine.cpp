@@ -664,6 +664,7 @@ static void ShutdownDebugSystems()
 static void InitPhysics()
 {
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+    ASSERT_NOT_NULL(EngineContext::Get());
     g_physicsOwned = std::make_unique<PhysicsSystem>();
     EngineContext::Get()->SetPhysics(g_physicsOwned.get());
     if (g_graphics)
