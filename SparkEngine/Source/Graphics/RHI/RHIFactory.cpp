@@ -359,17 +359,34 @@ namespace Spark
             replaceAll(src, "uint4", "uvec4");
             replaceAll(src, "uint3", "uvec3");
             replaceAll(src, "uint2", "uvec2");
-            replaceAll(src, "mul(", "(("); // Simplified — needs parenthesis fixup
-            replaceAll(src, "saturate(", "clamp(");
+            // HLSL intrinsic → GLSL equivalents (inspired by Wine's WineD3D shader translator)
+            // Wine translates mul() to GLSL's * operator; we use a comment marker since
+            // naive find-replace can't restructure mul(A, B) → (A * B) without parsing.
+            replaceAll(src, "mul(", "/* HLSL_MUL */ (");
+            replaceAll(src, "saturate(", "clamp("); // Note: needs 3 args clamp(x, 0.0, 1.0)
             replaceAll(src, "lerp(", "mix(");
             replaceAll(src, "frac(", "fract(");
             replaceAll(src, "rsqrt(", "inversesqrt(");
             replaceAll(src, "ddx(", "dFdx(");
             replaceAll(src, "ddy(", "dFdy(");
+            replaceAll(src, "atan2(", "atan(");
+            replaceAll(src, "clip(", "/* HLSL_CLIP */ ("); // Needs: if (x < 0.0) discard;
+
+            // Texture sampling (Wine maps tex2D/tex2Dlod to texture/textureLod)
+            replaceAll(src, "tex2Dlod(", "textureLod(");
+            replaceAll(src, "tex2D(", "texture(");
             replaceAll(src, "Texture2D", "sampler2D");
             replaceAll(src, "SamplerState", "// SamplerState removed");
             replaceAll(src, ".Sample(", ".texture("); // Simplified
             replaceAll(src, "cbuffer", "uniform");
+
+            // HLSL system-value semantics → GLSL built-in variables
+            // Wine's shader translator maps these in its semantic resolution pass
+            replaceAll(src, "SV_Position", "gl_Position");
+            replaceAll(src, "SV_VertexID", "gl_VertexIndex");
+            replaceAll(src, "SV_InstanceID", "gl_InstanceIndex");
+            replaceAll(src, "SV_Depth", "gl_FragDepth");
+            replaceAll(src, "SV_IsFrontFace", "gl_FrontFacing");
 
             glsl += "// Auto-translated from HLSL (basic keyword substitution)\n";
             glsl += "// Entry point: " + entryPoint + "\n\n";

@@ -104,11 +104,27 @@ class AudioEngine
     ~AudioEngine();
 
     /**
+     * @brief Check whether a real audio backend is available on this platform
+     *
+     * Returns true on Windows (XAudio2). Returns false on Linux/macOS where
+     * audio stubs are no-ops. Wine wraps XAudio2 over ALSA/PulseAudio; a
+     * native SDL2 audio backend is planned but not yet implemented.
+     */
+    static bool IsAudioBackendAvailable()
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    /**
      * @brief Initialize the audio engine with XAudio2
-     * 
+     *
      * Sets up the XAudio2 engine, creates the mastering voice, and initializes
      * the audio source object pool with the specified number of sources.
-     * 
+     *
      * @param maxSources Maximum number of simultaneous audio sources
      * @return HRESULT indicating success or failure of audio initialization
      * @note A typical value for maxSources is 32-64 for most games

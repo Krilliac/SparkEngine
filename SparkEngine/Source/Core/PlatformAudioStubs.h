@@ -12,6 +12,8 @@
 
 #include "PlatformTypes.h"
 
+#include <cstdio>
+
 // --- XAudio2 stubs ---
 #ifndef XAUDIO2_DEFAULT_PROCESSOR
 #define XAUDIO2_DEFAULT_PROCESSOR 1
@@ -137,12 +139,20 @@ struct IXAudio2
     void Release() {}
 };
 
+// Wine wraps XAudio2 over ALSA/PulseAudio on Linux. SparkEngine uses no-op
+// stubs for now — a native SDL2 audio backend is planned but not yet implemented.
 inline long XAudio2Create(IXAudio2** pp, uint32_t = 0, uint32_t = XAUDIO2_DEFAULT_PROCESSOR)
 {
+    static bool warned = false;
+    if (!warned)
+    {
+        fprintf(stderr, "[SparkEngine] Warning: XAudio2 unavailable on this platform. Audio is disabled.\n");
+        warned = true;
+    }
     static IXAudio2 stubEngine;
     if (pp)
         *pp = &stubEngine;
-    return 0; // S_OK
+    return 0; // S_OK — succeeds silently so callers don't crash
 }
 
 // --- XInput stubs ---
@@ -184,14 +194,93 @@ struct XINPUT_VIBRATION
 #define XINPUT_GAMEPAD_Y 0x8000
 #endif
 
+// Wine maps XInput to Linux's evdev/joydev. SparkEngine uses SDL2's gamepad API
+// which provides near-identical abstraction (button/axis mapping, rumble).
+#ifdef SPARK_SDL2_AVAILABLE
+#include <SDL2/SDL.h>
+
+inline uint32_t XInputGetState(uint32_t dwUserIndex, XINPUT_STATE* pState)
+{
+    if (!pState || dwUserIndex > 3)
+        return 1; // ERROR_DEVICE_NOT_CONNECTED
+
+    SDL_GameController* controller = SDL_GameControllerOpen(static_cast<int>(dwUserIndex));
+    if (!controller)
+        return 1;
+
+    memset(pState, 0, sizeof(XINPUT_STATE));
+
+    // Map SDL2 buttons → XInput button flags
+    auto btn = [&](SDL_GameControllerButton b) { return SDL_GameControllerGetButton(controller, b); };
+    uint16_t buttons = 0;
+    if (btn(SDL_CONTROLLER_BUTTON_DPAD_UP))
+        buttons |= XINPUT_GAMEPAD_DPAD_UP;
+    if (btn(SDL_CONTROLLER_BUTTON_DPAD_DOWN))
+        buttons |= XINPUT_GAMEPAD_DPAD_DOWN;
+    if (btn(SDL_CONTROLLER_BUTTON_DPAD_LEFT))
+        buttons |= XINPUT_GAMEPAD_DPAD_LEFT;
+    if (btn(SDL_CONTROLLER_BUTTON_DPAD_RIGHT))
+        buttons |= XINPUT_GAMEPAD_DPAD_RIGHT;
+    if (btn(SDL_CONTROLLER_BUTTON_START))
+        buttons |= XINPUT_GAMEPAD_START;
+    if (btn(SDL_CONTROLLER_BUTTON_BACK))
+        buttons |= XINPUT_GAMEPAD_BACK;
+    if (btn(SDL_CONTROLLER_BUTTON_LEFTSTICK))
+        buttons |= XINPUT_GAMEPAD_LEFT_THUMB;
+    if (btn(SDL_CONTROLLER_BUTTON_RIGHTSTICK))
+        buttons |= XINPUT_GAMEPAD_RIGHT_THUMB;
+    if (btn(SDL_CONTROLLER_BUTTON_LEFTSHOULDER))
+        buttons |= XINPUT_GAMEPAD_LEFT_SHOULDER;
+    if (btn(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER))
+        buttons |= XINPUT_GAMEPAD_RIGHT_SHOULDER;
+    if (btn(SDL_CONTROLLER_BUTTON_A))
+        buttons |= XINPUT_GAMEPAD_A;
+    if (btn(SDL_CONTROLLER_BUTTON_B))
+        buttons |= XINPUT_GAMEPAD_B;
+    if (btn(SDL_CONTROLLER_BUTTON_X))
+        buttons |= XINPUT_GAMEPAD_X;
+    if (btn(SDL_CONTROLLER_BUTTON_Y))
+        buttons |= XINPUT_GAMEPAD_Y;
+
+    pState->Gamepad.wButtons = buttons;
+
+    // Map SDL2 axes → XInput axes (SDL range: -32768..32767, matches XInput)
+    auto axis = [&](SDL_GameControllerAxis a) { return SDL_GameControllerGetAxis(controller, a); };
+    pState->Gamepad.sThumbLX = static_cast<short>(axis(SDL_CONTROLLER_AXIS_LEFTX));
+    pState->Gamepad.sThumbLY = static_cast<short>(-axis(SDL_CONTROLLER_AXIS_LEFTY)); // Y-axis inverted
+    pState->Gamepad.sThumbRX = static_cast<short>(axis(SDL_CONTROLLER_AXIS_RIGHTX));
+    pState->Gamepad.sThumbRY = static_cast<short>(-axis(SDL_CONTROLLER_AXIS_RIGHTY));
+    pState->Gamepad.bLeftTrigger = static_cast<uint8_t>(axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT) >> 7);
+    pState->Gamepad.bRightTrigger = static_cast<uint8_t>(axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >> 7);
+
+    return 0; // ERROR_SUCCESS
+}
+
+inline uint32_t XInputSetState(uint32_t dwUserIndex, XINPUT_VIBRATION* pVibration)
+{
+    if (!pVibration || dwUserIndex > 3)
+        return 1;
+
+    SDL_GameController* controller = SDL_GameControllerOpen(static_cast<int>(dwUserIndex));
+    if (!controller)
+        return 1;
+
+    SDL_GameControllerRumble(controller, pVibration->wLeftMotorSpeed, pVibration->wRightMotorSpeed, 100);
+    return 0;
+}
+
+#else // No SDL2 — dead stubs
+
 inline uint32_t XInputGetState(uint32_t, XINPUT_STATE*)
 {
-    return 1; /* ERROR_DEVICE_NOT_CONNECTED */
+    return 1; // ERROR_DEVICE_NOT_CONNECTED
 }
 inline uint32_t XInputSetState(uint32_t, XINPUT_VIBRATION*)
 {
     return 1;
 }
+
+#endif // SPARK_SDL2_AVAILABLE
 
 // --- Win32 process/module stubs ---
 #ifndef PROCESS_QUERY_INFORMATION

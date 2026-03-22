@@ -15,6 +15,30 @@
 #include <cstddef>
 
 // ============================================================================
+// Minimal IUnknown stub (COM base interface)
+// ============================================================================
+
+// Wine defines the full COM IUnknown with reference counting. SparkEngine only
+// needs a minimal stub so that code referencing QueryInterface/AddRef/Release
+// compiles on non-Windows. No real COM infrastructure is needed.
+struct GUID
+{
+    uint32_t Data1;
+    uint16_t Data2;
+    uint16_t Data3;
+    uint8_t Data4[8];
+};
+using REFIID = const GUID&;
+
+struct IUnknown
+{
+    virtual ~IUnknown() = default;
+    virtual long QueryInterface(REFIID, void**) { return static_cast<long>(0x80004002L); } // E_NOINTERFACE
+    virtual unsigned long AddRef() { return 1; }
+    virtual unsigned long Release() { return 0; }
+};
+
+// ============================================================================
 // D3D11 Type Stubs (opaque forward declarations for non-Windows)
 // ============================================================================
 
