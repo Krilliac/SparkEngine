@@ -110,7 +110,7 @@ SparkEngine depends on 15 third-party libraries managed as Git submodules. After
 ls ThirdParty/
 ```
 
-You should see directories for: entt, bullet3, imgui, angelscript, assimp, glm, rapidjson, spdlog, stb, miniaudio, DirectXTK, ImGuizmo, imnodes, miniz, tinyobjloader.
+You should see directories for: entt, JoltPhysics, imgui, angelscript, assimp, glm, rapidjson, spdlog, stb, miniaudio, DirectXTK, ImGuizmo, imnodes, miniz, tinyobjloader.
 
 If any are empty, re-run:
 

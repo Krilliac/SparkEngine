@@ -419,7 +419,7 @@ public:
 | `GetTimer()` | `Timer*` | Frame timing and delta time |
 | `GetEventBus()` | `EventBus*` | Publish/subscribe event system |
 | `GetAudio()` | `AudioEngine*` | XAudio2 / miniaudio spatial audio |
-| `GetPhysics()` | `PhysicsSystem*` | Bullet Physics simulation |
+| `GetPhysics()` | `PhysicsSystem*` | Jolt Physics simulation |
 | `GetAnimation()` | `AnimationSystem*` | Skeletal animation pipeline |
 | `GetAI()` | `AISystem*` | Behavior trees and NavMesh |
 | `GetNetwork()` | `NetworkManager*` | UDP multiplayer (requires `ENABLE_NETWORKING`) |

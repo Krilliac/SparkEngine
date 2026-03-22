@@ -12,7 +12,7 @@ The terrain system renders large outdoor environments using heightmaps:
 
 - **Quadtree LOD** — Automatic level-of-detail based on camera distance
 - **Texture Splatting** — Multi-texture blending based on height, slope, or paint masks
-- **Heightfield Collision** — [Bullet Physics](Physics) `Heightfield` shape for terrain collisions
+- **Heightfield Collision** — [Jolt Physics](Physics) `Heightfield` shape for terrain collisions
 - **Chunk-based** — Terrain is divided into chunks for efficient culling and streaming
 
 ## Noise Functions
@@ -168,7 +168,7 @@ weights /= dot(weights, float4(1, 1, 1, 1));   // Normalize
 
 ## Terrain Collision Detail Levels
 
-The Bullet Physics heightfield shape can use a lower-resolution heightmap than the visual mesh to save CPU:
+The Jolt Physics heightfield shape can use a lower-resolution heightmap than the visual mesh to save CPU:
 
 | Collision LOD | Resolution Ratio | Use Case |
 |---------------|-----------------|----------|

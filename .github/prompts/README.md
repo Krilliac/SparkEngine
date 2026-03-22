@@ -9,7 +9,7 @@ Streamlined prompt system for AI-assisted development. 9 files (down from 34), z
 | [`copilot-instructions.md`](copilot-instructions.md) | Yes | Shared context: architecture, APIs, standards, build info |
 | [`engine-core.prompt.md`](engine-core.prompt.md) | | ECS (EnTT), components, systems, engine lifecycle |
 | [`graphics-rendering.prompt.md`](graphics-rendering.prompt.md) | | DX11 pipeline, shaders, PBR, post-processing |
-| [`audio-physics.prompt.md`](audio-physics.prompt.md) | | XAudio2 audio, Bullet Physics 3, collision system |
+| [`audio-physics.prompt.md`](audio-physics.prompt.md) | | XAudio2 audio, Jolt Physics, collision system |
 | [`gameplay-systems.prompt.md`](gameplay-systems.prompt.md) | | Game module, AI, animation, weapons, procedural gen, saves |
 | [`editor-tools.prompt.md`](editor-tools.prompt.md) | | SparkEditor (ImGui), asset pipeline, debugging tools |
 | [`build-test.prompt.md`](build-test.prompt.md) | | CMake build, CI/CD, testing, dependencies |

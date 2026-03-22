@@ -295,7 +295,7 @@ However, the **jobs themselves** must be written with thread safety in mind:
 | Rule | Rationale |
 |------|-----------|
 | Do not access the ECS registry from worker threads | EnTT is not thread-safe for concurrent mutation. Gather data on the main thread first. |
-| Do not call `PhysicsSystem` methods from worker threads | Bullet Physics is main-thread only. |
+| Do not call `PhysicsSystem` methods from worker threads | Jolt Physics supports multithreaded job dispatch, but direct API calls should be synchronized. |
 | Avoid shared mutable state without synchronization | Standard data-race rules apply. |
 | Prefer per-index output arrays over shared containers | `ParallelFor` with per-index writes to a pre-allocated array is data-race free. |
 | Use `WaitForAll()` before reading results from fire-and-forget jobs | Without the future, there is no other synchronization point. |

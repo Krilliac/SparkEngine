@@ -63,7 +63,7 @@ git submodule update --recursive
 If submodules are corrupted, remove and re-clone:
 
 ```bash
-rm -rf ThirdParty/bullet3 ThirdParty/entt ThirdParty/imgui
+rm -rf ThirdParty/JoltPhysics ThirdParty/entt ThirdParty/imgui
 git submodule update --init --recursive --force
 ```
 
