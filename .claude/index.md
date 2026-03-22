@@ -12,6 +12,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | PCSX2 analysis (12 recommendations: save tags, null RHI, render ring, multi-ISA) | [knowledge/pcsx2-analysis.md](knowledge/pcsx2-analysis.md) | Decision | **Resolved** | 2026-03-20 |
 | 11-engine + 3-framework analysis (30 recommendations, ~20 engines total) | [knowledge/eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) | Decision | Active | 2026-03-20 |
 | 13 closed/proprietary engine analysis (15 recommendations, Blizzard/Havok/Frostbite/RAGE/id Tech/etc.) | [knowledge/closed-engines-analysis.md](knowledge/closed-engines-analysis.md) | Decision | Active | 2026-03-21 |
+| ThorVG + Unity Graphics + 33 libraries analysis (35 recommendations: volumes, bloom, MSDF fonts, meshoptimizer) | [knowledge/thorvg-unity-graphics-analysis.md](knowledge/thorvg-unity-graphics-analysis.md) | Decision | Active | 2026-03-22 |
 | CI log access without gh CLI | [knowledge/ci-log-access.md](knowledge/ci-log-access.md) | Issue | **Resolved** | 2026-03-22 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
@@ -90,6 +91,14 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - Phase 5 (advanced): ClipmapTerrain (multi-level LOD), VirtualTextureManager (page cache + LRU eviction)
 - 16 new files, 3,480 lines added. All compiled, tested, formatted.
 - See [closed-engines-analysis.md](knowledge/closed-engines-analysis.md) for original analysis
+
+**Active: 35 recommendations from ThorVG + Unity Graphics + 33 libraries (2026-03-22):**
+- Sources: ThorVG (vector graphics), Unity SRP/HDRP (render pipeline), awesome-graphics-libraries (33+ libraries)
+- Top 12 HIGH: volume system, bloom, auto-exposure, tonemapping, color grading, meshoptimizer, Basis Universal, MSDF fonts, cached shadows, UI dirty tracking, shader variant keywords, FastNoiseLite HLSL
+- Top 13 MEDIUM: PCSS, light layers, 2D scene graph, UI compositor, persistent GPU CBs, GPU occlusion, OIDN denoiser, tinyexr, ShaderConductor, RTHandle scaling, SSAO temporal, bilateral upsample, reflection probe cache
+- Top 10 LOW/FUTURE: VCT GI, DDGI, froxel volumetric fog, APV, Jolt Physics, ThorVG/Lottie, GTAO, FastNoise2, Slang, Nanite-like clusters
+- Quick wins (days): FastNoiseLite HLSL, tinyexr, tonemapping, SSAO temporal, bilateral upsample, light layers
+- See [thorvg-unity-graphics-analysis.md](knowledge/thorvg-unity-graphics-analysis.md) for full prioritized list
 
 **Active: 20 recommendations from 5-engine analysis (2026-03-19):**
 - Cocos Engine, Defold, Panda3D, S&box, Halley
