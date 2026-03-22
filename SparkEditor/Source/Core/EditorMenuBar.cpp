@@ -338,6 +338,12 @@ namespace SparkEditor
                 createObject("Fog Volume");
             if (ImGui::MenuItem("Audio Reverb Zone"))
                 createObject("Audio Reverb Zone");
+            if (ImGui::MenuItem("Wind Zone"))
+                createObject("Wind Zone");
+            if (ImGui::MenuItem("Cinematic Trigger"))
+                createObject("Cinematic Trigger");
+            if (ImGui::MenuItem("Area Boundary"))
+                createObject("Area Boundary");
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Probe"))
@@ -356,6 +362,28 @@ namespace SparkEditor
                 createObject("Spawn Point");
             if (ImGui::MenuItem("NavMesh Obstacle"))
                 createObject("NavMesh Obstacle");
+            if (ImGui::MenuItem("Occluder"))
+                createObject("Occluder");
+            if (ImGui::MenuItem("Billboard"))
+                createObject("Billboard");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Gameplay"))
+        {
+            if (ImGui::MenuItem("Destructible"))
+                createObject("Destructible");
+            if (ImGui::MenuItem("Dialogue Trigger"))
+                createObject("Dialogue Trigger");
+            if (ImGui::MenuItem("Physics Joint"))
+                createObject("Physics Joint");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("AI"))
+        {
+            if (ImGui::MenuItem("Cover Point"))
+                createObject("Cover Point");
+            if (ImGui::MenuItem("Tactical Point"))
+                createObject("Tactical Point");
             ImGui::EndMenu();
         }
         ImGui::EndMenu();

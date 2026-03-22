@@ -672,6 +672,151 @@ namespace SparkEditor
         float roomSize = 0.5f;         ///< Room size factor [0,1]
     };
 
+    // =========================================================================
+    // Gameplay / AI Placement Data
+    // =========================================================================
+
+    /**
+     * @brief Wind zone scene data (directional or spherical wind force)
+     */
+    struct WindZoneData
+    {
+        int mode = 0;                            ///< 0=Directional, 1=Spherical
+        XMFLOAT3 direction = {1.0f, 0.0f, 0.0f}; ///< Wind direction (Directional mode)
+        float mainStrength = 1.0f;               ///< Main wind strength (m/s)
+        float turbulenceStrength = 0.5f;         ///< Turbulence intensity
+        float pulseFrequency = 0.0f;             ///< Pulsing frequency (Hz, 0=constant)
+        float radius = 10.0f;                    ///< Effect radius (Spherical mode)
+        bool affectsParticles = true;            ///< Influence particle systems
+        bool affectsVegetation = true;           ///< Influence vegetation sway
+        bool affectsCloth = true;                ///< Influence cloth simulation
+    };
+
+    /**
+     * @brief Physics joint/constraint scene data
+     */
+    struct PhysicsJointData
+    {
+        int jointType = 0;                    ///< 0=Fixed, 1=Hinge, 2=Slider, 3=BallSocket, 4=Distance, 5=Cone
+        uint64_t connectedBody = 0;           ///< ObjectID of the connected rigid body (0=world anchor)
+        XMFLOAT3 anchor = {0.0f, 0.0f, 0.0f}; ///< Local-space anchor point
+        XMFLOAT3 axis = {0.0f, 1.0f, 0.0f};   ///< Joint axis (for hinge/slider/cone)
+        float lowerLimit = 0.0f;              ///< Lower angular/linear limit
+        float upperLimit = 0.0f;              ///< Upper angular/linear limit
+        bool enableLimits = false;            ///< Enable joint limits
+        bool enableMotor = false;             ///< Enable joint motor
+        float motorSpeed = 0.0f;              ///< Motor target speed
+        float motorMaxForce = 100.0f;         ///< Motor maximum force
+        float breakForce = 0.0f;              ///< Force to break joint (0=unbreakable)
+        float breakTorque = 0.0f;             ///< Torque to break joint (0=unbreakable)
+    };
+
+    /**
+     * @brief Occluder proxy scene data (for software occlusion culling)
+     */
+    struct OccluderData
+    {
+        int shape = 0;                             ///< 0=Box, 1=Quad
+        XMFLOAT3 halfExtents = {1.0f, 1.0f, 0.1f}; ///< Box half-extents or quad size
+        bool doubleSided = false;                  ///< Cull from both sides
+    };
+
+    /**
+     * @brief AI cover point scene data
+     */
+    struct CoverPointData
+    {
+        int height = 0;                            ///< 0=Low (crouch), 1=High (standing)
+        float width = 1.0f;                        ///< Cover width (meters)
+        XMFLOAT3 coverNormal = {0.0f, 0.0f, 1.0f}; ///< Direction entity faces when in cover
+        bool canLeanLeft = true;                   ///< Can lean left to fire
+        bool canLeanRight = true;                  ///< Can lean right to fire
+        bool canFireOver = false;                  ///< Can fire over top (low cover)
+        int maxOccupants = 1;                      ///< Max AI using this point simultaneously
+    };
+
+    /**
+     * @brief AI tactical point scene data
+     */
+    struct TacticalPointData
+    {
+        int pointType = 0;         ///< 0=Cover, 1=Vantage, 2=Ambush, 3=Flank, 4=Retreat, 5=Rally
+        float qualityScore = 1.0f; ///< Base quality score [0,1] for AI evaluation
+        float radius = 2.0f;       ///< Effective radius of this tactical position
+        bool enabled = true;       ///< Whether this point is currently available
+    };
+
+    /**
+     * @brief Destructible object scene data
+     */
+    struct DestructibleData
+    {
+        float health = 100.0f;                ///< Object health before destruction
+        int damageStages = 3;                 ///< Number of visual damage stages (1-5)
+        char fracturePattern[64] = "default"; ///< Fracture pattern name
+        float debrisLifetime = 10.0f;         ///< How long debris persists (seconds)
+        float explosionForce = 5.0f;          ///< Force applied to debris on fracture
+        float minDamageThreshold = 5.0f;      ///< Minimum damage to cause any effect
+        bool generateColliders = true;        ///< Generate colliders for debris pieces
+        bool chainReaction = false;           ///< Can trigger nearby destructibles
+    };
+
+    /**
+     * @brief Cinematic trigger scene data (starts a cinematic sequence)
+     */
+    struct CinematicTriggerData
+    {
+        char sequenceName[128] = {};               ///< Name of the cinematic sequence to play
+        int triggerShape = 0;                      ///< 0=Sphere, 1=AABB
+        float radius = 5.0f;                       ///< Sphere radius
+        XMFLOAT3 halfExtents = {5.0f, 5.0f, 5.0f}; ///< AABB half-extents
+        bool playOnce = true;                      ///< Only trigger once per play session
+        bool skipable = true;                      ///< Player can skip the cinematic
+        bool pauseGameplay = true;                 ///< Freeze gameplay during cinematic
+    };
+
+    /**
+     * @brief Dialogue trigger scene data (starts a dialogue tree)
+     */
+    struct DialogueTriggerData
+    {
+        char dialogueTreeName[128] = {}; ///< Name of the dialogue tree to start
+        char speakerName[64] = {};       ///< NPC speaker name
+        float interactionRadius = 3.0f;  ///< Max distance to start dialogue
+        bool requiresInteract = true;    ///< Requires player input vs. auto-start
+        bool oneShot = false;            ///< Only trigger once
+        bool facePlayer = true;          ///< NPC turns to face player during dialogue
+    };
+
+    /**
+     * @brief Area boundary scene data (level streaming boundary)
+     */
+    struct AreaBoundaryData
+    {
+        char areaName[64] = {};               ///< Area identifier name
+        char scenePath[256] = {};             ///< Scene file to stream in
+        XMFLOAT3 boundsMin = {0, 0, 0};       ///< AABB minimum corner
+        XMFLOAT3 boundsMax = {100, 100, 100}; ///< AABB maximum corner
+        int priority = 0;                     ///< Loading priority
+        float loadRadius = 50.0f;             ///< Distance to start loading
+        float unloadRadius = 100.0f;          ///< Distance to unload
+        bool alwaysLoaded = false;            ///< Keep loaded regardless of distance
+    };
+
+    /**
+     * @brief Billboard scene data (always-face-camera sprite)
+     */
+    struct BillboardData
+    {
+        char texturePath[256] = {};                ///< Texture path
+        XMFLOAT4 color = {1.0f, 1.0f, 1.0f, 1.0f}; ///< Tint color
+        XMFLOAT2 size = {1.0f, 1.0f};              ///< Billboard size (world units)
+        int lockAxis = 0;                          ///< 0=Full, 1=Y-axis only, 2=None(flat)
+        float fadeStartDistance = 50.0f;           ///< Distance to start fading
+        float fadeEndDistance = 100.0f;            ///< Distance to fully fade out
+        int sortingLayer = 0;                      ///< Render sort order
+    };
+
     // ComponentType is defined in ../Enums/SceneSystemEnums.h to avoid ODR violations
 
     /**

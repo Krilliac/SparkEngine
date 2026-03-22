@@ -308,6 +308,36 @@ namespace SparkEditor
                     case ComponentType::AUDIO_REVERB_ZONE:
                         comp.SetData(AudioReverbZoneData{});
                         break;
+                    case ComponentType::WIND_ZONE:
+                        comp.SetData(WindZoneData{});
+                        break;
+                    case ComponentType::PHYSICS_JOINT:
+                        comp.SetData(PhysicsJointData{});
+                        break;
+                    case ComponentType::OCCLUDER:
+                        comp.SetData(OccluderData{});
+                        break;
+                    case ComponentType::COVER_POINT:
+                        comp.SetData(CoverPointData{});
+                        break;
+                    case ComponentType::TACTICAL_POINT:
+                        comp.SetData(TacticalPointData{});
+                        break;
+                    case ComponentType::DESTRUCTIBLE:
+                        comp.SetData(DestructibleData{});
+                        break;
+                    case ComponentType::CINEMATIC_TRIGGER:
+                        comp.SetData(CinematicTriggerData{});
+                        break;
+                    case ComponentType::DIALOGUE_TRIGGER:
+                        comp.SetData(DialogueTriggerData{});
+                        break;
+                    case ComponentType::AREA_BOUNDARY:
+                        comp.SetData(AreaBoundaryData{});
+                        break;
+                    case ComponentType::BILLBOARD:
+                        comp.SetData(BillboardData{});
+                        break;
                     default:
                         break;
                     }
@@ -779,6 +809,11 @@ namespace SparkEditor
                     AddComponent(ComponentType::RIGID_BODY);
                     m_showAddComponentMenu = false;
                 }
+                if (ImGui::MenuItem("Physics Joint", nullptr, false, !HasComponent(ComponentType::PHYSICS_JOINT)))
+                {
+                    AddComponent(ComponentType::PHYSICS_JOINT);
+                    m_showAddComponentMenu = false;
+                }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu(ICON_FA_CODE " Scripting"))
@@ -894,6 +929,22 @@ namespace SparkEditor
                     AddComponent(ComponentType::AUDIO_REVERB_ZONE);
                     m_showAddComponentMenu = false;
                 }
+                if (ImGui::MenuItem("Wind Zone", nullptr, false, !HasComponent(ComponentType::WIND_ZONE)))
+                {
+                    AddComponent(ComponentType::WIND_ZONE);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Cinematic Trigger", nullptr, false,
+                                    !HasComponent(ComponentType::CINEMATIC_TRIGGER)))
+                {
+                    AddComponent(ComponentType::CINEMATIC_TRIGGER);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Area Boundary", nullptr, false, !HasComponent(ComponentType::AREA_BOUNDARY)))
+                {
+                    AddComponent(ComponentType::AREA_BOUNDARY);
+                    m_showAddComponentMenu = false;
+                }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu(ICON_FA_LIGHTBULB " Probes"))
@@ -925,6 +976,16 @@ namespace SparkEditor
                 if (ImGui::MenuItem("NavMesh Obstacle", nullptr, false, !HasComponent(ComponentType::NAV_OBSTACLE)))
                 {
                     AddComponent(ComponentType::NAV_OBSTACLE);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Occluder", nullptr, false, !HasComponent(ComponentType::OCCLUDER)))
+                {
+                    AddComponent(ComponentType::OCCLUDER);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Billboard", nullptr, false, !HasComponent(ComponentType::BILLBOARD)))
+                {
+                    AddComponent(ComponentType::BILLBOARD);
                     m_showAddComponentMenu = false;
                 }
                 ImGui::EndMenu();
@@ -961,6 +1022,16 @@ namespace SparkEditor
                     AddComponent(ComponentType::WEATHER);
                     m_showAddComponentMenu = false;
                 }
+                if (ImGui::MenuItem("Destructible", nullptr, false, !HasComponent(ComponentType::DESTRUCTIBLE)))
+                {
+                    AddComponent(ComponentType::DESTRUCTIBLE);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Dialogue Trigger", nullptr, false, !HasComponent(ComponentType::DIALOGUE_TRIGGER)))
+                {
+                    AddComponent(ComponentType::DIALOGUE_TRIGGER);
+                    m_showAddComponentMenu = false;
+                }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu(ICON_FA_BRAIN " AI"))
@@ -968,6 +1039,16 @@ namespace SparkEditor
                 if (ImGui::MenuItem("AI Agent", nullptr, false, !HasComponent(ComponentType::AI_AGENT)))
                 {
                     AddComponent(ComponentType::AI_AGENT);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Cover Point", nullptr, false, !HasComponent(ComponentType::COVER_POINT)))
+                {
+                    AddComponent(ComponentType::COVER_POINT);
+                    m_showAddComponentMenu = false;
+                }
+                if (ImGui::MenuItem("Tactical Point", nullptr, false, !HasComponent(ComponentType::TACTICAL_POINT)))
+                {
+                    AddComponent(ComponentType::TACTICAL_POINT);
                     m_showAddComponentMenu = false;
                 }
                 ImGui::EndMenu();

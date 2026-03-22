@@ -76,6 +76,10 @@
 // NavObstacle, WaterPlane, FogVolume, LODGroup, SpawnPoint, AudioReverbZone
 #include "Components/VolumeComponents.h"
 
+// Placement: WindZone, PhysicsJoint, Occluder, CoverPoint, TacticalPoint,
+// Destructible, CinematicTrigger, DialogueTrigger, AreaBoundary, Billboard
+#include "Components/PlacementComponents.h"
+
 // =============================================================================
 // World
 // =============================================================================

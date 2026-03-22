@@ -467,16 +467,22 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `AbilityComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `ActiveComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `AnimationController` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
+| `AreaBoundaryComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `AudioReverbZoneComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `AudioSourceComponent` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |
+| `BillboardComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `Camera2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `CameraDrawMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/VisibilityComponents.h` |
 | `Camera` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
+| `CinematicTriggerComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `Collider2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ColliderComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
 | `CollisionMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/CollisionMaskComponents.h` |
 | `Config` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
+| `CoverPointComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `DecalComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
+| `DestructibleComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
+| `DialogueTriggerComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `FogVolumeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `HealthComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `InteractionComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
@@ -489,9 +495,11 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `NavObstacleComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `NetworkIdentity` | `SparkEngine/Source/Engine/ECS/Components/NetworkComponents.h` |
 | `NineSliceSprite` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `OccluderComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `ParallaxBackground` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ParallaxLayer` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `ParticleEmitterComponent` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
+| `PhysicsJointComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `PixelPerfectComponent` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `PostProcessVolumeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `ProjectileComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
@@ -507,6 +515,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `SpriteAnimationFrame` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `SpriteAnimator` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `SpriteRenderer` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
+| `TacticalPointComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `TagComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `TerrainComponent` | `SparkEngine/Source/Engine/ECS/Components/TerrainComponents.h` |
 | `TilemapComponent` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
@@ -516,6 +525,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `VisibilityMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/VisibilityComponents.h` |
 | `WaterPlaneComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `WeatherComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `WindZoneComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 <!-- /AUTO:component_list -->
 
 ## System Inventory

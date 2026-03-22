@@ -63,6 +63,20 @@ namespace SparkEditor
         m_prefabs.push_back({"Spawn Point", "Gameplay/SpawnPoint", "Gameplay", false});
         m_prefabs.push_back({"NavMesh Obstacle", "AI/NavMeshObstacle", "AI", false});
 
+        m_prefabs.push_back({"Wind Zone", "Volumes/WindZone", "Volumes", false});
+        m_prefabs.push_back({"Cinematic Trigger", "Volumes/CinematicTrigger", "Volumes", false});
+        m_prefabs.push_back({"Area Boundary", "Volumes/AreaBoundary", "Volumes", false});
+
+        m_prefabs.push_back({"Occluder", "Environment/Occluder", "Environment", false});
+        m_prefabs.push_back({"Billboard", "Environment/Billboard", "Environment", false});
+
+        m_prefabs.push_back({"Physics Joint", "Physics/Joint", "Physics", false});
+        m_prefabs.push_back({"Destructible", "Gameplay/Destructible", "Gameplay", false});
+        m_prefabs.push_back({"Dialogue Trigger", "Gameplay/DialogueTrigger", "Gameplay", false});
+
+        m_prefabs.push_back({"Cover Point", "AI/CoverPoint", "AI", false});
+        m_prefabs.push_back({"Tactical Point", "AI/TacticalPoint", "AI", false});
+
         return true;
     }
 
@@ -330,6 +344,8 @@ namespace SparkEditor
                 icon = ICON_FA_FLAG;
             else if (prefab.category == "AI")
                 icon = ICON_FA_BRAIN;
+            else if (prefab.category == "Physics")
+                icon = ICON_FA_VECTOR_SQUARE;
 
             std::string label = std::string(icon) + "  " + prefab.name;
             if (ImGui::Selectable(label.c_str(), isSelected))

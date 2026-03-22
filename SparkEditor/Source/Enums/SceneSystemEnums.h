@@ -64,6 +64,18 @@ namespace SparkEditor
         SPAWN_POINT = 37,         ///< Generic spawn point marker
         AUDIO_REVERB_ZONE = 38,   ///< Audio reverb/echo zone
 
+        // Gameplay / AI placement components
+        WIND_ZONE = 39,         ///< Directional/spherical wind force
+        PHYSICS_JOINT = 40,     ///< Physics constraint between bodies
+        OCCLUDER = 41,          ///< Occlusion culling proxy geometry
+        COVER_POINT = 42,       ///< AI cover position marker
+        TACTICAL_POINT = 43,    ///< AI tactical position marker
+        DESTRUCTIBLE = 44,      ///< Destructible object with fracture
+        CINEMATIC_TRIGGER = 45, ///< Starts a cinematic sequence on enter
+        DIALOGUE_TRIGGER = 46,  ///< Starts dialogue tree on interaction
+        AREA_BOUNDARY = 47,     ///< Level streaming area boundary
+        BILLBOARD = 48,         ///< Always-face-camera sprite
+
         CUSTOM = 1000 ///< Custom components start at 1000
     };
 
