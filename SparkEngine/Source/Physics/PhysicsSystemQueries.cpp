@@ -34,6 +34,16 @@
 #include <Jolt/Physics/Constraints/PointConstraint.h>
 #include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/Constraints/FixedConstraint.h>
+#include <Jolt/Physics/Constraints/DistanceConstraint.h>
+#include <Jolt/Physics/Constraints/ConeConstraint.h>
+#include <Jolt/Physics/Constraints/GearConstraint.h>
+#include <Jolt/Physics/Constraints/RackAndPinionConstraint.h>
+#include <Jolt/Physics/Constraints/PulleyConstraint.h>
+#include <Jolt/Physics/Constraints/PathConstraint.h>
+#include <Jolt/Physics/Constraints/PathConstraintPathHermite.h>
+#include <Jolt/Physics/Constraints/SixDOFConstraint.h>
+#include <Jolt/Physics/Constraints/MotorSettings.h>
+#include <Jolt/Physics/Constraints/SpringSettings.h>
 
 JPH_SUPPRESS_WARNINGS
 
@@ -112,6 +122,22 @@ std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& de
     {
         bodySettings.mIsSensor = true;
     }
+
+    // Set CCD / motion quality
+    if (desc.motionQuality == MotionQuality::LinearCast)
+    {
+        bodySettings.mMotionQuality = JPH::EMotionQuality::LinearCast;
+    }
+
+    // Set allowed degrees of freedom
+    bodySettings.mAllowedDOFs = static_cast<JPH::EAllowedDOFs>(static_cast<uint8_t>(desc.allowedDOFs));
+
+    // Set gravity factor
+    bodySettings.mGravityFactor = desc.gravityFactor;
+
+    // Set velocity limits
+    bodySettings.mMaxLinearVelocity = desc.maxLinearVelocity;
+    bodySettings.mMaxAngularVelocity = desc.maxAngularVelocity;
 
     // Create the body via Jolt
     auto& bodyInterface = m_joltSystem->GetBodyInterface();
@@ -425,6 +451,165 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateConeTwistConstraint(std:
     auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::ConeTwist, joltConstraint);
     m_constraints.push_back(constraint);
 
+    return constraint;
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateDistanceConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                           std::shared_ptr<PhysicsBody> bodyB,
+                                                                           const XMFLOAT3& pivotA,
+                                                                           const XMFLOAT3& pivotB, float minDistance,
+                                                                           float maxDistance)
+{
+    if (!m_joltSystem || !bodyA || !bodyB)
+        return nullptr;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
+
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
+
+    JPH::DistanceConstraintSettings settings;
+    settings.mPoint1 = JPH::RVec3(pivotA.x, pivotA.y, pivotA.z);
+    settings.mPoint2 = JPH::RVec3(pivotB.x, pivotB.y, pivotB.z);
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+    if (minDistance >= 0.0f)
+        settings.mMinDistance = minDistance;
+    if (maxDistance >= 0.0f)
+        settings.mMaxDistance = maxDistance;
+
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
+
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    m_joltSystem->AddConstraint(joltConstraint);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Distance, joltConstraint);
+    m_constraints.push_back(constraint);
+    return constraint;
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateConeConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                       std::shared_ptr<PhysicsBody> bodyB,
+                                                                       const XMFLOAT3& pivot, const XMFLOAT3& twistAxis,
+                                                                       float halfConeAngle)
+{
+    if (!m_joltSystem || !bodyA || !bodyB)
+        return nullptr;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
+
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
+
+    JPH::ConeConstraintSettings settings;
+    settings.mPoint1 = JPH::RVec3(pivot.x, pivot.y, pivot.z);
+    settings.mPoint2 = settings.mPoint1;
+    settings.mTwistAxis1 = JPH::Vec3(twistAxis.x, twistAxis.y, twistAxis.z).Normalized();
+    settings.mTwistAxis2 = settings.mTwistAxis1;
+    settings.mHalfConeAngle = halfConeAngle;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
+
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    m_joltSystem->AddConstraint(joltConstraint);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Cone, joltConstraint);
+    m_constraints.push_back(constraint);
+    return constraint;
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateSixDOFConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                         std::shared_ptr<PhysicsBody> bodyB,
+                                                                         const XMMATRIX& frameA, const XMMATRIX& frameB)
+{
+    if (!m_joltSystem || !bodyA || !bodyB)
+        return nullptr;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
+
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
+
+    XMVECTOR scaleA, rotA, transA;
+    XMMatrixDecompose(&scaleA, &rotA, &transA, frameA);
+    XMFLOAT3 posA;
+    XMStoreFloat3(&posA, transA);
+    XMFLOAT4 quatA;
+    XMStoreFloat4(&quatA, rotA);
+
+    XMVECTOR scaleB, rotB, transB;
+    XMMatrixDecompose(&scaleB, &rotB, &transB, frameB);
+    XMFLOAT3 posB;
+    XMStoreFloat3(&posB, transB);
+    XMFLOAT4 quatB;
+    XMStoreFloat4(&quatB, rotB);
+
+    JPH::SixDOFConstraintSettings settings;
+    settings.mPosition1 = JPH::RVec3(posA.x, posA.y, posA.z);
+    settings.mPosition2 = JPH::RVec3(posB.x, posB.y, posB.z);
+    settings.mAxisX1 = JPH::Vec3(1, 0, 0);
+    settings.mAxisY1 = JPH::Vec3(0, 1, 0);
+    settings.mAxisX2 = JPH::Vec3(1, 0, 0);
+    settings.mAxisY2 = JPH::Vec3(0, 1, 0);
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
+
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    m_joltSystem->AddConstraint(joltConstraint);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Generic6DOF, joltConstraint);
+    m_constraints.push_back(constraint);
+    return constraint;
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePulleyConstraint(
+    std::shared_ptr<PhysicsBody> bodyA, std::shared_ptr<PhysicsBody> bodyB, const XMFLOAT3& fixedPointA,
+    const XMFLOAT3& fixedPointB, const XMFLOAT3& bodyPointA, const XMFLOAT3& bodyPointB, float ratio)
+{
+    if (!m_joltSystem || !bodyA || !bodyB)
+        return nullptr;
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
+
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
+
+    JPH::PulleyConstraintSettings settings;
+    settings.mBodyPoint1 = JPH::RVec3(bodyPointA.x, bodyPointA.y, bodyPointA.z);
+    settings.mBodyPoint2 = JPH::RVec3(bodyPointB.x, bodyPointB.y, bodyPointB.z);
+    settings.mFixedPoint1 = JPH::RVec3(fixedPointA.x, fixedPointA.y, fixedPointA.z);
+    settings.mFixedPoint2 = JPH::RVec3(fixedPointB.x, fixedPointB.y, fixedPointB.z);
+    settings.mRatio = ratio;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
+
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    m_joltSystem->AddConstraint(joltConstraint);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Pulley, joltConstraint);
+    m_constraints.push_back(constraint);
     return constraint;
 }
 

@@ -131,11 +131,26 @@ class SparkObjectLayerPairFilter final : public JPH::ObjectLayerPairFilter
     }
 };
 
-// Contact listener for collision callbacks
+// Contact listener for collision callbacks — dispatches to SparkEngine's callback system
 class SparkContactListener final : public JPH::ContactListener
 {
   public:
     ::PhysicsSystem* m_physicsSystem = nullptr;
+
+    // Store pending contacts for dispatch after the simulation step
+    struct PendingContact
+    {
+        uint32_t bodyID1;
+        uint32_t bodyID2;
+        XMFLOAT3 contactPoint;
+        XMFLOAT3 contactNormal;
+        float penetrationDepth;
+        float combinedFriction;
+        float combinedRestitution;
+        bool isSensor;
+    };
+    std::vector<PendingContact> m_pendingContacts;
+    std::mutex m_contactMutex;
 
     JPH::ValidateResult OnContactValidate(const JPH::Body& inBody1, const JPH::Body& inBody2,
                                           JPH::RVec3Arg inBaseOffset,
@@ -147,7 +162,70 @@ class SparkContactListener final : public JPH::ContactListener
     void OnContactAdded(const JPH::Body& inBody1, const JPH::Body& inBody2, const JPH::ContactManifold& inManifold,
                         JPH::ContactSettings& ioSettings) override
     {
-        // Collision events are processed in ProcessCollisions() via the step listener pattern
+        PendingContact contact;
+        contact.bodyID1 = inBody1.GetID().GetIndexAndSequenceNumber();
+        contact.bodyID2 = inBody2.GetID().GetIndexAndSequenceNumber();
+
+        // Get the first contact point from the manifold
+        JPH::RVec3 worldPoint = inManifold.GetWorldSpaceContactPointOn1(0);
+        contact.contactPoint = XMFLOAT3(static_cast<float>(worldPoint.GetX()), static_cast<float>(worldPoint.GetY()),
+                                        static_cast<float>(worldPoint.GetZ()));
+        JPH::Vec3 normal = inManifold.mWorldSpaceNormal;
+        contact.contactNormal = XMFLOAT3(normal.GetX(), normal.GetY(), normal.GetZ());
+        contact.penetrationDepth = inManifold.mPenetrationDepth;
+        contact.combinedFriction = ioSettings.mCombinedFriction;
+        contact.combinedRestitution = ioSettings.mCombinedRestitution;
+        contact.isSensor = inBody1.IsSensor() || inBody2.IsSensor();
+
+        std::lock_guard<std::mutex> lock(m_contactMutex);
+        m_pendingContacts.push_back(contact);
+    }
+
+    void OnContactPersisted(const JPH::Body& inBody1, const JPH::Body& inBody2, const JPH::ContactManifold& inManifold,
+                            JPH::ContactSettings& ioSettings) override
+    {
+        // Persistent contacts for trigger tracking
+        if (inBody1.IsSensor() || inBody2.IsSensor())
+        {
+            PendingContact contact;
+            contact.bodyID1 = inBody1.GetID().GetIndexAndSequenceNumber();
+            contact.bodyID2 = inBody2.GetID().GetIndexAndSequenceNumber();
+            contact.isSensor = true;
+            contact.penetrationDepth = inManifold.mPenetrationDepth;
+
+            JPH::RVec3 worldPoint = inManifold.GetWorldSpaceContactPointOn1(0);
+            contact.contactPoint =
+                XMFLOAT3(static_cast<float>(worldPoint.GetX()), static_cast<float>(worldPoint.GetY()),
+                         static_cast<float>(worldPoint.GetZ()));
+            JPH::Vec3 normal = inManifold.mWorldSpaceNormal;
+            contact.contactNormal = XMFLOAT3(normal.GetX(), normal.GetY(), normal.GetZ());
+
+            std::lock_guard<std::mutex> lock(m_contactMutex);
+            m_pendingContacts.push_back(contact);
+        }
+    }
+
+    std::vector<PendingContact> DrainContacts()
+    {
+        std::lock_guard<std::mutex> lock(m_contactMutex);
+        std::vector<PendingContact> result;
+        result.swap(m_pendingContacts);
+        return result;
+    }
+};
+
+// Body activation listener — tracks sleep/wake state changes
+class SparkBodyActivationListener final : public JPH::BodyActivationListener
+{
+  public:
+    void OnBodyActivated(const JPH::BodyID& inBodyID, uint64_t inBodyUserData) override
+    {
+        // Bodies waking up — can be used for LOD/optimization
+    }
+
+    void OnBodyDeactivated(const JPH::BodyID& inBodyID, uint64_t inBodyUserData) override
+    {
+        // Bodies going to sleep — can be used to stop updating transforms
     }
 };
 
@@ -240,6 +318,10 @@ HRESULT PhysicsSystem::Initialize()
     contactListener->m_physicsSystem = this;
     m_contactListener = std::move(contactListener);
     m_joltSystem->SetContactListener(static_cast<SparkContactListener*>(m_contactListener.get()));
+
+    // Install body activation listener
+    m_bodyActivationListener = std::make_unique<SparkBodyActivationListener>();
+    m_joltSystem->SetBodyActivationListener(static_cast<SparkBodyActivationListener*>(m_bodyActivationListener.get()));
 
     Spark::SimpleConsole::GetInstance().LogSuccess("PhysicsSystem initialized successfully (Jolt Physics)");
     return S_OK;
@@ -410,41 +492,79 @@ void PhysicsSystem::ProcessCollisions()
         return;
 
     std::vector<std::pair<PhysicsBody*, PhysicsBody*>> currentTriggerPairs;
-
-    // Walk active contact manifolds via body pairs
-    auto& bodyInterface = m_joltSystem->GetBodyInterface();
-
-    // For collision callbacks, iterate bodies and check for contacts
-    if (m_collisionCallback || m_triggerCallback)
-    {
-        // Use Jolt's active contacts through the narrow phase
-        // For each body pair with active contacts, dispatch callbacks
-        for (auto& body : m_bodies)
-        {
-            if (!body || !body->IsActive())
-                continue;
-
-            bool isTrigger = body->IsTrigger();
-            if (isTrigger && m_triggerCallback)
-            {
-                // Trigger events will be handled via contact listener in future improvement
-                // For now, trigger state is tracked via body flags
-            }
-        }
-    }
-
     DispatchCollisionCallbacks(currentTriggerPairs);
     UpdateTriggerExitEvents(currentTriggerPairs);
-
     m_activeTriggerPairs = std::move(currentTriggerPairs);
 }
 
 void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody*, PhysicsBody*>>& outTriggerPairs)
 {
-    // Jolt doesn't expose manifolds the same way Bullet does.
-    // Contact events are handled through the ContactListener interface.
-    // The SparkContactListener stores contacts for processing here.
-    // For a minimal migration, collision callbacks fire through the listener.
+    // Drain contacts collected by SparkContactListener during the simulation step
+    auto* listener = static_cast<SparkContactListener*>(m_contactListener.get());
+    if (!listener)
+        return;
+
+    auto contacts = listener->DrainContacts();
+
+    for (const auto& contact : contacts)
+    {
+        PhysicsBody* bodyA = FindBodyByJoltID(contact.bodyID1);
+        PhysicsBody* bodyB = FindBodyByJoltID(contact.bodyID2);
+        if (!bodyA || !bodyB)
+            continue;
+
+        // Handle trigger (sensor) contacts
+        if (contact.isSensor)
+        {
+            PhysicsBody* first = (bodyA < bodyB) ? bodyA : bodyB;
+            PhysicsBody* second = (bodyA < bodyB) ? bodyB : bodyA;
+            outTriggerPairs.push_back({first, second});
+
+            if (m_triggerCallback)
+            {
+                bool wasActive = false;
+                for (const auto& prev : m_activeTriggerPairs)
+                {
+                    if (prev.first == first && prev.second == second)
+                    {
+                        wasActive = true;
+                        break;
+                    }
+                }
+                if (!wasActive)
+                {
+                    m_triggerCallback(bodyA, bodyB, true);
+
+                    if (m_eventBus)
+                    {
+                        m_eventBus->Publish(Spark::TriggerEnterEvent{bodyA->GetEntityID(), bodyB->GetEntityID()});
+                    }
+                }
+            }
+            continue;
+        }
+
+        // Fire collision callback for non-trigger contacts
+        if (m_collisionCallback)
+        {
+            ContactInfo info;
+            info.bodyA = bodyA;
+            info.bodyB = bodyB;
+            info.contactPoint = contact.contactPoint;
+            info.contactNormal = contact.contactNormal;
+            info.penetrationDepth = contact.penetrationDepth;
+            info.appliedImpulse = 0.0f; // Jolt doesn't expose applied impulse in contact listener
+            info.entityIdA = bodyA->GetEntityID();
+            info.entityIdB = bodyB->GetEntityID();
+
+            m_collisionCallback(info);
+        }
+
+        if (m_eventBus)
+        {
+            m_eventBus->Publish(Spark::CollisionEvent{bodyA->GetEntityID(), bodyB->GetEntityID(), 0.0f});
+        }
+    }
 }
 
 void PhysicsSystem::UpdateTriggerExitEvents(

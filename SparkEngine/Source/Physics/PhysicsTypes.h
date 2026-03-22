@@ -40,15 +40,50 @@ enum class PhysicsBodyType
  */
 enum class CollisionShapeType
 {
-    Box,         ///< Box collision shape
-    Sphere,      ///< Sphere collision shape
-    Capsule,     ///< Capsule collision shape
-    Cylinder,    ///< Cylinder collision shape
-    Cone,        ///< Cone collision shape
-    Mesh,        ///< Triangle mesh shape
-    ConvexHull,  ///< Convex hull shape
-    Heightfield, ///< Heightfield terrain shape
-    Compound     ///< Compound shape (multiple shapes)
+    Box,             ///< Box collision shape
+    Sphere,          ///< Sphere collision shape
+    Capsule,         ///< Capsule collision shape
+    Cylinder,        ///< Cylinder collision shape
+    Cone,            ///< Cone collision shape (approximated as convex hull in Jolt)
+    Mesh,            ///< Triangle mesh shape (static geometry only)
+    ConvexHull,      ///< Convex hull shape
+    Heightfield,     ///< Heightfield terrain shape (optimized grid)
+    Compound,        ///< Compound shape (multiple sub-shapes)
+    TaperedCapsule,  ///< Capsule with different top/bottom radii
+    TaperedCylinder, ///< Cylinder with different top/bottom radii
+    Plane,           ///< Infinite plane shape
+    Scaled,          ///< Scaled wrapper around another shape
+    Empty            ///< Empty shape (no collision geometry)
+};
+
+/**
+ * @brief Motion quality — controls how precisely collisions are detected.
+ *
+ * Discrete is cheapest but fast-moving bodies can tunnel through thin geometry.
+ * LinearCast prevents tunneling by sweeping the shape from start to end position.
+ */
+enum class MotionQuality
+{
+    Discrete,  ///< Standard discrete collision detection (cheapest)
+    LinearCast ///< CCD via linear cast — prevents tunneling for fast objects (bullets, projectiles)
+};
+
+/**
+ * @brief Allowed degrees of freedom for a physics body.
+ *
+ * Bitfield controlling which translation/rotation axes are active.
+ * Use to constrain bodies to 2D planes, lock rotation axes, etc.
+ */
+enum class AllowedDOFs : uint8_t
+{
+    All = 0b111111,          ///< All translation and rotation (default 3D)
+    TranslationX = 0b000001, ///< Allow X translation
+    TranslationY = 0b000010, ///< Allow Y translation
+    TranslationZ = 0b000100, ///< Allow Z translation
+    RotationX = 0b001000,    ///< Allow X rotation
+    RotationY = 0b010000,    ///< Allow Y rotation
+    RotationZ = 0b100000,    ///< Allow Z rotation
+    Plane2D = 0b100011,      ///< 2D mode: translate X/Y, rotate Z only
 };
 
 /**
@@ -56,12 +91,18 @@ enum class CollisionShapeType
  */
 enum class ConstraintType
 {
-    Point2Point, ///< Point-to-point constraint
-    Hinge,       ///< Hinge constraint
-    Slider,      ///< Slider constraint
-    ConeTwist,   ///< Cone-twist constraint
-    Generic6DOF, ///< 6-DOF constraint
-    Fixed        ///< Fixed constraint
+    Point2Point,   ///< Point-to-point (ball-socket) constraint
+    Hinge,         ///< Hinge constraint (single rotation axis)
+    Slider,        ///< Slider constraint (linear motion along axis)
+    ConeTwist,     ///< Cone-twist / swing-twist constraint (ragdoll joints)
+    Generic6DOF,   ///< 6-DOF constraint (per-axis freedom control)
+    Fixed,         ///< Fixed (weld) constraint — locks two bodies together
+    Distance,      ///< Distance constraint — maintains distance between anchor points
+    Cone,          ///< Cone constraint — limits rotation to a cone
+    Gear,          ///< Gear constraint — couples rotation of two hinge constraints
+    RackAndPinion, ///< Rack-and-pinion — couples rotation to linear motion
+    Pulley,        ///< Pulley constraint — rope/cable between two bodies
+    Path           ///< Path constraint — constrains body to follow a path
 };
 
 // =============================================================================
@@ -253,6 +294,55 @@ struct CollisionShapeDesc
      * default (Y-up). Applied after `localOffset`.
      */
     XMFLOAT3 localRotation = {0, 0, 0};
+
+    /**
+     * @brief Secondary radius for TaperedCapsule / TaperedCylinder shapes.
+     *
+     * For TaperedCapsule: `radius` is the top radius, `topRadius` is the bottom radius.
+     * For TaperedCylinder: `radius` is the top radius, `topRadius` is the bottom radius.
+     * Ignored by other shape types.
+     */
+    float topRadius = 0.5f;
+
+    /**
+     * @brief Heightfield data for terrain collision shapes.
+     *
+     * A flat array of height values in row-major order. Width × depth samples.
+     * Used only when `type == CollisionShapeType::Heightfield`.
+     */
+    std::vector<float> heightfieldData;
+
+    /**
+     * @brief Number of samples along each axis for heightfield shapes.
+     *
+     * The heightfield is `heightfieldSamples × heightfieldSamples` (square grid).
+     * Must be a power of 2 + 1 for optimal Jolt performance.
+     */
+    uint32_t heightfieldSamples = 0;
+
+    /**
+     * @brief Scale applied to heightfield height values.
+     *
+     * Multiplies each raw height value. Use with dimensions for XZ extent.
+     */
+    float heightfieldScale = 1.0f;
+
+    /**
+     * @brief Uniform scale factor for Scaled shape wrapper.
+     *
+     * Applied uniformly when `type == CollisionShapeType::Scaled`.
+     */
+    XMFLOAT3 scale = {1.0f, 1.0f, 1.0f};
+
+    /**
+     * @brief Plane normal for Plane shape.
+     */
+    XMFLOAT3 planeNormal = {0, 1, 0};
+
+    /**
+     * @brief Plane distance from origin for Plane shape.
+     */
+    float planeDistance = 0.0f;
 };
 
 /**
@@ -424,6 +514,44 @@ struct PhysicsBodyDesc
      * Zero means "no entity" (standalone body not tied to the ECS).
      */
     uint32_t entityId = 0;
+
+    /**
+     * @brief Motion quality controlling collision detection precision.
+     *
+     * Use LinearCast for fast-moving objects (bullets, projectiles) to prevent
+     * tunneling through thin geometry. Default: Discrete (cheapest).
+     */
+    MotionQuality motionQuality = MotionQuality::Discrete;
+
+    /**
+     * @brief Allowed degrees of freedom for this body.
+     *
+     * Restrict which axes can translate/rotate. Use Plane2D for side-scrollers.
+     * Default: All (full 3D freedom).
+     */
+    AllowedDOFs allowedDOFs = AllowedDOFs::All;
+
+    /**
+     * @brief Per-body gravity multiplier.
+     *
+     * 1.0 = normal gravity, 0.0 = no gravity (floating), 2.0 = double gravity.
+     * Useful for space environments, underwater areas, or moon-like gravity zones.
+     */
+    float gravityFactor = 1.0f;
+
+    /**
+     * @brief Maximum linear velocity (m/s). Jolt clamps to prevent instability.
+     *
+     * Default: 500 m/s. Reduce for controlled simulations; increase for extreme speeds.
+     */
+    float maxLinearVelocity = 500.0f;
+
+    /**
+     * @brief Maximum angular velocity (rad/s). Jolt clamps to prevent instability.
+     *
+     * Default: 47.12 (≈ 15π rad/s ≈ 7.5 revolutions/second).
+     */
+    float maxAngularVelocity = 47.12389f;
 };
 
 /**

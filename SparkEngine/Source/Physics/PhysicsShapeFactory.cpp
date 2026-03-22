@@ -21,6 +21,14 @@
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
+#include <Jolt/Physics/Collision/Shape/TaperedCapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/TaperedCylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/PlaneShape.h>
+#include <Jolt/Physics/Collision/Shape/ScaledShape.h>
+#include <Jolt/Physics/Collision/Shape/EmptyShape.h>
+#include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 
 JPH_SUPPRESS_WARNINGS
 
@@ -64,6 +72,68 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
     case CollisionShapeType::ConvexHull:
         shape = CreateConvexHullShape(desc.vertices);
         break;
+    case CollisionShapeType::Heightfield:
+    {
+        if (desc.heightfieldData.empty() || desc.heightfieldSamples == 0)
+        {
+            shape = CreateBoxShape(desc.dimensions);
+        }
+        else
+        {
+            JPH::HeightFieldShapeSettings hfSettings(desc.heightfieldData.data(), JPH::Vec3::sZero(),
+                                                     JPH::Vec3(desc.dimensions.x / desc.heightfieldSamples,
+                                                               desc.heightfieldScale,
+                                                               desc.dimensions.z / desc.heightfieldSamples),
+                                                     desc.heightfieldSamples);
+            auto result = hfSettings.Create();
+            if (!result.HasError())
+                shape = new JPH::ShapeRefC(result.Get());
+            else
+                shape = CreateBoxShape(desc.dimensions);
+        }
+        break;
+    }
+    case CollisionShapeType::TaperedCapsule:
+    {
+        JPH::TaperedCapsuleShapeSettings tcSettings(desc.height / 2.0f, desc.radius, desc.topRadius);
+        auto result = tcSettings.Create();
+        if (!result.HasError())
+            shape = new JPH::ShapeRefC(result.Get());
+        else
+            shape = CreateCapsuleShape(desc.radius, desc.height);
+        break;
+    }
+    case CollisionShapeType::TaperedCylinder:
+    {
+        JPH::TaperedCylinderShapeSettings tcSettings(desc.height / 2.0f, desc.radius, desc.topRadius);
+        auto result = tcSettings.Create();
+        if (!result.HasError())
+            shape = new JPH::ShapeRefC(result.Get());
+        else
+            shape = CreateCylinderShape(desc.radius, desc.height);
+        break;
+    }
+    case CollisionShapeType::Plane:
+    {
+        JPH::PlaneShapeSettings planeSettings(
+            JPH::Plane(JPH::Vec3(desc.planeNormal.x, desc.planeNormal.y, desc.planeNormal.z), desc.planeDistance));
+        auto result = planeSettings.Create();
+        if (!result.HasError())
+            shape = new JPH::ShapeRefC(result.Get());
+        else
+            shape = CreateBoxShape({100.0f, 0.1f, 100.0f});
+        break;
+    }
+    case CollisionShapeType::Empty:
+    {
+        JPH::EmptyShapeSettings emptySettings;
+        auto result = emptySettings.Create();
+        if (!result.HasError())
+            shape = new JPH::ShapeRefC(result.Get());
+        break;
+    }
+    case CollisionShapeType::Compound:
+    case CollisionShapeType::Scaled:
     default:
         shape = CreateBoxShape(desc.dimensions);
         break;

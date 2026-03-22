@@ -169,6 +169,29 @@ class PhysicsSystem
                                                              std::shared_ptr<PhysicsBody> bodyB, const XMMATRIX& frameA,
                                                              const XMMATRIX& frameB);
 
+    /** @brief Create a distance constraint maintaining distance between two points. */
+    std::shared_ptr<PhysicsConstraint> CreateDistanceConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                                std::shared_ptr<PhysicsBody> bodyB,
+                                                                const XMFLOAT3& pivotA, const XMFLOAT3& pivotB,
+                                                                float minDistance = -1.0f, float maxDistance = -1.0f);
+
+    /** @brief Create a cone constraint limiting rotation to a cone region. */
+    std::shared_ptr<PhysicsConstraint> CreateConeConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                            std::shared_ptr<PhysicsBody> bodyB, const XMFLOAT3& pivot,
+                                                            const XMFLOAT3& twistAxis, float halfConeAngle = 0.5f);
+
+    /** @brief Create a 6-DOF constraint with per-axis freedom control. */
+    std::shared_ptr<PhysicsConstraint> CreateSixDOFConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                              std::shared_ptr<PhysicsBody> bodyB,
+                                                              const XMMATRIX& frameA, const XMMATRIX& frameB);
+
+    /** @brief Create a pulley constraint (rope/cable between two bodies through fixed points). */
+    std::shared_ptr<PhysicsConstraint> CreatePulleyConstraint(std::shared_ptr<PhysicsBody> bodyA,
+                                                              std::shared_ptr<PhysicsBody> bodyB,
+                                                              const XMFLOAT3& fixedPointA, const XMFLOAT3& fixedPointB,
+                                                              const XMFLOAT3& bodyPointA, const XMFLOAT3& bodyPointB,
+                                                              float ratio = 1.0f);
+
     void RemoveConstraint(std::shared_ptr<PhysicsConstraint> constraint);
 
     // =========================================================================
