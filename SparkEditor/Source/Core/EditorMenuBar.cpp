@@ -613,8 +613,6 @@ namespace SparkEditor
             ImVec4 pillBg(0.157f, 0.173f, 0.212f, 1.0f);      // #282C36
 
             // === Transform Tools (grouped in a pill-shaped region) ===
-            ImVec2 groupStart = ImGui::GetCursorScreenPos();
-
             auto ToolButton = [&](const char* icon, TransformTool tool, const char* tooltip)
             {
                 bool active = (m_currentTool == tool);

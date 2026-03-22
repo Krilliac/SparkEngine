@@ -56,6 +56,8 @@ enum class EnemyType
 class SPARK_GAME_API Enemy : public GameObject
 {
   public:
+    using GameObject::Initialize;
+
     Enemy();
     ~Enemy() override;
 
