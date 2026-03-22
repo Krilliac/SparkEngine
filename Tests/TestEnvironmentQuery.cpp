@@ -109,9 +109,9 @@ TEST(EQS_DistanceScorer)
     close.position = {2.0f, 0.0f, 0.0f};
     float closeScore = scorer.Score(close);
 
-    EQSItem far;
-    far.position = {15.0f, 0.0f, 0.0f};
-    float farScore = scorer.Score(far);
+    EQSItem farItem;
+    farItem.position = {15.0f, 0.0f, 0.0f};
+    float farScore = scorer.Score(farItem);
 
     EXPECT_GT(closeScore, farScore);
     EXPECT_GE(closeScore, 0.0f);

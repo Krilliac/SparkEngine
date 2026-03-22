@@ -111,11 +111,11 @@ namespace Spark::Graphics
     /**
      * @brief Caches D3D11 pipeline state objects and tracks dirty state to minimize API calls.
      */
-    class PipelineStateCache
+    class D3D11PipelineStateCache
     {
       public:
-        PipelineStateCache() = default;
-        ~PipelineStateCache() = default;
+        D3D11PipelineStateCache() = default;
+        ~D3D11PipelineStateCache() = default;
 
         /**
          * @brief Initialize the cache with a D3D11 device.
