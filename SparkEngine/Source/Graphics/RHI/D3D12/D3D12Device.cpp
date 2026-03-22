@@ -483,7 +483,7 @@ namespace Spark
             // D3D12 DEVICE — RESOURCE CREATION
             // ============================================================================
 
-            IRHIBuffer* D3D12Device::CreateBuffer(const RHIBufferDesc& desc)
+            std::unique_ptr<IRHIBuffer> D3D12Device::CreateBuffer(const RHIBufferDesc& desc)
             {
                 D3D12_HEAP_PROPERTIES heapProps = {};
                 D3D12_RESOURCE_STATES initialState;
@@ -528,7 +528,7 @@ namespace Spark
                     }
                 }
 
-                auto* buffer = new D3D12Buffer(desc, std::move(resource), std::move(uploadResource));
+                auto buffer = std::make_unique<D3D12Buffer>(desc, std::move(resource), std::move(uploadResource));
 
                 // Map persistent pointer for dynamic buffers
                 if (isDynamic)
@@ -552,7 +552,7 @@ namespace Spark
                 return buffer;
             }
 
-            IRHITexture* D3D12Device::CreateTexture(const RHITextureDesc& desc)
+            std::unique_ptr<IRHITexture> D3D12Device::CreateTexture(const RHITextureDesc& desc)
             {
                 D3D12_RESOURCE_DESC texDesc = {};
                 texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -637,10 +637,11 @@ namespace Spark
                     m_device->CreateUnorderedAccessView(resource.Get(), nullptr, &uavDesc, uavAlloc.cpuHandle);
                 }
 
-                return new D3D12Texture(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);
+                return std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc,
+                                                      uavAlloc);
             }
 
-            IRHITexture* D3D12Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            std::unique_ptr<IRHITexture> D3D12Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
             {
                 if (!nativeHandle)
                     return nullptr;
@@ -664,10 +665,11 @@ namespace Spark
                     }
                 }
 
-                return new D3D12Texture(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);
+                return std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc,
+                                                      uavAlloc);
             }
 
-            IRHIShader* D3D12Device::CreateShader(const RHIShaderDesc& desc)
+            std::unique_ptr<IRHIShader> D3D12Device::CreateShader(const RHIShaderDesc& desc)
             {
                 if (desc.bytecode && desc.bytecodeSize > 0)
                 {
@@ -676,7 +678,7 @@ namespace Spark
                     if (FAILED(hr))
                         return nullptr;
                     memcpy(blob->GetBufferPointer(), desc.bytecode, desc.bytecodeSize);
-                    return new D3D12Shader(desc, std::move(blob));
+                    return std::make_unique<D3D12Shader>(desc, std::move(blob));
                 }
 
                 if (!desc.sourceCode.empty())
@@ -728,13 +730,13 @@ namespace Spark
                                             static_cast<const char*>(errors->GetBufferPointer()));
                         return nullptr;
                     }
-                    return new D3D12Shader(desc, std::move(bytecode));
+                    return std::make_unique<D3D12Shader>(desc, std::move(bytecode));
                 }
 
                 return nullptr;
             }
 
-            IRHISampler* D3D12Device::CreateSampler(const RHISamplerDesc& desc)
+            std::unique_ptr<IRHISampler> D3D12Device::CreateSampler(const RHISamplerDesc& desc)
             {
                 auto alloc = m_samplerHeap.Allocate(1);
                 if (!alloc.IsValid())
@@ -753,11 +755,12 @@ namespace Spark
                 samplerDesc.MaxLOD = desc.maxLod;
 
                 m_device->CreateSampler(&samplerDesc, alloc.cpuHandle);
-                return new D3D12Sampler(desc, alloc);
+                return std::make_unique<D3D12Sampler>(desc, alloc);
             }
 
-            IRHIPipelineState* D3D12Device::CreatePipelineState(const RHIPipelineStateDesc& desc,
-                                                                IRHIShader* vertexShader, IRHIShader* pixelShader)
+            std::unique_ptr<IRHIPipelineState> D3D12Device::CreatePipelineState(const RHIPipelineStateDesc& desc,
+                                                                                IRHIShader* vertexShader,
+                                                                                IRHIShader* pixelShader)
             {
                 auto rootSig = CreateDefaultRootSignature();
                 if (!rootSig)
@@ -871,48 +874,36 @@ namespace Spark
                     return nullptr;
                 }
 
-                return new D3D12PipelineState(desc, std::move(pso), std::move(rootSig));
+                return std::make_unique<D3D12PipelineState>(desc, std::move(pso), std::move(rootSig));
             }
 
             // ============================================================================
-            // D3D12 DEVICE — RESOURCE DESTRUCTION (deferred)
+            // D3D12 DEVICE — DEFERRED GPU RESOURCE RELEASE
             // ============================================================================
+            // D3D12 resources may still be referenced by in-flight command lists.
+            // These helpers enqueue the underlying ID3D12Resource into the deferred
+            // release queue so the COM ref is held until the GPU passes the fence.
+            // The wrapper object (D3D12Buffer/D3D12Texture) is owned by the caller's
+            // unique_ptr and destroyed immediately; only the GPU resource is deferred.
 
-            void D3D12Device::DestroyBuffer(IRHIBuffer* buffer)
+            void D3D12Device::DeferredReleaseBuffer(D3D12Buffer* buffer)
             {
-                auto* b = static_cast<D3D12Buffer*>(buffer);
-                if (!b)
+                if (!buffer)
                     return;
                 std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                m_deferredReleaseQueue.push({b->GetD3D12Resource(), m_frameFence.GetCurrentValue()});
-                delete b;
+                m_deferredReleaseQueue.push({buffer->GetD3D12Resource(), m_frameFence.GetCurrentValue()});
             }
 
-            void D3D12Device::DestroyTexture(IRHITexture* texture)
+            void D3D12Device::DeferredReleaseTexture(D3D12Texture* texture)
             {
-                auto* t = static_cast<D3D12Texture*>(texture);
-                if (!t)
+                if (!texture)
                     return;
-                m_cbvSrvUavHeap.Free(t->GetSRVDescriptor());
-                m_rtvHeap.Free(t->GetRTVDescriptor());
-                m_dsvHeap.Free(t->GetDSVDescriptor());
-                m_cbvSrvUavHeap.Free(t->GetUAVDescriptor());
+                m_cbvSrvUavHeap.Free(texture->GetSRVDescriptor());
+                m_rtvHeap.Free(texture->GetRTVDescriptor());
+                m_dsvHeap.Free(texture->GetDSVDescriptor());
+                m_cbvSrvUavHeap.Free(texture->GetUAVDescriptor());
                 std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                m_deferredReleaseQueue.push({t->GetD3D12Resource(), m_frameFence.GetCurrentValue()});
-                delete t;
-            }
-
-            void D3D12Device::DestroyShader(IRHIShader* shader)
-            {
-                delete static_cast<D3D12Shader*>(shader);
-            }
-            void D3D12Device::DestroySampler(IRHISampler* sampler)
-            {
-                delete static_cast<D3D12Sampler*>(sampler);
-            }
-            void D3D12Device::DestroyPipelineState(IRHIPipelineState* state)
-            {
-                delete static_cast<D3D12PipelineState*>(state);
+                m_deferredReleaseQueue.push({texture->GetD3D12Resource(), m_frameFence.GetCurrentValue()});
             }
 
             // ============================================================================
@@ -1056,9 +1047,9 @@ namespace Spark
                 return m_immediateCommandList.get();
             }
 
-            IRHICommandList* D3D12Device::CreateDeferredCommandList()
+            std::unique_ptr<IRHICommandList> D3D12Device::CreateDeferredCommandList()
             {
-                return new D3D12CommandList(m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+                return std::make_unique<D3D12CommandList>(m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
             }
 
             void D3D12Device::ExecuteCommandList(IRHICommandList* commandList)
@@ -1070,11 +1061,6 @@ namespace Spark
                 ID3D12CommandList* lists[] = {cmdList->GetCommandList()};
                 m_directQueue->ExecuteCommandLists(1, lists);
                 m_statistics.drawCalls++;
-            }
-
-            void D3D12Device::DestroyCommandList(IRHICommandList* commandList)
-            {
-                delete static_cast<D3D12CommandList*>(commandList);
             }
 
             // ============================================================================

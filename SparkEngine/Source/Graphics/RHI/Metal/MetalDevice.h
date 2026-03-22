@@ -462,18 +462,15 @@ namespace Spark
 
                 std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc& desc) override;
 
-                IRHIBuffer* CreateBuffer(const RHIBufferDesc& desc) override;
-                IRHITexture* CreateTexture(const RHITextureDesc& desc) override;
-                IRHIShader* CreateShader(const RHIShaderDesc& desc) override;
-                IRHISampler* CreateSampler(const RHISamplerDesc& desc) override;
-                IRHIPipelineState* CreatePipelineState(const RHIPipelineStateDesc& desc, IRHIShader* vertexShader,
-                                                       IRHIShader* pixelShader) override;
-
-                void DestroyBuffer(IRHIBuffer* buffer) override;
-                void DestroyTexture(IRHITexture* texture) override;
-                void DestroyShader(IRHIShader* shader) override;
-                void DestroySampler(IRHISampler* sampler) override;
-                void DestroyPipelineState(IRHIPipelineState* state) override;
+                std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc& desc) override;
+                std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc& desc) override;
+                std::unique_ptr<IRHITexture> WrapNativeTexture(void* nativeHandle,
+                                                                const RHITextureDesc& desc) override;
+                std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc& desc) override;
+                std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc& desc) override;
+                std::unique_ptr<IRHIPipelineState> CreatePipelineState(const RHIPipelineStateDesc& desc,
+                                                                       IRHIShader* vertexShader,
+                                                                       IRHIShader* pixelShader) override;
 
                 void* MapBuffer(IRHIBuffer* buffer) override;
                 void UnmapBuffer(IRHIBuffer* buffer) override;
@@ -482,9 +479,8 @@ namespace Spark
                                    uint32_t arraySlice) override;
 
                 IRHICommandList* GetImmediateCommandList() override;
-                IRHICommandList* CreateDeferredCommandList() override;
+                std::unique_ptr<IRHICommandList> CreateDeferredCommandList() override;
                 void ExecuteCommandList(IRHICommandList* commandList) override;
-                void DestroyCommandList(IRHICommandList* commandList) override;
 
                 void BeginFrame() override;
                 void EndFrame() override;

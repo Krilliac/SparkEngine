@@ -858,7 +858,7 @@ namespace Spark
                 return std::make_unique<GLSwapChain>(desc);
             }
 
-            IRHIBuffer* GLDevice::CreateBuffer(const RHIBufferDesc& desc)
+            std::unique_ptr<IRHIBuffer> GLDevice::CreateBuffer(const RHIBufferDesc& desc)
             {
                 GLuint buffer;
                 glCreateBuffers(1, &buffer);
@@ -892,10 +892,10 @@ namespace Spark
                     glNamedBufferData(buffer, desc.size, desc.initialData, usage);
                 }
 
-                return new GLBuffer(desc, buffer);
+                return std::make_unique<GLBuffer>(desc, buffer);
             }
 
-            IRHITexture* GLDevice::CreateTexture(const RHITextureDesc& desc)
+            std::unique_ptr<IRHITexture> GLDevice::CreateTexture(const RHITextureDesc& desc)
             {
                 GLenum target = GetTextureTarget(desc);
 
@@ -960,19 +960,19 @@ namespace Spark
                     glNamedFramebufferTexture(fbo, attachment, texture, 0);
                 }
 
-                return new GLTexture(desc, texture, fbo, target);
+                return std::make_unique<GLTexture>(desc, texture, fbo, target);
             }
 
-            IRHITexture* GLDevice::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            std::unique_ptr<IRHITexture> GLDevice::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
             {
                 if (!nativeHandle)
                     return nullptr;
                 // Interpret as OpenGL texture name (GLuint stored in pointer)
                 auto glTex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(nativeHandle));
-                return new GLTexture(desc, glTex, 0, GL_TEXTURE_2D);
+                return std::make_unique<GLTexture>(desc, glTex, 0, GL_TEXTURE_2D);
             }
 
-            IRHIShader* GLDevice::CreateShader(const RHIShaderDesc& desc)
+            std::unique_ptr<IRHIShader> GLDevice::CreateShader(const RHIShaderDesc& desc)
             {
                 GLenum shaderType;
                 switch (desc.stage)
@@ -1032,10 +1032,10 @@ namespace Spark
                     return nullptr;
                 }
 
-                return new GLShader(desc, shader, desc.sourceCode);
+                return std::make_unique<GLShader>(desc, shader, desc.sourceCode);
             }
 
-            IRHISampler* GLDevice::CreateSampler(const RHISamplerDesc& desc)
+            std::unique_ptr<IRHISampler> GLDevice::CreateSampler(const RHISamplerDesc& desc)
             {
                 GLuint sampler;
                 glCreateSamplers(1, &sampler);
@@ -1068,11 +1068,12 @@ namespace Spark
 
                 glSamplerParameterfv(sampler, GL_TEXTURE_BORDER_COLOR, desc.borderColor);
 
-                return new GLSampler(desc, sampler);
+                return std::make_unique<GLSampler>(desc, sampler);
             }
 
-            IRHIPipelineState* GLDevice::CreatePipelineState(const RHIPipelineStateDesc& desc, IRHIShader* vertexShader,
-                                                             IRHIShader* pixelShader)
+            std::unique_ptr<IRHIPipelineState> GLDevice::CreatePipelineState(const RHIPipelineStateDesc& desc,
+                                                                             IRHIShader* vertexShader,
+                                                                             IRHIShader* pixelShader)
             {
                 auto* glVS = static_cast<GLShader*>(vertexShader);
                 auto* glPS = static_cast<GLShader*>(pixelShader);
@@ -1211,29 +1212,9 @@ namespace Spark
                     glVertexArrayAttribFormat(vao, index, numComponents, type, GL_FALSE, elem.byteOffset);
                 }
 
-                return new GLPipelineState(desc, program, vao);
+                return std::make_unique<GLPipelineState>(desc, program, vao);
             }
 
-            void GLDevice::DestroyBuffer(IRHIBuffer* buffer)
-            {
-                delete buffer;
-            }
-            void GLDevice::DestroyTexture(IRHITexture* texture)
-            {
-                delete texture;
-            }
-            void GLDevice::DestroyShader(IRHIShader* shader)
-            {
-                delete shader;
-            }
-            void GLDevice::DestroySampler(IRHISampler* sampler)
-            {
-                delete sampler;
-            }
-            void GLDevice::DestroyPipelineState(IRHIPipelineState* state)
-            {
-                delete state;
-            }
 
             void* GLDevice::MapBuffer(IRHIBuffer* buffer)
             {
@@ -1278,16 +1259,12 @@ namespace Spark
                 return m_immediateCommandList.get();
             }
 
-            IRHICommandList* GLDevice::CreateDeferredCommandList()
+            std::unique_ptr<IRHICommandList> GLDevice::CreateDeferredCommandList()
             {
-                return new GLCommandList(false, &m_statistics);
+                return std::make_unique<GLCommandList>(false, &m_statistics);
             }
 
             void GLDevice::ExecuteCommandList(IRHICommandList*) {}
-            void GLDevice::DestroyCommandList(IRHICommandList* commandList)
-            {
-                delete commandList;
-            }
 
             void GLDevice::BeginFrame()
             {

@@ -6,6 +6,7 @@
 #include "EntityArchetypeLoader.h"
 #include "Components/LightComponents.h"
 #include "../../Utils/SparkConsole.h"
+#include "../../Utils/StringUtils.h"
 
 #include <algorithm>
 #include <fstream>
@@ -54,9 +55,15 @@ namespace Spark::ECS
         if (parts.size() < 3)
             return false;
 
-        x = std::stof(parts[0]);
-        y = std::stof(parts[1]);
-        z = std::stof(parts[2]);
+        auto px = Spark::StringUtils::ParseFloat(parts[0]);
+        auto py = Spark::StringUtils::ParseFloat(parts[1]);
+        auto pz = Spark::StringUtils::ParseFloat(parts[2]);
+        if (!px || !py || !pz)
+            return false;
+
+        x = *px;
+        y = *py;
+        z = *pz;
         return true;
     }
 
@@ -197,13 +204,13 @@ namespace Spark::ECS
         // p2 = intensity
         if (auto it = entry.properties.find("p2"); it != entry.properties.end())
         {
-            light.intensity = std::stof(it->second);
+            light.intensity = Spark::StringUtils::ParseFloat(it->second).value_or(light.intensity);
         }
 
         // p3 = range
         if (auto it = entry.properties.find("p3"); it != entry.properties.end())
         {
-            light.range = std::stof(it->second);
+            light.range = Spark::StringUtils::ParseFloat(it->second).value_or(light.range);
         }
 
         world.AddComponent<LightComponent>(entity, light);

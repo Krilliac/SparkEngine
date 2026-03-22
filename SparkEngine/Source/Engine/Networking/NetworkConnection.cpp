@@ -175,10 +175,19 @@ namespace Spark::Net
             m_handlers.clear();
         }
 
-        m_clients.clear();
-        m_replicatedEntities.clear();
-        m_pendingInputs.clear();
-        m_inputHistory.clear();
+        {
+            std::lock_guard<std::mutex> clientLock(m_clientsMutex);
+            m_clients.clear();
+        }
+        {
+            std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
+            m_replicatedEntities.clear();
+        }
+        {
+            std::lock_guard<std::mutex> inputLock(m_inputMutex);
+            m_pendingInputs.clear();
+            m_inputHistory.clear();
+        }
         m_unacknowledgedMessages.clear();
         m_reliableOriginalSendTime.clear();
         m_retransmitCounts.clear();
@@ -473,6 +482,8 @@ namespace Spark::Net
     void NetworkManager::KickClient(ClientID client, const std::string& reason)
     {
         ASSERT_MSG(client != INVALID_CLIENT, "NetworkManager::KickClient — client ID must not be INVALID_CLIENT");
+
+        std::lock_guard<std::mutex> lock(m_clientsMutex);
         auto it = m_clients.find(client);
         if (it == m_clients.end())
             return;

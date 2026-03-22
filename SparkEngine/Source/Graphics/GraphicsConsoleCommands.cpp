@@ -135,7 +135,18 @@ namespace Spark::Graphics
             "gfx_benchmark",
             [&engine](const std::vector<std::string>& args) -> std::string
             {
-                int seconds = args.empty() ? 10 : std::stoi(args[0]);
+                int seconds = 10;
+                if (!args.empty())
+                {
+                    try
+                    {
+                        seconds = std::stoi(args[0]);
+                    }
+                    catch (const std::exception&)
+                    {
+                        return std::string("Invalid number format");
+                    }
+                }
                 return engine.Console_Benchmark(seconds);
             },
             "Run graphics benchmark");
@@ -170,12 +181,19 @@ namespace Spark::Graphics
             {
                 if (args.size() < 3)
                     return "Usage: gfx_clearcolor <r> <g> <b> [a]";
-                float r = std::stof(args[0]);
-                float g = std::stof(args[1]);
-                float b = std::stof(args[2]);
-                float a = (args.size() >= 4) ? std::stof(args[3]) : 1.0f;
-                engine.Console_SetClearColor(r, g, b, a);
-                return "Clear color updated";
+                try
+                {
+                    float r = std::stof(args[0]);
+                    float g = std::stof(args[1]);
+                    float b = std::stof(args[2]);
+                    float a = (args.size() >= 4) ? std::stof(args[3]) : 1.0f;
+                    engine.Console_SetClearColor(r, g, b, a);
+                    return std::string("Clear color updated");
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Set the background clear color");
 
@@ -185,9 +203,16 @@ namespace Spark::Graphics
             {
                 if (args.empty())
                     return "Usage: gfx_renderscale <0.25-2.0>";
-                float scale = std::stof(args[0]);
-                engine.Console_SetRenderScale(scale);
-                return "Render scale set to: " + std::to_string(scale);
+                try
+                {
+                    float scale = std::stof(args[0]);
+                    engine.Console_SetRenderScale(scale);
+                    return "Render scale set to: " + std::to_string(scale);
+                }
+                catch (const std::exception&)
+                {
+                    return std::string("Invalid numeric argument");
+                }
             },
             "Set render resolution scale");
 

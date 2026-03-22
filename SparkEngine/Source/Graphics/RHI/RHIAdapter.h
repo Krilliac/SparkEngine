@@ -403,12 +403,12 @@ namespace Spark::RHI
         IRHICommandList* m_commandList = nullptr;
         bool m_frameActive = false;
 
-        // Tracked resources for bulk cleanup
-        std::vector<IRHIBuffer*> m_ownedBuffers;
-        std::vector<IRHITexture*> m_ownedTextures;
-        std::vector<IRHIShader*> m_ownedShaders;
-        std::vector<IRHISampler*> m_ownedSamplers;
-        std::vector<IRHIPipelineState*> m_ownedPipelineStates;
+        // Tracked resources for bulk cleanup (adapter owns these via unique_ptr)
+        std::vector<std::unique_ptr<IRHIBuffer>> m_ownedBuffers;
+        std::vector<std::unique_ptr<IRHITexture>> m_ownedTextures;
+        std::vector<std::unique_ptr<IRHIShader>> m_ownedShaders;
+        std::vector<std::unique_ptr<IRHISampler>> m_ownedSamplers;
+        std::vector<std::unique_ptr<IRHIPipelineState>> m_ownedPipelineStates;
     };
 
 } // namespace Spark::RHI

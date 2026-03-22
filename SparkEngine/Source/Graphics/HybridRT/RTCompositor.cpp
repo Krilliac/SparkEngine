@@ -64,16 +64,9 @@ namespace Spark::Graphics
         if (!m_device)
             return;
 
-        if (m_compositeCS)
-            m_device->DestroyShader(m_compositeCS);
-        if (m_constantBuffer)
-            m_device->DestroyBuffer(m_constantBuffer);
-        if (m_historyBuffer)
-            m_device->DestroyTexture(m_historyBuffer);
-
-        m_compositeCS = nullptr;
-        m_constantBuffer = nullptr;
-        m_historyBuffer = nullptr;
+        m_compositeCS.reset();
+        m_constantBuffer.reset();
+        m_historyBuffer.reset();
         m_device = nullptr;
         m_initialized = false;
     }
@@ -91,7 +84,6 @@ namespace Spark::Graphics
         // Recreate history buffer at new size
         if (m_historyBuffer && m_device)
         {
-            m_device->DestroyTexture(m_historyBuffer);
             RHI::RHITextureDesc histDesc;
             histDesc.width = width;
             histDesc.height = height;
@@ -119,10 +111,10 @@ namespace Spark::Graphics
         m_constants.frameIndex = frameIndex;
 
         // Update constant buffer
-        m_device->UpdateBuffer(m_constantBuffer, &m_constants, sizeof(CompositeConstants));
+        m_device->UpdateBuffer(m_constantBuffer.get(), &m_constants, sizeof(CompositeConstants));
 
         // Bind all inputs as SRVs (t0..t8)
-        cmd->SetConstantBuffer(RHI::RHIShaderStage::Compute, 0, m_constantBuffer);
+        cmd->SetConstantBuffer(RHI::RHIShaderStage::Compute, 0, m_constantBuffer.get());
         cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 0, rtReflections);
         cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 1, rtGI);
         cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 2, rtShadows);
@@ -131,7 +123,7 @@ namespace Spark::Graphics
         cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 5, lightingBuffer);
         cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 6, gbufferNormals);
         cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 7, gbufferAlbedo);
-        cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 8, m_historyBuffer);
+        cmd->SetShaderResource(RHI::RHIShaderStage::Compute, 8, m_historyBuffer.get());
 
         // Dispatch composite
         uint32_t dispatchX = (m_width + 7) / 8;
@@ -141,7 +133,7 @@ namespace Spark::Graphics
         // Copy composite output to history buffer for next frame's temporal accumulation
         if (m_historyBuffer && output)
         {
-            cmd->CopyTexture(m_historyBuffer, output);
+            cmd->CopyTexture(m_historyBuffer.get(), output);
         }
 
         cmd->EndEvent();

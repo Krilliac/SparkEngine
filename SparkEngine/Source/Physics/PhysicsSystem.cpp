@@ -479,8 +479,8 @@ void PhysicsSystem::Update(float deltaTime)
         }
         else
         {
-            // Determine number of steps based on deltaTime
-            int numSteps = static_cast<int>(std::ceil(deltaTime / m_timeStep));
+            // Determine number of steps based on deltaTime (guard against zero timestep)
+            int numSteps = (m_timeStep > 0.0f) ? static_cast<int>(std::ceil(deltaTime / m_timeStep)) : 1;
             if (numSteps > m_maxSubsteps)
                 numSteps = m_maxSubsteps;
             if (numSteps < 1)

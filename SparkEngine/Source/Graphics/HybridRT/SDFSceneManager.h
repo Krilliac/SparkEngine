@@ -81,11 +81,11 @@ namespace Spark::Graphics
                            RHI::IRHITexture** srvs, uint32_t srvCount, RHI::IRHITexture* output);
 
         RHI::IRHIDevice* m_device = nullptr;
-        RHI::IRHIBuffer* m_primitiveBuffer = nullptr;
-        RHI::IRHIBuffer* m_traceConstantBuffer = nullptr;
-        RHI::IRHIShader* m_traceReflectionsCS = nullptr;
-        RHI::IRHIShader* m_traceGICS = nullptr;
-        RHI::IRHIShader* m_traceShadowsCS = nullptr;
+        std::unique_ptr<RHI::IRHIBuffer> m_primitiveBuffer;
+        std::unique_ptr<RHI::IRHIBuffer> m_traceConstantBuffer;
+        std::unique_ptr<RHI::IRHIShader> m_traceReflectionsCS;
+        std::unique_ptr<RHI::IRHIShader> m_traceGICS;
+        std::unique_ptr<RHI::IRHIShader> m_traceShadowsCS;
 
         /// Noise data from ScreenSpaceEffects SSAOKernel for trace jitter
         std::vector<Spark::Graphics::SamplePoint> m_noiseData;

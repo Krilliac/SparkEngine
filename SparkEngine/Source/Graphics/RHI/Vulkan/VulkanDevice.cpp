@@ -719,7 +719,7 @@ namespace Spark
                                                          m_presentQueue);
             }
 
-            IRHIBuffer* VulkanDevice::CreateBuffer(const RHIBufferDesc& desc)
+            std::unique_ptr<IRHIBuffer> VulkanDevice::CreateBuffer(const RHIBufferDesc& desc)
             {
                 VkBufferCreateInfo bufferInfo = {};
                 bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -852,10 +852,10 @@ namespace Spark
                 }
 
                 // Also set transfer dst flag for device-local buffers that may receive initial data
-                return new VulkanBuffer(desc, buffer, memory, m_device);
+                return std::make_unique<VulkanBuffer>(desc, buffer, memory, m_device);
             }
 
-            IRHITexture* VulkanDevice::CreateTexture(const RHITextureDesc& desc)
+            std::unique_ptr<IRHITexture> VulkanDevice::CreateTexture(const RHITextureDesc& desc)
             {
                 VkImageCreateInfo imageInfo = {};
                 imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -924,19 +924,19 @@ namespace Spark
                     return nullptr;
                 }
 
-                return new VulkanTexture(desc, image, memory, imageView, m_device);
+                return std::make_unique<VulkanTexture>(desc, image, memory, imageView, m_device);
             }
 
-            IRHITexture* VulkanDevice::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
+            std::unique_ptr<IRHITexture> VulkanDevice::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
             {
                 if (!nativeHandle)
                     return nullptr;
                 // Wrap an externally-owned VkImage — caller manages lifetime
                 auto image = static_cast<VkImage>(nativeHandle);
-                return new VulkanTexture(desc, image, VK_NULL_HANDLE, VK_NULL_HANDLE, m_device, false);
+                return std::make_unique<VulkanTexture>(desc, image, VK_NULL_HANDLE, VK_NULL_HANDLE, m_device, false);
             }
 
-            IRHIShader* VulkanDevice::CreateShader(const RHIShaderDesc& desc)
+            std::unique_ptr<IRHIShader> VulkanDevice::CreateShader(const RHIShaderDesc& desc)
             {
                 std::vector<uint8_t> spirvCode;
 
@@ -961,10 +961,10 @@ namespace Spark
                 if (vkCreateShaderModule(m_device, &createInfo, nullptr, &module) != VK_SUCCESS)
                     return nullptr;
 
-                return new VulkanShader(desc, module, m_device, std::move(spirvCode));
+                return std::make_unique<VulkanShader>(desc, module, m_device, std::move(spirvCode));
             }
 
-            IRHISampler* VulkanDevice::CreateSampler(const RHISamplerDesc& desc)
+            std::unique_ptr<IRHISampler> VulkanDevice::CreateSampler(const RHISamplerDesc& desc)
             {
                 VkSamplerCreateInfo samplerInfo = {};
                 samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -988,11 +988,12 @@ namespace Spark
                 if (vkCreateSampler(m_device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
                     return nullptr;
 
-                return new VulkanSampler(desc, sampler, m_device);
+                return std::make_unique<VulkanSampler>(desc, sampler, m_device);
             }
 
-            IRHIPipelineState* VulkanDevice::CreatePipelineState(const RHIPipelineStateDesc& desc,
-                                                                 IRHIShader* vertexShader, IRHIShader* pixelShader)
+            std::unique_ptr<IRHIPipelineState> VulkanDevice::CreatePipelineState(const RHIPipelineStateDesc& desc,
+                                                                                 IRHIShader* vertexShader,
+                                                                                 IRHIShader* pixelShader)
             {
                 auto* vkVS = static_cast<VulkanShader*>(vertexShader);
                 auto* vkPS = static_cast<VulkanShader*>(pixelShader);
@@ -1183,29 +1184,9 @@ namespace Spark
                     return nullptr;
                 }
 
-                return new VulkanPipelineState(desc, pipeline, pipelineLayout, m_device);
+                return std::make_unique<VulkanPipelineState>(desc, pipeline, pipelineLayout, m_device);
             }
 
-            void VulkanDevice::DestroyBuffer(IRHIBuffer* buffer)
-            {
-                delete buffer;
-            }
-            void VulkanDevice::DestroyTexture(IRHITexture* texture)
-            {
-                delete texture;
-            }
-            void VulkanDevice::DestroyShader(IRHIShader* shader)
-            {
-                delete shader;
-            }
-            void VulkanDevice::DestroySampler(IRHISampler* sampler)
-            {
-                delete sampler;
-            }
-            void VulkanDevice::DestroyPipelineState(IRHIPipelineState* state)
-            {
-                delete state;
-            }
 
             void* VulkanDevice::MapBuffer(IRHIBuffer* buffer)
             {
@@ -1377,9 +1358,9 @@ namespace Spark
                 return m_immediateCommandList.get();
             }
 
-            IRHICommandList* VulkanDevice::CreateDeferredCommandList()
+            std::unique_ptr<IRHICommandList> VulkanDevice::CreateDeferredCommandList()
             {
-                return new VulkanCommandList(m_device, m_commandPool, false);
+                return std::make_unique<VulkanCommandList>(m_device, m_commandPool, false);
             }
 
             void VulkanDevice::ExecuteCommandList(IRHICommandList* commandList)
@@ -1395,10 +1376,6 @@ namespace Spark
                 vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
             }
 
-            void VulkanDevice::DestroyCommandList(IRHICommandList* commandList)
-            {
-                delete commandList;
-            }
 
             void VulkanDevice::BeginFrame()
             {

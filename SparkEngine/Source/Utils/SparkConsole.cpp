@@ -410,34 +410,39 @@ namespace Spark
             }
         }
 
-        // Look up registered command
-        auto it = m_commands.find(command);
-        if (it == m_commands.end())
+        // Look up registered command — copy handler out so we don't hold the lock during callback
+        CommandInfo entry;
         {
-            std::string suggestion = FindClosestCommand(command);
-            std::string errorMsg = "Unknown command: '" + command + "'.";
-            if (!suggestion.empty())
+            std::lock_guard<std::mutex> lock(m_commandMutex);
+            auto it = m_commands.find(command);
+            if (it == m_commands.end())
             {
-                errorMsg += " Did you mean '" + suggestion + "'?";
+                std::string suggestion = FindClosestCommand(command);
+                std::string errorMsg = "Unknown command: '" + command + "'.";
+                if (!suggestion.empty())
+                {
+                    errorMsg += " Did you mean '" + suggestion + "'?";
+                }
+                errorMsg += " Type 'help' for available commands.";
+                LogError(errorMsg);
+                m_stats.totalCommandsFailed++;
+                return false;
             }
-            errorMsg += " Type 'help' for available commands.";
-            LogError(errorMsg);
-            m_stats.totalCommandsFailed++;
-            return false;
-        }
 
-        // Permission check
-        if (m_currentPermission < it->second.requiredPermission)
-        {
-            LogError("Permission denied: '" + command + "' requires " +
-                     CommandPermissionToString(it->second.requiredPermission) + " level");
-            m_stats.totalCommandsFailed++;
-            return false;
+            // Permission check
+            if (m_currentPermission < it->second.requiredPermission)
+            {
+                LogError("Permission denied: '" + command + "' requires " +
+                         CommandPermissionToString(it->second.requiredPermission) + " level");
+                m_stats.totalCommandsFailed++;
+                return false;
+            }
+            entry = it->second;
         }
 
         try
         {
-            std::string result = it->second.handler(args);
+            std::string result = entry.handler(args);
             if (!result.empty())
             {
                 LogInfo(result);

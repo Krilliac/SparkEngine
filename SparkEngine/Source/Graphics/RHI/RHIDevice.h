@@ -138,24 +138,19 @@ namespace Spark
             // Swap chain
             virtual std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc& desc) = 0;
 
-            // Resource creation
-            virtual IRHIBuffer* CreateBuffer(const RHIBufferDesc& desc) = 0;
-            virtual IRHITexture* CreateTexture(const RHITextureDesc& desc) = 0;
-            virtual IRHIShader* CreateShader(const RHIShaderDesc& desc) = 0;
-            virtual IRHISampler* CreateSampler(const RHISamplerDesc& desc) = 0;
-            virtual IRHIPipelineState* CreatePipelineState(const RHIPipelineStateDesc& desc, IRHIShader* vertexShader,
-                                                           IRHIShader* pixelShader) = 0;
+            // Resource creation — caller owns the returned unique_ptr
+            virtual std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc& desc) = 0;
+            virtual std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc& desc) = 0;
+            virtual std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc& desc) = 0;
+            virtual std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc& desc) = 0;
+            virtual std::unique_ptr<IRHIPipelineState> CreatePipelineState(const RHIPipelineStateDesc& desc,
+                                                                           IRHIShader* vertexShader,
+                                                                           IRHIShader* pixelShader) = 0;
 
             /// Wrap a native texture handle (e.g. ID3D11Texture2D*) as an IRHITexture.
-            /// The RHI does NOT own the resource — caller must ensure it outlives the wrapper.
-            virtual IRHITexture* WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc) = 0;
-
-            // Resource destruction
-            virtual void DestroyBuffer(IRHIBuffer* buffer) = 0;
-            virtual void DestroyTexture(IRHITexture* texture) = 0;
-            virtual void DestroyShader(IRHIShader* shader) = 0;
-            virtual void DestroySampler(IRHISampler* sampler) = 0;
-            virtual void DestroyPipelineState(IRHIPipelineState* state) = 0;
+            /// The RHI does NOT own the underlying resource — caller must ensure it outlives the wrapper.
+            /// Caller owns the returned wrapper object.
+            virtual std::unique_ptr<IRHITexture> WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc) = 0;
 
             // Resource updates
             virtual void* MapBuffer(IRHIBuffer* buffer) = 0;
@@ -166,9 +161,8 @@ namespace Spark
 
             // Command lists
             virtual IRHICommandList* GetImmediateCommandList() = 0;
-            virtual IRHICommandList* CreateDeferredCommandList() = 0;
+            virtual std::unique_ptr<IRHICommandList> CreateDeferredCommandList() = 0;
             virtual void ExecuteCommandList(IRHICommandList* commandList) = 0;
-            virtual void DestroyCommandList(IRHICommandList* commandList) = 0;
 
             // Frame management
             virtual void BeginFrame() = 0;

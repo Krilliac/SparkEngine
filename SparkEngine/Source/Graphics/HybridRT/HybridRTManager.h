@@ -114,9 +114,9 @@ namespace Spark::Graphics
         std::unique_ptr<ProbeSystem> m_probes;
 
         // Intermediate RT output textures (owned by this manager)
-        RHI::IRHITexture* m_rtReflections = nullptr;
-        RHI::IRHITexture* m_rtGI = nullptr;
-        RHI::IRHITexture* m_rtShadows = nullptr;
+        std::unique_ptr<RHI::IRHITexture> m_rtReflections;
+        std::unique_ptr<RHI::IRHITexture> m_rtGI;
+        std::unique_ptr<RHI::IRHITexture> m_rtShadows;
 
         // Scene accumulation for current frame
         std::vector<SDFPrimitive> m_pendingPrimitives;

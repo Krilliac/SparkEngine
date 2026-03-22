@@ -49,35 +49,12 @@ namespace Spark::RHI
             return;
         }
 
-        // Destroy all tracked resources in reverse creation order.
-        for (auto* pso : m_ownedPipelineStates)
-        {
-            m_device->DestroyPipelineState(pso);
-        }
+        // Release all tracked resources in reverse creation order.
+        // unique_ptr destructors handle cleanup automatically.
         m_ownedPipelineStates.clear();
-
-        for (auto* sampler : m_ownedSamplers)
-        {
-            m_device->DestroySampler(sampler);
-        }
         m_ownedSamplers.clear();
-
-        for (auto* shader : m_ownedShaders)
-        {
-            m_device->DestroyShader(shader);
-        }
         m_ownedShaders.clear();
-
-        for (auto* tex : m_ownedTextures)
-        {
-            m_device->DestroyTexture(tex);
-        }
         m_ownedTextures.clear();
-
-        for (auto* buf : m_ownedBuffers)
-        {
-            m_device->DestroyBuffer(buf);
-        }
         m_ownedBuffers.clear();
 
         m_commandList = nullptr;
@@ -324,12 +301,11 @@ namespace Spark::RHI
         desc.initialData = data;
         desc.debugName = "AdapterVB";
 
-        IRHIBuffer* buffer = m_device->CreateBuffer(desc);
+        auto buffer = m_device->CreateBuffer(desc);
+        IRHIBuffer* raw = buffer.get();
         if (buffer)
-        {
-            m_ownedBuffers.push_back(buffer);
-        }
-        return buffer;
+            m_ownedBuffers.push_back(std::move(buffer));
+        return raw;
     }
 
     IRHIBuffer* RHIAdapter::CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride)
@@ -344,12 +320,11 @@ namespace Spark::RHI
         desc.initialData = data;
         desc.debugName = "AdapterIB";
 
-        IRHIBuffer* buffer = m_device->CreateBuffer(desc);
+        auto buffer = m_device->CreateBuffer(desc);
+        IRHIBuffer* raw = buffer.get();
         if (buffer)
-        {
-            m_ownedBuffers.push_back(buffer);
-        }
-        return buffer;
+            m_ownedBuffers.push_back(std::move(buffer));
+        return raw;
     }
 
     IRHIBuffer* RHIAdapter::CreateConstantBuffer(uint64_t size)
@@ -364,12 +339,11 @@ namespace Spark::RHI
         desc.initialData = nullptr;
         desc.debugName = "AdapterCB";
 
-        IRHIBuffer* buffer = m_device->CreateBuffer(desc);
+        auto buffer = m_device->CreateBuffer(desc);
+        IRHIBuffer* raw = buffer.get();
         if (buffer)
-        {
-            m_ownedBuffers.push_back(buffer);
-        }
-        return buffer;
+            m_ownedBuffers.push_back(std::move(buffer));
+        return raw;
     }
 
     IRHIBuffer* RHIAdapter::CreateStructuredBuffer(const void* data, uint64_t size, uint32_t stride)
@@ -384,12 +358,11 @@ namespace Spark::RHI
         desc.initialData = data;
         desc.debugName = "AdapterSB";
 
-        IRHIBuffer* buffer = m_device->CreateBuffer(desc);
+        auto buffer = m_device->CreateBuffer(desc);
+        IRHIBuffer* raw = buffer.get();
         if (buffer)
-        {
-            m_ownedBuffers.push_back(buffer);
-        }
-        return buffer;
+            m_ownedBuffers.push_back(std::move(buffer));
+        return raw;
     }
 
     // ========================================================================
@@ -413,16 +386,15 @@ namespace Spark::RHI
         desc.usage = usage;
         desc.debugName = "AdapterTex2D";
 
-        IRHITexture* texture = m_device->CreateTexture(desc);
+        auto texture = m_device->CreateTexture(desc);
+        IRHITexture* raw = texture.get();
         if (texture)
         {
             if (initialData)
-            {
-                m_device->UpdateTexture(texture, initialData);
-            }
-            m_ownedTextures.push_back(texture);
+                m_device->UpdateTexture(raw, initialData);
+            m_ownedTextures.push_back(std::move(texture));
         }
-        return texture;
+        return raw;
     }
 
     IRHITexture* RHIAdapter::CreateDepthStencil(uint32_t width, uint32_t height, PixelFormat format)
@@ -443,12 +415,11 @@ namespace Spark::RHI
         desc.clearStencil = 0;
         desc.debugName = "AdapterDepth";
 
-        IRHITexture* texture = m_device->CreateTexture(desc);
+        auto texture = m_device->CreateTexture(desc);
+        IRHITexture* raw = texture.get();
         if (texture)
-        {
-            m_ownedTextures.push_back(texture);
-        }
-        return texture;
+            m_ownedTextures.push_back(std::move(texture));
+        return raw;
     }
 
     IRHITexture* RHIAdapter::CreateRenderTarget(uint32_t width, uint32_t height, PixelFormat format)
@@ -467,12 +438,11 @@ namespace Spark::RHI
         desc.usage = RHITextureUsage::RenderTarget | RHITextureUsage::ShaderResource;
         desc.debugName = "AdapterRT";
 
-        IRHITexture* texture = m_device->CreateTexture(desc);
+        auto texture = m_device->CreateTexture(desc);
+        IRHITexture* raw = texture.get();
         if (texture)
-        {
-            m_ownedTextures.push_back(texture);
-        }
-        return texture;
+            m_ownedTextures.push_back(std::move(texture));
+        return raw;
     }
 
     // ========================================================================
@@ -483,12 +453,11 @@ namespace Spark::RHI
     {
         assert(m_device);
 
-        IRHISampler* sampler = m_device->CreateSampler(desc);
+        auto sampler = m_device->CreateSampler(desc);
+        IRHISampler* raw = sampler.get();
         if (sampler)
-        {
-            m_ownedSamplers.push_back(sampler);
-        }
-        return sampler;
+            m_ownedSamplers.push_back(std::move(sampler));
+        return raw;
     }
 
     // ========================================================================
@@ -500,12 +469,11 @@ namespace Spark::RHI
     {
         assert(m_device);
 
-        IRHIPipelineState* pso = m_device->CreatePipelineState(desc, vertexShader, pixelShader);
+        auto pso = m_device->CreatePipelineState(desc, vertexShader, pixelShader);
+        IRHIPipelineState* raw = pso.get();
         if (pso)
-        {
-            m_ownedPipelineStates.push_back(pso);
-        }
-        return pso;
+            m_ownedPipelineStates.push_back(std::move(pso));
+        return raw;
     }
 
     // ========================================================================
@@ -516,12 +484,11 @@ namespace Spark::RHI
     {
         assert(m_device);
 
-        IRHIShader* shader = m_device->CreateShader(desc);
+        auto shader = m_device->CreateShader(desc);
+        IRHIShader* raw = shader.get();
         if (shader)
-        {
-            m_ownedShaders.push_back(shader);
-        }
-        return shader;
+            m_ownedShaders.push_back(std::move(shader));
+        return raw;
     }
 
     // ========================================================================
@@ -553,11 +520,11 @@ namespace Spark::RHI
     namespace
     {
         /**
-         * @brief Remove an element from a vector by value (unordered).
+         * @brief Remove a unique_ptr element from a vector by raw pointer (unordered).
          */
-        template <typename T> void RemoveFromVector(std::vector<T>& vec, T value)
+        template <typename T> void RemoveFromVector(std::vector<std::unique_ptr<T>>& vec, T* value)
         {
-            auto it = std::find(vec.begin(), vec.end(), value);
+            auto it = std::find_if(vec.begin(), vec.end(), [value](const auto& p) { return p.get() == value; });
             if (it != vec.end())
             {
                 // Swap-and-pop for O(1) removal.
@@ -569,52 +536,37 @@ namespace Spark::RHI
 
     void RHIAdapter::DestroyBuffer(IRHIBuffer* buffer)
     {
-        if (!buffer || !m_device)
-        {
+        if (!buffer)
             return;
-        }
         RemoveFromVector(m_ownedBuffers, buffer);
-        m_device->DestroyBuffer(buffer);
     }
 
     void RHIAdapter::DestroyTexture(IRHITexture* texture)
     {
-        if (!texture || !m_device)
-        {
+        if (!texture)
             return;
-        }
         RemoveFromVector(m_ownedTextures, texture);
-        m_device->DestroyTexture(texture);
     }
 
     void RHIAdapter::DestroyShader(IRHIShader* shader)
     {
-        if (!shader || !m_device)
-        {
+        if (!shader)
             return;
-        }
         RemoveFromVector(m_ownedShaders, shader);
-        m_device->DestroyShader(shader);
     }
 
     void RHIAdapter::DestroySampler(IRHISampler* sampler)
     {
-        if (!sampler || !m_device)
-        {
+        if (!sampler)
             return;
-        }
         RemoveFromVector(m_ownedSamplers, sampler);
-        m_device->DestroySampler(sampler);
     }
 
     void RHIAdapter::DestroyPipelineState(IRHIPipelineState* pso)
     {
-        if (!pso || !m_device)
-        {
+        if (!pso)
             return;
-        }
         RemoveFromVector(m_ownedPipelineStates, pso);
-        m_device->DestroyPipelineState(pso);
     }
 
     // ========================================================================

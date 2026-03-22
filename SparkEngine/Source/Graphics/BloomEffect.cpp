@@ -319,7 +319,8 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
 
         BloomCB cb = {};
         cb.thresholdParams = {m_settings.threshold, knee, 2.0f * knee, knee > 0.0f ? 0.25f / knee : 0.0f};
-        cb.texelSize = {1.0f / m_prefilterTarget.width, 1.0f / m_prefilterTarget.height, m_settings.scatter,
+        cb.texelSize = {(m_prefilterTarget.width > 0) ? (1.0f / m_prefilterTarget.width) : 0.0f,
+                        (m_prefilterTarget.height > 0) ? (1.0f / m_prefilterTarget.height) : 0.0f, m_settings.scatter,
                         m_settings.intensity};
         cb.params = {m_settings.clampMax, 0.0f, m_settings.anamorphicRatio, 0.0f};
 

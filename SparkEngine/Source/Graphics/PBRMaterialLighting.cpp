@@ -236,6 +236,19 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
             }
         };
 
+        // Helper lambda to safely parse a single int value
+        auto safeStoi = [](const std::string& value, int defaultVal = 0) -> int
+        {
+            try
+            {
+                return std::stoi(value);
+            }
+            catch (const std::exception&)
+            {
+                return defaultVal;
+            }
+        };
+
         // Helper lambda to parse comma-separated values
         auto parseFloatArray = [](const std::string& value, std::vector<float>& output)
         {
@@ -472,11 +485,11 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                 {
                     if (key == "BlendMode")
                     {
-                        m_renderState.blendMode = static_cast<BlendMode>(std::stoi(value));
+                        m_renderState.blendMode = static_cast<BlendMode>(safeStoi(value));
                     }
                     else if (key == "CullMode")
                     {
-                        m_renderState.cullMode = static_cast<CullMode>(std::stoi(value));
+                        m_renderState.cullMode = static_cast<CullMode>(safeStoi(value));
                     }
                     else if (key == "DepthTest")
                     {
@@ -496,7 +509,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     }
                     else if (key == "RenderQueue")
                     {
-                        m_renderState.renderQueue = std::stoi(value);
+                        m_renderState.renderQueue = safeStoi(value);
                     }
                     else if (key == "DoubleSided")
                     {
@@ -509,7 +522,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                     if (key.substr(0, 7) == "Texture" && !key.contains("_"))
                     {
                         // Main texture path
-                        int textureType = std::stoi(key.substr(7));
+                        int textureType = safeStoi(key.substr(7));
                         LoadTexture(static_cast<MaterialTextureType>(textureType), value, device);
                     }
                     // Parse texture properties (enabled, intensity, tiling, offset)
@@ -518,7 +531,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                         std::string baseKey = key.substr(0, key.find("_Enabled"));
                         if (baseKey.substr(0, 7) == "Texture")
                         {
-                            int textureType = std::stoi(baseKey.substr(7));
+                            int textureType = safeStoi(baseKey.substr(7));
                             auto it = m_textures.find(static_cast<MaterialTextureType>(textureType));
                             if (it != m_textures.end())
                             {
@@ -531,7 +544,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                         std::string baseKey = key.substr(0, key.find("_Intensity"));
                         if (baseKey.substr(0, 7) == "Texture")
                         {
-                            int textureType = std::stoi(baseKey.substr(7));
+                            int textureType = safeStoi(baseKey.substr(7));
                             auto it = m_textures.find(static_cast<MaterialTextureType>(textureType));
                             if (it != m_textures.end())
                             {
@@ -544,7 +557,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                         std::string baseKey = key.substr(0, key.find("_Tiling"));
                         if (baseKey.substr(0, 7) == "Texture")
                         {
-                            int textureType = std::stoi(baseKey.substr(7));
+                            int textureType = safeStoi(baseKey.substr(7));
                             auto it = m_textures.find(static_cast<MaterialTextureType>(textureType));
                             if (it != m_textures.end())
                             {
@@ -562,7 +575,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                         std::string baseKey = key.substr(0, key.find("_Offset"));
                         if (baseKey.substr(0, 7) == "Texture")
                         {
-                            int textureType = std::stoi(baseKey.substr(7));
+                            int textureType = safeStoi(baseKey.substr(7));
                             auto it = m_textures.find(static_cast<MaterialTextureType>(textureType));
                             if (it != m_textures.end())
                             {

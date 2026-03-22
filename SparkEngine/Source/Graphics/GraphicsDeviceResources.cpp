@@ -928,8 +928,7 @@ HRESULT GraphicsEngine::CreateRenderTargets()
         return E_FAIL;
 
     // Create the HDR render target through the RHI bridge
-    Spark::RHI::IRHITexture* hdrTarget =
-        rhi.bridge.CreateRenderTarget(rhi.width, rhi.height, Spark::RHI::PixelFormat::R16G16B16A16_FLOAT);
+    auto hdrTarget = rhi.bridge.CreateRenderTarget(rhi.width, rhi.height, Spark::RHI::PixelFormat::R16G16B16A16_FLOAT);
     if (!hdrTarget)
         return E_FAIL;
 
@@ -956,7 +955,7 @@ HRESULT GraphicsEngine::CreateAdvancedRenderTargets()
 
     for (const auto& format : gBufferFormats)
     {
-        Spark::RHI::IRHITexture* gBufferRT = rhi.bridge.CreateRenderTarget(rhi.width, rhi.height, format);
+        auto gBufferRT = rhi.bridge.CreateRenderTarget(rhi.width, rhi.height, format);
         if (!gBufferRT)
             return E_FAIL;
     }
@@ -1058,7 +1057,7 @@ void GraphicsEngine::SetupForwardPlusPipeline()
                               "Shaders/ForwardPlus/Shading.hlsl", "Shaders/ForwardPlus/Shading.frag.glsl");
 
     // Create depth pre-pass render target
-    rhi.bridge.CreateDepthBuffer(rhi.width, rhi.height);
+    [[maybe_unused]] auto depthPrePass = rhi.bridge.CreateDepthBuffer(rhi.width, rhi.height);
 }
 
 // ============================================================================
@@ -1139,12 +1138,12 @@ HRESULT GraphicsEngine::CreateBasicConstantBuffer()
         return E_FAIL;
 
     constexpr uint64_t CB_SIZE = 256;
-    Spark::RHI::IRHIBuffer* cb = rhi.bridge.CreateConstantBuffer(CB_SIZE);
+    auto cb = rhi.bridge.CreateConstantBuffer(CB_SIZE);
     if (!cb)
         return E_FAIL;
 
     constexpr uint64_t FRAME_CB_SIZE = 256;
-    Spark::RHI::IRHIBuffer* frameCB = rhi.bridge.CreateConstantBuffer(FRAME_CB_SIZE);
+    auto frameCB = rhi.bridge.CreateConstantBuffer(FRAME_CB_SIZE);
     if (!frameCB)
         return E_FAIL;
 
@@ -1158,8 +1157,8 @@ HRESULT GraphicsEngine::CreateDefaultTexture()
         return E_FAIL;
 
     const uint32_t whitePixel = 0xFFFFFFFF;
-    Spark::RHI::IRHITexture* defaultTex = rhi.bridge.CreateTexture2D(
-        1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM, Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
+    auto defaultTex = rhi.bridge.CreateTexture2D(1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
+                                                 Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
 
     if (!defaultTex)
     {

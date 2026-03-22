@@ -20,6 +20,7 @@
 #include "../ScreenSpaceEffects.h" // SSRSettings for SS/RT blend coordination
 
 #include <cstdint>
+#include <memory>
 
 namespace Spark::RHI
 {
@@ -69,9 +70,9 @@ namespace Spark::Graphics
 
       private:
         RHI::IRHIDevice* m_device = nullptr;
-        RHI::IRHIShader* m_compositeCS = nullptr;
-        RHI::IRHIBuffer* m_constantBuffer = nullptr;
-        RHI::IRHITexture* m_historyBuffer = nullptr; ///< Previous frame for temporal accumulation
+        std::unique_ptr<RHI::IRHIShader> m_compositeCS;
+        std::unique_ptr<RHI::IRHIBuffer> m_constantBuffer;
+        std::unique_ptr<RHI::IRHITexture> m_historyBuffer; ///< Previous frame for temporal accumulation
 
         CompositeConstants m_constants;
         uint32_t m_width = 0;
