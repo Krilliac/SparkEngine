@@ -106,8 +106,7 @@ TEST(NetworkManager_RegisterHandler_Dispatches)
     nm.StartServer(27015, 16);
 
     bool handlerCalled = false;
-    nm.RegisterHandler(MessageType::ChatMessage,
-                       [&handlerCalled](const NetworkMessage& msg) { handlerCalled = true; });
+    nm.RegisterHandler(MessageType::ChatMessage, [&handlerCalled](const NetworkMessage& msg) { handlerCalled = true; });
 
     // Manually inject a message into the incoming queue via SendMessage + Update loop
     // Since ENABLE_NETWORKING is off, we test the handler registration itself
@@ -337,11 +336,11 @@ TEST(NetworkManager_DeserializeUnknownEntity_CreatesPlaceholder)
 
     // Build a buffer that looks like an entity state for networkID=999 (doesn't exist)
     NetBuffer fakeBuf;
-    fakeBuf.WriteUint32(999);                         // networkID
-    fakeBuf.WriteVector3({5.0f, 10.0f, 15.0f});      // position
-    fakeBuf.WriteVector3({0.0f, 45.0f, 0.0f});       // rotation
-    fakeBuf.WriteVector3({1.0f, 0.0f, 0.0f});        // velocity
-    fakeBuf.WriteUint16(0);                           // 0 properties
+    fakeBuf.WriteUint32(999);                   // networkID
+    fakeBuf.WriteVector3({5.0f, 10.0f, 15.0f}); // position
+    fakeBuf.WriteVector3({0.0f, 45.0f, 0.0f});  // rotation
+    fakeBuf.WriteVector3({1.0f, 0.0f, 0.0f});   // velocity
+    fakeBuf.WriteUint16(0);                     // 0 properties
 
     // Reconstruct as read buffer
     NetBuffer readBuf;

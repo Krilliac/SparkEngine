@@ -152,6 +152,7 @@ add_executable(SparkTests
     TestClusteredLightGPU.cpp
     TestRHIHandlePool.cpp
     TestMaterialDefinition.cpp
+    TestGraphicsIntegration.cpp
 )
 
 target_include_directories(SparkTests PRIVATE
