@@ -361,6 +361,25 @@ class PhysicsSystem
                                 float maxDistance);
     void Console_Reset();
 
+    // =========================================================================
+    // Collision layer filtering
+    // =========================================================================
+
+    /**
+     * @brief Test whether two bodies should collide based on group/mask bitmasks.
+     *
+     * Implements symmetric filtering: A collides with B only if
+     * `(A.group & B.mask) != 0 && (B.group & A.mask) != 0`.
+     *
+     * @param a First body descriptor.
+     * @param b Second body descriptor.
+     * @return true if the two bodies should collide.
+     */
+    static bool ShouldCollide(const PhysicsBodyDesc& a, const PhysicsBodyDesc& b)
+    {
+        return (a.collisionGroup & b.collisionMask) != 0 && (b.collisionGroup & a.collisionMask) != 0;
+    }
+
     /** @brief Get the Jolt physics system (for internal use by PhysicsBody). */
     JPH::PhysicsSystem* GetJoltSystem() const { return m_joltSystem.get(); }
 
@@ -651,6 +670,8 @@ class PhysicsSystem
 
     /** @brief Look up a PhysicsBody wrapper by its Jolt BodyID raw value. */
     PhysicsBody* FindBodyByJoltID(uint32_t joltBodyID) const;
+
+    friend class SparkContactListener;
 };
 
 // Utility functions are declared in PhysicsTypes.h (included above).

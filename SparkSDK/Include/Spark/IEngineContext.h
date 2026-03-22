@@ -78,6 +78,7 @@ namespace Spark
     class LocalFileCache;
     class AssetRegistry;
     class WeatherSystem;
+    class TimeOfDaySystem;
     class DialogueSystem;
     class ModSystem;
     class ReplaySystem;
@@ -188,6 +189,10 @@ namespace Spark
         /** @brief Get the weather system */
         virtual WeatherSystem* GetWeather() { return nullptr; }
         virtual const WeatherSystem* GetWeather() const { return nullptr; }
+
+        /** @brief Get the time-of-day system (day/night cycle) */
+        virtual TimeOfDaySystem* GetTimeOfDay() { return nullptr; }
+        virtual const TimeOfDaySystem* GetTimeOfDay() const { return nullptr; }
 
         /** @brief Get the UI system */
         virtual UI::UISystem* GetUI() { return nullptr; }

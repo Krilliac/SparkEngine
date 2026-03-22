@@ -157,6 +157,24 @@ class SparkContactListener final : public JPH::ContactListener
                                           JPH::RVec3Arg inBaseOffset,
                                           const JPH::CollideShapeResult& inCollisionResult) override
     {
+        // Apply collision group/mask filtering from PhysicsBody wrappers
+        if (m_physicsSystem)
+        {
+            PhysicsBody* bodyA = m_physicsSystem->FindBodyByJoltID(inBody1.GetID().GetIndexAndSequenceNumber());
+            PhysicsBody* bodyB = m_physicsSystem->FindBodyByJoltID(inBody2.GetID().GetIndexAndSequenceNumber());
+            if (bodyA && bodyB)
+            {
+                uint16_t groupA = bodyA->GetCollisionGroup();
+                uint16_t maskA = bodyA->GetCollisionMask();
+                uint16_t groupB = bodyB->GetCollisionGroup();
+                uint16_t maskB = bodyB->GetCollisionMask();
+                if ((groupA & maskB) == 0 || (groupB & maskA) == 0)
+                {
+                    return JPH::ValidateResult::RejectAllContactsForThisBodyPair;
+                }
+            }
+        }
+
         return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
     }
 

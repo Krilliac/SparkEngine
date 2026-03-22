@@ -40,6 +40,7 @@
 #include "EngineSetup.h"
 #include "AssetIntegration.h"
 #include "Graphics/WeatherSystem.h"
+#include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/UI/UISystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/Modding/ModSystem.h"
@@ -51,6 +52,7 @@
 #include "Utils/DebugDraw.h"
 #include "Utils/DebugOverlay.h"
 #include "Utils/FileLogger.h"
+#include "Utils/JobSystem.h"
 #include "Graphics/DecalSystem.h"
 #include "Graphics/MeshLOD.h"
 #include "Audio/MusicManager.h"
@@ -435,6 +437,9 @@ static void UpdateGameplaySystems(float dt)
     if (auto* weather = ctx->GetWeather())
         weather->Update(dt);
 
+    // Time-of-day — advances the 24-hour clock and recomputes sun state
+    Spark::TimeOfDaySystem::GetInstance().Update(dt);
+
     // Weather → gameplay bridge (wind forces, AI perception, audio state)
     Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, ctx->GetWeather(), ctx->GetPhysics());
 
@@ -741,6 +746,9 @@ static void ShutdownEngine()
     g_audioEngine.reset();
     ShutdownPhysics();
 
+    // Shut down the job system after all subsystems that submit jobs
+    Spark::JobSystem::Get().Shutdown();
+
     EngineContext::ResetOwned();
     g_eventBus.reset();
     g_input.reset();
@@ -1042,9 +1050,12 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         EngineContext::Get()->SetAssetPipeline(g_graphics->GetAssetPipeline());
     }
 
-    // Gameplay subsystems (Weather, UI, Dialogue, Modding)
+    // Gameplay subsystems (Weather, TimeOfDay, UI, Dialogue, Modding)
     g_weatherSystem = std::make_unique<Spark::WeatherSystem>();
     EngineContext::Get()->SetWeather(g_weatherSystem.get());
+
+    // TimeOfDay — singleton, registered with context for game-module access
+    EngineContext::Get()->SetTimeOfDay(&Spark::TimeOfDaySystem::GetInstance());
 
     g_uiSystem = std::make_unique<Spark::UI::UISystem>();
     EngineContext::Get()->SetUI(g_uiSystem.get());
@@ -1488,6 +1499,9 @@ static void RegisterGameplaySubsystems()
 {
     static Spark::WeatherSystem s_weatherSystem;
     EngineContext::Get()->SetWeather(&s_weatherSystem);
+
+    // TimeOfDay — singleton, registered with context for game-module access
+    EngineContext::Get()->SetTimeOfDay(&Spark::TimeOfDaySystem::GetInstance());
 
     // Wire WeatherSystem to EventBus for WeatherChangedEvent publishing
     if (g_eventBus)

@@ -364,41 +364,42 @@ size_t Game::GetAliveEnemyCount() const
 
 void Game::InitializeEnemies()
 {
-    // NOTE: Enemies are now defined in the scene file (Assets/Scenes/level1.scene)
-    // as [Enemy] entries with type, position, and patrol routes. They can be placed
-    // and edited in the SparkEditor without recompiling.
-    // The code below shows the equivalent C++ approach for reference.
-    //
-    // // Wave 1: Grunts at cardinal positions
-    // auto* g1 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, 15.0f);
-    // auto* g2 = SpawnEnemy(EnemyType::Grunt, -15.0f, 1.0f, 15.0f);
-    // auto* g3 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, -15.0f);
-    // auto* g4 = SpawnEnemy(EnemyType::Grunt, -15.0f, 1.0f, -15.0f);
-    //
-    // // Give grunts patrol routes
-    // if (g1) g1->SetPatrolPoints({{15,1,15}, {15,1,-5}, {5,1,-5}});
-    // if (g2) g2->SetPatrolPoints({{-15,1,15}, {-15,1,-5}, {-5,1,-5}});
-    // if (g3) g3->SetPatrolPoints({{15,1,-15}, {5,1,-15}, {5,1,-5}});
-    // if (g4) g4->SetPatrolPoints({{-15,1,-15}, {-5,1,-15}, {-5,1,-5}});
-    //
-    // // Scouts — fast flankers
-    // SpawnEnemy(EnemyType::Scout, 10.0f, 1.0f, 0.0f);
-    // SpawnEnemy(EnemyType::Scout, -10.0f, 1.0f, 0.0f);
-    //
-    // // Guard — stationary sentry at arena center
-    // SpawnEnemy(EnemyType::Guard, 0.0f, 1.0f, -10.0f);
-    //
-    // // Heavy — arena boss near the back
-    // SpawnEnemy(EnemyType::Heavy, 0.0f, 1.0f, 18.0f);
-    //
-    // // Snipers — long-range on platforms
-    // SpawnEnemy(EnemyType::Sniper, 22.0f, 4.0f, 0.0f);
-    // SpawnEnemy(EnemyType::Sniper, -22.0f, 4.0f, 0.0f);
-    //
-    // // Medic — stays near guards
-    // SpawnEnemy(EnemyType::Medic, 2.0f, 1.0f, -8.0f);
+    // Spawn AI enemies with patrol routes for the combat arena.
+    // Grunts patrol cardinal positions around the arena perimeter.
+    auto* g1 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, 15.0f);
+    auto* g2 = SpawnEnemy(EnemyType::Grunt, -15.0f, 1.0f, 15.0f);
+    auto* g3 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, -15.0f);
+    auto* g4 = SpawnEnemy(EnemyType::Grunt, -15.0f, 1.0f, -15.0f);
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Enemies loaded from scene file", L"SUCCESS");
+    if (g1)
+        g1->SetPatrolPoints({{15, 1, 15}, {15, 1, -5}, {5, 1, -5}});
+    if (g2)
+        g2->SetPatrolPoints({{-15, 1, 15}, {-15, 1, -5}, {-5, 1, -5}});
+    if (g3)
+        g3->SetPatrolPoints({{15, 1, -15}, {5, 1, -15}, {5, 1, -5}});
+    if (g4)
+        g4->SetPatrolPoints({{-15, 1, -15}, {-5, 1, -15}, {-5, 1, -5}});
+
+    // Scouts — fast flankers on the sides
+    SpawnEnemy(EnemyType::Scout, 10.0f, 1.0f, 0.0f);
+    SpawnEnemy(EnemyType::Scout, -10.0f, 1.0f, 0.0f);
+
+    // Guard — stationary sentry watching the center
+    SpawnEnemy(EnemyType::Guard, 0.0f, 1.0f, -10.0f);
+
+    // Heavy — arena boss near the back
+    SpawnEnemy(EnemyType::Heavy, 0.0f, 1.0f, 18.0f);
+
+    // Snipers — long-range on elevated platforms
+    SpawnEnemy(EnemyType::Sniper, 22.0f, 4.0f, 0.0f);
+    SpawnEnemy(EnemyType::Sniper, -22.0f, 4.0f, 0.0f);
+
+    // Medic — stays near the guard, heals allies
+    SpawnEnemy(EnemyType::Medic, 2.0f, 1.0f, -8.0f);
+
+    std::wstring msg = L"AI enemies spawned: " + std::to_wstring(m_enemies.size()) +
+                       L" (4 grunts, 2 scouts, 1 guard, 1 heavy, 2 snipers, 1 medic)";
+    LOG_TO_CONSOLE_IMMEDIATE(msg, L"SUCCESS");
 }
 
 /*-------------------------------------------------------------

@@ -14,6 +14,7 @@
 #include "ModuleHotReload.h"
 #include "Audio/AudioEngine.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Engine/World/TimeOfDaySystem.h"
 #include "Physics/PhysicsSystem.h"
 #include "Utils/SparkConsole.h"
 #include "EngineSetup.h"
@@ -736,6 +737,82 @@ namespace Spark
     }
 
     // ============================================================================
+    // Time-of-day commands
+    // ============================================================================
+
+    static void RegisterTimeOfDayCommands(SimpleConsole& console)
+    {
+        console.RegisterCommand(
+            "time_set",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                    return "Usage: time_set <hour>  (0-24, e.g. 14.5 = 2:30 PM)";
+                try
+                {
+                    float hour = std::stof(args[0]);
+                    auto& tod = TimeOfDaySystem::GetInstance();
+                    tod.SetTimeOfDay(hour);
+                    return "Time set to " + tod.GetTimeString() + " (" + args[0] + "h)";
+                }
+                catch (const std::exception&)
+                {
+                    return "Invalid number. Usage: time_set <hour>";
+                }
+            },
+            "Set time of day (0=midnight, 12=noon, 18=sunset)", "World");
+
+        console.RegisterCommand(
+            "time_speed",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                    return "Usage: time_speed <multiplier>  (60=1min/sec, 0=paused)";
+                try
+                {
+                    float scale = std::stof(args[0]);
+                    TimeOfDaySystem::GetInstance().SetTimeScale(scale);
+                    return "Time scale set to " + args[0] + "x";
+                }
+                catch (const std::exception&)
+                {
+                    return "Invalid number. Usage: time_speed <multiplier>";
+                }
+            },
+            "Set time progression speed (game seconds per real second)", "World");
+
+        console.RegisterCommand(
+            "time_info",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                auto& tod = TimeOfDaySystem::GetInstance();
+                std::stringstream ss;
+                ss << "=== Time of Day ===\n"
+                   << "  Time:      " << tod.GetTimeString() << " (" << tod.GetTimeOfDay() << "h)\n"
+                   << "  Day:       " << tod.GetDayCount() << "\n"
+                   << "  Scale:     " << tod.GetTimeScale() << "x\n"
+                   << "  Paused:    " << (tod.IsPaused() ? "YES" : "NO") << "\n"
+                   << "  IsNight:   " << (tod.IsNight() ? "YES" : "NO") << "\n"
+                   << "  Sun Y:     " << tod.GetSunDirection().y << "\n"
+                   << "  Intensity: " << tod.GetSunIntensity() << "\n";
+                return ss.str();
+            },
+            "Show current time-of-day state", "World");
+
+        console.RegisterCommand(
+            "time_pause",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                    return "Usage: time_pause <on|off>";
+                bool pause = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+                TimeOfDaySystem::GetInstance().SetPaused(pause);
+                return pause ? "Time paused" : "Time resumed";
+            },
+            "Pause or resume time progression", "World");
+    }
+
+    // ============================================================================
     // Public API — delegates to per-subsystem registrations
     // ============================================================================
 
@@ -750,6 +827,7 @@ namespace Spark
         RegisterAudioCommands(console, audioEngine);
         RegisterArchitectureCommands(console);
         RegisterHotReloadCommands(console, hotReload);
+        RegisterTimeOfDayCommands(console);
     }
 
 } // namespace Spark

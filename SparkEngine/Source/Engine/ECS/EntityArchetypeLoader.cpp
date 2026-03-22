@@ -12,6 +12,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Spark::ECS
@@ -258,6 +259,58 @@ namespace Spark::ECS
             }
             // Unrecognized component types are stored in the archetype
             // for game-specific code to interpret via GetArchetype()
+        }
+
+        return entity;
+    }
+
+    EntityID SpawnFromArchetype(const std::string& name, World& world,
+                                const std::unordered_map<std::string, std::string>& overrides)
+    {
+        const auto* archetype = EntityArchetypeSystem::GetInstance().GetArchetype(name);
+        if (!archetype)
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning("SpawnFromArchetype: archetype not found: " + name);
+            return entt::null;
+        }
+
+        // Build a mutable copy of the archetype's components with overrides applied.
+        // Override keys use the format "ComponentType.propertyName".
+        auto components = archetype->components;
+        for (const auto& [key, value] : overrides)
+        {
+            auto dotPos = key.find('.');
+            if (dotPos == std::string::npos)
+                continue;
+
+            std::string compType = key.substr(0, dotPos);
+            std::string propName = key.substr(dotPos + 1);
+
+            for (auto& comp : components)
+            {
+                if (comp.typeName == compType)
+                {
+                    comp.properties[propName] = value;
+                }
+            }
+        }
+
+        EntityID entity = world.CreateEntity(archetype->name);
+
+        for (const auto& comp : components)
+        {
+            if (comp.typeName == "Transform")
+            {
+                ApplyTransform(world, entity, comp);
+            }
+            else if (comp.typeName == "LightComponent")
+            {
+                ApplyLightComponent(world, entity, comp);
+            }
+            else if (comp.typeName == "NameComponent")
+            {
+                ApplyNameComponent(world, entity, comp);
+            }
         }
 
         return entity;

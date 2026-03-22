@@ -126,6 +126,18 @@ namespace Spark::Graphics
         SharpenSettings& GetSharpenSettings() { return m_sharpenSettings; }
         const SharpenSettings& GetSharpenSettings() const { return m_sharpenSettings; }
 
+        BloomSettings& GetBloomSettings() { return m_bloomSettings; }
+        const BloomSettings& GetBloomSettings() const { return m_bloomSettings; }
+
+        AutoExposureSettings& GetAutoExposureSettings() { return m_autoExposureSettings; }
+        const AutoExposureSettings& GetAutoExposureSettings() const { return m_autoExposureSettings; }
+
+        TonemappingSettings& GetTonemappingSettings() { return m_tonemappingSettings; }
+        const TonemappingSettings& GetTonemappingSettings() const { return m_tonemappingSettings; }
+
+        ColorGradingSettings& GetColorGradingSettings() { return m_colorGradingSettings; }
+        const ColorGradingSettings& GetColorGradingSettings() const { return m_colorGradingSettings; }
+
         // ---- Metrics ----
 
         std::vector<PassMetrics> GetPassMetrics() const;
@@ -186,6 +198,10 @@ namespace Spark::Graphics
         float m_passTimings[static_cast<int>(PostProcessPass::Count)] = {};
 
         // Per-effect settings
+        BloomSettings m_bloomSettings;
+        AutoExposureSettings m_autoExposureSettings;
+        TonemappingSettings m_tonemappingSettings;
+        ColorGradingSettings m_colorGradingSettings;
         FXAASettings m_fxaaSettings;
         DepthOfFieldSettings m_dofSettings;
         VignetteSettings m_vignetteSettings;
@@ -195,6 +211,9 @@ namespace Spark::Graphics
         LightShaftSettings m_lightShaftSettings;
         LensFlareSettings m_lensFlareSettings;
         SharpenSettings m_sharpenSettings;
+
+        // Auto-exposure state (persists between frames)
+        float m_currentExposure = 1.0f;
 
         // GPU resources
         ID3D11Device* m_device = nullptr;
@@ -209,6 +228,10 @@ namespace Spark::Graphics
 
         // Per-pass pixel shaders
         ComPtr<ID3D11VertexShader> m_fullscreenVS;
+        ComPtr<ID3D11PixelShader> m_bloomPS;
+        ComPtr<ID3D11PixelShader> m_autoExposurePS;
+        ComPtr<ID3D11PixelShader> m_tonemapPS;
+        ComPtr<ID3D11PixelShader> m_colorGradingPS;
         ComPtr<ID3D11PixelShader> m_fxaaPS;
         ComPtr<ID3D11PixelShader> m_dofPS;
         ComPtr<ID3D11PixelShader> m_motionBlurPS;

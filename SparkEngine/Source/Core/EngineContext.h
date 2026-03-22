@@ -182,6 +182,8 @@ class EngineContext : public Spark::IEngineContext
     const Spark::AssetRegistry* GetAssetRegistry() const override { return GetSystem<Spark::AssetRegistry>(); }
     Spark::WeatherSystem* GetWeather() override { return GetSystem<Spark::WeatherSystem>(); }
     const Spark::WeatherSystem* GetWeather() const override { return GetSystem<Spark::WeatherSystem>(); }
+    Spark::TimeOfDaySystem* GetTimeOfDay() override { return GetSystem<Spark::TimeOfDaySystem>(); }
+    const Spark::TimeOfDaySystem* GetTimeOfDay() const override { return GetSystem<Spark::TimeOfDaySystem>(); }
     Spark::UI::UISystem* GetUI() override { return GetSystem<Spark::UI::UISystem>(); }
     const Spark::UI::UISystem* GetUI() const override { return GetSystem<Spark::UI::UISystem>(); }
     Spark::DialogueSystem* GetDialogue() override { return GetSystem<Spark::DialogueSystem>(); }
@@ -268,6 +270,7 @@ class EngineContext : public Spark::IEngineContext
     void SetFileCache(Spark::LocalFileCache* f) { RegisterSystem<Spark::LocalFileCache>(f); }
     void SetAssetRegistry(Spark::AssetRegistry* a) { RegisterSystem<Spark::AssetRegistry>(a); }
     void SetWeather(Spark::WeatherSystem* w) { RegisterSystem<Spark::WeatherSystem>(w); }
+    void SetTimeOfDay(Spark::TimeOfDaySystem* t) { RegisterSystem<Spark::TimeOfDaySystem>(t); }
     void SetUI(Spark::UI::UISystem* u) { RegisterSystem<Spark::UI::UISystem>(u); }
     void SetDialogue(Spark::DialogueSystem* d) { RegisterSystem<Spark::DialogueSystem>(d); }
     void SetModSystem(Spark::ModSystem* m) { RegisterSystem<Spark::ModSystem>(m); }
