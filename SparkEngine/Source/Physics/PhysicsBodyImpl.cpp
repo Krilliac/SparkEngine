@@ -27,6 +27,7 @@ using namespace DirectX;
 
 // Access physics system via EngineContext service locator instead of raw global
 #include "../Core/EngineContext.h"
+#include "../Utils/Assert.h"
 
 static PhysicsSystem* GetPhysicsSystem()
 {
@@ -34,10 +35,24 @@ static PhysicsSystem* GetPhysicsSystem()
     return ctx ? ctx->GetPhysics() : nullptr;
 }
 
-// Helper to get the Jolt BodyInterface
+// Helper to get the Jolt BodyInterface (returns nullptr if physics unavailable)
+static JPH::BodyInterface* GetBodyInterfacePtr()
+{
+    auto* sys = GetPhysicsSystem();
+    if (!sys)
+        return nullptr;
+    auto* jolt = sys->GetJoltSystem();
+    if (!jolt)
+        return nullptr;
+    return &jolt->GetBodyInterface();
+}
+
+// Convenience reference accessor — asserts in debug, use only when physics is guaranteed active
 static JPH::BodyInterface& GetBodyInterface()
 {
-    return GetPhysicsSystem()->GetJoltSystem()->GetBodyInterface();
+    auto* bi = GetBodyInterfacePtr();
+    ASSERT_NOT_NULL(bi);
+    return *bi;
 }
 
 static bool HasValidJoltBody(uint32_t id)
@@ -297,7 +312,10 @@ float PhysicsBody::GetMass() const
     if (!HasValidJoltBody(m_joltBodyID))
         return m_desc.mass;
 
-    auto* sys = GetPhysicsSystem()->GetJoltSystem();
+    auto* phys = GetPhysicsSystem();
+    if (!phys)
+        return {};
+    auto* sys = phys->GetJoltSystem();
     JPH::BodyID bodyID(m_joltBodyID);
     const JPH::Body* body = sys->GetBodyLockInterface().TryGetBody(bodyID);
     if (!body || !body->IsDynamic())
@@ -314,7 +332,10 @@ void PhysicsBody::SetMass(float mass)
     if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    auto* sys = GetPhysicsSystem()->GetJoltSystem();
+    auto* phys = GetPhysicsSystem();
+    if (!phys)
+        return;
+    auto* sys = phys->GetJoltSystem();
     JPH::BodyID bodyID(m_joltBodyID);
     JPH::Body* body = const_cast<JPH::Body*>(sys->GetBodyLockInterface().TryGetBody(bodyID));
     if (body && body->IsDynamic() && mass > 0.0f)
@@ -334,7 +355,10 @@ void PhysicsBody::SetMaterial(const PhysicsMaterial& material)
     bi.SetFriction(bodyID, material.friction);
     bi.SetRestitution(bodyID, material.restitution);
 
-    auto* sys = GetPhysicsSystem()->GetJoltSystem();
+    auto* phys = GetPhysicsSystem();
+    if (!phys)
+        return;
+    auto* sys = phys->GetJoltSystem();
     JPH::Body* body = const_cast<JPH::Body*>(sys->GetBodyLockInterface().TryGetBody(bodyID));
     if (body && body->IsDynamic())
     {
