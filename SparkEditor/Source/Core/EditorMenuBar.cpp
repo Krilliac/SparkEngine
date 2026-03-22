@@ -6,6 +6,7 @@
  * Split from EditorUI.cpp for maintainability.
  */
 #include "EditorUI.h"
+#include "EditorPluginManager.h"
 #include "EditorIcons.h"
 #include "EditorTheme.h"
 #include "../Panels/HierarchyPanel.h"
@@ -37,6 +38,13 @@ namespace SparkEditor
             RenderFPSToolsMenu();
             RenderBuildMenu();
             RenderHelpMenu();
+
+            // Render plugin-contributed menu bar items
+            if (m_pluginManager)
+            {
+                m_pluginManager->RenderMenuBarItems();
+            }
+
             ImGui::EndMainMenuBar();
         }
     }
@@ -60,6 +68,13 @@ namespace SparkEditor
             m_currentScenePath.clear();
             m_currentSceneName = "Untitled";
             m_sceneModified = false;
+
+            // Notify plugins that a new (blank) scene was loaded
+            if (m_pluginManager)
+            {
+                m_pluginManager->NotifySceneLoad("Untitled");
+            }
+
             ShowNotification("New scene created", "success");
         }
         if (ImGui::MenuItem("Save Scene", "Ctrl+S"))

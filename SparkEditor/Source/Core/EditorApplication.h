@@ -11,6 +11,8 @@
 #include <memory>
 #include <chrono>
 
+#include "EditorPluginManager.h"
+
 #ifdef _WIN32
 #include <Windows.h>
 #include <d3d11.h>
@@ -72,6 +74,7 @@ namespace SparkEditor
         void RequestExit();
 
         PerformanceMetrics GetPerformanceMetrics() const;
+        EditorPluginManager& GetPluginManager() { return m_pluginManager; }
         void OnWindowResize(int width, int height);
         bool OnShutdownRequested();
         void SetWindowTitle(const std::string& title);
@@ -114,6 +117,9 @@ namespace SparkEditor
 
         // UI system
         std::unique_ptr<EditorUI> m_ui;
+
+        // Plugin system
+        EditorPluginManager m_pluginManager;
 
         // Performance tracking
         PerformanceMetrics m_performanceMetrics;

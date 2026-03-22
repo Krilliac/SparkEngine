@@ -124,6 +124,7 @@ GraphicsEngine::GraphicsEngine()
 
         m_lightManager = std::make_unique<LightManager>();
         m_renderPipeline = std::make_unique<Spark::Graphics::RenderPipeline>();
+        m_renderPipeline->SetGraphicsEngine(this);
         m_postProcessing = std::make_unique<PostProcessingPipeline>();
         m_temporalEffects = std::make_unique<TemporalEffects>();
         m_shadowAtlas = std::make_unique<Spark::Graphics::ShadowAtlas>();
@@ -1001,6 +1002,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_assetPipeline = std::make_unique<AssetPipeline>();
     m_lightManager = std::make_unique<LightManager>();
     m_renderPipeline = std::make_unique<Spark::Graphics::RenderPipeline>();
+    m_renderPipeline->SetGraphicsEngine(this);
     m_postProcessing = std::make_unique<PostProcessingPipeline>();
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initialized on Linux via RHI (%s)",

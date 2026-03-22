@@ -47,6 +47,7 @@
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorCrashHandler.h"
+#include "EditorPluginManager.h"
 #include "EditorApplication.h"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -172,6 +173,23 @@ namespace SparkEditor
         m_commandPalette = std::make_unique<CommandPalette>();
         console.LogSuccess("Command palette initialized");
 
+        // Gizmo system — 3D manipulation overlays
+        console.LogInfo("Initializing gizmo system...");
+        m_gizmoSystem = std::make_unique<GizmoSystem>();
+        if (m_gizmoSystem->Initialize(nullptr, nullptr))
+        {
+            console.LogSuccess("Gizmo system initialized");
+        }
+        else
+        {
+            console.LogWarning("Gizmo system initialization failed");
+        }
+
+        // Collaborative editing session
+        console.LogInfo("Initializing collaborative edit session...");
+        m_collabSession = std::make_unique<CollaborativeEditSession>();
+        console.LogSuccess("Collaborative edit session initialized");
+
         // Editor panels
         console.LogInfo("Creating editor panels...");
         CreatePanels();
@@ -219,6 +237,12 @@ namespace SparkEditor
                 }
                 m_sceneModified = false;
 
+                // Notify plugins of the scene load
+                if (m_pluginManager && !m_currentScenePath.empty())
+                {
+                    m_pluginManager->NotifySceneLoad(m_currentScenePath);
+                }
+
                 ShowNotification("Project opened: " + project.name, "success");
             });
 
@@ -240,6 +264,18 @@ namespace SparkEditor
 
         // Update stats
         UpdateStats(deltaTime);
+
+        // Update gizmo system
+        if (m_gizmoSystem)
+        {
+            m_gizmoSystem->Update(deltaTime);
+        }
+
+        // Update collaborative editing session (processes incoming messages, broadcasts presence)
+        if (m_collabSession)
+        {
+            m_collabSession->Update(deltaTime);
+        }
 
         // Handle keyboard shortcuts for undo/redo, command palette, search
         HandleKeyboardShortcuts();
@@ -266,6 +302,13 @@ namespace SparkEditor
                 m_currentScenePath.clear();
                 m_currentSceneName = "Untitled";
                 m_sceneModified = false;
+
+                // Notify plugins that a new (blank) scene was loaded
+                if (m_pluginManager)
+                {
+                    m_pluginManager->NotifySceneLoad("Untitled");
+                }
+
                 ShowNotification("New scene created", "success");
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_S))
@@ -509,6 +552,24 @@ namespace SparkEditor
             m_prefabManager->Shutdown();
             m_prefabManager.reset();
             console.LogSuccess("Prefab manager shutdown complete");
+        }
+
+        // Shutdown gizmo system
+        if (m_gizmoSystem)
+        {
+            console.LogInfo("Shutting down gizmo system...");
+            m_gizmoSystem->Shutdown();
+            m_gizmoSystem.reset();
+            console.LogSuccess("Gizmo system shutdown complete");
+        }
+
+        // Disconnect collaborative session
+        if (m_collabSession)
+        {
+            console.LogInfo("Shutting down collaborative edit session...");
+            m_collabSession->Disconnect();
+            m_collabSession.reset();
+            console.LogSuccess("Collaborative edit session shutdown complete");
         }
 
         // Reset other systems
@@ -1177,6 +1238,13 @@ namespace SparkEditor
 
             auto& console = Spark::SimpleConsole::GetInstance();
             console.LogSuccess("Scene saved to: " + path);
+
+            // Notify plugins of the scene save
+            if (m_pluginManager)
+            {
+                m_pluginManager->NotifySceneSave(path);
+            }
+
             return true;
         }
         catch (const std::exception& e)
@@ -1200,6 +1268,12 @@ namespace SparkEditor
                 auto& console = Spark::SimpleConsole::GetInstance();
                 console.LogSuccess("Graphics device passed to Scene View panel");
             }
+        }
+
+        // Re-initialize gizmo system with the actual D3D11 device
+        if (m_gizmoSystem)
+        {
+            m_gizmoSystem->Initialize(device, context);
         }
     }
 #endif

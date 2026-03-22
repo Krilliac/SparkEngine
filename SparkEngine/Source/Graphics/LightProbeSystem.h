@@ -91,14 +91,63 @@ namespace Spark::Graphics
         /// @brief Sample indirect irradiance at a world position
         SphericalHarmonics SampleIrradiance(const Float3& position) const;
 
-        /// @brief Bake a specific probe (stub — captures ambient SH)
+        /**
+         * @brief Bake a probe with sky/ground gradient SH
+         *
+         * Generates L2 SH coefficients representing a sky-ground gradient
+         * with configurable sky and ground colors and a directional sun term.
+         *
+         * @param probeId  ID of the probe to bake
+         */
         void BakeProbe(uint32_t probeId);
+
+        /**
+         * @brief Bake a probe with explicit light parameters
+         *
+         * @param probeId       ID of the probe to bake
+         * @param skyColor      Sky hemisphere color (RGB)
+         * @param groundColor   Ground hemisphere color (RGB)
+         * @param sunDir        Normalized sun direction (pointing toward sun)
+         * @param sunColor      Sun radiance (RGB)
+         */
+        void BakeProbe(uint32_t probeId, const Float3& skyColor, const Float3& groundColor, const Float3& sunDir,
+                       const Float3& sunColor);
 
         /// @brief Bake all probes
         void BakeAllProbes();
 
         /// @brief Get total number of probes
         uint32_t GetProbeCount() const;
+
+        /**
+         * @brief GPU constant buffer layout for uploading probe SH data
+         *
+         * Packs 9 SH coefficients as XMFLOAT4s (RGB + padding per band).
+         * Suitable for a structured buffer or constant buffer upload.
+         */
+        struct alignas(16) ProbeGPUData
+        {
+            float shR[9];      ///< SH coefficients for red channel
+            float padding0[3]; ///< Pad to 48 bytes
+            float shG[9];      ///< SH coefficients for green channel
+            float padding1[3]; ///< Pad to 48 bytes
+            float shB[9];      ///< SH coefficients for blue channel
+            float padding2[3]; ///< Pad to 48 bytes
+            float posX;        ///< World position X
+            float posY;        ///< World position Y
+            float posZ;        ///< World position Z
+            float radius;      ///< Influence radius
+        };
+
+        /**
+         * @brief Pack all probe data into a GPU-ready buffer
+         *
+         * Fills outData with ProbeGPUData structs for all probes, suitable
+         * for uploading to a D3D11 structured buffer or constant buffer.
+         *
+         * @param outData  Output vector filled with packed probe data
+         */
+        void PackProbeDataForGPU(std::vector<ProbeGPUData>& outData) const;
 
         /// @brief Console status
         std::string Console_GetStatus() const;

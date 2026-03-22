@@ -81,6 +81,11 @@ class Shader;
  */
 class GraphicsEngine
 {
+    // RenderPipeline delegates to private render sub-passes (FillGBuffer,
+    // LightingPass, RenderPostProcessing, etc.) when running the render-
+    // graph-based pipeline.
+    friend class Spark::Graphics::RenderPipeline;
+
   public:
     /**
      * @brief Default constructor
