@@ -242,48 +242,29 @@ static void InitDebugSystems()
 // Gameplay system lifecycle (TC-inspired systems from this session)
 // ============================================================================
 
-/**
- * @brief Initialize gameplay subsystems (called once during engine startup).
- *
- * @pre EngineContext must be initialized with a valid EventBus before calling.
- *      AbilitySystem depends on EventBus for spell/aura proc events.
- */
-static void InitGameplaySystems()
+static void InitCoreGameplaySystems(EngineContext* ctx)
 {
-    auto* ctx = EngineContext::Get();
-    if (!ctx)
-        return;
-
-    // Condition system (stateless evaluator — no frame update needed)
-    Spark::Gameplay::ConditionSystem::GetInstance().Initialize();
-
-    // Ability system requires EventBus for proc/aura event dispatch
     auto* eventBus = ctx->GetEventBus();
+
+    Spark::Gameplay::ConditionSystem::GetInstance().Initialize();
     Spark::Gameplay::AbilitySystem::GetInstance().Initialize(eventBus);
-
-    // Instance/dungeon manager
     Spark::Gameplay::InstanceManager::GetInstance().Initialize();
-
-    // Movement generator stack (AI movement)
     Spark::AI::MovementSystem::GetInstance().Initialize();
-
-    // Music manager — dynamic music layering and crossfade
     Spark::Audio::MusicManager::GetInstance().Initialize();
 
-    // Destruction system — fracturing and debris spawning
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.Initialize();
     if (auto* world = ctx->GetWorld())
     {
         destruction.SetWorld(world);
     }
-
-    // Wire destruction events into DynamicResponseSystem for signal-based responses
     destruction.OnDestruction(
         [](const Spark::DestructionEvent& e)
         { Spark::Dialogue::DynamicResponseSystem::GetInstance().SendSignal("OnDestruction", e.entityId); });
+}
 
-    // AI, environment, and world systems
+static void InitAIAndWorldSystems(Spark::EventBus* eventBus)
+{
     Spark::AI::TacticalPointSystem::GetInstance().Initialize();
     Spark::AI::CoverSystem::GetInstance().Initialize();
     Spark::AI::FormationSystem::GetInstance().Initialize();
@@ -297,8 +278,10 @@ static void InitGameplaySystems()
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Initialize();
     Spark::Graphics::WaterRenderer::GetInstance().Initialize();
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Initialize();
+}
 
-    // Serialization, rendering, and utility systems
+static void InitRenderingAndUtilitySystems()
+{
     Spark::FreezeSystem::GetInstance().Initialize();
     Spark::Graphics::RenderCommandQueue::GetInstance().Initialize();
     Spark::Graphics::ConstantBufferDiffManager::GetInstance().Initialize();
@@ -306,22 +289,21 @@ static void InitGameplaySystems()
     Spark::MultiISADispatch::GetInstance().Initialize();
     Spark::SceneConfigDatabase::GetInstance().Initialize();
 
-    // Extended engine systems
     Spark::FixedTimestepAccumulator::GetInstance().Initialize();
     Spark::TweenSystem::GetInstance().Initialize();
     Spark::VirtualFileSystem::GetInstance().Initialize();
     Spark::UI::UIFactory::GetInstance().Initialize();
     Spark::Graphics::ClusteredLightCulling::GetInstance().Initialize();
     Spark::Graphics::LightProbeSystem::GetInstance().Initialize();
-    // MaterialPropertyRegistry needs no Initialize — it's ready after construction
     Spark::Graphics::PipelineStateCache::GetInstance().Initialize();
     Spark::Graphics::TransientResourcePool::GetInstance().Initialize();
     Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
     Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
-    // ProfileProperties is ready after GetInstance() — no Initialize() needed
     Spark::PluginRegistry::InitializeAll();
+}
 
-    // AngelScript scripting engine
+static void InitScriptingAndPlatformSystems(EngineContext* ctx)
+{
     {
         static AngelScriptEngine s_angelScript;
         if (s_angelScript.Initialize())
@@ -331,61 +313,38 @@ static void InitGameplaySystems()
         }
     }
 
-    // Lua scripting engine (optional, guarded by SPARK_LUA_AVAILABLE internally)
     if (Spark::Scripting::LuaScriptEngine::GetInstance().Initialize())
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "LuaScriptEngine initialized");
     }
 
-    // BlendSpaceManager — force singleton construction so it's ready for animation queries
     (void)Spark::Animation::BlendSpaceManager::GetInstance();
-
-    // Profiler — frame timing, GPU queries, memory tracking
     Profiler::GetInstance().SetEnabled(true);
 
 #ifdef ENABLE_DXR
-    // DXR raytracing — Initialize is a no-op stub when no D3D12 device is available.
-    // The DXRManager gracefully handles nullptr by returning false.
     Spark::Graphics::DXRManager::GetInstance().Initialize(nullptr);
 #endif
 
 #ifndef NDEBUG
-    // RHI validation layer (debug builds only)
     Spark::Graphics::RHIValidationLayer::GetInstance().Initialize();
-
-    // NullRHI device — construct singleton for headless test availability
     (void)Spark::RHI::NullRHIDevice::GetInstance();
 #endif
 
-    // Predictive area streaming
     Spark::Streaming::SeamlessAreaManager::GetInstance().Initialize();
 
 #ifdef ENABLE_NETWORKING
-    // Networking servers — initialized and ready for Start() from game code or console.
-    // AreaServer/WorldServer/DedicatedServer run their own internal tick threads once started.
-    // They are NOT auto-started; game modules call Start() with appropriate configs.
     SPARK_LOG_INFO(Spark::LogCategory::Core,
                    "Networking enabled — AreaServer, WorldServer, and DedicatedServer are available");
 #endif
 
-    // Stage-based parallel ECS executor
-    // Systems are registered by each subsystem; the executor is ready after Initialize
-    // (individual systems register themselves via RegisterSystem when they come online)
-
-    // Cinematic sequencer — timeline playback for cutscenes (no init needed, ready after construction)
     ctx->SetCinematic(&Spark::Cinematic::SequencerManager::GetInstance());
-
-    // Replay system — recording/playback for match replays and kill cams
-    // No explicit Initialize() — ready after GetInstance(). Register with EngineContext.
     ctx->SetReplay(&Spark::ReplaySystem::GetInstance());
 
-    // Animation ragdoll system — blending between animation and physics ragdoll
     {
         static Spark::Animation::RagdollSystem s_ragdollSystem;
         s_ragdollSystem.Initialize();
     }
 
-    // VR system — OpenXR-ready framework (stub until OpenXR SDK is linked)
     {
         static Spark::VR::VRSystem s_vrSystem;
         if (s_vrSystem.Initialize())
@@ -395,12 +354,10 @@ static void InitGameplaySystems()
         }
         else
         {
-            // VR not available — system stays registered but inactive
             ctx->SetVR(&s_vrSystem);
         }
     }
 
-    // Mobile platform — touch input, GPU quality presets, battery-aware scaling
     {
         static Spark::Mobile::MobilePlatform s_mobilePlatform;
         if (s_mobilePlatform.Initialize())
@@ -408,6 +365,18 @@ static void InitGameplaySystems()
             SPARK_LOG_INFO(Spark::LogCategory::Core, "MobilePlatform initialized");
         }
     }
+}
+
+static void InitGameplaySystems()
+{
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+        return;
+
+    InitCoreGameplaySystems(ctx);
+    InitAIAndWorldSystems(ctx->GetEventBus());
+    InitRenderingAndUtilitySystems();
+    InitScriptingAndPlatformSystems(ctx);
 }
 
 /**
@@ -418,110 +387,78 @@ static void InitGameplaySystems()
  * the latest ECS state. Non-ECS systems update first (Weather, Dialogue, UI),
  * then ECS-dependent systems (AbilitySystem, InstanceManager, etc.).
  */
-static void UpdateGameplaySystems(float dt)
+static void UpdateNonECSSystems(EngineContext* ctx, float dt)
 {
-    auto* ctx = EngineContext::Get();
-    if (!ctx)
-        return;
-
-    // Profiler frame boundary
-    Profiler::GetInstance().BeginFrame();
-
-    // Publish FrameBeginEvent so subscribers know a new frame has started
-    if (auto* bus = ctx->GetEventBus())
-    {
-        bus->Publish(Spark::FrameBeginEvent{dt});
-    }
-
-    // Phase 1: Non-ECS systems (no World dependency)
     if (auto* weather = ctx->GetWeather())
         weather->Update(dt);
 
-    // Time-of-day — advances the 24-hour clock and recomputes sun state
     Spark::TimeOfDaySystem::GetInstance().Update(dt);
-
-    // Weather → gameplay bridge (wind forces, AI perception, audio state)
     Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, ctx->GetWeather(), ctx->GetPhysics());
 
     if (auto* dialogue = ctx->GetDialogue())
         dialogue->Update(dt);
     if (auto* ui = ctx->GetUI())
         ui->Update(dt);
+}
 
-    // Phase 2: ECS-dependent systems (require a valid World)
-    auto* world = ctx->GetWorld();
-    if (!world)
-        return;
-
+static void UpdateECSDependentSystems(World* world, float dt)
+{
     Spark::Gameplay::AbilitySystem::GetInstance().Update(*world, dt);
     Spark::Gameplay::InstanceManager::GetInstance().Update(dt);
     Spark::AI::MovementSystem::GetInstance().Update(*world, dt);
-
-    // Coroutine scheduler — resume pending coroutines
     Spark::CoroutineScheduler::GetInstance().Update(dt);
-
-    // Music manager — crossfade, dynamic layering
     Spark::Audio::MusicManager::GetInstance().Update(dt);
 
-    // Weapon system — fire control, reload, recoil, ADS
     static Spark::Gameplay::WeaponSystem s_weaponSystem;
     s_weaponSystem.Update(dt);
 
-    // Update destruction debris lifetimes and cleanup
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.SetWorld(world);
     destruction.Update(dt);
 
-    // Terrain system — LOD selection based on camera distance
     static Spark::ECS::TerrainSystem s_terrainSystem;
     s_terrainSystem.Update(*world, dt);
 
-    // AI, environment, and world systems
     Spark::AI::FormationSystem::GetInstance().Update(dt);
     Spark::AI::GroupAISystem::GetInstance().Update(dt);
     Spark::Dialogue::DynamicResponseSystem::GetInstance().Update(dt);
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt);
     Spark::Graphics::WaterRenderer::GetInstance().Update(dt);
+}
 
-    // Per-frame bookkeeping
-    Spark::Graphics::ConstantBufferDiffManager::GetInstance().BeginFrame();
-    Spark::Graphics::GPUPerfCounters::GetInstance().EndFrame();
+static void UpdateClusteredLighting(World* world)
+{
+    auto& clustering = Spark::Graphics::ClusteredLightCulling::GetInstance();
+    clustering.ClearLights();
 
-    // Clustered light culling — feed ECS lights into the 3D frustum grid
+    auto& reg = world->GetRegistry();
+    auto lightView = reg.view<LightComponent, Transform>();
+    for (auto entity : lightView)
     {
-        auto& clustering = Spark::Graphics::ClusteredLightCulling::GetInstance();
-        clustering.ClearLights();
+        const auto& lc = lightView.get<LightComponent>(entity);
+        const auto& xform = lightView.get<Transform>(entity);
 
-        auto& reg = world->GetRegistry();
-        auto lightView = reg.view<LightComponent, Transform>();
-        for (auto entity : lightView)
-        {
-            const auto& lc = lightView.get<LightComponent>(entity);
-            const auto& xform = lightView.get<Transform>(entity);
-
-            Spark::Graphics::LightData ld;
-            ld.position = xform.position;
-            ld.color = lc.color;
-            ld.intensity = lc.intensity;
-            ld.radius = lc.range;
-            ld.type = (lc.type == LightComponent::Type::Point) ? 0u : 1u;
-            clustering.AddLight(ld);
-        }
-
-        // Update with stored per-frame camera matrices from GraphicsEngine
-        if (g_graphics)
-        {
-            XMFLOAT4X4 viewMat, projMat;
-            XMStoreFloat4x4(&viewMat, g_graphics->GetFrameViewMatrix());
-            XMStoreFloat4x4(&projMat, g_graphics->GetFrameProjectionMatrix());
-            clustering.Update(viewMat, projMat, g_graphics->GetNearPlane(), g_graphics->GetFarPlane());
-        }
+        Spark::Graphics::LightData ld;
+        ld.position = xform.position;
+        ld.color = lc.color;
+        ld.intensity = lc.intensity;
+        ld.radius = lc.range;
+        ld.type = (lc.type == LightComponent::Type::Point) ? 0u : 1u;
+        clustering.AddLight(ld);
     }
 
-    // Predictive area streaming
-    Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt);
+    if (g_graphics)
+    {
+        XMFLOAT4X4 viewMat, projMat;
+        XMStoreFloat4x4(&viewMat, g_graphics->GetFrameViewMatrix());
+        XMStoreFloat4x4(&projMat, g_graphics->GetFrameProjectionMatrix());
+        clustering.Update(viewMat, projMat, g_graphics->GetNearPlane(), g_graphics->GetFarPlane());
+    }
+}
 
-    // Extended engine systems
+static void UpdateExtendedSystems(EngineContext* ctx, float dt)
+{
+    Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt);
     Spark::TweenSystem::GetInstance().Update(dt);
     Spark::UI::UIFactory::GetInstance().UpdateAllBindings();
     Spark::PluginRegistry::UpdateAll(dt);
@@ -529,50 +466,52 @@ static void UpdateGameplaySystems(float dt)
     Spark::ProfileProperties::GetInstance().ResetFrameProperties();
 #endif
 
-    // Cinematic sequencer — update active sequences (camera paths, events, fades)
     Spark::Cinematic::SequencerManager::GetInstance().Update(dt);
-
-    // Replay playback — only advances if a replay is actively playing
     Spark::ReplaySystem::GetInstance().UpdatePlayback(dt);
 
-    // VR tracking update (no-op if VR not available)
     if (auto* vr = ctx->GetVR())
         vr->UpdateTracking();
 
-    // Stage-based parallel ECS executor — runs all registered systems by stage
     Spark::ECS::StageBasedExecutor::GetInstance().ExecuteAll(dt);
+}
 
-    // Profiler frame boundary (end)
+static void UpdateGameplaySystems(float dt)
+{
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+        return;
+
+    Profiler::GetInstance().BeginFrame();
+
+    if (auto* bus = ctx->GetEventBus())
+    {
+        bus->Publish(Spark::FrameBeginEvent{dt});
+    }
+
+    UpdateNonECSSystems(ctx, dt);
+
+    auto* world = ctx->GetWorld();
+    if (!world)
+        return;
+
+    UpdateECSDependentSystems(world, dt);
+
+    Spark::Graphics::ConstantBufferDiffManager::GetInstance().BeginFrame();
+    Spark::Graphics::GPUPerfCounters::GetInstance().EndFrame();
+
+    UpdateClusteredLighting(world);
+    UpdateExtendedSystems(ctx, dt);
+
     Profiler::GetInstance().EndFrame();
 
-    // Publish FrameEndEvent so subscribers know the frame is complete
     if (auto* bus = ctx->GetEventBus())
     {
         bus->Publish(Spark::FrameEndEvent{dt});
     }
 }
 
-static void ShutdownGameplaySystems()
+static void ShutdownAIAndWorldSystems()
 {
-    // VR system (if initialized)
-    if (auto* ctx = EngineContext::Get())
-    {
-        if (auto* vr = ctx->GetVR())
-            vr->Shutdown();
-    }
-
-    // Cinematic sequencer (no explicit shutdown needed)
-
-    // Stage-based parallel ECS executor
-    Spark::ECS::StageBasedExecutor::GetInstance().Shutdown();
-
-    // Predictive area streaming
-    Spark::Streaming::SeamlessAreaManager::GetInstance().Shutdown();
-
-    // Per-connection replication scope filter
-    Spark::Net::ConnectionScopeFilter::GetInstance().Shutdown();
-
-    // AI, environment, and world systems (reverse order)
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Shutdown();
     Spark::Graphics::WaterRenderer::GetInstance().Shutdown();
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Shutdown();
@@ -587,15 +526,16 @@ static void ShutdownGameplaySystems()
     Spark::AI::FormationSystem::GetInstance().Shutdown();
     Spark::AI::CoverSystem::GetInstance().Shutdown();
     Spark::AI::TacticalPointSystem::GetInstance().Shutdown();
+}
 
-    // Serialization, rendering, and utility systems (reverse order)
+static void ShutdownRenderingAndUtilitySystems()
+{
     Spark::SceneConfigDatabase::GetInstance().Shutdown();
     Spark::Graphics::GPUPerfCounters::GetInstance().Shutdown();
     Spark::Graphics::ConstantBufferDiffManager::GetInstance().Shutdown();
     Spark::Graphics::RenderCommandQueue::GetInstance().Shutdown();
     Spark::FreezeSystem::GetInstance().Shutdown();
 
-    // Extended engine systems (reverse order)
     Spark::PluginRegistry::ShutdownAll();
 #ifndef NDEBUG
     Spark::ProfileProperties::GetInstance().Shutdown();
@@ -614,22 +554,35 @@ static void ShutdownGameplaySystems()
     Spark::Net::DeltaSnapshotManager::GetInstance().Shutdown();
     Spark::ResourceVersionTracker::GetInstance().Shutdown();
     Spark::FixedTimestepAccumulator::GetInstance().Shutdown();
+}
 
-    // TrinityCore systems
+static void ShutdownGameplaySystems()
+{
+    if (auto* ctx = EngineContext::Get())
+    {
+        if (auto* vr = ctx->GetVR())
+            vr->Shutdown();
+    }
+
+    Spark::ECS::StageBasedExecutor::GetInstance().Shutdown();
+    Spark::Streaming::SeamlessAreaManager::GetInstance().Shutdown();
+    Spark::Net::ConnectionScopeFilter::GetInstance().Shutdown();
+
+    ShutdownAIAndWorldSystems();
+    ShutdownRenderingAndUtilitySystems();
+
     Spark::Audio::MusicManager::GetInstance().Shutdown();
     Spark::AI::MovementSystem::GetInstance().Shutdown();
     Spark::Gameplay::InstanceManager::GetInstance().Shutdown();
     Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();
     Spark::Gameplay::ConditionSystem::GetInstance().Shutdown();
 
-    // Scripting engines
     if (auto* as = AngelScriptEngine::GetInstance())
     {
         as->Shutdown();
     }
     Spark::Scripting::LuaScriptEngine::GetInstance().Shutdown();
 
-    // Profiler
     Profiler::GetInstance().Shutdown();
 
 #ifdef ENABLE_DXR
@@ -1018,43 +971,36 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
  *
  * Called after the Win32 window has been created and InitInstance() succeeded.
  */
-static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
+static void InitEngineContext()
 {
-    // Engine context (service locator for modules)
     g_eventBus = std::make_unique<Spark::EventBus>();
     EngineContext::SetOwned(
         std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
 
-    // File cache (registered via generic system registry)
     g_fileCache = std::make_unique<Spark::LocalFileCache>();
     EngineContext::Get()->SetFileCache(g_fileCache.get());
 
-    // PhysicsSystem (owned here, not by GraphicsEngine)
     InitPhysics();
 
-    // Register core subsystems with dependency metadata (EngineSetup)
     Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
     Spark::EngineSetup::InitializeJobSystem();
 
-    // SaveSystem & CoroutineScheduler
     EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
-    // AssetRegistry for handle-based asset lookups
     static Spark::AssetRegistry g_assetRegistry;
     EngineContext::Get()->SetAssetRegistry(&g_assetRegistry);
 
-    // AssetPipeline (owned by GraphicsEngine, exposed via EngineContext for SDK access)
     if (g_graphics && g_graphics->GetAssetPipeline())
     {
         EngineContext::Get()->SetAssetPipeline(g_graphics->GetAssetPipeline());
     }
+}
 
-    // Gameplay subsystems (Weather, TimeOfDay, UI, Dialogue, Modding)
+static void InitGameplaySubsystems()
+{
     g_weatherSystem = std::make_unique<Spark::WeatherSystem>();
     EngineContext::Get()->SetWeather(g_weatherSystem.get());
-
-    // TimeOfDay — singleton, registered with context for game-module access
     EngineContext::Get()->SetTimeOfDay(&Spark::TimeOfDaySystem::GetInstance());
 
     g_uiSystem = std::make_unique<Spark::UI::UISystem>();
@@ -1065,17 +1011,17 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 
     g_modSystem = std::make_unique<Spark::ModSystem>();
     EngineContext::Get()->SetModSystem(g_modSystem.get());
+}
 
-    // Load game modules via ModuleManager
+static void LoadAndInitModules(LPWSTR lpCmdLine)
+{
     g_moduleManager = std::make_unique<ModuleManager>();
-
     auto& console = Spark::SimpleConsole::GetInstance();
 
     if (LoadGameModules(*g_moduleManager, lpCmdLine))
     {
         g_moduleManager->InitializeAll(EngineContext::Get());
 
-        // Update window title with primary module name
         auto* primary = g_moduleManager->GetPrimaryModule();
         if (primary)
         {
@@ -1098,20 +1044,26 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         console.LogInfo("or create a spark.modules.json manifest.");
     }
 
-    // Module hot-reload watcher
     g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
     g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
     g_moduleHotReload->WatchAllLoadedModules();
     g_moduleHotReload->Start();
+}
 
-    // SaveSystem initialization
+static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
+{
+    InitEngineContext();
+    InitGameplaySubsystems();
+    LoadAndInitModules(lpCmdLine);
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+
     if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
     {
-        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+        console.LogWarning("SaveSystem initialization failed — save/load unavailable");
     }
     console.LogInfo("SaveSystem initialized");
 
-    // Audio engine
     g_audioEngine = std::make_unique<AudioEngine>();
     if (SUCCEEDED(g_audioEngine->Initialize(32)))
     {
@@ -1124,7 +1076,6 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         g_audioEngine.reset();
     }
 
-    // Console commands
     if (g_graphics)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
     Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
@@ -1132,14 +1083,11 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 
     LogMissingModuleWarnings();
 
-    // Wire WeatherSystem to EventBus for WeatherChangedEvent publishing
     if (g_weatherSystem && g_eventBus)
     {
         g_weatherSystem->SetEventBus(g_eventBus.get());
     }
 
-    // Initialize console, debug, and gameplay systems in one call
-    // (also publishes EngineStartEvent when complete)
     InitConsole();
 }
 

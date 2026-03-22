@@ -268,13 +268,26 @@ namespace SparkEditor
         // Helper methods
         void RenderMainMenuBar();
         void RenderFileMenu();
+        void RenderFileSceneItems();
+        void RenderFileProjectItems();
         void RenderEditMenu();
         void RenderGameObjectMenu();
+        void RenderGameObject3DSubMenu(const std::function<void(const std::string&)>& createObject);
+        void RenderGameObject2DSubMenu();
+        void RenderGameObjectVolumeSubMenu(const std::function<void(const std::string&)>& createObject);
+        void RenderGameObjectSpecializedSubMenus(const std::function<void(const std::string&)>& createObject);
+        void RenderWindowCorePanels();
+        void RenderWindowToolPanels();
+        void RenderWindow2DAndGamePanels();
         void RenderWindowMenu();
         void RenderFPSToolsMenu();
         void RenderBuildMenu();
         void RenderHelpMenu();
         void RenderToolbar();
+        void RenderToolbarTransformTools(float btnSize, ImDrawList* dl, const ImVec4& accentTeal, const ImVec4& pillBg);
+        void RenderToolbarPlayControls(float btnSize, ImDrawList* dl, const ImVec4& playGreen,
+                                       const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg);
+        void RenderToolbarSnapControls(float btnSize, const ImVec4& pillBg);
         void RenderStatusBar();
         void RenderNotifications();
         void RenderPanels();
@@ -282,6 +295,12 @@ namespace SparkEditor
         void SetupDefaultDockLayout(ImGuiID dockspaceId);
         void UpdateStats(float deltaTime);
         void CreatePanels();
+        void CreateCorePanels(
+            const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel);
+        void CreateToolAndContentPanels(
+            const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel);
+        void InitializePanelIcons();
+        void SetDefaultPanelVisibility();
         void InitializeCommandPalette();
         void HandleKeyboardShortcuts();
 

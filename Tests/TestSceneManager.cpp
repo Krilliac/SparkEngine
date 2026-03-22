@@ -461,3 +461,117 @@ TEST(Scene_NodeTransform)
     EXPECT_NEAR(n->rotation.x, 45.0f, 0.001f);
     EXPECT_NEAR(n->scale.x, 2.0f, 0.001f);
 }
+
+// =============================================================================
+// Tests — Scene Switching
+// =============================================================================
+
+TEST(Scene_SwitchClearsOldScene)
+{
+    TestScene::SceneManager mgr;
+    mgr.NewScene("Level01");
+
+    // Populate first scene
+    TestScene::SceneNode a;
+    a.name = "Player";
+    a.type = "model";
+    mgr.AddNode(a);
+
+    TestScene::SceneNode b;
+    b.name = "Enemy";
+    b.type = "model";
+    mgr.AddNode(b);
+    EXPECT_EQ(mgr.GetNodeCount(), 2);
+
+    // Switch to a new scene — old content should be gone
+    mgr.NewScene("Level02");
+    EXPECT_EQ(mgr.GetNodeCount(), 0);
+    EXPECT_EQ(mgr.GetMetadata().sceneName, std::string("Level02"));
+    EXPECT_EQ(mgr.FindNode("Player"), -1);
+    EXPECT_EQ(mgr.FindNode("Enemy"), -1);
+    EXPECT_FALSE(mgr.IsDirty());
+}
+
+TEST(Scene_SwitchPreservesNewNodes)
+{
+    TestScene::SceneManager mgr;
+    mgr.NewScene("OldLevel");
+
+    TestScene::SceneNode old;
+    old.name = "OldObject";
+    mgr.AddNode(old);
+
+    // Switch and add new content
+    mgr.NewScene("NewLevel");
+    TestScene::SceneNode fresh;
+    fresh.name = "NewObject";
+    fresh.type = "cube";
+    mgr.AddNode(fresh);
+
+    EXPECT_EQ(mgr.GetNodeCount(), 1);
+    EXPECT_EQ(mgr.FindNode("NewObject"), 0);
+    EXPECT_EQ(mgr.FindNode("OldObject"), -1);
+}
+
+TEST(Scene_SwitchResetsMetadata)
+{
+    TestScene::SceneManager mgr;
+    mgr.NewScene("Scene1");
+
+    auto& meta1 = mgr.GetMetadata();
+    meta1.author = "Alice";
+    meta1.gravityY = -20.0f;
+    meta1.ambientR = 0.8f;
+
+    // Switch — metadata should be reset to defaults
+    mgr.NewScene("Scene2");
+    const auto& meta2 = mgr.GetMetadata();
+    EXPECT_EQ(meta2.sceneName, std::string("Scene2"));
+    EXPECT_EQ(meta2.author, std::string(""));
+    EXPECT_NEAR(meta2.gravityY, -9.81f, 0.001f);
+    EXPECT_NEAR(meta2.ambientR, 0.1f, 0.001f);
+}
+
+TEST(Scene_MultipleSwitches)
+{
+    TestScene::SceneManager mgr;
+
+    for (int i = 0; i < 5; ++i)
+    {
+        mgr.NewScene("Level_" + std::to_string(i));
+        TestScene::SceneNode node;
+        node.name = "Node_" + std::to_string(i);
+        mgr.AddNode(node);
+        EXPECT_EQ(mgr.GetNodeCount(), 1);
+        EXPECT_EQ(mgr.FindNode("Node_" + std::to_string(i)), 0);
+    }
+
+    // After last switch, only the last node should exist
+    EXPECT_EQ(mgr.GetMetadata().sceneName, std::string("Level_4"));
+    EXPECT_EQ(mgr.FindNode("Node_4"), 0);
+    EXPECT_EQ(mgr.FindNode("Node_0"), -1);
+}
+
+TEST(Scene_MutableNodeModification)
+{
+    TestScene::SceneManager mgr;
+    mgr.NewScene();
+
+    TestScene::SceneNode node;
+    node.name = "Movable";
+    node.type = "cube";
+    node.position = {0.0f, 0.0f, 0.0f};
+    mgr.AddNode(node);
+
+    // Modify node through mutable accessor
+    auto* n = mgr.GetNode(0);
+    EXPECT_TRUE(n != nullptr);
+    n->position = {5.0f, 10.0f, 15.0f};
+    n->properties["speed"] = "42";
+
+    // Verify modifications persisted
+    const auto* cn = mgr.GetNode(0);
+    EXPECT_NEAR(cn->position.x, 5.0f, 0.001f);
+    EXPECT_NEAR(cn->position.y, 10.0f, 0.001f);
+    EXPECT_EQ(cn->properties.at("speed"), std::string("42"));
+}

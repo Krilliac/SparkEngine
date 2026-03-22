@@ -153,6 +153,7 @@ add_executable(SparkTests
     TestRHIHandlePool.cpp
     TestMaterialDefinition.cpp
     TestGraphicsIntegration.cpp
+    TestTimeOfDaySystem.cpp
 )
 
 target_include_directories(SparkTests PRIVATE

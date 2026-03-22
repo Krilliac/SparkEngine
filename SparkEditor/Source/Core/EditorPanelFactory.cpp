@@ -59,124 +59,68 @@
 namespace SparkEditor
 {
 
-    void EditorUI::CreatePanels()
+    void EditorUI::CreateCorePanels(
+        const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel)
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("Creating editor panels...");
+        registerPanel("SceneView", std::make_shared<SceneViewPanel>());
+        registerPanel("Console", std::make_shared<ConsolePanel>());
+        registerPanel("Hierarchy", std::make_shared<HierarchyPanel>());
+        registerPanel("Inspector", std::make_shared<InspectorPanel>());
+        registerPanel("AssetBrowser", std::make_shared<AssetBrowserPanel>());
+        registerPanel("GameView", std::make_shared<GameViewPanel>());
+        registerPanel("Profiler", std::make_shared<PerformanceProfiler>());
 
-        // Skip complex panels that may cause deadlocks in debugger environment
-        bool isDebuggerPresent = false;
-#ifdef _WIN32
-        isDebuggerPresent = IsDebuggerPresent();
-#endif
+        registerPanel("WeaponEditor", std::make_shared<WeaponEditorPanel>());
+        registerPanel("FPSTools", std::make_shared<FPSToolsPanel>());
 
-        // Helper: create a panel, register it, and log the result
-        auto registerPanel = [&](const std::string& name, std::shared_ptr<EditorPanel> panel)
-        {
-            try
-            {
-                m_panels[name] = std::move(panel);
-                console.LogSuccess("Created " + name + " panel");
-            }
-            catch (const std::exception& e)
-            {
-                console.LogError("Failed to create " + name + " panel: " + std::string(e.what()));
-            }
-        };
+        registerPanel("SpriteEditor", std::make_shared<SpriteEditorPanel>());
+        registerPanel("TilemapEditor", std::make_shared<TilemapEditorPanel>());
+        registerPanel("SpriteAnimEditor", std::make_shared<SpriteAnimationEditorPanel>());
+        registerPanel("Physics2D", std::make_shared<Physics2DPanel>());
+        registerPanel("Physics3D", std::make_shared<Physics3DPanel>());
 
-        if (isDebuggerPresent)
-        {
-            console.LogWarning("DEBUGGER DETECTED - Using minimal panel set to avoid deadlocks");
-            registerPanel("SceneView", std::make_shared<SceneViewPanel>());
-        }
-        else
-        {
-            console.LogInfo("Creating full panel set...");
+        registerPanel("UndoHistory", std::make_shared<UndoHistoryPanel>(m_undoRedoManager.get()));
+        registerPanel("PrefabEditor", std::make_shared<PrefabEditorPanel>(m_prefabManager.get()));
+    }
 
-            // Core panels
-            registerPanel("SceneView", std::make_shared<SceneViewPanel>());
-            registerPanel("Console", std::make_shared<ConsolePanel>());
-            registerPanel("Hierarchy", std::make_shared<HierarchyPanel>());
-            registerPanel("Inspector", std::make_shared<InspectorPanel>());
-            registerPanel("AssetBrowser", std::make_shared<AssetBrowserPanel>());
-            registerPanel("GameView", std::make_shared<GameViewPanel>());
-            registerPanel("Profiler", std::make_shared<PerformanceProfiler>());
+    void EditorUI::CreateToolAndContentPanels(
+        const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel)
+    {
+        registerPanel("SceneStats", std::make_shared<SceneStatisticsPanel>());
+        registerPanel("Search", std::make_shared<SearchPanel>());
+        registerPanel("DedicatedServer", std::make_shared<DedicatedServerPanel>());
+        registerPanel("DebugVisualizer", std::make_shared<DebugVisualizerPanel>());
+        registerPanel("ObjectPlacement", std::make_shared<ObjectPlacementPanel>());
+        registerPanel("BuildCook", std::make_shared<BuildCookPanel>());
+        registerPanel("PlayModeToolbar", std::make_shared<PlayModeToolbarPanel>());
+        registerPanel("MaterialEditor", std::make_shared<MaterialEditorPanel>());
+        registerPanel("TerrainEditor", std::make_shared<TerrainEditor>());
 
-            // FPS panels
-            registerPanel("WeaponEditor", std::make_shared<WeaponEditorPanel>());
-            registerPanel("FPSTools", std::make_shared<FPSToolsPanel>());
+        registerPanel("PostProcessing", std::make_shared<PostProcessingPanel>());
+        registerPanel("DialogueEditor", std::make_shared<DialogueEditorPanel>());
+        registerPanel("AIEditor", std::make_shared<AIEditorPanel>());
+        registerPanel("SplineEditor", std::make_shared<SplineEditorPanel>());
+        registerPanel("ParticleEditor", std::make_shared<ParticleEditorPanel>());
+        registerPanel("EventMonitor", std::make_shared<EventMonitorPanel>());
+        registerPanel("SaveSystem", std::make_shared<SaveSystemPanel>());
+        registerPanel("Localization", std::make_shared<LocalizationPanel>());
+        registerPanel("WeatherFog", std::make_shared<WeatherFogPanel>());
+        registerPanel("CinematicSequencer", std::make_shared<CinematicSequencerPanel>());
+        registerPanel("ProjectSettings", std::make_shared<ProjectSettingsPanel>());
 
-            // 2D/2.5D panels
-            registerPanel("SpriteEditor", std::make_shared<SpriteEditorPanel>());
-            registerPanel("TilemapEditor", std::make_shared<TilemapEditorPanel>());
-            registerPanel("SpriteAnimEditor", std::make_shared<SpriteAnimationEditorPanel>());
-            registerPanel("Physics2D", std::make_shared<Physics2DPanel>());
-            registerPanel("Physics3D", std::make_shared<Physics3DPanel>());
+        registerPanel("AudioMixer", std::make_shared<AudioMixerPanel>());
+        registerPanel("ScriptEditor", std::make_shared<ScriptEditorPanel>());
+        registerPanel("DestructionEditor", std::make_shared<DestructionEditorPanel>());
+        registerPanel("Replay", std::make_shared<ReplayPanel>());
+        registerPanel("VRConfig", std::make_shared<VRConfigPanel>());
+        registerPanel("Streaming", std::make_shared<StreamingPanel>());
+        registerPanel("Modding", std::make_shared<ModdingPanel>());
+        registerPanel("CoroutineDebug", std::make_shared<CoroutineDebugPanel>());
+        registerPanel("GameModuleSelector", std::make_shared<GameModuleSelectorPanel>());
+    }
 
-            // Tool panels (require special constructor args)
-            registerPanel("UndoHistory", std::make_shared<UndoHistoryPanel>(m_undoRedoManager.get()));
-            registerPanel("PrefabEditor", std::make_shared<PrefabEditorPanel>(m_prefabManager.get()));
-
-            // Tool panels (default constructors)
-            registerPanel("SceneStats", std::make_shared<SceneStatisticsPanel>());
-            registerPanel("Search", std::make_shared<SearchPanel>());
-            registerPanel("DedicatedServer", std::make_shared<DedicatedServerPanel>());
-            registerPanel("DebugVisualizer", std::make_shared<DebugVisualizerPanel>());
-            registerPanel("ObjectPlacement", std::make_shared<ObjectPlacementPanel>());
-            registerPanel("BuildCook", std::make_shared<BuildCookPanel>());
-            registerPanel("PlayModeToolbar", std::make_shared<PlayModeToolbarPanel>());
-            registerPanel("MaterialEditor", std::make_shared<MaterialEditorPanel>());
-            registerPanel("TerrainEditor", std::make_shared<TerrainEditor>());
-
-            // Content/system panels
-            registerPanel("PostProcessing", std::make_shared<PostProcessingPanel>());
-            registerPanel("DialogueEditor", std::make_shared<DialogueEditorPanel>());
-            registerPanel("AIEditor", std::make_shared<AIEditorPanel>());
-            registerPanel("SplineEditor", std::make_shared<SplineEditorPanel>());
-            registerPanel("ParticleEditor", std::make_shared<ParticleEditorPanel>());
-            registerPanel("EventMonitor", std::make_shared<EventMonitorPanel>());
-            registerPanel("SaveSystem", std::make_shared<SaveSystemPanel>());
-            registerPanel("Localization", std::make_shared<LocalizationPanel>());
-            registerPanel("WeatherFog", std::make_shared<WeatherFogPanel>());
-            registerPanel("CinematicSequencer", std::make_shared<CinematicSequencerPanel>());
-            registerPanel("ProjectSettings", std::make_shared<ProjectSettingsPanel>());
-
-            // Engine system panels
-            registerPanel("AudioMixer", std::make_shared<AudioMixerPanel>());
-            registerPanel("ScriptEditor", std::make_shared<ScriptEditorPanel>());
-            registerPanel("DestructionEditor", std::make_shared<DestructionEditorPanel>());
-            registerPanel("Replay", std::make_shared<ReplayPanel>());
-            registerPanel("VRConfig", std::make_shared<VRConfigPanel>());
-            registerPanel("Streaming", std::make_shared<StreamingPanel>());
-            registerPanel("Modding", std::make_shared<ModdingPanel>());
-            registerPanel("CoroutineDebug", std::make_shared<CoroutineDebugPanel>());
-
-            // Multi-game module management
-            registerPanel("GameModuleSelector", std::make_shared<GameModuleSelectorPanel>());
-        }
-
-        // Initialize all panels
-        for (auto& [name, panel] : m_panels)
-        {
-            try
-            {
-                console.LogInfo("Initializing " + name + " panel");
-                if (panel && panel->Initialize())
-                {
-                    console.LogSuccess("Initialized " + name + " panel");
-                }
-                else
-                {
-                    console.LogError("Failed to initialize " + name + " panel");
-                }
-            }
-            catch (const std::exception& e)
-            {
-                console.LogError("Exception initializing " + name + " panel: " + std::string(e.what()));
-            }
-        }
-
-        // Panel icons — map panel name to FontAwesome icon
+    void EditorUI::InitializePanelIcons()
+    {
         struct PanelIcon
         {
             const char* name;
@@ -228,8 +172,10 @@ namespace SparkEditor
             if (m_panels.count(name))
                 m_panels[name]->SetIcon(icon);
         }
+    }
 
-        // Panels hidden by default (accessible via menus)
+    void EditorUI::SetDefaultPanelVisibility()
+    {
         const char* hiddenPanels[] = {
             "WeaponEditor",       "FPSTools",        "DebugVisualizer",
             "SceneStats",         "ObjectPlacement", "BuildCook",
@@ -249,6 +195,65 @@ namespace SparkEditor
             if (m_panels.count(name))
                 m_panels[name]->SetVisible(false);
         }
+    }
+
+    void EditorUI::CreatePanels()
+    {
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("Creating editor panels...");
+
+        bool isDebuggerPresent = false;
+#ifdef _WIN32
+        isDebuggerPresent = IsDebuggerPresent();
+#endif
+
+        auto registerPanel = [&](const std::string& name, std::shared_ptr<EditorPanel> panel)
+        {
+            try
+            {
+                m_panels[name] = std::move(panel);
+                console.LogSuccess("Created " + name + " panel");
+            }
+            catch (const std::exception& e)
+            {
+                console.LogError("Failed to create " + name + " panel: " + std::string(e.what()));
+            }
+        };
+
+        if (isDebuggerPresent)
+        {
+            console.LogWarning("DEBUGGER DETECTED - Using minimal panel set to avoid deadlocks");
+            registerPanel("SceneView", std::make_shared<SceneViewPanel>());
+        }
+        else
+        {
+            console.LogInfo("Creating full panel set...");
+            CreateCorePanels(registerPanel);
+            CreateToolAndContentPanels(registerPanel);
+        }
+
+        for (auto& [name, panel] : m_panels)
+        {
+            try
+            {
+                console.LogInfo("Initializing " + name + " panel");
+                if (panel && panel->Initialize())
+                {
+                    console.LogSuccess("Initialized " + name + " panel");
+                }
+                else
+                {
+                    console.LogError("Failed to initialize " + name + " panel");
+                }
+            }
+            catch (const std::exception& e)
+            {
+                console.LogError("Exception initializing " + name + " panel: " + std::string(e.what()));
+            }
+        }
+
+        InitializePanelIcons();
+        SetDefaultPanelVisibility();
 
         console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
     }
