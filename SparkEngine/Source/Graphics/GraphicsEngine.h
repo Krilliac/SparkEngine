@@ -247,8 +247,8 @@ class GraphicsEngine
 
 #ifdef SPARK_PLATFORM_WINDOWS
     /** @brief Get the pipeline state cache for hash-based D3D11 state deduplication. */
-    Spark::Graphics::PipelineStateCache* GetPipelineStateCache() { return &m_pipelineStateCache; }
-    const Spark::Graphics::PipelineStateCache* GetPipelineStateCache() const { return &m_pipelineStateCache; }
+    Spark::Graphics::D3D11PipelineStateCache* GetPipelineStateCache() { return &m_pipelineStateCache; }
+    const Spark::Graphics::D3D11PipelineStateCache* GetPipelineStateCache() const { return &m_pipelineStateCache; }
 
     /** @brief Get the render target pool for transient RT recycling. */
     Spark::Graphics::RenderTargetPool* GetRenderTargetPool() { return &m_renderTargetPool; }
@@ -601,15 +601,15 @@ class GraphicsEngine
     // ========================================================================
 
 #ifdef SPARK_PLATFORM_WINDOWS
-    Spark::Graphics::PipelineStateCache m_pipelineStateCache;     ///< Hash-based D3D11 state caching
-    Spark::Graphics::RenderTargetPool m_renderTargetPool;         ///< Pooled transient render targets
-    Spark::Graphics::GPUSceneBuffer m_gpuSceneBuffer;             ///< Persistent GPU instance buffer
-    Spark::Graphics::BVHAccelerator m_bvhAccelerator;             ///< SAH-based BVH for culling
-    Spark::Graphics::ConstantBufferRing m_constantBufferRing;     ///< Ring-buffer CB sub-allocation
-    Spark::Graphics::GPUDebugMarkers m_gpuDebugMarkers;           ///< PIX/RenderDoc GPU annotations
-    Spark::Graphics::GPUTimestampQuery m_gpuTimestampQuery;       ///< Per-pass GPU timing queries
-#endif                                                            // SPARK_PLATFORM_WINDOWS
-    std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList; ///< Sorted draw list per frame
+    Spark::Graphics::D3D11PipelineStateCache m_pipelineStateCache; ///< Hash-based D3D11 state caching
+    Spark::Graphics::RenderTargetPool m_renderTargetPool;          ///< Pooled transient render targets
+    Spark::Graphics::GPUSceneBuffer m_gpuSceneBuffer;              ///< Persistent GPU instance buffer
+    Spark::Graphics::BVHAccelerator m_bvhAccelerator;              ///< SAH-based BVH for culling
+    Spark::Graphics::ConstantBufferRing m_constantBufferRing;      ///< Ring-buffer CB sub-allocation
+    Spark::Graphics::GPUDebugMarkers m_gpuDebugMarkers;            ///< PIX/RenderDoc GPU annotations
+    Spark::Graphics::GPUTimestampQuery m_gpuTimestampQuery;        ///< Per-pass GPU timing queries
+#endif                                                             // SPARK_PLATFORM_WINDOWS
+    std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList;  ///< Sorted draw list per frame
 
     // Basic shader system resources (fallback rendering pipeline)
     ComPtr<ID3D11VertexShader> m_basicVertexShader;
