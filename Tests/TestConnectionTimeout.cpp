@@ -66,11 +66,12 @@ TEST(Timeout_ServerDetectsTimedOutClients)
 
     bool timeoutCalled = false;
     ClientID timedOutClient = INVALID_CLIENT;
-    nm.SetTimeoutHandler([&](ClientID id)
-                         {
-                             timeoutCalled = true;
-                             timedOutClient = id;
-                         });
+    nm.SetTimeoutHandler(
+        [&](ClientID id)
+        {
+            timeoutCalled = true;
+            timedOutClient = id;
+        });
 
     // Simulate 10+ seconds of updates (connection timeout is 10s)
     // Without any clients connected, no timeouts should fire
