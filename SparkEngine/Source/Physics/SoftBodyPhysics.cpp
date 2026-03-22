@@ -164,9 +164,49 @@ XMFLOAT3 SoftBody::GetVertexPosition(uint32_t index) const
 
 XMFLOAT3 SoftBody::GetVertexNormal(uint32_t index) const
 {
-    // Normals need to be computed from face data. Return up as default.
-    (void)index;
-    return {0, 1, 0};
+    if (index >= GetVertexCount() || m_desc.triangles.size() < 3 || !m_physicsSystem ||
+        !m_physicsSystem->GetJoltSystem())
+        return {0, 1, 0};
+
+    // Compute smooth vertex normal by averaging face normals of all triangles containing this vertex
+    XMFLOAT3 normal = {0, 0, 0};
+    int faceCount = 0;
+
+    for (size_t i = 0; i + 2 < m_desc.triangles.size(); i += 3)
+    {
+        if (m_desc.triangles[i] == index || m_desc.triangles[i + 1] == index || m_desc.triangles[i + 2] == index)
+        {
+            XMFLOAT3 v0 = GetVertexPosition(m_desc.triangles[i]);
+            XMFLOAT3 v1 = GetVertexPosition(m_desc.triangles[i + 1]);
+            XMFLOAT3 v2 = GetVertexPosition(m_desc.triangles[i + 2]);
+
+            // Cross product of edges to get face normal
+            float e1x = v1.x - v0.x, e1y = v1.y - v0.y, e1z = v1.z - v0.z;
+            float e2x = v2.x - v0.x, e2y = v2.y - v0.y, e2z = v2.z - v0.z;
+            normal.x += e1y * e2z - e1z * e2y;
+            normal.y += e1z * e2x - e1x * e2z;
+            normal.z += e1x * e2y - e1y * e2x;
+            faceCount++;
+        }
+    }
+
+    if (faceCount == 0)
+        return {0, 1, 0};
+
+    // Normalize
+    float len = std::sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+    if (len > 1e-6f)
+    {
+        normal.x /= len;
+        normal.y /= len;
+        normal.z /= len;
+    }
+    else
+    {
+        return {0, 1, 0};
+    }
+
+    return normal;
 }
 
 void SoftBody::GetAllVertexPositions(std::vector<XMFLOAT3>& outPositions) const

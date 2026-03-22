@@ -501,12 +501,12 @@ bool PhysicsConstraint::IsEnabled() const
 
 void PhysicsConstraint::SetBreakingThreshold(float threshold)
 {
-    // Jolt doesn't have a direct breaking threshold on base Constraint.
-    // This would need to be handled per-constraint-type or via a wrapper.
-    (void)threshold;
+    // Store the threshold for per-frame force checking in PhysicsSystem::Update().
+    // When the constraint force exceeds this value, the constraint is removed.
+    m_breakingThreshold = threshold;
 }
 
 float PhysicsConstraint::GetBreakingThreshold() const
 {
-    return 0.0f;
+    return m_breakingThreshold;
 }

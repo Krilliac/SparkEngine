@@ -221,17 +221,21 @@ namespace Spark::Physics
 
     void ClothSimulation::ApplyForces(ClothInstance& cloth, float deltaTime)
     {
-        (void)deltaTime;
         for (auto& p : cloth.particles)
         {
             if (p.pinned)
             {
                 continue;
             }
-            // Gravity
+            // Apply gravity and wind as acceleration, then integrate velocity with deltaTime
             p.acceleration.x = cloth.gravity.x + cloth.wind.x;
             p.acceleration.y = cloth.gravity.y + cloth.wind.y;
             p.acceleration.z = cloth.gravity.z + cloth.wind.z;
+
+            // Integrate velocity (semi-implicit Euler)
+            p.velocity.x += p.acceleration.x * deltaTime;
+            p.velocity.y += p.acceleration.y * deltaTime;
+            p.velocity.z += p.acceleration.z * deltaTime;
         }
     }
 

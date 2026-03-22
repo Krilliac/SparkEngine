@@ -19,7 +19,7 @@
 // =============================================================================
 
 /**
- * @brief Links an entity to a Bullet Physics rigid body.
+ * @brief Links an entity to a Jolt Physics rigid body.
  *
  * Dynamic bodies read position/rotation back from the physics simulation each
  * frame (physics -> Transform). Kinematic bodies push their Transform into
@@ -35,16 +35,25 @@ struct RigidBodyComponent
         Dynamic    ///< Fully simulated: responds to gravity, forces, and collisions.
     };
 
-    Type type = Type::Dynamic;                  ///< Body simulation mode.
-    float mass = 1.0f;                          ///< Mass in kg (ignored for Static/Kinematic).
-    float friction = 0.5f;                      ///< Surface friction coefficient [0, 1].
-    float restitution = 0.1f;                   ///< Bounciness [0, 1]; 0 = no bounce, 1 = perfectly elastic.
-    float linearDamping = 0.1f;                 ///< Velocity drag per second (simulates air resistance).
-    float angularDamping = 0.1f;                ///< Rotational drag per second.
-    bool isTrigger = false;                     ///< When true, detects overlaps but doesn't physically collide.
+    /// Motion quality for collision detection precision.
+    enum class MotionQuality
+    {
+        Discrete,  ///< Standard discrete detection (cheapest).
+        LinearCast ///< CCD via linear cast — prevents tunneling for fast objects.
+    };
+
+    Type type = Type::Dynamic;   ///< Body simulation mode.
+    float mass = 1.0f;           ///< Mass in kg (ignored for Static/Kinematic).
+    float friction = 0.5f;       ///< Surface friction coefficient [0, ∞).
+    float restitution = 0.1f;    ///< Bounciness [0, 1]; 0 = no bounce, 1 = perfectly elastic.
+    float linearDamping = 0.1f;  ///< Velocity drag per second (simulates air resistance).
+    float angularDamping = 0.1f; ///< Rotational drag per second.
+    float gravityFactor = 1.0f;  ///< Per-body gravity multiplier (0 = zero-g, 2 = double).
+    bool isTrigger = false;      ///< When true, detects overlaps but doesn't physically collide.
+    MotionQuality motionQuality = MotionQuality::Discrete; ///< CCD setting for fast-moving objects.
     DirectX::XMFLOAT3 linearVelocity{0, 0, 0};  ///< Cached linear velocity (m/s), synced from physics each frame.
     DirectX::XMFLOAT3 angularVelocity{0, 0, 0}; ///< Cached angular velocity (rad/s), synced from physics each frame.
-    Spark::PhysicsHandle physicsBodyHandle;     ///< Opaque handle to the underlying Bullet Physics body.
+    Spark::PhysicsHandle physicsBodyHandle;     ///< Opaque handle to the underlying Jolt Physics body.
 
     /**
      * @brief Validate that all physics parameters are within sane ranges.
@@ -57,9 +66,9 @@ struct RigidBodyComponent
             ASSERT_MSG(false, "Dynamic rigid body must have positive mass");
             return false;
         }
-        if (friction < 0.0f || friction > 1.0f)
+        if (friction < 0.0f)
         {
-            ASSERT_MSG(false, "Friction must be in [0, 1]");
+            ASSERT_MSG(false, "Friction must be non-negative");
             return false;
         }
         if (restitution < 0.0f || restitution > 1.0f)
@@ -96,16 +105,19 @@ struct ColliderComponent
     /// Primitive collision shape type.
     enum class Shape
     {
-        Box,     ///< Axis-aligned box defined by halfExtents.
-        Sphere,  ///< Sphere defined by radius.
-        Capsule, ///< Capsule (cylinder + hemisphere caps) defined by radius and height.
-        Mesh     ///< Triangle mesh loaded from the entity's MeshRenderer asset.
+        Box,        ///< Axis-aligned box defined by halfExtents.
+        Sphere,     ///< Sphere defined by radius.
+        Capsule,    ///< Capsule (cylinder + hemisphere caps) defined by radius and height.
+        Cylinder,   ///< Cylinder defined by radius and height.
+        ConvexHull, ///< Convex hull from mesh vertices.
+        Mesh,       ///< Triangle mesh loaded from the entity's MeshRenderer asset.
+        Heightfield ///< Terrain heightfield (static only).
     };
 
     Shape shape = Shape::Box;                        ///< Collision primitive type.
     DirectX::XMFLOAT3 halfExtents{0.5f, 0.5f, 0.5f}; ///< Box half-dimensions in local space (meters).
-    float radius = 0.5f;                             ///< Sphere/Capsule radius (meters).
-    float height = 1.0f;                             ///< Capsule total height including hemispherical caps (meters).
+    float radius = 0.5f;                             ///< Sphere/Capsule/Cylinder radius (meters).
+    float height = 1.0f;                             ///< Capsule/Cylinder total height (meters).
     DirectX::XMFLOAT3 offset{0, 0, 0};               ///< Local-space offset from the entity's Transform origin.
 
     /**

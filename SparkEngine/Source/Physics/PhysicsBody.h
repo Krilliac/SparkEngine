@@ -199,4 +199,5 @@ class PhysicsConstraint
   private:
     ConstraintType m_type;
     JPH::Constraint* m_joltConstraint;
+    float m_breakingThreshold = 0.0f; ///< Force threshold for auto-breaking (0 = unbreakable)
 };

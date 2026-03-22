@@ -13,6 +13,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | 11-engine + 3-framework analysis (30 recommendations, ~20 engines total) | [knowledge/eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) | Decision | Active | 2026-03-20 |
 | 13 closed/proprietary engine analysis (15 recommendations, Blizzard/Havok/Frostbite/RAGE/id Tech/etc.) | [knowledge/closed-engines-analysis.md](knowledge/closed-engines-analysis.md) | Decision | Active | 2026-03-21 |
 | ThorVG + Unity Graphics + 33 libraries analysis (35 recommendations: volumes, bloom, MSDF fonts, meshoptimizer) | [knowledge/thorvg-unity-graphics-analysis.md](knowledge/thorvg-unity-graphics-analysis.md) | Decision | Active | 2026-03-22 |
+| Jolt Physics integration (Bullet3 → Jolt, 7 commits, ~6500 lines) | [knowledge/jolt-physics-integration.md](knowledge/jolt-physics-integration.md) | Observation | Active | 2026-03-22 |
 | CI log access without gh CLI | [knowledge/ci-log-access.md](knowledge/ci-log-access.md) | Issue | **Resolved** | 2026-03-22 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
 | SparkConsole refactor | [knowledge/sparkconsole-refactor-plan.md](knowledge/sparkconsole-refactor-plan.md) | Pattern | **Resolved** | 2026-03-17 |
@@ -160,7 +161,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ### Functional audit — what works vs scaffolding
 
-**All 9 core subsystems are FUNCTIONAL** (confirmed 2026-03-17): Graphics (D3D11), Physics (Bullet3), Audio (XAudio2), ECS (EnTT), Input, Scene Management, AI (behavior trees + NavMesh), Animation (skeletal + IK), Main Game Loop.
+**All 9 core subsystems are FUNCTIONAL** (confirmed 2026-03-22): Graphics (D3D11), Physics (Jolt Physics — migrated from Bullet3), Audio (XAudio2), ECS (EnTT), Input, Scene Management, AI (behavior trees + NavMesh), Animation (skeletal + IK), Main Game Loop.
 
 **Rendering pipeline**: 17 working, 12 header-only stubs (~15K dead lines). See [rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md).
 

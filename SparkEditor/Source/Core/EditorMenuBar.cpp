@@ -429,6 +429,10 @@ namespace SparkEditor
         {
             SetPanelVisible("Physics2D", !IsPanelVisible("Physics2D"));
         }
+        if (ImGui::MenuItem("Physics 3D", nullptr, IsPanelVisible("Physics3D")))
+        {
+            SetPanelVisible("Physics3D", !IsPanelVisible("Physics3D"));
+        }
         ImGui::Separator();
         ImGui::TextDisabled("Game Modules");
         if (ImGui::MenuItem(ICON_FA_PUZZLE_PIECE " Game Module Selector", nullptr,
