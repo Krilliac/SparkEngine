@@ -215,6 +215,7 @@ namespace Spark
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
+#include <windows.h>
 #include <DirectXMath.h>
 using namespace DirectX;
 

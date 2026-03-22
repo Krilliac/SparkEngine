@@ -916,7 +916,7 @@ namespace Spark::Graphics
                     continue;
                 }
 
-                RenderTargetDesc rtDesc;
+                ::RenderTargetDesc rtDesc;
                 rtDesc.name = res.name;
                 rtDesc.width = res.textureDesc.width;
                 rtDesc.height = res.textureDesc.height;
@@ -928,7 +928,7 @@ namespace Spark::Graphics
                 rtDesc.clearDepth = res.textureDesc.clearDepth;
                 rtDesc.clearStencil = res.textureDesc.clearStencil;
 
-                auto rt = std::make_shared<RenderTarget>(rtDesc);
+                auto rt = std::make_shared<::RenderTarget>(rtDesc);
                 if (SUCCEEDED(rt->Create(m_device)))
                 {
                     res.physicalTexture = std::move(rt);

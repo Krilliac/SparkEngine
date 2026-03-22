@@ -372,7 +372,10 @@ namespace Spark
             // GL COMMAND LIST
             // ============================================================================
 
-            GLCommandList::GLCommandList(bool isImmediate) : m_isImmediate(isImmediate) {}
+            GLCommandList::GLCommandList(bool isImmediate, RHIStatistics* statistics)
+                : m_isImmediate(isImmediate), m_statistics(statistics)
+            {
+            }
 
             void GLCommandList::Begin() {}
             void GLCommandList::End()
@@ -1277,7 +1280,7 @@ namespace Spark
 
             IRHICommandList* GLDevice::CreateDeferredCommandList()
             {
-                return new GLCommandList(false);
+                return new GLCommandList(false, &m_statistics);
             }
 
             void GLDevice::ExecuteCommandList(IRHICommandList*) {}

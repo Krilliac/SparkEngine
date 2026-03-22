@@ -528,8 +528,12 @@ if(BULLET_FOUND)
                     -Wno-deprecated-copy
                     -Wno-implicit-fallthrough
                     -Wno-unused-but-set-variable
-                    -Wno-deprecated-volatile
                 )
+                if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+                    target_compile_options(${_bullet_target} PRIVATE -Wno-volatile)
+                elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|IntelLLVM")
+                    target_compile_options(${_bullet_target} PRIVATE -Wno-deprecated-volatile)
+                endif()
                 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|IntelLLVM")
                     target_compile_options(${_bullet_target} PRIVATE
                         -Wno-single-bit-bitfield-constant-conversion
