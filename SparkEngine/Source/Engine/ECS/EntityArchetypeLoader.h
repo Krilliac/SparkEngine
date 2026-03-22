@@ -25,6 +25,7 @@
 #include "Components.h"
 
 #include <string>
+#include <unordered_map>
 
 namespace Spark::ECS
 {
@@ -59,5 +60,21 @@ namespace Spark::ECS
      * @return The created EntityID, or entt::null if the archetype is not found.
      */
     EntityID SpawnFromArchetype(const std::string& name, World& world);
+
+    /**
+     * @brief Spawn a new entity from a registered archetype with property overrides.
+     *
+     * Works like SpawnFromArchetype(name, world), but after applying the archetype's
+     * default component properties, applies the given overrides on top. Override keys
+     * use the format "ComponentType.propertyName" (e.g. "Transform.p0" to override
+     * the position parameter).
+     *
+     * @param name      Name of the registered archetype.
+     * @param world     World to spawn the entity into.
+     * @param overrides Map of "ComponentType.propertyName" -> value strings.
+     * @return The created EntityID, or entt::null if the archetype is not found.
+     */
+    EntityID SpawnFromArchetype(const std::string& name, World& world,
+                                const std::unordered_map<std::string, std::string>& overrides);
 
 } // namespace Spark::ECS

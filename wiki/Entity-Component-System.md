@@ -186,7 +186,7 @@ struct Script
 
 | Component | Key Fields | Description |
 |-----------|------------|-------------|
-| `RigidBodyComponent` | `mass`, `type` (Static/Kinematic/Dynamic), `linearDamping`, `angularDamping`, `friction`, `restitution`, `physicsBodyHandle` | Rigid body properties for Bullet Physics |
+| `RigidBodyComponent` | `mass`, `type` (Static/Kinematic/Dynamic), `linearDamping`, `angularDamping`, `friction`, `restitution`, `physicsBodyHandle` | Rigid body properties for Jolt Physics |
 | `ColliderComponent` | `shapeType` (Box/Sphere/Capsule/Mesh/ConvexHull), `dimensions`, `offset`, `isTrigger` | Collision shape definition |
 
 ### Audio Components
@@ -297,7 +297,7 @@ protected:
 Systems are processed by `SystemManager::UpdateAll()` in registration order. The recommended order:
 
 ```
-1. PhysicsUpdateSystem    — Step Bullet simulation, sync transforms
+1. PhysicsUpdateSystem    — Step Jolt Physics simulation, sync transforms
 2. AnimationUpdateSystem  — Evaluate state machines, blend poses, solve IK
 3. AIUpdateSystem         — Perception, behavior trees, pathfinding, movement
 4. AudioUpdateSystem      — Update 3D audio source positions from transforms
@@ -334,8 +334,8 @@ float GetFixedTimestep() const;       // Current fixed timestep value
 ```
 
 It operates in two phases:
-1. **Pre-simulate** -- Write kinematic body positions from ECS Transform to Bullet
-2. **Post-simulate** -- Read dynamic body positions from Bullet back to ECS Transform
+1. **Pre-simulate** -- Write kinematic body positions from ECS Transform to Jolt
+2. **Post-simulate** -- Read dynamic body positions from Jolt back to ECS Transform
 
 ### LifecycleSystem Callbacks
 

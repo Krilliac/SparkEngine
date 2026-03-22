@@ -38,6 +38,7 @@
 
 #include "../../Utils/Assert.h"
 #include "../../Utils/Validate.h"
+#include "../../Utils/EntityEventBus.h"
 
 // Core types: EntityID, NameComponent, Transform, MeshRenderer, Camera, Script
 #include "Components/CoreComponents.h"
@@ -118,6 +119,10 @@ class World
         SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, m_registry.valid(entity),
                           "DestroyEntity called with invalid entity");
         SPARK_LOG_TRACE(Spark::LogCategory::ECS, "Destroying entity %u", static_cast<uint32_t>(entity));
+
+        // Clean up any per-entity event subscriptions before destroying
+        Spark::EntityEventBus::Global().RemoveEntity(static_cast<Spark::EventEntityID>(entity));
+
         m_registry.destroy(entity);
     }
 

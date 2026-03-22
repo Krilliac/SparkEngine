@@ -30,12 +30,12 @@
 #include "../Core/Platform.h"
 #include "../Utils/MathUtils.h"
 
-#include <vector>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <string>
-#include <algorithm>
 #include <random>
+#include <string>
+#include <vector>
 
 namespace Spark
 {
@@ -186,9 +186,9 @@ namespace Spark
 
                 for (int i = 0; i < sampleCount; ++i)
                 {
-                    // Random point in hemisphere
+                    // Random point in hemisphere (cosine-weighted)
                     float theta = MathUtils::TWO_PI * dist(rng);
-                    float cosPhi = dist(rng); // Cosine-weighted
+                    float cosPhi = dist(rng);
                     float sinPhi = std::sqrt(1.0f - cosPhi * cosPhi);
 
                     SamplePoint sample = {
@@ -250,110 +250,53 @@ namespace Spark
             ScreenSpaceEffects() = default;
             ~ScreenSpaceEffects() = default;
 
-            bool Initialize(uint32_t width = 1920, uint32_t height = 1080)
-            {
-                m_width = width;
-                m_height = height;
-                m_ssaoKernel = SSAOKernel::GenerateKernel(m_ssaoSettings.kernelSize);
-                m_noiseTexture = SSAOKernel::GenerateNoiseTexture(m_ssaoSettings.noiseSize);
-                m_initialized = true;
-                return true;
-            }
+            /// @brief Initialize render targets and generate default kernel/noise
+            bool Initialize(uint32_t width = 1920, uint32_t height = 1080);
 
-            void Shutdown()
-            {
-                m_ssaoKernel.clear();
-                m_noiseTexture.clear();
-                m_initialized = false;
-            }
+            /// @brief Release all resources
+            void Shutdown();
 
-            void Resize(uint32_t width, uint32_t height)
-            {
-                m_width = width;
-                m_height = height;
-            }
+            /// @brief Resize render targets for new resolution
+            void Resize(uint32_t width, uint32_t height);
 
             // ---- SSAO ----
-            void SetSSAOEnabled(bool enabled) { m_ssaoSettings.enabled = enabled; }
+            void SetSSAOEnabled(bool enabled);
             bool IsSSAOEnabled() const { return m_ssaoSettings.enabled; }
-            void SetSSAORadius(float radius) { m_ssaoSettings.radius = std::max(radius, 0.01f); }
-            void SetSSAOIntensity(float intensity) { m_ssaoSettings.intensity = std::max(intensity, 0.0f); }
-            void SetSSAOQuality(SSAOQuality quality)
-            {
-                m_ssaoSettings.quality = quality;
-                m_ssaoSettings.kernelSize = m_ssaoSettings.GetSampleCount();
-                m_ssaoSettings.halfResolution = m_ssaoSettings.IsHalfRes();
-                m_ssaoKernel = SSAOKernel::GenerateKernel(m_ssaoSettings.kernelSize);
-            }
+            void SetSSAORadius(float radius);
+            void SetSSAOIntensity(float intensity);
+            void SetSSAOQuality(SSAOQuality quality);
             const SSAOSettings& GetSSAOSettings() const { return m_ssaoSettings; }
             SSAOSettings& GetSSAOSettings() { return m_ssaoSettings; }
             const std::vector<SamplePoint>& GetSSAOKernel() const { return m_ssaoKernel; }
             const std::vector<SamplePoint>& GetNoiseTexture() const { return m_noiseTexture; }
 
             /// Regenerate kernel with new sample count
-            std::vector<SamplePoint> GenerateSSAOKernel(int sampleCount, uint32_t seed = 42)
-            {
-                m_ssaoKernel = SSAOKernel::GenerateKernel(sampleCount, seed);
-                return m_ssaoKernel;
-            }
+            std::vector<SamplePoint> GenerateSSAOKernel(int sampleCount, uint32_t seed = 42);
 
             /// Regenerate noise texture
-            std::vector<SamplePoint> GenerateNoiseTexture(int size, uint32_t seed = 123)
-            {
-                m_noiseTexture = SSAOKernel::GenerateNoiseTexture(size, seed);
-                return m_noiseTexture;
-            }
+            std::vector<SamplePoint> GenerateNoiseTexture(int size, uint32_t seed = 123);
 
             // ---- SSR ----
-            void SetSSREnabled(bool enabled) { m_ssrSettings.enabled = enabled; }
+            void SetSSREnabled(bool enabled);
             bool IsSSREnabled() const { return m_ssrSettings.enabled; }
-            void SetSSRQuality(SSRQuality quality)
-            {
-                m_ssrSettings.quality = quality;
-                m_ssrSettings.maxSteps = m_ssrSettings.GetStepCount();
-            }
+            void SetSSRQuality(SSRQuality quality);
             const SSRSettings& GetSSRSettings() const { return m_ssrSettings; }
             SSRSettings& GetSSRSettings() { return m_ssrSettings; }
 
             // ---- Contact Shadows ----
-            void SetContactShadowsEnabled(bool enabled) { m_contactShadowSettings.enabled = enabled; }
+            void SetContactShadowsEnabled(bool enabled);
             bool IsContactShadowsEnabled() const { return m_contactShadowSettings.enabled; }
             const ContactShadowSettings& GetContactShadowSettings() const { return m_contactShadowSettings; }
             ContactShadowSettings& GetContactShadowSettings() { return m_contactShadowSettings; }
 
             // ---- Metrics ----
-            ScreenSpaceMetrics GetMetrics() const
-            {
-                ScreenSpaceMetrics m;
-                m.ssaoActive = m_ssaoSettings.enabled;
-                m.ssrActive = m_ssrSettings.enabled;
-                m.contactShadowsActive = m_contactShadowSettings.enabled;
-                m.ssaoSamples = m_ssaoSettings.enabled ? m_ssaoSettings.GetSampleCount() : 0;
-                m.ssrSteps = m_ssrSettings.enabled ? m_ssrSettings.GetStepCount() : 0;
-                m.totalEffects = (m.ssaoActive ? 1 : 0) + (m.ssrActive ? 1 : 0) + (m.contactShadowsActive ? 1 : 0);
-                return m;
-            }
-
-            std::string Console_GetStatus() const
-            {
-                std::string s = "Screen-Space Effects:\n";
-                s += "  SSAO: " + std::string(m_ssaoSettings.enabled ? "ON" : "OFF");
-                if (m_ssaoSettings.enabled)
-                    s += " (samples=" + std::to_string(m_ssaoSettings.GetSampleCount()) +
-                         ", radius=" + std::to_string(m_ssaoSettings.radius) + ")";
-                s += "\n";
-                s += "  SSR: " + std::string(m_ssrSettings.enabled ? "ON" : "OFF");
-                if (m_ssrSettings.enabled)
-                    s += " (steps=" + std::to_string(m_ssrSettings.GetStepCount()) +
-                         ", maxDist=" + std::to_string(m_ssrSettings.maxDistance) + ")";
-                s += "\n";
-                s += "  Contact Shadows: " + std::string(m_contactShadowSettings.enabled ? "ON" : "OFF") + "\n";
-                return s;
-            }
+            ScreenSpaceMetrics GetMetrics() const;
+            std::string Console_GetStatus() const;
 
           private:
             bool m_initialized = false;
-            uint32_t m_width = 1920, m_height = 1080;
+            uint32_t m_width = 1920;
+            uint32_t m_height = 1080;
 
             SSAOSettings m_ssaoSettings;
             SSRSettings m_ssrSettings;

@@ -1,6 +1,6 @@
 # Spark Engine
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with DirectX 11 rendering, Bullet Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an EnTT-based ECS architecture, an ImGui visual editor, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an EnTT-based ECS architecture, an ImGui visual editor, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
 
 > **Early Development** — SparkEngine is under active development. Expect rough edges.
 
@@ -15,7 +15,7 @@
 ## Feature Highlights
 
 - **Rendering** — DirectX 11 with forward, deferred, forward+, and clustered pipelines. PBR materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting, bloom, HDR tone mapping, TAA/FXAA/MSAA, IBL, GPU particles, decals, fog, and quality presets. Experimental Vulkan and OpenGL backends via RHI abstraction.
-- **Physics** — Bullet Physics 3 with rigid bodies, 9 collision shape types, constraints, raycasting, overlap queries, physics materials, and debug draw.
+- **Physics** — Jolt Physics with rigid bodies, 15 collision shape types, 12 constraint types, raycasting, overlap queries, physics materials, character controller, vehicle physics, ragdoll, soft body/cloth, and debug draw.
 - **Audio** — XAudio2 3D spatial audio with Doppler effects, distance attenuation, volume channels, and object pooling. Miniaudio as cross-platform fallback.
 - **Gameplay** — ECS architecture (EnTT), FPS player controller, weapons, vehicles, inventory, quests, day/night cycle, weather, terrain with quadtree LOD.
 - **AI** — Behavior trees, NavMesh A* pathfinding, perception system, steering behaviors.
@@ -43,7 +43,7 @@ Pre-built binaries are published on every commit to `master`:
 ### Engine Subsystems
 - [Entity Component System](Entity-Component-System) — EnTT ECS, components, and systems
 - [Rendering and Graphics](Rendering-and-Graphics) — Graphics pipeline, materials, and post-processing
-- [Physics](Physics) — Bullet Physics integration
+- [Physics](Physics) — Jolt Physics integration
 - [Cloth Simulation](Cloth-Simulation) — Position-based dynamics cloth simulation
 - [Audio](Audio) — Spatial audio system
 - [Input System](Input-System) — Keyboard, mouse, and gamepad

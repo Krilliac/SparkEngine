@@ -1,13 +1,13 @@
 # Rendering Pipeline Feature Status
 
-**Last updated:** 2026-03-16
+**Last updated:** 2026-03-22
 **Type:** Observation
 **Status:** Active
 **Severity:** High
 
 ## Description
 
-Comprehensive audit of all 26 rendering features to determine what actually works vs header-only scaffolding. The D3D11 core pipeline is solid with 17 working features, but 12 systems are header-only stubs (~15K dead lines) and terrain rendering is completely missing.
+Comprehensive audit of all 26 rendering features to determine what actually works vs header-only scaffolding. The D3D11 core pipeline is solid with 17 working features, and 12 systems have type definitions but need GPU implementations. Terrain rendering exists via ClipmapTerrain (added 2026-03-21). **Direction (2026-03-22): all 12 stubs will be fully implemented with GPU backends — no deletion.**
 
 ---
 

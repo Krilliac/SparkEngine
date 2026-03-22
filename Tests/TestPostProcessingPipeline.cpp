@@ -12,6 +12,10 @@ namespace TestPostProc
 
     enum class PostProcessPass
     {
+        Bloom,
+        AutoExposure,
+        Tonemapping,
+        ColorGrading,
         FXAA,
         DepthOfField,
         MotionBlur,
@@ -70,6 +74,46 @@ namespace TestPostProc
         float threshold = 0.1f;
     };
 
+    struct BloomSettings
+    {
+        float threshold = 1.0f;
+        float softThreshold = 0.5f;
+        float intensity = 0.8f;
+        int iterations = 5;
+    };
+
+    enum class TonemapOperator
+    {
+        ACES,
+        Filmic,
+        Neutral,
+        Reinhard,
+        Count
+    };
+
+    struct TonemappingSettings
+    {
+        TonemapOperator op = TonemapOperator::ACES;
+        float exposure = 1.0f;
+        float whitePoint = 11.2f;
+    };
+
+    struct AutoExposureSettings
+    {
+        float minExposure = 0.25f;
+        float maxExposure = 4.0f;
+        float adaptSpeedUp = 2.0f;
+        float targetLuminance = 0.18f;
+    };
+
+    struct ColorGradingSettings
+    {
+        float temperature = 0.0f;
+        float tint = 0.0f;
+        float saturation = 1.0f;
+        float contrast = 1.0f;
+    };
+
     class PostProcessingPipeline
     {
       public:
@@ -77,16 +121,20 @@ namespace TestPostProc
         {
             // Default pass order
             m_passes = {
-                {PostProcessPass::FXAA, false, 0, 1.0f},
-                {PostProcessPass::DepthOfField, false, 1, 1.0f},
-                {PostProcessPass::MotionBlur, false, 2, 1.0f},
-                {PostProcessPass::Vignette, false, 3, 1.0f},
-                {PostProcessPass::ChromaticAberration, false, 4, 1.0f},
-                {PostProcessPass::FilmGrain, false, 5, 1.0f},
-                {PostProcessPass::LensDistortion, false, 6, 1.0f},
-                {PostProcessPass::LightShafts, false, 7, 1.0f},
-                {PostProcessPass::LensFlare, false, 8, 1.0f},
-                {PostProcessPass::Sharpen, false, 9, 1.0f},
+                {PostProcessPass::Bloom, false, 0, 1.0f},
+                {PostProcessPass::AutoExposure, false, 1, 1.0f},
+                {PostProcessPass::Tonemapping, false, 2, 1.0f},
+                {PostProcessPass::ColorGrading, false, 3, 1.0f},
+                {PostProcessPass::FXAA, false, 4, 1.0f},
+                {PostProcessPass::DepthOfField, false, 5, 1.0f},
+                {PostProcessPass::MotionBlur, false, 6, 1.0f},
+                {PostProcessPass::Vignette, false, 7, 1.0f},
+                {PostProcessPass::ChromaticAberration, false, 8, 1.0f},
+                {PostProcessPass::FilmGrain, false, 9, 1.0f},
+                {PostProcessPass::LensDistortion, false, 10, 1.0f},
+                {PostProcessPass::LightShafts, false, 11, 1.0f},
+                {PostProcessPass::LensFlare, false, 12, 1.0f},
+                {PostProcessPass::Sharpen, false, 13, 1.0f},
             };
         }
 
@@ -176,6 +224,10 @@ namespace TestPostProc
         VignetteSettings& GetVignetteSettings() { return m_vignette; }
         FilmGrainSettings& GetFilmGrainSettings() { return m_filmGrain; }
         SharpenSettings& GetSharpenSettings() { return m_sharpen; }
+        BloomSettings& GetBloomSettings() { return m_bloom; }
+        TonemappingSettings& GetTonemappingSettings() { return m_tonemapping; }
+        AutoExposureSettings& GetAutoExposureSettings() { return m_autoExposure; }
+        ColorGradingSettings& GetColorGradingSettings() { return m_colorGrading; }
 
       private:
         std::vector<PassConfig> m_passes;
@@ -184,6 +236,10 @@ namespace TestPostProc
         VignetteSettings m_vignette;
         FilmGrainSettings m_filmGrain;
         SharpenSettings m_sharpen;
+        BloomSettings m_bloom;
+        TonemappingSettings m_tonemapping;
+        AutoExposureSettings m_autoExposure;
+        ColorGradingSettings m_colorGrading;
     };
 
 } // namespace TestPostProc
@@ -196,7 +252,7 @@ TEST(PostProc_DefaultAllDisabled)
 {
     TestPostProc::PostProcessingPipeline pp;
     EXPECT_EQ(pp.GetActivePassCount(), 0);
-    EXPECT_EQ(pp.GetTotalPassCount(), 10);
+    EXPECT_EQ(pp.GetTotalPassCount(), 14);
 }
 
 TEST(PostProc_EnableDisablePass)
@@ -322,4 +378,75 @@ TEST(PostProc_OrderedPassesOnlyEnabled)
     {
         EXPECT_TRUE(pass == TestPostProc::PostProcessPass::FXAA || pass == TestPostProc::PostProcessPass::FilmGrain);
     }
+}
+
+TEST(PostProc_BloomSettings)
+{
+    TestPostProc::PostProcessingPipeline pp;
+    auto& bloom = pp.GetBloomSettings();
+
+    EXPECT_GT(bloom.threshold, 0.0f);
+    EXPECT_GT(bloom.intensity, 0.0f);
+    EXPECT_GT(bloom.iterations, 0);
+
+    bloom.threshold = 0.5f;
+    EXPECT_NEAR(pp.GetBloomSettings().threshold, 0.5f, 0.001f);
+}
+
+TEST(PostProc_TonemappingSettings)
+{
+    TestPostProc::PostProcessingPipeline pp;
+    auto& tm = pp.GetTonemappingSettings();
+
+    EXPECT_EQ(static_cast<int>(tm.op), static_cast<int>(TestPostProc::TonemapOperator::ACES));
+    EXPECT_GT(tm.exposure, 0.0f);
+    EXPECT_GT(tm.whitePoint, 0.0f);
+
+    tm.op = TestPostProc::TonemapOperator::Filmic;
+    EXPECT_EQ(static_cast<int>(pp.GetTonemappingSettings().op),
+              static_cast<int>(TestPostProc::TonemapOperator::Filmic));
+}
+
+TEST(PostProc_AutoExposureSettings)
+{
+    TestPostProc::PostProcessingPipeline pp;
+    auto& ae = pp.GetAutoExposureSettings();
+
+    EXPECT_GT(ae.minExposure, 0.0f);
+    EXPECT_GT(ae.maxExposure, ae.minExposure);
+    EXPECT_GT(ae.targetLuminance, 0.0f);
+
+    ae.targetLuminance = 0.25f;
+    EXPECT_NEAR(pp.GetAutoExposureSettings().targetLuminance, 0.25f, 0.001f);
+}
+
+TEST(PostProc_ColorGradingSettings)
+{
+    TestPostProc::PostProcessingPipeline pp;
+    auto& cg = pp.GetColorGradingSettings();
+
+    EXPECT_NEAR(cg.temperature, 0.0f, 0.001f);
+    EXPECT_NEAR(cg.saturation, 1.0f, 0.001f);
+    EXPECT_NEAR(cg.contrast, 1.0f, 0.001f);
+
+    cg.temperature = 0.5f;
+    EXPECT_NEAR(pp.GetColorGradingSettings().temperature, 0.5f, 0.001f);
+}
+
+TEST(PostProc_HDRPassOrdering)
+{
+    // Verify HDR effects run before post-effects in pipeline order
+    TestPostProc::PostProcessingPipeline pp;
+
+    pp.SetPassEnabled(TestPostProc::PostProcessPass::Bloom, true);
+    pp.SetPassEnabled(TestPostProc::PostProcessPass::Tonemapping, true);
+    pp.SetPassEnabled(TestPostProc::PostProcessPass::FXAA, true);
+
+    auto ordered = pp.GetOrderedPasses();
+    EXPECT_EQ((int)ordered.size(), 3);
+
+    // Bloom (priority 0) should come before Tonemapping (priority 2) before FXAA (priority 4)
+    EXPECT_EQ((int)ordered[0], (int)TestPostProc::PostProcessPass::Bloom);
+    EXPECT_EQ((int)ordered[1], (int)TestPostProc::PostProcessPass::Tonemapping);
+    EXPECT_EQ((int)ordered[2], (int)TestPostProc::PostProcessPass::FXAA);
 }

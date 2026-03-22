@@ -27,7 +27,7 @@ cmake --build build --config Release
 cd build && ctest --output-on-failure
 ```
 
-CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (OFF by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`.
+CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`.
 
 ## Anti-Bloat Guidelines
 
@@ -156,7 +156,7 @@ SparkGame/Source/                        — Example FPS game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 82+ unit tests, CTest
+Tests/                                   — 145 unit tests, CTest
 ```
 
 ## ECS execution order
@@ -531,7 +531,7 @@ These are confirmed bloat problems discovered during audit. They must be fixed b
 
 - Use `EngineContext` service locator, not deprecated `g_graphics`/`g_input` globals
 - Cross-platform types live in `Core/Platform.h` (DirectXMath stubs on Linux)
-- Networking is disabled in default builds (`ENABLE_NETWORKING=OFF`)
+- Networking is enabled in default builds (`ENABLE_NETWORKING=ON`)
 - VR framework exists (`SparkEngine/Source/Engine/VR/`) — OpenXR-ready stub, wired into engine init/update loop. Requires OpenXR SDK for actual VR hardware. DXR raytracing is optional (`ENABLE_DXR=OFF` by default); DLSS/FSR are not implemented
 - `.clang-format` enforces Microsoft-based style (Allman braces, 120-col, 4-space indent)
 - `.clang-tidy` checks for bugprone, modernize, performance, and readability issues

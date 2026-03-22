@@ -96,6 +96,17 @@ namespace Spark::Graphics
         bool Initialize(RenderDevice* device);
 
         /**
+         * @brief Set the graphics engine for pass delegation.
+         *
+         * Passes delegate rendering work to GraphicsEngine methods
+         * (ProcessDrawList, FillGBuffer, LightingPass, etc.) rather
+         * than reimplementing rendering logic.
+         *
+         * @param engine  Non-owning pointer to the GraphicsEngine.
+         */
+        void SetGraphicsEngine(GraphicsEngine* engine) { m_graphicsEngine = engine; }
+
+        /**
          * @brief Shut down and release all pipeline resources.
          */
         void Shutdown();
@@ -157,9 +168,15 @@ namespace Spark::Graphics
         void SortPasses();
 
         RenderDevice* m_device = nullptr;
+        GraphicsEngine* m_graphicsEngine = nullptr; ///< Non-owning; for pass delegation
         std::unique_ptr<RenderGraph> m_renderGraph;
         std::vector<RegisteredPass> m_passes;
         bool m_passesDirty = true;
+
+        /// Per-frame camera state, stored by ExecuteFrame for use by pass lambdas.
+        DirectX::XMMATRIX m_frameView = DirectX::XMMatrixIdentity();
+        DirectX::XMMATRIX m_frameProj = DirectX::XMMatrixIdentity();
+        DirectX::XMFLOAT3 m_frameCameraPos = {0.0f, 0.0f, 0.0f};
     };
 
 } // namespace Spark::Graphics

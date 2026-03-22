@@ -17,7 +17,7 @@ The Doxygen configuration indexes the following:
 | Directory | Description |
 |-----------|-------------|
 | `SparkEngine/Source/` | Core engine library (all subsystems) |
-| `SparkEditor/Source/` | ImGui visual editor (22 subsystems) |
+| `SparkEditor/Source/` | ImGui visual editor (32 panels) |
 | `SparkConsole/src/` | Standalone debug console application |
 | `SparkShaderCompiler/src/` | Offline shader compilation tool |
 | `SparkGame/Source/` | Example FPS game module |

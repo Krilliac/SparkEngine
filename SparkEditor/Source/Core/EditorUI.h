@@ -27,6 +27,8 @@
 #include "../Prefabs/PrefabManager.h"
 #include "../Search/CommandPalette.h"
 #include "Engine/Editor/PlayModeManager.h"
+#include "../Gizmos/GizmoSystem.h"
+#include "../Communication/CollaborativeEditSession.h"
 
 #ifdef _WIN32
 struct ID3D11Device;
@@ -38,6 +40,7 @@ namespace SparkEditor
 
     // Forward declarations
     class EditorPanel;
+    class EditorPluginManager;
     class ProjectBrowserPanel;
     class HierarchyPanel;
     struct EditorConfig; // Forward declare instead of defining
@@ -83,6 +86,11 @@ namespace SparkEditor
         UndoRedoManager* GetUndoRedoManager() { return m_undoRedoManager.get(); }
         PrefabManager* GetPrefabManager() { return m_prefabManager.get(); }
         CommandPalette* GetCommandPalette() { return m_commandPalette.get(); }
+        GizmoSystem* GetGizmoSystem() { return m_gizmoSystem.get(); }
+        CollaborativeEditSession* GetCollabSession() { return m_collabSession.get(); }
+
+        /// @brief Set non-owning pointer to the plugin manager (owned by EditorApplication)
+        void SetPluginManager(EditorPluginManager* pluginManager) { m_pluginManager = pluginManager; }
 
         // Project operations (triggered from menu bar)
         void ShowNewProjectDialog();
@@ -152,6 +160,9 @@ namespace SparkEditor
         std::unique_ptr<UndoRedoManager> m_undoRedoManager;
         std::unique_ptr<PrefabManager> m_prefabManager;
         std::unique_ptr<CommandPalette> m_commandPalette;
+
+        // Plugin manager (non-owning, owned by EditorApplication)
+        EditorPluginManager* m_pluginManager = nullptr;
 
         // Panel management
         std::unordered_map<std::string, std::shared_ptr<EditorPanel>> m_panels;
@@ -240,6 +251,12 @@ namespace SparkEditor
         bool m_snapEnabled = false;
         float m_snapValue = 1.0f;
 
+        // Gizmo system — 3D object manipulation overlays
+        std::unique_ptr<GizmoSystem> m_gizmoSystem;
+
+        // Collaborative editing — multi-user session management
+        std::unique_ptr<CollaborativeEditSession> m_collabSession;
+
         // Exit state
         bool m_exitRequested = false;
 
@@ -251,13 +268,26 @@ namespace SparkEditor
         // Helper methods
         void RenderMainMenuBar();
         void RenderFileMenu();
+        void RenderFileSceneItems();
+        void RenderFileProjectItems();
         void RenderEditMenu();
         void RenderGameObjectMenu();
+        void RenderGameObject3DSubMenu(const std::function<void(const std::string&)>& createObject);
+        void RenderGameObject2DSubMenu();
+        void RenderGameObjectVolumeSubMenu(const std::function<void(const std::string&)>& createObject);
+        void RenderGameObjectSpecializedSubMenus(const std::function<void(const std::string&)>& createObject);
+        void RenderWindowCorePanels();
+        void RenderWindowToolPanels();
+        void RenderWindow2DAndGamePanels();
         void RenderWindowMenu();
         void RenderFPSToolsMenu();
         void RenderBuildMenu();
         void RenderHelpMenu();
         void RenderToolbar();
+        void RenderToolbarTransformTools(float btnSize, ImDrawList* dl, const ImVec4& accentTeal, const ImVec4& pillBg);
+        void RenderToolbarPlayControls(float btnSize, ImDrawList* dl, const ImVec4& playGreen,
+                                       const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg);
+        void RenderToolbarSnapControls(float btnSize, const ImVec4& pillBg);
         void RenderStatusBar();
         void RenderNotifications();
         void RenderPanels();
@@ -265,6 +295,12 @@ namespace SparkEditor
         void SetupDefaultDockLayout(ImGuiID dockspaceId);
         void UpdateStats(float deltaTime);
         void CreatePanels();
+        void CreateCorePanels(
+            const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel);
+        void CreateToolAndContentPanels(
+            const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel);
+        void InitializePanelIcons();
+        void SetDefaultPanelVisibility();
         void InitializeCommandPalette();
         void HandleKeyboardShortcuts();
 

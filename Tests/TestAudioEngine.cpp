@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing (no XAudio2 dependency)
 
 #include "TestFramework.h"
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -42,9 +43,41 @@ namespace TestAudio
         float duration = 0.0f;
     };
 
+    struct PoolSlot
+    {
+        bool inUse = false;
+        uint32_t sourceID = 0;
+    };
+
     class AudioEngine
     {
       public:
+        bool Initialize(size_t maxSources)
+        {
+            if (m_initialized)
+                return false;
+            m_maxSources = maxSources;
+            m_pool.resize(maxSources);
+            for (size_t i = 0; i < maxSources; ++i)
+            {
+                m_pool[i].inUse = false;
+                m_pool[i].sourceID = static_cast<uint32_t>(i);
+            }
+            m_initialized = true;
+            return true;
+        }
+
+        void Shutdown()
+        {
+            StopAllSources();
+            m_sounds.clear();
+            m_pool.clear();
+            m_maxSources = 0;
+            m_initialized = false;
+        }
+
+        bool IsInitialized() const { return m_initialized; }
+
         void SetMasterVolume(float v) { m_masterVolume = std::clamp(v, 0.0f, 1.0f); }
         void SetSFXVolume(float v) { m_sfxVolume = std::clamp(v, 0.0f, 1.0f); }
         void SetMusicVolume(float v) { m_musicVolume = std::clamp(v, 0.0f, 1.0f); }
@@ -87,7 +120,7 @@ namespace TestAudio
         AudioMetrics GetMetrics() const
         {
             AudioMetrics m;
-            m.activeSources = m_activeSources;
+            m.activeSources = GetActiveSourceCount();
             m.totalSoundsLoaded = static_cast<int>(m_sounds.size());
             m.masterVolume = m_masterVolume;
             m.sfxVolume = m_sfxVolume;
@@ -96,29 +129,113 @@ namespace TestAudio
             return m;
         }
 
-        void SimulatePlaySource() { m_activeSources++; }
-        void SimulateStopSource()
+        // --- Object pool API ---
+
+        /// Acquire a source from the pool. Returns -1 if pool is exhausted.
+        int AcquireSource()
         {
-            if (m_activeSources > 0)
-                m_activeSources--;
+            for (auto& slot : m_pool)
+            {
+                if (!slot.inUse)
+                {
+                    slot.inUse = true;
+                    return static_cast<int>(slot.sourceID);
+                }
+            }
+            return -1;
         }
-        void StopAllSources() { m_activeSources = 0; }
-        int GetActiveSourceCount() const { return m_activeSources; }
+
+        /// Release a source back into the pool for reuse.
+        bool ReleaseSource(int sourceID)
+        {
+            if (sourceID < 0 || sourceID >= static_cast<int>(m_pool.size()))
+                return false;
+            m_pool[sourceID].inUse = false;
+            return true;
+        }
+
+        void StopAllSources()
+        {
+            for (auto& slot : m_pool)
+                slot.inUse = false;
+        }
+
+        int GetActiveSourceCount() const
+        {
+            int count = 0;
+            for (const auto& slot : m_pool)
+            {
+                if (slot.inUse)
+                    count++;
+            }
+            return count;
+        }
+
+        size_t GetMaxSources() const { return m_maxSources; }
 
       private:
+        bool m_initialized = false;
         float m_masterVolume = 1.0f;
         float m_sfxVolume = 0.8f;
         float m_musicVolume = 0.6f;
         float m_voiceVolume = 1.0f;
+        size_t m_maxSources = 0;
         ListenerState m_listener;
         std::unordered_map<std::string, SoundEntry> m_sounds;
-        int m_activeSources = 0;
+        std::vector<PoolSlot> m_pool;
     };
 
 } // namespace TestAudio
 
 // =============================================================================
-// Tests
+// Tests — Initialization and Shutdown
+// =============================================================================
+
+TEST(Audio_InitializeAndShutdown)
+{
+    TestAudio::AudioEngine audio;
+    EXPECT_FALSE(audio.IsInitialized());
+
+    EXPECT_TRUE(audio.Initialize(32));
+    EXPECT_TRUE(audio.IsInitialized());
+    EXPECT_EQ(audio.GetMaxSources(), (size_t)32);
+
+    // Double-init should fail
+    EXPECT_FALSE(audio.Initialize(16));
+
+    audio.Shutdown();
+    EXPECT_FALSE(audio.IsInitialized());
+    EXPECT_EQ(audio.GetMaxSources(), (size_t)0);
+    EXPECT_EQ(audio.GetActiveSourceCount(), 0);
+}
+
+TEST(Audio_ShutdownClearsLoadedSounds)
+{
+    TestAudio::AudioEngine audio;
+    audio.Initialize(8);
+    audio.RegisterSound("explosion", 1.5f);
+    audio.RegisterSound("footstep", 0.3f);
+    EXPECT_EQ(audio.GetSoundCount(), (size_t)2);
+
+    audio.Shutdown();
+    EXPECT_EQ(audio.GetSoundCount(), (size_t)0);
+}
+
+TEST(Audio_ReinitializeAfterShutdown)
+{
+    TestAudio::AudioEngine audio;
+    audio.Initialize(16);
+    audio.Shutdown();
+
+    // Should be able to re-initialize after shutdown
+    EXPECT_TRUE(audio.Initialize(8));
+    EXPECT_TRUE(audio.IsInitialized());
+    EXPECT_EQ(audio.GetMaxSources(), (size_t)8);
+    audio.Shutdown();
+}
+
+// =============================================================================
+// Tests — Volume Controls
 // =============================================================================
 
 TEST(Audio_DefaultVolumes)
@@ -144,6 +261,27 @@ TEST(Audio_SetVolumeClamped)
     EXPECT_NEAR(audio.GetMasterVolume(), 1.0f, 0.001f);
 }
 
+TEST(Audio_AllVolumeChannels)
+{
+    TestAudio::AudioEngine audio;
+
+    audio.SetSFXVolume(0.3f);
+    EXPECT_NEAR(audio.GetSFXVolume(), 0.3f, 0.001f);
+
+    audio.SetMusicVolume(0.0f);
+    EXPECT_NEAR(audio.GetMusicVolume(), 0.0f, 0.001f);
+
+    audio.SetVoiceVolume(0.9f);
+    EXPECT_NEAR(audio.GetVoiceVolume(), 0.9f, 0.001f);
+
+    // Clamping on all channels
+    audio.SetSFXVolume(-5.0f);
+    EXPECT_NEAR(audio.GetSFXVolume(), 0.0f, 0.001f);
+
+    audio.SetMusicVolume(100.0f);
+    EXPECT_NEAR(audio.GetMusicVolume(), 1.0f, 0.001f);
+}
+
 TEST(Audio_EffectiveVolume)
 {
     TestAudio::AudioEngine audio;
@@ -152,7 +290,15 @@ TEST(Audio_EffectiveVolume)
 
     float effective = audio.GetEffectiveVolume(1.0f);
     EXPECT_NEAR(effective, 0.25f, 0.001f);
+
+    // Zero master means zero effective
+    audio.SetMasterVolume(0.0f);
+    EXPECT_NEAR(audio.GetEffectiveVolume(1.0f), 0.0f, 0.001f);
 }
+
+// =============================================================================
+// Tests — 3D Audio / Listener
+// =============================================================================
 
 TEST(Audio_ListenerPosition)
 {
@@ -181,9 +327,25 @@ TEST(Audio_DopplerScale)
     audio.SetDopplerScale(2.0f);
     EXPECT_NEAR(audio.GetListener().dopplerScale, 2.0f, 0.001f);
 
+    // Negative clamps to zero
     audio.SetDopplerScale(-1.0f);
     EXPECT_GE(audio.GetListener().dopplerScale, 0.0f);
 }
+
+TEST(Audio_DistanceScale)
+{
+    TestAudio::AudioEngine audio;
+    audio.SetDistanceScale(5.0f);
+    EXPECT_NEAR(audio.GetListener().distanceScale, 5.0f, 0.001f);
+
+    // Very small values clamp to minimum
+    audio.SetDistanceScale(-10.0f);
+    EXPECT_GT(audio.GetListener().distanceScale, 0.0f);
+}
+
+// =============================================================================
+// Tests — Sound Loading
+// =============================================================================
 
 TEST(Audio_SoundRegistration)
 {
@@ -214,32 +376,105 @@ TEST(Audio_SoundUnregister)
     EXPECT_EQ(audio.GetSoundCount(), (size_t)1);
 }
 
-TEST(Audio_ActiveSources)
+// =============================================================================
+// Tests — Object Pool Behavior
+// =============================================================================
+
+TEST(Audio_PoolAcquireAndRelease)
 {
     TestAudio::AudioEngine audio;
+    audio.Initialize(4);
     EXPECT_EQ(audio.GetActiveSourceCount(), 0);
 
-    audio.SimulatePlaySource();
-    audio.SimulatePlaySource();
-    audio.SimulatePlaySource();
+    int id1 = audio.AcquireSource();
+    int id2 = audio.AcquireSource();
+    EXPECT_GE(id1, 0);
+    EXPECT_GE(id2, 0);
+    EXPECT_NE(id1, id2);
+    EXPECT_EQ(audio.GetActiveSourceCount(), 2);
+
+    // Release one and verify count decreases
+    EXPECT_TRUE(audio.ReleaseSource(id1));
+    EXPECT_EQ(audio.GetActiveSourceCount(), 1);
+
+    // Re-acquire should reuse the released slot
+    int id3 = audio.AcquireSource();
+    EXPECT_GE(id3, 0);
+    EXPECT_EQ(audio.GetActiveSourceCount(), 2);
+
+    audio.Shutdown();
+}
+
+TEST(Audio_PoolExhaustion)
+{
+    TestAudio::AudioEngine audio;
+    audio.Initialize(3);
+
+    // Exhaust the pool
+    int id0 = audio.AcquireSource();
+    int id1 = audio.AcquireSource();
+    int id2 = audio.AcquireSource();
+    EXPECT_GE(id0, 0);
+    EXPECT_GE(id1, 0);
+    EXPECT_GE(id2, 0);
     EXPECT_EQ(audio.GetActiveSourceCount(), 3);
 
-    audio.SimulateStopSource();
-    EXPECT_EQ(audio.GetActiveSourceCount(), 2);
+    // Pool is full — acquire should fail
+    int idFail = audio.AcquireSource();
+    EXPECT_EQ(idFail, -1);
+    EXPECT_EQ(audio.GetActiveSourceCount(), 3);
+
+    audio.Shutdown();
+}
+
+TEST(Audio_StopAllReleasesPool)
+{
+    TestAudio::AudioEngine audio;
+    audio.Initialize(4);
+
+    audio.AcquireSource();
+    audio.AcquireSource();
+    audio.AcquireSource();
+    EXPECT_EQ(audio.GetActiveSourceCount(), 3);
 
     audio.StopAllSources();
     EXPECT_EQ(audio.GetActiveSourceCount(), 0);
+
+    // All slots should be available again
+    int id = audio.AcquireSource();
+    EXPECT_GE(id, 0);
+
+    audio.Shutdown();
 }
+
+TEST(Audio_ReleaseInvalidSourceID)
+{
+    TestAudio::AudioEngine audio;
+    audio.Initialize(4);
+
+    EXPECT_FALSE(audio.ReleaseSource(-1));
+    EXPECT_FALSE(audio.ReleaseSource(100));
+    EXPECT_EQ(audio.GetActiveSourceCount(), 0);
+
+    audio.Shutdown();
+}
+
+// =============================================================================
+// Tests — Metrics
+// =============================================================================
 
 TEST(Audio_Metrics)
 {
     TestAudio::AudioEngine audio;
+    audio.Initialize(8);
     audio.SetMasterVolume(0.7f);
     audio.RegisterSound("test", 1.0f);
-    audio.SimulatePlaySource();
+    audio.AcquireSource();
 
     auto m = audio.GetMetrics();
     EXPECT_NEAR(m.masterVolume, 0.7f, 0.001f);
     EXPECT_EQ(m.totalSoundsLoaded, 1);
     EXPECT_EQ(m.activeSources, 1);
+
+    audio.Shutdown();
 }

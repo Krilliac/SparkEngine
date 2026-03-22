@@ -6,6 +6,7 @@
  * Split from EditorUI.cpp for maintainability.
  */
 #include "EditorUI.h"
+#include "EditorPluginManager.h"
 #include "EditorIcons.h"
 #include "EditorTheme.h"
 #include "../Panels/HierarchyPanel.h"
@@ -37,15 +38,19 @@ namespace SparkEditor
             RenderFPSToolsMenu();
             RenderBuildMenu();
             RenderHelpMenu();
+
+            // Render plugin-contributed menu bar items
+            if (m_pluginManager)
+            {
+                m_pluginManager->RenderMenuBarItems();
+            }
+
             ImGui::EndMainMenuBar();
         }
     }
 
-    void EditorUI::RenderFileMenu()
+    void EditorUI::RenderFileSceneItems()
     {
-        if (!ImGui::BeginMenu("File"))
-            return;
-
         if (ImGui::MenuItem("New Scene", "Ctrl+N"))
         {
             auto it = m_panels.find("Hierarchy");
@@ -60,6 +65,12 @@ namespace SparkEditor
             m_currentScenePath.clear();
             m_currentSceneName = "Untitled";
             m_sceneModified = false;
+
+            if (m_pluginManager)
+            {
+                m_pluginManager->NotifySceneLoad("Untitled");
+            }
+
             ShowNotification("New scene created", "success");
         }
         if (ImGui::MenuItem("Save Scene", "Ctrl+S"))
@@ -86,7 +97,10 @@ namespace SparkEditor
                 ShowNotification("Open a project first before saving a scene", "warning");
             }
         }
-        ImGui::Separator();
+    }
+
+    void EditorUI::RenderFileProjectItems()
+    {
         if (ImGui::MenuItem("New Project..."))
         {
             ShowNewProjectDialog();
@@ -107,7 +121,6 @@ namespace SparkEditor
             }
         }
 
-        // Recent projects submenu
         if (m_projectManager && !m_projectManager->GetRecentProjects().empty())
         {
             if (ImGui::BeginMenu("Recent Projects"))
@@ -120,13 +133,9 @@ namespace SparkEditor
                     if (ImGui::MenuItem(label.c_str(), nullptr, false, rp.valid))
                     {
                         if (m_projectManager->OpenProject(rp.path))
-                        {
                             ShowNotification("Opened project: " + rp.name, "success");
-                        }
                         else
-                        {
                             ShowNotification("Failed to open project: " + rp.name, "error");
-                        }
                     }
                 }
                 ImGui::Separator();
@@ -137,6 +146,16 @@ namespace SparkEditor
                 ImGui::EndMenu();
             }
         }
+    }
+
+    void EditorUI::RenderFileMenu()
+    {
+        if (!ImGui::BeginMenu("File"))
+            return;
+
+        RenderFileSceneItems();
+        ImGui::Separator();
+        RenderFileProjectItems();
 
         ImGui::Separator();
         if (ImGui::MenuItem("Import Asset"))
@@ -219,59 +238,8 @@ namespace SparkEditor
         ImGui::EndMenu();
     }
 
-    void EditorUI::RenderGameObjectMenu()
+    void EditorUI::RenderGameObject3DSubMenu(const std::function<void(const std::string&)>& createObject)
     {
-        if (!ImGui::BeginMenu("GameObject"))
-            return;
-
-        auto createObject = [this](const std::string& name)
-        {
-            auto it = m_panels.find("Hierarchy");
-            if (it != m_panels.end())
-            {
-                auto* hierarchy = dynamic_cast<HierarchyPanel*>(it->second.get());
-                if (hierarchy)
-                {
-                    hierarchy->CreateObject(name);
-                    m_sceneModified = true;
-                }
-            }
-            ShowNotification("Created " + name, "success", 2.0f);
-        };
-
-        if (ImGui::MenuItem("Create Empty"))
-        {
-            createObject("Empty GameObject");
-        }
-        if (ImGui::MenuItem(ICON_FA_CUBE " Create Prefab from Selection"))
-        {
-            if (m_prefabManager)
-            {
-                m_prefabManager->CreatePrefabFromEntity(0, "New Prefab");
-                ShowNotification("Prefab created from selection!", "success");
-            }
-        }
-        if (ImGui::BeginMenu(ICON_FA_CUBE " Instantiate Prefab"))
-        {
-            if (m_prefabManager)
-            {
-                auto names = m_prefabManager->GetPrefabNames();
-                for (const auto& name : names)
-                {
-                    if (ImGui::MenuItem(name.c_str()))
-                    {
-                        m_prefabManager->InstantiatePrefab(name);
-                        ShowNotification("Instantiated prefab: " + name, "success");
-                    }
-                }
-                if (names.empty())
-                {
-                    ImGui::TextDisabled("No prefabs available");
-                }
-            }
-            ImGui::EndMenu();
-        }
-        ImGui::Separator();
         if (ImGui::BeginMenu("3D Object"))
         {
             if (ImGui::MenuItem("Cube"))
@@ -282,34 +250,6 @@ namespace SparkEditor
                 createObject("Cylinder");
             if (ImGui::MenuItem("Plane"))
                 createObject("Plane");
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("2D Object"))
-        {
-            if (ImGui::MenuItem("Sprite"))
-            {
-                ShowNotification("Created Sprite!", "success");
-            }
-            if (ImGui::MenuItem("Animated Sprite"))
-            {
-                ShowNotification("Created Animated Sprite!", "success");
-            }
-            if (ImGui::MenuItem("Tilemap"))
-            {
-                ShowNotification("Created Tilemap!", "success");
-            }
-            if (ImGui::MenuItem("Camera 2D"))
-            {
-                ShowNotification("Created 2D Camera!", "success");
-            }
-            if (ImGui::MenuItem("Parallax Background"))
-            {
-                ShowNotification("Created Parallax Background!", "success");
-            }
-            if (ImGui::MenuItem("Nine-Slice Sprite"))
-            {
-                ShowNotification("Created Nine-Slice Sprite!", "success");
-            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Light"))
@@ -328,6 +268,30 @@ namespace SparkEditor
                 createObject("Camera");
             ImGui::EndMenu();
         }
+    }
+
+    void EditorUI::RenderGameObject2DSubMenu()
+    {
+        if (!ImGui::BeginMenu("2D Object"))
+            return;
+
+        if (ImGui::MenuItem("Sprite"))
+            ShowNotification("Created Sprite!", "success");
+        if (ImGui::MenuItem("Animated Sprite"))
+            ShowNotification("Created Animated Sprite!", "success");
+        if (ImGui::MenuItem("Tilemap"))
+            ShowNotification("Created Tilemap!", "success");
+        if (ImGui::MenuItem("Camera 2D"))
+            ShowNotification("Created 2D Camera!", "success");
+        if (ImGui::MenuItem("Parallax Background"))
+            ShowNotification("Created Parallax Background!", "success");
+        if (ImGui::MenuItem("Nine-Slice Sprite"))
+            ShowNotification("Created Nine-Slice Sprite!", "success");
+        ImGui::EndMenu();
+    }
+
+    void EditorUI::RenderGameObjectVolumeSubMenu(const std::function<void(const std::string&)>& createObject)
+    {
         if (ImGui::BeginMenu("Volume"))
         {
             if (ImGui::MenuItem("Trigger Volume"))
@@ -368,6 +332,10 @@ namespace SparkEditor
                 createObject("Billboard");
             ImGui::EndMenu();
         }
+    }
+
+    void EditorUI::RenderGameObjectSpecializedSubMenus(const std::function<void(const std::string&)>& createObject)
+    {
         if (ImGui::BeginMenu("Gameplay"))
         {
             if (ImGui::MenuItem("Destructible"))
@@ -426,7 +394,143 @@ namespace SparkEditor
                 createObject("Spring Arm");
             ImGui::EndMenu();
         }
+    }
+
+    void EditorUI::RenderGameObjectMenu()
+    {
+        if (!ImGui::BeginMenu("GameObject"))
+            return;
+
+        auto createObject = [this](const std::string& name)
+        {
+            auto it = m_panels.find("Hierarchy");
+            if (it != m_panels.end())
+            {
+                auto* hierarchy = dynamic_cast<HierarchyPanel*>(it->second.get());
+                if (hierarchy)
+                {
+                    hierarchy->CreateObject(name);
+                    m_sceneModified = true;
+                }
+            }
+            ShowNotification("Created " + name, "success", 2.0f);
+        };
+
+        if (ImGui::MenuItem("Create Empty"))
+        {
+            createObject("Empty GameObject");
+        }
+        if (ImGui::MenuItem(ICON_FA_CUBE " Create Prefab from Selection"))
+        {
+            if (m_prefabManager)
+            {
+                m_prefabManager->CreatePrefabFromEntity(0, "New Prefab");
+                ShowNotification("Prefab created from selection!", "success");
+            }
+        }
+        if (ImGui::BeginMenu(ICON_FA_CUBE " Instantiate Prefab"))
+        {
+            if (m_prefabManager)
+            {
+                auto names = m_prefabManager->GetPrefabNames();
+                for (const auto& name : names)
+                {
+                    if (ImGui::MenuItem(name.c_str()))
+                    {
+                        m_prefabManager->InstantiatePrefab(name);
+                        ShowNotification("Instantiated prefab: " + name, "success");
+                    }
+                }
+                if (names.empty())
+                {
+                    ImGui::TextDisabled("No prefabs available");
+                }
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
+
+        RenderGameObject3DSubMenu(createObject);
+        RenderGameObject2DSubMenu();
+        RenderGameObjectVolumeSubMenu(createObject);
+        RenderGameObjectSpecializedSubMenus(createObject);
+
         ImGui::EndMenu();
+    }
+
+    void EditorUI::RenderWindowCorePanels()
+    {
+        if (ImGui::MenuItem("Hierarchy", nullptr, IsPanelVisible("Hierarchy")))
+            SetPanelVisible("Hierarchy", !IsPanelVisible("Hierarchy"));
+        if (ImGui::MenuItem("Inspector", nullptr, IsPanelVisible("Inspector")))
+            SetPanelVisible("Inspector", !IsPanelVisible("Inspector"));
+        if (ImGui::MenuItem("Scene View", nullptr, IsPanelVisible("SceneView")))
+            SetPanelVisible("SceneView", !IsPanelVisible("SceneView"));
+        if (ImGui::MenuItem("Asset Browser", nullptr, IsPanelVisible("AssetBrowser")))
+            SetPanelVisible("AssetBrowser", !IsPanelVisible("AssetBrowser"));
+        if (ImGui::MenuItem("Console", nullptr, IsPanelVisible("Console")))
+            SetPanelVisible("Console", !IsPanelVisible("Console"));
+        if (ImGui::MenuItem("Game View", nullptr, IsPanelVisible("GameView")))
+            SetPanelVisible("GameView", !IsPanelVisible("GameView"));
+        if (ImGui::MenuItem(ICON_FA_PALETTE " Material Editor", nullptr, IsPanelVisible("MaterialEditor")))
+            SetPanelVisible("MaterialEditor", !IsPanelVisible("MaterialEditor"));
+        if (ImGui::MenuItem(ICON_FA_PLAY " Play Mode Toolbar", nullptr, IsPanelVisible("PlayModeToolbar")))
+            SetPanelVisible("PlayModeToolbar", !IsPanelVisible("PlayModeToolbar"));
+        if (ImGui::MenuItem("Profiler", nullptr, IsPanelVisible("Profiler")))
+            SetPanelVisible("Profiler", !IsPanelVisible("Profiler"));
+    }
+
+    void EditorUI::RenderWindowToolPanels()
+    {
+        ImGui::TextDisabled("Tools & Debug");
+        if (ImGui::MenuItem(ICON_FA_BUG " Debug Visualizer", nullptr, IsPanelVisible("DebugVisualizer")))
+            SetPanelVisible("DebugVisualizer", !IsPanelVisible("DebugVisualizer"));
+        if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Stats", nullptr, IsPanelVisible("SceneStats")))
+            SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
+        if (ImGui::MenuItem(ICON_FA_CUBE " Object Placement", nullptr, IsPanelVisible("ObjectPlacement")))
+            SetPanelVisible("ObjectPlacement", !IsPanelVisible("ObjectPlacement"));
+        if (ImGui::MenuItem(ICON_FA_HAMMER " Build & Cook", nullptr, IsPanelVisible("BuildCook")))
+            SetPanelVisible("BuildCook", !IsPanelVisible("BuildCook"));
+        if (ImGui::MenuItem(ICON_FA_MOUNTAIN " Terrain Editor", nullptr, IsPanelVisible("TerrainEditor")))
+            SetPanelVisible("TerrainEditor", !IsPanelVisible("TerrainEditor"));
+
+        ImGui::TextDisabled("Tools & Analysis");
+        if (ImGui::MenuItem(ICON_FA_UNDO " Undo History", nullptr, IsPanelVisible("UndoHistory")))
+            SetPanelVisible("UndoHistory", !IsPanelVisible("UndoHistory"));
+        if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Statistics", nullptr, IsPanelVisible("SceneStats")))
+            SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
+        if (ImGui::MenuItem(ICON_FA_CUBE " Prefab Editor", nullptr, IsPanelVisible("PrefabEditor")))
+            SetPanelVisible("PrefabEditor", !IsPanelVisible("PrefabEditor"));
+        if (ImGui::MenuItem(ICON_FA_SEARCH " Search", nullptr, IsPanelVisible("Search")))
+            SetPanelVisible("Search", !IsPanelVisible("Search"));
+    }
+
+    void EditorUI::RenderWindow2DAndGamePanels()
+    {
+        ImGui::TextDisabled("2D / 2.5D Panels");
+        if (ImGui::MenuItem("Sprite Editor", nullptr, IsPanelVisible("SpriteEditor")))
+            SetPanelVisible("SpriteEditor", !IsPanelVisible("SpriteEditor"));
+        if (ImGui::MenuItem("Tilemap Editor", nullptr, IsPanelVisible("TilemapEditor")))
+            SetPanelVisible("TilemapEditor", !IsPanelVisible("TilemapEditor"));
+        if (ImGui::MenuItem("Sprite Animation", nullptr, IsPanelVisible("SpriteAnimEditor")))
+            SetPanelVisible("SpriteAnimEditor", !IsPanelVisible("SpriteAnimEditor"));
+        if (ImGui::MenuItem("Physics 2D", nullptr, IsPanelVisible("Physics2D")))
+            SetPanelVisible("Physics2D", !IsPanelVisible("Physics2D"));
+        if (ImGui::MenuItem("Physics 3D", nullptr, IsPanelVisible("Physics3D")))
+            SetPanelVisible("Physics3D", !IsPanelVisible("Physics3D"));
+
+        ImGui::Separator();
+        ImGui::TextDisabled("Game Modules");
+        if (ImGui::MenuItem(ICON_FA_PUZZLE_PIECE " Game Module Selector", nullptr,
+                            IsPanelVisible("GameModuleSelector")))
+            SetPanelVisible("GameModuleSelector", !IsPanelVisible("GameModuleSelector"));
+
+        ImGui::Separator();
+        ImGui::TextDisabled("FPS Panels");
+        if (ImGui::MenuItem("Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
+            SetPanelVisible("WeaponEditor", !IsPanelVisible("WeaponEditor"));
+        if (ImGui::MenuItem("FPS Tools", nullptr, IsPanelVisible("FPSTools")))
+            SetPanelVisible("FPSTools", !IsPanelVisible("FPSTools"));
     }
 
     void EditorUI::RenderWindowMenu()
@@ -434,120 +538,12 @@ namespace SparkEditor
         if (!ImGui::BeginMenu("Window"))
             return;
 
-        if (ImGui::MenuItem("Hierarchy", nullptr, IsPanelVisible("Hierarchy")))
-        {
-            SetPanelVisible("Hierarchy", !IsPanelVisible("Hierarchy"));
-        }
-        if (ImGui::MenuItem("Inspector", nullptr, IsPanelVisible("Inspector")))
-        {
-            SetPanelVisible("Inspector", !IsPanelVisible("Inspector"));
-        }
-        if (ImGui::MenuItem("Scene View", nullptr, IsPanelVisible("SceneView")))
-        {
-            SetPanelVisible("SceneView", !IsPanelVisible("SceneView"));
-        }
-        if (ImGui::MenuItem("Asset Browser", nullptr, IsPanelVisible("AssetBrowser")))
-        {
-            SetPanelVisible("AssetBrowser", !IsPanelVisible("AssetBrowser"));
-        }
-        if (ImGui::MenuItem("Console", nullptr, IsPanelVisible("Console")))
-        {
-            SetPanelVisible("Console", !IsPanelVisible("Console"));
-        }
-        if (ImGui::MenuItem("Game View", nullptr, IsPanelVisible("GameView")))
-        {
-            SetPanelVisible("GameView", !IsPanelVisible("GameView"));
-        }
-        if (ImGui::MenuItem(ICON_FA_PALETTE " Material Editor", nullptr, IsPanelVisible("MaterialEditor")))
-        {
-            SetPanelVisible("MaterialEditor", !IsPanelVisible("MaterialEditor"));
-        }
-        if (ImGui::MenuItem(ICON_FA_PLAY " Play Mode Toolbar", nullptr, IsPanelVisible("PlayModeToolbar")))
-        {
-            SetPanelVisible("PlayModeToolbar", !IsPanelVisible("PlayModeToolbar"));
-        }
-        if (ImGui::MenuItem("Profiler", nullptr, IsPanelVisible("Profiler")))
-        {
-            SetPanelVisible("Profiler", !IsPanelVisible("Profiler"));
-        }
+        RenderWindowCorePanels();
         ImGui::Separator();
-        ImGui::TextDisabled("Tools & Debug");
-        if (ImGui::MenuItem(ICON_FA_BUG " Debug Visualizer", nullptr, IsPanelVisible("DebugVisualizer")))
-        {
-            SetPanelVisible("DebugVisualizer", !IsPanelVisible("DebugVisualizer"));
-        }
-        if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Stats", nullptr, IsPanelVisible("SceneStats")))
-        {
-            SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
-        }
-        if (ImGui::MenuItem(ICON_FA_CUBE " Object Placement", nullptr, IsPanelVisible("ObjectPlacement")))
-        {
-            SetPanelVisible("ObjectPlacement", !IsPanelVisible("ObjectPlacement"));
-        }
-        if (ImGui::MenuItem(ICON_FA_HAMMER " Build & Cook", nullptr, IsPanelVisible("BuildCook")))
-        {
-            SetPanelVisible("BuildCook", !IsPanelVisible("BuildCook"));
-        }
-        if (ImGui::MenuItem(ICON_FA_MOUNTAIN " Terrain Editor", nullptr, IsPanelVisible("TerrainEditor")))
-        {
-            SetPanelVisible("TerrainEditor", !IsPanelVisible("TerrainEditor"));
-        }
-        ImGui::TextDisabled("Tools & Analysis");
-        if (ImGui::MenuItem(ICON_FA_UNDO " Undo History", nullptr, IsPanelVisible("UndoHistory")))
-        {
-            SetPanelVisible("UndoHistory", !IsPanelVisible("UndoHistory"));
-        }
-        if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Statistics", nullptr, IsPanelVisible("SceneStats")))
-        {
-            SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
-        }
-        if (ImGui::MenuItem(ICON_FA_CUBE " Prefab Editor", nullptr, IsPanelVisible("PrefabEditor")))
-        {
-            SetPanelVisible("PrefabEditor", !IsPanelVisible("PrefabEditor"));
-        }
-        if (ImGui::MenuItem(ICON_FA_SEARCH " Search", nullptr, IsPanelVisible("Search")))
-        {
-            SetPanelVisible("Search", !IsPanelVisible("Search"));
-        }
+        RenderWindowToolPanels();
         ImGui::Separator();
-        ImGui::TextDisabled("2D / 2.5D Panels");
-        if (ImGui::MenuItem("Sprite Editor", nullptr, IsPanelVisible("SpriteEditor")))
-        {
-            SetPanelVisible("SpriteEditor", !IsPanelVisible("SpriteEditor"));
-        }
-        if (ImGui::MenuItem("Tilemap Editor", nullptr, IsPanelVisible("TilemapEditor")))
-        {
-            SetPanelVisible("TilemapEditor", !IsPanelVisible("TilemapEditor"));
-        }
-        if (ImGui::MenuItem("Sprite Animation", nullptr, IsPanelVisible("SpriteAnimEditor")))
-        {
-            SetPanelVisible("SpriteAnimEditor", !IsPanelVisible("SpriteAnimEditor"));
-        }
-        if (ImGui::MenuItem("Physics 2D", nullptr, IsPanelVisible("Physics2D")))
-        {
-            SetPanelVisible("Physics2D", !IsPanelVisible("Physics2D"));
-        }
-        if (ImGui::MenuItem("Physics 3D", nullptr, IsPanelVisible("Physics3D")))
-        {
-            SetPanelVisible("Physics3D", !IsPanelVisible("Physics3D"));
-        }
-        ImGui::Separator();
-        ImGui::TextDisabled("Game Modules");
-        if (ImGui::MenuItem(ICON_FA_PUZZLE_PIECE " Game Module Selector", nullptr,
-                            IsPanelVisible("GameModuleSelector")))
-        {
-            SetPanelVisible("GameModuleSelector", !IsPanelVisible("GameModuleSelector"));
-        }
-        ImGui::Separator();
-        ImGui::TextDisabled("FPS Panels");
-        if (ImGui::MenuItem("Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
-        {
-            SetPanelVisible("WeaponEditor", !IsPanelVisible("WeaponEditor"));
-        }
-        if (ImGui::MenuItem("FPS Tools", nullptr, IsPanelVisible("FPSTools")))
-        {
-            SetPanelVisible("FPSTools", !IsPanelVisible("FPSTools"));
-        }
+        RenderWindow2DAndGamePanels();
+
         ImGui::Separator();
         if (ImGui::MenuItem("Reset Layout"))
         {
@@ -692,6 +688,170 @@ namespace SparkEditor
         ImGui::EndMenu();
     }
 
+    void EditorUI::RenderToolbarTransformTools(float btnSize, ImDrawList* dl, const ImVec4& accentTeal,
+                                               const ImVec4& pillBg)
+    {
+        ImVec2 btnDim(btnSize, btnSize);
+
+        auto ToolButton = [&](const char* icon, TransformTool tool, const char* tooltip)
+        {
+            bool active = (m_currentTool == tool);
+            if (active)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, accentTeal);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                      ImVec4(accentTeal.x * 1.1f, accentTeal.y * 1.1f, accentTeal.z * 1.1f, 1.0f));
+            }
+            else
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                      ImVec4(pillBg.x + 0.06f, pillBg.y + 0.06f, pillBg.z + 0.06f, 1.0f));
+            }
+            if (ImGui::Button(icon, btnDim))
+                m_currentTool = tool;
+            ImGui::PopStyleColor(2);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", tooltip);
+            ImGui::SameLine();
+        };
+
+        ToolButton(ICON_FA_ARROWS_ALT, TransformTool::Move, "Move (W)");
+        ToolButton(ICON_FA_SYNC_ALT, TransformTool::Rotate, "Rotate (E)");
+        ToolButton(ICON_FA_EXPAND, TransformTool::Scale, "Scale (R)");
+
+        {
+            ImGui::SameLine(0, 8);
+            ImVec2 sepPos = ImGui::GetCursorScreenPos();
+            dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
+            ImGui::Dummy(ImVec2(2, btnSize));
+            ImGui::SameLine(0, 8);
+        }
+
+        bool isLocal = (m_transformSpace == TransformSpace::Local);
+        ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              ImVec4(pillBg.x + 0.06f, pillBg.y + 0.06f, pillBg.z + 0.06f, 1.0f));
+        if (ImGui::Button(isLocal ? ICON_FA_CUBE " Local" : ICON_FA_GLOBE " World", ImVec2(80, btnSize)))
+        {
+            m_transformSpace = isLocal ? TransformSpace::World : TransformSpace::Local;
+        }
+        ImGui::PopStyleColor(2);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Toggle World/Local space");
+
+        ImGui::SameLine(0, 8);
+
+        {
+            ImVec2 sepPos = ImGui::GetCursorScreenPos();
+            dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
+            ImGui::Dummy(ImVec2(2, btnSize));
+            ImGui::SameLine(0, 8);
+        }
+    }
+
+    void EditorUI::RenderToolbarPlayControls(float btnSize, ImDrawList* dl, const ImVec4& playGreen,
+                                             const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg)
+    {
+        ImVec2 btnDim(btnSize, btnSize);
+
+        float windowWidth = ImGui::GetWindowContentRegionMax().x;
+        float playWidth = btnSize * 3 + 12;
+        float cursorX = (windowWidth - playWidth) * 0.5f;
+        if (cursorX > ImGui::GetCursorPosX())
+            ImGui::SetCursorPosX(cursorX);
+
+        bool isPlaying = (m_playMode == PlayMode::Playing);
+        if (isPlaying)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, playGreen);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(playGreen.x, playGreen.y, playGreen.z, 0.85f));
+        }
+        else
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                  ImVec4(playGreen.x * 0.4f, playGreen.y * 0.4f, playGreen.z * 0.4f, 1.0f));
+        }
+        if (ImGui::Button(ICON_FA_PLAY, btnDim))
+        {
+            m_playModeManager.TogglePlayMode();
+            m_playMode = m_playModeManager.IsInPlayMode() ? PlayMode::Playing : PlayMode::Stopped;
+            ShowNotification(m_playModeManager.IsInPlayMode() ? "Playing..." : "Stopped",
+                             m_playModeManager.IsInPlayMode() ? "success" : "info", 2.0f);
+        }
+        ImGui::PopStyleColor(2);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Play (F5)");
+        ImGui::SameLine();
+
+        bool isPaused = (m_playMode == PlayMode::Paused);
+        if (isPaused)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, accentAmber);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accentAmber.x, accentAmber.y, accentAmber.z, 0.85f));
+        }
+        else
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                  ImVec4(accentAmber.x * 0.3f, accentAmber.y * 0.3f, accentAmber.z * 0.3f, 1.0f));
+        }
+        if (ImGui::Button(ICON_FA_PAUSE, btnDim))
+        {
+            m_playModeManager.TogglePause();
+            if (m_playModeManager.IsPaused())
+                m_playMode = PlayMode::Paused;
+            else if (m_playModeManager.IsInPlayMode())
+                m_playMode = PlayMode::Playing;
+        }
+        ImGui::PopStyleColor(2);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Pause");
+        ImGui::SameLine();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              ImVec4(stopRed.x * 0.3f, stopRed.y * 0.3f, stopRed.z * 0.3f, 1.0f));
+        if (ImGui::Button(ICON_FA_STOP, btnDim))
+        {
+            if (m_playMode != PlayMode::Stopped)
+            {
+                m_playModeManager.ExitPlayMode();
+                m_playMode = PlayMode::Stopped;
+                ShowNotification("Stopped", "info", 2.0f);
+            }
+        }
+        ImGui::PopStyleColor(2);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Stop (Shift+F5)");
+
+        ImGui::SameLine(0, 8);
+
+        {
+            ImVec2 sepPos = ImGui::GetCursorScreenPos();
+            dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
+            ImGui::Dummy(ImVec2(2, btnSize));
+            ImGui::SameLine(0, 8);
+        }
+    }
+
+    void EditorUI::RenderToolbarSnapControls(float btnSize, const ImVec4& pillBg)
+    {
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(pillBg.x, pillBg.y, pillBg.z, 1.0f));
+        ImGui::Checkbox(ICON_FA_MAGNET " Snap", &m_snapEnabled);
+        ImGui::PopStyleColor();
+        if (m_snapEnabled)
+        {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(60);
+            ImGui::DragFloat("##SnapVal", &m_snapValue, 0.1f, 0.1f, 100.0f, "%.1f");
+        }
+    }
+
     void EditorUI::RenderToolbar()
     {
         ImGuiWindowFlags toolbarFlags =
@@ -704,176 +864,17 @@ namespace SparkEditor
         if (ImGui::Begin("##Toolbar", nullptr, toolbarFlags))
         {
             float btnSize = 30.0f;
-            ImVec2 btnDim(btnSize, btnSize);
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
-            // Accent palette (matches redesigned Spark Professional theme)
-            ImVec4 accentTeal(0.102f, 0.686f, 0.737f, 1.0f);  // #1AAFBC
-            ImVec4 accentAmber(0.941f, 0.659f, 0.188f, 1.0f); // #F0A830
-            ImVec4 playGreen(0.239f, 0.839f, 0.549f, 1.0f);   // #3DD68C
-            ImVec4 stopRed(0.910f, 0.251f, 0.251f, 1.0f);     // #E84040
-            ImVec4 pillBg(0.157f, 0.173f, 0.212f, 1.0f);      // #282C36
+            ImVec4 accentTeal(0.102f, 0.686f, 0.737f, 1.0f);
+            ImVec4 accentAmber(0.941f, 0.659f, 0.188f, 1.0f);
+            ImVec4 playGreen(0.239f, 0.839f, 0.549f, 1.0f);
+            ImVec4 stopRed(0.910f, 0.251f, 0.251f, 1.0f);
+            ImVec4 pillBg(0.157f, 0.173f, 0.212f, 1.0f);
 
-            // === Transform Tools (grouped in a pill-shaped region) ===
-            auto ToolButton = [&](const char* icon, TransformTool tool, const char* tooltip)
-            {
-                bool active = (m_currentTool == tool);
-                if (active)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Button, accentTeal);
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                          ImVec4(accentTeal.x * 1.1f, accentTeal.y * 1.1f, accentTeal.z * 1.1f, 1.0f));
-                }
-                else
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                          ImVec4(pillBg.x + 0.06f, pillBg.y + 0.06f, pillBg.z + 0.06f, 1.0f));
-                }
-                if (ImGui::Button(icon, btnDim))
-                    m_currentTool = tool;
-                ImGui::PopStyleColor(2);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("%s", tooltip);
-                ImGui::SameLine();
-            };
-
-            ToolButton(ICON_FA_ARROWS_ALT, TransformTool::Move, "Move (W)");
-            ToolButton(ICON_FA_SYNC_ALT, TransformTool::Rotate, "Rotate (E)");
-            ToolButton(ICON_FA_EXPAND, TransformTool::Scale, "Scale (R)");
-
-            // Subtle vertical separator with accent glow
-            {
-                ImGui::SameLine(0, 8);
-                ImVec2 sepPos = ImGui::GetCursorScreenPos();
-                float sepH = btnSize;
-                dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + sepH - 2),
-                            ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
-                ImGui::Dummy(ImVec2(2, btnSize));
-                ImGui::SameLine(0, 8);
-            }
-
-            // === Space Toggle (pill button) ===
-            bool isLocal = (m_transformSpace == TransformSpace::Local);
-            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                  ImVec4(pillBg.x + 0.06f, pillBg.y + 0.06f, pillBg.z + 0.06f, 1.0f));
-            if (ImGui::Button(isLocal ? ICON_FA_CUBE " Local" : ICON_FA_GLOBE " World", ImVec2(80, btnSize)))
-            {
-                m_transformSpace = isLocal ? TransformSpace::World : TransformSpace::Local;
-            }
-            ImGui::PopStyleColor(2);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Toggle World/Local space");
-
-            ImGui::SameLine(0, 8);
-
-            // Separator
-            {
-                ImVec2 sepPos = ImGui::GetCursorScreenPos();
-                dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
-                            ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
-                ImGui::Dummy(ImVec2(2, btnSize));
-                ImGui::SameLine(0, 8);
-            }
-
-            // === Play Controls (centered) ===
-            float windowWidth = ImGui::GetWindowContentRegionMax().x;
-            float playWidth = btnSize * 3 + 12;
-            float cursorX = (windowWidth - playWidth) * 0.5f;
-            if (cursorX > ImGui::GetCursorPosX())
-                ImGui::SetCursorPosX(cursorX);
-
-            // Play
-            bool isPlaying = (m_playMode == PlayMode::Playing);
-            if (isPlaying)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, playGreen);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(playGreen.x, playGreen.y, playGreen.z, 0.85f));
-            }
-            else
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      ImVec4(playGreen.x * 0.4f, playGreen.y * 0.4f, playGreen.z * 0.4f, 1.0f));
-            }
-            if (ImGui::Button(ICON_FA_PLAY, btnDim))
-            {
-                m_playModeManager.TogglePlayMode();
-                m_playMode = m_playModeManager.IsInPlayMode() ? PlayMode::Playing : PlayMode::Stopped;
-                ShowNotification(m_playModeManager.IsInPlayMode() ? "Playing..." : "Stopped",
-                                 m_playModeManager.IsInPlayMode() ? "success" : "info", 2.0f);
-            }
-            ImGui::PopStyleColor(2);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Play (F5)");
-            ImGui::SameLine();
-
-            // Pause
-            bool isPaused = (m_playMode == PlayMode::Paused);
-            if (isPaused)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, accentAmber);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      ImVec4(accentAmber.x, accentAmber.y, accentAmber.z, 0.85f));
-            }
-            else
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      ImVec4(accentAmber.x * 0.3f, accentAmber.y * 0.3f, accentAmber.z * 0.3f, 1.0f));
-            }
-            if (ImGui::Button(ICON_FA_PAUSE, btnDim))
-            {
-                m_playModeManager.TogglePause();
-                if (m_playModeManager.IsPaused())
-                    m_playMode = PlayMode::Paused;
-                else if (m_playModeManager.IsInPlayMode())
-                    m_playMode = PlayMode::Playing;
-            }
-            ImGui::PopStyleColor(2);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Pause");
-            ImGui::SameLine();
-
-            // Stop
-            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                  ImVec4(stopRed.x * 0.3f, stopRed.y * 0.3f, stopRed.z * 0.3f, 1.0f));
-            if (ImGui::Button(ICON_FA_STOP, btnDim))
-            {
-                if (m_playMode != PlayMode::Stopped)
-                {
-                    m_playModeManager.ExitPlayMode();
-                    m_playMode = PlayMode::Stopped;
-                    ShowNotification("Stopped", "info", 2.0f);
-                }
-            }
-            ImGui::PopStyleColor(2);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Stop (Shift+F5)");
-
-            ImGui::SameLine(0, 8);
-
-            // Separator
-            {
-                ImVec2 sepPos = ImGui::GetCursorScreenPos();
-                dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
-                            ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
-                ImGui::Dummy(ImVec2(2, btnSize));
-                ImGui::SameLine(0, 8);
-            }
-
-            // === Snap Controls (right section) ===
-            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(pillBg.x, pillBg.y, pillBg.z, 1.0f));
-            ImGui::Checkbox(ICON_FA_MAGNET " Snap", &m_snapEnabled);
-            ImGui::PopStyleColor();
-            if (m_snapEnabled)
-            {
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(60);
-                ImGui::DragFloat("##SnapVal", &m_snapValue, 0.1f, 0.1f, 100.0f, "%.1f");
-            }
+            RenderToolbarTransformTools(btnSize, dl, accentTeal, pillBg);
+            RenderToolbarPlayControls(btnSize, dl, playGreen, accentAmber, stopRed, pillBg);
+            RenderToolbarSnapControls(btnSize, pillBg);
         }
         ImGui::End();
         ImGui::PopStyleVar(3);

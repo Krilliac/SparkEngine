@@ -44,7 +44,7 @@ Standardized prompts for AI-assisted development with SparkEngine. Compatible wi
 The prompt library covers SparkEngine's full stack:
 
 - **Rendering**: DirectX 11 pipeline with PBR, deferred/forward+, post-processing (bloom, tone mapping, FXAA), IBL, shadow mapping (PCF/VSM/CSM), particles, decals
-- **Physics**: Bullet Physics with rigid bodies, constraints, raycasting, collision callbacks
+- **Physics**: Jolt Physics with rigid bodies, constraints, raycasting, collision callbacks, character controller, vehicles, ragdoll
 - **Audio**: XAudio2 3D spatial audio with object pooling
 - **ECS**: EnTT-based entity component system
 - **Editor**: ImGui with docking, gizmos (ImGuizmo), node graphs (imnodes)

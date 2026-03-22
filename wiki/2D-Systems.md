@@ -1,6 +1,6 @@
 # 2D Systems
 
-SparkEngine includes a self-contained 2D subsystem comprising a rigid-body physics world (`Spark::Physics2D`) and a batched sprite renderer (`Spark::Graphics2D`). These systems are designed to operate independently of the 3D Bullet Physics pipeline, making them suitable for pure 2D games, UI overlays, mini-maps, and hybrid 2D/3D scenes. Both subsystems integrate with the EnTT-based Entity Component System and expose dedicated editor panels in SparkEditor.
+SparkEngine includes a self-contained 2D subsystem comprising a rigid-body physics world (`Spark::Physics2D`) and a batched sprite renderer (`Spark::Graphics2D`). These systems are designed to operate independently of the 3D Jolt Physics pipeline, making them suitable for pure 2D games, UI overlays, mini-maps, and hybrid 2D/3D scenes. Both subsystems integrate with the EnTT-based Entity Component System and expose dedicated editor panels in SparkEditor.
 
 ---
 
@@ -692,7 +692,7 @@ If you need to perform physics queries from a background thread (e.g., AI pathfi
 
 ## See Also
 
-- [Physics](Physics) -- 3D Bullet Physics integration and the `PhysicsSystem` ECS system
+- [Physics](Physics) -- 3D Jolt Physics integration and the `PhysicsSystem` ECS system
 - [Rendering and Graphics](Rendering-and-Graphics) -- DX11 graphics engine, shader pipeline, and 3D rendering
 - [Entity Component System](Entity-Component-System) -- EnTT-based ECS architecture, component registration, and system execution order
 - [SparkEditor](SparkEditor) -- Editor panel architecture and the 22 subsystem panels

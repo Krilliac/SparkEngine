@@ -83,7 +83,7 @@ struct SceneMetadata
 };
 ```
 
-The ambient light fields control the global ambient pass in the renderer. The gravity fields are forwarded to the Bullet physics world on scene load.
+The ambient light fields control the global ambient pass in the renderer. The gravity fields are forwarded to the Jolt physics world on scene load.
 
 ## SceneNode
 
@@ -463,7 +463,7 @@ Scene nodes are converted to ECS entities during `InstantiateNodes()`. Each node
 
 ### Physics Integration
 
-- Gravity settings from `SceneMetadata` are applied to the Bullet physics world
+- Gravity settings from `SceneMetadata` are applied to the Jolt physics world
 - Trigger nodes create `ColliderComponent` with `isTrigger = true`
 - Nodes with physics properties create `RigidBodyComponent`
 

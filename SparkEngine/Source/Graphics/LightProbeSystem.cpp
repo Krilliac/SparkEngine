@@ -1,14 +1,44 @@
 /**
  * @file LightProbeSystem.cpp
- * @brief Light probe management with SH interpolation
+ * @brief Light probe management with SH interpolation and GPU data packing
  */
 
 #include "LightProbeSystem.h"
+
 #include <algorithm>
 #include <cmath>
 
 namespace Spark::Graphics
 {
+
+    // =========================================================================
+    // SH Basis Evaluation (L2 = 9 coefficients)
+    // =========================================================================
+
+    /// @brief SH basis constants (Ramamoorthi & Hanrahan 2001)
+    static constexpr float SH_C0 = 0.282095f;   // 1 / (2 * sqrt(pi))
+    static constexpr float SH_C1 = 0.488603f;   // sqrt(3) / (2 * sqrt(pi))
+    static constexpr float SH_C2_0 = 1.092548f; // sqrt(15) / (2 * sqrt(pi))
+    static constexpr float SH_C2_1 = 0.315392f; // sqrt(5) / (4 * sqrt(pi))
+    static constexpr float SH_C2_2 = 0.546274f; // sqrt(15) / (4 * sqrt(pi))
+
+    /// @brief Evaluate L2 SH basis for direction (nx, ny, nz)
+    static void EvaluateSHBasis(float nx, float ny, float nz, float out[9])
+    {
+        out[0] = SH_C0;
+        out[1] = SH_C1 * ny;
+        out[2] = SH_C1 * nz;
+        out[3] = SH_C1 * nx;
+        out[4] = SH_C2_0 * nx * ny;
+        out[5] = SH_C2_0 * ny * nz;
+        out[6] = SH_C2_1 * (3.0f * nz * nz - 1.0f);
+        out[7] = SH_C2_0 * nx * nz;
+        out[8] = SH_C2_2 * (nx * nx - ny * ny);
+    }
+
+    // =========================================================================
+    // SphericalHarmonics struct methods
+    // =========================================================================
 
     SphericalHarmonics SphericalHarmonics::Lerp(const SphericalHarmonics& a, const SphericalHarmonics& b, float t)
     {
@@ -42,6 +72,10 @@ namespace Spark::Graphics
         }
     }
 
+    // =========================================================================
+    // Utility
+    // =========================================================================
+
     static float Distance(const Float3& a, const Float3& b)
     {
         float dx = a.x - b.x;
@@ -49,6 +83,10 @@ namespace Spark::Graphics
         float dz = a.z - b.z;
         return std::sqrt(dx * dx + dy * dy + dz * dz);
     }
+
+    // =========================================================================
+    // LightProbeSystem
+    // =========================================================================
 
     bool LightProbeSystem::Initialize()
     {
@@ -128,20 +166,80 @@ namespace Spark::Graphics
 
     void LightProbeSystem::BakeProbe(uint32_t probeId)
     {
+        // Default sky/ground bake: blue sky, brown ground, sun from upper-right
+        Float3 skyColor{0.4f, 0.6f, 0.9f};
+        Float3 groundColor{0.15f, 0.12f, 0.08f};
+        Float3 sunDir{0.5f, 0.707f, 0.5f}; // Normalized ~45 degrees
+        Float3 sunColor{1.2f, 1.1f, 0.9f};
+        BakeProbe(probeId, skyColor, groundColor, sunDir, sunColor);
+    }
+
+    void LightProbeSystem::BakeProbe(uint32_t probeId, const Float3& skyColor, const Float3& groundColor,
+                                     const Float3& sunDir, const Float3& sunColor)
+    {
         auto it = m_probes.find(probeId);
         if (it == m_probes.end())
             return;
 
-        // Stub: set ambient-only SH (L0 band = uniform white light)
-        it->second.sh = SphericalHarmonics{};
-        it->second.sh.coefficients[0] = {0.5f, 0.5f, 0.5f};
+        SphericalHarmonics& sh = it->second.sh;
+        sh = SphericalHarmonics{};
+
+        // Generate SH by sampling a hemisphere-split sky/ground + directional sun.
+        // Use spherical Fibonacci for quasi-uniform sampling over the sphere.
+        static constexpr int SAMPLE_COUNT = 64;
+        static constexpr float GOLDEN_RATIO = 1.6180339887498948f;
+        static constexpr float PI = 3.14159265f;
+        static constexpr float FOUR_PI = 4.0f * PI;
+
+        for (int i = 0; i < SAMPLE_COUNT; ++i)
+        {
+            float theta = 2.0f * PI * i / GOLDEN_RATIO;
+            float phi = std::acos(1.0f - 2.0f * (i + 0.5f) / SAMPLE_COUNT);
+            float sinPhi = std::sin(phi);
+            float nx = std::cos(theta) * sinPhi;
+            float ny = std::cos(phi);
+            float nz = std::sin(theta) * sinPhi;
+
+            // Sky/ground gradient based on Y direction
+            float skyFactor = std::clamp(ny * 0.5f + 0.5f, 0.0f, 1.0f);
+            float r = groundColor.x + (skyColor.x - groundColor.x) * skyFactor;
+            float g = groundColor.y + (skyColor.y - groundColor.y) * skyFactor;
+            float b = groundColor.z + (skyColor.z - groundColor.z) * skyFactor;
+
+            // Add directional sun contribution
+            float sunDot = std::max(0.0f, nx * sunDir.x + ny * sunDir.y + nz * sunDir.z);
+            // Narrow sun disk approximation: pow(dot, 16)
+            float sunTerm = sunDot * sunDot; // ^2
+            sunTerm *= sunTerm;              // ^4
+            sunTerm *= sunTerm;              // ^8
+            sunTerm *= sunTerm;              // ^16
+            r += sunColor.x * sunTerm;
+            g += sunColor.y * sunTerm;
+            b += sunColor.z * sunTerm;
+
+            // Evaluate SH basis and accumulate
+            float basis[9];
+            EvaluateSHBasis(nx, ny, nz, basis);
+
+            float weight = FOUR_PI / SAMPLE_COUNT;
+            for (int c = 0; c < 9; ++c)
+            {
+                float bw = basis[c] * weight;
+                sh.coefficients[c].x += r * bw;
+                sh.coefficients[c].y += g * bw;
+                sh.coefficients[c].z += b * bw;
+            }
+        }
+
         it->second.baked = true;
     }
 
     void LightProbeSystem::BakeAllProbes()
     {
         for (auto& [id, probe] : m_probes)
+        {
             BakeProbe(id);
+        }
     }
 
     uint32_t LightProbeSystem::GetProbeCount() const
@@ -149,12 +247,39 @@ namespace Spark::Graphics
         return static_cast<uint32_t>(m_probes.size());
     }
 
+    void LightProbeSystem::PackProbeDataForGPU(std::vector<ProbeGPUData>& outData) const
+    {
+        outData.clear();
+        outData.reserve(m_probes.size());
+
+        for (const auto& [id, probe] : m_probes)
+        {
+            ProbeGPUData gpu{};
+
+            for (int c = 0; c < 9; ++c)
+            {
+                gpu.shR[c] = probe.sh.coefficients[c].x;
+                gpu.shG[c] = probe.sh.coefficients[c].y;
+                gpu.shB[c] = probe.sh.coefficients[c].z;
+            }
+
+            gpu.posX = probe.position.x;
+            gpu.posY = probe.position.y;
+            gpu.posZ = probe.position.z;
+            gpu.radius = probe.influenceRadius;
+
+            outData.push_back(gpu);
+        }
+    }
+
     std::string LightProbeSystem::Console_GetStatus() const
     {
         uint32_t bakedCount = 0;
         for (const auto& [id, probe] : m_probes)
+        {
             if (probe.baked)
                 bakedCount++;
+        }
 
         std::string status = "LightProbeSystem:\n";
         status += "  Total: " + std::to_string(m_probes.size()) + "\n";

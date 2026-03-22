@@ -210,7 +210,7 @@ ctx->ShutdownAll();
 │   RENDERING      │    PHYSICS       │      AUDIO       │
 │                  │                  │                  │
 │ GraphicsEngine   │ PhysicsSystem    │ AudioEngine      │
-│ RHI (DX11,      │ Bullet3 World    │ XAudio2 / mini   │
+│ RHI (DX11,      │ Jolt Physics     │ XAudio2 / mini   │
 │   Vulkan, GL)   │ Collision        │ 3D Spatial       │
 │ PBR Materials   │ Raycasting       │ Object Pool      │
 │ Post-Processing │ Rigid Bodies     │ Doppler          │
@@ -243,7 +243,7 @@ ctx->ShutdownAll();
 | Subsystem | Key Class | Description |
 |-----------|-----------|-------------|
 | **Rendering** | `GraphicsEngine` | DX11 primary, Vulkan/GL stubs; PBR materials, shadow maps, post-processing pipeline |
-| **Physics** | `PhysicsSystem` | Bullet Physics 3 wrapper; rigid bodies, collision detection, raycasting, trigger volumes |
+| **Physics** | `PhysicsSystem` | Jolt Physics wrapper; rigid bodies, collision detection, raycasting, trigger volumes |
 | **Audio** | `AudioEngine` | XAudio2 on Windows, miniaudio fallback; 3D spatial audio, object pool, Doppler |
 | **ECS** | `World`, `SystemManager` | EnTT-backed entity registry; POD components, ordered system execution |
 | **Scene** | `SceneManager` | JSON scene files, hierarchy management, prefabs, async loading |
@@ -268,7 +268,7 @@ Frame Start
     │
     ├── 1. Input        — InputManager::Update() captures keyboard/mouse/gamepad
     ├── 2. Scripts       — AngelScriptEngine calls Update() on entity scripts
-    ├── 3. Physics       — PhysicsUpdateSystem steps Bullet simulation (fixed timestep)
+    ├── 3. Physics       — PhysicsUpdateSystem steps Jolt simulation (fixed timestep)
     ├── 4. Animation     — AnimationUpdateSystem evaluates state machines, IK
     ├── 5. AI            — AIUpdateSystem ticks behavior trees, pathfinding
     ├── 6. Particles     — ParticleUpdateSystem spawns and simulates particles
@@ -337,7 +337,7 @@ SparkEngine/
 │       │   ├── WaterSystem.h
 │       │   └── WeatherSystem.h
 │       ├── Input/            # Keyboard, mouse, gamepad
-│       ├── Physics/          # Bullet Physics integration
+│       ├── Physics/          # Jolt Physics integration
 │       ├── SceneManager/     # Scene hierarchy, serialization
 │       └── Utils/            # Logging, profiler, crash handler, JobSystem
 ├── SparkEditor/              # ImGui-based visual editor (Windows only)
@@ -376,7 +376,7 @@ SparkEngine/
 | Subsystem | Thread Safety | Notes |
 |-----------|--------------|-------|
 | `SimpleConsole` | Thread-safe | Mutex-protected command buffer |
-| `PhysicsSystem` | Main thread only | Bullet world must be accessed from one thread |
+| `PhysicsSystem` | Main thread only | Jolt Physics; supports multithreaded job dispatch |
 | `GraphicsEngine` | Main thread render | `std::atomic` frame state for synchronization |
 | `NetworkManager` | Queue mutex | Thread-safe message I/O and handler registration |
 | `EventBus` | Thread-safe subscribe/unsubscribe | Callbacks execute on publishing thread |
@@ -404,7 +404,7 @@ Key build targets:
 | Library | Version | Purpose |
 |---------|---------|---------|
 | EnTT | 3.x | Entity Component System |
-| Bullet Physics 3 | 3.x | Physics simulation |
+| Jolt Physics | 5.x | Physics simulation |
 | Dear ImGui | Docking branch | Editor UI |
 | AngelScript | 2.x | Gameplay scripting |
 | Assimp | 5.x | 3D model import (FBX, glTF, OBJ) |
@@ -425,7 +425,7 @@ Key build targets:
 
 - [Entity Component System](Entity-Component-System) -- ECS architecture using EnTT
 - [Rendering and Graphics](Rendering-and-Graphics) -- Render pipelines, PBR materials, post-processing
-- [Physics](Physics) -- Bullet Physics integration
+- [Physics](Physics) -- Jolt Physics integration
 - [Audio](Audio) -- XAudio2 / miniaudio audio engine
 - [AI and Navigation](AI-and-Navigation) -- Behavior trees, NavMesh, perception
 - [Animation](Animation) -- Skeletal animation, IK, state machines

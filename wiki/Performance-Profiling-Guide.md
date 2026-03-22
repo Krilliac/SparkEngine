@@ -34,7 +34,7 @@ Every profiling sample is tagged with a category:
 |----------|---------------|
 | `Frame` | Overall frame timing |
 | `Render` | Draw calls, state changes |
-| `Physics` | Bullet simulation step |
+| `Physics` | Jolt Physics simulation step |
 | `Audio` | XAudio2 processing |
 | `GameLogic` | ECS systems, gameplay |
 | `Input` | Input polling and dispatch |

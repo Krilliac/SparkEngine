@@ -110,7 +110,7 @@ SparkEngine depends on 15 third-party libraries managed as Git submodules. After
 ls ThirdParty/
 ```
 
-You should see directories for: entt, bullet3, imgui, angelscript, assimp, glm, rapidjson, spdlog, stb, miniaudio, DirectXTK, ImGuizmo, imnodes, miniz, tinyobjloader.
+You should see directories for: entt, JoltPhysics, imgui, angelscript, assimp, glm, rapidjson, spdlog, stb, miniaudio, DirectXTK, ImGuizmo, imnodes, miniz, tinyobjloader.
 
 If any are empty, re-run:
 
@@ -358,10 +358,10 @@ cmake -B build -DENABLE_AI=OFF -DENABLE_NETWORKING=ON ...
 | `BUILD_TESTS` | ON | Build the unit test suite |
 | `ENABLE_EDITOR` | ON (Windows) | Include the ImGui editor |
 | `ENABLE_GRAPHICS` | ON | Enable graphics rendering |
-| `ENABLE_PHYSX` | ON | Enable Bullet Physics integration |
+| `ENABLE_PHYSX` | ON | Enable Jolt Physics integration |
 | `ENABLE_AI` | ON | Enable AI and navigation |
 | `ENABLE_ANIMATION` | ON | Enable skeletal animation |
-| `ENABLE_NETWORKING` | OFF | Enable networking (requires CURL) |
+| `ENABLE_NETWORKING` | ON | Enable networking (UDP sockets) |
 | `ENABLE_PROFILING` | ON | Enable performance profiler |
 | `ENABLE_HOT_RELOAD` | ON | Enable script hot-reload |
 
@@ -477,7 +477,7 @@ SparkEngine/
 │       ├── Core/         # Platform, EngineContext, entry point
 │       ├── Graphics/     # DX11 renderer, post-processing
 │       ├── Engine/       # ECS, AI, Animation, Events, Networking
-│       ├── Physics/      # Bullet Physics integration
+│       ├── Physics/      # Jolt Physics integration
 │       ├── Input/        # Keyboard, mouse, gamepad
 │       ├── Audio/        # XAudio2 audio engine
 │       └── Utils/        # Logger, Profiler, Console

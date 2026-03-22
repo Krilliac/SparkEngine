@@ -1,6 +1,6 @@
 # Physics
 
-SparkEngine integrates **Bullet Physics 3** for rigid body dynamics, collision detection, raycasting, constraints, cloth simulation, and soft body physics. The `PhysicsSystem` wraps Bullet with a DirectX Math-native API, transparently converting between `XMFLOAT3` / `XMMATRIX` and Bullet's `btVector3` / `btTransform`.
+SparkEngine integrates **Jolt Physics** for rigid body dynamics, collision detection, raycasting, constraints, cloth simulation, and soft body physics. The `PhysicsSystem` wraps Jolt with a DirectX Math-native API, transparently converting between `XMFLOAT3` / `XMMATRIX` and Jolt's native types.
 
 **Source:** `SparkEngine/Source/Physics/`
 
@@ -27,7 +27,7 @@ SparkEngine integrates **Bullet Physics 3** for rigid body dynamics, collision d
          ▼                    ▼                    ▼
 ┌─────────────────┐  ┌──────────────┐  ┌────────────────────┐
 │ btDynamicsWorld │  │ btBroadphase │  │ btConstraintSolver │
-│ (Bullet core)   │  │ (DBVT)       │  │ (Sequential Imp.)  │
+│ (Jolt core)   │  │ (DBVT)       │  │ (Sequential Imp.)  │
 └─────────────────┘  └──────────────┘  └────────────────────┘
 ```
 
@@ -36,7 +36,7 @@ SparkEngine integrates **Bullet Physics 3** for rigid body dynamics, collision d
 | File | Responsibility |
 |------|---------------|
 | `PhysicsSystem.h` | World manager: lifecycle, simulation step, queries, callbacks, console commands |
-| `PhysicsTypes.h` | Lightweight type-only header (enums, structs, descriptors) -- no Bullet dependency |
+| `PhysicsTypes.h` | Lightweight type-only header (enums, structs, descriptors) -- no Jolt dependency |
 | `CollisionSystem.h` | Static collision detection utilities: primitive tests, raycasts, sweep tests, manifolds |
 | `ClothSimulation.h` | Position-based dynamics cloth and soft body simulation |
 
@@ -198,7 +198,7 @@ struct PhysicsMaterial {
 
 ### Friction/Restitution Mixing
 
-Bullet combines materials from two contacting bodies:
+Jolt combines materials from two contacting bodies:
 - **Friction**: `sqrt(frictionA * frictionB)` (geometric mean)
 - **Restitution**: `max(restitutionA, restitutionB)` (maximum)
 
@@ -330,7 +330,7 @@ physics.SetTriggerCallback([](PhysicsBody* trigger, PhysicsBody* other, bool ent
 
 ## CollisionSystem (Static Utility Class)
 
-The `CollisionSystem` class provides CPU-side collision detection independent of Bullet Physics. All methods are `static` and thread-safe.
+The `CollisionSystem` class provides CPU-side collision detection independent of Jolt Physics. All methods are `static` and thread-safe.
 
 ### Primitive Shapes
 
@@ -518,7 +518,7 @@ col.isTrigger  = false;
 ```
 
 The `PhysicsUpdateSystem` runs in the ECS execution pipeline and:
-1. Reads `RigidBodyComponent` + `ColliderComponent` to create/update Bullet bodies
+1. Reads `RigidBodyComponent` + `ColliderComponent` to create/update Jolt bodies
 2. Steps the physics simulation via `PhysicsSystem::Update()`
 3. Writes updated transforms back to the [ECS](Entity-Component-System) `TransformComponent`
 
@@ -535,11 +535,11 @@ Physics --> Animation --> AI --> Audio --> Lifecycle --> Render
 
 ## Internal Implementation
 
-### Bullet Physics Integration
+### Jolt Physics Integration
 
-PhysicsSystem manages these Bullet objects internally:
+PhysicsSystem manages these Jolt objects internally:
 
-| Bullet Object | Purpose |
+| Jolt Object | Purpose |
 |---------------|---------|
 | `btDiscreteDynamicsWorld` | The simulation world |
 | `btDefaultCollisionConfiguration` | Collision algorithm configuration |
@@ -568,7 +568,7 @@ XMFLOAT4  <-->  btQuaternion  (rotations)
 
 ## Debug Drawing
 
-Enable the Bullet debug draw overlay to visualize collision shapes, constraints, and contact points:
+Enable the physics debug draw overlay to visualize collision shapes, constraints, and contact points:
 
 ```
 physics_debug on       # Enable debug draw
@@ -613,7 +613,7 @@ physics_material <name>     # Show properties of a named material
 - **Compound shapes**: More efficient than mesh for dynamic objects with complex geometry.
 - **Solver iterations**: Default is 10. Increase for more accurate stacking; decrease for better performance.
 - **Cloth iterations**: `solverIterations` in `ClothDescriptor` controls stiffness vs. performance (4 = fast, 16 = stiff).
-- **Body sleeping**: Bullet automatically deactivates bodies at rest. Reactivation is automatic on collision or force application.
+- **Body sleeping**: Jolt automatically deactivates bodies at rest. Reactivation is automatic on collision or force application.
 - **Raycast performance**: Single raycast is O(log n) via broadphase. Batch raycasts when possible.
 
 ---

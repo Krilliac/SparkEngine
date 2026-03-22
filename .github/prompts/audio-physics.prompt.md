@@ -39,7 +39,7 @@ audio.Play3D(sfx, position, velocity, volume, pitch);
 
 ## Physics System
 
-`PhysicsSystem` (`SparkEngine/Source/Physics/PhysicsSystem.h`) — Bullet Physics 3 with DirectXMath-native API. **NOT thread-safe** (main thread only).
+`PhysicsSystem` (`SparkEngine/Source/Physics/PhysicsSystem.h`) — Jolt Physics with DirectXMath-native API. Supports multithreaded job dispatch.
 
 ### Architecture
 

@@ -4,7 +4,7 @@ SparkEngine includes a UDP-based networking system for multiplayer games with en
 
 **Source:** `SparkEngine/Source/Engine/Networking/`
 
-> **Note:** Networking is disabled by default (`ENABLE_NETWORKING=OFF`) due to CURL dependency issues. Enable it with `-DENABLE_NETWORKING=ON` during CMake configuration. When disabled, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
+> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). It uses raw UDP sockets with no external dependencies. When disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
 
 ## Architecture
 

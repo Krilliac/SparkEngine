@@ -33,6 +33,10 @@ namespace Spark::Graphics
  */
     enum class PostProcessPass
     {
+        Bloom,               ///< HDR bloom (threshold extract + blur + composite)
+        AutoExposure,        ///< Luminance-based automatic exposure adaptation
+        Tonemapping,         ///< HDR-to-LDR tonemapping (ACES, Filmic, Neutral)
+        ColorGrading,        ///< Lift/Gamma/Gain color correction + curves
         FXAA,                ///< Fast Approximate Anti-Aliasing
         DepthOfField,        ///< Bokeh depth of field
         MotionBlur,          ///< Per-pixel motion blur (uses TemporalEffects data)
@@ -170,6 +174,90 @@ namespace Spark::Graphics
         float amount = 0.5f;            ///< Sharpening strength [0, 1]
         float threshold = 0.05f;        ///< Edge threshold to avoid noise amplification
         bool adaptiveSharpening = true; ///< CAS (AMD FidelityFX style)
+    };
+
+    // =============================================================================
+    // HDR / Tonemapping / Color Grading Settings
+    // =============================================================================
+
+    /**
+     * @brief Bloom effect settings (threshold-based HDR extraction + blur + composite)
+     */
+    struct BloomSettings
+    {
+        bool enabled = false;
+        float threshold = 1.0f;     ///< Luminance threshold for bright pixel extraction
+        float softThreshold = 0.5f; ///< Soft knee around threshold [0, 1]
+        float intensity = 0.8f;     ///< Final bloom composite intensity
+        float radius = 4.0f;        ///< Blur radius in texels
+        int iterations = 5;         ///< Number of downscale/blur passes [1, 8]
+        float scatter = 0.7f;       ///< Energy scatter between blur passes [0, 1]
+        bool highQuality = true;    ///< Use 13-tap dual filter vs 5-tap
+    };
+
+    /**
+     * @brief Tonemapping operator selection
+     */
+    enum class TonemapOperator
+    {
+        ACES,     ///< Academy Color Encoding System (filmic, industry standard)
+        Filmic,   ///< Uncharted 2 filmic curve (John Hable)
+        Neutral,  ///< Minimal color shift, balanced contrast
+        Reinhard, ///< Simple Reinhard (luminance-based)
+        Count
+    };
+
+    /**
+     * @brief Tonemapping settings (HDR to LDR conversion)
+     */
+    struct TonemappingSettings
+    {
+        bool enabled = false;
+        TonemapOperator op = TonemapOperator::ACES; ///< Active tonemapping operator
+        float exposure = 1.0f;                      ///< Pre-tonemap exposure multiplier
+        float whitePoint = 11.2f;                   ///< White point for Filmic/Reinhard operators
+        float contrast = 1.0f;                      ///< Post-tonemap contrast adjustment [0.5, 2.0]
+        float saturation = 1.0f;                    ///< Post-tonemap saturation [0, 2]
+    };
+
+    /**
+     * @brief Auto-exposure / eye adaptation settings
+     */
+    struct AutoExposureSettings
+    {
+        bool enabled = false;
+        float minExposure = 0.25f;     ///< Minimum EV (prevents over-darkening)
+        float maxExposure = 4.0f;      ///< Maximum EV (prevents over-brightening)
+        float adaptSpeedUp = 2.0f;     ///< Adaptation speed bright-to-dark (EV/s)
+        float adaptSpeedDown = 1.0f;   ///< Adaptation speed dark-to-bright (EV/s)
+        float targetLuminance = 0.18f; ///< Middle-grey target (key value)
+        float histogramMin = -8.0f;    ///< Log2 luminance histogram lower bound
+        float histogramMax = 4.0f;     ///< Log2 luminance histogram upper bound
+        float compensationEV = 0.0f;   ///< Manual EV compensation offset
+    };
+
+    /**
+     * @brief Color grading settings (Lift/Gamma/Gain + curves)
+     */
+    struct ColorGradingSettings
+    {
+        bool enabled = false;
+
+        /// Lift (shadows) — added to the darkest values
+        XMFLOAT3 lift = {0.0f, 0.0f, 0.0f};
+
+        /// Gamma (midtones) — power curve applied to midrange
+        XMFLOAT3 gamma = {1.0f, 1.0f, 1.0f};
+
+        /// Gain (highlights) — multiplied into the brightest values
+        XMFLOAT3 gain = {1.0f, 1.0f, 1.0f};
+
+        float temperature = 0.0f; ///< White balance shift [-1=cool, 1=warm]
+        float tint = 0.0f;        ///< Green-magenta shift [-1=green, 1=magenta]
+        float hueShift = 0.0f;    ///< Global hue rotation in degrees [-180, 180]
+        float saturation = 1.0f;  ///< Global saturation [0=mono, 2=oversaturated]
+        float brightness = 0.0f;  ///< Global brightness offset [-1, 1]
+        float contrast = 1.0f;    ///< Global contrast [0.5, 2.0]
     };
 
     // =============================================================================

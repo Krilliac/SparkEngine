@@ -97,7 +97,7 @@ endif()
 # ---------------------------------------------------------------------
 option(ENABLE_GRAPHICS "Enable graphics engine" ON)
 option(ENABLE_PROFILING "Enable profiling tools" ON)
-option(ENABLE_NETWORKING "Enable networking features (experimental — requires socket libs)" OFF)
+option(ENABLE_NETWORKING "Enable networking features (UDP sockets)" ON)
 option(ENABLE_VULKAN "Enable Vulkan graphics backend (experimental)" ON)
 option(ENABLE_OPENGL "Enable OpenGL graphics backend (experimental)" ON)
 option(ENABLE_METAL "Enable Metal graphics backend (macOS, experimental)" OFF)

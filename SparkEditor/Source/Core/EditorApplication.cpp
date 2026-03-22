@@ -9,6 +9,7 @@
 #include "EditorUI.h"
 #include "EditorFonts.h"
 #include "EditorCrashHandler.h"
+#include "EditorPluginManager.h"
 #include "../Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include <memory>
@@ -107,6 +108,8 @@ namespace SparkEditor
             console.LogError("Failed to initialize EditorUI");
             return false;
         }
+        // Give EditorUI access to the plugin manager for menu bar rendering
+        m_ui->SetPluginManager(&m_pluginManager);
         console.LogSuccess("EditorUI initialized successfully");
 
 #ifdef _WIN32
@@ -118,6 +121,11 @@ namespace SparkEditor
             m_ui->SetGraphicsDevice(m_device.Get(), m_context.Get());
         }
 #endif
+
+        // Initialize plugin system
+        console.LogInfo("Initializing editor plugins...");
+        m_pluginManager.InitializeAll(this);
+        console.LogSuccess("Editor plugins initialized");
 
         m_isInitialized = true;
         m_isRunning = true;
@@ -371,6 +379,9 @@ namespace SparkEditor
             m_ui->Render();
         }
 
+        // Render editor plugin GUI
+        m_pluginManager.RenderAll();
+
         // Render ImGui
         ImGui::Render();
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -420,6 +431,11 @@ namespace SparkEditor
         console.LogInfo("Shutting down enhanced editor...");
 
         m_isRunning = false;
+
+        // Shutdown editor plugins before UI teardown
+        console.LogInfo("Shutting down editor plugins...");
+        m_pluginManager.ShutdownAll();
+        console.LogSuccess("Editor plugins shutdown complete");
 
         if (m_ui)
         {
@@ -690,6 +706,9 @@ namespace SparkEditor
             m_ui->Render();
         }
 
+        // Render editor plugin GUI
+        m_pluginManager.RenderAll();
+
         // Render ImGui
         ImGui::Render();
 
@@ -727,6 +746,11 @@ namespace SparkEditor
         console.LogInfo("Shutting down enhanced editor...");
 
         m_isRunning = false;
+
+        // Shutdown editor plugins before UI teardown
+        console.LogInfo("Shutting down editor plugins...");
+        m_pluginManager.ShutdownAll();
+        console.LogSuccess("Editor plugins shutdown complete");
 
         if (m_ui)
         {
@@ -782,6 +806,9 @@ namespace SparkEditor
                 RequestExit();
             }
         }
+
+        // Update editor plugins
+        m_pluginManager.UpdateAll(deltaTime);
     }
 
     void EditorApplication::UpdatePerformanceMetrics()

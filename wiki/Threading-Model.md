@@ -10,7 +10,7 @@ This page documents every threading primitive, thread-safety contract, and concu
 
 SparkEngine uses a **main-thread-primary** architecture. The main thread owns:
 - The ECS registry (EnTT)
-- Physics simulation (Bullet3)
+- Physics simulation (Jolt Physics)
 - Graphics rendering (D3D11/D3D12/Vulkan)
 - ImGui editor UI
 - Coroutine scheduling
@@ -315,7 +315,7 @@ main game thread. The physics simulation runs on the calling thread
 inside Update().
 ```
 
-No threading primitives. Bullet3 is stepped single-threaded. All raycasts, collision queries, and body manipulation must happen on the main thread.
+No threading primitives. Jolt Physics supports multithreaded job dispatch. All raycasts, collision queries, and body manipulation must happen on the main thread.
 
 ---
 
@@ -391,7 +391,7 @@ SPARK_LOG_INFO(LogCategory::Core, "Message from any thread");
 | Pattern | Why It's Wrong | Fix |
 |---------|---------------|-----|
 | Access ECS from worker thread | EnTT is not thread-safe | Use snapshots or the Gather-Process-Writeback pattern |
-| Call Physics from non-main thread | Bullet3 is single-threaded | Queue physics commands for main thread |
+| Call Physics from non-main thread | Jolt Physics dispatch is thread-safe; query from any thread | Queue physics commands for main thread |
 | Reverse NetworkManager lock order | Deadlock | Always: state → queue → handler |
 | Hold mutex during long I/O | Main thread stalls | Use async patterns (JobSystem, AsyncDB) |
 | Busy-wait on atomics | CPU waste | Use `std::condition_variable` |
