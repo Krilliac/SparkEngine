@@ -526,7 +526,12 @@ if(BULLET_FOUND)
         )
             if(TARGET ${_bullet_target})
                 if(MSVC)
-                    # /w disables all warnings for this target
+                    # Strip /W3 set by Bullet's CMakeLists to avoid D9025 override warning
+                    get_target_property(_bullet_opts ${_bullet_target} COMPILE_OPTIONS)
+                    if(_bullet_opts)
+                        list(REMOVE_ITEM _bullet_opts "/W3")
+                        set_target_properties(${_bullet_target} PROPERTIES COMPILE_OPTIONS "${_bullet_opts}")
+                    endif()
                     target_compile_options(${_bullet_target} PRIVATE /w)
                 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
                     target_compile_options(${_bullet_target} PRIVATE

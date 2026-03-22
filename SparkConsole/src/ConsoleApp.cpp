@@ -89,9 +89,9 @@ ConsoleApp::~ConsoleApp()
 void ConsoleApp::Run()
 {
 #ifdef SPARK_PLATFORM_WINDOWS
-    system("cls");
+    [[maybe_unused]] int rc_ = system("cls");
 #else
-    system("clear");
+    [[maybe_unused]] int rc_ = system("clear");
 #endif
     std::wcout << L"========================================" << std::endl;
     std::wcout << L"   Spark Engine Console v2.0.0" << std::endl;
@@ -998,12 +998,12 @@ void ConsoleApp::RegisterDefaultCommands()
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
 #ifdef SPARK_PLATFORM_WINDOWS
-                                          system("cls");
+                                          [[maybe_unused]] int rc_ = system("cls");
 
                                           HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
                                           DWORD fileType = GetFileType(hStdin);
 #else
-            system("clear");
+            [[maybe_unused]] int rc_ = system("clear");
 #endif
 
                                           std::wcout << L"========================================" << std::endl;
