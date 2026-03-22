@@ -1289,6 +1289,7 @@ namespace SparkEditor
         RegisterPanelToggle("TilemapEditor", "Tilemap Editor");
         RegisterPanelToggle("SpriteAnimEditor", "Sprite Animation Editor");
         RegisterPanelToggle("Physics2D", "Physics 2D");
+        RegisterPanelToggle("Physics3D", "Physics 3D");
 
         // Editor utility panels
         RegisterPanelToggle("UndoHistory", "Undo History");

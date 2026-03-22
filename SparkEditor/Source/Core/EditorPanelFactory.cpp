@@ -23,6 +23,7 @@
 #include "../Panels/TilemapEditorPanel.h"
 #include "../Panels/SpriteAnimationEditorPanel.h"
 #include "../Panels/Physics2DPanel.h"
+#include "../Panels/Physics3DPanel.h"
 #include "../Panels/UndoHistoryPanel.h"
 #include "../Panels/SceneStatisticsPanel.h"
 #include "../Panels/PrefabEditorPanel.h"
@@ -110,6 +111,7 @@ namespace SparkEditor
             registerPanel("TilemapEditor", std::make_shared<TilemapEditorPanel>());
             registerPanel("SpriteAnimEditor", std::make_shared<SpriteAnimationEditorPanel>());
             registerPanel("Physics2D", std::make_shared<Physics2DPanel>());
+            registerPanel("Physics3D", std::make_shared<Physics3DPanel>());
 
             // Tool panels (require special constructor args)
             registerPanel("UndoHistory", std::make_shared<UndoHistoryPanel>(m_undoRedoManager.get()));

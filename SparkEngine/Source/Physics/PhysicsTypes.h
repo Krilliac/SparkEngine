@@ -6,7 +6,7 @@
  *
  * Extracted from PhysicsSystem.h so that code needing only physics types
  * (e.g. ECS components, editor panels) can include this lightweight header
- * without pulling in the full PhysicsSystem class and its Bullet dependencies.
+ * without pulling in the full PhysicsSystem class and its Jolt dependencies.
  */
 
 #pragma once
@@ -40,15 +40,52 @@ enum class PhysicsBodyType
  */
 enum class CollisionShapeType
 {
-    Box,         ///< Box collision shape
-    Sphere,      ///< Sphere collision shape
-    Capsule,     ///< Capsule collision shape
-    Cylinder,    ///< Cylinder collision shape
-    Cone,        ///< Cone collision shape
-    Mesh,        ///< Triangle mesh shape
-    ConvexHull,  ///< Convex hull shape
-    Heightfield, ///< Heightfield terrain shape
-    Compound     ///< Compound shape (multiple shapes)
+    Box,                ///< Box collision shape
+    Sphere,             ///< Sphere collision shape
+    Capsule,            ///< Capsule collision shape
+    Cylinder,           ///< Cylinder collision shape
+    Cone,               ///< Cone collision shape (approximated as convex hull in Jolt)
+    Mesh,               ///< Triangle mesh shape (static geometry only)
+    ConvexHull,         ///< Convex hull shape
+    Heightfield,        ///< Heightfield terrain shape (optimized grid)
+    Compound,           ///< Compound shape (multiple sub-shapes)
+    TaperedCapsule,     ///< Capsule with different top/bottom radii
+    TaperedCylinder,    ///< Cylinder with different top/bottom radii
+    Plane,              ///< Infinite plane shape
+    Scaled,             ///< Scaled wrapper around another shape
+    OffsetCenterOfMass, ///< Shape with offset center of mass
+    MutableCompound,    ///< Mutable compound shape (runtime add/remove sub-shapes)
+    Empty               ///< Empty shape (no collision geometry)
+};
+
+/**
+ * @brief Motion quality — controls how precisely collisions are detected.
+ *
+ * Discrete is cheapest but fast-moving bodies can tunnel through thin geometry.
+ * LinearCast prevents tunneling by sweeping the shape from start to end position.
+ */
+enum class MotionQuality
+{
+    Discrete,  ///< Standard discrete collision detection (cheapest)
+    LinearCast ///< CCD via linear cast — prevents tunneling for fast objects (bullets, projectiles)
+};
+
+/**
+ * @brief Allowed degrees of freedom for a physics body.
+ *
+ * Bitfield controlling which translation/rotation axes are active.
+ * Use to constrain bodies to 2D planes, lock rotation axes, etc.
+ */
+enum class AllowedDOFs : uint8_t
+{
+    All = 0b111111,          ///< All translation and rotation (default 3D)
+    TranslationX = 0b000001, ///< Allow X translation
+    TranslationY = 0b000010, ///< Allow Y translation
+    TranslationZ = 0b000100, ///< Allow Z translation
+    RotationX = 0b001000,    ///< Allow X rotation
+    RotationY = 0b010000,    ///< Allow Y rotation
+    RotationZ = 0b100000,    ///< Allow Z rotation
+    Plane2D = 0b100011,      ///< 2D mode: translate X/Y, rotate Z only
 };
 
 /**
@@ -56,12 +93,18 @@ enum class CollisionShapeType
  */
 enum class ConstraintType
 {
-    Point2Point, ///< Point-to-point constraint
-    Hinge,       ///< Hinge constraint
-    Slider,      ///< Slider constraint
-    ConeTwist,   ///< Cone-twist constraint
-    Generic6DOF, ///< 6-DOF constraint
-    Fixed        ///< Fixed constraint
+    Point2Point,   ///< Point-to-point (ball-socket) constraint
+    Hinge,         ///< Hinge constraint (single rotation axis)
+    Slider,        ///< Slider constraint (linear motion along axis)
+    ConeTwist,     ///< Cone-twist / swing-twist constraint (ragdoll joints)
+    Generic6DOF,   ///< 6-DOF constraint (per-axis freedom control)
+    Fixed,         ///< Fixed (weld) constraint — locks two bodies together
+    Distance,      ///< Distance constraint — maintains distance between anchor points
+    Cone,          ///< Cone constraint — limits rotation to a cone
+    Gear,          ///< Gear constraint — couples rotation of two hinge constraints
+    RackAndPinion, ///< Rack-and-pinion — couples rotation to linear motion
+    Pulley,        ///< Pulley constraint — rope/cable between two bodies
+    Path           ///< Path constraint — constrains body to follow a path
 };
 
 // =============================================================================
@@ -82,7 +125,7 @@ enum class ConstraintType
  * ### Tuning guide
  * - **friction**: 0.0 = frictionless ice; 1.0 = high-grip rubber. Values above 1
  *   are valid for extra-grippy surfaces. Combined with the other body's friction via
- *   Bullet's default `sqrt(frA * frB)` mixing.
+ *   the physics engine's default `sqrt(frA * frB)` mixing.
  * - **restitution**: 0.0 = no bounce (clay); 1.0 = perfectly elastic. Values > 1
  *   add energy (usually undesirable). Combined via `max(restA, restB)` mixing.
  * - **linearDamping / angularDamping**: [0, 1] range; simulates air resistance.
@@ -154,7 +197,7 @@ struct PhysicsMaterial
 /**
  * @brief Descriptor that fully specifies the collision geometry for a physics body.
  *
- * PhysicsSystem::CreateBody() reads this struct to construct the appropriate Bullet
+ * PhysicsSystem::CreateBody() reads this struct to construct the appropriate Jolt
  * `btCollisionShape`. Once a shape is created it may be cached internally (keyed by
  * a hash of the descriptor) so that many bodies sharing the same geometry reuse a
  * single `btCollisionShape` instance, reducing memory usage.
@@ -222,7 +265,7 @@ struct CollisionShapeDesc
     /**
      * @brief Vertex positions for ConvexHull and inline TriangleMesh shapes.
      *
-     * - For **ConvexHull**: provide all hull vertices (duplicates are handled by Bullet).
+     * - For **ConvexHull**: provide all hull vertices (duplicates are handled by Jolt).
      * - For **Mesh** (inline): paired with `indices` to define the triangle list.
      *   This is useful for procedurally-generated geometry or when the mesh data is
      *   already in memory.
@@ -253,6 +296,94 @@ struct CollisionShapeDesc
      * default (Y-up). Applied after `localOffset`.
      */
     XMFLOAT3 localRotation = {0, 0, 0};
+
+    /**
+     * @brief Secondary radius for TaperedCapsule / TaperedCylinder shapes.
+     *
+     * For TaperedCapsule: `radius` is the top radius, `topRadius` is the bottom radius.
+     * For TaperedCylinder: `radius` is the top radius, `topRadius` is the bottom radius.
+     * Ignored by other shape types.
+     */
+    float topRadius = 0.5f;
+
+    /**
+     * @brief Heightfield data for terrain collision shapes.
+     *
+     * A flat array of height values in row-major order. Width × depth samples.
+     * Used only when `type == CollisionShapeType::Heightfield`.
+     */
+    std::vector<float> heightfieldData;
+
+    /**
+     * @brief Number of samples along each axis for heightfield shapes.
+     *
+     * The heightfield is `heightfieldSamples × heightfieldSamples` (square grid).
+     * Must be a power of 2 + 1 for optimal Jolt performance.
+     */
+    uint32_t heightfieldSamples = 0;
+
+    /**
+     * @brief Scale applied to heightfield height values.
+     *
+     * Multiplies each raw height value. Use with dimensions for XZ extent.
+     */
+    float heightfieldScale = 1.0f;
+
+    /**
+     * @brief Uniform scale factor for Scaled shape wrapper.
+     *
+     * Applied uniformly when `type == CollisionShapeType::Scaled`.
+     */
+    XMFLOAT3 scale = {1.0f, 1.0f, 1.0f};
+
+    /**
+     * @brief Plane normal for Plane shape.
+     */
+    XMFLOAT3 planeNormal = {0, 1, 0};
+
+    /**
+     * @brief Plane distance from origin for Plane shape.
+     */
+    float planeDistance = 0.0f;
+};
+
+// =============================================================================
+// Collision group filtering
+// =============================================================================
+
+/**
+ * @brief Collision group assignment for a physics body.
+ *
+ * Used with GroupFilterTable for fine-grained per-body collision filtering
+ * beyond object layer filtering. Two bodies with the same groupFilterID
+ * share a GroupFilterTable that determines which sub-group pairs collide.
+ *
+ * @code
+ *   // Create a filter table with 4 sub-groups
+ *   auto filterID = physics.CreateGroupFilterTable(4);
+ *   physics.DisableGroupCollision(filterID, 0, 1); // sub-group 0 doesn't collide with 1
+ *
+ *   bodyDesc.collisionGroupDesc.groupFilterID = filterID;
+ *   bodyDesc.collisionGroupDesc.groupID = 0;
+ *   bodyDesc.collisionGroupDesc.subGroupID = 0;
+ * @endcode
+ */
+struct CollisionGroupDesc
+{
+    uint32_t groupFilterID = 0; ///< ID of the GroupFilterTable (0 = no group filtering)
+    uint32_t groupID = 0;       ///< Group identifier
+    uint32_t subGroupID = 0;    ///< Sub-group within the group
+};
+
+/**
+ * @brief Descriptor for a sub-shape within a MutableCompoundShape.
+ */
+struct MutableSubShapeDesc
+{
+    CollisionShapeDesc shape;      ///< Shape geometry
+    XMFLOAT3 position = {0, 0, 0}; ///< Local position relative to compound center
+    XMFLOAT3 rotation = {0, 0, 0}; ///< Euler rotation in degrees
+    uint32_t userData = 0;         ///< Per-sub-shape user data
 };
 
 /**
@@ -311,7 +442,7 @@ struct PhysicsBodyDesc
     /**
      * @brief Initial rotation expressed as Euler angles in degrees (X=pitch, Y=yaw, Z=roll).
      *
-     * Converted internally to a quaternion before being passed to Bullet. Using
+     * Converted internally to a quaternion before being passed to Jolt. Using
      * Euler angles avoids gimbal lock issues at the API boundary; prefer setting
      * this to zero and calling PhysicsBody::SetTransform() if you already have a matrix.
      */
@@ -336,7 +467,7 @@ struct PhysicsBodyDesc
     /**
      * @brief Mass of the body in kilograms.
      *
-     * - 0.0 -> the body behaves as Static regardless of the `type` field. Bullet
+     * - 0.0 -> the body behaves as Static regardless of the `type` field. Jolt
      *          treats zero-mass bodies as immovable.
      * - > 0  -> must match `type == Dynamic` for full simulation.
      *
@@ -380,7 +511,7 @@ struct PhysicsBodyDesc
     /**
      * @brief Collision filter group bitmask (what this body IS).
      *
-     * Used by Bullet's broadphase to filter collision pairs. Body A collides
+     * Used by the broadphase to filter collision pairs. Body A collides
      * with body B only if `(A.group & B.mask) != 0 && (B.group & A.mask) != 0`.
      * Default: 1 (default group). Set to 0 to disable all collisions.
      */
@@ -393,6 +524,14 @@ struct PhysicsBodyDesc
      * Default: 0xFFFF (collide with everything).
      */
     uint16_t collisionMask = 0xFFFF;
+
+    /**
+     * @brief Advanced collision group filtering (GroupFilterTable).
+     *
+     * When groupFilterID != 0, the body participates in sub-group-based
+     * collision filtering. See CreateGroupFilterTable() / DisableGroupCollision().
+     */
+    CollisionGroupDesc collisionGroupDesc;
 
     /**
      * @brief Human-readable identifier for debugging and console queries.
@@ -424,6 +563,179 @@ struct PhysicsBodyDesc
      * Zero means "no entity" (standalone body not tied to the ECS).
      */
     uint32_t entityId = 0;
+
+    /**
+     * @brief Motion quality controlling collision detection precision.
+     *
+     * Use LinearCast for fast-moving objects (bullets, projectiles) to prevent
+     * tunneling through thin geometry. Default: Discrete (cheapest).
+     */
+    MotionQuality motionQuality = MotionQuality::Discrete;
+
+    /**
+     * @brief Allowed degrees of freedom for this body.
+     *
+     * Restrict which axes can translate/rotate. Use Plane2D for side-scrollers.
+     * Default: All (full 3D freedom).
+     */
+    AllowedDOFs allowedDOFs = AllowedDOFs::All;
+
+    /**
+     * @brief Per-body gravity multiplier.
+     *
+     * 1.0 = normal gravity, 0.0 = no gravity (floating), 2.0 = double gravity.
+     * Useful for space environments, underwater areas, or moon-like gravity zones.
+     */
+    float gravityFactor = 1.0f;
+
+    /**
+     * @brief Maximum linear velocity (m/s). Jolt clamps to prevent instability.
+     *
+     * Default: 500 m/s. Reduce for controlled simulations; increase for extreme speeds.
+     */
+    float maxLinearVelocity = 500.0f;
+
+    /**
+     * @brief Maximum angular velocity (rad/s). Jolt clamps to prevent instability.
+     *
+     * Default: 47.12 (≈ 15π rad/s ≈ 7.5 revolutions/second).
+     */
+    float maxAngularVelocity = 47.12389f;
+};
+
+// =============================================================================
+// Motor and spring settings
+// =============================================================================
+
+/**
+ * @brief Motor state for constraint motors.
+ */
+enum class MotorState
+{
+    Off,      ///< Motor disabled
+    Velocity, ///< Motor drives to target velocity
+    Position  ///< Motor drives to target position (servo)
+};
+
+/**
+ * @brief Spring configuration for constraints with spring behavior.
+ *
+ * Springs can be configured with either frequency+damping (intuitive) or
+ * stiffness+damping (precise control). Frequency mode: frequency in Hz,
+ * damping ratio 0-1 (1 = critically damped). Stiffness mode: N/m or N*m.
+ */
+struct PhysicsSpringSettings
+{
+    bool useFrequencyMode = true; ///< true = frequency+damping, false = stiffness+damping
+    float frequency = 1.0f;       ///< Spring frequency in Hz (frequency mode)
+    float damping = 0.5f;         ///< Damping ratio [0-1] (frequency) or absolute damping (stiffness mode)
+    float stiffness = 100.0f;     ///< Spring stiffness N/m (stiffness mode only)
+};
+
+/**
+ * @brief Motor configuration for motorized constraints.
+ */
+struct PhysicsMotorSettings
+{
+    PhysicsSpringSettings spring;  ///< Spring settings for the motor
+    float minForceLimit = -1e10f;  ///< Minimum force the motor can apply (N)
+    float maxForceLimit = 1e10f;   ///< Maximum force the motor can apply (N)
+    float minTorqueLimit = -1e10f; ///< Minimum torque the motor can apply (N*m)
+    float maxTorqueLimit = 1e10f;  ///< Maximum torque the motor can apply (N*m)
+};
+
+// =============================================================================
+// Vehicle types
+// =============================================================================
+
+/**
+ * @brief Vehicle type enumeration.
+ */
+enum class PhysicsVehicleType
+{
+    Wheeled,   ///< Standard wheeled vehicle (car, truck)
+    Tracked,   ///< Tracked vehicle (tank, bulldozer)
+    Motorcycle ///< Two-wheeled motorcycle with lean stabilization
+};
+
+/**
+ * @brief Wheel configuration for vehicle physics.
+ */
+struct VehicleWheelDesc
+{
+    XMFLOAT3 position = {0, 0, 0};       ///< Wheel attachment position relative to vehicle body
+    XMFLOAT3 suspensionDir = {0, -1, 0}; ///< Suspension direction (typically down)
+    XMFLOAT3 steeringAxis = {0, 1, 0};   ///< Axis around which the wheel steers
+    XMFLOAT3 wheelForward = {0, 0, 1};   ///< Forward direction of the wheel
+    XMFLOAT3 wheelUp = {0, 1, 0};        ///< Up direction of the wheel
+    float radius = 0.3f;                 ///< Wheel radius (metres)
+    float width = 0.1f;                  ///< Wheel width (metres)
+    float suspensionMinLength = 0.3f;    ///< Minimum suspension spring length
+    float suspensionMaxLength = 0.5f;    ///< Maximum suspension spring length
+    float suspensionFrequency = 1.5f;    ///< Suspension spring frequency (Hz)
+    float suspensionDamping = 0.5f;      ///< Suspension damping ratio [0-1]
+    float maxSteerAngle = 0.0f;          ///< Maximum steering angle (radians, 0 = non-steering)
+    float maxBrakeTorque = 1500.0f;      ///< Maximum braking torque (N*m)
+    float maxHandBrakeTorque = 4000.0f;  ///< Handbrake torque (N*m)
+    float lateralFriction = 1.0f;        ///< Lateral (side) friction multiplier
+    float longitudinalFriction = 1.0f;   ///< Longitudinal (forward/backward) friction multiplier
+};
+
+/**
+ * @brief Vehicle configuration descriptor.
+ */
+struct VehicleDesc
+{
+    PhysicsVehicleType type = PhysicsVehicleType::Wheeled;
+    std::vector<VehicleWheelDesc> wheels;
+
+    // Engine
+    float maxEngineTorque = 500.0f; ///< Maximum engine torque (N*m)
+    float minRPM = 1000.0f;         ///< Engine idle RPM
+    float maxRPM = 6000.0f;         ///< Engine redline RPM
+
+    // Transmission
+    std::vector<float> gearRatios = {2.66f, 1.78f, 1.30f, 1.0f, 0.74f}; ///< Forward gear ratios
+    float reverseGearRatio = -2.90f;                                    ///< Reverse gear ratio
+    float clutchStrength = 10.0f;                                       ///< Clutch strength
+
+    // Differentials
+    float differentialRatio = 3.42f; ///< Final drive ratio
+
+    // Anti-roll bars
+    float antiRollBarStiffness = 1000.0f; ///< Anti-roll bar stiffness (N/m, 0 = disabled)
+
+    // Motorcycle-specific
+    float leanSpringConstant = 5000.0f; ///< Lean stabilization spring (motorcycle only)
+    float leanSpringDamping = 1000.0f;  ///< Lean stabilization damping (motorcycle only)
+};
+
+// =============================================================================
+// Ragdoll types
+// =============================================================================
+
+/**
+ * @brief Ragdoll limb/part descriptor.
+ */
+struct RagdollPartDesc
+{
+    std::string name;                                          ///< Bone/joint name (e.g., "LeftUpperArm")
+    int parentIndex = -1;                                      ///< Index of parent part (-1 = root)
+    PhysicsBodyDesc bodyDesc;                                  ///< Body configuration for this limb
+    ConstraintType constraintType = ConstraintType::ConeTwist; ///< Joint type connecting to parent
+    XMFLOAT3 constraintPivot = {0, 0, 0};                      ///< Joint pivot in parent's local space
+    XMFLOAT3 constraintAxis = {0, 1, 0};                       ///< Primary joint axis
+    float swingLimit1 = 0.5f;                                  ///< Swing limit 1 (radians)
+    float swingLimit2 = 0.5f;                                  ///< Swing limit 2 (radians)
+    float twistLimit = 0.3f;                                   ///< Twist limit (radians)
+};
+
+/**
+ * @brief Ragdoll descriptor — a collection of connected parts.
+ */
+struct RagdollDesc
+{
+    std::vector<RagdollPartDesc> parts;
 };
 
 /**

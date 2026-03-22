@@ -64,9 +64,9 @@ namespace Spark::ECS
          * 2. Accumulates deltaTime.
          * 3. Steps physics in fixedTimestep increments.
          * 4. Computes interpolation alpha for rendering.
-         * 5. Syncs transforms between ECS and Bullet:
-         *    - Kinematic: ECS → Bullet
-         *    - Dynamic: Bullet → ECS
+         * 5. Syncs transforms between ECS and Jolt:
+         *    - Kinematic: ECS → Jolt
+         *    - Dynamic: Jolt → ECS
          */
         void Update(World& world, float deltaTime) override
         {
@@ -108,9 +108,9 @@ namespace Spark::ECS
         /**
          * @brief Execute one fixed-step physics simulation.
          *
-         * Pre-step: Pushes kinematic transforms from ECS → Bullet.
-         * Step: Advances the Bullet simulation by fixedTimestep.
-         * Post-step: Reads dynamic transforms from Bullet → ECS.
+         * Pre-step: Pushes kinematic transforms from ECS → Jolt.
+         * Step: Advances the Jolt simulation by fixedTimestep.
+         * Post-step: Reads dynamic transforms from Jolt → ECS.
          */
         void StepPhysics(World& world, float fixedDt)
         {
@@ -119,13 +119,13 @@ namespace Spark::ECS
 
             auto view = world.GetEntitiesWith<RigidBodyComponent, Transform>();
 
-            // Pre-step: push kinematic targets to Bullet
+            // Pre-step: push kinematic targets to Jolt
             for (auto [entity, rb, tf] : view.each())
             {
                 if (rb.type == RigidBodyComponent::Type::Kinematic)
                 {
-                    // Write ECS transform to Bullet rigid body
-                    // The actual Bullet API call is handled by PhysicsSystem internals
+                    // Write ECS transform to Jolt rigid body
+                    // The actual Jolt API call is handled by PhysicsSystem internals
                     rb.previousPosition = tf.position;
                     rb.previousRotation = tf.rotation;
                 }
@@ -137,19 +137,18 @@ namespace Spark::ECS
                 }
             }
 
-            // Step Bullet simulation at fixed rate
-            // PhysicsSystem::Update internally calls btDynamicsWorld::stepSimulation
-            // with fixedDt and maxSubSteps=1 (we handle sub-stepping ourselves)
+            // Step Jolt simulation at fixed rate
+            // PhysicsSystem::Update internally calls JPH::PhysicsSystem::Update
+            // with fixedDt and 1 collision step (we handle sub-stepping ourselves)
             // Note: This delegates to the existing PhysicsUpdateSystem behavior
-            // The PhysicsSystem::StepSimulation(fixedDt) is the core call
 
             // Post-step: read dynamic results back to ECS
             for (auto [entity, rb, tf] : view.each())
             {
                 if (rb.type == RigidBodyComponent::Type::Dynamic)
                 {
-                    // Read new position/rotation from Bullet → ECS Transform
-                    // The actual Bullet API reading is done by PhysicsSystem
+                    // Read new position/rotation from Jolt → ECS Transform
+                    // The actual Jolt API reading is done by PhysicsSystem
                 }
             }
         }

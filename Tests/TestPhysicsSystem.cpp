@@ -1,5 +1,5 @@
 // TestPhysicsSystem.cpp - Tests for physics system configuration and state
-// Standalone implementations for CI testing (no Bullet Physics dependency)
+// Standalone implementations for CI testing (no Jolt Physics dependency)
 
 #include "TestFramework.h"
 #include <string>
@@ -493,4 +493,178 @@ TEST(Physics_Shutdown)
     physics.Shutdown();
     EXPECT_FALSE(physics.IsInitialized());
     EXPECT_EQ(physics.GetBodyCount(), 0);
+}
+
+// =============================================================================
+// PhysicsTypes.h tests (real types from the engine, no Jolt dependency)
+// =============================================================================
+
+#include "Physics/PhysicsTypes.h"
+#include "Physics/SoftBodyPhysics.h"
+
+TEST(PhysicsTypes_BodyTypeStringRoundtrip)
+{
+    EXPECT_EQ(PhysicsBodyTypeToString(PhysicsBodyType::Static), std::string("Static"));
+    EXPECT_EQ(PhysicsBodyTypeToString(PhysicsBodyType::Dynamic), std::string("Dynamic"));
+    EXPECT_EQ(PhysicsBodyTypeToString(PhysicsBodyType::Kinematic), std::string("Kinematic"));
+    EXPECT_TRUE(StringToPhysicsBodyType("Static") == PhysicsBodyType::Static);
+    EXPECT_TRUE(StringToPhysicsBodyType("Dynamic") == PhysicsBodyType::Dynamic);
+    EXPECT_TRUE(StringToPhysicsBodyType("Kinematic") == PhysicsBodyType::Kinematic);
+}
+
+TEST(PhysicsTypes_ShapeTypeStringRoundtrip)
+{
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::Box), std::string("Box"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::Sphere), std::string("Sphere"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::Capsule), std::string("Capsule"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::Heightfield), std::string("Heightfield"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::TaperedCapsule), std::string("TaperedCapsule"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::TaperedCylinder), std::string("TaperedCylinder"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::Plane), std::string("Plane"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::Scaled), std::string("Scaled"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::OffsetCenterOfMass), std::string("OffsetCenterOfMass"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::MutableCompound), std::string("MutableCompound"));
+    EXPECT_EQ(CollisionShapeTypeToString(CollisionShapeType::Empty), std::string("Empty"));
+    EXPECT_TRUE(StringToCollisionShapeType("Sphere") == CollisionShapeType::Sphere);
+    EXPECT_TRUE(StringToCollisionShapeType("Heightfield") == CollisionShapeType::Heightfield);
+}
+
+TEST(PhysicsTypes_ConstraintTypeStringRoundtrip)
+{
+    EXPECT_EQ(ConstraintTypeToString(ConstraintType::Hinge), std::string("Hinge"));
+    EXPECT_EQ(ConstraintTypeToString(ConstraintType::Gear), std::string("Gear"));
+    EXPECT_EQ(ConstraintTypeToString(ConstraintType::RackAndPinion), std::string("RackAndPinion"));
+    EXPECT_EQ(ConstraintTypeToString(ConstraintType::Path), std::string("Path"));
+    EXPECT_EQ(ConstraintTypeToString(ConstraintType::Distance), std::string("Distance"));
+    EXPECT_EQ(ConstraintTypeToString(ConstraintType::Cone), std::string("Cone"));
+    EXPECT_EQ(ConstraintTypeToString(ConstraintType::Pulley), std::string("Pulley"));
+    EXPECT_TRUE(StringToConstraintType("Gear") == ConstraintType::Gear);
+    EXPECT_TRUE(StringToConstraintType("Path") == ConstraintType::Path);
+}
+
+TEST(PhysicsTypes_BodyDescDefaults)
+{
+    PhysicsBodyDesc desc;
+    EXPECT_TRUE(desc.type == PhysicsBodyType::Dynamic);
+    EXPECT_NEAR(desc.mass, 1.0f, 0.01f);
+    EXPECT_NEAR(desc.gravityFactor, 1.0f, 0.01f);
+    EXPECT_NEAR(desc.maxLinearVelocity, 500.0f, 0.01f);
+    EXPECT_NEAR(desc.maxAngularVelocity, 47.12f, 0.1f);
+    EXPECT_EQ(desc.collisionGroup, static_cast<uint16_t>(1));
+    EXPECT_EQ(desc.collisionMask, static_cast<uint16_t>(0xFFFF));
+    EXPECT_TRUE(desc.motionQuality == MotionQuality::Discrete);
+    EXPECT_TRUE(desc.allowedDOFs == AllowedDOFs::All);
+    EXPECT_FALSE(desc.isTrigger);
+    EXPECT_FALSE(desc.isKinematic);
+    EXPECT_TRUE(desc.name.empty());
+    EXPECT_EQ(desc.entityId, 0u);
+}
+
+TEST(PhysicsTypes_CollisionGroupDescDefaults)
+{
+    CollisionGroupDesc group;
+    EXPECT_EQ(group.groupFilterID, 0u);
+    EXPECT_EQ(group.groupID, 0u);
+    EXPECT_EQ(group.subGroupID, 0u);
+
+    // Verify embedded in body desc
+    PhysicsBodyDesc desc;
+    EXPECT_EQ(desc.collisionGroupDesc.groupFilterID, 0u);
+}
+
+TEST(PhysicsTypes_ShapeDescDefaults)
+{
+    CollisionShapeDesc desc;
+    EXPECT_TRUE(desc.type == CollisionShapeType::Box);
+    EXPECT_NEAR(desc.radius, 0.5f, 0.01f);
+    EXPECT_NEAR(desc.height, 1.0f, 0.01f);
+    EXPECT_NEAR(desc.scale.x, 1.0f, 0.01f);
+    EXPECT_NEAR(desc.scale.y, 1.0f, 0.01f);
+    EXPECT_NEAR(desc.scale.z, 1.0f, 0.01f);
+    EXPECT_EQ(desc.heightfieldSamples, 0u);
+}
+
+TEST(PhysicsTypes_MaterialDefaults)
+{
+    PhysicsMaterial mat;
+    EXPECT_NEAR(mat.friction, 0.5f, 0.01f);
+    EXPECT_NEAR(mat.restitution, 0.1f, 0.01f);
+    EXPECT_NEAR(mat.linearDamping, 0.1f, 0.01f);
+    EXPECT_NEAR(mat.angularDamping, 0.1f, 0.01f);
+    EXPECT_NEAR(mat.density, 1.0f, 0.01f);
+    EXPECT_FALSE(mat.isStatic);
+    EXPECT_TRUE(mat.name.empty());
+}
+
+TEST(PhysicsTypes_MutableSubShapeDescDefaults)
+{
+    MutableSubShapeDesc sub;
+    EXPECT_TRUE(sub.shape.type == CollisionShapeType::Box);
+    EXPECT_NEAR(sub.position.x, 0.0f, 0.01f);
+    EXPECT_NEAR(sub.rotation.x, 0.0f, 0.01f);
+    EXPECT_EQ(sub.userData, 0u);
+}
+
+TEST(PhysicsTypes_MotorAndSpringDefaults)
+{
+    PhysicsMotorSettings motor;
+    EXPECT_NEAR(motor.spring.frequency, 1.0f, 0.01f);
+    EXPECT_NEAR(motor.spring.damping, 0.5f, 0.01f);
+    EXPECT_TRUE(motor.spring.useFrequencyMode);
+
+    PhysicsSpringSettings spring;
+    EXPECT_TRUE(spring.useFrequencyMode);
+    EXPECT_NEAR(spring.frequency, 1.0f, 0.01f);
+    EXPECT_NEAR(spring.stiffness, 100.0f, 0.01f);
+}
+
+TEST(PhysicsTypes_AllowedDOFs_Bitfield)
+{
+    // Verify 2D mode restricts to X/Y translation + Z rotation
+    auto dofs2D = static_cast<uint8_t>(AllowedDOFs::Plane2D);
+    auto transX = static_cast<uint8_t>(AllowedDOFs::TranslationX);
+    auto transY = static_cast<uint8_t>(AllowedDOFs::TranslationY);
+    auto rotZ = static_cast<uint8_t>(AllowedDOFs::RotationZ);
+    EXPECT_TRUE((dofs2D & transX) != 0);
+    EXPECT_TRUE((dofs2D & transY) != 0);
+    EXPECT_TRUE((dofs2D & rotZ) != 0);
+}
+
+TEST(PhysicsTypes_VehicleDescDefaults)
+{
+    VehicleDesc vDesc;
+    EXPECT_TRUE(vDesc.type == PhysicsVehicleType::Wheeled);
+    EXPECT_TRUE(vDesc.wheels.empty());
+    EXPECT_NEAR(vDesc.maxEngineTorque, 500.0f, 1.0f);
+    EXPECT_NEAR(vDesc.minRPM, 1000.0f, 1.0f);
+    EXPECT_NEAR(vDesc.maxRPM, 6000.0f, 1.0f);
+    EXPECT_EQ(vDesc.gearRatios.size(), 5u);
+}
+
+TEST(PhysicsTypes_RagdollDescDefaults)
+{
+    RagdollPartDesc part;
+    EXPECT_EQ(part.parentIndex, -1);
+    EXPECT_TRUE(part.constraintType == ConstraintType::ConeTwist);
+    EXPECT_NEAR(part.swingLimit1, 0.5f, 0.01f);
+    EXPECT_NEAR(part.twistLimit, 0.3f, 0.01f);
+}
+
+TEST(PhysicsTypes_ContactInfoDefaults)
+{
+    ContactInfo info;
+    EXPECT_TRUE(info.bodyA == nullptr);
+    EXPECT_TRUE(info.bodyB == nullptr);
+    EXPECT_NEAR(info.penetrationDepth, 0.0f, 0.01f);
+    EXPECT_EQ(info.entityIdA, 0u);
+    EXPECT_EQ(info.entityIdB, 0u);
+}
+
+TEST(PhysicsTypes_RaycastHitDefaults)
+{
+    RaycastHit hit;
+    EXPECT_FALSE(hit.hasHit);
+    EXPECT_TRUE(hit.body == nullptr);
+    EXPECT_NEAR(hit.distance, 0.0f, 0.01f);
+    EXPECT_EQ(hit.entityId, 0u);
 }

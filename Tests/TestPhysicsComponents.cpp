@@ -1,5 +1,5 @@
 // TestPhysicsComponents.cpp - Tests for physics component data and logic
-// Standalone implementations for CI testing (no DirectXMath/Bullet dependency)
+// Standalone implementations for CI testing (no DirectXMath/Jolt dependency)
 
 #include "TestFramework.h"
 #include <string>

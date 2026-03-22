@@ -1,10 +1,10 @@
 /**
  * @file PhysicsSystemStub.cpp
- * @brief No-op implementation of PhysicsSystem when Bullet Physics is unavailable.
+ * @brief No-op implementation of PhysicsSystem when Jolt Physics is unavailable.
  *
- * Compiled only when SPARK_BULLET_PHYSICS_AVAILABLE is NOT set.  Every public
+ * Compiled only when SPARK_JOLT_PHYSICS_AVAILABLE is NOT set.  Every public
  * method returns a safe default so the rest of the engine and game link without
- * the Bullet SDK.
+ * the Jolt SDK.
  */
 
 #include "Core/Platform.h"
@@ -13,6 +13,9 @@
 #include "Utils/Hash.h"
 #include "Utils/Validate.h"
 #include <sstream>
+
+// Global physics system pointer (stub — always null)
+::PhysicsSystem* g_physicsSystem = nullptr;
 
 // ============================================================================
 // Utility functions
@@ -142,9 +145,7 @@ ConstraintType StringToConstraintType(const std::string& str)
 // PhysicsBody — stub
 // ============================================================================
 
-PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, btRigidBody* /*bulletBody*/) : m_desc(desc), m_bulletBody(nullptr)
-{
-}
+PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, uint32_t /*joltBodyID*/) : m_desc(desc), m_joltBodyID(0) {}
 
 PhysicsBody::~PhysicsBody() = default;
 
@@ -260,7 +261,7 @@ void PhysicsBody::SetCollisionMask(uint16_t mask)
 
 void PhysicsBody::ApplyCollisionFilter()
 {
-    // Stub: no Bullet broadphase to update
+    // Stub: no Jolt broadphase to update
 }
 
 std::string PhysicsBody::GetInfo() const
@@ -270,7 +271,7 @@ std::string PhysicsBody::GetInfo() const
     ss << "  Type: " << PhysicsBodyTypeToString(m_desc.type) << "\n";
     ss << "  Position: (" << m_desc.position.x << ", " << m_desc.position.y << ", " << m_desc.position.z << ")\n";
     ss << "  Mass: " << m_desc.mass << " kg\n";
-    ss << "  [Bullet Physics not available - stub implementation]\n";
+    ss << "  [Jolt Physics not available - stub implementation]\n";
     return ss.str();
 }
 
@@ -290,12 +291,26 @@ void PhysicsBody::Console_SetProperty(const std::string& property, float value)
 
 void PhysicsBody::Console_ApplyForce(float /*x*/, float /*y*/, float /*z*/) {}
 
+XMFLOAT3 PhysicsBody::GetInterpolatedPosition(float /*alpha*/) const
+{
+    return m_desc.position;
+}
+
+XMMATRIX PhysicsBody::GetInterpolatedTransform(float /*alpha*/) const
+{
+    return GetTransform();
+}
+
+void PhysicsBody::StoreCurrentState() {}
+
+void PhysicsBody::UpdateCurrentState() {}
+
 // ============================================================================
 // PhysicsConstraint — stub
 // ============================================================================
 
-PhysicsConstraint::PhysicsConstraint(ConstraintType type, btTypedConstraint* /*bulletConstraint*/)
-    : m_type(type), m_bulletConstraint(nullptr)
+PhysicsConstraint::PhysicsConstraint(ConstraintType type, JPH::Constraint* /*joltConstraint*/)
+    : m_type(type), m_joltConstraint(nullptr)
 {
 }
 
@@ -320,8 +335,6 @@ float PhysicsConstraint::GetBreakingThreshold() const
 // ============================================================================
 
 PhysicsSystem::PhysicsSystem()
-    : m_dynamicsWorld(nullptr), m_collisionConfig(nullptr), m_dispatcher(nullptr), m_broadphase(nullptr),
-      m_solver(nullptr), m_debugDrawer(nullptr)
 {
     m_metrics = {};
 }
@@ -334,7 +347,7 @@ PhysicsSystem::~PhysicsSystem()
 HRESULT PhysicsSystem::Initialize()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
-    SPARK_LOG_WARN(Spark::LogCategory::Physics, "Bullet Physics not available — physics simulation disabled");
+    SPARK_LOG_WARN(Spark::LogCategory::Physics, "Jolt Physics not available — physics simulation disabled");
     return S_OK;
 }
 
@@ -345,6 +358,7 @@ void PhysicsSystem::Shutdown()
     m_bodies.clear();
     m_constraints.clear();
     m_namedBodies.clear();
+    m_bodyIDMap.clear();
     m_shapeCache.clear();
     m_materials.clear();
 }
@@ -360,7 +374,7 @@ XMFLOAT3 PhysicsSystem::GetGravity() const
 
 std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& desc)
 {
-    auto body = std::make_shared<PhysicsBody>(desc, nullptr);
+    auto body = std::make_shared<PhysicsBody>(desc, 0);
     m_bodies.push_back(body);
     if (!desc.name.empty())
     {
@@ -384,6 +398,7 @@ void PhysicsSystem::RemoveAllBodies()
 {
     m_bodies.clear();
     m_namedBodies.clear();
+    m_bodyIDMap.clear();
 }
 
 std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateHingeConstraint(
@@ -478,6 +493,133 @@ RaycastHit PhysicsSystem::CapsuleCast(float /*radius*/, float /*height*/, const 
 {
     return RaycastHit{};
 }
+
+// New constraint stubs
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateGearConstraint(std::shared_ptr<PhysicsBody>,
+                                                                       std::shared_ptr<PhysicsBody>,
+                                                                       std::shared_ptr<PhysicsConstraint>,
+                                                                       std::shared_ptr<PhysicsConstraint>, float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Gear, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateRackAndPinionConstraint(std::shared_ptr<PhysicsBody>,
+                                                                                std::shared_ptr<PhysicsBody>,
+                                                                                std::shared_ptr<PhysicsConstraint>,
+                                                                                std::shared_ptr<PhysicsConstraint>,
+                                                                                float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::RackAndPinion, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePathConstraint(std::shared_ptr<PhysicsBody>,
+                                                                       const std::vector<XMFLOAT3>&,
+                                                                       const std::vector<XMFLOAT3>&)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Path, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateDistanceConstraint(std::shared_ptr<PhysicsBody>,
+                                                                           std::shared_ptr<PhysicsBody>,
+                                                                           const XMFLOAT3&, const XMFLOAT3&, float,
+                                                                           float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Distance, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateConeConstraint(std::shared_ptr<PhysicsBody>,
+                                                                       std::shared_ptr<PhysicsBody>, const XMFLOAT3&,
+                                                                       const XMFLOAT3&, float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Cone, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateSixDOFConstraint(std::shared_ptr<PhysicsBody>,
+                                                                         std::shared_ptr<PhysicsBody>, const XMMATRIX&,
+                                                                         const XMMATRIX&)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Generic6DOF, nullptr);
+}
+
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePulleyConstraint(std::shared_ptr<PhysicsBody>,
+                                                                         std::shared_ptr<PhysicsBody>, const XMFLOAT3&,
+                                                                         const XMFLOAT3&, const XMFLOAT3&,
+                                                                         const XMFLOAT3&, float)
+{
+    return std::make_shared<PhysicsConstraint>(ConstraintType::Pulley, nullptr);
+}
+
+// Motor stubs
+void PhysicsSystem::SetHingeMotorVelocity(std::shared_ptr<PhysicsConstraint>, float, float) {}
+void PhysicsSystem::SetHingeMotorPosition(std::shared_ptr<PhysicsConstraint>, float, float) {}
+void PhysicsSystem::SetSliderMotorVelocity(std::shared_ptr<PhysicsConstraint>, float, float) {}
+void PhysicsSystem::SetSliderMotorPosition(std::shared_ptr<PhysicsConstraint>, float, float) {}
+void PhysicsSystem::DisableConstraintMotor(std::shared_ptr<PhysicsConstraint>) {}
+
+// Character/Vehicle/Ragdoll/SoftBody factory stubs
+std::unique_ptr<CharacterController> PhysicsSystem::CreateCharacterController(const CharacterControllerDesc&)
+{
+    return nullptr;
+}
+std::unique_ptr<VehiclePhysics> PhysicsSystem::CreateVehicle(std::shared_ptr<PhysicsBody>, const VehicleDesc&)
+{
+    return nullptr;
+}
+std::unique_ptr<Ragdoll> PhysicsSystem::CreateRagdoll(const RagdollDesc&)
+{
+    return nullptr;
+}
+std::unique_ptr<SoftBody> PhysicsSystem::CreateSoftBody(const SoftBodyDesc&)
+{
+    return nullptr;
+}
+
+// Surface velocity stub
+void PhysicsSystem::SetSurfaceVelocity(std::shared_ptr<PhysicsBody>, const XMFLOAT3&) {}
+
+// Buoyancy stub
+void PhysicsSystem::ApplyBuoyancy(std::shared_ptr<PhysicsBody>, const XMFLOAT3&, const XMFLOAT3&, float, float, float)
+{
+}
+
+// State serialization stubs
+bool PhysicsSystem::SaveState(std::vector<uint8_t>&) const
+{
+    return false;
+}
+bool PhysicsSystem::LoadState(const std::vector<uint8_t>&)
+{
+    return false;
+}
+
+// Group filter table stubs
+uint32_t PhysicsSystem::CreateGroupFilterTable(uint32_t)
+{
+    return 0;
+}
+void PhysicsSystem::DisableGroupCollision(uint32_t, uint32_t, uint32_t) {}
+void PhysicsSystem::EnableGroupCollision(uint32_t, uint32_t, uint32_t) {}
+
+// Mutable compound shape stubs
+std::shared_ptr<PhysicsBody> PhysicsSystem::CreateMutableCompoundBody(const PhysicsBodyDesc&,
+                                                                      const std::vector<MutableSubShapeDesc>&)
+{
+    return nullptr;
+}
+uint32_t PhysicsSystem::AddSubShape(std::shared_ptr<PhysicsBody>, const MutableSubShapeDesc&)
+{
+    return UINT32_MAX;
+}
+void PhysicsSystem::RemoveSubShape(std::shared_ptr<PhysicsBody>, uint32_t) {}
+
+// Deterministic simulation stub
+void PhysicsSystem::SetDeterministicSimulation(bool enabled)
+{
+    m_deterministicMode = enabled;
+}
+
+// Offset center of mass stub
+void PhysicsSystem::SetCenterOfMassOffset(std::shared_ptr<PhysicsBody>, const XMFLOAT3&) {}
 
 void PhysicsSystem::SetDebugDrawMode(int /*mode*/) {}
 
@@ -641,6 +783,15 @@ void PhysicsSystem::UpdateMetrics()
 }
 
 void PhysicsSystem::ProcessCollisions() {}
+
+void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody*, PhysicsBody*>>&) {}
+
+void PhysicsSystem::UpdateTriggerExitEvents(const std::vector<std::pair<PhysicsBody*, PhysicsBody*>>&) {}
+
+PhysicsBody* PhysicsSystem::FindBodyByJoltID(uint32_t /*joltBodyID*/) const
+{
+    return nullptr;
+}
 
 size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc) const
 {
