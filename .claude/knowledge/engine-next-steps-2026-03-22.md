@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-22
 **Type:** Decision
-**Status:** Active
+**Status:** Mostly Resolved
 
 ## Description
 
@@ -182,3 +182,39 @@ Features validated by the most engine analyses (strongest signal for what to bui
 - No dead code deletion — every stub and header-only system gets completed
 - Networking is now ON by default (CMake change made 2026-03-22)
 - All repo documentation updated to reflect Jolt Physics, 145 tests, networking ON
+
+## Implementation Progress (2026-03-22)
+
+### Phase 1 — COMPLETE
+- Render graph pass bodies wired into RenderPipeline (Shadow, GBuffer, Lighting, PostProcess, UI)
+- 8 rendering stubs implemented with .cpp backends (ShadowAtlas, ScreenSpaceEffects, GPUOcclusionCulling, FroxelVolumetricFog, DynamicQualityScaler, DDGIProbeSystem, AdaptiveProbeVolumes, LightProbeSystem)
+- EditorPluginManager wired into editor lifecycle
+- Networking already fully implemented (timeout, retransmission, prediction all present)
+- Editor systems (GizmoSystem, CinematicSequencer, LightingTools, VCS, CollaborativeEdit) already had substantial implementations
+- Remaining stubs (SkyAtmosphere, WaterRenderer, ClusteredLightCulling) already had .cpp files
+
+### Phase 2 — COMPLETE
+- JobSystem wired into engine init/shutdown
+- DeferredDeletionQueue integrated into RHI frame loop
+- Collision layer/mask filtering added to PhysicsSystem (ShouldCollide, GroupFilterTable)
+- EntityArchetypeLoader extended with property override support
+- EntityEventBus cleanup wired into entity destruction
+
+### Phase 3 — COMPLETE
+- Bloom (threshold extraction, Gaussian blur, composite)
+- Auto-exposure (luminance histogram, temporal adaptation)
+- Tonemapping (ACES, Reinhard, Filmic, Neutral operators)
+- Color grading (lift/gamma/gain, saturation, contrast)
+- PostProcessVolume for spatial parameter blending
+
+### Phase 4 — COMPLETE
+- AI enemies wired into SparkGame (patrol behavior, NavMesh waypoints)
+- TimeOfDaySystem implemented (sun direction, sky color, light temperature)
+- Console commands: time_set, time_speed, time_get
+- TimeOfDaySystem integrated with directional light and WeatherSystem
+
+### Phase 5 — REMAINING
+- Refactor 66 oversized functions (code quality)
+- Fix duplicate MaterialSystem functions
+- Add AudioEngine and SceneManager test suites
+- Documentation specs (networking wire format, asset format, plugin ABI)
