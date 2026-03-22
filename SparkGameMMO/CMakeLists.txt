@@ -150,9 +150,9 @@ if(MSVC)
     target_link_libraries(SparkGameMMO PRIVATE legacy_stdio_definitions)
 endif()
 
-# Link Bullet Physics if available
-if(TARGET BulletDynamics)
-    target_link_libraries(SparkGameMMO PRIVATE BulletDynamics BulletCollision LinearMath)
+# Link Jolt Physics if available
+if(TARGET Jolt)
+    target_link_libraries(SparkGameMMO PRIVATE Jolt)
 endif()
 
 if(TARGET miniz)

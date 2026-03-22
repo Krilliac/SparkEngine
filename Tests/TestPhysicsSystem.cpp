@@ -1,5 +1,5 @@
 // TestPhysicsSystem.cpp - Tests for physics system configuration and state
-// Standalone implementations for CI testing (no Bullet Physics dependency)
+// Standalone implementations for CI testing (no Jolt Physics dependency)
 
 #include "TestFramework.h"
 #include <string>

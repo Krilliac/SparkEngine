@@ -6,7 +6,7 @@
  *
  * Extracted from PhysicsSystem.h so that code needing only physics types
  * (e.g. ECS components, editor panels) can include this lightweight header
- * without pulling in the full PhysicsSystem class and its Bullet dependencies.
+ * without pulling in the full PhysicsSystem class and its Jolt dependencies.
  */
 
 #pragma once
@@ -82,7 +82,7 @@ enum class ConstraintType
  * ### Tuning guide
  * - **friction**: 0.0 = frictionless ice; 1.0 = high-grip rubber. Values above 1
  *   are valid for extra-grippy surfaces. Combined with the other body's friction via
- *   Bullet's default `sqrt(frA * frB)` mixing.
+ *   the physics engine's default `sqrt(frA * frB)` mixing.
  * - **restitution**: 0.0 = no bounce (clay); 1.0 = perfectly elastic. Values > 1
  *   add energy (usually undesirable). Combined via `max(restA, restB)` mixing.
  * - **linearDamping / angularDamping**: [0, 1] range; simulates air resistance.
@@ -154,7 +154,7 @@ struct PhysicsMaterial
 /**
  * @brief Descriptor that fully specifies the collision geometry for a physics body.
  *
- * PhysicsSystem::CreateBody() reads this struct to construct the appropriate Bullet
+ * PhysicsSystem::CreateBody() reads this struct to construct the appropriate Jolt
  * `btCollisionShape`. Once a shape is created it may be cached internally (keyed by
  * a hash of the descriptor) so that many bodies sharing the same geometry reuse a
  * single `btCollisionShape` instance, reducing memory usage.
@@ -222,7 +222,7 @@ struct CollisionShapeDesc
     /**
      * @brief Vertex positions for ConvexHull and inline TriangleMesh shapes.
      *
-     * - For **ConvexHull**: provide all hull vertices (duplicates are handled by Bullet).
+     * - For **ConvexHull**: provide all hull vertices (duplicates are handled by Jolt).
      * - For **Mesh** (inline): paired with `indices` to define the triangle list.
      *   This is useful for procedurally-generated geometry or when the mesh data is
      *   already in memory.
@@ -311,7 +311,7 @@ struct PhysicsBodyDesc
     /**
      * @brief Initial rotation expressed as Euler angles in degrees (X=pitch, Y=yaw, Z=roll).
      *
-     * Converted internally to a quaternion before being passed to Bullet. Using
+     * Converted internally to a quaternion before being passed to Jolt. Using
      * Euler angles avoids gimbal lock issues at the API boundary; prefer setting
      * this to zero and calling PhysicsBody::SetTransform() if you already have a matrix.
      */
@@ -336,7 +336,7 @@ struct PhysicsBodyDesc
     /**
      * @brief Mass of the body in kilograms.
      *
-     * - 0.0 -> the body behaves as Static regardless of the `type` field. Bullet
+     * - 0.0 -> the body behaves as Static regardless of the `type` field. Jolt
      *          treats zero-mass bodies as immovable.
      * - > 0  -> must match `type == Dynamic` for full simulation.
      *
@@ -380,7 +380,7 @@ struct PhysicsBodyDesc
     /**
      * @brief Collision filter group bitmask (what this body IS).
      *
-     * Used by Bullet's broadphase to filter collision pairs. Body A collides
+     * Used by the broadphase to filter collision pairs. Body A collides
      * with body B only if `(A.group & B.mask) != 0 && (B.group & A.mask) != 0`.
      * Default: 1 (default group). Set to 0 to disable all collisions.
      */

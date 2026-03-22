@@ -4,7 +4,7 @@
 
 SparkEngine is a C++23 open-source 3D game engine (with C++26 forward-compatibility macros). Originally focused on first-person shooters, it is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres.
 - **Rendering**: Full RHI abstraction — D3D11 (primary), D3D12/Vulkan/Metal/OpenGL (experimental backends)
-- **Physics**: Bullet Physics 3
+- **Physics**: Jolt Physics
 - **Audio**: XAudio2
 - **ECS**: EnTT
 - **Scripting**: AngelScript (with hot-reload and client/server context separation)

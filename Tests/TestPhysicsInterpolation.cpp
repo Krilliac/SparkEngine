@@ -1,5 +1,5 @@
 // TestPhysicsInterpolation.cpp - Tests for physics body interpolation
-// Standalone implementations for CI testing (no DirectXMath/Bullet dependency)
+// Standalone implementations for CI testing (no DirectXMath/Jolt dependency)
 
 #include "TestFramework.h"
 #include <cmath>

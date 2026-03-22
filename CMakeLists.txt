@@ -112,8 +112,8 @@ endif()
 option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON)
 option(ENABLE_RECAST "Enable Recast/Detour navmesh generation (improved voxel-based builder)" ON)
 option(BUILD_TESTS "Build test suite" ON)
-option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Bullet3, ImGui, EnTT)" OFF)
-option(SPARK_SUPPRESS_THIRDPARTY_WARNINGS "Suppress compiler warnings from third-party libraries (Bullet3, etc.)" ON)
+option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)" OFF)
+option(SPARK_SUPPRESS_THIRDPARTY_WARNINGS "Suppress compiler warnings from third-party libraries (Jolt, etc.)" ON)
 
 # Editor available on Windows (Win32+DX11) and Linux (SDL2+OpenGL3)
 option(ENABLE_EDITOR "Enable editor features" ON)
@@ -304,11 +304,11 @@ elseif(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt_stub/entt/entt.hpp")
     message(STATUS "Found EnTT (minimal stub - initialize submodule for full library)")
 endif()
 
-# Bullet Physics
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
-    set(BULLET_PHYSICS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3/src")
-    set(BULLET_FOUND TRUE)
-    message(STATUS "Found Bullet Physics")
+# Jolt Physics
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/JoltPhysics/Jolt/Jolt.h")
+    set(JOLT_PHYSICS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Physics/JoltPhysics")
+    set(JOLT_FOUND TRUE)
+    message(STATUS "Found Jolt Physics")
 endif()
 
 # ImGui
@@ -461,13 +461,13 @@ set(SPARK_ENGINE_LIB_SOURCES ${SPARK_ENGINE_SOURCES})
 list(REMOVE_ITEM SPARK_ENGINE_LIB_SOURCES "${SPARK_ENGINE_ENTRY_POINT}")
 
 # Exclude source files whose third-party dependencies are missing
-if(NOT BULLET_FOUND)
+if(NOT JOLT_FOUND)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSystem\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSystemQueries\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsShapeFactory\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsBodyImpl\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsConsoleOps\\.cpp$")
-    message(STATUS "Bullet Physics not found - using PhysicsSystemStub.cpp")
+    message(STATUS "Jolt Physics not found - using PhysicsSystemStub.cpp")
 else()
     # When the real PhysicsSystem is built, exclude the stub
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSystemStub\\.cpp$")
@@ -506,45 +506,36 @@ if(TINYOBJ_FOUND)
     message(STATUS "Linking SparkEngineLib with TinyObjLoader")
 endif()
 
-# Link Bullet Physics
-if(BULLET_FOUND)
-    set(BUILD_BULLET2_DEMOS OFF CACHE BOOL "" FORCE)
-    set(BUILD_CPU_DEMOS OFF CACHE BOOL "" FORCE)
-    set(BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
-    set(BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-    set(USE_GRAPHICAL_BENCHMARK OFF CACHE BOOL "" FORCE)
-    set(USE_MSVC_RUNTIME_LIBRARY_DLL ON CACHE BOOL "" FORCE)
-    add_subdirectory("${CMAKE_SOURCE_DIR}/ThirdParty/Physics/bullet3" "${CMAKE_BINARY_DIR}/bullet3")
-    # Suppress warnings in third-party bullet3 code
-    if(SPARK_SUPPRESS_THIRDPARTY_WARNINGS)
-        foreach(_bullet_target
-            BulletDynamics BulletCollision LinearMath
-            BulletSoftBody BulletInverseDynamics
-            Bullet3Common Bullet3Collision Bullet3Dynamics Bullet3Geometry
-            Bullet3OpenCL_clew Bullet2FileLoader
-        )
-            if(TARGET ${_bullet_target})
-                if(MSVC)
-                    # Strip /W3 set by Bullet's CMakeLists to avoid D9025 override warning
-                    get_target_property(_bullet_opts ${_bullet_target} COMPILE_OPTIONS)
-                    if(_bullet_opts)
-                        list(REMOVE_ITEM _bullet_opts "/W3")
-                        set_target_properties(${_bullet_target} PROPERTIES COMPILE_OPTIONS "${_bullet_opts}")
-                    endif()
-                    target_compile_options(${_bullet_target} PRIVATE /w)
-                elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
-                    target_compile_options(${_bullet_target} PRIVATE
-                        -w
-                    )
-                endif()
-            endif()
-        endforeach()
+# Link Jolt Physics
+if(JOLT_FOUND)
+    # Configure Jolt build options
+    set(TARGET_HELLO_WORLD OFF CACHE BOOL "" FORCE)
+    set(TARGET_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+    set(TARGET_PERFORMANCE_TEST OFF CACHE BOOL "" FORCE)
+    set(TARGET_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(TARGET_VIEWER OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+    set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
+    set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+    set(FLOATING_POINT_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
+    set(CPP_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
+    set(CPP_RTTI_ENABLED OFF CACHE BOOL "" FORCE)
+
+    add_subdirectory("${JOLT_PHYSICS_SOURCE_DIR}/Build" "${CMAKE_BINARY_DIR}/JoltPhysics")
+
+    # Suppress warnings in third-party Jolt code
+    if(SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt)
+        if(MSVC)
+            target_compile_options(Jolt PRIVATE /w)
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
+            target_compile_options(Jolt PRIVATE -w)
+        endif()
     endif()
-    target_link_libraries(SparkEngineLib PRIVATE BulletDynamics BulletCollision LinearMath)
-    target_compile_definitions(SparkEngineLib PUBLIC SPARK_BULLET_PHYSICS_AVAILABLE=1)
-    target_compile_definitions(SparkEngine PRIVATE SPARK_BULLET_PHYSICS_AVAILABLE=1)
-    message(STATUS "Linking SparkEngineLib with Bullet Physics")
+
+    target_link_libraries(SparkEngineLib PRIVATE Jolt)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_JOLT_PHYSICS_AVAILABLE=1)
+    target_compile_definitions(SparkEngine PRIVATE SPARK_JOLT_PHYSICS_AVAILABLE=1)
+    message(STATUS "Linking SparkEngineLib with Jolt Physics")
 endif()
 
 # Recast/Detour — NavMesh generation library
@@ -743,10 +734,10 @@ foreach(_tp_dir ${THIRDPARTY_INCLUDE_DIRS})
     )
 endforeach()
 
-# Bullet Physics headers are added as SYSTEM to suppress third-party warnings
-if(BULLET_FOUND)
+# Jolt Physics headers are added as SYSTEM to suppress third-party warnings
+if(JOLT_FOUND)
     target_include_directories(SparkEngineLib SYSTEM PUBLIC
-        $<BUILD_INTERFACE:${BULLET_PHYSICS_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${JOLT_PHYSICS_SOURCE_DIR}>
     )
 endif()
 
@@ -1003,7 +994,7 @@ foreach(dir ${THIRDPARTY_INCLUDE_DIRS})
 endforeach()
 
 # Export targets (only when all dependencies are in export sets)
-if(FALSE) # Disabled: third-party targets (Bullet, miniz) lack EXPORT sets
+if(FALSE) # Disabled: third-party targets (Jolt, miniz) lack EXPORT sets
 install(EXPORT SparkEngineTargets
     FILE SparkEngineTargets.cmake
     NAMESPACE Spark::
@@ -1090,13 +1081,13 @@ message(STATUS "=== THIRD-PARTY DEPENDENCY STATUS ===")
 set(_SPARK_MISSING_DEPS "")
 set(_SPARK_MISSING_COUNT 0)
 
-# Bullet Physics
-if(BULLET_FOUND)
-    message(STATUS "  [OK]      Bullet Physics  — rigid body physics, collision, raycasting")
+# Jolt Physics
+if(JOLT_FOUND)
+    message(STATUS "  [OK]      Jolt Physics    — rigid body physics, collision, raycasting")
 else()
-    list(APPEND _SPARK_MISSING_DEPS "bullet3")
+    list(APPEND _SPARK_MISSING_DEPS "JoltPhysics")
     math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
-    message(STATUS "  [MISSING] Bullet Physics  — PhysicsSystem disabled, no rigid body simulation")
+    message(STATUS "  [MISSING] Jolt Physics    — PhysicsSystem disabled, no rigid body simulation")
 endif()
 
 # miniz
@@ -1167,9 +1158,9 @@ if(_SPARK_MISSING_COUNT GREATER 0)
 
     # Strict mode: fail the build if critical deps are missing
     if(SPARK_STRICT_DEPS)
-        if(NOT BULLET_FOUND)
-            message(FATAL_ERROR "SPARK_STRICT_DEPS: Bullet Physics is required but not found. "
-                "Run: git submodule update --init ThirdParty/Physics/bullet3")
+        if(NOT JOLT_FOUND)
+            message(FATAL_ERROR "SPARK_STRICT_DEPS: Jolt Physics is required but not found. "
+                "Run: git submodule update --init ThirdParty/Physics/JoltPhysics")
         endif()
         if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.cpp")
             message(FATAL_ERROR "SPARK_STRICT_DEPS: Dear ImGui is required but not found. "

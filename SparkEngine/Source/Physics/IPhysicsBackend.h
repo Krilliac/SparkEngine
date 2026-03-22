@@ -2,11 +2,11 @@
  * @file IPhysicsBackend.h
  * @brief Abstract physics backend interface for swappable physics engines
  *
- * Defines the interface that physics implementations (Bullet, Jolt, etc.) must
+ * Defines the interface that physics implementations (Jolt, Jolt, etc.) must
  * implement. This abstraction enables future migration to Jolt Physics
  * (ezEngine-inspired) without changing engine code that uses physics.
  *
- * Currently, PhysicsSystem implements this interface directly using Bullet Physics.
+ * Currently, PhysicsSystem implements this interface directly using Jolt Physics.
  * A future JoltPhysicsBackend could implement the same interface.
  *
  * @note This is a forward-looking abstraction. The current engine still uses
@@ -147,7 +147,7 @@ namespace Spark::Physics
         /// Set the gravity vector.
         virtual void SetGravity(const DirectX::XMFLOAT3& gravity) = 0;
 
-        /// Get the backend name (e.g., "Bullet", "Jolt").
+        /// Get the backend name (e.g., "Jolt", "Jolt").
         virtual const char* GetBackendName() const = 0;
 
         /// Get debug statistics string.

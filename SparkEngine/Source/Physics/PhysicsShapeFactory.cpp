@@ -1,56 +1,37 @@
 #include "../Core/Platform.h"
 /**
  * @file PhysicsShapeFactory.cpp
- * @brief Collision shape creation and Bullet vector/quaternion conversion helpers
+ * @brief Collision shape creation for Jolt Physics
  * @author Spark Engine Team
  * @date 2025
  *
- * Extracted from PhysicsSystem.cpp. Contains ToBullet/FromBullet conversions,
- * all Create*Shape helpers, and the shape hash function used by the shape cache.
+ * Contains all shape creation helpers and the shape hash function used by the
+ * shape cache. Shapes are created as Jolt ShapeRefC (ref-counted) and stored
+ * as void* in the cache for type erasure at the PhysicsSystem level.
  */
 
 #include "PhysicsSystem.h"
 #include "../Utils/Hash.h"
 
-#include <btBulletDynamicsCommon.h>
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+
+JPH_SUPPRESS_WARNINGS
 
 using namespace DirectX;
-
-// ============================================================================
-// BULLET CONVERSION HELPERS
-// ============================================================================
-
-btVector3 PhysicsSystem::ToBullet(const XMFLOAT3& vec) const
-{
-    return btVector3(vec.x, vec.y, vec.z);
-}
-
-XMFLOAT3 PhysicsSystem::FromBullet(const btVector3& vec) const
-{
-    return XMFLOAT3(vec.getX(), vec.getY(), vec.getZ());
-}
-
-btQuaternion PhysicsSystem::ToBulletQuaternion(const XMFLOAT3& euler) const
-{
-    btQuaternion quat;
-    quat.setEulerZYX(euler.z, euler.y, euler.x);
-    return quat;
-}
-
-XMFLOAT3 PhysicsSystem::FromBullet(const btQuaternion& quat) const
-{
-    btScalar yaw, pitch, roll;
-    btMatrix3x3(quat).getEulerYPR(yaw, pitch, roll);
-    return XMFLOAT3(roll, yaw, pitch);
-}
 
 // ============================================================================
 // COLLISION SHAPE CREATION
 // ============================================================================
 
-btCollisionShape* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
+void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
 {
-    // Check shape cache first
     size_t hash = HashShape(desc);
     auto it = m_shapeCache.find(hash);
     if (it != m_shapeCache.end())
@@ -58,7 +39,7 @@ btCollisionShape* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& 
         return it->second;
     }
 
-    btCollisionShape* shape = nullptr;
+    void* shape = nullptr;
 
     switch (desc.type)
     {
@@ -84,7 +65,6 @@ btCollisionShape* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& 
         shape = CreateConvexHullShape(desc.vertices);
         break;
     default:
-        // Default to box shape
         shape = CreateBoxShape(desc.dimensions);
         break;
     }
@@ -97,46 +77,88 @@ btCollisionShape* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& 
     return shape;
 }
 
-btCollisionShape* PhysicsSystem::CreateBoxShape(const XMFLOAT3& dimensions)
+void* PhysicsSystem::CreateBoxShape(const XMFLOAT3& dimensions)
 {
-    return new btBoxShape(btVector3(dimensions.x / 2.0f, dimensions.y / 2.0f, dimensions.z / 2.0f));
+    // Jolt BoxShape takes half-extents directly
+    JPH::BoxShapeSettings settings(JPH::Vec3(dimensions.x / 2.0f, dimensions.y / 2.0f, dimensions.z / 2.0f));
+    auto result = settings.Create();
+    if (result.HasError())
+        return nullptr;
+
+    // Store a new ref-counted shape on the heap
+    auto* shapeRef = new JPH::ShapeRefC(result.Get());
+    return shapeRef;
 }
 
-btCollisionShape* PhysicsSystem::CreateSphereShape(float radius)
+void* PhysicsSystem::CreateSphereShape(float radius)
 {
-    return new btSphereShape(radius);
+    JPH::SphereShapeSettings settings(radius);
+    auto result = settings.Create();
+    if (result.HasError())
+        return nullptr;
+
+    auto* shapeRef = new JPH::ShapeRefC(result.Get());
+    return shapeRef;
 }
 
-btCollisionShape* PhysicsSystem::CreateCapsuleShape(float radius, float height)
+void* PhysicsSystem::CreateCapsuleShape(float radius, float height)
 {
-    return new btCapsuleShape(radius, height);
+    // Jolt CapsuleShape takes half-height of the cylindrical part
+    JPH::CapsuleShapeSettings settings(height / 2.0f, radius);
+    auto result = settings.Create();
+    if (result.HasError())
+        return nullptr;
+
+    auto* shapeRef = new JPH::ShapeRefC(result.Get());
+    return shapeRef;
 }
 
-btCollisionShape* PhysicsSystem::CreateCylinderShape(float radius, float height)
+void* PhysicsSystem::CreateCylinderShape(float radius, float height)
 {
-    return new btCylinderShape(btVector3(radius, height / 2.0f, radius));
+    JPH::CylinderShapeSettings settings(height / 2.0f, radius);
+    auto result = settings.Create();
+    if (result.HasError())
+        return nullptr;
+
+    auto* shapeRef = new JPH::ShapeRefC(result.Get());
+    return shapeRef;
 }
 
-btCollisionShape* PhysicsSystem::CreateConeShape(float radius, float height)
+void* PhysicsSystem::CreateConeShape(float radius, float height)
 {
-    return new btConeShape(radius, height);
+    // Jolt doesn't have a native cone shape — approximate with a convex hull
+    // Generate cone vertices: apex + base circle
+    JPH::Array<JPH::Vec3> points;
+    points.push_back(JPH::Vec3(0, height, 0)); // Apex
+
+    constexpr int segments = 16;
+    for (int i = 0; i < segments; ++i)
+    {
+        float angle = (2.0f * 3.14159265f * i) / segments;
+        points.push_back(JPH::Vec3(radius * std::cos(angle), 0, radius * std::sin(angle)));
+    }
+
+    JPH::ConvexHullShapeSettings settings(points);
+    auto result = settings.Create();
+    if (result.HasError())
+        return CreateBoxShape({radius * 2, height, radius * 2}); // Fallback
+
+    auto* shapeRef = new JPH::ShapeRefC(result.Get());
+    return shapeRef;
 }
 
-btCollisionShape* PhysicsSystem::CreateMeshShape(const std::vector<XMFLOAT3>& vertices,
-                                                 const std::vector<uint32_t>& indices)
+void* PhysicsSystem::CreateMeshShape(const std::vector<XMFLOAT3>& vertices, const std::vector<uint32_t>& indices)
 {
     if (vertices.empty() || indices.empty() || indices.size() % 3 != 0)
     {
-        // Fall back to a unit box if mesh data is invalid
         return CreateBoxShape({1.0f, 1.0f, 1.0f});
     }
 
-    btTriangleMesh* triMesh = new btTriangleMesh();
-
+    JPH::TriangleList triangles;
     const auto vertexCount = static_cast<uint32_t>(vertices.size());
+
     for (size_t i = 0; i + 2 < indices.size(); i += 3)
     {
-        // Bounds-check indices to prevent out-of-range access on corrupted data
         if (indices[i] >= vertexCount || indices[i + 1] >= vertexCount || indices[i + 2] >= vertexCount)
             continue;
 
@@ -144,32 +166,40 @@ btCollisionShape* PhysicsSystem::CreateMeshShape(const std::vector<XMFLOAT3>& ve
         const XMFLOAT3& v1 = vertices[indices[i + 1]];
         const XMFLOAT3& v2 = vertices[indices[i + 2]];
 
-        triMesh->addTriangle(btVector3(v0.x, v0.y, v0.z), btVector3(v1.x, v1.y, v1.z), btVector3(v2.x, v2.y, v2.z));
+        triangles.push_back(
+            JPH::Triangle(JPH::Float3(v0.x, v0.y, v0.z), JPH::Float3(v1.x, v1.y, v1.z), JPH::Float3(v2.x, v2.y, v2.z)));
     }
 
-    // Track the triangle mesh for cleanup — btBvhTriangleMeshShape does not own it
-    m_triangleMeshes.push_back(triMesh);
+    JPH::MeshShapeSettings settings(triangles);
+    auto result = settings.Create();
+    if (result.HasError())
+        return CreateBoxShape({1.0f, 1.0f, 1.0f});
 
-    btBvhTriangleMeshShape* meshShape = new btBvhTriangleMeshShape(triMesh, true);
-    return meshShape;
+    auto* shapeRef = new JPH::ShapeRefC(result.Get());
+    return shapeRef;
 }
 
-btCollisionShape* PhysicsSystem::CreateConvexHullShape(const std::vector<XMFLOAT3>& vertices)
+void* PhysicsSystem::CreateConvexHullShape(const std::vector<XMFLOAT3>& vertices)
 {
     if (vertices.empty())
     {
         return CreateBoxShape({1.0f, 1.0f, 1.0f});
     }
 
-    btConvexHullShape* convexShape = new btConvexHullShape();
-
+    JPH::Array<JPH::Vec3> points;
+    points.reserve(vertices.size());
     for (const auto& v : vertices)
     {
-        convexShape->addPoint(btVector3(v.x, v.y, v.z), false);
+        points.push_back(JPH::Vec3(v.x, v.y, v.z));
     }
 
-    convexShape->recalcLocalAabb();
-    return convexShape;
+    JPH::ConvexHullShapeSettings settings(points);
+    auto result = settings.Create();
+    if (result.HasError())
+        return CreateBoxShape({1.0f, 1.0f, 1.0f});
+
+    auto* shapeRef = new JPH::ShapeRefC(result.Get());
+    return shapeRef;
 }
 
 size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc) const

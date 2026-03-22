@@ -5,9 +5,9 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Extracted from PhysicsSystem.cpp. Contains body creation/removal, all
- * constraint creation methods, raycasting, overlap queries, sweep tests,
- * debug rendering, material management, and metrics retrieval.
+ * Contains body creation/removal, all constraint creation methods, raycasting,
+ * overlap queries, sweep tests, debug rendering, material management, and
+ * metrics retrieval. Uses Jolt Physics API.
  */
 
 #include "PhysicsSystem.h"
@@ -15,13 +15,35 @@
 #include "../Utils/SparkConsole.h"
 #include "../Utils/Validate.h"
 
-#include <BulletCollision/CollisionDispatch/btGhostObject.h>
-#include <btBulletDynamicsCommon.h>
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Body/Body.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/ShapeCast.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
+#include <Jolt/Physics/Constraints/HingeConstraint.h>
+#include <Jolt/Physics/Constraints/SliderConstraint.h>
+#include <Jolt/Physics/Constraints/PointConstraint.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
+#include <Jolt/Physics/Constraints/FixedConstraint.h>
+
+JPH_SUPPRESS_WARNINGS
 
 #include <algorithm>
 #include <mutex>
 
 using namespace DirectX;
+
+// Global physics system pointer (defined in engine startup code)
+::PhysicsSystem* g_physicsSystem = nullptr;
 
 // ============================================================================
 // BODY CREATION / REMOVAL
@@ -30,78 +52,87 @@ using namespace DirectX;
 std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& desc)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
-    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Physics, m_dynamicsWorld, nullptr);
+    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Physics, m_joltSystem, nullptr);
+
+    g_physicsSystem = this;
 
     // Create collision shape
-    btCollisionShape* shape = CreateCollisionShape(desc.shape);
-    if (!shape)
+    void* shapePtr = CreateCollisionShape(desc.shape);
+    if (!shapePtr)
         return nullptr;
 
-    // Determine mass (0 for static and kinematic bodies)
-    float mass = desc.mass;
-    if (desc.type == PhysicsBodyType::Static || desc.isKinematic)
+    auto* shapeRef = static_cast<JPH::ShapeRefC*>(shapePtr);
+
+    // Determine motion type
+    JPH::EMotionType motionType = JPH::EMotionType::Dynamic;
+    if (desc.type == PhysicsBodyType::Static || (desc.mass <= 0.0f && !desc.isKinematic))
     {
-        mass = 0.0f;
+        motionType = JPH::EMotionType::Static;
+    }
+    else if (desc.isKinematic || desc.type == PhysicsBodyType::Kinematic)
+    {
+        motionType = JPH::EMotionType::Kinematic;
     }
 
-    // Calculate local inertia
-    btVector3 localInertia(0, 0, 0);
-    if (mass > 0.0f)
-    {
-        shape->calculateLocalInertia(mass, localInertia);
-    }
-
-    // Create initial transform
-    btTransform startTransform;
-    startTransform.setIdentity();
-    startTransform.setOrigin(ToBullet(desc.position));
-    startTransform.setRotation(ToBulletQuaternion(desc.rotation));
-
-    // Create motion state
-    btDefaultMotionState* motionState = new btDefaultMotionState(startTransform);
-
-    // Create rigid body construction info
-    btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, motionState, shape, localInertia);
-    rbInfo.m_friction = desc.material.friction;
-    rbInfo.m_restitution = desc.material.restitution;
-    rbInfo.m_linearDamping = desc.material.linearDamping;
-    rbInfo.m_angularDamping = desc.material.angularDamping;
-
-    // Create the Bullet rigid body
-    btRigidBody* bulletBody = new btRigidBody(rbInfo);
-
-    // Set kinematic flags
-    if (desc.isKinematic)
-    {
-        bulletBody->setCollisionFlags(bulletBody->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
-        bulletBody->setActivationState(DISABLE_DEACTIVATION);
-    }
-
-    // Set trigger flags
+    // Determine object layer
+    JPH::ObjectLayer objectLayer = 1; // MOVING
+    if (motionType == JPH::EMotionType::Static)
+        objectLayer = 0; // NON_MOVING
     if (desc.isTrigger)
+        objectLayer = 2; // TRIGGER
+
+    // Create body settings
+    JPH::BodyCreationSettings bodySettings(
+        *shapeRef, JPH::RVec3(desc.position.x, desc.position.y, desc.position.z),
+        JPH::Quat::sEulerAngles(JPH::Vec3(desc.rotation.x, desc.rotation.y, desc.rotation.z)), motionType, objectLayer);
+
+    // Set material properties
+    bodySettings.mFriction = desc.material.friction;
+    bodySettings.mRestitution = desc.material.restitution;
+    bodySettings.mLinearDamping = desc.material.linearDamping;
+    bodySettings.mAngularDamping = desc.material.angularDamping;
+
+    // Set mass for dynamic bodies
+    if (motionType == JPH::EMotionType::Dynamic && desc.mass > 0.0f)
     {
-        bulletBody->setCollisionFlags(bulletBody->getCollisionFlags() | btCollisionObject::CF_NO_CONTACT_RESPONSE);
+        bodySettings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        bodySettings.mMassPropertiesOverride.mMass = desc.mass;
     }
 
     // Set initial velocities
-    if (mass > 0.0f)
+    if (motionType == JPH::EMotionType::Dynamic)
     {
-        bulletBody->setLinearVelocity(ToBullet(desc.linearVelocity));
-        bulletBody->setAngularVelocity(ToBullet(desc.angularVelocity));
+        bodySettings.mLinearVelocity = JPH::Vec3(desc.linearVelocity.x, desc.linearVelocity.y, desc.linearVelocity.z);
+        bodySettings.mAngularVelocity =
+            JPH::Vec3(desc.angularVelocity.x, desc.angularVelocity.y, desc.angularVelocity.z);
     }
 
-    // Add to dynamics world with collision filtering from desc
-    m_dynamicsWorld->addRigidBody(bulletBody, desc.collisionGroup, desc.collisionMask);
+    // Set trigger (sensor) flag
+    if (desc.isTrigger)
+    {
+        bodySettings.mIsSensor = true;
+    }
 
-    // Create the PhysicsBody wrapper (inherits group/mask from desc)
-    auto body = std::make_shared<PhysicsBody>(desc, bulletBody);
+    // Create the body via Jolt
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID bodyID = bodyInterface.CreateAndAddBody(bodySettings, JPH::EActivation::Activate);
+
+    if (bodyID.IsInvalid())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Failed to create Jolt body: {}", desc.name);
+        return nullptr;
+    }
+
+    // Create the PhysicsBody wrapper
+    auto body = std::make_shared<PhysicsBody>(desc, bodyID.GetIndexAndSequenceNumber());
     body->SetCollisionGroup(desc.collisionGroup);
     body->SetCollisionMask(desc.collisionMask);
 
-    // Store user data pointer on the bullet body for lookup during collision
-    bulletBody->setUserPointer(body.get());
+    // Store user data on the Jolt body for collision lookup
+    bodyInterface.SetUserData(bodyID, reinterpret_cast<uint64_t>(body.get()));
 
     m_bodies.push_back(body);
+    m_bodyIDMap[bodyID.GetIndexAndSequenceNumber()] = body.get();
 
     if (!desc.name.empty())
     {
@@ -117,11 +148,20 @@ void PhysicsSystem::RemoveBody(std::shared_ptr<PhysicsBody> body)
     if (!body)
         return;
 
-    // Remove from Bullet world
-    if (m_dynamicsWorld && body->GetBulletBody())
+    // Remove from Jolt world
+    if (m_joltSystem)
     {
-        m_dynamicsWorld->removeRigidBody(body->GetBulletBody());
+        auto& bodyInterface = m_joltSystem->GetBodyInterface();
+        JPH::BodyID bodyID(body->GetJoltBodyID());
+        if (bodyInterface.IsAdded(bodyID))
+        {
+            bodyInterface.RemoveBody(bodyID);
+            bodyInterface.DestroyBody(bodyID);
+        }
     }
+
+    // Remove from ID map
+    m_bodyIDMap.erase(body->GetJoltBodyID());
 
     // Remove from named bodies
     const std::string& name = body->GetName();
@@ -140,19 +180,26 @@ void PhysicsSystem::RemoveBody(std::shared_ptr<PhysicsBody> body)
 
 void PhysicsSystem::RemoveAllBodies()
 {
-    if (m_dynamicsWorld)
+    if (m_joltSystem)
     {
+        auto& bodyInterface = m_joltSystem->GetBodyInterface();
         for (auto& body : m_bodies)
         {
-            if (body && body->GetBulletBody())
+            if (body)
             {
-                m_dynamicsWorld->removeRigidBody(body->GetBulletBody());
+                JPH::BodyID bodyID(body->GetJoltBodyID());
+                if (bodyInterface.IsAdded(bodyID))
+                {
+                    bodyInterface.RemoveBody(bodyID);
+                    bodyInterface.DestroyBody(bodyID);
+                }
             }
         }
     }
 
     m_bodies.clear();
     m_namedBodies.clear();
+    m_bodyIDMap.clear();
 }
 
 // ============================================================================
@@ -164,18 +211,34 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateHingeConstraint(std::sha
                                                                         const XMFLOAT3& pivotA, const XMFLOAT3& pivotB,
                                                                         const XMFLOAT3& axisA, const XMFLOAT3& axisB)
 {
-    if (!m_dynamicsWorld || !bodyA || !bodyB)
-        return nullptr;
-    if (!bodyA->GetBulletBody() || !bodyB->GetBulletBody())
+    if (!m_joltSystem || !bodyA || !bodyB)
         return nullptr;
 
-    btHingeConstraint* hingeConstraint =
-        new btHingeConstraint(*bodyA->GetBulletBody(), *bodyB->GetBulletBody(), ToBullet(pivotA), ToBullet(pivotB),
-                              ToBullet(axisA), ToBullet(axisB));
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
 
-    m_dynamicsWorld->addConstraint(hingeConstraint, true);
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
 
-    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Hinge, hingeConstraint);
+    JPH::HingeConstraintSettings settings;
+    settings.mPoint1 = JPH::RVec3(pivotA.x, pivotA.y, pivotA.z);
+    settings.mPoint2 = JPH::RVec3(pivotB.x, pivotB.y, pivotB.z);
+    settings.mHingeAxis1 = JPH::Vec3(axisA.x, axisA.y, axisA.z).Normalized();
+    settings.mHingeAxis2 = JPH::Vec3(axisB.x, axisB.y, axisB.z).Normalized();
+    settings.mNormalAxis1 = settings.mHingeAxis1.GetNormalizedPerpendicular();
+    settings.mNormalAxis2 = settings.mHingeAxis2.GetNormalizedPerpendicular();
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
+
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    m_joltSystem->AddConstraint(joltConstraint);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Hinge, joltConstraint);
     m_constraints.push_back(constraint);
 
     return constraint;
@@ -185,38 +248,43 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateSliderConstraint(std::sh
                                                                          std::shared_ptr<PhysicsBody> bodyB,
                                                                          const XMMATRIX& frameA, const XMMATRIX& frameB)
 {
-    if (!m_dynamicsWorld || !bodyA || !bodyB)
-        return nullptr;
-    if (!bodyA->GetBulletBody() || !bodyB->GetBulletBody())
+    if (!m_joltSystem || !bodyA || !bodyB)
         return nullptr;
 
-    // Convert XMMATRIX frames to btTransform
-    btTransform btFrameA, btFrameB;
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
 
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
+
+    // Extract positions and slide axis from frame matrices
     XMVECTOR scaleA, rotA, transA;
     XMMatrixDecompose(&scaleA, &rotA, &transA, frameA);
     XMFLOAT3 posA;
     XMStoreFloat3(&posA, transA);
-    XMFLOAT4 quatA;
-    XMStoreFloat4(&quatA, rotA);
-    btFrameA.setOrigin(btVector3(posA.x, posA.y, posA.z));
-    btFrameA.setRotation(btQuaternion(quatA.x, quatA.y, quatA.z, quatA.w));
 
     XMVECTOR scaleB, rotB, transB;
     XMMatrixDecompose(&scaleB, &rotB, &transB, frameB);
     XMFLOAT3 posB;
     XMStoreFloat3(&posB, transB);
-    XMFLOAT4 quatB;
-    XMStoreFloat4(&quatB, rotB);
-    btFrameB.setOrigin(btVector3(posB.x, posB.y, posB.z));
-    btFrameB.setRotation(btQuaternion(quatB.x, quatB.y, quatB.z, quatB.w));
 
-    btSliderConstraint* sliderConstraint =
-        new btSliderConstraint(*bodyA->GetBulletBody(), *bodyB->GetBulletBody(), btFrameA, btFrameB, true);
+    JPH::SliderConstraintSettings settings;
+    settings.mPoint1 = JPH::RVec3(posA.x, posA.y, posA.z);
+    settings.mPoint2 = JPH::RVec3(posB.x, posB.y, posB.z);
+    settings.mSliderAxis1 = JPH::Vec3(1, 0, 0); // Default slide along X
+    settings.mSliderAxis2 = JPH::Vec3(1, 0, 0);
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
 
-    m_dynamicsWorld->addConstraint(sliderConstraint, true);
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
 
-    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Slider, sliderConstraint);
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    m_joltSystem->AddConstraint(joltConstraint);
+
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Slider, joltConstraint);
     m_constraints.push_back(constraint);
 
     return constraint;
@@ -226,38 +294,35 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateFixedConstraint(std::sha
                                                                         std::shared_ptr<PhysicsBody> bodyB,
                                                                         const XMMATRIX& frameA, const XMMATRIX& frameB)
 {
-    if (!m_dynamicsWorld || !bodyA || !bodyB)
-        return nullptr;
-    if (!bodyA->GetBulletBody() || !bodyB->GetBulletBody())
+    if (!m_joltSystem || !bodyA || !bodyB)
         return nullptr;
 
-    // Convert XMMATRIX frames to btTransform
-    btTransform btFrameA, btFrameB;
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
+
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
 
     XMVECTOR scaleA, rotA, transA;
     XMMatrixDecompose(&scaleA, &rotA, &transA, frameA);
     XMFLOAT3 posA;
     XMStoreFloat3(&posA, transA);
-    XMFLOAT4 quatA;
-    XMStoreFloat4(&quatA, rotA);
-    btFrameA.setOrigin(btVector3(posA.x, posA.y, posA.z));
-    btFrameA.setRotation(btQuaternion(quatA.x, quatA.y, quatA.z, quatA.w));
 
-    XMVECTOR scaleB, rotB, transB;
-    XMMatrixDecompose(&scaleB, &rotB, &transB, frameB);
-    XMFLOAT3 posB;
-    XMStoreFloat3(&posB, transB);
-    XMFLOAT4 quatB;
-    XMStoreFloat4(&quatB, rotB);
-    btFrameB.setOrigin(btVector3(posB.x, posB.y, posB.z));
-    btFrameB.setRotation(btQuaternion(quatB.x, quatB.y, quatB.z, quatB.w));
+    JPH::FixedConstraintSettings settings;
+    settings.mPoint1 = JPH::RVec3(posA.x, posA.y, posA.z);
+    settings.mPoint2 = settings.mPoint1;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
 
-    btFixedConstraint* fixedConstraint =
-        new btFixedConstraint(*bodyA->GetBulletBody(), *bodyB->GetBulletBody(), btFrameA, btFrameB);
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
 
-    m_dynamicsWorld->addConstraint(fixedConstraint, true);
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    m_joltSystem->AddConstraint(joltConstraint);
 
-    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Fixed, fixedConstraint);
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Fixed, joltConstraint);
     m_constraints.push_back(constraint);
 
     return constraint;
@@ -268,28 +333,43 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePoint2PointConstraint(st
                                                                               const XMFLOAT3& pivotA,
                                                                               const XMFLOAT3& pivotB)
 {
-    if (!m_dynamicsWorld || !bodyA)
-        return nullptr;
-    if (!bodyA->GetBulletBody())
+    if (!m_joltSystem || !bodyA)
         return nullptr;
 
-    btPoint2PointConstraint* p2pConstraint = nullptr;
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
 
-    if (bodyB && bodyB->GetBulletBody())
+    if (!bodyInterface.IsAdded(idA))
+        return nullptr;
+
+    JPH::PointConstraintSettings settings;
+    settings.mPoint1 = JPH::RVec3(pivotA.x, pivotA.y, pivotA.z);
+    settings.mPoint2 = JPH::RVec3(pivotB.x, pivotB.y, pivotB.z);
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
+
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    if (!joltBodyA)
+        return nullptr;
+
+    JPH::Constraint* joltConstraint = nullptr;
+    if (bodyB)
     {
-        // Two-body constraint
-        p2pConstraint = new btPoint2PointConstraint(*bodyA->GetBulletBody(), *bodyB->GetBulletBody(), ToBullet(pivotA),
-                                                    ToBullet(pivotB));
+        JPH::BodyID idB(bodyB->GetJoltBodyID());
+        if (!bodyInterface.IsAdded(idB))
+            return nullptr;
+        JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+        if (!joltBodyB)
+            return nullptr;
+        joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
     }
     else
     {
-        // Single-body constraint anchored to world
-        p2pConstraint = new btPoint2PointConstraint(*bodyA->GetBulletBody(), ToBullet(pivotA));
+        joltConstraint = settings.Create(*joltBodyA, JPH::Body::sFixedToWorld);
     }
 
-    m_dynamicsWorld->addConstraint(p2pConstraint, true);
+    m_joltSystem->AddConstraint(joltConstraint);
 
-    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Point2Point, p2pConstraint);
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Point2Point, joltConstraint);
     m_constraints.push_back(constraint);
 
     return constraint;
@@ -301,40 +381,48 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateConeTwistConstraint(std:
                                                                             const XMMATRIX& frameB, float swingSpan1,
                                                                             float swingSpan2, float twistSpan)
 {
-    if (!m_dynamicsWorld || !bodyA || !bodyB)
-        return nullptr;
-    if (!bodyA->GetBulletBody() || !bodyB->GetBulletBody())
+    if (!m_joltSystem || !bodyA || !bodyB)
         return nullptr;
 
-    // Convert XMMATRIX frames to btTransform
-    btTransform btFrameA, btFrameB;
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    JPH::BodyID idA(bodyA->GetJoltBodyID());
+    JPH::BodyID idB(bodyB->GetJoltBodyID());
+
+    if (!bodyInterface.IsAdded(idA) || !bodyInterface.IsAdded(idB))
+        return nullptr;
 
     XMVECTOR scaleA, rotA, transA;
     XMMatrixDecompose(&scaleA, &rotA, &transA, frameA);
     XMFLOAT3 posA;
     XMStoreFloat3(&posA, transA);
-    XMFLOAT4 quatA;
-    XMStoreFloat4(&quatA, rotA);
-    btFrameA.setOrigin(btVector3(posA.x, posA.y, posA.z));
-    btFrameA.setRotation(btQuaternion(quatA.x, quatA.y, quatA.z, quatA.w));
 
     XMVECTOR scaleB, rotB, transB;
     XMMatrixDecompose(&scaleB, &rotB, &transB, frameB);
     XMFLOAT3 posB;
     XMStoreFloat3(&posB, transB);
-    XMFLOAT4 quatB;
-    XMStoreFloat4(&quatB, rotB);
-    btFrameB.setOrigin(btVector3(posB.x, posB.y, posB.z));
-    btFrameB.setRotation(btQuaternion(quatB.x, quatB.y, quatB.z, quatB.w));
 
-    btConeTwistConstraint* coneTwist =
-        new btConeTwistConstraint(*bodyA->GetBulletBody(), *bodyB->GetBulletBody(), btFrameA, btFrameB);
+    JPH::SwingTwistConstraintSettings settings;
+    settings.mPosition1 = JPH::RVec3(posA.x, posA.y, posA.z);
+    settings.mPosition2 = JPH::RVec3(posB.x, posB.y, posB.z);
+    settings.mTwistAxis1 = JPH::Vec3(0, 0, 1);
+    settings.mTwistAxis2 = JPH::Vec3(0, 0, 1);
+    settings.mPlaneAxis1 = JPH::Vec3(1, 0, 0);
+    settings.mPlaneAxis2 = JPH::Vec3(1, 0, 0);
+    settings.mNormalHalfConeAngle = swingSpan1;
+    settings.mPlaneHalfConeAngle = swingSpan2;
+    settings.mTwistMinAngle = -twistSpan;
+    settings.mTwistMaxAngle = twistSpan;
+    settings.mSpace = JPH::EConstraintSpace::WorldSpace;
 
-    coneTwist->setLimit(swingSpan1, swingSpan2, twistSpan);
+    JPH::Body* joltBodyA = m_joltSystem->GetBodyLockInterface().TryGetBody(idA);
+    JPH::Body* joltBodyB = m_joltSystem->GetBodyLockInterface().TryGetBody(idB);
+    if (!joltBodyA || !joltBodyB)
+        return nullptr;
 
-    m_dynamicsWorld->addConstraint(coneTwist, true);
+    JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    m_joltSystem->AddConstraint(joltConstraint);
 
-    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::ConeTwist, coneTwist);
+    auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::ConeTwist, joltConstraint);
     m_constraints.push_back(constraint);
 
     return constraint;
@@ -345,9 +433,9 @@ void PhysicsSystem::RemoveConstraint(std::shared_ptr<PhysicsConstraint> constrai
     if (!constraint)
         return;
 
-    if (m_dynamicsWorld && constraint->GetBulletConstraint())
+    if (m_joltSystem && constraint->GetJoltConstraint())
     {
-        m_dynamicsWorld->removeConstraint(constraint->GetBulletConstraint());
+        m_joltSystem->RemoveConstraint(constraint->GetJoltConstraint());
     }
 
     auto it = std::find(m_constraints.begin(), m_constraints.end(), constraint);
@@ -371,33 +459,51 @@ RaycastHit PhysicsSystem::Raycast(const XMFLOAT3& origin, const XMFLOAT3& direct
         m_metrics.raycastCount++;
     }
 
-    if (!m_dynamicsWorld)
+    if (!m_joltSystem)
         return hit;
 
-    btVector3 from = ToBullet(origin);
-    btVector3 to = from + ToBullet(direction) * maxDistance;
+    JPH::RVec3 rayOrigin(origin.x, origin.y, origin.z);
+    JPH::Vec3 rayDir(direction.x, direction.y, direction.z);
+    if (rayDir.LengthSq() > 0.0f)
+        rayDir = rayDir.Normalized();
 
-    btCollisionWorld::ClosestRayResultCallback callback(from, to);
-    m_dynamicsWorld->rayTest(from, to, callback);
+    JPH::RRayCast ray(rayOrigin, rayDir * maxDistance);
+    JPH::RayCastResult result;
 
-    if (callback.hasHit())
+    const auto& narrowPhase = m_joltSystem->GetNarrowPhaseQuery();
+    if (narrowPhase.CastRay(ray, result))
     {
         hit.hasHit = true;
-        hit.point = FromBullet(callback.m_hitPointWorld);
-        hit.normal = FromBullet(callback.m_hitNormalWorld);
 
-        btVector3 diff = callback.m_hitPointWorld - from;
-        hit.distance = diff.length();
+        JPH::RVec3 hitPoint = ray.GetPointOnRay(result.mFraction);
+        hit.point = XMFLOAT3(static_cast<float>(hitPoint.GetX()), static_cast<float>(hitPoint.GetY()),
+                             static_cast<float>(hitPoint.GetZ()));
+        hit.distance = result.mFraction * maxDistance;
 
-        // Find the PhysicsBody wrapper
-        const btCollisionObject* hitObj = callback.m_collisionObject;
-        if (hitObj)
+        // Get the hit body
+        JPH::BodyID hitBodyID = result.mBodyID;
+        auto& bodyInterface = m_joltSystem->GetBodyInterface();
+        if (bodyInterface.IsAdded(hitBodyID))
         {
-            hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
-            if (hit.body)
+            // Get surface normal at hit point
+            JPH::Body* joltBody = m_joltSystem->GetBodyLockInterface().TryGetBody(hitBodyID);
+            if (joltBody)
             {
-                hit.userData = hit.body->GetUserData();
-                hit.entityId = hit.body->GetEntityID();
+                JPH::Vec3 normal =
+                    joltBody->GetShape()->GetSurfaceNormal(result.mSubShapeID2, ray.GetPointOnRay(result.mFraction));
+                hit.normal = XMFLOAT3(normal.GetX(), normal.GetY(), normal.GetZ());
+            }
+
+            // Find our PhysicsBody wrapper
+            uint64_t userData = bodyInterface.GetUserData(hitBodyID);
+            if (userData != 0)
+            {
+                hit.body = reinterpret_cast<PhysicsBody*>(userData);
+                if (hit.body)
+                {
+                    hit.userData = hit.body->GetUserData();
+                    hit.entityId = hit.body->GetEntityID();
+                }
             }
         }
     }
@@ -414,40 +520,50 @@ std::vector<RaycastHit> PhysicsSystem::RaycastAll(const XMFLOAT3& origin, const 
         m_metrics.raycastCount++;
     }
 
-    if (!m_dynamicsWorld)
+    if (!m_joltSystem)
         return hits;
 
-    btVector3 from = ToBullet(origin);
-    btVector3 to = from + ToBullet(direction) * maxDistance;
+    JPH::RVec3 rayOrigin(origin.x, origin.y, origin.z);
+    JPH::Vec3 rayDir(direction.x, direction.y, direction.z);
+    if (rayDir.LengthSq() > 0.0f)
+        rayDir = rayDir.Normalized();
 
-    btCollisionWorld::AllHitsRayResultCallback callback(from, to);
-    m_dynamicsWorld->rayTest(from, to, callback);
+    JPH::RRayCast ray(rayOrigin, rayDir * maxDistance);
 
-    if (callback.hasHit())
+    JPH::AllHitCollisionCollector<JPH::CastRayCollector> collector;
+    const auto& narrowPhase = m_joltSystem->GetNarrowPhaseQuery();
+    narrowPhase.CastRay(ray, JPH::RayCastSettings(), collector);
+
+    collector.Sort();
+
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    for (const auto& result : collector.mHits)
     {
-        for (int i = 0; i < callback.m_hitPointWorld.size(); i++)
+        RaycastHit hit;
+        hit.hasHit = true;
+
+        JPH::RVec3 hitPoint = ray.GetPointOnRay(result.mFraction);
+        hit.point = XMFLOAT3(static_cast<float>(hitPoint.GetX()), static_cast<float>(hitPoint.GetY()),
+                             static_cast<float>(hitPoint.GetZ()));
+        hit.distance = result.mFraction * maxDistance;
+        hit.normal = {0, 1, 0}; // Default normal
+
+        JPH::BodyID hitBodyID = result.mBodyID;
+        if (bodyInterface.IsAdded(hitBodyID))
         {
-            RaycastHit hit;
-            hit.hasHit = true;
-            hit.point = FromBullet(callback.m_hitPointWorld[i]);
-            hit.normal = FromBullet(callback.m_hitNormalWorld[i]);
-
-            btVector3 diff = callback.m_hitPointWorld[i] - from;
-            hit.distance = diff.length();
-
-            const btCollisionObject* hitObj = callback.m_collisionObjects[i];
-            if (hitObj)
+            uint64_t userData = bodyInterface.GetUserData(hitBodyID);
+            if (userData != 0)
             {
-                hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
+                hit.body = reinterpret_cast<PhysicsBody*>(userData);
                 if (hit.body)
                 {
                     hit.userData = hit.body->GetUserData();
                     hit.entityId = hit.body->GetEntityID();
                 }
             }
-
-            hits.push_back(hit);
         }
+
+        hits.push_back(hit);
     }
 
     return hits;
@@ -457,48 +573,34 @@ bool PhysicsSystem::SphereOverlap(const XMFLOAT3& center, float radius, std::vec
 {
     results.clear();
 
-    if (!m_dynamicsWorld)
+    if (!m_joltSystem)
         return false;
 
-    btSphereShape sphereShape(radius);
-    btGhostObject ghostObject;
-    ghostObject.setCollisionShape(&sphereShape);
+    // Use Jolt's CollideShape with a sphere
+    JPH::SphereShape sphereShape(radius);
+    JPH::RVec3 pos(center.x, center.y, center.z);
 
-    btTransform transform;
-    transform.setIdentity();
-    transform.setOrigin(ToBullet(center));
-    ghostObject.setWorldTransform(transform);
+    JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
+    const auto& narrowPhase = m_joltSystem->GetNarrowPhaseQuery();
+    narrowPhase.CollideShape(&sphereShape, JPH::Vec3::sReplicate(1.0f), JPH::RMat44::sTranslation(pos),
+                             JPH::CollideShapeSettings(), JPH::RVec3::sZero(), collector);
 
-    // Use contactTest to find overlapping objects
-    struct ContactCallback : public btCollisionWorld::ContactResultCallback
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    for (const auto& result : collector.mHits)
     {
-        std::vector<PhysicsBody*>& m_results;
-
-        ContactCallback(std::vector<PhysicsBody*>& results) : m_results(results) {}
-
-        btScalar addSingleResult(btManifoldPoint& cp, const btCollisionObjectWrapper* colObj0Wrap, int partId0,
-                                 int index0, const btCollisionObjectWrapper* colObj1Wrap, int partId1,
-                                 int index1) override
+        if (bodyInterface.IsAdded(result.mBodyID2))
         {
-            const btCollisionObject* obj = colObj1Wrap->getCollisionObject();
-            if (obj)
+            uint64_t userData = bodyInterface.GetUserData(result.mBodyID2);
+            if (userData != 0)
             {
-                PhysicsBody* body = static_cast<PhysicsBody*>(obj->getUserPointer());
-                if (body)
+                auto* body = reinterpret_cast<PhysicsBody*>(userData);
+                if (std::find(results.begin(), results.end(), body) == results.end())
                 {
-                    // Avoid duplicates
-                    if (std::find(m_results.begin(), m_results.end(), body) == m_results.end())
-                    {
-                        m_results.push_back(body);
-                    }
+                    results.push_back(body);
                 }
             }
-            return btScalar(1.0);
         }
-    };
-
-    ContactCallback callback(results);
-    m_dynamicsWorld->contactTest(&ghostObject, callback);
+    }
 
     return !results.empty();
 }
@@ -507,46 +609,33 @@ bool PhysicsSystem::BoxOverlap(const XMFLOAT3& center, const XMFLOAT3& halfExten
 {
     results.clear();
 
-    if (!m_dynamicsWorld)
+    if (!m_joltSystem)
         return false;
 
-    btBoxShape boxShape(ToBullet(halfExtents));
-    btGhostObject ghostObject;
-    ghostObject.setCollisionShape(&boxShape);
+    JPH::BoxShape boxShape(JPH::Vec3(halfExtents.x, halfExtents.y, halfExtents.z));
+    JPH::RVec3 pos(center.x, center.y, center.z);
 
-    btTransform transform;
-    transform.setIdentity();
-    transform.setOrigin(ToBullet(center));
-    ghostObject.setWorldTransform(transform);
+    JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
+    const auto& narrowPhase = m_joltSystem->GetNarrowPhaseQuery();
+    narrowPhase.CollideShape(&boxShape, JPH::Vec3::sReplicate(1.0f), JPH::RMat44::sTranslation(pos),
+                             JPH::CollideShapeSettings(), JPH::RVec3::sZero(), collector);
 
-    struct ContactCallback : public btCollisionWorld::ContactResultCallback
+    auto& bodyInterface = m_joltSystem->GetBodyInterface();
+    for (const auto& result : collector.mHits)
     {
-        std::vector<PhysicsBody*>& m_results;
-
-        ContactCallback(std::vector<PhysicsBody*>& results) : m_results(results) {}
-
-        btScalar addSingleResult(btManifoldPoint& cp, const btCollisionObjectWrapper* colObj0Wrap, int partId0,
-                                 int index0, const btCollisionObjectWrapper* colObj1Wrap, int partId1,
-                                 int index1) override
+        if (bodyInterface.IsAdded(result.mBodyID2))
         {
-            const btCollisionObject* obj = colObj1Wrap->getCollisionObject();
-            if (obj)
+            uint64_t userData = bodyInterface.GetUserData(result.mBodyID2);
+            if (userData != 0)
             {
-                PhysicsBody* body = static_cast<PhysicsBody*>(obj->getUserPointer());
-                if (body)
+                auto* body = reinterpret_cast<PhysicsBody*>(userData);
+                if (std::find(results.begin(), results.end(), body) == results.end())
                 {
-                    if (std::find(m_results.begin(), m_results.end(), body) == m_results.end())
-                    {
-                        m_results.push_back(body);
-                    }
+                    results.push_back(body);
                 }
             }
-            return btScalar(1.0);
         }
-    };
-
-    ContactCallback callback(results);
-    m_dynamicsWorld->contactTest(&ghostObject, callback);
+    }
 
     return !results.empty();
 }
@@ -555,148 +644,71 @@ bool PhysicsSystem::BoxOverlap(const XMFLOAT3& center, const XMFLOAT3& halfExten
 // SHAPE CASTING (SWEEP TESTS)
 // ============================================================================
 
-RaycastHit PhysicsSystem::SphereCast(float radius, const XMFLOAT3& from, const XMFLOAT3& to)
+static RaycastHit PerformShapeCast(JPH::PhysicsSystem* joltSystem, const JPH::Shape* shape, const XMFLOAT3& from,
+                                   const XMFLOAT3& to)
 {
     RaycastHit hit;
     hit.hasHit = false;
 
-    if (!m_dynamicsWorld)
+    if (!joltSystem)
         return hit;
 
-    btSphereShape sphereShape(radius);
+    JPH::RVec3 startPos(from.x, from.y, from.z);
+    JPH::Vec3 direction(to.x - from.x, to.y - from.y, to.z - from.z);
 
-    btTransform fromTransform;
-    fromTransform.setIdentity();
-    fromTransform.setOrigin(ToBullet(from));
+    JPH::RShapeCast shapeCast = JPH::RShapeCast::sFromWorldTransform(shape, JPH::Vec3::sReplicate(1.0f),
+                                                                     JPH::RMat44::sTranslation(startPos), direction);
 
-    btTransform toTransform;
-    toTransform.setIdentity();
-    toTransform.setOrigin(ToBullet(to));
+    JPH::ClosestHitCollisionCollector<JPH::CastShapeCollector> collector;
+    const auto& narrowPhase = joltSystem->GetNarrowPhaseQuery();
+    narrowPhase.CastShape(shapeCast, JPH::ShapeCastSettings(), JPH::RVec3::sZero(), collector);
 
-    btCollisionWorld::ClosestConvexResultCallback callback(ToBullet(from), ToBullet(to));
-    callback.m_collisionFilterGroup = 1;
-    callback.m_collisionFilterMask = 0xFFFF;
-
-    m_dynamicsWorld->convexSweepTest(&sphereShape, fromTransform, toTransform, callback);
-
-    if (callback.hasHit())
+    if (collector.HadHit())
     {
         hit.hasHit = true;
-        hit.point = FromBullet(callback.m_hitPointWorld);
-        hit.normal = FromBullet(callback.m_hitNormalWorld);
 
-        btVector3 diff = callback.m_hitPointWorld - ToBullet(from);
-        hit.distance = diff.length();
+        JPH::RVec3 hitPoint = startPos + direction * collector.mHit.mFraction;
+        hit.point = XMFLOAT3(static_cast<float>(hitPoint.GetX()), static_cast<float>(hitPoint.GetY()),
+                             static_cast<float>(hitPoint.GetZ()));
+        hit.normal = XMFLOAT3(collector.mHit.mPenetrationAxis.GetX(), collector.mHit.mPenetrationAxis.GetY(),
+                              collector.mHit.mPenetrationAxis.GetZ());
+        hit.distance = collector.mHit.mFraction * direction.Length();
 
-        const btCollisionObject* hitObj = callback.m_hitCollisionObject;
-        if (hitObj)
+        auto& bodyInterface = joltSystem->GetBodyInterface();
+        if (bodyInterface.IsAdded(collector.mHit.mBodyID2))
         {
-            hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
-            if (hit.body)
+            uint64_t userData = bodyInterface.GetUserData(collector.mHit.mBodyID2);
+            if (userData != 0)
             {
-                hit.userData = hit.body->GetUserData();
-                hit.entityId = hit.body->GetEntityID();
+                hit.body = reinterpret_cast<PhysicsBody*>(userData);
+                if (hit.body)
+                {
+                    hit.userData = hit.body->GetUserData();
+                    hit.entityId = hit.body->GetEntityID();
+                }
             }
         }
     }
 
     return hit;
+}
+
+RaycastHit PhysicsSystem::SphereCast(float radius, const XMFLOAT3& from, const XMFLOAT3& to)
+{
+    JPH::SphereShape sphereShape(radius);
+    return PerformShapeCast(m_joltSystem.get(), &sphereShape, from, to);
 }
 
 RaycastHit PhysicsSystem::BoxCast(const XMFLOAT3& halfExtents, const XMFLOAT3& from, const XMFLOAT3& to)
 {
-    RaycastHit hit;
-    hit.hasHit = false;
-
-    if (!m_dynamicsWorld)
-        return hit;
-
-    btBoxShape boxShape(ToBullet(halfExtents));
-
-    btTransform fromTransform;
-    fromTransform.setIdentity();
-    fromTransform.setOrigin(ToBullet(from));
-
-    btTransform toTransform;
-    toTransform.setIdentity();
-    toTransform.setOrigin(ToBullet(to));
-
-    btCollisionWorld::ClosestConvexResultCallback callback(ToBullet(from), ToBullet(to));
-    callback.m_collisionFilterGroup = 1;
-    callback.m_collisionFilterMask = 0xFFFF;
-
-    m_dynamicsWorld->convexSweepTest(&boxShape, fromTransform, toTransform, callback);
-
-    if (callback.hasHit())
-    {
-        hit.hasHit = true;
-        hit.point = FromBullet(callback.m_hitPointWorld);
-        hit.normal = FromBullet(callback.m_hitNormalWorld);
-
-        btVector3 diff = callback.m_hitPointWorld - ToBullet(from);
-        hit.distance = diff.length();
-
-        const btCollisionObject* hitObj = callback.m_hitCollisionObject;
-        if (hitObj)
-        {
-            hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
-            if (hit.body)
-            {
-                hit.userData = hit.body->GetUserData();
-                hit.entityId = hit.body->GetEntityID();
-            }
-        }
-    }
-
-    return hit;
+    JPH::BoxShape boxShape(JPH::Vec3(halfExtents.x, halfExtents.y, halfExtents.z));
+    return PerformShapeCast(m_joltSystem.get(), &boxShape, from, to);
 }
 
 RaycastHit PhysicsSystem::CapsuleCast(float radius, float height, const XMFLOAT3& from, const XMFLOAT3& to)
 {
-    RaycastHit hit;
-    hit.hasHit = false;
-
-    if (!m_dynamicsWorld)
-        return hit;
-
-    btCapsuleShape capsuleShape(radius, height);
-
-    btTransform fromTransform;
-    fromTransform.setIdentity();
-    fromTransform.setOrigin(ToBullet(from));
-
-    btTransform toTransform;
-    toTransform.setIdentity();
-    toTransform.setOrigin(ToBullet(to));
-
-    btCollisionWorld::ClosestConvexResultCallback callback(ToBullet(from), ToBullet(to));
-    callback.m_collisionFilterGroup = 1;
-    callback.m_collisionFilterMask = 0xFFFF;
-
-    m_dynamicsWorld->convexSweepTest(&capsuleShape, fromTransform, toTransform, callback);
-
-    if (callback.hasHit())
-    {
-        hit.hasHit = true;
-        hit.point = FromBullet(callback.m_hitPointWorld);
-        hit.normal = FromBullet(callback.m_hitNormalWorld);
-
-        btVector3 diff = callback.m_hitPointWorld - ToBullet(from);
-        hit.distance = diff.length();
-
-        const btCollisionObject* hitObj = callback.m_hitCollisionObject;
-        if (hitObj)
-        {
-            hit.body = static_cast<PhysicsBody*>(hitObj->getUserPointer());
-            if (hit.body)
-            {
-                hit.userData = hit.body->GetUserData();
-                hit.entityId = hit.body->GetEntityID();
-            }
-        }
-    }
-
-    return hit;
+    JPH::CapsuleShape capsuleShape(height / 2.0f, radius);
+    return PerformShapeCast(m_joltSystem.get(), &capsuleShape, from, to);
 }
 
 // ============================================================================
@@ -705,23 +717,16 @@ RaycastHit PhysicsSystem::CapsuleCast(float radius, float height, const XMFLOAT3
 
 void PhysicsSystem::SetDebugDrawMode(int mode)
 {
-    if (!m_dynamicsWorld)
-        return;
-
     m_debugDrawEnabled = (mode != 0);
-
-    if (m_dynamicsWorld->getDebugDrawer())
-    {
-        m_dynamicsWorld->getDebugDrawer()->setDebugMode(mode);
-    }
 }
 
 void PhysicsSystem::RenderDebug()
 {
-    if (!m_dynamicsWorld || !m_debugDrawEnabled)
+    if (!m_joltSystem || !m_debugDrawEnabled)
         return;
 
-    m_dynamicsWorld->debugDrawWorld();
+    // Jolt debug rendering requires implementing JPH::DebugRenderer
+    // For now this is a no-op placeholder
 }
 
 // ============================================================================

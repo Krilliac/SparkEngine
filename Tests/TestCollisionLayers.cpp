@@ -1,5 +1,5 @@
 // TestCollisionLayers.cpp - Tests for collision layer/mask filtering system
-// Validates 16-bit collision group/mask bitmask logic and Bullet broadphase wiring.
+// Validates 16-bit collision group/mask bitmask logic and broadphase wiring.
 
 #include "TestFramework.h"
 #include <cstdint>
@@ -32,7 +32,7 @@ namespace TestCollisionLayers
         void SetCollisionMask(uint16_t mask) { collisionMask = mask; }
     };
 
-    // Bullet-style collision test: A collides with B if (A.group & B.mask) && (B.group & A.mask)
+    // Collision test: A collides with B if (A.group & B.mask) && (B.group & A.mask)
     bool WouldCollide(const TestBody& a, const TestBody& b)
     {
         return (a.collisionGroup & b.collisionMask) != 0 && (b.collisionGroup & a.collisionMask) != 0;

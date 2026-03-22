@@ -11,23 +11,46 @@
  */
 
 #include "PhysicsBody.h"
+#include "PhysicsSystem.h"
 
-#include <btBulletDynamicsCommon.h>
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Body/Body.h>
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Constraints/Constraint.h>
+
+JPH_SUPPRESS_WARNINGS
 
 #include <sstream>
 
 using namespace DirectX;
 
+// Forward declaration — defined in the engine's global scope
+extern ::PhysicsSystem* g_physicsSystem;
+
+// Helper to get the Jolt BodyInterface
+static JPH::BodyInterface& GetBodyInterface()
+{
+    return g_physicsSystem->GetJoltSystem()->GetBodyInterface();
+}
+
+static bool HasValidJoltBody(uint32_t id)
+{
+    auto* sys = g_physicsSystem ? g_physicsSystem->GetJoltSystem() : nullptr;
+    if (!sys)
+        return false;
+    return sys->GetBodyInterface().IsAdded(JPH::BodyID(id));
+}
+
 // ============================================================================
 // PHYSICS BODY IMPLEMENTATION
 // ============================================================================
 
-PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, btRigidBody* bulletBody) : m_desc(desc), m_bulletBody(bulletBody)
+PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, uint32_t joltBodyID) : m_desc(desc), m_joltBodyID(joltBodyID)
 {
     // Initialize interpolation state from the initial position
     m_previousPosition = desc.position;
     m_currentPosition = desc.position;
-    // Convert initial Euler rotation to quaternion for interpolation
     XMVECTOR quat = XMQuaternionRotationRollPitchYaw(desc.rotation.x, desc.rotation.y, desc.rotation.z);
     XMStoreFloat4(&m_previousRotation, quat);
     XMStoreFloat4(&m_currentRotation, quat);
@@ -35,119 +58,71 @@ PhysicsBody::PhysicsBody(const PhysicsBodyDesc& desc, btRigidBody* bulletBody) :
 
 PhysicsBody::~PhysicsBody()
 {
-    if (m_bulletBody)
-    {
-        delete m_bulletBody->getMotionState();
-        // NOTE: Do not delete the collision shape here — shapes are cached and
-        // shared via PhysicsSystem::m_shapeCache. They are cleaned up when the
-        // PhysicsSystem is shut down.
-        delete m_bulletBody;
-        m_bulletBody = nullptr;
-    }
+    // Body removal from Jolt is handled by PhysicsSystem::RemoveBody()
+    // Do not destroy the Jolt body here — PhysicsSystem owns the lifecycle.
 }
 
 XMFLOAT3 PhysicsBody::GetPosition() const
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return m_desc.position;
 
-    btTransform transform;
-    if (m_bulletBody->getMotionState())
-    {
-        m_bulletBody->getMotionState()->getWorldTransform(transform);
-    }
-    else
-    {
-        transform = m_bulletBody->getWorldTransform();
-    }
-
-    const btVector3& origin = transform.getOrigin();
-    return XMFLOAT3(origin.getX(), origin.getY(), origin.getZ());
+    JPH::RVec3 pos = GetBodyInterface().GetPosition(JPH::BodyID(m_joltBodyID));
+    return XMFLOAT3(static_cast<float>(pos.GetX()), static_cast<float>(pos.GetY()), static_cast<float>(pos.GetZ()));
 }
 
 void PhysicsBody::SetPosition(const XMFLOAT3& position)
 {
     m_desc.position = position;
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    btTransform transform = m_bulletBody->getWorldTransform();
-    transform.setOrigin(btVector3(position.x, position.y, position.z));
-    m_bulletBody->setWorldTransform(transform);
-
-    if (m_bulletBody->getMotionState())
-    {
-        m_bulletBody->getMotionState()->setWorldTransform(transform);
-    }
-
-    m_bulletBody->activate();
+    GetBodyInterface().SetPosition(JPH::BodyID(m_joltBodyID), JPH::RVec3(position.x, position.y, position.z),
+                                   JPH::EActivation::Activate);
 }
 
 XMFLOAT3 PhysicsBody::GetRotation() const
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return m_desc.rotation;
 
-    btTransform transform;
-    if (m_bulletBody->getMotionState())
-    {
-        m_bulletBody->getMotionState()->getWorldTransform(transform);
-    }
-    else
-    {
-        transform = m_bulletBody->getWorldTransform();
-    }
+    JPH::Quat rot = GetBodyInterface().GetRotation(JPH::BodyID(m_joltBodyID));
 
-    btQuaternion quat = transform.getRotation();
-    btScalar yaw, pitch, roll;
-    btMatrix3x3(quat).getEulerYPR(yaw, pitch, roll);
-    return XMFLOAT3(roll, yaw, pitch);
+    // Convert quaternion to Euler angles (roll, yaw, pitch)
+    JPH::Vec3 euler = rot.GetEulerAngles();
+    return XMFLOAT3(euler.GetX(), euler.GetY(), euler.GetZ());
 }
 
 void PhysicsBody::SetRotation(const XMFLOAT3& rotation)
 {
     m_desc.rotation = rotation;
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    btTransform transform = m_bulletBody->getWorldTransform();
-    btQuaternion quat;
-    quat.setEulerZYX(rotation.z, rotation.y, rotation.x);
-    transform.setRotation(quat);
-    m_bulletBody->setWorldTransform(transform);
-
-    if (m_bulletBody->getMotionState())
-    {
-        m_bulletBody->getMotionState()->setWorldTransform(transform);
-    }
-
-    m_bulletBody->activate();
+    JPH::Quat quat = JPH::Quat::sEulerAngles(JPH::Vec3(rotation.x, rotation.y, rotation.z));
+    GetBodyInterface().SetRotation(JPH::BodyID(m_joltBodyID), quat, JPH::EActivation::Activate);
 }
 
 XMMATRIX PhysicsBody::GetTransform() const
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
     {
         XMMATRIX translation = XMMatrixTranslation(m_desc.position.x, m_desc.position.y, m_desc.position.z);
         XMMATRIX rotation = XMMatrixRotationRollPitchYaw(m_desc.rotation.x, m_desc.rotation.y, m_desc.rotation.z);
         return rotation * translation;
     }
 
-    btTransform btTrans;
-    if (m_bulletBody->getMotionState())
-    {
-        m_bulletBody->getMotionState()->getWorldTransform(btTrans);
-    }
-    else
-    {
-        btTrans = m_bulletBody->getWorldTransform();
-    }
+    JPH::RMat44 transform = GetBodyInterface().GetWorldTransform(JPH::BodyID(m_joltBodyID));
 
-    float m[16];
-    btTrans.getOpenGLMatrix(m);
+    // Convert Jolt's column-major 4x4 matrix to DirectX XMMATRIX (row-major)
+    JPH::Vec4 col0 = transform.GetColumn4(0);
+    JPH::Vec4 col1 = transform.GetColumn4(1);
+    JPH::Vec4 col2 = transform.GetColumn4(2);
+    JPH::Vec3 translation = transform.GetTranslation();
 
-    return XMMATRIX(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14],
-                    m[15]);
+    return XMMATRIX(col0.GetX(), col1.GetX(), col2.GetX(), 0.0f, col0.GetY(), col1.GetY(), col2.GetY(), 0.0f,
+                    col0.GetZ(), col1.GetZ(), col2.GetZ(), 0.0f, static_cast<float>(translation.GetX()),
+                    static_cast<float>(translation.GetY()), static_cast<float>(translation.GetZ()), 1.0f);
 }
 
 void PhysicsBody::SetTransform(const XMMATRIX& transform)
@@ -161,20 +136,13 @@ void PhysicsBody::SetTransform(const XMMATRIX& transform)
     XMStoreFloat4(&rotQuat, rotation);
     m_desc.rotation = {rotQuat.x, rotQuat.y, rotQuat.z};
 
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    btTransform btTrans;
-    btTrans.setOrigin(btVector3(m_desc.position.x, m_desc.position.y, m_desc.position.z));
-    btTrans.setRotation(btQuaternion(rotQuat.x, rotQuat.y, rotQuat.z, rotQuat.w));
-    m_bulletBody->setWorldTransform(btTrans);
-
-    if (m_bulletBody->getMotionState())
-    {
-        m_bulletBody->getMotionState()->setWorldTransform(btTrans);
-    }
-
-    m_bulletBody->activate();
+    auto& bi = GetBodyInterface();
+    bi.SetPositionAndRotation(JPH::BodyID(m_joltBodyID),
+                              JPH::RVec3(m_desc.position.x, m_desc.position.y, m_desc.position.z),
+                              JPH::Quat(rotQuat.x, rotQuat.y, rotQuat.z, rotQuat.w), JPH::EActivation::Activate);
 }
 
 // ============================================================================
@@ -192,12 +160,10 @@ XMFLOAT3 PhysicsBody::GetInterpolatedPosition(float alpha) const
 
 XMMATRIX PhysicsBody::GetInterpolatedTransform(float alpha) const
 {
-    // Lerp position
     XMVECTOR prevPos = XMLoadFloat3(&m_previousPosition);
     XMVECTOR currPos = XMLoadFloat3(&m_currentPosition);
     XMVECTOR interpPos = XMVectorLerp(prevPos, currPos, alpha);
 
-    // Slerp rotation
     XMVECTOR prevRot = XMLoadFloat4(&m_previousRotation);
     XMVECTOR currRot = XMLoadFloat4(&m_currentRotation);
     XMVECTOR interpRot = XMQuaternionSlerp(prevRot, currRot, alpha);
@@ -218,109 +184,119 @@ void PhysicsBody::StoreCurrentState()
 
 void PhysicsBody::UpdateCurrentState()
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    btTransform transform;
-    if (m_bulletBody->getMotionState())
-    {
-        m_bulletBody->getMotionState()->getWorldTransform(transform);
-    }
-    else
-    {
-        transform = m_bulletBody->getWorldTransform();
-    }
+    auto& bi = GetBodyInterface();
+    JPH::RVec3 pos = bi.GetPosition(JPH::BodyID(m_joltBodyID));
+    m_currentPosition =
+        XMFLOAT3(static_cast<float>(pos.GetX()), static_cast<float>(pos.GetY()), static_cast<float>(pos.GetZ()));
 
-    const btVector3& origin = transform.getOrigin();
-    m_currentPosition = XMFLOAT3(origin.getX(), origin.getY(), origin.getZ());
-
-    const btQuaternion& rot = transform.getRotation();
-    m_currentRotation = XMFLOAT4(rot.getX(), rot.getY(), rot.getZ(), rot.getW());
+    JPH::Quat rot = bi.GetRotation(JPH::BodyID(m_joltBodyID));
+    m_currentRotation = XMFLOAT4(rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW());
 }
 
 XMFLOAT3 PhysicsBody::GetLinearVelocity() const
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return m_desc.linearVelocity;
 
-    const btVector3& vel = m_bulletBody->getLinearVelocity();
-    return XMFLOAT3(vel.getX(), vel.getY(), vel.getZ());
+    JPH::Vec3 vel = GetBodyInterface().GetLinearVelocity(JPH::BodyID(m_joltBodyID));
+    return XMFLOAT3(vel.GetX(), vel.GetY(), vel.GetZ());
 }
 
 void PhysicsBody::SetLinearVelocity(const XMFLOAT3& velocity)
 {
     m_desc.linearVelocity = velocity;
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    m_bulletBody->setLinearVelocity(btVector3(velocity.x, velocity.y, velocity.z));
-    m_bulletBody->activate();
+    GetBodyInterface().SetLinearVelocity(JPH::BodyID(m_joltBodyID), JPH::Vec3(velocity.x, velocity.y, velocity.z));
 }
 
 XMFLOAT3 PhysicsBody::GetAngularVelocity() const
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return m_desc.angularVelocity;
 
-    const btVector3& vel = m_bulletBody->getAngularVelocity();
-    return XMFLOAT3(vel.getX(), vel.getY(), vel.getZ());
+    JPH::Vec3 vel = GetBodyInterface().GetAngularVelocity(JPH::BodyID(m_joltBodyID));
+    return XMFLOAT3(vel.GetX(), vel.GetY(), vel.GetZ());
 }
 
 void PhysicsBody::SetAngularVelocity(const XMFLOAT3& velocity)
 {
     m_desc.angularVelocity = velocity;
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    m_bulletBody->setAngularVelocity(btVector3(velocity.x, velocity.y, velocity.z));
-    m_bulletBody->activate();
+    GetBodyInterface().SetAngularVelocity(JPH::BodyID(m_joltBodyID), JPH::Vec3(velocity.x, velocity.y, velocity.z));
 }
 
 void PhysicsBody::ApplyForce(const XMFLOAT3& force, const XMFLOAT3& relativePos)
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    m_bulletBody->applyForce(btVector3(force.x, force.y, force.z),
-                             btVector3(relativePos.x, relativePos.y, relativePos.z));
-    m_bulletBody->activate();
+    auto& bi = GetBodyInterface();
+    if (relativePos.x == 0 && relativePos.y == 0 && relativePos.z == 0)
+    {
+        bi.AddForce(JPH::BodyID(m_joltBodyID), JPH::Vec3(force.x, force.y, force.z));
+    }
+    else
+    {
+        // Get body position and add relative offset for world-space application point
+        JPH::RVec3 bodyPos = bi.GetPosition(JPH::BodyID(m_joltBodyID));
+        JPH::RVec3 worldPoint = bodyPos + JPH::Vec3(relativePos.x, relativePos.y, relativePos.z);
+        bi.AddForce(JPH::BodyID(m_joltBodyID), JPH::Vec3(force.x, force.y, force.z), worldPoint);
+    }
 }
 
 void PhysicsBody::ApplyImpulse(const XMFLOAT3& impulse, const XMFLOAT3& relativePos)
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    m_bulletBody->applyImpulse(btVector3(impulse.x, impulse.y, impulse.z),
-                               btVector3(relativePos.x, relativePos.y, relativePos.z));
-    m_bulletBody->activate();
+    auto& bi = GetBodyInterface();
+    if (relativePos.x == 0 && relativePos.y == 0 && relativePos.z == 0)
+    {
+        bi.AddImpulse(JPH::BodyID(m_joltBodyID), JPH::Vec3(impulse.x, impulse.y, impulse.z));
+    }
+    else
+    {
+        JPH::RVec3 bodyPos = bi.GetPosition(JPH::BodyID(m_joltBodyID));
+        JPH::RVec3 worldPoint = bodyPos + JPH::Vec3(relativePos.x, relativePos.y, relativePos.z);
+        bi.AddImpulse(JPH::BodyID(m_joltBodyID), JPH::Vec3(impulse.x, impulse.y, impulse.z), worldPoint);
+    }
 }
 
 void PhysicsBody::ApplyTorque(const XMFLOAT3& torque)
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    m_bulletBody->applyTorque(btVector3(torque.x, torque.y, torque.z));
-    m_bulletBody->activate();
+    GetBodyInterface().AddTorque(JPH::BodyID(m_joltBodyID), JPH::Vec3(torque.x, torque.y, torque.z));
 }
 
 void PhysicsBody::ApplyTorqueImpulse(const XMFLOAT3& torque)
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    m_bulletBody->applyTorqueImpulse(btVector3(torque.x, torque.y, torque.z));
-    m_bulletBody->activate();
+    GetBodyInterface().AddAngularImpulse(JPH::BodyID(m_joltBodyID), JPH::Vec3(torque.x, torque.y, torque.z));
 }
 
 float PhysicsBody::GetMass() const
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return m_desc.mass;
 
-    btScalar invMass = m_bulletBody->getInvMass();
-    if (invMass == btScalar(0))
+    auto* sys = g_physicsSystem->GetJoltSystem();
+    JPH::BodyID bodyID(m_joltBodyID);
+    const JPH::Body* body = sys->GetBodyLockInterface().TryGetBody(bodyID);
+    if (!body || !body->IsDynamic())
+        return 0.0f;
+    float invMass = body->GetMotionProperties()->GetInverseMass();
+    if (invMass == 0.0f)
         return 0.0f;
     return 1.0f / invMass;
 }
@@ -328,98 +304,109 @@ float PhysicsBody::GetMass() const
 void PhysicsBody::SetMass(float mass)
 {
     m_desc.mass = mass;
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    btVector3 localInertia(0, 0, 0);
-    if (mass > 0.0f && m_bulletBody->getCollisionShape())
+    auto* sys = g_physicsSystem->GetJoltSystem();
+    JPH::BodyID bodyID(m_joltBodyID);
+    JPH::Body* body = const_cast<JPH::Body*>(sys->GetBodyLockInterface().TryGetBody(bodyID));
+    if (body && body->IsDynamic() && mass > 0.0f)
     {
-        m_bulletBody->getCollisionShape()->calculateLocalInertia(mass, localInertia);
+        body->GetMotionProperties()->SetInverseMass(1.0f / mass);
     }
-    m_bulletBody->setMassProps(mass, localInertia);
-    m_bulletBody->updateInertiaTensor();
-    m_bulletBody->activate();
 }
 
 void PhysicsBody::SetMaterial(const PhysicsMaterial& material)
 {
     m_desc.material = material;
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
-    m_bulletBody->setFriction(material.friction);
-    m_bulletBody->setRestitution(material.restitution);
-    m_bulletBody->setDamping(material.linearDamping, material.angularDamping);
+    auto& bi = GetBodyInterface();
+    JPH::BodyID bodyID(m_joltBodyID);
+    bi.SetFriction(bodyID, material.friction);
+    bi.SetRestitution(bodyID, material.restitution);
+
+    auto* sys = g_physicsSystem->GetJoltSystem();
+    JPH::Body* body = const_cast<JPH::Body*>(sys->GetBodyLockInterface().TryGetBody(bodyID));
+    if (body && body->IsDynamic())
+    {
+        body->GetMotionProperties()->SetLinearDamping(material.linearDamping);
+        body->GetMotionProperties()->SetAngularDamping(material.angularDamping);
+    }
 }
 
 void PhysicsBody::SetActive(bool active)
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
+    auto& bi = GetBodyInterface();
     if (active)
     {
-        m_bulletBody->setActivationState(ACTIVE_TAG);
+        bi.ActivateBody(JPH::BodyID(m_joltBodyID));
     }
     else
     {
-        m_bulletBody->setActivationState(WANTS_DEACTIVATION);
+        bi.DeactivateBody(JPH::BodyID(m_joltBodyID));
     }
 }
 
 bool PhysicsBody::IsActive() const
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return false;
-    return m_bulletBody->isActive();
+    return GetBodyInterface().IsActive(JPH::BodyID(m_joltBodyID));
 }
 
 void PhysicsBody::SetKinematic(bool kinematic)
 {
     m_desc.isKinematic = kinematic;
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
+    auto& bi = GetBodyInterface();
     if (kinematic)
     {
-        m_bulletBody->setCollisionFlags(m_bulletBody->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
-        m_bulletBody->setActivationState(DISABLE_DEACTIVATION);
+        bi.SetMotionType(JPH::BodyID(m_joltBodyID), JPH::EMotionType::Kinematic, JPH::EActivation::Activate);
     }
     else
     {
-        m_bulletBody->setCollisionFlags(m_bulletBody->getCollisionFlags() & ~btCollisionObject::CF_KINEMATIC_OBJECT);
-        m_bulletBody->setActivationState(ACTIVE_TAG);
+        bi.SetMotionType(JPH::BodyID(m_joltBodyID), JPH::EMotionType::Dynamic, JPH::EActivation::Activate);
     }
 }
 
 bool PhysicsBody::IsKinematic() const
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return m_desc.isKinematic;
-    return (m_bulletBody->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT) != 0;
+    return GetBodyInterface().GetMotionType(JPH::BodyID(m_joltBodyID)) == JPH::EMotionType::Kinematic;
 }
 
 void PhysicsBody::SetTrigger(bool trigger)
 {
     m_desc.isTrigger = trigger;
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return;
 
+    auto& bi = GetBodyInterface();
     if (trigger)
     {
-        m_bulletBody->setCollisionFlags(m_bulletBody->getCollisionFlags() | btCollisionObject::CF_NO_CONTACT_RESPONSE);
+        bi.SetObjectLayer(JPH::BodyID(m_joltBodyID), 2); // TRIGGER layer
     }
     else
     {
-        m_bulletBody->setCollisionFlags(m_bulletBody->getCollisionFlags() & ~btCollisionObject::CF_NO_CONTACT_RESPONSE);
+        // Restore based on motion type
+        JPH::EMotionType mt = bi.GetMotionType(JPH::BodyID(m_joltBodyID));
+        bi.SetObjectLayer(JPH::BodyID(m_joltBodyID), mt == JPH::EMotionType::Static ? 0 : 1);
     }
 }
 
 bool PhysicsBody::IsTrigger() const
 {
-    if (!m_bulletBody)
+    if (!HasValidJoltBody(m_joltBodyID))
         return m_desc.isTrigger;
-    return (m_bulletBody->getCollisionFlags() & btCollisionObject::CF_NO_CONTACT_RESPONSE) != 0;
+    return m_desc.isTrigger;
 }
 
 void PhysicsBody::SetCollisionGroup(uint16_t group)
@@ -436,16 +423,10 @@ void PhysicsBody::SetCollisionMask(uint16_t mask)
 
 void PhysicsBody::ApplyCollisionFilter()
 {
-    if (!m_bulletBody)
-        return;
-
-    // Update Bullet's broadphase proxy with the new group/mask
-    btBroadphaseProxy* proxy = m_bulletBody->getBroadphaseProxy();
-    if (proxy)
-    {
-        proxy->m_collisionFilterGroup = m_collisionGroup;
-        proxy->m_collisionFilterMask = m_collisionMask;
-    }
+    // Jolt uses ObjectLayer + GroupFilter for collision filtering.
+    // The group/mask bitmask approach is stored locally and can be used
+    // via a custom GroupFilter if needed. For the default setup, object
+    // layers handle basic filtering.
 }
 
 std::string PhysicsBody::GetInfo() const
@@ -471,14 +452,14 @@ void PhysicsBody::Console_SetProperty(const std::string& property, float value)
     else if (property == "friction")
     {
         m_desc.material.friction = value;
-        if (m_bulletBody)
-            m_bulletBody->setFriction(value);
+        if (HasValidJoltBody(m_joltBodyID))
+            GetBodyInterface().SetFriction(JPH::BodyID(m_joltBodyID), value);
     }
     else if (property == "restitution")
     {
         m_desc.material.restitution = value;
-        if (m_bulletBody)
-            m_bulletBody->setRestitution(value);
+        if (HasValidJoltBody(m_joltBodyID))
+            GetBodyInterface().SetRestitution(JPH::BodyID(m_joltBodyID), value);
     }
 }
 
@@ -491,48 +472,41 @@ void PhysicsBody::Console_ApplyForce(float x, float y, float z)
 // PHYSICS CONSTRAINT IMPLEMENTATION
 // ============================================================================
 
-PhysicsConstraint::PhysicsConstraint(ConstraintType type, btTypedConstraint* bulletConstraint)
-    : m_type(type), m_bulletConstraint(bulletConstraint)
+PhysicsConstraint::PhysicsConstraint(ConstraintType type, JPH::Constraint* joltConstraint)
+    : m_type(type), m_joltConstraint(joltConstraint)
 {
 }
 
 PhysicsConstraint::~PhysicsConstraint()
 {
-    // WARNING: The constraint MUST be removed from the dynamics world via
+    // WARNING: The constraint MUST be removed from the physics system via
     // PhysicsSystem::RemoveConstraint() BEFORE this destructor runs.
-    // Deleting a constraint that is still registered in a btDynamicsWorld
-    // causes use-after-free on the next simulation step.
-    if (m_bulletConstraint)
-    {
-        delete m_bulletConstraint;
-        m_bulletConstraint = nullptr;
-    }
+    // Jolt constraints are ref-counted so we just release our reference.
+    m_joltConstraint = nullptr;
 }
 
 void PhysicsConstraint::SetEnabled(bool enabled)
 {
-    if (!m_bulletConstraint)
+    if (!m_joltConstraint)
         return;
-    m_bulletConstraint->setEnabled(enabled);
+    m_joltConstraint->SetEnabled(enabled);
 }
 
 bool PhysicsConstraint::IsEnabled() const
 {
-    if (!m_bulletConstraint)
+    if (!m_joltConstraint)
         return false;
-    return m_bulletConstraint->isEnabled();
+    return m_joltConstraint->GetEnabled();
 }
 
 void PhysicsConstraint::SetBreakingThreshold(float threshold)
 {
-    if (!m_bulletConstraint)
-        return;
-    m_bulletConstraint->setBreakingImpulseThreshold(threshold);
+    // Jolt doesn't have a direct breaking threshold on base Constraint.
+    // This would need to be handled per-constraint-type or via a wrapper.
+    (void)threshold;
 }
 
 float PhysicsConstraint::GetBreakingThreshold() const
 {
-    if (!m_bulletConstraint)
-        return 0.0f;
-    return m_bulletConstraint->getBreakingImpulseThreshold();
+    return 0.0f;
 }

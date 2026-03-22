@@ -4,7 +4,7 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Contains the DirectX Math-native wrappers around Bullet Physics rigid bodies
+ * Contains the DirectX Math-native wrappers around Jolt Physics bodies
  * and constraints. These classes are the primary handles callers use to interact
  * with individual physics objects.
  *
@@ -22,16 +22,20 @@
 #include <cstdint>
 #include <string>
 
-// Forward declarations for Bullet Physics
-class btRigidBody;
-class btTypedConstraint;
+// Forward declarations for Jolt Physics
+namespace JPH
+{
+    class Body;
+    class BodyID;
+    class Constraint;
+} // namespace JPH
 
 /**
  * @class PhysicsBody
- * @brief DirectX Math-native wrapper around a Bullet `btRigidBody`.
+ * @brief DirectX Math-native wrapper around a Jolt `JPH::Body`.
  *
  * PhysicsBody is the primary handle callers use to interact with a single
- * rigid body in the simulation. It abstracts away Bullet's coordinate system
+ * rigid body in the simulation. It abstracts away Jolt's coordinate system
  * and type conversions, presenting all transforms and velocities as DirectX
  * `XMFLOAT3` / `XMMATRIX` values.
  *
@@ -58,7 +62,7 @@ class btTypedConstraint;
 class PhysicsBody
 {
   public:
-    PhysicsBody(const PhysicsBodyDesc& desc, btRigidBody* bulletBody);
+    PhysicsBody(const PhysicsBodyDesc& desc, uint32_t joltBodyID);
     ~PhysicsBody();
 
     // =========================================================================
@@ -138,7 +142,8 @@ class PhysicsBody
     // Internal / low-level access
     // =========================================================================
 
-    btRigidBody* GetBulletBody() const { return m_bulletBody; }
+    /** @brief Get the Jolt BodyID (index into the Jolt physics system). */
+    uint32_t GetJoltBodyID() const { return m_joltBodyID; }
     const PhysicsBodyDesc& GetDesc() const { return m_desc; }
 
     // =========================================================================
@@ -159,11 +164,11 @@ class PhysicsBody
     void UpdateCurrentState();
 
   private:
-    /// @brief Push m_collisionGroup/m_collisionMask to Bullet's broadphase proxy.
+    /// @brief Push m_collisionGroup/m_collisionMask to Jolt's broadphase.
     void ApplyCollisionFilter();
 
     PhysicsBodyDesc m_desc;
-    btRigidBody* m_bulletBody;
+    uint32_t m_joltBodyID; ///< Jolt BodyID raw value (BodyID::GetIndexAndSequenceNumber())
     uint16_t m_collisionGroup = 1;
     uint16_t m_collisionMask = 0xFFFF;
 
@@ -180,7 +185,7 @@ class PhysicsBody
 class PhysicsConstraint
 {
   public:
-    PhysicsConstraint(ConstraintType type, btTypedConstraint* bulletConstraint);
+    PhysicsConstraint(ConstraintType type, JPH::Constraint* joltConstraint);
     ~PhysicsConstraint();
 
     ConstraintType GetType() const { return m_type; }
@@ -189,9 +194,9 @@ class PhysicsConstraint
     void SetBreakingThreshold(float threshold);
     float GetBreakingThreshold() const;
 
-    btTypedConstraint* GetBulletConstraint() const { return m_bulletConstraint; }
+    JPH::Constraint* GetJoltConstraint() const { return m_joltConstraint; }
 
   private:
     ConstraintType m_type;
-    btTypedConstraint* m_bulletConstraint;
+    JPH::Constraint* m_joltConstraint;
 };
