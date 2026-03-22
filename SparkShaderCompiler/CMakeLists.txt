@@ -32,6 +32,8 @@ endif()
 if(SPARK_VULKAN_AVAILABLE)
     list(APPEND RHI_SOURCES
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanCommandList.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanFormatHelpers.cpp"
     )
 endif()
 
