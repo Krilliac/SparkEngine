@@ -526,7 +526,9 @@ if(JOLT_FOUND)
     set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
     set(FLOATING_POINT_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
     set(CPP_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
-    set(CPP_RTTI_ENABLED OFF CACHE BOOL "" FORCE)
+    # RTTI must be ON to match the engine — otherwise PhysicsShapeFactory
+    # generates typeinfo refs that the Jolt library cannot satisfy.
+    set(CPP_RTTI_ENABLED ON CACHE BOOL "" FORCE)
 
     # Double precision physics for large-world support (MMO, open-world)
     if(SPARK_DOUBLE_PRECISION_PHYSICS)
