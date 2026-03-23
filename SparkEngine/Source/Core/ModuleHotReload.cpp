@@ -19,6 +19,11 @@ namespace Spark
 
     void ModuleHotReloadManager::Initialize(ModuleManager* moduleManager, IEngineContext* context)
     {
+        if (!moduleManager || !context)
+        {
+            SimpleConsole::GetInstance().LogWarning("ModuleHotReloadManager::Initialize called with null " +
+                                                    std::string(!moduleManager ? "moduleManager" : "context"));
+        }
         m_moduleManager = moduleManager;
         m_context = context;
 

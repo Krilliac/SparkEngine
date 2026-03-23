@@ -4,6 +4,7 @@
  */
 
 #include "EntityReplicator.h"
+#include "../../Utils/Validate.h"
 
 #include <cstring>
 
@@ -55,6 +56,8 @@ namespace Spark::Net
         auto it = m_entities.find(entityID);
         if (it == m_entities.end() || !it->second.serializer)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "WriteCreatePacket: entity %u not found or has no serializer",
+                           entityID);
             return false;
         }
 
@@ -82,6 +85,8 @@ namespace Spark::Net
         auto it = m_entities.find(entityID);
         if (it == m_entities.end() || !it->second.serializer)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "WriteUpdatePacket: entity %u not found or has no serializer",
+                           entityID);
             return false;
         }
 
@@ -141,6 +146,8 @@ namespace Spark::Net
         auto it = m_entities.find(entityID);
         if (it == m_entities.end() || !it->second.deserializer)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "ProcessIncoming: entity %u not found or has no deserializer",
+                           entityID);
             return false;
         }
 
@@ -154,6 +161,9 @@ namespace Spark::Net
                 size_t bytesRead = entry.deserializer(i, buffer, offset);
                 if (bytesRead == 0)
                 {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                                    "ProcessIncoming: deserializer returned 0 bytes for entity %u field %u", entityID,
+                                    i);
                     return false;
                 }
                 offset += bytesRead;

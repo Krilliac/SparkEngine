@@ -380,9 +380,10 @@ namespace Spark
         {
             std::filesystem::create_directories(m_config.directory);
         }
-        catch (const std::filesystem::filesystem_error&)
+        catch (const std::filesystem::filesystem_error& e)
         {
-            // Best effort
+            fprintf(stderr, "[FileSink] Failed to create log directory '%s': %s\n", m_config.directory.c_str(),
+                    e.what());
         }
 
         // Generate timestamped filename

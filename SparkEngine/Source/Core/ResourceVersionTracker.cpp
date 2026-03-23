@@ -4,6 +4,7 @@
  */
 
 #include "ResourceVersionTracker.h"
+#include "Utils/Validate.h"
 
 #include <format>
 
@@ -37,6 +38,7 @@ namespace Spark
         auto it = m_versions.find(path);
         if (it == m_versions.end())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "IncrementVersion: resource '%s' not registered", path.c_str());
             return 0;
         }
         return ++(it->second);

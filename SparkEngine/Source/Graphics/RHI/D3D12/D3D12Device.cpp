@@ -338,15 +338,24 @@ namespace Spark
                 queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
                 queueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
                 if (FAILED(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_directQueue))))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create direct command queue");
                     return false;
+                }
 
                 queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
                 if (FAILED(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_copyQueue))))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create copy command queue");
                     return false;
+                }
 
                 queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
                 if (FAILED(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_computeQueue))))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create compute command queue");
                     return false;
+                }
 
                 return true;
             }

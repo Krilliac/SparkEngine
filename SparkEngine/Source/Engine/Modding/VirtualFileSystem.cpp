@@ -4,6 +4,7 @@
  */
 
 #include "VirtualFileSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -45,6 +46,7 @@ namespace Spark
         std::ifstream file(fullPath, std::ios::binary | std::ios::ate);
         if (!file.is_open())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: Failed to open file '%s'", fullPath.c_str());
             return {};
         }
 
@@ -66,6 +68,7 @@ namespace Spark
         std::ifstream file(fullPath);
         if (!file.is_open())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: Failed to open text file '%s'", fullPath.c_str());
             return {};
         }
 

@@ -196,6 +196,11 @@ namespace Spark
         {
             m_commandRegistry->RegisterCommand(name, handler, description, usage);
         }
+        else
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "RegisterCommand('%s') dropped — command registry not initialized",
+                           name.c_str());
+        }
     }
 
     // ============================================================================

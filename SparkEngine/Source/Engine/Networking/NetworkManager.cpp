@@ -145,13 +145,17 @@ namespace Spark::Net
     {
         m_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (m_socket == INVALID_SOCKET)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to create UDP socket");
             return false;
+        }
 
-            // Set non-blocking mode
+        // Set non-blocking mode
 #ifdef SPARK_PLATFORM_WINDOWS
         u_long nonBlocking = 1;
         if (ioctlsocket(m_socket, FIONBIO, &nonBlocking) == SOCKET_ERROR)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to set socket to non-blocking mode");
             CloseSocket();
             return false;
         }
@@ -159,6 +163,7 @@ namespace Spark::Net
         int flags = fcntl(m_socket, F_GETFL, 0);
         if (flags == -1 || fcntl(m_socket, F_SETFL, flags | O_NONBLOCK) == -1)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to set socket to non-blocking mode");
             CloseSocket();
             return false;
         }
@@ -178,6 +183,7 @@ namespace Spark::Net
 
         if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == SOCKET_ERROR)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to bind socket to port %u", port);
             CloseSocket();
             return false;
         }
@@ -229,14 +235,20 @@ namespace Spark::Net
     {
         // Minimum header: magic(4) + type(2) + channel(1) + sender(4) + seq(4) + timestamp(4) + payloadLen(4) = 23
         if (length < 23)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet too small (%zu bytes, need 23 minimum)", length);
             return false;
+        }
 
         NetBuffer buf;
         buf.WriteBytes(data, length);
 
         uint32_t magic = buf.ReadUint32();
         if (magic != 0x5350524B)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Invalid packet magic 0x%08X (expected 0x5350524B)", magic);
             return false;
+        }
 
         outMsg.type = static_cast<MessageType>(buf.ReadUint16());
         outMsg.channel = static_cast<ChannelType>(buf.ReadUint8());
@@ -246,12 +258,19 @@ namespace Spark::Net
         uint32_t payloadLen = buf.ReadUint32();
 
         if (buf.GetReadPosition() + payloadLen > length)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Payload length %u exceeds remaining packet data", payloadLen);
             return false;
+        }
 
         // Reject unreasonably large payloads to prevent memory exhaustion attacks
         constexpr uint32_t kMaxPayloadSize = 64 * 1024; // 64 KB
         if (payloadLen > kMaxPayloadSize)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Payload length %u exceeds max allowed (%u)", payloadLen,
+                           kMaxPayloadSize);
             return false;
+        }
 
         outMsg.payload.resize(payloadLen);
         if (payloadLen > 0)
@@ -265,7 +284,11 @@ namespace Spark::Net
     bool NetworkManager::SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr)
     {
         if (m_socket == INVALID_SOCKET || data.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "SendRawTo failed: %s",
+                           m_socket == INVALID_SOCKET ? "socket not open" : "empty data");
             return false;
+        }
 
         int sent = sendto(m_socket, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()), 0,
                           reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
@@ -284,7 +307,10 @@ namespace Spark::Net
     int NetworkManager::ReceiveRaw(std::vector<uint8_t>& outData, sockaddr_in& outSender)
     {
         if (m_socket == INVALID_SOCKET)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "ReceiveRaw called with invalid socket");
             return -1;
+        }
 
         static constexpr int MAX_PACKET_SIZE = 4096;
         outData.resize(MAX_PACKET_SIZE);

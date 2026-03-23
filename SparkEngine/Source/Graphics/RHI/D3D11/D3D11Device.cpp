@@ -155,17 +155,29 @@ namespace Spark
                 ComPtr<IDXGIDevice> dxgiDevice;
                 HRESULT hr = device->QueryInterface(__uuidof(IDXGIDevice), &dxgiDevice);
                 if (FAILED(hr))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "D3D11SwapChain: QueryInterface(IDXGIDevice) failed (HRESULT 0x%08lX)", hr);
                     return;
+                }
 
                 ComPtr<IDXGIAdapter> dxgiAdapter;
                 hr = dxgiDevice->GetAdapter(&dxgiAdapter);
                 if (FAILED(hr))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D11SwapChain: GetAdapter failed (HRESULT 0x%08lX)",
+                                    hr);
                     return;
+                }
 
                 ComPtr<IDXGIFactory2> dxgiFactory;
                 hr = dxgiAdapter->GetParent(__uuidof(IDXGIFactory2), &dxgiFactory);
                 if (FAILED(hr))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "D3D11SwapChain: GetParent(IDXGIFactory2) failed (HRESULT 0x%08lX)", hr);
                     return;
+                }
 
                 DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
                 swapChainDesc.Width = desc.width;
@@ -180,7 +192,11 @@ namespace Spark
                 HWND hwnd = static_cast<HWND>(desc.windowHandle);
                 hr = dxgiFactory->CreateSwapChainForHwnd(device, hwnd, &swapChainDesc, nullptr, nullptr, &m_swapChain);
                 if (FAILED(hr))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "D3D11SwapChain: CreateSwapChainForHwnd failed (HRESULT 0x%08lX)", hr);
                     return;
+                }
 
                 CreateBackBufferViews();
             }

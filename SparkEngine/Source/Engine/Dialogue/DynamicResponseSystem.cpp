@@ -4,6 +4,7 @@
  */
 
 #include "DynamicResponseSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -55,6 +56,7 @@ namespace Spark::Dialogue
     {
         if (!m_initialized)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "DynamicResponseSystem::RegisterRule called before Initialize");
             return;
         }
         m_rules.push_back(rule);
@@ -68,6 +70,8 @@ namespace Spark::Dialogue
     {
         if (!m_initialized)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "DynamicResponseSystem::SendSignal('%s') called before Initialize",
+                           signalName.c_str());
             return;
         }
 

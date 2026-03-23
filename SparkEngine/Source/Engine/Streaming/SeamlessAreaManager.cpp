@@ -9,6 +9,7 @@
 
 #include "SeamlessAreaManager.h"
 #include "../../Utils/SparkConsole.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -113,6 +114,8 @@ namespace Spark::Streaming
         auto it = m_areas.find(areaId);
         if (it == m_areas.end())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Scene, "[SeamlessAreaManager] UnregisterArea: area %u not found",
+                           areaId);
             return;
         }
 
