@@ -31,7 +31,7 @@ namespace TestPhysics
         Plane
     };
 
-    struct PhysicsMaterial
+    struct TestMaterial
     {
         std::string name;
         float friction = 0.5f;
@@ -47,7 +47,7 @@ namespace TestPhysics
         Vec3 position;
         Vec3 halfExtents = {0.5f, 0.5f, 0.5f};
         float mass = 1.0f;
-        PhysicsMaterial material;
+        TestMaterial material;
     };
 
     struct RigidBody
@@ -157,9 +157,9 @@ namespace TestPhysics
         }
 
         // Material registration
-        void RegisterMaterial(const PhysicsMaterial& mat) { m_materials[mat.name] = mat; }
+        void RegisterMaterial(const TestMaterial& mat) { m_materials[mat.name] = mat; }
 
-        const PhysicsMaterial* GetMaterial(const std::string& name) const
+        const TestMaterial* GetMaterial(const std::string& name) const
         {
             auto it = m_materials.find(name);
             return (it != m_materials.end()) ? &it->second : nullptr;
@@ -242,7 +242,7 @@ namespace TestPhysics
         float m_interpolationAlpha = 0.0f;
         bool m_initialized = false;
         std::vector<RigidBody> m_bodies;
-        std::unordered_map<std::string, PhysicsMaterial> m_materials;
+        std::unordered_map<std::string, TestMaterial> m_materials;
         int m_nextId = 0;
     };
 
@@ -416,7 +416,7 @@ TEST(Physics_MaterialRegistration)
     TestPhysics::PhysicsSystem physics;
     physics.Initialize();
 
-    TestPhysics::PhysicsMaterial mat;
+    TestPhysics::TestMaterial mat;
     mat.name = "Rubber";
     mat.friction = 0.8f;
     mat.restitution = 0.9f;
