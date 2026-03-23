@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <iostream>
 #include <cstdio>
+#include <cstring>
 
 namespace SparkEditor
 {
@@ -17,7 +18,6 @@ namespace SparkEditor
     bool SaveSystemPanel::Initialize()
     {
         std::cout << "Initializing Save System panel\n";
-        // Initialize empty slots
         m_slots.resize(m_maxSlots);
         for (int i = 0; i < m_maxSlots; ++i)
         {
@@ -41,6 +41,11 @@ namespace SparkEditor
                 if (ImGui::BeginTabItem(ICON_FA_SAVE " Save Slots"))
                 {
                     RenderSaveSlots();
+                    if (m_selectedSlot >= 0)
+                    {
+                        ImGui::Separator();
+                        RenderSlotActions();
+                    }
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem(ICON_FA_COG " Autosave Settings"))
@@ -61,13 +66,15 @@ namespace SparkEditor
 
     void SaveSystemPanel::RenderSaveSlots()
     {
-        if (ImGui::BeginTable("SaveSlotTable", 4,
+        if (ImGui::BeginTable("SaveSlotTable", 6,
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
         {
-            ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 60);
+            ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 40);
             ImGui::TableSetupColumn("Name");
             ImGui::TableSetupColumn("Scene");
-            ImGui::TableSetupColumn("Play Time", ImGuiTableColumnFlags_WidthFixed, 100);
+            ImGui::TableSetupColumn("Play Time", ImGuiTableColumnFlags_WidthFixed, 80);
+            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 70);
+            ImGui::TableSetupColumn("Modified", ImGuiTableColumnFlags_WidthFixed, 100);
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_slots.size()); ++i)
@@ -80,7 +87,10 @@ namespace SparkEditor
                 snprintf(slotLabel, sizeof(slotLabel), "%d", slot.slot + 1);
                 bool selected = (m_selectedSlot == i);
                 if (ImGui::Selectable(slotLabel, selected, ImGuiSelectableFlags_SpanAllColumns))
+                {
                     m_selectedSlot = i;
+                    m_renaming = false;
+                }
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(slot.occupied ? slot.name : "(Empty)");
@@ -99,26 +109,85 @@ namespace SparkEditor
                 {
                     ImGui::TextUnformatted("-");
                 }
+
+                ImGui::TableNextColumn();
+                if (slot.occupied)
+                    ImGui::Text("%.1f KB", slot.fileSizeKB);
+                else
+                    ImGui::TextUnformatted("-");
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(slot.occupied ? slot.lastModified : "-");
             }
 
             ImGui::EndTable();
         }
+    }
 
-        if (m_selectedSlot >= 0)
+    void SaveSystemPanel::RenderSlotActions()
+    {
+        auto& slot = m_slots[m_selectedSlot];
+        ImGui::Text("Selected: Slot %d", slot.slot + 1);
+
+        if (slot.occupied)
         {
-            ImGui::Separator();
-            auto& slot = m_slots[m_selectedSlot];
-            ImGui::Text("Selected: Slot %d", slot.slot + 1);
-
-            if (slot.occupied)
+            // Rename
+            if (m_renaming)
             {
+                ImGui::SetNextItemWidth(200);
+                if (ImGui::InputText("##rename", m_renameBuffer, sizeof(m_renameBuffer),
+                                     ImGuiInputTextFlags_EnterReturnsTrue))
+                {
+                    strncpy(slot.name, m_renameBuffer, sizeof(slot.name) - 1);
+                    m_renaming = false;
+                }
                 ImGui::SameLine();
-                if (ImGui::Button(ICON_FA_TRASH " Delete Save"))
+                if (ImGui::Button("OK"))
+                {
+                    strncpy(slot.name, m_renameBuffer, sizeof(slot.name) - 1);
+                    m_renaming = false;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel"))
+                    m_renaming = false;
+            }
+            else
+            {
+                if (ImGui::Button(ICON_FA_DOWNLOAD " Load Save"))
+                {
+                    // Would trigger SaveSystem::LoadSlot()
+                    std::cout << "Loading save slot " << slot.slot << "\n";
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button(ICON_FA_PEN " Rename"))
+                {
+                    m_renaming = true;
+                    strncpy(m_renameBuffer, slot.name, sizeof(m_renameBuffer) - 1);
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button(ICON_FA_FILE_EXPORT " Export"))
+                {
+                    std::cout << "Exporting save slot " << slot.slot << "\n";
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button(ICON_FA_TRASH " Delete"))
                 {
                     slot.occupied = false;
                     memset(slot.sceneName, 0, sizeof(slot.sceneName));
+                    memset(slot.lastModified, 0, sizeof(slot.lastModified));
                     slot.playTime = 0.0f;
+                    slot.fileSizeKB = 0.0f;
                 }
+            }
+        }
+        else
+        {
+            if (ImGui::Button(ICON_FA_FILE_IMPORT " Import Save"))
+            {
+                std::cout << "Importing save into slot " << slot.slot << "\n";
             }
         }
     }
@@ -135,7 +204,7 @@ namespace SparkEditor
         }
 
         ImGui::Separator();
-        ImGui::Checkbox("Quick Save/Load (F5/F9)", &m_autosaveEnabled);
+        ImGui::Checkbox("Quick Save/Load (F5/F9)", &m_quickSaveEnabled);
     }
 
 } // namespace SparkEditor

@@ -17,7 +17,8 @@ namespace SparkEditor
      * @brief Panel for monitoring the engine's EventBus in real-time
      *
      * Shows a scrolling log of events fired during Play mode,
-     * with filtering by event type. Useful for debugging event flow.
+     * with filtering by event type and category. Color-codes events
+     * by category and supports a circular buffer to cap memory usage.
      */
     class EventMonitorPanel : public EditorPanel
     {
@@ -31,12 +32,31 @@ namespace SparkEditor
         void Shutdown() override;
 
       private:
+        enum class EventCategory : int
+        {
+            All = 0,
+            Entity,
+            Physics,
+            Gameplay,
+            Audio,
+            UI,
+            Count
+        };
+
         struct EventEntry
         {
             float timestamp = 0.0f;
             char eventType[128] = {};
             char details[256] = {};
+            EventCategory category = EventCategory::Entity;
         };
+
+        void RenderToolbar();
+        void RenderEventLog();
+        void RenderStats();
+
+        static ImVec4 GetCategoryColor(EventCategory category);
+        static const char* GetCategoryName(EventCategory category);
 
         std::vector<EventEntry> m_events;
         char m_filterText[128] = {};
@@ -44,6 +64,8 @@ namespace SparkEditor
         bool m_paused = false;
         float m_elapsed = 0.0f;
         int m_maxEntries = 500;
+        int m_categoryFilter = 0; // 0 = All
+        int m_categoryCounts[6] = {};
     };
 
 } // namespace SparkEditor
