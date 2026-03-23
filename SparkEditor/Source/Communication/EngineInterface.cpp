@@ -181,8 +181,7 @@ namespace SparkEditor
                 if (waitResult == WAIT_TIMEOUT)
                 {
                     std::cerr << "Connect timed out after " << timeoutSeconds << "s\n";
-                    SPARK_LOG_WARNING(Spark::LogCategory::Editor, "Pipe connection timed out after %.1fs",
-                                      timeoutSeconds);
+                    SPARK_LOG_WARN(Spark::LogCategory::Editor, "Pipe connection timed out after %.1fs", timeoutSeconds);
                     ::CancelIo(hPipe);
                     ::CloseHandle(overlapped.hEvent);
                     ::CloseHandle(hPipe);

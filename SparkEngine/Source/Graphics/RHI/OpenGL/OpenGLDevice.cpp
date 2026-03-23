@@ -836,8 +836,8 @@ namespace Spark
                             else if (severity == GL_DEBUG_SEVERITY_LOW)
                                 severityStr = "LOW";
 
-                            SPARK_LOG_WARNING(Spark::LogCategory::Graphics, "GL Debug [%s] src=%u type=%u id=%u: %s",
-                                              severityStr, source, type, id, message);
+                            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GL Debug [%s] src=%u type=%u id=%u: %s",
+                                           severityStr, source, type, id, message);
                         },
                         nullptr);
 

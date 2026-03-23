@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "EditorPanel.h"
 #include "IEditorPlugin.h"
 
 #include <memory>
@@ -20,7 +21,6 @@ namespace SparkEditor
 {
 
     class EditorApplication;
-    class EditorPanel;
 
     /**
      * @brief Tracks a loaded plugin and its associated resources
