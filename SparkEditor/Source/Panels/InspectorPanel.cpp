@@ -482,7 +482,7 @@ namespace SparkEditor
     // Drawing Helpers
     // ============================================================================
 
-    static void DrawVec3Control(const char* label, float* values, float resetValue, float speed)
+    void InspectorPanel::DrawVec3Control(const char* label, float* values, float resetValue, float speed)
     {
         ImVec4 xColor(0.9f, 0.2f, 0.2f, 1.0f);
         ImVec4 yColor(0.2f, 0.8f, 0.2f, 1.0f);

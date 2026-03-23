@@ -105,6 +105,9 @@ namespace SparkEditor
         /// Helper: find a component by type on a given object
         static Component* FindComponent(SceneFile* scene, ObjectID objectID, ComponentType type);
 
+        /// Helper: draw a labeled XYZ drag-float control with colored reset buttons
+        static void DrawVec3Control(const char* label, float* values, float resetValue, float speed);
+
       private:
         SceneFile* m_scene = nullptr;                     ///< Non-owning pointer to the active scene.
         ObjectID m_inspectedObjectID = INVALID_OBJECT_ID; ///< Currently inspected object (by ID).
