@@ -112,6 +112,7 @@ endif()
 option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON)
 option(ENABLE_RECAST "Enable Recast/Detour navmesh generation (improved voxel-based builder)" ON)
 option(BUILD_TESTS "Build test suite" ON)
+option(BUILD_GAME_MODULES "Build in-tree game modules (SparkGame, SparkGameMMO)" ON)
 option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)" OFF)
 option(SPARK_SUPPRESS_THIRDPARTY_WARNINGS "Suppress compiler warnings from third-party libraries (Jolt, etc.)" ON)
 option(SPARK_DOUBLE_PRECISION_PHYSICS "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds" OFF)
@@ -604,53 +605,56 @@ if(TARGET SparkConsole)
 endif()
 
 # ---------------------------------------------------------------------
-# 9.5) Build SparkGame (game module DLL loaded by engine at runtime)
+# 9.5) Build in-tree game modules (optional, BUILD_GAME_MODULES toggle)
 # ---------------------------------------------------------------------
-if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGame/CMakeLists.txt")
-    message(STATUS "Adding SparkGame game module to build...")
-    add_subdirectory(SparkGame)
+if(BUILD_GAME_MODULES)
+    # SparkGame — FPS game showcase module
+    if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGame/CMakeLists.txt")
+        message(STATUS "Adding SparkGame game module to build...")
+        add_subdirectory(SparkGame)
 
-    if(TARGET SparkGame)
-        # SparkEngineLib (static) contains SparkConsole code that references
-        # Game/Player symbols exported from SparkGame.  Link SparkEngine
-        # against SparkGame's import library so the linker can resolve them.
-        target_link_libraries(SparkEngine PRIVATE SparkGame)
-        # Re-add SparkEngineLib so the linker can resolve symbols that
-        # SparkGame.so/.dll left undefined (e.g. CrashHandler functions
-        # referenced by SparkConsole code linked into SparkGame).
-        target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
-        message(STATUS "SparkEngine will link SparkGame import library")
+        if(TARGET SparkGame)
+            # SparkEngineLib (static) contains SparkConsole code that references
+            # Game/Player symbols exported from SparkGame.  Link SparkEngine
+            # against SparkGame's import library so the linker can resolve them.
+            target_link_libraries(SparkEngine PRIVATE SparkGame)
+            # Re-add SparkEngineLib so the linker can resolve symbols that
+            # SparkGame.so/.dll left undefined (e.g. CrashHandler functions
+            # referenced by SparkConsole code linked into SparkGame).
+            target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
+            message(STATUS "SparkEngine will link SparkGame import library")
 
-        # Copy SparkGame DLL next to the engine executable after build.
-        # This is done here (on SparkEngine) rather than as a SparkGame
-        # post-build step to avoid a circular build dependency.
-        add_custom_command(TARGET SparkEngine POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SparkGame>
-                $<TARGET_FILE_DIR:SparkEngine>
-            COMMENT "Copying SparkGame DLL to engine output directory"
-            VERBATIM
-        )
+            # Copy SparkGame DLL next to the engine executable after build.
+            # This is done here (on SparkEngine) rather than as a SparkGame
+            # post-build step to avoid a circular build dependency.
+            add_custom_command(TARGET SparkEngine POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:SparkGame>
+                    $<TARGET_FILE_DIR:SparkEngine>
+                COMMENT "Copying SparkGame DLL to engine output directory"
+                VERBATIM
+            )
+        endif()
     endif()
-endif()
 
-# ---------------------------------------------------------------------
-# 9.55) Build SparkGameMMO (MMO networking showcase module DLL)
-# ---------------------------------------------------------------------
-if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGameMMO/CMakeLists.txt")
-    message(STATUS "Adding SparkGameMMO game module to build...")
-    add_subdirectory(SparkGameMMO)
+    # SparkGameMMO — MMO networking showcase module
+    if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGameMMO/CMakeLists.txt")
+        message(STATUS "Adding SparkGameMMO game module to build...")
+        add_subdirectory(SparkGameMMO)
 
-    if(TARGET SparkGameMMO)
-        # Copy SparkGameMMO DLL next to the engine executable after build.
-        add_custom_command(TARGET SparkEngine POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SparkGameMMO>
-                $<TARGET_FILE_DIR:SparkEngine>
-            COMMENT "Copying SparkGameMMO DLL to engine output directory"
-            VERBATIM
-        )
+        if(TARGET SparkGameMMO)
+            # Copy SparkGameMMO DLL next to the engine executable after build.
+            add_custom_command(TARGET SparkEngine POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:SparkGameMMO>
+                    $<TARGET_FILE_DIR:SparkEngine>
+                COMMENT "Copying SparkGameMMO DLL to engine output directory"
+                VERBATIM
+            )
+        endif()
     endif()
+else()
+    message(STATUS "Game modules: SKIPPED (BUILD_GAME_MODULES=OFF)")
 endif()
 
 # ---------------------------------------------------------------------
@@ -1084,7 +1088,11 @@ else()
     message(STATUS "  OpenGL     : DISABLED")
 endif()
 message(STATUS "SparkEngine: EXECUTABLE (runtime host)")
-message(STATUS "SparkGame: SHARED LIBRARY (game module DLL)")
+if(BUILD_GAME_MODULES)
+    message(STATUS "Game Modules: ON (SparkGame, SparkGameMMO)")
+else()
+    message(STATUS "Game Modules: OFF (engine-only build)")
+endif()
 message(STATUS "Editor: ${ENABLE_EDITOR}")
 message(STATUS "Shader Compiler Tool: ENABLED")
 message(STATUS "Tests: ${BUILD_TESTS}")
