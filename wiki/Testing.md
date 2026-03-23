@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*145 test files, 1666+ test cases*
+*146 test files, 1686+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -457,6 +457,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestClientPrediction` | 5 |
 | `TestClothSimulation` | 4 |
 | `TestClusteredLightGPU` | 7 |
+| `TestCollaborativeEditing` | 20 |
 | `TestCollisionAvoidance` | 4 |
 | `TestCollisionLayers` | 10 |
 | `TestColorUtils` | 18 |

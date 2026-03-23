@@ -29,6 +29,7 @@
 #include "Engine/Editor/PlayModeManager.h"
 #include "../Gizmos/GizmoSystem.h"
 #include "../Communication/CollaborativeEditSession.h"
+#include "../Communication/LiveEditBridge.h"
 
 #ifdef _WIN32
 struct ID3D11Device;
@@ -88,6 +89,7 @@ namespace SparkEditor
         CommandPalette* GetCommandPalette() { return m_commandPalette.get(); }
         GizmoSystem* GetGizmoSystem() { return m_gizmoSystem.get(); }
         CollaborativeEditSession* GetCollabSession() { return m_collabSession.get(); }
+        LiveEditBridge* GetLiveEditBridge() { return m_liveEditBridge.get(); }
 
         /// @brief Set non-owning pointer to the plugin manager (owned by EditorApplication)
         void SetPluginManager(EditorPluginManager* pluginManager) { m_pluginManager = pluginManager; }
@@ -256,6 +258,9 @@ namespace SparkEditor
 
         // Collaborative editing — multi-user session management
         std::unique_ptr<CollaborativeEditSession> m_collabSession;
+
+        // Live edit bridge — forwards edits to running AreaServer
+        std::unique_ptr<LiveEditBridge> m_liveEditBridge;
 
         // Exit state
         bool m_exitRequested = false;

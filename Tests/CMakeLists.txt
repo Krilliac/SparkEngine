@@ -152,12 +152,17 @@ add_executable(SparkTests
     TestClusteredLightGPU.cpp
     TestRHIHandlePool.cpp
     TestMaterialDefinition.cpp
+    TestCollaborativeEditing.cpp
     TestGraphicsIntegration.cpp
     TestTimeOfDaySystem.cpp
+    # Editor sources needed by TestCollaborativeEditing
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
 )
 
 target_include_directories(SparkTests PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source"
     "${CMAKE_SOURCE_DIR}/ThirdParty"
 )
 

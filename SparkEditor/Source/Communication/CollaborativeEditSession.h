@@ -1,6 +1,6 @@
 /**
  * @file CollaborativeEditSession.h
- * @brief Multi-user collaborative editor session with presence and locking
+ * @brief Multi-user collaborative editor session with presence, locking, and TCP networking
  * @author Spark Engine Team
  * @date 2026
  *
@@ -10,21 +10,21 @@
  * - **Node-level locking**: Prevent conflicting edits on the same object
  * - **Edit broadcasting**: See other editors' changes in real-time
  * - **Conflict resolution**: Pessimistic locking with graceful fallback
+ * - **TCP networking**: Real peer-to-peer communication over TCP sockets
+ * - **Live push**: Optional bridge to push edits to a running AreaServer
  *
- * Unlike HeroEngine's full real-time character-by-character sync, this
- * implementation uses a simpler pessimistic locking model suitable for
+ * The implementation uses a pessimistic locking model suitable for
  * small-to-medium teams (2-10 editors). Editors lock nodes before editing,
  * and completed edits are broadcast to all connected sessions.
  *
  * ## Usage
  * @code
  *   CollaborativeEditSession session;
- *   session.Connect("192.168.1.100", 27030);
+ *   session.Host(27030, "Alice");
+ *   // or: session.Connect("192.168.1.100", 27030, "Bob");
  *
- *   // Lock a node before editing
  *   if (session.RequestLock("Entity_42"))
  *   {
- *       // Make edits...
  *       session.BroadcastEdit(editMessage);
  *       session.ReleaseLock("Entity_42");
  *   }
@@ -43,6 +43,7 @@
 #include <functional>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <queue>
@@ -179,6 +180,16 @@ namespace SparkEditor
     };
 
     // ============================================================================
+    // Wire Protocol
+    // ============================================================================
+
+    /// @brief Serializes an InternalMessage to a byte buffer for TCP transmission
+    std::vector<uint8_t> SerializeMessage(const InternalMessage& msg);
+
+    /// @brief Deserializes bytes back into an InternalMessage
+    bool DeserializeMessage(const uint8_t* data, size_t size, InternalMessage& outMsg);
+
+    // ============================================================================
     // Collaborative Edit Session
     // ============================================================================
 
@@ -186,7 +197,8 @@ namespace SparkEditor
      * @brief Manages a multi-user collaborative editing session
      *
      * Handles peer discovery, node locking, edit broadcasting, and presence
-     * awareness for collaborative scene editing.
+     * awareness for collaborative scene editing. Uses TCP sockets for reliable
+     * communication between editor instances.
      */
     class CollaborativeEditSession
     {
@@ -194,27 +206,31 @@ namespace SparkEditor
         CollaborativeEditSession();
         ~CollaborativeEditSession();
 
+        // Non-copyable, non-movable (owns threads and sockets)
+        CollaborativeEditSession(const CollaborativeEditSession&) = delete;
+        CollaborativeEditSession& operator=(const CollaborativeEditSession&) = delete;
+
         // -- Connection --
 
         /**
-         * @brief Host a new collaborative session
-         * @param port Port to listen on
+         * @brief Host a new collaborative session on a TCP port
+         * @param port Port to listen on for incoming editor connections
          * @param userName Display name for this editor
-         * @return true if hosting started
+         * @return true if hosting started (listener thread spawned)
          */
         bool Host(uint16_t port, const std::string& userName);
 
         /**
-         * @brief Connect to an existing collaborative session
-         * @param address Host address
+         * @brief Connect to an existing collaborative session via TCP
+         * @param address Host address (IP or hostname)
          * @param port Host port
          * @param userName Display name for this editor
-         * @return true if connection succeeded
+         * @return true if TCP connection succeeded and handshake completed
          */
         bool Connect(const std::string& address, uint16_t port, const std::string& userName);
 
         /**
-         * @brief Disconnect from the session
+         * @brief Disconnect from the session, releasing all locks
          */
         void Disconnect();
 
@@ -235,70 +251,22 @@ namespace SparkEditor
 
         // -- Peer Awareness --
 
-        /**
-         * @brief Get all connected peers
-         */
         std::vector<EditorPeer> GetConnectedPeers() const;
-
-        /**
-         * @brief Get a specific peer's info
-         */
         const EditorPeer* GetPeer(PeerID id) const;
-
-        /**
-         * @brief Get the local peer's ID
-         */
         PeerID GetLocalPeerID() const { return m_localPeerID; }
-
-        /**
-         * @brief Update the local editor's selection (broadcast to peers)
-         * @param nodeId The currently selected node ID
-         */
         void SetLocalSelection(const std::string& nodeId);
-
-        /**
-         * @brief Update the local editor's viewport camera (broadcast to peers)
-         */
         void SetLocalViewportCamera(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& direction);
 
         // -- Node Locking --
 
-        /**
-         * @brief Request a lock on a scene node for editing
-         * @param nodeId The node to lock
-         * @return true if the lock was acquired (not held by another peer)
-         */
         bool RequestLock(const std::string& nodeId);
-
-        /**
-         * @brief Release a lock on a scene node
-         * @param nodeId The node to unlock
-         */
         void ReleaseLock(const std::string& nodeId);
-
-        /**
-         * @brief Check if a node is locked
-         * @param nodeId The node to check
-         * @return PeerID of the lock owner, or INVALID_PEER if unlocked
-         */
         PeerID GetLockOwner(const std::string& nodeId) const;
-
-        /**
-         * @brief Check if the local editor holds the lock on a node
-         */
         bool IsLockedByLocal(const std::string& nodeId) const;
-
-        /**
-         * @brief Get all current node locks
-         */
         std::vector<NodeLock> GetAllLocks() const;
 
         // -- Edit Broadcasting --
 
-        /**
-         * @brief Broadcast an edit to all connected editors
-         * @param message The edit operation to broadcast
-         */
         void BroadcastEdit(const EditMessage& message);
 
         // -- Callbacks --
@@ -313,9 +281,6 @@ namespace SparkEditor
 
         // -- Queries --
 
-        /**
-         * @brief Get session statistics
-         */
         struct SessionStats
         {
             uint32_t peerCount = 0;
@@ -325,24 +290,38 @@ namespace SparkEditor
             float sessionDuration = 0.0f;
         };
         SessionStats GetStats() const;
-
-        /**
-         * @brief Console status string
-         */
         std::string Console_GetStatus() const;
 
+        /// @brief Get the port this session is listening on (host) or connected to (client)
+        uint16_t GetPort() const { return m_port; }
+
+        /// @brief Get the address this session is connected to (client only)
+        const std::string& GetHostAddress() const { return m_hostAddress; }
+
       private:
+        // Application-level message processing
         void ProcessIncomingMessages();
         void BroadcastPresence();
         void ExpireStaleNodes();
         PeerID AllocatePeerID();
 
+        // Network I/O
+        void SendToAllPeers(const InternalMessage& msg);
+        void SendToPeer(PeerID peerId, const InternalMessage& msg);
+        void NetworkThreadHost();
+        void NetworkThreadClient();
+        void HandleClientSocket(int clientSocket, PeerID peerId);
+        void CloseAllSockets();
+
         // State
         std::atomic<bool> m_connected{false};
+        std::atomic<bool> m_shuttingDown{false};
         bool m_isHost = false;
         PeerID m_localPeerID = INVALID_PEER;
         std::string m_localUserName;
         float m_sessionTime = 0.0f;
+        uint16_t m_port = 0;
+        std::string m_hostAddress;
 
         // Peers
         std::unordered_map<PeerID, EditorPeer> m_peers;
@@ -371,6 +350,26 @@ namespace SparkEditor
         std::queue<InternalMessage> m_outgoingMessages;
         std::queue<InternalMessage> m_incomingMessages;
         mutable std::mutex m_messageMutex;
+
+        // Networking — TCP sockets and threads
+        int m_listenSocket = -1;
+        int m_clientSocket = -1; ///< Client's connection to host
+        std::unordered_map<PeerID, int> m_peerSockets;
+        mutable std::mutex m_socketMutex;
+        std::thread m_networkThread;
+        std::vector<std::thread> m_clientThreads;
+
+        // Peer color palette for viewport visualization
+        static constexpr EditorPeer::Color kPeerColors[] = {
+            {0.2f, 0.8f, 0.2f, 1.0f}, // Green (host)
+            {0.2f, 0.5f, 0.9f, 1.0f}, // Blue
+            {0.9f, 0.4f, 0.2f, 1.0f}, // Orange
+            {0.8f, 0.2f, 0.8f, 1.0f}, // Purple
+            {0.9f, 0.9f, 0.2f, 1.0f}, // Yellow
+            {0.2f, 0.9f, 0.9f, 1.0f}, // Cyan
+            {0.9f, 0.2f, 0.4f, 1.0f}, // Pink
+            {0.5f, 0.8f, 0.3f, 1.0f}, // Lime
+        };
     };
 
 } // namespace SparkEditor
