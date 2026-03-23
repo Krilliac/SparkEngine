@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <chrono>
 #include "Utils/TypeTraits.h"
+#include "../Utils/ContainerUtils.h"
 
 namespace SparkEditor
 {
@@ -122,7 +123,7 @@ namespace SparkEditor
         static bool IsValid(EnumType value)                                                                            \
         {                                                                                                              \
             const auto& values = GetAllValues();                                                                       \
-            return std::find(values.begin(), values.end(), value) != values.end();                                     \
+            return Spark::ContainerUtils::Contains(values, value);                                                     \
         }                                                                                                              \
                                                                                                                        \
         static std::string ToString(EnumType value);                                                                   \

@@ -7,6 +7,7 @@
  */
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <cmath>
 #include <array>
 
@@ -17,10 +18,8 @@
 namespace
 {
 
-    struct Vec3
-    {
-        float x, y, z;
-    };
+    using TestMath::Vec3;
+
     struct AABB
     {
         Vec3 min, max;

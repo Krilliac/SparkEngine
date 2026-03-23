@@ -31,8 +31,13 @@
 #pragma once
 
 #include <algorithm>
+#include <map>
 #include <optional>
+#include <set>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace Spark::ContainerUtils
 {

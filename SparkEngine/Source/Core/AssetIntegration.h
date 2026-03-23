@@ -21,6 +21,7 @@
 #pragma once
 
 #include "AssetHandle.h"
+#include "../Utils/ContainerUtils.h"
 
 #include <any>
 #include <memory>
@@ -157,7 +158,7 @@ namespace Spark
         bool Contains(AssetHandle handle) const
         {
             std::lock_guard<std::mutex> lock(m_mutex);
-            return m_assets.find(handle) != m_assets.end();
+            return Spark::ContainerUtils::Contains(m_assets, handle);
         }
 
         /**

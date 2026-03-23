@@ -2,6 +2,7 @@
 // Validates that parallel AABB culling produces correct results across threads.
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -17,10 +18,7 @@ namespace TestParallelCulling
 {
 
     // Simplified AABB / plane structs (platform-independent, no DirectXMath dependency)
-    struct Vec3
-    {
-        float x, y, z;
-    };
+    using TestMath::Vec3;
 
     struct AABB
     {

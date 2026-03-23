@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <cmath>
 #include <algorithm>
 #include <string>
@@ -22,10 +23,7 @@ namespace TestDayNight
         }
     };
 
-    struct Vec3
-    {
-        float x = 0, y = 0, z = 0;
-    };
+    using TestMath::Vec3;
 
     enum class DayPeriod
     {

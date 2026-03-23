@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -145,10 +146,7 @@ namespace TestReflect
     }
 
     // Test types
-    struct Vec3
-    {
-        float x = 0, y = 0, z = 0;
-    };
+    using TestMath::Vec3;
 
     struct Transform
     {

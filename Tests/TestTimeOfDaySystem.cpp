@@ -2,6 +2,7 @@
 // Standalone implementation for CI testing (no engine dependency)
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -21,10 +22,7 @@ namespace TestTimeOfDay
         LateNight  // 21:00 - 24:00
     };
 
-    struct Vec3
-    {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-    };
+    using TestMath::Vec3;
 
     static Vec3 LerpColor(const Vec3& a, const Vec3& b, float t)
     {
@@ -315,10 +313,9 @@ TEST(TimeOfDay_AllPeriodsSequential)
     // Verify each boundary transitions to the expected period
     float hours[] = {2.0f, 5.5f, 8.0f, 12.0f, 15.0f, 18.0f, 20.0f, 22.0f};
     TestTimeOfDay::DayPeriod expected[] = {
-        TestTimeOfDay::DayPeriod::Night,     TestTimeOfDay::DayPeriod::Dawn,
-        TestTimeOfDay::DayPeriod::Morning,   TestTimeOfDay::DayPeriod::Midday,
-        TestTimeOfDay::DayPeriod::Afternoon, TestTimeOfDay::DayPeriod::Dusk,
-        TestTimeOfDay::DayPeriod::Evening,   TestTimeOfDay::DayPeriod::LateNight,
+        TestTimeOfDay::DayPeriod::Night,   TestTimeOfDay::DayPeriod::Dawn,      TestTimeOfDay::DayPeriod::Morning,
+        TestTimeOfDay::DayPeriod::Midday,  TestTimeOfDay::DayPeriod::Afternoon, TestTimeOfDay::DayPeriod::Dusk,
+        TestTimeOfDay::DayPeriod::Evening, TestTimeOfDay::DayPeriod::LateNight,
     };
 
     for (int i = 0; i < 8; ++i)

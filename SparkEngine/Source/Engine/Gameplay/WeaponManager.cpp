@@ -462,10 +462,7 @@ namespace Spark::Gameplay
 
     void WeaponSystem::EmitFireEvent(const WeaponFireEvent& event)
     {
-        for (const auto& callback : m_fireCallbacks)
-        {
-            callback(event);
-        }
+        m_fireCallbacks.Broadcast(event);
     }
 
 } // namespace Spark::Gameplay

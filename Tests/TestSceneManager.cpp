@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing (no engine dependency)
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -10,10 +11,7 @@
 namespace TestScene
 {
 
-    struct Vec3
-    {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-    };
+    using TestMath::Vec3;
 
     struct SceneNode
     {

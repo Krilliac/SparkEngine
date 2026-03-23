@@ -11,6 +11,7 @@
  */
 #include "Shader.h"
 #include "Utils/Assert.h"
+#include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -735,7 +736,7 @@ HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompi
     }
 
     // Add to watched files for hot reload
-    if (std::find(m_watchedFiles.begin(), m_watchedFiles.end(), filename) == m_watchedFiles.end())
+    if (!Spark::ContainerUtils::Contains(m_watchedFiles, filename))
     {
         m_watchedFiles.push_back(filename);
     }
@@ -814,7 +815,7 @@ HRESULT Shader::LoadPixelShader(const std::wstring& filename, const ShaderCompil
     }
 
     // Add to watched files for hot reload
-    if (std::find(m_watchedFiles.begin(), m_watchedFiles.end(), filename) == m_watchedFiles.end())
+    if (!Spark::ContainerUtils::Contains(m_watchedFiles, filename))
     {
         m_watchedFiles.push_back(filename);
     }
@@ -974,7 +975,7 @@ HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const
 
     // Track file for hot reload
     std::wstring widePath(filePath.begin(), filePath.end());
-    if (std::find(m_watchedFiles.begin(), m_watchedFiles.end(), widePath) == m_watchedFiles.end())
+    if (!Spark::ContainerUtils::Contains(m_watchedFiles, widePath))
     {
         m_watchedFiles.push_back(widePath);
     }

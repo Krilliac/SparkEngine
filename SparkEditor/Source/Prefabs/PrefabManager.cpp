@@ -6,6 +6,7 @@
  */
 
 #include "PrefabManager.h"
+#include "Utils/ContainerUtils.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <filesystem>
@@ -215,7 +216,7 @@ namespace SparkEditor
                 for (const auto& [propName, propValue] : comp.properties)
                 {
                     std::string key = comp.typeName + "." + propName;
-                    if (overriddenKeys.find(key) == overriddenKeys.end())
+                    if (!Spark::ContainerUtils::Contains(overriddenKeys, key))
                     {
                         // Property is not overridden — inherits from template
                     }

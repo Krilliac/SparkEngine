@@ -34,6 +34,7 @@
 #pragma once
 
 #include "../../Core/Platform.h"
+#include "../../Utils/Delegate.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -253,7 +254,8 @@ namespace Spark
      * @brief Register callback for destruction events.
      * @param callback Called when an object is destroyed.
      */
-        void OnDestruction(std::function<void(const DestructionEvent&)> callback);
+        Spark::Delegate<const DestructionEvent&>::HandlerID OnDestruction(
+            std::function<void(const DestructionEvent&)> callback);
 
         // --- Console integration ---
 
@@ -272,7 +274,7 @@ namespace Spark
 
         std::unordered_map<std::string, FracturePattern> m_patterns;
         std::vector<DebrisInstance> m_debris;
-        std::vector<std::function<void(const DestructionEvent&)>> m_destructionCallbacks;
+        Spark::Delegate<const DestructionEvent&> m_destructionCallbacks;
         size_t m_activeDebrisCount = 0;
         size_t m_maxDebris = 500;
         float m_debrisLifetimeMultiplier = 1.0f;

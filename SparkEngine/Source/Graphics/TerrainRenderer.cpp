@@ -7,6 +7,7 @@
  */
 
 #include "TerrainRenderer.h"
+#include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
@@ -50,7 +51,7 @@ namespace Spark::Graphics
         std::vector<uint32_t> toRemove;
         for (const auto& [id, data] : m_terrainData)
         {
-            if (terrains.find(id) == terrains.end())
+            if (!Spark::ContainerUtils::Contains(terrains, id))
                 toRemove.push_back(id);
         }
         for (uint32_t id : toRemove)

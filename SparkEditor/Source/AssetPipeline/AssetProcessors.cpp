@@ -6,6 +6,7 @@
  */
 
 #include "AdvancedAssetPipeline.h"
+#include "Utils/ContainerUtils.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -483,11 +484,11 @@ namespace SparkEditor
 
     void AssetDependencyGraph::AddAsset(const std::string& assetPath)
     {
-        if (m_dependencies.find(assetPath) == m_dependencies.end())
+        if (!Spark::ContainerUtils::Contains(m_dependencies, assetPath))
         {
             m_dependencies[assetPath] = {};
         }
-        if (m_dependents.find(assetPath) == m_dependents.end())
+        if (!Spark::ContainerUtils::Contains(m_dependents, assetPath))
         {
             m_dependents[assetPath] = {};
         }
@@ -514,13 +515,13 @@ namespace SparkEditor
     void AssetDependencyGraph::AddDependency(const std::string& dependent, const std::string& dependency)
     {
         auto& deps = m_dependencies[dependent];
-        if (std::find(deps.begin(), deps.end(), dependency) == deps.end())
+        if (!Spark::ContainerUtils::Contains(deps, dependency))
         {
             deps.push_back(dependency);
         }
 
         auto& revDeps = m_dependents[dependency];
-        if (std::find(revDeps.begin(), revDeps.end(), dependent) == revDeps.end())
+        if (!Spark::ContainerUtils::Contains(revDeps, dependent))
         {
             revDeps.push_back(dependent);
         }
@@ -636,7 +637,7 @@ namespace SparkEditor
         {
             for (const auto& asset : assetPaths)
             {
-                if (std::find(result.begin(), result.end(), asset) == result.end())
+                if (!Spark::ContainerUtils::Contains(result, asset))
                 {
                     result.push_back(asset);
                 }

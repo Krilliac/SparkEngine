@@ -6,6 +6,7 @@
  */
 
 #include "RHIFactory.h"
+#include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 #include <fstream>
 #include <algorithm>
@@ -171,7 +172,7 @@ namespace Spark
         bool IsBackendAvailable(GraphicsBackend backend)
         {
             auto available = DetectAvailableBackends();
-            return std::find(available.begin(), available.end(), backend) != available.end();
+            return Spark::ContainerUtils::Contains(available, backend);
         }
 
         // ============================================================================

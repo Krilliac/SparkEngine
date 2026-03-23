@@ -82,10 +82,7 @@ namespace Spark
             if (!task.success)
             {
                 m_state = LoadingState::Failed;
-                for (const auto& callback : m_completeCallbacks)
-                {
-                    callback(false);
-                }
+                m_completeCallbacks.Broadcast(false);
                 return;
             }
 
@@ -94,19 +91,13 @@ namespace Spark
             m_progress.store(progress);
 
             // Fire progress callbacks
-            for (const auto& callback : m_progressCallbacks)
-            {
-                callback(progress, task.name);
-            }
+            m_progressCallbacks.Broadcast(progress, task.name);
         }
 
         m_state = LoadingState::Completed;
         m_progress.store(1.0f);
 
-        for (const auto& callback : m_completeCallbacks)
-        {
-            callback(true);
-        }
+        m_completeCallbacks.Broadcast(true);
     }
 
     void LoadingScreen::Cancel()
@@ -135,14 +126,15 @@ namespace Spark
         return m_loadingTips[dist(rng)];
     }
 
-    void LoadingScreen::OnProgress(std::function<void(float, const std::string&)> callback)
+    Spark::Delegate<float, const std::string&>::HandlerID LoadingScreen::OnProgress(
+        std::function<void(float, const std::string&)> callback)
     {
-        m_progressCallbacks.push_back(std::move(callback));
+        return (m_progressCallbacks += std::move(callback));
     }
 
-    void LoadingScreen::OnComplete(std::function<void(bool)> callback)
+    Spark::Delegate<bool>::HandlerID LoadingScreen::OnComplete(std::function<void(bool)> callback)
     {
-        m_completeCallbacks.push_back(std::move(callback));
+        return (m_completeCallbacks += std::move(callback));
     }
 
     std::string LoadingScreen::Console_GetStatus() const

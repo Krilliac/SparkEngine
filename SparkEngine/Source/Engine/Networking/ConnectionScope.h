@@ -29,6 +29,7 @@
 #pragma once
 
 #include "NetworkManager.h"
+#include "../../Utils/ContainerUtils.h"
 
 #include <cmath>
 #include <cstdint>
@@ -201,7 +202,7 @@
             // Compute entered (in newScope, not in prevScope)
             for (uint32_t id : newScope)
             {
-                if (prevScope.find(id) == prevScope.end())
+                if (!Spark::ContainerUtils::Contains(prevScope, id))
                 {
                     changes.entered.push_back(id);
                 }
@@ -211,7 +212,7 @@
             // Compute exited (in prevScope, not in newScope)
             for (uint32_t id : prevScope)
             {
-                if (newScope.find(id) == newScope.end())
+                if (!Spark::ContainerUtils::Contains(newScope, id))
                 {
                     changes.exited.push_back(id);
                 }

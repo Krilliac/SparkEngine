@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing (no XAudio2 dependency)
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -22,10 +23,7 @@ namespace TestAudio
         float voiceVolume = 1.0f;
     };
 
-    struct Vec3
-    {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-    };
+    using TestMath::Vec3;
 
     struct ListenerState
     {

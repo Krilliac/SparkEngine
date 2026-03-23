@@ -5,6 +5,7 @@
  */
 
 #include "MusicManager.h"
+#include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
@@ -242,7 +243,7 @@ namespace Spark::Audio
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
         SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, trackName);
-        if (m_tracks.find(trackName) == m_tracks.end())
+        if (!Spark::ContainerUtils::Contains(m_tracks, trackName))
             return;
 
         m_currentTrack = trackName;
@@ -279,7 +280,7 @@ namespace Spark::Audio
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
         SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, trackName);
-        if (m_tracks.find(trackName) == m_tracks.end())
+        if (!Spark::ContainerUtils::Contains(m_tracks, trackName))
             return;
         if (trackName == m_currentTrack)
             return;
