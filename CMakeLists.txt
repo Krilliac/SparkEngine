@@ -605,54 +605,43 @@ if(TARGET SparkConsole)
 endif()
 
 # ---------------------------------------------------------------------
-# 9.5) Build in-tree game modules (optional, BUILD_GAME_MODULES toggle)
+# 9.5) Build game modules from GameModules/ directory (auto-discovery)
+#
+# Drop a game module folder into GameModules/ with a CMakeLists.txt and
+# it will be built automatically.  Remove the folder to exclude it.
+# Set BUILD_GAME_MODULES=OFF to skip all game modules entirely.
 # ---------------------------------------------------------------------
 if(BUILD_GAME_MODULES)
-    # SparkGame — FPS game showcase module
-    if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGame/CMakeLists.txt")
-        message(STATUS "Adding SparkGame game module to build...")
-        add_subdirectory(SparkGame)
+    file(GLOB _SPARK_GAME_MODULE_DIRS "${CMAKE_SOURCE_DIR}/GameModules/*/CMakeLists.txt")
+    list(LENGTH _SPARK_GAME_MODULE_DIRS _SPARK_GAME_MODULE_COUNT)
 
-        if(TARGET SparkGame)
-            # SparkEngineLib (static) contains SparkConsole code that references
-            # Game/Player symbols exported from SparkGame.  Link SparkEngine
-            # against SparkGame's import library so the linker can resolve them.
-            target_link_libraries(SparkEngine PRIVATE SparkGame)
-            # Re-add SparkEngineLib so the linker can resolve symbols that
-            # SparkGame.so/.dll left undefined (e.g. CrashHandler functions
-            # referenced by SparkConsole code linked into SparkGame).
+    if(_SPARK_GAME_MODULE_COUNT EQUAL 0)
+        message(STATUS "Game modules: none found in GameModules/")
+    endif()
+
+    set(_SPARK_GAME_MODULE_NAMES "")
+    foreach(_MOD_CMAKE IN LISTS _SPARK_GAME_MODULE_DIRS)
+        get_filename_component(_MOD_DIR "${_MOD_CMAKE}" DIRECTORY)
+        get_filename_component(_MOD_NAME "${_MOD_DIR}" NAME)
+
+        message(STATUS "Adding game module: ${_MOD_NAME}")
+        add_subdirectory("${_MOD_DIR}" "${CMAKE_BINARY_DIR}/GameModules/${_MOD_NAME}")
+
+        if(TARGET ${_MOD_NAME})
+            # Link engine against the game module's import library and copy
+            # the DLL next to the engine executable after build.
+            target_link_libraries(SparkEngine PRIVATE ${_MOD_NAME})
             target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
-            message(STATUS "SparkEngine will link SparkGame import library")
-
-            # Copy SparkGame DLL next to the engine executable after build.
-            # This is done here (on SparkEngine) rather than as a SparkGame
-            # post-build step to avoid a circular build dependency.
             add_custom_command(TARGET SparkEngine POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    $<TARGET_FILE:SparkGame>
+                    $<TARGET_FILE:${_MOD_NAME}>
                     $<TARGET_FILE_DIR:SparkEngine>
-                COMMENT "Copying SparkGame DLL to engine output directory"
+                COMMENT "Copying ${_MOD_NAME} DLL to engine output directory"
                 VERBATIM
             )
+            list(APPEND _SPARK_GAME_MODULE_NAMES "${_MOD_NAME}")
         endif()
-    endif()
-
-    # SparkGameMMO — MMO networking showcase module
-    if(EXISTS "${CMAKE_SOURCE_DIR}/SparkGameMMO/CMakeLists.txt")
-        message(STATUS "Adding SparkGameMMO game module to build...")
-        add_subdirectory(SparkGameMMO)
-
-        if(TARGET SparkGameMMO)
-            # Copy SparkGameMMO DLL next to the engine executable after build.
-            add_custom_command(TARGET SparkEngine POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    $<TARGET_FILE:SparkGameMMO>
-                    $<TARGET_FILE_DIR:SparkEngine>
-                COMMENT "Copying SparkGameMMO DLL to engine output directory"
-                VERBATIM
-            )
-        endif()
-    endif()
+    endforeach()
 else()
     message(STATUS "Game modules: SKIPPED (BUILD_GAME_MODULES=OFF)")
 endif()
@@ -743,7 +732,7 @@ endif()
 # ---------------------------------------------------------------------
 target_include_directories(SparkEngineLib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkEngine/Source>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkGame/Source>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/GameModules/SparkGame/Source>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkSDK/Include>
     $<INSTALL_INTERFACE:include>
 )
@@ -1088,8 +1077,11 @@ else()
     message(STATUS "  OpenGL     : DISABLED")
 endif()
 message(STATUS "SparkEngine: EXECUTABLE (runtime host)")
-if(BUILD_GAME_MODULES)
-    message(STATUS "Game Modules: ON (SparkGame, SparkGameMMO)")
+if(BUILD_GAME_MODULES AND _SPARK_GAME_MODULE_NAMES)
+    string(REPLACE ";" ", " _MOD_LIST "${_SPARK_GAME_MODULE_NAMES}")
+    message(STATUS "Game Modules: ${_MOD_LIST}")
+elseif(BUILD_GAME_MODULES)
+    message(STATUS "Game Modules: none found in GameModules/")
 else()
     message(STATUS "Game Modules: OFF (engine-only build)")
 endif()

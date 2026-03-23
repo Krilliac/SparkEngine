@@ -24,7 +24,7 @@ jobs:
 
     - name: Check formatting
       run: |
-        find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+        find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
           -not -path '*/Metal/*' \
           \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
           xargs clang-format --dry-run --Werror 2>&1 || {
@@ -364,7 +364,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Count TODO/FIXME/HACK comments
         run: |
-          count=$(grep -rn 'TODO\|FIXME\|HACK\|XXX' SparkEngine/Source SparkEditor/Source SparkGame/Source --include='*.h' --include='*.cpp' | wc -l)
+          count=$(grep -rn 'TODO\|FIXME\|HACK\|XXX' SparkEngine/Source SparkEditor/Source GameModules --include='*.h' --include='*.cpp' | wc -l)
           echo "Found $count TODO/FIXME/HACK/XXX comments"
           if [ "$count" -gt 20 ]; then
             echo "::warning::TODO/FIXME count ($count) exceeds threshold of 20"

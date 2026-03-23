@@ -23,7 +23,7 @@ jobs:
       id: loc
       run: |
         # Count C++ source lines (excluding ThirdParty, build, .git)
-        CPP_LINES=$(find SparkEngine/Source SparkEditor/Source SparkGame/Source \
+        CPP_LINES=$(find SparkEngine/Source SparkEditor/Source GameModules \
           SparkConsole/src SparkShaderCompiler/src Tests \
           -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
           xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
@@ -33,7 +33,7 @@ jobs:
           xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
         EDITOR_LINES=$(find SparkEditor/Source -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
           xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
-        GAME_LINES=$(find SparkGame/Source -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
+        GAME_LINES=$(find GameModules -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
           xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
         TEST_LINES=$(find Tests -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | \
           xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
@@ -41,7 +41,7 @@ jobs:
           xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
 
         # Count files
-        FILE_COUNT=$(find SparkEngine/Source SparkEditor/Source SparkGame/Source \
+        FILE_COUNT=$(find SparkEngine/Source SparkEditor/Source GameModules \
           SparkConsole/src SparkShaderCompiler/src Tests \
           -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | wc -l)
 
