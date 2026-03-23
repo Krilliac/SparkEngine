@@ -6,6 +6,7 @@
  */
 
 #include "WaterRenderer.h"
+#include "../Utils/AngleUtils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -17,8 +18,8 @@ namespace Spark::Graphics
     // Constants
     // =========================================================================
 
-    static constexpr float kPI = 3.14159265358979323846f;
-    static constexpr float kTwoPI = kPI * 2.0f;
+    static constexpr float kPI = Spark::AngleUtils::PI;
+    static constexpr float kTwoPI = Spark::AngleUtils::TWO_PI;
     static constexpr float kFiniteDiffEpsilon = 0.05f;
 
     // =========================================================================
