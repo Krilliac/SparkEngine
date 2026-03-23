@@ -537,10 +537,22 @@ if(JOLT_FOUND)
     # Use dynamic CRT to match the rest of the engine (/MD instead of /MT)
     set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
 
-    # Disable Jolt GPU compute — CI runners lack Vulkan SDK / glslc
-    set(JPH_USE_VK OFF CACHE BOOL "" FORCE)
-    set(JPH_USE_DX12 OFF CACHE BOOL "" FORCE)
-    set(JPH_USE_MTL OFF CACHE BOOL "" FORCE)
+    # Jolt GPU compute requires shader compilers (glslc/dxc/xcrun).
+    # Auto-disable each backend when the required tools are missing so the
+    # build works out-of-the-box on CI and minimal dev setups, while still
+    # enabling GPU compute for users who have the SDKs installed.
+    find_package(Vulkan QUIET COMPONENTS glslc)
+    if(NOT TARGET Vulkan::glslc)
+        set(JPH_USE_VK OFF CACHE BOOL "" FORCE)
+    endif()
+    find_program(_SPARK_DXC dxc QUIET)
+    if(NOT _SPARK_DXC)
+        set(JPH_USE_DX12 OFF CACHE BOOL "" FORCE)
+    endif()
+    find_program(_SPARK_XCRUN xcrun QUIET)
+    if(NOT _SPARK_XCRUN)
+        set(JPH_USE_MTL OFF CACHE BOOL "" FORCE)
+    endif()
 
     add_subdirectory("${JOLT_PHYSICS_SOURCE_DIR}/Build" "${CMAKE_BINARY_DIR}/JoltPhysics")
 
