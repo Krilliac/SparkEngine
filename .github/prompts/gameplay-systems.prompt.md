@@ -4,12 +4,12 @@ Context: `#prompt:copilot-instructions` for project overview. Console commands: 
 
 ## Game Module Architecture
 
-Game logic in `SparkGame/` (DLL/SO), loaded at runtime via `IGameModule`. Engine calls `Initialize`, `Update(dt)`, `Render`, `Shutdown`. DLL exports: `CreateGameModule()` / `DestroyGameModule()`.
+Game logic in `GameModules/SparkGame/` (DLL/SO), loaded at runtime via `IGameModule`. Engine calls `Initialize`, `Update(dt)`, `Render`, `Shutdown`. DLL exports: `CreateGameModule()` / `DestroyGameModule()`.
 
 ### SparkGame Structure
 
 ```
-SparkGame/Source/
+GameModules/SparkGame/Source/
   Game/          ← Player, weapons, HUD, terrain, inventory, quests, day-night, weather
   Projectiles/   ← Bullet, Rocket, Grenade with ProjectilePool
   Console/       ← Game-specific console commands

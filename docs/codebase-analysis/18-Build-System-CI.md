@@ -145,7 +145,7 @@ All presets enable `BUILD_TESTS=ON` by default.
 
 **Format check:**
 ```bash
-find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
   -not -path '*/Metal/*' \
   \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
   xargs clang-format --dry-run --Werror

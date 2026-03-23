@@ -412,7 +412,7 @@ cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
 The CI enforces formatting on every PR. To check locally:
 
 ```bash
-find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
   -not -path '*/Metal/*' \
   \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
   xargs clang-format --dry-run --Werror 2>&1
@@ -421,7 +421,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 To auto-fix:
 
 ```bash
-find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
   -not -path '*/Metal/*' \
   \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
   xargs clang-format -i

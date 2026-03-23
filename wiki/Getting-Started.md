@@ -428,7 +428,7 @@ sudo dnf install libX11-devel mesa-libGL-devel
 **Fix:** Format your code before committing:
 
 ```bash
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \
   -name '*.h' -o -name '*.cpp' | xargs clang-format -i
 ```
 
@@ -482,7 +482,9 @@ SparkEngine/
 │       ├── Audio/        # XAudio2 audio engine
 │       └── Utils/        # Logger, Profiler, Console
 ├── SparkEditor/          # ImGui editor (Windows)
-├── SparkGame/            # Default game module (DLL)
+├── GameModules/          # Game modules
+│   ├── SparkGame/        # Default game module (DLL)
+│   └── SparkGameMMO/     # MMO game module (DLL)
 ├── SparkConsole/         # Standalone debug console
 ├── SparkShaderCompiler/  # Shader compilation tool
 ├── SparkSDK/             # Public SDK headers

@@ -15,7 +15,7 @@ Audit of SparkGame (example FPS game DLL), SparkConsole (standalone debug consol
 
 ### Module Loading: WORKING (100%)
 
-- DLL entry point: `SparkGame/Source/Main.cpp:37-48` (DllMain)
+- DLL entry point: `GameModules/SparkGame/Source/Main.cpp:37-48` (DllMain)
 - Factory exports: `CreateModule()`, `DestroyModule()`, `CreateGameModule()`, `DestroyGameModule()`
 - Engine loads via ModuleManager, calls OnLoad(EngineContext), OnUpdate(), OnRender() each frame
 - Module info: "Spark Arena - Engine Showcase" v1.0.0

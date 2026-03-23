@@ -603,11 +603,11 @@
 
 ## 26. Game Module (SparkGame)
 
-### 26.1 Core Game (`SparkGame/Source/Core/`)
+### 26.1 Core Game (`GameModules/SparkGame/Source/Core/`)
 - [ ] `SparkGame` — game module implementing `IGameModule`
 - [ ] `Main.cpp` — entry point and module registration
 
-### 26.2 Gameplay Systems (`SparkGame/Source/Game/`)
+### 26.2 Gameplay Systems (`GameModules/SparkGame/Source/Game/`)
 - [ ] `Game` — main game class, game loop
 - [ ] `GameMode` — game mode management (deathmatch, CTF, etc.)
 - [ ] `Player` — FPS player controller (movement, look, interact)
@@ -622,12 +622,12 @@
 - [ ] `Terrain` — runtime terrain rendering with LOD
 - [ ] `Console` — in-game developer console
 
-### 26.3 Game Objects (`SparkGame/Source/Game/`)
+### 26.3 Game Objects (`GameModules/SparkGame/Source/Game/`)
 - [ ] `CubeObject`, `SphereObject`, `PlaneObject` — primitive objects
 - [ ] `PyramidObject`, `RampObject`, `WallObject` — structural objects
 - [ ] `ModelObject` — model-based game objects
 
-### 26.4 Weapons & Projectiles (`SparkGame/Source/Projectiles/`)
+### 26.4 Weapons & Projectiles (`GameModules/SparkGame/Source/Projectiles/`)
 - [ ] `Projectile` — base projectile class
 - [ ] `Bullet` — hitscan/ballistic bullet
 - [ ] `Grenade` — grenade with fuse and explosion
@@ -635,7 +635,7 @@
 - [ ] `ProjectilePool` — object pool for projectiles
 - [ ] `WeaponStats` — damage, fire rate, spread, recoil
 
-### 26.5 Console Commands (`SparkGame/Source/Console/`)
+### 26.5 Console Commands (`GameModules/SparkGame/Source/Console/`)
 - [ ] `AdvancedConsoleCommands` — cheat/debug commands
 
 ---
