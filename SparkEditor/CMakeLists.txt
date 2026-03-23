@@ -197,6 +197,10 @@ else()
 endif()
 
 # Link libraries
+if(TARGET SparkEngineLib)
+    target_link_libraries(SparkEditor PRIVATE SparkEngineLib)
+endif()
+
 if(IMGUI_FOUND)
     target_link_libraries(SparkEditor PRIVATE imgui)
 endif()

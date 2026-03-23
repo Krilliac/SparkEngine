@@ -1273,6 +1273,12 @@ namespace SparkEditor
         float avgFrameTime = sumFrameTime / static_cast<float>(windowSize);
         float avgFps = (avgFrameTime > 0.0f) ? 1000.0f / avgFrameTime : 0.0f;
 
+        // Used for bottleneck detection (below) — suppress unused warnings for now
+        (void)sumCpuTime;
+        (void)sumGpuTime;
+        (void)sumDrawCalls;
+        (void)sumTriangles;
+
         // Calculate percentiles (sort frame times)
         std::sort(frameTimes.begin(), frameTimes.end());
         float p50 = frameTimes.empty() ? 0.0f : frameTimes[frameTimes.size() / 2];
