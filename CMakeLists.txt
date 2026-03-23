@@ -533,6 +533,9 @@ if(JOLT_FOUND)
         message(STATUS "Jolt Physics: double precision enabled (JPH_DOUBLE_PRECISION)")
     endif()
 
+    # Use dynamic CRT to match the rest of the engine (/MD instead of /MT)
+    set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
+
     add_subdirectory("${JOLT_PHYSICS_SOURCE_DIR}/Build" "${CMAKE_BINARY_DIR}/JoltPhysics")
 
     # Suppress warnings in third-party Jolt code
