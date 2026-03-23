@@ -99,9 +99,62 @@ namespace SparkEditor
                 {
                     HandleInput();
                 }
+
+                // Render collaborative peer overlays on top of scene
+                RenderPeerOverlays();
             }
         }
         EndPanel();
+    }
+
+    void SceneViewPanel::RenderPeerOverlays()
+    {
+        if (!m_collabSession || !m_collabSession->IsConnected())
+            return;
+
+        auto peers = m_collabSession->GetConnectedPeers();
+        if (peers.size() <= 1)
+            return;
+
+        PeerID localId = m_collabSession->GetLocalPeerID();
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 windowPos = ImGui::GetWindowPos();
+        float yOffset = 40.0f; // Below toolbar
+
+        for (const auto& peer : peers)
+        {
+            if (peer.id == localId)
+                continue;
+
+            ImU32 color = IM_COL32(static_cast<int>(peer.color.r * 255), static_cast<int>(peer.color.g * 255),
+                                   static_cast<int>(peer.color.b * 255), 200);
+
+            // Draw peer name tag with selection info in top-right corner
+            std::string label = peer.userName;
+            if (!peer.selectedNode.empty())
+            {
+                label += " [" + peer.selectedNode + "]";
+            }
+
+            ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
+            float padding = 4.0f;
+            float tagX = windowPos.x + ImGui::GetWindowWidth() - textSize.x - padding * 3.0f;
+            float tagY = windowPos.y + yOffset;
+
+            // Background pill
+            drawList->AddRectFilled(ImVec2(tagX - padding, tagY - padding),
+                                    ImVec2(tagX + textSize.x + padding, tagY + textSize.y + padding),
+                                    IM_COL32(0, 0, 0, 150), 4.0f);
+
+            // Colored left border
+            drawList->AddRectFilled(ImVec2(tagX - padding, tagY - padding),
+                                    ImVec2(tagX - padding + 3.0f, tagY + textSize.y + padding), color, 2.0f);
+
+            // Text
+            drawList->AddText(ImVec2(tagX, tagY), color, label.c_str());
+
+            yOffset += textSize.y + padding * 3.0f;
+        }
     }
 
     void SceneViewPanel::Shutdown()

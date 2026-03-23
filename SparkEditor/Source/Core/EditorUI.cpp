@@ -190,6 +190,11 @@ namespace SparkEditor
         m_collabSession = std::make_unique<CollaborativeEditSession>();
         console.LogSuccess("Collaborative edit session initialized");
 
+        // Live edit bridge (editor → AreaServer)
+        console.LogInfo("Initializing live edit bridge...");
+        m_liveEditBridge = std::make_unique<LiveEditBridge>();
+        console.LogSuccess("Live edit bridge initialized");
+
         // Editor panels
         console.LogInfo("Creating editor panels...");
         CreatePanels();
@@ -248,6 +253,76 @@ namespace SparkEditor
 
         m_projectManager->SetOnProjectClosed([this](const ProjectInfo& project)
                                              { ShowNotification("Project closed: " + project.name, "info"); });
+
+        // Wire SceneViewPanel to show peer overlays
+        auto svIt = m_panels.find("SceneView");
+        if (svIt != m_panels.end())
+        {
+            auto* sceneView = dynamic_cast<SceneViewPanel*>(svIt->second.get());
+            if (sceneView && m_collabSession)
+            {
+                sceneView->SetCollabSession(m_collabSession.get());
+            }
+        }
+
+        // Wire HierarchyPanel selection to collaborative session for peer presence
+        auto hierIt2 = m_panels.find("Hierarchy");
+        if (hierIt2 != m_panels.end())
+        {
+            auto* hierarchy = dynamic_cast<HierarchyPanel*>(hierIt2->second.get());
+            if (hierarchy && m_collabSession)
+            {
+                hierarchy->RegisterSelectionCallback(
+                    [this](const std::vector<ObjectID>& selectedObjects)
+                    {
+                        if (!m_collabSession || !m_collabSession->IsConnected())
+                            return;
+
+                        // Broadcast the first selected object as the local selection
+                        if (!selectedObjects.empty())
+                        {
+                            m_collabSession->SetLocalSelection(std::to_string(selectedObjects[0]));
+                        }
+                        else
+                        {
+                            m_collabSession->SetLocalSelection("");
+                        }
+                    });
+
+                hierarchy->RegisterObjectOperationCallback(
+                    [this](const std::string& operation, ObjectID objectId)
+                    {
+                        if (!m_collabSession || !m_collabSession->IsConnected())
+                            return;
+
+                        // Map object operations to EditMessage types
+                        EditMessage edit;
+                        edit.sourceEditor = m_collabSession->GetLocalPeerID();
+                        edit.nodeId = std::to_string(objectId);
+
+                        if (operation == "create")
+                            edit.type = EditMessageType::NodeAdded;
+                        else if (operation == "delete")
+                            edit.type = EditMessageType::NodeRemoved;
+                        else if (operation == "duplicate")
+                            edit.type = EditMessageType::NodeAdded;
+                        else if (operation == "rename")
+                            edit.type = EditMessageType::NodeRenamed;
+                        else if (operation == "move")
+                            edit.type = EditMessageType::NodeMoved;
+                        else
+                            return;
+
+                        m_collabSession->BroadcastEdit(edit);
+
+                        // Also push to live server if connected
+                        if (m_liveEditBridge && m_liveEditBridge->IsConnected())
+                        {
+                            m_liveEditBridge->PushEdit(edit);
+                        }
+                    });
+            }
+        }
     }
 
     void EditorUI::Update(float deltaTime)
@@ -275,6 +350,12 @@ namespace SparkEditor
         if (m_collabSession)
         {
             m_collabSession->Update(deltaTime);
+        }
+
+        // Flush pending live edits to AreaServer
+        if (m_liveEditBridge)
+        {
+            m_liveEditBridge->Update();
         }
 
         // Handle keyboard shortcuts for undo/redo, command palette, search
@@ -561,6 +642,15 @@ namespace SparkEditor
             m_gizmoSystem->Shutdown();
             m_gizmoSystem.reset();
             console.LogSuccess("Gizmo system shutdown complete");
+        }
+
+        // Disconnect live edit bridge
+        if (m_liveEditBridge)
+        {
+            console.LogInfo("Shutting down live edit bridge...");
+            m_liveEditBridge->Disconnect();
+            m_liveEditBridge.reset();
+            console.LogSuccess("Live edit bridge shutdown complete");
         }
 
         // Disconnect collaborative session

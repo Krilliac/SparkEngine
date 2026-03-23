@@ -8,6 +8,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include "../Communication/CollaborativeEditSession.h"
 #ifdef _WIN32
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -76,9 +77,13 @@ namespace SparkEditor
      */
         void SetDevice(ID3D11Device* device, ID3D11DeviceContext* context);
 
+        /// @brief Set collaborative session for peer visualization in viewport
+        void SetCollabSession(CollaborativeEditSession* session) { m_collabSession = session; }
+
       private:
         void RenderToolbar();
         void RenderSceneContent();
+        void RenderPeerOverlays();
         void HandleInput();
         void UpdateCamera(float deltaTime);
         void CreateRenderTexture(int width, int height);
@@ -122,6 +127,9 @@ namespace SparkEditor
             Scale
         };
         GizmoMode m_gizmoMode = GizmoMode::Move;
+
+        // Collaborative peer visualization
+        CollaborativeEditSession* m_collabSession = nullptr;
     };
 
 } // namespace SparkEditor

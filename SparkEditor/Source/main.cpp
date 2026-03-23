@@ -1,22 +1,35 @@
 /**
  * @file main.cpp
- * @brief SparkEditor entry point with integrated debug support
+ * @brief SparkEditor entry point with integrated debug and collab server support
  * @author Spark Engine Team
  * @date 2025
  */
 
 #include "Core/EditorApplication.h"
-#include "Utils/SparkConsole.h" // Use local SparkConsole instead of engine version
+#include "Communication/CollaborativeEditSession.h"
+#include "Utils/SparkConsole.h"
 #include <iostream>
 #include <fstream>
 #include <memory>
 #include <sstream>
 #include <vector>
 #include <cstring>
+#include <cstdlib>
+#include <thread>
+#include <chrono>
+#include <csignal>
+#include <atomic>
 
 #ifdef _WIN32
 #include <Windows.h>
 #endif
+
+static std::atomic<bool> g_collabServerRunning{true};
+
+static void CollabServerSignalHandler(int /*sig*/)
+{
+    g_collabServerRunning.store(false, std::memory_order_release);
+}
 
 static bool IsDebuggerAttached()
 {
@@ -45,6 +58,67 @@ static bool IsDebuggerAttached()
 #include <fstream>
 #endif
 
+/// @brief Run as a headless collaborative editing server (no GUI).
+/// Usage: SparkEditor --collab-server [--port PORT] [--name NAME]
+static int RunCollabServer(uint16_t port, const std::string& serverName)
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.Initialize();
+
+    std::signal(SIGINT, CollabServerSignalHandler);
+    std::signal(SIGTERM, CollabServerSignalHandler);
+
+    console.LogInfo("Starting headless collab server on port " + std::to_string(port) + " as '" + serverName + "'...");
+    std::cout << "=== SPARKEDITOR COLLAB SERVER ===" << std::endl;
+    std::cout << "Port: " << port << "  Name: " << serverName << std::endl;
+    std::cout << "Press Ctrl+C to stop." << std::endl;
+
+    SparkEditor::CollaborativeEditSession session;
+
+    session.SetPeerConnectedCallback(
+        [&console](const SparkEditor::EditorPeer& peer)
+        { console.LogInfo("Peer connected: " + peer.userName + " (ID=" + std::to_string(peer.id) + ")"); });
+
+    session.SetPeerDisconnectedCallback([&console](SparkEditor::PeerID id)
+                                        { console.LogInfo("Peer disconnected: ID=" + std::to_string(id)); });
+
+    session.SetEditReceivedCallback([&console](const SparkEditor::EditMessage& edit)
+                                    { console.LogInfo("Edit: " + edit.nodeId + "." + edit.propertyName); });
+
+    if (!session.Host(port, serverName))
+    {
+        console.LogError("Failed to start collab server on port " + std::to_string(port));
+        std::cerr << "ERROR: Failed to bind on port " << port << std::endl;
+        console.Shutdown();
+        return 1;
+    }
+
+    console.LogSuccess("Collab server running. Waiting for editors to connect...");
+    std::cout << "Server started successfully." << std::endl;
+
+    // Headless main loop — just tick the session at 10 Hz
+    while (g_collabServerRunning.load(std::memory_order_acquire))
+    {
+        session.Update(0.1f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        // Periodic status output
+        auto stats = session.GetStats();
+        if (static_cast<int>(stats.sessionDuration) % 30 == 0 && stats.sessionDuration > 0.0f)
+        {
+            std::cout << "[" << static_cast<int>(stats.sessionDuration) << "s] Peers: " << stats.peerCount
+                      << " Locks: " << stats.activeLocks << " Edits: " << stats.editsBroadcast << "/"
+                      << stats.editsReceived << std::endl;
+        }
+    }
+
+    std::cout << std::endl << "Shutting down collab server..." << std::endl;
+    session.Disconnect();
+    console.LogInfo("Collab server stopped.");
+    console.Shutdown();
+    return 0;
+}
+
 // Unified main entry point with debug support when needed
 int main(int argc, char* argv[])
 {
@@ -53,15 +127,35 @@ int main(int argc, char* argv[])
 
     // Check for debug console request or if debugger is present
     bool showDebugConsole = false;
+    bool collabServerMode = false;
+    uint16_t collabPort = 27030;
+    std::string collabServerName = "CollabServer";
 
-    // Check command line arguments for debug console
+    // Check command line arguments
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--debug-console") == 0 || strcmp(argv[i], "-d") == 0)
         {
             showDebugConsole = true;
-            break;
         }
+        else if (strcmp(argv[i], "--collab-server") == 0)
+        {
+            collabServerMode = true;
+        }
+        else if (strcmp(argv[i], "--collab-port") == 0 && i + 1 < argc)
+        {
+            collabPort = static_cast<uint16_t>(std::atoi(argv[++i]));
+        }
+        else if (strcmp(argv[i], "--collab-name") == 0 && i + 1 < argc)
+        {
+            collabServerName = argv[++i];
+        }
+    }
+
+    // Headless collab server mode — no GUI, just networking
+    if (collabServerMode)
+    {
+        return RunCollabServer(collabPort, collabServerName);
     }
 
     // Also show debug console if debugger is attached

@@ -51,6 +51,7 @@
 #include "../Panels/ModdingPanel.h"
 #include "../Panels/CoroutineDebugPanel.h"
 #include "../Panels/GameModuleSelectorPanel.h"
+#include "../Panels/CollaborationPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorIcons.h"
@@ -117,6 +118,7 @@ namespace SparkEditor
         registerPanel("Modding", std::make_shared<ModdingPanel>());
         registerPanel("CoroutineDebug", std::make_shared<CoroutineDebugPanel>());
         registerPanel("GameModuleSelector", std::make_shared<GameModuleSelectorPanel>());
+        registerPanel("Collaboration", std::make_shared<CollaborationPanel>(m_collabSession.get()));
     }
 
     void EditorUI::InitializePanelIcons()
@@ -165,6 +167,7 @@ namespace SparkEditor
             {"Modding", ICON_FA_BOXES},
             {"CoroutineDebug", ICON_FA_CLOCK},
             {"GameModuleSelector", ICON_FA_PUZZLE_PIECE},
+            {"Collaboration", ICON_FA_USERS},
         };
 
         for (const auto& [name, icon] : panelIcons)
@@ -187,7 +190,7 @@ namespace SparkEditor
             "ProjectSettings",    "AudioMixer",      "ScriptEditor",
             "DestructionEditor",  "Replay",          "VRConfig",
             "Streaming",          "Modding",         "CoroutineDebug",
-            "GameModuleSelector",
+            "GameModuleSelector", "Collaboration",
         };
 
         for (const char* name : hiddenPanels)

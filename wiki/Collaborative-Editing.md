@@ -1,21 +1,31 @@
 # Collaborative Editing
 
-SparkEngine's collaborative editing system enables multiple editor instances to work on the same scene simultaneously, inspired by HeroEngine's live collaborative editing. The system provides peer presence awareness, node-level locking, and edit broadcasting.
+SparkEngine's collaborative editing system enables multiple editor instances to work on the same scene simultaneously, inspired by HeroEngine's live collaborative editing. The system provides real-time peer presence awareness, node-level locking, edit broadcasting, and optional live push to running game servers.
 
-## Overview
+## Architecture
 
 ```
-[Editor A] ◄──────► [CollaborativeEditSession] ◄──────► [Editor B]
-   Host                 Node Locking                      Client
-                        Edit Broadcasting
-                        Presence Awareness
+[Editor A] ◄──── TCP ────► [CollaborativeEditSession Host] ◄──── TCP ────► [Editor B]
+                               │  Node Locking                                  │
+                               │  Edit Broadcasting                              │
+                               │  Presence Awareness                             │
+                               │                                                 │
+                               └──── LiveEditBridge (optional) ──────────────────┘
+                                              │
+                                      [AreaServer]
+                                              │
+                                      [Game Clients see changes]
 ```
 
-The `CollaborativeEditSession` class manages:
-- **Peer presence** — See other editors' selections and viewport cameras
-- **Node locking** — Prevent conflicting edits via pessimistic locking
-- **Edit broadcasting** — Real-time edit visibility across all editors
-- **Conflict resolution** — Lock-based conflict prevention with auto-expiry
+### Three Layers
+
+| Layer | System | Purpose |
+|-------|--------|---------|
+| **Editor Collaboration** | `CollaborativeEditSession` | Peer-to-peer editing between editor instances |
+| **Editor ↔ Engine IPC** | `EngineInterface` | Named pipe communication with local engine process |
+| **Live Push** | `LiveEditBridge` | Forward edits to a running AreaServer for live game updates |
+
+These are intentionally separate systems. Editor collaboration uses TCP for reliable ordered delivery of edits. Game networking uses UDP for low-latency gameplay. The `LiveEditBridge` connects the two when live editing of a running game world is desired.
 
 ## Usage
 
@@ -23,12 +33,13 @@ The `CollaborativeEditSession` class manages:
 
 ```cpp
 SparkEditor::CollaborativeEditSession session;
+session.Host(27030, "Alice");  // Opens TCP listener on port 27030
+```
 
-// Host a session (one editor acts as host)
-session.Host(27030, "Alice");
+### Connecting to a Session
 
-// Or connect to an existing session
-session.Connect("192.168.1.100", 27030, "Bob");
+```cpp
+session.Connect("192.168.1.100", 27030, "Bob");  // TCP connect to host
 ```
 
 ### Node Locking
@@ -39,22 +50,18 @@ Before editing a scene node, request a lock:
 if (session.RequestLock("Entity_42"))
 {
     // Lock acquired — safe to edit
-    // Make edits...
-
-    // Broadcast the edit to other editors
     SparkEditor::EditMessage msg;
     msg.type = SparkEditor::EditMessageType::NodeModified;
+    msg.sourceEditor = session.GetLocalPeerID();
     msg.nodeId = "Entity_42";
     msg.propertyName = "position";
     msg.newValue = "10.0, 5.0, 3.0";
     session.BroadcastEdit(msg);
 
-    // Release the lock when done
     session.ReleaseLock("Entity_42");
 }
 else
 {
-    // Locked by another editor — show who holds the lock
     auto owner = session.GetLockOwner("Entity_42");
     auto* peer = session.GetPeer(owner);
     // Display: "Locked by Bob"
@@ -71,13 +78,13 @@ session.SetLocalViewportCamera(cameraPos, cameraDir);
 // In the editor loop:
 session.Update(deltaTime);
 
-// Get connected peers and render their selections
+// Get connected peers and render their presence
 auto peers = session.GetConnectedPeers();
 for (const auto& peer : peers)
 {
     // Draw peer's selection highlight in viewport
     // Show peer's camera frustum
-    // Display peer's name tag
+    // Display peer's name tag with color
 }
 ```
 
@@ -97,6 +104,77 @@ session.SetLockChangedCallback([](const std::string& nodeId, SparkEditor::PeerID
 });
 ```
 
+## Headless Collab Server Mode
+
+The editor can run as a dedicated headless collaboration server without a GUI:
+
+```bash
+# Basic usage
+SparkEditor --collab-server
+
+# With custom port and name
+SparkEditor --collab-server --collab-port 27030 --collab-name "TeamServer"
+```
+
+This mode:
+- Starts a TCP listener on the specified port
+- Accepts editor connections and relays messages between them
+- Runs at 10 Hz with periodic status output
+- Handles Ctrl+C for graceful shutdown
+- Does not create a window or initialize graphics
+
+Use this for persistent team collaboration sessions where you don't want one editor to be the host.
+
+## Live Push to Running Games
+
+The `LiveEditBridge` enables HeroEngine-style live editing where changes made by editors appear in the running game world in real-time.
+
+### Architecture
+
+```
+Editor → CollaborativeEditSession → LiveEditBridge → AreaServer → Game Clients
+```
+
+### Usage
+
+```cpp
+SparkEditor::LiveEditBridge bridge;
+bridge.Connect("192.168.1.200", 27031, "EditorAlice");  // AreaServer inter-server port
+
+// When an edit is committed:
+bridge.PushEdit(editMessage);
+
+// Each frame:
+bridge.Update();
+```
+
+### Custom Message Types
+
+The bridge uses `UserDefined` message types (starting at 1000) to avoid collision with game messages:
+
+| Type | Value | Description |
+|------|-------|-------------|
+| `SceneEdit` | 1000 | A scene edit (node/component change) |
+| `LockNotify` | 1001 | Lock state change notification |
+| `EditorJoin` | 1002 | Editor connecting as privileged client |
+| `EditorLeave` | 1003 | Editor disconnecting |
+
+## Editor UI — Collaboration Panel
+
+The **Collaboration** panel (View → Collaboration) provides:
+- **Connection controls**: Host or join a session with username and port
+- **Peer list**: Shows all connected editors with their colors and current selections
+- **Lock list**: Active locks with owner names, durations, and release buttons
+- **Edit log**: Recent edit activity across all peers
+- **Session stats**: Peer count, lock count, edit counts, session duration
+
+## Viewport Peer Visualization
+
+When a collaborative session is active, the Scene View panel shows:
+- **Name tags**: Each remote peer's username displayed in their assigned color
+- **Selection info**: What node each peer is currently editing
+- Tags appear in the top-right corner of the viewport
+
 ## Edit Message Types
 
 | Type | Description |
@@ -114,30 +192,58 @@ session.SetLockChangedCallback([](const std::string& nodeId, SparkEditor::PeerID
 
 - Locks are **pessimistic** — only one editor can lock a node at a time
 - Locks auto-expire after **5 minutes** (configurable via `NodeLock::maxDurationSeconds`)
-- When an editor disconnects, all their locks are released
+- When an editor disconnects, all their locks are released automatically
 - Lock ownership is tracked with editor name for UI display
+- Double-locking the same node by the same peer is idempotent (succeeds)
+
+## Wire Protocol
+
+Messages are sent as length-prefixed TCP frames:
+
+```
+[4 bytes: message length N] [N bytes: serialized InternalMessage]
+```
+
+The serialization uses big-endian integers and length-prefixed strings. Maximum message size is 16 MB.
+
+## Thread Safety
+
+- `CollaborativeEditSession` uses one network thread for socket I/O plus per-client handler threads on the host
+- Message queues (`m_incomingMessages`, `m_outgoingMessages`) are mutex-protected
+- `m_connected` and `m_shuttingDown` use `std::atomic<bool>` with appropriate memory ordering
+- Peer map and lock map have separate mutexes (`m_peerMutex`, `m_lockMutex`)
+- The main thread drains queues and fires callbacks — callbacks always run on the main thread
 
 ## Session Statistics
 
 ```cpp
 auto stats = session.GetStats();
-// stats.peerCount, stats.activeLocks, stats.editsBroadcast, stats.editsReceived
+// stats.peerCount, stats.activeLocks, stats.editsBroadcast, stats.editsReceived, stats.sessionDuration
 ```
 
 ## Design Decisions
 
-- **Pessimistic locking** was chosen over CRDTs/OT for simplicity and predictability in small teams (2-10 editors)
+- **Pessimistic locking** over CRDTs/OT for simplicity and predictability in small teams (2-10 editors)
 - **Node-level granularity** (not property-level) reduces lock contention while keeping the protocol simple
 - **Auto-expiry** prevents forgotten locks from blocking other editors
+- **TCP** for editor collaboration (reliable, ordered) vs **UDP** for game networking (low-latency)
+- **Separate networking stacks** — editor collab and game networking serve fundamentally different needs
+- **Peer-hosted by default** — no infrastructure required; dedicated server mode available for larger teams
 
 ## Source Files
 
 | File | Description |
 |------|-------------|
-| `SparkEditor/Source/Communication/CollaborativeEditSession.h` | Session class and types |
-| `SparkEditor/Source/Communication/CollaborativeEditSession.cpp` | Session implementation |
+| `SparkEditor/Source/Communication/CollaborativeEditSession.h` | Session class, types, wire protocol |
+| `SparkEditor/Source/Communication/CollaborativeEditSession.cpp` | Session implementation with TCP networking |
+| `SparkEditor/Source/Communication/LiveEditBridge.h` | Live push bridge to AreaServer |
+| `SparkEditor/Source/Communication/LiveEditBridge.cpp` | Bridge implementation |
+| `SparkEditor/Source/Panels/CollaborationPanel.h` | Collaboration UI panel |
+| `SparkEditor/Source/Panels/CollaborationPanel.cpp` | Panel implementation |
+| `SparkEditor/Source/main.cpp` | `--collab-server` CLI mode |
+| `Tests/TestCollaborativeEditing.cpp` | Unit tests |
 
 ## Related Pages
 
 - [SparkEditor](SparkEditor) — Editor overview
-- [Networking](Networking) — Base networking system
+- [Networking](Networking) — Base networking system (game networking)
