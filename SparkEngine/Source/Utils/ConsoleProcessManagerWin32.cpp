@@ -81,7 +81,14 @@ namespace Spark
         if (success)
         {
             m_shouldStopThread = false;
+            m_threadStarted.store(false, std::memory_order_relaxed);
             m_consoleThread = std::thread(&ConsoleProcessManager::ConsoleThreadMain, this);
+
+            // Wait for console thread to start
+            while (!m_threadStarted.load(std::memory_order_acquire))
+            {
+                std::this_thread::yield();
+            }
         }
         return success;
     }
@@ -282,6 +289,8 @@ namespace Spark
 
     void ConsoleProcessManager::ConsoleThreadMain()
     {
+        m_threadStarted.store(true, std::memory_order_release);
+
         while (!m_shouldStopThread && m_consoleRunning)
         {
             if (ReadFromConsole())

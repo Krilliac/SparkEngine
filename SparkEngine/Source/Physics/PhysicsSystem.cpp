@@ -336,7 +336,8 @@ HRESULT PhysicsSystem::Initialize()
 #ifdef JPH_ENABLE_ASSERTS
     JPH::AssertFailed = JoltAssertFailed;
 #endif
-    JPH::Factory::sInstance = new JPH::Factory();
+    auto factory = std::make_unique<JPH::Factory>();
+    JPH::Factory::sInstance = factory.release(); // Jolt owns via global; cleaned up in Shutdown()
     JPH::RegisterTypes();
 
     // Create temp allocator (16 MB — enough for complex scenes with many contacts)
@@ -426,6 +427,16 @@ void PhysicsSystem::Shutdown()
 
     // Clear shape cache
     m_shapeCache.clear();
+
+    // Null out contact listener pointers before destroying Jolt (prevents dangling access
+    // from physics thread callbacks during shutdown)
+    if (m_contactListener)
+    {
+        auto* cl = static_cast<SparkContactListener*>(m_contactListener.get());
+        std::lock_guard<std::mutex> lock(m_surfaceVelocityMutex);
+        cl->m_surfaceVelocities = nullptr;
+        cl->m_surfaceVelocityMutex = nullptr;
+    }
 
     // Destroy Jolt systems in reverse order
     m_joltSystem.reset();

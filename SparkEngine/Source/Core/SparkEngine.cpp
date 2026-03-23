@@ -311,11 +311,19 @@ static void InitScriptingAndPlatformSystems(EngineContext* ctx)
             AngelScriptEngine::BindWorld(ctx->GetWorld());
             SPARK_LOG_INFO(Spark::LogCategory::Core, "AngelScriptEngine initialized");
         }
+        else
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "AngelScriptEngine init failed — scripts disabled");
+        }
     }
 
     if (Spark::Scripting::LuaScriptEngine::GetInstance().Initialize())
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "LuaScriptEngine initialized");
+    }
+    else
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "LuaScriptEngine init failed — Lua scripts disabled");
     }
 
     (void)Spark::Animation::BlendSpaceManager::GetInstance();
@@ -371,7 +379,10 @@ static void InitGameplaySystems()
 {
     auto* ctx = EngineContext::Get();
     if (!ctx)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — all gameplay systems skipped");
         return;
+    }
 
     InitCoreGameplaySystems(ctx);
     InitAIAndWorldSystems(ctx->GetEventBus());
@@ -393,7 +404,13 @@ static void UpdateNonECSSystems(EngineContext* ctx, float dt)
         weather->Update(dt);
 
     Spark::TimeOfDaySystem::GetInstance().Update(dt);
-    Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, ctx->GetWeather(), ctx->GetPhysics());
+
+    auto* weather = ctx->GetWeather();
+    auto* physics = ctx->GetPhysics();
+    if (weather && physics)
+    {
+        Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
+    }
 
     if (auto* dialogue = ctx->GetDialogue())
         dialogue->Update(dt);
@@ -1054,7 +1071,6 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 {
     InitEngineContext();
     InitGameplaySubsystems();
-    LoadAndInitModules(lpCmdLine);
 
     auto& console = Spark::SimpleConsole::GetInstance();
 
@@ -1064,6 +1080,7 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     }
     console.LogInfo("SaveSystem initialized");
 
+    // Initialize AudioEngine before modules so modules can use EngineContext::Get()->GetAudio()
     g_audioEngine = std::make_unique<AudioEngine>();
     if (SUCCEEDED(g_audioEngine->Initialize(32)))
     {
@@ -1075,6 +1092,8 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         console.LogWarning("AudioEngine initialization failed - audio commands will be unavailable");
         g_audioEngine.reset();
     }
+
+    LoadAndInitModules(lpCmdLine);
 
     if (g_graphics)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
@@ -1518,8 +1537,25 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
  */
 static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
 {
-    g_moduleManager = std::make_unique<ModuleManager>();
     auto& console = Spark::SimpleConsole::GetInstance();
+
+    // Initialize AudioEngine before modules so modules can use EngineContext::Get()->GetAudio()
+    if (initAudio)
+    {
+        g_audioEngine = std::make_unique<AudioEngine>();
+        if (SUCCEEDED(g_audioEngine->Initialize(32)))
+        {
+            console.LogInfo("AudioEngine initialized (32 sources)");
+            EngineContext::Get()->SetAudio(g_audioEngine.get());
+        }
+        else
+        {
+            console.LogWarning("AudioEngine initialization failed");
+            g_audioEngine.reset();
+        }
+    }
+
+    g_moduleManager = std::make_unique<ModuleManager>();
 
     if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
     {
@@ -1536,22 +1572,6 @@ static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
     g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
     g_moduleHotReload->WatchAllLoadedModules();
     g_moduleHotReload->Start();
-
-    // Audio engine (windowed modes only — headless has no audio output)
-    if (initAudio)
-    {
-        g_audioEngine = std::make_unique<AudioEngine>();
-        if (SUCCEEDED(g_audioEngine->Initialize(32)))
-        {
-            console.LogInfo("AudioEngine initialized (32 sources)");
-            EngineContext::Get()->SetAudio(g_audioEngine.get());
-        }
-        else
-        {
-            console.LogWarning("AudioEngine initialization failed");
-            g_audioEngine.reset();
-        }
-    }
 
     // Console commands
     if (g_graphics)

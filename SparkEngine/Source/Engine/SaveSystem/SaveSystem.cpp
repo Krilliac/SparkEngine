@@ -99,8 +99,14 @@ namespace Spark
         {
             return std::stof(it->second);
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (SafeGetFloat): %s", e.what());
+            return def;
+        }
         catch (...)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in SafeGetFloat");
             return def;
         }
     }
@@ -115,8 +121,14 @@ namespace Spark
         {
             return static_cast<uint32_t>(std::stoul(it->second));
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (SafeGetUint32): %s", e.what());
+            return def;
+        }
         catch (...)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in SafeGetUint32");
             return def;
         }
     }
@@ -578,8 +590,14 @@ namespace Spark
             ComponentSerializerRegistry::GetInstance().RegisterBuiltins();
             return true;
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system initialization error: %s", e.what());
+            return false;
+        }
         catch (...)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception during initialization");
             return false;
         }
     }
@@ -649,8 +667,14 @@ namespace Spark
                 return true;
             return fs::remove(path);
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (DeleteSave): %s", e.what());
+            return false;
+        }
         catch (...)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in DeleteSave");
             return false;
         }
     }
@@ -672,8 +696,13 @@ namespace Spark
                 }
             }
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (GetSaveSlots): %s", e.what());
+        }
         catch (...)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in GetSaveSlots");
         }
 
         // Sort by timestamp (newest first)
@@ -856,7 +885,9 @@ namespace Spark
     {
         try
         {
-            std::ofstream file(filepath, std::ios::binary);
+            // Write to temp file first, then rename for atomic save (prevents corruption on crash)
+            std::string tmpPath = filepath + ".tmp";
+            std::ofstream file(tmpPath, std::ios::binary);
             if (!file.is_open())
                 return false;
 
@@ -940,6 +971,26 @@ namespace Spark
                 file.write(value.c_str(), valLen);
             }
 
+            file.close();
+            if (file.fail())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: write failed for {}", tmpPath);
+                std::error_code rmEc;
+                std::filesystem::remove(tmpPath, rmEc);
+                return false;
+            }
+
+            // Atomic rename: replace target with completed temp file
+            std::error_code ec;
+            std::filesystem::rename(tmpPath, filepath, ec);
+            if (ec)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: rename failed {} -> {}: {}", tmpPath, filepath,
+                               ec.message());
+                std::filesystem::remove(tmpPath, ec);
+                return false;
+            }
+
             // Invalidate any cached copy so future reads see the new data
             if (m_fileCache)
             {
@@ -948,8 +999,19 @@ namespace Spark
 
             return true;
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (WriteToFile): {}", e.what());
+            // Clean up temp file on failure
+            std::error_code ec;
+            std::filesystem::remove(filepath + ".tmp", ec);
+            return false;
+        }
         catch (...)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in WriteToFile");
+            std::error_code ec;
+            std::filesystem::remove(filepath + ".tmp", ec);
             return false;
         }
     }
@@ -1120,8 +1182,14 @@ namespace Spark
 
             return true;
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (ReadFromFile): %s", e.what());
+            return false;
+        }
         catch (...)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in ReadFromFile");
             return false;
         }
     }

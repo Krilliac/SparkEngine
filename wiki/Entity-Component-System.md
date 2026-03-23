@@ -604,6 +604,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `TerrainSystem` | `SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.h` |
 | `TextureSystem` | `SparkEngine/Source/Graphics/TextureSystem.h` |
 | `TilemapRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
+| `TimeOfDaySystem` | `SparkEngine/Source/Engine/World/TimeOfDaySystem.h` |
 | `TweenSystem` | `SparkEngine/Source/Engine/Tween/TweenSystem.h` |
 | `UISystem` | `SparkEngine/Source/Engine/UI/UISystem.h` |
 | `UpscalingSystem` | `SparkEngine/Source/Graphics/UpscalingSystem.h` |

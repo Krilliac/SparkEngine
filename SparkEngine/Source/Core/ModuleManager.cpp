@@ -238,11 +238,13 @@ bool ModuleManager::LoadModule(const std::string& path)
         entry.name = info.name;
         entry.path = path;
         entry.libraryHandle = handle;
-        entry.instance = adapterOwner.release(); // transfer ownership to entry
-        entry.createFn = nullptr;                // managed by adapter
+        entry.createFn = nullptr; // managed by adapter
         entry.destroyFn = [](Spark::IModule* mod) { delete mod; };
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = true;
+
+        // Transfer ownership last to avoid leak if any prior line throws
+        entry.instance = adapterOwner.release();
 
         console.LogSuccess(std::format("Loaded legacy module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));

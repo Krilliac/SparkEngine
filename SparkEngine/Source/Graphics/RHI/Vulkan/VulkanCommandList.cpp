@@ -8,6 +8,7 @@
 #ifdef SPARK_VULKAN_SUPPORT
 
 #include "VulkanDevice.h"
+#include "../../../Utils/Validate.h"
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -41,6 +42,13 @@ namespace Spark
 
             bool VulkanSwapChain::CreateSwapChain()
             {
+                if (!m_queueFamilies.graphicsFamily.has_value() || !m_queueFamilies.presentFamily.has_value())
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "Queue family indices not available for swap chain creation");
+                    return false;
+                }
+
                 VkSurfaceCapabilitiesKHR capabilities;
                 vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physDevice, m_surface, &capabilities);
 

@@ -58,20 +58,15 @@ CharacterController::CharacterController(PhysicsSystem* physicsSystem, const Cha
         JPH::Plane(JPH::Vec3(desc.up.x, desc.up.y, desc.up.z), -capsuleHalfHeight); // Inside the character
 
     // Create the character
-    auto* character = new JPH::CharacterVirtual(
+    m_joltCharacter = new JPH::CharacterVirtual(
         &settings, JPH::RVec3(desc.position.x, desc.position.y, desc.position.z),
         JPH::Quat(desc.rotation.x, desc.rotation.y, desc.rotation.z, desc.rotation.w), 0, joltSystem);
-
-    m_joltCharacter = character;
 }
 
 CharacterController::~CharacterController()
 {
-    if (m_joltCharacter)
-    {
-        delete static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
-        m_joltCharacter = nullptr;
-    }
+    delete m_joltCharacter;
+    m_joltCharacter = nullptr;
 }
 
 void CharacterController::Update(float deltaTime, const XMFLOAT3& gravity)
@@ -79,7 +74,7 @@ void CharacterController::Update(float deltaTime, const XMFLOAT3& gravity)
     if (!m_joltCharacter || !m_physicsSystem || !m_physicsSystem->GetJoltSystem())
         return;
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     auto* joltSystem = m_physicsSystem->GetJoltSystem();
 
     // Extended update handles gravity, ground detection, and sliding
@@ -99,7 +94,7 @@ XMFLOAT3 CharacterController::GetPosition() const
     if (!m_joltCharacter)
         return m_desc.position;
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     JPH::RVec3 pos = character->GetPosition();
     return XMFLOAT3(static_cast<float>(pos.GetX()), static_cast<float>(pos.GetY()), static_cast<float>(pos.GetZ()));
 }
@@ -109,7 +104,7 @@ void CharacterController::SetPosition(const XMFLOAT3& position)
     if (!m_joltCharacter)
         return;
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     character->SetPosition(JPH::RVec3(position.x, position.y, position.z));
 }
 
@@ -118,7 +113,7 @@ XMFLOAT4 CharacterController::GetRotation() const
     if (!m_joltCharacter)
         return m_desc.rotation;
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     JPH::Quat rot = character->GetRotation();
     return XMFLOAT4(rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW());
 }
@@ -128,7 +123,7 @@ void CharacterController::SetRotation(const XMFLOAT4& rotation)
     if (!m_joltCharacter)
         return;
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     character->SetRotation(JPH::Quat(rotation.x, rotation.y, rotation.z, rotation.w));
 }
 
@@ -137,7 +132,7 @@ XMFLOAT3 CharacterController::GetLinearVelocity() const
     if (!m_joltCharacter)
         return {0, 0, 0};
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     JPH::Vec3 vel = character->GetLinearVelocity();
     return XMFLOAT3(vel.GetX(), vel.GetY(), vel.GetZ());
 }
@@ -147,7 +142,7 @@ void CharacterController::SetLinearVelocity(const XMFLOAT3& velocity)
     if (!m_joltCharacter)
         return;
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     character->SetLinearVelocity(JPH::Vec3(velocity.x, velocity.y, velocity.z));
 }
 
@@ -156,7 +151,7 @@ CharacterGroundState CharacterController::GetGroundState() const
     if (!m_joltCharacter)
         return CharacterGroundState::InAir;
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     switch (character->GetGroundState())
     {
     case JPH::CharacterVirtual::EGroundState::OnGround:
@@ -181,7 +176,7 @@ XMFLOAT3 CharacterController::GetGroundNormal() const
     if (!m_joltCharacter)
         return {0, 1, 0};
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     JPH::Vec3 normal = character->GetGroundNormal();
     return XMFLOAT3(normal.GetX(), normal.GetY(), normal.GetZ());
 }
@@ -191,7 +186,7 @@ XMFLOAT3 CharacterController::GetGroundVelocity() const
     if (!m_joltCharacter)
         return {0, 0, 0};
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     JPH::Vec3 vel = character->GetGroundVelocity();
     return XMFLOAT3(vel.GetX(), vel.GetY(), vel.GetZ());
 }
@@ -201,7 +196,7 @@ XMFLOAT3 CharacterController::GetUp() const
     if (!m_joltCharacter)
         return m_desc.up;
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     JPH::Vec3 up = character->GetUp();
     return XMFLOAT3(up.GetX(), up.GetY(), up.GetZ());
 }
@@ -211,6 +206,6 @@ void CharacterController::SetUp(const XMFLOAT3& up)
     if (!m_joltCharacter)
         return;
 
-    auto* character = static_cast<JPH::CharacterVirtual*>(m_joltCharacter);
+    auto* character = m_joltCharacter;
     character->SetUp(JPH::Vec3(up.x, up.y, up.z));
 }

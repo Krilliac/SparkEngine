@@ -438,7 +438,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*144 test files, 1630+ test cases*
+*145 test files, 1666+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -449,7 +449,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationSystem` | 17 |
 | `TestAsyncDatabase` | 23 |
-| `TestAudioEngine` | 10 |
+| `TestAudioEngine` | 18 |
 | `TestBitFlags` | 14 |
 | `TestBlendSpace` | 6 |
 | `TestCameraInterpolation` | 9 |
@@ -539,7 +539,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestPhysicsSystem` | 29 |
 | `TestPlayModeManager` | 33 |
 | `TestPoseModifier` | 4 |
-| `TestPostProcessingPipeline` | 11 |
+| `TestPostProcessingPipeline` | 16 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 10 |
 | `TestRHIHandlePool` | 10 |
@@ -555,7 +555,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestSHLighting` | 7 |
 | `TestSaveSystem` | 7 |
 | `TestSceneConfigDatabase` | 3 |
-| `TestSceneManager` | 14 |
+| `TestSceneManager` | 19 |
 | `TestSceneSnapshotSerializer` | 19 |
 | `TestScopeGuard` | 13 |
 | `TestScopedTimer` | 3 |
@@ -576,6 +576,7 @@ find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src Spa
 | `TestTemporalEffects` | 11 |
 | `TestTerrainRenderer` | 5 |
 | `TestThreadSafeQueue` | 10 |
+| `TestTimeOfDaySystem` | 18 |
 | `TestTransientBufferAllocator` | 10 |
 | `TestTween` | 14 |
 | `TestTypeTraits` | 11 |

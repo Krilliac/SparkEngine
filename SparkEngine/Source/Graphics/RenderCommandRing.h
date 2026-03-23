@@ -94,7 +94,7 @@ namespace Spark
 
                 m_ring[w & MASK] = cmd;
                 m_writePos.store(w + 1, std::memory_order_release);
-                m_totalPosted++;
+                m_totalPosted.fetch_add(1, std::memory_order_relaxed);
                 return true;
             }
 
@@ -125,7 +125,7 @@ namespace Spark
 
                 outCmd = std::move(m_ring[r & MASK]);
                 m_readPos.store(r + 1, std::memory_order_release);
-                m_totalConsumed++;
+                m_totalConsumed.fetch_add(1, std::memory_order_relaxed);
                 return true;
             }
 
@@ -151,23 +151,23 @@ namespace Spark
 
             bool IsEmpty() const { return GetPendingCount() == 0; }
             bool IsFull() const { return GetPendingCount() >= CAPACITY; }
-            uint64_t GetTotalPosted() const { return m_totalPosted; }
-            uint64_t GetTotalConsumed() const { return m_totalConsumed; }
+            uint64_t GetTotalPosted() const { return m_totalPosted.load(std::memory_order_relaxed); }
+            uint64_t GetTotalConsumed() const { return m_totalConsumed.load(std::memory_order_relaxed); }
 
             void Reset()
             {
                 m_writePos.store(0, std::memory_order_relaxed);
                 m_readPos.store(0, std::memory_order_relaxed);
-                m_totalPosted = 0;
-                m_totalConsumed = 0;
+                m_totalPosted.store(0, std::memory_order_relaxed);
+                m_totalConsumed.store(0, std::memory_order_relaxed);
             }
 
           private:
             std::array<RenderCommand, CAPACITY> m_ring;
             alignas(64) std::atomic<uint32_t> m_writePos{0};
             alignas(64) std::atomic<uint32_t> m_readPos{0};
-            uint64_t m_totalPosted = 0;
-            uint64_t m_totalConsumed = 0;
+            std::atomic<uint64_t> m_totalPosted{0};
+            std::atomic<uint64_t> m_totalConsumed{0};
         };
 
         /**

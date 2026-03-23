@@ -7,7 +7,8 @@
 #include "../Graphics/GraphicsEngine.h"
 #include <iostream>
 
-// Define the globals
+// DEPRECATED: These globals are legacy fallbacks. Use EngineContext::Get()->GetGraphics() instead.
+// They are not thread-safe and will be removed in a future version.
 IDXGISwapChain* g_MainSwapChain = nullptr;
 ID3D11Device* g_D3DDevice = nullptr;
 ID3D11DeviceContext* g_D3DContext = nullptr;

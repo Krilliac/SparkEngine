@@ -39,12 +39,12 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* devic
     if (!device)
         return E_INVALIDARG;
 
-    // Load image using WIC
+    // Load image using WIC — ComPtr handles Release() on all exit paths
     HRESULT hr = S_OK;
-    IWICImagingFactory* pFactory = nullptr;
-    IWICBitmapDecoder* pDecoder = nullptr;
-    IWICBitmapFrameDecode* pFrame = nullptr;
-    IWICFormatConverter* pConverter = nullptr;
+    ComPtr<IWICImagingFactory> pFactory;
+    ComPtr<IWICBitmapDecoder> pDecoder;
+    ComPtr<IWICBitmapFrameDecode> pFrame;
+    ComPtr<IWICFormatConverter> pConverter;
     UINT width, height;
 
     // Create WIC factory
@@ -56,19 +56,12 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* devic
     hr = pFactory->CreateDecoderFromFilename(std::wstring(filePath.begin(), filePath.end()).c_str(), nullptr,
                                              GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
     if (FAILED(hr))
-    {
-        pFactory->Release();
         return hr;
-    }
 
     // Get frame
     hr = pDecoder->GetFrame(0, &pFrame);
     if (FAILED(hr))
-    {
-        pDecoder->Release();
-        pFactory->Release();
         return hr;
-    }
 
     pFrame->GetSize(&width, &height);
     m_desc.width = width;
@@ -77,23 +70,12 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* devic
     // Convert to RGBA
     hr = pFactory->CreateFormatConverter(&pConverter);
     if (FAILED(hr))
-    {
-        pFrame->Release();
-        pDecoder->Release();
-        pFactory->Release();
         return hr;
-    }
 
-    hr = pConverter->Initialize(pFrame, GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0f,
+    hr = pConverter->Initialize(pFrame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0f,
                                 WICBitmapPaletteTypeMedianCut);
     if (FAILED(hr))
-    {
-        pConverter->Release();
-        pFrame->Release();
-        pDecoder->Release();
-        pFactory->Release();
         return hr;
-    }
 
     // Read pixel data
     UINT stride = width * 4;
@@ -105,12 +87,6 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* devic
     {
         hr = CreateFromData(buffer.data(), bufferSize, device);
     }
-
-    // Cleanup
-    pConverter->Release();
-    pFrame->Release();
-    pDecoder->Release();
-    pFactory->Release();
 
     if (SUCCEEDED(hr))
     {

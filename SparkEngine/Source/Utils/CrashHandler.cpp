@@ -488,10 +488,15 @@ void TriggerCrashHandler(const char* assertMsg)
         {
             Spark::ConsoleProcessManager::GetInstance().LogCrash(logMsg);
         }
+        catch (const std::exception& e)
+        {
+            OutputDebugStringA("[SPARK ENGINE] Exception: ");
+            OutputDebugStringA(e.what());
+            OutputDebugStringA("\n");
+        }
         catch (...)
         {
-            OutputDebugStringA(logMsg.c_str());
-            OutputDebugStringA("\n");
+            OutputDebugStringA("[SPARK ENGINE] Unknown exception in crash handler\n");
         }
         return;
     }
@@ -519,8 +524,15 @@ void SetAssertCrashBehavior(bool shouldCrash)
         logMsg += (shouldCrash ? "ENABLED" : "DISABLED");
         Spark::ConsoleProcessManager::GetInstance().LogCrash(logMsg);
     }
+    catch (const std::exception& e)
+    {
+        OutputDebugStringA("[SPARK ENGINE] Exception: ");
+        OutputDebugStringA(e.what());
+        OutputDebugStringA("\n");
+    }
     catch (...)
     {
+        OutputDebugStringA("[SPARK ENGINE] Unknown exception in crash handler\n");
     }
 }
 
@@ -629,8 +641,15 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
         crashSummary += "\nLog file: " + WideToUtf8(logFile);
         Spark::ConsoleProcessManager::GetInstance().LogCrash(crashSummary);
     }
+    catch (const std::exception& e)
+    {
+        OutputDebugStringA("[SPARK ENGINE] Exception: ");
+        OutputDebugStringA(e.what());
+        OutputDebugStringA("\n");
+    }
     catch (...)
     {
+        OutputDebugStringA("[SPARK ENGINE] Unknown exception in crash handler\n");
     }
 
     {
@@ -1204,9 +1223,15 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         WriteStderr(logFile.c_str());
         WriteStderr("\n");
     }
+    catch (const std::exception& e)
+    {
+        WriteStderr("[SPARK ENGINE] Exception: ");
+        WriteStderr(e.what());
+        WriteStderr("\n");
+    }
     catch (...)
     {
-        WriteStderr("[SPARK ENGINE] Failed to write crash report\n");
+        WriteStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
     }
 
     // Re-raise to get core dump
@@ -1250,9 +1275,15 @@ void TriggerCrashHandler(const char* assertMsg)
         {
             Spark::ConsoleProcessManager::GetInstance().LogCrash(logMsg);
         }
+        catch (const std::exception& e)
+        {
+            WriteStderr("[SPARK ENGINE] Exception: ");
+            WriteStderr(e.what());
+            WriteStderr("\n");
+        }
         catch (...)
         {
-            std::cerr << logMsg << "\n";
+            WriteStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
         }
         return;
     }
@@ -1287,8 +1318,15 @@ void TriggerCrashHandler(const char* assertMsg)
     {
         Spark::ConsoleProcessManager::GetInstance().LogCrash(log.str().substr(0, 1000));
     }
+    catch (const std::exception& e)
+    {
+        WriteStderr("[SPARK ENGINE] Exception: ");
+        WriteStderr(e.what());
+        WriteStderr("\n");
+    }
     catch (...)
     {
+        WriteStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
     }
 
     std::cerr << "\n[SPARK ENGINE] ASSERTION FAILURE\n" << log.str() << "\n";
@@ -1304,8 +1342,15 @@ void SetAssertCrashBehavior(bool shouldCrash)
         logMsg += (shouldCrash ? "ENABLED" : "DISABLED");
         Spark::ConsoleProcessManager::GetInstance().LogCrash(logMsg);
     }
+    catch (const std::exception& e)
+    {
+        WriteStderr("[SPARK ENGINE] Exception: ");
+        WriteStderr(e.what());
+        WriteStderr("\n");
+    }
     catch (...)
     {
+        WriteStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
     }
 }
 

@@ -162,22 +162,24 @@ namespace Spark::Net
         m_clientAddresses.clear();
 #endif // ENABLE_NETWORKING
 
+        // Acquire locks in documented order:
+        // m_stateMutex -> m_clientsMutex -> m_queueMutex -> m_replicationMutex -> m_inputMutex -> m_handlerMutex
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            m_role = NetworkRole::None;
+            m_connectionState = ConnectionState::Disconnected;
+            m_localClientID = INVALID_CLIENT;
+        }
+        {
+            std::lock_guard<std::mutex> clientLock(m_clientsMutex);
+            m_clients.clear();
+        }
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
             while (!m_outgoingQueue.empty())
                 m_outgoingQueue.pop();
             while (!m_incomingQueue.empty())
                 m_incomingQueue.pop();
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(m_handlerMutex);
-            m_handlers.clear();
-        }
-
-        {
-            std::lock_guard<std::mutex> clientLock(m_clientsMutex);
-            m_clients.clear();
         }
         {
             std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
@@ -188,17 +190,15 @@ namespace Spark::Net
             m_pendingInputs.clear();
             m_inputHistory.clear();
         }
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            m_handlers.clear();
+        }
+
         m_unacknowledgedMessages.clear();
         m_reliableOriginalSendTime.clear();
         m_retransmitCounts.clear();
         m_lagCompensator.Clear();
-
-        {
-            std::lock_guard<std::mutex> stateLock(m_stateMutex);
-            m_role = NetworkRole::None;
-            m_connectionState = ConnectionState::Disconnected;
-            m_localClientID = INVALID_CLIENT;
-        }
         m_serverTime = 0.0f;
         m_nextClientID = 1;
         m_nextNetworkID = 1;

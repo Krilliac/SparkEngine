@@ -70,13 +70,20 @@ void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& p
                 triangles += 12;
                 vertices += 36;
             }
-            catch (...)
+            catch (const std::exception& e)
             {
                 static int errorCount = 0;
                 if (++errorCount <= 5)
                 {
-                    LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Object rendering error", L"WARNING");
+                    std::wstring msg = L"Render error: " + std::wstring(e.what(), e.what() + strlen(e.what()));
+                    LOG_TO_CONSOLE_IMMEDIATE(msg.c_str(), L"WARNING");
                 }
+            }
+            catch (...)
+            {
+                static int errorCount = 0;
+                if (++errorCount <= 5)
+                    LOG_TO_CONSOLE_IMMEDIATE(L"Unknown render error", L"WARNING");
             }
         }
     }
@@ -181,14 +188,21 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
                 obj->Render(viewMatrix, projMatrix);
                 transparentDrawCalls++;
             }
-            catch (...)
+            catch (const std::exception& e)
             {
                 static int errorCount = 0;
                 if (++errorCount <= 3)
                 {
-                    LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Transparent object rendering error in deferred pass",
-                                             L"WARNING");
+                    std::wstring msg =
+                        L"Render error (deferred transparent): " + std::wstring(e.what(), e.what() + strlen(e.what()));
+                    LOG_TO_CONSOLE_IMMEDIATE(msg.c_str(), L"WARNING");
                 }
+            }
+            catch (...)
+            {
+                static int errorCount = 0;
+                if (++errorCount <= 3)
+                    LOG_TO_CONSOLE_IMMEDIATE(L"Unknown render error in deferred transparent pass", L"WARNING");
             }
         }
     }
@@ -241,12 +255,22 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
                 triangles += 12;
                 vertices += 36;
             }
+            catch (const std::exception& e)
+            {
+                static int errorCount = 0;
+                if (++errorCount <= 3)
+                {
+                    std::wstring msg =
+                        L"Render error (Forward+ shading): " + std::wstring(e.what(), e.what() + strlen(e.what()));
+                    LOG_TO_CONSOLE_IMMEDIATE(msg.c_str(), L"WARNING");
+                }
+            }
             catch (...)
             {
                 static int errorCount = 0;
                 if (++errorCount <= 3)
                 {
-                    LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Forward+ shading pass rendering error", L"WARNING");
+                    LOG_TO_CONSOLE_IMMEDIATE(L"Unknown render error in Forward+ shading pass", L"WARNING");
                 }
             }
         }
@@ -292,13 +316,21 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
                 totalTriangles += 12;
                 totalVertices += 36;
             }
-            catch (...)
+            catch (const std::exception& e)
             {
                 static int errorCount = 0;
                 if (++errorCount <= 3)
                 {
-                    LOG_TO_CONSOLE_IMMEDIATE(L"Warning: G-Buffer object rendering error", L"WARNING");
+                    std::wstring msg =
+                        L"Render error (G-Buffer): " + std::wstring(e.what(), e.what() + strlen(e.what()));
+                    LOG_TO_CONSOLE_IMMEDIATE(msg.c_str(), L"WARNING");
                 }
+            }
+            catch (...)
+            {
+                static int errorCount = 0;
+                if (++errorCount <= 3)
+                    LOG_TO_CONSOLE_IMMEDIATE(L"Unknown render error in G-Buffer fill", L"WARNING");
             }
         }
     }
