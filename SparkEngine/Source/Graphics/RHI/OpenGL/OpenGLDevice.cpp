@@ -437,7 +437,11 @@ namespace Spark
             void GLCommandList::SetPipelineState(IRHIPipelineState* pipelineState)
             {
                 if (!pipelineState)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "GL: SetPipelineState called with null pipeline state");
                     return;
+                }
                 auto* glPSO = static_cast<GLPipelineState*>(pipelineState);
 
                 m_currentProgram = glPSO->GetGLProgram();
@@ -484,7 +488,10 @@ namespace Spark
             void GLCommandList::SetVertexBuffer(IRHIBuffer* buffer, uint32_t, uint32_t)
             {
                 if (!buffer)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GL: SetVertexBuffer called with null buffer");
                     return;
+                }
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
                 glBindBuffer(GL_ARRAY_BUFFER, glBuf->GetGLBuffer());
             }
@@ -492,7 +499,10 @@ namespace Spark
             void GLCommandList::SetIndexBuffer(IRHIBuffer* buffer, uint32_t)
             {
                 if (!buffer)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GL: SetIndexBuffer called with null buffer");
                     return;
+                }
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
                 m_boundIndexBuffer = glBuf->GetGLBuffer();
                 m_indexStride = glBuf->GetStride();
@@ -502,7 +512,11 @@ namespace Spark
             void GLCommandList::SetConstantBuffer(RHIShaderStage, uint32_t slot, IRHIBuffer* buffer)
             {
                 if (!buffer)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "GL: SetConstantBuffer called with null buffer (slot %u)", slot);
                     return;
+                }
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
                 glBindBufferBase(GL_UNIFORM_BUFFER, slot, glBuf->GetGLBuffer());
                 if (m_statistics)
@@ -620,7 +634,11 @@ namespace Spark
             void GLCommandList::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
                 if (!argsBuffer)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "GL: DrawInstancedIndirect called with null args buffer");
                     return;
+                }
                 auto* glBuf = static_cast<GLBuffer*>(argsBuffer);
                 glBindBuffer(GL_DRAW_INDIRECT_BUFFER, glBuf->GetGLBuffer());
                 glDrawArraysIndirect(m_currentTopology,
@@ -632,7 +650,11 @@ namespace Spark
             void GLCommandList::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
                 if (!argsBuffer)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "GL: DrawIndexedInstancedIndirect called with null args buffer");
                     return;
+                }
                 auto* glBuf = static_cast<GLBuffer*>(argsBuffer);
                 glBindBuffer(GL_DRAW_INDIRECT_BUFFER, glBuf->GetGLBuffer());
                 glDrawElementsIndirect(m_currentTopology, GL_UNSIGNED_INT,
@@ -644,7 +666,10 @@ namespace Spark
             void GLCommandList::DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
                 if (!argsBuffer)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GL: DispatchIndirect called with null args buffer");
                     return;
+                }
                 auto* glBuf = static_cast<GLBuffer*>(argsBuffer);
                 glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, glBuf->GetGLBuffer());
                 glDispatchComputeIndirect(static_cast<GLintptr>(argsOffset));
@@ -656,7 +681,11 @@ namespace Spark
             void GLCommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
             {
                 if (!dst || !src)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GL: CopyTexture called with null %s",
+                                   !dst ? "destination" : "source");
                     return;
+                }
                 auto* glDst = static_cast<GLTexture*>(dst);
                 auto* glSrc = static_cast<GLTexture*>(src);
                 glCopyImageSubData(glSrc->GetGLTexture(), GL_TEXTURE_2D, 0, 0, 0, 0, glDst->GetGLTexture(),

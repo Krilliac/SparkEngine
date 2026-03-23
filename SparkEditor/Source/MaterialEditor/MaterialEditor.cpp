@@ -91,6 +91,8 @@ namespace SparkEditor
         std::ifstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "[MaterialEditor] Failed to open material file: %s",
+                           filePath.c_str());
             return false;
         }
 
@@ -98,6 +100,8 @@ namespace SparkEditor
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         if (content.empty())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "[MaterialEditor] Material file is empty: %s",
+                           filePath.c_str());
             return false;
         }
 
@@ -117,6 +121,8 @@ namespace SparkEditor
         std::ofstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "[MaterialEditor] Failed to save material to: %s",
+                            filePath.c_str());
             return false;
         }
 

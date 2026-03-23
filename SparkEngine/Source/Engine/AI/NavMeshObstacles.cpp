@@ -55,6 +55,7 @@ namespace Spark::AI
         SPARK_TRACE_ENTER(Spark::LogCategory::AI);
         if (m_navMesh == nullptr)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::AI, "AddObstacle called with no NavMesh set — obstacle not created");
             return InvalidObstacleHandle;
         }
 
@@ -119,6 +120,8 @@ namespace Spark::AI
     {
         if (m_navMesh == nullptr)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::AI,
+                           "ApplyDirtyObstacles called with no NavMesh set — dirty obstacles not applied");
             return;
         }
 
@@ -241,6 +244,7 @@ namespace Spark::AI
     {
         if (m_navMesh == nullptr)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::AI, "CarveObstacle called with no NavMesh set");
             return;
         }
 
@@ -263,6 +267,7 @@ namespace Spark::AI
     {
         if (m_navMesh == nullptr)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::AI, "RestoreObstacle called with no NavMesh set");
             return;
         }
 

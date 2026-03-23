@@ -8,6 +8,7 @@
 
 #include "CharacterController.h"
 #include "PhysicsSystem.h"
+#include "../Utils/Validate.h"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
@@ -27,7 +28,11 @@ CharacterController::CharacterController(PhysicsSystem* physicsSystem, const Cha
     : m_physicsSystem(physicsSystem), m_desc(desc)
 {
     if (!physicsSystem || !physicsSystem->GetJoltSystem())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "CharacterController: null %s — character will not be created",
+                        !physicsSystem ? "PhysicsSystem" : "JoltSystem");
         return;
+    }
 
     auto* joltSystem = physicsSystem->GetJoltSystem();
 
@@ -72,7 +77,11 @@ CharacterController::~CharacterController()
 void CharacterController::Update(float deltaTime, const XMFLOAT3& gravity)
 {
     if (!m_joltCharacter || !m_physicsSystem || !m_physicsSystem->GetJoltSystem())
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Physics, "CharacterController::Update skipped — null %s",
+                       !m_joltCharacter ? "JoltCharacter" : (!m_physicsSystem ? "PhysicsSystem" : "JoltSystem"));
         return;
+    }
 
     auto* character = m_joltCharacter;
     auto* joltSystem = m_physicsSystem->GetJoltSystem();

@@ -12,6 +12,7 @@
 
 #include "PhysicsSystem.h"
 #include "../Utils/Hash.h"
+#include "../Utils/Validate.h"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
@@ -76,6 +77,8 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
     {
         if (desc.heightfieldData.empty() || desc.heightfieldSamples == 0)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Physics,
+                           "Heightfield shape requested with empty data or zero samples — falling back to box");
             shape = CreateBoxShape(desc.dimensions);
         }
         else
@@ -87,9 +90,14 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
                                                      desc.heightfieldSamples);
             auto result = hfSettings.Create();
             if (!result.HasError())
+            {
                 shape = new JPH::ShapeRefC(result.Get());
+            }
             else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Physics, "Heightfield shape creation failed — falling back to box");
                 shape = CreateBoxShape(desc.dimensions);
+            }
         }
         break;
     }
@@ -181,6 +189,8 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
     case CollisionShapeType::MutableCompound:
     case CollisionShapeType::Compound:
     default:
+        SPARK_LOG_WARN(Spark::LogCategory::Physics, "Unknown or unhandled shape type %d — falling back to box",
+                       static_cast<int>(desc.type));
         shape = CreateBoxShape(desc.dimensions);
         break;
     }

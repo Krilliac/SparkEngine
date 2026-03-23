@@ -182,9 +182,13 @@ namespace Spark
         HANDLE hChildStdOutRead, hChildStdOutWrite;
 
         if (!CreatePipe(&hChildStdInRead, &hChildStdInWrite, &sa, 0))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreatePipe failed for stdin (error %lu)", GetLastError());
             return false;
+        }
         if (!CreatePipe(&hChildStdOutRead, &hChildStdOutWrite, &sa, 0))
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreatePipe failed for stdout (error %lu)", GetLastError());
             CloseHandle(hChildStdInRead);
             CloseHandle(hChildStdInWrite);
             return false;
@@ -207,6 +211,8 @@ namespace Spark
 
         if (!success)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreateProcessW failed for SparkConsole (error %lu)",
+                            GetLastError());
             CloseHandle(hChildStdInRead);
             CloseHandle(hChildStdInWrite);
             CloseHandle(hChildStdOutRead);
@@ -234,6 +240,8 @@ namespace Spark
         DWORD bytesAvailable = 0;
         if (!PeekNamedPipe(m_stdOutRead, NULL, 0, NULL, &bytesAvailable, NULL))
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "PeekNamedPipe failed (error %lu) — marking console as stopped",
+                            GetLastError());
             m_consoleRunning = false;
             return false;
         }
@@ -245,6 +253,7 @@ namespace Spark
         DWORD bytesToRead = std::min(bytesAvailable, static_cast<DWORD>(sizeof(buffer) - 1));
         if (!ReadFile(m_stdOutRead, buffer, bytesToRead, &bytesRead, NULL))
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "ReadFile failed on console pipe (error %lu)", GetLastError());
             m_consoleRunning = false;
             return false;
         }
@@ -272,7 +281,11 @@ namespace Spark
 
         int utf8Size = WideCharToMultiByte(CP_UTF8, 0, message.c_str(), -1, NULL, 0, NULL, NULL);
         if (utf8Size <= 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "WideCharToMultiByte failed for console message (error %lu)",
+                           GetLastError());
             return false;
+        }
 
         std::string utf8Message(utf8Size, '\0');
         WideCharToMultiByte(CP_UTF8, 0, message.c_str(), -1, &utf8Message[0], utf8Size, NULL, NULL);
