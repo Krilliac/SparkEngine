@@ -31,6 +31,25 @@ namespace TestPhysics
         Plane
     };
 
+    // WARNING: This struct was originally named "PhysicsMaterial", which caused an
+    // ASAN segfault due to constructor aliasing with the engine's ::PhysicsMaterial
+    // (included via Physics/PhysicsTypes.h at line ~502 of this same file).
+    //
+    // What happened:
+    //   This struct has layout: [std::string name (32B)] [float friction] [float restitution] [float density]
+    //   The engine's ::PhysicsMaterial has: [float friction] [float restitution=0.1f] [float linearDamping=0.1f] ...
+    //     [std::string name at the END]
+    //
+    //   Under GCC + AddressSanitizer (-fsanitize=address), the compiler aliased the
+    //   default-member-initializer code for the two same-named structs in this TU.
+    //   The engine's float defaults (restitution=0.1f → 0x3DCCCCCD) were written at
+    //   offset 4-11, which in THIS struct's layout overlaps std::string::_M_string_length
+    //   (offset 8). The string then believed its length was 0x3DCCCCCD3DCCCCCE (~4.4
+    //   exabytes), and the next std::string copy triggered an allocation-size-too-big abort.
+    //
+    // Fix: Renamed to TestMaterial. If you ever see a mysterious "allocation-size-too-big"
+    // ASAN error where the size looks like IEEE 754 float bit patterns, check for two
+    // differently-laid-out structs with the same name in the same translation unit.
     struct TestMaterial
     {
         std::string name;
@@ -497,6 +516,13 @@ TEST(Physics_Shutdown)
 
 // =============================================================================
 // PhysicsTypes.h tests (real types from the engine, no Jolt dependency)
+//
+// NOTE: This #include brings ::PhysicsMaterial into this TU alongside
+// TestPhysics::TestMaterial (above). These two structs have completely
+// different field layouts. See the comment on TestMaterial for why the
+// test struct was renamed — having two "PhysicsMaterial" types in the
+// same TU caused GCC+ASAN to alias their default-member-initializer
+// code, corrupting the test struct's std::string with float bit patterns.
 // =============================================================================
 
 #include "Physics/PhysicsTypes.h"
