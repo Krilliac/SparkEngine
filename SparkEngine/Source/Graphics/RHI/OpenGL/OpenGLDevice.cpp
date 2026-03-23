@@ -1070,7 +1070,7 @@ namespace Spark
                     {
                         char infoLog[1024];
                         glGetShaderInfoLog(shader, sizeof(infoLog), nullptr, infoLog);
-                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OpenGL shader compilation failed: {}", infoLog);
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OpenGL shader compilation failed: %s", infoLog);
                         glDeleteShader(shader);
                         return nullptr;
                     }
@@ -1139,7 +1139,7 @@ namespace Spark
                 {
                     char infoLog[1024];
                     glGetProgramInfoLog(program, sizeof(infoLog), nullptr, infoLog);
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OpenGL program link failed: {}", infoLog);
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OpenGL program link failed: %s", infoLog);
                     glDeleteProgram(program);
                     return nullptr;
                 }

@@ -502,6 +502,11 @@ if(MINIZ_FOUND)
     message(STATUS "Linking SparkEngineLib with MINIZ")
 endif()
 
+if(CURL_FOUND)
+    target_link_libraries(SparkEngineLib PRIVATE CURL::libcurl)
+    message(STATUS "Linking SparkEngineLib with libcurl")
+endif()
+
 if(TINYOBJ_FOUND)
     target_link_libraries(SparkEngineLib PRIVATE tinyobjloader)
     message(STATUS "Linking SparkEngineLib with TinyObjLoader")
@@ -852,6 +857,12 @@ endif()
 
 if(ENABLE_NETWORKING)
     list(APPEND FEATURE_DEFINITIONS "NETWORKING_ENABLED")
+
+    # Check if libcurl is available for crash report uploading
+    find_package(CURL QUIET)
+    if(CURL_FOUND)
+        list(APPEND FEATURE_DEFINITIONS "SPARK_HAS_CURL")
+    endif()
 endif()
 
 if(SPARK_HEADLESS_SUPPORT)
