@@ -25,6 +25,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | SparkGame module (AI enemies now wired) | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-22 |
 | Documentation coverage (58 wiki pages, 99.6% Doxygen) | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-19 |
 | ThirdParty dependencies | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-17 |
+| Deep code stability analysis (33 findings, 4 critical) | [knowledge/code-stability-analysis.md](knowledge/code-stability-analysis.md) | Observation | Active | 2026-03-23 |
 
 ## Quick Reference
 
