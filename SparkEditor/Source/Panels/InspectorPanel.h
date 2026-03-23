@@ -102,6 +102,9 @@ namespace SparkEditor
         /// Helper: remove a component from the inspected object through CommandHistory
         void RemoveComponent(ComponentType type);
 
+        /// Helper: find a component by type on a given object
+        static Component* FindComponent(SceneFile* scene, ObjectID objectID, ComponentType type);
+
       private:
         SceneFile* m_scene = nullptr;                     ///< Non-owning pointer to the active scene.
         ObjectID m_inspectedObjectID = INVALID_OBJECT_ID; ///< Currently inspected object (by ID).

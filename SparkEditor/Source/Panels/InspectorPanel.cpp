@@ -466,7 +466,7 @@ namespace SparkEditor
     // Helper: find the Component record for the inspected object of given type
     // ============================================================================
 
-    static Component* FindComponent(SceneFile* scene, ObjectID objectID, ComponentType type)
+    Component* InspectorPanel::FindComponent(SceneFile* scene, ObjectID objectID, ComponentType type)
     {
         if (!scene)
             return nullptr;
