@@ -617,14 +617,12 @@ bool Material::SaveToFile(const std::string& filePath) const
         file << "MetallicFactor=" << std::fixed << std::setprecision(6) << m_pbrProperties.metallicFactor << "\n";
         file << "RoughnessFactor=" << std::fixed << std::setprecision(6) << m_pbrProperties.roughnessFactor << "\n";
         file << "NormalScale=" << std::fixed << std::setprecision(6) << m_pbrProperties.normalScale << "\n";
-        file << "OcclusionStrength=" << std::fixed << std::setprecision(6) << m_pbrProperties.occlusionStrength
-             << "\n";
+        file << "OcclusionStrength=" << std::fixed << std::setprecision(6) << m_pbrProperties.occlusionStrength << "\n";
         file << "EmissiveColor=" << m_pbrProperties.emissiveColor.x << "," << m_pbrProperties.emissiveColor.y << ","
              << m_pbrProperties.emissiveColor.z << "\n";
         file << "EmissiveFactor=" << std::fixed << std::setprecision(6) << m_pbrProperties.emissiveFactor << "\n";
         file << "AlphaCutoff=" << std::fixed << std::setprecision(6) << m_pbrProperties.alphaCutoff << "\n";
-        file << "IndexOfRefraction=" << std::fixed << std::setprecision(6) << m_pbrProperties.indexOfRefraction
-             << "\n";
+        file << "IndexOfRefraction=" << std::fixed << std::setprecision(6) << m_pbrProperties.indexOfRefraction << "\n";
         file << "\n";
 
         // Write advanced properties
@@ -657,8 +655,7 @@ bool Material::SaveToFile(const std::string& filePath) const
         {
             file << "TransmissionFactor=" << m_advancedProperties.transmissionFactor << "\n";
             file << "TransmissionColor=" << m_advancedProperties.transmissionColor.x << ","
-                 << m_advancedProperties.transmissionColor.y << "," << m_advancedProperties.transmissionColor.z
-                 << "\n";
+                 << m_advancedProperties.transmissionColor.y << "," << m_advancedProperties.transmissionColor.z << "\n";
         }
 
         file << "SheenEnabled=" << (m_advancedProperties.sheenEnabled ? "true" : "false") << "\n";

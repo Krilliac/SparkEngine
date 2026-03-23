@@ -19,6 +19,9 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <cerrno>
 #define CLOSE_SOCKET ::close
 #endif
 
@@ -148,10 +151,40 @@ namespace SparkEditor
         addr.sin_port = htons(port);
         inet_pton(AF_INET, address.c_str(), &addr.sin_addr);
 
-        if (::connect(m_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
+        // Non-blocking connect with 5-second timeout
+        bool connectOk = false;
+#ifdef _WIN32
+        u_long nbMode = 1;
+        ioctlsocket(static_cast<SOCKET>(m_socket), FIONBIO, &nbMode);
+        ::connect(m_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        fd_set writeSet;
+        FD_ZERO(&writeSet);
+        FD_SET(static_cast<SOCKET>(m_socket), &writeSet);
+        timeval tv{5, 0};
+        connectOk = (::select(0, nullptr, &writeSet, nullptr, &tv) > 0);
+        nbMode = 0;
+        ioctlsocket(static_cast<SOCKET>(m_socket), FIONBIO, &nbMode);
+#else
+        int flags = fcntl(m_socket, F_GETFL, 0);
+        fcntl(m_socket, F_SETFL, flags | O_NONBLOCK);
+        ::connect(m_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        pollfd pfd{};
+        pfd.fd = m_socket;
+        pfd.events = POLLOUT;
+        if (::poll(&pfd, 1, 5000) > 0)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "LiveEditBridge: Failed to connect to %s:%u.", address.c_str(),
-                            port);
+            int err = 0;
+            socklen_t errLen = sizeof(err);
+            getsockopt(m_socket, SOL_SOCKET, SO_ERROR, &err, &errLen);
+            connectOk = (err == 0);
+        }
+        fcntl(m_socket, F_SETFL, flags);
+#endif
+
+        if (!connectOk)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "LiveEditBridge: Failed to connect to %s:%u (timeout 5s).",
+                            address.c_str(), port);
             CLOSE_SOCKET(m_socket);
             m_socket = -1;
             return false;

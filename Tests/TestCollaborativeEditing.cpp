@@ -9,6 +9,7 @@
 #include "TestFramework.h"
 #include "../SparkEditor/Source/Communication/CollaborativeEditSession.h"
 #include "../SparkEditor/Source/Communication/LiveEditBridge.h"
+#include <cmath>
 #include <thread>
 #include <chrono>
 
@@ -37,15 +38,15 @@ TEST(CollabEdit_SerializeDeserialize_Presence)
     InternalMessage decoded;
     bool ok = DeserializeMessage(data.data(), data.size(), decoded);
     EXPECT_TRUE(ok);
-    EXPECT_EQ(decoded.type, InternalMessageType::Presence);
+    EXPECT_TRUE(decoded.type == InternalMessageType::Presence);
     EXPECT_EQ(decoded.sourcePeer, 42u);
     EXPECT_EQ(decoded.timestamp, 12345u);
     EXPECT_EQ(decoded.peerInfo.id, 42u);
     EXPECT_EQ(decoded.peerInfo.userName, "Alice");
     EXPECT_EQ(decoded.peerInfo.selectedNode, "Entity_7");
-    EXPECT_FLOAT_EQ(decoded.peerInfo.viewportCameraPos.x, 1.0f);
-    EXPECT_FLOAT_EQ(decoded.peerInfo.viewportCameraPos.y, 2.0f);
-    EXPECT_FLOAT_EQ(decoded.peerInfo.viewportCameraPos.z, 3.0f);
+    EXPECT_TRUE(std::abs(decoded.peerInfo.viewportCameraPos.x - 1.0f) < 0.001f);
+    EXPECT_TRUE(std::abs(decoded.peerInfo.viewportCameraPos.y - 2.0f) < 0.001f);
+    EXPECT_TRUE(std::abs(decoded.peerInfo.viewportCameraPos.z - 3.0f) < 0.001f);
 }
 
 TEST(CollabEdit_SerializeDeserialize_EditBroadcast)
@@ -69,7 +70,7 @@ TEST(CollabEdit_SerializeDeserialize_EditBroadcast)
     InternalMessage decoded;
     bool ok = DeserializeMessage(data.data(), data.size(), decoded);
     EXPECT_TRUE(ok);
-    EXPECT_EQ(decoded.editMessage.type, EditMessageType::NodeModified);
+    EXPECT_TRUE(decoded.editMessage.type == EditMessageType::NodeModified);
     EXPECT_EQ(decoded.editMessage.sourceEditor, 5u);
     EXPECT_EQ(decoded.editMessage.nodeId, "Entity_42");
     EXPECT_EQ(decoded.editMessage.componentType, "Transform");
@@ -91,7 +92,7 @@ TEST(CollabEdit_SerializeDeserialize_LockRequest)
     InternalMessage decoded;
     bool ok = DeserializeMessage(data.data(), data.size(), decoded);
     EXPECT_TRUE(ok);
-    EXPECT_EQ(decoded.type, InternalMessageType::LockRequest);
+    EXPECT_TRUE(decoded.type == InternalMessageType::LockRequest);
     EXPECT_EQ(decoded.sourcePeer, 3u);
     EXPECT_EQ(decoded.nodeId, "Terrain_Root");
 }
@@ -114,7 +115,6 @@ TEST(CollabEdit_HostSession)
     EXPECT_TRUE(!session.IsHost());
 
     bool hosted = session.Host(0, "TestHost"); // Port 0 = OS assigns
-    // Note: May fail if no network available, but should at least not crash
     if (hosted)
     {
         EXPECT_TRUE(session.IsConnected());
@@ -144,7 +144,7 @@ TEST(CollabEdit_DoubleHostRejects)
     if (hosted)
     {
         bool hosted2 = session.Host(0, "Host2");
-        EXPECT_TRUE(!hosted2); // Should reject double-host
+        EXPECT_TRUE(!hosted2);
         session.Disconnect();
     }
 }
@@ -178,14 +178,13 @@ TEST(CollabEdit_LockAndRelease)
     session.Disconnect();
 }
 
-TEST(CollabEdit_DoubleLocksameNodeSucceeds)
+TEST(CollabEdit_DoubleLockSameNodeSucceeds)
 {
     CollaborativeEditSession session;
     if (!session.Host(0, "LockTest2"))
         return;
 
     EXPECT_TRUE(session.RequestLock("Node_A"));
-    // Same peer locking same node should succeed (idempotent)
     EXPECT_TRUE(session.RequestLock("Node_A"));
 
     session.Disconnect();
@@ -265,7 +264,6 @@ TEST(CollabEdit_RejectsInvalidEdit)
     bool editReceived = false;
     session.SetEditReceivedCallback([&](const EditMessage&) { editReceived = true; });
 
-    // Empty nodeId — should be rejected
     EditMessage edit;
     edit.type = EditMessageType::NodeModified;
     edit.sourceEditor = session.GetLocalPeerID();
@@ -273,7 +271,6 @@ TEST(CollabEdit_RejectsInvalidEdit)
     session.BroadcastEdit(edit);
     EXPECT_TRUE(!editReceived);
 
-    // INVALID_PEER source — should be rejected
     edit.nodeId = "Entity_1";
     edit.sourceEditor = INVALID_PEER;
     session.BroadcastEdit(edit);
@@ -298,7 +295,6 @@ TEST(CollabEdit_SetLocalSelection)
     EXPECT_EQ(peers.size(), 1u);
     EXPECT_EQ(peers[0].selectedNode, "Entity_7");
 
-    // Clear selection
     session.SetLocalSelection("");
     peers = session.GetConnectedPeers();
     EXPECT_EQ(peers[0].selectedNode, "");
@@ -312,7 +308,6 @@ TEST(CollabEdit_RejectsLongSelection)
     if (!session.Host(0, "LongSelTest"))
         return;
 
-    // 256+ char nodeId should be rejected
     std::string longId(300, 'x');
     session.SetLocalSelection(longId);
 
@@ -333,9 +328,9 @@ TEST(CollabEdit_SetLocalViewportCamera)
     session.SetLocalViewportCamera(pos, dir);
 
     auto peers = session.GetConnectedPeers();
-    EXPECT_FLOAT_EQ(peers[0].viewportCameraPos.x, 10.0f);
-    EXPECT_FLOAT_EQ(peers[0].viewportCameraPos.y, 20.0f);
-    EXPECT_FLOAT_EQ(peers[0].viewportCameraDir.y, -1.0f);
+    EXPECT_TRUE(std::abs(peers[0].viewportCameraPos.x - 10.0f) < 0.001f);
+    EXPECT_TRUE(std::abs(peers[0].viewportCameraPos.y - 20.0f) < 0.001f);
+    EXPECT_TRUE(std::abs(peers[0].viewportCameraDir.y - (-1.0f)) < 0.001f);
 
     session.Disconnect();
 }
@@ -372,27 +367,23 @@ TEST(CollabEdit_Stats)
 
 TEST(CollabEdit_HostAndConnect)
 {
-    // Use a high ephemeral port to avoid conflicts
     constexpr uint16_t testPort = 49199;
 
     CollaborativeEditSession host;
     bool hosted = host.Host(testPort, "HostEditor");
     if (!hosted)
-        return; // Port may be in use — skip gracefully
+        return;
 
-    // Give the listen thread time to start
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     CollaborativeEditSession client;
     bool connected = client.Connect("127.0.0.1", testPort, "ClientEditor");
     EXPECT_TRUE(connected);
 
-    // Give the handshake time to process
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     host.Update(0.1f);
     client.Update(0.1f);
 
-    // Host should see the client peer
     auto hostPeers = host.GetConnectedPeers();
     EXPECT_TRUE(hostPeers.size() >= 2u);
 
@@ -411,14 +402,12 @@ TEST(LiveEditBridge_DefaultState)
     LiveEditBridge bridge;
     EXPECT_TRUE(!bridge.IsConnected());
     EXPECT_EQ(bridge.GetEditsPushed(), 0u);
-    EXPECT_EQ(bridge.GetServerPort(), 0u);
+    EXPECT_TRUE(bridge.GetServerPort() == 0);
 }
 
 TEST(LiveEditBridge_ConnectToRefusedPort)
 {
     LiveEditBridge bridge;
-    // Connecting to localhost on a port with no listener should fail immediately
-    // (connection refused, not timeout)
     bool connected = bridge.Connect("127.0.0.1", 59999, "TestEditor");
     EXPECT_TRUE(!connected);
     EXPECT_TRUE(!bridge.IsConnected());
@@ -432,7 +421,6 @@ TEST(LiveEditBridge_PushWithoutConnect)
     edit.nodeId = "Entity_1";
     edit.sourceEditor = 1;
 
-    // Should silently ignore when not connected
     bridge.PushEdit(edit);
     bridge.Update();
     EXPECT_EQ(bridge.GetEditsPushed(), 0u);

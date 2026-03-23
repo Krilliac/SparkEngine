@@ -213,8 +213,9 @@ namespace SparkEditor
             return sendAll(sock, header, 4) && sendAll(sock, data.data(), data.size());
         }
 
-        // Receive one length-prefixed frame from TCP (blocking with timeout check)
-        // Returns empty vector on disconnect or error
+        // Receive one length-prefixed frame from TCP.
+        // Socket should have SO_RCVTIMEO set so recv() returns periodically,
+        // allowing us to check m_shuttingDown. Returns empty on disconnect/error.
         std::vector<uint8_t> RecvFramed(int sock, const std::atomic<bool>& shuttingDown)
         {
             auto recvAll = [&](void* buf, size_t totalLen) -> bool
@@ -226,9 +227,21 @@ namespace SparkEditor
                     if (shuttingDown.load(std::memory_order_acquire))
                         return false;
                     auto n = ::recv(sock, ptr + received, static_cast<int>(totalLen - received), 0);
-                    if (n <= 0)
-                        return false;
-                    received += static_cast<size_t>(n);
+                    if (n > 0)
+                    {
+                        received += static_cast<size_t>(n);
+                        continue;
+                    }
+                    if (n == 0)
+                        return false; // Clean disconnect
+#ifdef _WIN32
+                    if (WSAGetLastError() == WSAETIMEDOUT)
+                        continue; // Timeout — retry after checking shuttingDown
+#else
+                    if (errno == EAGAIN || errno == EWOULDBLOCK)
+                        continue; // Timeout — retry after checking shuttingDown
+#endif
+                    return false; // Real error
                 }
                 return true;
             };
@@ -269,6 +282,85 @@ namespace SparkEditor
 #else
         void EnsureWinsock() {}
 #endif
+
+        // Set socket receive/send timeout (seconds)
+        void SetSocketTimeout(int sock, int timeoutSec)
+        {
+#ifdef _WIN32
+            DWORD timeoutMs = static_cast<DWORD>(timeoutSec * 1000);
+            setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeoutMs), sizeof(timeoutMs));
+            setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&timeoutMs), sizeof(timeoutMs));
+#else
+            timeval tv{timeoutSec, 0};
+            setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+#endif
+        }
+
+        // Non-blocking connect with timeout (seconds). Returns true on success.
+        bool ConnectWithTimeout(int sock, sockaddr* addr, socklen_t addrLen, int timeoutSec)
+        {
+#ifdef _WIN32
+            u_long mode = 1;
+            ioctlsocket(static_cast<SOCKET>(sock), FIONBIO, &mode);
+
+            int result = ::connect(sock, addr, addrLen);
+            if (result == 0)
+            {
+                mode = 0;
+                ioctlsocket(static_cast<SOCKET>(sock), FIONBIO, &mode);
+                return true;
+            }
+
+            if (WSAGetLastError() != WSAEWOULDBLOCK)
+            {
+                mode = 0;
+                ioctlsocket(static_cast<SOCKET>(sock), FIONBIO, &mode);
+                return false;
+            }
+
+            fd_set writeSet;
+            FD_ZERO(&writeSet);
+            FD_SET(static_cast<SOCKET>(sock), &writeSet);
+            timeval tv{timeoutSec, 0};
+            int ready = ::select(0, nullptr, &writeSet, nullptr, &tv);
+
+            mode = 0;
+            ioctlsocket(static_cast<SOCKET>(sock), FIONBIO, &mode);
+            return ready > 0;
+#else
+            int flags = fcntl(sock, F_GETFL, 0);
+            fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
+            int result = ::connect(sock, addr, addrLen);
+            if (result == 0)
+            {
+                fcntl(sock, F_SETFL, flags);
+                return true;
+            }
+
+            if (errno != EINPROGRESS)
+            {
+                fcntl(sock, F_SETFL, flags);
+                return false;
+            }
+
+            pollfd pfd{};
+            pfd.fd = sock;
+            pfd.events = POLLOUT;
+            int ready = ::poll(&pfd, 1, timeoutSec * 1000);
+
+            fcntl(sock, F_SETFL, flags);
+
+            if (ready <= 0)
+                return false;
+
+            int err = 0;
+            socklen_t errLen = sizeof(err);
+            getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errLen);
+            return err == 0;
+#endif
+        }
 
     } // namespace
 
@@ -422,13 +514,17 @@ namespace SparkEditor
         addr.sin_port = htons(port);
         inet_pton(AF_INET, address.c_str(), &addr.sin_addr);
 
-        if (::connect(m_clientSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
+        if (!ConnectWithTimeout(m_clientSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr), 5))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to connect to %s:%u.", address.c_str(), port);
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to connect to %s:%u (timeout 5s).", address.c_str(),
+                            port);
             CLOSE_SOCKET(m_clientSocket);
             m_clientSocket = -1;
             return false;
         }
+
+        // Set recv/send timeouts so threads can check m_shuttingDown periodically
+        SetSocketTimeout(m_clientSocket, 2);
 
         m_isHost = false;
         m_localUserName = userName;
@@ -572,6 +668,9 @@ namespace SparkEditor
                 static_cast<int>(::accept(m_listenSocket, reinterpret_cast<sockaddr*>(&clientAddr), &addrLen));
             if (clientSock < 0)
                 continue;
+
+            // Set recv timeout so handler thread can check m_shuttingDown
+            SetSocketTimeout(clientSock, 2);
 
             PeerID newPeerId = AllocatePeerID();
             {

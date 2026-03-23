@@ -27,7 +27,28 @@ SparkEngine's collaborative editing system enables multiple editor instances to 
 
 These are intentionally separate systems. Editor collaboration uses TCP for reliable ordered delivery of edits. Game networking uses UDP for low-latency gameplay. The `LiveEditBridge` connects the two when live editing of a running game world is desired.
 
-## Usage
+## No Game Module Code Required
+
+**All collaborative editing is handled entirely within the editor.** There is no need to write any C++ code in your game module to use collaborative editing. The system is fully integrated into the SparkEditor:
+
+- **Hosting/joining**: Use the **Collaboration panel** (View > Collaboration) to host or join sessions
+- **Locking**: The editor automatically acquires/releases locks when you select and edit nodes
+- **Edit broadcasting**: Property changes in the Inspector and object operations in the Hierarchy are automatically broadcast to all connected editors
+- **Presence**: Other editors' selections and viewport positions are shown automatically in the Scene View
+
+The C++ code examples below are **internal API reference** showing how the editor's subsystems work under the hood. They are provided for engine developers extending the collaborative editing system, not for game developers using it.
+
+## How to Use (No Code Needed)
+
+1. Open the **Collaboration** panel from **View > Collaboration**
+2. One editor clicks **Host Session** (sets port and username)
+3. Other editors enter the host's IP address and click **Join Session**
+4. Edit the scene normally — locking, broadcasting, and presence are automatic
+5. For persistent sessions without tying up an editor, run a **headless collab server** (see below)
+
+## Internal API Reference
+
+> The following C++ examples show the editor's internal implementation. You do not need to write this code — it runs automatically when you use the Collaboration panel.
 
 ### Hosting a Session
 
@@ -39,12 +60,12 @@ session.Host(27030, "Alice");  // Opens TCP listener on port 27030
 ### Connecting to a Session
 
 ```cpp
-session.Connect("192.168.1.100", 27030, "Bob");  // TCP connect to host
+session.Connect("192.168.1.100", 27030, "Bob");  // TCP connect with 5s timeout
 ```
 
 ### Node Locking
 
-Before editing a scene node, request a lock:
+The editor automatically locks nodes when you select them for editing:
 
 ```cpp
 if (session.RequestLock("Entity_42"))
@@ -70,25 +91,27 @@ else
 
 ### Presence Awareness
 
+The editor broadcasts selection and camera state automatically:
+
 ```cpp
-// Update local state for other editors to see
+// These are called internally by HierarchyPanel and SceneViewPanel
 session.SetLocalSelection("Entity_42");
 session.SetLocalViewportCamera(cameraPos, cameraDir);
 
-// In the editor loop:
+// Called each frame by EditorUI::Update()
 session.Update(deltaTime);
 
-// Get connected peers and render their presence
+// SceneViewPanel renders peer overlays automatically
 auto peers = session.GetConnectedPeers();
 for (const auto& peer : peers)
 {
-    // Draw peer's selection highlight in viewport
-    // Show peer's camera frustum
-    // Display peer's name tag with color
+    // Draw peer's name tag with color and selection info
 }
 ```
 
 ### Callbacks
+
+These are wired automatically by `EditorUI::WireCallbacks()`:
 
 ```cpp
 session.SetPeerConnectedCallback([](const SparkEditor::EditorPeer& peer) {
@@ -127,7 +150,7 @@ Use this for persistent team collaboration sessions where you don't want one edi
 
 ## Live Push to Running Games
 
-The `LiveEditBridge` enables HeroEngine-style live editing where changes made by editors appear in the running game world in real-time.
+The `LiveEditBridge` enables HeroEngine-style live editing where changes made by editors appear in the running game world in real-time. This is also handled within the editor — no game module code is needed. The editor's Collaboration panel will include a "Connect to AreaServer" option when an AreaServer is running.
 
 ### Architecture
 
@@ -135,16 +158,17 @@ The `LiveEditBridge` enables HeroEngine-style live editing where changes made by
 Editor → CollaborativeEditSession → LiveEditBridge → AreaServer → Game Clients
 ```
 
-### Usage
+### Internal API (called automatically by EditorUI)
 
 ```cpp
+// Created and managed by EditorUI — not user code
 SparkEditor::LiveEditBridge bridge;
 bridge.Connect("192.168.1.200", 27031, "EditorAlice");  // AreaServer inter-server port
 
-// When an edit is committed:
+// Edits are forwarded automatically when HierarchyPanel operations occur
 bridge.PushEdit(editMessage);
 
-// Each frame:
+// Called each frame by EditorUI::Update()
 bridge.Update();
 ```
 
