@@ -10,7 +10,7 @@
 #include "EditorFonts.h"
 #include "EditorCrashHandler.h"
 #include "EditorPluginManager.h"
-#include "../Utils/SparkConsole.h"
+#include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include <memory>
 #include <iostream>
@@ -152,7 +152,7 @@ namespace SparkEditor
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = WindowProc;
         wc.hInstance = GetModuleHandleW(nullptr);
-        wc.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(IDC_ARROW));
+        wc.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512)); // IDC_ARROW
         wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
         wc.lpszClassName = L"SparkEditorWindow";
 

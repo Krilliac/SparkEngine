@@ -11,6 +11,7 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
 #include <vector>
 #include <unordered_map>
 #include <variant>

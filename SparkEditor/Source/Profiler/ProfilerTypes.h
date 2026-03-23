@@ -13,6 +13,7 @@
 
 #ifdef _WIN32
 #include <d3d11.h>
+#include <cstdint>
 #include <wrl/client.h>
 #include <DirectXMath.h>
 using namespace DirectX;

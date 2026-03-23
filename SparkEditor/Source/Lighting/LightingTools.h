@@ -8,6 +8,7 @@
 #pragma once
 
 #include <Core/framework.h>
+#include <cstdint>
 #ifdef _WIN32
 #include <DirectXMath.h>
 #else

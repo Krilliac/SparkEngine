@@ -143,7 +143,7 @@ collect_inventory() {
 
     # --- Header count ---
     HEADER_COUNT=0
-    for dir in "$PROJECT_ROOT/SparkEngine/Source" "$PROJECT_ROOT/SparkEditor/Source" "$PROJECT_ROOT/SparkGame/Source"; do
+    for dir in "$PROJECT_ROOT/SparkEngine/Source" "$PROJECT_ROOT/SparkEditor/Source" "$PROJECT_ROOT/GameModules/SparkGame/Source" "$PROJECT_ROOT/GameModules/SparkGameMMO/Source"; do
         [ -d "$dir" ] || continue
         HEADER_COUNT=$((HEADER_COUNT + $(find "$dir" -name '*.h' | wc -l)))
     done

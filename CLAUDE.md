@@ -27,7 +27,7 @@ cmake --build build --config Release
 cd build && ctest --output-on-failure
 ```
 
-CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`.
+CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
 
 ## Anti-Bloat Guidelines
 
@@ -152,7 +152,9 @@ SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking
 SparkEngine/Source/Utils/                — Console, Logger, Profiler, Assert
 SparkEditor/Source/Communication/        — CollaborativeEditSession (multi-user editing)
 SparkEditor/Source/                      — ImGui editor (22 subsystems, 32 specialized panels)
-SparkGame/Source/                        — Example FPS game module (DLL)
+GameModules/                             — Game module directory (auto-discovered by CMake)
+GameModules/SparkGame/Source/            — Example FPS game module (DLL)
+GameModules/SparkGameMMO/Source/         — Example MMO game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
@@ -203,7 +205,7 @@ After the git sync, **read `.claude/index.md`** to load session context (step 5 
 cat .claude/index.md
 
 # 6. Bloat check — identify the worst files before touching anything
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkGame/Source \
+find SparkEngine/Source SparkEditor/Source SparkConsole/src GameModules \
   -name '*.cpp' | xargs wc -l | sort -rn | head -15
 ```
 
@@ -319,11 +321,11 @@ After finishing any code change, **always** run these checks in order:
 
 ```bash
 # 1. Format check — ensure code matches .clang-format
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules \
   -name '*.h' -o -name '*.cpp' | head -50 | xargs clang-format --dry-run --Werror 2>&1
 
 # 2. Fix formatting automatically (if step 1 fails)
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules \
   -name '*.h' -o -name '*.cpp' | xargs clang-format -i
 
 # 3. Sanity check — CMake configure (Linux)
@@ -375,7 +377,7 @@ The GitHub Actions workflow (`.github/workflows/build.yml`) runs these jobs. To 
 
 **clang-format check** (runs on every PR):
 ```bash
-find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
   -not -path '*/Metal/*' \
   \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
   xargs clang-format --dry-run --Werror 2>&1

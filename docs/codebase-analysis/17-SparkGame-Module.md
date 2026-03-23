@@ -1,6 +1,6 @@
 # 17 — SparkGame Module
 
-**Location:** `SparkGame/Source/`
+**Location:** `GameModules/SparkGame/Source/`
 
 Example FPS game module demonstrating all major engine subsystems. Loaded at runtime as a DLL, implements both `Spark::IModule` and legacy `IGameModule`.
 
@@ -9,7 +9,7 @@ Example FPS game module demonstrating all major engine subsystems. Loaded at run
 ## Module Structure
 
 ```
-SparkGame/Source/
+GameModules/SparkGame/Source/
 ├── Core/
 │   ├── Main.cpp              — DLL exports (CreateModule/DestroyModule)
 │   └── SparkGame.h           — SparkGameModule class
@@ -45,7 +45,7 @@ SparkGame/Source/
 
 ## Game Class — Central Coordinator
 
-**File:** `SparkGame/Source/Game/Game.h`
+**File:** `GameModules/SparkGame/Source/Game/Game.h`
 
 ### Owned Systems
 
@@ -124,7 +124,7 @@ void CreateCombatArena();
 
 ## Player — First-Person Controller
 
-**File:** `SparkGame/Source/Game/Player.h`
+**File:** `GameModules/SparkGame/Source/Game/Player.h`
 
 ```cpp
 class Player : public GameObject {
@@ -163,7 +163,7 @@ Features: physics-based movement with gravity, head bob, footstep sounds, weapon
 
 ## ClassSystem — FPS Archetypes
 
-**File:** `SparkGame/Source/Game/ClassSystem.h`
+**File:** `GameModules/SparkGame/Source/Game/ClassSystem.h`
 
 Six distinct player classes:
 
@@ -198,7 +198,7 @@ struct ClassDefinition {
 
 ## Weapon System
 
-**File:** `SparkGame/Source/Projectiles/WeaponStats.h`
+**File:** `GameModules/SparkGame/Source/Projectiles/WeaponStats.h`
 
 ```cpp
 struct WeaponStats {
@@ -244,7 +244,7 @@ if (bullet->IsExpired())
 
 ## Wave Spawner
 
-**File:** `SparkGame/Source/Game/WaveSpawner.h`
+**File:** `GameModules/SparkGame/Source/Game/WaveSpawner.h`
 
 ```cpp
 WaveSpawner spawner;
@@ -265,7 +265,7 @@ int alive = spawner.GetAliveEnemyCount();
 
 ## DLL Exports
 
-**File:** `SparkGame/Source/Core/Main.cpp`
+**File:** `GameModules/SparkGame/Source/Core/Main.cpp`
 
 ```cpp
 // New interface
@@ -297,7 +297,7 @@ Spark::ModuleInfo SparkGameModule::GetModuleInfo() const {
 
 ## Console Commands
 
-**File:** `SparkGame/Source/Console/AdvancedConsoleCommands.h`
+**File:** `GameModules/SparkGame/Source/Console/AdvancedConsoleCommands.h`
 
 ```cpp
 void RegisterAdvancedCommands(Game* game, GraphicsEngine* graphics);

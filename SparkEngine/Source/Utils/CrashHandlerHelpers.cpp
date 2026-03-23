@@ -24,8 +24,8 @@
 #include <wrl/client.h>
 #endif // SPARK_PLATFORM_WINDOWS
 
-// Only include CURL when networking is enabled
-#ifdef NETWORKING_ENABLED
+// Only include CURL when libcurl is available (detected by CMake)
+#ifdef SPARK_HAS_CURL
 #include <curl/curl.h>
 #endif
 
@@ -228,10 +228,10 @@ static CrashConfig g_cfg;
 static std::mutex g_lock;
 
 // ============================================================================
-// GitHub Issue upload (requires NETWORKING_ENABLED)
+// GitHub Issue upload (requires SPARK_HAS_CURL)
 // ============================================================================
 
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
 
 static size_t GitHubWriteCallback(char* ptr, size_t size, size_t nmemb, void* userdata)
 {
@@ -503,7 +503,7 @@ static bool UploadToGitHubIssue(const std::string& logContent, const std::string
     return (res == CURLE_OK && issueResponse.contains("\"id\""));
 }
 
-#endif // NETWORKING_ENABLED
+#endif // SPARK_HAS_CURL
 
 // Externals from your engine
 extern IDXGISwapChain* GetMainSwapChain();
@@ -520,7 +520,7 @@ static std::wstring ThreadStacks();
 static void SaveScreenshot(const std::wstring&);
 static void ZipFiles(const std::wstring&, const std::vector<std::wstring>&);
 
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
 static bool Upload(const std::string&, const std::wstring&, const std::string&);
 #endif
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
@@ -578,7 +578,7 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* msg)
         ZipFiles(zipFile, files);
 
     bool ok = true;
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
     if (!g_cfg.uploadURL.empty())
     {
         if (g_cfg.zipBeforeUpload)
@@ -614,7 +614,7 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* msg)
     if (g_cfg.captureScreenshot)
         msgBox += L"\n" + shot;
 
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
     if (!g_cfg.uploadURL.empty())
         msgBox += L"\nUpload: " + std::wstring(ok ? L"Success" : L"FAILED");
     if (!g_cfg.githubRepo.empty())
@@ -989,7 +989,7 @@ static void ZipFiles(const std::wstring& zipPath, const std::vector<std::wstring
 // Upload via libcurl (only if networking is enabled)
 //------------------------------------------------------------------------------
 
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
 static bool Upload(const std::string& url, const std::wstring& wfile, const std::string& fieldName)
 {
     std::string fileUtf8 = WideToUtf8(wfile);
@@ -1018,6 +1018,6 @@ static bool Upload(const std::string& url, const std::wstring& wfile, const std:
 
     return (res == CURLE_OK);
 }
-#endif // NETWORKING_ENABLED
+#endif // SPARK_HAS_CURL
 
 #endif // SPARK_PLATFORM_WINDOWS

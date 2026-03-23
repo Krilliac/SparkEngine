@@ -78,7 +78,7 @@ Run pre-push checks in this specific order — each step catches different error
 
 ```bash
 # 1. Format first (fastest, most common failure)
-find SparkEngine/Source SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
   xargs clang-format --dry-run --Werror 2>&1
 
@@ -183,7 +183,7 @@ Every session should start in this exact order before doing anything else:
 5. Read any knowledge files relevant to the current task
 6. **Bloat check** — run before touching anything:
    ```bash
-   find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkGame/Source \
+   find SparkEngine/Source SparkEditor/Source SparkConsole/src GameModules/SparkGame/Source \
      -name '*.cpp' | xargs wc -l | sort -rn | head -15
    ```
 7. **Then** start reading code or planning

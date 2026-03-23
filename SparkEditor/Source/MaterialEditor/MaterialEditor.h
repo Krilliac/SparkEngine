@@ -12,6 +12,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include <cstdint>
 #ifdef _WIN32
 #include <DirectXMath.h>
 using namespace DirectX;

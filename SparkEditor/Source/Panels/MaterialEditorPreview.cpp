@@ -9,6 +9,7 @@
  */
 
 #include "MaterialEditorPanel.h"
+#include "../Core/EditorIcons.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>

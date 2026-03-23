@@ -16,7 +16,8 @@ SOURCE_DIRS=(
     "$PROJECT_ROOT/SparkEditor/Source"
     "$PROJECT_ROOT/SparkConsole/src"
     "$PROJECT_ROOT/SparkShaderCompiler/src"
-    "$PROJECT_ROOT/SparkGame/Source"
+    "$PROJECT_ROOT/GameModules/SparkGame/Source"
+    "$PROJECT_ROOT/GameModules/SparkGameMMO/Source"
     "$PROJECT_ROOT/SparkSDK"
 )
 

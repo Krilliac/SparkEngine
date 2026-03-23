@@ -93,7 +93,7 @@ namespace SparkEditor
         }
 
         // Time scale
-        ImGui::Text(ICON_FA_TACHOMETER " Time Scale:");
+        ImGui::Text(ICON_FA_TACHOMETER_ALT " Time Scale:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(150);
         ImGui::DragFloat("##TimeScale", &m_timeScale, 1.0f, 0.0f, 3600.0f, "%.0f x");
@@ -163,7 +163,7 @@ namespace SparkEditor
         // Day/night indicator
         bool isNight = m_sunDirection[1] < 0.0f;
         ImGui::TextColored(isNight ? ImVec4(0.4f, 0.4f, 0.8f, 1.0f) : ImVec4(1.0f, 0.9f, 0.3f, 1.0f),
-                           isNight ? ICON_FA_MOON " Night" : ICON_FA_SUN " Day");
+                           isNight ? ICON_FA_ADJUST " Night" : ICON_FA_SUN " Day");
     }
 
     void TimeOfDayPanel::RenderDayInfo()

@@ -974,7 +974,7 @@ namespace Spark
             file.close();
             if (file.fail())
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: write failed for {}", tmpPath);
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: write failed for %s", tmpPath.c_str());
                 std::error_code rmEc;
                 std::filesystem::remove(tmpPath, rmEc);
                 return false;
@@ -985,8 +985,8 @@ namespace Spark
             std::filesystem::rename(tmpPath, filepath, ec);
             if (ec)
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: rename failed {} -> {}: {}", tmpPath, filepath,
-                               ec.message());
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: rename failed %s -> %s: %s", tmpPath.c_str(),
+                               filepath.c_str(), ec.message().c_str());
                 std::filesystem::remove(tmpPath, ec);
                 return false;
             }
@@ -1001,7 +1001,7 @@ namespace Spark
         }
         catch (const std::exception& e)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (WriteToFile): {}", e.what());
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (WriteToFile): %s", e.what());
             // Clean up temp file on failure
             std::error_code ec;
             std::filesystem::remove(filepath + ".tmp", ec);

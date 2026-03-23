@@ -431,11 +431,11 @@ SparkEngine enforces consistent code style via `.clang-format` (Microsoft-based,
 
 ```bash
 # Check formatting (dry run)
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \
   -name '*.h' -o -name '*.cpp' | head -50 | xargs clang-format --dry-run --Werror 2>&1
 
 # Fix formatting automatically
-find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkGame/Source \
+find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules/SparkGame/Source \
   -name '*.h' -o -name '*.cpp' | xargs clang-format -i
 ```
 

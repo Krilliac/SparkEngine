@@ -10,7 +10,7 @@
 #include "EditorTheme.h"
 #include "EditorFonts.h"
 #include "EditorIcons.h"
-#include "../Utils/SparkConsole.h"
+#include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/ConsolePanel.h"

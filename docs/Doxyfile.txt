@@ -121,7 +121,8 @@ INPUT                  = "../SparkEngine/Source" \
                          "../SparkEditor/Source" \
                          "../SparkConsole/src" \
                          "../SparkShaderCompiler/src" \
-                         "../SparkGame/Source" \
+                         "../GameModules/SparkGame/Source" \
+                         "../GameModules/SparkGameMMO/Source" \
                          "../SparkSDK" \
                          "../README.md" \
                          "../TROUBLESHOOTING.md"

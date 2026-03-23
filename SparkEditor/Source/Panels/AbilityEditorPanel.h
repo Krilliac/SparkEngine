@@ -6,6 +6,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include <cstdint>
 #include <string>
 #include <vector>
 

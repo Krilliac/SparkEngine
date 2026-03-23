@@ -341,7 +341,9 @@ SparkEngine/
 │       ├── SceneManager/     # Scene hierarchy, serialization
 │       └── Utils/            # Logging, profiler, crash handler, JobSystem
 ├── SparkEditor/              # ImGui-based visual editor (Windows only)
-├── SparkGame/                # Default game module (DLL)
+├── GameModules/              # Game modules
+│   ├── SparkGame/            # Default game module (DLL)
+│   └── SparkGameMMO/         # MMO game module (DLL)
 ├── SparkConsole/             # Standalone debug console
 ├── SparkShaderCompiler/      # Offline shader compilation tool
 ├── SparkSDK/                 # Public SDK headers for module development

@@ -291,13 +291,13 @@ static void JoltTraceImpl(const char* inFMT, ...)
     vsnprintf(buffer, sizeof(buffer), inFMT, list);
     va_end(list);
 
-    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Jolt: {}", buffer);
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Jolt: %s", buffer);
 }
 
 #ifdef JPH_ENABLE_ASSERTS
 static bool JoltAssertFailed(const char* inExpression, const char* inMessage, const char* inFile, uint32_t inLine)
 {
-    SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Jolt assert failed: {} : {} ({}:{})", inExpression,
+    SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Jolt assert failed: %s : %s (%s:%u)", inExpression,
                     inMessage ? inMessage : "", inFile, inLine);
     return true; // Break into debugger
 }
@@ -350,7 +350,7 @@ HRESULT PhysicsSystem::Initialize()
         numThreads = 0; // 0 = run on calling thread only
     m_jobSystem =
         std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, numThreads);
-    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Jolt job system: {} worker threads", numThreads);
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Jolt job system: %d worker threads", numThreads);
 
     // Create broadphase layer interface and filters
     m_broadPhaseLayerInterface = std::make_unique<SparkBPLayerInterface>();

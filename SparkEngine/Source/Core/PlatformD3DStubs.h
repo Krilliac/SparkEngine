@@ -100,6 +100,11 @@ namespace Microsoft
             ~ComPtr() { /* No Release() on stubs */ }
             ComPtr(const ComPtr&) = default;
             ComPtr& operator=(const ComPtr&) = default;
+            ComPtr& operator=(T* p)
+            {
+                ptr = p;
+                return *this;
+            }
             ComPtr(ComPtr&& o) noexcept : ptr(o.ptr) { o.ptr = nullptr; }
             ComPtr& operator=(ComPtr&& o) noexcept
             {

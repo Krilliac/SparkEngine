@@ -107,10 +107,9 @@ list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*_Updated\\.cpp$")
 list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*_EngineIntegrated\\.cpp$")
 list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*_AutoConnect\\.(cpp|h)$")
 
-# Engine utility sources needed by validation/logging macros
-list(APPEND SPARK_EDITOR_SOURCES
-    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Utils/Logger.cpp"
-)
+# Exclude editor's own SparkConsole.cpp — SparkEngineLib provides the real implementation.
+# Also don't manually append Logger.cpp; it comes from SparkEngineLib too.
+list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*/Utils/SparkConsole\\.cpp$")
 
 # Create executable
 if(WIN32)
@@ -197,6 +196,10 @@ else()
 endif()
 
 # Link libraries
+if(TARGET SparkEngineLib)
+    target_link_libraries(SparkEditor PRIVATE SparkEngineLib)
+endif()
+
 if(IMGUI_FOUND)
     target_link_libraries(SparkEditor PRIVATE imgui)
 endif()

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include <imgui.h>
 #include <string>
 #include <vector>
 

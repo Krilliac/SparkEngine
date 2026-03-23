@@ -5,13 +5,13 @@
 
 #include "GameModuleSelectorPanel.h"
 #include "Core/ModuleManager.h"
-#include "../Utils/SparkConsole.h"
+#include "Utils/SparkConsole.h"
 #include <imgui.h>
 #include <filesystem>
 #include <fstream>
-
-// External: the global ModuleManager owned by SparkEngine
-extern std::unique_ptr<ModuleManager> g_moduleManager;
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace SparkEditor
 {
@@ -92,10 +92,7 @@ namespace SparkEditor
     {
         m_modules.clear();
 
-        if (!g_moduleManager)
-            return;
-
-        // Get the executable directory for scanning
+        // Scan the executable directory for game module shared libraries
         std::string scanDir;
 #ifdef _WIN32
         char exePath[MAX_PATH];
@@ -105,17 +102,33 @@ namespace SparkEditor
         scanDir = std::filesystem::canonical("/proc/self/exe").parent_path().string();
 #endif
 
-        auto discovered = g_moduleManager->DiscoverModules(scanDir);
-
-        for (const auto& disc : discovered)
+        // Look for game module DLLs/SOs in the output directory
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(scanDir, ec))
         {
-            ModuleEntry entry;
-            entry.name = disc.name;
-            entry.path = disc.path;
-            entry.version = disc.version;
-            entry.isLoaded = disc.isLoaded;
-            entry.isSelected = disc.isLoaded; // Pre-select loaded modules
-            m_modules.push_back(std::move(entry));
+            if (!entry.is_regular_file())
+                continue;
+
+            auto ext = entry.path().extension().string();
+#ifdef _WIN32
+            if (ext != ".dll")
+                continue;
+#else
+            if (ext != ".so")
+                continue;
+#endif
+            auto stem = entry.path().stem().string();
+            // Game modules follow the naming convention: SparkGame*, lib*Game*
+            if (stem.find("Game") == std::string::npos && stem.find("game") == std::string::npos)
+                continue;
+
+            ModuleEntry mod;
+            mod.name = stem;
+            mod.path = entry.path().string();
+            mod.version = "1.0.0";
+            mod.isLoaded = false;
+            mod.isSelected = false;
+            m_modules.push_back(std::move(mod));
         }
     }
 

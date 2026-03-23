@@ -160,7 +160,7 @@ std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& de
 
     if (bodyID.IsInvalid())
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Failed to create Jolt body: {}", desc.name);
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Failed to create Jolt body: %s", desc.name.c_str());
         return nullptr;
     }
 

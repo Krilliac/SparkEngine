@@ -8,6 +8,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include <cstdint>
 #include "../SceneSystem/SceneFile.h"
 #include <string>
 #include <vector>

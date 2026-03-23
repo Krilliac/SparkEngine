@@ -12,6 +12,7 @@
 #pragma once
 
 #include "SceneFile.h"
+#include <cstdint>
 #include <string>
 #include <memory>
 #include <vector>

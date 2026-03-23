@@ -64,6 +64,7 @@
 #define ICON_FA_COGS "\xef\x82\x85"     // U+F085
 #define ICON_FA_DOWNLOAD "\xef\x80\x99" // U+F019
 #define ICON_FA_UPLOAD "\xef\x82\x93"   // U+F093
+#define ICON_FA_EXCHANGE "\xef\x8c\x82" // U+F0EC
 
 // === View / Visibility ===
 #define ICON_FA_EYE "\xef\x81\xae"        // U+F06E
@@ -129,6 +130,7 @@
 // === Metrics / Data ===
 #define ICON_FA_TACHOMETER_ALT "\xef\x8f\xbd" // U+F3FD
 #define ICON_FA_DATABASE "\xef\x87\x80"       // U+F1C0
+#define ICON_FA_MEMORY "\xef\x94\xb8"         // U+F538
 
 // === Additional Icons ===
 #define ICON_FA_RUNNING "\xef\x9c\x8c"       // U+F70C (person-running)
@@ -209,3 +211,17 @@
 
 // === Module / Plugin Icons ===
 #define ICON_FA_PUZZLE_PIECE "\xef\x84\xae" // U+F12E
+
+// === Settings / Category Icons ===
+#define ICON_FA_DESKTOP "\xef\x84\x88"              // U+F108
+#define ICON_FA_ATOM "\xef\x97\x92"                 // U+F5D2
+#define ICON_FA_VIDEO "\xef\x80\xbd"                // U+F03D
+#define ICON_FA_PENCIL_ALT "\xef\x8c\x83"           // U+F303
+#define ICON_FA_EXCLAMATION_TRIANGLE "\xef\x81\xb1" // U+F071
+#define ICON_FA_PEN "\xef\x8c\x84"                  // U+F304
+#define ICON_FA_FILE_EXPORT "\xef\x95\xae"          // U+F56E
+#define ICON_FA_FILE_IMPORT "\xef\x95\xaf"          // U+F56F
+#define ICON_FA_BOOKMARK "\xef\x80\xae"             // U+F02E
+#define ICON_FA_CHECK_CIRCLE "\xef\x81\x98"         // U+F058
+#define ICON_FA_HEADPHONES "\xef\x80\xa5"           // U+F025
+#define ICON_FA_WAVE_SQUARE "\xef\xa0\xbe"          // U+F83E

@@ -2,7 +2,7 @@
 
 This page documents the ownership rules, allocation strategies, and debugging tools used throughout SparkEngine.
 
-**Source:** `SparkEngine/Source/Utils/FrameAllocator.h`, `MemoryDebugger.h`, `SparkEngine/Source/Graphics/RenderTargetPool.h`, `SparkGame/Source/Projectiles/ProjectilePool.h`
+**Source:** `SparkEngine/Source/Utils/FrameAllocator.h`, `MemoryDebugger.h`, `SparkEngine/Source/Graphics/RenderTargetPool.h`, `GameModules/SparkGame/Source/Projectiles/ProjectilePool.h`
 
 ---
 
@@ -128,7 +128,7 @@ pool.Tick();
 
 ## Object Pool (ProjectilePool)
 
-**Source:** `SparkGame/Source/Projectiles/ProjectilePool.h`
+**Source:** `GameModules/SparkGame/Source/Projectiles/ProjectilePool.h`
 
 Pre-allocates a fixed number of game objects and recycles them to avoid runtime allocation:
 

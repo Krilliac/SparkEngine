@@ -5,8 +5,8 @@
 #include "Utils/ConsoleProcessManager.h"
 #include "Validate.h"
 
-// Only include CURL when networking is enabled
-#ifdef NETWORKING_ENABLED
+// Only include CURL when libcurl is available (detected by CMake)
+#ifdef SPARK_HAS_CURL
 #include <curl/curl.h>
 #endif
 
@@ -62,7 +62,7 @@ static volatile sig_atomic_t g_inSignalHandler = 0;
 // GitHub Issue upload (requires NETWORKING_ENABLED)
 // ============================================================================
 
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
 
 // libcurl write callback — appends response body to a std::string
 static size_t GitHubWriteCallback(char* ptr, size_t size, size_t nmemb, void* userdata)
@@ -367,7 +367,7 @@ static bool UploadToGitHubIssue(const std::string& logContent, const std::string
     return (res == CURLE_OK && issueResponse.contains("\"id\""));
 }
 
-#endif // NETWORKING_ENABLED
+#endif // SPARK_HAS_CURL
 
 // ============================================================================
 // Cross-platform helpers
@@ -469,7 +469,7 @@ void InstallCrashHandler(const CrashConfig& cfg)
     g_cfg = cfg;
     g_triggerCrashOnAssert = cfg.triggerCrashOnAssert;
 
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
     curl_global_init(CURL_GLOBAL_DEFAULT);
 #endif
 
@@ -667,7 +667,7 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
         ZipFiles(zipFile, files);
 
     bool ok = true;
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
     // upload logic unchanged
 
     // GitHub Issue upload
@@ -930,7 +930,7 @@ static void ZipFiles(const std::wstring& zip, const std::vector<std::wstring>& f
     ZipFilesUtf8(zipUtf, utf8Files);
 }
 
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
 static bool Upload(const std::string& url, const std::wstring& file, const std::string& field)
 {
     CURL* c = curl_easy_init();
@@ -1206,7 +1206,7 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         if (g_cfg.zipBeforeUpload)
             ZipFilesUtf8(zipFile, files);
 
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
         // GitHub Issue upload
         if (!g_cfg.githubRepo.empty() && !g_cfg.githubToken.empty())
         {
@@ -1245,7 +1245,7 @@ void InstallCrashHandler(const CrashConfig& cfg)
     g_cfg = cfg;
     g_triggerCrashOnAssert = cfg.triggerCrashOnAssert;
 
-#ifdef NETWORKING_ENABLED
+#ifdef SPARK_HAS_CURL
     curl_global_init(CURL_GLOBAL_DEFAULT);
 #endif
 
