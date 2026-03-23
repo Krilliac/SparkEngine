@@ -285,6 +285,7 @@ namespace SparkEditor
         sample.shaderName = shaderName;
         m_activeGPUSamples[name] = sample;
 
+#ifdef SPARK_PLATFORM_WINDOWS
         // Issue a D3D11 timestamp query if device is available
         if (m_device && m_context)
         {
@@ -321,6 +322,7 @@ namespace SparkEditor
                 m_pendingGPUQueries[name] = std::move(queryPair);
             }
         }
+#endif // SPARK_PLATFORM_WINDOWS
     }
 
     void PerformanceProfiler::EndGPUSample(const std::string& name)
@@ -328,6 +330,7 @@ namespace SparkEditor
         if (!m_isProfiling)
             return;
 
+#ifdef SPARK_PLATFORM_WINDOWS
         // Issue the end timestamp query
         if (m_context)
         {
@@ -338,6 +341,7 @@ namespace SparkEditor
                 it->second.ended = true;
             }
         }
+#endif // SPARK_PLATFORM_WINDOWS
 
         m_activeGPUSamples.erase(name);
     }
@@ -1117,6 +1121,7 @@ namespace SparkEditor
         if (!m_currentFrame)
             return;
 
+#ifdef SPARK_PLATFORM_WINDOWS
         // Collect results from D3D11 timestamp queries
         if (m_context && m_disjointActive && m_disjointQuery)
         {
@@ -1171,6 +1176,7 @@ namespace SparkEditor
                 m_pendingGPUQueries.clear();
             }
         }
+#endif // SPARK_PLATFORM_WINDOWS
 
         // Fallback: process any samples with manually-set timestamps (non-D3D11 path)
         for (auto& [name, sample] : m_activeGPUSamples)

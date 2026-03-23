@@ -9,6 +9,9 @@
 #include <imgui.h>
 #include <filesystem>
 #include <fstream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 // External: the global ModuleManager owned by SparkEngine
 extern std::unique_ptr<ModuleManager> g_moduleManager;

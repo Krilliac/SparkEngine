@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <sstream>
 #include <cmath>
+#include <numbers>
 
 namespace SparkEditor
 {
@@ -633,13 +634,13 @@ namespace SparkEditor
         // Convert time of day to sun angle
         // At 6:00 the sun is at the horizon (elevation = 0), at 12:00 it is at zenith
         // Sun travels 180 degrees from 6:00 to 18:00
-        float hourAngle = (time - 12.0f) * (static_cast<float>(M_PI) / 12.0f); // radians from noon
+        float hourAngle = (time - 12.0f) * (std::numbers::pi_v<float> / 12.0f); // radians from noon
 
         // Elevation: peak at noon (pi/2), horizon at 6 and 18
-        float elevation = static_cast<float>(M_PI) * 0.5f - std::abs(hourAngle);
+        float elevation = std::numbers::pi_v<float> * 0.5f - std::abs(hourAngle);
 
         // Clamp elevation for night time (sun below horizon)
-        float azimuth = (time < 12.0f) ? static_cast<float>(M_PI) : 0.0f;
+        float azimuth = (time < 12.0f) ? std::numbers::pi_v<float> : 0.0f;
 
         // Spherical to Cartesian (Y-up coordinate system)
         float cosElev = std::cos(elevation);
