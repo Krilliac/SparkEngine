@@ -734,6 +734,7 @@ void InputManager::LogInputEvent(int key, bool isPressed)
 {
     if (m_recentInputEvents.size() >= 100)
     {
+        // O(n) erase on small bounded buffer (max 100 entries) — acceptable for input event rate
         m_recentInputEvents.erase(m_recentInputEvents.begin());
     }
     m_recentInputEvents.emplace_back(key, isPressed);
@@ -1306,6 +1307,7 @@ void InputManager::LogInputEvent(int key, bool isPressed)
 {
     if (m_recentInputEvents.size() >= 100)
     {
+        // O(n) erase on small bounded buffer (max 100 entries) — acceptable for input event rate
         m_recentInputEvents.erase(m_recentInputEvents.begin());
     }
     m_recentInputEvents.emplace_back(key, isPressed);

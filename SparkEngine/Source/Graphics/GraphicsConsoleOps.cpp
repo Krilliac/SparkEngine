@@ -318,9 +318,14 @@ void GraphicsEngine::Console_ForceGarbageCollection()
             // If texture system has a cleanup method, call it
             LOG_TO_CONSOLE_IMMEDIATE(L"Texture system cleanup triggered", L"INFO");
         }
+        catch (const std::exception& e)
+        {
+            std::wstring msg = L"Texture system cleanup failed: " + std::wstring(e.what(), e.what() + strlen(e.what()));
+            LOG_TO_CONSOLE_IMMEDIATE(msg.c_str(), L"WARNING");
+        }
         catch (...)
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Texture system cleanup failed", L"WARNING");
+            LOG_TO_CONSOLE_IMMEDIATE(L"Texture system cleanup failed: unknown exception", L"WARNING");
         }
     }
 
@@ -331,9 +336,14 @@ void GraphicsEngine::Console_ForceGarbageCollection()
             m_assetPipeline->Console_ForceGC();
             LOG_TO_CONSOLE_IMMEDIATE(L"Asset pipeline garbage collection triggered", L"INFO");
         }
+        catch (const std::exception& e)
+        {
+            std::wstring msg = L"Asset pipeline GC failed: " + std::wstring(e.what(), e.what() + strlen(e.what()));
+            LOG_TO_CONSOLE_IMMEDIATE(msg.c_str(), L"WARNING");
+        }
         catch (...)
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Asset pipeline GC failed", L"WARNING");
+            LOG_TO_CONSOLE_IMMEDIATE(L"Asset pipeline GC failed: unknown exception", L"WARNING");
         }
     }
 
@@ -388,9 +398,14 @@ size_t GraphicsEngine::Console_GetVRAMUsage() const
             auto textureMetrics = m_textureSystem->Console_GetMetrics();
             totalUsage = textureMetrics.totalMemoryUsage + m_bufferMemoryUsage;
         }
+        catch (const std::exception& e)
+        {
+            std::wstring msg = L"VRAM metrics unavailable: " + std::wstring(e.what(), e.what() + strlen(e.what()));
+            LOG_TO_CONSOLE_IMMEDIATE(msg.c_str(), L"WARNING");
+        }
         catch (...)
         {
-            // Fall back to tracked usage if metrics are unavailable
+            LOG_TO_CONSOLE_IMMEDIATE(L"VRAM metrics unavailable: unknown exception", L"WARNING");
         }
     }
 
@@ -475,9 +490,14 @@ void GraphicsEngine::Console_ResetDevice()
 
         LOG_TO_CONSOLE_IMMEDIATE(L"Graphics device reset complete", L"SUCCESS");
     }
+    catch (const std::exception& e)
+    {
+        std::wstring msg = L"Exception during device reset: " + std::wstring(e.what(), e.what() + strlen(e.what()));
+        LOG_TO_CONSOLE_IMMEDIATE(msg.c_str(), L"ERROR");
+    }
     catch (...)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Exception occurred during device reset", L"ERROR");
+        LOG_TO_CONSOLE_IMMEDIATE(L"Unknown exception during device reset", L"ERROR");
     }
 }
 

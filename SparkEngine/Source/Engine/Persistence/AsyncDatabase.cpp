@@ -21,17 +21,36 @@ namespace Spark::Persistence
 
     int64_t QueryRow::GetInt(size_t col) const
     {
-        return std::get<int64_t>(columns.at(col));
+        if (col >= columns.size())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "QueryRow::GetInt column %zu out of range (size=%zu)", col,
+                            columns.size());
+            return 0;
+        }
+        return std::get<int64_t>(columns[col]);
     }
 
     double QueryRow::GetDouble(size_t col) const
     {
-        return std::get<double>(columns.at(col));
+        if (col >= columns.size())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "QueryRow::GetDouble column %zu out of range (size=%zu)", col,
+                            columns.size());
+            return 0.0;
+        }
+        return std::get<double>(columns[col]);
     }
 
     const std::string& QueryRow::GetString(size_t col) const
     {
-        return std::get<std::string>(columns.at(col));
+        if (col >= columns.size())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "QueryRow::GetString column %zu out of range (size=%zu)", col,
+                            columns.size());
+            static const std::string empty;
+            return empty;
+        }
+        return std::get<std::string>(columns[col]);
     }
 
     bool QueryRow::IsNull(size_t col) const

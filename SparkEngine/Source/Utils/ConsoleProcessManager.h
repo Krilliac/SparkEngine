@@ -92,6 +92,7 @@ namespace Spark
 
         std::thread m_consoleThread;                 ///< Background thread reading from the child process.
         std::atomic<bool> m_shouldStopThread{false}; ///< Signal for the console thread to exit its loop.
+        std::atomic<bool> m_threadStarted{false};    ///< Set by console thread once it begins its run loop.
 
         std::mutex m_messageMutex;               ///< Guards m_messageQueue (log output to child).
         std::queue<std::wstring> m_messageQueue; ///< Outgoing log messages queued for the child process.

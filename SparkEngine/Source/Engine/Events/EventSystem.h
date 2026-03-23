@@ -300,6 +300,14 @@ namespace Spark
         template <typename T> void QueueEvent(T event)
         {
             std::lock_guard<std::mutex> lock(m_mutex);
+
+            if (m_pendingEvents.size() >= MaxQueueSize)
+            {
+                // Drop oldest events to prevent unbounded memory growth
+                m_pendingEvents.erase(m_pendingEvents.begin());
+                ++m_droppedEventCount;
+            }
+
             m_pendingEvents.push_back([evt = std::move(event)](EventBus& bus) { bus.Publish(evt); });
         }
 
@@ -313,6 +321,7 @@ namespace Spark
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
                 events.swap(m_pendingEvents);
+                m_droppedEventCount = 0;
             }
 
             for (const auto& dispatch : events)
@@ -335,9 +344,19 @@ namespace Spark
             m_pendingEvents.clear();
         }
 
+        /** @brief Number of events dropped due to queue overflow since last DispatchAll. */
+        size_t GetDroppedEventCount() const
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_droppedEventCount;
+        }
+
       private:
+        static constexpr size_t MaxQueueSize = 10000;
+
         mutable std::mutex m_mutex;
         std::vector<std::function<void(EventBus&)>> m_pendingEvents;
+        size_t m_droppedEventCount = 0;
     };
 
 } // namespace Spark

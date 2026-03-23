@@ -279,8 +279,12 @@ namespace Spark::Streaming
         std::sort(m_loadQueue.begin(), m_loadQueue.end(),
                   [this](AreaID a, AreaID b)
                   {
-                      const auto& areaA = m_areas.at(a);
-                      const auto& areaB = m_areas.at(b);
+                      auto itA = m_areas.find(a);
+                      auto itB = m_areas.find(b);
+                      if (itA == m_areas.end() || itB == m_areas.end())
+                          return itA != m_areas.end();
+                      const auto& areaA = itA->second;
+                      const auto& areaB = itB->second;
                       if (areaA.definition.priority != areaB.definition.priority)
                       {
                           return areaA.definition.priority > areaB.definition.priority;
@@ -296,7 +300,10 @@ namespace Spark::Streaming
                 break;
             }
 
-            auto& area = m_areas.at(id);
+            auto areaIt = m_areas.find(id);
+            if (areaIt == m_areas.end())
+                continue;
+            auto& area = areaIt->second;
             TransitionAreaState(area, AreaState::Loading);
             ++m_activeLoadCount;
 

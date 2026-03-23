@@ -38,6 +38,7 @@
 #include <atomic>
 #include <cstdint>
 #include <type_traits>
+#include <new>
 
 namespace Spark
 {
@@ -63,25 +64,24 @@ namespace Spark
          */
         void Initialize(uint32_t numThreads = 0)
         {
-            if (m_initialized.load(std::memory_order_acquire))
-            {
-                return;
-            }
+            std::call_once(m_initFlag,
+                           [&, numThreads]() mutable
+                           {
+                               if (numThreads == 0)
+                               {
+                                   numThreads = std::max(1u, std::thread::hardware_concurrency() - 1);
+                               }
 
-            if (numThreads == 0)
-            {
-                numThreads = std::max(1u, std::thread::hardware_concurrency() - 1);
-            }
+                               m_stop.store(false, std::memory_order_relaxed);
 
-            m_stop.store(false, std::memory_order_relaxed);
+                               m_workers.reserve(numThreads);
+                               for (uint32_t i = 0; i < numThreads; ++i)
+                               {
+                                   m_workers.emplace_back(&JobSystem::WorkerThread, this);
+                               }
 
-            m_workers.reserve(numThreads);
-            for (uint32_t i = 0; i < numThreads; ++i)
-            {
-                m_workers.emplace_back(&JobSystem::WorkerThread, this);
-            }
-
-            m_initialized.store(true, std::memory_order_release);
+                               m_initialized.store(true, std::memory_order_release);
+                           });
         }
 
         /**
@@ -172,7 +172,7 @@ namespace Spark
             {
                 int batchEnd = std::min(batchStart + batchSize, end);
                 futures.push_back(Submit(
-                    [batchStart, batchEnd, &body]()
+                    [batchStart, batchEnd, body]()
                     {
                         for (int i = batchStart; i < batchEnd; ++i)
                         {
@@ -247,6 +247,7 @@ namespace Spark
         std::condition_variable m_condition;
         std::atomic<bool> m_stop{false};
         std::atomic<bool> m_initialized{false};
+        std::once_flag m_initFlag;
     };
 
 } // namespace Spark

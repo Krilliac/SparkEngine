@@ -108,12 +108,14 @@ namespace Spark
         m_asyncEnabled.store(enableAsync, std::memory_order_relaxed);
         m_stopThread.store(false, std::memory_order_relaxed);
 
+        // Set initialized before starting the writer thread to prevent a racing
+        // Initialize() call from creating a second thread.
+        m_initialized.store(true, std::memory_order_release);
+
         if (enableAsync)
         {
             m_writerThread = std::thread(&Logger::AsyncWriterThread, this);
         }
-
-        m_initialized.store(true, std::memory_order_release);
     }
 
     // ============================================================================

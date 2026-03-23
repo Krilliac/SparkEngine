@@ -28,6 +28,7 @@ using namespace DirectX;
 // Access physics system via EngineContext service locator instead of raw global
 #include "../Core/EngineContext.h"
 #include "../Utils/Assert.h"
+#include "../Utils/LogMacros.h"
 
 static PhysicsSystem* GetPhysicsSystem()
 {
@@ -47,11 +48,16 @@ static JPH::BodyInterface* GetBodyInterfacePtr()
     return &jolt->GetBodyInterface();
 }
 
-// Convenience reference accessor — asserts in debug, use only when physics is guaranteed active
+// Convenience reference accessor — asserts in debug, aborts with message in Release
 static JPH::BodyInterface& GetBodyInterface()
 {
     auto* bi = GetBodyInterfacePtr();
     ASSERT_NOT_NULL(bi);
+    if (!bi)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Physics body interface is null — physics system not initialized");
+        std::abort();
+    }
     return *bi;
 }
 

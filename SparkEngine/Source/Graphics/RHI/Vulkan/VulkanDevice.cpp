@@ -334,6 +334,12 @@ namespace Spark
 
             bool VulkanDevice::CreateLogicalDevice()
             {
+                if (!m_queueFamilies.graphicsFamily.has_value())
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Graphics queue family not found");
+                    return false;
+                }
+
                 std::set<uint32_t> uniqueQueueFamilies = {m_queueFamilies.graphicsFamily.value()};
                 if (m_queueFamilies.presentFamily.has_value())
                     uniqueQueueFamilies.insert(m_queueFamilies.presentFamily.value());
@@ -424,6 +430,12 @@ namespace Spark
 
             bool VulkanDevice::CreateCommandPool()
             {
+                if (!m_queueFamilies.graphicsFamily.has_value())
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Graphics queue family not found");
+                    return false;
+                }
+
                 VkCommandPoolCreateInfo poolInfo = {};
                 poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
                 poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;

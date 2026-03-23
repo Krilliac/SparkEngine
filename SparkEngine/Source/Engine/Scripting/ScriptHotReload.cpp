@@ -259,6 +259,7 @@ namespace Spark::Scripting
             m_recentErrors.push_back(result);
             if (static_cast<int>(m_recentErrors.size()) > MaxRecentErrors)
             {
+                // O(n) erase on small bounded buffer (MaxRecentErrors=10) — acceptable cost
                 m_recentErrors.erase(m_recentErrors.begin());
             }
 

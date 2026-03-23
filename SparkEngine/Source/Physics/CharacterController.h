@@ -28,6 +28,11 @@ using DirectX::XMFLOAT4;
 
 class PhysicsSystem;
 
+namespace JPH
+{
+    class CharacterVirtual;
+}
+
 /**
  * @brief Ground state of the character controller.
  */
@@ -148,5 +153,5 @@ class CharacterController
   private:
     PhysicsSystem* m_physicsSystem;
     CharacterControllerDesc m_desc;
-    void* m_joltCharacter = nullptr; ///< Opaque pointer to JPH::CharacterVirtual
+    JPH::CharacterVirtual* m_joltCharacter = nullptr; ///< Owned pointer to Jolt character
 };

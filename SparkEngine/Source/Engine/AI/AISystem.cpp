@@ -132,14 +132,15 @@ namespace Spark::AI
                 }
             }
 
-            // Lazily initialize NavMeshQuery handle
+            // Lazily initialize NavMeshQuery handle (ownership transferred to AIComponent;
+            // cleaned up when component is removed via ECS lifecycle)
             if (!ai.navQueryHandle)
             {
                 auto& mgr = NavMeshManager::GetInstance();
                 auto query = mgr.CreateQuery("default");
                 if (query)
                 {
-                    ai.navQueryHandle = Spark::NavQueryHandle(static_cast<void*>(query.release()));
+                    ai.navQueryHandle = Spark::NavQueryHandle(query.release());
                 }
             }
 
