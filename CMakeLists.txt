@@ -350,11 +350,11 @@ if(ENABLE_VULKAN)
                 message(STATUS "Vulkan SDK found via environment: $ENV{VULKAN_SDK}")
             else()
                 set(SPARK_VULKAN_AVAILABLE FALSE)
-                message(STATUS "Vulkan SDK path set but libraries not found")
+                message(STATUS "Vulkan SDK path set ($ENV{VULKAN_SDK}) but libraries not found at expected paths")
             endif()
         else()
             set(SPARK_VULKAN_AVAILABLE FALSE)
-            message(STATUS "Vulkan not found - Vulkan backend disabled")
+            message(STATUS "Vulkan not found — backend disabled (see dependency report below for install steps)")
         endif()
     endif()
 else()
@@ -537,21 +537,58 @@ if(JOLT_FOUND)
     # Use dynamic CRT to match the rest of the engine (/MD instead of /MT)
     set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
 
-    # Jolt GPU compute requires shader compilers (glslc/dxc/xcrun).
-    # Auto-disable each backend when the required tools are missing so the
-    # build works out-of-the-box on CI and minimal dev setups, while still
-    # enabling GPU compute for users who have the SDKs installed.
+    # Jolt GPU-accelerated physics (optional)
+    # Jolt can offload certain physics workloads (hair simulation, compute tests)
+    # to the GPU via Vulkan, DirectX 12, or Metal compute shaders.  Each backend
+    # requires a shader compiler at configure time; if the compiler is missing the
+    # backend is silently disabled and Jolt falls back to CPU-only physics (which
+    # is the normal mode for most projects).
+    #
+    # Vulkan compute — requires glslc (ships with the Vulkan SDK)
     find_package(Vulkan QUIET COMPONENTS glslc)
-    if(NOT TARGET Vulkan::glslc)
+    if(TARGET Vulkan::glslc)
+        message(STATUS "Jolt GPU compute: Vulkan ENABLED (glslc found)")
+    else()
         set(JPH_USE_VK OFF CACHE BOOL "" FORCE)
+        message(STATUS "Jolt GPU compute: Vulkan DISABLED (glslc not found)")
+        message(STATUS "  What: glslc compiles GLSL/HLSL shaders to SPIR-V for Vulkan compute")
+        message(STATUS "  Why:  Enables GPU-accelerated physics (hair sim, parallel broadphase)")
+        message(STATUS "  Install:")
+        message(STATUS "    Windows/Linux : Install the Vulkan SDK — https://vulkan.lunarg.com/sdk/home")
+        message(STATUS "    Ubuntu/Debian : sudo apt install vulkan-tools glslang-tools")
+        message(STATUS "    Fedora        : sudo dnf install vulkan-tools glslang")
+        message(STATUS "    macOS         : brew install vulkan-sdk")
     endif()
+
+    # DX12 compute — requires dxc (Microsoft DirectX Shader Compiler)
     find_program(_SPARK_DXC dxc QUIET)
-    if(NOT _SPARK_DXC)
+    if(_SPARK_DXC)
+        message(STATUS "Jolt GPU compute: DX12 ENABLED (dxc found: ${_SPARK_DXC})")
+    else()
         set(JPH_USE_DX12 OFF CACHE BOOL "" FORCE)
+        message(STATUS "Jolt GPU compute: DX12 DISABLED (dxc not found)")
+        message(STATUS "  What: dxc compiles HLSL shaders to DXIL for DirectX 12 compute")
+        message(STATUS "  Why:  Enables GPU-accelerated physics on Windows via DX12")
+        message(STATUS "  Install:")
+        message(STATUS "    Windows : Included with Windows SDK / Visual Studio (ensure 'Graphics Tools' is installed)")
+        message(STATUS "    Linux   : https://github.com/microsoft/DirectXShaderCompiler/releases")
+        message(STATUS "    macOS   : brew install microsoft/dxc/directx-shader-compiler")
     endif()
+
+    # Metal compute — requires xcrun (Xcode command-line tools, macOS only)
     find_program(_SPARK_XCRUN xcrun QUIET)
-    if(NOT _SPARK_XCRUN)
+    if(_SPARK_XCRUN)
+        message(STATUS "Jolt GPU compute: Metal ENABLED (xcrun found: ${_SPARK_XCRUN})")
+    else()
         set(JPH_USE_MTL OFF CACHE BOOL "" FORCE)
+        if(APPLE)
+            message(STATUS "Jolt GPU compute: Metal DISABLED (xcrun not found)")
+            message(STATUS "  What: xcrun invokes Apple's Metal shader compiler toolchain")
+            message(STATUS "  Why:  Enables GPU-accelerated physics on macOS/iOS via Metal")
+            message(STATUS "  Install: xcode-select --install")
+        else()
+            message(STATUS "Jolt GPU compute: Metal DISABLED (not macOS)")
+        endif()
     endif()
 
     add_subdirectory("${JOLT_PHYSICS_SOURCE_DIR}/Build" "${CMAKE_BINARY_DIR}/JoltPhysics")
@@ -1111,13 +1148,29 @@ message(STATUS "  SDL2 Input     : ${ENABLE_SDL2}")
 message(STATUS "  Headless Mode  : ${SPARK_HEADLESS_SUPPORT}")
 
 # ---------------------------------------------------------------------
-# 19) Third-party dependency status and missing module warnings
+# 19) Third-party dependency status — detailed diagnostics
+#
+# Every dependency reports:  status, what it provides, what breaks
+# without it, and exactly how to install it.  This lets users and CI
+# logs diagnose issues without searching external docs.
 # ---------------------------------------------------------------------
 message(STATUS "")
 message(STATUS "=== THIRD-PARTY DEPENDENCY STATUS ===")
+message(STATUS "")
 
 set(_SPARK_MISSING_DEPS "")
 set(_SPARK_MISSING_COUNT 0)
+
+# --- Helper macro: prints the "how to get it" block for a missing dep ---
+macro(_spark_dep_help _name)
+    message(STATUS "  ${_name}:")
+    # Remaining arguments are passed via ARGN; each is one STATUS line
+    foreach(_line ${ARGN})
+        message(STATUS "    ${_line}")
+    endforeach()
+endmacro()
+
+# ---- Core engine libraries (git submodules) ----
 
 # Jolt Physics
 if(JOLT_FOUND)
@@ -1125,7 +1178,13 @@ if(JOLT_FOUND)
 else()
     list(APPEND _SPARK_MISSING_DEPS "JoltPhysics")
     math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
-    message(STATUS "  [MISSING] Jolt Physics    — PhysicsSystem disabled, no rigid body simulation")
+    message(STATUS "  [MISSING] Jolt Physics    — rigid body physics, collision, raycasting")
+    _spark_dep_help("Jolt Physics"
+        "What:    Full 3D physics engine (rigid bodies, collision detection, raycasting, character controller)"
+        "Impact:  PhysicsSystem disabled — engine uses inert stub (no collisions, no gravity, no raycasts)"
+        "Install: git submodule update --init ThirdParty/Physics/JoltPhysics"
+        "Docs:    https://github.com/jrouwe/JoltPhysics"
+    )
 endif()
 
 # miniz
@@ -1134,7 +1193,13 @@ if(MINIZ_FOUND)
 else()
     list(APPEND _SPARK_MISSING_DEPS "miniz")
     math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
-    message(STATUS "  [MISSING] miniz           — CrashHandler disabled (using stub), no save compression")
+    message(STATUS "  [MISSING] miniz           — crash dump compression, save file compression")
+    _spark_dep_help("miniz"
+        "What:    Lightweight zlib-compatible compression library (single-file)"
+        "Impact:  CrashHandler disabled (stub used), save files are uncompressed"
+        "Install: git submodule update --init ThirdParty/Utils/miniz"
+        "Docs:    https://github.com/richgel999/miniz"
+    )
 endif()
 
 # EnTT
@@ -1143,7 +1208,13 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include/entt/entt.hpp"
 else()
     list(APPEND _SPARK_MISSING_DEPS "entt")
     math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
-    message(STATUS "  [STUB]    EnTT            — using minimal stub, ECS features limited")
+    message(STATUS "  [STUB]    EnTT            — entity component system (using minimal stub)")
+    _spark_dep_help("EnTT"
+        "What:    Header-only ECS framework — manages all game entities and components"
+        "Impact:  Using minimal stub — no archetype storage, no groups, no signals, limited ECS features"
+        "Install: git submodule update --init ThirdParty/ECS/entt"
+        "Docs:    https://github.com/skypjack/entt"
+    )
 endif()
 
 # Dear ImGui
@@ -1152,7 +1223,13 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.cpp")
 else()
     list(APPEND _SPARK_MISSING_DEPS "imgui")
     math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
-    message(STATUS "  [MISSING] Dear ImGui      — editor and debug UI unavailable")
+    message(STATUS "  [MISSING] Dear ImGui      — editor UI, debug overlays")
+    _spark_dep_help("Dear ImGui"
+        "What:    Immediate-mode GUI library for the editor and in-game debug overlays"
+        "Impact:  SparkEditor cannot build — no debug panels, no property inspector, no console overlay"
+        "Install: git submodule update --init ThirdParty/UI/imgui"
+        "Docs:    https://github.com/ocornut/imgui"
+    )
 endif()
 
 # AngelScript
@@ -1161,37 +1238,185 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscri
 else()
     list(APPEND _SPARK_MISSING_DEPS "angelscript")
     math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
-    message(STATUS "  [MISSING] AngelScript     — scripting system unavailable")
+    message(STATUS "  [MISSING] AngelScript     — hot-reload scripting")
+    _spark_dep_help("AngelScript"
+        "What:    Statically-typed scripting language with C++-like syntax and hot-reload"
+        "Impact:  Scripting system unavailable — no gameplay scripts, no hot-reload, no script console"
+        "Install: git submodule update --init ThirdParty/Scripting/angelscript-mirror"
+        "Docs:    https://www.angelcode.com/angelscript/"
+    )
 endif()
 
 # TinyObjLoader
 if(TINYOBJ_FOUND)
     message(STATUS "  [OK]      TinyObjLoader   — OBJ model loading")
 else()
-    message(STATUS "  [MISSING] TinyObjLoader   — OBJ model loading unavailable")
+    list(APPEND _SPARK_MISSING_DEPS "tinyobjloader")
+    math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
+    message(STATUS "  [MISSING] TinyObjLoader   — OBJ model loading")
+    _spark_dep_help("TinyObjLoader"
+        "What:    Lightweight Wavefront OBJ/MTL mesh loader"
+        "Impact:  Cannot load .obj model files — other formats (FBX, glTF) unaffected"
+        "Install: git submodule update --init ThirdParty/Utils/tinyobjloader"
+        "Docs:    https://github.com/tinyobjloader/tinyobjloader"
+    )
 endif()
 
-# SDL2 (Linux)
+# Recast / Detour
+if(RECAST_FOUND)
+    message(STATUS "  [OK]      Recast/Detour   — navmesh generation and pathfinding")
+else()
+    if(ENABLE_RECAST)
+        list(APPEND _SPARK_MISSING_DEPS "recast")
+        math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
+        message(STATUS "  [MISSING] Recast/Detour   — navmesh generation and pathfinding")
+        _spark_dep_help("Recast/Detour"
+            "What:    Navigation mesh generation (Recast) and pathfinding (Detour) for AI agents"
+            "Impact:  AI agents cannot navigate the world — NavMeshSystem disabled"
+            "Install: git submodule update --init ThirdParty/AI/recastnavigation"
+            "Docs:    https://github.com/recastnavigation/recastnavigation"
+        )
+    else()
+        message(STATUS "  [OFF]     Recast/Detour   — disabled by ENABLE_RECAST=OFF")
+    endif()
+endif()
+
+# ---- Platform / system libraries ----
+
+message(STATUS "")
+message(STATUS "  --- Platform Libraries ---")
+
+# SDL2
 if(ENABLE_SDL2)
     if(SDL2_FOUND OR SDL2_PKG_FOUND)
         message(STATUS "  [OK]      SDL2            — cross-platform windowing and input")
     else()
         list(APPEND _SPARK_MISSING_DEPS "SDL2")
         math(EXPR _SPARK_MISSING_COUNT "${_SPARK_MISSING_COUNT} + 1")
-        message(STATUS "  [MISSING] SDL2            — no windowed mode on Linux (install libsdl2-dev)")
+        message(STATUS "  [MISSING] SDL2            — cross-platform windowing and input")
+        _spark_dep_help("SDL2"
+            "What:    Windowing, input, and audio abstraction layer (required for Linux desktop mode)"
+            "Impact:  No windowed mode on Linux — engine runs headless only"
+            "Install:"
+            "  Ubuntu/Debian : sudo apt install libsdl2-dev"
+            "  Fedora        : sudo dnf install SDL2-devel"
+            "  Arch          : sudo pacman -S sdl2"
+            "  macOS         : brew install sdl2"
+            "  Windows       : vcpkg install sdl2 (or download from https://libsdl.org)"
+            "Docs:    https://wiki.libsdl.org/SDL2"
+        )
+    endif()
+else()
+    message(STATUS "  [OFF]     SDL2            — disabled (ENABLE_SDL2=OFF)")
+endif()
+
+# Vulkan
+if(ENABLE_VULKAN)
+    if(SPARK_VULKAN_AVAILABLE)
+        message(STATUS "  [OK]      Vulkan SDK      — Vulkan graphics backend")
+    else()
+        message(STATUS "  [MISSING] Vulkan SDK      — Vulkan graphics backend")
+        _spark_dep_help("Vulkan SDK"
+            "What:    Low-level cross-platform graphics API (experimental backend)"
+            "Impact:  Vulkan renderer unavailable — D3D11 (Windows) or OpenGL (Linux) still work"
+            "Install:"
+            "  All platforms : https://vulkan.lunarg.com/sdk/home"
+            "  Ubuntu/Debian : sudo apt install libvulkan-dev vulkan-tools"
+            "  Fedora        : sudo dnf install vulkan-devel vulkan-tools"
+            "  macOS         : brew install vulkan-sdk (MoltenVK)"
+            "  Tip: Set VULKAN_SDK env var if installed to a non-standard path"
+        )
+    endif()
+else()
+    message(STATUS "  [OFF]     Vulkan SDK      — disabled (ENABLE_VULKAN=OFF)")
+endif()
+
+# OpenGL + GLAD
+if(ENABLE_OPENGL)
+    if(SPARK_OPENGL_AVAILABLE)
+        message(STATUS "  [OK]      OpenGL + GLAD   — OpenGL graphics backend")
+    else()
+        if(NOT OpenGL_FOUND)
+            message(STATUS "  [MISSING] OpenGL          — OpenGL graphics backend")
+            _spark_dep_help("OpenGL"
+                "What:    Cross-platform graphics API (experimental backend)"
+                "Impact:  OpenGL renderer unavailable"
+                "Install:"
+                "  Ubuntu/Debian : sudo apt install libgl-dev mesa-common-dev"
+                "  Fedora        : sudo dnf install mesa-libGL-devel"
+                "  Arch          : sudo pacman -S mesa"
+                "  macOS         : Ships with Xcode (OpenGL is deprecated on macOS)"
+                "  Windows       : Ships with GPU drivers — ensure drivers are up to date"
+            )
+        endif()
+        if(NOT GLAD_FOUND)
+            message(STATUS "  [MISSING] GLAD            — OpenGL function loader")
+            _spark_dep_help("GLAD"
+                "What:    OpenGL extension loader — loads GL function pointers at runtime"
+                "Impact:  OpenGL backend cannot initialize without a loader"
+                "Install: git submodule update --init ThirdParty/Graphics/glad"
+                "  Or generate from: https://glad.dav1d.de/ (select GL 4.6 Core, C/C++)"
+            )
+        endif()
+    endif()
+else()
+    message(STATUS "  [OFF]     OpenGL          — disabled (ENABLE_OPENGL=OFF)")
+endif()
+
+# X11 (Linux windowing)
+if(NOT WIN32 AND NOT APPLE)
+    if(X11_FOUND)
+        message(STATUS "  [OK]      X11             — Linux windowing and display")
+    else()
+        message(STATUS "  [MISSING] X11             — Linux windowing and display")
+        _spark_dep_help("X11"
+            "What:    X Window System client libraries for window creation and input"
+            "Impact:  No native window creation on Linux (headless mode only unless SDL2 is used)"
+            "Install:"
+            "  Ubuntu/Debian : sudo apt install libx11-dev"
+            "  Fedora        : sudo dnf install libX11-devel"
+            "  Arch          : sudo pacman -S libx11"
+        )
     endif()
 endif()
 
-# Print warnings if dependencies are missing
+# libcurl (optional, for crash report uploading)
+if(ENABLE_NETWORKING)
+    if(CURL_FOUND)
+        message(STATUS "  [OK]      libcurl         — HTTP client (crash report uploads)")
+    else()
+        message(STATUS "  [SKIP]    libcurl         — HTTP client (optional)")
+        _spark_dep_help("libcurl"
+            "What:    HTTP/HTTPS client library for uploading crash reports"
+            "Impact:  Crash reports are saved locally but not uploaded to a server"
+            "Install:"
+            "  Ubuntu/Debian : sudo apt install libcurl4-openssl-dev"
+            "  Fedora        : sudo dnf install libcurl-devel"
+            "  Arch          : sudo pacman -S curl"
+            "  macOS         : brew install curl"
+            "  Windows       : vcpkg install curl"
+        )
+    endif()
+endif()
+
+# ---- Summary ----
+
+message(STATUS "")
 if(_SPARK_MISSING_COUNT GREATER 0)
-    message(STATUS "")
+    string(REPLACE ";" ", " _SPARK_MISSING_LIST "${_SPARK_MISSING_DEPS}")
     message(WARNING
-        "${_SPARK_MISSING_COUNT} third-party dependency(ies) not found: ${_SPARK_MISSING_DEPS}\n"
+        "${_SPARK_MISSING_COUNT} dependency(ies) not found: ${_SPARK_MISSING_LIST}\n"
+        "\n"
         "  The engine will build but with DEGRADED functionality.\n"
-        "  To fix: initialize git submodules and install system packages:\n"
+        "  Most submodule dependencies can be fixed with:\n"
+        "\n"
         "    git submodule update --init --recursive\n"
-        "    # Linux: sudo apt install libsdl2-dev    (for SDL2)\n"
-        "  See README.md 'Dependencies' section for details."
+        "\n"
+        "  System libraries (SDL2, Vulkan, X11, etc.) must be installed via your\n"
+        "  system package manager — see the per-dependency messages above.\n"
+        "\n"
+        "  For full details, see README.md 'Dependencies' section.\n"
+        "  To make missing deps a hard error: cmake -DSPARK_STRICT_DEPS=ON ..."
     )
 
     # Strict mode: fail the build if critical deps are missing
@@ -1210,7 +1435,6 @@ if(_SPARK_MISSING_COUNT GREATER 0)
         endif()
     endif()
 else()
-    message(STATUS "")
-    message(STATUS "All third-party dependencies found. Full engine functionality available.")
+    message(STATUS "All dependencies found. Full engine functionality available.")
 endif()
 message(STATUS "")
