@@ -53,6 +53,7 @@
 #include "Utils/DebugDraw.h"
 #include "Utils/DebugOverlay.h"
 #include "Utils/FileLogger.h"
+#include "Utils/Logger.h"
 #include "Utils/JobSystem.h"
 #include "Graphics/DecalSystem.h"
 #include "Graphics/MeshLOD.h"
@@ -221,6 +222,11 @@ static void LogMissingModuleWarnings()
 
 static void InitDebugSystems()
 {
+    // Initialize the unified Logger with a stderr sink so SPARK_LOG_* output is visible
+    auto& logger = Spark::Logger::Get();
+    logger.Initialize(/*enableAsync=*/false);
+    logger.AddSink(std::make_unique<Spark::StderrSink>());
+
     Spark::FileLogger::GetInstance().Initialize("Logs");
     Spark::ChromeTracing::GetInstance().Start();
 #ifndef NDEBUG
