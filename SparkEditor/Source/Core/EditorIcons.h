@@ -64,6 +64,7 @@
 #define ICON_FA_COGS "\xef\x82\x85"     // U+F085
 #define ICON_FA_DOWNLOAD "\xef\x80\x99" // U+F019
 #define ICON_FA_UPLOAD "\xef\x82\x93"   // U+F093
+#define ICON_FA_EXCHANGE "\xef\x8c\x82" // U+F0EC
 
 // === View / Visibility ===
 #define ICON_FA_EYE "\xef\x81\xae"        // U+F06E

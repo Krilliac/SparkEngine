@@ -537,6 +537,11 @@ if(JOLT_FOUND)
     # Use dynamic CRT to match the rest of the engine (/MD instead of /MT)
     set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
 
+    # Disable Jolt GPU compute — CI runners lack Vulkan SDK / glslc
+    set(JPH_USE_VK OFF CACHE BOOL "" FORCE)
+    set(JPH_USE_DX12 OFF CACHE BOOL "" FORCE)
+    set(JPH_USE_MTL OFF CACHE BOOL "" FORCE)
+
     add_subdirectory("${JOLT_PHYSICS_SOURCE_DIR}/Build" "${CMAKE_BINARY_DIR}/JoltPhysics")
 
     # Suppress warnings in third-party Jolt code
