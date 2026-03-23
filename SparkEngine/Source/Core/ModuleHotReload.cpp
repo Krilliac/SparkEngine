@@ -8,6 +8,7 @@
 #include "Utils/SparkConsole.h"
 
 #include <sstream>
+#include <thread>
 
 namespace Spark
 {
@@ -118,11 +119,19 @@ namespace Spark
                 continue;
             }
 
-            // Debounce window passed — perform reload
+            // Debounce window passed — perform reload (with one retry if DLL is locked)
             auto& console = SimpleConsole::GetInstance();
             console.LogInfo("Reloading module: " + pending.moduleName);
 
             bool success = m_moduleManager->ReloadModule(pending.moduleName, m_context);
+
+            if (!success)
+            {
+                // Retry once after a short delay — the file may still be locked by the compiler
+                console.LogWarning("Module reload failed, retrying in 200ms: " + pending.moduleName);
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                success = m_moduleManager->ReloadModule(pending.moduleName, m_context);
+            }
 
             if (success)
             {
@@ -132,7 +141,7 @@ namespace Spark
             }
             else
             {
-                console.LogError("Module hot-reload failed: " + pending.moduleName);
+                console.LogError("Module hot-reload failed after retry: " + pending.moduleName);
             }
 
             // Re-snapshot after reload attempt

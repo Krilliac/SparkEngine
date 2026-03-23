@@ -106,6 +106,14 @@ namespace Spark::Dialogue
 
         if (bestRule == nullptr)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "DynamicResponseSystem: no matching rule for signal '%s' — executing default response",
+                           signalName.c_str());
+            // Execute a default fallback action so the caller gets a response
+            ResponseAction fallback;
+            fallback.type = ResponseAction::Type::Speak;
+            fallback.stringParam = "[No response available]";
+            ExecuteAction(fallback, senderEntity);
             return;
         }
 

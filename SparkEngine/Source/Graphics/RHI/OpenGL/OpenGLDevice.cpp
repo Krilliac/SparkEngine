@@ -489,7 +489,9 @@ namespace Spark
             {
                 if (!buffer)
                 {
-                    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GL: SetVertexBuffer called with null buffer");
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "GL: SetVertexBuffer called with null buffer — binding zero buffer as fallback");
+                    glBindBuffer(GL_ARRAY_BUFFER, 0);
                     return;
                 }
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
@@ -500,7 +502,11 @@ namespace Spark
             {
                 if (!buffer)
                 {
-                    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GL: SetIndexBuffer called with null buffer");
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "GL: SetIndexBuffer called with null buffer — binding zero buffer as fallback");
+                    m_boundIndexBuffer = 0;
+                    m_indexStride = 0;
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
                     return;
                 }
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
@@ -514,7 +520,8 @@ namespace Spark
                 if (!buffer)
                 {
                     SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                                   "GL: SetConstantBuffer called with null buffer (slot %u)", slot);
+                                   "GL: SetConstantBuffer called with null buffer (slot %u) — unbinding slot", slot);
+                    glBindBufferBase(GL_UNIFORM_BUFFER, slot, 0);
                     return;
                 }
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
@@ -760,11 +767,24 @@ namespace Spark
                 int pixelFormat = ChoosePixelFormat(bootstrapDC, &pfd);
                 if (!pixelFormat || !SetPixelFormat(bootstrapDC, pixelFormat, &pfd))
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to set pixel format on bootstrap context");
-                    ReleaseDC(bootstrapWindow, bootstrapDC);
-                    DestroyWindow(bootstrapWindow);
-                    UnregisterClassA(wc.lpszClassName, wc.hInstance);
-                    return false;
+                    // Fallback: try simpler pixel format (16-bit color, no stencil)
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "Preferred pixel format failed — trying 16-bit fallback");
+                    pfd.cColorBits = 16;
+                    pfd.cDepthBits = 16;
+                    pfd.cStencilBits = 0;
+                    pixelFormat = ChoosePixelFormat(bootstrapDC, &pfd);
+                    if (!pixelFormat || !SetPixelFormat(bootstrapDC, pixelFormat, &pfd))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "Failed to set pixel format on bootstrap context (both 32-bit and 16-bit)");
+                        ReleaseDC(bootstrapWindow, bootstrapDC);
+                        DestroyWindow(bootstrapWindow);
+                        UnregisterClassA(wc.lpszClassName, wc.hInstance);
+                        return false;
+                    }
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "OpenGL running in degraded mode (16-bit color, no stencil)");
                 }
 
                 HGLRC bootstrapContext = wglCreateContext(bootstrapDC);

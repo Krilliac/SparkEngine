@@ -46,6 +46,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 using namespace DirectX;
@@ -240,6 +241,9 @@ namespace Spark::Streaming
         // Load queue (areas sorted by priority/distance)
         std::vector<AreaID> m_loadQueue;
         uint32_t m_activeLoadCount = 0;
+
+        /// @brief History of all area IDs that have ever been registered (for diagnostics).
+        std::unordered_set<AreaID> m_registeredHistory;
     };
 
 } // namespace Spark::Streaming

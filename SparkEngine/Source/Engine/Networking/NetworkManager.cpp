@@ -14,6 +14,7 @@
 #include <sstream>
 #include <cstring>
 #include <algorithm>
+#include <thread>
 
 // Windows headers may redefine SendMessage after our includes.
 // Undefine it so NetworkManager::SendMessage compiles correctly.
@@ -143,10 +144,22 @@ namespace Spark::Net
 
     bool NetworkManager::CreateSocket(uint16_t port)
     {
-        m_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        // Retry socket creation up to 3 times for transient OS-level failures
+        constexpr int kMaxSocketRetries = 3;
+        for (int attempt = 0; attempt < kMaxSocketRetries; ++attempt)
+        {
+            m_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            if (m_socket != INVALID_SOCKET)
+                break;
+
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Socket creation attempt %d/%d failed — retrying", attempt + 1,
+                           kMaxSocketRetries);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100 * (1 << attempt)));
+        }
         if (m_socket == INVALID_SOCKET)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to create UDP socket");
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to create UDP socket after %d attempts",
+                            kMaxSocketRetries);
             return false;
         }
 
@@ -176,14 +189,40 @@ namespace Spark::Net
         setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&recvBufSize), sizeof(recvBufSize));
 
         // Bind to the specified port (0 = OS-assigned ephemeral port for clients)
-        sockaddr_in localAddr{};
-        localAddr.sin_family = AF_INET;
-        localAddr.sin_addr.s_addr = INADDR_ANY;
-        localAddr.sin_port = htons(port);
+        // If the requested port is in use, try up to 5 consecutive ports
+        constexpr int kMaxPortRetries = 5;
+        uint16_t bindPort = port;
+        bool bound = false;
 
-        if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == SOCKET_ERROR)
+        for (int attempt = 0; attempt <= kMaxPortRetries; ++attempt)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to bind socket to port %u", port);
+            sockaddr_in localAddr{};
+            localAddr.sin_family = AF_INET;
+            localAddr.sin_addr.s_addr = INADDR_ANY;
+            localAddr.sin_port = htons(bindPort);
+
+            if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) != SOCKET_ERROR)
+            {
+                bound = true;
+                if (attempt > 0)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Network,
+                                   "Port %u was unavailable — bound to fallback port %u instead", port, bindPort);
+                }
+                break;
+            }
+
+            // Port 0 means OS-assigned — no point retrying with port 1
+            if (port == 0)
+                break;
+
+            ++bindPort;
+        }
+
+        if (!bound)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to bind socket to port %u (tried %d ports)", port,
+                            kMaxPortRetries + 1);
             CloseSocket();
             return false;
         }

@@ -38,8 +38,12 @@ namespace Spark
         auto it = m_versions.find(path);
         if (it == m_versions.end())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "IncrementVersion: resource '%s' not registered", path.c_str());
-            return 0;
+            // Lazy registration: auto-register with version 1, then increment to 2
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "IncrementVersion: resource '%s' not registered — lazy-registering (version now 2)",
+                           path.c_str());
+            m_versions[path] = 2;
+            return 2;
         }
         return ++(it->second);
     }

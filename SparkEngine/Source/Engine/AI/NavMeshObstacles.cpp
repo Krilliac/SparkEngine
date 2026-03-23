@@ -39,6 +39,21 @@ namespace Spark::AI
             Clear();
         }
         m_navMesh = navMesh;
+
+        // Carve any obstacles that were queued while no NavMesh was attached
+        if (m_navMesh != nullptr && !m_pendingObstacles.empty())
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::AI, "NavMeshObstacleManager: carving %zu deferred obstacles",
+                           m_pendingObstacles.size());
+            for (const auto& [handle, desc] : m_pendingObstacles)
+            {
+                ObstacleRecord& record = m_obstacles[handle];
+                record.desc = desc;
+                record.dirty = false;
+                CarveObstacle(record);
+            }
+            m_pendingObstacles.clear();
+        }
     }
 
     NavMeshData* NavMeshObstacleManager::GetNavMesh() const
@@ -53,13 +68,17 @@ namespace Spark::AI
     ObstacleHandle NavMeshObstacleManager::AddObstacle(const ObstacleDesc& desc)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::AI);
+        const ObstacleHandle handle = m_nextHandle++;
+
         if (m_navMesh == nullptr)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::AI, "AddObstacle called with no NavMesh set — obstacle not created");
-            return InvalidObstacleHandle;
+            // Queue obstacle for deferred carving when NavMesh becomes available
+            SPARK_LOG_WARN(Spark::LogCategory::AI,
+                           "AddObstacle: no NavMesh set — queuing obstacle %u for deferred carving", handle);
+            m_pendingObstacles.emplace_back(handle, desc);
+            return handle;
         }
 
-        const ObstacleHandle handle = m_nextHandle++;
         ObstacleRecord& record = m_obstacles[handle];
         record.desc = desc;
         record.dirty = false;

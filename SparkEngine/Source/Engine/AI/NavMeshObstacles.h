@@ -373,6 +373,9 @@ namespace Spark::AI
         /** @brief Map from obstacle handle to internal record. */
         std::unordered_map<ObstacleHandle, ObstacleRecord> m_obstacles;
 
+        /** @brief Obstacles added before a NavMesh was attached. Carve when SetNavMesh() is called. */
+        std::vector<std::pair<ObstacleHandle, ObstacleDesc>> m_pendingObstacles;
+
         /** @brief Next handle to assign. Monotonically increasing starting at 1. */
         ObstacleHandle m_nextHandle = 1;
 

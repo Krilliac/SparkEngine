@@ -207,11 +207,22 @@ namespace Spark
     std::vector<uint8_t> VirtualFileSystem::ReadFile(const std::string& virtualPath) const
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        for (const auto* mp : GetSortedMounts())
+        auto sorted = GetSortedMounts();
+        for (size_t i = 0; i < sorted.size(); ++i)
         {
-            if (mp->provider->Exists(virtualPath))
+            if (sorted[i]->provider->Exists(virtualPath))
             {
-                return mp->provider->ReadFile(virtualPath);
+                auto data = sorted[i]->provider->ReadFile(virtualPath);
+                if (!data.empty())
+                    return data;
+
+                // File exists but read failed — try next mount
+                if (i + 1 < sorted.size())
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                                   "VFS: '%s' read failed in [%s], falling back to next mount", virtualPath.c_str(),
+                                   sorted[i]->name.c_str());
+                }
             }
         }
         return {};
@@ -220,11 +231,22 @@ namespace Spark
     std::string VirtualFileSystem::ReadTextFile(const std::string& virtualPath) const
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        for (const auto* mp : GetSortedMounts())
+        auto sorted = GetSortedMounts();
+        for (size_t i = 0; i < sorted.size(); ++i)
         {
-            if (mp->provider->Exists(virtualPath))
+            if (sorted[i]->provider->Exists(virtualPath))
             {
-                return mp->provider->ReadTextFile(virtualPath);
+                auto text = sorted[i]->provider->ReadTextFile(virtualPath);
+                if (!text.empty())
+                    return text;
+
+                // File exists but read failed — try next mount
+                if (i + 1 < sorted.size())
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                                   "VFS: '%s' text read failed in [%s], falling back to next mount",
+                                   virtualPath.c_str(), sorted[i]->name.c_str());
+                }
             }
         }
         return {};

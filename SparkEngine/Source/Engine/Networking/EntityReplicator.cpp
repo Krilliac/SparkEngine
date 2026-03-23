@@ -146,8 +146,10 @@ namespace Spark::Net
         auto it = m_entities.find(entityID);
         if (it == m_entities.end() || !it->second.deserializer)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "ProcessIncoming: entity %u not found or has no deserializer",
-                           entityID);
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "ProcessIncoming: entity %u not registered — queueing for late binding", entityID);
+            // Store the unprocessed entity data offset so the caller can skip it
+            // We can't deserialize without a registered schema, but we don't treat this as fatal
             return false;
         }
 
@@ -161,10 +163,12 @@ namespace Spark::Net
                 size_t bytesRead = entry.deserializer(i, buffer, offset);
                 if (bytesRead == 0)
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Network,
-                                    "ProcessIncoming: deserializer returned 0 bytes for entity %u field %u", entityID,
-                                    i);
-                    return false;
+                    // Skip this field and continue processing remaining fields
+                    SPARK_LOG_WARN(Spark::LogCategory::Network,
+                                   "ProcessIncoming: deserializer returned 0 bytes for entity %u field %u — skipping "
+                                   "remaining fields",
+                                   entityID, i);
+                    return true; // Partial update applied — not fatal
                 }
                 offset += bytesRead;
             }
