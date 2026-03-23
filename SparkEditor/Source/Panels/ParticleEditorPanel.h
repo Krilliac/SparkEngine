@@ -20,7 +20,8 @@ namespace SparkEditor
      * @brief Panel for visually authoring particle emitter configurations
      *
      * Exposes emission rate, lifetime, shape, color gradient, size curves,
-     * physics, and rendering settings for ParticleEmitterDesc.
+     * physics, rendering, sub-emitters, texture animation, noise, and trails
+     * for ParticleEmitterDesc.
      */
     class ParticleEditorPanel : public EditorPanel
     {
@@ -39,6 +40,11 @@ namespace SparkEditor
         void RenderAppearanceSettings();
         void RenderPhysicsSettings();
         void RenderRenderingSettings();
+        void RenderSubEmitterSettings();
+        void RenderTextureAnimSettings();
+        void RenderNoiseSettings();
+        void RenderTrailSettings();
+        void RenderPresetSelector();
 
         // Emitter configuration (mirrors ParticleEmitterDesc)
         char m_effectName[128] = "NewEffect";
@@ -66,6 +72,30 @@ namespace SparkEditor
         bool m_loop = true;
         bool m_playOnAwake = true;
         bool m_prewarm = false;
+
+        // Sub-emitter settings
+        bool m_subEmitOnBirth = false;
+        bool m_subEmitOnDeath = false;
+        bool m_subEmitOnCollision = false;
+        int m_subEmitCount = 1;
+
+        // Texture animation
+        bool m_useTextureAnim = false;
+        int m_texAnimRows = 1;
+        int m_texAnimCols = 1;
+        float m_texAnimFrameRate = 10.0f;
+
+        // Noise
+        bool m_useNoise = false;
+        float m_noiseStrength = 1.0f;
+        float m_noiseFrequency = 1.0f;
+        float m_noiseScrollSpeed = 0.5f;
+
+        // Trails
+        bool m_useTrails = false;
+        float m_trailWidth = 0.1f;
+        float m_trailLifetime = 0.5f;
+        int m_trailMinVertexDistance = 1;
     };
 
 } // namespace SparkEditor

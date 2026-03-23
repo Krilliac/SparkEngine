@@ -7,6 +7,7 @@
 #include "../Core/EditorIcons.h"
 #include <imgui.h>
 #include <iostream>
+#include <cstring>
 
 namespace SparkEditor
 {
@@ -29,12 +30,37 @@ namespace SparkEditor
         if (BeginPanel())
         {
             ImGui::InputText("Effect Name", m_effectName, sizeof(m_effectName));
+
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_UNDO " Reset"))
+            {
+                // Reset all values to defaults
+                m_emissionRate = 10.0f;
+                m_maxParticles = 1000;
+                m_burstCount = 0;
+                m_shape = 0;
+                m_shapeRadius = 1.0f;
+                m_lifetimeMin = 1.0f;
+                m_lifetimeMax = 2.0f;
+                m_speedMin = 1.0f;
+                m_speedMax = 5.0f;
+                m_sizeMin = 0.1f;
+                m_sizeMax = 0.5f;
+                m_gravityMultiplier = 0.0f;
+                m_drag = 0.0f;
+            }
+
+            RenderPresetSelector();
             ImGui::Separator();
 
             RenderEmissionSettings();
             RenderShapeSettings();
             RenderAppearanceSettings();
             RenderPhysicsSettings();
+            RenderSubEmitterSettings();
+            RenderTextureAnimSettings();
+            RenderNoiseSettings();
+            RenderTrailSettings();
             RenderRenderingSettings();
         }
         EndPanel();
@@ -43,6 +69,99 @@ namespace SparkEditor
     void ParticleEditorPanel::Shutdown()
     {
         std::cout << "Shutting down Particle Editor panel\n";
+    }
+
+    void ParticleEditorPanel::RenderPresetSelector()
+    {
+        ImGui::Text(ICON_FA_BOOKMARK " Presets:");
+        ImGui::SameLine();
+
+        if (ImGui::SmallButton("Fire"))
+        {
+            m_emissionRate = 50.0f;
+            m_lifetimeMin = 0.3f;
+            m_lifetimeMax = 1.0f;
+            m_speedMin = 2.0f;
+            m_speedMax = 5.0f;
+            m_sizeMin = 0.2f;
+            m_sizeMax = 0.8f;
+            m_startColor = {1.0f, 0.5f, 0.0f, 1.0f};
+            m_endColor = {1.0f, 0.0f, 0.0f, 0.0f};
+            m_gravityMultiplier = -0.5f;
+            m_blendMode = 0;
+            m_shape = 1;
+            m_shapeRadius = 0.3f;
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Smoke"))
+        {
+            m_emissionRate = 20.0f;
+            m_lifetimeMin = 2.0f;
+            m_lifetimeMax = 4.0f;
+            m_speedMin = 0.5f;
+            m_speedMax = 2.0f;
+            m_sizeMin = 0.5f;
+            m_sizeMax = 2.0f;
+            m_startColor = {0.5f, 0.5f, 0.5f, 0.5f};
+            m_endColor = {0.3f, 0.3f, 0.3f, 0.0f};
+            m_gravityMultiplier = -0.2f;
+            m_blendMode = 1;
+            m_shape = 1;
+            m_shapeRadius = 0.5f;
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Sparks"))
+        {
+            m_emissionRate = 100.0f;
+            m_lifetimeMin = 0.5f;
+            m_lifetimeMax = 1.5f;
+            m_speedMin = 5.0f;
+            m_speedMax = 15.0f;
+            m_sizeMin = 0.02f;
+            m_sizeMax = 0.05f;
+            m_startColor = {1.0f, 0.9f, 0.3f, 1.0f};
+            m_endColor = {1.0f, 0.3f, 0.0f, 0.0f};
+            m_gravityMultiplier = 1.0f;
+            m_blendMode = 0;
+            m_shape = 2;
+            m_shapeRadius = 0.1f;
+            m_coneAngle = 30.0f;
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Rain"))
+        {
+            m_emissionRate = 500.0f;
+            m_lifetimeMin = 1.0f;
+            m_lifetimeMax = 2.0f;
+            m_speedMin = 10.0f;
+            m_speedMax = 15.0f;
+            m_sizeMin = 0.01f;
+            m_sizeMax = 0.02f;
+            m_startColor = {0.7f, 0.8f, 1.0f, 0.6f};
+            m_endColor = {0.7f, 0.8f, 1.0f, 0.0f};
+            m_gravityMultiplier = 2.0f;
+            m_blendMode = 1;
+            m_shape = 3;
+            m_shapeExtents = {20.0f, 0.1f, 20.0f};
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Snow"))
+        {
+            m_emissionRate = 200.0f;
+            m_lifetimeMin = 3.0f;
+            m_lifetimeMax = 6.0f;
+            m_speedMin = 0.5f;
+            m_speedMax = 1.5f;
+            m_sizeMin = 0.03f;
+            m_sizeMax = 0.08f;
+            m_startColor = {1.0f, 1.0f, 1.0f, 0.8f};
+            m_endColor = {1.0f, 1.0f, 1.0f, 0.0f};
+            m_gravityMultiplier = 0.3f;
+            m_drag = 2.0f;
+            m_blendMode = 1;
+            m_shape = 3;
+            m_shapeExtents = {20.0f, 0.1f, 20.0f};
+        }
     }
 
     void ParticleEditorPanel::RenderEmissionSettings()
@@ -124,6 +243,83 @@ namespace SparkEditor
             ImGui::Indent(4);
             ImGui::DragFloat("Gravity", &m_gravityMultiplier, 0.01f, -5.0f, 5.0f);
             ImGui::DragFloat("Drag", &m_drag, 0.01f, 0.0f, 10.0f);
+            ImGui::Unindent(4);
+        }
+    }
+
+    void ParticleEditorPanel::RenderSubEmitterSettings()
+    {
+        if (ImGui::CollapsingHeader(ICON_FA_LAYER_GROUP " Sub-Emitters"))
+        {
+            ImGui::Indent(4);
+
+            ImGui::Checkbox("Emit on Birth", &m_subEmitOnBirth);
+            ImGui::SameLine();
+            ImGui::Checkbox("Emit on Death", &m_subEmitOnDeath);
+            ImGui::SameLine();
+            ImGui::Checkbox("Emit on Collision", &m_subEmitOnCollision);
+
+            if (m_subEmitOnBirth || m_subEmitOnDeath || m_subEmitOnCollision)
+            {
+                ImGui::DragInt("Sub-emit Count", &m_subEmitCount, 1.0f, 1, 100);
+                ImGui::TextDisabled("Sub-emitters inherit parent effect settings by default.");
+            }
+
+            ImGui::Unindent(4);
+        }
+    }
+
+    void ParticleEditorPanel::RenderTextureAnimSettings()
+    {
+        if (ImGui::CollapsingHeader(ICON_FA_TH " Texture Sheet Animation"))
+        {
+            ImGui::Indent(4);
+
+            ImGui::Checkbox("Enable Texture Animation", &m_useTextureAnim);
+            if (m_useTextureAnim)
+            {
+                ImGui::DragInt("Rows", &m_texAnimRows, 1.0f, 1, 16);
+                ImGui::DragInt("Columns", &m_texAnimCols, 1.0f, 1, 16);
+                ImGui::DragFloat("Frame Rate", &m_texAnimFrameRate, 0.5f, 0.1f, 120.0f, "%.1f fps");
+                ImGui::Text("Total Frames: %d", m_texAnimRows * m_texAnimCols);
+            }
+
+            ImGui::Unindent(4);
+        }
+    }
+
+    void ParticleEditorPanel::RenderNoiseSettings()
+    {
+        if (ImGui::CollapsingHeader(ICON_FA_WAVE_SQUARE " Noise"))
+        {
+            ImGui::Indent(4);
+
+            ImGui::Checkbox("Enable Noise", &m_useNoise);
+            if (m_useNoise)
+            {
+                ImGui::DragFloat("Strength", &m_noiseStrength, 0.1f, 0.0f, 50.0f);
+                ImGui::DragFloat("Frequency", &m_noiseFrequency, 0.1f, 0.01f, 10.0f);
+                ImGui::DragFloat("Scroll Speed", &m_noiseScrollSpeed, 0.1f, 0.0f, 10.0f);
+            }
+
+            ImGui::Unindent(4);
+        }
+    }
+
+    void ParticleEditorPanel::RenderTrailSettings()
+    {
+        if (ImGui::CollapsingHeader(ICON_FA_ROUTE " Trails"))
+        {
+            ImGui::Indent(4);
+
+            ImGui::Checkbox("Enable Trails", &m_useTrails);
+            if (m_useTrails)
+            {
+                ImGui::DragFloat("Width", &m_trailWidth, 0.01f, 0.001f, 5.0f, "%.3f");
+                ImGui::DragFloat("Lifetime", &m_trailLifetime, 0.1f, 0.01f, 10.0f, "%.2f s");
+                ImGui::DragInt("Min Vertex Distance", &m_trailMinVertexDistance, 1.0f, 1, 100);
+            }
+
             ImGui::Unindent(4);
         }
     }

@@ -114,7 +114,7 @@ protected:
 
 ## Editor Panels
 
-The editor includes 32+ subsystem panels:
+The editor includes 51 subsystem panels:
 
 ### Scene Hierarchy
 
@@ -751,6 +751,47 @@ cmake --build build --config Release
 1. Call `EditorTheme::ApplyProfessionalEnhancements()` after applying the theme.
 2. Verify custom fonts loaded successfully via `EditorTheme::ApplyCustomFonts()`.
 
+### Time of Day
+
+- Time slider (0-24h) with formatted HH:MM display
+- Time scale control (1x, 10x, 60x, 600x) with pause/resume
+- Preset buttons: Dawn, Morning, Noon, Dusk, Midnight
+- Sun direction, color, and intensity preview with color swatches
+- Ambient lighting state display
+- Day/night indicator and day period classification
+- Day cycle progress bar
+
+### Ability Editor
+
+- Tabbed view: Abilities, Auras, Procs
+- Ability authoring: targeting, range, cast time, cooldown, resource cost, channeling
+- Aura authoring: type, school, duration, tick interval, modifiers, stacking
+- Proc authoring: trigger mask checkboxes, chance, cooldown, charges
+- Filterable lists with create/delete operations
+
+### Trigger Editor
+
+- List of proximity trigger volumes with ID, shape, label, enabled state
+- Create dialog for sphere/AABB triggers with center and size parameters
+- Per-trigger detail editor (shape, center, radius/extents, enabled, occupant count)
+- Viewport visualization toggle
+
+### Condition Editor
+
+- Visual condition set builder with AND/OR group logic
+- 27 condition types matching ConditionSystem enum (IsAlive, HasItem, QuestComplete, etc.)
+- Negation toggle per condition
+- World variable editor (name/value pairs with add/edit/delete)
+- World flag editor (boolean toggle list)
+
+### Decal Editor
+
+- Decal material list with create/delete
+- Per-material texture paths (albedo, normal, roughness), opacity, fade time
+- Surface-to-decal mapping table (Concrete, Metal, Wood, etc.)
+- Active decal count display and "Clear All" button
+- Max decal pool size configuration
+
 ---
 
 ## See Also
@@ -774,14 +815,17 @@ cmake --build build --config Release
 |-------|--------|
 | `AIDebugPanel` | `SparkEditor/Source/Panels/AIDebugPanel.h` |
 | `AIEditorPanel` | `SparkEditor/Source/Panels/AIEditorPanel.h` |
+| `AbilityEditorPanel` | `SparkEditor/Source/Panels/AbilityEditorPanel.h` |
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
 | `AudioMixerPanel` | `SparkEditor/Source/Panels/AudioMixerPanel.h` |
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
 | `CinematicSequencerPanel` | `SparkEditor/Source/Panels/CinematicSequencerPanel.h` |
 | `CollaborationPanel` | `SparkEditor/Source/Panels/CollaborationPanel.h` |
+| `ConditionEditorPanel` | `SparkEditor/Source/Panels/ConditionEditorPanel.h` |
 | `ConsolePanel` | `SparkEditor/Source/Panels/ConsolePanel.h` |
 | `CoroutineDebugPanel` | `SparkEditor/Source/Panels/CoroutineDebugPanel.h` |
 | `DebugVisualizerPanel` | `SparkEditor/Source/Panels/DebugVisualizerPanel.h` |
+| `DecalEditorPanel` | `SparkEditor/Source/Panels/DecalEditorPanel.h` |
 | `DedicatedServerPanel` | `SparkEditor/Source/Panels/DedicatedServerPanel.h` |
 | `DestructionEditorPanel` | `SparkEditor/Source/Panels/DestructionEditorPanel.h` |
 | `DialogueEditorPanel` | `SparkEditor/Source/Panels/DialogueEditorPanel.h` |
@@ -814,6 +858,8 @@ cmake --build build --config Release
 | `SpriteEditorPanel` | `SparkEditor/Source/Panels/SpriteEditorPanel.h` |
 | `StreamingPanel` | `SparkEditor/Source/Panels/StreamingPanel.h` |
 | `TilemapEditorPanel` | `SparkEditor/Source/Panels/TilemapEditorPanel.h` |
+| `TimeOfDayPanel` | `SparkEditor/Source/Panels/TimeOfDayPanel.h` |
+| `TriggerEditorPanel` | `SparkEditor/Source/Panels/TriggerEditorPanel.h` |
 | `UndoHistoryPanel` | `SparkEditor/Source/Panels/UndoHistoryPanel.h` |
 | `VRConfigPanel` | `SparkEditor/Source/Panels/VRConfigPanel.h` |
 | `WeaponEditorPanel` | `SparkEditor/Source/Panels/WeaponEditorPanel.h` |

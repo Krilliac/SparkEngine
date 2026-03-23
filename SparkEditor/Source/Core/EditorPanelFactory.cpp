@@ -52,6 +52,11 @@
 #include "../Panels/CoroutineDebugPanel.h"
 #include "../Panels/GameModuleSelectorPanel.h"
 #include "../Panels/CollaborationPanel.h"
+#include "../Panels/TimeOfDayPanel.h"
+#include "../Panels/AbilityEditorPanel.h"
+#include "../Panels/TriggerEditorPanel.h"
+#include "../Panels/ConditionEditorPanel.h"
+#include "../Panels/DecalEditorPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorIcons.h"
@@ -119,6 +124,12 @@ namespace SparkEditor
         registerPanel("CoroutineDebug", std::make_shared<CoroutineDebugPanel>());
         registerPanel("GameModuleSelector", std::make_shared<GameModuleSelectorPanel>());
         registerPanel("Collaboration", std::make_shared<CollaborationPanel>(m_collabSession.get()));
+
+        registerPanel("TimeOfDay", std::make_shared<TimeOfDayPanel>());
+        registerPanel("AbilityEditor", std::make_shared<AbilityEditorPanel>());
+        registerPanel("TriggerEditor", std::make_shared<TriggerEditorPanel>());
+        registerPanel("ConditionEditor", std::make_shared<ConditionEditorPanel>());
+        registerPanel("DecalEditor", std::make_shared<DecalEditorPanel>());
     }
 
     void EditorUI::InitializePanelIcons()
@@ -168,6 +179,11 @@ namespace SparkEditor
             {"CoroutineDebug", ICON_FA_CLOCK},
             {"GameModuleSelector", ICON_FA_PUZZLE_PIECE},
             {"Collaboration", ICON_FA_USERS},
+            {"TimeOfDay", ICON_FA_SUN},
+            {"AbilityEditor", ICON_FA_MAGIC},
+            {"TriggerEditor", ICON_FA_CROSSHAIRS},
+            {"ConditionEditor", ICON_FA_CHECK_CIRCLE},
+            {"DecalEditor", ICON_FA_STAMP},
         };
 
         for (const auto& [name, icon] : panelIcons)
@@ -190,7 +206,9 @@ namespace SparkEditor
             "ProjectSettings",    "AudioMixer",      "ScriptEditor",
             "DestructionEditor",  "Replay",          "VRConfig",
             "Streaming",          "Modding",         "CoroutineDebug",
-            "GameModuleSelector", "Collaboration",
+            "GameModuleSelector", "Collaboration",   "TimeOfDay",
+            "AbilityEditor",      "TriggerEditor",   "ConditionEditor",
+            "DecalEditor",
         };
 
         for (const char* name : hiddenPanels)
