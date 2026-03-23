@@ -129,6 +129,7 @@
 // === Metrics / Data ===
 #define ICON_FA_TACHOMETER_ALT "\xef\x8f\xbd" // U+F3FD
 #define ICON_FA_DATABASE "\xef\x87\x80"       // U+F1C0
+#define ICON_FA_MEMORY "\xef\x94\xb8"         // U+F538
 
 // === Additional Icons ===
 #define ICON_FA_RUNNING "\xef\x9c\x8c"       // U+F70C (person-running)
