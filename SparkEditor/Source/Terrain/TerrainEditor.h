@@ -6,6 +6,7 @@
 #pragma once
 
 #include "TerrainData.h"
+#include <cstdint>
 #include "../Core/EditorPanel.h"
 
 namespace SparkEditor

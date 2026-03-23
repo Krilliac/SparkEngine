@@ -11,6 +11,7 @@
 #pragma once
 
 #include "EditorPanel.h"
+#include <cstdint>
 #include "IEditorPlugin.h"
 
 #include <memory>

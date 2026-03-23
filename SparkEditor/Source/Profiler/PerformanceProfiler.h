@@ -12,6 +12,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include <cstdint>
 #include "ProfilerTypes.h"
 #ifdef _WIN32
 #include <d3d11.h>

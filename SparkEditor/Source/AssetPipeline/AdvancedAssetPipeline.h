@@ -12,6 +12,7 @@
 #pragma once
 
 #include "AssetPipelineTypes.h"
+#include <cstdint>
 #include "../Core/EditorPanel.h"
 #include <vector>
 #include <memory>

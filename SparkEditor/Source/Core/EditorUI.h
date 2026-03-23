@@ -12,6 +12,7 @@
 #pragma once
 
 #include <imgui.h>
+#include <cstdint>
 #include <vector>
 #include <string>
 #include <memory>

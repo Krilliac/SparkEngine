@@ -11,6 +11,7 @@
 #pragma once
 
 #include "PrefabAsset.h"
+#include <cstdint>
 #include <unordered_map>
 #include <string>
 #include <vector>

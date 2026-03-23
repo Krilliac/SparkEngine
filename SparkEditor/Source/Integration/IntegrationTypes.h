@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
 #include <vector>
 #include <functional>
 #ifdef _WIN32

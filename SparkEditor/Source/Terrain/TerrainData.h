@@ -6,6 +6,7 @@
 #pragma once
 
 #include "../SceneSystem/SceneFile.h"
+#include <cstdint>
 #ifdef _WIN32
 #include <DirectXMath.h>
 #else

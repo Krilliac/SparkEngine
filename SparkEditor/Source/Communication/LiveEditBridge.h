@@ -15,6 +15,7 @@
 #pragma once
 
 #include "CollaborativeEditSession.h"
+#include <cstdint>
 #include <atomic>
 #include <functional>
 #include <mutex>
