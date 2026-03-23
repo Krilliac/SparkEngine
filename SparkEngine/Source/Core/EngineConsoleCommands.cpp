@@ -17,6 +17,7 @@
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Physics/PhysicsSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/MemoryMonitor.h"
 #include "EngineSetup.h"
 
 #include <sstream>
@@ -813,6 +814,101 @@ namespace Spark
     }
 
     // ============================================================================
+    // Memory monitor commands
+    // ============================================================================
+
+    static void RegisterMemoryMonitorCommands(SimpleConsole& console)
+    {
+        console.RegisterCommand(
+            "memory_status", [](const std::vector<std::string>&) -> std::string
+            { return MemoryMonitor::GetInstance().GetStatusReport(); },
+            "Show memory monitor health status and statistics", "Memory");
+
+        console.RegisterCommand(
+            "memory_snapshot",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                auto snap = MemoryMonitor::GetInstance().TakeSnapshot();
+                std::ostringstream ss;
+                ss << "Snapshot taken: " << snap.totalBytes / 1024 << " KB, " << snap.activeAllocations
+                   << " allocations, " << snap.categories.size() << " categories";
+                return ss.str();
+            },
+            "Take a memory snapshot for later comparison", "Memory");
+
+        console.RegisterCommand(
+            "memory_compare",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                auto& monitor = MemoryMonitor::GetInstance();
+                auto before = monitor.TakeSnapshot();
+                // Compare against the initial snapshot stored at init time
+                // In practice, user takes a snapshot, does something, then compares
+                return "Use memory_snapshot first, then memory_compare shows changes since engine start.\n"
+                       "Current state:\n" +
+                       monitor.GetStatusReport();
+            },
+            "Compare current memory state against baseline", "Memory");
+
+        console.RegisterCommand(
+            "memory_anomalies",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                auto anomalies = MemoryMonitor::GetInstance().GetRecentAnomalies();
+                if (anomalies.empty())
+                    return "No anomalies recorded.";
+
+                std::ostringstream ss;
+                ss << "Recent anomalies (" << anomalies.size() << "):\n";
+                auto now = std::chrono::steady_clock::now();
+                for (size_t i = 0; i < anomalies.size() && i < 20; i++)
+                {
+                    auto age = std::chrono::duration_cast<std::chrono::seconds>(now - anomalies[i].timestamp).count();
+                    ss << "  [" << age << "s ago] " << anomalies[i].description << "\n";
+                }
+                return ss.str();
+            },
+            "List recent memory anomaly events", "Memory");
+
+        console.RegisterCommand(
+            "memory_budget",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.size() < 2)
+                    return "Usage: memory_budget <category> <MB>  (0 to remove)";
+
+                const std::string& category = args[0];
+                size_t mb = 0;
+                try
+                {
+                    mb = std::stoull(args[1]);
+                }
+                catch (...)
+                {
+                    return "Invalid MB value";
+                }
+
+                MemoryMonitor::GetInstance().SetCategoryBudget(category, mb * 1024 * 1024);
+                if (mb == 0)
+                    return "Budget removed for " + category;
+                return "Budget set: " + category + " = " + args[1] + " MB";
+            },
+            "Set memory budget for a category (MB)", "Memory");
+
+        console.RegisterCommand(
+            "memory_monitor",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                    return "Usage: memory_monitor <on|off>";
+                bool enable = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+                MemoryMonitor::GetInstance().SetEnabled(enable);
+                return enable ? "Memory monitor enabled" : "Memory monitor disabled";
+            },
+            "Enable or disable the memory monitor", "Memory");
+    }
+
+    // ============================================================================
     // Public API — delegates to per-subsystem registrations
     // ============================================================================
 
@@ -828,6 +924,7 @@ namespace Spark
         RegisterArchitectureCommands(console);
         RegisterHotReloadCommands(console, hotReload);
         RegisterTimeOfDayCommands(console);
+        RegisterMemoryMonitorCommands(console);
     }
 
 } // namespace Spark

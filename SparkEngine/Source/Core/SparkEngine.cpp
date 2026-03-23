@@ -47,6 +47,7 @@
 #include "ModuleHotReload.h"
 #include "Utils/ChromeTracing.h"
 #include "Utils/MemoryDebugger.h"
+#include "Utils/MemoryMonitor.h"
 #include "Utils/FrameInspector.h"
 #include "Utils/Tween.h"
 #include "Utils/DebugDraw.h"
@@ -226,6 +227,7 @@ static void InitDebugSystems()
     Spark::MemoryDebugger::GetInstance().SetEnabled(true);
 #endif
     Spark::DebugOverlay::GetInstance().SetEnabled(true);
+    Spark::MemoryMonitor::GetInstance().Initialize();
     Spark::DebugDrawManager::GetInstance().SetEnabled(true);
 
     // Graphics utility singletons
@@ -616,6 +618,7 @@ static void UpdateDebugSystems(float dt)
     Spark::TweenManager::GetInstance().Update(dt);
     Spark::DebugDrawManager::GetInstance().Flush(dt);
     Spark::DebugOverlay::GetInstance().Update(dt);
+    Spark::MemoryMonitor::GetInstance().Update(dt);
     Spark::FrameInspector::GetInstance().OnFrameEnd();
 
     // Update decal fading
@@ -628,6 +631,7 @@ static void ShutdownDebugSystems()
 
     Spark::TweenManager::GetInstance().KillAll();
     Spark::DebugDrawManager::GetInstance().Clear();
+    Spark::MemoryMonitor::GetInstance().Shutdown();
 #ifndef NDEBUG
     Spark::MemoryDebugger::GetInstance().PrintLeakReport();
 #endif
