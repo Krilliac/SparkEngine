@@ -7,6 +7,7 @@
 
 #ifdef ENABLE_NETWORKING
 
+#include "../../Utils/ContainerUtils.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/Validate.h"
 
@@ -116,7 +117,7 @@ namespace Spark::Net
         std::lock_guard<std::mutex> lock(m_migrationMutex);
 
         // Check for duplicate entity
-        if (m_trackedEntities.find(entity.networkID) != m_trackedEntities.end())
+        if (Spark::ContainerUtils::Contains(m_trackedEntities, entity.networkID))
         {
             SPARK_LOG_WARN("AreaServer", "Area '%s' already tracking entity %u, overwriting.",
                            m_config.areaName.c_str(), entity.networkID);

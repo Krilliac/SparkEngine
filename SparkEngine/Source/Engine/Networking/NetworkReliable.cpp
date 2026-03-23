@@ -7,6 +7,7 @@
  */
 
 #include "NetworkManager.h"
+#include "../../Utils/ContainerUtils.h"
 #include <cstring>
 
 #ifdef SendMessage
@@ -92,7 +93,7 @@ namespace Spark::Net
 
     bool NetworkManager::IsDuplicateSequence(SequenceNumber seq) const
     {
-        return m_receivedSequences.find(seq) != m_receivedSequences.end();
+        return Spark::ContainerUtils::Contains(m_receivedSequences, seq);
     }
 
     void NetworkManager::RecordReceivedSequence(SequenceNumber seq)

@@ -17,6 +17,7 @@
 #undef SendMessage
 #endif
 
+#include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -81,8 +82,7 @@ namespace Spark::Net
                                    // Check bans
                                    {
                                        std::lock_guard<std::mutex> lock(m_banMutex);
-                                       if (std::find(m_bannedClients.begin(), m_bannedClients.end(), msg.senderID) !=
-                                           m_bannedClients.end())
+                                       if (Spark::ContainerUtils::Contains(m_bannedClients, msg.senderID))
                                        {
                                            NetworkManager::GetInstance().KickClient(msg.senderID,
                                                                                     "You are banned from this server");

@@ -4,6 +4,7 @@
  */
 
 #include "LocalizationSystem.h"
+#include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 
 #include <fstream>
@@ -114,7 +115,7 @@ namespace Spark
         std::vector<std::function<void(const std::string&)>> callbacks;
         {
             std::lock_guard<std::mutex> lock(m_mutex);
-            if (m_languages.find(languageCode) == m_languages.end())
+            if (!Spark::ContainerUtils::Contains(m_languages, languageCode))
             {
                 return false;
             }

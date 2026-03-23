@@ -12,6 +12,7 @@
 
 #include "PhysicsSystem.h"
 #include "Utils/Assert.h"
+#include "../Utils/ContainerUtils.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/Validate.h"
 
@@ -1019,7 +1020,7 @@ bool PhysicsSystem::SphereOverlap(const XMFLOAT3& center, float radius, std::vec
             if (userData != 0)
             {
                 auto* body = reinterpret_cast<PhysicsBody*>(userData);
-                if (std::find(results.begin(), results.end(), body) == results.end())
+                if (!Spark::ContainerUtils::Contains(results, body))
                 {
                     results.push_back(body);
                 }
@@ -1054,7 +1055,7 @@ bool PhysicsSystem::BoxOverlap(const XMFLOAT3& center, const XMFLOAT3& halfExten
             if (userData != 0)
             {
                 auto* body = reinterpret_cast<PhysicsBody*>(userData);
-                if (std::find(results.begin(), results.end(), body) == results.end())
+                if (!Spark::ContainerUtils::Contains(results, body))
                 {
                     results.push_back(body);
                 }

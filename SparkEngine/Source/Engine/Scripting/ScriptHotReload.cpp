@@ -5,6 +5,7 @@
 
 #include "ScriptHotReload.h"
 #include "../../Utils/Assert.h"
+#include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -202,7 +203,7 @@ namespace Spark::Scripting
                 if (!IsWatchedExtension(path))
                     return;
 
-                if (m_fileStates.find(path) == m_fileStates.end())
+                if (!Spark::ContainerUtils::Contains(m_fileStates, path))
                 {
                     FileState state;
                     state.path = path;

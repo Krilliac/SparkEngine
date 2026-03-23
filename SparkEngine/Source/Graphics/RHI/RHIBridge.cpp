@@ -7,6 +7,7 @@
 
 #include "RHIBridge.h"
 #include "RHIFactory.h"
+#include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 #include <cassert>
 #include <fstream>
@@ -457,7 +458,7 @@ namespace Spark
         bool RHIBridge::IsBackendAvailable(GraphicsBackend backend)
         {
             auto available = GetAvailableBackends();
-            return std::find(available.begin(), available.end(), backend) != available.end();
+            return Spark::ContainerUtils::Contains(available, backend);
         }
 
         std::vector<GraphicsBackend> RHIBridge::GetAvailableBackends()
