@@ -14,6 +14,8 @@
 #include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
 
+#include <unordered_set>
+
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
@@ -34,6 +36,21 @@
 JPH_SUPPRESS_WARNINGS
 
 using namespace DirectX;
+
+namespace
+{
+    // Log shape fallbacks once per unique (requested, actual) pair to avoid log spam
+    void LogShapeFallback(const char* requested, const char* actual, const char* reason)
+    {
+        static std::unordered_set<size_t> loggedFallbacks;
+        size_t key = std::hash<std::string_view>()(requested) ^ (std::hash<std::string_view>()(actual) << 16);
+        if (loggedFallbacks.insert(key).second)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Physics, "Shape fallback: requested [%s] -> created [%s] (reason: %s)",
+                           requested, actual, reason);
+        }
+    }
+} // namespace
 
 // ============================================================================
 // COLLISION SHAPE CREATION
@@ -77,8 +94,7 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
     {
         if (desc.heightfieldData.empty() || desc.heightfieldSamples == 0)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Physics,
-                           "Heightfield shape requested with empty data or zero samples — falling back to box");
+            LogShapeFallback("Heightfield", "Box", "empty heightfield data or zero samples");
             shape = CreateBoxShape(desc.dimensions);
         }
         else
@@ -95,7 +111,7 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
             }
             else
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Physics, "Heightfield shape creation failed — falling back to box");
+                LogShapeFallback("Heightfield", "Box", "Jolt shape creation error");
                 shape = CreateBoxShape(desc.dimensions);
             }
         }
@@ -106,9 +122,14 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
         JPH::TaperedCapsuleShapeSettings tcSettings(desc.height / 2.0f, desc.radius, desc.topRadius);
         auto result = tcSettings.Create();
         if (!result.HasError())
+        {
             shape = new JPH::ShapeRefC(result.Get());
+        }
         else
+        {
+            LogShapeFallback("TaperedCapsule", "Capsule", "tapered capsule creation failed");
             shape = CreateCapsuleShape(desc.radius, desc.height);
+        }
         break;
     }
     case CollisionShapeType::TaperedCylinder:
@@ -116,9 +137,14 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
         JPH::TaperedCylinderShapeSettings tcSettings(desc.height / 2.0f, desc.radius, desc.topRadius);
         auto result = tcSettings.Create();
         if (!result.HasError())
+        {
             shape = new JPH::ShapeRefC(result.Get());
+        }
         else
+        {
+            LogShapeFallback("TaperedCylinder", "Cylinder", "tapered cylinder creation failed");
             shape = CreateCylinderShape(desc.radius, desc.height);
+        }
         break;
     }
     case CollisionShapeType::Plane:
@@ -127,9 +153,14 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
             JPH::Plane(JPH::Vec3(desc.planeNormal.x, desc.planeNormal.y, desc.planeNormal.z), desc.planeDistance));
         auto result = planeSettings.Create();
         if (!result.HasError())
+        {
             shape = new JPH::ShapeRefC(result.Get());
+        }
         else
+        {
+            LogShapeFallback("Plane", "Box (100x0.1x100)", "plane shape creation failed");
             shape = CreateBoxShape({100.0f, 0.1f, 100.0f});
+        }
         break;
     }
     case CollisionShapeType::Empty:
@@ -189,8 +220,7 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
     case CollisionShapeType::MutableCompound:
     case CollisionShapeType::Compound:
     default:
-        SPARK_LOG_WARN(Spark::LogCategory::Physics, "Unknown or unhandled shape type %d — falling back to box",
-                       static_cast<int>(desc.type));
+        LogShapeFallback("Unknown/Compound", "Box", "unhandled shape type");
         shape = CreateBoxShape(desc.dimensions);
         break;
     }

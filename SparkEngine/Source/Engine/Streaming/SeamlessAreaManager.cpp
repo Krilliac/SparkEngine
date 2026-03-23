@@ -107,6 +107,7 @@ namespace Spark::Streaming
         managed.definition = def;
         managed.state = AreaState::Unloaded;
         m_areas[def.areaId] = std::move(managed);
+        m_registeredHistory.insert(def.areaId);
     }
 
     void SeamlessAreaManager::UnregisterArea(AreaID areaId)
@@ -114,8 +115,10 @@ namespace Spark::Streaming
         auto it = m_areas.find(areaId);
         if (it == m_areas.end())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Scene, "[SeamlessAreaManager] UnregisterArea: area %u not found",
-                           areaId);
+            bool wasEverRegistered = m_registeredHistory.contains(areaId);
+            SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                           "[SeamlessAreaManager] UnregisterArea: area %u not found. Was it ever registered? %s",
+                           areaId, wasEverRegistered ? "YES (previously unregistered)" : "NO (never registered)");
             return;
         }
 

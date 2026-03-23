@@ -29,43 +29,57 @@ CharacterController::CharacterController(PhysicsSystem* physicsSystem, const Cha
 {
     if (!physicsSystem || !physicsSystem->GetJoltSystem())
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "CharacterController: null %s — character will not be created",
-                        !physicsSystem ? "PhysicsSystem" : "JoltSystem");
+        SPARK_LOG_WARN(Spark::LogCategory::Physics,
+                       "CharacterController: null %s — deferring initialization to first Update()",
+                       !physicsSystem ? "PhysicsSystem" : "JoltSystem");
+        m_pendingInit = true;
         return;
     }
 
-    auto* joltSystem = physicsSystem->GetJoltSystem();
+    TryInitialize();
+}
+
+bool CharacterController::TryInitialize()
+{
+    if (!m_physicsSystem || !m_physicsSystem->GetJoltSystem())
+        return false;
+
+    auto* joltSystem = m_physicsSystem->GetJoltSystem();
 
     // Create a capsule shape for the character
     // Jolt's capsule is centered at origin along Y, so we offset it upward
-    float capsuleHalfHeight = (desc.height - 2.0f * desc.radius) / 2.0f;
+    float capsuleHalfHeight = (m_desc.height - 2.0f * m_desc.radius) / 2.0f;
     if (capsuleHalfHeight < 0.0f)
         capsuleHalfHeight = 0.01f;
 
-    JPH::RefConst<JPH::Shape> capsuleShape = new JPH::CapsuleShape(capsuleHalfHeight, desc.radius);
+    JPH::RefConst<JPH::Shape> capsuleShape = new JPH::CapsuleShape(capsuleHalfHeight, m_desc.radius);
 
     // Offset the shape so the bottom of the capsule is at the character's feet
-    float shapeOffset = capsuleHalfHeight + desc.radius;
+    float shapeOffset = capsuleHalfHeight + m_desc.radius;
     JPH::RefConst<JPH::Shape> standingShape =
         new JPH::RotatedTranslatedShape(JPH::Vec3(0, shapeOffset, 0), JPH::Quat::sIdentity(), capsuleShape);
 
     // Configure the character
     JPH::CharacterVirtualSettings settings;
     settings.mShape = standingShape;
-    settings.mMaxSlopeAngle = desc.maxSlopeAngle;
-    settings.mMass = desc.mass;
-    settings.mMaxStrength = desc.maxStrength;
-    settings.mCharacterPadding = desc.characterPadding;
-    settings.mPenetrationRecoverySpeed = desc.penetrationRecovery;
-    settings.mPredictiveContactDistance = desc.predictiveContactDistance;
-    settings.mUp = JPH::Vec3(desc.up.x, desc.up.y, desc.up.z);
+    settings.mMaxSlopeAngle = m_desc.maxSlopeAngle;
+    settings.mMass = m_desc.mass;
+    settings.mMaxStrength = m_desc.maxStrength;
+    settings.mCharacterPadding = m_desc.characterPadding;
+    settings.mPenetrationRecoverySpeed = m_desc.penetrationRecovery;
+    settings.mPredictiveContactDistance = m_desc.predictiveContactDistance;
+    settings.mUp = JPH::Vec3(m_desc.up.x, m_desc.up.y, m_desc.up.z);
     settings.mSupportingVolume =
-        JPH::Plane(JPH::Vec3(desc.up.x, desc.up.y, desc.up.z), -capsuleHalfHeight); // Inside the character
+        JPH::Plane(JPH::Vec3(m_desc.up.x, m_desc.up.y, m_desc.up.z), -capsuleHalfHeight); // Inside the character
 
     // Create the character
     m_joltCharacter = new JPH::CharacterVirtual(
-        &settings, JPH::RVec3(desc.position.x, desc.position.y, desc.position.z),
-        JPH::Quat(desc.rotation.x, desc.rotation.y, desc.rotation.z, desc.rotation.w), 0, joltSystem);
+        &settings, JPH::RVec3(m_desc.position.x, m_desc.position.y, m_desc.position.z),
+        JPH::Quat(m_desc.rotation.x, m_desc.rotation.y, m_desc.rotation.z, m_desc.rotation.w), 0, joltSystem);
+
+    m_pendingInit = false;
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "CharacterController: deferred initialization succeeded");
+    return true;
 }
 
 CharacterController::~CharacterController()
@@ -76,10 +90,21 @@ CharacterController::~CharacterController()
 
 void CharacterController::Update(float deltaTime, const XMFLOAT3& gravity)
 {
+    // Attempt deferred initialization if construction was postponed
+    if (m_pendingInit)
+    {
+        if (!TryInitialize())
+        {
+            // Still not ready — give up on future retries to avoid log spam
+            SPARK_LOG_ERROR(Spark::LogCategory::Physics,
+                            "CharacterController: deferred init failed — disabling further retries");
+            m_pendingInit = false;
+            return;
+        }
+    }
+
     if (!m_joltCharacter || !m_physicsSystem || !m_physicsSystem->GetJoltSystem())
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Physics, "CharacterController::Update skipped — null %s",
-                       !m_joltCharacter ? "JoltCharacter" : (!m_physicsSystem ? "PhysicsSystem" : "JoltSystem"));
         return;
     }
 

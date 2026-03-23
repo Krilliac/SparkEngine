@@ -151,7 +151,11 @@ class CharacterController
     float GetMass() const { return m_desc.mass; }
 
   private:
+    /// @brief Attempt to create the Jolt character from stored desc. Returns true on success.
+    bool TryInitialize();
+
     PhysicsSystem* m_physicsSystem;
     CharacterControllerDesc m_desc;
     JPH::CharacterVirtual* m_joltCharacter = nullptr; ///< Owned pointer to Jolt character
+    bool m_pendingInit = false;                       ///< True if construction was deferred due to null PhysicsSystem
 };

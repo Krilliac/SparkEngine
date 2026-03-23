@@ -179,22 +179,58 @@ namespace Spark
                     return;
                 }
 
-                DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-                swapChainDesc.Width = desc.width;
-                swapChainDesc.Height = desc.height;
-                swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-                swapChainDesc.SampleDesc.Count = desc.sampleCount;
-                swapChainDesc.SampleDesc.Quality = 0;
-                swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-                swapChainDesc.BufferCount = desc.bufferCount;
-                swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-
                 HWND hwnd = static_cast<HWND>(desc.windowHandle);
-                hr = dxgiFactory->CreateSwapChainForHwnd(device, hwnd, &swapChainDesc, nullptr, nullptr, &m_swapChain);
-                if (FAILED(hr))
+
+                // Try swapchain creation with fallback configurations
+                struct SwapChainFallback
+                {
+                    DXGI_FORMAT format;
+                    DXGI_SWAP_EFFECT swapEffect;
+                    UINT sampleCount;
+                    const char* description;
+                };
+
+                const SwapChainFallback fallbacks[] = {
+                    {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SWAP_EFFECT_FLIP_DISCARD, desc.sampleCount, "preferred"},
+                    {DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SWAP_EFFECT_FLIP_DISCARD, desc.sampleCount, "BGRA format"},
+                    {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SWAP_EFFECT_DISCARD, 1, "legacy swap effect"},
+                    {DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SWAP_EFFECT_DISCARD, 1, "BGRA + legacy swap"},
+                };
+
+                for (const auto& fb : fallbacks)
+                {
+                    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+                    swapChainDesc.Width = desc.width;
+                    swapChainDesc.Height = desc.height;
+                    swapChainDesc.Format = fb.format;
+                    swapChainDesc.SampleDesc.Count = fb.sampleCount;
+                    swapChainDesc.SampleDesc.Quality = 0;
+                    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+                    swapChainDesc.BufferCount = desc.bufferCount;
+                    swapChainDesc.SwapEffect = fb.swapEffect;
+
+                    hr = dxgiFactory->CreateSwapChainForHwnd(device, hwnd, &swapChainDesc, nullptr, nullptr,
+                                                             &m_swapChain);
+                    if (SUCCEEDED(hr))
+                    {
+                        if (fb.format != DXGI_FORMAT_R8G8B8A8_UNORM || fb.swapEffect != DXGI_SWAP_EFFECT_FLIP_DISCARD ||
+                            fb.sampleCount != desc.sampleCount)
+                        {
+                            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                           "D3D11SwapChain: created with fallback config (%s)", fb.description);
+                        }
+                        break;
+                    }
+
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "D3D11SwapChain: %s config failed (HRESULT 0x%08lX) — trying next fallback",
+                                   fb.description, hr);
+                }
+
+                if (!m_swapChain)
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                    "D3D11SwapChain: CreateSwapChainForHwnd failed (HRESULT 0x%08lX)", hr);
+                                    "D3D11SwapChain: all swapchain configurations failed (last HRESULT 0x%08lX)", hr);
                     return;
                 }
 
