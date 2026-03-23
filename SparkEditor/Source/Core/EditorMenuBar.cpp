@@ -10,7 +10,7 @@
 #include "EditorIcons.h"
 #include "EditorTheme.h"
 #include "../Panels/HierarchyPanel.h"
-#include "../Utils/SparkConsole.h"
+#include "Utils/SparkConsole.h"
 #include "EditorApplication.h"
 #include <imgui.h>
 #include <imgui_internal.h>

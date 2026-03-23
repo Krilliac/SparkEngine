@@ -5,7 +5,7 @@
 
 #include "GameModuleSelectorPanel.h"
 #include "Core/ModuleManager.h"
-#include "../Utils/SparkConsole.h"
+#include "Utils/SparkConsole.h"
 #include <imgui.h>
 #include <filesystem>
 #include <fstream>

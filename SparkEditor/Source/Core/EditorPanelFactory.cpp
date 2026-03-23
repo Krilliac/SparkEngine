@@ -6,7 +6,7 @@
  * Split from EditorUI.cpp for maintainability.
  */
 #include "EditorUI.h"
-#include "../Utils/SparkConsole.h"
+#include "Utils/SparkConsole.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/HierarchyPanel.h"

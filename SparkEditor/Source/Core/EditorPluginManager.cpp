@@ -7,7 +7,7 @@
 
 #include "EditorPluginManager.h"
 #include "EditorPanel.h"
-#include "../Utils/SparkConsole.h"
+#include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 
 #ifdef _WIN32

@@ -10,7 +10,7 @@
 #include "EditorFonts.h"
 #include "EditorCrashHandler.h"
 #include "EditorPluginManager.h"
-#include "../Utils/SparkConsole.h"
+#include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include <memory>
 #include <iostream>
