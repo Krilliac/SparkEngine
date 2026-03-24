@@ -132,9 +132,9 @@ def main() -> int:
     # ------------------------------------------------------------------
     print("\n[Test 1-2] Simultaneous Connection (2 clients)")
     s1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s1.bind(('', 0))
+    s1.bind(('127.0.0.1', 0))
     s2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s2.bind(('', 0))
+    s2.bind(('127.0.0.1', 0))
     s1.sendto(connect_pkt("Player1"), server)
     s2.sendto(connect_pkt("Player2"), server)
     time.sleep(tw * 3)
@@ -176,7 +176,7 @@ def main() -> int:
     stress: list[socket.socket] = []
     for i in range(10):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.bind(('', 0))
+        s.bind(('127.0.0.1', 0))
         s.sendto(connect_pkt(f"Stress_{i}"), server)
         stress.append(s)
     time.sleep(tw * 5)
