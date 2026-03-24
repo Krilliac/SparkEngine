@@ -7,12 +7,14 @@
  */
 
 #include "SparkGameARPG.h"
+#include "ARPGEngineSystems.h"
 #include "Hero/ARPGHeroSystem.h"
 #include "Combat/ARPGCombatSystem.h"
 #include "Loot/ARPGLootSystem.h"
 #include "Dungeon/ARPGDungeonSystem.h"
 #include "Skill/ARPGSkillSystem.h"
 #include "Monster/ARPGMonsterSystem.h"
+#include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/SparkConsole.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -118,10 +120,19 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    // Wire engine systems into ARPG gameplay (after all subsystems are ready)
+    m_engineSystems = std::make_unique<ARPG::ARPGEngineSystems>();
+    if (!m_engineSystems->Initialize(context, m_heroSystem.get(), m_combatSystem.get(), m_lootSystem.get(),
+                                     m_dungeonSystem.get()))
+    {
+        console.LogError("[ARPG] Failed to initialize engine systems integration");
+        return false;
+    }
+
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[ARPG] Spark ARPG module loaded successfully (6 subsystems)");
+    console.LogInfo("[ARPG] Spark ARPG module loaded successfully (7 subsystems)");
     console.LogInfo("[ARPG] Classes: " + std::to_string(m_heroSystem->GetClassCount()) +
                     " | Skills: " + std::to_string(m_skillSystem->GetTotalSkillCount()) +
                     " | Monsters: " + std::to_string(m_monsterSystem->GetTemplateCount()) +
@@ -137,6 +148,13 @@ void SparkGameARPGModule::OnUnload()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[ARPG] Unloading Spark ARPG module...");
+
+    // Shutdown engine integrations first (depends on all ARPG subsystems)
+    if (m_engineSystems)
+    {
+        m_engineSystems->Shutdown();
+        m_engineSystems.reset();
+    }
 
     // Shutdown in reverse initialization order
     if (m_monsterSystem)
@@ -185,6 +203,7 @@ void SparkGameARPGModule::OnUpdate(float deltaTime)
     m_skillSystem->Update(deltaTime);
     m_dungeonSystem->Update(deltaTime);
     m_monsterSystem->Update(deltaTime);
+    m_engineSystems->Update(deltaTime);
 }
 
 void SparkGameARPGModule::OnFixedUpdate(float fixedDeltaTime)
@@ -228,6 +247,7 @@ void SparkGameARPGModule::OnImGui()
     m_dungeonSystem->RenderDebugUI();
     m_skillSystem->RenderDebugUI();
     m_monsterSystem->RenderDebugUI();
+    m_engineSystems->RenderDebugUI();
 }
 
 void SparkGameARPGModule::RegisterConsoleCommands()
@@ -268,4 +288,58 @@ void SparkGameARPGModule::RegisterConsoleCommands()
 
     console.RegisterCommand("arpg_monsters", [this](const std::vector<std::string>&) -> std::string
                             { return m_monsterSystem->GetMonsterListString(); });
+
+    console.RegisterCommand("arpg_save",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                auto* saveSystem = m_context->GetSaveSystem();
+                                if (!saveSystem)
+                                    return "Save system not available";
+
+                                auto* world = m_context->GetWorld();
+                                if (!world)
+                                    return "World not available";
+
+                                std::string slot = args.empty() ? "arpg_quicksave" : args[0];
+                                Spark::SaveMetadata meta;
+                                meta.saveName = "ARPG Save";
+                                meta.sceneName =
+                                    "Dungeon Floor " + std::to_string(m_dungeonSystem->GetCurrentFloorNumber());
+
+                                if (saveSystem->Save(slot, *world, meta))
+                                    return "ARPG state saved to slot: " + slot;
+                                return "Failed to save to slot: " + slot;
+                            });
+
+    console.RegisterCommand("arpg_load",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                auto* saveSystem = m_context->GetSaveSystem();
+                                if (!saveSystem)
+                                    return "Save system not available";
+
+                                auto* world = m_context->GetWorld();
+                                if (!world)
+                                    return "World not available";
+
+                                std::string slot = args.empty() ? "arpg_quicksave" : args[0];
+                                if (!saveSystem->SaveExists(slot))
+                                    return "No save found in slot: " + slot;
+
+                                if (saveSystem->Load(slot, *world))
+                                    return "ARPG state loaded from slot: " + slot;
+                                return "Failed to load from slot: " + slot;
+                            });
+
+    console.RegisterCommand("arpg_abilities",
+                            [this]([[maybe_unused]] const std::vector<std::string>& args) -> std::string
+                            {
+                                // AbilitySystem.h cannot be included from game modules (types not in scope).
+                                // Report the statically-known ARPG ability configuration instead.
+                                std::string info = "=== ARPG Abilities ===\n";
+                                info += "Configured abilities: 4 (Fireball, Whirlwind, Raise Skeleton, Holy Light)\n";
+                                info += "Configured auras: 4 (Holy Shield, Bone Armor, Poison DoT, Fire Mastery)\n";
+                                info += "Configured procs: 1 (Fire Mastery proc)\n";
+                                return info;
+                            });
 }

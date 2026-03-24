@@ -7,6 +7,7 @@
  */
 
 #include "SparkGameRPG.h"
+#include "RPGEngineSystems.h"
 #include "World/RPGWorldSetup.h"
 #include "Character/RPGCharacterSystem.h"
 #include "Combat/RPGCombatSystem.h"
@@ -127,10 +128,17 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    // Initialize engine system integrations (save, animation, AI, cinematic, etc.)
+    m_engineSystems = std::make_unique<RPG::RPGEngineSystems>();
+    if (!m_engineSystems->Initialize(context))
+    {
+        console.LogWarning("[RPG] Engine systems integration partially failed (non-fatal)");
+    }
+
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[RPG] Spark RPG module loaded successfully (7 subsystems)");
+    console.LogInfo("[RPG] Spark RPG module loaded successfully (8 subsystems)");
     console.LogInfo("[RPG] Areas: " + std::to_string(m_worldSetup->GetAreaCount()) +
                     " | Classes: " + std::to_string(m_characterSystem->GetClassCount()) +
                     " | Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
@@ -148,6 +156,11 @@ void SparkGameRPGModule::OnUnload()
     console.LogInfo("[RPG] Unloading Spark RPG module...");
 
     // Shutdown in reverse initialization order
+    if (m_engineSystems)
+    {
+        m_engineSystems->Shutdown();
+        m_engineSystems.reset();
+    }
     if (m_npcSystem)
     {
         m_npcSystem->Shutdown();
@@ -199,6 +212,7 @@ void SparkGameRPGModule::OnUpdate(float deltaTime)
     m_npcSystem->Update(deltaTime);
     m_questSystem->Update(deltaTime);
     m_dialogueSystem->Update(deltaTime);
+    m_engineSystems->Update(deltaTime);
 }
 
 void SparkGameRPGModule::OnFixedUpdate(float fixedDeltaTime)
@@ -243,6 +257,7 @@ void SparkGameRPGModule::OnImGui()
     m_questSystem->RenderDebugUI();
     m_inventorySystem->RenderDebugUI();
     m_npcSystem->RenderDebugUI();
+    m_engineSystems->RenderDebugUI();
 }
 
 void SparkGameRPGModule::RegisterConsoleCommands()
@@ -280,4 +295,52 @@ void SparkGameRPGModule::RegisterConsoleCommands()
 
     console.RegisterCommand("rpg_items", [this](const std::vector<std::string>&) -> std::string
                             { return m_inventorySystem->GetItemListString(); });
+
+    // Engine system integration commands
+    console.RegisterCommand("rpg_save",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (!m_engineSystems)
+                                    return "Engine systems not initialized";
+                                std::string slot = args.empty() ? "slot1" : args[0];
+                                return m_engineSystems->SaveGame(slot);
+                            });
+
+    console.RegisterCommand("rpg_load",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (!m_engineSystems)
+                                    return "Engine systems not initialized";
+                                std::string slot = args.empty() ? "slot1" : args[0];
+                                return m_engineSystems->LoadGame(slot);
+                            });
+
+    console.RegisterCommand("rpg_weather",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (!m_engineSystems)
+                                    return "Engine systems not initialized";
+                                if (args.empty())
+                                    return "Usage: rpg_weather <clear|cloudy|rain|snow|fog|storm>";
+                                return m_engineSystems->SetWeather(args[0]);
+                            });
+
+    console.RegisterCommand("rpg_time",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (!m_engineSystems)
+                                    return "Engine systems not initialized";
+                                if (args.empty())
+                                    return "Usage: rpg_time <hour> (0-24)";
+                                float hour = 0.0f;
+                                try
+                                {
+                                    hour = std::stof(args[0]);
+                                }
+                                catch (...)
+                                {
+                                    return "Invalid hour value: " + args[0];
+                                }
+                                return m_engineSystems->SetTime(hour);
+                            });
 }

@@ -23,6 +23,7 @@
 #include "Account/MMOAccountSystem.h"
 #include "Character/MMOCharacterSystem.h"
 #include "UI/MMOLoginUI.h"
+#include "MMOEngineSystems.h"
 #include "Utils/SparkConsole.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -196,10 +197,17 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    // Wire engine subsystems (weather, abilities, dialogue, cinematic, AI, animation, events, localization)
+    m_engineSystems = std::make_unique<MMO::MMOEngineSystems>();
+    if (!m_engineSystems->Initialize(context))
+    {
+        console.LogWarning("[MMO] Engine subsystem wiring partially failed (non-fatal)");
+    }
+
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[MMO] Spark MMO module loaded successfully (16 subsystems)");
+    console.LogInfo("[MMO] Spark MMO module loaded successfully (17 subsystems)");
     console.LogInfo("[MMO] World areas: " + std::to_string(m_worldSetup->GetAreaCount()));
     console.LogInfo("[MMO] Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
                     " | Recipes: " + std::to_string(m_craftingSystem->GetRecipeCount()) +
@@ -217,6 +225,13 @@ void SparkGameMMOModule::OnUnload()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[MMO] Unloading Spark MMO module...");
+
+    // Shutdown engine subsystem wiring first
+    if (m_engineSystems)
+    {
+        m_engineSystems->Shutdown();
+        m_engineSystems.reset();
+    }
 
     // Shutdown login UI and account/character systems
     if (m_loginUI)
@@ -316,6 +331,9 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
 {
     if (!m_initialized || m_paused)
         return;
+
+    if (m_engineSystems)
+        m_engineSystems->Update(deltaTime);
 
     m_worldSetup->Update(deltaTime);
     m_playerSystem->Update(deltaTime);
@@ -505,6 +523,22 @@ void SparkGameMMOModule::RegisterConsoleCommands()
 
     console.RegisterCommand("mmo_online", [this](const std::vector<std::string>&) -> std::string
                             { return m_accountSystem->GetOnlineListString(); });
+
+    console.RegisterCommand(
+        "mmo_abilities", [this](const std::vector<std::string>&) -> std::string
+        { return m_engineSystems ? m_engineSystems->GetAbilitySummary() : "Engine systems not loaded"; });
+
+    console.RegisterCommand(
+        "mmo_weather", [this](const std::vector<std::string>&) -> std::string
+        { return m_engineSystems ? m_engineSystems->GetWeatherStatus() : "Engine systems not loaded"; });
+
+    console.RegisterCommand(
+        "mmo_cinematic", [this](const std::vector<std::string>&) -> std::string
+        { return m_engineSystems ? m_engineSystems->GetCinematicList() : "Engine systems not loaded"; });
+
+    console.RegisterCommand(
+        "mmo_locale", [this](const std::vector<std::string>&) -> std::string
+        { return m_engineSystems ? m_engineSystems->GetLocaleStatus() : "Engine systems not loaded"; });
 
     console.RegisterCommand("mmo_characters",
                             [this](const std::vector<std::string>& args) -> std::string

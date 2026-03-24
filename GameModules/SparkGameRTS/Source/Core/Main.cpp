@@ -7,6 +7,7 @@
  */
 
 #include "SparkGameRTS.h"
+#include "RTSEngineSystems.h"
 #include "Unit/RTSUnitSystem.h"
 #include "Building/RTSBuildingSystem.h"
 #include "Resource/RTSResourceSystem.h"
@@ -118,10 +119,17 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    // Initialize engine system integrations (AI, events, audio, weather, destruction, save, coroutines)
+    m_engineSystems = std::make_unique<RTS::RTSEngineSystems>();
+    if (!m_engineSystems->Initialize(context))
+    {
+        console.LogWarning("[RTS] Engine system integrations partially unavailable (non-fatal)");
+    }
+
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[RTS] Spark RTS module loaded successfully (6 subsystems)");
+    console.LogInfo("[RTS] Spark RTS module loaded successfully (7 subsystems)");
     console.LogInfo("[RTS] Units: " + std::to_string(m_unitSystem->GetUnitCount()) +
                     " | Buildings: " + std::to_string(m_buildingSystem->GetBuildingCount()) +
                     " | Nodes: " + std::to_string(m_resourceSystem->GetNodeCount()));
@@ -137,6 +145,11 @@ void SparkGameRTSModule::OnUnload()
     console.LogInfo("[RTS] Unloading Spark RTS module...");
 
     // Shutdown in reverse initialization order
+    if (m_engineSystems)
+    {
+        m_engineSystems->Shutdown();
+        m_engineSystems.reset();
+    }
     if (m_matchSystem)
     {
         m_matchSystem->Shutdown();
@@ -184,6 +197,8 @@ void SparkGameRTSModule::OnUpdate(float deltaTime)
     m_unitSystem->Update(deltaTime);
     m_commandSystem->Update(deltaTime);
     m_fogOfWarSystem->Update(deltaTime);
+    if (m_engineSystems)
+        m_engineSystems->Update(deltaTime);
 }
 
 void SparkGameRTSModule::OnFixedUpdate(float fixedDeltaTime)
@@ -259,4 +274,46 @@ void SparkGameRTSModule::RegisterConsoleCommands()
 
     console.RegisterCommand("rts_resources", [this](const std::vector<std::string>&) -> std::string
                             { return m_resourceSystem->GetResourceListString(); });
+
+    // Engine system commands
+    console.RegisterCommand("rts_save",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (!m_engineSystems)
+                                    return "Engine systems not initialized";
+                                std::string slot = args.empty() ? "rts_quicksave" : args[0];
+                                return m_engineSystems->SaveMatch(slot) ? "Saved to: " + slot : "Save failed";
+                            });
+
+    console.RegisterCommand("rts_load",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (!m_engineSystems)
+                                    return "Engine systems not initialized";
+                                std::string slot = args.empty() ? "rts_quicksave" : args[0];
+                                return m_engineSystems->LoadMatch(slot) ? "Loaded from: " + slot : "Load failed";
+                            });
+
+    console.RegisterCommand("rts_weather",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (!m_engineSystems)
+                                    return "Engine systems not initialized";
+                                if (args.empty())
+                                    return "Usage: rts_weather <clear|rain|fog|storm|snow|cloudy>";
+                                m_engineSystems->SetWeather(args[0]);
+                                return "Weather set to: " + args[0];
+                            });
+
+    console.RegisterCommand("rts_time",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (!m_engineSystems)
+                                    return "Engine systems not initialized";
+                                if (args.empty())
+                                    return "Usage: rts_time <0-24>";
+                                float hour = std::stof(args[0]);
+                                m_engineSystems->SetTimeOfDay(hour);
+                                return "Time set to: " + args[0];
+                            });
 }

@@ -5,11 +5,11 @@
  * Implements the SparkGameDefaultModule class and exports the CreateModule/
  * DestroyModule factory functions for the engine's ModuleManager.
  *
- * This is the minimal default game module — a blank slate with no
- * subsystems. Extend from here to build your game.
+ * This module showcases core engine subsystem integration via GameplayShowcase.
  */
 
 #include "SparkGame.h"
+#include "GameplayShowcase.h"
 #include "Utils/SparkConsole.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -39,6 +39,8 @@ SPARK_IMPLEMENT_MODULE(SparkGameDefaultModule)
 // SparkGameDefaultModule implementation
 // =============================================================================
 
+SparkGameDefaultModule::SparkGameDefaultModule() = default;
+
 SparkGameDefaultModule::~SparkGameDefaultModule()
 {
     if (m_initialized)
@@ -48,8 +50,8 @@ SparkGameDefaultModule::~SparkGameDefaultModule()
 Spark::ModuleInfo SparkGameDefaultModule::GetModuleInfo() const
 {
     Spark::ModuleInfo info{};
-    info.name = "Spark Default - Engine Template";
-    info.version = "1.0.0";
+    info.name = "Spark Default - Engine Showcase";
+    info.version = "2.0.0";
     info.sdkVersion = SPARK_SDK_VERSION;
     info.loadOrder = 999;
     return info;
@@ -63,12 +65,20 @@ bool SparkGameDefaultModule::OnLoad(Spark::IEngineContext* context)
     m_context = context;
 
     auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Default] Loading Spark Default module...");
+    console.LogInfo("[Default] Loading Spark Engine Showcase module...");
+
+    // Initialize the gameplay showcase
+    m_showcase = std::make_unique<GameplayShowcase>();
+    if (!m_showcase->Initialize(context))
+    {
+        console.LogWarning("[Default] GameplayShowcase initialization failed — running without showcase");
+        m_showcase.reset();
+    }
 
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[Default] Spark Default module loaded successfully");
+    console.LogInfo("[Default] Spark Engine Showcase module loaded successfully");
     return true;
 }
 
@@ -78,12 +88,18 @@ void SparkGameDefaultModule::OnUnload()
         return;
 
     auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Default] Unloading Spark Default module...");
+    console.LogInfo("[Default] Unloading Spark Engine Showcase module...");
+
+    if (m_showcase)
+    {
+        m_showcase->Shutdown();
+        m_showcase.reset();
+    }
 
     m_context = nullptr;
     m_initialized = false;
 
-    console.LogInfo("[Default] Spark Default module unloaded");
+    console.LogInfo("[Default] Spark Engine Showcase module unloaded");
 }
 
 void SparkGameDefaultModule::OnUpdate(float deltaTime)
@@ -91,7 +107,10 @@ void SparkGameDefaultModule::OnUpdate(float deltaTime)
     if (!m_initialized || m_paused)
         return;
 
-    (void)deltaTime;
+    if (m_showcase)
+    {
+        m_showcase->Update(deltaTime);
+    }
 }
 
 void SparkGameDefaultModule::OnFixedUpdate(float fixedDeltaTime)
@@ -128,24 +147,65 @@ void SparkGameDefaultModule::OnImGui()
 {
     if (!m_initialized)
         return;
+
+    if (m_showcase)
+    {
+        m_showcase->RenderDebugUI();
+    }
 }
 
 void SparkGameDefaultModule::RegisterConsoleCommands()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    console.RegisterCommand("default_status",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                if (!m_initialized)
-                                    return "Default module not initialized";
+    console.RegisterCommand(
+        "showcase_status",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_showcase)
+                return "Showcase not initialized";
+            return m_showcase->GetStatus();
+        },
+        "Show gameplay showcase status", "Showcase");
 
-                                auto info = GetModuleInfo();
-                                std::string status = "=== Spark Default Module ===\n";
-                                status += "Name: " + std::string(info.name) + "\n";
-                                status += "Version: " + std::string(info.version) + "\n";
-                                status += "Status: Running\n";
-                                status += "Paused: " + std::string(m_paused ? "Yes" : "No") + "\n";
-                                return status;
-                            });
+    console.RegisterCommand(
+        "showcase_weather",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_showcase)
+                return "Showcase not initialized";
+            return m_showcase->CycleWeather();
+        },
+        "Cycle to the next weather type", "Showcase");
+
+    console.RegisterCommand(
+        "showcase_save",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_showcase)
+                return "Showcase not initialized";
+            return m_showcase->DoQuickSave();
+        },
+        "QuickSave the current world state", "Showcase");
+
+    console.RegisterCommand(
+        "showcase_load",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_showcase)
+                return "Showcase not initialized";
+            return m_showcase->DoQuickLoad();
+        },
+        "QuickLoad the last saved world state", "Showcase");
+
+    console.RegisterCommand(
+        "showcase_spawn",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (!m_showcase)
+                return "Showcase not initialized";
+            std::string name = args.empty() ? "" : args[0];
+            return m_showcase->SpawnEntity(name);
+        },
+        "Spawn a showcase entity (optional: name)", "Showcase", "showcase_spawn [name]");
 }

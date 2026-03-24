@@ -27,6 +27,7 @@ namespace Platformer
     class PlatformerHazardSystem;
     class PlatformerCheckpointSystem;
     class PlatformerCameraSystem;
+    class PlatformerEngineSystems;
 } // namespace Platformer
 
 /**
@@ -71,6 +72,7 @@ class SparkGamePlatformerModule : public Spark::IModule
     std::unique_ptr<Platformer::PlatformerHazardSystem> m_hazardSystem;
     std::unique_ptr<Platformer::PlatformerCheckpointSystem> m_checkpointSystem;
     std::unique_ptr<Platformer::PlatformerCameraSystem> m_cameraSystem;
+    std::unique_ptr<Platformer::PlatformerEngineSystems> m_engineSystems;
 };
 
 // Module exports

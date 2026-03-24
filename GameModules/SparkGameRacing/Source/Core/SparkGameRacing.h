@@ -26,6 +26,7 @@ namespace Racing
     class RacingAIDriver;
     class RacingCameraSystem;
     class RacingHUDSystem;
+    class RacingEngineSystems;
 } // namespace Racing
 
 /**
@@ -70,6 +71,7 @@ class SparkGameRacingModule : public Spark::IModule
     std::unique_ptr<Racing::RacingAIDriver> m_aiDriver;
     std::unique_ptr<Racing::RacingCameraSystem> m_cameraSystem;
     std::unique_ptr<Racing::RacingHUDSystem> m_hudSystem;
+    std::unique_ptr<Racing::RacingEngineSystems> m_engineSystems;
 };
 
 // Module exports
