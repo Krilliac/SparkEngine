@@ -24,8 +24,11 @@
 
 #pragma once
 
+#include "LogMacros.h"
+
 #include <algorithm>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <utility>
 #include <vector>
@@ -72,7 +75,23 @@ namespace Spark
         void Broadcast(Args... args) const
         {
             for (const auto& [id, handler] : m_handlers)
-                handler(args...);
+            {
+                try
+                {
+                    handler(args...);
+                }
+                catch (const std::exception& e)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "Delegate::Broadcast handler %llu threw: %s",
+                                    static_cast<unsigned long long>(id), e.what());
+                }
+                catch (...)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "Delegate::Broadcast handler %llu threw unknown exception",
+                                    static_cast<unsigned long long>(id));
+                }
+            }
         }
 
         /**

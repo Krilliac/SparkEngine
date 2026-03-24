@@ -29,7 +29,10 @@
 
 #pragma once
 
+#include "LogMacros.h"
+
 #include <cstdint>
+#include <exception>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -113,19 +116,106 @@ namespace Spark::Json
         [[nodiscard]] bool IsArray() const { return GetType() == Type::Array; }
         [[nodiscard]] bool IsObject() const { return GetType() == Type::Object; }
 
-        // -- Value access --
+        // -- Value access (safe — logs and returns default on type mismatch) --
 
-        [[nodiscard]] bool AsBool() const { return std::get<bool>(m_data); }
-        [[nodiscard]] double AsNumber() const { return std::get<double>(m_data); }
-        [[nodiscard]] int AsInt() const { return static_cast<int>(std::get<double>(m_data)); }
-        [[nodiscard]] const std::string& AsString() const { return std::get<std::string>(m_data); }
+        [[nodiscard]] bool AsBool(bool fallback = false) const
+        {
+            if (auto* val = std::get_if<bool>(&m_data))
+                return *val;
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::AsBool called on non-bool (type=%d)",
+                           static_cast<int>(GetType()));
+            return fallback;
+        }
 
-        // -- Array access --
+        [[nodiscard]] double AsNumber(double fallback = 0.0) const
+        {
+            if (auto* val = std::get_if<double>(&m_data))
+                return *val;
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::AsNumber called on non-number (type=%d)",
+                           static_cast<int>(GetType()));
+            return fallback;
+        }
 
-        Value& operator[](size_t index) { return std::get<ArrayType>(m_data)[index]; }
-        const Value& operator[](size_t index) const { return std::get<ArrayType>(m_data)[index]; }
+        [[nodiscard]] int AsInt(int fallback = 0) const
+        {
+            if (auto* val = std::get_if<double>(&m_data))
+                return static_cast<int>(*val);
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::AsInt called on non-number (type=%d)",
+                           static_cast<int>(GetType()));
+            return fallback;
+        }
 
-        void PushBack(Value val) { std::get<ArrayType>(m_data).push_back(std::move(val)); }
+        [[nodiscard]] const std::string& AsString() const
+        {
+            if (auto* val = std::get_if<std::string>(&m_data))
+                return *val;
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::AsString called on non-string (type=%d)",
+                           static_cast<int>(GetType()));
+            static const std::string s_empty;
+            return s_empty;
+        }
+
+        [[nodiscard]] const std::string& AsString(const std::string& fallback) const
+        {
+            if (auto* val = std::get_if<std::string>(&m_data))
+                return *val;
+            return fallback;
+        }
+
+        // -- Array access (safe — logs and returns null on type/bounds mismatch) --
+
+        Value& operator[](size_t index)
+        {
+            static Value s_null;
+            auto* arr = std::get_if<ArrayType>(&m_data);
+            if (!arr)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::operator[size_t] called on non-array (type=%d)",
+                               static_cast<int>(GetType()));
+                s_null = Value();
+                return s_null;
+            }
+            if (index >= arr->size())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value array index %zu out of bounds (size=%zu)", index,
+                               arr->size());
+                s_null = Value();
+                return s_null;
+            }
+            return (*arr)[index];
+        }
+
+        const Value& operator[](size_t index) const
+        {
+            static const Value s_null;
+            auto* arr = std::get_if<ArrayType>(&m_data);
+            if (!arr)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "Json::Value::operator[size_t] const called on non-array (type=%d)",
+                               static_cast<int>(GetType()));
+                return s_null;
+            }
+            if (index >= arr->size())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value array index %zu out of bounds (size=%zu)", index,
+                               arr->size());
+                return s_null;
+            }
+            return (*arr)[index];
+        }
+
+        void PushBack(Value val)
+        {
+            auto* arr = std::get_if<ArrayType>(&m_data);
+            if (!arr)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Json::Value::PushBack called on non-array (type=%d)",
+                                static_cast<int>(GetType()));
+                return;
+            }
+            arr->push_back(std::move(val));
+        }
 
         [[nodiscard]] size_t Size() const
         {
@@ -143,15 +233,31 @@ namespace Spark::Json
             // Auto-promote null to object on first key access
             if (IsNull())
                 m_data = ObjectType{};
-            return std::get<ObjectType>(m_data)[key];
+            auto* obj = std::get_if<ObjectType>(&m_data);
+            if (!obj)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::operator[string] called on non-object (type=%d)",
+                               static_cast<int>(GetType()));
+                static Value s_null;
+                s_null = Value();
+                return s_null;
+            }
+            return (*obj)[key];
         }
 
         const Value& operator[](const std::string& key) const
         {
             static const Value s_null;
-            auto& obj = std::get<ObjectType>(m_data);
-            auto it = obj.find(key);
-            if (it == obj.end())
+            auto* obj = std::get_if<ObjectType>(&m_data);
+            if (!obj)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "Json::Value::operator[string] const called on non-object (type=%d)",
+                               static_cast<int>(GetType()));
+                return s_null;
+            }
+            auto it = obj->find(key);
+            if (it == obj->end())
                 return s_null;
             return it->second;
         }

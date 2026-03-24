@@ -22,6 +22,9 @@
 
 #pragma once
 
+#include "LogMacros.h"
+
+#include <exception>
 #include <functional>
 #include <vector>
 
@@ -55,7 +58,20 @@ namespace Spark
             std::vector<T> local = std::move(m_pending);
             m_pending.clear();
             for (auto& item : local)
-                callback(item);
+            {
+                try
+                {
+                    callback(item);
+                }
+                catch (const std::exception& e)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "DeferredQueue::Flush callback threw: %s", e.what());
+                }
+                catch (...)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "DeferredQueue::Flush callback threw unknown exception");
+                }
+            }
         }
 
         /**

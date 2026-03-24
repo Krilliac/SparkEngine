@@ -25,6 +25,9 @@
 
 #pragma once
 
+#include "LogMacros.h"
+
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <mutex>
@@ -85,6 +88,17 @@ namespace Spark
         {
             if (!obj)
                 return;
+
+            // Validate the pointer actually belongs to this pool
+            bool owned =
+                std::any_of(m_storage.begin(), m_storage.end(), [obj](const auto& p) { return p.get() == obj; });
+            if (!owned)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                "ObjectPool::Release called with pointer not owned by this pool");
+                return;
+            }
+
             if constexpr (ThreadSafe)
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
@@ -115,7 +129,11 @@ namespace Spark
         T* AcquireImpl()
         {
             if (m_freeList.empty())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "ObjectPool::Acquire exhausted (capacity=%zu)",
+                               m_storage.size());
                 return nullptr;
+            }
             T* obj = m_freeList.back();
             m_freeList.pop_back();
             return obj;

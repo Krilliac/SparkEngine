@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include "LogMacros.h"
+
 #include <cstdint>
 #include <vector>
 
@@ -81,7 +83,11 @@ namespace Spark
         [[nodiscard]] VersionedHandle Allocate()
         {
             if (m_freeList.empty())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "HandleAllocator::Allocate exhausted (capacity=%u, active=%u)",
+                               GetCapacity(), m_activeCount);
                 return VersionedHandle::Null();
+            }
 
             uint32_t idx = m_freeList.back();
             m_freeList.pop_back();
@@ -100,9 +106,20 @@ namespace Spark
             if (handle.IsNull())
                 return;
             if (handle.index >= m_generations.size())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "HandleAllocator::Free called with out-of-range index %u (capacity=%u)", handle.index,
+                               GetCapacity());
                 return;
+            }
             if (m_generations[handle.index] != handle.generation)
-                return; // Already freed (generation mismatch)
+            {
+                SPARK_LOG_DEBUG(
+                    Spark::LogCategory::Core,
+                    "HandleAllocator::Free called with stale handle (index=%u, handle_gen=%u, current_gen=%u)",
+                    handle.index, handle.generation, m_generations[handle.index]);
+                return;
+            }
 
             ++m_generations[handle.index];
             m_freeList.push_back(handle.index);

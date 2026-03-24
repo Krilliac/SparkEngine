@@ -30,6 +30,7 @@
 #pragma once
 
 #include "Hash.h"
+#include "LogMacros.h"
 
 #include <string>
 #include <string_view>
@@ -79,9 +80,19 @@ namespace Spark
         {
             uint64_t h = FNV1a64(str);
 
-            // If this hash is already interned, return it
-            if (m_hashToString.contains(h))
+            // If this hash is already interned, check for collision
+            auto existing = m_hashToString.find(h);
+            if (existing != m_hashToString.end())
+            {
+                if (*existing->second != str)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "StringPool hash collision: \"%.*s\" collides with \"%s\" (hash=0x%llx)",
+                                    static_cast<int>(str.size()), str.data(), existing->second->c_str(),
+                                    static_cast<unsigned long long>(h));
+                }
                 return {h};
+            }
 
             // Insert the string into the stable set and record the mapping
             auto [it, inserted] = m_strings.emplace(str);

@@ -27,7 +27,10 @@
 
 #pragma once
 
+#include "LogMacros.h"
+
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <vector>
 
@@ -54,6 +57,12 @@ namespace Spark
          */
         [[nodiscard]] CallbackHandle Schedule(std::function<void()> callback, float delay)
         {
+            if (delay < 0.0f)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "Scheduler::Schedule called with negative delay %.3f, clamping to 0", delay);
+                delay = 0.0f;
+            }
             CallbackHandle id = m_nextId++;
             m_entries.push_back({id, std::move(callback), delay, 0.0f, false});
             return id;
@@ -67,6 +76,13 @@ namespace Spark
          */
         [[nodiscard]] CallbackHandle ScheduleRepeating(std::function<void()> callback, float interval)
         {
+            if (interval <= 0.0f)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                "Scheduler::ScheduleRepeating called with non-positive interval %.3f, ignoring",
+                                interval);
+                return 0;
+            }
             CallbackHandle id = m_nextId++;
             m_entries.push_back({id, std::move(callback), interval, interval, true});
             return id;
@@ -95,6 +111,13 @@ namespace Spark
          */
         void Update(float dt)
         {
+            if (dt < 0.0f)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Scheduler::Update called with negative dt %.3f, ignoring",
+                               dt);
+                return;
+            }
+
             // Iterate with index since vector may be modified by removal
             size_t i = 0;
             while (i < m_entries.size())
@@ -104,7 +127,20 @@ namespace Spark
 
                 if (entry.timeRemaining <= 0.0f)
                 {
-                    entry.callback();
+                    try
+                    {
+                        entry.callback();
+                    }
+                    catch (const std::exception& e)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Scheduler callback %llu threw: %s",
+                                        static_cast<unsigned long long>(entry.id), e.what());
+                    }
+                    catch (...)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Scheduler callback %llu threw unknown exception",
+                                        static_cast<unsigned long long>(entry.id));
+                    }
 
                     if (entry.repeating)
                     {
