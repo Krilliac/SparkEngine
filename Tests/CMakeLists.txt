@@ -44,6 +44,7 @@ add_executable(SparkTests
     TestTween.cpp
     TestCommandHistory.cpp
     TestDebugTools.cpp
+    TestDebugHookManager.cpp
     TestResult.cpp
     TestFrameAllocator.cpp
     TestChromeTracing.cpp
