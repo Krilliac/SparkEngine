@@ -438,7 +438,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*157 test files, 1800+ test cases*
+*158 test files, 1811+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -535,6 +535,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestNetworkEncryption` | 17 |
 | `TestNetworkIntegration` | 31 |
 | `TestNetworkInterpolation` | 12 |
+| `TestNetworkMMOIntegration` | 11 |
 | `TestNetworkStress` | 21 |
 | `TestNoiseGenerator` | 7 |
 | `TestNullRHIDevice` | 3 |

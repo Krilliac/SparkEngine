@@ -332,26 +332,62 @@ namespace Spark::Net
         }
     }
 
+    void AreaServer::AddClient(ClientID clientId)
+    {
+        std::lock_guard<std::mutex> lock(m_clientMutex);
+        ClientRecord record;
+        record.clientId = clientId;
+        record.lastHeartbeatTime = m_stats.uptimeSeconds;
+        m_connectedClients[clientId] = record;
+        m_stats.clientCount = static_cast<uint32_t>(m_connectedClients.size());
+
+        SPARK_LOG_INFO("AreaServer", "Area '%s' added client %u (total: %u/%d).", m_config.areaName.c_str(), clientId,
+                       m_stats.clientCount, m_config.maxClients);
+    }
+
+    void AreaServer::RemoveClient(ClientID clientId)
+    {
+        std::lock_guard<std::mutex> lock(m_clientMutex);
+        m_connectedClients.erase(clientId);
+        m_stats.clientCount = static_cast<uint32_t>(m_connectedClients.size());
+
+        SPARK_LOG_INFO("AreaServer", "Area '%s' removed client %u (total: %u/%d).", m_config.areaName.c_str(), clientId,
+                       m_stats.clientCount, m_config.maxClients);
+    }
+
+    uint32_t AreaServer::GetClientCount() const
+    {
+        std::lock_guard<std::mutex> lock(m_clientMutex);
+        return static_cast<uint32_t>(m_connectedClients.size());
+    }
+
     void AreaServer::ProcessClientMessages(float deltaTime)
     {
-        // --- Client Message Processing Pipeline ---
-        // 1. Poll incoming messages from the area's NetworkManager
-        // 2. Deserialize and validate each message
-        // 3. Dispatch to appropriate handler based on MessageType
-        // 4. Send acknowledgements for reliable messages
-        // 5. Check for timed-out clients
-
         // Check heartbeat timeouts for connected clients
-        // In a full implementation, we would iterate m_connectedClients and
-        // compare each client's lastHeartbeatTime against HEARTBEAT_TIMEOUT.
-        // Clients that exceed the timeout would be disconnected gracefully.
-        // For now, this is tracked via stats only.
+        std::vector<ClientID> timedOut;
+        {
+            std::lock_guard<std::mutex> lock(m_clientMutex);
+            float currentUptime = m_stats.uptimeSeconds;
 
-        // Update client count stat (would normally come from NetworkManager)
-        // m_stats.clientCount = static_cast<uint32_t>(m_connectedClients.size());
+            for (auto& [clientId, record] : m_connectedClients)
+            {
+                float elapsed = currentUptime - record.lastHeartbeatTime;
+                if (elapsed > HEARTBEAT_TIMEOUT)
+                {
+                    SPARK_LOG_WARN("AreaServer", "Area '%s' client %u timed out (%.1fs since last heartbeat).",
+                                   m_config.areaName.c_str(), clientId, elapsed);
+                    timedOut.push_back(clientId);
+                }
+            }
+
+            for (ClientID id : timedOut)
+            {
+                m_connectedClients.erase(id);
+            }
+            m_stats.clientCount = static_cast<uint32_t>(m_connectedClients.size());
+        }
 
         // Rate-limited periodic status logging
-        // Note: m_stats.uptimeSeconds is updated by Tick() from the steady_clock.
         float currentUptime = m_stats.uptimeSeconds;
         if (currentUptime - m_lastStatusLogTime >= STATUS_LOG_INTERVAL)
         {
@@ -369,66 +405,19 @@ namespace Spark::Net
     {
         auto simStart = std::chrono::steady_clock::now();
 
-        // 1. Physics step (if enabled)
-        if (m_config.enablePhysics)
-        {
-            auto physicsStart = std::chrono::steady_clock::now();
-
-            // In a full implementation, this would call into PhysicsSystem::Step(deltaTime)
-            // to advance rigid body simulation, collision detection, and constraint solving
-            // for all physics-enabled entities in this area.
-
-            auto physicsEnd = std::chrono::steady_clock::now();
-            float physicsMs = std::chrono::duration<float, std::milli>(physicsEnd - physicsStart).count();
-            if (physicsMs > 1.0f)
-            {
-                SPARK_LOG_WARN("AreaServer", "Area '%s' physics step took %.2fms (dt=%.4f).", m_config.areaName.c_str(),
-                               physicsMs, deltaTime);
-            }
-        }
-
-        // 2. AI update (if enabled)
-        if (m_config.enableAI)
-        {
-            auto aiStart = std::chrono::steady_clock::now();
-
-            // In a full implementation, this would call into AISystem::Update(deltaTime)
-            // to process behavior trees, navigation, and perception for AI-controlled
-            // entities within this area's boundaries.
-
-            auto aiEnd = std::chrono::steady_clock::now();
-            float aiMs = std::chrono::duration<float, std::milli>(aiEnd - aiStart).count();
-            if (aiMs > 1.0f)
-            {
-                SPARK_LOG_WARN("AreaServer", "Area '%s' AI update took %.2fms.", m_config.areaName.c_str(), aiMs);
-            }
-        }
-
-        // 3. Scripting update (if enabled)
-        if (m_config.enableScripting)
-        {
-            auto scriptStart = std::chrono::steady_clock::now();
-
-            // In a full implementation, this would call into the AngelScript VM
-            // to execute per-tick script callbacks (OnTick, OnUpdate) for all
-            // script-attached entities in this area.
-
-            auto scriptEnd = std::chrono::steady_clock::now();
-            float scriptMs = std::chrono::duration<float, std::milli>(scriptEnd - scriptStart).count();
-            if (scriptMs > 1.0f)
-            {
-                SPARK_LOG_WARN("AreaServer", "Area '%s' scripting update took %.2fms.", m_config.areaName.c_str(),
-                               scriptMs);
-            }
-        }
-
-        // 4. Update entity count tracking
+        // Apply velocity integration to tracked entities
         {
             std::lock_guard<std::mutex> lock(m_migrationMutex);
+            for (auto& [networkID, entity] : m_trackedEntities)
+            {
+                entity.position.x += entity.velocity.x * deltaTime;
+                entity.position.y += entity.velocity.y * deltaTime;
+                entity.position.z += entity.velocity.z * deltaTime;
+            }
             m_stats.entityCount = static_cast<uint32_t>(m_trackedEntities.size());
         }
 
-        // 5. Debug logging for overall tick performance
+        // Performance budget check
         auto simEnd = std::chrono::steady_clock::now();
         float totalSimMs = std::chrono::duration<float, std::milli>(simEnd - simStart).count();
         float targetMs = 1000.0f / m_config.tickRate;

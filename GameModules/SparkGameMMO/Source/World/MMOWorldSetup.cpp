@@ -9,6 +9,7 @@
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/WorldServer.h"
 #include "Engine/Networking/AreaServer.h"
+#include "Engine/Networking/NetworkManager.h"
 #endif
 
 #include "Engine/Streaming/SeamlessAreaManager.h"
@@ -224,6 +225,111 @@ namespace MMO
         auto& streamingMgr = Spark::Streaming::SeamlessAreaManager::GetInstance();
         streamingMgr.Update(deltaTime);
     }
+
+#ifdef ENABLE_NETWORKING
+
+    bool MMOWorldSetup::StartNetworkServer(uint16_t port)
+    {
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        if (!nm.IsInitialized())
+        {
+            if (!nm.Initialize())
+                return false;
+        }
+
+        if (!nm.StartServer(port, 128))
+            return false;
+
+        // Register server-side chat broadcast handler
+        nm.RegisterHandler(Spark::Net::MessageType::ChatMessage,
+                           [](const Spark::Net::NetworkMessage& msg)
+                           {
+                               auto& mgr = Spark::Net::NetworkManager::GetInstance();
+                               if (mgr.GetRole() != Spark::Net::NetworkRole::Server)
+                                   return;
+
+                               // Broadcast to all other connected clients
+                               mgr.SendToAllExcept(msg.senderID, msg);
+                           });
+
+        // Register server-side position relay handler
+        nm.RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
+                           [](const Spark::Net::NetworkMessage& msg)
+                           {
+                               auto& mgr = Spark::Net::NetworkManager::GetInstance();
+                               if (mgr.GetRole() != Spark::Net::NetworkRole::Server)
+                                   return;
+
+                               // Relay position update to all other clients
+                               mgr.SendToAllExcept(msg.senderID, msg);
+                           });
+
+        m_networkServerRunning = true;
+        m_knownClients.clear();
+
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO World] Network server started on port " + std::to_string(port));
+        return true;
+    }
+
+    void MMOWorldSetup::ServerTick(float deltaTime)
+    {
+        if (!m_networkServerRunning)
+            return;
+
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        nm.Update(deltaTime);
+
+        // Detect new client connections and bridge to WorldServer
+        if (m_worldServer && m_worldServer->IsRunning())
+        {
+            const auto& clients = nm.GetClients();
+
+            // Detect new connections
+            for (const auto& [clientId, info] : clients)
+            {
+                if (m_knownClients.find(clientId) == m_knownClients.end())
+                {
+                    m_knownClients[clientId] = true;
+                    m_worldServer->HandlePlayerConnect(clientId, info.name, {0.0f, 0.0f, 0.0f});
+                }
+            }
+
+            // Detect disconnections
+            std::vector<Spark::Net::ClientID> disconnected;
+            for (const auto& [clientId, _] : m_knownClients)
+            {
+                if (clients.find(clientId) == clients.end())
+                {
+                    disconnected.push_back(clientId);
+                }
+            }
+            for (auto clientId : disconnected)
+            {
+                m_knownClients.erase(clientId);
+                m_worldServer->HandlePlayerDisconnect(clientId);
+            }
+        }
+
+        m_worldTime += deltaTime;
+    }
+
+    void MMOWorldSetup::StopNetworkServer()
+    {
+        if (!m_networkServerRunning)
+            return;
+
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        nm.StopServer();
+        nm.Shutdown();
+        m_knownClients.clear();
+        m_networkServerRunning = false;
+
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO World] Network server stopped");
+    }
+
+#endif // ENABLE_NETWORKING
 
     void MMOWorldSetup::Shutdown()
     {
