@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.25)
 # Modern CMake Configuration - Cross-Platform Build
 # ================================================================
 
-# All targets need PIC since SparkGame is a shared library that links SparkEngineLib
+# All targets need PIC since game modules are shared libraries that link SparkEngineLib
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Set CMake policies for modern behavior
@@ -112,7 +112,7 @@ endif()
 option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON)
 option(ENABLE_RECAST "Enable Recast/Detour navmesh generation (improved voxel-based builder)" ON)
 option(BUILD_TESTS "Build test suite" ON)
-option(BUILD_GAME_MODULES "Build in-tree game modules (SparkGame, SparkGameMMO)" ON)
+option(BUILD_GAME_MODULES "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)" ON)
 option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)" OFF)
 option(SPARK_SUPPRESS_THIRDPARTY_WARNINGS "Suppress compiler warnings from third-party libraries (Jolt, etc.)" ON)
 option(SPARK_DOUBLE_PRECISION_PHYSICS "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds" OFF)
@@ -441,9 +441,9 @@ endif()
 # Architecture:
 #   SparkEngineLib  = STATIC LIBRARY (all engine systems)
 #   SparkEngine     = EXECUTABLE (entry point + game module loader)
-#   SparkGame       = SHARED LIBRARY / DLL (game code, links SparkEngineLib)
+#   SparkGameFPS    = SHARED LIBRARY / DLL (FPS game code, links SparkEngineLib)
 #
-# The engine exe loads SparkGame.dll at runtime via GameModuleLoader.
+# The engine exe loads game module DLLs at runtime via GameModuleLoader.
 # Both the engine exe and game DLL link SparkEngineLib for shared engine code.
 # ---------------------------------------------------------------------
 
@@ -788,7 +788,7 @@ endif()
 # ---------------------------------------------------------------------
 target_include_directories(SparkEngineLib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkEngine/Source>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/GameModules/SparkGame/Source>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/GameModules/SparkGameFPS/Source>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkSDK/Include>
     $<INSTALL_INTERFACE:include>
 )
@@ -1090,8 +1090,8 @@ install(FILES
 install(TARGETS SparkEngine
     RUNTIME DESTINATION bin
 )
-if(TARGET SparkGame)
-    install(TARGETS SparkGame
+if(TARGET SparkGameFPS)
+    install(TARGETS SparkGameFPS
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION bin
     )

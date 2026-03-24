@@ -1,20 +1,26 @@
 cmake_minimum_required(VERSION 3.25)
 
 # ================================================================
-# SparkGame - Default Game Module DLL
+# SparkGamePlatformer - 3D Platformer Game Module DLL
 #
-# Minimal "blank slate" game module for SparkEngine.
-# Serves as the simplest possible entry point — no subsystems,
-# no game-specific logic, just the IModule interface wired up.
+# Showcases SparkEngine's 3D platformer mechanics:
+#   - Physics-based player movement with state machine
+#   - Coyote time, jump buffering, variable jump height
+#   - Moving/falling/bouncy/disappearing platforms
+#   - Collectibles with magnet power-up
+#   - Hazards with invincibility frames
+#   - Checkpoint/respawn system
+#   - Third-person follow camera with collision
 #
-# Built as a shared library loaded by the engine at runtime.
+# Built as a shared library loaded by the engine at runtime,
+# identical to SparkGame's module pattern.
 # ================================================================
 
-if(NOT CMAKE_PROJECT_NAME OR CMAKE_PROJECT_NAME STREQUAL "SparkGame")
-    project(SparkGame LANGUAGES CXX)
-    set(SPARK_GAME_DEFAULT_STANDALONE TRUE)
+if(NOT CMAKE_PROJECT_NAME OR CMAKE_PROJECT_NAME STREQUAL "SparkGamePlatformer")
+    project(SparkGamePlatformer LANGUAGES CXX)
+    set(SPARK_GAME_PLATFORMER_STANDALONE TRUE)
 else()
-    set(SPARK_GAME_DEFAULT_STANDALONE FALSE)
+    set(SPARK_GAME_PLATFORMER_STANDALONE FALSE)
 endif()
 
 set(CMAKE_CXX_STANDARD 23)
@@ -24,13 +30,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ---------------------------------------------------------------------
 # Standalone mode: locate SparkEngine
 # ---------------------------------------------------------------------
-if(SPARK_GAME_DEFAULT_STANDALONE)
+if(SPARK_GAME_PLATFORMER_STANDALONE)
     if(NOT SPARK_ENGINE_DIR)
         set(SPARK_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." CACHE PATH
             "Path to SparkEngine root directory")
     endif()
 
-    message(STATUS "SparkGame standalone build - Engine at: ${SPARK_ENGINE_DIR}")
+    message(STATUS "SparkGamePlatformer standalone build - Engine at: ${SPARK_ENGINE_DIR}")
 
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -68,41 +74,41 @@ else()
 endif()
 
 # ---------------------------------------------------------------------
-# Collect SparkGame source files
+# Collect SparkGamePlatformer source files
 # ---------------------------------------------------------------------
-file(GLOB_RECURSE SPARK_GAME_DEFAULT_SOURCES
+file(GLOB_RECURSE SPARK_GAME_PLATFORMER_SOURCES
     CONFIGURE_DEPENDS
     "Source/*.cpp"
     "Source/*.h"
     "Source/*.hpp"
 )
-list(FILTER SPARK_GAME_DEFAULT_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
-list(FILTER SPARK_GAME_DEFAULT_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
+list(FILTER SPARK_GAME_PLATFORMER_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
+list(FILTER SPARK_GAME_PLATFORMER_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 
 # ---------------------------------------------------------------------
 # Create the game as a SHARED library (DLL)
 # ---------------------------------------------------------------------
-add_library(SparkGame SHARED ${SPARK_GAME_DEFAULT_SOURCES})
+add_library(SparkGamePlatformer SHARED ${SPARK_GAME_PLATFORMER_SOURCES})
 
-target_compile_definitions(SparkGame PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
+target_compile_definitions(SparkGamePlatformer PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
 
 # ---------------------------------------------------------------------
 # Link against SparkEngineLib
 # ---------------------------------------------------------------------
-if(NOT SPARK_GAME_DEFAULT_STANDALONE AND TARGET SparkEngineLib)
-    target_link_libraries(SparkGame PRIVATE SparkEngineLib)
+if(NOT SPARK_GAME_PLATFORMER_STANDALONE AND TARGET SparkEngineLib)
+    target_link_libraries(SparkGamePlatformer PRIVATE SparkEngineLib)
 endif()
 
 # ---------------------------------------------------------------------
 # Include directories
 # ---------------------------------------------------------------------
-if(SPARK_GAME_DEFAULT_STANDALONE)
+if(SPARK_GAME_PLATFORMER_STANDALONE)
     set(SPARK_SDK_INCLUDE_DIR "${SPARK_ENGINE_DIR}/SparkSDK/Include")
 else()
     set(SPARK_SDK_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/SparkSDK/Include")
 endif()
 
-target_include_directories(SparkGame PRIVATE
+target_include_directories(SparkGamePlatformer PRIVATE
     "Source"
     "${ENGINE_SOURCE_DIR}"
     "${SPARK_SDK_INCLUDE_DIR}"
@@ -113,7 +119,7 @@ target_include_directories(SparkGame PRIVATE
 # Platform-specific libraries
 # ---------------------------------------------------------------------
 if(WIN32)
-    target_link_libraries(SparkGame PRIVATE
+    target_link_libraries(SparkGamePlatformer PRIVATE
         d3d11 dxgi d3dcompiler dxguid
         kernel32 user32 gdi32 winspool
         shell32 comdlg32 advapi32
@@ -125,77 +131,77 @@ if(WIN32)
         $<$<BOOL:${ENABLE_NETWORKING}>:wldap32>
         $<$<BOOL:${ENABLE_NETWORKING}>:normaliz>
     )
-    target_compile_definitions(SparkGame PRIVATE
+    target_compile_definitions(SparkGamePlatformer PRIVATE
         WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS
     )
 else()
     find_package(Threads REQUIRED)
-    target_link_libraries(SparkGame PRIVATE
+    target_link_libraries(SparkGamePlatformer PRIVATE
         Threads::Threads
         ${CMAKE_DL_LIBS}
     )
     if(APPLE)
-        target_compile_definitions(SparkGame PRIVATE SPARK_PLATFORM_MACOS)
+        target_compile_definitions(SparkGamePlatformer PRIVATE SPARK_PLATFORM_MACOS)
     else()
-        target_compile_definitions(SparkGame PRIVATE SPARK_PLATFORM_LINUX)
+        target_compile_definitions(SparkGamePlatformer PRIVATE SPARK_PLATFORM_LINUX)
     endif()
 endif()
 
 if(MSVC)
-    target_link_libraries(SparkGame PRIVATE legacy_stdio_definitions)
+    target_link_libraries(SparkGamePlatformer PRIVATE legacy_stdio_definitions)
 endif()
 
 # Link Jolt Physics if available
 if(TARGET Jolt)
-    target_link_libraries(SparkGame PRIVATE Jolt)
+    target_link_libraries(SparkGamePlatformer PRIVATE Jolt)
 endif()
 
 if(TARGET miniz)
-    target_link_libraries(SparkGame PRIVATE miniz)
+    target_link_libraries(SparkGamePlatformer PRIVATE miniz)
 endif()
 if(TARGET tinyobjloader)
-    target_link_libraries(SparkGame PRIVATE tinyobjloader)
+    target_link_libraries(SparkGamePlatformer PRIVATE tinyobjloader)
 endif()
 
 # Vulkan backend
 if(SPARK_VULKAN_AVAILABLE)
-    target_compile_definitions(SparkGame PRIVATE SPARK_VULKAN_SUPPORT)
+    target_compile_definitions(SparkGamePlatformer PRIVATE SPARK_VULKAN_SUPPORT)
     if(Vulkan_FOUND)
-        target_link_libraries(SparkGame PRIVATE Vulkan::Vulkan)
+        target_link_libraries(SparkGamePlatformer PRIVATE Vulkan::Vulkan)
     else()
-        target_include_directories(SparkGame PRIVATE ${Vulkan_INCLUDE_DIR})
-        target_link_libraries(SparkGame PRIVATE ${Vulkan_LIBRARY})
+        target_include_directories(SparkGamePlatformer PRIVATE ${Vulkan_INCLUDE_DIR})
+        target_link_libraries(SparkGamePlatformer PRIVATE ${Vulkan_LIBRARY})
     endif()
 endif()
 
 # OpenGL backend
 if(SPARK_OPENGL_AVAILABLE)
-    target_compile_definitions(SparkGame PRIVATE SPARK_OPENGL_SUPPORT)
-    target_link_libraries(SparkGame PRIVATE OpenGL::GL)
+    target_compile_definitions(SparkGamePlatformer PRIVATE SPARK_OPENGL_SUPPORT)
+    target_link_libraries(SparkGamePlatformer PRIVATE OpenGL::GL)
     if(TARGET glad)
-        target_link_libraries(SparkGame PRIVATE glad)
+        target_link_libraries(SparkGamePlatformer PRIVATE glad)
     endif()
 endif()
 
 # Apply feature definitions
 if(FEATURE_DEFINITIONS)
-    target_compile_definitions(SparkGame PRIVATE ${FEATURE_DEFINITIONS})
+    target_compile_definitions(SparkGamePlatformer PRIVATE ${FEATURE_DEFINITIONS})
 endif()
 
 # ---------------------------------------------------------------------
 # Post-build: Asset directories
 # ---------------------------------------------------------------------
-add_custom_command(TARGET SparkGame POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Shaders"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGame>/Assets"
-    COMMENT "Creating SparkGame asset directory structure"
+add_custom_command(TARGET SparkGamePlatformer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGamePlatformer>/Shaders"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGamePlatformer>/Assets"
+    COMMENT "Creating SparkGamePlatformer asset directory structure"
 )
 
 # Copy shaders from engine
 set(SHADER_SOURCE_DIR "${ENGINE_SOURCE_DIR}/../Shaders/HLSL")
 if(NOT EXISTS "${SHADER_SOURCE_DIR}")
     set(SHADER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/HLSL")
-    if(SPARK_GAME_DEFAULT_STANDALONE)
+    if(SPARK_GAME_PLATFORMER_STANDALONE)
         set(SHADER_SOURCE_DIR "${SPARK_ENGINE_DIR}/SparkEngine/Shaders/HLSL")
     endif()
 endif()
@@ -203,10 +209,10 @@ if(EXISTS "${SHADER_SOURCE_DIR}")
     file(GLOB_RECURSE SHADER_FILES "${SHADER_SOURCE_DIR}/*.hlsl")
     foreach(SHADER_FILE ${SHADER_FILES})
         get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-        add_custom_command(TARGET SparkGame POST_BUILD
+        add_custom_command(TARGET SparkGamePlatformer POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${SHADER_FILE}
-                "$<TARGET_FILE_DIR:SparkGame>/Shaders/${SHADER_NAME}"
+                "$<TARGET_FILE_DIR:SparkGamePlatformer>/Shaders/${SHADER_NAME}"
             COMMENT "Copying shader ${SHADER_NAME}"
         )
     endforeach()
@@ -216,7 +222,7 @@ endif()
 # Visual Studio settings
 # ---------------------------------------------------------------------
 if(MSVC)
-    foreach(src ${SPARK_GAME_DEFAULT_SOURCES})
+    foreach(src ${SPARK_GAME_PLATFORMER_SOURCES})
         get_filename_component(dir "${src}" DIRECTORY)
         file(RELATIVE_PATH grp "${CMAKE_CURRENT_SOURCE_DIR}/Source" "${dir}")
         string(REPLACE "/" "\\\\" grp "${grp}")
@@ -227,15 +233,15 @@ if(MSVC)
         endif()
     endforeach()
 
-    if(SPARK_GAME_DEFAULT_STANDALONE)
-        set_property(TARGET SparkGame PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${SPARK_ENGINE_DIR}")
+    if(SPARK_GAME_PLATFORMER_STANDALONE)
+        set_property(TARGET SparkGamePlatformer PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${SPARK_ENGINE_DIR}")
     else()
-        set_property(TARGET SparkGame PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        set_property(TARGET SparkGamePlatformer PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     endif()
 endif()
 
-message(STATUS "SparkGame configured as SHARED LIBRARY (default game module DLL)")
-if(SPARK_GAME_DEFAULT_STANDALONE)
+message(STATUS "SparkGamePlatformer configured as SHARED LIBRARY (platformer game module DLL)")
+if(SPARK_GAME_PLATFORMER_STANDALONE)
     message(STATUS "  Mode: Standalone build")
     message(STATUS "  Engine: ${SPARK_ENGINE_DIR}")
 else()
