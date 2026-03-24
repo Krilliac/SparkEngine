@@ -684,10 +684,16 @@ if(BUILD_GAME_MODULES)
         add_subdirectory("${_MOD_DIR}" "${CMAKE_BINARY_DIR}/GameModules/${_MOD_NAME}")
 
         if(TARGET ${_MOD_NAME})
-            # Link engine against the game module's import library and copy
-            # the DLL next to the engine executable after build.
-            target_link_libraries(SparkEngine PRIVATE ${_MOD_NAME})
-            target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
+            # On Windows, link the import library so the engine can resolve
+            # DLL exports at load time.  On Linux/macOS, game modules are
+            # loaded at runtime via dlopen (ModuleManager), so we must NOT
+            # create an ELF NEEDED dependency — that would force the shared
+            # library to load at startup and cause duplicate-singleton issues
+            # when static SparkEngineLib symbols appear in both the exe and SO.
+            if(WIN32)
+                target_link_libraries(SparkEngine PRIVATE ${_MOD_NAME})
+                target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
+            endif()
             add_custom_command(TARGET SparkEngine POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     $<TARGET_FILE:${_MOD_NAME}>
