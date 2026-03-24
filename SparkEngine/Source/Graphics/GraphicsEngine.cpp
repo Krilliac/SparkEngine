@@ -14,6 +14,7 @@
  */
 #include "GraphicsEngine.h"
 #include "../Utils/Assert.h"
+#include "../Utils/DebugHookManager.h"
 #include "../Utils/SparkError.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/Validate.h"
@@ -153,6 +154,7 @@ GraphicsEngine::~GraphicsEngine()
 
 HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 {
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Graphics", 0.0);
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::Initialize started with critical fixes.", L"INFO");
     ASSERT(hWnd != nullptr);
     if (!hWnd)
@@ -418,6 +420,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         LOG_TO_CONSOLE_IMMEDIATE(L"Basic shaders initialized successfully", L"SUCCESS");
     }
 
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Graphics", 0.0);
     return S_OK;
 }
 
@@ -428,6 +431,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 void GraphicsEngine::Shutdown()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Graphics", 0.0);
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GraphicsEngine::Shutdown — beginning graphics subsystem teardown");
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::Shutdown called.", L"INFO");
 
@@ -535,6 +539,7 @@ void GraphicsEngine::Shutdown()
     m_device.Reset();
 
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine shutdown complete.", L"INFO");
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Graphics", 0.0);
 }
 
 // ============================================================================
@@ -937,6 +942,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #include "../Physics/PhysicsSystem.h"
 #include "../Game/GameObject.h"
 #include "RHI/RHI.h"
+#include "../Utils/DebugHookManager.h"
 #include "../Utils/Validate.h"
 #include <sstream>
 #include <chrono>
@@ -1017,6 +1023,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
 void GraphicsEngine::Shutdown()
 {
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Graphics.RHI", 0.0);
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GraphicsEngine::Shutdown (RHI path) — beginning teardown");
     auto& rhi = GetRHI();
     if (!rhi.initialized)
@@ -1037,6 +1044,7 @@ void GraphicsEngine::Shutdown()
     rhi.initialized = false;
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shutdown complete");
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Graphics.RHI", 0.0);
 }
 
 // ============================================================================

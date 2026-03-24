@@ -13,6 +13,7 @@
 #include "DeltaSnapshotManager.h"
 #include "InstabilitySimulator.h"
 #include "../../Utils/Assert.h"
+#include "../../Utils/DebugHookManager.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
 #include <cstring>
@@ -33,6 +34,7 @@ namespace Spark::Net
     bool NetworkManager::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Network", 0.0);
         if (m_initialized)
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Network, "NetworkManager::Initialize — already initialized");
@@ -139,6 +141,7 @@ namespace Spark::Net
                             }
                         });
 
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Network", 0.0);
         return true;
     }
 
@@ -147,6 +150,7 @@ namespace Spark::Net
         if (!m_initialized)
             return;
 
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Network", 0.0);
         if (m_connectionState != ConnectionState::Disconnected)
         {
             Disconnect();
@@ -211,6 +215,7 @@ namespace Spark::Net
         m_rttInitialized = false;
         m_stats = {};
         m_initialized = false;
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Network", 0.0);
     }
 
     // --------------------------------------------------------------------------

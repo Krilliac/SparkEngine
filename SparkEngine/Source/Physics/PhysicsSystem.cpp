@@ -30,6 +30,8 @@
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
 
+#include "Utils/DebugHookManager.h"
+
 #include <algorithm>
 #include <chrono>
 #include <thread>
@@ -317,6 +319,7 @@ PhysicsSystem::~PhysicsSystem()
 HRESULT PhysicsSystem::Initialize()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Physics", 0.0);
     SPARK_LOG_INFO(Spark::LogCategory::Physics, "PhysicsSystem initializing (Jolt Physics)");
 
     // Initialize default material
@@ -383,6 +386,7 @@ HRESULT PhysicsSystem::Initialize()
     m_joltSystem->SetBodyActivationListener(static_cast<SparkBodyActivationListener*>(m_bodyActivationListener.get()));
 
     Spark::SimpleConsole::GetInstance().LogSuccess("PhysicsSystem initialized successfully (Jolt Physics)");
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Physics", 0.0);
     return S_OK;
 }
 
@@ -392,6 +396,7 @@ void PhysicsSystem::Shutdown()
     if (!m_joltSystem && m_bodies.empty() && m_constraints.empty())
         return;
 
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Physics", 0.0);
     SPARK_LOG_INFO(Spark::LogCategory::Physics, "PhysicsSystem shutting down");
 
     // Remove all constraints
@@ -457,11 +462,13 @@ void PhysicsSystem::Shutdown()
     }
 
     Spark::SimpleConsole::GetInstance().LogInfo("PhysicsSystem shutdown complete");
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Physics", 0.0);
 }
 
 void PhysicsSystem::Update(float deltaTime)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Physics", 0.0);
     SPARK_WARN_IF(Spark::LogCategory::Physics, deltaTime < 0.0f,
                   "PhysicsSystem::Update called with negative deltaTime");
     if (m_paused || deltaTime <= 0.0f)
@@ -529,6 +536,7 @@ void PhysicsSystem::Update(float deltaTime)
         m_metrics.simulationTime = duration.count() / 1000.0f;
     }
 
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", duration.count() / 1000.0);
     UpdateMetrics();
 }
 

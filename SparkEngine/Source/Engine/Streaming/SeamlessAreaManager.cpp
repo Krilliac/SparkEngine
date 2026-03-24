@@ -8,6 +8,7 @@
  */
 
 #include "SeamlessAreaManager.h"
+#include "../../Utils/DebugHookManager.h"
 #include "../../Utils/SparkConsole.h"
 #include "../../Utils/Validate.h"
 
@@ -24,6 +25,7 @@ namespace Spark::Streaming
 
     void SeamlessAreaManager::Initialize()
     {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Streaming", 0.0);
         if (m_initialized)
         {
             return;
@@ -38,10 +40,12 @@ namespace Spark::Streaming
         m_initialized = true;
 
         Spark::SimpleConsole::GetInstance().LogInfo("[SeamlessAreaManager] Initialized");
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Streaming", 0.0);
     }
 
     void SeamlessAreaManager::Update(float dt)
     {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Streaming", 0.0);
         if (!m_initialized)
         {
             return;
@@ -70,10 +74,12 @@ namespace Spark::Streaming
 
         // Unload areas that are beyond the unload radius
         ProcessUnloadQueue();
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Streaming", 0.0);
     }
 
     void SeamlessAreaManager::Shutdown()
     {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Streaming", 0.0);
         if (!m_initialized)
         {
             return;
@@ -95,6 +101,7 @@ namespace Spark::Streaming
         m_initialized = false;
 
         Spark::SimpleConsole::GetInstance().LogInfo("[SeamlessAreaManager] Shutdown");
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Streaming", 0.0);
     }
 
     // ========================================================================

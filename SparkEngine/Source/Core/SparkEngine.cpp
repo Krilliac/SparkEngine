@@ -51,6 +51,7 @@
 #include "Utils/FrameInspector.h"
 #include "Utils/Tween.h"
 #include "Utils/DebugDraw.h"
+#include "Utils/DebugHookManager.h"
 #include "Utils/DebugOverlay.h"
 #include "Utils/FileLogger.h"
 #include "Utils/Logger.h"
@@ -222,6 +223,10 @@ static void LogMissingModuleWarnings()
 
 static void InitDebugSystems()
 {
+    // Initialize the debug hook manager first so subsequent inits can be observed
+    Spark::DebugHookManager::GetInstance().SetEnabled(true);
+    SPARK_DEBUG_HOOK(EnginePreInit, 0, 0.0f);
+
     // Initialize the unified Logger with a stderr sink so SPARK_LOG_* output is visible
     auto& logger = Spark::Logger::Get();
     logger.Initialize(/*enableAsync=*/false);
@@ -252,6 +257,7 @@ static void InitDebugSystems()
 
 static void InitCoreGameplaySystems(EngineContext* ctx)
 {
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "CoreGameplaySystems", 0.0);
     auto* eventBus = ctx->GetEventBus();
 
     Spark::Gameplay::ConditionSystem::GetInstance().Initialize();
@@ -269,10 +275,12 @@ static void InitCoreGameplaySystems(EngineContext* ctx)
     destruction.OnDestruction(
         [](const Spark::DestructionEvent& e)
         { Spark::Dialogue::DynamicResponseSystem::GetInstance().SendSignal("OnDestruction", e.entityId); });
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "CoreGameplaySystems", 0.0);
 }
 
 static void InitAIAndWorldSystems(Spark::EventBus* eventBus)
 {
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "AIAndWorldSystems", 0.0);
     Spark::AI::TacticalPointSystem::GetInstance().Initialize();
     Spark::AI::CoverSystem::GetInstance().Initialize();
     Spark::AI::FormationSystem::GetInstance().Initialize();
@@ -286,10 +294,12 @@ static void InitAIAndWorldSystems(Spark::EventBus* eventBus)
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Initialize();
     Spark::Graphics::WaterRenderer::GetInstance().Initialize();
     Spark::Graphics::OcclusionCullingSystem::GetInstance().Initialize();
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "AIAndWorldSystems", 0.0);
 }
 
 static void InitRenderingAndUtilitySystems()
 {
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "RenderingAndUtility", 0.0);
     Spark::FreezeSystem::GetInstance().Initialize();
     Spark::Graphics::RenderCommandQueue::GetInstance().Initialize();
     Spark::Graphics::ConstantBufferDiffManager::GetInstance().Initialize();
@@ -308,10 +318,12 @@ static void InitRenderingAndUtilitySystems()
     Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
     Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
     Spark::PluginRegistry::InitializeAll();
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "RenderingAndUtility", 0.0);
 }
 
 static void InitScriptingAndPlatformSystems(EngineContext* ctx)
 {
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "ScriptingAndPlatform", 0.0);
     {
         static AngelScriptEngine s_angelScript;
         if (s_angelScript.Initialize())
@@ -381,6 +393,7 @@ static void InitScriptingAndPlatformSystems(EngineContext* ctx)
             SPARK_LOG_INFO(Spark::LogCategory::Core, "MobilePlatform initialized");
         }
     }
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "ScriptingAndPlatform", 0.0);
 }
 
 static void InitGameplaySystems()
@@ -408,10 +421,14 @@ static void InitGameplaySystems()
  */
 static void UpdateNonECSSystems(EngineContext* ctx, float dt)
 {
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Weather", 0.0);
     if (auto* weather = ctx->GetWeather())
         weather->Update(dt);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Weather", 0.0);
 
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "TimeOfDay", 0.0);
     Spark::TimeOfDaySystem::GetInstance().Update(dt);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "TimeOfDay", 0.0);
 
     auto* weather = ctx->GetWeather();
     auto* physics = ctx->GetPhysics();
@@ -420,32 +437,48 @@ static void UpdateNonECSSystems(EngineContext* ctx, float dt)
         Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
     }
 
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Dialogue", 0.0);
     if (auto* dialogue = ctx->GetDialogue())
         dialogue->Update(dt);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Dialogue", 0.0);
+
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "UI", 0.0);
     if (auto* ui = ctx->GetUI())
         ui->Update(dt);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "UI", 0.0);
 }
 
 static void UpdateECSDependentSystems(World* world, float dt)
 {
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AbilitySystem", 0.0);
     Spark::Gameplay::AbilitySystem::GetInstance().Update(*world, dt);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AbilitySystem", 0.0);
+
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AI_Movement", 0.0);
     Spark::Gameplay::InstanceManager::GetInstance().Update(dt);
     Spark::AI::MovementSystem::GetInstance().Update(*world, dt);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AI_Movement", 0.0);
+
     Spark::CoroutineScheduler::GetInstance().Update(dt);
     Spark::Audio::MusicManager::GetInstance().Update(dt);
 
     static Spark::Gameplay::WeaponSystem s_weaponSystem;
     s_weaponSystem.Update(dt);
 
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Destruction", 0.0);
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.SetWorld(world);
     destruction.Update(dt);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Destruction", 0.0);
 
     static Spark::ECS::TerrainSystem s_terrainSystem;
     s_terrainSystem.Update(*world, dt);
 
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AI_Tactical", 0.0);
     Spark::AI::FormationSystem::GetInstance().Update(dt);
     Spark::AI::GroupAISystem::GetInstance().Update(dt);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AI_Tactical", 0.0);
+
     Spark::Dialogue::DynamicResponseSystem::GetInstance().Update(dt);
     Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt);
     Spark::Graphics::WaterRenderer::GetInstance().Update(dt);
@@ -500,13 +533,22 @@ static void UpdateExtendedSystems(EngineContext* ctx, float dt)
     Spark::ECS::StageBasedExecutor::GetInstance().ExecuteAll(dt);
 }
 
+static uint64_t g_frameCounter = 0;
+
 static void UpdateGameplaySystems(float dt)
 {
     auto* ctx = EngineContext::Get();
     if (!ctx)
         return;
 
+    ++g_frameCounter;
+    auto& debugHooks = Spark::DebugHookManager::GetInstance();
+    debugHooks.SetFrameNumber(g_frameCounter);
+    debugHooks.SetDeltaTime(dt);
+
     Profiler::GetInstance().BeginFrame();
+
+    SPARK_DEBUG_HOOK(FrameBegin, g_frameCounter, dt);
 
     if (auto* bus = ctx->GetEventBus())
     {
@@ -528,6 +570,8 @@ static void UpdateGameplaySystems(float dt)
     UpdateExtendedSystems(ctx, dt);
 
     Profiler::GetInstance().EndFrame();
+
+    SPARK_DEBUG_HOOK(FrameEnd, g_frameCounter, dt);
 
     if (auto* bus = ctx->GetEventBus())
     {
@@ -633,6 +677,8 @@ static void UpdateDebugSystems(float dt)
 
 static void ShutdownDebugSystems()
 {
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "DebugSystems", 0.0);
+
     Spark::Graphics::DecalSystem::GetInstance().Shutdown();
 
     Spark::TweenManager::GetInstance().KillAll();
@@ -644,6 +690,8 @@ static void ShutdownDebugSystems()
     Spark::ChromeTracing::GetInstance().SaveToFile("spark_trace.json");
     Spark::ChromeTracing::GetInstance().Stop();
     Spark::FileLogger::GetInstance().Shutdown();
+
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "DebugSystems", 0.0);
 }
 
 static void InitPhysics()
@@ -685,6 +733,8 @@ static void InitConsole()
     {
         g_eventBus->Publish(Spark::EngineStartEvent{});
     }
+
+    SPARK_DEBUG_HOOK(EnginePostInit, 0, 0.0f);
 }
 
 static void ShutdownPhysics()
@@ -706,6 +756,8 @@ static void ShutdownPhysics()
  */
 static void ShutdownEngine()
 {
+    SPARK_DEBUG_HOOK(EnginePreShutdown, g_frameCounter, 0.0f);
+
     // Publish EngineShutdownEvent before tearing down systems
     if (g_eventBus)
     {
@@ -736,6 +788,9 @@ static void ShutdownEngine()
     g_timer.reset();
 
     Spark::SimpleConsole::GetInstance().Shutdown();
+
+    SPARK_DEBUG_HOOK(EnginePostShutdown, g_frameCounter, 0.0f);
+    Spark::DebugHookManager::GetInstance().Clear();
 }
 
 // ============================================================================
