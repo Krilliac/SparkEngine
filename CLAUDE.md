@@ -317,7 +317,21 @@ git rebase --continue
 
 ## Pre-commit checks (run before every commit)
 
-After finishing any code change, **always** run these checks in order:
+After finishing any code change, run the checks **appropriate to the files you changed**. Not every step applies to every commit.
+
+### Docs-only changes (`.md`, `wiki/`, `docs/`, `.claude/`, `README.md`, `CLAUDE.md`)
+
+If you **only** changed markdown, wiki, documentation, or `.claude/` knowledge files — and touched **no** `.h`, `.hpp`, or `.cpp` files — skip steps 1–5 and only run step 6:
+
+```bash
+# 6. Update documentation — regenerate API docs and sync wiki
+docs/generate-api-docs.sh check
+docs/sync-wiki.sh sync
+```
+
+### Code changes (`.h`, `.hpp`, `.cpp`, `CMakeLists.txt`, etc.)
+
+If you changed any C++ source, headers, or build files, run **all** steps in order:
 
 ```bash
 # 1. Format check — ensure code matches .clang-format
