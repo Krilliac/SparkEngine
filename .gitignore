@@ -477,3 +477,5 @@ docs/.doc_checksums
 Testing/
 
 # End of SparkEngine .gitignore
+mmo_data.db
+spark_trace.json
