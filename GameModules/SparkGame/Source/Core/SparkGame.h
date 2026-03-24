@@ -1,45 +1,34 @@
 /**
  * @file SparkGame.h
- * @brief SparkGame module - Spark Engine FPS showcase
+ * @brief SparkGame module - minimal default game template
  * @author Spark Engine Team
- * @date 2025
+ * @date 2026
  *
- * SparkGame is the initial engine showcase module loaded as a DLL at runtime.
- * It demonstrates all major engine subsystems: rendering, physics, AI,
- * animation, audio, networking, ECS, vehicles, and class-based FPS gameplay.
+ * SparkGame is the simplest possible game module for SparkEngine.
+ * It serves as a blank-slate starting point with no subsystems or
+ * game-specific logic — just the IModule interface wired up and ready.
  *
- * Implements both the new IModule interface (via Spark::IModule) and
- * the legacy IGameModule interface for backward compatibility.
+ * Implements the Spark::IModule interface for the module system.
  */
 
 #pragma once
 
 #include "Spark/SparkSDK.h"
-#include "Core/IGameModule.h"
-
-// Forward declarations
-class Game;
-class Console;
-
-// Global game pointer shared between SparkGame and SparkEngineLib (SparkConsole).
-// Raw pointer — owned by SparkGameModule, set during Initialize, cleared during Shutdown.
-// Not exported as unique_ptr to avoid ABI/CRT mismatch across DLL boundaries.
-extern SPARK_GAME_API Game* g_game;
 
 /**
- * @brief Game module implementation for SparkGame
+ * @brief Minimal default game module — blank-slate engine template
  *
- * Implements both the new Spark::IModule interface and the legacy IGameModule.
- * The new interface receives an IEngineContext; the legacy interface receives
- * individual system pointers. Both paths ultimately initialize the same Game.
+ * Provides the bare minimum IModule implementation needed to load
+ * into SparkEngine. No subsystems, no game logic — just a clean
+ * starting point for new projects.
  */
-class SparkGameModule : public Spark::IModule, public IGameModule
+class SparkGameDefaultModule : public Spark::IModule
 {
   public:
-    SparkGameModule();
-    ~SparkGameModule() override;
+    SparkGameDefaultModule() = default;
+    ~SparkGameDefaultModule() override;
 
-    // --- Spark::IModule interface (new, SDK v2) ---
+    // --- Spark::IModule interface ---
     Spark::ModuleInfo GetModuleInfo() const override;
     bool OnLoad(Spark::IEngineContext* context) override;
     void OnUnload() override;
@@ -51,35 +40,17 @@ class SparkGameModule : public Spark::IModule, public IGameModule
     void OnResume() override;
     void OnImGui() override;
 
-    // --- IGameModule interface (legacy) ---
-    const char* GetGameName() const override;
-    const char* GetGameVersion() const override;
-    bool Initialize(GraphicsEngine* graphics, InputManager* input) override;
-    void Shutdown() override;
-    void Update(float deltaTime) override;
-    void Render() override;
-    // OnResize is shared via override above
-    void Pause() override;
-    void Resume() override;
-    bool IsPaused() const override;
-
   private:
-    void RegisterGameConsoleCommands();
+    void RegisterConsoleCommands();
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};
+    bool m_paused{false};
 };
 
-// New module exports (preferred by ModuleManager)
+// Module exports
 extern "C"
 {
     SPARK_MODULE_API Spark::IModule* CreateModule();
     SPARK_MODULE_API void DestroyModule(Spark::IModule* mod);
-}
-
-// Legacy exports (backward compatibility)
-extern "C"
-{
-    SPARK_GAME_API IGameModule* CreateGameModule();
-    SPARK_GAME_API void DestroyGameModule(IGameModule* module);
 }
