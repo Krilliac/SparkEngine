@@ -342,7 +342,7 @@ namespace Spark
          * @param point   ErrorRaised or WarningRaised.
          * @param message The error/warning message.
          */
-        void DispatchMessage(DebugHookPoint point, std::string_view message);
+        void DispatchDebugMessage(DebugHookPoint point, std::string_view message);
 
         /** @brief Whether any hooks are registered for a specific point. */
         [[nodiscard]] bool HasHandlers(DebugHookPoint point) const;
@@ -416,7 +416,7 @@ namespace Spark
     Spark::DebugHookManager::GetInstance().DispatchScene(Spark::DebugHookPoint::point, sceneName)
 
 #define SPARK_DEBUG_HOOK_MESSAGE(point, msg)                                                                           \
-    Spark::DebugHookManager::GetInstance().DispatchMessage(Spark::DebugHookPoint::point, msg)
+    Spark::DebugHookManager::GetInstance().DispatchDebugMessage(Spark::DebugHookPoint::point, msg)
 
 #else
 

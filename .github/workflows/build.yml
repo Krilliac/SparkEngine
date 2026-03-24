@@ -317,7 +317,7 @@ jobs:
         run: cd build && ctest --output-on-failure
       - name: Generate coverage
         run: |
-          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,gcov --rc geninfo_unexecuted_blocks=1
+          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,mismatch,gcov --rc geninfo_unexecuted_blocks=1
           lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused
           lcov --list coverage.info --ignore-errors unused
       - name: Upload coverage
