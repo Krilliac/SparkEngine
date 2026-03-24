@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include "../Utils/ContainerUtils.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <functional>
@@ -282,7 +284,7 @@ namespace Spark::Graphics
             for (size_t i = 0; i < m_keywords.size(); ++i)
             {
                 const auto& kw = m_keywords[i];
-                if (kw.type == KeywordType::ShaderFeature && usedKeywords.find(kw.name) == usedKeywords.end())
+                if (kw.type == KeywordType::ShaderFeature && !Spark::ContainerUtils::Contains(usedKeywords, kw.name))
                 {
                     // This keyword is a ShaderFeature not used by any material
                     // All variants with this keyword enabled can be stripped
@@ -305,7 +307,7 @@ namespace Spark::Graphics
             {
                 if (key.HasKeyword(static_cast<int>(i)))
                 {
-                    if (disabledFeatures.find(m_keywords[i].defineSymbol) != disabledFeatures.end())
+                    if (Spark::ContainerUtils::Contains(disabledFeatures, m_keywords[i].defineSymbol))
                         return false;
                 }
             }

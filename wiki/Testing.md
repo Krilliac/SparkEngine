@@ -438,19 +438,21 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*146 test files, 1686+ test cases*
+*156 test files, 1779+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
 | `TestAIBehaviorTree` | 16 |
 | `TestAbilitySystem` | 15 |
 | `TestAlignedHeapArray` | 6 |
+| `TestAngleUtils` | 10 |
 | `TestAnimationCompression` | 6 |
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationSystem` | 17 |
 | `TestAsyncDatabase` | 23 |
 | `TestAudioEngine` | 18 |
 | `TestBitFlags` | 14 |
+| `TestBitUtils` | 10 |
 | `TestBlendSpace` | 6 |
 | `TestCameraInterpolation` | 9 |
 | `TestChromeTracing` | 5 |
@@ -468,6 +470,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestConnectionTimeout` | 9 |
 | `TestConsoleRBAC` | 21 |
 | `TestConstantBufferDiff` | 2 |
+| `TestContainerUtils` | 10 |
 | `TestCooldown` | 14 |
 | `TestCoroutineScheduler` | 10 |
 | `TestCoverSystem` | 4 |
@@ -476,6 +479,8 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestDebugTools` | 31 |
 | `TestDedicatedServer` | 27 |
 | `TestDeferredDeletion` | 6 |
+| `TestDeferredQueue` | 6 |
+| `TestDelegate` | 9 |
 | `TestDeltaSmoother` | 10 |
 | `TestDestructionSystem` | 5 |
 | `TestDialogueSystem` | 4 |
@@ -493,6 +498,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestExtendedSystems` | 38 |
 | `TestFPSComponents` | 23 |
 | `TestFileUtils` | 15 |
+| `TestFixtures` | 0 |
 | `TestFogSystem` | 17 |
 | `TestFormationSystem` | 4 |
 | `TestFrameAllocator` | 8 |
@@ -509,6 +515,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestInputSystem` | 11 |
 | `TestInstanceManager` | 14 |
 | `TestInventorySystem` | 11 |
+| `TestJsonUtils` | 23 |
 | `TestLightManager` | 13 |
 | `TestLoadingScreen` | 4 |
 | `TestLocalFileCache` | 15 |
@@ -558,6 +565,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestSceneConfigDatabase` | 3 |
 | `TestSceneManager` | 19 |
 | `TestSceneSnapshotSerializer` | 19 |
+| `TestScheduledCallback` | 8 |
 | `TestScopeGuard` | 13 |
 | `TestScopedTimer` | 3 |
 | `TestScreenSpaceEffects` | 16 |
@@ -572,6 +580,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestSprite2DComponents` | 35 |
 | `TestStateMachine` | 16 |
 | `TestSteeringBehaviors` | 15 |
+| `TestStringPool` | 8 |
 | `TestStringUtils` | 19 |
 | `TestTacticalPointSystem` | 4 |
 | `TestTemporalEffects` | 11 |
@@ -584,6 +593,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestUISystem` | 6 |
 | `TestUUID` | 12 |
 | `TestUpscalingSystem` | 10 |
+| `TestVersionedHandle` | 9 |
 | `TestWaterRenderer` | 6 |
 | `TestWeaponSystem` | 18 |
 | `TestWeatherSystem` | 8 |

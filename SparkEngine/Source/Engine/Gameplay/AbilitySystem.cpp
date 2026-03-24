@@ -4,6 +4,7 @@
  */
 
 #include "AbilitySystem.h"
+#include "../../Utils/DeferredDeletion.h"
 #include "../../Utils/SparkConsole.h"
 #include "../ECS/Components/GameplayComponents.h"
 #include "../Events/EventSystem.h"
@@ -217,7 +218,7 @@ namespace Spark::Gameplay
     void AbilitySystem::UpdateCasts(World& world, float dt)
     {
         // Collect entities to remove after iteration
-        std::vector<uint32_t> toRemove;
+        Spark::DeferredQueue<uint32_t> toRemove;
 
         for (auto& [entityId, cast] : m_activeCasts)
         {
@@ -269,7 +270,7 @@ namespace Spark::Gameplay
             case CastPhase::Completed:
             case CastPhase::Failed:
             case CastPhase::Interrupted:
-                toRemove.push_back(entityId);
+                toRemove.MarkForDeletion(entityId);
                 break;
 
             case CastPhase::Preparing:
@@ -279,10 +280,7 @@ namespace Spark::Gameplay
             }
         }
 
-        for (uint32_t id : toRemove)
-        {
-            m_activeCasts.erase(id);
-        }
+        toRemove.Flush([&](uint32_t& id) { m_activeCasts.erase(id); });
     }
 
     void AbilitySystem::UpdateAuras(World& world, float dt)

@@ -9,6 +9,7 @@
 #pragma once
 #include "Core/Platform.h"
 #include "Enemy.h"
+#include "Utils/ScheduledCallback.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -150,6 +151,7 @@ namespace Spark
         float m_countdownTimer{0.0f};
         float m_difficultyScale{1.0f};
         bool m_paused{false};
+        bool m_waveTransitionReady{false}; ///< Set by scheduler when countdown expires
 
         int m_enemiesSpawnedThisWave{0};
         int m_enemiesKilledThisWave{0};
@@ -158,6 +160,7 @@ namespace Spark
 
         std::vector<DirectX::XMFLOAT3> m_spawnPoints;
         WaveCallbacks m_callbacks;
+        Spark::Scheduler m_waveScheduler;
     };
 
 } // namespace Spark

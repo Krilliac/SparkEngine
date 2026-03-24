@@ -12,6 +12,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../CommandHistory.h"
+#include "../../../SparkEngine/Source/Utils/ContainerUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
@@ -146,7 +147,7 @@ namespace SparkEditor
         if (!obj)
             return false;
 
-        return std::find(obj->componentTypes.begin(), obj->componentTypes.end(), type) != obj->componentTypes.end();
+        return Spark::ContainerUtils::Contains(obj->componentTypes, type);
     }
 
     void InspectorPanel::AddComponent(ComponentType type)

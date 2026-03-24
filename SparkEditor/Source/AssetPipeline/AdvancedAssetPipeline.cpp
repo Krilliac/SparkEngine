@@ -6,6 +6,7 @@
  */
 
 #include "AdvancedAssetPipeline.h"
+#include "Utils/ContainerUtils.h"
 #include "Utils/Validate.h"
 
 #include <imgui.h>
@@ -322,7 +323,7 @@ namespace SparkEditor
         {
             ProcessingJob job = m_processingQueue.top();
             m_processingQueue.pop();
-            if (batchAssets.find(job.assetPath) == batchAssets.end())
+            if (!Spark::ContainerUtils::Contains(batchAssets, job.assetPath))
             {
                 filteredQueue.push(std::move(job));
             }

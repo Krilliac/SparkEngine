@@ -6,6 +6,7 @@
  */
 
 #include "HUDSystem.h"
+#include "Utils/AngleUtils.h"
 #include "Utils/Validate.h"
 #include "Player.h"
 #include <cmath>
@@ -84,7 +85,7 @@ namespace Spark
         float dz = damageSource.z - playerPos.z;
 
         // Calculate angle relative to player forward
-        float angle = atan2f(dx, dz) - atan2f(playerForward.x, playerForward.z);
+        float angle = Spark::AngleUtils::AngleDelta(atan2f(playerForward.x, playerForward.z), atan2f(dx, dz));
 
         AddDamageIndicator(angle, intensity);
     }

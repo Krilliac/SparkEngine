@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -15,10 +16,7 @@ namespace TestGroupAI
     using GroupID = uint32_t;
     using EntityID = uint32_t;
 
-    struct Vec3
-    {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-    };
+    using TestMath::Vec3;
 
     enum class GroupTactic : uint8_t
     {

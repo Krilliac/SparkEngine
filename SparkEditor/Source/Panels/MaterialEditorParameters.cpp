@@ -11,6 +11,7 @@
 
 #include "MaterialEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/ContainerUtils.h"
 #include <imgui.h>
 #include <algorithm>
 #include <iostream>
@@ -106,7 +107,7 @@ namespace SparkEditor
         for (auto& param : selected->parameters)
         {
             const std::string& group = param.group.empty() ? "General" : param.group;
-            if (groups.find(group) == groups.end())
+            if (!Spark::ContainerUtils::Contains(groups, group))
             {
                 groupOrder.push_back(group);
             }

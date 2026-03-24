@@ -4,6 +4,7 @@
  */
 
 #include "MMOCraftingSystem.h"
+#include "Utils/ContainerUtils.h"
 #include "Utils/SparkConsole.h"
 
 #ifdef ENABLE_EDITOR
@@ -296,8 +297,7 @@ namespace MMO
 
     bool MMOCraftingSystem::KnowsRecipe(const CraftingState& crafter, uint32_t recipeId) const
     {
-        return std::find(crafter.knownRecipes.begin(), crafter.knownRecipes.end(), recipeId) !=
-               crafter.knownRecipes.end();
+        return Spark::ContainerUtils::Contains(crafter.knownRecipes, recipeId);
     }
 
     int MMOCraftingSystem::GetSkillLevel(const CraftingState& crafter, CraftingDiscipline disc) const

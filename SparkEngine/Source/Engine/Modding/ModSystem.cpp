@@ -4,12 +4,12 @@
  */
 
 #include "ModSystem.h"
+#include "../../Utils/JsonUtils.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <regex>
 #include <sstream>
 
 namespace Spark
@@ -246,19 +246,20 @@ namespace Spark
         {
             return false;
         }
-        file << "{\n  \"mods\": [\n";
-        bool first = true;
+
+        auto modsArray = Json::Value::MakeArray();
         for (const auto& [id, info] : m_mods)
         {
-            if (!first)
-            {
-                file << ",\n";
-            }
-            first = false;
-            file << "    {\"id\": \"" << id << "\", \"enabled\": " << (info.enabled ? "true" : "false")
-                 << ", \"loadOrder\": " << info.loadOrder << "}";
+            Json::Value entry;
+            entry["id"] = Json::Value(id);
+            entry["enabled"] = Json::Value(info.enabled);
+            entry["loadOrder"] = Json::Value(info.loadOrder);
+            modsArray.PushBack(std::move(entry));
         }
-        file << "\n  ]\n}\n";
+
+        Json::Value root;
+        root["mods"] = std::move(modsArray);
+        file << Json::StringifyPretty(root) << "\n";
         return true;
     }
 
@@ -271,28 +272,29 @@ namespace Spark
         }
 
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
-        std::regex modRegex(
-            R"~~("id"\s*:\s*"(\w+)"\s*,\s*"enabled"\s*:\s*(true|false)\s*,\s*"loadOrder"\s*:\s*(\d+))~~");
-        auto begin = std::sregex_iterator(content.begin(), content.end(), modRegex);
-        auto end = std::sregex_iterator();
-
-        for (auto it = begin; it != end; ++it)
+        auto root = Json::Parse(content);
+        if (!root.IsObject() || !root.HasKey("mods") || !root["mods"].IsArray())
         {
-            const std::smatch& match = *it;
-            std::string modId = match[1].str();
+            return false;
+        }
+
+        const auto& modsArray = root["mods"];
+        for (size_t i = 0; i < modsArray.Size(); ++i)
+        {
+            const auto& entry = modsArray[i];
+            if (!entry.IsObject() || !entry.HasKey("id") || !entry["id"].IsString())
+            {
+                continue;
+            }
+
+            std::string modId = entry["id"].AsString();
             auto modIt = m_mods.find(modId);
             if (modIt != m_mods.end())
             {
-                modIt->second.enabled = (match[2].str() == "true");
-                try
-                {
-                    modIt->second.loadOrder = std::stoi(match[3].str());
-                }
-                catch (const std::exception&)
-                {
-                    modIt->second.loadOrder = 0;
-                }
+                modIt->second.enabled =
+                    entry.HasKey("enabled") && entry["enabled"].IsBool() ? entry["enabled"].AsBool() : false;
+                modIt->second.loadOrder =
+                    entry.HasKey("loadOrder") && entry["loadOrder"].IsNumber() ? entry["loadOrder"].AsInt() : 0;
                 m_modStates[modId] = modIt->second.enabled ? ModState::Available : ModState::Disabled;
             }
         }
@@ -318,23 +320,47 @@ namespace Spark
         }
 
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
-        auto extractString = [&](const std::string& key) -> std::string
+        auto root = Json::Parse(content);
+        if (!root.IsObject())
         {
-            std::regex r("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"");
-            std::smatch m;
-            if (std::regex_search(content, m, r))
+            return false;
+        }
+
+        // Extract string fields
+        auto getString = [&](const std::string& key) -> std::string
+        {
+            if (root.HasKey(key) && root[key].IsString())
             {
-                return m[1].str();
+                return root[key].AsString();
             }
             return "";
         };
 
-        info.id = extractString("id");
-        info.name = extractString("name");
-        info.author = extractString("author");
-        info.version = extractString("version");
-        info.description = extractString("description");
+        info.id = getString("id");
+        info.name = getString("name");
+        info.author = getString("author");
+        info.version = getString("version");
+        info.description = getString("description");
+        info.previewImage = getString("previewImage");
+
+        // Extract dependencies array
+        if (root.HasKey("dependencies") && root["dependencies"].IsArray())
+        {
+            const auto& deps = root["dependencies"];
+            for (size_t i = 0; i < deps.Size(); ++i)
+            {
+                if (deps[i].IsString())
+                {
+                    info.dependencies.push_back(deps[i].AsString());
+                }
+            }
+        }
+
+        // Extract load order if present
+        if (root.HasKey("loadOrder") && root["loadOrder"].IsNumber())
+        {
+            info.loadOrder = root["loadOrder"].AsInt();
+        }
 
         return !info.id.empty();
     }

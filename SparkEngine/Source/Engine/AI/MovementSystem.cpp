@@ -6,6 +6,7 @@
 #include "MovementSystem.h"
 #include "../ECS/Components.h"
 #include "../ECS/Components/CoreComponents.h"
+#include "../../Utils/AngleUtils.h"
 #include "../../Utils/MathUtils.h"
 #include <cmath>
 #include <algorithm>
@@ -96,7 +97,7 @@ namespace Spark::AI
             if (waitTimer >= waitTime)
             {
                 // Pick a random point within radius (simple pseudo-random using origin)
-                float angle = static_cast<float>(std::fmod(waitTimer * 1234.5f, 6.2831853f));
+                float angle = static_cast<float>(std::fmod(waitTimer * 1234.5f, Spark::AngleUtils::TWO_PI));
                 float r = radius * 0.5f + radius * 0.5f * static_cast<float>(std::fmod(waitTimer * 567.8f, 1.0f));
                 targetX = originX + std::cos(angle) * r;
                 targetY = originY;

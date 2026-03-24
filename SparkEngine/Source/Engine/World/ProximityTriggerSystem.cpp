@@ -4,6 +4,7 @@
  */
 
 #include "ProximityTriggerSystem.h"
+#include "../../Utils/ContainerUtils.h"
 
 #include <cmath>
 
@@ -130,7 +131,7 @@ namespace Spark::World
             // Detect entries: entities in nowInside but not in currentOccupants
             for (uint32_t entityID : nowInside)
             {
-                if (currentOccupants.find(entityID) == currentOccupants.end())
+                if (!Spark::ContainerUtils::Contains(currentOccupants, entityID))
                 {
                     if (trigger.onEnter)
                     {
@@ -142,7 +143,7 @@ namespace Spark::World
             // Detect exits: entities in currentOccupants but not in nowInside
             for (uint32_t entityID : currentOccupants)
             {
-                if (nowInside.find(entityID) == nowInside.end())
+                if (!Spark::ContainerUtils::Contains(nowInside, entityID))
                 {
                     if (trigger.onExit)
                     {

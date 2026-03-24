@@ -176,10 +176,7 @@ namespace Spark
 
         m_totalDestructions++;
 
-        for (const auto& callback : m_destructionCallbacks)
-        {
-            callback(event);
-        }
+        m_destructionCallbacks.Broadcast(event);
     }
 
     void DestructionSystem::ForceDestroy(uint32_t entityId, float force)
@@ -189,9 +186,10 @@ namespace Spark
         ApplyDamage(entityId, force, origin, upDir);
     }
 
-    void DestructionSystem::OnDestruction(std::function<void(const DestructionEvent&)> callback)
+    Spark::Delegate<const DestructionEvent&>::HandlerID DestructionSystem::OnDestruction(
+        std::function<void(const DestructionEvent&)> callback)
     {
-        m_destructionCallbacks.push_back(std::move(callback));
+        return (m_destructionCallbacks += std::move(callback));
     }
 
     std::string DestructionSystem::Console_GetStatus() const

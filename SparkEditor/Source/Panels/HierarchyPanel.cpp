@@ -18,6 +18,7 @@
 #include "HierarchyPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../CommandHistory.h"
+#include "Utils/ContainerUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
@@ -98,7 +99,7 @@ namespace SparkEditor
             m_selectedObjects.clear();
             m_selectedSet.clear();
         }
-        if (m_selectedSet.find(objectID) == m_selectedSet.end())
+        if (!Spark::ContainerUtils::Contains(m_selectedSet, objectID))
         {
             m_selectedObjects.push_back(objectID);
             m_selectedSet.insert(objectID);

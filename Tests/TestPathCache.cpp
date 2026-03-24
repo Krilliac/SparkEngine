@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <cmath>
 #include <cstdint>
 #include <unordered_map>
@@ -10,10 +11,7 @@
 namespace TestPathCache
 {
 
-    struct Vec3
-    {
-        float x = 0, y = 0, z = 0;
-    };
+    using TestMath::Vec3;
 
     struct PathPoint
     {

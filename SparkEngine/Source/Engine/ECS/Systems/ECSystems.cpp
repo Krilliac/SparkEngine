@@ -22,6 +22,7 @@
 #include "Engine/ECS/Components/FPSComponents.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
+#include "../../../Utils/DeferredDeletion.h"
 #include "Utils/Cooldown.h"
 #include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
@@ -231,7 +232,7 @@ namespace Spark::ECS
         // Two-phase death processing: collect first, then fire callbacks.
         // This avoids iterator invalidation if a death callback destroys
         // the entity or modifies HealthComponent on other entities.
-        std::vector<entt::entity> deadEntities;
+        Spark::DeferredQueue<entt::entity> deadEntities;
 
         auto healthView = world.GetEntitiesWith<HealthComponent>();
         for (auto entity : healthView)
@@ -240,28 +241,29 @@ namespace Spark::ECS
             if (health.isDead && !health.deathProcessed)
             {
                 health.deathProcessed = true;
-                deadEntities.push_back(entity);
+                deadEntities.MarkForDeletion(entity);
             }
         }
 
-        if (!deadEntities.empty())
+        if (deadEntities.GetPendingCount() > 0)
         {
             SPARK_LOG_INFO(Spark::LogCategory::ECS, "LifecycleSystem: %zu entities died this frame",
-                           deadEntities.size());
+                           deadEntities.GetPendingCount());
         }
 
         if (m_onDeath)
         {
-            for (auto entity : deadEntities)
-            {
-                SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "LifecycleSystem: firing death callback for entity %u",
-                                static_cast<uint32_t>(entity));
-                m_onDeath(entity);
-            }
+            deadEntities.Flush(
+                [&](entt::entity& entity)
+                {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "LifecycleSystem: firing death callback for entity %u",
+                                    static_cast<uint32_t>(entity));
+                    m_onDeath(entity);
+                });
         }
         else
         {
-            SPARK_WARN_IF(Spark::LogCategory::ECS, !deadEntities.empty(),
+            SPARK_WARN_IF(Spark::LogCategory::ECS, !deadEntities.IsEmpty(),
                           "LifecycleSystem: entities died but no death callback is registered");
         }
     }
@@ -523,7 +525,7 @@ namespace Spark::ECS
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
         m_activeDecalCount = 0;
-        std::vector<entt::entity> expiredDecals;
+        Spark::DeferredQueue<entt::entity> expiredDecals;
 
         auto view = world.GetEntitiesWith<Transform, DecalComponent>();
         for (auto entity : view)
@@ -543,7 +545,7 @@ namespace Spark::ECS
             if (decal.remainingLifetime <= 0.0f)
             {
                 decal.remainingLifetime = 0.0f;
-                expiredDecals.push_back(entity);
+                expiredDecals.MarkForDeletion(entity);
             }
             else
             {
@@ -554,10 +556,7 @@ namespace Spark::ECS
         // Fire expired callbacks
         if (m_onExpired)
         {
-            for (auto entity : expiredDecals)
-            {
-                m_onExpired(entity);
-            }
+            expiredDecals.Flush([&](entt::entity& e) { m_onExpired(e); });
         }
     }
 
@@ -570,7 +569,7 @@ namespace Spark::ECS
         SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
         SPARK_WARN_IF(Spark::LogCategory::ECS, deltaTime < 0.0f, "Negative deltaTime in ProjectileSystem");
         m_activeProjectileCount = 0;
-        std::vector<entt::entity> expiredProjectiles;
+        Spark::DeferredQueue<entt::entity> expiredProjectiles;
 
         auto view = world.GetEntitiesWith<Transform, ProjectileComponent>();
         for (auto entity : view)
@@ -617,7 +616,7 @@ namespace Spark::ECS
             // Check expiration
             if (proj.IsExpired())
             {
-                expiredProjectiles.push_back(entity);
+                expiredProjectiles.MarkForDeletion(entity);
             }
             else
             {
@@ -628,10 +627,7 @@ namespace Spark::ECS
         // Fire expired callbacks
         if (m_onExpired)
         {
-            for (auto entity : expiredProjectiles)
-            {
-                m_onExpired(entity);
-            }
+            expiredProjectiles.Flush([&](entt::entity& e) { m_onExpired(e); });
         }
     }
 

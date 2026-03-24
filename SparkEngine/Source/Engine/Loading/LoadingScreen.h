@@ -31,6 +31,8 @@
 
 #pragma once
 
+#include "../../Utils/Delegate.h"
+
 #include <string>
 #include <vector>
 #include <functional>
@@ -154,13 +156,14 @@ namespace Spark
      * @brief Register a progress callback.
      * @param callback Called with (progress 0-1, current task name).
      */
-        void OnProgress(std::function<void(float, const std::string&)> callback);
+        Spark::Delegate<float, const std::string&>::HandlerID OnProgress(
+            std::function<void(float, const std::string&)> callback);
 
         /**
      * @brief Register a completion callback.
      * @param callback Called when all tasks finish.
      */
-        void OnComplete(std::function<void(bool)> callback);
+        Spark::Delegate<bool>::HandlerID OnComplete(std::function<void(bool)> callback);
 
         // --- Console integration ---
 
@@ -180,8 +183,8 @@ namespace Spark
         float m_elapsedTime = 0.0f;
         bool m_cancelled = false;
 
-        std::vector<std::function<void(float, const std::string&)>> m_progressCallbacks;
-        std::vector<std::function<void(bool)>> m_completeCallbacks;
+        Spark::Delegate<float, const std::string&> m_progressCallbacks;
+        Spark::Delegate<bool> m_completeCallbacks;
         mutable std::mutex m_mutex;
     };
 

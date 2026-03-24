@@ -8,6 +8,7 @@
 
 #include "EngineContext.h"
 #include "Spark/Version.h"
+#include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"
 
 #include <algorithm>
@@ -105,7 +106,7 @@ bool EngineContext::TopologicalSort(std::vector<SubsystemEntry*>& sorted)
         for (const auto& dep : entry.dependencies)
         {
             // Only count edges where the dependency is also a registered subsystem
-            if (entryMap.find(dep) != entryMap.end())
+            if (Spark::ContainerUtils::Contains(entryMap, dep))
             {
                 adjacency[dep].push_back(entry.type);
                 inDegree[entry.type]++;

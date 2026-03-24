@@ -13,6 +13,7 @@
 
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
+#include "../Utils/ContainerUtils.h"
 #include "../Utils/SparkConsole.h"
 #include <filesystem>
 #include <cstring>
@@ -50,7 +51,7 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     }
 
     // Check if texture already loaded
-    if (m_textures.find(type) != m_textures.end())
+    if (Spark::ContainerUtils::Contains(m_textures, type))
     {
         Spark::SimpleConsole::GetInstance().LogInfo("Texture of type " + std::to_string(static_cast<int>(type)) +
                                                     " already loaded for material '" + m_name + "'");

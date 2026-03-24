@@ -1,4 +1,5 @@
 #include "Core/Platform.h"
+#include "../Utils/ContainerUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file PBRMaterial.cpp
@@ -54,7 +55,7 @@ void Material::SetTexture(MaterialTextureType type, const MaterialTexture& textu
 
 bool Material::HasTexture(MaterialTextureType type) const
 {
-    return m_textures.find(type) != m_textures.end();
+    return Spark::ContainerUtils::Contains(m_textures, type);
 }
 
 void Material::CreateVariant(const std::string& variantName, const std::vector<std::string>& defines)
@@ -64,7 +65,7 @@ void Material::CreateVariant(const std::string& variantName, const std::vector<s
 
 void Material::SetActiveVariant(const std::string& variantName)
 {
-    if (m_variants.find(variantName) != m_variants.end())
+    if (Spark::ContainerUtils::Contains(m_variants, variantName))
     {
         m_activeVariant = variantName;
     }
@@ -276,7 +277,7 @@ void Material::CreateVariant(const std::string& variantName, const std::vector<s
 
 void Material::SetActiveVariant(const std::string& variantName)
 {
-    if (m_variants.find(variantName) != m_variants.end())
+    if (Spark::ContainerUtils::Contains(m_variants, variantName))
     {
         m_activeVariant = variantName;
     }

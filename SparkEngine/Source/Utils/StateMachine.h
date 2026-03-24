@@ -51,6 +51,8 @@
 
 #pragma once
 
+#include "ContainerUtils.h"
+
 #include <algorithm>
 #include <functional>
 #include <optional>
@@ -131,7 +133,7 @@ namespace Spark
          */
         void Start(StateID initialState)
         {
-            if (m_states.find(initialState) == m_states.end())
+            if (!Spark::ContainerUtils::Contains(m_states, initialState))
                 throw std::invalid_argument("StateMachine::Start: initial state not registered");
 
             m_current = initialState;
@@ -199,7 +201,7 @@ namespace Spark
          */
         void TransitionTo(StateID to)
         {
-            if (m_states.find(to) == m_states.end())
+            if (!Spark::ContainerUtils::Contains(m_states, to))
                 throw std::invalid_argument("StateMachine::TransitionTo: target state not registered");
 
             if (m_current.has_value())
@@ -238,7 +240,7 @@ namespace Spark
          * @param id  State to check.
          * @return    true if registered.
          */
-        [[nodiscard]] bool HasState(StateID id) const { return m_states.find(id) != m_states.end(); }
+        [[nodiscard]] bool HasState(StateID id) const { return Spark::ContainerUtils::Contains(m_states, id); }
 
         /**
          * @brief Remove all registered states and transitions, and stop the machine.

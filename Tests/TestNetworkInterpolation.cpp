@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing (no DirectXMath dependency)
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <cmath>
 #include <algorithm>
 #include <array>
@@ -9,13 +10,7 @@
 namespace TestNetInterp
 {
 
-    struct Vec3
-    {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-
-        Vec3() = default;
-        Vec3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
-    };
+    using TestMath::Vec3;
 
     Vec3 Lerp(const Vec3& a, const Vec3& b, float t)
     {

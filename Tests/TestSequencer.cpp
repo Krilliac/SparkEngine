@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <cmath>
 #include <vector>
 #include <string>
@@ -10,10 +11,7 @@
 namespace TestSequencer
 {
 
-    struct Vec3
-    {
-        float x, y, z;
-    };
+    using TestMath::Vec3;
 
     static Vec3 LerpVec3(const Vec3& a, const Vec3& b, float t)
     {

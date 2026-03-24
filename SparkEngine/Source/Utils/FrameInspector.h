@@ -40,6 +40,7 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "ContainerUtils.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -95,7 +96,7 @@ namespace Spark
 
             for (const auto& [key, val] : other.stateEntries)
             {
-                if (stateEntries.find(key) == stateEntries.end())
+                if (!Spark::ContainerUtils::Contains(stateEntries, key))
                     diffs.push_back(key + ": (new) -> " + val);
             }
 

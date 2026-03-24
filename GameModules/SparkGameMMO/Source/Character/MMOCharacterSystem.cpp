@@ -4,6 +4,7 @@
  */
 
 #include "MMOCharacterSystem.h"
+#include "Utils/ContainerUtils.h"
 #include "Utils/SparkConsole.h"
 
 #ifdef ENABLE_EDITOR
@@ -193,8 +194,7 @@ namespace MMO
         const auto* raceDef = GetRace(race);
         if (!raceDef)
             return false;
-        return std::find(raceDef->allowedClasses.begin(), raceDef->allowedClasses.end(), classId) !=
-               raceDef->allowedClasses.end();
+        return Spark::ContainerUtils::Contains(raceDef->allowedClasses, classId);
     }
 
     // === Character CRUD ===

@@ -2,6 +2,7 @@
 // Standalone implementations for CI testing
 
 #include "TestFramework.h"
+#include "TestCommonMath.h"
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -14,11 +15,7 @@ namespace TestFormation
     using FormationID = uint32_t;
     using EntityID = uint32_t;
 
-    struct Vec3
-    {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-        Vec3 operator+(const Vec3& o) const { return {x + o.x, y + o.y, z + o.z}; }
-    };
+    using TestMath::Vec3;
 
     struct FormationSlot
     {

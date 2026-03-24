@@ -45,6 +45,9 @@ namespace Spark
         m_totalEnemiesKilled = 0;
         m_state = WaveState::Countdown;
         m_countdownTimer = 3.0f; // Short initial countdown
+        m_waveTransitionReady = false;
+        m_waveScheduler.ClearAll();
+        m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
     }
 
     void WaveSpawner::Update(float dt, size_t aliveEnemies, Game* game)
@@ -52,16 +55,21 @@ namespace Spark
         if (m_paused || m_state == WaveState::Idle || m_state == WaveState::Completed || m_state == WaveState::Failed)
             return;
 
+        m_waveScheduler.Update(dt);
+
         switch (m_state)
         {
         case WaveState::Countdown:
         {
-            m_countdownTimer -= dt;
+            // Update display timer for countdown tick callbacks
+            m_countdownTimer = std::max(m_countdownTimer - dt, 0.0f);
             if (m_callbacks.onCountdownTick)
                 m_callbacks.onCountdownTick(m_countdownTimer);
 
-            if (m_countdownTimer <= 0.0f)
+            // Scheduler fires m_waveTransitionReady when countdown expires
+            if (m_waveTransitionReady)
             {
+                m_waveTransitionReady = false;
                 m_currentWave++;
                 WaveDefinition wave = GenerateWave(m_currentWave);
 
@@ -103,6 +111,9 @@ namespace Spark
                 {
                     m_state = WaveState::Countdown;
                     m_countdownTimer = m_restDuration;
+                    m_waveTransitionReady = false;
+                    m_waveScheduler.ClearAll();
+                    m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, m_restDuration);
                 }
             }
             break;
@@ -118,6 +129,9 @@ namespace Spark
         m_currentWave = std::max(0, waveNum - 1);
         m_state = WaveState::Countdown;
         m_countdownTimer = 3.0f;
+        m_waveTransitionReady = false;
+        m_waveScheduler.ClearAll();
+        m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
     }
 
     void WaveSpawner::Reset()

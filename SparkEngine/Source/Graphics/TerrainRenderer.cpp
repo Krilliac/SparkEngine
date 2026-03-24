@@ -7,6 +7,8 @@
  */
 
 #include "TerrainRenderer.h"
+#include "../Utils/ContainerUtils.h"
+#include "../Utils/DeferredDeletion.h"
 #include "../Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
@@ -47,14 +49,13 @@ namespace Spark::Graphics
     void TerrainRenderer::UpdateTerrains(const std::unordered_map<uint32_t, const TerrainComponent*>& terrains)
     {
         // Remove stale entries (entities no longer have terrain)
-        std::vector<uint32_t> toRemove;
+        Spark::DeferredQueue<uint32_t> toRemove;
         for (const auto& [id, data] : m_terrainData)
         {
-            if (terrains.find(id) == terrains.end())
-                toRemove.push_back(id);
+            if (!Spark::ContainerUtils::Contains(terrains, id))
+                toRemove.MarkForDeletion(id);
         }
-        for (uint32_t id : toRemove)
-            m_terrainData.erase(id);
+        toRemove.Flush([&](uint32_t& id) { m_terrainData.erase(id); });
 
         // Update or create entries for active terrains
         for (const auto& [entityID, component] : terrains)

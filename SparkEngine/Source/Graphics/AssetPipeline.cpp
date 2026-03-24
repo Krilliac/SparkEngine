@@ -12,6 +12,7 @@
 
 #include "AssetPipeline.h"
 #include "Utils/Assert.h"
+#include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include <iostream>
@@ -264,7 +265,7 @@ std::shared_ptr<Asset> AssetPipeline::GetAsset(const std::string& path)
 bool AssetPipeline::IsAssetLoaded(const std::string& path) const
 {
     std::lock_guard<std::mutex> lock(m_assetsMutex);
-    return m_assets.find(path) != m_assets.end();
+    return Spark::ContainerUtils::Contains(m_assets, path);
 }
 
 // ============================================================================

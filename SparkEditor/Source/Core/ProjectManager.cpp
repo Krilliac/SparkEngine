@@ -6,6 +6,7 @@
  */
 
 #include "ProjectManager.h"
+#include "Utils/ContainerUtils.h"
 #include "Utils/LocalFileCache.h"
 #include "Utils/Validate.h"
 #include <iostream>
@@ -338,7 +339,7 @@ namespace SparkEditor
                     continue;
 
                 auto ext = entry.path().extension().string();
-                if (textExtensions.find(ext) == textExtensions.end())
+                if (!Spark::ContainerUtils::Contains(textExtensions, ext))
                     continue;
 
                 // Read file

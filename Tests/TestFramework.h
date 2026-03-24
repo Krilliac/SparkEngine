@@ -51,6 +51,32 @@ extern std::string g_currentTest;
     static TestRegistrar registrar_##name(#name, __FILE__, __LINE__, test_##name);                                     \
     void test_##name()
 
+// Fixture-based test. FixtureClass must define SetUp() and TearDown() methods.
+// Test names appear as "FixtureClass.testName" in output.
+#define TEST_F(FixtureClass, testName)                                                                                 \
+    struct TestFixture_##FixtureClass##_##testName : public FixtureClass                                               \
+    {                                                                                                                  \
+        void Run();                                                                                                    \
+    };                                                                                                                 \
+    static TestRegistrar registrar_fixture_##FixtureClass##_##testName(                                                \
+        #FixtureClass "." #testName, __FILE__, __LINE__,                                                               \
+        []                                                                                                             \
+        {                                                                                                              \
+            TestFixture_##FixtureClass##_##testName fixture;                                                           \
+            fixture.SetUp();                                                                                           \
+            try                                                                                                        \
+            {                                                                                                          \
+                fixture.Run();                                                                                         \
+            }                                                                                                          \
+            catch (...)                                                                                                \
+            {                                                                                                          \
+                fixture.TearDown();                                                                                    \
+                throw;                                                                                                 \
+            }                                                                                                          \
+            fixture.TearDown();                                                                                        \
+        });                                                                                                            \
+    void TestFixture_##FixtureClass##_##testName::Run()
+
 #define EXPECT_TRUE(expr)                                                                                              \
     do                                                                                                                 \
     {                                                                                                                  \

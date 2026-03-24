@@ -34,6 +34,7 @@
 
 #pragma once
 
+#include "ContainerUtils.h"
 #include "FileUtils.h"
 #include "Result.h"
 
@@ -293,7 +294,7 @@ namespace Spark
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             const std::string key = NormalizeKey(path);
-            return m_entries.find(key) != m_entries.end();
+            return Spark::ContainerUtils::Contains(m_entries, key);
         }
 
         /**

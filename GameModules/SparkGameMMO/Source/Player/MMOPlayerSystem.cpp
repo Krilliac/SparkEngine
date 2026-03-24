@@ -4,6 +4,7 @@
  */
 
 #include "MMOPlayerSystem.h"
+#include "Utils/ContainerUtils.h"
 #include "Utils/SparkConsole.h"
 
 #ifdef ENABLE_NETWORKING
@@ -59,7 +60,7 @@ namespace MMO
                                    uint32_t clientId = buf.ReadUint32();
                                    uint32_t areaId = buf.ReadUint32();
 
-                                   if (m_players.find(clientId) == m_players.end())
+                                   if (!Spark::ContainerUtils::Contains(m_players, clientId))
                                    {
                                        MMOPlayer player{};
                                        player.clientId = clientId;

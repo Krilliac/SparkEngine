@@ -14,6 +14,7 @@
 #include <sstream>
 
 #include "AssetDatabase.h"
+#include "Utils/ContainerUtils.h"
 #include "Utils/Validate.h"
 
 #ifdef _WIN32
@@ -805,7 +806,7 @@ namespace SparkEditor
             // Check for deleted files
             for (const auto& [path, time] : lastModificationTimes)
             {
-                if (currentTimes.find(path) == currentTimes.end())
+                if (!Spark::ContainerUtils::Contains(currentTimes, path))
                 {
                     // File was deleted
                     FileSystemChange change;
@@ -967,7 +968,7 @@ namespace SparkEditor
         std::transform(extension.begin(), extension.end(), extension.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-        return s_extensionToType.find(extension) != s_extensionToType.end();
+        return Spark::ContainerUtils::Contains(s_extensionToType, extension);
     }
 
     void AssetDatabase::UpdateAssetModificationTime(const std::string& assetPath)

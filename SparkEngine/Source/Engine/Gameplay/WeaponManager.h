@@ -20,6 +20,7 @@
 #pragma once
 
 #include "../../Core/Platform.h"
+#include "../../Utils/Delegate.h"
 
 #include <array>
 #include <cstdint>
@@ -282,7 +283,10 @@ namespace Spark::Gameplay
         void Update(float deltaTime);
 
         /// @brief Register a callback for fire events
-        void OnFire(FireCallback callback) { m_fireCallbacks.push_back(std::move(callback)); }
+        Spark::Delegate<const WeaponFireEvent&>::HandlerID OnFire(FireCallback callback)
+        {
+            return (m_fireCallbacks += std::move(callback));
+        }
 
       private:
         void ProcessWeapon(WeaponInventoryComponent& inv, float deltaTime);
@@ -297,7 +301,7 @@ namespace Spark::Gameplay
 
         void EmitFireEvent(const WeaponFireEvent& event);
 
-        std::vector<FireCallback> m_fireCallbacks;
+        Spark::Delegate<const WeaponFireEvent&> m_fireCallbacks;
     };
 
 } // namespace Spark::Gameplay

@@ -4,6 +4,7 @@
  */
 
 #include "ShaderGraphCompiler.h"
+#include "../../Utils/ContainerUtils.h"
 #include <algorithm>
 #include <iomanip>
 #include <queue>
@@ -64,7 +65,7 @@ namespace Spark::Graphics
             // Find all nodes that connect INTO this node
             for (const auto& conn : graph.connections)
             {
-                if (conn.toNodeID == current && visited.find(conn.fromNodeID) == visited.end())
+                if (conn.toNodeID == current && !Spark::ContainerUtils::Contains(visited, conn.fromNodeID))
                 {
                     visited.insert(conn.fromNodeID);
                     queue.push(conn.fromNodeID);
