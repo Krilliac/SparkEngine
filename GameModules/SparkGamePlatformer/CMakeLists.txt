@@ -96,7 +96,12 @@ target_compile_definitions(SparkGamePlatformer PRIVATE SPARK_GAME_DLL SPARK_MODU
 # Link against SparkEngineLib
 # ---------------------------------------------------------------------
 if(NOT SPARK_GAME_PLATFORMER_STANDALONE AND TARGET SparkEngineLib)
-    target_link_libraries(SparkGamePlatformer PRIVATE SparkEngineLib)
+    if(WIN32)
+        target_link_libraries(SparkGamePlatformer PRIVATE SparkEngineLib)
+    elseif(TARGET SparkEngineInterface)
+        # Headers + defines only; symbols resolve from exe via ENABLE_EXPORTS
+        target_link_libraries(SparkGamePlatformer PRIVATE SparkEngineInterface)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------
@@ -152,15 +157,18 @@ if(MSVC)
 endif()
 
 # Link Jolt Physics if available
-if(TARGET Jolt)
-    target_link_libraries(SparkGamePlatformer PRIVATE Jolt)
-endif()
+# On Linux, static third-party libs resolve from the exe (ENABLE_EXPORTS)
+if(WIN32)
+    if(TARGET Jolt)
+        target_link_libraries(SparkGamePlatformer PRIVATE Jolt)
+    endif()
 
-if(TARGET miniz)
-    target_link_libraries(SparkGamePlatformer PRIVATE miniz)
-endif()
-if(TARGET tinyobjloader)
-    target_link_libraries(SparkGamePlatformer PRIVATE tinyobjloader)
+    if(TARGET miniz)
+        target_link_libraries(SparkGamePlatformer PRIVATE miniz)
+    endif()
+    if(TARGET tinyobjloader)
+        target_link_libraries(SparkGamePlatformer PRIVATE tinyobjloader)
+    endif()
 endif()
 
 # Vulkan backend

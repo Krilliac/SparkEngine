@@ -495,6 +495,14 @@ else()
 endif()
 target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
 
+# On Linux/macOS, export the executable's symbols so that game module .so files
+# loaded via dlopen() can resolve SparkEngineLib symbols from the host process.
+# Without this, each .so would need its own copy of SparkEngineLib, creating
+# duplicate singletons (NetworkManager, EngineContext, etc.) and ABI mismatches.
+if(NOT WIN32)
+    set_target_properties(SparkEngine PROPERTIES ENABLE_EXPORTS ON)
+endif()
+
 # Link third-party libraries to the static lib (both exe and game DLL get them)
 if(MINIZ_FOUND)
     target_link_libraries(SparkEngineLib PRIVATE miniz)
@@ -985,6 +993,25 @@ list(APPEND FEATURE_DEFINITIONS
 # Apply feature definitions to the static library (inherited by exe and game DLL)
 if(FEATURE_DEFINITIONS)
     target_compile_definitions(SparkEngineLib PUBLIC ${FEATURE_DEFINITIONS})
+endif()
+
+# ---------------------------------------------------------------------
+# 14.5) SparkEngineInterface — header-only view of SparkEngineLib
+#
+# On Linux, game module .so files must NOT link SparkEngineLib's object
+# code, otherwise each .so gets its own copy of every singleton and the
+# class layout diverges when conditional members (#ifdef ENABLE_NETWORKING)
+# change member offsets.  Instead, game modules link this INTERFACE
+# target, which provides the same include directories and compile
+# definitions but zero object code.  Undefined symbols are resolved at
+# dlopen() time from the host executable (which has ENABLE_EXPORTS ON).
+# ---------------------------------------------------------------------
+if(NOT WIN32)
+    add_library(SparkEngineInterface INTERFACE)
+    target_include_directories(SparkEngineInterface INTERFACE
+        $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>)
+    target_compile_definitions(SparkEngineInterface INTERFACE
+        $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_COMPILE_DEFINITIONS>)
 endif()
 
 # ---------------------------------------------------------------------
