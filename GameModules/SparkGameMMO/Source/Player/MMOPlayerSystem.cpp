@@ -86,12 +86,19 @@ namespace MMO
                                    RemovePlayer(clientId);
                                });
 
-        // Handle position updates from server (for remote players)
+        // Handle position updates — server relays to other clients, client applies locally
         netMgr.RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
                                [this](const Spark::Net::NetworkMessage& netMsg)
                                {
                                    if (netMsg.payload.size() < sizeof(uint32_t) + sizeof(float) * 3)
                                        return;
+
+                                   // Server-side: relay position to all other clients
+                                   auto& mgr = Spark::Net::NetworkManager::GetInstance();
+                                   if (mgr.GetRole() == Spark::Net::NetworkRole::Server)
+                                   {
+                                       mgr.SendToAllExcept(netMsg.senderID, netMsg);
+                                   }
 
                                    Spark::Net::NetBuffer buf;
                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());

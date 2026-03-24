@@ -57,6 +57,13 @@ namespace MMO
                                    if (netMsg.payload.size() < 2)
                                        return;
 
+                                   // Server-side: broadcast chat to all other clients
+                                   auto& mgr = Spark::Net::NetworkManager::GetInstance();
+                                   if (mgr.GetRole() == Spark::Net::NetworkRole::Server)
+                                   {
+                                       mgr.SendToAllExcept(netMsg.senderID, netMsg);
+                                   }
+
                                    Spark::Net::NetBuffer buf;
                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
                                    auto channel = static_cast<ChatChannel>(buf.ReadUint8());

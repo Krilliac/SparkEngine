@@ -201,6 +201,15 @@ namespace Spark::Net
 
         // -- Queries --
 
+        /// Register a client as present in this area
+        void AddClient(ClientID clientId);
+
+        /// Remove a client from this area
+        void RemoveClient(ClientID clientId);
+
+        /// Get count of connected clients
+        uint32_t GetClientCount() const;
+
         const AreaServerConfig& GetConfig() const { return m_config; }
         const AreaServerStats& GetStats() const { return m_stats; }
         AreaID GetAreaID() const { return m_config.areaId; }
@@ -232,6 +241,15 @@ namespace Spark::Net
 
         // Entity tracking
         std::unordered_map<uint32_t, MigratingEntity> m_trackedEntities;
+
+        // Client tracking for heartbeat timeouts
+        struct ClientRecord
+        {
+            ClientID clientId = INVALID_CLIENT;
+            float lastHeartbeatTime = 0.0f;
+        };
+        std::unordered_map<ClientID, ClientRecord> m_connectedClients;
+        mutable std::mutex m_clientMutex;
 
         // Area bounds (axis-aligned bounding box)
         XMFLOAT3 m_boundsMin{-500.0f, -500.0f, -500.0f};
