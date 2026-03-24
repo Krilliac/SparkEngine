@@ -511,6 +511,11 @@ namespace Spark::Net
         if (m_role != NetworkRole::Server)
             return;
 
+        // ProcessIncoming pre-registers m_clientAddresses[m_nextClientID] so
+        // that SendToClient can reach the new client. If we reject, we must
+        // clean up that entry to avoid stale addresses receiving broadcasts.
+        ClientID pendingID = m_nextClientID;
+
         if (static_cast<int>(m_clients.size()) >= m_maxClients)
         {
             NetworkMessage reject;
@@ -519,7 +524,15 @@ namespace Spark::Net
             NetBuffer rejectBuf;
             rejectBuf.WriteString("Server full");
             reject.payload = rejectBuf.GetData();
-            SendMessage(reject);
+
+            // Send rejection only to the connecting client (not broadcast)
+            SendToClient(pendingID, reject);
+
+#ifdef ENABLE_NETWORKING
+            // Clean up the pre-registered address so the rejected client
+            // doesn't receive broadcast traffic meant for real clients
+            m_clientAddresses.erase(pendingID);
+#endif
             return;
         }
 
@@ -680,6 +693,25 @@ namespace Spark::Net
                 if (msg.type == MessageType::Connect)
                 {
                     msg.senderID = INVALID_CLIENT;
+
+                    // Duplicate-address detection: if this address already has
+                    // an active connection, ignore the redundant Connect to
+                    // prevent slot exhaustion from repeated packets.
+                    bool addressAlreadyConnected = false;
+                    for (const auto& [id, addr] : m_clientAddresses)
+                    {
+                        if (addr.sin_addr.s_addr == senderAddr.sin_addr.s_addr && addr.sin_port == senderAddr.sin_port)
+                        {
+                            addressAlreadyConnected = true;
+                            break;
+                        }
+                    }
+                    if (addressAlreadyConnected)
+                    {
+                        SPARK_LOG_DEBUG(Spark::LogCategory::Network,
+                                        "Ignoring duplicate Connect from already-connected address");
+                        continue;
+                    }
 
                     // Pre-register the client address so HandleConnect's
                     // SendToClient(ConnectAccepted) can reach the new client.

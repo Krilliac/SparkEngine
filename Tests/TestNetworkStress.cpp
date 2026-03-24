@@ -769,11 +769,10 @@ TEST(NetworkStress_ReplayAttack)
                    for (int f = 0; f < 10; ++f)
                        nm.Update(0.016f);
 
-                   // Replayed connects should not create unbounded clients
-                   // (each replay from the same address creates a new client in current impl,
-                   // but total should stay within maxClients=32)
+                   // Replayed connects from the same address are now detected
+                   // and ignored — only one client should exist
                    auto clientsAfter = nm.GetClients().size();
-                   EXPECT_LE(static_cast<int>(clientsAfter), 32);
+                   EXPECT_EQ(static_cast<int>(clientsAfter), static_cast<int>(clientsBefore));
                    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
                });
 }
