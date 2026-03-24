@@ -662,6 +662,9 @@ namespace Spark::Net
         if (m_socket == INVALID_SOCKET)
             return;
 
+        // Track newly connected clients for deferred entity sync
+        std::vector<ClientID> newlyConnected;
+
         // Read all available datagrams
         for (int i = 0; i < 256; ++i) // Cap per-frame reads
         {
@@ -681,19 +684,15 @@ namespace Spark::Net
                 // Check if this is a new connection
                 if (msg.type == MessageType::Connect)
                 {
-                    // HandleConnect will assign an ID; we need to map the address
-                    // temporarily set senderID to 0 so HandleConnect creates it
                     msg.senderID = INVALID_CLIENT;
 
-                    // Process the connect directly to get the new client ID
-                    HandleConnect(msg);
-
-                    // The last assigned client gets this address
-                    ClientID newID = m_nextClientID - 1;
+                    // Pre-register the client address so HandleConnect's
+                    // SendToClient(ConnectAccepted) can reach the new client.
+                    ClientID newID = m_nextClientID;
                     m_clientAddresses[newID] = senderAddr;
 
-                    // Send the full entity state to the new client
-                    SendFullEntitySync(newID);
+                    HandleConnect(msg);
+                    newlyConnected.push_back(newID);
                     continue;
                 }
 
@@ -713,6 +712,14 @@ namespace Spark::Net
             std::lock_guard<std::mutex> lock(m_queueMutex);
             m_incomingQueue.push(msg);
         }
+
+        // Send full entity state to newly connected clients (deferred to
+        // avoid blocking the receive loop with mutex acquisitions / sends)
+        for (ClientID id : newlyConnected)
+        {
+            SendFullEntitySync(id);
+        }
+
 #else
         // Without networking, just dispatch whatever is in the queue already
         // (for local/testing scenarios)

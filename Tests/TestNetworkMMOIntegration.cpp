@@ -273,13 +273,13 @@ TEST(MMOIntegration_ChatBroadcast)
 
     EXPECT_EQ(static_cast<int>(nm.GetClients().size()), 2);
 
-    // Drain any ConnectAccepted responses
+    // Drain all ConnectAccepted / EntitySync / ACK responses
     uint8_t drain[4096];
-    clientA.Receive(drain, sizeof(drain));
-    clientB.Receive(drain, sizeof(drain));
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    clientA.Receive(drain, sizeof(drain));
-    clientB.Receive(drain, sizeof(drain));
+    for (int d = 0; d < 20; ++d)
+    {
+        clientA.Receive(drain, sizeof(drain));
+        clientB.Receive(drain, sizeof(drain));
+    }
 
     // Client A sends a chat message
     auto chatPkt = MakeChatPacket(1, "Alice", "Hello World!");
@@ -288,21 +288,26 @@ TEST(MMOIntegration_ChatBroadcast)
     // Process server frames — server should broadcast to client B
     RunServerFrames(nm, 10);
 
-    // Client B should receive the chat message
+    // Client B should receive the chat message (may be preceded by ACKs)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    int received = clientB.Receive(drain, sizeof(drain));
-    EXPECT_GT(received, 0);
-
-    // Verify it's a ChatMessage by checking magic and type
-    if (received >= 6)
+    bool gotChat = false;
+    for (int attempt = 0; attempt < 20; ++attempt)
     {
+        int received = clientB.Receive(drain, sizeof(drain));
+        if (received < 6)
+            break;
+
         NetBuffer verifyBuf;
         verifyBuf.WriteBytes(drain, static_cast<size_t>(received));
         uint32_t magic = verifyBuf.ReadUint32();
         uint16_t msgType = verifyBuf.ReadUint16();
-        EXPECT_EQ(magic, static_cast<uint32_t>(0x5350524B));
-        EXPECT_EQ(msgType, static_cast<uint16_t>(MessageType::ChatMessage));
+        if (magic == 0x5350524B && msgType == static_cast<uint16_t>(MessageType::ChatMessage))
+        {
+            gotChat = true;
+            break;
+        }
     }
+    EXPECT_TRUE(gotChat);
 
     nm.StopServer();
     nm.Shutdown();
@@ -345,7 +350,7 @@ TEST(MMOIntegration_PositionRelay)
 
     // Drain connect responses
     uint8_t drain[4096];
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 20; ++i)
     {
         clientA.Receive(drain, sizeof(drain));
         clientB.Receive(drain, sizeof(drain));
@@ -357,20 +362,26 @@ TEST(MMOIntegration_PositionRelay)
 
     RunServerFrames(nm, 10);
 
-    // Client B should receive the position update
+    // Client B should receive the position update (may be preceded by ACKs)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    int received = clientB.Receive(drain, sizeof(drain));
-    EXPECT_GT(received, 0);
-
-    if (received >= 6)
+    bool gotPos = false;
+    for (int attempt = 0; attempt < 20; ++attempt)
     {
+        int received = clientB.Receive(drain, sizeof(drain));
+        if (received < 6)
+            break;
+
         NetBuffer verifyBuf;
         verifyBuf.WriteBytes(drain, static_cast<size_t>(received));
         uint32_t magic = verifyBuf.ReadUint32();
         uint16_t msgType = verifyBuf.ReadUint16();
-        EXPECT_EQ(magic, static_cast<uint32_t>(0x5350524B));
-        EXPECT_EQ(msgType, static_cast<uint16_t>(MessageType::EntityStateUpdate));
+        if (magic == 0x5350524B && msgType == static_cast<uint16_t>(MessageType::EntityStateUpdate))
+        {
+            gotPos = true;
+            break;
+        }
     }
+    EXPECT_TRUE(gotPos);
 
     nm.StopServer();
     nm.Shutdown();
