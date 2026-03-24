@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "../Utils/BitUtils.h"
+
 #include <cstdint>
 #include <string>
 
@@ -54,13 +56,7 @@ namespace Spark::Graphics
         bool Interacts(const LightLayerMask& other) const { return (bits & other.bits) != 0; }
 
         /** @brief Count enabled layers */
-        int CountLayers() const
-        {
-            uint32_t n = bits;
-            n = n - ((n >> 1) & 0x55555555u);
-            n = (n & 0x33333333u) + ((n >> 2) & 0x33333333u);
-            return static_cast<int>(((n + (n >> 4)) & 0x0F0F0F0Fu) * 0x01010101u >> 24);
-        }
+        int CountLayers() const { return Spark::BitUtils::PopCount(bits); }
     };
 
     /**

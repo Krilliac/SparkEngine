@@ -20,7 +20,7 @@ namespace Spark::Dialogue
     {
         m_variables.clear();
         m_rules.clear();
-        m_pendingActions.clear();
+        m_actionScheduler.ClearAll();
         m_gameTime = 0.0f;
         m_initialized = true;
     }
@@ -29,7 +29,7 @@ namespace Spark::Dialogue
     {
         m_variables.clear();
         m_rules.clear();
-        m_pendingActions.clear();
+        m_actionScheduler.ClearAll();
         m_initialized = false;
     }
 
@@ -138,11 +138,10 @@ namespace Spark::Dialogue
                     }
                     else
                     {
-                        PendingAction pending;
-                        pending.action = deferred;
-                        pending.senderEntity = senderEntity;
-                        pending.remainingDelay = delay;
-                        m_pendingActions.push_back(std::move(pending));
+                        ResponseAction deferredCopy = deferred;
+                        uint32_t sender = senderEntity;
+                        m_actionScheduler.Schedule([this, action = std::move(deferredCopy), sender]
+                                                   { ExecuteAction(action, sender); }, delay);
                     }
                 }
                 break; // All remaining actions are now pending
@@ -165,21 +164,8 @@ namespace Spark::Dialogue
 
         m_gameTime += deltaTime;
 
-        // Process pending (delayed) actions
-        auto it = m_pendingActions.begin();
-        while (it != m_pendingActions.end())
-        {
-            it->remainingDelay -= deltaTime;
-            if (it->remainingDelay <= 0.0f)
-            {
-                ExecuteAction(it->action, it->senderEntity);
-                it = m_pendingActions.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
+        // Process pending (delayed) actions via scheduler
+        m_actionScheduler.Update(deltaTime);
     }
 
     // =========================================================================

@@ -5,11 +5,11 @@
 
 #include "DialogueSystem.h"
 #include "../../Utils/Hash.h"
+#include "../../Utils/JsonUtils.h"
 #include "../../Utils/Validate.h"
 
 #include <fstream>
 #include <sstream>
-#include <regex>
 
 namespace Spark
 {
@@ -57,55 +57,48 @@ namespace Spark
 
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
+        auto root = Spark::Json::Parse(content);
+        if (root.IsNull())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "DialogueTree: failed to parse JSON: %s", filePath.c_str());
+            return false;
+        }
+
         // Parse tree ID and start node
-        std::regex idRegex(R"~~("id"\s*:\s*"([^"]+)")~~");
-        std::regex startRegex(R"~~("startNode"\s*:\s*"([^"]+)")~~");
-        std::smatch match;
-
-        if (std::regex_search(content, match, idRegex))
+        if (root["id"].IsString())
         {
-            m_id = match[1].str();
+            m_id = root["id"].AsString();
         }
-        if (std::regex_search(content, match, startRegex))
+        if (root["startNode"].IsString())
         {
-            m_startNodeId = match[1].str();
+            m_startNodeId = root["startNode"].AsString();
         }
 
-        // Parse nodes — simplified parser for the dialogue format
-        std::regex nodeRegex(R"~~("nodeId"\s*:\s*"([^"]+)")~~");
-        std::regex speakerRegex(R"~~("speaker"\s*:\s*"([^"]*)")~~");
-        std::regex textRegex(R"~~("text"\s*:\s*"([^"]*)")~~");
-        std::regex nextRegex(R"~~("next"\s*:\s*"([^"]*)")~~");
-        std::regex typeRegex(R"~~("type"\s*:\s*"([^"]*)")~~");
-        std::regex conditionRegex(R"~~("condition"\s*:\s*"([^"]*)")~~");
-        std::regex trueNodeRegex(R"~~("trueNodeId"\s*:\s*"([^"]*)")~~");
-        std::regex falseNodeRegex(R"~~("falseNodeId"\s*:\s*"([^"]*)")~~");
-        std::regex eventNameRegex(R"~~("eventName"\s*:\s*"([^"]*)")~~");
-        std::regex eventDataRegex(R"~~("eventData"\s*:\s*"([^"]*)")~~");
-        std::regex displayDurationRegex(R"~~("displayDuration"\s*:\s*([0-9]*\.?[0-9]+))~~");
-        std::regex choiceEntryRegex(R"~~(\{[^}]*"text"\s*:\s*"([^"]*)"[^}]*\})~~");
-        std::regex choiceNextRegex(R"~~("nextNodeId"\s*:\s*"([^"]*)")~~");
-        std::regex choiceCondRegex(R"~~("condition"\s*:\s*"([^"]*)")~~");
-
-        auto nodeBegin = std::sregex_iterator(content.begin(), content.end(), nodeRegex);
-        auto nodeEnd = std::sregex_iterator();
-
-        for (auto it = nodeBegin; it != nodeEnd; ++it)
+        // Parse nodes array
+        const auto& nodes = root["nodes"];
+        if (!nodes.IsArray())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "DialogueTree: missing 'nodes' array: %s", filePath.c_str());
+            return false;
+        }
+
+        for (size_t i = 0; i < nodes.Size(); ++i)
+        {
+            const auto& jsonNode = nodes[i];
+            if (!jsonNode["nodeId"].IsString())
+            {
+                continue;
+            }
+
             DialogueNode node;
-            node.id = (*it)[1].str();
+            node.id = jsonNode["nodeId"].AsString();
             node.type = DialogueNodeType::Text;
 
-            // Search for properties near this node
-            std::string nodeContext = content.substr(
-                static_cast<size_t>(it->position()),
-                (std::min)(static_cast<size_t>(500), content.size() - static_cast<size_t>(it->position())));
-
             // Parse node type using compile-time hash dispatch
-            if (std::regex_search(nodeContext, match, typeRegex))
+            if (jsonNode["type"].IsString())
             {
                 using namespace Spark::HashLiterals;
-                const std::string& typeStr = match[1].str();
+                const std::string& typeStr = jsonNode["type"].AsString();
                 switch (Spark::FNV1a64(typeStr))
                 {
                 case "Choice"_hash64:
@@ -125,85 +118,70 @@ namespace Spark
                 }
             }
 
-            if (std::regex_search(nodeContext, match, speakerRegex))
+            if (jsonNode["speaker"].IsString())
             {
-                node.speakerName = match[1].str();
+                node.speakerName = jsonNode["speaker"].AsString();
             }
-            if (std::regex_search(nodeContext, match, textRegex))
+            if (jsonNode["text"].IsString())
             {
-                node.text = match[1].str();
+                node.text = jsonNode["text"].AsString();
             }
-            if (std::regex_search(nodeContext, match, nextRegex))
+            if (jsonNode["next"].IsString())
             {
-                node.nextNodeId = match[1].str();
+                node.nextNodeId = jsonNode["next"].AsString();
             }
-
-            // Parse displayDuration for Text nodes
-            if (std::regex_search(nodeContext, match, displayDurationRegex))
+            if (jsonNode["displayDuration"].IsNumber())
             {
-                try
-                {
-                    node.displayDuration = std::stof(match[1].str());
-                }
-                catch (const std::exception&)
-                {
-                    node.displayDuration = 3.0f; // Safe default
-                }
+                node.displayDuration = static_cast<float>(jsonNode["displayDuration"].AsNumber());
             }
 
-            // Parse Branch node fields
-            if (std::regex_search(nodeContext, match, conditionRegex))
+            // Branch node fields
+            if (jsonNode["condition"].IsString())
             {
-                node.condition = match[1].str();
+                node.condition = jsonNode["condition"].AsString();
             }
-            if (std::regex_search(nodeContext, match, trueNodeRegex))
+            if (jsonNode["trueNodeId"].IsString())
             {
-                node.trueNodeId = match[1].str();
+                node.trueNodeId = jsonNode["trueNodeId"].AsString();
             }
-            if (std::regex_search(nodeContext, match, falseNodeRegex))
+            if (jsonNode["falseNodeId"].IsString())
             {
-                node.falseNodeId = match[1].str();
+                node.falseNodeId = jsonNode["falseNodeId"].AsString();
             }
 
-            // Parse Event node fields
-            if (std::regex_search(nodeContext, match, eventNameRegex))
+            // Event node fields
+            if (jsonNode["eventName"].IsString())
             {
-                node.eventName = match[1].str();
+                node.eventName = jsonNode["eventName"].AsString();
             }
-            if (std::regex_search(nodeContext, match, eventDataRegex))
+            if (jsonNode["eventData"].IsString())
             {
-                node.eventData = match[1].str();
+                node.eventData = jsonNode["eventData"].AsString();
             }
 
             // Parse choices array for Choice nodes
-            if (node.type == DialogueNodeType::Choice)
+            if (node.type == DialogueNodeType::Choice && jsonNode["choices"].IsArray())
             {
-                // Find the "choices" array region in the context
-                size_t choicesPos = nodeContext.find("\"choices\"");
-                if (choicesPos != std::string::npos)
+                const auto& choices = jsonNode["choices"];
+                for (size_t c = 0; c < choices.Size(); ++c)
                 {
-                    std::string choicesContext = nodeContext.substr(choicesPos);
-                    auto choiceBegin =
-                        std::sregex_iterator(choicesContext.begin(), choicesContext.end(), choiceEntryRegex);
-                    auto choiceEnd = std::sregex_iterator();
+                    const auto& jsonChoice = choices[c];
+                    DialogueChoice choice;
 
-                    for (auto cIt = choiceBegin; cIt != choiceEnd; ++cIt)
+                    if (jsonChoice["text"].IsString())
                     {
-                        DialogueChoice choice;
-                        choice.text = (*cIt)[1].str();
-
-                        std::string entryStr = (*cIt)[0].str();
-                        std::smatch choiceMatch;
-                        if (std::regex_search(entryStr, choiceMatch, choiceNextRegex))
-                        {
-                            choice.nextNodeId = choiceMatch[1].str();
-                        }
-                        if (std::regex_search(entryStr, choiceMatch, choiceCondRegex))
-                        {
-                            choice.condition = choiceMatch[1].str();
-                        }
-                        node.choices.push_back(std::move(choice));
+                        choice.text = jsonChoice["text"].AsString();
                     }
+                    if (jsonChoice["nextNodeId"].IsString())
+                    {
+                        choice.nextNodeId = jsonChoice["nextNodeId"].AsString();
+                    }
+                    if (jsonChoice["condition"].IsString())
+                    {
+                        choice.condition = jsonChoice["condition"].AsString();
+                    }
+
+                    node.choices.push_back(std::move(choice));
                 }
             }
 

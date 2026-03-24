@@ -16,9 +16,9 @@
  * DynamicResponseSystem (singleton)
  *   ├── m_variables      (named float variables for conditions)
  *   ├── m_rules          (response rules triggered by signal names)
- *   ├── m_pendingActions  (actions waiting to execute, e.g., after Wait delays)
+ *   ├── m_actionScheduler (Spark::Scheduler for delayed actions)
  *   └── Update(dt)
- *         └── Process pending actions (execute delayed/queued actions)
+ *         └── Scheduler.Update(dt) fires delayed actions when ready
  * ```
  *
  * ## CryEngine Comparison
@@ -48,6 +48,8 @@
  */
 
 #pragma once
+
+#include "../../Utils/ScheduledCallback.h"
 
 #include <cstdint>
 #include <functional>
@@ -204,7 +206,7 @@ namespace Spark::Dialogue
         size_t GetRuleCount() const { return m_rules.size(); }
 
         /** @brief Get the number of pending actions. */
-        size_t GetPendingActionCount() const { return m_pendingActions.size(); }
+        size_t GetPendingActionCount() const { return m_actionScheduler.GetPendingCount(); }
 
       private:
         DynamicResponseSystem() = default;
@@ -215,17 +217,9 @@ namespace Spark::Dialogue
         /** @brief Execute a single action immediately. */
         void ExecuteAction(const ResponseAction& action, uint32_t senderEntity);
 
-        /** @brief A delayed action waiting to execute. */
-        struct PendingAction
-        {
-            ResponseAction action;
-            uint32_t senderEntity = 0;
-            float remainingDelay = 0.0f;
-        };
-
         std::unordered_map<std::string, float> m_variables;
         std::vector<ResponseRule> m_rules;
-        std::vector<PendingAction> m_pendingActions;
+        Spark::Scheduler m_actionScheduler;
         float m_gameTime = 0.0f;
         bool m_initialized = false;
     };
