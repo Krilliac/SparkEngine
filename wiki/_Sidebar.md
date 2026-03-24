@@ -68,6 +68,8 @@
 - [Performance Profiling Guide](Performance-Profiling-Guide)
 - [Utilities](Utilities)
 - [Testing](Testing)
+- [Codebase Statistics](Codebase-Statistics)
+- [Codebase Health](Codebase-Health)
 - [Troubleshooting](Troubleshooting)
 - [Contributing](Contributing)
 

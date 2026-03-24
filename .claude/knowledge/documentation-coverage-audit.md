@@ -1,39 +1,31 @@
 # Documentation Coverage Audit
 
-**Last updated:** 2026-03-18
+**Last updated:** 2026-03-24
 **Type:** Observation
 **Status:** Active
-**Severity:** Medium
+**Severity:** Low
 
 ## Description
 
-56 wiki pages (32K+ lines), 245/246 headers with Doxygen comments, near-complete API coverage. Threading model documented, SparkEditor.md expanded with all 32 panels, API docs generated. Remaining gaps: networking protocol spec, asset format specs, memory management rules.
+64 wiki pages (including new Codebase-Statistics and Codebase-Health pages), 245/246 headers with Doxygen comments, near-complete API coverage. All analysis data consolidated from docs/ into wiki pages.
 
 ---
 
-## Wiki Coverage (53 pages)
+## Wiki Coverage (64 pages)
 
 ### Statistics
-- **Total pages**: 53 (excluding _Sidebar.md)
-- **Total lines**: 29,583
-- **Average**: 558 lines/page
+- **Total pages**: 64 (excluding _Sidebar.md)
+- **Key new pages**: Codebase-Statistics.md, Codebase-Health.md
+- All 25+ engine subsystems have wiki pages
+- Test counts updated to 1,808 cases across 160 files
 
-### Top pages by size
+### Consolidated Analysis Data (2026-03-24)
 
-| Page | Lines | Topic |
-|------|-------|-------|
-| Shader-Pipeline.md | 937 | Shader architecture, compilation |
-| Content-Delivery.md | 915 | Streaming, DLC, content updates |
-| Networking.md | 899 | UDP, replication, lag compensation |
-| AI-and-Navigation.md | 837 | Behavior trees, NavMesh, perception |
-| Replay-System.md | 819 | Recording, playback, state snapshots |
-| VR-Support.md | 783 | OpenXR, controllers, tracking |
-| Visual-Scripting.md | 778 | Node graph, blueprint system |
-| Coroutine-System.md | 772 | Async scheduler, patterns |
-| Asset-Pipeline.md | 749 | Import, compression, LOD, streaming |
-| Save-System.md | 743 | Serialization, compression, slots |
-
-All 25+ engine subsystems have wiki pages. No stale documentation detected — all pages reflect current system state.
+The following docs/ files were merged into wiki pages and removed:
+- `docs/codebase-analysis/` (19 documents) → merged into wiki/Codebase-Statistics.md and subsystem wiki pages
+- `docs/gap-analysis/` (4 documents) → merged into wiki/Codebase-Health.md
+- `docs/ARCHITECTURE_ANALYSIS.md` → merged into wiki/Architecture-Overview.md and wiki/Codebase-Health.md
+- `docs/defensive-offensive-programming-analysis.md` → merged into wiki/Codebase-Health.md
 
 ---
 
@@ -41,87 +33,43 @@ All 25+ engine subsystems have wiki pages. No stale documentation detected — a
 
 - **245/246 headers** have `@file` + `@brief` (99.6%)
 - **Missing**: UISystem.h (1 file, zero Doxygen)
-- **Quality**: All sampled headers have comprehensive `@param`, `@return`, `@code` examples
 - **Auto-generated API docs**: `docs/api/` generated (370 pages from 382 headers)
 
 ---
 
-## CLAUDE.md Accuracy
-
-Verified: All listed directories exist, no critical omissions. Architecture section accurately reflects actual structure.
-
----
-
-## README.md
-
-489 lines covering: project overview, feature matrix, quick start (Windows/Linux), 30+ CMake toggles, CI workflows, platform matrix, dependencies, templates.
-
-**Issue**: README says "35 unit tests" but CLAUDE.md says "82+ unit tests" — inconsistency.
-
----
-
-## Top 10 Documentation Gaps
-
-| Priority | Gap | Impact |
-|----------|-----|--------|
-| ~~1~~ | ~~**Threading model & concurrency rules**~~ | **DONE** wiki/Threading-Model.md |
-| 2 | **Networking protocol wire format** | Can't build external clients |
-| 3 | **Asset format specifications** | Can't build external tools |
-| 4 | **Memory management patterns** | Leaks, fragmentation |
-| 5 | **Plugin ABI stability & versioning** | Breaking module changes |
-| 6 | **Shader compilation constraints** | Cross-platform failures |
-| 7 | **Save system binary layout** | Version migration unclear |
-| ~~8~~ | ~~**19 editor subsystem pages**~~ | **DONE** 32 panels documented in SparkEditor.md |
-| 9 | **Physics solver tuning guide** | Instability in complex scenes |
-| 10 | **AI behavior tree serialization** | Can't author trees externally |
-
----
-
-## Editor Subsystems Without Wiki Pages (19)
-
-Animation, AssetBrowser, AssetPipeline (editor), Gizmos, Integration, LevelStreaming, Lighting, MaterialEditor, Panels base, Prefabs, Profiler (editor UI), Reflection, SceneSystem (editor), Search, Terrain (editor tools), UndoRedo, VersionControl, VisualScripting (editor UI)
-
-SparkEditor.md now covers all 32 panels with full descriptions, sources, and line counts.
-
----
-
-## docs/ Directory
+## docs/ Directory (current)
 
 ```
 docs/
-├── README.md (126 lines)
-├── ARCHITECTURE_ANALYSIS.md
-├── defensive-offensive-programming-analysis.md
-└── gap-analysis/
-    ├── GAP_ANALYSIS_TEMPLATE.md (735 lines)
-    ├── NETWORKING_GAP_ANALYSIS.md (104 lines)
-    └── NEW_FEATURES_GAP_ANALYSIS.md (113 lines)
+├── README.md
+├── Doxyfile.txt
+├── auto-update.sh
+├── generate-api-docs.sh
+├── generate-docs.sh
+└── sync-wiki.sh
 ```
 
-Missing: `FEATURE_ROADMAP.md`, `PROJECT_STATUS.md` (referenced in README but not found). `docs/api/` now generated.
+Analysis files and gap analyses have been consolidated into wiki pages.
 
 ---
 
-## Gap Analyses (updated 2026-03-18)
+## Top Documentation Gaps (remaining)
 
-```
-docs/gap-analysis/
-├── GAP_ANALYSIS_TEMPLATE.md (735 lines)
-├── NETWORKING_GAP_ANALYSIS.md (104 lines)
-├── NEW_FEATURES_GAP_ANALYSIS.md (113 lines)
-└── COMPREHENSIVE_GAP_ANALYSIS_2026-03-18.md (NEW — full project audit)
-```
-
-The comprehensive gap analysis covers all 18 subsystem categories with DONE/PARTIAL/STUB/MISSING/ORPHANED status for every system.
+| Priority | Gap | Impact |
+|----------|-----|--------|
+| 1 | **Networking protocol wire format** | Can't build external clients |
+| 2 | **Asset format specifications** | Can't build external tools |
+| 3 | **Plugin ABI stability & versioning** | Breaking module changes |
+| 4 | **Save system binary layout** | Version migration unclear |
+| 5 | **Physics solver tuning guide** | Instability in complex scenes |
 
 ---
 
 ## What's Done Right
 
-- 55 wiki pages covering all major subsystems
+- 64 wiki pages covering all major subsystems
 - 99.6% header Doxygen coverage
-- No stale documentation detected
-- CLAUDE.md accurately reflects codebase
-- Comprehensive README with build instructions
-- Gap analysis infrastructure exists
-- Full project gap analysis completed 2026-03-18
+- Codebase-Statistics.md with comprehensive metrics (~371K LOC)
+- Codebase-Health.md with system maturity status for all subsystems
+- README badges for all platforms, compilers, and quality tools
+- All analysis data lives in wiki (no orphan docs/ files)
