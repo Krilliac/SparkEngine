@@ -20,8 +20,13 @@
 #include "Spark/IEngineContext.h"
 #include "Engine/World/WorldOriginSystem.h"
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
+
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/WorldServer.h"
+#endif
 
 namespace MMO
 {
@@ -57,7 +62,7 @@ namespace MMO
     {
       public:
         MMOWorldSetup() = default;
-        ~MMOWorldSetup() = default;
+        ~MMOWorldSetup();
 
         bool Initialize(Spark::IEngineContext* context);
         void Update(float deltaTime);
@@ -79,6 +84,9 @@ namespace MMO
         Spark::IEngineContext* m_context{nullptr};
         std::vector<MMOAreaInfo> m_areas;
         Spark::World::WorldOriginSystem m_originSystem;
+#ifdef ENABLE_NETWORKING
+        std::unique_ptr<Spark::Net::WorldServer> m_worldServer;
+#endif
         float m_worldTime{0.0f};
         bool m_initialized{false};
     };

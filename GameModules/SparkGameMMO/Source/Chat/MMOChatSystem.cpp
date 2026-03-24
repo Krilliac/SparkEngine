@@ -52,19 +52,20 @@ namespace MMO
         auto& netMgr = Spark::Net::NetworkManager::GetInstance();
 
         netMgr.RegisterHandler(Spark::Net::MessageType::ChatMessage,
-                               [this](Spark::Net::ClientID senderId, const std::vector<uint8_t>& data)
+                               [this](const Spark::Net::NetworkMessage& netMsg)
                                {
-                                   if (data.size() < 2)
+                                   if (netMsg.payload.size() < 2)
                                        return;
 
-                                   Spark::Net::NetBuffer buf(data);
+                                   Spark::Net::NetBuffer buf;
+                                   buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
                                    auto channel = static_cast<ChatChannel>(buf.ReadUint8());
                                    std::string senderName = buf.ReadString();
                                    std::string text = buf.ReadString();
 
                                    ChatMessage msg{};
                                    msg.channel = channel;
-                                   msg.senderClientId = senderId;
+                                   msg.senderClientId = netMsg.senderID;
                                    msg.senderName = senderName;
                                    msg.text = text;
                                    msg.timestamp = m_time;
@@ -109,15 +110,18 @@ namespace MMO
             buf.WriteString(msg.senderName);
             buf.WriteString(text);
 
+            Spark::Net::NetworkMessage netMsg;
+            netMsg.type = Spark::Net::MessageType::ChatMessage;
+            netMsg.channel = Spark::Net::ChannelType::ReliableOrdered;
+            netMsg.payload = std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
+
             if (channel == ChatChannel::Global)
             {
-                netMgr.BroadcastMessage(Spark::Net::MessageType::ChatMessage, buf.GetData(),
-                                        Spark::Net::ChannelType::ReliableOrdered);
+                netMgr.BroadcastMessage(netMsg);
             }
             else
             {
-                netMgr.SendMessage(Spark::Net::MessageType::ChatMessage, buf.GetData(),
-                                   Spark::Net::ChannelType::ReliableOrdered);
+                netMgr.SendMessage(netMsg);
             }
         }
 #endif

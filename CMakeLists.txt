@@ -908,7 +908,7 @@ if(ENABLE_PROFILING)
 endif()
 
 if(ENABLE_NETWORKING)
-    list(APPEND FEATURE_DEFINITIONS "NETWORKING_ENABLED")
+    list(APPEND FEATURE_DEFINITIONS "ENABLE_NETWORKING")
 
     # Check if libcurl is available for crash report uploading
     find_package(CURL QUIET)

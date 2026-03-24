@@ -21,6 +21,11 @@
 namespace MMO
 {
 
+    MMOWorldSetup::~MMOWorldSetup()
+    {
+        Shutdown();
+    }
+
     bool MMOWorldSetup::Initialize(Spark::IEngineContext* context)
     {
         if (!context)
@@ -160,10 +165,10 @@ namespace MMO
         worldConfig.enableLoadBalancing = true;
         worldConfig.loadBalanceInterval = 30.0f;
 
-        auto& worldServer = Spark::Net::WorldServer::GetInstance();
-        if (worldServer.Initialize(worldConfig))
+        m_worldServer = std::make_unique<Spark::Net::WorldServer>();
+        if (m_worldServer->Start(worldConfig))
         {
-            console.LogInfo("[MMO World] WorldServer initialized on port " + std::to_string(worldConfig.port));
+            console.LogInfo("[MMO World] WorldServer started on port " + std::to_string(worldConfig.port));
 
             // Register each area with the WorldServer
             uint16_t basePort = 27030;
@@ -181,14 +186,14 @@ namespace MMO
                 areaConfig.enablePhysics = true;
                 areaConfig.enableScripting = true;
 
-                worldServer.RegisterArea(areaConfig);
+                m_worldServer->RegisterAreaServer(areaConfig);
                 console.LogInfo("[MMO World] Registered area: " + area.name + " (port " +
                                 std::to_string(areaConfig.port) + ")");
             }
         }
         else
         {
-            console.LogWarning("[MMO World] WorldServer init failed (networking may be disabled)");
+            console.LogWarning("[MMO World] WorldServer start failed (networking may be disabled)");
         }
 #else
         auto& console = Spark::SimpleConsole::GetInstance();
@@ -226,8 +231,11 @@ namespace MMO
             return;
 
 #ifdef ENABLE_NETWORKING
-        auto& worldServer = Spark::Net::WorldServer::GetInstance();
-        worldServer.Shutdown();
+        if (m_worldServer)
+        {
+            m_worldServer->Stop();
+            m_worldServer.reset();
+        }
 #endif
 
         m_areas.clear();

@@ -9,9 +9,6 @@
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
-#include "Engine/Networking/ClientPrediction.h"
-#include "Engine/Networking/NetworkInterpolation.h"
-#include "Engine/Networking/EntityReplicator.h"
 #endif
 
 #include "Engine/World/SpatialGrid.h"
@@ -49,13 +46,14 @@ namespace MMO
 
         // Handle player spawn messages from server
         netMgr.RegisterHandler(Spark::Net::MessageType::EntitySpawn,
-                               [this](Spark::Net::ClientID senderId, const std::vector<uint8_t>& data)
+                               [this](const Spark::Net::NetworkMessage& netMsg)
                                {
-                                   if (data.size() < sizeof(uint32_t) * 3)
+                                   if (netMsg.payload.size() < sizeof(uint32_t) * 3)
                                        return;
 
                                    // Parse: networkId, clientId, areaId
-                                   Spark::Net::NetBuffer buf(data);
+                                   Spark::Net::NetBuffer buf;
+                                   buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
                                    uint32_t networkId = buf.ReadUint32();
                                    uint32_t clientId = buf.ReadUint32();
                                    uint32_t areaId = buf.ReadUint32();
@@ -77,24 +75,26 @@ namespace MMO
 
         // Handle player disconnect
         netMgr.RegisterHandler(Spark::Net::MessageType::EntityDestroy,
-                               [this](Spark::Net::ClientID senderId, const std::vector<uint8_t>& data)
+                               [this](const Spark::Net::NetworkMessage& netMsg)
                                {
-                                   if (data.size() < sizeof(uint32_t))
+                                   if (netMsg.payload.size() < sizeof(uint32_t))
                                        return;
 
-                                   Spark::Net::NetBuffer buf(data);
+                                   Spark::Net::NetBuffer buf;
+                                   buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
                                    uint32_t clientId = buf.ReadUint32();
                                    RemovePlayer(clientId);
                                });
 
         // Handle position updates from server (for remote players)
         netMgr.RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
-                               [this](Spark::Net::ClientID senderId, const std::vector<uint8_t>& data)
+                               [this](const Spark::Net::NetworkMessage& netMsg)
                                {
-                                   if (data.size() < sizeof(uint32_t) + sizeof(float) * 3)
+                                   if (netMsg.payload.size() < sizeof(uint32_t) + sizeof(float) * 3)
                                        return;
 
-                                   Spark::Net::NetBuffer buf(data);
+                                   Spark::Net::NetBuffer buf;
+                                   buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
                                    uint32_t clientId = buf.ReadUint32();
                                    float x = buf.ReadFloat();
                                    float y = buf.ReadFloat();
@@ -149,12 +149,14 @@ namespace MMO
         m_players[m_localClientId] = player;
 
 #ifdef ENABLE_NETWORKING
-        // Register with entity replicator for network sync
-        auto& replicator = Spark::Net::EntityReplicator::GetInstance();
-        replicator.RegisterEntity(networkId, {}, nullptr, nullptr);
-
+        // Register with NetworkManager for replication
         auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-        netMgr.RegisterReplicatedEntity(networkId);
+        Spark::Net::ReplicatedEntity repEntity;
+        repEntity.networkID = networkId;
+        repEntity.ownerID = m_localClientId;
+        repEntity.entityType = "MMOPlayer";
+        repEntity.position = {player.posX, player.posY, player.posZ};
+        netMgr.RegisterReplicatedEntity(repEntity);
 #endif
 
         auto& console = Spark::SimpleConsole::GetInstance();
@@ -199,17 +201,11 @@ namespace MMO
             return;
 
         auto& local = it->second;
-        auto& prediction = Spark::Net::ClientPrediction::GetInstance();
 
-        // Record current input and apply prediction locally
-        Spark::Net::PredictedInput input{};
-        // Input would come from InputManager in a real game
-        prediction.RecordInput(input);
-
-        auto state = prediction.GetState();
-        local.posX = state.position.x;
-        local.posY = state.position.y;
-        local.posZ = state.position.z;
+        // Client-side prediction: in a full implementation, a Spark::ClientPrediction
+        // instance would be maintained per-player and fed inputs each frame.
+        // For now, the local player position is driven by direct input in Update().
+        (void)local;
 #else
         (void)fixedDeltaTime;
 #endif

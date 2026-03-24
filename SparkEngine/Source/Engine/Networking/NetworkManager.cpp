@@ -456,11 +456,14 @@ namespace Spark::Net
                     SPARK_LOG_WARN(Spark::LogCategory::Network, "Unknown message type %u — dropping",
                                    static_cast<unsigned>(msg.type));
                 }
+
+                // Check channel before popping — msg reference is invalidated by pop()
+                bool wasReliableOrdered = (msg.channel == ChannelType::ReliableOrdered);
                 m_stats.packetsReceived++;
                 toDispatch.pop();
 
                 // After delivering an ordered message, flush any buffered successors
-                if (msg.channel == ChannelType::ReliableOrdered)
+                if (wasReliableOrdered)
                     FlushOrderedBuffer();
             }
         }
