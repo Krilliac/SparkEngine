@@ -343,7 +343,7 @@ While `JobSystem` uses a raw `std::queue` internally with its own mutex, `Thread
 - **No work stealing**: Workers are bound to a single shared queue. A per-thread deque with work stealing would improve cache locality for fine-grained workloads.
 - **No main-thread dispatch**: There is no mechanism to schedule a callback back onto the main thread from a worker. Results must be polled via futures.
 
-These limitations are documented in the architecture analysis (`docs/ARCHITECTURE_ANALYSIS.md`, items R8.1 and gap analysis section 3.1).
+These limitations are documented in the [Codebase Health](Codebase-Health) wiki page under architectural considerations.
 
 ## Source Files
 

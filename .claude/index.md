@@ -23,7 +23,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Rendering pipeline (all 12 stubs now implemented) | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | **Resolved** | 2026-03-22 |
 | Engine systems (29+ working, all wired) | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-22 |
 | SparkGame module (AI enemies now wired) | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-22 |
-| Documentation coverage (58 wiki pages, 99.6% Doxygen) | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-19 |
+| Documentation coverage (64 wiki pages, 99.6% Doxygen) | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-03-24 |
 | ThirdParty dependencies | [knowledge/thirdparty-dependencies-audit.md](knowledge/thirdparty-dependencies-audit.md) | Observation | Active | 2026-03-17 |
 ## Quick Reference
 
@@ -31,7 +31,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
-- **Tests**: 145 test files, 1235+ tests passing
+- **Tests**: 160 test files, 1808 tests passing
 - **Editor**: 51 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor
 - **Rendering**: All 12 former stubs now have .cpp implementations (ShadowAtlas, ScreenSpaceEffects, GPUOcclusionCulling, FroxelVolumetricFog, DynamicQualityScaler, DDGIProbeSystem, AdaptiveProbeVolumes, LightProbeSystem, SkyAtmosphere, WaterRenderer, ClusteredLightCulling, DynamicQualityTypes)
 - **Post-processing**: Bloom, auto-exposure, tonemapping (ACES/Filmic/Neutral/Reinhard), color grading (LGG)

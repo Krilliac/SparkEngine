@@ -1,6 +1,6 @@
 # Testing
 
-SparkEngine includes a comprehensive test suite with 71 test files and 864+ test cases using a lightweight internal test framework with CTest integration.
+SparkEngine includes a comprehensive test suite with 160 test files and 1,808 test cases using a lightweight internal test framework with CTest integration.
 
 **Source:** `Tests/TestFramework.h`, `Tests/`
 
@@ -118,7 +118,7 @@ ctest --test-dir build --output-on-failure -j$(nproc)
 
 ## Test Categories and Coverage
 
-The 71 test files cover all major engine subsystems:
+The 160 test files cover all major engine subsystems. For the full inventory, see the [Test File Inventory](#test-file-inventory) section at the bottom of this page. Key categories:
 
 ### Core & Utilities
 

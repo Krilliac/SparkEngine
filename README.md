@@ -8,6 +8,28 @@
 [![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/loc.json)](https://github.com/Krilliac/SparkEngine)
 [![Source Files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/files.json)](https://github.com/Krilliac/SparkEngine)
 
+**Platforms & Compilers:**
+
+[![Windows MSVC](https://img.shields.io/badge/Windows-MSVC_v143_(VS_2022)-0078D4?logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![Windows MSVC v144](https://img.shields.io/badge/Windows-MSVC_v144_(VS_2026)-0078D4?logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![Linux GCC](https://img.shields.io/badge/Linux-GCC_13+-E95420?logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![Linux Clang](https://img.shields.io/badge/Linux-Clang_17+-A9A9A9?logo=llvm&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![macOS](https://img.shields.io/badge/macOS-Experimental-999999?logo=apple&logoColor=white)](https://github.com/Krilliac/SparkEngine)
+
+**Quality & Testing:**
+
+[![Tests](https://img.shields.io/badge/tests-1%2C808_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/master/Tests)
+[![ASan](https://img.shields.io/badge/sanitizers-ASan_%2B_UBSan-green)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-format)
+[![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-tidy)
+
+**Rendering Backends:**
+
+[![DirectX 11](https://img.shields.io/badge/DX11-Stable-brightgreen)](https://github.com/Krilliac/SparkEngine)
+[![DirectX 12](https://img.shields.io/badge/DX12-Experimental-yellow)](https://github.com/Krilliac/SparkEngine)
+[![Vulkan](https://img.shields.io/badge/Vulkan-Experimental-yellow?logo=vulkan&logoColor=white)](https://github.com/Krilliac/SparkEngine)
+[![OpenGL](https://img.shields.io/badge/OpenGL_4.5-Experimental-yellow?logo=opengl&logoColor=white)](https://github.com/Krilliac/SparkEngine)
+
 **Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Built-in support for DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
 
 > **Early Development** — SparkEngine is under active development. Systems are being built out and stabilized. Expect rough edges.
@@ -270,7 +292,7 @@ SparkEngine/
 |   |-- Models/             # 3D model files (.obj)
 |   |-- Scenes/             # Level/scene JSON files
 |   |-- Scripts/            # AngelScript game scripts
-|-- Tests/                   # 145 unit tests (CTest integration)
+|-- Tests/                   # 1,808 unit tests across 160 files (CTest)
 |-- tools/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
@@ -313,7 +335,7 @@ The following libraries are included directly in the source tree:
 
 ## Tests
 
-145 unit tests covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
+1,808 unit tests across 160 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
 
 ```bash
 # Build and run tests
@@ -322,7 +344,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Test coverage includes: math utilities, object pool, ECS world, game modes, AI behavior trees, animation, NavMesh, physics, input, save system, event system, weather, inventory, quests, day/night cycle, performance stats, light manager, fog, screen-space effects, post-processing pipeline, sequencer, mesh LOD, console command history, debug tools, noise generator, string utilities, ring buffer, UUID, file utilities, config parser, frustum culling, coroutine scheduler, tweening, temporal effects, ability system, condition system, instance manager, movement system, spatial grid, replication fields, async database, script hook manager, module hot-reload, console RBAC, networking integration (30 tests), and cryptography.
+Test coverage spans all major subsystems: core utilities (math, string, file, UUID, config, ring buffer, object pool), ECS (world, components, integration), physics (rigid bodies, collision layers, frustum culling, interpolation), AI (behavior trees, NavMesh, steering, EQS, formations, cover, group AI), animation (state machines, IK, retargeting, cloth, blend spaces), networking (NetBuffer, encryption, prediction, reliable channels, replication, dedicated server, integration), gameplay (weapons, inventory, quests, achievements, destruction, dialogue, cooldowns), graphics (fog, SSAO/SSR, post-processing, temporal effects, mesh LOD, lights, upscaling, render graph, water, terrain), scene management (serialization, snapshots, loading), events (EventBus, coroutines, tweens), editor (play mode, debug tools, collaborative editing), and infrastructure (engine context, modules, profiling, RBAC).
 
 ## Build Options
 

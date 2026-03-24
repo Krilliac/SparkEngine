@@ -492,7 +492,7 @@ Whenever code is **added**, **modified**, or **deleted**, update the correspondi
    docs/sync-wiki.sh sync             # Update wiki inventories (components, systems, panels, tests)
    ```
 2. **Wiki pages** (`wiki/`): Update the relevant wiki page for the subsystem affected. If a new subsystem is introduced, create a new wiki page and add it to `wiki/_Sidebar.md`. Existing pages cover: Architecture, ECS, Rendering, Physics, AI, Animation, Audio, Networking, Scripting, Editor, Input, Scene Management, Terrain, Gameplay Systems, Event System, Save System, Shader Pipeline, Asset Pipeline, Day-Night/Weather, Cinematic Sequencer, Testing, Build System, and more.
-3. **API docs** (`docs/`): Ensure new or changed public headers have Doxygen-style comments (`@brief`, `@param`, `@return`). The `generate-api-docs.sh` script extracts these automatically. Gap analyses go in `docs/gap-analysis/`.
+3. **API docs** (`docs/`): Ensure new or changed public headers have Doxygen-style comments (`@brief`, `@param`, `@return`). The `generate-api-docs.sh` script extracts these automatically. System maturity tracking lives in the `wiki/Codebase-Health.md` wiki page.
 4. **CLAUDE.md**: If the change affects architecture, build toggles, execution order, thread safety rules, or key directories, update this file to keep it accurate.
 
 Skipping documentation is **not acceptable** — treat docs as part of the deliverable, not an afterthought.
