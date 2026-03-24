@@ -104,7 +104,12 @@ target_compile_definitions(SparkGameFPS PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
 # In standalone mode, the game must provide its own engine lib path.
 # ---------------------------------------------------------------------
 if(NOT SPARK_GAME_FPS_STANDALONE AND TARGET SparkEngineLib)
-    target_link_libraries(SparkGameFPS PRIVATE SparkEngineLib)
+    if(WIN32)
+        target_link_libraries(SparkGameFPS PRIVATE SparkEngineLib)
+    elseif(TARGET SparkEngineInterface)
+        # Headers + defines only; symbols resolve from exe via ENABLE_EXPORTS
+        target_link_libraries(SparkGameFPS PRIVATE SparkEngineInterface)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------
@@ -161,17 +166,20 @@ if(MSVC)
     target_link_libraries(SparkGameFPS PRIVATE legacy_stdio_definitions)
 endif()
 
-# Link Jolt Physics if available
-if(TARGET Jolt)
-    target_link_libraries(SparkGameFPS PRIVATE Jolt)
-endif()
+# On Linux, static third-party libs resolve from the exe (ENABLE_EXPORTS)
+if(WIN32)
+    # Link Jolt Physics if available
+    if(TARGET Jolt)
+        target_link_libraries(SparkGameFPS PRIVATE Jolt)
+    endif()
 
-# Link third-party libraries
-if(TARGET miniz)
-    target_link_libraries(SparkGameFPS PRIVATE miniz)
-endif()
-if(TARGET tinyobjloader)
-    target_link_libraries(SparkGameFPS PRIVATE tinyobjloader)
+    # Link third-party libraries
+    if(TARGET miniz)
+        target_link_libraries(SparkGameFPS PRIVATE miniz)
+    endif()
+    if(TARGET tinyobjloader)
+        target_link_libraries(SparkGameFPS PRIVATE tinyobjloader)
+    endif()
 endif()
 
 # Vulkan backend
