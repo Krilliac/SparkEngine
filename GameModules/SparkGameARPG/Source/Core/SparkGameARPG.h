@@ -27,6 +27,7 @@ namespace ARPG
     class ARPGDungeonSystem;
     class ARPGSkillSystem;
     class ARPGMonsterSystem;
+    class ARPGEngineSystems;
 } // namespace ARPG
 
 /**
@@ -72,6 +73,9 @@ class SparkGameARPGModule : public Spark::IModule
     std::unique_ptr<ARPG::ARPGDungeonSystem> m_dungeonSystem;
     std::unique_ptr<ARPG::ARPGSkillSystem> m_skillSystem;
     std::unique_ptr<ARPG::ARPGMonsterSystem> m_monsterSystem;
+
+    // Engine system integrations (EventBus, SaveSystem, AI, Animation, Abilities, etc.)
+    std::unique_ptr<ARPG::ARPGEngineSystems> m_engineSystems;
 };
 
 // Module exports

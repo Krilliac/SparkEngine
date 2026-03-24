@@ -7,6 +7,7 @@
  */
 
 #include "SparkGameRacing.h"
+#include "RacingEngineSystems.h"
 #include "Vehicle/RacingVehicleSystem.h"
 #include "Track/RacingTrackSystem.h"
 #include "Race/RacingRaceManager.h"
@@ -118,10 +119,18 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    // Initialize engine system integrations (audio, events, save, replay, weather, destruction, coroutines)
+    m_engineSystems = std::make_unique<Racing::RacingEngineSystems>();
+    if (!m_engineSystems->Initialize(context))
+    {
+        console.LogError("[Racing] Failed to initialize engine system integrations");
+        return false;
+    }
+
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[Racing] Spark Racing module loaded successfully (6 subsystems)");
+    console.LogInfo("[Racing] Spark Racing module loaded successfully (7 subsystems)");
     console.LogInfo("[Racing] Tracks: " + std::to_string(m_trackSystem->GetTrackCount()) +
                     " | Vehicles: " + std::to_string(m_vehicleSystem->GetVehicleCount()) +
                     " | AI Drivers: " + std::to_string(m_aiDriver->GetDriverCount()));
@@ -137,6 +146,11 @@ void SparkGameRacingModule::OnUnload()
     console.LogInfo("[Racing] Unloading Spark Racing module...");
 
     // Shutdown in reverse initialization order
+    if (m_engineSystems)
+    {
+        m_engineSystems->Shutdown();
+        m_engineSystems.reset();
+    }
     if (m_hudSystem)
     {
         m_hudSystem->Shutdown();
@@ -178,6 +192,7 @@ void SparkGameRacingModule::OnUpdate(float deltaTime)
     if (!m_initialized || m_paused)
         return;
 
+    m_engineSystems->Update(deltaTime);
     m_trackSystem->Update(deltaTime);
     m_raceManager->Update(deltaTime);
     m_aiDriver->Update(deltaTime);
@@ -230,6 +245,7 @@ void SparkGameRacingModule::OnImGui()
     m_aiDriver->RenderDebugUI();
     m_cameraSystem->RenderDebugUI();
     m_hudSystem->RenderDebugUI();
+    m_engineSystems->RenderDebugUI();
 }
 
 void SparkGameRacingModule::RegisterConsoleCommands()
@@ -307,5 +323,47 @@ void SparkGameRacingModule::RegisterConsoleCommands()
                                 else
                                     return "Unknown difficulty. Options: easy, medium, hard, expert";
                                 return "AI difficulty set to: " + args[0];
+                            });
+
+    // --- Engine system commands ---
+
+    console.RegisterCommand("race_save",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.empty())
+                                    return "Usage: race_save <slot_name>";
+                                return m_engineSystems->SaveRaceData(args[0]);
+                            });
+
+    console.RegisterCommand("race_load",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.empty())
+                                    return "Usage: race_load <slot_name>";
+                                return m_engineSystems->LoadRaceData(args[0]);
+                            });
+
+    console.RegisterCommand("race_replay",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.empty())
+                                    return "Usage: race_replay <record|stop|play>";
+                                return m_engineSystems->ToggleReplay(args[0]);
+                            });
+
+    console.RegisterCommand("race_ghost",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.empty())
+                                    return "Usage: race_ghost <track_name>";
+                                return m_engineSystems->ToggleGhost(args[0]);
+                            });
+
+    console.RegisterCommand("race_weather",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                if (args.empty())
+                                    return "Usage: race_weather <clear|rain|storm>";
+                                return m_engineSystems->SetWeather(args[0]);
                             });
 }

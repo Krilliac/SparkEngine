@@ -36,6 +36,7 @@ namespace MMO
     class MMOAccountSystem;
     class MMOCharacterSystem;
     class MMOLoginUI;
+    class MMOEngineSystems;
 } // namespace MMO
 
 /**
@@ -93,6 +94,9 @@ class SparkGameMMOModule : public Spark::IModule
     std::unique_ptr<MMO::MMOAccountSystem> m_accountSystem;
     std::unique_ptr<MMO::MMOCharacterSystem> m_characterSystem;
     std::unique_ptr<MMO::MMOLoginUI> m_loginUI;
+
+    // Engine subsystem integration
+    std::unique_ptr<MMO::MMOEngineSystems> m_engineSystems;
 };
 
 // Module exports

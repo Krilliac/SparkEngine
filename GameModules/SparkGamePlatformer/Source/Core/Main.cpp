@@ -7,6 +7,7 @@
  */
 
 #include "SparkGamePlatformer.h"
+#include "PlatformerEngineSystems.h"
 #include "Player/PlatformerPlayerController.h"
 #include "Level/PlatformerLevelSystem.h"
 #include "Collectible/PlatformerCollectibleSystem.h"
@@ -118,10 +119,18 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
+    // Wire engine subsystems (audio, events, save, destruction, replay, coroutines, localization)
+    m_engineSystems = std::make_unique<Platformer::PlatformerEngineSystems>();
+    if (!m_engineSystems->Initialize(context))
+    {
+        console.LogError("[Platformer] Failed to initialize engine systems");
+        return false;
+    }
+
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[Platformer] Spark Platformer module loaded successfully (6 subsystems)");
+    console.LogInfo("[Platformer] Spark Platformer module loaded successfully (7 subsystems)");
     console.LogInfo("[Platformer] Levels: " + std::to_string(m_levelSystem->GetLevelCount()) +
                     " | Collectibles: " + std::to_string(m_collectibleSystem->GetTotalCollectibleCount()) +
                     " | Hazards: " + std::to_string(m_hazardSystem->GetHazardCount()) +
@@ -138,6 +147,11 @@ void SparkGamePlatformerModule::OnUnload()
     console.LogInfo("[Platformer] Unloading Spark Platformer module...");
 
     // Shutdown in reverse initialization order
+    if (m_engineSystems)
+    {
+        m_engineSystems->Shutdown();
+        m_engineSystems.reset();
+    }
     if (m_cameraSystem)
     {
         m_cameraSystem->Shutdown();
@@ -185,6 +199,7 @@ void SparkGamePlatformerModule::OnUpdate(float deltaTime)
     m_hazardSystem->Update(deltaTime);
     m_checkpointSystem->Update(deltaTime);
     m_cameraSystem->Update(deltaTime, m_playerController->GetPlayerPosition());
+    m_engineSystems->Update(deltaTime);
 }
 
 void SparkGamePlatformerModule::OnFixedUpdate(float fixedDeltaTime)
@@ -283,4 +298,41 @@ void SparkGamePlatformerModule::RegisterConsoleCommands()
 
     console.RegisterCommand("platformer_collectibles", [this](const std::vector<std::string>&) -> std::string
                             { return m_collectibleSystem->GetCollectionString(); });
+
+    // --- Engine system commands ---
+
+    console.RegisterCommand("plat_save",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                std::string slot = args.empty() ? "plat_slot1" : args[0];
+                                return m_engineSystems->SaveProgress(slot) ? "Saved to " + slot : "Save failed";
+                            });
+
+    console.RegisterCommand("plat_load",
+                            [this](const std::vector<std::string>& args) -> std::string
+                            {
+                                std::string slot = args.empty() ? "plat_slot1" : args[0];
+                                return m_engineSystems->LoadProgress(slot) ? "Loaded from " + slot : "Load failed";
+                            });
+
+    console.RegisterCommand("plat_replay_start",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                m_engineSystems->StartReplayRecording();
+                                return "Replay recording started";
+                            });
+
+    console.RegisterCommand("plat_replay_stop",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                m_engineSystems->StopReplayRecording();
+                                return "Replay recording stopped and saved";
+                            });
+
+    console.RegisterCommand("plat_ghost",
+                            [this](const std::vector<std::string>&) -> std::string
+                            {
+                                m_engineSystems->ToggleGhostPlayback();
+                                return "Ghost playback toggled";
+                            });
 }

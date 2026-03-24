@@ -28,6 +28,7 @@ namespace RPG
     class RPGQuestSystem;
     class RPGInventorySystem;
     class RPGNPCSystem;
+    class RPGEngineSystems;
 } // namespace RPG
 
 /**
@@ -75,6 +76,7 @@ class SparkGameRPGModule : public Spark::IModule
     std::unique_ptr<RPG::RPGQuestSystem> m_questSystem;
     std::unique_ptr<RPG::RPGInventorySystem> m_inventorySystem;
     std::unique_ptr<RPG::RPGNPCSystem> m_npcSystem;
+    std::unique_ptr<RPG::RPGEngineSystems> m_engineSystems;
 };
 
 // Module exports

@@ -27,6 +27,7 @@ namespace RTS
     class RTSCommandSystem;
     class RTSFogOfWarSystem;
     class RTSMatchSystem;
+    class RTSEngineSystems;
 } // namespace RTS
 
 /**
@@ -72,6 +73,7 @@ class SparkGameRTSModule : public Spark::IModule
     std::unique_ptr<RTS::RTSCommandSystem> m_commandSystem;
     std::unique_ptr<RTS::RTSFogOfWarSystem> m_fogOfWarSystem;
     std::unique_ptr<RTS::RTSMatchSystem> m_matchSystem;
+    std::unique_ptr<RTS::RTSEngineSystems> m_engineSystems;
 };
 
 // Module exports
