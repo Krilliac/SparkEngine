@@ -189,7 +189,7 @@ TEST(DebugHookManager_ContextMessage)
     auto handle = mgr.Register(Spark::DebugHookPoint::ErrorRaised, "ErrCheck",
                                [&](const Spark::DebugHookContext& ctx) { receivedMsg = std::string(ctx.message); });
 
-    mgr.DispatchMessage(Spark::DebugHookPoint::ErrorRaised, "Out of memory");
+    mgr.DispatchDebugMessage(Spark::DebugHookPoint::ErrorRaised, "Out of memory");
     EXPECT_EQ(receivedMsg, std::string("Out of memory"));
 }
 

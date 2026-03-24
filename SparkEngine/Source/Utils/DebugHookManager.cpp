@@ -163,7 +163,7 @@ namespace Spark
         Dispatch(ctx);
     }
 
-    void DebugHookManager::DispatchMessage(DebugHookPoint point, std::string_view message)
+    void DebugHookManager::DispatchDebugMessage(DebugHookPoint point, std::string_view message)
     {
         if (!m_enabled)
             return;
