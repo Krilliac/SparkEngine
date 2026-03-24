@@ -13,6 +13,7 @@
  */
 
 #include "Logger.h"
+#include "DebugHookManager.h"
 
 #include <iostream>
 #include <cstring>
@@ -237,6 +238,16 @@ namespace Spark
         msg.function = func ? func : "";
         msg.timestamp = std::chrono::system_clock::now();
         msg.threadId = std::this_thread::get_id();
+
+        // Fire debug hooks for errors and warnings so instrumentation can observe them
+        if (level == LogLevel::Error || level == LogLevel::Fatal)
+        {
+            SPARK_DEBUG_HOOK_MESSAGE(ErrorRaised, message);
+        }
+        else if (level == LogLevel::Warn)
+        {
+            SPARK_DEBUG_HOOK_MESSAGE(WarningRaised, message);
+        }
 
         if (m_asyncEnabled.load(std::memory_order_relaxed))
         {

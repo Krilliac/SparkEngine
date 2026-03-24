@@ -3,12 +3,14 @@
  * @brief Unit tests for Spark::DebugHookManager
  *
  * Tests registration, dispatch, priority ordering, RAII handles,
- * convenience methods, enable/disable toggle, and name-based cleanup.
+ * convenience methods, enable/disable toggle, name-based cleanup,
+ * and multi-system lifecycle tracing patterns.
  */
 
 #include "TestFramework.h"
 #include "../SparkEngine/Source/Utils/DebugHookManager.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -388,4 +390,248 @@ TEST(DebugHookManager_MacroDispatch)
 
     SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Physics", 0.0);
     EXPECT_EQ(sysCount, 1);
+}
+
+// ============================================================================
+// Multi-system lifecycle tracing
+// ============================================================================
+
+TEST(DebugHookManager_SystemLifecycleTrace)
+{
+    ResetHookManager();
+    auto& mgr = Spark::DebugHookManager::GetInstance();
+    std::vector<std::string> trace;
+
+    // Register a single handler that observes all system lifecycle events
+    auto h1 = mgr.Register(Spark::DebugHookPoint::SystemPreInit, "Lifecycle", [&](const Spark::DebugHookContext& ctx)
+                           { trace.push_back("PreInit:" + std::string(ctx.systemName)); });
+    auto h2 = mgr.Register(Spark::DebugHookPoint::SystemPostInit, "Lifecycle", [&](const Spark::DebugHookContext& ctx)
+                           { trace.push_back("PostInit:" + std::string(ctx.systemName)); });
+    auto h3 =
+        mgr.Register(Spark::DebugHookPoint::SystemPreShutdown, "Lifecycle", [&](const Spark::DebugHookContext& ctx)
+                     { trace.push_back("PreShutdown:" + std::string(ctx.systemName)); });
+    auto h4 =
+        mgr.Register(Spark::DebugHookPoint::SystemPostShutdown, "Lifecycle", [&](const Spark::DebugHookContext& ctx)
+                     { trace.push_back("PostShutdown:" + std::string(ctx.systemName)); });
+
+    // Simulate a system lifecycle: Physics init, Audio init, Audio shutdown, Physics shutdown
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Physics", 0.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Physics", 0.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Audio", 0.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Audio", 0.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Audio", 0.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Audio", 0.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Physics", 0.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Physics", 0.0);
+
+    EXPECT_EQ(trace.size(), 8u);
+    EXPECT_EQ(trace[0], std::string("PreInit:Physics"));
+    EXPECT_EQ(trace[1], std::string("PostInit:Physics"));
+    EXPECT_EQ(trace[2], std::string("PreInit:Audio"));
+    EXPECT_EQ(trace[3], std::string("PostInit:Audio"));
+    EXPECT_EQ(trace[4], std::string("PreShutdown:Audio"));
+    EXPECT_EQ(trace[5], std::string("PostShutdown:Audio"));
+    EXPECT_EQ(trace[6], std::string("PreShutdown:Physics"));
+    EXPECT_EQ(trace[7], std::string("PostShutdown:Physics"));
+}
+
+// ============================================================================
+// Per-system update timing pattern
+// ============================================================================
+
+TEST(DebugHookManager_SystemUpdateTimingPattern)
+{
+    ResetHookManager();
+    auto& mgr = Spark::DebugHookManager::GetInstance();
+
+    struct SystemTiming
+    {
+        std::string name;
+        double durationMs = 0.0;
+    };
+    std::vector<SystemTiming> timings;
+
+    auto handle =
+        mgr.Register(Spark::DebugHookPoint::SystemPostUpdate, "TimingCollector", [&](const Spark::DebugHookContext& ctx)
+                     { timings.push_back({std::string(ctx.systemName), ctx.durationMs}); });
+
+    // Simulate several systems reporting their update duration
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "ECS.Physics", 3.2);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "ECS.Animation", 1.1);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "ECS.AI", 0.5);
+    mgr.DispatchSystem(Spark::DebugHookPoint::SystemPostUpdate, "ECS.Render", 8.7);
+
+    EXPECT_EQ(timings.size(), 4u);
+    EXPECT_EQ(timings[0].name, std::string("ECS.Physics"));
+    EXPECT_GT(timings[0].durationMs, 3.1);
+    EXPECT_EQ(timings[3].name, std::string("ECS.Render"));
+    EXPECT_GT(timings[3].durationMs, 8.6);
+}
+
+// ============================================================================
+// Error/warning hook observability
+// ============================================================================
+
+TEST(DebugHookManager_ErrorWarningHooks)
+{
+    ResetHookManager();
+    auto& mgr = Spark::DebugHookManager::GetInstance();
+
+    std::vector<std::string> errors;
+    std::vector<std::string> warnings;
+
+    auto h1 = mgr.Register(Spark::DebugHookPoint::ErrorRaised, "ErrCollector",
+                           [&](const Spark::DebugHookContext& ctx) { errors.push_back(std::string(ctx.message)); });
+    auto h2 = mgr.Register(Spark::DebugHookPoint::WarningRaised, "WarnCollector",
+                           [&](const Spark::DebugHookContext& ctx) { warnings.push_back(std::string(ctx.message)); });
+
+    SPARK_DEBUG_HOOK_MESSAGE(ErrorRaised, "GPU device lost");
+    SPARK_DEBUG_HOOK_MESSAGE(WarningRaised, "Texture pool 80% full");
+    SPARK_DEBUG_HOOK_MESSAGE(ErrorRaised, "Shader compilation failed");
+
+    EXPECT_EQ(errors.size(), 2u);
+    EXPECT_EQ(warnings.size(), 1u);
+    EXPECT_EQ(errors[0], std::string("GPU device lost"));
+    EXPECT_EQ(warnings[0], std::string("Texture pool 80% full"));
+}
+
+// ============================================================================
+// Resource load tracking
+// ============================================================================
+
+TEST(DebugHookManager_ResourceLoadTracking)
+{
+    ResetHookManager();
+    auto& mgr = Spark::DebugHookManager::GetInstance();
+
+    struct ResourceEvent
+    {
+        std::string pointName;
+        std::string name;
+        double durationMs;
+    };
+    std::vector<ResourceEvent> events;
+
+    auto h1 = mgr.Register(Spark::DebugHookPoint::ResourceLoadBegin, "ResTracker",
+                           [&](const Spark::DebugHookContext& ctx)
+                           {
+                               events.push_back({std::string(Spark::DebugHookPointToString(ctx.point)),
+                                                 std::string(ctx.resourceName), ctx.durationMs});
+                           });
+    auto h2 = mgr.Register(Spark::DebugHookPoint::ResourceLoadComplete, "ResTracker",
+                           [&](const Spark::DebugHookContext& ctx)
+                           {
+                               events.push_back({std::string(Spark::DebugHookPointToString(ctx.point)),
+                                                 std::string(ctx.resourceName), ctx.durationMs});
+                           });
+
+    SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadBegin, "materials/brick.sparkmat", 0.0);
+    SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadComplete, "materials/brick.sparkmat", 12.3);
+    SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadBegin, "scripts/player.as", 0.0);
+    SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadComplete, "scripts/player.as", 2.1);
+
+    EXPECT_EQ(events.size(), 4u);
+    EXPECT_EQ(events[0].pointName, std::string("ResourceLoadBegin"));
+    EXPECT_EQ(events[0].name, std::string("materials/brick.sparkmat"));
+    EXPECT_EQ(events[1].pointName, std::string("ResourceLoadComplete"));
+    EXPECT_GT(events[1].durationMs, 12.0);
+    EXPECT_EQ(events[2].name, std::string("scripts/player.as"));
+}
+
+// ============================================================================
+// Scene transition hooks
+// ============================================================================
+
+TEST(DebugHookManager_SceneTransitionHooks)
+{
+    ResetHookManager();
+    auto& mgr = Spark::DebugHookManager::GetInstance();
+
+    std::vector<std::pair<std::string, std::string>> transitions;
+
+    auto h1 = mgr.Register(Spark::DebugHookPoint::ScenePreLoad, "SceneTracker", [&](const Spark::DebugHookContext& ctx)
+                           { transitions.push_back({"PreLoad", std::string(ctx.sceneName)}); });
+    auto h2 = mgr.Register(Spark::DebugHookPoint::ScenePostLoad, "SceneTracker", [&](const Spark::DebugHookContext& ctx)
+                           { transitions.push_back({"PostLoad", std::string(ctx.sceneName)}); });
+    auto h3 =
+        mgr.Register(Spark::DebugHookPoint::ScenePreUnload, "SceneTracker", [&](const Spark::DebugHookContext& ctx)
+                     { transitions.push_back({"PreUnload", std::string(ctx.sceneName)}); });
+    auto h4 =
+        mgr.Register(Spark::DebugHookPoint::ScenePostUnload, "SceneTracker", [&](const Spark::DebugHookContext& ctx)
+                     { transitions.push_back({"PostUnload", std::string(ctx.sceneName)}); });
+
+    SPARK_DEBUG_HOOK_SCENE(ScenePreLoad, "Level01");
+    SPARK_DEBUG_HOOK_SCENE(ScenePostLoad, "Level01");
+    SPARK_DEBUG_HOOK_SCENE(ScenePreUnload, "Level01");
+    SPARK_DEBUG_HOOK_SCENE(ScenePostUnload, "Level01");
+
+    EXPECT_EQ(transitions.size(), 4u);
+    EXPECT_EQ(transitions[0].first, std::string("PreLoad"));
+    EXPECT_EQ(transitions[0].second, std::string("Level01"));
+    EXPECT_EQ(transitions[3].first, std::string("PostUnload"));
+}
+
+// ============================================================================
+// Mixed hook types in single frame simulation
+// ============================================================================
+
+TEST(DebugHookManager_FullFrameSimulation)
+{
+    ResetHookManager();
+    auto& mgr = Spark::DebugHookManager::GetInstance();
+    mgr.SetFrameNumber(42);
+    mgr.SetDeltaTime(0.016f);
+
+    std::vector<std::string> events;
+
+    auto h1 = mgr.Register(Spark::DebugHookPoint::FrameBegin, "FrameTracer", [&](const Spark::DebugHookContext& ctx)
+                           { events.push_back("FrameBegin:" + std::to_string(ctx.frameNumber)); });
+    auto h2 =
+        mgr.Register(Spark::DebugHookPoint::SystemPreUpdate, "FrameTracer", [&](const Spark::DebugHookContext& ctx)
+                     { events.push_back("PreUpdate:" + std::string(ctx.systemName)); });
+    auto h3 =
+        mgr.Register(Spark::DebugHookPoint::SystemPostUpdate, "FrameTracer", [&](const Spark::DebugHookContext& ctx)
+                     { events.push_back("PostUpdate:" + std::string(ctx.systemName)); });
+    auto h4 = mgr.Register(Spark::DebugHookPoint::FrameEnd, "FrameTracer", [&](const Spark::DebugHookContext& ctx)
+                           { events.push_back("FrameEnd:" + std::to_string(ctx.frameNumber)); });
+
+    // Simulate a full frame
+    SPARK_DEBUG_HOOK(FrameBegin, 42, 0.016f);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Physics", 0.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", 2.1);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "ECS.Render", 0.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.Render", 5.3);
+    SPARK_DEBUG_HOOK(FrameEnd, 42, 0.016f);
+
+    EXPECT_EQ(events.size(), 6u);
+    EXPECT_EQ(events[0], std::string("FrameBegin:42"));
+    EXPECT_EQ(events[1], std::string("PreUpdate:Physics"));
+    EXPECT_EQ(events[2], std::string("PostUpdate:Physics"));
+    EXPECT_EQ(events[5], std::string("FrameEnd:42"));
+}
+
+// ============================================================================
+// Selective system filtering
+// ============================================================================
+
+TEST(DebugHookManager_SelectiveSystemFilter)
+{
+    ResetHookManager();
+    auto& mgr = Spark::DebugHookManager::GetInstance();
+
+    // Only track Physics updates, ignore everything else
+    int physicsUpdates = 0;
+    auto handle = mgr.Register(Spark::DebugHookPoint::SystemPostUpdate, "PhysicsOnly",
+                               [&](const Spark::DebugHookContext& ctx)
+                               {
+                                   if (ctx.systemName == "Physics")
+                                       physicsUpdates++;
+                               });
+
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", 2.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Audio", 0.5);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.AI", 1.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", 2.1);
+
+    EXPECT_EQ(physicsUpdates, 2);
 }

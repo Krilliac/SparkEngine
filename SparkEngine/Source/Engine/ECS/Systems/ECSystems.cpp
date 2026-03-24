@@ -24,8 +24,10 @@
 #include "Engine/ECS/Components/PhysicsComponents.h"
 #include "../../../Utils/DeferredDeletion.h"
 #include "Utils/Cooldown.h"
+#include "Utils/DebugHookManager.h"
 #include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
+#include <chrono>
 #include <sstream>
 #include <cmath>
 
@@ -40,6 +42,8 @@ namespace Spark::ECS
     void RenderSystem::Update(World& world, float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "ECS.Render", 0.0);
+        auto ecsSysStart = std::chrono::high_resolution_clock::now();
         m_renderedCount = 0;
         SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_graphics);
 
@@ -71,6 +75,10 @@ namespace Spark::ECS
 
             m_renderedCount++;
         }
+
+        auto ecsSysEnd = std::chrono::high_resolution_clock::now();
+        double ecsMs = std::chrono::duration<double, std::milli>(ecsSysEnd - ecsSysStart).count();
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.Render", ecsMs);
     }
 
     // ============================================================================
@@ -80,6 +88,7 @@ namespace Spark::ECS
     void PhysicsUpdateSystem::Update(World& world, float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "ECS.Physics", 0.0);
         SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Physics, m_physics);
         SPARK_WARN_IF(Spark::LogCategory::Physics, deltaTime > 0.1f,
                       "Large deltaTime in PhysicsUpdate — possible frame spike");
@@ -181,6 +190,7 @@ namespace Spark::ECS
                 physBody->SetRotation(transform.rotation);
             }
         }
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.Physics", 0.0);
     }
 
     // ============================================================================
@@ -190,6 +200,7 @@ namespace Spark::ECS
     void AudioUpdateSystem::Update(World& world, float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "ECS.Audio", 0.0);
         SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Audio, m_audio);
 
         auto view = world.GetEntitiesWith<Transform, AudioSourceComponent>();
@@ -220,6 +231,7 @@ namespace Spark::ECS
             source->Position = transform.position;
             audio.previousPosition = transform.position;
         }
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.Audio", 0.0);
     }
 
     // ============================================================================
@@ -275,6 +287,7 @@ namespace Spark::ECS
     void AnimationUpdateSystem::Update(World& world, float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Animation);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "ECS.Animation", 0.0);
         SPARK_WARN_IF(Spark::LogCategory::Animation, deltaTime < 0.0f, "Negative deltaTime in AnimationUpdate");
         auto view = world.GetEntitiesWith<Transform, AnimationController>();
         for (auto entity : view)
@@ -306,6 +319,7 @@ namespace Spark::ECS
                 anim.normalizedTime = anim.currentTime / anim.duration;
             }
         }
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.Animation", 0.0);
     }
 
     // ============================================================================
@@ -315,6 +329,7 @@ namespace Spark::ECS
     void AIUpdateSystem::Update(World& world, float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::AI);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "ECS.AI", 0.0);
         SPARK_WARN_IF(Spark::LogCategory::AI, deltaTime < 0.0f, "Negative deltaTime in AIUpdate");
         auto view = world.GetEntitiesWith<Transform, AIComponent>();
         for (auto entity : view)
@@ -382,6 +397,7 @@ namespace Spark::ECS
                 }
             }
         }
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.AI", 0.0);
     }
 
     // ============================================================================

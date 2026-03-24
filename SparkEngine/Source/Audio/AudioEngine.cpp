@@ -3,6 +3,7 @@
 // AudioEngine.cpp
 #include "AudioEngine.h"
 #include "Utils/Assert.h"
+#include "Utils/DebugHookManager.h"
 #include "Utils/SparkError.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/Validate.h"
@@ -45,6 +46,7 @@ AudioEngine::~AudioEngine()
 HRESULT AudioEngine::Initialize(size_t maxSources)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Audio", 0.0);
     SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine::Initialize -- maxSources=%zu", maxSources);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, maxSources > 0, "AudioEngine maxSources must be positive");
     m_maxSources = maxSources;
@@ -87,12 +89,14 @@ HRESULT AudioEngine::Initialize(size_t maxSources)
     SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine initialization complete - audio ready");
     Spark::SimpleConsole::GetInstance().Log(
         "AudioEngine initialization complete with console integration - audio ready.", "SUCCESS");
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Audio", 0.0);
     return S_OK;
 }
 
 void AudioEngine::Update(float deltaTime)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Audio", 0.0);
     static bool firstFrame = true;
     if (firstFrame)
     {
@@ -107,11 +111,13 @@ void AudioEngine::Update(float deltaTime)
     {
         Update3DAudio();
     }
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Audio", 0.0);
 }
 
 void AudioEngine::Shutdown()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Audio", 0.0);
     SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine::Shutdown called");
     Spark::SimpleConsole::GetInstance().Log("AudioEngine::Shutdown called.", "INFO");
     StopAllSounds();
@@ -151,6 +157,7 @@ void AudioEngine::Shutdown()
         m_xAudio2 = nullptr;
     }
     Spark::SimpleConsole::GetInstance().Log("AudioEngine shutdown complete.", "INFO");
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Audio", 0.0);
 }
 
 HRESULT AudioEngine::LoadSound(const std::string& name, const std::wstring& filename)

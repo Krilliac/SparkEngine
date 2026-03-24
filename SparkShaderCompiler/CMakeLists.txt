@@ -17,6 +17,7 @@ set(COMPILER_SOURCES
 # RHI sources needed for shader compilation
 set(RHI_SOURCES
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/RHIFactory.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Utils/DebugHookManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Utils/Logger.cpp"
 )
 
