@@ -6,6 +6,7 @@
 #include "ScriptHotReload.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/ContainerUtils.h"
+#include "../../Utils/DebugHookManager.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -251,6 +252,7 @@ namespace Spark::Scripting
         if (!m_recompileCallback)
             return;
 
+        SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadBegin, filePath, 0.0);
         RecompileResult result = m_recompileCallback(filePath);
         m_recompileCount++;
 
@@ -264,10 +266,15 @@ namespace Spark::Scripting
                 m_recentErrors.erase(m_recentErrors.begin());
             }
 
+            SPARK_DEBUG_HOOK_MESSAGE(ErrorRaised, result.errorMessage);
             if (m_errorCallback)
             {
                 m_errorCallback(result);
             }
+        }
+        else
+        {
+            SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadComplete, filePath, 0.0);
         }
     }
 

@@ -12,6 +12,7 @@
 #include "Engine/Events/EventSystem.h"
 #include "Core/EngineContext.h"
 #include "Utils/Assert.h"
+#include "Utils/DebugHookManager.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/ConsoleProcessManager.h"
@@ -68,6 +69,8 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
     SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Scene, !filepath.empty(),
                       "SceneManager::LoadScene — filepath must not be empty");
+    std::string narrowName(filepath.begin(), filepath.end());
+    SPARK_DEBUG_HOOK_SCENE(ScenePreLoad, narrowName);
 
     // Security: reject path traversal attempts
     std::string narrowCheck = WideToNarrow(filepath);
@@ -103,6 +106,8 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
         LOG_TO_CONSOLE_IMMEDIATE(L"Scene loaded: " + std::to_wstring(m_objects.size()) + L" objects, " +
                                      std::to_wstring(m_sceneNodes.size()) + L" nodes",
                                  L"SUCCESS");
+
+        SPARK_DEBUG_HOOK_SCENE(ScenePostLoad, narrowName);
 
         // Publish SceneLoadedEvent
         if (auto* ctx = EngineContext::Get())

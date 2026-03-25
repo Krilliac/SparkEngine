@@ -5,6 +5,7 @@
 
 #include "MaterialLoader.h"
 #include "MaterialSystem.h"
+#include "../Utils/DebugHookManager.h"
 #include "../Utils/SparkConsole.h"
 
 #include "../Utils/StringUtils.h"
@@ -41,6 +42,7 @@ namespace Spark::Graphics
 
     bool MaterialLoader::LoadMaterial(const std::string& filePath)
     {
+        SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadBegin, filePath, 0.0);
         MaterialDefinition def;
         if (!ParseFile(filePath, def))
         {
@@ -59,6 +61,7 @@ namespace Spark::Graphics
         }
 
         m_loadedNames.push_back(def.name);
+        SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadComplete, filePath, 0.0);
         return true;
     }
 

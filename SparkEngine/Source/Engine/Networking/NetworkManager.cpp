@@ -10,6 +10,7 @@
 
 #include "NetworkManager.h"
 #include "../../Utils/Assert.h"
+#include "../../Utils/DebugHookManager.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
 #include <cstring>
@@ -379,6 +380,7 @@ namespace Spark::Net
     void NetworkManager::Update(float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Network", 0.0);
         if (m_role == NetworkRole::None)
             return;
 
@@ -497,6 +499,7 @@ namespace Spark::Net
         }
 
         ProcessOutgoing();
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Network", 0.0);
     }
 
     // --------------------------------------------------------------------------

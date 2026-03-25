@@ -351,7 +351,7 @@ SparkEngine/
 ├── ThirdParty/               # Git submodules (15 libraries)
 ├── Assets/                   # Models, Scenes, Scripts
 ├── Shaders/                  # HLSL, GLSL, Compiled bytecode
-├── Tests/                    # 70+ unit test files, 860+ test cases
+├── Tests/                    # 160 test files, 1,800+ test cases
 ├── Tools/                    # CLI tools (spark-cli, SparkBuild)
 ├── docs/                     # API docs, gap analysis, roadmap
 ├── wiki/                     # Wiki documentation pages
@@ -423,6 +423,20 @@ Key build targets:
 
 ---
 
+## Codebase Scale
+
+SparkEngine is a substantial codebase with ~371,500 lines of original C++ code across 2,233 source files. For detailed metrics, see [Codebase Statistics](Codebase-Statistics).
+
+| Section | Lines | Files |
+|---------|------:|------:|
+| SparkEngine/Source | 203,317 | ~1,100 |
+| SparkEditor/Source | 72,945 | ~250 |
+| GameModules | 50,630 | ~200 |
+| Tests | 41,279 | 160 |
+| Tools (Console + ShaderCompiler) | 2,326 | ~20 |
+
+The largest subsystem is Graphics at 83,986 lines (41% of engine source), followed by the Engine subsystem collection at 60,445 lines covering AI, Networking, ECS, Animation, and 20+ other subsystems.
+
 ## See Also
 
 - [Entity Component System](Entity-Component-System) -- ECS architecture using EnTT
@@ -442,4 +456,6 @@ Key build targets:
 - [SparkConsole](SparkConsole) -- Standalone debug console
 - [Creating a Game Module](Creating-a-Game-Module) -- Building game modules
 - [Build System and CMake Modules](Build-System-and-CMake-Modules) -- CMake configuration
+- [Codebase Statistics](Codebase-Statistics) -- Detailed codebase metrics
+- [Codebase Health](Codebase-Health) -- System maturity and known gaps
 - [Getting Started](Getting-Started) -- Build and run the engine
