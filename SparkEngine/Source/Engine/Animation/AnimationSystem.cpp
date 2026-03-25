@@ -121,6 +121,8 @@ namespace Spark::Animation
     void AnimationStateMachine::AddState(const AnimationState& state)
     {
         m_states[state.name] = state;
+        SPARK_LOG_DEBUG(LogCategory::Animation, "State machine: added state '%s' (clip='%s', speed=%.2f)",
+                        state.name.c_str(), state.clipName.c_str(), state.speed);
         if (m_defaultState.empty())
             m_defaultState = state.name;
         if (m_currentState.empty())
@@ -179,6 +181,8 @@ namespace Spark::Animation
             if (m_blendFactor >= 1.0f)
             {
                 // Transition complete: target becomes current
+                SPARK_LOG_INFO(LogCategory::Animation, "State machine transition complete: now in '%s'",
+                               m_targetState.c_str());
                 m_currentState = m_targetState;
                 m_currentTime = m_targetTime;
                 m_targetState.clear();
@@ -218,6 +222,8 @@ namespace Spark::Animation
                 continue;
 
             // Fire the transition
+            SPARK_LOG_INFO(LogCategory::Animation, "State machine transition: '%s' -> '%s' (duration=%.2fs)",
+                           m_currentState.c_str(), t.toState.c_str(), t.duration);
             m_targetState = t.toState;
             m_transitionDuration = t.duration;
             m_transitionElapsed = 0.0f;
@@ -254,10 +260,17 @@ namespace Spark::Animation
     {
         if (m_states.contains(stateName))
         {
+            SPARK_LOG_INFO(LogCategory::Animation, "State machine: forced state '%s' (was '%s')", stateName.c_str(),
+                           m_currentState.c_str());
             m_currentState = stateName;
             m_isTransitioning = false;
             m_currentTime = 0.0f;
             m_blendFactor = 0.0f;
+        }
+        else
+        {
+            SPARK_LOG_WARN(LogCategory::Animation, "State machine: ForceState('%s') failed - state not found",
+                           stateName.c_str());
         }
     }
 
@@ -347,6 +360,8 @@ namespace Spark::Animation
         // If no bones were loaded from file, the skeleton remains empty but valid.
         // Downstream code (AnimationInstance) handles empty skeletons gracefully.
         m_skeletons[filepath] = skeleton;
+        SPARK_LOG_INFO(LogCategory::Animation, "Loaded skeleton '%s' (%zu bones)", filepath.c_str(),
+                       skeleton->bones.size());
         return skeleton;
     }
 
@@ -458,11 +473,14 @@ namespace Spark::Animation
             clips.push_back(std::move(clip));
         }
 
+        SPARK_LOG_INFO(LogCategory::Animation, "Loaded %zu animation clips from '%s'", clips.size(), filepath.c_str());
         return clips;
     }
 
     void AnimationManager::RegisterClip(const std::string& name, std::shared_ptr<AnimationClip> clip)
     {
+        SPARK_LOG_INFO(LogCategory::Animation, "Registered clip '%s' (duration=%.2fs, %zu channels)", name.c_str(),
+                       clip ? clip->duration : 0.0f, clip ? clip->channels.size() : 0);
         m_clips[name] = std::move(clip);
     }
 

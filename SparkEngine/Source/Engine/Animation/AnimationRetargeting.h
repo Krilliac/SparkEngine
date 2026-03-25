@@ -19,6 +19,7 @@
 #pragma once
 
 #include "../../Core/Platform.h"
+#include "../../Utils/Validate.h"
 #include "Skeleton.h"
 
 #include <algorithm>
@@ -93,6 +94,9 @@ namespace Spark::Animation
                 }
             }
 
+            SPARK_LOG_INFO(LogCategory::Animation,
+                           "SkeletonMapping: built bone mapping (%d/%zu source bones mapped to %zu target bones)",
+                           mapped, source.bones.size(), target.bones.size());
             return mapped;
         }
 
@@ -120,8 +124,19 @@ namespace Spark::Animation
                 {
                     m_sourceToTarget[srcIdx] = tgtIdx;
                     resolved++;
+                    SPARK_LOG_DEBUG(LogCategory::Animation,
+                                    "SkeletonMapping: mapped bone '%s' (idx=%d) -> '%s' (idx=%d)", srcName.c_str(),
+                                    srcIdx, tgtName.c_str(), tgtIdx);
+                }
+                else
+                {
+                    SPARK_LOG_WARN(LogCategory::Animation,
+                                   "SkeletonMapping: failed to resolve mapping '%s' -> '%s' (srcIdx=%d, tgtIdx=%d)",
+                                   srcName.c_str(), tgtName.c_str(), srcIdx, tgtIdx);
                 }
             }
+            SPARK_LOG_INFO(LogCategory::Animation, "SkeletonMapping: resolved %d/%zu name mappings", resolved,
+                           m_nameMapping.size());
             return resolved;
         }
 
@@ -263,6 +278,8 @@ namespace Spark::Animation
             }
 
             result.unmappedBones = static_cast<int>(target.bones.size()) - result.mappedBones;
+            SPARK_LOG_INFO(LogCategory::Animation, "Retarget complete: %d mapped, %d unmapped (target has %zu bones)",
+                           result.mappedBones, result.unmappedBones, target.bones.size());
             return result;
         }
 

@@ -91,30 +91,39 @@ namespace Spark::Graphics
     void StandardPipelineBuilder::Build(RenderGraph& graph)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderGraphBuilder: building pipeline (%ux%u, scale=%.2f)",
+                        m_config.renderWidth, m_config.renderHeight, m_config.renderScale);
+
         // Passes are added in dependency order.  The RenderGraph compiler
         // will verify and reorder if needed, but adding them in the natural
         // order makes the setup lambdas straightforward.
 
         if (m_config.shadowsEnabled)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderGraphBuilder: adding ShadowPass");
             AddShadowPass(graph);
         }
 
         if (m_config.deferredEnabled)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderGraphBuilder: adding GBufferPass");
             AddGBufferPass(graph);
         }
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderGraphBuilder: adding LightingPass");
         AddLightingPass(graph);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderGraphBuilder: adding PostProcessPass");
         AddPostProcessPass(graph);
 
         if (m_config.uiEnabled)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderGraphBuilder: adding UIPass");
             AddUIPass(graph);
         }
 
         if (m_config.debugPassEnabled)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderGraphBuilder: adding DebugPass");
             AddDebugPass(graph);
         }
     }

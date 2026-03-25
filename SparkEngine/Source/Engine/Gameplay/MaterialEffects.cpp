@@ -4,6 +4,7 @@
  */
 
 #include "MaterialEffects.h"
+#include "../../Utils/Validate.h"
 
 namespace Spark::Gameplay
 {
@@ -15,10 +16,12 @@ namespace Spark::Gameplay
     void MaterialEffectSystem::Initialize()
     {
         m_effects.clear();
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "MaterialEffectSystem initialized");
     }
 
     void MaterialEffectSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "MaterialEffectSystem shutting down (%zu effects)", m_effects.size());
         m_effects.clear();
     }
 
@@ -30,6 +33,9 @@ namespace Spark::Gameplay
                                               const MaterialEffect& effect)
     {
         uint16_t key = MakeKey(interaction, surface);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core,
+                        "MaterialEffectSystem: registered effect (interaction=%d, surface=%d)",
+                        static_cast<int>(interaction), static_cast<int>(surface));
         m_effects.insert_or_assign(key, effect);
     }
 
@@ -66,8 +72,14 @@ namespace Spark::Gameplay
 
         if (effect == nullptr)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "MaterialEffectSystem::TriggerEffect: no effect for interaction=%d, surface=%d",
+                           static_cast<int>(interaction), static_cast<int>(surface));
             return;
         }
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "MaterialEffectSystem: triggering effect at (%.1f, %.1f, %.1f)",
+                        position.x, position.y, position.z);
 
         // Dispatch particle effect
         // Integration point: forward to the engine's particle system when available.

@@ -7,9 +7,17 @@
  */
 
 #include "PhysicsDebugRenderer.h"
+#include "../Utils/Validate.h"
 
 void PhysicsDebugRenderer::Clear()
 {
+    static bool firstCall = true;
+    if (firstCall)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Physics, "PhysicsDebugRenderer initialized");
+        firstCall = false;
+    }
+
     m_lines.clear();
     m_triangles.clear();
 }

@@ -5,6 +5,7 @@
 
 #include "ProximityTriggerSystem.h"
 #include "../../Utils/ContainerUtils.h"
+#include "../../Utils/Validate.h"
 
 #include <cmath>
 
@@ -17,6 +18,7 @@ namespace Spark::World
 
     void ProximityTriggerSystem::Initialize()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "ProximityTriggerSystem::Initialize");
         m_triggers.clear();
         m_occupants.clear();
         m_nextID = 1;
@@ -24,6 +26,8 @@ namespace Spark::World
 
     void ProximityTriggerSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "ProximityTriggerSystem::Shutdown — clearing %zu triggers",
+                       m_triggers.size());
         m_triggers.clear();
         m_occupants.clear();
         m_nextID = 1;
@@ -49,6 +53,8 @@ namespace Spark::World
         m_triggers.emplace(id, std::move(trigger));
         m_occupants.emplace(id, std::unordered_set<uint32_t>{});
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "CreateSphereTrigger id=%u center=(%.1f,%.1f,%.1f) radius=%.1f", id,
+                        center.x, center.y, center.z, radius);
         return id;
     }
 
@@ -68,6 +74,9 @@ namespace Spark::World
         m_triggers.emplace(id, std::move(trigger));
         m_occupants.emplace(id, std::unordered_set<uint32_t>{});
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Scene,
+                        "CreateAABBTrigger id=%u center=(%.1f,%.1f,%.1f) halfExtents=(%.1f,%.1f,%.1f)", id, center.x,
+                        center.y, center.z, halfExtents.x, halfExtents.y, halfExtents.z);
         return id;
     }
 
@@ -133,6 +142,7 @@ namespace Spark::World
             {
                 if (!Spark::ContainerUtils::Contains(currentOccupants, entityID))
                 {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Trigger %u: entity %u entered", triggerID, entityID);
                     if (trigger.onEnter)
                     {
                         trigger.onEnter(triggerID, entityID);
@@ -145,6 +155,7 @@ namespace Spark::World
             {
                 if (!Spark::ContainerUtils::Contains(nowInside, entityID))
                 {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Trigger %u: entity %u exited", triggerID, entityID);
                     if (trigger.onExit)
                     {
                         trigger.onExit(triggerID, entityID);

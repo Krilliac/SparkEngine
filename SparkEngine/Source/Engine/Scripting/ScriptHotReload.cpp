@@ -77,6 +77,9 @@ namespace Spark::Scripting
         m_running = true;
         m_fileStates.clear();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Scripting, "ScriptHotReloadManager::Start — watching %zu directories",
+                       m_watchDirs.size());
+
         // Initial scan of all watch directories
         for (const auto& dir : m_watchDirs)
         {
@@ -87,6 +90,8 @@ namespace Spark::Scripting
     void ScriptHotReloadManager::Stop()
     {
         SPARK_TRACE_ENTER(LogCategory::Scripting);
+        SPARK_LOG_INFO(Spark::LogCategory::Scripting, "ScriptHotReloadManager::Stop — tracked %zu files, %d recompiles",
+                       m_fileStates.size(), m_recompileCount);
 
         m_running = false;
         m_pendingChanges.clear();
@@ -135,6 +140,8 @@ namespace Spark::Scripting
 
                     if (!alreadyPending)
                     {
+                        SPARK_LOG_INFO(Spark::LogCategory::Scripting, "ScriptHotReload: change detected in '%s'",
+                                       path.c_str());
                         m_pendingChanges.push_back({path, now});
                     }
                 }

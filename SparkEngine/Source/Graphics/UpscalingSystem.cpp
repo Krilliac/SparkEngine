@@ -826,6 +826,7 @@ namespace Spark
                 if (hModule != nullptr)
                 {
                     FreeLibrary(hModule);
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DLSS runtime detected (nvngx_dlss.dll)");
                     return true;
                 }
 
@@ -834,9 +835,11 @@ namespace Spark
                 if (hModule != nullptr)
                 {
                     FreeLibrary(hModule);
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DLSS runtime detected (_nvngx.dll)");
                     return true;
                 }
 
+                SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "DLSS runtime not found");
                 return false;
 #else
                 // DLSS is Windows + NVIDIA only
@@ -860,9 +863,11 @@ namespace Spark
                 if (hModule != nullptr)
                 {
                     FreeLibrary(hModule);
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "XeSS runtime detected (libxess.dll)");
                     return true;
                 }
 
+                SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "XeSS runtime not found");
                 return false;
 #else
                 // XeSS DX11/DX12 runtime is Windows only

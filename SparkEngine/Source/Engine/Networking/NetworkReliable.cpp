@@ -8,6 +8,7 @@
 
 #include "NetworkManager.h"
 #include "../../Utils/ContainerUtils.h"
+#include "../../Utils/Validate.h"
 #include <cstring>
 
 #ifdef SendMessage
@@ -51,6 +52,7 @@ namespace Spark::Net
         }
 
         // Remove the acknowledged sequence from unack map
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "ACK received: seq=%u, bitfield=0x%08X", ackSeq, ackBits);
         m_unacknowledgedMessages.erase(ackSeq);
         m_reliableOriginalSendTime.erase(ackSeq);
         m_retransmitCounts.erase(ackSeq);
@@ -93,7 +95,12 @@ namespace Spark::Net
 
     bool NetworkManager::IsDuplicateSequence(SequenceNumber seq) const
     {
-        return Spark::ContainerUtils::Contains(m_receivedSequences, seq);
+        bool dup = Spark::ContainerUtils::Contains(m_receivedSequences, seq);
+        if (dup)
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Duplicate sequence %u detected — suppressing", seq);
+        }
+        return dup;
     }
 
     void NetworkManager::RecordReceivedSequence(SequenceNumber seq)

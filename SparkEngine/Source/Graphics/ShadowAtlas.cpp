@@ -8,6 +8,7 @@
  */
 
 #include "ShadowAtlas.h"
+#include "../Utils/Validate.h"
 
 namespace Spark::Graphics
 {
@@ -26,11 +27,14 @@ namespace Spark::Graphics
         m_gridSize = gridSize;
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ShadowAtlas initialized (%ux%u, minTile=%u, grid=%ux%u)",
+                       atlasSize, atlasSize, minTileSize, gridSize, gridSize);
         return true;
     }
 
     void ShadowAtlas::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ShadowAtlas shutting down (%zu tiles)", m_tiles.size());
         m_tiles.clear();
         m_tileMap.clear();
         m_gridCells.clear();
@@ -51,6 +55,7 @@ namespace Spark::Graphics
     {
         if (!m_initialized)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "ShadowAtlas::RequestTile called before initialization");
             return false;
         }
 
@@ -221,6 +226,8 @@ namespace Spark::Graphics
         }
         if (evictIdx < 0)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "ShadowAtlas tile allocation failed for light %u (no eviction candidate)", lightId);
             return false;
         }
 

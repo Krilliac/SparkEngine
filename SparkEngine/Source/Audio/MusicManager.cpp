@@ -259,6 +259,7 @@ namespace Spark::Audio
     void MusicManager::Stop(float fadeOutDuration)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "MusicManager::Stop fadeOut=%.2fs", fadeOutDuration);
         if (fadeOutDuration > 0.0f)
         {
             AudioBusMixer::GetInstance().FadeBus(AudioBus::Music, 0.0f, fadeOutDuration);
@@ -302,8 +303,14 @@ namespace Spark::Audio
         SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, playlistName);
         auto it = m_playlists.find(playlistName);
         if (it == m_playlists.end())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Audio, "MusicManager::PlayPlaylist '%s' not found",
+                           playlistName.c_str());
             return;
+        }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "MusicManager::PlayPlaylist '%s' (%zu tracks)", playlistName.c_str(),
+                       it->second.trackNames.size());
         m_activePlaylist = playlistName;
         it->second.currentIndex = 0;
         std::string firstTrack = it->second.GetCurrentTrack();

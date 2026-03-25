@@ -30,6 +30,7 @@
 
 #include "../Core/Platform.h"
 #include "../Utils/MathUtils.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -200,14 +201,29 @@ namespace Spark
             bool Initialize()
             {
                 m_initialized = true;
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FogSystem initialized");
                 return true;
             }
 
-            void Shutdown() { m_initialized = false; }
+            void Shutdown()
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FogSystem shutting down");
+                m_initialized = false;
+            }
 
             // ---- Mode and Settings ----
 
-            void SetMode(FogMode mode) { m_mode = mode; }
+            void SetMode(FogMode mode)
+            {
+                if (m_mode != mode)
+                {
+                    static const char* modeNames[] = {"None",   "Linear",    "Exponential", "ExpSquared",
+                                                      "Height", "ExpHeight", "Volumetric"};
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FogSystem mode changed: %s -> %s",
+                                   modeNames[static_cast<int>(m_mode)], modeNames[static_cast<int>(mode)]);
+                }
+                m_mode = mode;
+            }
             FogMode GetMode() const { return m_mode; }
 
             void SetEnabled(bool enabled) { m_enabled = enabled; }

@@ -19,7 +19,7 @@ namespace Spark
     void DestructionSystem::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
-        SPARK_LOG_INFO(Spark::LogCategory::Physics, "DestructionSystem initializing");
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "DestructionSystem initializing");
         // Register some default fracture patterns
         FracturePattern woodenCrate;
         woodenCrate.AddPiece({"plank1", "debris_plank", {0.3f, 0, 0}, 0.5f, 8.0f, 3.0f});
@@ -29,6 +29,7 @@ namespace Spark
         woodenCrate.SetDestructionSound("sfx_wood_break");
         woodenCrate.SetParticleEffect("fx_wood_splinters");
         RegisterPattern("wooden_crate", woodenCrate);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Registered default pattern: wooden_crate");
 
         FracturePattern metalBarrel;
         metalBarrel.AddPiece({"shell_top", "debris_metal_curved", {0, 0.4f, 0}, 2.0f, 12.0f, 6.0f});
@@ -37,6 +38,7 @@ namespace Spark
         metalBarrel.SetDestructionSound("sfx_metal_break");
         metalBarrel.SetParticleEffect("fx_metal_sparks");
         RegisterPattern("metal_barrel", metalBarrel);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Registered default pattern: metal_barrel");
 
         FracturePattern concreteWall;
         for (int i = 0; i < 8; ++i)
@@ -48,6 +50,9 @@ namespace Spark
         concreteWall.SetDestructionSound("sfx_concrete_break");
         concreteWall.SetParticleEffect("fx_concrete_dust");
         RegisterPattern("concrete_wall", concreteWall);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Registered default pattern: concrete_wall");
+        SPARK_LOG_INFO(Spark::LogCategory::Physics, "DestructionSystem initialized with %zu default patterns",
+                       m_patterns.size());
     }
 
     void DestructionSystem::Update(float deltaTime)
@@ -85,6 +90,8 @@ namespace Spark
     void DestructionSystem::RegisterPattern(const std::string& name, const FracturePattern& pattern)
     {
         SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Physics, name);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "DestructionSystem: registered pattern '%s' (%zu pieces)",
+                       name.c_str(), pattern.GetPieces().size());
         m_patterns[name] = pattern;
     }
 
@@ -175,6 +182,9 @@ namespace Spark
         }
 
         m_totalDestructions++;
+        SPARK_LOG_INFO(Spark::LogCategory::Core,
+                       "DestructionSystem: entity %u destroyed (damage=%.1f, pattern='%s', debris=%zu)", entityId,
+                       damage, patternName.c_str(), m_debris.size());
 
         m_destructionCallbacks.Broadcast(event);
     }

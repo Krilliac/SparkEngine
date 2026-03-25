@@ -4,6 +4,7 @@
  */
 
 #include "CoverSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -38,6 +39,9 @@ namespace Spark::AI
     {
         if (positions.size() != normals.size())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::AI,
+                            "CoverSystem: geometry analysis failed — position count (%zu) != normal count (%zu)",
+                            positions.size(), normals.size());
             return;
         }
 
@@ -104,6 +108,10 @@ namespace Spark::AI
 
             RegisterCoverPoint(cover);
         }
+
+        SPARK_LOG_INFO(Spark::LogCategory::AI,
+                       "CoverSystem: geometry analysis complete — %zu surfaces analyzed, %zu total cover points",
+                       positions.size(), m_points.size());
     }
 
     // ============================================================================
@@ -120,6 +128,8 @@ namespace Spark::AI
         m_buckets[key].push_back(id);
         m_points.emplace(id, std::move(stored));
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::AI, "CoverSystem: registered cover point %u at (%.1f, %.1f, %.1f)", id,
+                        point.position.x, point.position.y, point.position.z);
         return id;
     }
 

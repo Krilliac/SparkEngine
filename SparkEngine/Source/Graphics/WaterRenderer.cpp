@@ -7,6 +7,7 @@
 
 #include "WaterRenderer.h"
 #include "../Utils/AngleUtils.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,11 +36,13 @@ namespace Spark::Graphics
 
         GenerateDefaultWaves();
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "WaterRenderer initialized (%d waves)", m_settings.waveCount);
         return true;
     }
 
     void WaterRenderer::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "WaterRenderer shutting down (%zu planes)", m_planes.size());
         m_planes.clear();
         m_waves.clear();
         m_time = 0.0f;

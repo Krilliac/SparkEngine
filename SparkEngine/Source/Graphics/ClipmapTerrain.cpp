@@ -4,6 +4,7 @@
  */
 
 #include "ClipmapTerrain.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,6 +36,9 @@ namespace Spark::Graphics
 
         if (numLevels == 0 || gridSize < 2 || baseCellSize <= 0.0f)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "ClipmapTerrain::Initialize failed: invalid params (levels=%u, grid=%u, cellSize=%.2f)",
+                            numLevels, gridSize, baseCellSize);
             return false;
         }
 
@@ -53,6 +57,9 @@ namespace Spark::Graphics
         }
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "ClipmapTerrain initialized (%u levels, grid=%u, baseCellSize=%.2f)", numLevels, gridSize,
+                       baseCellSize);
         return true;
     }
 
@@ -262,6 +269,7 @@ namespace Spark::Graphics
 
     void ClipmapTerrain::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ClipmapTerrain shutting down (%zu levels)", m_levels.size());
         m_levels.clear();
         m_heightmap.clear();
         m_heightmapWidth = 0;

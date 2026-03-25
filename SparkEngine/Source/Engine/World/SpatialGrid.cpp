@@ -5,6 +5,7 @@
 
 #include "SpatialGrid.h"
 #include "../ECS/Components.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -34,6 +35,9 @@ namespace Spark::World
         Cell& cell = GetOrCreateCell(coord);
         cell.entities.insert(entity);
         m_entityCells[entity] = coord;
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "SpatialGrid::AddEntity entity=%u to cell (%d, %d)",
+                        static_cast<uint32_t>(entity), coord.x, coord.z);
     }
 
     void SpatialGrid::RemoveEntity(entt::entity entity)
@@ -45,6 +49,8 @@ namespace Spark::World
         }
 
         CellCoord coord = it->second;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "SpatialGrid::RemoveEntity entity=%u from cell (%d, %d)",
+                        static_cast<uint32_t>(entity), coord.x, coord.z);
         m_entityCells.erase(it);
 
         auto cellIt = m_cells.find(coord);
@@ -258,12 +264,18 @@ namespace Spark::World
 
     void SpatialGrid::PruneEmptyCells()
     {
+        size_t before = m_cells.size();
         std::erase_if(m_cells,
                       [](const auto& pair)
                       {
                           const Cell& cell = pair.second;
                           return cell.state == CellState::Unloaded && cell.IsEmpty();
                       });
+        size_t pruned = before - m_cells.size();
+        if (pruned > 0)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Scene, "SpatialGrid::PruneEmptyCells removed %zu empty cells", pruned);
+        }
     }
 
     void SpatialGrid::Clear()

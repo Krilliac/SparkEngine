@@ -6,6 +6,7 @@
  */
 
 #include "PoseModifier.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -127,6 +128,8 @@ namespace Spark::Animation
     {
         if (m_boneIndex < 0 || static_cast<size_t>(m_boneIndex) >= pose.boneTransforms.size())
         {
+            SPARK_LOG_WARN(LogCategory::Animation, "LookAtModifier: invalid bone index %d (pose has %zu bones)",
+                           m_boneIndex, pose.boneTransforms.size());
             return;
         }
 
@@ -190,6 +193,9 @@ namespace Spark::Animation
         if (m_shoulderIndex < 0 || m_shoulderIndex >= boneCount || m_elbowIndex < 0 || m_elbowIndex >= boneCount ||
             m_handIndex < 0 || m_handIndex >= boneCount)
         {
+            SPARK_LOG_WARN(LogCategory::Animation,
+                           "AimIKModifier: invalid bone indices (shoulder=%d, elbow=%d, hand=%d, boneCount=%d)",
+                           m_shoulderIndex, m_elbowIndex, m_handIndex, boneCount);
             return;
         }
 
@@ -307,6 +313,8 @@ namespace Spark::Animation
     {
         if (modifier)
         {
+            SPARK_LOG_DEBUG(LogCategory::Animation, "PoseModifierStack: added modifier '%s' (priority=%d)",
+                            modifier->GetName(), modifier->GetPriority());
             m_modifiers.push_back(std::move(modifier));
             m_needsSort = true;
         }
@@ -336,6 +344,8 @@ namespace Spark::Animation
                       { return a->GetPriority() < b->GetPriority(); });
             m_needsSort = false;
         }
+
+        SPARK_LOG_DEBUG(LogCategory::Animation, "PoseModifierStack: applying %zu modifiers", m_modifiers.size());
 
         for (auto& modifier : m_modifiers)
         {

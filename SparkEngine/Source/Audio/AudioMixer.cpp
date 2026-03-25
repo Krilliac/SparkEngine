@@ -36,6 +36,8 @@ namespace Spark::Audio
     void AudioMixer::CreateBus(const std::string& name, const std::string& parentBus)
     {
         SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Audio, name);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "AudioMixer::CreateBus '%s' parent='%s'", name.c_str(),
+                        parentBus.c_str());
         BusState state;
         state.bus.name = name;
         state.bus.parentBus = parentBus;
@@ -47,7 +49,13 @@ namespace Spark::Audio
         auto it = m_buses.find(busName);
         if (it != m_buses.end())
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "AudioMixer::SetBusVolume '%s' vol=%.2f", busName.c_str(),
+                            volume);
             it->second.bus.volume = std::clamp(volume, 0.0f, 1.0f);
+        }
+        else
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Audio, "AudioMixer::SetBusVolume bus '%s' not found", busName.c_str());
         }
     }
 
@@ -62,6 +70,8 @@ namespace Spark::Audio
         auto it = m_buses.find(busName);
         if (it != m_buses.end())
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioMixer::SetBusMuted '%s' muted=%s", busName.c_str(),
+                           muted ? "true" : "false");
             it->second.bus.muted = muted;
         }
     }

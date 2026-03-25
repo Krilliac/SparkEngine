@@ -6,6 +6,7 @@
  */
 
 #include "TransientResourcePool.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <format>
@@ -25,6 +26,8 @@ namespace Spark::Graphics
         m_nextHandle = 1;
         m_initialized = true;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "TransientResourcePool initialized (maxIdleFrames=%u)",
+                       maxIdleFrames);
         return true;
     }
 
@@ -150,6 +153,8 @@ namespace Spark::Graphics
 
     void TransientResourcePool::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "TransientResourcePool shutting down (%u resources)",
+                       GetPooledResourceCount());
         m_resources.clear();
         m_nextHandle = 1;
         m_currentFrame = 0;

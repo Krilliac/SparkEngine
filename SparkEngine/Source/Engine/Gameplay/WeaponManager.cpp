@@ -242,6 +242,8 @@ namespace Spark::Gameplay
                 weapon.state = WeaponState::Switching;
                 weapon.stateTimer = def->holsterTime;
                 inv.pendingSlot = targetSlot;
+                SPARK_LOG_INFO(Spark::LogCategory::Core, "Weapon switch initiated from slot %d to slot %d",
+                               static_cast<int>(inv.activeSlot), inv.inputSwitchSlot);
             }
             inv.inputSwitchSlot = -1;
         }
@@ -299,6 +301,7 @@ namespace Spark::Gameplay
             else
             {
                 weapon.state = WeaponState::Empty;
+                SPARK_LOG_INFO(Spark::LogCategory::Core, "Weapon ammo depleted — switching to Empty state");
             }
         }
 
@@ -326,6 +329,8 @@ namespace Spark::Gameplay
         weapon.state = WeaponState::Firing;
         weapon.fireCooldown = def.GetShotInterval();
         weapon.triggerHeld = true;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Weapon '%s' fired — ammo: %d/%d", def.name.c_str(),
+                        weapon.currentAmmo, weapon.reserveAmmo);
 
         // Apply recoil
         float recoilMultiplier = (weapon.accumulatedVerticalRecoil == 0.0f) ? def.recoil.firstShotMultiplier : 1.0f;
@@ -376,6 +381,8 @@ namespace Spark::Gameplay
             weapon.reserveAmmo -= available;
             weapon.state = WeaponState::Idle;
             weapon.stateTimer = 0.0f;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Reload complete — ammo: %d, reserve: %d", weapon.currentAmmo,
+                           weapon.reserveAmmo);
         }
     }
 

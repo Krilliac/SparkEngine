@@ -9,6 +9,7 @@
 #include "RagdollSystem.h"
 #include "PhysicsBody.h"
 #include "PhysicsSystem.h"
+#include "../Utils/Validate.h"
 
 #include <Jolt/Jolt.h>
 
@@ -25,7 +26,12 @@ const std::string Ragdoll::s_emptyString;
 Ragdoll::Ragdoll(PhysicsSystem* physicsSystem, const RagdollDesc& desc) : m_physicsSystem(physicsSystem)
 {
     if (!physicsSystem)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Ragdoll creation failed: null PhysicsSystem");
         return;
+    }
+
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Creating ragdoll with %zu parts", desc.parts.size());
 
     m_parts.reserve(desc.parts.size());
 
@@ -51,7 +57,12 @@ Ragdoll::Ragdoll(PhysicsSystem* physicsSystem, const RagdollDesc& desc) : m_phys
         auto& parent = m_parts[partDesc.parentIndex];
 
         if (!child.body || !parent.body)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Physics,
+                           "Ragdoll constraint skipped: null body for part %zu (child=%p, parent=%p)", i,
+                           static_cast<void*>(child.body.get()), static_cast<void*>(parent.body.get()));
             continue;
+        }
 
         // Create constraint based on type
         switch (partDesc.constraintType)
@@ -119,6 +130,8 @@ Ragdoll::~Ragdoll()
 
 void Ragdoll::SetMode(RagdollMode mode)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Ragdoll mode transition: %d -> %d", static_cast<int>(m_mode),
+                   static_cast<int>(mode));
     m_mode = mode;
 
     for (auto& part : m_parts)

@@ -31,6 +31,7 @@ namespace Spark::Net
         std::uniform_int_distribution<unsigned int> dist(0, 255);
         for (auto& byte : key)
             byte = static_cast<uint8_t>(dist(rng));
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated new session key (%zu bytes)", key.size());
         return key;
     }
 
@@ -41,6 +42,7 @@ namespace Spark::Net
         std::uniform_int_distribution<unsigned int> dist(0, 255);
         for (auto& byte : token)
             byte = static_cast<uint8_t>(dist(rng));
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated new connection token (%zu bytes)", token.size());
         return token;
     }
 
@@ -177,7 +179,16 @@ namespace Spark::Net
         uint8_t diff = 0;
         for (size_t i = 0; i < TOKEN_SIZE; ++i)
             diff |= expected[i] ^ received[i];
-        return diff == 0;
+        bool valid = (diff == 0);
+        if (!valid)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection token validation failed");
+        }
+        else
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Connection token validated successfully");
+        }
+        return valid;
     }
 
     // ============================================================================
@@ -203,7 +214,15 @@ namespace Spark::Net
         }
 
         info.packetCount++;
-        return info.packetCount <= (m_maxPacketsPerSecond + m_burstAllowance);
+        bool allowed = info.packetCount <= (m_maxPacketsPerSecond + m_burstAllowance);
+        if (!allowed)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "Rate limit exceeded for address hash %llu (%u packets/s, limit %u+%u)",
+                           static_cast<unsigned long long>(addressHash), info.packetCount, m_maxPacketsPerSecond,
+                           m_burstAllowance);
+        }
+        return allowed;
     }
 
     void RateLimiter::ResetClient(uint64_t addressHash)

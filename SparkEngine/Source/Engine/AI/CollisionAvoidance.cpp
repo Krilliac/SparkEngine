@@ -4,6 +4,7 @@
  */
 
 #include "CollisionAvoidance.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -69,10 +70,14 @@ namespace Spark::AI
         agent.radius = radius;
         agent.maxSpeed = maxSpeed;
         m_agents[entityID] = agent;
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::AI, "CollisionAvoidance: registered agent %u (radius=%.2f, maxSpeed=%.2f)",
+                        entityID, radius, maxSpeed);
     }
 
     void CollisionAvoidanceSystem::UnregisterAgent(uint32_t entityID)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::AI, "CollisionAvoidance: unregistered agent %u", entityID);
         m_agents.erase(entityID);
     }
 

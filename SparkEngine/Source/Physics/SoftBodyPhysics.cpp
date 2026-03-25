@@ -8,6 +8,7 @@
 
 #include "SoftBodyPhysics.h"
 #include "PhysicsSystem.h"
+#include "../Utils/Validate.h"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -30,7 +31,13 @@ SoftBody::SoftBody(PhysicsSystem* physicsSystem, const SoftBodyDesc& desc)
     : m_physicsSystem(physicsSystem), m_desc(desc)
 {
     if (!physicsSystem || !physicsSystem->GetJoltSystem())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "SoftBody creation failed: null PhysicsSystem or JoltSystem");
         return;
+    }
+
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Creating SoftBody: %zu vertices, %zu edges, %zu triangle indices",
+                   desc.vertices.size(), desc.edges.size(), desc.triangles.size());
 
     auto* joltSystem = physicsSystem->GetJoltSystem();
 
@@ -120,6 +127,11 @@ SoftBody::SoftBody(PhysicsSystem* physicsSystem, const SoftBodyDesc& desc)
     if (!bodyID.IsInvalid())
     {
         m_joltBodyID = bodyID.GetIndexAndSequenceNumber();
+        SPARK_LOG_INFO(Spark::LogCategory::Physics, "SoftBody created successfully (bodyID=%u)", m_joltBodyID);
+    }
+    else
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "SoftBody creation failed: Jolt returned invalid BodyID");
     }
 }
 
@@ -151,7 +163,11 @@ XMFLOAT3 SoftBody::GetVertexPosition(uint32_t index) const
     JPH::BodyID bodyID(m_joltBodyID);
     const JPH::Body* body = joltSystem->GetBodyLockInterface().TryGetBody(bodyID);
     if (!body)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Physics, "SoftBody::GetVertexPosition: TryGetBody failed for bodyID=%u",
+                       m_joltBodyID);
         return {0, 0, 0};
+    }
 
     const JPH::SoftBodyMotionProperties* mp =
         static_cast<const JPH::SoftBodyMotionProperties*>(body->GetMotionProperties());
@@ -220,7 +236,11 @@ void SoftBody::GetAllVertexPositions(std::vector<XMFLOAT3>& outPositions) const
     JPH::BodyID bodyID(m_joltBodyID);
     const JPH::Body* body = joltSystem->GetBodyLockInterface().TryGetBody(bodyID);
     if (!body)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Physics, "SoftBody::GetAllVertexPositions: TryGetBody failed for bodyID=%u",
+                       m_joltBodyID);
         return;
+    }
 
     const JPH::SoftBodyMotionProperties* mp =
         static_cast<const JPH::SoftBodyMotionProperties*>(body->GetMotionProperties());
@@ -244,12 +264,17 @@ void SoftBody::PinVertex(uint32_t index)
     JPH::BodyID bodyID(m_joltBodyID);
     JPH::Body* body = const_cast<JPH::Body*>(joltSystem->GetBodyLockInterface().TryGetBody(bodyID));
     if (!body)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Physics, "SoftBody::PinVertex: TryGetBody failed for bodyID=%u",
+                       m_joltBodyID);
         return;
+    }
 
     JPH::SoftBodyMotionProperties* mp = static_cast<JPH::SoftBodyMotionProperties*>(body->GetMotionProperties());
     if (mp && index < mp->GetVertices().size())
     {
         mp->GetVertex(index).mInvMass = 0.0f;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "SoftBody: pinned vertex %u", index);
     }
 }
 
@@ -262,12 +287,17 @@ void SoftBody::UnpinVertex(uint32_t index)
     JPH::BodyID bodyID(m_joltBodyID);
     JPH::Body* body = const_cast<JPH::Body*>(joltSystem->GetBodyLockInterface().TryGetBody(bodyID));
     if (!body)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Physics, "SoftBody::UnpinVertex: TryGetBody failed for bodyID=%u",
+                       m_joltBodyID);
         return;
+    }
 
     JPH::SoftBodyMotionProperties* mp = static_cast<JPH::SoftBodyMotionProperties*>(body->GetMotionProperties());
     if (mp && index < mp->GetVertices().size() && index < m_desc.vertices.size())
     {
         mp->GetVertex(index).mInvMass = m_desc.vertices[index].invMass;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "SoftBody: unpinned vertex %u", index);
     }
 }
 

@@ -8,6 +8,7 @@
 #include "../ECS/Components/GameplayComponents.h"
 #include "../ECS/Components/AIComponents.h"
 #include "../../Graphics/WeatherSystem.h"
+#include "../../Utils/Validate.h"
 #include "AbilitySystem.h"
 #include "../../Core/EngineContext.h"
 
@@ -35,10 +36,13 @@ namespace Spark::Gameplay
         m_customEvaluators.clear();
         m_variables.clear();
         m_flags.clear();
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ConditionSystem initialized");
     }
 
     void ConditionSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ConditionSystem shutting down (%zu evaluators, %zu variables)",
+                       m_customEvaluators.size(), m_variables.size());
         m_customEvaluators.clear();
         m_variables.clear();
         m_flags.clear();
@@ -78,6 +82,7 @@ namespace Spark::Gameplay
 
     void ConditionSystem::RegisterCustomEvaluator(const std::string& id, CustomConditionEvaluator evaluator)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ConditionSystem: registered custom evaluator '%s'", id.c_str());
         m_customEvaluators[id] = std::move(evaluator);
     }
 

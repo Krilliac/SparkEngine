@@ -10,6 +10,7 @@
  */
 
 #include "BlendSpace.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -32,6 +33,8 @@ namespace Spark::Animation
         sample.playbackSpeed = playbackSpeed;
         m_samples.push_back(std::move(sample));
         m_dirty = true;
+        SPARK_LOG_INFO(LogCategory::Animation, "BlendSpace '%s': added sample '%s' at (%.2f, %.2f)", m_name.c_str(),
+                       animName.c_str(), position.x, position.y);
     }
 
     bool BlendSpace2D::RemoveSample(const std::string& animName)
@@ -43,8 +46,12 @@ namespace Spark::Animation
         {
             m_samples.erase(it, m_samples.end());
             m_dirty = true;
+            SPARK_LOG_INFO(LogCategory::Animation, "BlendSpace '%s': removed sample '%s'", m_name.c_str(),
+                           animName.c_str());
             return true;
         }
+        SPARK_LOG_WARN(LogCategory::Animation, "BlendSpace '%s': sample '%s' not found for removal", m_name.c_str(),
+                       animName.c_str());
         return false;
     }
 
@@ -298,6 +305,7 @@ namespace Spark::Animation
         }
 
         // Remove triangles referencing super-triangle vertices
+        size_t validTriCount = 0;
         for (const auto& tri : tris)
         {
             if (tri.a >= static_cast<uint32_t>(n) || tri.b >= static_cast<uint32_t>(n) ||
@@ -311,7 +319,11 @@ namespace Spark::Animation
             bt.indices[1] = tri.b;
             bt.indices[2] = tri.c;
             m_triangles.push_back(bt);
+            ++validTriCount;
         }
+
+        SPARK_LOG_DEBUG(LogCategory::Animation, "BlendSpace '%s': triangulation complete (%zu samples, %zu triangles)",
+                        m_name.c_str(), n, validTriCount);
     }
 
     // =========================================================================

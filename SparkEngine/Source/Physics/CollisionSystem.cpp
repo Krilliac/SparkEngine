@@ -105,9 +105,12 @@ bool CollisionSystem::SphereVsSphere(const BoundingSphere& a, const BoundingSphe
         }
         else
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Physics,
+                           "SphereVsSphere: near-zero distance between centers, using fallback normal");
             m.Normal = XMFLOAT3(1, 0, 0);
             m.ContactPoints[0] = a.Center;
         }
+        SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "SphereVsSphere collision: penetration=%.4f", m.PenetrationDepth);
         return true;
     }
     return false;
@@ -380,6 +383,8 @@ bool CollisionSystem::SphereVsBox(const BoundingSphere& sphere, const BoundingBo
     }
     else
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Physics,
+                       "SphereVsBox: sphere center inside box, using minimum penetration axis");
         // Sphere center is inside the box; find the axis of minimum penetration
         XMFLOAT3 center = box.GetCenter();
         XMFLOAT3 extents = box.GetExtents();
@@ -408,6 +413,7 @@ bool CollisionSystem::SphereVsBox(const BoundingSphere& sphere, const BoundingBo
         }
     }
 
+    SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "SphereVsBox collision: penetration=%.4f", m.PenetrationDepth);
     return true;
 }
 
@@ -455,6 +461,7 @@ bool CollisionSystem::BoxVsBox(const BoundingBox& a, const BoundingBox& b, Conta
     float cpZ = std::max(a.Min.z, b.Min.z) + (std::min(a.Max.z, b.Max.z) - std::max(a.Min.z, b.Min.z)) * 0.5f;
     m.ContactPoints[0] = XMFLOAT3(cpX, cpY, cpZ);
 
+    SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "BoxVsBox collision: penetration=%.4f", m.PenetrationDepth);
     return true;
 }
 

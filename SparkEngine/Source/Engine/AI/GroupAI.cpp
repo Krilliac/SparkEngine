@@ -4,6 +4,7 @@
  */
 
 #include "GroupAI.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -69,6 +70,7 @@ namespace Spark::AI
         m_groups[id] = std::move(group);
         m_entityToGroup[leaderEntityID] = id;
 
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "GroupAI: created group %u with leader entity %u", id, leaderEntityID);
         return id;
     }
 
@@ -79,6 +81,9 @@ namespace Spark::AI
         {
             return;
         }
+
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "GroupAI: disbanding group %u (%zu members)", groupID,
+                       it->second.members.size());
 
         // Remove reverse lookups for all members
         for (const auto& member : it->second.members)
@@ -175,6 +180,9 @@ namespace Spark::AI
         ThreatInfo newThreat = threat;
         newThreat.lastSeenTime = m_gameTime;
         threats.push_back(newThreat);
+
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "GroupAI: group %u detected new threat entity %u (level=%.2f)", groupID,
+                       threat.entityID, threat.threatLevel);
     }
 
     // =========================================================================
@@ -285,6 +293,8 @@ namespace Spark::AI
             if (member.alive)
             {
                 member.role = GroupRole::Leader;
+                SPARK_LOG_INFO(Spark::LogCategory::AI, "GroupAI: promoted entity %u to leader in group %u",
+                               member.entityID, group.id);
                 return;
             }
         }

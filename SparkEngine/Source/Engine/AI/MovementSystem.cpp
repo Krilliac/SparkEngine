@@ -8,6 +8,7 @@
 #include "../ECS/Components/CoreComponents.h"
 #include "../../Utils/AngleUtils.h"
 #include "../../Utils/MathUtils.h"
+#include "../../Utils/Validate.h"
 #include <cmath>
 #include <algorithm>
 
@@ -249,6 +250,7 @@ namespace Spark::AI
         auto slot = static_cast<int>(generator->GetSlot());
         if (slot < 0 || slot >= kMovementSlotCount)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::AI, "MotionController: invalid movement slot %d", slot);
             return;
         }
 
@@ -257,6 +259,9 @@ namespace Spark::AI
         {
             m_slots[slot]->Finalize(0);
         }
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::AI, "MotionController: assigned generator type %d to slot %d",
+                        static_cast<int>(generator->GetType()), slot);
 
         EntityID entity = 0; // Entity ID provided at Update time; use 0 for init
         generator->Initialize(entity);
@@ -316,6 +321,8 @@ namespace Spark::AI
         if (!keepRunning)
         {
             auto slot = static_cast<int>(gen->GetSlot());
+            SPARK_LOG_DEBUG(Spark::LogCategory::AI, "MotionController: movement type %d completed for entity %u",
+                            static_cast<int>(gen->GetType()), static_cast<uint32_t>(entity));
             m_slots[slot]->Finalize(entity);
             m_slots[slot].reset();
         }
@@ -340,6 +347,7 @@ namespace Spark::AI
     void MovementSystem::Initialize()
     {
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "MovementSystem: initialized");
     }
 
     void MovementSystem::Update(World& world, float deltaTime)
@@ -527,6 +535,7 @@ namespace Spark::AI
 
     void MovementSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "MovementSystem: shutting down (%zu controllers)", m_controllers.size());
         for (auto& [entityId, controller] : m_controllers)
         {
             controller.ClearAll();

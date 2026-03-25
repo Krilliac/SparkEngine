@@ -32,6 +32,10 @@ namespace Spark::VR
         //
         // For now, provide the framework stub
         m_initialized = false; // Set to true when OpenXR is linked
+        if (!m_initialized)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VRSystem::Initialize — OpenXR not linked, VR unavailable");
+        }
         return m_initialized;
     }
 

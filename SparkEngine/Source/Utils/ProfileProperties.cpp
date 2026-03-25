@@ -4,6 +4,7 @@
  */
 
 #include "ProfileProperties.h"
+#include "Validate.h"
 
 #include <format>
 
@@ -19,6 +20,8 @@ namespace Spark
     uint32_t ProfileProperties::RegisterProperty(const std::string& name, ProfilePropertyFlags flags)
     {
         uint32_t id = static_cast<uint32_t>(m_properties.size());
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "ProfileProperties::RegisterProperty id=%u name='%s'", id,
+                        name.c_str());
         m_properties.push_back({name, 0.0f, flags});
         return id;
     }
@@ -107,6 +110,8 @@ namespace Spark
 
     void ProfileProperties::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ProfileProperties::Shutdown — clearing %zu properties",
+                       m_properties.size());
         m_properties.clear();
     }
 

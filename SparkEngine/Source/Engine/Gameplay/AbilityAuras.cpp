@@ -8,6 +8,7 @@
 
 #include "AbilitySystem.h"
 #include "../../Utils/SparkConsole.h"
+#include "../../Utils/Validate.h"
 #include "../ECS/Components.h"
 #include "../ECS/Components/GameplayComponents.h"
 #include "../Events/EventSystem.h"
@@ -83,6 +84,7 @@ namespace Spark::Gameplay
         }
 
         auraList.push_back(aura);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Applied aura %u to target %u (caster: %u)", auraId, target, caster);
 
         // Suppress unused parameter warning — world may be used by future aura-apply hooks
         (void)world;
@@ -98,10 +100,12 @@ namespace Spark::Gameplay
 
         auto& auraList = it->second;
         std::erase_if(auraList, [auraId](const ActiveAura& a) { return a.definitionId == auraId; });
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Removed aura %u from target %u", auraId, target);
     }
 
     void AbilitySystem::RemoveAllAuras(uint32_t target)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Removing all auras from target %u", target);
         m_activeAuras.erase(target);
     }
 
@@ -160,6 +164,8 @@ namespace Spark::Gameplay
             HealthComponent* hp = world.GetComponent<HealthComponent>(static_cast<entt::entity>(target));
             if (hp && !hp->isDead)
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Aura DoT tick: %u takes %.1f damage (aura %u, %d stacks)",
+                                target, tickValue, aura.definitionId, aura.currentStacks);
                 bool wasDead = hp->isDead;
                 hp->TakeDamage(tickValue);
 
@@ -196,6 +202,8 @@ namespace Spark::Gameplay
             HealthComponent* hp = world.GetComponent<HealthComponent>(static_cast<entt::entity>(target));
             if (hp && !hp->isDead)
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Aura HoT tick: %u heals %.1f (aura %u, %d stacks)", target,
+                                tickValue, aura.definitionId, aura.currentStacks);
                 hp->Heal(tickValue);
                 ProcessProcs(world, static_cast<uint32_t>(ProcTrigger::OnHeal), aura.casterId, target, def.school);
             }

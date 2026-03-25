@@ -129,6 +129,9 @@ namespace Spark::AI
             {
                 // Force-update regardless of budget
                 ++m_currentFrameStats.agentsForceUpdated;
+                SPARK_LOG_INFO(Spark::LogCategory::AI,
+                               "AIBudgetLimiter: starvation promotion for entity %u (stale %u frames)",
+                               static_cast<uint32_t>(agent.entityId), agent.framesSinceLastUpdate);
                 return agent.entityId;
             }
 
@@ -179,6 +182,14 @@ namespace Spark::AI
         }
 
         m_currentFrameStats.timeConsumedMs = GetElapsedMs();
+
+        // Log when agents were deferred due to budget exhaustion
+        if (m_currentFrameStats.agentsDeferred > 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::AI,
+                           "AIBudgetLimiter: %u agents deferred (budget %.2fms, consumed %.2fms)",
+                           m_currentFrameStats.agentsDeferred, m_budgetMs, m_currentFrameStats.timeConsumedMs);
+        }
 
         // Commit stats
         m_lastFrameStats = m_currentFrameStats;

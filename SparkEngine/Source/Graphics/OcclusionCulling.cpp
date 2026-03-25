@@ -10,6 +10,7 @@
  */
 
 #include "OcclusionCulling.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -37,11 +38,14 @@ namespace Spark::Graphics
         m_depthBuffer.resize(bufferSize, 1.0f);
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OcclusionCulling initialized (%dx%d, maxOccluders=%d)",
+                       m_settings.bufferWidth, m_settings.bufferHeight, m_settings.maxOccluders);
         return true;
     }
 
     void OcclusionCullingSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OcclusionCulling shutting down");
         m_depthBuffer.clear();
         m_initialized = false;
     }

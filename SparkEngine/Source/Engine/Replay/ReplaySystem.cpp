@@ -4,6 +4,7 @@
  */
 
 #include "ReplaySystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cstring>
@@ -38,6 +39,7 @@ namespace Spark
     void ReplaySystem::StartRecording()
     {
         std::lock_guard lock(m_mutex);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ReplaySystem::StartRecording");
         m_data.frames.clear();
         m_data.events.clear();
         m_data.duration = 0.0f;
@@ -52,6 +54,8 @@ namespace Spark
         m_recording = false;
         if (!m_data.frames.empty())
             m_data.duration = m_data.frames.back().timestamp;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ReplaySystem::StopRecording — %zu frames, %.1fs duration",
+                       m_data.frames.size(), m_data.duration);
     }
 
     bool ReplaySystem::IsRecording() const

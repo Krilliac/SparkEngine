@@ -23,10 +23,13 @@ namespace Spark::Dialogue
         m_actionScheduler.ClearAll();
         m_gameTime = 0.0f;
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "DynamicResponseSystem initialized");
     }
 
     void DynamicResponseSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "DynamicResponseSystem shutting down (%zu rules, %zu variables)",
+                       m_rules.size(), m_variables.size());
         m_variables.clear();
         m_rules.clear();
         m_actionScheduler.ClearAll();
@@ -59,6 +62,8 @@ namespace Spark::Dialogue
             SPARK_LOG_WARN(Spark::LogCategory::Core, "DynamicResponseSystem::RegisterRule called before Initialize");
             return;
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "DynamicResponseSystem: registered rule for signal '%s' (priority %d)",
+                       rule.signalName.c_str(), rule.priority);
         m_rules.push_back(rule);
     }
 
@@ -74,6 +79,9 @@ namespace Spark::Dialogue
                            signalName.c_str());
             return;
         }
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "DynamicResponseSystem: signal '%s' from entity %u",
+                        signalName.c_str(), senderEntity);
 
         // Find all rules matching this signal, pick highest priority that passes conditions
         ResponseRule* bestRule = nullptr;
@@ -213,6 +221,8 @@ namespace Spark::Dialogue
 
     void DynamicResponseSystem::ExecuteAction(const ResponseAction& action, uint32_t senderEntity)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "DynamicResponseSystem: executing action type %d for entity %u",
+                        static_cast<int>(action.type), senderEntity);
         switch (action.type)
         {
         case ResponseAction::Type::Speak:

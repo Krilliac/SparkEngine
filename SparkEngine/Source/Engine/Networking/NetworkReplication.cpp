@@ -9,6 +9,7 @@
 #include "NetworkManager.h"
 #include "DeltaSnapshotManager.h"
 #include "../../Utils/Assert.h"
+#include "../../Utils/Validate.h"
 #include <algorithm>
 
 #ifdef SendMessage
@@ -31,6 +32,8 @@ namespace Spark::Net
         m_replicatedEntities[netID] = entity;
         m_replicatedEntities[netID].networkID = netID;
         m_replicatedEntities[netID].needsFullSync = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Entity registered: netID=%u type='%s' owner=%u", netID,
+                       entity.entityType.c_str(), entity.ownerID);
 
         // Notify clients about the new entity (server only)
         NetworkRole role;
@@ -77,6 +80,7 @@ namespace Spark::Net
             SendToAll(msg);
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Entity unregistered: netID=%u", networkID);
         m_replicatedEntities.erase(it);
     }
 
@@ -109,6 +113,8 @@ namespace Spark::Net
             return;
 
         std::lock_guard<std::mutex> lock(m_replicationMutex);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Sending full entity sync to client %u (%zu entities)",
+                        targetClient, m_replicatedEntities.size());
         for (const auto& [netID, entity] : m_replicatedEntities)
         {
             // Send spawn message
@@ -183,6 +189,7 @@ namespace Spark::Net
         if (it == m_replicatedEntities.end())
         {
             // Entity not known locally -- create a placeholder
+            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Creating placeholder for unknown entity netID=%u", networkID);
             ReplicatedEntity placeholder;
             placeholder.networkID = networkID;
             placeholder.position = inBuffer.ReadVector3();

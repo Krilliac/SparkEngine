@@ -24,6 +24,7 @@ namespace Spark::AI
             DirectorPhase::BuildUp,
             [this]()
             {
+                SPARK_LOG_INFO(Spark::LogCategory::AI, "AIDirector: phase transition -> BuildUp");
                 m_currentPhase = DirectorPhase::BuildUp;
                 m_phaseTimer = 0.0f;
             },
@@ -38,6 +39,8 @@ namespace Spark::AI
             DirectorPhase::Peak,
             [this]()
             {
+                SPARK_LOG_INFO(Spark::LogCategory::AI, "AIDirector: phase transition -> Peak (intensity=%.2f)",
+                               m_currentIntensity);
                 m_currentPhase = DirectorPhase::Peak;
                 m_phaseTimer = 0.0f;
             },
@@ -51,6 +54,8 @@ namespace Spark::AI
             DirectorPhase::Relax,
             [this]()
             {
+                SPARK_LOG_INFO(Spark::LogCategory::AI, "AIDirector: phase transition -> Relax (intensity=%.2f)",
+                               m_currentIntensity);
                 m_currentPhase = DirectorPhase::Relax;
                 m_phaseTimer = 0.0f;
             },
@@ -246,7 +251,10 @@ namespace Spark::AI
 
     void AIDirector::Console_SetIntensity(float intensity)
     {
-        m_currentIntensity = std::clamp(intensity, 0.0f, 1.0f);
+        float clamped = std::clamp(intensity, 0.0f, 1.0f);
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "AIDirector: intensity forced to %.2f (was %.2f)", clamped,
+                       m_currentIntensity);
+        m_currentIntensity = clamped;
         m_targetIntensity = m_currentIntensity;
     }
 

@@ -16,6 +16,7 @@ add_executable(SparkTests
     TestNoiseGenerator.cpp
     TestSaveSystem.cpp
     TestAIBehaviorTree.cpp
+    TestAIStress.cpp
     TestSequencer.cpp
     TestMeshLOD.cpp
     TestInputSystem.cpp
@@ -70,6 +71,7 @@ add_executable(SparkTests
     TestAnimationRetargeting.cpp
     TestDedicatedServer.cpp
     TestServerMockClient.cpp
+    TestServerLiveMockClient.cpp
     TestSplineMath.cpp
     TestPhysicsInterpolation.cpp
     TestCameraInterpolation.cpp
@@ -169,6 +171,14 @@ add_executable(SparkTests
     TestJsonUtils.cpp
     TestNetworkStress.cpp
     TestNetworkMMOIntegration.cpp
+    TestAnimationStress.cpp
+    TestECSStress.cpp
+    TestPhysicsStress.cpp
+    TestAIStress.cpp
+    TestGraphicsStress.cpp
+    TestGameplayStress.cpp
+    TestUtilsStress.cpp
+    TestDialogueStress.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
