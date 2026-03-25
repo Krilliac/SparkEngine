@@ -20,8 +20,14 @@
 #include "Spark/IEngineContext.h"
 #include "Engine/World/WorldOriginSystem.h"
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/WorldServer.h"
+#endif
 
 namespace MMO
 {
@@ -57,13 +63,27 @@ namespace MMO
     {
       public:
         MMOWorldSetup() = default;
-        ~MMOWorldSetup() = default;
+        ~MMOWorldSetup();
 
         bool Initialize(Spark::IEngineContext* context);
         void Update(float deltaTime);
         void Shutdown();
 
         void RenderDebugUI();
+
+#ifdef ENABLE_NETWORKING
+        /// Start NetworkManager as a dedicated server and wire all handlers
+        bool StartNetworkServer(uint16_t port);
+
+        /// Process one server tick: NM update + client tracking + WorldServer bridging
+        void ServerTick(float deltaTime);
+
+        /// Stop the network server
+        void StopNetworkServer();
+
+        /// Get the WorldServer instance (for tests)
+        Spark::Net::WorldServer* GetWorldServer() const { return m_worldServer.get(); }
+#endif
 
         size_t GetAreaCount() const { return m_areas.size(); }
         const std::vector<MMOAreaInfo>& GetAreas() const { return m_areas; }
@@ -79,6 +99,11 @@ namespace MMO
         Spark::IEngineContext* m_context{nullptr};
         std::vector<MMOAreaInfo> m_areas;
         Spark::World::WorldOriginSystem m_originSystem;
+#ifdef ENABLE_NETWORKING
+        std::unique_ptr<Spark::Net::WorldServer> m_worldServer;
+        std::unordered_map<Spark::Net::ClientID, bool> m_knownClients; ///< Clients we've seen (for delta detection)
+        bool m_networkServerRunning{false};
+#endif
         float m_worldTime{0.0f};
         bool m_initialized{false};
     };

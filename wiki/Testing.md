@@ -1,6 +1,6 @@
 # Testing
 
-SparkEngine includes a comprehensive test suite with 160 test files and 1,808 test cases using a lightweight internal test framework with CTest integration.
+SparkEngine includes a comprehensive test suite with 71 test files and 864+ test cases using a lightweight internal test framework with CTest integration.
 
 **Source:** `Tests/TestFramework.h`, `Tests/`
 
@@ -118,7 +118,7 @@ ctest --test-dir build --output-on-failure -j$(nproc)
 
 ## Test Categories and Coverage
 
-The 160 test files cover all major engine subsystems. For the full inventory, see the [Test File Inventory](#test-file-inventory) section at the bottom of this page. Key categories:
+The 71 test files cover all major engine subsystems:
 
 ### Core & Utilities
 
@@ -438,7 +438,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*157 test files, 1806+ test cases*
+*158 test files, 1811+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -476,7 +476,6 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestCoverSystem` | 4 |
 | `TestDatablockRegistry` | 10 |
 | `TestDayNightCycle` | 10 |
-| `TestDebugHookManager` | 27 |
 | `TestDebugTools` | 31 |
 | `TestDedicatedServer` | 27 |
 | `TestDeferredDeletion` | 6 |
@@ -536,6 +535,8 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestNetworkEncryption` | 17 |
 | `TestNetworkIntegration` | 31 |
 | `TestNetworkInterpolation` | 12 |
+| `TestNetworkMMOIntegration` | 11 |
+| `TestNetworkStress` | 21 |
 | `TestNoiseGenerator` | 7 |
 | `TestNullRHIDevice` | 3 |
 | `TestObjectPool` | 6 |

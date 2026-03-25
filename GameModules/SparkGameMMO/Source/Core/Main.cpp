@@ -206,6 +206,22 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
 
     RegisterConsoleCommands();
 
+#ifdef ENABLE_NETWORKING
+    // In headless/dedicated mode, start the network server automatically
+    if (context->IsHeadless())
+    {
+        constexpr uint16_t MMO_SERVER_PORT = 27015;
+        if (m_worldSetup->StartNetworkServer(MMO_SERVER_PORT))
+        {
+            console.LogInfo("[MMO] Dedicated server listening on port " + std::to_string(MMO_SERVER_PORT));
+        }
+        else
+        {
+            console.LogError("[MMO] Failed to start network server on port " + std::to_string(MMO_SERVER_PORT));
+        }
+    }
+#endif
+
     m_initialized = true;
     console.LogInfo("[MMO] Spark MMO module loaded successfully (17 subsystems)");
     console.LogInfo("[MMO] World areas: " + std::to_string(m_worldSetup->GetAreaCount()));
@@ -318,6 +334,9 @@ void SparkGameMMOModule::OnUnload()
 
     if (m_worldSetup)
     {
+#ifdef ENABLE_NETWORKING
+        m_worldSetup->StopNetworkServer();
+#endif
         m_worldSetup->Shutdown();
         m_worldSetup.reset();
     }
@@ -334,6 +353,11 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
 
     if (m_engineSystems)
         m_engineSystems->Update(deltaTime);
+
+#ifdef ENABLE_NETWORKING
+    // Drive the network server tick (processes socket I/O, bridges to WorldServer)
+    m_worldSetup->ServerTick(deltaTime);
+#endif
 
     m_worldSetup->Update(deltaTime);
     m_playerSystem->Update(deltaTime);

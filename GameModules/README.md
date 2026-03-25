@@ -113,7 +113,13 @@ add_library(MyGame SHARED ${MY_SOURCES})
 target_compile_definitions(MyGame PRIVATE SPARK_MODULE_DLL)
 
 # Link engine (available when built as subdirectory of the engine)
-target_link_libraries(MyGame PRIVATE SparkEngineLib)
+# On Linux, use SparkEngineInterface (headers only) to avoid duplicate
+# singletons — symbols resolve from the exe at dlopen time.
+if(WIN32)
+    target_link_libraries(MyGame PRIVATE SparkEngineLib)
+elseif(TARGET SparkEngineInterface)
+    target_link_libraries(MyGame PRIVATE SparkEngineInterface)
+endif()
 
 # Include paths
 target_include_directories(MyGame PRIVATE

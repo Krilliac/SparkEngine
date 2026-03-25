@@ -96,8 +96,6 @@ Pre-built binaries are published on every commit to `master`:
 - [Build System and CMake Modules](Build-System-and-CMake-Modules) — CMake configuration and CI/CD
 - [Profiler and Debugging](Profiler-and-Debugging) — Frame profiling, GPU timing, and debug tools
 - [Testing](Testing) — Unit tests and test framework
-- [Codebase Statistics](Codebase-Statistics) — Lines of code, file counts, subsystem breakdown
-- [Codebase Health](Codebase-Health) — System maturity status and known gaps
 - [Troubleshooting](Troubleshooting) — Common issues and solutions
 - [Contributing](Contributing) — How to contribute (includes pre-commit checks)
 
@@ -110,10 +108,9 @@ SparkEngine enforces code quality automatically:
 
 - **clang-format** — Enforced in CI on every PR (Microsoft-based style, Allman braces, 120-col, 4-space indent)
 - **clang-tidy** — Static analysis for bugprone, modernize, performance, and readability checks
-- **1,808 unit tests** — CTest suite with 160 test files covering all major subsystems
-- **AddressSanitizer / UBSanitizer** — Memory safety checks in CI (GCC Debug)
-- **Code coverage** — lcov reports generated in CI
-- **10 CI jobs** — GCC, Clang, MSVC, ASan, coverage, format check, clang-tidy, prompt validation
+- **35+ unit tests** — CTest suite covering all major subsystems
+- **AddressSanitizer / UBSanitizer** — Memory safety checks in CI
+- **CodeQL** — GitHub security scanning
 
 See [Contributing](Contributing) for the full pre-commit checklist.
 
@@ -126,12 +123,12 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 <!-- AUTO:stats -->
 | Metric | Count |
 |--------|-------|
-| Header files | 513 |
+| Header files | 512 |
 | ECS Components | 79 |
 | ECS Systems | 63 |
 | Editor Panels | 51 |
-| Test files | 157 |
-| Test cases | 1806+ |
-| Wiki pages | 65 |
-| *Last synced* | *2026-03-24 23:27* |
+| Test files | 158 |
+| Test cases | 1811+ |
+| Wiki pages | 63 |
+| *Last synced* | *2026-03-24 19:37* |
 <!-- /AUTO:stats -->

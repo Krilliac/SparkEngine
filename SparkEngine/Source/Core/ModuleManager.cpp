@@ -392,6 +392,7 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
         if (entry.initialized)
             continue;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Initializing module: %s", entry.name.c_str());
         console.LogInfo("Initializing module: " + entry.name);
         if (entry.instance->OnLoad(context))
         {

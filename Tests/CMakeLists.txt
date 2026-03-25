@@ -69,6 +69,7 @@ add_executable(SparkTests
     TestEnvironmentQuery.cpp
     TestAnimationRetargeting.cpp
     TestDedicatedServer.cpp
+    TestServerMockClient.cpp
     TestSplineMath.cpp
     TestPhysicsInterpolation.cpp
     TestCameraInterpolation.cpp
@@ -166,6 +167,8 @@ add_executable(SparkTests
     TestScheduledCallback.cpp
     TestFixtures.cpp
     TestJsonUtils.cpp
+    TestNetworkStress.cpp
+    TestNetworkMMOIntegration.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
