@@ -4,6 +4,7 @@
  */
 
 #include "DeltaSnapshotManager.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cstring>
@@ -46,12 +47,14 @@ namespace Spark::Net
         ConnectionState state;
         state.connectionId = connectionId;
         m_connections[connectionId] = std::move(state);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "DeltaSnapshotManager: registered connection %u", connectionId);
     }
 
     void DeltaSnapshotManager::UnregisterConnection(uint32_t connectionId)
     {
         std::lock_guard lock(m_mutex);
         m_connections.erase(connectionId);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "DeltaSnapshotManager: unregistered connection %u", connectionId);
     }
 
     // ========================================================================

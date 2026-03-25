@@ -4,6 +4,7 @@
  */
 
 #include "InstabilitySimulator.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -65,6 +66,11 @@ namespace Spark::Net
         m_settings.reorderPercent = std::clamp(m_settings.reorderPercent, 0.0f, 100.0f);
         m_settings.latencyMs = std::max(m_settings.latencyMs, 0.0f);
         m_settings.jitterMs = std::max(m_settings.jitterMs, 0.0f);
+        SPARK_LOG_INFO(
+            Spark::LogCategory::Network,
+            "InstabilitySimulator settings: enabled=%d loss=%.1f%% latency=%.1fms jitter=%.1fms reorder=%.1f%%",
+            m_settings.enabled ? 1 : 0, m_settings.packetLossPercent, m_settings.latencyMs, m_settings.jitterMs,
+            m_settings.reorderPercent);
     }
 
     const InstabilitySettings& InstabilitySimulator::GetSettings() const

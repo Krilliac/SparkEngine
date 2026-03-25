@@ -7,6 +7,7 @@
  */
 
 #include "TestFramework.h"
+#include "../SparkEngine/Source/Utils/Logger.h"
 
 // Global test state (defined here, declared extern in TestFramework.h)
 int g_assertionsPassed = 0;
@@ -21,6 +22,12 @@ int main(int argc, char** argv)
 {
     (void)argc;
     (void)argv;
+
+    // Initialize the Logger with a stderr sink so SPARK_LOG_* output is visible
+    auto& logger = Spark::Logger::Get();
+    logger.Initialize(false);
+    logger.AddSink(std::make_unique<Spark::StderrSink>());
+    logger.SetGlobalLevel(Spark::LogLevel::Debug);
 
     auto& tests = GetTestRegistry();
     int passed = 0;

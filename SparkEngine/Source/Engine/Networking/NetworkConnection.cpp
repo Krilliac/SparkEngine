@@ -257,6 +257,8 @@ namespace Spark::Net
     {
         if (m_role != NetworkRole::Server)
             return;
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Stopping server, notifying %zu connected clients",
+                       m_clients.size());
 
         // Notify all connected clients
         NetworkMessage disconnectMsg;
@@ -487,6 +489,7 @@ namespace Spark::Net
     void NetworkManager::KickClient(ClientID client, const std::string& reason)
     {
         ASSERT_MSG(client != INVALID_CLIENT, "NetworkManager::KickClient — client ID must not be INVALID_CLIENT");
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Kicking client %u: %s", client, reason.c_str());
 
         std::lock_guard<std::mutex> lock(m_clientsMutex);
         auto it = m_clients.find(client);
@@ -531,6 +534,9 @@ namespace Spark::Net
             reject.payload = rejectBuf.GetData();
 
             // Send rejection only to the connecting client (not broadcast)
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "Connection rejected for pending client %u: server full (%d/%d)", pendingID,
+                           static_cast<int>(m_clients.size()), m_maxClients);
             SendToClient(pendingID, reject);
 
 #ifdef ENABLE_NETWORKING
@@ -575,11 +581,14 @@ namespace Spark::Net
         respBuf.WriteFloat(m_serverTime);
         accept.payload = respBuf.GetData();
         SendToClient(newID, accept);
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u accepted ('%s'), %d/%d slots used", newID,
+                       info.name.c_str(), static_cast<int>(m_clients.size()), m_maxClients);
     }
 
     void NetworkManager::HandleDisconnect(const NetworkMessage& msg)
     {
         ClientID clientID = msg.senderID;
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u disconnecting", clientID);
 
         // Unregister from delta snapshot tracking before removing the client
         DeltaSnapshotManager::GetInstance().UnregisterConnection(clientID);
@@ -594,6 +603,7 @@ namespace Spark::Net
 #endif
 
         // Remove entities owned by this client
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Cleaning up entities owned by client %u", clientID);
         std::vector<uint32_t> ownedEntities;
         for (const auto& [netID, entity] : m_replicatedEntities)
         {
@@ -605,6 +615,11 @@ namespace Spark::Net
         for (uint32_t netID : ownedEntities)
         {
             UnregisterReplicatedEntity(netID);
+        }
+        if (!ownedEntities.empty())
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "Removed %zu entities owned by disconnected client %u",
+                           ownedEntities.size(), clientID);
         }
     }
 

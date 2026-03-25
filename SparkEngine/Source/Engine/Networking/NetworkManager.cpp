@@ -568,6 +568,8 @@ namespace Spark::Net
         // Update stats
         m_stats.ping = m_smoothedRTT * 1000.0f;
         m_stats.jitter = m_rttVariance * 1000.0f;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "RTT estimate: %.1fms (jitter: %.1fms)", m_stats.ping,
+                        m_stats.jitter);
     }
 
     float NetworkManager::GetRetransmitTimeout() const

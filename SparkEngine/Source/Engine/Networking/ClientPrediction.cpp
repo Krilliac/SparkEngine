@@ -49,6 +49,8 @@ namespace Spark
         float dy = serverState.position.y - m_currentState.position.y;
         float dz = serverState.position.z - m_currentState.position.z;
         m_lastCorrectionMag = std::sqrt(dx * dx + dy * dy + dz * dz);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Reconcile: correction magnitude=%.4f, pending inputs=%zu",
+                        m_lastCorrectionMag, m_pendingInputs.size());
 
         // Snap to server state
         PredictedState reconciled = serverState;

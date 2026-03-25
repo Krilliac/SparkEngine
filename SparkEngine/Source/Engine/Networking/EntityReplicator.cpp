@@ -25,10 +25,13 @@ namespace Spark::Net
         entry.deserializer = std::move(deserializer);
 
         m_entities[entityID] = std::move(entry);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "EntityReplicator: registered entity %u (%u fields)", entityID,
+                        fieldSet.GetFieldCount());
     }
 
     void EntityReplicator::UnregisterEntity(NetworkEntityID entityID)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "EntityReplicator: unregistered entity %u", entityID);
         m_entities.erase(entityID);
     }
 
