@@ -9,6 +9,7 @@
 #include "VehiclePhysics.h"
 #include "PhysicsBody.h"
 #include "PhysicsSystem.h"
+#include "../Utils/Validate.h"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -32,14 +33,26 @@ VehiclePhysics::VehiclePhysics(PhysicsSystem* physicsSystem, std::shared_ptr<Phy
     : m_physicsSystem(physicsSystem), m_body(body), m_desc(desc)
 {
     if (!physicsSystem || !physicsSystem->GetJoltSystem() || !body)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "VehiclePhysics creation failed: null PhysicsSystem=%p, body=%p",
+                        static_cast<void*>(physicsSystem), static_cast<void*>(body.get()));
         return;
+    }
+
+    SPARK_LOG_INFO(Spark::LogCategory::Physics,
+                   "Creating vehicle: type=%d, %zu wheels, maxTorque=%.1f, RPM=[%.0f-%.0f], %zu gears",
+                   static_cast<int>(desc.type), desc.wheels.size(), desc.maxEngineTorque, desc.minRPM, desc.maxRPM,
+                   desc.gearRatios.size());
 
     auto* joltSystem = physicsSystem->GetJoltSystem();
     auto& bodyInterface = joltSystem->GetBodyInterface();
     JPH::BodyID bodyID(body->GetJoltBodyID());
 
     if (!bodyInterface.IsAdded(bodyID))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "VehiclePhysics: body not added to physics system");
         return;
+    }
 
     // Build vehicle constraint settings
     JPH::VehicleConstraintSettings vehicleSettings;
@@ -153,7 +166,10 @@ VehiclePhysics::VehiclePhysics(PhysicsSystem* physicsSystem, std::shared_ptr<Phy
     // Create the vehicle constraint
     JPH::Body* joltBody = joltSystem->GetBodyLockInterface().TryGetBody(bodyID);
     if (!joltBody)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "VehiclePhysics: TryGetBody failed, cannot create constraint");
         return;
+    }
 
     auto* constraint = new JPH::VehicleConstraint(*joltBody, vehicleSettings);
 
@@ -166,6 +182,8 @@ VehiclePhysics::VehiclePhysics(PhysicsSystem* physicsSystem, std::shared_ptr<Phy
 
     m_joltConstraint = constraint;
     m_joltController = constraint->GetController();
+
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Vehicle created successfully with %zu wheels", desc.wheels.size());
 }
 
 VehiclePhysics::~VehiclePhysics()

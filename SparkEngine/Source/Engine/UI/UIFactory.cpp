@@ -4,6 +4,7 @@
  */
 
 #include "UIFactory.h"
+#include "../../Utils/Validate.h"
 
 #include <sstream>
 
@@ -150,6 +151,7 @@ namespace Spark::UI
 
     bool UIFactory::Initialize()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "UIFactory::Initialize");
         m_widgetFactories.clear();
         m_bindings.clear();
 
@@ -204,11 +206,13 @@ namespace Spark::UI
 
     void UIFactory::RegisterWidgetType(const std::string& type, WidgetFactoryFn factory)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "UIFactory::RegisterWidgetType '%s'", type.c_str());
         m_widgetFactories[type] = std::move(factory);
     }
 
     UIWidgetConfig UIFactory::ParseConfig(const std::string& configText) const
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "UIFactory::ParseConfig (%zu bytes)", configText.size());
         UIWidgetConfig root;
         root.type = "root";
 

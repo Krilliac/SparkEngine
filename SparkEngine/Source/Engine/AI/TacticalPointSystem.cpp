@@ -4,6 +4,7 @@
  */
 
 #include "TacticalPointSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -43,6 +44,8 @@ namespace Spark::AI
         m_buckets[key].push_back(id);
         m_points.emplace(id, std::move(stored));
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::AI, "TacticalPointSystem: registered point %u at (%.1f, %.1f, %.1f)", id,
+                        point.position.x, point.position.y, point.position.z);
         return id;
     }
 
@@ -67,6 +70,7 @@ namespace Spark::AI
             }
         }
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::AI, "TacticalPointSystem: removed point %u", pointID);
         m_points.erase(it);
     }
 

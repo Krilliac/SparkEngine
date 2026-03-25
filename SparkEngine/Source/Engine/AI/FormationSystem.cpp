@@ -4,6 +4,7 @@
  */
 
 #include "FormationSystem.h"
+#include "../../Utils/Validate.h"
 
 #include <cmath>
 #include <algorithm>
@@ -58,11 +59,15 @@ namespace Spark::AI
         instance.slots = GenerateSlots(type, memberCount, spacing);
 
         m_formations[id] = std::move(instance);
+
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "FormationSystem: created formation %u (type=%d, leader=%u, slots=%u)",
+                       id, static_cast<int>(type), leaderEntity, memberCount);
         return id;
     }
 
     void FormationSystem::DisbandFormation(uint32_t formationID)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "FormationSystem: disbanded formation %u", formationID);
         m_formations.erase(formationID);
     }
 
@@ -85,10 +90,15 @@ namespace Spark::AI
             {
                 slots[i].assignedEntity = entityID;
                 slots[i].occupied = true;
+                SPARK_LOG_DEBUG(Spark::LogCategory::AI,
+                                "FormationSystem: entity %u assigned to slot %zu in formation %u", entityID, i,
+                                formationID);
                 return static_cast<int>(i);
             }
         }
 
+        SPARK_LOG_WARN(Spark::LogCategory::AI, "FormationSystem: no free slot in formation %u for entity %u",
+                       formationID, entityID);
         return -1; // No free slot
     }
 

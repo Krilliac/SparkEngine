@@ -61,8 +61,10 @@ namespace Spark
         auto it = m_mods.find(modId);
         if (it == m_mods.end())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "EnableMod: mod '%s' not found", modId.c_str());
             return false;
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "EnableMod '%s'", modId.c_str());
         it->second.enabled = true;
         if (m_modStates[modId] == ModState::Disabled)
         {
@@ -76,6 +78,7 @@ namespace Spark
         auto it = m_mods.find(modId);
         if (it != m_mods.end())
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "DisableMod '%s'", modId.c_str());
             it->second.enabled = false;
             m_modStates[modId] = ModState::Disabled;
         }
@@ -130,6 +133,7 @@ namespace Spark
 
         if (!AreDependenciesMet(modId))
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadMod '%s' failed — unmet dependencies", modId.c_str());
             m_modStates[modId] = ModState::Error;
             return false;
         }
@@ -241,9 +245,11 @@ namespace Spark
 
     bool ModSystem::SaveConfig(const std::string& filePath) const
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ModSystem::SaveConfig to '%s'", filePath.c_str());
         std::ofstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem::SaveConfig failed to open '%s'", filePath.c_str());
             return false;
         }
 
@@ -265,9 +271,11 @@ namespace Spark
 
     bool ModSystem::LoadConfig(const std::string& filePath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ModSystem::LoadConfig from '%s'", filePath.c_str());
         std::ifstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "ModSystem::LoadConfig failed to open '%s'", filePath.c_str());
             return false;
         }
 

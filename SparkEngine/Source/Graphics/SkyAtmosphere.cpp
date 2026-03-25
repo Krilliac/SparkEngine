@@ -11,6 +11,7 @@
 
 #include "SkyAtmosphere.h"
 #include "../Utils/AngleUtils.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -38,11 +39,14 @@ namespace Spark::Graphics
         RecalculateCoefficients();
         ComputeZenithValues();
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SkyAtmosphere initialized (turbidity=%.1f)",
+                       m_settings.turbidity);
         return true;
     }
 
     void SkyAtmosphereSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SkyAtmosphere shutting down");
         m_initialized = false;
     }
 

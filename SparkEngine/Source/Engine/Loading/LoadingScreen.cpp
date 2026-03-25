@@ -81,10 +81,13 @@ namespace Spark
 
             if (!task.success)
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "LoadingScreen task '%s' failed", task.name.c_str());
                 m_state = LoadingState::Failed;
                 m_completeCallbacks.Broadcast(false);
                 return;
             }
+
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "LoadingScreen task '%s' completed", task.name.c_str());
 
             completedWeight += task.weight;
             float progress = completedWeight / totalWeight;
@@ -102,6 +105,8 @@ namespace Spark
 
     void LoadingScreen::Cancel()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "LoadingScreen::Cancel requested for session '%s'",
+                       m_sessionName.c_str());
         m_cancelled = true;
     }
 

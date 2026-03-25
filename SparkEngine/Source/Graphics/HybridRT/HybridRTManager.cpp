@@ -20,6 +20,7 @@
 #include "HybridRTManager.h"
 #include "../RHI/RHIDevice.h"
 #include "../RHI/RHIResources.h"
+#include "../../Utils/Validate.h"
 
 #ifdef SPARK_HARDWARE_RT
 #include "../RHI/DXRSupport.h"
@@ -47,6 +48,8 @@ namespace Spark::Graphics
 
         // Detect best available backend from device capabilities
         m_activeBackend = DetectBestBackend();
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "HybridRTManager: detected backend '%s'",
+                       RayTracingBackendToString(m_activeBackend).c_str());
 
         // If everything is disabled and no compute support, we can't do anything
         if (m_activeBackend == RHI::RayTracingBackend::Disabled)
@@ -111,11 +114,13 @@ namespace Spark::Graphics
 
         m_pendingPrimitives.reserve(SDFSceneManager::kMaxPrimitives);
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "HybridRTManager initialized (%ux%u)", width, height);
         return true;
     }
 
     void HybridRTManager::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "HybridRTManager shutting down");
         if (m_sdfScene)
             m_sdfScene->Shutdown();
         if (m_compositor)

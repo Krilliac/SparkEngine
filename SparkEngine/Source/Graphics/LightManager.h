@@ -34,6 +34,8 @@
 #include <DirectXMath.h>
 #endif
 
+#include "../Utils/Validate.h"
+
 #include <memory>
 #include <vector>
 #include <string>
@@ -201,11 +203,14 @@ class LightManager
         m_tileLightLists.resize(m_tilesX * m_tilesY);
         m_shadowAtlas.resize(MAX_SHADOW_SLOTS);
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightManager initialized (%ux%u, tileSize=%d, grid=%dx%d)", width,
+                       height, tileSize, m_tilesX, m_tilesY);
         return true;
     }
 
     void Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightManager shutting down");
         m_lights.clear();
         m_tileLightLists.clear();
         m_shadowAtlas.clear();
@@ -339,6 +344,8 @@ class LightManager
                 return i;
             }
         }
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "LightManager: shadow slot allocation failed for light %u (no free slots)", lightId);
         return -1;
     }
 

@@ -30,7 +30,18 @@ void GamepadInput::Update(float deltaTime)
             continue;
 
         DWORD result = XInputGetState(i, &state.xinputState);
+        bool wasConnected = state.connected;
         state.connected = (result == ERROR_SUCCESS);
+
+        // Log connection state changes (not per-frame)
+        if (state.connected && !wasConnected)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Input, "Gamepad %d connected", i);
+        }
+        else if (!state.connected && wasConnected)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Input, "Gamepad %d disconnected", i);
+        }
 
         if (!state.connected)
             continue;

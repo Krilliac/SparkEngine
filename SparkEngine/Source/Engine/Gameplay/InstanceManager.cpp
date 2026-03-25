@@ -4,6 +4,7 @@
  */
 
 #include "InstanceManager.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cassert>
@@ -93,6 +94,7 @@ namespace Spark::Gameplay
         m_instances.clear();
         m_playerInstances.clear();
         m_lockouts.clear();
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InstanceManager initialized");
     }
 
     void InstanceManager::Update(float deltaTime)
@@ -119,6 +121,8 @@ namespace Spark::Gameplay
 
     void InstanceManager::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InstanceManager shutting down (%zu instances, %zu templates)",
+                       m_instances.size(), m_templates.size());
         m_instances.clear();
         m_playerInstances.clear();
         m_lockouts.clear();
@@ -160,6 +164,7 @@ namespace Spark::Gameplay
         auto tmplIt = m_templates.find(templateId);
         if (tmplIt == m_templates.end())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreateInstance failed — template %u not found", templateId);
             return 0; // Invalid — template not found
         }
 
@@ -188,6 +193,8 @@ namespace Spark::Gameplay
         }
 
         m_instances[newId] = std::move(data);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Created instance %u from template %u (%zu encounters)", newId,
+                       templateId, tmpl.encounters.size());
         return newId;
     }
 
@@ -196,8 +203,11 @@ namespace Spark::Gameplay
         auto it = m_instances.find(id);
         if (it == m_instances.end())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "DestroyInstance: instance %u not found", id);
             return;
         }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Destroying instance %u (%zu players)", id, it->second.players.size());
 
         // Remove all player reverse-lookup entries for this instance
         for (EntityID player : it->second.players)
@@ -268,6 +278,8 @@ namespace Spark::Gameplay
 
         instData.players.push_back(player);
         m_playerInstances[player] = id;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Player %u added to instance %u (%zu/%d players)", player, id,
+                       instData.players.size(), tmplIt != m_templates.end() ? tmplIt->second.maxPlayers : -1);
         return true;
     }
 
@@ -284,6 +296,7 @@ namespace Spark::Gameplay
         if (it != players.end())
         {
             players.erase(it);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Player %u removed from instance %u", player, id);
         }
 
         m_playerInstances.erase(player);
@@ -324,6 +337,7 @@ namespace Spark::Gameplay
         }
 
         stateIt->second = EncounterState::InProgress;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Encounter %u started in instance %u", encounterId, instanceId);
 
         auto scriptIt = instData->encounterScripts.find(encounterId);
         if (scriptIt != instData->encounterScripts.end() && scriptIt->second)
@@ -351,6 +365,7 @@ namespace Spark::Gameplay
         }
 
         stateIt->second = EncounterState::Failed;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Encounter %u failed in instance %u", encounterId, instanceId);
 
         auto scriptIt = instData->encounterScripts.find(encounterId);
         if (scriptIt != instData->encounterScripts.end() && scriptIt->second)
@@ -375,6 +390,7 @@ namespace Spark::Gameplay
         }
 
         stateIt->second = EncounterState::Done;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Encounter %u completed in instance %u", encounterId, instanceId);
 
         auto scriptIt = instData->encounterScripts.find(encounterId);
         if (scriptIt != instData->encounterScripts.end() && scriptIt->second)
@@ -387,6 +403,7 @@ namespace Spark::Gameplay
         if (instData->AllEncountersDone())
         {
             instData->completed = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Instance %u fully completed — all encounters done", instanceId);
         }
     }
 

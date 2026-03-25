@@ -37,6 +37,7 @@ void TextureSystem::LoadTextureAsync(const std::string& filePath,
     }
 
     // Queue for streaming
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "TextureStreaming: queuing async load '%s'", filePath.c_str());
     StreamingRequest request;
     request.filePath = filePath;
     request.desc = AdjustDescForQuality(desc);
@@ -118,11 +119,15 @@ void TextureSystem::StreamingThreadFunction()
                     request.callback(texture);
                 }
 
+                SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "TextureStreaming: loaded '%s'",
+                                request.filePath.c_str());
                 std::lock_guard<std::mutex> metricsLock(m_metricsMutex);
                 m_metrics.loadedTextures++;
             }
             else
             {
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics, "TextureStreaming: failed to load '%s'",
+                               request.filePath.c_str());
                 // Call callback with null on failure
                 if (request.callback)
                 {

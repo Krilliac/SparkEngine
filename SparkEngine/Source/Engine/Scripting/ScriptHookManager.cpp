@@ -4,6 +4,7 @@
  */
 
 #include "ScriptHookManager.h"
+#include "../../Utils/Validate.h"
 #include <algorithm>
 
 namespace Spark::Scripting
@@ -43,6 +44,8 @@ namespace Spark::Scripting
         std::sort(handlers.begin(), handlers.end(),
                   [](const HookRegistration& a, const HookRegistration& b) { return a.priority < b.priority; });
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Scripting, "ScriptHookManager::RegisterHook id=%u script='%s' priority=%d",
+                        id, scriptName.c_str(), priority);
         return id;
     }
 
@@ -57,10 +60,15 @@ namespace Spark::Scripting
 
             if (it != handlers.end())
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Scripting, "ScriptHookManager::UnregisterHook id=%u script='%s'",
+                                registrationId, it->scriptName.c_str());
                 handlers.erase(it);
                 return;
             }
         }
+
+        SPARK_LOG_WARN(Spark::LogCategory::Scripting, "ScriptHookManager::UnregisterHook id=%u not found",
+                       registrationId);
     }
 
     void ScriptHookManager::UnregisterAllForScript(const std::string& scriptName)
@@ -94,6 +102,9 @@ namespace Spark::Scripting
             }
             localHandlers = it->second;
         }
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Scripting, "ScriptHookManager::DispatchHook type=%d handlers=%zu",
+                        static_cast<int>(type), localHandlers.size());
 
         for (const auto& reg : localHandlers)
         {

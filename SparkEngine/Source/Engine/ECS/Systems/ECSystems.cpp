@@ -62,6 +62,9 @@ namespace Spark::ECS
             if (active && !active->active)
                 continue;
 
+            // Log visibility state changes could go here, but mesh submission
+            // is per-frame work — only the rendered count is meaningful at INFO level.
+
             // Compute the world matrix, walking the parent hierarchy if present.
             // Cache it on the component so other systems (physics debug draw, culling)
             // can read the matrix without recomputing it.
@@ -102,6 +105,9 @@ namespace Spark::ECS
             // Auto-create physics body if one doesn't exist yet
             if (!rb.physicsBodyHandle)
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Physics,
+                               "PhysicsUpdateSystem: auto-creating physics body for entity %u",
+                               static_cast<uint32_t>(entity));
                 PhysicsBodyDesc desc;
                 desc.position = transform.position;
                 desc.rotation = transform.rotation;
@@ -310,6 +316,9 @@ namespace Spark::ECS
                 {
                     anim.currentTime = anim.duration;
                     anim.playing = false;
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Animation,
+                                    "AnimationUpdateSystem: animation completed for entity %u",
+                                    static_cast<uint32_t>(entity));
                 }
             }
 
@@ -341,8 +350,11 @@ namespace Spark::ECS
             auto* health = world.GetComponent<HealthComponent>(entity);
             if (health && health->isDead)
             {
-                SPARK_LOG_DEBUG(Spark::LogCategory::AI, "AIUpdateSystem: entity %u marked as dead",
-                                static_cast<uint32_t>(entity));
+                if (ai.state != AIComponent::State::Dead)
+                {
+                    SPARK_LOG_INFO(Spark::LogCategory::AI, "AIUpdateSystem: entity %u transitioned to Dead state",
+                                   static_cast<uint32_t>(entity));
+                }
                 ai.state = AIComponent::State::Dead;
                 continue;
             }

@@ -4,6 +4,7 @@
  */
 
 #include "EntityArchetype.h"
+#include "../../Utils/Validate.h"
 
 #include <algorithm>
 
@@ -18,10 +19,13 @@ namespace Spark::ECS
     {
         m_archetypes.clear();
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "EntityArchetypeSystem initialized");
     }
 
     void EntityArchetypeSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "EntityArchetypeSystem shutting down (%zu archetypes)",
+                       m_archetypes.size());
         m_archetypes.clear();
         m_initialized = false;
     }
@@ -34,13 +38,18 @@ namespace Spark::ECS
     {
         if (!m_initialized || archetype.name.empty())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "EntityArchetypeSystem::RegisterArchetype failed — %s",
+                           !m_initialized ? "not initialized" : "empty name");
             return;
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Registered archetype '%s' (category: '%s')", archetype.name.c_str(),
+                       archetype.category.c_str());
         m_archetypes[archetype.name] = archetype;
     }
 
     void EntityArchetypeSystem::RemoveArchetype(const std::string& name)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Removing archetype '%s'", name.c_str());
         m_archetypes.erase(name);
     }
 

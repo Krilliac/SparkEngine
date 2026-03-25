@@ -209,6 +209,8 @@ namespace Spark
         }
         tree->SetId(treeId);
         m_trees[treeId] = std::move(tree);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "DialogueSystem: loaded tree '%s' from '%s' (%zu nodes)",
+                       treeId.c_str(), filePath.c_str(), m_trees[treeId]->GetNodeCount());
         return true;
     }
 
@@ -302,6 +304,8 @@ namespace Spark
         }
 
         const auto& choice = available[choiceIndex];
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "DialogueSystem: choice %zu selected -> node '%s'", choiceIndex,
+                       choice.nextNodeId.c_str());
 
         // Mark the selected choice as visited in the actual tree node
         auto treeIt = m_trees.find(m_state.treeId);
@@ -352,6 +356,8 @@ namespace Spark
             return;
         }
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "DialogueSystem: advancing from node '%s' to '%s'",
+                        m_state.currentNodeId.c_str(), node->nextNodeId.c_str());
         m_state.currentNodeId = node->nextNodeId;
         m_state.nodeTimer = 0.0f;
         m_state.waitingForInput = false;

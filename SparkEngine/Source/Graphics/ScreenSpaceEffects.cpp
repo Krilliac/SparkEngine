@@ -10,6 +10,7 @@
  */
 
 #include "ScreenSpaceEffects.h"
+#include "../Utils/Validate.h"
 
 namespace Spark::Graphics
 {
@@ -28,11 +29,14 @@ namespace Spark::Graphics
         // - Upload noise texture to GPU
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ScreenSpaceEffects initialized (%ux%u, SSAO kernel=%d)", width,
+                       height, m_ssaoSettings.kernelSize);
         return true;
     }
 
     void ScreenSpaceEffects::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ScreenSpaceEffects shutting down");
         m_ssaoKernel.clear();
         m_noiseTexture.clear();
         m_initialized = false;

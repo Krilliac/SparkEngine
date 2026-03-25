@@ -4,6 +4,7 @@
  */
 
 #include "DynamicQualityScaler.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <numeric>
@@ -17,6 +18,9 @@ namespace Spark::Graphics
         m_currentScale = thresholds.maxScale;
         Reset();
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "DynamicQualityScaler initialized (targetFPS=%.0f, scale=[%.2f, %.2f])", thresholds.targetFPS,
+                       thresholds.minScale, thresholds.maxScale);
     }
 
     void DynamicQualityScaler::RecordFrameTime(float deltaTimeSec)
@@ -48,16 +52,24 @@ namespace Spark::Graphics
         if (avgFPS < dropThreshold)
         {
             // Below target: reduce resolution
+            float prevScale = m_currentScale;
             m_currentScale -= m_thresholds.scaleStepDown;
             m_currentScale = std::max(m_currentScale, m_thresholds.minScale);
             m_timeSinceLastAdjust = 0.0f;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics,
+                            "DynamicQualityScaler: scale down %.2f -> %.2f (avgFPS=%.1f, target=%.0f)", prevScale,
+                            m_currentScale, avgFPS, targetFPS);
         }
         else if (avgFPS > headroomThreshold)
         {
             // Above target with headroom: increase resolution
+            float prevScale = m_currentScale;
             m_currentScale += m_thresholds.scaleStepUp;
             m_currentScale = std::min(m_currentScale, m_thresholds.maxScale);
             m_timeSinceLastAdjust = 0.0f;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics,
+                            "DynamicQualityScaler: scale up %.2f -> %.2f (avgFPS=%.1f, target=%.0f)", prevScale,
+                            m_currentScale, avgFPS, targetFPS);
         }
     }
 

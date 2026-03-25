@@ -1,4 +1,5 @@
 #include "PostProcessingPipeline.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -19,17 +20,26 @@ namespace Spark::Graphics
         if (m_device)
         {
             if (!CreatePingPongTargets())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                "PostProcessingPipeline: failed to create ping-pong targets");
                 return false;
+            }
             if (!CreatePostProcessShaders())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "PostProcessingPipeline: failed to create shaders");
                 return false;
+            }
         }
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "PostProcessingPipeline initialized (%ux%u)", width, height);
         return true;
     }
 
     void PostProcessingPipeline::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "PostProcessingPipeline shutting down");
         for (int i = 0; i < 2; ++i)
         {
             m_pingPongTextures[i].Reset();

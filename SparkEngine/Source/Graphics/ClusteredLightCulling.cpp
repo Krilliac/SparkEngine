@@ -6,6 +6,7 @@
  */
 
 #include "ClusteredLightCulling.h"
+#include "../Utils/Validate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,6 +32,8 @@ namespace Spark::Graphics
         m_lights.reserve(m_config.maxTotalLights);
         m_initialized = true;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ClusteredLightCulling initialized (grid=%ux%ux%u, %u clusters)",
+                       config.gridX, config.gridY, config.gridZ, clusterCount);
         return true;
     }
 
@@ -56,6 +59,11 @@ namespace Spark::Graphics
         if (m_lights.size() < m_config.maxTotalLights)
         {
             m_lights.push_back(light);
+        }
+        else
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "ClusteredLightCulling: light overflow, max %u reached",
+                           m_config.maxTotalLights);
         }
     }
 
@@ -132,6 +140,7 @@ namespace Spark::Graphics
 
     void ClusteredLightCulling::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ClusteredLightCulling shutting down");
         m_lights.clear();
         m_clusterAABBs.clear();
         m_clusterLightCounts.clear();

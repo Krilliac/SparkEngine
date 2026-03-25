@@ -4,6 +4,7 @@
  */
 
 #include "DebugHookManager.h"
+#include "Validate.h"
 
 #include <algorithm>
 
@@ -53,6 +54,8 @@ namespace Spark
                              [](const HookEntry& a, const HookEntry& b) { return a.priority < b.priority; });
         }
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "DebugHookManager::Register id=%u name='%s' point=%d priority=%d", id,
+                        name.c_str(), static_cast<int>(point), priority);
         return DebugHookHandle(this, id);
     }
 
@@ -64,6 +67,7 @@ namespace Spark
             auto it = std::remove_if(list.begin(), list.end(), [id](const HookEntry& e) { return e.id == id; });
             if (it != list.end())
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "DebugHookManager::Unregister id=%u", id);
                 list.erase(it, list.end());
                 return;
             }

@@ -22,6 +22,10 @@ namespace Spark::Animation
 
     void AnimationCompressor::ReduceClip(AnimationClip& clip, const Settings& settings)
     {
+        SPARK_LOG_DEBUG(LogCategory::Animation, "Reducing clip '%s' (%zu channels, posTol=%.4f, rotTol=%.4f)",
+                        clip.name.c_str(), clip.channels.size(), settings.positionTolerance,
+                        settings.rotationTolerance);
+
         for (auto& channel : clip.channels)
         {
             ReduceKeyframes(channel.positionKeys, settings.positionTolerance);
@@ -47,6 +51,8 @@ namespace Spark::Animation
     CompressedClip AnimationCompressor::CompressClip(const AnimationClip& clip, const Settings& settings)
     {
         SPARK_TRACE_ENTER(LogCategory::Animation);
+        SPARK_LOG_INFO(LogCategory::Animation, "Compressing clip '%s' (%zu channels, duration=%.2fs)",
+                       clip.name.c_str(), clip.channels.size(), clip.duration);
 
         // Work on a copy so we can reduce without modifying the original
         AnimationClip reduced = clip;
@@ -149,6 +155,14 @@ namespace Spark::Animation
 
             result.channels.push_back(std::move(compChannel));
         }
+
+        const size_t compSize = EstimateCompressedSize(result);
+        const size_t uncompSize = EstimateUncompressedSize(clip);
+        SPARK_LOG_INFO(LogCategory::Animation,
+                       "Compression complete for '%s': %zu -> %zu bytes (ratio %.2f), %zu channels", clip.name.c_str(),
+                       uncompSize, compSize,
+                       uncompSize > 0 ? static_cast<float>(compSize) / static_cast<float>(uncompSize) : 1.0f,
+                       result.channels.size());
 
         return result;
     }
@@ -559,6 +573,8 @@ namespace Spark::Animation
             return;
         }
 
+        const size_t originalCount = keys.size();
+
         std::vector<VectorKey> reduced;
         reduced.reserve(keys.size());
         reduced.push_back(keys.front());
@@ -580,6 +596,9 @@ namespace Spark::Animation
 
         reduced.push_back(keys.back());
         keys = std::move(reduced);
+
+        SPARK_LOG_DEBUG(LogCategory::Animation, "Keyframe reduction: %zu -> %zu keys (tolerance=%.4f)", originalCount,
+                        keys.size(), tolerance);
     }
 
     void AnimationCompressor::ReduceRotationKeyframes(std::vector<QuatKey>& keys, float tolerance)
@@ -588,6 +607,8 @@ namespace Spark::Animation
         {
             return;
         }
+
+        const size_t originalCount = keys.size();
 
         std::vector<QuatKey> reduced;
         reduced.reserve(keys.size());
@@ -610,6 +631,9 @@ namespace Spark::Animation
 
         reduced.push_back(keys.back());
         keys = std::move(reduced);
+
+        SPARK_LOG_DEBUG(LogCategory::Animation, "Rotation keyframe reduction: %zu -> %zu keys (tolerance=%.4f)",
+                        originalCount, keys.size(), tolerance);
     }
 
     float AnimationCompressor::CalculateInterpolationError(const VectorKey& prev, const VectorKey& removed,

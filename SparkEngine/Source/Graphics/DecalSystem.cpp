@@ -374,6 +374,7 @@ namespace Spark::Graphics
 
     void DecalSystem::Initialize(uint32_t maxDecals)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DecalSystem initializing with maxDecals=%u", maxDecals);
         m_maxDecals = maxDecals;
         m_decals.reserve(maxDecals);
 
@@ -418,6 +419,7 @@ namespace Spark::Graphics
 
     void DecalSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DecalSystem shutting down");
         m_decals.clear();
         m_materials.clear();
         m_surfaceMappings.clear();
