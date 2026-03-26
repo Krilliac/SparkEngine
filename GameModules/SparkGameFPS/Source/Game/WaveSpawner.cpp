@@ -47,7 +47,7 @@ namespace Spark
         m_countdownTimer = 3.0f; // Short initial countdown
         m_waveTransitionReady = false;
         m_waveScheduler.ClearAll();
-        m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
+        (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
     }
 
     void WaveSpawner::Update(float dt, size_t aliveEnemies, Game* game)
@@ -113,7 +113,7 @@ namespace Spark
                     m_countdownTimer = m_restDuration;
                     m_waveTransitionReady = false;
                     m_waveScheduler.ClearAll();
-                    m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, m_restDuration);
+                    (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, m_restDuration);
                 }
             }
             break;
@@ -131,7 +131,7 @@ namespace Spark
         m_countdownTimer = 3.0f;
         m_waveTransitionReady = false;
         m_waveScheduler.ClearAll();
-        m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
+        (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
     }
 
     void WaveSpawner::Reset()
