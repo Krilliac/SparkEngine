@@ -27,7 +27,7 @@ cmake --build build --config Release
 cd build && ctest --output-on-failure
 ```
 
-CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_PHYSX`, `ENABLE_AI`, `ENABLE_ANIMATION`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_SAVE_SYSTEM`, `ENABLE_PROCEDURAL`, `ENABLE_CINEMATIC`, `ENABLE_EVENT_SYSTEM`, `ENABLE_DECALS`, `ENABLE_MESH_LOD`, `ENABLE_DXR` (OFF by default), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
+CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL` (OFF), `ENABLE_DXR` (OFF), `ENABLE_HYBRID_RT`, `ENABLE_RECAST`, `ENABLE_SDL2` (auto-ON on Linux), `SPARK_HEADLESS_SUPPORT`, `SPARK_DOUBLE_PRECISION_PHYSICS` (OFF), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
 
 ## Anti-Bloat Guidelines
 
@@ -151,14 +151,14 @@ SparkEngine/Source/Engine/UI/            — UI system
 SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking
 SparkEngine/Source/Utils/                — Console, Logger, Profiler, Assert
 SparkEditor/Source/Communication/        — CollaborativeEditSession (multi-user editing)
-SparkEditor/Source/                      — ImGui editor (22 subsystems, 32 specialized panels)
+SparkEditor/Source/                      — ImGui editor (22 subsystems, 52 specialized panels)
 GameModules/                             — Game module directory (auto-discovered by CMake)
 GameModules/SparkGame/Source/            — Example FPS game module (DLL)
 GameModules/SparkGameMMO/Source/         — Example MMO game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 145 unit tests, CTest
+Tests/                                   — 1,989 unit tests across 170 files, CTest
 ```
 
 ## ECS execution order
@@ -552,6 +552,6 @@ These are confirmed bloat problems discovered during audit. They must be fixed b
 - `.clang-format` enforces Microsoft-based style (Allman braces, 120-col, 4-space indent)
 - `.clang-tidy` checks for bugprone, modernize, performance, and readability issues
 - Doxygen config lives in `docs/Doxyfile.txt`; wiki pages in `wiki/`
-- 82+ unit tests in `Tests/`; always run `ctest` after changes
+- 1,989 unit tests across 170 files in `Tests/`; always run `ctest` after changes
 - **SparkConsole communicates with the engine via stdin/stdout pipes.** ConsoleProcessManager launches the subprocess and owns the pipe. SimpleConsole is the engine-side log sink only — it is not an IPC layer.
 - **ConsoleProcessManager must be initialized at engine startup** and `ProcessCommands()` must be called each frame. Without this, SparkConsole.exe never launches and commands are never executed.
