@@ -8,6 +8,7 @@
  */
 
 #include "EngineConsoleCommands.h"
+#include "EngineDiagnostics.h"
 #include "EngineContext.h"
 #include "AssetIntegration.h"
 #include "ModuleManager.h"
@@ -925,6 +926,7 @@ namespace Spark
         RegisterHotReloadCommands(console, hotReload);
         RegisterTimeOfDayCommands(console);
         RegisterMemoryMonitorCommands(console);
+        RegisterDiagnosticCommands(console);
     }
 
 } // namespace Spark
