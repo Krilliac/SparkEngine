@@ -524,10 +524,10 @@ TEST(PhysicsStress_CollisionAABBDegenerate)
     EXPECT_TRUE(point.Intersects(point2));
 
     // A point-AABB should not intersect a distant AABB
-    TestPhysicsStress::AABB far;
-    far.min = {10.0f, 10.0f, 10.0f};
-    far.max = {20.0f, 20.0f, 20.0f};
-    EXPECT_FALSE(point.Intersects(far));
+    TestPhysicsStress::AABB distant;
+    distant.min = {10.0f, 10.0f, 10.0f};
+    distant.max = {20.0f, 20.0f, 20.0f};
+    EXPECT_FALSE(point.Intersects(distant));
 }
 
 // ============================================================================

@@ -103,7 +103,7 @@ TEST(StringPool_ResolveUnknownReturnsEmpty)
 TEST(StringPool_Contains)
 {
     StringPool pool;
-    pool.Intern("alpha");
+    (void)pool.Intern("alpha");
     EXPECT_TRUE(pool.Contains("alpha"));
     EXPECT_FALSE(pool.Contains("beta"));
 }
@@ -112,17 +112,17 @@ TEST(StringPool_Count)
 {
     StringPool pool;
     EXPECT_EQ(pool.GetCount(), 0u);
-    pool.Intern("a");
-    pool.Intern("b");
-    pool.Intern("a"); // duplicate
+    (void)pool.Intern("a");
+    (void)pool.Intern("b");
+    (void)pool.Intern("a"); // duplicate
     EXPECT_EQ(pool.GetCount(), 2u);
 }
 
 TEST(StringPool_Clear)
 {
     StringPool pool;
-    pool.Intern("x");
-    pool.Intern("y");
+    (void)pool.Intern("x");
+    (void)pool.Intern("y");
     pool.Clear();
     EXPECT_EQ(pool.GetCount(), 0u);
     EXPECT_FALSE(pool.Contains("x"));
