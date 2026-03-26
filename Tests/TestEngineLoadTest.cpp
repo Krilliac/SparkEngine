@@ -596,3 +596,475 @@ TEST(LoadTest_FullEngine_3000Frames)
 
     handle.Unsubscribe();
 }
+
+// ============================================================================
+// ADVERSE: High entity count — 10,000 entities alive simultaneously
+// ============================================================================
+
+TEST(LoadTest_Adverse_HighEntityCount)
+{
+    InitLoadTestEngine();
+    auto* world = EngineContext::Get()->GetWorld();
+    EXPECT_TRUE(world != nullptr);
+    if (!world)
+        return;
+
+    size_t baseline = world->GetEntityCount();
+    constexpr int ENTITY_COUNT = 10000;
+
+    // Create 10,000 entities with multiple components each
+    auto createStart = std::chrono::high_resolution_clock::now();
+
+    std::vector<EntityID> entities;
+    entities.reserve(ENTITY_COUNT);
+    for (int i = 0; i < ENTITY_COUNT; i++)
+    {
+        auto e = world->CreateEntity();
+        world->AddComponent<Transform>(e, Transform{});
+        world->AddComponent<HealthComponent>(e, HealthComponent{100.0f, 100.0f});
+        if (i % 3 == 0)
+            world->AddComponent<LightComponent>(e, LightComponent{});
+        entities.push_back(e);
+    }
+
+    auto createEnd = std::chrono::high_resolution_clock::now();
+    double createMs = std::chrono::duration<double, std::milli>(createEnd - createStart).count();
+
+    EXPECT_EQ(world->GetEntityCount(), baseline + ENTITY_COUNT);
+
+    auto memAfterCreate = SampleResources();
+
+    // Tick 100 frames with all entities alive
+    constexpr float DT = 1.0f / 60.0f;
+    std::vector<double> frameTimes;
+    frameTimes.reserve(100);
+
+    for (int f = 0; f < 100; f++)
+    {
+        auto fs = std::chrono::high_resolution_clock::now();
+
+        Spark::FixedTimestepAccumulator::GetInstance().Advance(DT);
+        if (auto* w = EngineContext::Get()->GetWeather())
+            w->Update(DT);
+        if (auto* t = EngineContext::Get()->GetTimeOfDay())
+            t->Update(DT);
+        if (auto* tw = EngineContext::Get()->GetTween())
+            tw->Update(DT);
+        Profiler::GetInstance().BeginFrame();
+        Profiler::GetInstance().EndFrame();
+
+        auto fe = std::chrono::high_resolution_clock::now();
+        frameTimes.push_back(std::chrono::duration<double, std::micro>(fe - fs).count());
+    }
+
+    std::sort(frameTimes.begin(), frameTimes.end());
+    double avgUs = std::accumulate(frameTimes.begin(), frameTimes.end(), 0.0) / frameTimes.size();
+
+    // Destroy all
+    auto destroyStart = std::chrono::high_resolution_clock::now();
+    for (auto e : entities)
+        world->DestroyEntity(e);
+    auto destroyEnd = std::chrono::high_resolution_clock::now();
+    double destroyMs = std::chrono::duration<double, std::milli>(destroyEnd - destroyStart).count();
+
+    EXPECT_EQ(world->GetEntityCount(), baseline);
+
+    auto memAfterDestroy = SampleResources();
+
+    std::cout << "\n=== ADVERSE: 10,000 Entities Alive ===\n";
+    std::cout << "  Create 10k: " << std::fixed << std::setprecision(1) << createMs << " ms\n";
+    std::cout << "  Destroy 10k: " << destroyMs << " ms\n";
+    std::cout << "  Frame avg (100 frames): " << std::setprecision(1) << avgUs << " us\n";
+    std::cout << "  Frame P99: " << frameTimes[99] << " us\n";
+    std::cout << "  RSS after create: " << memAfterCreate.residentKB << " KB\n";
+    std::cout << "  RSS after destroy: " << memAfterDestroy.residentKB << " KB\n" << std::flush;
+
+    EXPECT_TRUE(createMs < 500.0); // < 500ms for 10k entities
+    EXPECT_TRUE(destroyMs < 500.0);
+}
+
+// ============================================================================
+// ADVERSE: Thread contention — max JobSystem pressure
+// ============================================================================
+
+TEST(LoadTest_Adverse_ThreadContention)
+{
+    InitLoadTestEngine();
+    auto& jobs = Spark::JobSystem::Get();
+
+    constexpr int BATCHES = 50;
+    constexpr int JOBS_PER_BATCH = 200;
+
+    std::atomic<int> totalCompleted{0};
+    std::vector<double> batchTimes;
+    batchTimes.reserve(BATCHES);
+
+    for (int b = 0; b < BATCHES; b++)
+    {
+        auto batchStart = std::chrono::high_resolution_clock::now();
+
+        // Fire 200 jobs that all contend on the same atomic
+        std::vector<std::future<void>> futures;
+        futures.reserve(JOBS_PER_BATCH);
+        std::atomic<int> contended{0};
+
+        for (int j = 0; j < JOBS_PER_BATCH; j++)
+        {
+            futures.push_back(jobs.Submit(
+                [&contended, &totalCompleted]()
+                {
+                    // Tight contention: 100 atomic increments per job
+                    for (int k = 0; k < 100; k++)
+                        contended.fetch_add(1, std::memory_order_seq_cst);
+                    totalCompleted.fetch_add(1, std::memory_order_relaxed);
+                }));
+        }
+
+        for (auto& f : futures)
+            f.get();
+
+        auto batchEnd = std::chrono::high_resolution_clock::now();
+        batchTimes.push_back(std::chrono::duration<double, std::micro>(batchEnd - batchStart).count());
+
+        EXPECT_EQ(contended.load(), JOBS_PER_BATCH * 100);
+    }
+
+    std::sort(batchTimes.begin(), batchTimes.end());
+    double avgBatchUs = std::accumulate(batchTimes.begin(), batchTimes.end(), 0.0) / batchTimes.size();
+
+    std::cout << "\n=== ADVERSE: Thread Contention (50 batches x 200 jobs) ===\n";
+    std::cout << "  Total jobs: " << totalCompleted.load() << "/" << (BATCHES * JOBS_PER_BATCH) << "\n";
+    std::cout << "  Batch avg: " << std::fixed << std::setprecision(0) << avgBatchUs << " us\n";
+    std::cout << "  Batch min: " << batchTimes.front() << " us\n";
+    std::cout << "  Batch max: " << batchTimes.back() << " us\n";
+    std::cout << "  Batch P99: " << batchTimes[static_cast<size_t>(batchTimes.size() * 0.99)] << " us\n" << std::flush;
+
+    EXPECT_EQ(totalCompleted.load(), BATCHES * JOBS_PER_BATCH);
+}
+
+// ============================================================================
+// ADVERSE: Rapid state thrashing — weather/time/tween flip-flopping
+// ============================================================================
+
+TEST(LoadTest_Adverse_StateThrashing)
+{
+    InitLoadTestEngine();
+    auto* ctx = EngineContext::Get();
+
+    constexpr int FRAMES = 2000;
+    constexpr float DT = 1.0f / 60.0f;
+
+    auto memBefore = SampleResources();
+    std::vector<double> frameTimes;
+    frameTimes.reserve(FRAMES);
+
+    for (int f = 0; f < FRAMES; f++)
+    {
+        auto fs = std::chrono::high_resolution_clock::now();
+
+        // Thrash weather — switch every single frame
+        if (auto* w = ctx->GetWeather())
+        {
+            auto type = static_cast<Spark::WeatherType>(f % 6);
+            w->SetWeather(type, static_cast<float>(f % 10) / 10.0f, 0.0f);
+            w->Update(DT);
+        }
+
+        // Thrash time — jump randomly every frame
+        if (auto* t = ctx->GetTimeOfDay())
+        {
+            t->SetTimeOfDay(static_cast<float>(f % 24));
+            t->Update(DT);
+        }
+
+        // Thrash tweens — create and immediately cancel
+        if (auto* tw = ctx->GetTween())
+        {
+            static float dummy = 0.0f;
+            auto h = tw->TweenFloat(dummy, 0.0f, 1.0f, 10.0f, Spark::EaseType::Linear);
+            tw->Update(DT);
+            tw->Cancel(h);
+        }
+
+        // Thrash coroutines — start and stop
+        auto& coro = Spark::CoroutineScheduler::GetInstance();
+        coro.StartCoroutine("__thrash_" + std::to_string(f)).Do([]() {});
+        coro.Update(DT);
+
+        auto fe = std::chrono::high_resolution_clock::now();
+        frameTimes.push_back(std::chrono::duration<double, std::micro>(fe - fs).count());
+    }
+
+    auto memAfter = SampleResources();
+    std::sort(frameTimes.begin(), frameTimes.end());
+    double avgUs = std::accumulate(frameTimes.begin(), frameTimes.end(), 0.0) / frameTimes.size();
+
+    int64_t memDeltaKB = static_cast<int64_t>(memAfter.residentKB) - static_cast<int64_t>(memBefore.residentKB);
+
+    std::cout << "\n=== ADVERSE: State Thrashing (2000 frames) ===\n";
+    std::cout << "  Frame avg: " << std::fixed << std::setprecision(1) << avgUs << " us\n";
+    std::cout << "  Frame min: " << frameTimes.front() << " us\n";
+    std::cout << "  Frame max: " << frameTimes.back() << " us\n";
+    std::cout << "  Frame P99: " << frameTimes[static_cast<size_t>(frameTimes.size() * 0.99)] << " us\n";
+    std::cout << "  Memory delta: " << memDeltaKB << " KB\n" << std::flush;
+
+    EXPECT_TRUE(avgUs < 5000.0);
+    EXPECT_TRUE(std::abs(memDeltaKB) < 5120); // < 5MB drift
+}
+
+// ============================================================================
+// SEVERE: Entity flood — 100,000 entities
+// ============================================================================
+
+TEST(LoadTest_Severe_EntityFlood)
+{
+    InitLoadTestEngine();
+    auto* world = EngineContext::Get()->GetWorld();
+    EXPECT_TRUE(world != nullptr);
+    if (!world)
+        return;
+
+    size_t baseline = world->GetEntityCount();
+    constexpr int FLOOD_SIZE = 100000;
+
+    auto memBefore = SampleResources();
+
+    auto createStart = std::chrono::high_resolution_clock::now();
+
+    std::vector<EntityID> entities;
+    entities.reserve(FLOOD_SIZE);
+    for (int i = 0; i < FLOOD_SIZE; i++)
+    {
+        auto e = world->CreateEntity();
+        world->AddComponent<Transform>(e, Transform{});
+        entities.push_back(e);
+    }
+
+    auto createEnd = std::chrono::high_resolution_clock::now();
+    double createMs = std::chrono::duration<double, std::milli>(createEnd - createStart).count();
+
+    auto memPeak = SampleResources();
+    EXPECT_EQ(world->GetEntityCount(), baseline + FLOOD_SIZE);
+
+    // Destroy all
+    auto destroyStart = std::chrono::high_resolution_clock::now();
+    for (auto e : entities)
+        world->DestroyEntity(e);
+    auto destroyEnd = std::chrono::high_resolution_clock::now();
+    double destroyMs = std::chrono::duration<double, std::milli>(destroyEnd - destroyStart).count();
+
+    auto memAfter = SampleResources();
+    EXPECT_EQ(world->GetEntityCount(), baseline);
+
+    std::cout << "\n=== SEVERE: 100,000 Entity Flood ===\n";
+    std::cout << "  Create 100k: " << std::fixed << std::setprecision(1) << createMs << " ms (" << std::setprecision(3)
+              << (createMs / FLOOD_SIZE * 1000.0) << " us/entity)\n";
+    std::cout << "  Destroy 100k: " << std::setprecision(1) << destroyMs << " ms (" << std::setprecision(3)
+              << (destroyMs / FLOOD_SIZE * 1000.0) << " us/entity)\n";
+    std::cout << "  RSS before: " << memBefore.residentKB << " KB\n";
+    std::cout << "  RSS peak:   " << memPeak.residentKB << " KB\n";
+    std::cout << "  RSS after:  " << memAfter.residentKB << " KB\n" << std::flush;
+
+    EXPECT_TRUE(createMs < 5000.0); // < 5 seconds
+    EXPECT_TRUE(destroyMs < 5000.0);
+}
+
+// ============================================================================
+// SEVERE: EventBus storm — 100k events x 50 subscribers
+// ============================================================================
+
+TEST(LoadTest_Severe_EventBusStorm)
+{
+    Spark::EventBus bus;
+
+    struct StormEvent
+    {
+        int id;
+        float payload;
+    };
+
+    std::atomic<int> totalDelivered{0};
+
+    // 50 subscribers
+    std::vector<Spark::SubscriptionHandle> handles;
+    for (int i = 0; i < 50; i++)
+    {
+        handles.push_back(bus.Subscribe<StormEvent>([&totalDelivered](const StormEvent&)
+                                                    { totalDelivered.fetch_add(1, std::memory_order_relaxed); }));
+    }
+
+    constexpr int NUM_EVENTS = 100000;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < NUM_EVENTS; i++)
+    {
+        bus.Publish(StormEvent{i, static_cast<float>(i) * 0.01f});
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+
+    int expected = NUM_EVENTS * 50;
+
+    std::cout << "\n=== SEVERE: EventBus Storm (100k events x 50 subscribers) ===\n";
+    std::cout << "  Total deliveries: " << totalDelivered.load() << "/" << expected << "\n";
+    std::cout << "  Total time: " << std::fixed << std::setprecision(1) << totalMs << " ms\n";
+    std::cout << "  Per event: " << std::setprecision(3) << (totalMs / NUM_EVENTS * 1000.0) << " us\n";
+    std::cout << "  Throughput: " << std::setprecision(0) << (totalDelivered.load() / (totalMs / 1000.0))
+              << " deliveries/sec\n"
+              << std::flush;
+
+    EXPECT_EQ(totalDelivered.load(), expected);
+    EXPECT_TRUE(totalMs < 5000.0); // < 5 seconds for 5M deliveries
+}
+
+// ============================================================================
+// SEVERE: JobSystem flood — 10,000 async jobs
+// ============================================================================
+
+TEST(LoadTest_Severe_JobSystemFlood)
+{
+    InitLoadTestEngine();
+    auto& jobs = Spark::JobSystem::Get();
+
+    constexpr int NUM_JOBS = 10000;
+    std::atomic<int> counter{0};
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    std::vector<std::future<void>> futures;
+    futures.reserve(NUM_JOBS);
+    for (int i = 0; i < NUM_JOBS; i++)
+    {
+        futures.push_back(jobs.Submit(
+            [&counter]()
+            {
+                // Real work: compute sum
+                volatile int sum = 0;
+                for (int k = 0; k < 1000; k++)
+                    sum += k;
+                counter.fetch_add(1, std::memory_order_relaxed);
+            }));
+    }
+
+    for (auto& f : futures)
+        f.get();
+
+    auto end = std::chrono::high_resolution_clock::now();
+    double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+
+    std::cout << "\n=== SEVERE: JobSystem Flood (10,000 jobs) ===\n";
+    std::cout << "  Completed: " << counter.load() << "/" << NUM_JOBS << "\n";
+    std::cout << "  Total time: " << std::fixed << std::setprecision(1) << totalMs << " ms\n";
+    std::cout << "  Per job: " << std::setprecision(2) << (totalMs / NUM_JOBS * 1000.0) << " us\n";
+    std::cout << "  Throughput: " << std::setprecision(0) << (NUM_JOBS / (totalMs / 1000.0)) << " jobs/sec\n"
+              << std::flush;
+
+    EXPECT_EQ(counter.load(), NUM_JOBS);
+}
+
+// ============================================================================
+// SEVERE: Save/load under pressure — rapid save/load cycling
+// ============================================================================
+
+TEST(LoadTest_Severe_SaveLoadCycling)
+{
+    InitLoadTestEngine();
+    auto* save = EngineContext::Get()->GetSaveSystem();
+    auto* world = EngineContext::Get()->GetWorld();
+    EXPECT_TRUE(save != nullptr && world != nullptr);
+    if (!save || !world)
+        return;
+
+    constexpr int CYCLES = 50;
+    std::vector<double> saveTimes, loadTimes;
+    saveTimes.reserve(CYCLES);
+    loadTimes.reserve(CYCLES);
+
+    // Create some entities to serialize
+    std::vector<EntityID> sceneEntities;
+    for (int i = 0; i < 100; i++)
+    {
+        auto e = world->CreateEntity("__save_test_" + std::to_string(i));
+        world->AddComponent<Transform>(e, Transform{});
+        world->AddComponent<HealthComponent>(e, HealthComponent{100.0f, 100.0f});
+        sceneEntities.push_back(e);
+    }
+
+    for (int c = 0; c < CYCLES; c++)
+    {
+        Spark::SaveMetadata meta;
+        meta.saveName = "stress_" + std::to_string(c);
+
+        auto saveStart = std::chrono::high_resolution_clock::now();
+        bool saved = save->Save("__stress_slot_" + std::to_string(c % 5), *world, meta);
+        auto saveEnd = std::chrono::high_resolution_clock::now();
+        saveTimes.push_back(std::chrono::duration<double, std::micro>(saveEnd - saveStart).count());
+
+        if (saved)
+        {
+            auto loadStart = std::chrono::high_resolution_clock::now();
+            save->Load("__stress_slot_" + std::to_string(c % 5), *world);
+            auto loadEnd = std::chrono::high_resolution_clock::now();
+            loadTimes.push_back(std::chrono::duration<double, std::micro>(loadEnd - loadStart).count());
+        }
+    }
+
+    // Clean up
+    for (int i = 0; i < 5; i++)
+        save->DeleteSave("__stress_slot_" + std::to_string(i));
+    for (auto e : sceneEntities)
+    {
+        if (world->GetRegistry().valid(e))
+            world->DestroyEntity(e);
+    }
+
+    std::sort(saveTimes.begin(), saveTimes.end());
+    std::sort(loadTimes.begin(), loadTimes.end());
+    double avgSaveUs = std::accumulate(saveTimes.begin(), saveTimes.end(), 0.0) / saveTimes.size();
+    double avgLoadUs =
+        loadTimes.empty() ? 0.0 : std::accumulate(loadTimes.begin(), loadTimes.end(), 0.0) / loadTimes.size();
+
+    std::cout << "\n=== SEVERE: Save/Load Cycling (50 cycles, 100 entities) ===\n";
+    std::cout << "  Save avg: " << std::fixed << std::setprecision(0) << avgSaveUs << " us\n";
+    std::cout << "  Save max: " << saveTimes.back() << " us\n";
+    std::cout << "  Load avg: " << avgLoadUs << " us\n";
+    if (!loadTimes.empty())
+        std::cout << "  Load max: " << loadTimes.back() << " us\n";
+    std::cout << std::flush;
+}
+
+// ============================================================================
+// SEVERE: Network rapid connect/disconnect cycling
+// ============================================================================
+
+TEST(LoadTest_Severe_NetworkChurn)
+{
+    auto& net = Spark::Net::NetworkManager::GetInstance();
+
+    constexpr int CYCLES = 50;
+    int successCount = 0;
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (int i = 0; i < CYCLES; i++)
+    {
+        uint16_t port = static_cast<uint16_t>(55000 + (i % 100));
+        if (net.StartServer(port, 2))
+        {
+            net.Update(0.016f);
+            net.StopServer();
+            successCount++;
+        }
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+
+    std::cout << "\n=== SEVERE: Network Churn (50 start/stop cycles) ===\n";
+    std::cout << "  Successful: " << successCount << "/" << CYCLES << "\n";
+    std::cout << "  Total time: " << std::fixed << std::setprecision(1) << totalMs << " ms\n";
+    std::cout << "  Per cycle: " << std::setprecision(2) << (totalMs / CYCLES) << " ms\n" << std::flush;
+
+    EXPECT_TRUE(successCount >= CYCLES - 5);
+    EXPECT_TRUE(net.GetRole() == Spark::Net::NetworkRole::None);
+}
