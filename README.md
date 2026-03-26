@@ -2,6 +2,7 @@
 
 [![Build SparkEngine](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
 [![Release](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml)
+[![Debug](https://github.com/Krilliac/SparkEngine/actions/workflows/debug.yml/badge.svg)](https://github.com/Krilliac/SparkEngine/actions/workflows/debug.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![Downloads](https://img.shields.io/github/downloads/Krilliac/SparkEngine/total?color=brightgreen)](https://github.com/Krilliac/SparkEngine/releases)
