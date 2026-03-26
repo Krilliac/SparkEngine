@@ -77,6 +77,15 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* devic
     if (FAILED(hr))
         return hr;
 
+    // Validate dimensions before allocation to prevent integer overflow
+    if (width == 0 || height == 0)
+        return E_INVALIDARG;
+
+    // Check for multiplication overflow: width * 4 * height
+    constexpr UINT kMaxTextureBytes = 256u * 1024u * 1024u; // 256 MB sanity limit
+    if (width > kMaxTextureBytes / 4 || (width * 4) > kMaxTextureBytes / height)
+        return E_OUTOFMEMORY;
+
     // Read pixel data
     UINT stride = width * 4;
     UINT bufferSize = stride * height;
@@ -99,7 +108,10 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* devic
 
 HRESULT Texture::CreateFromData(const void* data, size_t dataSize, ID3D11Device* device)
 {
-    if (!device || !data)
+    if (!device || !data || dataSize == 0)
+        return E_INVALIDARG;
+
+    if (m_desc.width == 0 || m_desc.height == 0)
         return E_INVALIDARG;
 
     D3D11_TEXTURE2D_DESC texDesc = {};

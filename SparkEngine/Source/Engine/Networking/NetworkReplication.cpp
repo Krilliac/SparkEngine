@@ -183,6 +183,11 @@ namespace Spark::Net
     void NetworkManager::DeserializeEntityState(NetBuffer& inBuffer)
     {
         uint32_t networkID = inBuffer.ReadUint32();
+        if (inBuffer.HasError())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "DeserializeEntityState: malformed packet (no networkID)");
+            return;
+        }
 
         std::lock_guard<std::mutex> lock(m_replicationMutex);
         auto it = m_replicatedEntities.find(networkID);
@@ -197,7 +202,13 @@ namespace Spark::Net
             placeholder.velocity = inBuffer.ReadVector3();
             // Skip remaining property data
             uint16_t propCount = inBuffer.ReadUint16();
-            for (uint16_t i = 0; i < propCount; ++i)
+            if (inBuffer.HasError())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "DeserializeEntityState: truncated packet for placeholder netID=%u", networkID);
+                return;
+            }
+            for (uint16_t i = 0; i < propCount && !inBuffer.HasError(); ++i)
             {
                 inBuffer.ReadString(); // name
                 inBuffer.ReadUint8();  // type
@@ -215,11 +226,25 @@ namespace Spark::Net
         entity.lastUpdateTime = m_serverTime;
 
         uint16_t propCount = inBuffer.ReadUint16();
-        for (uint16_t i = 0; i < propCount; ++i)
+        if (inBuffer.HasError())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "DeserializeEntityState: truncated packet for netID=%u",
+                           networkID);
+            return;
+        }
+        for (uint16_t i = 0; i < propCount && !inBuffer.HasError(); ++i)
         {
             std::string propName = inBuffer.ReadString();
             uint8_t propType = inBuffer.ReadUint8();
             (void)propType;
+
+            if (inBuffer.HasError())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "DeserializeEntityState: buffer error reading property %u/%u for netID=%u", i, propCount,
+                               networkID);
+                break;
+            }
 
             // Find matching property and deserialize
             for (auto& prop : entity.properties)

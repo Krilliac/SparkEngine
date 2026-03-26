@@ -228,6 +228,13 @@ namespace Spark::Gameplay
                 cast.phase = CastPhase::Failed;
             }
 
+            // Skip all phases that require a valid definition when def is null
+            if (!def && cast.phase != CastPhase::Completed && cast.phase != CastPhase::Failed &&
+                cast.phase != CastPhase::Interrupted)
+            {
+                cast.phase = CastPhase::Failed;
+            }
+
             switch (cast.phase)
             {
             case CastPhase::Casting:

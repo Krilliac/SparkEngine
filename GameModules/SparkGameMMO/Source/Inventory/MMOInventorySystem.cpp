@@ -170,6 +170,8 @@ namespace MMO
         float addWeight = def->weight * count;
         if (currentWeight + addWeight > inv.maxWeight)
         {
+            if (def->weight <= 0.0f)
+                return 0; // Zero-weight items can't reduce over-weight
             int fittable = static_cast<int>((inv.maxWeight - currentWeight) / def->weight);
             if (fittable <= 0)
                 return 0;
@@ -265,6 +267,8 @@ namespace MMO
             return results;
 
         const auto& table = it->second;
+        if (table.totalWeight <= 0.0f)
+            return results;
         std::uniform_real_distribution<float> dist(0.0f, table.totalWeight);
 
         for (int r = 0; r < rolls; ++r)

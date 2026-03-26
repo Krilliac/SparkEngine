@@ -176,14 +176,16 @@ namespace SparkEditor
             return false;
 
         uint32_t magic = 0;
-        file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+        if (!file.read(reinterpret_cast<char*>(&magic), sizeof(magic)))
+            return false;
         if (magic == SCENE_FILE_MAGIC)
             return true;
 
         // Check for JSON format
         file.seekg(0);
         char firstChar = 0;
-        file.read(&firstChar, 1);
+        if (!file.read(&firstChar, 1))
+            return false;
         return firstChar == '{';
     }
 

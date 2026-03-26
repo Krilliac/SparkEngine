@@ -9,7 +9,6 @@
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
-#include <cassert>
 
 namespace Spark::RHI
 {
@@ -75,6 +74,12 @@ namespace Spark::RHI
 
         m_device->BeginFrame();
         m_commandList = m_device->GetImmediateCommandList();
+        if (!m_commandList)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "RHIAdapter::BeginFrame -- GetImmediateCommandList returned null");
+            return;
+        }
         m_commandList->Begin();
         m_frameActive = true;
     }
@@ -83,6 +88,12 @@ namespace Spark::RHI
     {
         SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, m_frameActive, "RHIAdapter::EndFrame -- no frame in progress");
 
+        if (!m_commandList)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "RHIAdapter::EndFrame -- command list is null");
+            m_frameActive = false;
+            return;
+        }
         m_commandList->End();
         m_device->EndFrame();
         m_frameActive = false;
@@ -94,13 +105,13 @@ namespace Spark::RHI
 
     void RHIAdapter::BeginPass(const char* name)
     {
-        assert(m_commandList && "RHIAdapter::BeginPass -- no active command list");
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->BeginEvent(name);
     }
 
     void RHIAdapter::EndPass()
     {
-        assert(m_commandList && "RHIAdapter::EndPass -- no active command list");
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->EndEvent();
     }
 
@@ -110,7 +121,7 @@ namespace Spark::RHI
 
     void RHIAdapter::SetRenderTargets(std::span<IRHITexture* const> renderTargets, IRHITexture* depthStencil)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
 
         auto count = static_cast<uint32_t>(renderTargets.size());
         m_commandList->SetRenderTargets(renderTargets.data(), count, depthStencil);
@@ -118,13 +129,13 @@ namespace Spark::RHI
 
     void RHIAdapter::ClearRenderTarget(IRHITexture* target, const float color[4])
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->ClearRenderTarget(target, color);
     }
 
     void RHIAdapter::ClearDepthStencil(IRHITexture* target, float depth, uint8_t stencil)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->ClearDepthStencil(target, depth, stencil);
     }
 
@@ -134,7 +145,7 @@ namespace Spark::RHI
 
     void RHIAdapter::SetViewport(float x, float y, float width, float height, float minDepth, float maxDepth)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
 
         RHIViewport vp{};
         vp.x = x;
@@ -153,7 +164,7 @@ namespace Spark::RHI
 
     void RHIAdapter::SetScissorRect(const AdapterScissorRect& rect)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
 
         RHIScissorRect sr{};
         sr.left = rect.left;
@@ -179,13 +190,13 @@ namespace Spark::RHI
 
     void RHIAdapter::SetPipelineState(IRHIPipelineState* pso)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->SetPipelineState(pso);
     }
 
     void RHIAdapter::SetPrimitiveTopology(RHIPrimitiveTopology topology)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->SetPrimitiveTopology(topology);
     }
 
@@ -195,31 +206,31 @@ namespace Spark::RHI
 
     void RHIAdapter::BindVertexBuffer(IRHIBuffer* buffer, uint32_t slot, uint32_t offset)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->SetVertexBuffer(buffer, slot, offset);
     }
 
     void RHIAdapter::BindIndexBuffer(IRHIBuffer* buffer, uint32_t offset)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->SetIndexBuffer(buffer, offset);
     }
 
     void RHIAdapter::BindConstantBuffer(RHIShaderStage stage, uint32_t slot, IRHIBuffer* buffer)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->SetConstantBuffer(stage, slot, buffer);
     }
 
     void RHIAdapter::BindTexture(RHIShaderStage stage, uint32_t slot, IRHITexture* texture)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->SetShaderResource(stage, slot, texture);
     }
 
     void RHIAdapter::BindSampler(RHIShaderStage stage, uint32_t slot, IRHISampler* sampler)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->SetSampler(stage, slot, sampler);
     }
 
@@ -229,27 +240,27 @@ namespace Spark::RHI
 
     void RHIAdapter::Draw(uint32_t vertexCount, uint32_t startVertex)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->Draw(vertexCount, startVertex);
     }
 
     void RHIAdapter::DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->DrawIndexed(indexCount, startIndex, baseVertex);
     }
 
     void RHIAdapter::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex,
                                    uint32_t startInstance)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
     }
 
     void RHIAdapter::DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, uint32_t startIndex,
                                           int32_t baseVertex, uint32_t startInstance)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
     }
 
@@ -259,7 +270,7 @@ namespace Spark::RHI
 
     void RHIAdapter::Dispatch(uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->Dispatch(groupsX, groupsY, groupsZ);
     }
 
@@ -269,19 +280,19 @@ namespace Spark::RHI
 
     void RHIAdapter::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->DrawInstancedIndirect(argsBuffer, argsOffset);
     }
 
     void RHIAdapter::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->DrawIndexedInstancedIndirect(argsBuffer, argsOffset);
     }
 
     void RHIAdapter::DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
     {
-        assert(m_commandList);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_commandList);
         m_commandList->DispatchIndirect(argsBuffer, argsOffset);
     }
 
@@ -291,7 +302,7 @@ namespace Spark::RHI
 
     IRHIBuffer* RHIAdapter::CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         RHIBufferDesc desc{};
         desc.size = size;
@@ -310,7 +321,7 @@ namespace Spark::RHI
 
     IRHIBuffer* RHIAdapter::CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         RHIBufferDesc desc{};
         desc.size = size;
@@ -329,7 +340,7 @@ namespace Spark::RHI
 
     IRHIBuffer* RHIAdapter::CreateConstantBuffer(uint64_t size)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         RHIBufferDesc desc{};
         desc.size = size;
@@ -348,7 +359,7 @@ namespace Spark::RHI
 
     IRHIBuffer* RHIAdapter::CreateStructuredBuffer(const void* data, uint64_t size, uint32_t stride)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         RHIBufferDesc desc{};
         desc.size = size;
@@ -372,7 +383,7 @@ namespace Spark::RHI
     IRHITexture* RHIAdapter::CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format, RHITextureUsage usage,
                                              const void* initialData)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         RHITextureDesc desc{};
         desc.width = width;
@@ -399,7 +410,7 @@ namespace Spark::RHI
 
     IRHITexture* RHIAdapter::CreateDepthStencil(uint32_t width, uint32_t height, PixelFormat format)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         RHITextureDesc desc{};
         desc.width = width;
@@ -424,7 +435,7 @@ namespace Spark::RHI
 
     IRHITexture* RHIAdapter::CreateRenderTarget(uint32_t width, uint32_t height, PixelFormat format)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         RHITextureDesc desc{};
         desc.width = width;
@@ -451,7 +462,7 @@ namespace Spark::RHI
 
     IRHISampler* RHIAdapter::CreateSampler(const RHISamplerDesc& desc)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         auto sampler = m_device->CreateSampler(desc);
         IRHISampler* raw = sampler.get();
@@ -467,7 +478,7 @@ namespace Spark::RHI
     IRHIPipelineState* RHIAdapter::CreateGraphicsPipeline(const RHIPipelineStateDesc& desc, IRHIShader* vertexShader,
                                                           IRHIShader* pixelShader)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         auto pso = m_device->CreatePipelineState(desc, vertexShader, pixelShader);
         IRHIPipelineState* raw = pso.get();
@@ -482,7 +493,7 @@ namespace Spark::RHI
 
     IRHIShader* RHIAdapter::CreateShader(const RHIShaderDesc& desc)
     {
-        assert(m_device);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
 
         auto shader = m_device->CreateShader(desc);
         IRHIShader* raw = shader.get();
@@ -497,19 +508,22 @@ namespace Spark::RHI
 
     void RHIAdapter::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
     {
-        assert(m_device && buffer);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_device);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, buffer);
         m_device->UpdateBuffer(buffer, data, size, offset);
     }
 
     void* RHIAdapter::MapBuffer(IRHIBuffer* buffer)
     {
-        assert(m_device && buffer);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, m_device, nullptr);
+        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Graphics, buffer, nullptr);
         return m_device->MapBuffer(buffer);
     }
 
     void RHIAdapter::UnmapBuffer(IRHIBuffer* buffer)
     {
-        assert(m_device && buffer);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, m_device);
+        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Graphics, buffer);
         m_device->UnmapBuffer(buffer);
     }
 
@@ -575,7 +589,7 @@ namespace Spark::RHI
 
     const RHIDeviceCapabilities& RHIAdapter::GetCapabilities() const
     {
-        assert(m_device);
+        SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, m_device);
         return m_device->GetCapabilities();
     }
 
@@ -590,7 +604,7 @@ namespace Spark::RHI
 
     const RHIStatistics& RHIAdapter::GetStatistics() const
     {
-        assert(m_device);
+        SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, m_device);
         return m_device->GetStatistics();
     }
 
