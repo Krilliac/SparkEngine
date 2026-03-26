@@ -438,16 +438,18 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*158 test files, 1811+ test cases*
+*169 test files, 1988+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
 | `TestAIBehaviorTree` | 16 |
+| `TestAIStress` | 18 |
 | `TestAbilitySystem` | 15 |
 | `TestAlignedHeapArray` | 6 |
 | `TestAngleUtils` | 10 |
 | `TestAnimationCompression` | 6 |
 | `TestAnimationRetargeting` | 9 |
+| `TestAnimationStress` | 12 |
 | `TestAnimationSystem` | 17 |
 | `TestAsyncDatabase` | 23 |
 | `TestAudioEngine` | 18 |
@@ -476,6 +478,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestCoverSystem` | 4 |
 | `TestDatablockRegistry` | 10 |
 | `TestDayNightCycle` | 10 |
+| `TestDebugHookManager` | 27 |
 | `TestDebugTools` | 31 |
 | `TestDedicatedServer` | 27 |
 | `TestDeferredDeletion` | 6 |
@@ -483,11 +486,13 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestDelegate` | 9 |
 | `TestDeltaSmoother` | 10 |
 | `TestDestructionSystem` | 5 |
+| `TestDialogueStress` | 10 |
 | `TestDialogueSystem` | 4 |
 | `TestDirtyRectTracker` | 4 |
 | `TestDrawIndirect` | 6 |
 | `TestDynamicResponseSystem` | 6 |
 | `TestECSIntegration` | 9 |
+| `TestECSStress` | 10 |
 | `TestECSWorld` | 11 |
 | `TestEngineContext` | 18 |
 | `TestEntityArchetype` | 6 |
@@ -506,8 +511,10 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestFrustumCulling` | 11 |
 | `TestGPUPerfCounters` | 2 |
 | `TestGameMode` | 5 |
+| `TestGameplayStress` | 15 |
 | `TestGraphicsEngine` | 10 |
 | `TestGraphicsIntegration` | 27 |
+| `TestGraphicsStress` | 15 |
 | `TestGroupAI` | 5 |
 | `TestHash` | 18 |
 | `TestHybridRT` | 20 |
@@ -546,6 +553,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestPerformanceStats` | 10 |
 | `TestPhysicsComponents` | 22 |
 | `TestPhysicsInterpolation` | 8 |
+| `TestPhysicsStress` | 16 |
 | `TestPhysicsSystem` | 29 |
 | `TestPlayModeManager` | 33 |
 | `TestPoseModifier` | 4 |
@@ -574,6 +582,8 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestScriptHookManager` | 15 |
 | `TestSequencer` | 10 |
 | `TestSerializer` | 17 |
+| `TestServerLiveMockClient` | 10 |
+| `TestServerMockClient` | 31 |
 | `TestShaderGraphCompiler` | 5 |
 | `TestShadowAtlas` | 7 |
 | `TestSkyAtmosphere` | 5 |
@@ -595,6 +605,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestUISystem` | 6 |
 | `TestUUID` | 12 |
 | `TestUpscalingSystem` | 10 |
+| `TestUtilsStress` | 13 |
 | `TestVersionedHandle` | 9 |
 | `TestWaterRenderer` | 6 |
 | `TestWeaponSystem` | 18 |
