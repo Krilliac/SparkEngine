@@ -44,6 +44,12 @@ using Microsoft::WRL::ComPtr;
 void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
                                    const std::vector<GameObject*>& objects)
 {
+    if (!m_context)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "RenderForward: device context is null, skipping");
+        return;
+    }
+
     // Update per-frame constants at the start of rendering
     if (m_basicFrameConstantBuffer)
     {
@@ -100,6 +106,30 @@ void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& p
 void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
                                     const std::vector<GameObject*>& objects)
 {
+    if (!m_context)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "RenderDeferred: device context is null, skipping");
+        return;
+    }
+
+    // Verify G-Buffer targets are valid before attempting deferred rendering
+    bool gBufferValid = true;
+    for (int i = 0; i < 4; ++i)
+    {
+        if (!m_gBufferRTVs[i])
+        {
+            gBufferValid = false;
+            break;
+        }
+    }
+    if (!gBufferValid)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "RenderDeferred: G-Buffer render targets not created, falling back to forward");
+        RenderForward(viewMatrix, projMatrix, objects);
+        return;
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Starting deferred rendering pass", L"INFO");
 
     // Phase 1: Fill G-Buffer
@@ -221,6 +251,12 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
 void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
                                        const std::vector<GameObject*>& objects)
 {
+    if (!m_context)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "RenderForwardPlus: device context is null, skipping");
+        return;
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Starting Forward+ rendering pass", L"INFO");
 
     // Phase 1: Depth pre-pass
@@ -294,7 +330,18 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
 void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix,
                                  const XMMATRIX& projMatrix)
 {
+    if (!m_context)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "FillGBuffer: device context is null, skipping");
+        return;
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Filling G-Buffer for deferred rendering", L"INFO");
+
+    // Bind G-Buffer render targets for the geometry pass
+    ID3D11RenderTargetView* gBufferRTVs[4] = {m_gBufferRTVs[0].Get(), m_gBufferRTVs[1].Get(), m_gBufferRTVs[2].Get(),
+                                              m_gBufferRTVs[3].Get()};
+    m_context->OMSetRenderTargets(4, gBufferRTVs, m_depthStencilView.Get());
 
     uint32_t gBufferDrawCalls = 0;
     uint32_t totalTriangles = 0;
@@ -594,6 +641,10 @@ void GraphicsEngine::RenderPostProcessing()
     if (m_postProcessing)
     {
         float deltaTime = m_statistics.frameTime / 1000.0f; // ms -> seconds
+        if (deltaTime < 0.0f || deltaTime > 1.0f)
+        {
+            deltaTime = std::clamp(deltaTime, 0.0f, 1.0f);
+        }
         m_postProcessing->Process(deltaTime);
         m_postProcessing->Render();
     }

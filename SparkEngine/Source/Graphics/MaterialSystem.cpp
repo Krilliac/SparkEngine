@@ -269,7 +269,7 @@ std::shared_ptr<Material> MaterialSystem::CreateMaterialInstance(const std::stri
                                                                  const std::string& instanceName)
 {
     auto templateMat = GetMaterial(templateName);
-    if (!templateMat || templateMat == m_defaultMaterial)
+    if (!templateMat || (m_defaultMaterial && templateMat == m_defaultMaterial))
     {
         Spark::SimpleConsole::GetInstance().LogError("CreateMaterialInstance: template material not found: " +
                                                      templateName);
@@ -1184,7 +1184,7 @@ MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) 
 std::vector<std::string> MaterialSystem::GetShaderPermutation(const std::string& name) const
 {
     auto material = GetMaterial(name);
-    if (material && material != m_defaultMaterial)
+    if (material && (!m_defaultMaterial || material != m_defaultMaterial))
     {
         return material->GetShaderPermutation();
     }

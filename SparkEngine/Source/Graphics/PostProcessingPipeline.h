@@ -82,11 +82,27 @@ namespace Spark::Graphics
         /** @brief Render the final result to the currently bound render target */
         void Render();
 
-        /** @brief Handle viewport resize */
+        /** @brief Handle viewport resize, recreating GPU targets if needed */
         void Resize(uint32_t width, uint32_t height)
         {
+            if (width == 0 || height == 0)
+            {
+                return;
+            }
+
+            if (m_width == width && m_height == height)
+            {
+                return;
+            }
+
             m_width = width;
             m_height = height;
+
+            // Recreate ping-pong targets at new resolution
+            if (m_initialized && m_device)
+            {
+                CreatePingPongTargets();
+            }
         }
 
         // ---- Effect Enable/Disable ----

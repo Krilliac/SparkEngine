@@ -15,12 +15,32 @@ namespace Spark::Graphics
     void DynamicQualityScaler::Initialize(const DynamicQualityThresholds& thresholds)
     {
         m_thresholds = thresholds;
-        m_currentScale = thresholds.maxScale;
+
+        // Validate thresholds to prevent divide-by-zero or nonsensical behavior
+        if (m_thresholds.targetFPS <= 0.0f)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "DynamicQualityScaler: invalid targetFPS %.1f, defaulting to 60", m_thresholds.targetFPS);
+            m_thresholds.targetFPS = 60.0f;
+        }
+
+        if (m_thresholds.minScale >= m_thresholds.maxScale)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "DynamicQualityScaler: minScale (%.2f) >= maxScale (%.2f), swapping", m_thresholds.minScale,
+                           m_thresholds.maxScale);
+            std::swap(m_thresholds.minScale, m_thresholds.maxScale);
+        }
+
+        m_thresholds.minScale = std::max(m_thresholds.minScale, 0.1f);
+        m_thresholds.maxScale = std::min(m_thresholds.maxScale, 2.0f);
+
+        m_currentScale = m_thresholds.maxScale;
         Reset();
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Graphics,
-                       "DynamicQualityScaler initialized (targetFPS=%.0f, scale=[%.2f, %.2f])", thresholds.targetFPS,
-                       thresholds.minScale, thresholds.maxScale);
+                       "DynamicQualityScaler initialized (targetFPS=%.0f, scale=[%.2f, %.2f])", m_thresholds.targetFPS,
+                       m_thresholds.minScale, m_thresholds.maxScale);
     }
 
     void DynamicQualityScaler::RecordFrameTime(float deltaTimeSec)

@@ -91,6 +91,35 @@ namespace Spark::Graphics
     void StandardPipelineBuilder::Build(RenderGraph& graph)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+
+        // Validate configuration
+        if (m_config.renderWidth == 0 || m_config.renderHeight == 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "RenderGraphBuilder: invalid render dimensions (%ux%u)",
+                            m_config.renderWidth, m_config.renderHeight);
+            return;
+        }
+
+        if (m_config.renderScale <= 0.0f || m_config.renderScale > 4.0f)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "RenderGraphBuilder: render scale %.2f out of range, clamping to [0.1, 4.0]",
+                           m_config.renderScale);
+            m_config.renderScale = std::clamp(m_config.renderScale, 0.1f, 4.0f);
+        }
+
+        // Warn about missing callbacks (passes will be no-ops without them)
+        if (!m_callbacks.lightingExecute)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "RenderGraphBuilder: no lighting callback set — LightingPass will be a no-op");
+        }
+        if (m_config.shadowsEnabled && !m_callbacks.shadowExecute)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "RenderGraphBuilder: shadows enabled but no shadow callback set");
+        }
+
         SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderGraphBuilder: building pipeline (%ux%u, scale=%.2f)",
                         m_config.renderWidth, m_config.renderHeight, m_config.renderScale);
 
