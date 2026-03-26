@@ -1,4 +1,4 @@
-name: Release Builds
+name: Publish Builds
 
 on:
   push:
@@ -9,13 +9,22 @@ on:
         description: 'Release tag (e.g. v1.0.0). Leave empty for rolling "latest" release.'
         required: false
         type: string
+      build_configs:
+        description: 'Which build configurations to publish'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - release
+          - debug
 
 permissions:
   contents: write
 
 jobs:
   # ===========================================================================
-  # Compute release metadata shared by all jobs
+  # Compute release metadata and build matrix shared by all jobs
   # ===========================================================================
   prepare:
     runs-on: ubuntu-latest
@@ -23,6 +32,8 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       tag: ${{ steps.meta.outputs.tag }}
       is_versioned: ${{ steps.meta.outputs.is_versioned }}
+      configs: ${{ steps.matrix.outputs.configs }}
+      build_type: ${{ steps.matrix.outputs.build_type }}
     steps:
     - name: Compute release metadata
       id: meta
@@ -43,15 +54,30 @@ jobs:
           echo "is_versioned=false" >> "$GITHUB_OUTPUT"
         fi
 
+    - name: Determine build configurations
+      id: matrix
+      run: |
+        # Default to 'both' for tag pushes, use input for workflow_dispatch
+        BUILD_CONFIGS="${{ inputs.build_configs || 'both' }}"
+        echo "build_type=$BUILD_CONFIGS" >> "$GITHUB_OUTPUT"
+
+        if [[ "$BUILD_CONFIGS" == "both" ]]; then
+          echo 'configs=["Debug","Release"]' >> "$GITHUB_OUTPUT"
+        elif [[ "$BUILD_CONFIGS" == "release" ]]; then
+          echo 'configs=["Release"]' >> "$GITHUB_OUTPUT"
+        else
+          echo 'configs=["Debug"]' >> "$GITHUB_OUTPUT"
+        fi
+
   # ===========================================================================
-  # Windows Build — MSVC VS 2022, Debug + Release
+  # Windows Build — MSVC VS 2022
   # ===========================================================================
   build-windows:
     needs: [prepare]
     runs-on: windows-latest
     strategy:
       matrix:
-        config: [Debug, Release]
+        config: ${{ fromJson(needs.prepare.outputs.configs) }}
 
     steps:
     - name: Checkout repository
@@ -63,10 +89,13 @@ jobs:
       uses: microsoft/setup-msbuild@v3
 
     - name: Configure CMake
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=OFF
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
 
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel
+
+    - name: Run Tests
+      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
 
     - name: Package artifacts
       shell: pwsh
@@ -88,14 +117,14 @@ jobs:
         retention-days: 7
 
   # ===========================================================================
-  # Linux Build — GCC, Debug + Release
+  # Linux Build — GCC
   # ===========================================================================
   build-linux:
     needs: [prepare]
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        config: [Debug, Release]
+        config: ${{ fromJson(needs.prepare.outputs.configs) }}
 
     steps:
     - name: Checkout repository
@@ -112,12 +141,18 @@ jobs:
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
-          -DBUILD_TESTS=OFF \
+          -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc \
           -DCMAKE_CXX_COMPILER=g++
 
     - name: Build
       run: cmake --build build --parallel $(nproc)
+
+    - name: Run Tests
+      run: |
+        cd build
+        ctest --output-on-failure
+        if [ -f bin/SparkTests ]; then ./bin/SparkTests; fi
 
     - name: Package artifacts
       run: |
@@ -153,61 +188,88 @@ jobs:
       with:
         path: release-assets
 
-    - name: Flatten assets to root
+    - name: Collect release assets
+      id: assets
       run: |
+        # Flatten all artifacts to current directory
         find release-assets -type f \( -name "*.zip" -o -name "*.tar.gz" \) \
           -exec cp {} . \;
+
+        # Build the file list and downloads table dynamically
+        FILES=""
+        TABLE="| Asset | Platform | Config |"$'\n'"|---|---|---|"
+
+        for config in Debug Release; do
+          WIN="SparkEngine-Windows-${config}.zip"
+          LIN="SparkEngine-Linux-${config}.tar.gz"
+
+          if [ -f "$WIN" ]; then
+            FILES="${FILES}${WIN}"$'\n'
+            TABLE="${TABLE}"$'\n'"| \`${WIN}\` | Windows (VS 2022 x64) | ${config} |"
+          fi
+          if [ -f "$LIN" ]; then
+            FILES="${FILES}${LIN}"$'\n'
+            TABLE="${TABLE}"$'\n'"| \`${LIN}\` | Linux (GCC, ubuntu-24.04) | ${config} |"
+          fi
+        done
+
+        # Write multiline outputs
+        {
+          echo "files<<FILESEOF"
+          echo "$FILES"
+          echo "FILESEOF"
+        } >> "$GITHUB_OUTPUT"
+
+        {
+          echo "table<<TABLEEOF"
+          echo "$TABLE"
+          echo "TABLEEOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Determine release title suffix
+      id: suffix
+      run: |
+        BUILD_TYPE="${{ needs.prepare.outputs.build_type }}"
+        if [[ "$BUILD_TYPE" == "debug" ]]; then
+          echo "label= (Debug)" >> "$GITHUB_OUTPUT"
+        elif [[ "$BUILD_TYPE" == "release" ]]; then
+          echo "label= (Release)" >> "$GITHUB_OUTPUT"
+        else
+          echo "label=" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Create versioned release
       if: needs.prepare.outputs.is_versioned == 'true'
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ needs.prepare.outputs.tag }}
-        name: "SparkEngine ${{ needs.prepare.outputs.version }}"
+        name: "SparkEngine ${{ needs.prepare.outputs.version }}${{ steps.suffix.outputs.label }}"
         body: |
-          ## SparkEngine ${{ needs.prepare.outputs.version }}
+          ## SparkEngine ${{ needs.prepare.outputs.version }}${{ steps.suffix.outputs.label }}
 
           Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           Built on: ${{ github.run_started_at }}
 
           ### Downloads
 
-          | Asset | Platform | Config |
-          |---|---|---|
-          | `SparkEngine-Windows-Release.zip` | Windows (VS 2022 x64) | Release |
-          | `SparkEngine-Windows-Debug.zip` | Windows (VS 2022 x64) | Debug |
-          | `SparkEngine-Linux-Release.tar.gz` | Linux (GCC, ubuntu-24.04) | Release |
-          | `SparkEngine-Linux-Debug.tar.gz` | Linux (GCC, ubuntu-24.04) | Debug |
+          ${{ steps.assets.outputs.table }}
         prerelease: false
         make_latest: true
-        files: |
-          SparkEngine-Windows-Release.zip
-          SparkEngine-Windows-Debug.zip
-          SparkEngine-Linux-Release.tar.gz
-          SparkEngine-Linux-Debug.tar.gz
+        files: ${{ steps.assets.outputs.files }}
 
     - name: Create or update "latest" rolling release
       if: needs.prepare.outputs.is_versioned == 'false'
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
-        name: "Latest Build (${{ steps.sha.outputs.short }})"
+        name: "Latest Build (${{ steps.sha.outputs.short }})${{ steps.suffix.outputs.label }}"
         body: |
           Automated build from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
 
           Built on: ${{ github.run_started_at }}
           Branch: `${{ github.ref_name }}`
 
-          | Asset | Platform | Config |
-          |---|---|---|
-          | `SparkEngine-Windows-Release.zip` | Windows (VS 2022 x64) | Release |
-          | `SparkEngine-Windows-Debug.zip` | Windows (VS 2022 x64) | Debug |
-          | `SparkEngine-Linux-Release.tar.gz` | Linux (GCC, ubuntu-24.04) | Release |
-          | `SparkEngine-Linux-Debug.tar.gz` | Linux (GCC, ubuntu-24.04) | Debug |
+          ${{ steps.assets.outputs.table }}
         prerelease: false
         make_latest: true
-        files: |
-          SparkEngine-Windows-Release.zip
-          SparkEngine-Windows-Debug.zip
-          SparkEngine-Linux-Release.tar.gz
-          SparkEngine-Linux-Debug.tar.gz
+        files: ${{ steps.assets.outputs.files }}
