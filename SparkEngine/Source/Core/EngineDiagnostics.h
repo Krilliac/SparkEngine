@@ -46,7 +46,7 @@ namespace Spark
         std::string Format() const;
     };
 
-    // Individual subsystem diagnostics (each returns results appended to report)
+    // --- Core subsystem diagnostics (EngineDiagnostics.cpp) ---
     void DiagPhysics(DiagReport& report);
     void DiagWeather(DiagReport& report);
     void DiagTimeOfDay(DiagReport& report);
@@ -64,7 +64,21 @@ namespace Spark
     void DiagVFS(DiagReport& report);
     void DiagMemory(DiagReport& report);
 
-    /// @brief Register all diag_* console commands.
+    // --- Extended subsystem diagnostics (EngineDiagnosticsExtended.cpp) ---
+    void DiagRHI(DiagReport& report);
+    void DiagJobSystem(DiagReport& report);
+    void DiagAISystems(DiagReport& report);
+    void DiagDebugSystems(DiagReport& report);
+    void DiagRenderingSystems(DiagReport& report);
+    void DiagStreaming(DiagReport& report);
+    void DiagDestruction(DiagReport& report);
+    void DiagFreezeSystem(DiagReport& report);
+    void DiagScripting(DiagReport& report);
+
+    /// @brief Run ALL diagnostics (core + extended) into a single report.
+    void DiagRunAll(DiagReport& report);
+
+    /// @brief Register all diag_* console commands (core + extended).
     void RegisterDiagnosticCommands(SimpleConsole& console);
 
 } // namespace Spark

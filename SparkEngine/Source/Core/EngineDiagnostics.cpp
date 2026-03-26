@@ -844,22 +844,7 @@ namespace Spark
             [](const std::vector<std::string>&) -> std::string
             {
                 DiagReport report;
-                DiagPhysics(report);
-                DiagWeather(report);
-                DiagTimeOfDay(report);
-                DiagECS(report);
-                DiagEventBus(report);
-                DiagSaveSystem(report);
-                DiagNetworking(report);
-                DiagAbilities(report);
-                DiagDialogue(report);
-                DiagCoroutines(report);
-                DiagConditions(report);
-                DiagInstances(report);
-                DiagTweens(report);
-                DiagFileCache(report);
-                DiagVFS(report);
-                DiagMemory(report);
+                DiagRunAll(report);
                 return report.Format();
             },
             "Run all engine runtime diagnostics", "Diagnostics");
@@ -933,6 +918,45 @@ namespace Spark
         console.RegisterCommand(
             "diag_memory", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagMemory); },
             "Diagnose memory monitor (snapshot, anomalies)", "Diagnostics");
+
+        // Extended subsystem commands
+        console.RegisterCommand(
+            "diag_rhi", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagRHI); },
+            "Diagnose RHI null device (headless graphics)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_jobs", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagJobSystem); },
+            "Diagnose job system (thread pool, parallel dispatch)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_ai", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagAISystems); },
+            "Diagnose AI systems (tactical, cover, formation, group)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_debug",
+            [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagDebugSystems); },
+            "Diagnose debug systems (hooks, tracing, inspector, profiler)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_render",
+            [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagRenderingSystems); },
+            "Diagnose rendering utilities (GPU counters, light culling)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_streaming", [](const std::vector<std::string>&) -> std::string
+            { return RunSingleDiag(DiagStreaming); }, "Diagnose area streaming (seamless area manager)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_destruction", [](const std::vector<std::string>&) -> std::string
+            { return RunSingleDiag(DiagDestruction); }, "Diagnose destruction system", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_freeze", [](const std::vector<std::string>&) -> std::string
+            { return RunSingleDiag(DiagFreezeSystem); }, "Diagnose freeze/snapshot system", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_scripting", [](const std::vector<std::string>&) -> std::string
+            { return RunSingleDiag(DiagScripting); }, "Diagnose scripting engines (AngelScript, Lua)", "Diagnostics");
     }
 
 } // namespace Spark
