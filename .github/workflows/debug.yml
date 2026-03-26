@@ -1,0 +1,208 @@
+name: Debug Builds
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g. v1.0.0). Leave empty for rolling "latest" release.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  # ===========================================================================
+  # Compute release metadata shared by all jobs
+  # ===========================================================================
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      is_versioned: ${{ steps.meta.outputs.is_versioned }}
+    steps:
+    - name: Compute release metadata
+      id: meta
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.release_tag }}" ]]; then
+          TAG="${{ inputs.release_tag }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "is_versioned=true" >> "$GITHUB_OUTPUT"
+        elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+          TAG="${{ github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "is_versioned=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "tag=latest" >> "$GITHUB_OUTPUT"
+          echo "version=latest" >> "$GITHUB_OUTPUT"
+          echo "is_versioned=false" >> "$GITHUB_OUTPUT"
+        fi
+
+  # ===========================================================================
+  # Windows Debug Build — MSVC VS 2022
+  # ===========================================================================
+  build-windows:
+    needs: [prepare]
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v3
+
+    - name: Configure CMake
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
+
+    - name: Build (Debug)
+      run: cmake --build build --config Debug --parallel
+
+    - name: Run Tests
+      run: ctest --test-dir build -C Debug --output-on-failure
+
+    - name: Package artifacts
+      shell: pwsh
+      run: |
+        $outDir = "dist/SparkEngine-Windows-Debug"
+        New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+        if (Test-Path "build/bin/Debug") {
+          Copy-Item "build/bin/Debug/*" $outDir -Recurse -Force
+        } elseif (Test-Path "build/bin") {
+          Copy-Item "build/bin/*" $outDir -Recurse -Force
+        }
+        Compress-Archive -Path $outDir -DestinationPath "SparkEngine-Windows-Debug.zip"
+
+    - name: Upload packaged artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: SparkEngine-Windows-Debug
+        path: SparkEngine-Windows-Debug.zip
+        retention-days: 7
+
+  # ===========================================================================
+  # Linux Debug Build — GCC
+  # ===========================================================================
+  build-linux:
+    needs: [prepare]
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DBUILD_TESTS=ON \
+          -DCMAKE_C_COMPILER=gcc \
+          -DCMAKE_CXX_COMPILER=g++
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Run Tests
+      run: |
+        cd build
+        ctest --output-on-failure || true
+        ./bin/SparkTests
+
+    - name: Package artifacts
+      run: |
+        mkdir -p dist/SparkEngine-Linux-Debug
+        cp -r build/bin/* dist/SparkEngine-Linux-Debug/
+        tar -czf SparkEngine-Linux-Debug.tar.gz \
+          -C dist SparkEngine-Linux-Debug
+
+    - name: Upload packaged artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: SparkEngine-Linux-Debug
+        path: SparkEngine-Linux-Debug.tar.gz
+        retention-days: 7
+
+  # ===========================================================================
+  # Publish Debug artifacts to GitHub Release
+  # ===========================================================================
+  release:
+    needs: [prepare, build-windows, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Resolve short commit SHA
+      id: sha
+      run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+    - name: Download all build artifacts
+      uses: actions/download-artifact@v8
+      with:
+        path: release-assets
+
+    - name: Flatten assets to root
+      run: |
+        find release-assets -type f \( -name "*.zip" -o -name "*.tar.gz" \) \
+          -exec cp {} . \;
+
+    - name: Create versioned release
+      if: needs.prepare.outputs.is_versioned == 'true'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.prepare.outputs.tag }}
+        name: "SparkEngine ${{ needs.prepare.outputs.version }} (Debug)"
+        body: |
+          ## SparkEngine ${{ needs.prepare.outputs.version }} — Debug Builds
+
+          Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          Built on: ${{ github.run_started_at }}
+
+          ### Downloads
+
+          | Asset | Platform | Config |
+          |---|---|---|
+          | `SparkEngine-Windows-Debug.zip` | Windows (VS 2022 x64) | Debug |
+          | `SparkEngine-Linux-Debug.tar.gz` | Linux (GCC, ubuntu-24.04) | Debug |
+        prerelease: false
+        make_latest: false
+        files: |
+          SparkEngine-Windows-Debug.zip
+          SparkEngine-Linux-Debug.tar.gz
+
+    - name: Create or update "latest-debug" rolling release
+      if: needs.prepare.outputs.is_versioned == 'false'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest-debug
+        name: "Latest Debug Build (${{ steps.sha.outputs.short }})"
+        body: |
+          Automated debug build from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+
+          Built on: ${{ github.run_started_at }}
+          Branch: `${{ github.ref_name }}`
+
+          | Asset | Platform | Config |
+          |---|---|---|
+          | `SparkEngine-Windows-Debug.zip` | Windows (VS 2022 x64) | Debug |
+          | `SparkEngine-Linux-Debug.tar.gz` | Linux (GCC, ubuntu-24.04) | Debug |
+        prerelease: false
+        make_latest: false
+        files: |
+          SparkEngine-Windows-Debug.zip
+          SparkEngine-Linux-Debug.tar.gz
