@@ -438,14 +438,14 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*170 test files, 2035+ test cases*
+*170 test files, 2077+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
 | `TestAIBehaviorTree` | 16 |
 | `TestAIStress` | 18 |
 | `TestAbilitySystem` | 15 |
-| `TestAdversarialEngine` | 47 |
+| `TestAdversarialEngine` | 89 |
 | `TestAlignedHeapArray` | 6 |
 | `TestAngleUtils` | 10 |
 | `TestAnimationCompression` | 6 |
