@@ -419,6 +419,14 @@ namespace Spark::Animation
             // Read channels
             uint32_t channelCount = 0;
             file.read(reinterpret_cast<char*>(&channelCount), sizeof(channelCount));
+            // Sanity cap: prevent malformed files from causing huge allocations
+            constexpr uint32_t kMaxChannels = 10'000;
+            if (!file.good() || channelCount > kMaxChannels)
+            {
+                SPARK_LOG_WARN(LogCategory::Animation, "Invalid channel count %u in '%s'", channelCount,
+                               filepath.c_str());
+                break;
+            }
             clip->channels.reserve(channelCount);
 
             for (uint32_t ch = 0; ch < channelCount && file.good(); ++ch)
@@ -440,6 +448,9 @@ namespace Spark::Animation
                 // Read position keyframes
                 uint32_t posKeyCount = 0;
                 file.read(reinterpret_cast<char*>(&posKeyCount), sizeof(posKeyCount));
+                constexpr uint32_t kMaxKeyframes = 1'000'000;
+                if (posKeyCount > kMaxKeyframes)
+                    break;
                 boneAnim.positionKeys.resize(posKeyCount);
                 for (uint32_t k = 0; k < posKeyCount && file.good(); ++k)
                 {
@@ -450,6 +461,8 @@ namespace Spark::Animation
                 // Read rotation keyframes
                 uint32_t rotKeyCount = 0;
                 file.read(reinterpret_cast<char*>(&rotKeyCount), sizeof(rotKeyCount));
+                if (rotKeyCount > kMaxKeyframes)
+                    break;
                 boneAnim.rotationKeys.resize(rotKeyCount);
                 for (uint32_t k = 0; k < rotKeyCount && file.good(); ++k)
                 {
@@ -460,6 +473,8 @@ namespace Spark::Animation
                 // Read scale keyframes
                 uint32_t sclKeyCount = 0;
                 file.read(reinterpret_cast<char*>(&sclKeyCount), sizeof(sclKeyCount));
+                if (sclKeyCount > kMaxKeyframes)
+                    break;
                 boneAnim.scaleKeys.resize(sclKeyCount);
                 for (uint32_t k = 0; k < sclKeyCount && file.good(); ++k)
                 {

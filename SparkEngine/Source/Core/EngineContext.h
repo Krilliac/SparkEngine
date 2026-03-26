@@ -320,6 +320,29 @@ class EngineContext : public Spark::IEngineContext
         return nullptr;
     }
 
+    /**
+     * @brief Retrieve a subsystem with a logged warning if not registered
+     *
+     * Use this variant when the caller expects the subsystem to be present.
+     * Returns nullptr with a diagnostic log message if missing, making it
+     * easier to track down initialization-order bugs.
+     *
+     * @param callerName  Name of the calling function (for diagnostics)
+     * @return Pointer to the system, or nullptr if not registered (with warning logged)
+     */
+    template <typename T> T* GetSystemChecked(const char* callerName = nullptr) const
+    {
+        T* system = GetSystem<T>();
+        if (!system)
+        {
+            // Log through stderr since we can't depend on Logger being available
+            // (Logger itself might be the missing subsystem)
+            std::fprintf(stderr, "[EngineContext] WARNING: Subsystem not registered (requested by %s)\n",
+                         callerName ? callerName : "unknown");
+        }
+        return system;
+    }
+
     // =========================================================================
     // Dependency-aware subsystem registration and lifecycle (R1.2)
     // =========================================================================

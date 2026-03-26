@@ -208,6 +208,9 @@ namespace Spark::AI
 
         NodeStatus Tick(float deltaTime, Blackboard& blackboard) override
         {
+            if (!m_child)
+                return m_status = NodeStatus::Failure;
+
             NodeStatus status = m_child->Tick(deltaTime, blackboard);
             if (status == NodeStatus::Success)
                 return m_status = NodeStatus::Failure;
@@ -236,6 +239,9 @@ namespace Spark::AI
 
         NodeStatus Tick(float deltaTime, Blackboard& blackboard) override
         {
+            if (!m_child)
+                return m_status = NodeStatus::Failure;
+
             NodeStatus status = m_child->Tick(deltaTime, blackboard);
             if (status == NodeStatus::Running)
                 return m_status = NodeStatus::Running;
@@ -252,7 +258,8 @@ namespace Spark::AI
         {
             BTNode::Reset();
             m_currentCount = 0;
-            m_child->Reset();
+            if (m_child)
+                m_child->Reset();
         }
 
         const char* GetName() const override { return "Repeater"; }
@@ -280,6 +287,8 @@ namespace Spark::AI
 
         NodeStatus Tick(float deltaTime, Blackboard& blackboard) override
         {
+            if (!m_action)
+                return m_status = NodeStatus::Failure;
             return m_status = m_action(deltaTime, blackboard);
         }
 
@@ -306,6 +315,8 @@ namespace Spark::AI
 
         NodeStatus Tick(float deltaTime, Blackboard& blackboard) override
         {
+            if (!m_condition)
+                return m_status = NodeStatus::Failure;
             return m_status = m_condition(blackboard) ? NodeStatus::Success : NodeStatus::Failure;
         }
 

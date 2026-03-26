@@ -163,6 +163,13 @@ namespace Spark::Net
         {
             if ((dirtyMask >> i) & 1ULL)
             {
+                if (offset >= buffer.size())
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Network,
+                                   "ProcessIncoming: buffer exhausted at field %u/%u for entity %u", i, fieldCount,
+                                   entityID);
+                    return true; // Partial update — not fatal
+                }
                 size_t bytesRead = entry.deserializer(i, buffer, offset);
                 if (bytesRead == 0)
                 {

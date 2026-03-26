@@ -1042,9 +1042,27 @@ namespace Spark
 
                 file.seekg(0, std::ios::end);
                 auto size = file.tellg();
+                if (size < 0)
+                    return false;
                 file.seekg(0, std::ios::beg);
+
+                // Sanity cap: reject unreasonably large save files (512 MB)
+                constexpr auto kMaxSaveFileSize = static_cast<std::streamoff>(512 * 1024 * 1024);
+                if (size > kMaxSaveFileSize)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file too large: %lld bytes",
+                                   static_cast<long long>(size));
+                    return false;
+                }
+
                 fileData.resize(static_cast<size_t>(size));
                 file.read(reinterpret_cast<char*>(fileData.data()), size);
+                if (!file)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file read incomplete: expected %lld bytes",
+                                   static_cast<long long>(size));
+                    return false;
+                }
             }
 
             if (fileData.size() < 8)
@@ -1101,12 +1119,25 @@ namespace Spark
             if (!readBytes(&entityCount, sizeof(entityCount)))
                 return false;
 
+            // Sanity cap: prevent malformed files from causing huge allocations
+            constexpr uint32_t kMaxEntities = 1'000'000;
+            if (entityCount > kMaxEntities)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file entity count %u exceeds limit %u", entityCount,
+                               kMaxEntities);
+                return false;
+            }
+
             for (uint32_t i = 0; i < entityCount; ++i)
             {
                 SerializedEntity entity;
 
                 uint16_t nameLen;
                 if (!readBytes(&nameLen, sizeof(nameLen)))
+                    return false;
+                // Cap string lengths to prevent malformed data from causing huge allocations
+                constexpr uint16_t kMaxStringLen = 4096;
+                if (nameLen > kMaxStringLen)
                     return false;
                 entity.name.resize(nameLen);
                 if (!readBytes(entity.name.data(), nameLen))
@@ -1122,6 +1153,9 @@ namespace Spark
 
                     uint16_t typeLen;
                     if (!readBytes(&typeLen, sizeof(typeLen)))
+                        return false;
+                    constexpr uint16_t kMaxTypeLen = 4096;
+                    if (typeLen > kMaxTypeLen)
                         return false;
                     comp.typeName.resize(typeLen);
                     if (!readBytes(comp.typeName.data(), typeLen))
@@ -1160,6 +1194,9 @@ namespace Spark
             uint32_t customStateCount = 0;
             if (readBytes(&customStateCount, sizeof(customStateCount)))
             {
+                constexpr uint32_t kMaxCustomState = 100'000;
+                if (customStateCount > kMaxCustomState)
+                    return false;
                 for (uint32_t i = 0; i < customStateCount; ++i)
                 {
                     uint16_t keyLen;
