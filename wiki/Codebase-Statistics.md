@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-03-24.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-03-26.
 
 ## Code Volume
 
@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-03-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 203,317 |
+| **SparkEngine/Source** | 203,969 |
 | **SparkEditor/Source** | 72,945 |
-| **GameModules** | 50,630 |
-| **Tests** | 41,279 |
+| **GameModules** | 50,807 |
+| **Tests** | 48,990 |
 | **SparkConsole/src** | 1,793 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~371,500** |
+| **Total C++ (excl. ThirdParty)** | **~379,000** |
 
 ### File Counts
 
@@ -25,7 +25,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-03-
 | HLSL shader files | 70 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.h + .cpp) | 160 |
+| Test files (.h + .cpp) | 172 |
 | Wiki pages (.md) | 64 |
 
 ### Code Density
@@ -97,7 +97,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-03-
 | Metric | Count |
 |--------|------:|
 | Editor panel header files | 52 |
-| Editor panel classes | 51 |
+| Editor panel classes | 52 |
 | Total editor lines | 72,945 |
 | Console command registrations | 101 |
 
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-03-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 160 |
-| TEST() definitions | 1,808 |
+| Test files | 170 |
+| TEST() definitions | 1,989 |
 | Subsystems covered | All major |
 | CI configurations | 10 jobs |
 | Sanitizer coverage | ASan + UBSan |
@@ -116,7 +116,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-03-
 | Metric | Count |
 |--------|------:|
 | CMake option() declarations | 21 |
-| ENABLE_* feature toggles | 14 |
+| ENABLE_* feature toggles | 13 |
 | CI jobs | 10 |
 | Supported compilers | MSVC v143/v144, GCC 13+, Clang 17+ |
 | Platforms | Windows, Linux, macOS (experimental) |

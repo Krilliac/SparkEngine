@@ -31,8 +31,8 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
-- **Tests**: 160 test files, 1808 tests passing
-- **Editor**: 51 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor
+- **Tests**: 170 test files, 1,989 tests passing
+- **Editor**: 52 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor
 - **Rendering**: All 12 former stubs now have .cpp implementations (ShadowAtlas, ScreenSpaceEffects, GPUOcclusionCulling, FroxelVolumetricFog, DynamicQualityScaler, DDGIProbeSystem, AdaptiveProbeVolumes, LightProbeSystem, SkyAtmosphere, WaterRenderer, ClusteredLightCulling, DynamicQualityTypes)
 - **Post-processing**: Bloom, auto-exposure, tonemapping (ACES/Filmic/Neutral/Reinhard), color grading (LGG)
 - **Infrastructure**: JobSystem wired, DeferredDeletionQueue in RHI, collision layer filtering, EntityEventBus cleanup, archetype spawn overrides

@@ -2,7 +2,7 @@
 
 System maturity status, known gaps, and improvement priorities across the SparkEngine codebase. This page consolidates findings from comprehensive gap analyses and code quality audits.
 
-Last updated: 2026-03-24
+Last updated: 2026-03-26
 
 ## System Maturity Overview
 
@@ -116,7 +116,7 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 
 | System | Status | Notes |
 |--------|:------:|-------|
-| ImGui editor core | **DONE** | 51 panel classes, docking, theming |
+| ImGui editor core | **DONE** | 52 panel classes, docking, theming |
 | Scene hierarchy | **DONE** | Tree view with drag-drop |
 | Inspector | **DONE** | Component renderers |
 | Material editor | **DONE** | PBR material editing |
@@ -158,7 +158,7 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 
 - **Modular service locator** — EngineContext provides clean subsystem access with dependency-aware initialization
 - **Comprehensive ECS** — 80+ component types with well-ordered system execution
-- **Strong test coverage** — 1,808 test cases across 160 files covering all major subsystems
+- **Strong test coverage** — 1,989 test cases across 170 files covering all major subsystems
 - **Consistent code style** — clang-format enforced in CI, Allman braces, 120-col limit
 - **RHI abstraction** — Clean backend selection via factory pattern
 

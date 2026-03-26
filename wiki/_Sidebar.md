@@ -58,6 +58,7 @@
 - [RHI Abstraction Layer](RHI-Abstraction-Layer)
 - [D3D12 Backend](D3D12-Backend)
 - [DXR Raytracing](DXR-Raytracing)
+- [Hybrid Ray Tracing](Hybrid-Ray-Tracing)
 - [Upscaling (DLSS/FSR)](Upscaling-System)
 
 ### Advanced

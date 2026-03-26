@@ -17,7 +17,7 @@
 - **Total pages**: 64 (excluding _Sidebar.md)
 - **Key new pages**: Codebase-Statistics.md, Codebase-Health.md
 - All 25+ engine subsystems have wiki pages
-- Test counts updated to 1,808 cases across 160 files
+- Test counts updated to 1,989 cases across 170 files
 
 ### Consolidated Analysis Data (2026-03-24)
 

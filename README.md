@@ -19,7 +19,7 @@
 
 **Quality & Testing:**
 
-[![Tests](https://img.shields.io/badge/tests-1%2C808_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/master/Tests)
+[![Tests](https://img.shields.io/badge/tests-1%2C989_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/master/Tests)
 [![ASan](https://img.shields.io/badge/sanitizers-ASan_%2B_UBSan-green)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
 [![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-format)
 [![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-tidy)
@@ -102,7 +102,7 @@ AngelScript with Unity-style hot-reload (file watcher with debouncing and state 
 
 ### Editor
 
-ImGui-powered visual editor with 32 specialized panels: scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor, terrain editing, weapon editor, profiler, AI editor, physics debug, 2D editors, FPS tools, version control integration, build/deployment system, level streaming, search, prefab system, project management, scene statistics, collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness), docking, and theming. Full undo/redo support and play-mode editing.
+ImGui-powered visual editor with 52 specialized panels: scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor, terrain editing, weapon editor, profiler, AI editor, physics debug, 2D editors, FPS tools, version control integration, build/deployment system, level streaming, search, prefab system, project management, scene statistics, collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness), docking, and theming. Full undo/redo support and play-mode editing.
 
 ### Procedural Generation
 
@@ -279,11 +279,21 @@ SparkEngine/
 |       |-- SceneManager/    # Scene and level management
 |       |-- Utils/           # Logging, profiler, crash handler, console, debug tools
 |-- SparkEditor/
-|   |-- Source/              # ImGui editor (32 panels)
+|   |-- Source/              # ImGui editor (52 panels)
 |-- SparkConsole/
 |   |-- src/                 # Standalone debug console application
 |-- SparkShaderCompiler/
 |   |-- src/                 # Offline shader compilation tool
+|-- SparkSDK/                # Public SDK/interface headers
+|-- GameModules/             # Game module shared libraries (8 modules)
+|   |-- SparkGame/           # Base game module
+|   |-- SparkGameFPS/        # FPS game module
+|   |-- SparkGameMMO/        # MMO game module
+|   |-- SparkGameRPG/        # RPG game module
+|   |-- SparkGameARPG/       # Action RPG game module
+|   |-- SparkGameRTS/        # RTS game module
+|   |-- SparkGameRacing/     # Racing game module
+|   |-- SparkGamePlatformer/ # Platformer game module
 |-- ThirdParty/              # Git submodules (see Dependencies)
 |-- Shaders/
 |   |-- HLSL/               # DirectX shaders
@@ -293,11 +303,14 @@ SparkEngine/
 |   |-- Models/             # 3D model files (.obj)
 |   |-- Scenes/             # Level/scene JSON files
 |   |-- Scripts/            # AngelScript game scripts
-|-- Tests/                   # 1,808 unit tests across 160 files (CTest)
+|-- Templates/               # Game module project templates
+|-- Tests/                   # 1,989 unit tests across 170 files (CTest)
 |-- tools/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
-|-- docs/                    # Doxygen docs, roadmap, status reports
+|-- docs/                    # Doxygen docs, wiki, API reference
+|-- wiki/                    # 64 wiki pages covering all subsystems
+|-- cmake/                   # CMake utility modules
 |-- .github/
 |   |-- workflows/          # CI/CD (build + release)
 |   |-- prompts/            # AI assistant prompt library
@@ -336,7 +349,7 @@ The following libraries are included directly in the source tree:
 
 ## Tests
 
-1,808 unit tests across 160 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
+1,989 unit tests across 170 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
 
 ```bash
 # Build and run tests
@@ -353,37 +366,26 @@ All options are passed to CMake via `-D<OPTION>=ON/OFF`.
 
 | Option | Default | Description |
 |---|:---:|---|
-| `BUILD_TESTS` | OFF | Unit tests (CTest) |
-| `ENABLE_EDITOR` | ON | ImGui visual editor |
 | `ENABLE_GRAPHICS` | ON | Graphics rendering system |
-| `ENABLE_PHYSX` | ON | Physics engine (Jolt Physics) |
-| `ENABLE_PROFILING` | ON | Performance profiling |
+| `ENABLE_EDITOR` | ON | ImGui visual editor |
+| `ENABLE_PROFILING` | ON | Performance profiling tools |
+| `ENABLE_NETWORKING` | ON | UDP networking (client/server, area servers, replication) |
 | `ENABLE_VULKAN` | ON | Vulkan graphics backend (experimental) |
 | `ENABLE_OPENGL` | ON | OpenGL graphics backend (experimental) |
-| `ENABLE_AI` | ON | AI and navigation systems |
-| `ENABLE_ANIMATION` | ON | Skeletal animation |
-| `ENABLE_SAVE_SYSTEM` | ON | Save/load system |
-| `ENABLE_TERRAIN_SYSTEM` | ON | Heightmap terrain |
-| `ENABLE_POST_PROCESSING` | ON | Bloom, tone mapping, FXAA |
-| `ENABLE_LIGHTING_SYSTEM` | ON | Advanced lighting / IBL |
-| `ENABLE_ADVANCED_INPUT` | ON | Extended input features |
-| `ENABLE_ASSET_STREAMING` | ON | Runtime asset streaming |
-| `ENABLE_HOT_RELOAD` | ON | Script hot-reload |
-| `ENABLE_COLLABORATIVE` | ON | Collaborative features |
-| `ENABLE_PROCEDURAL` | ON | Procedural generation |
-| `ENABLE_CINEMATIC` | ON | Cinematic sequencer |
-| `ENABLE_DECALS` | ON | Decal system |
-| `ENABLE_MESH_LOD` | ON | Mesh level-of-detail |
-| `ENABLE_WEATHER` | ON | Dynamic weather system |
-| `ENABLE_INVENTORY` | ON | Inventory system |
-| `ENABLE_QUEST_SYSTEM` | ON | Quest tracking |
-| `ENABLE_EVENT_SYSTEM` | ON | Event system |
-| `ENABLE_DAY_NIGHT` | ON | Day/night cycle |
-| `ENABLE_SCREEN_SPACE` | ON | Screen-space effects |
-| `ENABLE_FOG_SYSTEM` | ON | Volumetric fog |
-| `ENABLE_NETWORKING` | ON | UDP networking (client/server, area servers, replication) |
+| `ENABLE_METAL` | OFF | Metal graphics backend (macOS, experimental) |
 | `ENABLE_DXR` | OFF | DirectX Raytracing (experimental, needs D3D12) |
-| `ENABLE_SDL2` | OFF | SDL2 cross-platform input |
+| `ENABLE_HYBRID_RT` | ON | Hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT) |
+| `ENABLE_RECAST` | ON | Recast/Detour navmesh generation |
+| `ENABLE_SDL2` | OFF | SDL2 cross-platform input (auto-enabled on Linux) |
+| `SPARK_HEADLESS_SUPPORT` | ON | Headless/dedicated server mode support |
+| `BUILD_TESTS` | ON | Build test suite (CTest) |
+| `BUILD_GAME_MODULES` | ON | Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.) |
+| `SPARK_STRICT_DEPS` | OFF | FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT) |
+| `SPARK_SUPPRESS_THIRDPARTY_WARNINGS` | ON | Suppress compiler warnings from third-party libraries |
+| `SPARK_DOUBLE_PRECISION_PHYSICS` | OFF | Double precision physics (JPH_DOUBLE_PRECISION) for large worlds |
+| `ENABLE_CONSOLE_IN_SHIPPING` | OFF | Include SparkConsole in Shipping builds |
+| `ENABLE_DEVCOMMANDS_IN_SHIPPING` | OFF | Include developer commands in Shipping builds |
+| `STRIP_DEBUG_SYMBOLS` | OFF | Strip debug symbols from the final binary |
 
 ```bash
 # Example: minimal build without editor

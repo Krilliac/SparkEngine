@@ -11,7 +11,7 @@ Comprehensive cross-engine analysis of 11 engines and 3 rendering frameworks, id
 
 ## Context
 
-SparkEngine already has: EnTT ECS, D3D11 primary RHI with D3D12/Vulkan/Metal/OpenGL experimental, Bullet Physics, AngelScript scripting, ImGui editor (32 panels), UDP networking with AreaServer/WorldServer, EntityReplicator with dirty tracking, RenderGraph, PipelineStateCache, TransientResourcePool, JobSystem, SaveSystem, and 45+ working systems from prior analyses.
+SparkEngine already has: EnTT ECS, D3D11 primary RHI with D3D12/Vulkan/Metal/OpenGL experimental, Jolt Physics, AngelScript scripting, ImGui editor (52 panels), UDP networking with AreaServer/WorldServer, EntityReplicator with dirty tracking, RenderGraph, PipelineStateCache, TransientResourcePool, JobSystem, SaveSystem, and 45+ working systems from prior analyses.
 
 ## Engine-by-Engine Key Findings
 
