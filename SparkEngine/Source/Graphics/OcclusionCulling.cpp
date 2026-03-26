@@ -170,8 +170,8 @@ namespace Spark::Graphics
                 float depth = w0 * z0 + w1 * z1 + w2 * z2;
 
                 // Depth test (write if closer)
-                int bufIdx = py * width + px;
-                if (depth < m_depthBuffer[bufIdx])
+                size_t bufIdx = static_cast<size_t>(py) * static_cast<size_t>(width) + static_cast<size_t>(px);
+                if (bufIdx < m_depthBuffer.size() && depth < m_depthBuffer[bufIdx])
                 {
                     m_depthBuffer[bufIdx] = depth;
                 }
@@ -257,12 +257,25 @@ namespace Spark::Graphics
     bool OcclusionCullingSystem::IsRectOccluded(int minX, int minY, int maxX, int maxY, float minDepth) const
     {
         int width = m_settings.bufferWidth;
+        int height = m_settings.bufferHeight;
+
+        // Clamp to buffer bounds to prevent out-of-range access
+        minX = std::max(minX, 0);
+        minY = std::max(minY, 0);
+        maxX = std::min(maxX, width - 1);
+        maxY = std::min(maxY, height - 1);
+
+        if (minX > maxX || minY > maxY)
+        {
+            return false;
+        }
 
         for (int py = minY; py <= maxY; ++py)
         {
             for (int px = minX; px <= maxX; ++px)
             {
-                if (m_depthBuffer[py * width + px] >= minDepth)
+                size_t bufIdx = static_cast<size_t>(py) * static_cast<size_t>(width) + static_cast<size_t>(px);
+                if (bufIdx < m_depthBuffer.size() && m_depthBuffer[bufIdx] >= minDepth)
                 {
                     // At least one pixel is not occluded
                     return false;

@@ -1055,7 +1055,30 @@ namespace Spark
                     // SPIR-V shader loading (GL_ARB_gl_spirv)
                     glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, desc.bytecode,
                                    static_cast<GLsizei>(desc.bytecodeSize));
+
+                    GLenum binaryErr = glGetError();
+                    if (binaryErr != GL_NO_ERROR)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "OpenGL SPIR-V binary load failed (GL error 0x%X)", binaryErr);
+                        glDeleteShader(shader);
+                        return nullptr;
+                    }
+
                     glSpecializeShader(shader, desc.entryPoint.c_str(), 0, nullptr, nullptr);
+
+                    // Check specialization/compilation status
+                    GLint specSuccess;
+                    glGetShaderiv(shader, GL_COMPILE_STATUS, &specSuccess);
+                    if (!specSuccess)
+                    {
+                        char infoLog[1024];
+                        glGetShaderInfoLog(shader, sizeof(infoLog), nullptr, infoLog);
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OpenGL SPIR-V specialization failed: %s",
+                                        infoLog);
+                        glDeleteShader(shader);
+                        return nullptr;
+                    }
                 }
                 else if (!desc.sourceCode.empty())
                 {
@@ -1077,6 +1100,8 @@ namespace Spark
                 }
                 else
                 {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "OpenGL CreateShader: no source code or SPIR-V bytecode provided");
                     glDeleteShader(shader);
                     return nullptr;
                 }
@@ -1124,6 +1149,14 @@ namespace Spark
                                                                              IRHIShader* vertexShader,
                                                                              IRHIShader* pixelShader)
             {
+                if (!vertexShader || !pixelShader)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "OpenGL CreatePipelineState: null shader (VS=%p, PS=%p)",
+                                    static_cast<void*>(vertexShader), static_cast<void*>(pixelShader));
+                    return nullptr;
+                }
+
                 auto* glVS = static_cast<GLShader*>(vertexShader);
                 auto* glPS = static_cast<GLShader*>(pixelShader);
 

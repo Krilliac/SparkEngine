@@ -17,6 +17,13 @@ namespace Spark::Graphics
 
     bool ScreenSpaceEffects::Initialize(uint32_t width, uint32_t height)
     {
+        if (width == 0 || height == 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ScreenSpaceEffects::Initialize: invalid dimensions (%ux%u)",
+                            width, height);
+            return false;
+        }
+
         m_width = width;
         m_height = height;
         m_ssaoKernel = SSAOKernel::GenerateKernel(m_ssaoSettings.kernelSize);

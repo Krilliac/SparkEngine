@@ -754,6 +754,8 @@ namespace Spark::Graphics
             {sharpenPS, &m_sharpenPS, "Sharpen"},
         };
 
+        int compiledCount = 0;
+        int failedCount = 0;
         for (auto& sd : shaders)
         {
             ComPtr<ID3DBlob> psBlob, errBlob;
@@ -761,9 +763,33 @@ namespace Spark::Graphics
                                     &psBlob, &errBlob);
             if (SUCCEEDED(hr))
             {
-                m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr,
-                                            sd.target->GetAddressOf());
+                hr = m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr,
+                                                 sd.target->GetAddressOf());
+                if (SUCCEEDED(hr))
+                {
+                    compiledCount++;
+                }
+                else
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "PostProcess: CreatePixelShader failed for '%s' (HRESULT=0x%08X)", sd.name,
+                                    static_cast<unsigned>(hr));
+                    failedCount++;
+                }
             }
+            else
+            {
+                const char* errMsg = errBlob ? static_cast<const char*>(errBlob->GetBufferPointer()) : "unknown error";
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "PostProcess: shader compilation failed for '%s': %s",
+                                sd.name, errMsg);
+                failedCount++;
+            }
+        }
+
+        if (failedCount > 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "PostProcess: %d/%d effect shaders failed to compile",
+                           failedCount, compiledCount + failedCount);
         }
 #endif
     }

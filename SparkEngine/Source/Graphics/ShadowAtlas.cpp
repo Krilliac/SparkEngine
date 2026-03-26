@@ -15,6 +15,28 @@ namespace Spark::Graphics
 
     bool ShadowAtlas::Initialize(uint32_t atlasSize, uint32_t minTileSize)
     {
+        if (atlasSize == 0 || minTileSize == 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "ShadowAtlas::Initialize: invalid size (atlas=%u, minTile=%u)", atlasSize, minTileSize);
+            return false;
+        }
+
+        if (minTileSize > atlasSize)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "ShadowAtlas::Initialize: minTileSize (%u) exceeds atlasSize (%u)", minTileSize, atlasSize);
+            return false;
+        }
+
+        // Ensure power-of-2 sizes for correct grid subdivision
+        if ((atlasSize & (atlasSize - 1)) != 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "ShadowAtlas: atlasSize %u is not a power of 2, may cause uneven grid subdivision",
+                           atlasSize);
+        }
+
         m_atlasSize = atlasSize;
         m_minTileSize = minTileSize;
         m_tiles.clear();
@@ -202,11 +224,28 @@ namespace Spark::Graphics
 
     void ShadowAtlas::FreeTile(uint32_t index)
     {
+        if (index >= static_cast<uint32_t>(m_tiles.size()))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ShadowAtlas::FreeTile: index %u out of range (size=%zu)",
+                            index, m_tiles.size());
+            return;
+        }
+
         auto& tile = m_tiles[index];
+        if (tile.size == 0 || m_minTileSize == 0)
+        {
+            return;
+        }
+
         uint32_t gx = tile.x / m_minTileSize;
         uint32_t gy = tile.y / m_minTileSize;
         uint32_t cells = tile.size / m_minTileSize;
-        MarkRegion(gx, gy, cells, false);
+
+        if (gx + cells <= m_gridSize && gy + cells <= m_gridSize)
+        {
+            MarkRegion(gx, gy, cells, false);
+        }
+
         m_tileMap.erase(tile.lightId);
         tile = {};
     }
