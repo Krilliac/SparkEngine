@@ -438,7 +438,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*176 test files, 2149+ test cases*
+*176 test files, 2154+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -480,7 +480,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestDatablockRegistry` | 10 |
 | `TestDayNightCycle` | 10 |
 | `TestDebugHookManager` | 27 |
-| `TestDebugTools` | 31 |
+| `TestDebugTools` | 36 |
 | `TestDebugUtilities` | 28 |
 | `TestDedicatedServer` | 27 |
 | `TestDeferredDeletion` | 6 |

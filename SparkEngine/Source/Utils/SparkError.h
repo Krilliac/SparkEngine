@@ -356,11 +356,25 @@ namespace SparkError
         {                                                                                                              \
             SparkError::LogMessage(SparkError::Severity::Error, category, __FILE__, __LINE__, __FUNCTION__,            \
                                    "EXCEPTION CAUGHT: %s", _ex.what());                                                \
+            auto _catchTrace = Spark::StackTrace::Capture(1);                                                          \
+            std::string _catchTraceStr = _catchTrace.ToString("    ");                                                 \
+            if (!_catchTraceStr.empty())                                                                               \
+            {                                                                                                          \
+                SparkError::LogMessage(SparkError::Severity::Error, category, __FILE__, __LINE__, __FUNCTION__,        \
+                                       "Exception Stack Trace:\n%s", _catchTraceStr.c_str());                          \
+            }                                                                                                          \
         }                                                                                                              \
         catch (...)                                                                                                    \
         {                                                                                                              \
             SparkError::LogMessage(SparkError::Severity::Error, category, __FILE__, __LINE__, __FUNCTION__,            \
                                    "UNKNOWN EXCEPTION CAUGHT");                                                        \
+            auto _catchTrace = Spark::StackTrace::Capture(1);                                                          \
+            std::string _catchTraceStr = _catchTrace.ToString("    ");                                                 \
+            if (!_catchTraceStr.empty())                                                                               \
+            {                                                                                                          \
+                SparkError::LogMessage(SparkError::Severity::Error, category, __FILE__, __LINE__, __FUNCTION__,        \
+                                       "Exception Stack Trace:\n%s", _catchTraceStr.c_str());                          \
+            }                                                                                                          \
         }                                                                                                              \
     } while (0)
 
@@ -376,12 +390,26 @@ namespace SparkError
         {                                                                                                              \
             SparkError::LogMessage(SparkError::Severity::Error, category, __FILE__, __LINE__, __FUNCTION__,            \
                                    "EXCEPTION CAUGHT (returning default): %s", _ex.what());                            \
+            auto _catchTrace = Spark::StackTrace::Capture(1);                                                          \
+            std::string _catchTraceStr = _catchTrace.ToString("    ");                                                 \
+            if (!_catchTraceStr.empty())                                                                               \
+            {                                                                                                          \
+                SparkError::LogMessage(SparkError::Severity::Error, category, __FILE__, __LINE__, __FUNCTION__,        \
+                                       "Exception Stack Trace:\n%s", _catchTraceStr.c_str());                          \
+            }                                                                                                          \
             return retval;                                                                                             \
         }                                                                                                              \
         catch (...)                                                                                                    \
         {                                                                                                              \
             SparkError::LogMessage(SparkError::Severity::Error, category, __FILE__, __LINE__, __FUNCTION__,            \
                                    "UNKNOWN EXCEPTION CAUGHT (returning default)");                                    \
+            auto _catchTrace = Spark::StackTrace::Capture(1);                                                          \
+            std::string _catchTraceStr = _catchTrace.ToString("    ");                                                 \
+            if (!_catchTraceStr.empty())                                                                               \
+            {                                                                                                          \
+                SparkError::LogMessage(SparkError::Severity::Error, category, __FILE__, __LINE__, __FUNCTION__,        \
+                                       "Exception Stack Trace:\n%s", _catchTraceStr.c_str());                          \
+            }                                                                                                          \
             return retval;                                                                                             \
         }                                                                                                              \
     }()

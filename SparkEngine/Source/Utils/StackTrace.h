@@ -31,6 +31,8 @@
 #include <vector>
 #include <sstream>
 #include <cstdint>
+#include <cstring>
+#include <mutex>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -40,6 +42,7 @@
 #include <execinfo.h>
 #include <cxxabi.h>
 #include <cstdlib>
+#include <dlfcn.h> // dladdr() for better symbol resolution
 #endif
 
 namespace Spark
@@ -94,13 +97,18 @@ namespace Spark
 
         /**
      * @brief Capture the current call stack
-     * @param skipFrames Number of frames to skip (default 1 = skip Capture itself)
+     * @param skipFrames Number of caller frames to skip beyond Capture itself
+     *                   (default 1 = skip Capture + its immediate caller).
+     *                   Use 0 to include everything from the direct caller up.
      * @param maxFrames Maximum frames to capture
      * @return StackTrace object with resolved symbols
      */
         static StackTrace Capture(int skipFrames = 1, int maxFrames = MAX_FRAMES)
         {
             StackTrace trace;
+            // +1 to skip Capture() itself (when not inlined).
+            // CaptureRaw passes this directly to backtrace/CaptureStackBackTrace
+            // without adding further skips, so the total skip count is predictable.
             trace.m_capturedFrames = CaptureRaw(trace.m_rawAddresses, skipFrames + 1, maxFrames);
             trace.ResolveSymbols();
             return trace;
@@ -163,27 +171,31 @@ namespace Spark
                 maxFrames = MAX_FRAMES;
 
 #ifdef SPARK_PLATFORM_WINDOWS
-            int totalSkip = skipFrames + 1; // skip CaptureRaw itself
-            USHORT captured =
-                CaptureStackBackTrace(static_cast<DWORD>(totalSkip), static_cast<DWORD>(maxFrames), addresses, nullptr);
+            // CaptureStackBackTrace already skips its own frame internally,
+            // so pass skipFrames directly without adding an extra +1.
+            // In optimized builds CaptureRaw/Capture are inlined, so the extra
+            // skip was consuming real caller frames.
+            USHORT captured = CaptureStackBackTrace(static_cast<DWORD>(skipFrames), static_cast<DWORD>(maxFrames),
+                                                    addresses, nullptr);
             return static_cast<int>(captured);
 
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
             void* buffer[MAX_FRAMES + 32]; // extra room for skip
-            int totalCapture = maxFrames + skipFrames + 1;
+            int totalCapture = maxFrames + skipFrames;
             if (totalCapture > MAX_FRAMES + 32)
                 totalCapture = MAX_FRAMES + 32;
 
             int captured = backtrace(buffer, totalCapture);
-            int start = skipFrames + 1;
-            if (start >= captured)
+            // backtrace() does not include its own frame, so buffer[0] is
+            // CaptureRaw (or its inlined caller). Skip exactly skipFrames.
+            if (skipFrames >= captured)
                 return 0;
 
-            int count = captured - start;
+            int count = captured - skipFrames;
             if (count > maxFrames)
                 count = maxFrames;
             for (int i = 0; i < count; ++i)
-                addresses[i] = buffer[start + i];
+                addresses[i] = buffer[skipFrames + i];
             return count;
 #else
             (void)addresses;
@@ -193,13 +205,51 @@ namespace Spark
 #endif
         }
 
+        /**
+         * @brief Initialize DbgHelp symbol handler once per process (Windows only)
+         *
+         * SymInitialize must be called exactly once before any Sym* calls.
+         * Calling it repeatedly without SymCleanup causes subsequent calls to fail.
+         * SymSetOptions configures PDB search, line resolution, and name undecorating.
+         */
+        static void EnsureSymbolsInitialized()
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            static std::once_flag s_symInitFlag;
+            std::call_once(s_symInitFlag,
+                           []()
+                           {
+                               HANDLE process = GetCurrentProcess();
+
+                               // SYMOPT_UNDNAME: return demangled C++ names
+                               // SYMOPT_LOAD_LINES: resolve source file + line numbers
+                               // Note: SYMOPT_DEFERRED_LOADS is intentionally omitted —
+                               // it delays symbol loading and can cause the main module's
+                               // PDB to be missed if SymFromAddr is called before the
+                               // deferred load triggers.
+                               SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
+
+                               // Build a search path that includes the executable's directory,
+                               // so the PDB file is found even when the working directory differs.
+                               char exePath[MAX_PATH] = {};
+                               GetModuleFileNameA(nullptr, exePath, MAX_PATH);
+                               // Truncate to directory
+                               char* lastSlash = strrchr(exePath, '\\');
+                               if (lastSlash)
+                                   *lastSlash = '\0';
+
+                               SymInitialize(process, exePath, TRUE);
+                           });
+#endif
+        }
+
         void ResolveSymbols()
         {
             m_frames.resize(m_capturedFrames);
 
 #ifdef SPARK_PLATFORM_WINDOWS
+            EnsureSymbolsInitialized();
             HANDLE process = GetCurrentProcess();
-            SymInitialize(process, nullptr, TRUE);
 
             for (int i = 0; i < m_capturedFrames; ++i)
             {
@@ -239,26 +289,19 @@ namespace Spark
             }
 
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
-            char** symbols = backtrace_symbols(m_rawAddresses, m_capturedFrames);
-            if (symbols)
+            for (int i = 0; i < m_capturedFrames; ++i)
             {
-                for (int i = 0; i < m_capturedFrames; ++i)
+                StackFrame& frame = m_frames[i];
+                frame.address = reinterpret_cast<uintptr_t>(m_rawAddresses[i]);
+
+                // Use dladdr() for reliable symbol + module resolution
+                Dl_info dlInfo = {};
+                if (dladdr(m_rawAddresses[i], &dlInfo))
                 {
-                    StackFrame& frame = m_frames[i];
-                    frame.address = reinterpret_cast<uintptr_t>(m_rawAddresses[i]);
-
-                    // Try to demangle the symbol
-                    std::string raw = symbols[i];
-                    frame.functionName = raw;
-
-                    // Try demangling C++ names
-                    size_t start = raw.find('(');
-                    size_t end = raw.find('+', start);
-                    if (start != std::string::npos && end != std::string::npos)
+                    if (dlInfo.dli_sname)
                     {
-                        std::string mangled = raw.substr(start + 1, end - start - 1);
                         int status = 0;
-                        char* demangled = abi::__cxa_demangle(mangled.c_str(), nullptr, nullptr, &status);
+                        char* demangled = abi::__cxa_demangle(dlInfo.dli_sname, nullptr, nullptr, &status);
                         if (status == 0 && demangled)
                         {
                             frame.functionName = demangled;
@@ -266,14 +309,34 @@ namespace Spark
                         }
                         else
                         {
-                            frame.functionName = mangled;
+                            frame.functionName = dlInfo.dli_sname;
                         }
 
-                        // Extract module name
-                        frame.moduleName = raw.substr(0, start);
+                        // Compute displacement from function start
+                        if (dlInfo.dli_saddr)
+                        {
+                            frame.displacement = static_cast<int>(reinterpret_cast<uintptr_t>(m_rawAddresses[i]) -
+                                                                  reinterpret_cast<uintptr_t>(dlInfo.dli_saddr));
+                        }
+                    }
+
+                    if (dlInfo.dli_fname)
+                    {
+                        // Extract just the filename from the full path
+                        const char* slash = strrchr(dlInfo.dli_fname, '/');
+                        frame.moduleName = slash ? (slash + 1) : dlInfo.dli_fname;
                     }
                 }
-                free(symbols);
+                else
+                {
+                    // Fallback to backtrace_symbols for this frame
+                    char** sym = backtrace_symbols(&m_rawAddresses[i], 1);
+                    if (sym)
+                    {
+                        frame.functionName = sym[0];
+                        free(sym);
+                    }
+                }
             }
 #endif
         }

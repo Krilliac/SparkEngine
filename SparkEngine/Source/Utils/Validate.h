@@ -101,15 +101,8 @@ namespace Spark::Validation
         {
             std::snprintf(buf, sizeof(buf), "[%s] VALIDATION FAILED: %s", kind, expr);
         }
+        // Stack trace is auto-captured by Logger::Log() based on level threshold
         logger.Log(level, category, file, line, func, std::string(buf));
-
-        // Append stack trace for diagnostic context
-        auto stackTrace = Spark::StackTrace::Capture(2);
-        std::string traceStr = stackTrace.ToString("    ");
-        if (!traceStr.empty())
-        {
-            logger.Log(level, category, file, line, func, std::string("Stack Trace:\n") + traceStr);
-        }
     }
 
     /**

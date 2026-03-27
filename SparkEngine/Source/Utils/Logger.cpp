@@ -13,6 +13,7 @@
  */
 
 #include "Logger.h"
+#include "StackTrace.h"
 #include "DebugHookManager.h"
 
 #include <iostream>
@@ -77,7 +78,16 @@ namespace Spark
             offset += snprintf(buf + offset, sizeof(buf) - offset, "  (%s:%d)", shortFile, msg.line);
         }
 
-        return std::string(buf, offset);
+        std::string result(buf, offset);
+
+        // Append stack trace if present
+        if (!msg.stackTrace.empty())
+        {
+            result += "\n  Stack Trace:\n";
+            result += msg.stackTrace;
+        }
+
+        return result;
     }
 
     // ============================================================================
@@ -238,6 +248,18 @@ namespace Spark
         msg.function = func ? func : "";
         msg.timestamp = std::chrono::system_clock::now();
         msg.threadId = std::this_thread::get_id();
+
+        // Auto-capture stack trace when level meets threshold
+        LogLevel stLevel = m_stackTraceLevel.load(std::memory_order_relaxed);
+        if (stLevel != LogLevel::Off && level >= stLevel)
+        {
+            // Skip 0 caller frames beyond Capture() itself — show the full
+            // call chain from Logger::Log upward.  In optimized builds,
+            // Log/Capture/CaptureRaw are often inlined into one frame, so
+            // minimal skipping avoids losing meaningful callers.
+            auto trace = StackTrace::Capture(0);
+            msg.stackTrace = trace.ToString("    ");
+        }
 
         // Fire debug hooks for errors and warnings so instrumentation can observe them
         if (level == LogLevel::Error || level == LogLevel::Fatal)

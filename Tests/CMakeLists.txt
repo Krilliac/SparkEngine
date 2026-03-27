@@ -210,6 +210,9 @@ if(NOT WIN32)
     find_package(Threads REQUIRED)
     target_link_libraries(SparkTests PRIVATE Threads::Threads)
     target_compile_definitions(SparkTests PRIVATE SPARK_PLATFORM_LINUX)
+
+    # Export symbols so backtrace_symbols() can resolve function names in stack traces
+    set_target_properties(SparkTests PROPERTIES ENABLE_EXPORTS ON)
 endif()
 
 # Add to CTest
