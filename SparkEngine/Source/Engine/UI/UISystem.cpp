@@ -4,6 +4,7 @@
  */
 
 #include "UISystem.h"
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -354,18 +355,22 @@ namespace Spark::UI
     void UISystem::Update(float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-        if (m_visible)
-        {
-            m_canvas.Update(deltaTime);
-        }
+        SPARK_GUARDED_UPDATE("UI:Canvas", "UI", {
+            if (m_visible)
+            {
+                m_canvas.Update(deltaTime);
+            }
+        });
     }
 
     void UISystem::Render()
     {
-        if (m_visible)
-        {
-            m_canvas.Render();
-        }
+        SPARK_GUARDED_UPDATE("UI:CanvasRender", "UI", {
+            if (m_visible)
+            {
+                m_canvas.Render();
+            }
+        });
     }
 
     void UISystem::OnResize(int width, int height)

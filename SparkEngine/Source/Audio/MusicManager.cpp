@@ -5,6 +5,7 @@
  */
 
 #include "MusicManager.h"
+#include "../Core/FaultIsolation.h"
 #include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"
 #include <sstream>
@@ -208,9 +209,9 @@ namespace Spark::Audio
         if (!m_isPlaying || m_isPaused)
             return;
 
-        UpdateCrossfade(deltaTime);
-        UpdateDynamicMusic(deltaTime);
-        AudioBusMixer::GetInstance().Update(deltaTime);
+        SPARK_GUARDED_UPDATE("Audio:Crossfade", "Audio", { UpdateCrossfade(deltaTime); });
+        SPARK_GUARDED_UPDATE("Audio:DynamicMusic", "Audio", { UpdateDynamicMusic(deltaTime); });
+        SPARK_GUARDED_UPDATE("Audio:BusMixer", "Audio", { AudioBusMixer::GetInstance().Update(deltaTime); });
     }
 
     void MusicManager::Shutdown()

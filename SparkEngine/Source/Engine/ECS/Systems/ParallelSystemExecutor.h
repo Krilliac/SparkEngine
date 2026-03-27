@@ -32,6 +32,7 @@
 #pragma once
 
 #include "ECSystems.h"
+#include "../../../Core/FaultIsolation.h"
 #include "../../../Utils/JobSystem.h"
 #include <functional>
 #include <typeindex>
@@ -179,7 +180,7 @@ namespace Spark::ECS
                     // Single system in batch — run directly
                     if (batch.systems[0]->IsEnabled())
                     {
-                        batch.systems[0]->Update(world, deltaTime);
+                        SPARK_GUARDED_UPDATE("ECS:BatchSystem", "ECS", { batch.systems[0]->Update(world, deltaTime); });
                     }
                 }
                 else
@@ -192,8 +193,11 @@ namespace Spark::ECS
                     {
                         if (system->IsEnabled())
                         {
-                            futures.push_back(
-                                jobs.Submit([system, &world, deltaTime]() { system->Update(world, deltaTime); }));
+                            futures.push_back(jobs.Submit(
+                                [system, &world, deltaTime]() {
+                                    SPARK_GUARDED_UPDATE("ECS:BatchSystem", "ECS",
+                                                         { system->Update(world, deltaTime); });
+                                }));
                         }
                     }
 

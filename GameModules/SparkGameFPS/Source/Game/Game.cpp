@@ -10,6 +10,7 @@
 
 #include "Game.h"
 #include "ClassSystem.h"
+#include "Core/FaultIsolation.h"
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 #include "Utils/Validate.h"
@@ -351,37 +352,51 @@ void Game::Update(float dt)
         UpdateGameObjects(dt);
     });
 
-    if (m_classSystem)
-        m_classSystem->Update(dt);
-    if (m_player)
-        m_player->Update(dt);
-    if (m_projectilePool)
-        m_projectilePool->Update(dt);
+    SPARK_GUARDED_UPDATE("Game:ClassSystem", "Game", {
+        if (m_classSystem)
+            m_classSystem->Update(dt);
+    });
+    SPARK_GUARDED_UPDATE("Game:Player", "Game", {
+        if (m_player)
+            m_player->Update(dt);
+    });
+    SPARK_GUARDED_UPDATE("Game:Projectiles", "Game", {
+        if (m_projectilePool)
+            m_projectilePool->Update(dt);
+    });
 
     // New systems
-    if (m_vehicleSystem)
-        m_vehicleSystem->Update(dt);
-    if (m_gravitySystem)
-        m_gravitySystem->Update(dt);
-    if (m_interactionSystem)
-        m_interactionSystem->Update(dt, m_player.get());
-    if (m_damageZoneSystem)
-        m_damageZoneSystem->Update(dt, m_player.get());
-    if (m_respawnSystem)
-        m_respawnSystem->Update(dt);
+    SPARK_GUARDED_UPDATE("Game:Vehicles", "Game", {
+        if (m_vehicleSystem)
+            m_vehicleSystem->Update(dt);
+        if (m_gravitySystem)
+            m_gravitySystem->Update(dt);
+    });
+    SPARK_GUARDED_UPDATE("Game:Interaction", "Game", {
+        if (m_interactionSystem)
+            m_interactionSystem->Update(dt, m_player.get());
+        if (m_damageZoneSystem)
+            m_damageZoneSystem->Update(dt, m_player.get());
+        if (m_respawnSystem)
+            m_respawnSystem->Update(dt);
+    });
 
     // Gameplay systems
-    if (m_waveSpawner)
-        m_waveSpawner->Update(dt, GetAliveEnemyCount(), this);
-    if (m_lootSystem)
-        m_lootSystem->Update(dt, m_player.get());
+    SPARK_GUARDED_UPDATE("Game:WaveSpawner", "Game", {
+        if (m_waveSpawner)
+            m_waveSpawner->Update(dt, GetAliveEnemyCount(), this);
+        if (m_lootSystem)
+            m_lootSystem->Update(dt, m_player.get());
+    });
 
     // Integrated systems
-    if (m_gameMode)
-        m_gameMode->Update(dt);
-    if (m_hudSystem)
-        m_hudSystem->Update(dt);
-    Spark::QuestOps::UpdateTimers(m_playerQuests, m_questRegistry, dt);
+    SPARK_GUARDED_UPDATE("Game:GameMode", "Game", {
+        if (m_gameMode)
+            m_gameMode->Update(dt);
+        if (m_hudSystem)
+            m_hudSystem->Update(dt);
+        Spark::QuestOps::UpdateTimers(m_playerQuests, m_questRegistry, dt);
+    });
 
     // Track play time for save metadata
     m_playTime += dt;
@@ -423,58 +438,62 @@ void Game::Update(float dt)
     }
 
     // Update cinematic sequencer via context
-    if (m_engineContext)
-    {
-        if (auto* cinematic = m_engineContext->GetCinematic())
-            cinematic->Update(dt);
-
-        if (auto* replay = m_engineContext->GetReplay())
+    SPARK_GUARDED_UPDATE("Game:Cinematic", "Game", {
+        if (m_engineContext)
         {
-            if (replay->GetPlaybackState() == Spark::PlaybackState::Playing)
-                replay->UpdatePlayback(dt);
+            if (auto* cinematic = m_engineContext->GetCinematic())
+                cinematic->Update(dt);
+
+            if (auto* replay = m_engineContext->GetReplay())
+            {
+                if (replay->GetPlaybackState() == Spark::PlaybackState::Playing)
+                    replay->UpdatePlayback(dt);
+            }
         }
-    }
+    });
 
 #ifdef ENABLE_NETWORKING
     // Update networking - process incoming messages, send outgoing state
-    if (m_networkInitialized)
-    {
-        auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-        netMgr.Update(dt);
-
-        // Replicate player position to network
-        if (m_player && netMgr.GetRole() != Spark::Net::NetworkRole::None)
+    SPARK_GUARDED_UPDATE("Game:Networking", "Game", {
+        if (m_networkInitialized)
         {
-            auto pos = m_player->GetPosition();
-            auto vel = m_player->GetVelocity();
-            // Send client input state for prediction/reconciliation
-            Spark::Net::ClientInputState inputState{};
-            inputState.deltaTime = dt;
-            inputState.timestamp = netMgr.GetServerTime();
-            netMgr.SendClientInput(inputState);
+            auto& netMgr = Spark::Net::NetworkManager::GetInstance();
+            netMgr.Update(dt);
+
+            // Replicate player position to network
+            if (m_player && netMgr.GetRole() != Spark::Net::NetworkRole::None)
+            {
+                auto pos = m_player->GetPosition();
+                auto vel = m_player->GetVelocity();
+                // Send client input state for prediction/reconciliation
+                Spark::Net::ClientInputState inputState{};
+                inputState.deltaTime = dt;
+                inputState.timestamp = netMgr.GetServerTime();
+                netMgr.SendClientInput(inputState);
+            }
         }
-    }
+    });
 #endif
 
     // Update advanced systems through main GraphicsEngine
-    if (m_graphics)
-    {
-        if (auto textureSystem = m_graphics->GetTextureSystem())
+    SPARK_GUARDED_UPDATE("Game:Graphics", "Game", {
+        if (m_graphics)
         {
-            textureSystem->Update(dt);
+            if (auto textureSystem = m_graphics->GetTextureSystem())
+                textureSystem->Update(dt);
+            if (auto assetPipeline = m_graphics->GetAssetPipeline())
+                assetPipeline->Update(dt);
         }
-        if (auto assetPipeline = m_graphics->GetAssetPipeline())
-        {
-            assetPipeline->Update(dt);
-        }
-    }
+    });
 
     // Update physics via engine context
-    if (m_engineContext)
-    {
-        if (auto* physics = m_engineContext->GetPhysics())
-            physics->Update(dt);
-    }
+    SPARK_GUARDED_UPDATE("Game:Physics", "Game", {
+        if (m_engineContext)
+        {
+            if (auto* physics = m_engineContext->GetPhysics())
+                physics->Update(dt);
+        }
+    });
 }
 
 /*-------------------------------------------------------------

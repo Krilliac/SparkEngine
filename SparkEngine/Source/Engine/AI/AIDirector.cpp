@@ -4,6 +4,7 @@
  */
 
 #include "AIDirector.h"
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/Validate.h"
 
 #include "../ECS/Components/GameplayComponents.h"
@@ -156,7 +157,7 @@ namespace Spark::AI
 
     void AIDirector::UpdateIntensity(float deltaTime)
     {
-        m_phaseFSM.Tick(deltaTime);
+        SPARK_GUARDED_UPDATE("AI:PhaseFSM", "AI", { m_phaseFSM.Tick(deltaTime); });
 
         // Adjust target intensity based on player skill
         float skillAdjustment = (m_playerSkillEstimate - 0.5f) * 0.2f;

@@ -29,6 +29,7 @@
 #include "../SparkEngine/Source/Utils/MemoryMonitor.h"
 
 #include <iostream>
+#include <memory>
 
 // ============================================================================
 // Helper: Initialize a minimal EngineContext with singleton subsystems
@@ -81,6 +82,24 @@ static void SetupMinimalContext()
     // FileCache
     static Spark::LocalFileCache fileCache;
     ctx->SetFileCache(&fileCache);
+
+    // Physics
+    static std::unique_ptr<PhysicsSystem> physics;
+    if (!physics)
+    {
+        physics = std::make_unique<PhysicsSystem>();
+        physics->Initialize();
+        std::atexit(
+            []()
+            {
+                if (physics)
+                {
+                    physics->Shutdown();
+                    physics.reset();
+                }
+            });
+    }
+    ctx->SetPhysics(physics.get());
 
     // Network: DiagNetworking uses Spark::Net::NetworkManager::GetInstance() directly,
     // so no need to register via EngineContext (type mismatch: Spark::NetworkManager vs Spark::Net::NetworkManager)

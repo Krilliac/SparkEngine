@@ -13,6 +13,7 @@
  * State management, metrics, and settings are in GraphicsStateAndSettings.cpp.
  */
 #include "GraphicsEngine.h"
+#include "../Core/FaultIsolation.h"
 #include "../Utils/Assert.h"
 #include "../Utils/DebugHookManager.h"
 #include "../Utils/SparkError.h"
@@ -611,15 +612,17 @@ void GraphicsEngine::EndFrame()
     auto renderEndTime = std::chrono::high_resolution_clock::now();
 
     // Flush GPU scene buffer and tick render target pool
-    if (m_gpuSceneBuffer.IsInitialized())
-    {
-        m_gpuSceneBuffer.FlushToGPU(m_context.Get());
-    }
-    m_constantBufferRing.EndFrame();
-    m_gpuTimestampQuery.EndFrame(m_context.Get());
-    m_renderTargetPool.Tick();
-    if (m_shadowAtlas)
-        m_shadowAtlas->EndFrame();
+    SPARK_GUARDED_UPDATE("Graphics:GPUFlush", "Graphics", {
+        if (m_gpuSceneBuffer.IsInitialized())
+        {
+            m_gpuSceneBuffer.FlushToGPU(m_context.Get());
+        }
+        m_constantBufferRing.EndFrame();
+        m_gpuTimestampQuery.EndFrame(m_context.Get());
+        m_renderTargetPool.Tick();
+        if (m_shadowAtlas)
+            m_shadowAtlas->EndFrame();
+    });
 
     if (!m_swapChain)
     {

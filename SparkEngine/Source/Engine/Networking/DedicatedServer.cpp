@@ -17,6 +17,7 @@
 #undef SendMessage
 #endif
 
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 
@@ -248,10 +249,10 @@ namespace Spark::Net
         auto tickStart = std::chrono::steady_clock::now();
 
         auto& netMgr = NetworkManager::GetInstance();
-        netMgr.Update(deltaTime);
+        SPARK_GUARDED_UPDATE("Server:Network", "Network", { netMgr.Update(deltaTime); });
 
-        ProcessServerMessages(deltaTime);
-        UpdateMatchState(deltaTime);
+        SPARK_GUARDED_UPDATE("Server:Messages", "Network", { ProcessServerMessages(deltaTime); });
+        SPARK_GUARDED_UPDATE("Server:MatchState", "Network", { UpdateMatchState(deltaTime); });
 
         // Update stats
         m_stats.totalTicksProcessed++;
