@@ -80,9 +80,24 @@ static void InitFullEngine()
     ctx->SetWorld(&world);
 
     // --- Physics (stub mode if Jolt unavailable) ---
-    static PhysicsSystem physics;
-    physics.Initialize();
-    ctx->SetPhysics(&physics);
+    // PhysicsSystem must be heap-allocated and explicitly shutdown before the
+    // SimpleConsole singleton is destroyed (PhysicsSystem::~PhysicsSystem logs).
+    static std::unique_ptr<PhysicsSystem> physics;
+    if (!physics)
+    {
+        physics = std::make_unique<PhysicsSystem>();
+        physics->Initialize();
+        std::atexit(
+            []()
+            {
+                if (physics)
+                {
+                    physics->Shutdown();
+                    physics.reset();
+                }
+            });
+    }
+    ctx->SetPhysics(physics.get());
 
     // --- Weather ---
     static Spark::WeatherSystem weather;

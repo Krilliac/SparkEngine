@@ -467,18 +467,21 @@ namespace Spark
         int countBefore = abilities->GetRegisteredAbilityCount();
         report.Add(sub, "Registered abilities", true, std::to_string(countBefore));
 
-        // Register a test ability
-        Gameplay::AbilityDefinition testAbility;
-        testAbility.id = 99999;
-        testAbility.name = "__diag_test_ability";
-        testAbility.range = 10.0f;
-        testAbility.castTime = 0.0f;
-        testAbility.cooldown = 1.0f;
-        testAbility.resourceCost = 0.0f;
-        abilities->RegisterAbility(testAbility);
-
+        // Register a test ability (idempotent — skip count check if already registered)
+        bool alreadyExists = (abilities->GetAbilityDef(99999) != nullptr);
+        if (!alreadyExists)
+        {
+            Gameplay::AbilityDefinition testAbility;
+            testAbility.id = 99999;
+            testAbility.name = "__diag_test_ability";
+            testAbility.range = 10.0f;
+            testAbility.castTime = 0.0f;
+            testAbility.cooldown = 1.0f;
+            testAbility.resourceCost = 0.0f;
+            abilities->RegisterAbility(testAbility);
+        }
         int countAfter = abilities->GetRegisteredAbilityCount();
-        report.Add(sub, "Register ability", countAfter == countBefore + 1);
+        report.Add(sub, "Register ability", alreadyExists || countAfter == countBefore + 1);
 
         // Look it up
         auto* def = abilities->GetAbilityDef(99999);
@@ -651,15 +654,19 @@ namespace Spark
         int templatesBefore = instances->GetRegisteredTemplateCount();
         int activesBefore = instances->GetActiveInstanceCount();
 
-        // Register a template
-        Gameplay::InstanceTemplate tmpl;
-        tmpl.templateId = 99999;
-        tmpl.name = "__diag_dungeon";
-        tmpl.maxPlayers = 5;
-        instances->RegisterTemplate(tmpl);
+        // Register a template (idempotent — skip count check if already registered)
+        bool tmplExists = (instances->GetTemplate(99999) != nullptr);
+        if (!tmplExists)
+        {
+            Gameplay::InstanceTemplate tmpl;
+            tmpl.templateId = 99999;
+            tmpl.name = "__diag_dungeon";
+            tmpl.maxPlayers = 5;
+            instances->RegisterTemplate(tmpl);
+        }
 
         int templatesAfter = instances->GetRegisteredTemplateCount();
-        report.Add(sub, "Register template", templatesAfter == templatesBefore + 1);
+        report.Add(sub, "Register template", tmplExists || templatesAfter == templatesBefore + 1);
 
         // Create an instance
         auto instId = instances->CreateInstance(99999);

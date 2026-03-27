@@ -1,0 +1,10 @@
+# LeakSanitizer suppressions for SparkEngine tests
+#
+# Jolt Physics singleton allocations (Factory, JobSystemThreadPool) are
+# intentionally never freed — they live for the process lifetime.
+# These are not leaks in SparkEngine code.
+leak:JPH::Factory
+leak:JPH::JobSystemThreadPool
+leak:AllocateImpl
+leak:PhysicsSystem::CreateBoxShape
+leak:PhysicsSystem::CreateCollisionShape

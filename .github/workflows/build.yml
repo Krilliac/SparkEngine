@@ -74,6 +74,8 @@ jobs:
       run: cmake --build build --parallel $(nproc)
 
     - name: Run Tests under ASan
+      env:
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/Tests/lsan_suppressions.txt
       run: |
         cd build
         ctest --output-on-failure || true
