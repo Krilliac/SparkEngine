@@ -170,9 +170,10 @@ namespace Spark
             const NullStats& GetNullStats() const { return m_stats; }
             void ResetNullStats() { m_stats = {}; }
 
-          private:
+            /** @brief Public constructor for factory-created instances (unique_ptr ownership). */
             NullRHIDevice() = default;
 
+          private:
             RHIDeviceCapabilities m_caps;
             RHIStatistics m_rhiStats;
             NullStats m_stats;

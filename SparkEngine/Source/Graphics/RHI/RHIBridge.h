@@ -117,6 +117,9 @@ namespace Spark
             IRHITexture* GetDepthBuffer() const { return m_depthBuffer.get(); }
             GraphicsBackend GetActiveBackend() const;
 
+            /** @brief True when running on NullRHIDevice (no GPU / headless). */
+            bool IsHeadless() const { return m_headless; }
+
             // ========================================================================
             // RESOURCE CONVENIENCE METHODS
             // ========================================================================
@@ -217,6 +220,7 @@ namespace Spark
             uint32_t m_width = 0;
             uint32_t m_height = 0;
             bool m_initialized = false;
+            bool m_headless = false;
         };
 
     } // namespace RHI
