@@ -1,0 +1,51 @@
+# MemorySanitizer ignorelist for SparkEngine
+#
+# MSan requires ALL code to be instrumented. Third-party libraries built
+# without MSan instrumentation produce false positives. This file suppresses
+# reports originating from uninstrumented code so that MSan findings in
+# SparkEngine's own code are actionable.
+#
+# Syntax: https://clang.llvm.org/docs/SanitizerSpecialCaseList.html
+
+# Jolt Physics — compiled without MSan instrumentation
+src:*/ThirdParty/Physics/JoltPhysics/*
+src:*/Jolt/*
+
+# ImGui — compiled without MSan instrumentation
+src:*/ThirdParty/UI/imgui/*
+src:*/imgui.cpp
+src:*/imgui_*.cpp
+
+# EnTT — header-only, but templates instantiated in our TUs are fine;
+# suppress only the internal registry/storage internals if needed
+# (no suppression needed for header-only libs generally)
+
+# tinyobjloader
+src:*/ThirdParty/Utils/tinyobjloader/*
+
+# miniz
+src:*/ThirdParty/Utils/miniz/*
+
+# AngelScript
+src:*/ThirdParty/Scripting/angelscript-mirror/*
+
+# GLM
+src:*/ThirdParty/glm/*
+
+# RapidJSON
+src:*/ThirdParty/rapidjson/*
+
+# stb headers (stb_image, etc.)
+src:*/stb_*.h
+
+# spdlog
+src:*/ThirdParty/spdlog/*
+
+# Assimp
+src:*/ThirdParty/assimp/*
+
+# miniaudio
+src:*/miniaudio.h
+
+# System libraries (libc++, libstdc++, glibc)
+src:/usr/*

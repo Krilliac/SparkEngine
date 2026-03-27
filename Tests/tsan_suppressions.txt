@@ -1,0 +1,10 @@
+# ThreadSanitizer suppressions for SparkEngine tests
+#
+# Suppress known benign races from third-party libraries that we do not control.
+# SparkEngine's own code should have ZERO suppressions — fix the race instead.
+#
+# Syntax: https://github.com/google/sanitizers/wiki/ThreadSanitizerSuppressions
+
+# Jolt Physics internal job system (benign races in job scheduling)
+race:JPH::JobSystemThreadPool
+race:JPH::JobSystem

@@ -453,8 +453,8 @@ cmake -B build \
   -DCMAKE_BUILD_TYPE=Debug \
   -DBUILD_TESTS=ON \
   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-  -DCMAKE_CXX_FLAGS="-fsanitize=memory -fno-omit-frame-pointer -stdlib=libc++" \
-  -DCMAKE_C_FLAGS="-fsanitize=memory -fno-omit-frame-pointer" \
+  -DCMAKE_CXX_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
+  -DCMAKE_C_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
   -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -lc++abi" \
   -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
 cmake --build build --parallel $(nproc)
@@ -483,7 +483,7 @@ ctest --test-dir build -C Release --output-on-failure
 | `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan + LSan |
 | `build-linux-tsan` | ubuntu-24.04 | GCC | Debug | TSan (thread races) |
-| `build-linux-msan` | ubuntu-24.04 | Clang | Debug | MSan (`continue-on-error`) |
+| `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan + ignorelist |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |

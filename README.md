@@ -19,10 +19,17 @@
 
 **Quality & Testing:**
 
-[![Tests](https://img.shields.io/badge/tests-1%2C989_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/master/Tests)
-[![Sanitizers](https://img.shields.io/badge/sanitizers-ASan_UBSan_LSan_TSan_MSan-green)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![Tests](https://img.shields.io/badge/tests-2%2C108_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/master/Tests)
 [![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-format)
 [![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-tidy)
+
+**Sanitizers (CI-enforced):**
+
+[![ASan](https://img.shields.io/badge/ASan-address_errors-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![UBSan](https://img.shields.io/badge/UBSan-undefined_behavior-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![LSan](https://img.shields.io/badge/LSan-memory_leaks-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![TSan](https://img.shields.io/badge/TSan-data_races-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![MSan](https://img.shields.io/badge/MSan-uninitialized_memory-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
 
 **Rendering Backends:**
 
@@ -304,7 +311,7 @@ SparkEngine/
 |   |-- Scenes/             # Level/scene JSON files
 |   |-- Scripts/            # AngelScript game scripts
 |-- Templates/               # Game module project templates
-|-- Tests/                   # 1,989 unit tests across 170 files (CTest)
+|-- Tests/                   # 2,108 unit tests across 174 files (CTest + 5 sanitizers)
 |-- tools/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
@@ -349,13 +356,51 @@ The following libraries are included directly in the source tree:
 
 ## Tests
 
-1,989 unit tests across 170 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
+2,108 unit tests across 174 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
 
 ```bash
 # Build and run tests
 cmake -B build -DBUILD_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
+
+# Export test results to a file (useful for CI review)
+./build/bin/SparkTests --output-file test-results.txt
+
+# Export only failures/errors
+./build/bin/SparkTests --output-file errors.txt --errors-only
+```
+
+### Running Sanitizers Locally
+
+```bash
+# ASan + UBSan + LSan (GCC) — detects memory errors, undefined behavior, leaks
+cmake -B build-asan -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build-asan --parallel $(nproc)
+LSAN_OPTIONS=suppressions=Tests/lsan_suppressions.txt ./build-asan/bin/SparkTests --output-file asan-results.txt
+
+# TSan (GCC) — detects data races and deadlocks
+cmake -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \
+  -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
+cmake --build build-tsan --parallel $(nproc)
+TSAN_OPTIONS=suppressions=Tests/tsan_suppressions.txt ./build-tsan/bin/SparkTests --output-file tsan-results.txt
+
+# MSan (Clang + libc++) — detects uninitialized memory reads
+cmake -B build-msan -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_CXX_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
+  -DCMAKE_C_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -lc++abi" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
+cmake --build build-msan --parallel $(nproc)
+./build-msan/bin/SparkTests --output-file msan-results.txt
 ```
 
 Test coverage spans all major subsystems: core utilities (math, string, file, UUID, config, ring buffer, object pool), ECS (world, components, integration), physics (rigid bodies, collision layers, frustum culling, interpolation), AI (behavior trees, NavMesh, steering, EQS, formations, cover, group AI), animation (state machines, IK, retargeting, cloth, blend spaces), networking (NetBuffer, encryption, prediction, reliable channels, replication, dedicated server, integration), gameplay (weapons, inventory, quests, achievements, destruction, dialogue, cooldowns), graphics (fog, SSAO/SSR, post-processing, temporal effects, mesh LOD, lights, upscaling, render graph, water, terrain), scene management (serialization, snapshots, loading), events (EventBus, coroutines, tweens), editor (play mode, debug tools, collaborative editing), and infrastructure (engine context, modules, profiling, RBAC).
@@ -399,9 +444,14 @@ Two GitHub Actions workflows run automatically:
 **`build.yml`** — runs on every push / PR to `main`, `develop`, and `feature/**`:
 - Platforms: Windows (MSVC VS 2022 + experimental VS 2026^1), Linux GCC, Linux Clang
 - Configurations: Debug and Release matrix
-- Sanitizers: ASan + UBSan + LSan (GCC), TSan (GCC), MSan (Clang, `continue-on-error`)
-- Steps: checkout with submodules, CMake configure, build, test, sanitizer reports uploaded as artifacts
-- Artifacts retained for 14 days
+- Sanitizers: 5 sanitizer jobs with downloadable report artifacts (14-day retention)
+- Steps: checkout with submodules, CMake configure, build, test, artifact upload
+
+| Sanitizer Job | Compiler | What it detects | Suppression files |
+|---|---|---|---|
+| **ASan + UBSan + LSan** | GCC | Buffer overflows, use-after-free, undefined behavior, memory leaks | `Tests/lsan_suppressions.txt` |
+| **TSan** | GCC | Data races, deadlocks, thread-safety violations | `Tests/tsan_suppressions.txt` |
+| **MSan** | Clang + libc++ | Reads of uninitialized memory | `Tests/msan_ignorelist.txt` |
 
 > ^1 **VS 2026 (v144 toolset):** The VS 2026 CI job is included for forward compatibility but will be skipped until GitHub Actions runners ship with the v144 platform toolset. It is marked `continue-on-error` and does not gate merges.
 
