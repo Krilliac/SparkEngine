@@ -211,7 +211,11 @@ namespace Spark::Net
         uint32_t GetClientCount() const;
 
         const AreaServerConfig& GetConfig() const { return m_config; }
-        const AreaServerStats& GetStats() const { return m_stats; }
+        AreaServerStats GetStats() const
+        {
+            std::lock_guard<std::mutex> lock(m_statsMutex);
+            return m_stats;
+        }
         AreaID GetAreaID() const { return m_config.areaId; }
         const std::string& GetAreaName() const { return m_config.areaName; }
 
@@ -226,6 +230,7 @@ namespace Spark::Net
 
         AreaServerConfig m_config;
         AreaServerStats m_stats;
+        mutable std::mutex m_statsMutex; ///< Guards m_stats (written by tick thread, read elsewhere)
         std::atomic<bool> m_running{false};
         std::thread m_tickThread;
         std::chrono::steady_clock::time_point m_startTime;

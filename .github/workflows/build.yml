@@ -45,7 +45,7 @@ jobs:
       run: ./tools/validate-prompts.sh --ci
 
   # ===========================================================================
-  # Linux Build — GCC with AddressSanitizer
+  # Linux Build — GCC with AddressSanitizer + UBSan + LSan
   # ===========================================================================
   build-linux-asan:
     runs-on: ubuntu-24.04
@@ -60,7 +60,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
 
-    - name: Configure CMake (ASan + UBSan)
+    - name: Configure CMake (ASan + UBSan + LSan)
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
@@ -73,13 +73,122 @@ jobs:
     - name: Build
       run: cmake --build build --parallel $(nproc)
 
-    - name: Run Tests under ASan
+    - name: Run Tests under ASan + UBSan + LSan
       env:
+        ASAN_OPTIONS: detect_leaks=1:halt_on_error=0:print_stats=1
+        UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=0
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/Tests/lsan_suppressions.txt
       run: |
         cd build
-        ctest --output-on-failure || true
-        ./bin/SparkTests
+        ./bin/SparkTests --output-file asan-ubsan-results.txt 2>&1 | tee asan-ubsan-console.txt
+        # Capture sanitizer stderr output separately
+        cat asan-ubsan-console.txt >> asan-ubsan-results.txt || true
+
+    - name: Upload ASan + UBSan report
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: sanitizer-report-asan-ubsan
+        path: build/asan-ubsan-results.txt
+        retention-days: 14
+
+  # ===========================================================================
+  # Linux Build — GCC with ThreadSanitizer
+  # ===========================================================================
+  build-linux-tsan:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
+
+    - name: Configure CMake (TSan)
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DBUILD_TESTS=ON \
+          -DCMAKE_C_COMPILER=gcc \
+          -DCMAKE_CXX_COMPILER=g++ \
+          -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+          -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Run Tests under TSan
+      env:
+        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1
+      run: |
+        cd build
+        ./bin/SparkTests --output-file tsan-results.txt 2>&1 | tee tsan-console.txt
+        cat tsan-console.txt >> tsan-results.txt || true
+
+    - name: Upload TSan report
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: sanitizer-report-tsan
+        path: build/tsan-results.txt
+        retention-days: 14
+
+  # ===========================================================================
+  # Linux Build — Clang with MemorySanitizer
+  # MSan requires all code (including stdlib) to be instrumented, so we use
+  # Clang's built-in instrumented libc++. Marked continue-on-error because
+  # third-party libraries (Jolt, etc.) are not MSan-instrumented.
+  # ===========================================================================
+  build-linux-msan:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang cmake libgl-dev libvulkan-dev libsdl2-dev libc++-dev libc++abi-dev
+
+    - name: Configure CMake (MSan)
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DBUILD_TESTS=ON \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_CXX_FLAGS="-fsanitize=memory -fno-omit-frame-pointer -stdlib=libc++" \
+          -DCMAKE_C_FLAGS="-fsanitize=memory -fno-omit-frame-pointer" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -lc++abi" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Run Tests under MSan
+      env:
+        MSAN_OPTIONS: halt_on_error=0:print_stats=1
+      run: |
+        cd build
+        ./bin/SparkTests --output-file msan-results.txt 2>&1 | tee msan-console.txt
+        cat msan-console.txt >> msan-results.txt || true
+
+    - name: Upload MSan report
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: sanitizer-report-msan
+        path: build/msan-results.txt
+        retention-days: 14
 
   # ===========================================================================
   # Windows Build (MSVC VS 2022, v143 toolset + DirectX 11)

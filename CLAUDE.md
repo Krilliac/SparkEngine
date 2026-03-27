@@ -420,7 +420,7 @@ cmake --build build --parallel $(nproc)
 cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
 ```
 
-**Linux GCC AddressSanitizer** (Debug):
+**Linux GCC AddressSanitizer + UBSan + LSan** (Debug):
 ```bash
 cmake -B build \
   -DCMAKE_BUILD_TYPE=Debug \
@@ -430,7 +430,35 @@ cmake -B build \
   -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
   -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 cmake --build build --parallel $(nproc)
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=0 LSAN_OPTIONS=suppressions=Tests/lsan_suppressions.txt \
+  cd build && ./bin/SparkTests --output-file asan-results.txt && cd ..
+```
+
+**Linux GCC ThreadSanitizer** (Debug):
+```bash
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DBUILD_TESTS=ON \
+  -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
+cmake --build build --parallel $(nproc)
+TSAN_OPTIONS=halt_on_error=0 cd build && ./bin/SparkTests --output-file tsan-results.txt && cd ..
+```
+
+**Linux Clang MemorySanitizer** (Debug):
+```bash
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DBUILD_TESTS=ON \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_CXX_FLAGS="-fsanitize=memory -fno-omit-frame-pointer -stdlib=libc++" \
+  -DCMAKE_C_FLAGS="-fsanitize=memory -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -lc++abi" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
+cmake --build build --parallel $(nproc)
+MSAN_OPTIONS=halt_on_error=0 cd build && ./bin/SparkTests --output-file msan-results.txt && cd ..
 ```
 
 **Windows MSVC VS 2022 (v143)** (Debug + Release):
@@ -453,7 +481,9 @@ ctest --test-dir build -C Release --output-on-failure
 | `validate-prompts` | ubuntu-24.04 | — | — | `--ci` |
 | `build-linux-gcc` | ubuntu-24.04 | GCC | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
-| `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan |
+| `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan + LSan |
+| `build-linux-tsan` | ubuntu-24.04 | GCC | Debug | TSan (thread races) |
+| `build-linux-msan` | ubuntu-24.04 | Clang | Debug | MSan (`continue-on-error`) |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |

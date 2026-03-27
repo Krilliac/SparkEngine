@@ -20,7 +20,7 @@
 **Quality & Testing:**
 
 [![Tests](https://img.shields.io/badge/tests-1%2C989_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/master/Tests)
-[![ASan](https://img.shields.io/badge/sanitizers-ASan_%2B_UBSan-green)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![Sanitizers](https://img.shields.io/badge/sanitizers-ASan_UBSan_LSan_TSan_MSan-green)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
 [![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-format)
 [![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-tidy)
 
@@ -399,8 +399,9 @@ Two GitHub Actions workflows run automatically:
 **`build.yml`** — runs on every push / PR to `main`, `develop`, and `feature/**`:
 - Platforms: Windows (MSVC VS 2022 + experimental VS 2026^1), Linux GCC, Linux Clang
 - Configurations: Debug and Release matrix
-- Steps: checkout with submodules, CMake configure, build, test (Release only), artifact upload
-- Artifacts retained for 7 days
+- Sanitizers: ASan + UBSan + LSan (GCC), TSan (GCC), MSan (Clang, `continue-on-error`)
+- Steps: checkout with submodules, CMake configure, build, test, sanitizer reports uploaded as artifacts
+- Artifacts retained for 14 days
 
 > ^1 **VS 2026 (v144 toolset):** The VS 2026 CI job is included for forward compatibility but will be skipped until GitHub Actions runners ship with the v144 platform toolset. It is marked `continue-on-error` and does not gate merges.
 
