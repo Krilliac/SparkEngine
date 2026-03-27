@@ -315,6 +315,12 @@ int main(int argc, char** argv)
     logger.AddSink(std::make_unique<Spark::StderrSink>());
     logger.SetGlobalLevel(Spark::LogLevel::Debug);
 
+    // Disable auto stack traces during tests — many tests deliberately trigger
+    // errors (refused connections, invalid params, etc.) and the multi-line
+    // stack traces clutter output and can confuse CI error parsers.
+    // Individual tests that verify stack trace capture enable it explicitly.
+    logger.SetStackTraceLevel(Spark::LogLevel::Off);
+
     auto& tests = GetTestRegistry();
     int passed = 0;
     int failed = 0;
