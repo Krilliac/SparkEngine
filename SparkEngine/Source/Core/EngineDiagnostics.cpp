@@ -964,6 +964,24 @@ namespace Spark
         console.RegisterCommand(
             "diag_scripting", [](const std::vector<std::string>&) -> std::string
             { return RunSingleDiag(DiagScripting); }, "Diagnose scripting engines (AngelScript, Lua)", "Diagnostics");
+
+        // Debug utility commands
+        console.RegisterCommand(
+            "diag_cpu", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagCpuDebugger); },
+            "Diagnose CPU debugger (section timing, hotspots)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_cache", [](const std::vector<std::string>&) -> std::string
+            { return RunSingleDiag(DiagCacheDebugger); }, "Diagnose cache debugger (hit/miss tracking)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_io", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagIODebugger); },
+            "Diagnose I/O debugger (file operation tracking)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_threads",
+            [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagThreadDebugger); },
+            "Diagnose thread debugger (lifecycle, contention)", "Diagnostics");
     }
 
 } // namespace Spark

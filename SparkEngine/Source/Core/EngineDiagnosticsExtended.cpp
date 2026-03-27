@@ -27,6 +27,10 @@
 #include "Utils/GPUPerfCounters.h"
 #include "Utils/JobSystem.h"
 #include "Utils/Profiler.h"
+#include "Utils/CpuDebugger.h"
+#include "Utils/CacheDebugger.h"
+#include "Utils/IODebugger.h"
+#include "Utils/ThreadDebugger.h"
 
 #include <atomic>
 #include <future>
@@ -293,6 +297,85 @@ namespace Spark
     }
 
     // ========================================================================
+    // CpuDebugger
+    // ========================================================================
+
+    void DiagCpuDebugger(DiagReport& report)
+    {
+        const std::string sub = "CpuDebugger";
+
+        auto& cd = CpuDebugger::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        cd.SetEnabled(true);
+        cd.BeginSection("diag_test_section", "Diagnostics");
+        volatile int x = 0;
+        for (int i = 0; i < 1000; ++i)
+            x += i;
+        cd.EndSection("diag_test_section");
+
+        auto stats = cd.GetSectionStats("diag_test_section");
+        report.Add(sub, "Section timing recorded", stats.hitCount >= 1);
+        report.Add(sub, "Duration measured", stats.totalTimeMs >= 0.0f);
+    }
+
+    // ========================================================================
+    // CacheDebugger
+    // ========================================================================
+
+    void DiagCacheDebugger(DiagReport& report)
+    {
+        const std::string sub = "CacheDebugger";
+
+        auto& cd = CacheDebugger::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        cd.RegisterCache("diag_test_cache", 100, 0);
+        cd.RecordHit("diag_test_cache");
+        cd.RecordMiss("diag_test_cache");
+
+        auto stats = cd.GetCacheStats("diag_test_cache");
+        report.Add(sub, "Hit recorded", stats.hits >= 1);
+        report.Add(sub, "Miss recorded", stats.misses >= 1);
+        report.Add(sub, "Hit rate computed", stats.hitRatePercent > 0.0f);
+    }
+
+    // ========================================================================
+    // IODebugger
+    // ========================================================================
+
+    void DiagIODebugger(DiagReport& report)
+    {
+        const std::string sub = "IODebugger";
+
+        auto& io = IODebugger::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        io.RecordRead("diag_test.dat", 1024, 0.5f, __FILE__, __LINE__, __FUNCTION__);
+        report.Add(sub, "Read recorded", io.GetTotalOperationCount() >= 1);
+        report.Add(sub, "Bytes tracked", io.GetTotalBytesRead() >= 1024);
+    }
+
+    // ========================================================================
+    // ThreadDebugger
+    // ========================================================================
+
+    void DiagThreadDebugger(DiagReport& report)
+    {
+        const std::string sub = "ThreadDebugger";
+
+        auto& td = ThreadDebugger::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        uint64_t tid = ThreadDebugger::GetCurrentThreadId();
+        report.Add(sub, "Thread ID non-zero", tid != 0);
+
+        td.RecordThreadStart(tid, "DiagThread", __FILE__, __LINE__, __FUNCTION__);
+        report.Add(sub, "Thread tracked", td.GetActiveThreadCount() >= 1);
+        td.RecordThreadEnd(tid);
+    }
+
+    // ========================================================================
     // DiagRunAll — master orchestrator
     // ========================================================================
 
@@ -326,6 +409,12 @@ namespace Spark
         DiagDestruction(report);
         DiagFreezeSystem(report);
         DiagScripting(report);
+
+        // Debug utility diagnostics
+        DiagCpuDebugger(report);
+        DiagCacheDebugger(report);
+        DiagIODebugger(report);
+        DiagThreadDebugger(report);
     }
 
 } // namespace Spark
