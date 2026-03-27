@@ -23,13 +23,14 @@
 [![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-format)
 [![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-tidy)
 
-**Sanitizers (CI-enforced):**
+**Sanitizers (CI-enforced) — click to download latest report:**
 
-[![ASan](https://img.shields.io/badge/ASan-address_errors-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
-[![UBSan](https://img.shields.io/badge/UBSan-undefined_behavior-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
-[![LSan](https://img.shields.io/badge/LSan-memory_leaks-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
-[![TSan](https://img.shields.io/badge/TSan-data_races-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
-[![MSan](https://img.shields.io/badge/MSan-uninitialized_memory_(advisory)-yellow?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![ASan](https://img.shields.io/badge/⬇_ASan-address_errors-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/sanitizer-report-asan-ubsan-lsan.zip)
+[![UBSan](https://img.shields.io/badge/⬇_UBSan-undefined_behavior-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/sanitizer-report-asan-ubsan-lsan.zip)
+[![LSan](https://img.shields.io/badge/⬇_LSan-memory_leaks-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/sanitizer-report-asan-ubsan-lsan.zip)
+[![TSan](https://img.shields.io/badge/⬇_TSan-data_races-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/sanitizer-report-tsan.zip)
+[![MSan](https://img.shields.io/badge/⬇_MSan-uninitialized_memory_(advisory)-yellow?logo=gnuprivacyguard&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/sanitizer-report-msan.zip)
+[![Coverage](https://img.shields.io/badge/⬇_Coverage-lcov_report-blue?logo=codecov&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/coverage-report.zip)
 
 **Rendering Backends:**
 
@@ -72,6 +73,26 @@ The commit hash shown on each badge matches the build you are downloading.
 [![Linux Debug](https://img.shields.io/badge/Linux-Debug-555555?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Debug.tar.gz)
 
 > All downloads are from the [`latest` release](https://github.com/Krilliac/SparkEngine/releases/tag/latest). Each release body includes the exact commit hash and timestamp of the build.
+
+### CI Build Artifacts (latest Working branch)
+
+Build artifacts from the most recent CI run on the `Working` branch. These are per-commit builds, updated automatically. Provided via [nightly.link](https://nightly.link) (no GitHub login required).
+
+**Build Binaries:**
+
+[![Windows VS2022 Release](https://img.shields.io/badge/⬇_Windows_VS2022-Release-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/SparkEngine-Windows-VS2022-Release.zip)
+[![Linux GCC Release](https://img.shields.io/badge/⬇_Linux_GCC-Release-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/SparkEngine-Linux-GCC-Release.zip)
+[![Linux Clang Release](https://img.shields.io/badge/⬇_Linux_Clang-Release-A9A9A9?style=for-the-badge&logo=llvm&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/SparkEngine-Linux-Clang-Release.zip)
+
+**Sanitizer Reports:**
+
+[![ASan+UBSan+LSan Report](https://img.shields.io/badge/⬇_ASan+UBSan+LSan-report-2ea44f?style=for-the-badge&logo=gnuprivacyguard&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/sanitizer-report-asan-ubsan-lsan.zip)
+[![TSan Report](https://img.shields.io/badge/⬇_TSan-report-2ea44f?style=for-the-badge&logo=gnuprivacyguard&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/sanitizer-report-tsan.zip)
+[![MSan Report](https://img.shields.io/badge/⬇_MSan-report_(advisory)-yellow?style=for-the-badge&logo=gnuprivacyguard&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/sanitizer-report-msan.zip)
+
+**Code Coverage:**
+
+[![Coverage Report](https://img.shields.io/badge/⬇_Coverage-lcov_report-blue?style=for-the-badge&logo=codecov&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/coverage-report.zip)
 
 ## Key Features
 
