@@ -97,13 +97,18 @@ namespace Spark
 
         /**
      * @brief Capture the current call stack
-     * @param skipFrames Number of frames to skip (default 1 = skip Capture itself)
+     * @param skipFrames Number of caller frames to skip beyond Capture itself
+     *                   (default 1 = skip Capture + its immediate caller).
+     *                   Use 0 to include everything from the direct caller up.
      * @param maxFrames Maximum frames to capture
      * @return StackTrace object with resolved symbols
      */
         static StackTrace Capture(int skipFrames = 1, int maxFrames = MAX_FRAMES)
         {
             StackTrace trace;
+            // +1 to skip Capture() itself (when not inlined).
+            // CaptureRaw passes this directly to backtrace/CaptureStackBackTrace
+            // without adding further skips, so the total skip count is predictable.
             trace.m_capturedFrames = CaptureRaw(trace.m_rawAddresses, skipFrames + 1, maxFrames);
             trace.ResolveSymbols();
             return trace;
@@ -166,27 +171,31 @@ namespace Spark
                 maxFrames = MAX_FRAMES;
 
 #ifdef SPARK_PLATFORM_WINDOWS
-            int totalSkip = skipFrames + 1; // skip CaptureRaw itself
-            USHORT captured =
-                CaptureStackBackTrace(static_cast<DWORD>(totalSkip), static_cast<DWORD>(maxFrames), addresses, nullptr);
+            // CaptureStackBackTrace already skips its own frame internally,
+            // so pass skipFrames directly without adding an extra +1.
+            // In optimized builds CaptureRaw/Capture are inlined, so the extra
+            // skip was consuming real caller frames.
+            USHORT captured = CaptureStackBackTrace(static_cast<DWORD>(skipFrames), static_cast<DWORD>(maxFrames),
+                                                    addresses, nullptr);
             return static_cast<int>(captured);
 
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
             void* buffer[MAX_FRAMES + 32]; // extra room for skip
-            int totalCapture = maxFrames + skipFrames + 1;
+            int totalCapture = maxFrames + skipFrames;
             if (totalCapture > MAX_FRAMES + 32)
                 totalCapture = MAX_FRAMES + 32;
 
             int captured = backtrace(buffer, totalCapture);
-            int start = skipFrames + 1;
-            if (start >= captured)
+            // backtrace() does not include its own frame, so buffer[0] is
+            // CaptureRaw (or its inlined caller). Skip exactly skipFrames.
+            if (skipFrames >= captured)
                 return 0;
 
-            int count = captured - start;
+            int count = captured - skipFrames;
             if (count > maxFrames)
                 count = maxFrames;
             for (int i = 0; i < count; ++i)
-                addresses[i] = buffer[start + i];
+                addresses[i] = buffer[skipFrames + i];
             return count;
 #else
             (void)addresses;

@@ -197,6 +197,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
         -Wno-unused-function
         -Wno-reorder
         -Wno-ignored-qualifiers
+        -fno-omit-frame-pointer  # Preserve frame pointers so backtrace() can walk the full call stack
     )
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         add_compile_options(
