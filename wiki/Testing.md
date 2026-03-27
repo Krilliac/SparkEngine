@@ -438,7 +438,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*170 test files, 2077+ test cases*
+*173 test files, 2098+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -496,6 +496,8 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestECSStress` | 10 |
 | `TestECSWorld` | 11 |
 | `TestEngineContext` | 18 |
+| `TestEngineDiagnostics` | 4 |
+| `TestEngineMonitor` | 10 |
 | `TestEntityArchetype` | 6 |
 | `TestEntityEventBus` | 11 |
 | `TestEnvironmentQuery` | 12 |
@@ -510,6 +512,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestFrameAllocator` | 8 |
 | `TestFreezeSystem` | 5 |
 | `TestFrustumCulling` | 11 |
+| `TestFullEngineDiagnostics` | 7 |
 | `TestGPUPerfCounters` | 2 |
 | `TestGameMode` | 5 |
 | `TestGameplayStress` | 15 |
