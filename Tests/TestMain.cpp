@@ -8,6 +8,8 @@
  * CLI options:
  *   --output-file <path>   Write all test output to a file
  *   --errors-only          Only include failed tests and error details in output file
+ *   --junit-xml <path>     Write JUnit XML report (for CI integration)
+ *   --shuffle [seed]       Randomize test execution order (seed for reproducibility)
  *   --help                 Show usage information
  *
  * Environment variables (still supported):
@@ -19,13 +21,77 @@
 #include "TestFramework.h"
 #include "../SparkEngine/Source/Utils/Logger.h"
 
+#include <algorithm>
+#include <chrono>
 #include <fstream>
+#include <random>
 #include <sstream>
+
+#ifndef _WIN32
+#include <csignal>
+#include <cstdio>
+#include <cstring>
+#include <unistd.h>
+#endif
 
 // Global test state (defined here, declared extern in TestFramework.h)
 int g_assertionsPassed = 0;
 int g_assertionsFailed = 0;
 std::string g_currentTest;
+
+// ============================================================================
+// Per-test result storage (for timing, JUnit XML, and slowest-test summary)
+// ============================================================================
+
+struct TestResult
+{
+    std::string name;
+    double durationMs = 0.0;
+    int assertions = 0;
+    bool passed = true;
+    std::string failureOutput;
+};
+
+// ============================================================================
+// Signal handling — catch crashes so they don't silently kill the suite
+// ============================================================================
+
+#ifndef _WIN32
+static void CrashSignalHandler(int sig)
+{
+    const char* sigName = "UNKNOWN";
+    switch (sig)
+    {
+    case SIGSEGV:
+        sigName = "SIGSEGV";
+        break;
+    case SIGABRT:
+        sigName = "SIGABRT";
+        break;
+    case SIGFPE:
+        sigName = "SIGFPE";
+        break;
+    }
+
+    // Use write() — async-signal-safe, unlike std::cerr
+    const char* prefix = "\n[ CRASH  ] ";
+    [[maybe_unused]] auto r1 = write(STDERR_FILENO, prefix, 12);
+    [[maybe_unused]] auto r2 = write(STDERR_FILENO, g_currentTest.c_str(), g_currentTest.size());
+    const char* mid = " (signal: ";
+    [[maybe_unused]] auto r3 = write(STDERR_FILENO, mid, 10);
+    [[maybe_unused]] auto r4 = write(STDERR_FILENO, sigName, strlen(sigName));
+    const char* suffix = ")\n";
+    [[maybe_unused]] auto r5 = write(STDERR_FILENO, suffix, 2);
+    _exit(128 + sig);
+}
+
+static void InstallCrashHandlers()
+{
+    signal(SIGSEGV, CrashSignalHandler);
+    signal(SIGABRT, CrashSignalHandler);
+    signal(SIGFPE, CrashSignalHandler);
+}
+#endif
 
 // ============================================================================
 // Output helper — writes to console and optionally to a file
@@ -51,14 +117,6 @@ struct TestOutput
             file << msg;
     }
 
-    // Error output — always written to both console and file
-    void PrintError(const std::string& msg)
-    {
-        std::cerr << msg;
-        if (hasFile)
-            file << msg;
-    }
-
     // Summary lines — always written to file regardless of errors-only mode
     void PrintSummary(const std::string& msg)
     {
@@ -68,6 +126,105 @@ struct TestOutput
     }
 };
 
+// ============================================================================
+// JUnit XML output
+// ============================================================================
+
+static std::string XmlEscape(const std::string& s)
+{
+    std::string result;
+    result.reserve(s.size());
+    for (char c : s)
+    {
+        switch (c)
+        {
+        case '&':
+            result += "&amp;";
+            break;
+        case '<':
+            result += "&lt;";
+            break;
+        case '>':
+            result += "&gt;";
+            break;
+        case '"':
+            result += "&quot;";
+            break;
+        case '\'':
+            result += "&apos;";
+            break;
+        default:
+            result += c;
+        }
+    }
+    return result;
+}
+
+static void WriteJUnitXml(const std::string& path, const std::vector<TestResult>& results, double totalTimeMs)
+{
+    std::ofstream xml(path, std::ios::out | std::ios::trunc);
+    if (!xml.is_open())
+    {
+        std::cerr << "Warning: Could not open JUnit XML file: " << path << "\n";
+        return;
+    }
+
+    int totalTests = static_cast<int>(results.size());
+    int failures = 0;
+    for (const auto& r : results)
+    {
+        if (!r.passed)
+            ++failures;
+    }
+
+    xml << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+    xml << "<testsuites tests=\"" << totalTests << "\" failures=\"" << failures << "\" time=\""
+        << (totalTimeMs / 1000.0) << "\">\n";
+    xml << "  <testsuite name=\"SparkEngine\" tests=\"" << totalTests << "\" failures=\"" << failures << "\" time=\""
+        << (totalTimeMs / 1000.0) << "\">\n";
+
+    for (const auto& r : results)
+    {
+        xml << "    <testcase name=\"" << XmlEscape(r.name) << "\" time=\"" << (r.durationMs / 1000.0) << "\"";
+        if (r.passed)
+        {
+            xml << "/>\n";
+        }
+        else
+        {
+            xml << ">\n";
+            xml << "      <failure message=\"Test failed\">" << XmlEscape(r.failureOutput) << "</failure>\n";
+            xml << "    </testcase>\n";
+        }
+    }
+
+    xml << "  </testsuite>\n";
+    xml << "</testsuites>\n";
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+static std::string FormatDuration(double ms)
+{
+    if (ms < 1.0)
+        return std::to_string(static_cast<int>(ms * 1000.0)) + "us";
+    if (ms < 1000.0)
+    {
+        std::ostringstream oss;
+        oss << std::fixed;
+        oss.precision(1);
+        oss << ms << "ms";
+        return oss.str();
+    }
+    std::ostringstream oss;
+    oss << std::fixed;
+    oss.precision(2);
+    oss << (ms / 1000.0) << "s";
+    return oss.str();
+}
+
 static void PrintUsage(const char* argv0)
 {
     std::cout << "Usage: " << argv0 << " [options]\n"
@@ -75,6 +232,8 @@ static void PrintUsage(const char* argv0)
               << "Options:\n"
               << "  --output-file <path>   Write test output to a file\n"
               << "  --errors-only          Only write failed tests to the output file\n"
+              << "  --junit-xml <path>     Write JUnit XML report for CI integration\n"
+              << "  --shuffle [seed]       Randomize test order (optional integer seed)\n"
               << "  --help                 Show this help message\n"
               << "\n"
               << "Environment variables:\n"
@@ -89,9 +248,16 @@ static void PrintUsage(const char* argv0)
 
 int main(int argc, char** argv)
 {
+#ifndef _WIN32
+    InstallCrashHandlers();
+#endif
+
     // Parse CLI arguments
     std::string outputFilePath;
+    std::string junitXmlPath;
     bool errorsOnly = false;
+    bool shuffle = false;
+    unsigned int shuffleSeed = 0;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -100,9 +266,21 @@ int main(int argc, char** argv)
         {
             outputFilePath = argv[++i];
         }
+        else if (arg == "--junit-xml" && i + 1 < argc)
+        {
+            junitXmlPath = argv[++i];
+        }
         else if (arg == "--errors-only")
         {
             errorsOnly = true;
+        }
+        else if (arg == "--shuffle")
+        {
+            shuffle = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-')
+                shuffleSeed = static_cast<unsigned int>(std::stoul(argv[++i]));
+            else
+                shuffleSeed = std::random_device{}();
         }
         else if (arg == "--help")
         {
@@ -133,8 +311,18 @@ int main(int argc, char** argv)
     int passed = 0;
     int failed = 0;
 
+    // Shuffle test order if requested
+    if (shuffle)
+    {
+        std::mt19937 rng(shuffleSeed);
+        std::shuffle(tests.begin(), tests.end(), rng);
+    }
+
     out.PrintSummary("=== SparkEngine Test Suite ===\n");
-    out.PrintSummary("Running " + std::to_string(tests.size()) + " tests...\n\n");
+    out.PrintSummary("Running " + std::to_string(tests.size()) + " tests...\n");
+    if (shuffle)
+        out.PrintSummary("Shuffle seed: " + std::to_string(shuffleSeed) + "\n");
+    out.PrintSummary("\n");
 
     // Allow limiting test count for bisection debugging (SPARK_TEST_LIMIT=N)
     // Allow filtering to a specific file (SPARK_TEST_FILE=filename)
@@ -153,13 +341,16 @@ int main(int argc, char** argv)
         std::cerr.rdbuf(cerrCapture.rdbuf());
     }
 
-    int testIndex = 0;
+    std::vector<TestResult> results;
+    results.reserve(tests.size());
+
+    auto suiteStart = std::chrono::steady_clock::now();
+
     int ranCount = 0;
     for (auto& test : tests)
     {
         if (ranCount >= testLimit)
             break;
-        ++testIndex;
         if (fileFilter && test.file.find(fileFilter) == std::string::npos)
             continue;
         if (nameFilter && test.name.find(nameFilter) == std::string::npos)
@@ -167,6 +358,7 @@ int main(int argc, char** argv)
         ++ranCount;
         g_currentTest = test.name;
         int prevFailed = g_assertionsFailed;
+        int prevPassed = g_assertionsPassed;
 
         // Clear the stderr capture buffer for this test
         if (out.hasFile)
@@ -176,6 +368,8 @@ int main(int argc, char** argv)
         }
 
         out.Print("[ RUN    ] " + test.name + "\n");
+
+        auto testStart = std::chrono::steady_clock::now();
 
         try
         {
@@ -205,30 +399,43 @@ int main(int argc, char** argv)
                 out.file << msg;
         }
 
+        auto testEnd = std::chrono::steady_clock::now();
+        double durationMs = std::chrono::duration<double, std::milli>(testEnd - testStart).count();
+        int testAssertions = (g_assertionsPassed - prevPassed) + (g_assertionsFailed - prevFailed);
         bool testFailed = (g_assertionsFailed != prevFailed);
 
         // Flush any captured stderr (assertion failure details) to both original stderr and file
+        std::string capturedErrors;
         if (out.hasFile)
         {
-            std::string captured = cerrCapture.str();
-            if (!captured.empty())
+            capturedErrors = cerrCapture.str();
+            if (!capturedErrors.empty())
             {
-                origCerrBuf->sputn(captured.c_str(), static_cast<std::streamsize>(captured.size()));
-                out.file << captured;
+                origCerrBuf->sputn(capturedErrors.c_str(), static_cast<std::streamsize>(capturedErrors.size()));
+                out.file << capturedErrors;
             }
         }
 
+        // Build status line with timing and assertion count
+        std::string duration = FormatDuration(durationMs);
+        std::string suffix = " (" + duration + ", " + std::to_string(testAssertions) + " assertions)";
+
         if (!testFailed)
         {
-            out.Print("[   OK   ] " + test.name + "\n");
+            out.Print("[   OK   ] " + test.name + suffix + "\n");
             passed++;
         }
         else
         {
-            out.Print("[ FAILED ] " + test.name + "\n", true);
+            out.Print("[ FAILED ] " + test.name + suffix + "\n", true);
             failed++;
         }
+
+        results.push_back({test.name, durationMs, testAssertions, !testFailed, capturedErrors});
     }
+
+    auto suiteEnd = std::chrono::steady_clock::now();
+    double totalMs = std::chrono::duration<double, std::milli>(suiteEnd - suiteStart).count();
 
     // Restore original stderr
     if (origCerrBuf)
@@ -239,10 +446,33 @@ int main(int argc, char** argv)
                      std::to_string(tests.size()) + " total\n");
     out.PrintSummary("Assertions: " + std::to_string(g_assertionsPassed) + " passed, " +
                      std::to_string(g_assertionsFailed) + " failed\n");
+    out.PrintSummary("Duration:   " + FormatDuration(totalMs) + "\n");
+
+    // Print slowest tests
+    if (results.size() > 1)
+    {
+        std::vector<size_t> indices(results.size());
+        std::iota(indices.begin(), indices.end(), 0);
+        std::sort(indices.begin(), indices.end(),
+                  [&](size_t a, size_t b) { return results[a].durationMs > results[b].durationMs; });
+
+        size_t count = std::min<size_t>(10, results.size());
+        out.PrintSummary("\n=== Slowest " + std::to_string(count) + " Tests ===\n");
+        for (size_t i = 0; i < count; ++i)
+        {
+            const auto& r = results[indices[i]];
+            out.PrintSummary("  " + FormatDuration(r.durationMs) + "  " + r.name + "\n");
+        }
+    }
 
     if (out.hasFile)
-    {
         out.PrintSummary("\nOutput written to: " + outputFilePath + "\n");
+
+    // Write JUnit XML if requested
+    if (!junitXmlPath.empty())
+    {
+        WriteJUnitXml(junitXmlPath, results, totalMs);
+        out.PrintSummary("JUnit XML written to: " + junitXmlPath + "\n");
     }
 
     return (failed > 0) ? EXIT_FAILURE : EXIT_SUCCESS;

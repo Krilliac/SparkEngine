@@ -15,6 +15,7 @@
 #include <functional>
 #include <cstdlib>
 #include <cmath>
+#include <exception>
 
 // ============================================================================
 // Minimal Test Framework
@@ -217,6 +218,8 @@ extern std::string g_currentTest;
     do                                                                                                                 \
     {                                                                                                                  \
         bool caught = false;                                                                                           \
+        bool wrongType = false;                                                                                        \
+        std::string wrongMsg;                                                                                          \
         try                                                                                                            \
         {                                                                                                              \
             expr;                                                                                                      \
@@ -225,18 +228,31 @@ extern std::string g_currentTest;
         {                                                                                                              \
             caught = true;                                                                                             \
         }                                                                                                              \
+        catch (const std::exception& _ex)                                                                              \
+        {                                                                                                              \
+            wrongType = true;                                                                                          \
+            wrongMsg = _ex.what();                                                                                     \
+        }                                                                                                              \
         catch (...)                                                                                                    \
         {                                                                                                              \
+            wrongType = true;                                                                                          \
+            wrongMsg = "(non-std exception)";                                                                          \
         }                                                                                                              \
         if (caught)                                                                                                    \
         {                                                                                                              \
             g_assertionsPassed++;                                                                                      \
         }                                                                                                              \
+        else if (wrongType)                                                                                            \
+        {                                                                                                              \
+            g_assertionsFailed++;                                                                                      \
+            std::cerr << "  FAIL: Expected " << #exception_type << " from " << #expr << " but got: " << wrongMsg       \
+                      << " at " << __FILE__ << ":" << __LINE__ << "\n";                                                \
+        }                                                                                                              \
         else                                                                                                           \
         {                                                                                                              \
             g_assertionsFailed++;                                                                                      \
-            std::cerr << "  FAIL: Expected " << #exception_type << " from " << #expr << " at " << __FILE__ << ":"      \
-                      << __LINE__ << "\n";                                                                             \
+            std::cerr << "  FAIL: Expected " << #exception_type << " from " << #expr << " but nothing was thrown"      \
+                      << " at " << __FILE__ << ":" << __LINE__ << "\n";                                                \
         }                                                                                                              \
     } while (0)
 
@@ -261,5 +277,24 @@ extern std::string g_currentTest;
             g_assertionsFailed++;                                                                                      \
             std::cerr << "  FAIL: Unexpected exception from " << #expr << " at " << __FILE__ << ":" << __LINE__        \
                       << "\n";                                                                                         \
+        }                                                                                                              \
+    } while (0)
+
+#define EXPECT_STR_CONTAINS(haystack, needle)                                                                          \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        std::string _h = (haystack);                                                                                   \
+        std::string _n = (needle);                                                                                     \
+        if (_h.find(_n) != std::string::npos)                                                                          \
+        {                                                                                                              \
+            g_assertionsPassed++;                                                                                      \
+        }                                                                                                              \
+        else                                                                                                           \
+        {                                                                                                              \
+            g_assertionsFailed++;                                                                                      \
+            std::string hTrunc = _h.size() > 200 ? _h.substr(0, 200) + "..." : _h;                                     \
+            std::string nTrunc = _n.size() > 200 ? _n.substr(0, 200) + "..." : _n;                                     \
+            std::cerr << "  FAIL: \"" << hTrunc << "\" does not contain \"" << nTrunc << "\" at " << __FILE__ << ":"   \
+                      << __LINE__ << "\n";                                                                             \
         }                                                                                                              \
     } while (0)
