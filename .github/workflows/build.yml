@@ -175,8 +175,8 @@ jobs:
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -lc++abi" \
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
 
-    - name: Build
-      run: cmake --build build --parallel $(nproc)
+    - name: Build (SparkTests only)
+      run: cmake --build build --parallel $(nproc) --target SparkTests
 
     - name: Run Tests under MSan
       env:
