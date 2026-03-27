@@ -110,6 +110,10 @@ namespace Spark
         ErrorRaised,   ///< An engine error occurred (message filled)
         WarningRaised, ///< An engine warning occurred (message filled)
 
+        // Fault isolation
+        SubsystemFaulted,   ///< A subsystem was disabled after repeated faults (systemName filled)
+        SubsystemRecovered, ///< A faulted subsystem was re-enabled (systemName filled)
+
         // Memory
         AllocationSpike, ///< Memory allocation exceeded a threshold
 
@@ -167,6 +171,10 @@ namespace Spark
             return "WarningRaised";
         case DebugHookPoint::AllocationSpike:
             return "AllocationSpike";
+        case DebugHookPoint::SubsystemFaulted:
+            return "SubsystemFaulted";
+        case DebugHookPoint::SubsystemRecovered:
+            return "SubsystemRecovered";
         default:
             return "Unknown";
         }

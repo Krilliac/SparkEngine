@@ -185,6 +185,7 @@ add_executable(SparkTests
     TestFullEngineDiagnostics.cpp
     TestEngineLoadTest.cpp
     TestDebugUtilities.cpp
+    TestFaultIsolation.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
