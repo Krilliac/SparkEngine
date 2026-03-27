@@ -4,6 +4,7 @@
  */
 
 #include "LocalizationSystem.h"
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 
@@ -125,7 +126,7 @@ namespace Spark
 
         for (const auto& callback : callbacks)
         {
-            callback(languageCode);
+            SPARK_GUARDED_UPDATE("Localization:LanguageChanged", "Core", { callback(languageCode); });
         }
         return true;
     }

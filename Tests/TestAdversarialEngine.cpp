@@ -861,11 +861,15 @@ namespace
     };
 } // namespace
 
-TEST(Adversarial_EventBus_HandlerThrows_ExceptionPropagates)
+TEST(Adversarial_EventBus_HandlerThrows_ExceptionIsolated)
 {
     EventBus bus;
-    auto handle = bus.Subscribe<AdvEvtThrow>([](const AdvEvtThrow&) { throw std::runtime_error("boom"); });
-    EXPECT_THROW(bus.Publish(AdvEvtThrow{}), std::runtime_error);
+    int afterCount = 0;
+    auto handle1 = bus.Subscribe<AdvEvtThrow>([](const AdvEvtThrow&) { throw std::runtime_error("boom"); });
+    auto handle2 = bus.Subscribe<AdvEvtThrow>([&](const AdvEvtThrow&) { ++afterCount; });
+    // Fault isolation: throwing handler is caught, subsequent handlers still execute
+    EXPECT_NO_THROW(bus.Publish(AdvEvtThrow{}));
+    EXPECT_EQ(afterCount, 1);
 }
 
 TEST(Adversarial_EventBus_ClearAllThenPublish)

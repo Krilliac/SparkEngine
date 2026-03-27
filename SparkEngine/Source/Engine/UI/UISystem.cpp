@@ -306,7 +306,7 @@ namespace Spark::UI
     {
         for (auto& panel : m_panels)
         {
-            panel->Update(deltaTime);
+            SPARK_GUARDED_UPDATE("UI:PanelUpdate", "UI", { panel->Update(deltaTime); });
         }
     }
 
@@ -314,7 +314,7 @@ namespace Spark::UI
     {
         for (const auto& panel : m_panels)
         {
-            panel->Render();
+            SPARK_GUARDED_UPDATE("UI:PanelRender", "UI", { panel->Render(); });
         }
     }
 

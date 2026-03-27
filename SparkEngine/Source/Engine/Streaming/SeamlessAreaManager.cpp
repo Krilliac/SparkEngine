@@ -8,6 +8,7 @@
  */
 
 #include "SeamlessAreaManager.h"
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/DebugHookManager.h"
 #include "../../Utils/SparkConsole.h"
 #include "../../Utils/Validate.h"
@@ -360,7 +361,8 @@ namespace Spark::Streaming
 
         for (const auto& callback : m_stateCallbacks)
         {
-            callback(area.definition.areaId, newState);
+            SPARK_GUARDED_UPDATE("SeamlessArea:StateCallback", "Streaming",
+                                 { callback(area.definition.areaId, newState); });
         }
     }
 

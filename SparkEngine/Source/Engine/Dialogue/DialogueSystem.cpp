@@ -4,6 +4,7 @@
  */
 
 #include "DialogueSystem.h"
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/Hash.h"
 #include "../../Utils/JsonUtils.h"
 #include "../../Utils/Validate.h"
@@ -258,7 +259,7 @@ namespace Spark
 
         for (const auto& callback : m_endCallbacks)
         {
-            callback(treeId);
+            SPARK_GUARDED_UPDATE("Dialogue:EndCallback", "Dialogue", { callback(treeId); });
         }
     }
 
@@ -466,7 +467,8 @@ namespace Spark
         case DialogueNodeType::Event:
             for (const auto& callback : m_eventCallbacks)
             {
-                callback(node.eventName, node.eventData);
+                SPARK_GUARDED_UPDATE("Dialogue:EventCallback", "Dialogue",
+                                     { callback(node.eventName, node.eventData); });
             }
             // Auto-advance past event nodes
             if (!node.nextNodeId.empty())

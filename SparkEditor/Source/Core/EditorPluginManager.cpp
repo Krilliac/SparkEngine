@@ -7,6 +7,7 @@
 
 #include "EditorPluginManager.h"
 #include "EditorPanel.h"
+#include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 
@@ -282,7 +283,7 @@ namespace SparkEditor
         {
             if (entry.isInitialized)
             {
-                entry.plugin->Update(deltaTime);
+                SPARK_GUARDED_UPDATE("EditorPlugin:Update", "Editor", { entry.plugin->Update(deltaTime); });
             }
         }
     }
@@ -293,7 +294,7 @@ namespace SparkEditor
         {
             if (entry.isInitialized)
             {
-                entry.plugin->OnGUI();
+                SPARK_GUARDED_UPDATE("EditorPlugin:Render", "Editor", { entry.plugin->OnGUI(); });
             }
         }
     }
@@ -306,7 +307,7 @@ namespace SparkEditor
         {
             if (entry.isInitialized)
             {
-                entry.plugin->OnSceneLoad(scenePath);
+                SPARK_GUARDED_UPDATE("EditorPlugin:SceneLoad", "Editor", { entry.plugin->OnSceneLoad(scenePath); });
             }
         }
     }
@@ -317,7 +318,7 @@ namespace SparkEditor
         {
             if (entry.isInitialized)
             {
-                entry.plugin->OnSceneSave(scenePath);
+                SPARK_GUARDED_UPDATE("EditorPlugin:SceneSave", "Editor", { entry.plugin->OnSceneSave(scenePath); });
             }
         }
     }
@@ -328,7 +329,8 @@ namespace SparkEditor
         {
             if (entry.isInitialized)
             {
-                entry.plugin->OnEntitySelected(entityID);
+                SPARK_GUARDED_UPDATE("EditorPlugin:EntitySelect", "Editor",
+                                     { entry.plugin->OnEntitySelected(entityID); });
             }
         }
     }
@@ -339,7 +341,7 @@ namespace SparkEditor
         {
             if (entry.isInitialized)
             {
-                entry.plugin->OnMenuBar();
+                SPARK_GUARDED_UPDATE("EditorPlugin:MenuBar", "Editor", { entry.plugin->OnMenuBar(); });
             }
         }
     }

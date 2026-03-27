@@ -442,7 +442,10 @@ void ModuleManager::ResizeAll(int width, int height)
     for (auto& entry : m_modules)
     {
         if (entry.initialized && entry.instance)
-            entry.instance->OnResize(width, height);
+        {
+            std::string guardName = "Module:" + entry.name;
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnResize(width, height); });
+        }
     }
 }
 

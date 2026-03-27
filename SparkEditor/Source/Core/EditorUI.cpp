@@ -10,6 +10,7 @@
 #include "EditorTheme.h"
 #include "EditorFonts.h"
 #include "EditorIcons.h"
+#include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "../Panels/SceneViewPanel.h"
@@ -858,8 +859,8 @@ namespace SparkEditor
         {
             if (panel->IsVisible())
             {
-                panel->Update(deltaTime); // Fixed: Pass proper delta time
-                panel->Render();
+                SPARK_GUARDED_UPDATE("EditorPanel:Update", "Editor", { panel->Update(deltaTime); });
+                SPARK_GUARDED_UPDATE("EditorPanel:Render", "Editor", { panel->Render(); });
             }
         }
     }

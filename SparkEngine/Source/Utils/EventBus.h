@@ -213,7 +213,20 @@ namespace Spark
 
             ++s_publishDepth;
             for (auto& handler : snapshot)
-                handler(event);
+            {
+                try
+                {
+                    handler(event);
+                }
+                catch (const std::exception&)
+                {
+                    // Fault isolation: skip faulted handler, continue dispatching
+                }
+                catch (...)
+                {
+                    // Fault isolation: skip faulted handler, continue dispatching
+                }
+            }
             --s_publishDepth;
         }
 
