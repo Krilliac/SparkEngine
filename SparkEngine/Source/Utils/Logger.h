@@ -42,6 +42,12 @@
 #include <sstream>
 #include <queue>
 
+// Forward declare StackTrace to avoid circular includes — the .cpp pulls in the full header
+namespace Spark
+{
+    class StackTrace;
+} // namespace Spark
+
 namespace Spark
 {
 
@@ -216,6 +222,7 @@ namespace Spark
         std::string function;
         std::chrono::system_clock::time_point timestamp;
         std::thread::id threadId;
+        std::string stackTrace; ///< Auto-captured when level >= stackTraceLevel threshold
     };
 
     // ============================================================================
@@ -381,6 +388,20 @@ namespace Spark
         LogLevel GetCategoryLevel(LogCategory cat) const;
 
         /**
+         * @brief Set the minimum level at which stack traces are auto-captured
+         *
+         * Messages at this level or above will automatically include a stack trace.
+         * Default is Error (captures for Error and Fatal). Set to Warn to also
+         * capture stack traces on warnings. Set to Off to disable auto-capture.
+         */
+        void SetStackTraceLevel(LogLevel level) { m_stackTraceLevel.store(level, std::memory_order_relaxed); }
+
+        /**
+         * @brief Get the current stack trace auto-capture threshold
+         */
+        LogLevel GetStackTraceLevel() const { return m_stackTraceLevel.load(std::memory_order_relaxed); }
+
+        /**
          * @brief Check if a message at the given level and category would be logged
          */
         bool ShouldLog(LogLevel level, LogCategory category) const;
@@ -438,6 +459,7 @@ namespace Spark
         std::atomic<bool> m_initialized{false};
         std::atomic<bool> m_asyncEnabled{false};
         std::atomic<LogLevel> m_globalLevel{LogLevel::Trace};
+        std::atomic<LogLevel> m_stackTraceLevel{LogLevel::Error}; ///< Auto-capture threshold
 
         // Per-category filtering
         std::array<std::atomic<LogLevel>, static_cast<size_t>(LogCategory::Count)> m_categoryLevels;

@@ -13,6 +13,7 @@
 #include "../SparkEngine/Source/Utils/DebugOverlay.h"
 #include "../SparkEngine/Source/Utils/FileLogger.h"
 #include "../SparkEngine/Source/Utils/StackTrace.h"
+#include "../SparkEngine/Source/Utils/Logger.h"
 
 // ============================================================================
 // MemoryDebugger Tests
@@ -477,6 +478,109 @@ TEST(StackTrace_CompactString)
     std::string compact = trace.ToCompactString();
     // Should not crash
     EXPECT_TRUE(true);
+}
+
+// ============================================================================
+// Logger Auto-StackTrace Tests
+// ============================================================================
+
+TEST(Logger_StackTraceLevel_Default)
+{
+    auto& logger = Spark::Logger::Get();
+    // Default should be Error — only Error and Fatal get auto stack traces
+    EXPECT_EQ(static_cast<int>(logger.GetStackTraceLevel()), static_cast<int>(Spark::LogLevel::Error));
+}
+
+TEST(Logger_StackTraceLevel_SetGet)
+{
+    auto& logger = Spark::Logger::Get();
+    auto original = logger.GetStackTraceLevel();
+
+    logger.SetStackTraceLevel(Spark::LogLevel::Warn);
+    EXPECT_EQ(static_cast<int>(logger.GetStackTraceLevel()), static_cast<int>(Spark::LogLevel::Warn));
+
+    logger.SetStackTraceLevel(Spark::LogLevel::Off);
+    EXPECT_EQ(static_cast<int>(logger.GetStackTraceLevel()), static_cast<int>(Spark::LogLevel::Off));
+
+    // Restore
+    logger.SetStackTraceLevel(original);
+}
+
+TEST(Logger_ErrorLog_ContainsStackTrace)
+{
+    auto& logger = Spark::Logger::Get();
+    bool wasInit = logger.IsInitialized();
+    if (!wasInit)
+    {
+        logger.Initialize(false); // sync mode for testing
+    }
+
+    // Capture log output via a CallbackSink
+    std::string capturedOutput;
+    auto sink = std::make_unique<Spark::CallbackSink>([&capturedOutput](const Spark::LogMessage& msg)
+                                                      { capturedOutput = msg.stackTrace; });
+    logger.AddSink(std::move(sink));
+
+    logger.SetStackTraceLevel(Spark::LogLevel::Error);
+    logger.Log(Spark::LogLevel::Error, Spark::LogCategory::Core, __FILE__, __LINE__, __FUNCTION__, "Test error");
+
+    // Stack trace should be non-empty for Error level
+    EXPECT_FALSE(capturedOutput.empty());
+
+    logger.ClearSinks();
+    // Re-add stderr sink for remaining tests
+    logger.AddSink(std::make_unique<Spark::StderrSink>());
+}
+
+TEST(Logger_InfoLog_NoStackTrace)
+{
+    auto& logger = Spark::Logger::Get();
+    bool wasInit = logger.IsInitialized();
+    if (!wasInit)
+    {
+        logger.Initialize(false);
+    }
+
+    std::string capturedTrace;
+    auto sink = std::make_unique<Spark::CallbackSink>([&capturedTrace](const Spark::LogMessage& msg)
+                                                      { capturedTrace = msg.stackTrace; });
+    logger.AddSink(std::move(sink));
+
+    logger.SetStackTraceLevel(Spark::LogLevel::Error);
+    logger.Log(Spark::LogLevel::Info, Spark::LogCategory::Core, __FILE__, __LINE__, __FUNCTION__, "Test info");
+
+    // Info is below Error threshold — no stack trace
+    EXPECT_TRUE(capturedTrace.empty());
+
+    logger.ClearSinks();
+    logger.AddSink(std::make_unique<Spark::StderrSink>());
+}
+
+TEST(Logger_StackTraceOff_NoCapture)
+{
+    auto& logger = Spark::Logger::Get();
+    bool wasInit = logger.IsInitialized();
+    if (!wasInit)
+    {
+        logger.Initialize(false);
+    }
+
+    std::string capturedTrace;
+    auto sink = std::make_unique<Spark::CallbackSink>([&capturedTrace](const Spark::LogMessage& msg)
+                                                      { capturedTrace = msg.stackTrace; });
+    logger.AddSink(std::move(sink));
+
+    auto original = logger.GetStackTraceLevel();
+    logger.SetStackTraceLevel(Spark::LogLevel::Off);
+    logger.Log(Spark::LogLevel::Fatal, Spark::LogCategory::Core, __FILE__, __LINE__, __FUNCTION__,
+               "Test fatal with stack trace off");
+
+    // Off means no auto-capture even for Fatal
+    EXPECT_TRUE(capturedTrace.empty());
+
+    logger.SetStackTraceLevel(original);
+    logger.ClearSinks();
+    logger.AddSink(std::make_unique<Spark::StderrSink>());
 }
 
 // ============================================================================
