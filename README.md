@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![Downloads](https://img.shields.io/github/downloads/Krilliac/SparkEngine/total?color=brightgreen)](https://github.com/Krilliac/SparkEngine/releases)
-[![Last Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine)](https://github.com/Krilliac/SparkEngine/commits/master)
-[![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/loc.json)](https://github.com/Krilliac/SparkEngine)
-[![Source Files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/master/.github/badges/files.json)](https://github.com/Krilliac/SparkEngine)
+[![Last Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine)](https://github.com/Krilliac/SparkEngine/commits/Working)
+[![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/loc.json)](https://github.com/Krilliac/SparkEngine)
+[![Source Files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/files.json)](https://github.com/Krilliac/SparkEngine)
 
 **Platforms & Compilers:**
 
@@ -19,9 +19,9 @@
 
 **Quality & Testing:**
 
-[![Tests](https://img.shields.io/badge/tests-2%2C108_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/master/Tests)
-[![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-format)
-[![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/master/.clang-tidy)
+[![Tests](https://img.shields.io/badge/tests-2%2C108_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/Working/Tests)
+[![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-format)
+[![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-tidy)
 
 **Sanitizers (CI-enforced):**
 
@@ -59,7 +59,7 @@
 Latest binaries are published automatically on every commit to `master`.
 The commit hash shown on each badge matches the build you are downloading.
 
-[![Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine?label=built%20from&style=flat-square)](https://github.com/Krilliac/SparkEngine/commits/master)
+[![Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine?label=built%20from&style=flat-square)](https://github.com/Krilliac/SparkEngine/commits/Working)
 
 **Windows (VS 2022 · x64)**
 
