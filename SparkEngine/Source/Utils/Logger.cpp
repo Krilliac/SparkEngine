@@ -253,8 +253,9 @@ namespace Spark
         LogLevel stLevel = m_stackTraceLevel.load(std::memory_order_relaxed);
         if (stLevel != LogLevel::Off && level >= stLevel)
         {
-            // Skip 3 frames: Log() + SPARK_LOG macro + caller's wrapper (if any)
-            auto trace = StackTrace::Capture(3);
+            // Skip 2 frames: StackTrace::Capture() + Logger::Log()
+            // SPARK_LOG macros are inlined by the preprocessor, not real stack frames
+            auto trace = StackTrace::Capture(2);
             msg.stackTrace = trace.ToString("    ");
         }
 

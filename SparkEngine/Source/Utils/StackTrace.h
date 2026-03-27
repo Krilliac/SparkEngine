@@ -31,6 +31,7 @@
 #include <vector>
 #include <sstream>
 #include <cstdint>
+#include <cstring>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -40,6 +41,7 @@
 #include <execinfo.h>
 #include <cxxabi.h>
 #include <cstdlib>
+#include <dlfcn.h> // dladdr() for better symbol resolution
 #endif
 
 namespace Spark
@@ -239,26 +241,19 @@ namespace Spark
             }
 
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
-            char** symbols = backtrace_symbols(m_rawAddresses, m_capturedFrames);
-            if (symbols)
+            for (int i = 0; i < m_capturedFrames; ++i)
             {
-                for (int i = 0; i < m_capturedFrames; ++i)
+                StackFrame& frame = m_frames[i];
+                frame.address = reinterpret_cast<uintptr_t>(m_rawAddresses[i]);
+
+                // Use dladdr() for reliable symbol + module resolution
+                Dl_info dlInfo = {};
+                if (dladdr(m_rawAddresses[i], &dlInfo))
                 {
-                    StackFrame& frame = m_frames[i];
-                    frame.address = reinterpret_cast<uintptr_t>(m_rawAddresses[i]);
-
-                    // Try to demangle the symbol
-                    std::string raw = symbols[i];
-                    frame.functionName = raw;
-
-                    // Try demangling C++ names
-                    size_t start = raw.find('(');
-                    size_t end = raw.find('+', start);
-                    if (start != std::string::npos && end != std::string::npos)
+                    if (dlInfo.dli_sname)
                     {
-                        std::string mangled = raw.substr(start + 1, end - start - 1);
                         int status = 0;
-                        char* demangled = abi::__cxa_demangle(mangled.c_str(), nullptr, nullptr, &status);
+                        char* demangled = abi::__cxa_demangle(dlInfo.dli_sname, nullptr, nullptr, &status);
                         if (status == 0 && demangled)
                         {
                             frame.functionName = demangled;
@@ -266,14 +261,34 @@ namespace Spark
                         }
                         else
                         {
-                            frame.functionName = mangled;
+                            frame.functionName = dlInfo.dli_sname;
                         }
 
-                        // Extract module name
-                        frame.moduleName = raw.substr(0, start);
+                        // Compute displacement from function start
+                        if (dlInfo.dli_saddr)
+                        {
+                            frame.displacement = static_cast<int>(reinterpret_cast<uintptr_t>(m_rawAddresses[i]) -
+                                                                  reinterpret_cast<uintptr_t>(dlInfo.dli_saddr));
+                        }
+                    }
+
+                    if (dlInfo.dli_fname)
+                    {
+                        // Extract just the filename from the full path
+                        const char* slash = strrchr(dlInfo.dli_fname, '/');
+                        frame.moduleName = slash ? (slash + 1) : dlInfo.dli_fname;
                     }
                 }
-                free(symbols);
+                else
+                {
+                    // Fallback to backtrace_symbols for this frame
+                    char** sym = backtrace_symbols(&m_rawAddresses[i], 1);
+                    if (sym)
+                    {
+                        frame.functionName = sym[0];
+                        free(sym);
+                    }
+                }
             }
 #endif
         }
