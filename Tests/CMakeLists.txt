@@ -136,6 +136,7 @@ add_executable(SparkTests
     TestFreezeSystem.cpp
     TestNullRHIDevice.cpp
     TestGraphicsInitFallback.cpp
+    TestSoftwareRendering.cpp
     TestRenderCommandRing.cpp
     TestMultiISADispatch.cpp
     TestConstantBufferDiff.cpp

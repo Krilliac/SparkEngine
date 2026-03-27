@@ -438,7 +438,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*177 test files, 2159+ test cases*
+*178 test files, 2164+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -595,6 +595,7 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 | `TestShaderGraphCompiler` | 5 |
 | `TestShadowAtlas` | 7 |
 | `TestSkyAtmosphere` | 5 |
+| `TestSoftwareRendering` | 5 |
 | `TestSpatialGrid` | 16 |
 | `TestSplineMath` | 24 |
 | `TestSprite2DComponents` | 35 |

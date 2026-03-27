@@ -24,7 +24,15 @@
 #include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #elif defined(__linux__)
+#ifdef SPARK_EGL_SUPPORT
+#include <EGL/egl.h>
+#else
 #include <GL/glx.h>
+#endif
+// X11 defines 'None' as 0L which conflicts with GraphicsBackend::None
+#ifdef None
+#undef None
+#endif
 #endif
 
 #include <vector>
@@ -218,6 +226,10 @@ namespace Spark
 #ifdef _WIN32
                 HDC m_hdc = nullptr;
                 HGLRC m_hglrc = nullptr;
+#elif defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+                EGLDisplay m_eglDisplay = EGL_NO_DISPLAY;
+                EGLSurface m_eglSurface = EGL_NO_SURFACE;
+                EGLContext m_eglContext = EGL_NO_CONTEXT;
 #endif
             };
 
@@ -341,6 +353,16 @@ namespace Spark
                 RHIDeviceCapabilities m_capabilities;
                 RHIStatistics m_statistics;
                 bool m_debugEnabled = false;
+
+#if defined(__linux__) && !defined(SPARK_EGL_SUPPORT)
+                Display* m_glxDisplay = nullptr;
+                GLXContext m_glxContext = nullptr;
+                GLXPbuffer m_glxPbuffer = 0;
+#elif defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+                EGLDisplay m_bootstrapDisplay = EGL_NO_DISPLAY;
+                EGLContext m_bootstrapContext = EGL_NO_CONTEXT;
+                EGLSurface m_bootstrapSurface = EGL_NO_SURFACE;
+#endif
             };
 
         } // namespace OpenGL

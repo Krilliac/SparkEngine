@@ -301,6 +301,32 @@ namespace Spark
 
             GLSwapChain::GLSwapChain(const RHISwapChainDesc& desc) : m_desc(desc)
             {
+#if defined(__linux__)
+                // Linux headless (EGL or GLX): create an FBO as the "swap chain" back buffer.
+                // The GL context is already current from GLDevice::Initialize().
+                GLuint colorTex = 0;
+                glCreateTextures(GL_TEXTURE_2D, 1, &colorTex);
+                glTextureStorage2D(colorTex, 1, GL_RGBA8, desc.width, desc.height);
+
+                GLuint fbo = 0;
+                glCreateFramebuffers(1, &fbo);
+                glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, colorTex, 0);
+
+                GLenum status = glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER);
+                if (status != GL_FRAMEBUFFER_COMPLETE)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Headless swap chain FBO incomplete: 0x%x", status);
+                }
+
+                RHITextureDesc texDesc;
+                texDesc.width = desc.width;
+                texDesc.height = desc.height;
+                texDesc.format = desc.format;
+                texDesc.usage = RHITextureUsage::RenderTarget;
+                texDesc.debugName = "HeadlessBackBuffer";
+
+                m_backBuffer = std::make_unique<GLTexture>(texDesc, colorTex, fbo);
+#else
                 // Create a texture wrapper for the default framebuffer
                 RHITextureDesc texDesc;
                 texDesc.width = desc.width;
@@ -330,11 +356,14 @@ namespace Spark
                 m_hglrc = wglCreateContext(m_hdc);
                 wglMakeCurrent(m_hdc, m_hglrc);
 #endif
+#endif // SPARK_EGL_SUPPORT
             }
 
             GLSwapChain::~GLSwapChain()
             {
-#ifdef _WIN32
+#if defined(__linux__)
+                // FBO and texture are owned by the GLTexture destructor
+#elif defined(_WIN32)
                 if (m_hglrc)
                 {
                     wglMakeCurrent(nullptr, nullptr);
@@ -345,7 +374,11 @@ namespace Spark
 
             bool GLSwapChain::Present(bool)
             {
-#ifdef _WIN32
+#if defined(__linux__)
+                // Headless: flush all pending GL commands (no window to swap to)
+                glFlush();
+                return true;
+#elif defined(_WIN32)
                 if (m_hdc)
                 {
                     SwapBuffers(m_hdc);
@@ -738,7 +771,204 @@ namespace Spark
                 // OpenGL requires a current context before any GL calls (including GLAD loading).
                 // Create a temporary hidden window and context to bootstrap GLAD, then tear it down.
                 // The real context is created later by GLSwapChain with the application window.
-#ifdef _WIN32
+                //
+                // On Linux with EGL, we create a surfaceless EGL context using Mesa's software
+                // renderer (llvmpipe). This enables full GL rendering without a GPU or display.
+#if defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+                // EGL headless bootstrap — works with Mesa llvmpipe, no X11/GPU required
+                m_bootstrapDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+                if (m_bootstrapDisplay == EGL_NO_DISPLAY)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "eglGetDisplay failed");
+                    return false;
+                }
+
+                EGLint major = 0;
+                EGLint minor = 0;
+                if (!eglInitialize(m_bootstrapDisplay, &major, &minor))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "eglInitialize failed: 0x%x", eglGetError());
+                    return false;
+                }
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "EGL %d.%d initialized", major, minor);
+
+                // Request an OpenGL context (not OpenGL ES)
+                if (!eglBindAPI(EGL_OPENGL_API))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "eglBindAPI(EGL_OPENGL_API) failed: 0x%x",
+                                    eglGetError());
+                    eglTerminate(m_bootstrapDisplay);
+                    return false;
+                }
+
+                // Choose an EGL config that supports OpenGL rendering
+                // clang-format off
+                const EGLint configAttribs[] = {
+                    EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
+                    EGL_SURFACE_TYPE,    EGL_PBUFFER_BIT,
+                    EGL_RED_SIZE,        8,
+                    EGL_GREEN_SIZE,      8,
+                    EGL_BLUE_SIZE,       8,
+                    EGL_ALPHA_SIZE,      8,
+                    EGL_DEPTH_SIZE,      24,
+                    EGL_STENCIL_SIZE,    8,
+                    EGL_NONE
+                };
+                // clang-format on
+
+                EGLConfig config;
+                EGLint numConfigs = 0;
+                if (!eglChooseConfig(m_bootstrapDisplay, configAttribs, &config, 1, &numConfigs) || numConfigs == 0)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "eglChooseConfig failed: 0x%x (configs=%d)",
+                                    eglGetError(), numConfigs);
+                    eglTerminate(m_bootstrapDisplay);
+                    return false;
+                }
+
+                // Create a 1x1 PBuffer surface (required for context creation; rendering uses FBOs)
+                // clang-format off
+                const EGLint pbufferAttribs[] = {
+                    EGL_WIDTH,  1,
+                    EGL_HEIGHT, 1,
+                    EGL_NONE
+                };
+                // clang-format on
+
+                m_bootstrapSurface = eglCreatePbufferSurface(m_bootstrapDisplay, config, pbufferAttribs);
+                if (m_bootstrapSurface == EGL_NO_SURFACE)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "eglCreatePbufferSurface failed: 0x%x — trying surfaceless", eglGetError());
+                    // Surfaceless context is fine for FBO-only rendering
+                    m_bootstrapSurface = EGL_NO_SURFACE;
+                }
+
+                // Request a Core Profile context (Mesa llvmpipe supports up to GL 4.5)
+                // clang-format off
+                const EGLint contextAttribs[] = {
+                    EGL_CONTEXT_MAJOR_VERSION, 4,
+                    EGL_CONTEXT_MINOR_VERSION, 5,
+                    EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+                    EGL_NONE
+                };
+                // clang-format on
+
+                m_bootstrapContext = eglCreateContext(m_bootstrapDisplay, config, EGL_NO_CONTEXT, contextAttribs);
+                if (m_bootstrapContext == EGL_NO_CONTEXT)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "eglCreateContext failed: 0x%x", eglGetError());
+                    if (m_bootstrapSurface != EGL_NO_SURFACE)
+                        eglDestroySurface(m_bootstrapDisplay, m_bootstrapSurface);
+                    eglTerminate(m_bootstrapDisplay);
+                    return false;
+                }
+
+                if (!eglMakeCurrent(m_bootstrapDisplay, m_bootstrapSurface, m_bootstrapSurface, m_bootstrapContext))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "eglMakeCurrent failed: 0x%x", eglGetError());
+                    eglDestroyContext(m_bootstrapDisplay, m_bootstrapContext);
+                    if (m_bootstrapSurface != EGL_NO_SURFACE)
+                        eglDestroySurface(m_bootstrapDisplay, m_bootstrapSurface);
+                    eglTerminate(m_bootstrapDisplay);
+                    return false;
+                }
+
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "EGL headless context created successfully");
+#elif defined(__linux__) && !defined(SPARK_EGL_SUPPORT)
+                // GLX bootstrap — requires X11 display (use Xvfb for headless software rendering)
+                Display* bootstrapDpy = XOpenDisplay(nullptr);
+                if (!bootstrapDpy)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "XOpenDisplay failed — set DISPLAY or start Xvfb for software rendering");
+                    return false;
+                }
+
+                // clang-format off
+                int fbAttribs[] = {
+                    GLX_RENDER_TYPE,   GLX_RGBA_BIT,
+                    GLX_DRAWABLE_TYPE, GLX_PBUFFER_BIT | GLX_WINDOW_BIT,
+                    GLX_RED_SIZE,      8,
+                    GLX_GREEN_SIZE,    8,
+                    GLX_BLUE_SIZE,     8,
+                    GLX_ALPHA_SIZE,    8,
+                    GLX_DEPTH_SIZE,    24,
+                    GLX_STENCIL_SIZE,  8,
+                    0 // None
+                };
+                // clang-format on
+
+                int fbCount = 0;
+                GLXFBConfig* fbConfigs =
+                    glXChooseFBConfig(bootstrapDpy, DefaultScreen(bootstrapDpy), fbAttribs, &fbCount);
+                if (!fbConfigs || fbCount == 0)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "glXChooseFBConfig failed — no suitable config");
+                    XCloseDisplay(bootstrapDpy);
+                    return false;
+                }
+
+                // Create a PBuffer for off-screen rendering (no visible window needed)
+                // clang-format off
+                int pbAttribs[] = {
+                    GLX_PBUFFER_WIDTH,  1,
+                    GLX_PBUFFER_HEIGHT, 1,
+                    0 // None
+                };
+                // clang-format on
+
+                GLXPbuffer bootstrapPbuffer = glXCreatePbuffer(bootstrapDpy, fbConfigs[0], pbAttribs);
+
+                // Try to create a GL 4.5 Core context via ARB extension
+                auto glXCreateContextAttribsARB = reinterpret_cast<PFNGLXCREATECONTEXTATTRIBSARBPROC>(
+                    glXGetProcAddress(reinterpret_cast<const GLubyte*>("glXCreateContextAttribsARB")));
+
+                GLXContext bootstrapCtx = nullptr;
+                if (glXCreateContextAttribsARB)
+                {
+                    // clang-format off
+                    int ctxAttribs[] = {
+                        GLX_CONTEXT_MAJOR_VERSION_ARB, 4,
+                        GLX_CONTEXT_MINOR_VERSION_ARB, 5,
+                        GLX_CONTEXT_PROFILE_MASK_ARB,  GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+                        0 // None
+                    };
+                    // clang-format on
+
+                    bootstrapCtx =
+                        glXCreateContextAttribsARB(bootstrapDpy, fbConfigs[0], nullptr, 1 /*direct*/, ctxAttribs);
+                }
+
+                if (!bootstrapCtx)
+                {
+                    // Fallback: legacy context (may give a Compatibility Profile)
+                    XVisualInfo* vi = glXGetVisualFromFBConfig(bootstrapDpy, fbConfigs[0]);
+                    if (vi)
+                    {
+                        bootstrapCtx = glXCreateContext(bootstrapDpy, vi, nullptr, 1 /*direct*/);
+                        XFree(vi);
+                    }
+                }
+
+                XFree(fbConfigs);
+
+                if (!bootstrapCtx)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create GLX bootstrap context");
+                    glXDestroyPbuffer(bootstrapDpy, bootstrapPbuffer);
+                    XCloseDisplay(bootstrapDpy);
+                    return false;
+                }
+
+                glXMakeCurrent(bootstrapDpy, bootstrapPbuffer, bootstrapCtx);
+                m_glxDisplay = bootstrapDpy;
+                m_glxContext = bootstrapCtx;
+                m_glxPbuffer = bootstrapPbuffer;
+
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                               "GLX bootstrap context created (software rendering via Xvfb)");
+#elif defined(_WIN32)
                 WNDCLASSA wc = {};
                 wc.lpfnWndProc = DefWindowProcA;
                 wc.hInstance = GetModuleHandleA(nullptr);
@@ -804,7 +1034,18 @@ namespace Spark
                 if (!gladLoadGL())
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "gladLoadGL failed — no valid GL context");
-#ifdef _WIN32
+#if defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+                    eglMakeCurrent(m_bootstrapDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+                    eglDestroyContext(m_bootstrapDisplay, m_bootstrapContext);
+                    if (m_bootstrapSurface != EGL_NO_SURFACE)
+                        eglDestroySurface(m_bootstrapDisplay, m_bootstrapSurface);
+                    eglTerminate(m_bootstrapDisplay);
+#elif defined(__linux__) && !defined(SPARK_EGL_SUPPORT)
+                    glXMakeCurrent(m_glxDisplay, 0, nullptr);
+                    glXDestroyContext(m_glxDisplay, m_glxContext);
+                    glXDestroyPbuffer(m_glxDisplay, m_glxPbuffer);
+                    XCloseDisplay(m_glxDisplay);
+#elif defined(_WIN32)
                     wglMakeCurrent(nullptr, nullptr);
                     wglDeleteContext(bootstrapContext);
                     ReleaseDC(bootstrapWindow, bootstrapDC);
@@ -851,8 +1092,15 @@ namespace Spark
 
                 QueryCapabilities();
 
-                // Tear down the bootstrap context — the real context will be created by GLSwapChain
-#ifdef _WIN32
+                // Tear down the bootstrap context — the real context will be created by GLSwapChain.
+                // Exception: on Linux (EGL/GLX) we keep the bootstrap context alive as the
+                // rendering context, since headless mode uses FBOs for off-screen rendering.
+#if defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                               "EGL headless: keeping bootstrap context as rendering context");
+#elif defined(__linux__)
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLX: keeping bootstrap context as rendering context");
+#elif defined(_WIN32)
                 wglMakeCurrent(nullptr, nullptr);
                 wglDeleteContext(bootstrapContext);
                 ReleaseDC(bootstrapWindow, bootstrapDC);
@@ -873,6 +1121,34 @@ namespace Spark
                 SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLDevice::Shutdown");
                 m_immediateCommandList.reset();
+
+#if defined(__linux__) && !defined(SPARK_EGL_SUPPORT)
+                if (m_glxDisplay)
+                {
+                    glXMakeCurrent(m_glxDisplay, 0, nullptr);
+                    if (m_glxContext)
+                        glXDestroyContext(m_glxDisplay, m_glxContext);
+                    if (m_glxPbuffer)
+                        glXDestroyPbuffer(m_glxDisplay, m_glxPbuffer);
+                    XCloseDisplay(m_glxDisplay);
+                    m_glxDisplay = nullptr;
+                    m_glxContext = nullptr;
+                    m_glxPbuffer = 0;
+                }
+#elif defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+                if (m_bootstrapDisplay != EGL_NO_DISPLAY)
+                {
+                    eglMakeCurrent(m_bootstrapDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+                    if (m_bootstrapContext != EGL_NO_CONTEXT)
+                        eglDestroyContext(m_bootstrapDisplay, m_bootstrapContext);
+                    if (m_bootstrapSurface != EGL_NO_SURFACE)
+                        eglDestroySurface(m_bootstrapDisplay, m_bootstrapSurface);
+                    eglTerminate(m_bootstrapDisplay);
+                    m_bootstrapDisplay = EGL_NO_DISPLAY;
+                    m_bootstrapContext = EGL_NO_CONTEXT;
+                    m_bootstrapSurface = EGL_NO_SURFACE;
+                }
+#endif
             }
 
             void GLDevice::QueryCapabilities()

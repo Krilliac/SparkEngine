@@ -38,6 +38,12 @@ if(SPARK_VULKAN_AVAILABLE)
     )
 endif()
 
+if(SPARK_OPENGL_AVAILABLE)
+    list(APPEND RHI_SOURCES
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp"
+    )
+endif()
+
 add_executable(SparkShaderCompiler
     ${COMPILER_SOURCES}
     ${RHI_SOURCES}
@@ -80,6 +86,15 @@ endif()
 # OpenGL backend for shader compilation
 if(SPARK_OPENGL_AVAILABLE)
     target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_OPENGL_SUPPORT)
+    if(GLAD_FOUND)
+        target_link_libraries(SparkShaderCompiler PRIVATE glad)
+    endif()
+    if(NOT WIN32)
+        find_package(X11 QUIET)
+        if(X11_FOUND)
+            target_link_libraries(SparkShaderCompiler PRIVATE X11::X11 GLX)
+        endif()
+    endif()
 endif()
 
 set_target_properties(SparkShaderCompiler PROPERTIES
