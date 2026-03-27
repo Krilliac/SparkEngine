@@ -32,6 +32,7 @@
 #include <sstream>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -195,13 +196,34 @@ namespace Spark
 #endif
         }
 
+        /**
+         * @brief Initialize DbgHelp symbol handler once per process (Windows only)
+         *
+         * SymInitialize must be called exactly once before any Sym* calls.
+         * Calling it repeatedly without SymCleanup causes subsequent calls to fail.
+         * SymSetOptions configures PDB search, line resolution, and name undecorating.
+         */
+        static void EnsureSymbolsInitialized()
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            static std::once_flag s_symInitFlag;
+            std::call_once(s_symInitFlag,
+                           []()
+                           {
+                               HANDLE process = GetCurrentProcess();
+                               SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
+                               SymInitialize(process, nullptr, TRUE);
+                           });
+#endif
+        }
+
         void ResolveSymbols()
         {
             m_frames.resize(m_capturedFrames);
 
 #ifdef SPARK_PLATFORM_WINDOWS
+            EnsureSymbolsInitialized();
             HANDLE process = GetCurrentProcess();
-            SymInitialize(process, nullptr, TRUE);
 
             for (int i = 0; i < m_capturedFrames; ++i)
             {
