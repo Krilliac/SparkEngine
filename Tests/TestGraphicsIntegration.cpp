@@ -401,9 +401,13 @@ namespace TestNoise
 
     static int Hash(int seed, int x, int y)
     {
-        int h = seed ^ (x * 374761393) ^ (y * 668265263);
-        h = (h ^ (h >> 13)) * 1274126177;
-        return h;
+        // Use unsigned arithmetic to avoid signed integer overflow (UBSan)
+        auto us = static_cast<unsigned int>(seed);
+        auto ux = static_cast<unsigned int>(x);
+        auto uy = static_cast<unsigned int>(y);
+        unsigned int h = us ^ (ux * 374761393u) ^ (uy * 668265263u);
+        h = (h ^ (h >> 13)) * 1274126177u;
+        return static_cast<int>(h);
     }
 
     static float ValCoord2D(int seed, int x, int y)

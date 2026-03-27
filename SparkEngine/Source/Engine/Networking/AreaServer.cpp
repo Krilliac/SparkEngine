@@ -77,9 +77,12 @@ namespace Spark::Net
         UpdateSimulation(deltaTime);
         CheckEntityBoundaries();
 
-        m_stats.totalTicks++;
-        auto now = std::chrono::steady_clock::now();
-        m_stats.uptimeSeconds = std::chrono::duration<float>(now - m_startTime).count();
+        {
+            std::lock_guard<std::mutex> lock(m_statsMutex);
+            m_stats.totalTicks++;
+            auto now = std::chrono::steady_clock::now();
+            m_stats.uptimeSeconds = std::chrono::duration<float>(now - m_startTime).count();
+        }
     }
 
     // ============================================================================
@@ -141,8 +144,12 @@ namespace Spark::Net
 
         // Track the accepted entity
         m_trackedEntities[entity.networkID] = entity;
-        m_stats.entitiesMigratedIn++;
-        m_stats.entityCount = static_cast<uint32_t>(m_trackedEntities.size());
+
+        {
+            std::lock_guard<std::mutex> slock(m_statsMutex);
+            m_stats.entitiesMigratedIn++;
+            m_stats.entityCount = static_cast<uint32_t>(m_trackedEntities.size());
+        }
 
         SPARK_LOG_INFO("AreaServer",
                        "Area '%s' accepted migrating entity %u (type='%s') from owner %u at position (%.2f, %.2f, "
@@ -185,7 +192,10 @@ namespace Spark::Net
 
         MigratingEntity migration;
         migration.networkID = networkID;
-        migration.timestamp = m_stats.uptimeSeconds;
+        {
+            std::lock_guard<std::mutex> slock(m_statsMutex);
+            migration.timestamp = m_stats.uptimeSeconds;
+        }
 
         // Populate fields from tracked entity if available, otherwise use defaults
         if (it != m_trackedEntities.end())
@@ -211,12 +221,16 @@ namespace Spark::Net
         migration.serializedState = buffer.GetData();
 
         m_pendingMigrations.push_back(std::move(migration));
-        m_stats.entitiesMigratedOut++;
 
         // Remove from tracked entities
         if (it != m_trackedEntities.end())
         {
             m_trackedEntities.erase(it);
+        }
+
+        {
+            std::lock_guard<std::mutex> slock(m_statsMutex);
+            m_stats.entitiesMigratedOut++;
             m_stats.entityCount = static_cast<uint32_t>(m_trackedEntities.size());
         }
 
@@ -293,12 +307,18 @@ namespace Spark::Net
 
     std::string AreaServer::Console_GetStatus() const
     {
+        AreaServerStats snapshot;
+        {
+            std::lock_guard<std::mutex> lock(m_statsMutex);
+            snapshot = m_stats;
+        }
+
         std::ostringstream oss;
         oss << "AreaServer '" << m_config.areaName << "' (ID=" << m_config.areaId
-            << "): " << (m_running.load() ? "Running" : "Stopped") << " | Clients: " << m_stats.clientCount << "/"
-            << m_config.maxClients << " | Entities: " << m_stats.entityCount << " | Ticks: " << m_stats.totalTicks
-            << " | Uptime: " << m_stats.uptimeSeconds << "s" << " | Migrated in/out: " << m_stats.entitiesMigratedIn
-            << "/" << m_stats.entitiesMigratedOut;
+            << "): " << (m_running.load() ? "Running" : "Stopped") << " | Clients: " << snapshot.clientCount << "/"
+            << m_config.maxClients << " | Entities: " << snapshot.entityCount << " | Ticks: " << snapshot.totalTicks
+            << " | Uptime: " << snapshot.uptimeSeconds << "s" << " | Migrated in/out: " << snapshot.entitiesMigratedIn
+            << "/" << snapshot.entitiesMigratedOut;
         return oss.str();
     }
 
@@ -321,9 +341,12 @@ namespace Spark::Net
             auto tickDuration = std::chrono::duration_cast<std::chrono::microseconds>(tickEnd - tickStart);
 
             float tickMs = static_cast<float>(tickDuration.count()) / 1000.0f;
-            m_stats.averageTickMs = m_stats.averageTickMs * 0.95f + tickMs * 0.05f;
-            if (tickMs > m_stats.peakTickMs)
-                m_stats.peakTickMs = tickMs;
+            {
+                std::lock_guard<std::mutex> lock(m_statsMutex);
+                m_stats.averageTickMs = m_stats.averageTickMs * 0.95f + tickMs * 0.05f;
+                if (tickMs > m_stats.peakTickMs)
+                    m_stats.peakTickMs = tickMs;
+            }
 
             if (tickDuration < targetTickDuration)
             {
@@ -334,12 +357,22 @@ namespace Spark::Net
 
     void AreaServer::AddClient(ClientID clientId)
     {
+        float uptime;
+        {
+            std::lock_guard<std::mutex> lock(m_statsMutex);
+            uptime = m_stats.uptimeSeconds;
+        }
+
         std::lock_guard<std::mutex> lock(m_clientMutex);
         ClientRecord record;
         record.clientId = clientId;
-        record.lastHeartbeatTime = m_stats.uptimeSeconds;
+        record.lastHeartbeatTime = uptime;
         m_connectedClients[clientId] = record;
-        m_stats.clientCount = static_cast<uint32_t>(m_connectedClients.size());
+
+        {
+            std::lock_guard<std::mutex> slock(m_statsMutex);
+            m_stats.clientCount = static_cast<uint32_t>(m_connectedClients.size());
+        }
 
         SPARK_LOG_INFO("AreaServer", "Area '%s' added client %u (total: %u/%d).", m_config.areaName.c_str(), clientId,
                        m_stats.clientCount, m_config.maxClients);
@@ -349,10 +382,15 @@ namespace Spark::Net
     {
         std::lock_guard<std::mutex> lock(m_clientMutex);
         m_connectedClients.erase(clientId);
-        m_stats.clientCount = static_cast<uint32_t>(m_connectedClients.size());
+        uint32_t count = static_cast<uint32_t>(m_connectedClients.size());
+
+        {
+            std::lock_guard<std::mutex> slock(m_statsMutex);
+            m_stats.clientCount = count;
+        }
 
         SPARK_LOG_INFO("AreaServer", "Area '%s' removed client %u (total: %u/%d).", m_config.areaName.c_str(), clientId,
-                       m_stats.clientCount, m_config.maxClients);
+                       count, m_config.maxClients);
     }
 
     uint32_t AreaServer::GetClientCount() const
@@ -367,7 +405,11 @@ namespace Spark::Net
         std::vector<ClientID> timedOut;
         {
             std::lock_guard<std::mutex> lock(m_clientMutex);
-            float currentUptime = m_stats.uptimeSeconds;
+            float currentUptime;
+            {
+                std::lock_guard<std::mutex> slock(m_statsMutex);
+                currentUptime = m_stats.uptimeSeconds;
+            }
 
             for (auto& [clientId, record] : m_connectedClients)
             {
@@ -384,20 +426,28 @@ namespace Spark::Net
             {
                 m_connectedClients.erase(id);
             }
-            m_stats.clientCount = static_cast<uint32_t>(m_connectedClients.size());
+            {
+                std::lock_guard<std::mutex> slock(m_statsMutex);
+                m_stats.clientCount = static_cast<uint32_t>(m_connectedClients.size());
+            }
         }
 
         // Rate-limited periodic status logging
-        float currentUptime = m_stats.uptimeSeconds;
+        AreaServerStats snapshot;
+        {
+            std::lock_guard<std::mutex> slock(m_statsMutex);
+            snapshot = m_stats;
+        }
+        float currentUptime = snapshot.uptimeSeconds;
         if (currentUptime - m_lastStatusLogTime >= STATUS_LOG_INTERVAL)
         {
             m_lastStatusLogTime = currentUptime;
             SPARK_LOG_INFO("AreaServer",
                            "Area '%s' status: clients=%u/%d, entities=%u, ticks=%llu, avgTick=%.2fms, "
                            "peakTick=%.2fms, migratedIn=%u, migratedOut=%u.",
-                           m_config.areaName.c_str(), m_stats.clientCount, m_config.maxClients, m_stats.entityCount,
-                           static_cast<unsigned long long>(m_stats.totalTicks), m_stats.averageTickMs,
-                           m_stats.peakTickMs, m_stats.entitiesMigratedIn, m_stats.entitiesMigratedOut);
+                           m_config.areaName.c_str(), snapshot.clientCount, m_config.maxClients, snapshot.entityCount,
+                           static_cast<unsigned long long>(snapshot.totalTicks), snapshot.averageTickMs,
+                           snapshot.peakTickMs, snapshot.entitiesMigratedIn, snapshot.entitiesMigratedOut);
         }
     }
 
@@ -414,7 +464,10 @@ namespace Spark::Net
                 entity.position.y += entity.velocity.y * deltaTime;
                 entity.position.z += entity.velocity.z * deltaTime;
             }
-            m_stats.entityCount = static_cast<uint32_t>(m_trackedEntities.size());
+            {
+                std::lock_guard<std::mutex> slock(m_statsMutex);
+                m_stats.entityCount = static_cast<uint32_t>(m_trackedEntities.size());
+            }
         }
 
         // Performance budget check
@@ -423,9 +476,14 @@ namespace Spark::Net
         float targetMs = 1000.0f / m_config.tickRate;
         if (totalSimMs > targetMs * 0.8f)
         {
+            uint32_t entityCount;
+            {
+                std::lock_guard<std::mutex> slock(m_statsMutex);
+                entityCount = m_stats.entityCount;
+            }
             SPARK_LOG_WARN(
                 "AreaServer", "Area '%s' simulation step took %.2fms (%.0f%% of %.2fms budget), entities=%u.",
-                m_config.areaName.c_str(), totalSimMs, (totalSimMs / targetMs) * 100.0f, targetMs, m_stats.entityCount);
+                m_config.areaName.c_str(), totalSimMs, (totalSimMs / targetMs) * 100.0f, targetMs, entityCount);
         }
     }
 
@@ -482,7 +540,10 @@ namespace Spark::Net
             migration.entityType = it->second.entityType;
             migration.position = it->second.position;
             migration.velocity = it->second.velocity;
-            migration.timestamp = m_stats.uptimeSeconds;
+            {
+                std::lock_guard<std::mutex> slock(m_statsMutex);
+                migration.timestamp = m_stats.uptimeSeconds;
+            }
 
             // Serialize entity state
             NetBuffer buffer;
@@ -493,13 +554,20 @@ namespace Spark::Net
 
             m_pendingMigrations.push_back(std::move(migration));
             m_trackedEntities.erase(it);
-            m_stats.entitiesMigratedOut++;
+
+            {
+                std::lock_guard<std::mutex> slock(m_statsMutex);
+                m_stats.entitiesMigratedOut++;
+            }
 
             SPARK_LOG_INFO("AreaServer", "Area '%s' queued boundary migration for entity %u to area %u.",
                            m_config.areaName.c_str(), entityID, targetArea);
         }
 
-        m_stats.entityCount = static_cast<uint32_t>(m_trackedEntities.size());
+        {
+            std::lock_guard<std::mutex> slock(m_statsMutex);
+            m_stats.entityCount = static_cast<uint32_t>(m_trackedEntities.size());
+        }
     }
 
 } // namespace Spark::Net

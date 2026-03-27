@@ -311,6 +311,7 @@ namespace SparkEditor
         void NetworkThreadHost();
         void NetworkThreadClient();
         void HandleClientSocket(int clientSocket, PeerID peerId);
+        void ShutdownAllSockets(); ///< shutdown() all sockets to unblock recv()/accept()
         void CloseAllSockets();
 
         // State

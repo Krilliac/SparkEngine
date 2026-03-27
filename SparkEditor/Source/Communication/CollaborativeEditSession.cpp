@@ -591,7 +591,9 @@ namespace SparkEditor
             }
         }
 
-        CloseAllSockets();
+        // Shutdown sockets first to unblock any recv()/accept() calls in network threads,
+        // then join threads, then close the fds. This avoids close()/recv() races.
+        ShutdownAllSockets();
 
         if (m_networkThread.joinable())
             m_networkThread.join();
@@ -603,12 +605,38 @@ namespace SparkEditor
         }
         m_clientThreads.clear();
 
+        CloseAllSockets();
+
         {
             std::lock_guard<std::mutex> lock(m_peerMutex);
             m_peers.clear();
         }
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Disconnected from session.");
+    }
+
+    void CollaborativeEditSession::ShutdownAllSockets()
+    {
+        std::lock_guard<std::mutex> lock(m_socketMutex);
+
+        // shutdown() unblocks recv()/accept() in network threads without closing the fd
+#ifdef _WIN32
+        auto shutdownSock = [](int fd) { ::shutdown(static_cast<SOCKET>(fd), SD_BOTH); };
+#else
+        auto shutdownSock = [](int fd) { ::shutdown(fd, SHUT_RDWR); };
+#endif
+
+        if (m_listenSocket >= 0)
+            shutdownSock(m_listenSocket);
+
+        if (m_clientSocket >= 0)
+            shutdownSock(m_clientSocket);
+
+        for (auto& [peerId, sock] : m_peerSockets)
+        {
+            if (sock >= 0)
+                shutdownSock(sock);
+        }
     }
 
     void CollaborativeEditSession::CloseAllSockets()
@@ -645,16 +673,25 @@ namespace SparkEditor
 
         while (!m_shuttingDown.load(std::memory_order_acquire))
         {
-            // Use poll/select with timeout to allow shutdown checks
+            // Snapshot the listen socket under the lock to avoid racing with CloseAllSockets()
+            int listenFd;
+            {
+                std::lock_guard<std::mutex> lock(m_socketMutex);
+                listenFd = m_listenSocket;
+            }
+            if (listenFd < 0)
+                break;
+
+                // Use poll/select with timeout to allow shutdown checks
 #ifdef _WIN32
             fd_set readSet;
             FD_ZERO(&readSet);
-            FD_SET(static_cast<SOCKET>(m_listenSocket), &readSet);
+            FD_SET(static_cast<SOCKET>(listenFd), &readSet);
             timeval tv{0, 500000}; // 500ms
             int ready = ::select(0, &readSet, nullptr, nullptr, &tv);
 #else
             pollfd pfd{};
-            pfd.fd = m_listenSocket;
+            pfd.fd = listenFd;
             pfd.events = POLLIN;
             int ready = ::poll(&pfd, 1, 500);
 #endif
@@ -664,8 +701,7 @@ namespace SparkEditor
 
             sockaddr_in clientAddr{};
             socklen_t addrLen = sizeof(clientAddr);
-            int clientSock =
-                static_cast<int>(::accept(m_listenSocket, reinterpret_cast<sockaddr*>(&clientAddr), &addrLen));
+            int clientSock = static_cast<int>(::accept(listenFd, reinterpret_cast<sockaddr*>(&clientAddr), &addrLen));
             if (clientSock < 0)
                 continue;
 
@@ -766,7 +802,15 @@ namespace SparkEditor
 
         while (!m_shuttingDown.load(std::memory_order_acquire))
         {
-            auto data = RecvFramed(m_clientSocket, m_shuttingDown);
+            int clientFd;
+            {
+                std::lock_guard<std::mutex> lock(m_socketMutex);
+                clientFd = m_clientSocket;
+            }
+            if (clientFd < 0)
+                break;
+
+            auto data = RecvFramed(clientFd, m_shuttingDown);
             if (data.empty())
                 break;
 
