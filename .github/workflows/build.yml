@@ -142,12 +142,16 @@ jobs:
 
   # ===========================================================================
   # Linux Build — Clang with MemorySanitizer
-  # MSan requires all code (including stdlib) to be instrumented. We use
-  # Clang with libc++ and an ignorelist to suppress false positives from
-  # third-party libraries that are not MSan-instrumented (Jolt, ImGui, etc.).
+  # MSan requires ALL code (including stdlib) to be MSan-instrumented. The
+  # system libc++ on ubuntu-24.04 is NOT instrumented, which causes false
+  # positives in basic string/IO operations. A fully clean MSan build would
+  # require building libc++ from source with -fsanitize=memory. This job is
+  # marked continue-on-error because of these inherent false positives, but
+  # the report artifact is still uploaded for manual review of real findings.
   # ===========================================================================
   build-linux-msan:
     runs-on: ubuntu-24.04
+    continue-on-error: true
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6

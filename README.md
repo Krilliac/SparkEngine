@@ -29,7 +29,7 @@
 [![UBSan](https://img.shields.io/badge/UBSan-undefined_behavior-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
 [![LSan](https://img.shields.io/badge/LSan-memory_leaks-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
 [![TSan](https://img.shields.io/badge/TSan-data_races-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
-[![MSan](https://img.shields.io/badge/MSan-uninitialized_memory-2ea44f?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
+[![MSan](https://img.shields.io/badge/MSan-uninitialized_memory_(advisory)-yellow?logo=gnuprivacyguard&logoColor=white)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml)
 
 **Rendering Backends:**
 
@@ -451,7 +451,9 @@ Two GitHub Actions workflows run automatically:
 |---|---|---|---|
 | **ASan + UBSan + LSan** | GCC | Buffer overflows, use-after-free, undefined behavior, memory leaks | `Tests/lsan_suppressions.txt` |
 | **TSan** | GCC | Data races, deadlocks, thread-safety violations | `Tests/tsan_suppressions.txt` |
-| **MSan** | Clang + libc++ | Reads of uninitialized memory | `Tests/msan_ignorelist.txt` |
+| **MSan** | Clang + libc++ | Reads of uninitialized memory | `Tests/msan_ignorelist.txt` (`continue-on-error`^2) |
+
+> ^2 **MSan (MemorySanitizer):** MSan requires the entire process — including the C++ standard library — to be compiled with MSan instrumentation. The system libc++ on ubuntu-24.04 is not instrumented, which produces false positives in basic string/IO operations. The job is marked `continue-on-error` and its report artifact is uploaded for manual review of genuine findings. A fully clean MSan run would require building libc++ from source with `-fsanitize=memory`.
 
 > ^1 **VS 2026 (v144 toolset):** The VS 2026 CI job is included for forward compatibility but will be skipped until GitHub Actions runners ship with the v144 platform toolset. It is marked `continue-on-error` and does not gate merges.
 

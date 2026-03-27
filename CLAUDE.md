@@ -483,7 +483,7 @@ ctest --test-dir build -C Release --output-on-failure
 | `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan + LSan |
 | `build-linux-tsan` | ubuntu-24.04 | GCC | Debug | TSan (thread races) |
-| `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan + ignorelist |
+| `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan + ignorelist, `continue-on-error` (uninstrumented stdlib) |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
