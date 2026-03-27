@@ -403,7 +403,6 @@ TEST(Monitor_TimeOfDayFullCycle)
     tod->SetTimeScale(3600.0f); // 1 hour per second
 
     FrameStats stats;
-    float lastSunIntensity = tod->GetSunIntensity();
     int intensityFlips = 0;
     bool wasDaytime = false;
 
@@ -428,7 +427,6 @@ TEST(Monitor_TimeOfDayFullCycle)
 
         // Sun intensity should always be in valid range
         EXPECT_TRUE(intensity >= 0.0f && intensity <= 1.01f);
-        lastSunIntensity = intensity;
     }
 
     stats.Analyze();
