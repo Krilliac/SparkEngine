@@ -7,6 +7,7 @@
 
 #include "Core/EditorApplication.h"
 #include "Communication/CollaborativeEditSession.h"
+#include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include <iostream>
 #include <fstream>
@@ -99,7 +100,7 @@ static int RunCollabServer(uint16_t port, const std::string& serverName)
     // Headless main loop — just tick the session at 10 Hz
     while (g_collabServerRunning.load(std::memory_order_acquire))
     {
-        session.Update(0.1f);
+        SPARK_GUARDED_UPDATE("Editor:CollabSession", "Editor", { session.Update(0.1f); });
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         // Periodic status output

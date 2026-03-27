@@ -5,6 +5,8 @@
 
 #include "PluginRegistry.h"
 
+#include "FaultIsolation.h"
+
 #include <format>
 #include <vector>
 
@@ -59,7 +61,8 @@ namespace Spark
         {
             if (desc->updateFn)
             {
-                desc->updateFn(deltaTime);
+                std::string guardName = std::format("Plugin:{}", desc->name ? desc->name : "unnamed");
+                SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { desc->updateFn(deltaTime); });
             }
         }
     }

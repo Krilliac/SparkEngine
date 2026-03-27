@@ -103,6 +103,7 @@
 #include "Engine/Mobile/MobilePlatform.h"
 
 // Extended engine systems
+#include "FaultIsolation.h"
 #include "FixedTimestepAccumulator.h"
 #include "PluginRegistry.h"
 #include "ResourceVersionTracker.h"
@@ -421,116 +422,151 @@ static void InitGameplaySystems()
  */
 static void UpdateNonECSSystems(EngineContext* ctx, float dt)
 {
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Weather", 0.0);
-    if (auto* weather = ctx->GetWeather())
-        weather->Update(dt);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Weather", 0.0);
+    SPARK_GUARDED_UPDATE("Weather", "Core", {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Weather", 0.0);
+        if (auto* weather = ctx->GetWeather())
+            weather->Update(dt);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Weather", 0.0);
+    });
 
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "TimeOfDay", 0.0);
-    Spark::TimeOfDaySystem::GetInstance().Update(dt);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "TimeOfDay", 0.0);
+    SPARK_GUARDED_UPDATE("TimeOfDay", "Core", {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "TimeOfDay", 0.0);
+        Spark::TimeOfDaySystem::GetInstance().Update(dt);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "TimeOfDay", 0.0);
+    });
 
-    auto* weather = ctx->GetWeather();
-    auto* physics = ctx->GetPhysics();
-    if (weather && physics)
-    {
-        Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
-    }
+    SPARK_GUARDED_UPDATE("WeatherGameplay", "Core", {
+        auto* weather = ctx->GetWeather();
+        auto* physics = ctx->GetPhysics();
+        if (weather && physics)
+        {
+            Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
+        }
+    });
 
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Dialogue", 0.0);
-    if (auto* dialogue = ctx->GetDialogue())
-        dialogue->Update(dt);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Dialogue", 0.0);
+    SPARK_GUARDED_UPDATE("Dialogue", "Core", {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Dialogue", 0.0);
+        if (auto* dialogue = ctx->GetDialogue())
+            dialogue->Update(dt);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Dialogue", 0.0);
+    });
 
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "UI", 0.0);
-    if (auto* ui = ctx->GetUI())
-        ui->Update(dt);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "UI", 0.0);
+    SPARK_GUARDED_UPDATE("UI", "Core", {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "UI", 0.0);
+        if (auto* ui = ctx->GetUI())
+            ui->Update(dt);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "UI", 0.0);
+    });
 }
 
 static void UpdateECSDependentSystems(World* world, float dt)
 {
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AbilitySystem", 0.0);
-    Spark::Gameplay::AbilitySystem::GetInstance().Update(*world, dt);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AbilitySystem", 0.0);
+    SPARK_GUARDED_UPDATE("AbilitySystem", "Core", {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AbilitySystem", 0.0);
+        Spark::Gameplay::AbilitySystem::GetInstance().Update(*world, dt);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AbilitySystem", 0.0);
+    });
 
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AI_Movement", 0.0);
-    Spark::Gameplay::InstanceManager::GetInstance().Update(dt);
-    Spark::AI::MovementSystem::GetInstance().Update(*world, dt);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AI_Movement", 0.0);
+    SPARK_GUARDED_UPDATE("AI_Movement", "Core", {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AI_Movement", 0.0);
+        Spark::Gameplay::InstanceManager::GetInstance().Update(dt);
+        Spark::AI::MovementSystem::GetInstance().Update(*world, dt);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AI_Movement", 0.0);
+    });
 
-    Spark::CoroutineScheduler::GetInstance().Update(dt);
-    Spark::Audio::MusicManager::GetInstance().Update(dt);
+    SPARK_GUARDED_UPDATE("Coroutine", "Core", { Spark::CoroutineScheduler::GetInstance().Update(dt); });
 
-    static Spark::Gameplay::WeaponSystem s_weaponSystem;
-    s_weaponSystem.Update(dt);
+    SPARK_GUARDED_UPDATE("MusicManager", "Core", { Spark::Audio::MusicManager::GetInstance().Update(dt); });
 
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Destruction", 0.0);
-    auto& destruction = Spark::DestructionSystem::GetInstance();
-    destruction.SetWorld(world);
-    destruction.Update(dt);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Destruction", 0.0);
+    SPARK_GUARDED_UPDATE("WeaponSystem", "Core", {
+        static Spark::Gameplay::WeaponSystem s_weaponSystem;
+        s_weaponSystem.Update(dt);
+    });
 
-    static Spark::ECS::TerrainSystem s_terrainSystem;
-    s_terrainSystem.Update(*world, dt);
+    SPARK_GUARDED_UPDATE("Destruction", "Core", {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Destruction", 0.0);
+        auto& destruction = Spark::DestructionSystem::GetInstance();
+        destruction.SetWorld(world);
+        destruction.Update(dt);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Destruction", 0.0);
+    });
 
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AI_Tactical", 0.0);
-    Spark::AI::FormationSystem::GetInstance().Update(dt);
-    Spark::AI::GroupAISystem::GetInstance().Update(dt);
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AI_Tactical", 0.0);
+    SPARK_GUARDED_UPDATE("Terrain", "Core", {
+        static Spark::ECS::TerrainSystem s_terrainSystem;
+        s_terrainSystem.Update(*world, dt);
+    });
 
-    Spark::Dialogue::DynamicResponseSystem::GetInstance().Update(dt);
-    Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt);
-    Spark::Graphics::WaterRenderer::GetInstance().Update(dt);
+    SPARK_GUARDED_UPDATE("AI_Tactical", "Core", {
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AI_Tactical", 0.0);
+        Spark::AI::FormationSystem::GetInstance().Update(dt);
+        Spark::AI::GroupAISystem::GetInstance().Update(dt);
+        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AI_Tactical", 0.0);
+    });
+
+    SPARK_GUARDED_UPDATE("DynamicResponse", "Core",
+                         { Spark::Dialogue::DynamicResponseSystem::GetInstance().Update(dt); });
+
+    SPARK_GUARDED_UPDATE("SkyAtmosphere", "Core", { Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt); });
+
+    SPARK_GUARDED_UPDATE("WaterRenderer", "Core", { Spark::Graphics::WaterRenderer::GetInstance().Update(dt); });
 }
 
 static void UpdateClusteredLighting(World* world)
 {
-    auto& clustering = Spark::Graphics::ClusteredLightCulling::GetInstance();
-    clustering.ClearLights();
+    SPARK_GUARDED_UPDATE("ClusteredLighting", "Core", {
+        auto& clustering = Spark::Graphics::ClusteredLightCulling::GetInstance();
+        clustering.ClearLights();
 
-    auto& reg = world->GetRegistry();
-    auto lightView = reg.view<LightComponent, Transform>();
-    for (auto entity : lightView)
-    {
-        const auto& lc = lightView.get<LightComponent>(entity);
-        const auto& xform = lightView.get<Transform>(entity);
+        auto& reg = world->GetRegistry();
+        auto lightView = reg.view<LightComponent, Transform>();
+        for (auto entity : lightView)
+        {
+            const auto& lc = lightView.get<LightComponent>(entity);
+            const auto& xform = lightView.get<Transform>(entity);
 
-        Spark::Graphics::LightData ld;
-        ld.position = xform.position;
-        ld.color = lc.color;
-        ld.intensity = lc.intensity;
-        ld.radius = lc.range;
-        ld.type = (lc.type == LightComponent::Type::Point) ? 0u : 1u;
-        clustering.AddLight(ld);
-    }
+            Spark::Graphics::LightData ld;
+            ld.position = xform.position;
+            ld.color = lc.color;
+            ld.intensity = lc.intensity;
+            ld.radius = lc.range;
+            ld.type = (lc.type == LightComponent::Type::Point) ? 0u : 1u;
+            clustering.AddLight(ld);
+        }
 
-    if (g_graphics)
-    {
-        XMFLOAT4X4 viewMat, projMat;
-        XMStoreFloat4x4(&viewMat, g_graphics->GetFrameViewMatrix());
-        XMStoreFloat4x4(&projMat, g_graphics->GetFrameProjectionMatrix());
-        clustering.Update(viewMat, projMat, g_graphics->GetNearPlane(), g_graphics->GetFarPlane());
-    }
+        if (g_graphics)
+        {
+            XMFLOAT4X4 viewMat, projMat;
+            XMStoreFloat4x4(&viewMat, g_graphics->GetFrameViewMatrix());
+            XMStoreFloat4x4(&projMat, g_graphics->GetFrameProjectionMatrix());
+            clustering.Update(viewMat, projMat, g_graphics->GetNearPlane(), g_graphics->GetFarPlane());
+        }
+    });
 }
 
 static void UpdateExtendedSystems(EngineContext* ctx, float dt)
 {
-    Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt);
-    Spark::TweenSystem::GetInstance().Update(dt);
-    Spark::UI::UIFactory::GetInstance().UpdateAllBindings();
-    Spark::PluginRegistry::UpdateAll(dt);
+    SPARK_GUARDED_UPDATE("SeamlessArea", "Core", { Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt); });
+
+    SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); });
+
+    SPARK_GUARDED_UPDATE("UIFactory", "Core", { Spark::UI::UIFactory::GetInstance().UpdateAllBindings(); });
+
+    SPARK_GUARDED_UPDATE("Plugins", "Core", { Spark::PluginRegistry::UpdateAll(dt); });
+
 #ifndef NDEBUG
     Spark::ProfileProperties::GetInstance().ResetFrameProperties();
 #endif
 
-    Spark::Cinematic::SequencerManager::GetInstance().Update(dt);
-    Spark::ReplaySystem::GetInstance().UpdatePlayback(dt);
+    SPARK_GUARDED_UPDATE("Cinematic", "Core", { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
 
-    if (auto* vr = ctx->GetVR())
-        vr->UpdateTracking();
+    SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
 
-    Spark::ECS::StageBasedExecutor::GetInstance().ExecuteAll(dt);
+    SPARK_GUARDED_UPDATE("VR", "Core", {
+        if (auto* vr = ctx->GetVR())
+            vr->UpdateTracking();
+    });
+
+    SPARK_GUARDED_UPDATE("ECS_Executor", "Core", { Spark::ECS::StageBasedExecutor::GetInstance().ExecuteAll(dt); });
 }
 
 static uint64_t g_frameCounter = 0;
@@ -665,14 +701,14 @@ static void ShutdownGameplaySystems()
 
 static void UpdateDebugSystems(float dt)
 {
-    Spark::TweenManager::GetInstance().Update(dt);
+    SPARK_GUARDED_UPDATE("TweenManager", "Debug", { Spark::TweenManager::GetInstance().Update(dt); });
     Spark::DebugDrawManager::GetInstance().Flush(dt);
-    Spark::DebugOverlay::GetInstance().Update(dt);
-    Spark::MemoryMonitor::GetInstance().Update(dt);
+    SPARK_GUARDED_UPDATE("DebugOverlay", "Debug", { Spark::DebugOverlay::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("MemoryMonitor", "Debug", { Spark::MemoryMonitor::GetInstance().Update(dt); });
     Spark::FrameInspector::GetInstance().OnFrameEnd();
 
     // Update decal fading
-    Spark::Graphics::DecalSystem::GetInstance().Update(dt);
+    SPARK_GUARDED_UPDATE("DecalSystem", "Debug", { Spark::Graphics::DecalSystem::GetInstance().Update(dt); });
 }
 
 static void ShutdownDebugSystems()
@@ -1006,6 +1042,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     if (g_graphics)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
     Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
+    Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -1020,16 +1057,20 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
         Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
-        if (g_moduleManager && g_moduleManager->HasModules())
-            g_moduleManager->UpdateAll(dt);
+        SPARK_GUARDED_UPDATE("Modules", "Core", {
+            if (g_moduleManager && g_moduleManager->HasModules())
+                g_moduleManager->UpdateAll(dt);
+        });
 
         if (g_moduleHotReload)
             g_moduleHotReload->PollChanges();
 
         UpdateGameplaySystems(dt);
         UpdateDebugSystems(dt);
-        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-        console.Update();
+        SPARK_GUARDED_UPDATE("Console", "Core", {
+            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+            console.Update();
+        });
 
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
         if (elapsed < TICK_INTERVAL)
@@ -1163,6 +1204,7 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     if (g_graphics)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
     Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
+    Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
     LogMissingModuleWarnings();
@@ -1214,13 +1256,17 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
             // query GetFixedStepCount() for deterministic fixed-rate updates.
             Spark::FixedTimestepAccumulator::GetInstance().Advance(rawDt);
 
-            if (g_input)
-                g_input->Update();
+            SPARK_GUARDED_UPDATE("Input", "Core", {
+                if (g_input)
+                    g_input->Update();
+            });
 
             if (g_moduleManager && g_moduleManager->HasModules())
             {
-                g_moduleManager->UpdateAll(dt);
-                g_moduleManager->RenderAll();
+                SPARK_GUARDED_UPDATE("Modules", "Core", {
+                    g_moduleManager->UpdateAll(dt);
+                    g_moduleManager->RenderAll();
+                });
             }
             else if (g_graphics)
             {
@@ -1234,8 +1280,10 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
 
             UpdateGameplaySystems(dt);
             UpdateDebugSystems(dt);
-            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-            console.Update();
+            SPARK_GUARDED_UPDATE("Console", "Core", {
+                Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+                console.Update();
+            });
         }
     }
 
@@ -1498,13 +1546,17 @@ static void TickFrame(float dt)
     // Advance the global fixed-timestep accumulator for deterministic fixed-rate updates.
     Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
-    if (g_input)
-        g_input->Update();
+    SPARK_GUARDED_UPDATE("Input", "Core", {
+        if (g_input)
+            g_input->Update();
+    });
 
     if (g_moduleManager && g_moduleManager->HasModules())
     {
-        g_moduleManager->UpdateAll(dt);
-        g_moduleManager->RenderAll();
+        SPARK_GUARDED_UPDATE("Modules", "Core", {
+            g_moduleManager->UpdateAll(dt);
+            g_moduleManager->RenderAll();
+        });
     }
     else if (g_graphics)
     {
@@ -1517,8 +1569,10 @@ static void TickFrame(float dt)
 
     UpdateGameplaySystems(dt);
     UpdateDebugSystems(dt);
-    Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-    Spark::SimpleConsole::GetInstance().Update();
+    SPARK_GUARDED_UPDATE("Console", "Core", {
+        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+        Spark::SimpleConsole::GetInstance().Update();
+    });
 }
 
 /**
@@ -1642,6 +1696,7 @@ static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
     if (g_graphics)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
     Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
+    Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
 
     LogMissingModuleWarnings();
 }
@@ -1690,16 +1745,20 @@ static int RunHeadlessLinux(int argc, char* argv[])
 
         Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
-        if (g_moduleManager && g_moduleManager->HasModules())
-            g_moduleManager->UpdateAll(dt);
+        SPARK_GUARDED_UPDATE("Modules", "Core", {
+            if (g_moduleManager && g_moduleManager->HasModules())
+                g_moduleManager->UpdateAll(dt);
+        });
 
         if (g_moduleHotReload)
             g_moduleHotReload->PollChanges();
 
         UpdateGameplaySystems(dt);
         UpdateDebugSystems(dt);
-        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-        console.Update();
+        SPARK_GUARDED_UPDATE("Console", "Core", {
+            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+            console.Update();
+        });
 
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
         if (elapsed < TICK_INTERVAL)

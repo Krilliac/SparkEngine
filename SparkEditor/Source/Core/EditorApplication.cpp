@@ -8,6 +8,7 @@
 #include "EditorApplication.h"
 #include "EditorUI.h"
 #include "EditorFonts.h"
+#include "Core/FaultIsolation.h"
 #include "EditorCrashHandler.h"
 #include "EditorPluginManager.h"
 #include "Utils/SparkConsole.h"
@@ -320,7 +321,7 @@ namespace SparkEditor
             lastTime = currentTime;
 
             // Update console (important for external console communication)
-            console.Update();
+            SPARK_GUARDED_UPDATE("EditorConsole", "Editor", { console.Update(); });
 
             // Process messages
             if (!ProcessMessages())
@@ -637,7 +638,7 @@ namespace SparkEditor
             lastTime = currentTime;
 
             // Update console
-            console.Update();
+            SPARK_GUARDED_UPDATE("EditorConsole", "Editor", { console.Update(); });
 
             // Process events
             if (!ProcessMessages())
@@ -798,7 +799,7 @@ namespace SparkEditor
         // Update UI system
         if (m_ui)
         {
-            m_ui->Update(deltaTime);
+            SPARK_GUARDED_UPDATE("EditorUI", "Editor", { m_ui->Update(deltaTime); });
 
             // Check if user requested exit via File > Exit
             if (m_ui->IsExitRequested())

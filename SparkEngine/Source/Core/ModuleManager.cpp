@@ -4,6 +4,7 @@
  */
 
 #include "ModuleManager.h"
+#include "FaultIsolation.h"
 #include "IGameModule.h"
 #include "Spark/Version.h"
 #include "Utils/SparkConsole.h"
@@ -411,7 +412,10 @@ void ModuleManager::UpdateAll(float deltaTime)
     for (auto& entry : m_modules)
     {
         if (entry.initialized && entry.instance)
-            entry.instance->OnUpdate(deltaTime);
+        {
+            std::string guardName = "Module:" + entry.name;
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnUpdate(deltaTime); });
+        }
     }
 }
 
@@ -426,7 +430,10 @@ void ModuleManager::RenderAll()
     for (auto& entry : m_modules)
     {
         if (entry.initialized && entry.instance)
-            entry.instance->OnRender();
+        {
+            std::string guardName = "Module:" + entry.name;
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnRender(); });
+        }
     }
 }
 
@@ -435,7 +442,10 @@ void ModuleManager::ResizeAll(int width, int height)
     for (auto& entry : m_modules)
     {
         if (entry.initialized && entry.instance)
-            entry.instance->OnResize(width, height);
+        {
+            std::string guardName = "Module:" + entry.name;
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnResize(width, height); });
+        }
     }
 }
 

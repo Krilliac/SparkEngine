@@ -4,6 +4,7 @@
  */
 #include "../../Core/Platform.h"
 #include "AnimationSystem.h"
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/Validate.h"
 #include <sstream>
 #include <cmath>
@@ -1241,7 +1242,7 @@ namespace Spark::Animation
         auto& mgr = AnimationManager::GetInstance();
 
         // ---- Step 1: Update the state machine (transition evaluation, crossfade) ----
-        stateMachine.Update(deltaTime);
+        SPARK_GUARDED_UPDATE("Anim:StateMachine", "Animation", { stateMachine.Update(deltaTime); });
 
         // ---- Step 2: Sample clips from the state machine and produce base local transforms ----
         blendResult.localTransforms.resize(boneCount);

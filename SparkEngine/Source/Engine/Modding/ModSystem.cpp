@@ -4,6 +4,7 @@
  */
 
 #include "ModSystem.h"
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/JsonUtils.h"
 #include "../../Utils/Validate.h"
 
@@ -147,7 +148,7 @@ namespace Spark
 
         for (const auto& callback : m_loadCallbacks)
         {
-            callback(modId);
+            SPARK_GUARDED_UPDATE("Mod:LoadCallback", "Game", { callback(modId); });
         }
         return true;
     }
@@ -167,7 +168,7 @@ namespace Spark
 
         for (const auto& callback : m_unloadCallbacks)
         {
-            callback(modId);
+            SPARK_GUARDED_UPDATE("Mod:UnloadCallback", "Game", { callback(modId); });
         }
     }
 

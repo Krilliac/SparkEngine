@@ -4,6 +4,7 @@
  */
 
 #include "DynamicResponseSystem.h"
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -173,7 +174,7 @@ namespace Spark::Dialogue
         m_gameTime += deltaTime;
 
         // Process pending (delayed) actions via scheduler
-        m_actionScheduler.Update(deltaTime);
+        SPARK_GUARDED_UPDATE("Dialogue:ActionScheduler", "Dialogue", { m_actionScheduler.Update(deltaTime); });
     }
 
     // =========================================================================

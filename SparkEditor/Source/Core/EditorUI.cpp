@@ -10,6 +10,7 @@
 #include "EditorTheme.h"
 #include "EditorFonts.h"
 #include "EditorIcons.h"
+#include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "../Panels/SceneViewPanel.h"
@@ -341,22 +342,22 @@ namespace SparkEditor
         UpdateStats(deltaTime);
 
         // Update gizmo system
-        if (m_gizmoSystem)
-        {
-            m_gizmoSystem->Update(deltaTime);
-        }
+        SPARK_GUARDED_UPDATE("GizmoSystem", "Editor", {
+            if (m_gizmoSystem)
+                m_gizmoSystem->Update(deltaTime);
+        });
 
         // Update collaborative editing session (processes incoming messages, broadcasts presence)
-        if (m_collabSession)
-        {
-            m_collabSession->Update(deltaTime);
-        }
+        SPARK_GUARDED_UPDATE("CollabSession", "Editor", {
+            if (m_collabSession)
+                m_collabSession->Update(deltaTime);
+        });
 
         // Flush pending live edits to AreaServer
-        if (m_liveEditBridge)
-        {
-            m_liveEditBridge->Update();
-        }
+        SPARK_GUARDED_UPDATE("LiveEditBridge", "Editor", {
+            if (m_liveEditBridge)
+                m_liveEditBridge->Update();
+        });
 
         // Handle keyboard shortcuts for undo/redo, command palette, search
         HandleKeyboardShortcuts();
@@ -858,8 +859,8 @@ namespace SparkEditor
         {
             if (panel->IsVisible())
             {
-                panel->Update(deltaTime); // Fixed: Pass proper delta time
-                panel->Render();
+                SPARK_GUARDED_UPDATE("EditorPanel:Update", "Editor", { panel->Update(deltaTime); });
+                SPARK_GUARDED_UPDATE("EditorPanel:Render", "Editor", { panel->Render(); });
             }
         }
     }

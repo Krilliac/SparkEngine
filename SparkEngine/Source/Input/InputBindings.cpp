@@ -4,6 +4,7 @@
  */
 
 #include "InputBindings.h"
+#include "../Core/FaultIsolation.h"
 #include "../Utils/Validate.h"
 
 #include <fstream>
@@ -31,7 +32,7 @@ namespace Spark
         m_bindings[action] = binding;
         for (const auto& callback : m_bindingChangedCallbacks)
         {
-            callback(action, binding);
+            SPARK_GUARDED_UPDATE("Input:BindingChanged", "Input", { callback(action, binding); });
         }
     }
 
@@ -98,7 +99,7 @@ namespace Spark
                 {
                     for (const auto& callback : m_bindingChangedCallbacks)
                     {
-                        callback(action, binding);
+                        SPARK_GUARDED_UPDATE("Input:BindingChanged", "Input", { callback(action, binding); });
                     }
                 }
                 return true;

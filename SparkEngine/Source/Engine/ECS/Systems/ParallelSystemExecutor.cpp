@@ -9,6 +9,7 @@
  */
 
 #include "ParallelSystemExecutor.h"
+#include "../../../Core/FaultIsolation.h"
 #include "../../../Utils/SparkConsole.h"
 
 #include <algorithm>
@@ -62,7 +63,7 @@ namespace Spark::ECS
             // Single system in stage: run inline, no thread dispatch overhead
             if (stageSystems.size() == 1)
             {
-                stageSystems[0]->updateFn(dt);
+                SPARK_GUARDED_UPDATE(stageSystems[0]->name.c_str(), "ECS", { stageSystems[0]->updateFn(dt); });
                 continue;
             }
 
@@ -74,7 +75,8 @@ namespace Spark::ECS
 
                 for (auto* sys : stageSystems)
                 {
-                    futures.push_back(jobs.Submit([sys, dt]() { sys->updateFn(dt); }));
+                    futures.push_back(jobs.Submit(
+                        [sys, dt]() { SPARK_GUARDED_UPDATE(sys->name.c_str(), "ECS", { sys->updateFn(dt); }); }));
                 }
 
                 // Wait for all systems in this stage to complete before
@@ -89,7 +91,7 @@ namespace Spark::ECS
                 // Fallback: run sequentially when no worker threads are available
                 for (auto* sys : stageSystems)
                 {
-                    sys->updateFn(dt);
+                    SPARK_GUARDED_UPDATE(sys->name.c_str(), "ECS", { sys->updateFn(dt); });
                 }
             }
         }

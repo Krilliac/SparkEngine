@@ -422,7 +422,11 @@ namespace SparkEditor
     bool CollaborativeEditSession::Host(uint16_t port, const std::string& userName)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !userName.empty(), false);
+        if (userName.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot host: userName is empty.");
+            return false;
+        }
         if (m_connected.load(std::memory_order_acquire))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Editor, "Already connected.");
@@ -494,8 +498,16 @@ namespace SparkEditor
     bool CollaborativeEditSession::Connect(const std::string& address, uint16_t port, const std::string& userName)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !address.empty(), false);
-        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !userName.empty(), false);
+        if (address.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot connect: address is empty.");
+            return false;
+        }
+        if (userName.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot connect: userName is empty.");
+            return false;
+        }
         if (m_connected.load(std::memory_order_acquire))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Editor, "Already connected.");

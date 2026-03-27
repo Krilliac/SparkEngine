@@ -4,6 +4,7 @@
  */
 
 #include "WorldOriginSystem.h"
+#include "../../Core/FaultIsolation.h"
 #include "../ECS/Components/CoreComponents.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/Validate.h"
@@ -161,7 +162,7 @@ namespace Spark::World
     {
         for (const auto& callback : m_callbacks)
         {
-            callback(offset);
+            SPARK_GUARDED_UPDATE("WorldOrigin:Callback", "Core", { callback(offset); });
         }
     }
 

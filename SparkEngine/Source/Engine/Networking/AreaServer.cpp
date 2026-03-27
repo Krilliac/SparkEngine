@@ -7,6 +7,7 @@
 
 #ifdef ENABLE_NETWORKING
 
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/Validate.h"
@@ -73,9 +74,9 @@ namespace Spark::Net
     void AreaServer::Tick(float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
-        ProcessClientMessages(deltaTime);
-        UpdateSimulation(deltaTime);
-        CheckEntityBoundaries();
+        SPARK_GUARDED_UPDATE("Area:ClientMessages", "Network", { ProcessClientMessages(deltaTime); });
+        SPARK_GUARDED_UPDATE("Area:Simulation", "Network", { UpdateSimulation(deltaTime); });
+        SPARK_GUARDED_UPDATE("Area:Boundaries", "Network", { CheckEntityBoundaries(); });
 
         {
             std::lock_guard<std::mutex> lock(m_statsMutex);

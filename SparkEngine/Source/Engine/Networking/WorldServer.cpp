@@ -7,6 +7,7 @@
 
 #ifdef ENABLE_NETWORKING
 
+#include "../../Core/FaultIsolation.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/Validate.h"
 
@@ -83,10 +84,10 @@ namespace Spark::Net
     void WorldServer::Tick(float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
-        ProcessWorldMessages(deltaTime);
-        ProcessAreaHeartbeats();
-        UpdatePlayerSessions(deltaTime);
-        ProcessEntityMigrations();
+        SPARK_GUARDED_UPDATE("World:Messages", "Network", { ProcessWorldMessages(deltaTime); });
+        SPARK_GUARDED_UPDATE("World:Heartbeats", "Network", { ProcessAreaHeartbeats(); });
+        SPARK_GUARDED_UPDATE("World:Sessions", "Network", { UpdatePlayerSessions(deltaTime); });
+        SPARK_GUARDED_UPDATE("World:Migration", "Network", { ProcessEntityMigrations(); });
 
         // Load balancing
         if (m_config.enableLoadBalancing)

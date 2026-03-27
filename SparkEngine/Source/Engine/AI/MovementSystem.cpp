@@ -4,6 +4,7 @@
  */
 
 #include "MovementSystem.h"
+#include "../../Core/FaultIsolation.h"
 #include "../ECS/Components.h"
 #include "../ECS/Components/CoreComponents.h"
 #include "../../Utils/AngleUtils.h"
@@ -360,7 +361,7 @@ namespace Spark::AI
         // Tick every entity that has a MotionController registered
         for (auto& [entityId, controller] : m_controllers)
         {
-            controller.Update(entityId, deltaTime);
+            SPARK_GUARDED_UPDATE("AI:MotionController", "AI", { controller.Update(entityId, deltaTime); });
 
             // Apply movement from the active generator to the entity's Transform
             auto* gen = controller.GetActiveGenerator();

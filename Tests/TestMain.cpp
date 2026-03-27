@@ -10,6 +10,7 @@
  *   --errors-only          Only include failed tests and error details in output file
  *   --junit-xml <path>     Write JUnit XML report (for CI integration)
  *   --shuffle [seed]       Randomize test execution order (seed for reproducibility)
+ *   --retries N            Retry failed tests up to N times (for flaky test mitigation)
  *   --help                 Show usage information
  *
  * Environment variables (still supported):
@@ -24,6 +25,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <numeric>
 #include <random>
 #include <sstream>
 
@@ -234,6 +236,7 @@ static void PrintUsage(const char* argv0)
               << "  --errors-only          Only write failed tests to the output file\n"
               << "  --junit-xml <path>     Write JUnit XML report for CI integration\n"
               << "  --shuffle [seed]       Randomize test order (optional integer seed)\n"
+              << "  --retries <N>          Retry failed tests up to N times (default: 0)\n"
               << "  --help                 Show this help message\n"
               << "\n"
               << "Environment variables:\n"
@@ -258,6 +261,7 @@ int main(int argc, char** argv)
     bool errorsOnly = false;
     bool shuffle = false;
     unsigned int shuffleSeed = 0;
+    int maxRetries = 0;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -281,6 +285,10 @@ int main(int argc, char** argv)
                 shuffleSeed = static_cast<unsigned int>(std::stoul(argv[++i]));
             else
                 shuffleSeed = std::random_device{}();
+        }
+        else if (arg == "--retries" && i + 1 < argc)
+        {
+            maxRetries = std::max(0, std::atoi(argv[++i]));
         }
         else if (arg == "--help")
         {
@@ -322,6 +330,8 @@ int main(int argc, char** argv)
     out.PrintSummary("Running " + std::to_string(tests.size()) + " tests...\n");
     if (shuffle)
         out.PrintSummary("Shuffle seed: " + std::to_string(shuffleSeed) + "\n");
+    if (maxRetries > 0)
+        out.PrintSummary("Retry policy: up to " + std::to_string(maxRetries) + " retries for failed tests\n");
     out.PrintSummary("\n");
 
     // Allow limiting test count for bisection debugging (SPARK_TEST_LIMIT=N)
@@ -434,6 +444,85 @@ int main(int argc, char** argv)
         results.push_back({test.name, durationMs, testAssertions, !testFailed, capturedErrors});
     }
 
+    // Retry failed tests if --retries was specified
+    int retriedCount = 0;
+    int retriedPassed = 0;
+    if (maxRetries > 0 && failed > 0)
+    {
+        // Collect indices of failed tests
+        std::vector<size_t> failedIndices;
+        for (size_t i = 0; i < results.size(); ++i)
+        {
+            if (!results[i].passed)
+                failedIndices.push_back(i);
+        }
+
+        out.Print("\n=== Retrying " + std::to_string(failedIndices.size()) + " failed test(s), up to " +
+                      std::to_string(maxRetries) + " retries each ===\n",
+                  false);
+
+        for (size_t idx : failedIndices)
+        {
+            const std::string& testName = results[idx].name;
+
+            // Find the matching test entry
+            TestCase* matchedTest = nullptr;
+            for (auto& t : tests)
+            {
+                if (t.name == testName)
+                {
+                    matchedTest = &t;
+                    break;
+                }
+            }
+            if (!matchedTest)
+                continue;
+
+            bool retryPassed = false;
+            for (int attempt = 1; attempt <= maxRetries; ++attempt)
+            {
+                ++retriedCount;
+                out.Print("[ RETRY  ] " + testName + " (attempt " + std::to_string(attempt) + "/" +
+                              std::to_string(maxRetries) + ")\n",
+                          false);
+
+                int prevFailed = g_assertionsFailed;
+                int prevPassed = g_assertionsPassed;
+
+                try
+                {
+                    matchedTest->func();
+                }
+                catch (const std::exception& e)
+                {
+                    g_assertionsFailed++;
+                }
+                catch (...)
+                {
+                    g_assertionsFailed++;
+                }
+
+                if (g_assertionsFailed == prevFailed)
+                {
+                    retryPassed = true;
+                    int retryAssertions = (g_assertionsPassed - prevPassed);
+                    out.Print("[   OK   ] " + testName + " (passed on retry " + std::to_string(attempt) + ", " +
+                                  std::to_string(retryAssertions) + " assertions)\n",
+                              false);
+                    break;
+                }
+            }
+
+            if (retryPassed)
+            {
+                ++retriedPassed;
+                --failed;
+                ++passed;
+                results[idx].passed = true;
+            }
+        }
+    }
+
     auto suiteEnd = std::chrono::steady_clock::now();
     double totalMs = std::chrono::duration<double, std::milli>(suiteEnd - suiteStart).count();
 
@@ -447,6 +536,11 @@ int main(int argc, char** argv)
     out.PrintSummary("Assertions: " + std::to_string(g_assertionsPassed) + " passed, " +
                      std::to_string(g_assertionsFailed) + " failed\n");
     out.PrintSummary("Duration:   " + FormatDuration(totalMs) + "\n");
+    if (retriedPassed > 0)
+    {
+        out.PrintSummary("Retries:    " + std::to_string(retriedPassed) + " flaky test(s) passed on retry (" +
+                         std::to_string(retriedCount) + " total retry attempts)\n");
+    }
 
     // Print slowest tests
     if (results.size() > 1)
