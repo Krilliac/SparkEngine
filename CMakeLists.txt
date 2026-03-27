@@ -157,12 +157,16 @@ endforeach()
 if(MSVC)
     add_compile_options(
         /W3 /MP /bigobj
+        /Zi          # Always generate PDB debug info (enables stack trace symbol resolution)
         /wd4005  # Macro redefinition
         /wd4996  # Deprecated functions
         /wd4244  # Conversion warnings
         /wd4267  # size_t conversion warnings
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
+    # /DEBUG linker flag embeds PDB reference in the executable so SymFromAddr
+    # can locate symbols at runtime. Does not affect binary performance.
+    add_link_options(/DEBUG)
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS)
 
     # Conformance improvements available in VS 2017+ - enforce __cplusplus macro and

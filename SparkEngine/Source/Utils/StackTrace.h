@@ -220,8 +220,25 @@ namespace Spark
                            []()
                            {
                                HANDLE process = GetCurrentProcess();
-                               SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-                               SymInitialize(process, nullptr, TRUE);
+
+                               // SYMOPT_UNDNAME: return demangled C++ names
+                               // SYMOPT_LOAD_LINES: resolve source file + line numbers
+                               // Note: SYMOPT_DEFERRED_LOADS is intentionally omitted —
+                               // it delays symbol loading and can cause the main module's
+                               // PDB to be missed if SymFromAddr is called before the
+                               // deferred load triggers.
+                               SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
+
+                               // Build a search path that includes the executable's directory,
+                               // so the PDB file is found even when the working directory differs.
+                               char exePath[MAX_PATH] = {};
+                               GetModuleFileNameA(nullptr, exePath, MAX_PATH);
+                               // Truncate to directory
+                               char* lastSlash = strrchr(exePath, '\\');
+                               if (lastSlash)
+                                   *lastSlash = '\0';
+
+                               SymInitialize(process, exePath, TRUE);
                            });
 #endif
         }
