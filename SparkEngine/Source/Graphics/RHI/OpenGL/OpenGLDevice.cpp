@@ -1275,7 +1275,7 @@ namespace Spark
                     if (glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
                     {
                         SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                        "OpenGL framebuffer incomplete for render target: {}", desc.debugName);
+                                        "OpenGL framebuffer incomplete for render target: %s", desc.debugName.c_str());
                     }
                 }
                 else if (desc.usage & RHITextureUsage::DepthStencil)
