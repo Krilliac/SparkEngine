@@ -701,14 +701,14 @@ static void ShutdownGameplaySystems()
 
 static void UpdateDebugSystems(float dt)
 {
-    Spark::TweenManager::GetInstance().Update(dt);
+    SPARK_GUARDED_UPDATE("TweenManager", "Debug", { Spark::TweenManager::GetInstance().Update(dt); });
     Spark::DebugDrawManager::GetInstance().Flush(dt);
-    Spark::DebugOverlay::GetInstance().Update(dt);
-    Spark::MemoryMonitor::GetInstance().Update(dt);
+    SPARK_GUARDED_UPDATE("DebugOverlay", "Debug", { Spark::DebugOverlay::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("MemoryMonitor", "Debug", { Spark::MemoryMonitor::GetInstance().Update(dt); });
     Spark::FrameInspector::GetInstance().OnFrameEnd();
 
     // Update decal fading
-    Spark::Graphics::DecalSystem::GetInstance().Update(dt);
+    SPARK_GUARDED_UPDATE("DecalSystem", "Debug", { Spark::Graphics::DecalSystem::GetInstance().Update(dt); });
 }
 
 static void ShutdownDebugSystems()
@@ -1067,8 +1067,10 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
         UpdateGameplaySystems(dt);
         UpdateDebugSystems(dt);
-        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-        console.Update();
+        SPARK_GUARDED_UPDATE("Console", "Core", {
+            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+            console.Update();
+        });
 
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
         if (elapsed < TICK_INTERVAL)
@@ -1254,8 +1256,10 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
             // query GetFixedStepCount() for deterministic fixed-rate updates.
             Spark::FixedTimestepAccumulator::GetInstance().Advance(rawDt);
 
-            if (g_input)
-                g_input->Update();
+            SPARK_GUARDED_UPDATE("Input", "Core", {
+                if (g_input)
+                    g_input->Update();
+            });
 
             if (g_moduleManager && g_moduleManager->HasModules())
             {
@@ -1276,8 +1280,10 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
 
             UpdateGameplaySystems(dt);
             UpdateDebugSystems(dt);
-            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-            console.Update();
+            SPARK_GUARDED_UPDATE("Console", "Core", {
+                Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+                console.Update();
+            });
         }
     }
 
@@ -1540,8 +1546,10 @@ static void TickFrame(float dt)
     // Advance the global fixed-timestep accumulator for deterministic fixed-rate updates.
     Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
-    if (g_input)
-        g_input->Update();
+    SPARK_GUARDED_UPDATE("Input", "Core", {
+        if (g_input)
+            g_input->Update();
+    });
 
     if (g_moduleManager && g_moduleManager->HasModules())
     {
@@ -1561,8 +1569,10 @@ static void TickFrame(float dt)
 
     UpdateGameplaySystems(dt);
     UpdateDebugSystems(dt);
-    Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-    Spark::SimpleConsole::GetInstance().Update();
+    SPARK_GUARDED_UPDATE("Console", "Core", {
+        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+        Spark::SimpleConsole::GetInstance().Update();
+    });
 }
 
 /**
@@ -1745,8 +1755,10 @@ static int RunHeadlessLinux(int argc, char* argv[])
 
         UpdateGameplaySystems(dt);
         UpdateDebugSystems(dt);
-        Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
-        console.Update();
+        SPARK_GUARDED_UPDATE("Console", "Core", {
+            Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
+            console.Update();
+        });
 
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
         if (elapsed < TICK_INTERVAL)
