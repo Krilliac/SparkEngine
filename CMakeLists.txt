@@ -936,7 +936,7 @@ if(SPARK_OPENGL_AVAILABLE)
         find_package(X11 QUIET)
         if(X11_FOUND)
             target_link_libraries(SparkEngineLib PUBLIC X11::X11)
-            target_link_libraries(SparkEngineLib PUBLIC GLX)
+            # GLX is part of OpenGL on Linux — already linked via OpenGL::GL above
             message(STATUS "SparkEngine: GLX software rendering ENABLED (use Xvfb for headless)")
         endif()
     endif()

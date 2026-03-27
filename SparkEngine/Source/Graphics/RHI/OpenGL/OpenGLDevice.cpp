@@ -922,7 +922,7 @@ namespace Spark
 
                 // Try to create a GL 4.5 Core context via ARB extension
                 auto glXCreateContextAttribsARB = reinterpret_cast<PFNGLXCREATECONTEXTATTRIBSARBPROC>(
-                    glXGetProcAddress(reinterpret_cast<const GLubyte*>("glXCreateContextAttribsARB")));
+                    glXGetProcAddressARB(reinterpret_cast<const GLubyte*>("glXCreateContextAttribsARB")));
 
                 GLXContext bootstrapCtx = nullptr;
                 if (glXCreateContextAttribsARB)

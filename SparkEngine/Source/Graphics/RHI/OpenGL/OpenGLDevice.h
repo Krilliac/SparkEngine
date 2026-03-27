@@ -28,10 +28,59 @@
 #include <EGL/egl.h>
 #else
 #include <GL/glx.h>
+// glxext.h provides ARB extension typedefs (e.g. PFNGLXCREATECONTEXTATTRIBSARBPROC)
+#if __has_include(<GL/glxext.h>)
+#include <GL/glxext.h>
 #endif
-// X11 defines 'None' as 0L which conflicts with GraphicsBackend::None
+// Fallback declarations if glxext.h is not available
+#ifndef GLX_ARB_create_context
+typedef GLXContext (*PFNGLXCREATECONTEXTATTRIBSARBPROC)(Display*, GLXFBConfig, GLXContext, int, const int*);
+#define GLX_CONTEXT_MAJOR_VERSION_ARB 0x2091
+#define GLX_CONTEXT_MINOR_VERSION_ARB 0x2092
+#define GLX_CONTEXT_PROFILE_MASK_ARB 0x9126
+#define GLX_CONTEXT_CORE_PROFILE_BIT_ARB 0x00000001
+#endif
+#ifndef GLX_ARB_get_proc_address
+extern "C" void (*glXGetProcAddressARB(const GLubyte*))();
+#endif
+#endif
+// X11 headers define short macros (None, Always, True, Bool, etc.) that clash
+// with C++ enum values. Undef them after the X11 includes are done.
 #ifdef None
 #undef None
+#endif
+#ifdef Always
+#undef Always
+#endif
+#ifdef True
+#undef True
+#endif
+#ifdef False
+#undef False
+#endif
+#ifdef Bool
+#undef Bool
+#endif
+#ifdef Success
+#undef Success
+#endif
+#ifdef Status
+#undef Status
+#endif
+#ifdef KeyPress
+#undef KeyPress
+#endif
+#ifdef KeyRelease
+#undef KeyRelease
+#endif
+#ifdef FocusIn
+#undef FocusIn
+#endif
+#ifdef FocusOut
+#undef FocusOut
+#endif
+#ifdef Expose
+#undef Expose
 #endif
 #endif
 
