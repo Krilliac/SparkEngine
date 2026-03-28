@@ -32,12 +32,20 @@ namespace SparkEditor
       private:
         void RenderToolbar();
         void RenderGraphicsTab();
+        void RenderRenderingTab();
+        void RenderPostProcessingTab();
         void RenderAudioTab();
+        void RenderControlsTab();
         void RenderPhysicsTab();
         void RenderAITab();
+        void RenderPlayerTab();
         void RenderGameplayTab();
         void RenderCameraTab();
+        void RenderNetworkTab();
+        void RenderScriptingTab();
+        void RenderAnimationTab();
         void RenderEditorTab();
+        void RenderLoggingTab();
         void RenderProjectInfoTab();
 
         int m_activeTab = 0;
