@@ -255,13 +255,20 @@ cd build/bin
 ./SparkEngine
 ```
 
-On Linux, the engine uses OpenGL stubs by default. Full rendering requires the Vulkan backend (experimental).
+On Linux with a GPU, the engine uses the Vulkan or OpenGL backend. Without a GPU, the engine falls back to `NullRHIDevice` (headless mode) or can render on CPU using the OpenGL backend with Mesa llvmpipe:
+
+```bash
+# Software rendering (no GPU required)
+sudo apt-get install -y xvfb libgl1-mesa-dri
+Xvfb :99 -screen 0 1024x768x24 &
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
+```
 
 ### Command-Line Options
 
 | Option | Description |
 |--------|-------------|
-| `-headless` | Run without graphics or audio (for dedicated servers) |
+| `-headless` | Run without graphics or audio (for dedicated servers). Falls back to `NullRHIDevice` automatically. |
 | `-game <path>` | Load a specific game module DLL |
 | `-scene <path>` | Load a specific scene on startup |
 | `-width <N>` | Set window width in pixels |

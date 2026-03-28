@@ -37,6 +37,8 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 | DXR raytracing | **EXPERIMENTAL** | Requires D3D12, disabled by default |
 | DLSS/FSR upscaling | **EXPERIMENTAL** | Requires NVIDIA/AMD SDK |
 | Render graph | **DONE** | Pass dependency management |
+| NullRHIDevice (headless) | **DONE** | Auto-fallback when no GPU; tested with 5 integration tests |
+| Software rendering (llvmpipe) | **DONE** | Full OpenGL 4.5 on CPU via Mesa llvmpipe; GLAD bundled |
 
 ### Physics
 
