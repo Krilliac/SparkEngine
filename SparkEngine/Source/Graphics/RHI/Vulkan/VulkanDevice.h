@@ -381,6 +381,7 @@ namespace Spark
                 VkDevice GetVkDevice() const { return m_device; }
                 VkPhysicalDevice GetVkPhysicalDevice() const { return m_physicalDevice; }
                 VkInstance GetVkInstance() const { return m_instance; }
+                bool IsSoftwareDevice() const { return m_isSoftwareDevice; }
                 VkQueue GetGraphicsQueue() const { return m_graphicsQueue; }
                 VkQueue GetPresentQueue() const { return m_presentQueue; }
                 VkCommandPool GetCommandPool() const { return m_commandPool; }
@@ -450,6 +451,7 @@ namespace Spark
                 RHIDeviceCapabilities m_capabilities;
                 RHIStatistics m_statistics;
                 bool m_validationEnabled = false;
+                bool m_isSoftwareDevice = false;
 
                 const std::vector<const char*> m_deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
             };

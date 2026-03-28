@@ -70,7 +70,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v4
@@ -162,7 +162,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v4
@@ -259,7 +259,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libc++-dev libc++abi-dev
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
 
     - name: Setup ccache
       uses: actions/cache@v4
@@ -488,7 +488,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v4
@@ -585,7 +585,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v4
