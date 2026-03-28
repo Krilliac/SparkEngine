@@ -3,8 +3,19 @@ name: Build SparkEngine
 on:
   push:
     branches: [ main, develop, Working, 'feature/**', 'claude/**' ]
+    paths-ignore:
+      - '**.md'
+      - 'wiki/**'
+      - 'docs/**'
+      - '.claude/**'
+      - 'LICENSE'
   pull_request:
     branches: [ main, develop, Working ]
+
+# Cancel in-progress runs on the same branch/PR when a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -59,7 +70,14 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-linux-asan-${{ github.sha }}
+        restore-keys: ccache-linux-asan-
 
     - name: Configure CMake (ASan + UBSan + LSan)
       run: |
@@ -68,6 +86,8 @@ jobs:
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc \
           -DCMAKE_CXX_COMPILER=g++ \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
           -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
@@ -142,7 +162,14 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-linux-tsan-${{ github.sha }}
+        restore-keys: ccache-linux-tsan-
 
     - name: Configure CMake (TSan)
       run: |
@@ -151,6 +178,8 @@ jobs:
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc \
           -DCMAKE_CXX_COMPILER=g++ \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
           -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
@@ -230,7 +259,14 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake libgl-dev libvulkan-dev libsdl2-dev libc++-dev libc++abi-dev
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libc++-dev libc++abi-dev
+
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-linux-msan-${{ github.sha }}
+        restore-keys: ccache-linux-msan-
 
     - name: Configure CMake (MSan)
       run: |
@@ -239,6 +275,8 @@ jobs:
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt" \
           -DCMAKE_C_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt" \
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -lc++abi" \
@@ -437,6 +475,7 @@ jobs:
   build-linux-gcc:
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: true
       matrix:
         config: [Debug, Release]
 
@@ -449,7 +488,14 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-linux-gcc-${{ matrix.config }}-${{ github.sha }}
+        restore-keys: ccache-linux-gcc-${{ matrix.config }}-
 
     - name: Configure CMake
       run: |
@@ -457,16 +503,15 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc \
-          -DCMAKE_CXX_COMPILER=g++ 2>&1 | tee cmake-configure.log
+          -DCMAKE_CXX_COMPILER=g++ \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests
-      run: |
-        cd build
-        ctest --output-on-failure 2>&1 | tee ../ctest.log || true
-        ./bin/SparkTests 2>&1 | tee ../test-results.log
+      run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Report errors to PR
       if: failure() && github.event_name == 'pull_request'
@@ -527,6 +572,7 @@ jobs:
   build-linux-clang:
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: true
       matrix:
         config: [Debug, Release]
 
@@ -539,7 +585,14 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-linux-clang-${{ matrix.config }}-${{ github.sha }}
+        restore-keys: ccache-linux-clang-${{ matrix.config }}-
 
     - name: Configure CMake
       run: |
@@ -547,16 +600,15 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++ 2>&1 | tee cmake-configure.log
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests
-      run: |
-        cd build
-        ctest --output-on-failure 2>&1 | tee ../ctest.log || true
-        ./bin/SparkTests 2>&1 | tee ../test-results.log
+      run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Report errors to PR
       if: failure() && github.event_name == 'pull_request'
@@ -623,11 +675,18 @@ jobs:
         with:
           submodules: recursive
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y lcov libgl-dev libsdl2-dev
+        run: sudo apt-get update && sudo apt-get install -y lcov ccache libgl-dev libsdl2-dev
+      - name: Setup ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-coverage-${{ github.sha }}
+          restore-keys: ccache-coverage-
       - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DBUILD_TESTS=ON
