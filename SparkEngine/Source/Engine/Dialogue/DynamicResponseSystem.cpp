@@ -149,8 +149,8 @@ namespace Spark::Dialogue
                     {
                         ResponseAction deferredCopy = deferred;
                         uint32_t sender = senderEntity;
-                        m_actionScheduler.Schedule([this, action = std::move(deferredCopy), sender]
-                                                   { ExecuteAction(action, sender); }, delay);
+                        (void)m_actionScheduler.Schedule([this, action = std::move(deferredCopy), sender]
+                                                         { ExecuteAction(action, sender); }, delay);
                     }
                 }
                 break; // All remaining actions are now pending

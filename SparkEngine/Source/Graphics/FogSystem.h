@@ -136,7 +136,10 @@ namespace Spark
             inline float ExponentialSquaredFog(float distance, float density)
             {
                 float d = density * distance;
-                return 1.0f - std::exp(-d * d);
+                float exponent = -(d * d);
+                // Clamp to prevent constant-arithmetic overflow (MSVC C4756)
+                exponent = std::max(exponent, -87.0f);
+                return 1.0f - std::exp(exponent);
             }
 
             /// Height-based fog density at a given altitude
