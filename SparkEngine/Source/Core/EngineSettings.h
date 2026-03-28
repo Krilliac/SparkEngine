@@ -332,6 +332,55 @@ class EngineSettings
         int undoHistorySize = 100;
     };
 
+    // ---- Network ----
+
+    struct NetworkSettings
+    {
+        int serverPort = 27015;
+        int maxClients = 32;
+        float connectionTimeout = 10.0f;
+        float heartbeatInterval = 1.0f;
+        float replicationRate = 20.0f; // Updates per second
+        float reliableRetransmitBase = 0.5f;
+        int maxReliableRetries = 5;
+        int sendBufferSize = 65536;
+        int receiveBufferSize = 65536;
+        bool enableCompression = false;
+        bool enableEncryption = false;
+        // Lag simulation (development only)
+        float simulatedLatencyMs = 0.0f;
+        float simulatedPacketLoss = 0.0f;
+        float simulatedJitterMs = 0.0f;
+    };
+
+    // ---- Scripting ----
+
+    struct ScriptingSettings
+    {
+        bool hotReloadEnabled = true;
+        float hotReloadPollInterval = 1.0f; // Seconds between file change checks
+        int contextPoolSize = 8;
+        float executionTimeoutMs = 100.0f;
+        bool generateDebugInfo = true;
+        int maxCallStackDepth = 64;
+        int maxScriptMemoryMB = 64;
+        bool enableProfiler = false;
+    };
+
+    // ---- Animation ----
+
+    struct AnimationSettings
+    {
+        float defaultBlendTime = 0.2f;
+        int ikSolverIterations = 10;
+        float ikTolerance = 0.001f;
+        int maxActiveMontages = 4;
+        bool enableRootMotion = true;
+        float lodDistanceMultiplier = 1.0f; // Skeleton LOD distance scale
+        int compressionQuality = 2;         // 0=None, 1=Low, 2=Medium, 3=High
+        bool enableAnimationEvents = true;
+    };
+
     // ---- Logging ----
 
     struct LoggingSettings
@@ -454,6 +503,15 @@ class EngineSettings
     EditorSettings& Editor() { return m_editor; }
     const EditorSettings& Editor() const { return m_editor; }
 
+    NetworkSettings& Network() { return m_network; }
+    const NetworkSettings& Network() const { return m_network; }
+
+    ScriptingSettings& Scripting() { return m_scripting; }
+    const ScriptingSettings& Scripting() const { return m_scripting; }
+
+    AnimationSettings& Animation() { return m_animation; }
+    const AnimationSettings& Animation() const { return m_animation; }
+
     LoggingSettings& Logging() { return m_logging; }
     const LoggingSettings& Logging() const { return m_logging; }
 
@@ -529,6 +587,9 @@ class EngineSettings
     GameModeSettings m_gameMode;
     CameraSettings m_camera;
     EditorSettings m_editor;
+    NetworkSettings m_network;
+    ScriptingSettings m_scripting;
+    AnimationSettings m_animation;
     LoggingSettings m_logging;
 
     // Change listeners

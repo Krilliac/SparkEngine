@@ -116,6 +116,10 @@ void EngineSettings::ResetToDefaults()
     m_gameMode = GameModeSettings{};
     m_camera = CameraSettings{};
     m_editor = EditorSettings{};
+    m_network = NetworkSettings{};
+    m_scripting = ScriptingSettings{};
+    m_animation = AnimationSettings{};
+    m_logging = LoggingSettings{};
     PopulateDefaults();
 }
 
@@ -352,6 +356,42 @@ void EngineSettings::ReadFromConfig()
     m_editor.autosaveEnabled = m_config.GetBool("Editor", "AutosaveEnabled", true);
     m_editor.autosaveIntervalSeconds = m_config.GetFloat("Editor", "AutosaveIntervalSeconds", 300.0f);
     m_editor.undoHistorySize = m_config.GetInt("Editor", "UndoHistorySize", 100);
+
+    // Network
+    m_network.serverPort = m_config.GetInt("Network", "ServerPort", 27015);
+    m_network.maxClients = m_config.GetInt("Network", "MaxClients", 32);
+    m_network.connectionTimeout = m_config.GetFloat("Network", "ConnectionTimeout", 10.0f);
+    m_network.heartbeatInterval = m_config.GetFloat("Network", "HeartbeatInterval", 1.0f);
+    m_network.replicationRate = m_config.GetFloat("Network", "ReplicationRate", 20.0f);
+    m_network.reliableRetransmitBase = m_config.GetFloat("Network", "ReliableRetransmitBase", 0.5f);
+    m_network.maxReliableRetries = m_config.GetInt("Network", "MaxReliableRetries", 5);
+    m_network.sendBufferSize = m_config.GetInt("Network", "SendBufferSize", 65536);
+    m_network.receiveBufferSize = m_config.GetInt("Network", "ReceiveBufferSize", 65536);
+    m_network.enableCompression = m_config.GetBool("Network", "EnableCompression", false);
+    m_network.enableEncryption = m_config.GetBool("Network", "EnableEncryption", false);
+    m_network.simulatedLatencyMs = m_config.GetFloat("Network", "SimulatedLatencyMs", 0.0f);
+    m_network.simulatedPacketLoss = m_config.GetFloat("Network", "SimulatedPacketLoss", 0.0f);
+    m_network.simulatedJitterMs = m_config.GetFloat("Network", "SimulatedJitterMs", 0.0f);
+
+    // Scripting
+    m_scripting.hotReloadEnabled = m_config.GetBool("Scripting", "HotReloadEnabled", true);
+    m_scripting.hotReloadPollInterval = m_config.GetFloat("Scripting", "HotReloadPollInterval", 1.0f);
+    m_scripting.contextPoolSize = m_config.GetInt("Scripting", "ContextPoolSize", 8);
+    m_scripting.executionTimeoutMs = m_config.GetFloat("Scripting", "ExecutionTimeoutMs", 100.0f);
+    m_scripting.generateDebugInfo = m_config.GetBool("Scripting", "GenerateDebugInfo", true);
+    m_scripting.maxCallStackDepth = m_config.GetInt("Scripting", "MaxCallStackDepth", 64);
+    m_scripting.maxScriptMemoryMB = m_config.GetInt("Scripting", "MaxScriptMemoryMB", 64);
+    m_scripting.enableProfiler = m_config.GetBool("Scripting", "EnableProfiler", false);
+
+    // Animation
+    m_animation.defaultBlendTime = m_config.GetFloat("Animation", "DefaultBlendTime", 0.2f);
+    m_animation.ikSolverIterations = m_config.GetInt("Animation", "IKSolverIterations", 10);
+    m_animation.ikTolerance = m_config.GetFloat("Animation", "IKTolerance", 0.001f);
+    m_animation.maxActiveMontages = m_config.GetInt("Animation", "MaxActiveMontages", 4);
+    m_animation.enableRootMotion = m_config.GetBool("Animation", "EnableRootMotion", true);
+    m_animation.lodDistanceMultiplier = m_config.GetFloat("Animation", "LODDistanceMultiplier", 1.0f);
+    m_animation.compressionQuality = m_config.GetInt("Animation", "CompressionQuality", 2);
+    m_animation.enableAnimationEvents = m_config.GetBool("Animation", "EnableAnimationEvents", true);
 
     // Logging
     m_logging.globalLevel = m_config.GetString("Logging", "GlobalLevel", "Info");
@@ -621,6 +661,42 @@ void EngineSettings::WriteToConfig() const
     m_config.SetFloat("Editor", "AutosaveIntervalSeconds", m_editor.autosaveIntervalSeconds);
     m_config.SetInt("Editor", "UndoHistorySize", m_editor.undoHistorySize);
 
+    // Network
+    m_config.SetInt("Network", "ServerPort", m_network.serverPort);
+    m_config.SetInt("Network", "MaxClients", m_network.maxClients);
+    m_config.SetFloat("Network", "ConnectionTimeout", m_network.connectionTimeout);
+    m_config.SetFloat("Network", "HeartbeatInterval", m_network.heartbeatInterval);
+    m_config.SetFloat("Network", "ReplicationRate", m_network.replicationRate);
+    m_config.SetFloat("Network", "ReliableRetransmitBase", m_network.reliableRetransmitBase);
+    m_config.SetInt("Network", "MaxReliableRetries", m_network.maxReliableRetries);
+    m_config.SetInt("Network", "SendBufferSize", m_network.sendBufferSize);
+    m_config.SetInt("Network", "ReceiveBufferSize", m_network.receiveBufferSize);
+    m_config.SetBool("Network", "EnableCompression", m_network.enableCompression);
+    m_config.SetBool("Network", "EnableEncryption", m_network.enableEncryption);
+    m_config.SetFloat("Network", "SimulatedLatencyMs", m_network.simulatedLatencyMs);
+    m_config.SetFloat("Network", "SimulatedPacketLoss", m_network.simulatedPacketLoss);
+    m_config.SetFloat("Network", "SimulatedJitterMs", m_network.simulatedJitterMs);
+
+    // Scripting
+    m_config.SetBool("Scripting", "HotReloadEnabled", m_scripting.hotReloadEnabled);
+    m_config.SetFloat("Scripting", "HotReloadPollInterval", m_scripting.hotReloadPollInterval);
+    m_config.SetInt("Scripting", "ContextPoolSize", m_scripting.contextPoolSize);
+    m_config.SetFloat("Scripting", "ExecutionTimeoutMs", m_scripting.executionTimeoutMs);
+    m_config.SetBool("Scripting", "GenerateDebugInfo", m_scripting.generateDebugInfo);
+    m_config.SetInt("Scripting", "MaxCallStackDepth", m_scripting.maxCallStackDepth);
+    m_config.SetInt("Scripting", "MaxScriptMemoryMB", m_scripting.maxScriptMemoryMB);
+    m_config.SetBool("Scripting", "EnableProfiler", m_scripting.enableProfiler);
+
+    // Animation
+    m_config.SetFloat("Animation", "DefaultBlendTime", m_animation.defaultBlendTime);
+    m_config.SetInt("Animation", "IKSolverIterations", m_animation.ikSolverIterations);
+    m_config.SetFloat("Animation", "IKTolerance", m_animation.ikTolerance);
+    m_config.SetInt("Animation", "MaxActiveMontages", m_animation.maxActiveMontages);
+    m_config.SetBool("Animation", "EnableRootMotion", m_animation.enableRootMotion);
+    m_config.SetFloat("Animation", "LODDistanceMultiplier", m_animation.lodDistanceMultiplier);
+    m_config.SetInt("Animation", "CompressionQuality", m_animation.compressionQuality);
+    m_config.SetBool("Animation", "EnableAnimationEvents", m_animation.enableAnimationEvents);
+
     // Logging
     m_config.SetString("Logging", "GlobalLevel", m_logging.globalLevel);
     m_config.SetString("Logging", "StackTraceLevel", m_logging.stackTraceLevel);
@@ -697,9 +773,9 @@ bool EngineSettings::SetValue(const std::string& section, const std::string& key
 
 std::vector<std::string> EngineSettings::GetSections() const
 {
-    return {"Graphics", "Audio",      "Controls", "Game",       "Rendering",      "PostProcess",   "SSAO",
-            "SSR",      "Volumetric", "TAA",      "MotionBlur", "DynamicQuality", "AudioExtended", "Physics",
-            "AI",       "Player",     "GameMode", "Camera",     "Editor",         "Logging"};
+    return {"Graphics",   "Audio",  "Controls",   "Game",           "Rendering",     "PostProcess", "SSAO",   "SSR",
+            "Volumetric", "TAA",    "MotionBlur", "DynamicQuality", "AudioExtended", "Physics",     "AI",     "Player",
+            "GameMode",   "Camera", "Editor",     "Network",        "Scripting",     "Animation",   "Logging"};
 }
 
 std::vector<std::string> EngineSettings::GetKeys(const std::string& section) const
