@@ -302,14 +302,14 @@ namespace Spark::Net
                 std::vector<FieldSnapshot> fieldSnapshots;
                 fieldSnapshots.reserve(entity.properties.size());
 
-                for (uint8_t i = 0; i < entity.properties.size(); ++i)
+                for (size_t i = 0; i < entity.properties.size(); ++i)
                 {
                     const auto& prop = entity.properties[i];
                     if (!prop.dirty && !entity.needsFullSync)
                         continue;
 
                     FieldSnapshot fs;
-                    fs.fieldIndex = i;
+                    fs.fieldIndex = static_cast<uint8_t>(i & 0xFF);
                     if (prop.serialize)
                     {
                         NetBuffer fieldBuf;
@@ -335,8 +335,15 @@ namespace Spark::Net
                 }
                 else
                 {
-                    // Delta sync: build per-connection delta packets
-                    for (const auto& [clientId, info] : m_clients)
+                    // Delta sync: snapshot client IDs under lock, then build per-connection delta packets
+                    std::vector<ClientID> connectedClients;
+                    {
+                        std::lock_guard<std::mutex> clientLock(m_clientsMutex);
+                        connectedClients.reserve(m_clients.size());
+                        for (const auto& [cid, cinfo] : m_clients)
+                            connectedClients.push_back(cid);
+                    }
+                    for (ClientID clientId : connectedClients)
                     {
                         auto deltaPacket = deltaManager.BuildDeltaPacket(clientId, netID);
                         if (!deltaPacket.empty())
