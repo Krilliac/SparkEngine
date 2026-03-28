@@ -2008,6 +2008,15 @@ static int RunSDL2Windowed(int argc, char* argv[])
     int winW = settings.Graphics().windowWidth;
     int winH = settings.Graphics().windowHeight;
 
+    // Set OpenGL attributes before window creation (required for Mesa/llvmpipe)
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
     Uint32 windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     if (settings.Graphics().fullscreen)
         windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
@@ -2022,10 +2031,28 @@ static int RunSDL2Windowed(int argc, char* argv[])
         return -1;
     }
 
+    // Create SDL GL context and make it current before engine graphics init.
+    // This ensures Mesa llvmpipe and other software renderers work correctly —
+    // the GraphicsEngine can then share or skip its own bootstrap context.
+    SDL_GLContext glContext = SDL_GL_CreateContext(window);
+    if (!glContext)
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning(std::string("SDL_GL_CreateContext failed: ") + SDL_GetError() +
+                                                       " — engine will try headless fallback");
+    }
+    else
+    {
+        SDL_GL_MakeCurrent(window, glContext);
+        SDL_GL_SetSwapInterval(1);
+        Spark::SimpleConsole::GetInstance().LogInfo("SDL2 OpenGL context created successfully");
+    }
+
     InitializeSDL2Subsystems(window, argc, argv);
     RunSDL2MainLoop();
 
     ShutdownLinux();
+    if (glContext)
+        SDL_GL_DeleteContext(glContext);
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 0;

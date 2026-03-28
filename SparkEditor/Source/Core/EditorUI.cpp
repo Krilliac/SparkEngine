@@ -101,8 +101,8 @@ namespace SparkEditor
             // Wire project-opened / project-closed callbacks into panels
             WireCallbacks();
 
-            // Show project browser on startup if no project is loaded
-            if (!m_projectManager->HasOpenProject())
+            // Show project browser on startup if no project is loaded (skip in test mode)
+            if (!config.testMode && !m_projectManager->HasOpenProject())
             {
                 m_projectBrowserPanel->ShowBrowser();
             }

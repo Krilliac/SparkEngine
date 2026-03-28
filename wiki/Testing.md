@@ -429,6 +429,49 @@ find SparkEngine/Source GameModules/SparkGame/Source SparkEditor/Source SparkCon
 
 ---
 
+## Live Editor Testing (Software Rendering)
+
+The SparkEditor can be tested with full graphics on headless Linux using Xvfb and Mesa llvmpipe software rendering. An automated test script exercises the editor UI, menus, panels, and keyboard shortcuts.
+
+### Quick Start
+
+```bash
+# Start virtual framebuffer
+Xvfb :99 -screen 0 1920x1080x24 -ac &
+
+# Set environment
+export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 MESA_GL_VERSION_OVERRIDE=3.3
+
+# Run automated test suite (21 tests)
+python3 tools/test-editor-live.py build/bin/SparkEditor
+```
+
+### Editor Test Mode Flags
+
+| Flag | Description |
+|------|-------------|
+| `--test-mode` | Skip project browser, enable debug console |
+| `--test-frames N` | Exit after N rendered frames |
+| `--debug-console` | Print diagnostics to stdout |
+
+### What Gets Tested
+
+- Editor launch and clean shutdown
+- OpenGL 3.3 rendering via Mesa llvmpipe
+- ImGui frame rendering (non-blank, sufficient UI complexity)
+- Menu bar interaction (File, Edit, Window menus)
+- Panel toggle via Window menu (Scene View, Asset Browser, Profiler, Material Editor)
+- Keyboard shortcuts (Ctrl+Z, Ctrl+S, Ctrl+N)
+- Hierarchy panel click and right-click context menu
+- 5-second stress test (no crashes)
+
+### Prerequisites
+
+System packages: `xvfb`, `libgl-dev`, `xdotool`, Python 3 with Pillow.
+SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* building SDL2).
+
+---
+
 ## See Also
 
 - [Build System and CMake Modules](Build-System-and-CMake-Modules) -- BUILD_TESTS flag and CI details
