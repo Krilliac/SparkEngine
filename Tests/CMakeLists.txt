@@ -187,6 +187,12 @@ add_executable(SparkTests
     TestFullEngineDiagnostics.cpp
     TestEngineLoadTest.cpp
     TestDebugUtilities.cpp
+    TestMemoryDebugger.cpp
+    TestMemoryMonitor.cpp
+    TestLogger.cpp
+    TestProfiler.cpp
+    TestStackTrace.cpp
+    TestJobSystem.cpp
     TestFaultIsolation.cpp
     TestVulkanLavapipe.cpp
     TestWARPRendering.cpp

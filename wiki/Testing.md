@@ -481,7 +481,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*180 test files, 2172+ test cases*
+*186 test files, 2259+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -573,15 +573,19 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestInputSystem` | 11 |
 | `TestInstanceManager` | 14 |
 | `TestInventorySystem` | 11 |
+| `TestJobSystem` | 11 |
 | `TestJsonUtils` | 23 |
 | `TestLightManager` | 13 |
 | `TestLoadingScreen` | 4 |
 | `TestLocalFileCache` | 15 |
 | `TestLocalizationSystem` | 6 |
 | `TestLockFreeRingAllocator` | 3 |
+| `TestLogger` | 14 |
 | `TestMaterialDefinition` | 10 |
 | `TestMaterialEffects` | 5 |
 | `TestMathUtils` | 11 |
+| `TestMemoryDebugger` | 16 |
+| `TestMemoryMonitor` | 11 |
 | `TestMeshLOD` | 8 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
@@ -609,6 +613,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestPlayModeManager` | 33 |
 | `TestPoseModifier` | 4 |
 | `TestPostProcessingPipeline` | 16 |
+| `TestProfiler` | 19 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 10 |
 | `TestRHIHandlePool` | 10 |
@@ -642,6 +647,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSpatialGrid` | 16 |
 | `TestSplineMath` | 24 |
 | `TestSprite2DComponents` | 35 |
+| `TestStackTrace` | 16 |
 | `TestStateMachine` | 16 |
 | `TestSteeringBehaviors` | 15 |
 | `TestStringPool` | 8 |
