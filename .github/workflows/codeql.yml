@@ -13,7 +13,7 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ main, develop, Working ]
+    branches: [ main, develop, Working, 'feature/**', 'claude/**' ]
   pull_request:
     branches: [ main, develop, Working ]
   schedule:
@@ -102,8 +102,9 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_TESTS=OFF \
           -DCMAKE_C_COMPILER=gcc \
-          -DCMAKE_CXX_COMPILER=g++
-        cmake --build build --parallel $(nproc)
+          -DCMAKE_CXX_COMPILER=g++ \
+          -DENABLE_EDITOR=OFF
+        cmake --build build --parallel $(nproc) --target SparkEngineLib
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
