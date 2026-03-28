@@ -9,6 +9,7 @@
 
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
+#include "Core/Reflection.h"
 #include <string>
 #include <memory>
 
@@ -91,6 +92,23 @@ namespace SparkEditor
         void RenderWeatherComponent();
         void RenderNetworkIdentityComponent();
 
+        // Reflection-driven renderers for volumes, placement, and advanced components
+        void RenderTriggerVolumeComponent();
+        void RenderPostProcessVolumeComponent();
+        void RenderReflectionProbeComponent();
+        void RenderLightProbeComponent();
+        void RenderNavObstacleComponent();
+        void RenderWaterPlaneComponent();
+        void RenderFogVolumeComponent();
+        void RenderLODGroupComponent();
+        void RenderSpawnPointComponent();
+        void RenderAudioReverbZoneComponent();
+        void RenderWindZoneComponent();
+        void RenderBillboardComponent();
+        void RenderAudioListenerComponent();
+        void RenderCharacterControllerComponent();
+        void RenderSkyboxComponent();
+
         void RenderAddComponentMenu();
 
         /// Helper: check if the inspected object has a specific component type
@@ -107,6 +125,18 @@ namespace SparkEditor
 
         /// Helper: draw a labeled XYZ drag-float control with colored reset buttons
         static void DrawVec3Control(const char* label, float* values, float resetValue, float speed);
+
+        /**
+         * @brief Auto-render ImGui widgets for all fields described by a FieldInfo list.
+         *
+         * Reads/writes data directly through the void* pointer using field offsets.
+         * Supports Bool, Int, Float, String (char[N] buffers), Vector3, Vector4.
+         * Fields with hasRange use sliders; others use drag controls.
+         *
+         * @param data    Pointer to the start of the data struct.
+         * @param fields  Vector of field descriptors (from TypeRegistry or inline).
+         */
+        static void RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields);
 
       private:
         SceneFile* m_scene = nullptr;                     ///< Non-owning pointer to the active scene.

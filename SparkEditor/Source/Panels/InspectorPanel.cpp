@@ -800,6 +800,40 @@ namespace SparkEditor
             RenderWeatherComponent();
         if (HasComponent(ComponentType::NETWORK_IDENTITY))
             RenderNetworkIdentityComponent();
+
+        // Volumes & Probes (reflection-driven)
+        if (HasComponent(ComponentType::TRIGGER_VOLUME))
+            RenderTriggerVolumeComponent();
+        if (HasComponent(ComponentType::POST_PROCESS_VOLUME))
+            RenderPostProcessVolumeComponent();
+        if (HasComponent(ComponentType::REFLECTION_PROBE))
+            RenderReflectionProbeComponent();
+        if (HasComponent(ComponentType::LIGHT_PROBE))
+            RenderLightProbeComponent();
+        if (HasComponent(ComponentType::NAV_OBSTACLE))
+            RenderNavObstacleComponent();
+        if (HasComponent(ComponentType::WATER_PLANE))
+            RenderWaterPlaneComponent();
+        if (HasComponent(ComponentType::FOG_VOLUME))
+            RenderFogVolumeComponent();
+        if (HasComponent(ComponentType::LOD_GROUP))
+            RenderLODGroupComponent();
+        if (HasComponent(ComponentType::SPAWN_POINT))
+            RenderSpawnPointComponent();
+        if (HasComponent(ComponentType::AUDIO_REVERB_ZONE))
+            RenderAudioReverbZoneComponent();
+
+        // Placement (reflection-driven)
+        if (HasComponent(ComponentType::WIND_ZONE))
+            RenderWindZoneComponent();
+        if (HasComponent(ComponentType::BILLBOARD))
+            RenderBillboardComponent();
+        if (HasComponent(ComponentType::AUDIO_LISTENER))
+            RenderAudioListenerComponent();
+        if (HasComponent(ComponentType::CHARACTER_CONTROLLER))
+            RenderCharacterControllerComponent();
+        if (HasComponent(ComponentType::SKYBOX))
+            RenderSkyboxComponent();
     }
 
     void InspectorPanel::RenderAddComponentMenu()

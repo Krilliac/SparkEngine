@@ -534,6 +534,61 @@ TEST(Reflection_SetFieldFromString_UnsupportedType)
     EXPECT_TRUE(!ok);
 }
 
+TEST(Reflection_SerializeRoundTrip_MultipleFields)
+{
+    // Test that multiple fields on the same struct can be set and read back
+    auto& reg = TypeRegistry::Get();
+    reg.Clear();
+
+    auto& info =
+        reg.RegisterType(GetTypeId<MeshRenderer>(), "MeshRenderer", sizeof(MeshRenderer), alignof(MeshRenderer));
+
+    FieldInfo pathField;
+    pathField.fieldName = "meshPath";
+    pathField.type = FieldType::String;
+    pathField.offset = offsetof(MeshRenderer, meshPath);
+    pathField.size = sizeof(std::string);
+    info.fields.push_back(pathField);
+
+    FieldInfo shadowField;
+    shadowField.fieldName = "castShadows";
+    shadowField.type = FieldType::Bool;
+    shadowField.offset = offsetof(MeshRenderer, castShadows);
+    shadowField.size = sizeof(bool);
+    info.fields.push_back(shadowField);
+
+    // Set fields
+    MeshRenderer mr;
+    TestReflect::SetFieldFromString(&mr, *info.FindField("meshPath"), "models/hero.mesh");
+    TestReflect::SetFieldFromString(&mr, *info.FindField("castShadows"), "false");
+
+    EXPECT_EQ(mr.meshPath, std::string("models/hero.mesh"));
+    EXPECT_TRUE(!mr.castShadows);
+
+    // Read back
+    std::string pathStr = TestReflect::GetFieldAsString(&mr, *info.FindField("meshPath"));
+    EXPECT_EQ(pathStr, std::string("models/hero.mesh"));
+
+    std::string shadowStr = TestReflect::GetFieldAsString(&mr, *info.FindField("castShadows"));
+    EXPECT_EQ(shadowStr, std::string("false"));
+}
+
+TEST(Reflection_FindTypeByName_MultipleTypes)
+{
+    auto& reg = TypeRegistry::Get();
+    reg.Clear();
+
+    reg.RegisterType(GetTypeId<Transform>(), "Transform", sizeof(Transform), alignof(Transform));
+    reg.RegisterType(GetTypeId<Light>(), "Light", sizeof(Light), alignof(Light));
+    reg.RegisterType(GetTypeId<MeshRenderer>(), "MeshRenderer", sizeof(MeshRenderer), alignof(MeshRenderer));
+
+    EXPECT_TRUE(reg.GetTypeCount() == 3u);
+    EXPECT_TRUE(reg.FindTypeByName("Transform") != nullptr);
+    EXPECT_TRUE(reg.FindTypeByName("Light") != nullptr);
+    EXPECT_TRUE(reg.FindTypeByName("MeshRenderer") != nullptr);
+    EXPECT_TRUE(reg.FindTypeByName("NonExistent") == nullptr);
+}
+
 TEST(Reflection_RoundTrip_AllTypes)
 {
     auto& reg = TypeRegistry::Get();

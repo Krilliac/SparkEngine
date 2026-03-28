@@ -4,6 +4,7 @@
  */
 
 #include "SaveSystem.h"
+#include "../../Core/Reflection.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/EventBus.h"
 #include "../../Utils/Validate.h"
@@ -565,6 +566,66 @@ namespace Spark
                 auto it = data.properties.find("active");
                 ac.active = (it == data.properties.end()) || (it->second != "0");
             });
+
+        // Auto-register reflection-driven serializers for all remaining reflected types
+        RegisterReflectedSerializers();
+    }
+
+    // ============================================================================
+    // Reflection-driven auto-serialization
+    // ============================================================================
+
+    void ComponentSerializerRegistry::RegisterReflectedSerializers()
+    {
+        auto& typeRegistry = Spark::TypeRegistry::Get();
+        auto& factory = Spark::ComponentFactory::Get();
+
+        for (const auto& typeName : factory.GetRegisteredNames())
+        {
+            // Skip types that already have hand-written serializers
+            if (HasSerializer(typeName))
+                continue;
+
+            const auto* typeInfo = typeRegistry.FindTypeByName(typeName);
+            if (!typeInfo || typeInfo->fields.empty())
+                continue;
+
+            // Capture the type name and field list for the lambdas
+            std::string capturedName = typeName;
+            std::vector<Spark::FieldInfo> capturedFields = typeInfo->fields;
+
+            Register(
+                typeName,
+                // Serialize: iterate reflected fields, call GetFieldAsString
+                [capturedName, capturedFields](const void* comp) -> SerializedComponent
+                {
+                    SerializedComponent sc;
+                    sc.typeName = capturedName;
+                    for (const auto& field : capturedFields)
+                    {
+                        sc.properties[field.fieldName] = Spark::GetFieldAsString(comp, field);
+                    }
+                    return sc;
+                },
+                // Deserialize: add component via factory, set fields from properties
+                [capturedName, capturedFields](World& world, EntityID entity, const SerializedComponent& data)
+                {
+                    auto& f = Spark::ComponentFactory::Get();
+                    auto entityId = static_cast<uint32_t>(entity);
+                    f.AddComponent(capturedName, &world, entityId);
+                    void* raw = f.GetComponentRaw(capturedName, &world, entityId);
+                    if (!raw)
+                        return;
+                    for (const auto& field : capturedFields)
+                    {
+                        auto it = data.properties.find(field.fieldName);
+                        if (it != data.properties.end())
+                        {
+                            Spark::SetFieldFromString(raw, field, it->second);
+                        }
+                    }
+                });
+        }
     }
 
     // ============================================================================
