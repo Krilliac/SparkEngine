@@ -1219,7 +1219,8 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     if (SUCCEEDED(g_audioEngine->Initialize(32)))
     {
         console.LogInfo("AudioEngine initialized (32 sources)");
-        EngineContext::Get()->SetAudio(g_audioEngine.get());
+        if (auto* ctx = EngineContext::Get())
+            ctx->SetAudio(g_audioEngine.get());
     }
     else
     {
