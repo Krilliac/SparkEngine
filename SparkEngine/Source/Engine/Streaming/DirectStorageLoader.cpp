@@ -1,0 +1,250 @@
+/**
+ * @file DirectStorageLoader.cpp
+ * @brief GPU-direct asset loading via DirectStorage (Windows 11+)
+ * @author Spark Engine Team
+ * @date 2026
+ */
+
+#include "DirectStorageLoader.h"
+
+#include <chrono>
+#include <cstring>
+#include <format>
+#include <fstream>
+#include <thread>
+
+namespace Spark::Streaming
+{
+
+    DirectStorageLoader::~DirectStorageLoader()
+    {
+        Shutdown();
+    }
+
+    bool DirectStorageLoader::Initialize(void* graphicsDevice)
+    {
+        std::lock_guard lock(m_mutex);
+        if (m_initialized)
+            return true;
+
+        // TODO: Probe for DirectStorage runtime (dstorage.dll)
+        // On Windows 11+ with NVMe + DirectStorage SDK:
+        //   DStorageGetFactory() -> IDStorageFactory
+        //   factory->CreateQueue() -> IDStorageQueue
+        //   factory->SetStagingBufferSize()
+        //
+        // For now, use the async I/O fallback on all platforms.
+        m_stats.usingDirectStorage = false;
+        m_stats.usingGPUDecompression = false;
+
+        m_initialized = true;
+        return true;
+    }
+
+    void DirectStorageLoader::Shutdown()
+    {
+        std::lock_guard lock(m_mutex);
+        m_activeRequests.clear();
+        while (!m_pendingQueue.empty())
+            m_pendingQueue.pop();
+        m_initialized = false;
+    }
+
+    LoadRequestHandle DirectStorageLoader::Submit(const LoadRequest& request)
+    {
+        std::lock_guard lock(m_mutex);
+
+        auto internal = std::make_shared<InternalRequest>();
+        internal->request = request;
+        internal->handle = {m_nextHandleId++};
+        internal->status = LoadStatus::Pending;
+
+        m_pendingQueue.push(internal);
+        m_stats.totalRequests++;
+        m_stats.pendingRequests++;
+
+        return internal->handle;
+    }
+
+    void DirectStorageLoader::Flush()
+    {
+        std::lock_guard lock(m_mutex);
+
+        while (!m_pendingQueue.empty())
+        {
+            auto req = m_pendingQueue.front();
+            m_pendingQueue.pop();
+            req->status = LoadStatus::InProgress;
+            m_activeRequests.push_back(req);
+
+            // DirectStorage path would submit to IDStorageQueue here.
+            // Fallback: launch async I/O on a background thread.
+            FallbackAsyncLoad(req);
+        }
+    }
+
+    void DirectStorageLoader::ProcessCompletions()
+    {
+        std::lock_guard lock(m_mutex);
+
+        for (auto it = m_activeRequests.begin(); it != m_activeRequests.end();)
+        {
+            auto& req = *it;
+            if (req->status == LoadStatus::Completed || req->status == LoadStatus::Failed)
+            {
+                m_stats.pendingRequests--;
+                if (req->status == LoadStatus::Failed)
+                    m_stats.failedRequests++;
+
+                // Invoke callback
+                if (req->request.callback)
+                {
+                    req->request.callback(req->handle, req->status);
+                }
+                it = m_activeRequests.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    bool DirectStorageLoader::Cancel(LoadRequestHandle handle)
+    {
+        std::lock_guard lock(m_mutex);
+
+        for (auto& req : m_activeRequests)
+        {
+            if (req->handle.id == handle.id && req->status == LoadStatus::Pending)
+            {
+                req->status = LoadStatus::Failed;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    LoadStatus DirectStorageLoader::GetStatus(LoadRequestHandle handle) const
+    {
+        std::lock_guard lock(m_mutex);
+
+        for (const auto& req : m_activeRequests)
+        {
+            if (req->handle.id == handle.id)
+                return req->status;
+        }
+        return LoadStatus::Failed;
+    }
+
+    const void* DirectStorageLoader::GetLoadedData(LoadRequestHandle handle, uint64_t* outSize) const
+    {
+        std::lock_guard lock(m_mutex);
+
+        for (const auto& req : m_activeRequests)
+        {
+            if (req->handle.id == handle.id && req->status == LoadStatus::Completed)
+            {
+                if (outSize)
+                    *outSize = req->cpuData.size();
+                return req->cpuData.data();
+            }
+        }
+        if (outSize)
+            *outSize = 0;
+        return nullptr;
+    }
+
+    void DirectStorageLoader::ReleaseLoadedData(LoadRequestHandle handle)
+    {
+        std::lock_guard lock(m_mutex);
+
+        for (auto it = m_activeRequests.begin(); it != m_activeRequests.end(); ++it)
+        {
+            if ((*it)->handle.id == handle.id)
+            {
+                (*it)->cpuData.clear();
+                (*it)->cpuData.shrink_to_fit();
+                return;
+            }
+        }
+    }
+
+    void DirectStorageLoader::FallbackAsyncLoad(std::shared_ptr<InternalRequest> req)
+    {
+        // Fire-and-forget background thread for async file I/O
+        std::thread(
+            [this, req]()
+            {
+                auto startTime = std::chrono::high_resolution_clock::now();
+
+                std::ifstream file(req->request.filePath, std::ios::binary | std::ios::ate);
+                if (!file.is_open())
+                {
+                    req->status = LoadStatus::Failed;
+                    return;
+                }
+
+                uint64_t fileSize = static_cast<uint64_t>(file.tellg());
+                uint64_t readOffset = req->request.fileOffset;
+                uint64_t readSize = req->request.loadSize;
+
+                if (readSize == 0)
+                    readSize = fileSize - readOffset;
+
+                if (readOffset + readSize > fileSize)
+                {
+                    req->status = LoadStatus::Failed;
+                    return;
+                }
+
+                file.seekg(static_cast<std::streamoff>(readOffset));
+
+                req->cpuData.resize(readSize);
+                file.read(reinterpret_cast<char*>(req->cpuData.data()), static_cast<std::streamsize>(readSize));
+
+                if (!file.good() && !file.eof())
+                {
+                    req->status = LoadStatus::Failed;
+                    return;
+                }
+
+                auto endTime = std::chrono::high_resolution_clock::now();
+                float durationMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+                {
+                    std::lock_guard lock(m_mutex);
+                    m_stats.totalBytesLoaded += readSize;
+                    if (durationMs > 0.0f)
+                    {
+                        float mbps = (static_cast<float>(readSize) / (1024.0f * 1024.0f)) / (durationMs / 1000.0f);
+                        // Exponential moving average
+                        m_stats.averageBandwidthMBps = m_stats.averageBandwidthMBps * 0.9f + mbps * 0.1f;
+                    }
+                }
+
+                req->status = LoadStatus::Completed;
+            })
+            .detach();
+    }
+
+    std::string DirectStorageLoader::Console_GetStatus() const
+    {
+        std::lock_guard lock(m_mutex);
+
+        return std::format("DirectStorageLoader Status:\n"
+                           "  Initialized: {}\n"
+                           "  Hardware DirectStorage: {}\n"
+                           "  GPU Decompression: {}\n"
+                           "  Total requests: {}\n"
+                           "  Pending: {}\n"
+                           "  Failed: {}\n"
+                           "  Bytes loaded: {:.1f} MB\n"
+                           "  Avg bandwidth: {:.1f} MB/s",
+                           m_initialized, m_stats.usingDirectStorage, m_stats.usingGPUDecompression,
+                           m_stats.totalRequests, m_stats.pendingRequests, m_stats.failedRequests,
+                           static_cast<float>(m_stats.totalBytesLoaded) / (1024.0f * 1024.0f),
+                           m_stats.averageBandwidthMBps);
+    }
+
+} // namespace Spark::Streaming

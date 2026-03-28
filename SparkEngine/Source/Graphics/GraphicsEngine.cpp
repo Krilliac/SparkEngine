@@ -800,6 +800,42 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
         break;
     }
 
+    // Apply ray tracing effects (reflections, shadows, GI, AO)
+#ifdef SPARK_HARDWARE_RT
+    if (m_hybridRT)
+    {
+        XMMATRIX invView = XMMatrixInverse(nullptr, viewMatrix);
+        XMFLOAT3 cameraPos;
+        XMStoreFloat3(&cameraPos, invView.r[3]);
+
+        auto& dxr = Spark::Graphics::DXRManager::GetInstance();
+        if (dxr.IsAvailable())
+        {
+            // Rebuild TLAS each frame for dynamic objects
+            dxr.BuildTLAS();
+
+            // Dispatch enabled RT effects
+            const auto& settings = dxr.GetSettings();
+            if (static_cast<uint32_t>(settings.enabledEffects) & static_cast<uint32_t>(Spark::RHI::RTEffect::Reflections))
+            {
+                dxr.TraceReflections(viewMatrix, projMatrix);
+            }
+            if (static_cast<uint32_t>(settings.enabledEffects) & static_cast<uint32_t>(Spark::RHI::RTEffect::Shadows))
+            {
+                dxr.TraceShadows(viewMatrix, projMatrix);
+            }
+            if (static_cast<uint32_t>(settings.enabledEffects) & static_cast<uint32_t>(Spark::RHI::RTEffect::AmbientOcclusion))
+            {
+                dxr.TraceAmbientOcclusion(viewMatrix, projMatrix);
+            }
+            if (static_cast<uint32_t>(settings.enabledEffects) & static_cast<uint32_t>(Spark::RHI::RTEffect::GlobalIllumination))
+            {
+                dxr.TraceGlobalIllumination(viewMatrix, projMatrix);
+            }
+        }
+    }
+#endif
+
     // Apply temporal effects (TAA resolve, motion blur)
     RenderTemporalEffects();
 

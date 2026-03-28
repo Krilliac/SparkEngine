@@ -211,6 +211,14 @@ add_executable(SparkTests
     TestFaultIsolation.cpp
     TestVulkanLavapipe.cpp
     TestWARPRendering.cpp
+    # Hardware acceleration tests
+    TestGPUParticleSystem.cpp
+    TestGPUSkinning.cpp
+    TestAsyncComputeScheduler.cpp
+    TestGPUDrivenRenderer.cpp
+    TestGPUClusterCulling.cpp
+    TestDirectStorageLoader.cpp
+    TestMeshShaderPipeline.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
