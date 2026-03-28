@@ -224,6 +224,159 @@ namespace Spark
             return FieldType::Custom;
     }
 
+    // ========================================================================
+    // Component factory — dynamic add/has/remove by type name
+    // ========================================================================
+
+    /**
+     * @brief Function signatures for runtime component operations on a World.
+     *
+     * These type-erased callbacks enable adding, checking, removing, and
+     * getting raw pointers to components by string name — bridging the
+     * gap between data-driven archetype files and the compile-time ECS API.
+     */
+    struct ComponentOps
+    {
+        using AddFn = void (*)(void* world, uint32_t entity);
+        using HasFn = bool (*)(void* world, uint32_t entity);
+        using RemoveFn = void (*)(void* world, uint32_t entity);
+        using GetRawFn = void* (*)(void* world, uint32_t entity);
+
+        AddFn add = nullptr;       ///< Add a default-constructed component.
+        HasFn has = nullptr;       ///< Check if entity has the component.
+        RemoveFn remove = nullptr; ///< Remove the component.
+        GetRawFn getRaw = nullptr; ///< Get a raw pointer to the component data.
+    };
+
+    /**
+     * @brief Applies a string value to a reflected field on a component instance.
+     *
+     * Supports Bool, Int, Float, Double, String, Vector3 (x,y,z), and Vector4.
+     *
+     * @param component  Raw pointer to the component struct.
+     * @param field      Reflected field metadata.
+     * @param value      String representation of the value to set.
+     * @return true if the value was successfully parsed and written.
+     */
+    bool SetFieldFromString(void* component, const FieldInfo& field, const std::string& value);
+
+    /**
+     * @brief Reads a reflected field and returns its value as a string.
+     *
+     * @param component  Raw pointer to the component struct.
+     * @param field      Reflected field metadata.
+     * @return String representation, or empty string if type is unsupported.
+     */
+    std::string GetFieldAsString(const void* component, const FieldInfo& field);
+
+    /**
+     * @brief Central registry of component factory operations.
+     *
+     * Maps component type names (e.g. "Transform", "HealthComponent") to
+     * type-erased add/has/remove/getRaw callbacks. Works with any World
+     * class that supports the template-based AddComponent/HasComponent/etc API.
+     *
+     * ### Usage
+     * ```cpp
+     * auto& factory = ComponentFactory::Get();
+     * factory.AddComponent("Transform", &world, entityId);
+     * void* raw = factory.GetComponentRaw("Transform", &world, entityId);
+     * ```
+     *
+     * @threadsafety Registration happens at static init time (single-threaded).
+     *               Operations are read-only after startup.
+     */
+    class ComponentFactory
+    {
+      public:
+        static ComponentFactory& Get()
+        {
+            static ComponentFactory instance;
+            return instance;
+        }
+
+        /** @brief Register component operations for a type name. */
+        void Register(const std::string& name, ComponentOps ops) { m_ops[name] = ops; }
+
+        /** @brief Add a default-constructed component to an entity. Returns true if the type is known. */
+        bool AddComponent(const std::string& typeName, void* world, uint32_t entity) const
+        {
+            auto it = m_ops.find(typeName);
+            if (it == m_ops.end() || !it->second.add)
+                return false;
+            it->second.add(world, entity);
+            return true;
+        }
+
+        /** @brief Check if an entity has a component by type name. */
+        bool HasComponent(const std::string& typeName, void* world, uint32_t entity) const
+        {
+            auto it = m_ops.find(typeName);
+            if (it == m_ops.end() || !it->second.has)
+                return false;
+            return it->second.has(world, entity);
+        }
+
+        /** @brief Remove a component by type name. Returns true if the type is known. */
+        bool RemoveComponent(const std::string& typeName, void* world, uint32_t entity) const
+        {
+            auto it = m_ops.find(typeName);
+            if (it == m_ops.end() || !it->second.remove)
+                return false;
+            it->second.remove(world, entity);
+            return true;
+        }
+
+        /** @brief Get a raw pointer to a component by type name. Returns nullptr if not found. */
+        void* GetComponentRaw(const std::string& typeName, void* world, uint32_t entity) const
+        {
+            auto it = m_ops.find(typeName);
+            if (it == m_ops.end() || !it->second.getRaw)
+                return nullptr;
+            return it->second.getRaw(world, entity);
+        }
+
+        /** @brief Check if a type name is registered. */
+        bool IsRegistered(const std::string& typeName) const { return m_ops.count(typeName) > 0; }
+
+        /** @brief Get all registered component type names. */
+        std::vector<std::string> GetRegisteredNames() const
+        {
+            std::vector<std::string> names;
+            names.reserve(m_ops.size());
+            for (const auto& [name, _] : m_ops)
+                names.push_back(name);
+            return names;
+        }
+
+        /** @brief Get the number of registered component types. */
+        size_t GetRegisteredCount() const { return m_ops.size(); }
+
+        /**
+         * @brief Set a reflected field on a component by field name, using string value.
+         *
+         * Looks up the TypeInfo for the given component type, finds the field,
+         * then calls SetFieldFromString.
+         *
+         * @return true if the field was found and set successfully.
+         */
+        bool SetField(const std::string& typeName, void* component, const std::string& fieldName,
+                      const std::string& value) const
+        {
+            const auto* typeInfo = TypeRegistry::Get().FindTypeByName(typeName);
+            if (!typeInfo)
+                return false;
+            const auto* field = typeInfo->FindField(fieldName);
+            if (!field)
+                return false;
+            return SetFieldFromString(component, *field, value);
+        }
+
+      private:
+        ComponentFactory() = default;
+        std::unordered_map<std::string, ComponentOps> m_ops;
+    };
+
 } // namespace Spark
 
 // ============================================================================

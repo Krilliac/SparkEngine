@@ -5,6 +5,7 @@
 
 #include "EntityArchetypeLoader.h"
 #include "Components/LightComponents.h"
+#include "../../Core/Reflection.h"
 #include "../../Utils/SparkConsole.h"
 #include "../../Utils/StringUtils.h"
 
@@ -232,6 +233,82 @@ namespace Spark::ECS
         }
     }
 
+    // =========================================================================
+    // Reflection-driven component application
+    // =========================================================================
+
+    /// Apply a component from archetype properties using the ComponentFactory
+    /// and TypeRegistry reflection data. Falls back to legacy Apply* functions
+    /// for component types that need custom positional-parameter parsing.
+    static void ApplyComponentViaReflection(World& world, EntityID entity, const ComponentEntry& entry)
+    {
+        auto& factory = Spark::ComponentFactory::Get();
+        auto entityId = static_cast<uint32_t>(entity);
+
+        // NameComponent needs special handling: CreateEntity may already add one
+        if (entry.typeName == "NameComponent")
+        {
+            ApplyNameComponent(world, entity, entry);
+            return;
+        }
+
+        // Legacy handling for Transform and LightComponent positional params (p0, p1, p2...)
+        // These use compact "x,y,z / r,g,b / ..." syntax that doesn't map to field names.
+        bool hasPositionalParams = false;
+        for (const auto& [key, _] : entry.properties)
+        {
+            if (key.starts_with("p") && key.size() == 2 && key[1] >= '0' && key[1] <= '9')
+            {
+                hasPositionalParams = true;
+                break;
+            }
+        }
+
+        if (hasPositionalParams)
+        {
+            if (entry.typeName == "Transform")
+            {
+                ApplyTransform(world, entity, entry);
+                return;
+            }
+            if (entry.typeName == "LightComponent")
+            {
+                ApplyLightComponent(world, entity, entry);
+                return;
+            }
+        }
+
+        // Reflection path: add component via factory, then set fields by name
+        if (!factory.IsRegistered(entry.typeName))
+            return;
+
+        factory.AddComponent(entry.typeName, &world, entityId);
+
+        if (entry.properties.empty())
+            return;
+
+        void* raw = factory.GetComponentRaw(entry.typeName, &world, entityId);
+        if (!raw)
+            return;
+
+        const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(entry.typeName);
+        if (!typeInfo)
+            return;
+
+        for (const auto& [propName, propValue] : entry.properties)
+        {
+            const auto* field = typeInfo->FindField(propName);
+            if (field)
+            {
+                Spark::SetFieldFromString(raw, *field, propValue);
+            }
+        }
+    }
+
+    // =========================================================================
+    // Entity Spawning (public API)
+    // =========================================================================
+
     EntityID SpawnFromArchetype(const std::string& name, World& world)
     {
         const auto* archetype = EntityArchetypeSystem::GetInstance().GetArchetype(name);
@@ -245,20 +322,7 @@ namespace Spark::ECS
 
         for (const auto& comp : archetype->components)
         {
-            if (comp.typeName == "Transform")
-            {
-                ApplyTransform(world, entity, comp);
-            }
-            else if (comp.typeName == "LightComponent")
-            {
-                ApplyLightComponent(world, entity, comp);
-            }
-            else if (comp.typeName == "NameComponent")
-            {
-                ApplyNameComponent(world, entity, comp);
-            }
-            // Unrecognized component types are stored in the archetype
-            // for game-specific code to interpret via GetArchetype()
+            ApplyComponentViaReflection(world, entity, comp);
         }
 
         return entity;
@@ -299,18 +363,7 @@ namespace Spark::ECS
 
         for (const auto& comp : components)
         {
-            if (comp.typeName == "Transform")
-            {
-                ApplyTransform(world, entity, comp);
-            }
-            else if (comp.typeName == "LightComponent")
-            {
-                ApplyLightComponent(world, entity, comp);
-            }
-            else if (comp.typeName == "NameComponent")
-            {
-                ApplyNameComponent(world, entity, comp);
-            }
+            ApplyComponentViaReflection(world, entity, comp);
         }
 
         return entity;
