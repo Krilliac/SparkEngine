@@ -40,7 +40,7 @@ namespace SparkEditor
                     RenderGraphicsTab();
                     ImGui::EndTabItem();
                 }
-                if (ImGui::BeginTabItem(ICON_FA_CUBES " Rendering"))
+                if (ImGui::BeginTabItem(ICON_FA_CUBE " Rendering"))
                 {
                     RenderRenderingTab();
                     ImGui::EndTabItem();
@@ -85,7 +85,7 @@ namespace SparkEditor
                     RenderCameraTab();
                     ImGui::EndTabItem();
                 }
-                if (ImGui::BeginTabItem(ICON_FA_WIFI " Network"))
+                if (ImGui::BeginTabItem(ICON_FA_WIND " Network"))
                 {
                     RenderNetworkTab();
                     ImGui::EndTabItem();
