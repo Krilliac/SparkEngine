@@ -305,8 +305,22 @@ namespace Spark
 
                 if (!bestAdapter)
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: No D3D12-capable GPU found");
-                    return false;
+                    // No hardware adapter — fall back to WARP (Microsoft's software rasterizer)
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "D3D12: No hardware GPU found — falling back to WARP software rasterizer");
+                    ComPtr<IDXGIAdapter> warpAdapter;
+                    hr = m_dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&warpAdapter));
+                    if (FAILED(hr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: WARP adapter not available");
+                        return false;
+                    }
+                    if (FAILED(warpAdapter.As(&bestAdapter)))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to query WARP adapter");
+                        return false;
+                    }
+                    m_isSoftwareDevice = true;
                 }
                 m_adapter = bestAdapter;
 
@@ -412,12 +426,16 @@ namespace Spark
                 case 0x8086:
                     m_capabilities.vendorName = "Intel";
                     break;
+                case 0x1414:
+                    m_capabilities.vendorName = "Microsoft";
+                    break; // WARP
                 default:
                     m_capabilities.vendorName = "Unknown";
                     break;
                 }
 
                 m_capabilities.apiVersion = "Direct3D 12.0";
+                m_capabilities.isSoftwareDevice = m_isSoftwareDevice;
                 m_capabilities.tessellationSupport = true;
                 m_capabilities.computeShaderSupport = true;
                 m_capabilities.geometryShaderSupport = true;
@@ -1127,6 +1145,8 @@ namespace Spark
                 ss << "=== D3D12 Device ===\n";
                 ss << "GPU: " << m_capabilities.deviceName << "\n";
                 ss << "Vendor: " << m_capabilities.vendorName << "\n";
+                if (m_isSoftwareDevice)
+                    ss << "Type: Software (WARP)\n";
                 ss << "VRAM: " << (m_capabilities.dedicatedVideoMemory / (1024 * 1024)) << " MB\n";
                 ss << "DXR: " << (m_dxrSupported ? "Yes" : "No") << "\n";
                 ss << "Mesh Shaders: " << (m_capabilities.meshShaderSupport ? "Yes" : "No") << "\n";

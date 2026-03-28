@@ -135,6 +135,7 @@ namespace Spark
 
                 IDXGIFactory6* GetDXGIFactory() const { return m_dxgiFactory.Get(); }
                 IDXGIAdapter1* GetAdapter() const { return m_adapter.Get(); }
+                bool IsSoftwareDevice() const { return m_isSoftwareDevice; }
 
                 DescriptorHeapAllocator& GetCBVSRVUAVHeap() { return m_cbvSrvUavHeap; }
                 DescriptorHeapAllocator& GetRTVHeap() { return m_rtvHeap; }
@@ -235,6 +236,7 @@ namespace Spark
                 RHIStatistics m_statistics;
                 bool m_debugEnabled = false;
                 bool m_dxrSupported = false;
+                bool m_isSoftwareDevice = false;
 
                 // -- Deferred deletion queue ----------------------------------------------
 
