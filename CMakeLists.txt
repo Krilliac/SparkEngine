@@ -169,7 +169,7 @@ if(MSVC)
     add_link_options(/DEBUG)
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS)
 
-    # Conformance improvements available in VS 2017+ - enforce __cplusplus macro and
+    # Conformance improvements available in VS 2017+ — enforce __cplusplus macro and
     # disable non-conforming extensions so code is portable across compilers.
     if(MSVC_VERSION GREATER_EQUAL 1910)
         add_compile_options(/Zc:__cplusplus /permissive-)
@@ -224,6 +224,13 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
     if(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
         add_compile_options(-Wno-tautological-constant-compare)
     endif()
+endif()
+
+# MinGW cross-compilation from Linux: defines the same Windows macros as MSVC
+# so that D3D11/D3D12 code paths compile. MinGW uses GCC flags (set above).
+if(MINGW AND NOT MSVC)
+    add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX SPARK_PLATFORM_WINDOWS)
+    message(STATUS "MinGW detected — enabling Windows code paths (D3D11/D3D12)")
 endif()
 
 # ---------------------------------------------------------------------
@@ -893,7 +900,7 @@ endif()
 # ---------------------------------------------------------------------
 if(WIN32)
     target_link_libraries(SparkEngineLib PUBLIC
-        d3d11 dxgi d3dcompiler dxguid
+        d3d11 d3d12 dxgi d3dcompiler dxguid
         kernel32 user32 gdi32 winspool
         shell32 comdlg32 advapi32
         ole32 oleaut32 uuid
@@ -1257,7 +1264,10 @@ else()
 endif()
 message(STATUS "Output: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 message(STATUS "Graphics Backends:")
-if(WIN32)
+if(WIN32 AND MINGW)
+    message(STATUS "  DirectX 11 : ENABLED (MinGW cross-compilation — run under Wine + DXVK)")
+    message(STATUS "  DirectX 12 : ENABLED (MinGW cross-compilation — run under Wine + VKD3D-Proton)")
+elseif(WIN32)
     message(STATUS "  DirectX 11 : ENABLED (Windows)")
 else()
     message(STATUS "  DirectX 11 : DISABLED (non-Windows)")

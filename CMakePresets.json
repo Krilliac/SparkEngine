@@ -190,6 +190,31 @@
             }
         },
         {
+            "name": "linux-mingw-release",
+            "displayName": "Linux MinGW Cross-Compile (Windows .exe, run under Wine)",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/mingw-w64-x86_64.cmake",
+                "ENABLE_VULKAN": "OFF",
+                "ENABLE_OPENGL": "OFF",
+                "ENABLE_SDL2": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-mingw-debug",
+            "displayName": "Linux MinGW Cross-Compile Debug",
+            "inherits": "linux-mingw-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
             "name": "minimal",
             "displayName": "Minimal Build (core only)",
             "inherits": "default",
@@ -247,6 +272,14 @@
         {
             "name": "linux-shipping",
             "configurePreset": "linux-shipping"
+        },
+        {
+            "name": "linux-mingw-release",
+            "configurePreset": "linux-mingw-release"
+        },
+        {
+            "name": "linux-mingw-debug",
+            "configurePreset": "linux-mingw-debug"
         }
     ],
     "testPresets": [

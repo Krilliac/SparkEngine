@@ -173,6 +173,8 @@ cmake -DSPARK_MSVC_TOOLSET=v144 ...  # VS 2026
 | `linux-clang-release` | Ninja | Clang | Release | Full features |
 | `ci-linux-asan` | Ninja | GCC | Debug | AddressSanitizer + UBSan |
 | `ci-linux-tsan` | Ninja | GCC | Debug | ThreadSanitizer |
+| `linux-mingw-release` | Makefiles | MinGW-w64 | Release | Cross-compile Windows D3D11/D3D12, run under Wine |
+| `linux-mingw-debug` | Makefiles | MinGW-w64 | Debug | Cross-compile Windows D3D11/D3D12, run under Wine |
 | `minimal` | Default | Default | Release | Core-only, no advanced features |
 
 ```bash
@@ -183,6 +185,61 @@ cmake --list-presets
 cmake --preset windows-release
 cmake --build --preset windows-release
 ```
+
+## Cross-Compilation: Windows on Linux (MinGW + Wine)
+
+SparkEngine supports cross-compiling the Windows D3D11/D3D12 code paths on a Linux host using MinGW-w64. The resulting `.exe` files run under Wine, with DXVK translating D3D11 calls to Vulkan and VKD3D-Proton handling D3D12. Combined with Mesa Lavapipe, this enables full D3D11/D3D12 testing without a GPU.
+
+### Prerequisites
+
+```bash
+sudo apt-get install mingw-w64 wine64 mesa-vulkan-drivers
+# Optional for D3D11->Vulkan: sudo apt-get install dxvk
+```
+
+### Build and Run
+
+```bash
+# Configure and build
+cmake --preset linux-mingw-release
+cmake --build build/linux-mingw-release
+
+# Run tests under Wine (auto-configures DXVK, Lavapipe)
+tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
+```
+
+### How It Works
+
+```
+D3D11/D3D12 C++ (same _WIN32 code paths as MSVC)
+    → MinGW cross-compiler (x86_64-w64-mingw32-g++) → .exe
+    → Wine translates Windows API calls
+    → DXVK translates D3D11 → Vulkan
+    → VKD3D-Proton translates D3D12 → Vulkan
+    → Lavapipe provides software Vulkan (no GPU needed)
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `cmake/toolchains/mingw-w64-x86_64.cmake` | CMake toolchain for MinGW cross-compilation |
+| `tools/wine-run.sh` | Wine runner with DXVK/VKD3D-Proton auto-setup |
+| `CMakePresets.json` | `linux-mingw-release` / `linux-mingw-debug` presets |
+
+### Software Rendering Fallback (All Backends)
+
+Every RHI backend gracefully falls back to software rendering when no GPU is available:
+
+| Backend | Platform | Software Fallback |
+|---------|----------|-------------------|
+| D3D11 | Windows | WARP (`D3D_DRIVER_TYPE_WARP`, built into Windows 10+) |
+| D3D12 | Windows | WARP (`EnumWarpAdapter()`, built into Windows 10+) |
+| Vulkan | Cross-platform | Mesa Lavapipe (`VK_PHYSICAL_DEVICE_TYPE_CPU`) |
+| OpenGL | Linux | Mesa llvmpipe (EGL headless or GLX + Xvfb) |
+| None | All | NullRHIDevice (no-op headless mode) |
+
+All backends expose `isSoftwareDevice` in `RHIDeviceCapabilities` and report it in `GetDeviceInfo()`.
 
 ## Build Targets
 
