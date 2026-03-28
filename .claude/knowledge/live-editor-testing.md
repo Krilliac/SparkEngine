@@ -16,11 +16,11 @@ The editor (SparkEditor) uses SDL2 + OpenGL 3.3 + ImGui on Linux. The engine run
 
 ### Prerequisites (system packages)
 - `xvfb` — Virtual framebuffer X server
-- `libgl-dev` — OpenGL development headers
+- `libgl-dev` — OpenGL development headers (**must be installed before CMake configure**)
 - `xdotool` — X11 automation (mouse/keyboard simulation)
 - `python3-pillow` — Screenshot capture via Python
 
-SDL2 is built from source (ThirdParty or `/tmp/SDL2-*`) because apt can be unreliable. **Critical:** SDL2 must be built *after* `libgl-dev` is installed, otherwise it compiles without OpenGL/GLX support (`SDL not configured with OpenGL/GLX support` error).
+SDL2 is bundled as a git submodule at `ThirdParty/SDL2` (release-2.30.0) and built automatically by CMake. **Critical:** `libgl-dev` must be installed *before* running `cmake -B build`, otherwise SDL2 compiles without OpenGL/GLX support (`SDL not configured with OpenGL/GLX support` error). If this happens, install `libgl-dev`, delete the build directory, and reconfigure.
 
 ### Build
 ```bash

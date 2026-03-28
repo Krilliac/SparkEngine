@@ -230,6 +230,42 @@ endif()
 # 7) Third-party library configuration
 # ---------------------------------------------------------------------
 
+# SDL2 - Built from submodule on Linux (before anything else needs it)
+set(SDL2_SUBMODULE_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/SDL2")
+if(NOT WIN32 AND ENABLE_SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/CMakeLists.txt")
+    # Probe for OpenGL first — SDL2 auto-detects GLX when headers are present.
+    # Without libgl-dev, SDL2 still builds but without OpenGL support.
+    find_package(OpenGL QUIET)
+    if(NOT OpenGL_FOUND)
+        message(WARNING
+            "OpenGL headers not found — SDL2 will build WITHOUT OpenGL/GLX support.\n"
+            "  The editor requires OpenGL. Install the development headers:\n"
+            "    Ubuntu/Debian : sudo apt install libgl-dev\n"
+            "    Fedora        : sudo dnf install mesa-libGL-devel\n"
+            "    Arch          : sudo pacman -S mesa\n"
+            "  Then delete the build directory and reconfigure.")
+    endif()
+
+    # Minimal SDL2 build — only what the engine needs
+    set(SDL_SHARED   ON  CACHE BOOL "" FORCE)
+    set(SDL_STATIC   OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST     OFF CACHE BOOL "" FORCE)
+    set(SDL_WAYLAND  OFF CACHE BOOL "" FORCE)
+    set(SDL_KMSDRM   OFF CACHE BOOL "" FORCE)
+    set(SDL_DBUS     OFF CACHE BOOL "" FORCE)
+    set(SDL_PULSEAUDIO OFF CACHE BOOL "" FORCE)
+    set(SDL_ALSA     OFF CACHE BOOL "" FORCE)
+    set(SDL_PIPEWIRE OFF CACHE BOOL "" FORCE)
+    set(SDL_SNDIO    OFF CACHE BOOL "" FORCE)
+    set(SDL_JACK     OFF CACHE BOOL "" FORCE)
+    set(SDL_X11      ON  CACHE BOOL "" FORCE)
+    set(SDL_OPENGL   ON  CACHE BOOL "" FORCE)
+
+    add_subdirectory("${SDL2_SUBMODULE_DIR}" "${CMAKE_BINARY_DIR}/ThirdParty/SDL2" EXCLUDE_FROM_ALL)
+    set(SDL2_FOUND TRUE)
+    message(STATUS "SDL2 built from submodule (ThirdParty/SDL2)")
+endif()
+
 # MINIZ - Simple compression library
 set(MINIZ_ROOT "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/miniz")
 if(EXISTS "${MINIZ_ROOT}")
@@ -752,11 +788,16 @@ if(NOT EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui/imgui.h")
     set(SPARK_EDITOR_SKIP_REASON "Dear ImGui not found (initialize submodule)")
 elseif(NOT WIN32)
     # Linux editor requires SDL2 and OpenGL — check before adding subdirectory
-    find_package(SDL2 QUIET)
+    # SDL2 may come from the ThirdParty submodule (preferred) or system install
+    if(NOT TARGET SDL2::SDL2 AND NOT TARGET SDL2)
+        find_package(SDL2 QUIET)
+    else()
+        set(SDL2_FOUND TRUE)
+    endif()
     find_package(OpenGL QUIET)
-    if(NOT SDL2_FOUND)
+    if(NOT SDL2_FOUND AND NOT TARGET SDL2 AND NOT TARGET SDL2::SDL2)
         set(SPARK_EDITOR_DEPS_OK FALSE)
-        set(SPARK_EDITOR_SKIP_REASON "SDL2 not found (install libsdl2-dev)")
+        set(SPARK_EDITOR_SKIP_REASON "SDL2 not found (run: git submodule update --init --recursive)")
     elseif(NOT OpenGL_FOUND)
         set(SPARK_EDITOR_DEPS_OK FALSE)
         set(SPARK_EDITOR_SKIP_REASON "OpenGL not found (install libgl-dev)")
@@ -989,32 +1030,44 @@ if(SPARK_HEADLESS_SUPPORT)
 endif()
 
 if(ENABLE_SDL2)
-    find_package(SDL2 QUIET)
-    if(SDL2_FOUND)
+    # Prefer the ThirdParty submodule target, then system SDL2, then pkg-config
+    if(TARGET SDL2::SDL2)
         list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
-        if(TARGET SDL2::SDL2)
-            target_link_libraries(SparkEngineLib PUBLIC SDL2::SDL2)
-        else()
-            # Fallback for older FindSDL2 modules that don't provide imported targets
-            target_include_directories(SparkEngineLib PUBLIC ${SDL2_INCLUDE_DIRS})
-            target_link_libraries(SparkEngineLib PUBLIC ${SDL2_LIBRARIES})
-        endif()
+        target_link_libraries(SparkEngineLib PUBLIC SDL2::SDL2)
         message(STATUS "SDL2 found and linked (windowing + input on Linux)")
+    elseif(TARGET SDL2)
+        list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
+        target_link_libraries(SparkEngineLib PUBLIC SDL2)
+        target_include_directories(SparkEngineLib PUBLIC
+            $<TARGET_PROPERTY:SDL2,INTERFACE_INCLUDE_DIRECTORIES>)
+        message(STATUS "SDL2 linked from submodule (windowing + input on Linux)")
     else()
-        # Try pkg-config as a last resort (common on many Linux distros)
-        find_package(PkgConfig QUIET)
-        if(PKG_CONFIG_FOUND)
-            pkg_check_modules(SDL2_PKG QUIET sdl2)
-            if(SDL2_PKG_FOUND)
-                list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
-                target_include_directories(SparkEngineLib PUBLIC ${SDL2_PKG_INCLUDE_DIRS})
-                target_link_libraries(SparkEngineLib PUBLIC ${SDL2_PKG_LIBRARIES})
-                message(STATUS "SDL2 found via pkg-config and linked")
+        find_package(SDL2 QUIET)
+        if(SDL2_FOUND)
+            list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
+            if(TARGET SDL2::SDL2)
+                target_link_libraries(SparkEngineLib PUBLIC SDL2::SDL2)
             else()
-                message(WARNING "SDL2 not found - Linux windowed mode requires SDL2. Install libsdl2-dev.")
+                target_include_directories(SparkEngineLib PUBLIC ${SDL2_INCLUDE_DIRS})
+                target_link_libraries(SparkEngineLib PUBLIC ${SDL2_LIBRARIES})
             endif()
+            message(STATUS "SDL2 found and linked (system install)")
         else()
-            message(WARNING "SDL2 not found - Linux windowed mode requires SDL2. Install libsdl2-dev.")
+            # Try pkg-config as a last resort
+            find_package(PkgConfig QUIET)
+            if(PKG_CONFIG_FOUND)
+                pkg_check_modules(SDL2_PKG QUIET sdl2)
+                if(SDL2_PKG_FOUND)
+                    list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
+                    target_include_directories(SparkEngineLib PUBLIC ${SDL2_PKG_INCLUDE_DIRS})
+                    target_link_libraries(SparkEngineLib PUBLIC ${SDL2_PKG_LIBRARIES})
+                    message(STATUS "SDL2 found via pkg-config and linked")
+                else()
+                    message(WARNING "SDL2 not found — run: git submodule update --init --recursive")
+                endif()
+            else()
+                message(WARNING "SDL2 not found — run: git submodule update --init --recursive")
+            endif()
         endif()
     endif()
 endif()
@@ -1376,7 +1429,7 @@ message(STATUS "  --- Platform Libraries ---")
 
 # SDL2
 if(ENABLE_SDL2)
-    if(SDL2_FOUND OR SDL2_PKG_FOUND)
+    if(SDL2_FOUND OR SDL2_PKG_FOUND OR TARGET SDL2::SDL2 OR TARGET SDL2)
         message(STATUS "  [OK]      SDL2            — cross-platform windowing and input")
     else()
         list(APPEND _SPARK_MISSING_DEPS "SDL2")
@@ -1385,7 +1438,8 @@ if(ENABLE_SDL2)
         _spark_dep_help("SDL2"
             "What:    Windowing, input, and audio abstraction layer (required for Linux desktop mode)"
             "Impact:  No windowed mode on Linux — engine runs headless only"
-            "Install:"
+            "Install: git submodule update --init ThirdParty/SDL2"
+            "  Or install the system package:"
             "  Ubuntu/Debian : sudo apt install libsdl2-dev"
             "  Fedora        : sudo dnf install SDL2-devel"
             "  Arch          : sudo pacman -S sdl2"

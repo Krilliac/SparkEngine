@@ -17,3 +17,6 @@
 [submodule "ThirdParty/AI/recastnavigation"]
 	path = ThirdParty/AI/recastnavigation
 	url = https://github.com/recastnavigation/recastnavigation.git
+[submodule "ThirdParty/SDL2"]
+	path = ThirdParty/SDL2
+	url = https://github.com/libsdl-org/SDL.git

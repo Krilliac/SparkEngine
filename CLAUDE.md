@@ -581,6 +581,7 @@ These are confirmed bloat problems discovered during audit. They must be fixed b
 - Networking is enabled in default builds (`ENABLE_NETWORKING=ON`)
 - VR framework exists (`SparkEngine/Source/Engine/VR/`) — OpenXR-ready stub, wired into engine init/update loop. Requires OpenXR SDK for actual VR hardware. DXR raytracing is optional (`ENABLE_DXR=OFF` by default); DLSS/FSR are not implemented
 - **GLAD** (OpenGL loader) is bundled in `ThirdParty/glad/` (GL 4.6 Core). Auto-detected by CMake.
+- **SDL2** is bundled as a submodule in `ThirdParty/SDL2/` (release-2.30.0). Built automatically on Linux when `ENABLE_SDL2=ON`. Requires `libgl-dev` installed *before* CMake configure for OpenGL/GLX support.
 - **NullRHIDevice** automatically activates when no GPU backend is available — engine continues in headless mode
 - **Software rendering**: OpenGL backend + Mesa llvmpipe enables full CPU rendering. Requires `DISPLAY` (Xvfb works) and `LIBGL_ALWAYS_SOFTWARE=1`
 - `.clang-format` enforces Microsoft-based style (Allman braces, 120-col, 4-space indent)
