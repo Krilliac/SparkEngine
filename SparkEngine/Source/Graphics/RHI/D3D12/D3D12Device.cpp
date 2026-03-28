@@ -562,10 +562,10 @@ namespace Spark
                 {
                     void* mapped = nullptr;
                     hr = buffer->GetD3D12Resource()->Map(0, nullptr, &mapped);
-                    if (SUCCEEDED(hr))
+                    if (SUCCEEDED(hr) && mapped)
                     {
                         buffer->SetMappedPointer(mapped);
-                        if (desc.initialData && mapped)
+                        if (desc.initialData)
                             memcpy(mapped, desc.initialData, desc.size);
                     }
                 }

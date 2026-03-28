@@ -358,7 +358,7 @@ void LightingSystem::BindLightingData(ID3D11DeviceContext* context)
     {
         D3D11_MAPPED_SUBRESOURCE mapped;
         HRESULT hr = context->Map(m_lightDataBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(hr) && mapped.pData)
         {
             size_t copySize =
                 std::min(m_lightDataArray.size() * sizeof(LightData), static_cast<size_t>(64 * sizeof(LightData)));

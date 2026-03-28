@@ -187,7 +187,7 @@ namespace Spark::Graphics
 
         D3D11_MAPPED_SUBRESOURCE mapped = {};
         HRESULT hr = context->Map(m_clusterBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(hr) && mapped.pData)
         {
             memcpy(mapped.pData, clusters, count * sizeof(GPUClusterAABB));
             context->Unmap(m_clusterBuffer.Get(), 0);
@@ -205,7 +205,7 @@ namespace Spark::Graphics
         // Upload lights
         D3D11_MAPPED_SUBRESOURCE mapped = {};
         HRESULT hr = context->Map(m_lightBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(hr) && mapped.pData)
         {
             memcpy(mapped.pData, lights, lightCount * sizeof(GPULightData));
             context->Unmap(m_lightBuffer.Get(), 0);
@@ -221,7 +221,7 @@ namespace Spark::Graphics
         };
 
         hr = context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(hr) && mapped.pData)
         {
             auto* cb = static_cast<ClusterConstants*>(mapped.pData);
             cb->gridX = m_config.gridX;

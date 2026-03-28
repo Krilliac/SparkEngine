@@ -346,8 +346,16 @@ namespace SparkEditor
         bytes.reserve(hex.size() / 2);
         for (size_t i = 0; i + 1 < hex.size(); i += 2)
         {
-            uint8_t b = static_cast<uint8_t>(std::stoi(hex.substr(i, 2), nullptr, 16));
-            bytes.push_back(b);
+            try
+            {
+                uint8_t b = static_cast<uint8_t>(std::stoi(hex.substr(i, 2), nullptr, 16));
+                bytes.push_back(b);
+            }
+            catch (const std::exception&)
+            {
+                // Malformed hex digit pair — stop parsing
+                break;
+            }
         }
         return bytes;
     }
@@ -651,6 +659,13 @@ namespace SparkEditor
 
         w.EndObject(); // root
         file << "\n";
+
+        if (!file.good())
+        {
+            result.success = false;
+            result.errorMessage = "Write error while saving JSON: " + filePath;
+            return result;
+        }
 
         result.success = true;
         result.bytesProcessed = static_cast<size_t>(file.tellp());
@@ -1040,6 +1055,13 @@ namespace SparkEditor
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         file.close();
 
+        if (content.empty())
+        {
+            result.success = false;
+            result.errorMessage = "File is empty: " + filePath;
+            return result;
+        }
+
         JSONValue root;
         JSONParser parser(content);
         if (!parser.Parse(root) || root.type != JSONValue::OBJECT)
@@ -1053,8 +1075,10 @@ namespace SparkEditor
         {
             std::string name = FieldStr(root, "sceneName");
             std::strncpy(outScene.header.sceneName, name.c_str(), sizeof(outScene.header.sceneName) - 1);
+            outScene.header.sceneName[sizeof(outScene.header.sceneName) - 1] = '\0';
             std::string desc = FieldStr(root, "description");
             std::strncpy(outScene.header.description, desc.c_str(), sizeof(outScene.header.description) - 1);
+            outScene.header.description[sizeof(outScene.header.description) - 1] = '\0';
         }
         outScene.header.version = FieldUint32(root, "version", SCENE_FILE_VERSION);
         outScene.header.objectCount = FieldUint32(root, "objectCount");
@@ -1273,6 +1297,9 @@ namespace SparkEditor
         memcpy(&dataSize, buffer.data() + offset, sizeof(uint32_t));
         offset += sizeof(uint32_t);
 
+        // Sanity check: component data should not exceed 16 MB
+        if (dataSize > 16 * 1024 * 1024)
+            return false;
         if (offset + dataSize > buffer.size())
             return false;
         component.data.resize(dataSize);
@@ -1319,8 +1346,12 @@ namespace SparkEditor
             ++pos;
             for (int i = 0; i < count; ++i)
             {
+                if (pos >= str->size())
+                    return false;
                 char* end = nullptr;
                 out[i] = std::strtof(str->c_str() + pos, &end);
+                if (end == str->c_str() + pos)
+                    return false; // No numeric conversion occurred
                 pos = static_cast<size_t>(end - str->c_str());
                 if (pos < str->size() && (*end == ',' || *end == ']'))
                     ++pos;
@@ -1463,12 +1494,19 @@ namespace SparkEditor
 
     bool SceneSerializer::ReadFromFile(const std::string& filePath, std::vector<uint8_t>& data)
     {
+        if (filePath.empty())
+            return false;
+
         std::ifstream file(filePath, std::ios::binary | std::ios::ate);
         if (!file.is_open())
             return false;
 
-        size_t fileSize = static_cast<size_t>(file.tellg());
-        if (fileSize > m_maxFileSize)
+        auto tellResult = file.tellg();
+        if (tellResult < 0)
+            return false;
+
+        size_t fileSize = static_cast<size_t>(tellResult);
+        if (fileSize == 0 || fileSize > m_maxFileSize)
             return false;
 
         file.seekg(0);

@@ -263,7 +263,7 @@ void Material::BindToShader(ID3D11DeviceContext* context) const
         // Update constant buffer contents
         D3D11_MAPPED_SUBRESOURCE mapped = {};
         HRESULT hr = context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(hr) && mapped.pData)
         {
             MaterialConstants constants = {};
             constants.albedoColor = m_pbrProperties.albedoColor;

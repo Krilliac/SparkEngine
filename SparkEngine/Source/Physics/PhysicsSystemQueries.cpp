@@ -651,12 +651,22 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateGearConstraint(std::shar
 
     auto* joltHingeA = static_cast<JPH::HingeConstraint*>(hingeA->GetJoltConstraint());
     auto* joltHingeB = static_cast<JPH::HingeConstraint*>(hingeB->GetJoltConstraint());
+    if (!joltHingeA || !joltHingeB)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "GearConstraint: Failed to get hinge constraints");
+        return nullptr;
+    }
 
     JPH::GearConstraintSettings settings;
     settings.mRatio = ratio;
     settings.mSpace = JPH::EConstraintSpace::WorldSpace;
 
     JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
+    if (!joltConstraint)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "GearConstraint: Failed to create constraint");
+        return nullptr;
+    }
     static_cast<JPH::GearConstraint*>(joltConstraint)->SetConstraints(joltHingeA, joltHingeB);
     m_joltSystem->AddConstraint(joltConstraint);
 
@@ -687,10 +697,21 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateRackAndPinionConstraint(
     settings.mRatio = ratio;
     settings.mSpace = JPH::EConstraintSpace::WorldSpace;
 
+    auto* joltSlider = static_cast<JPH::SliderConstraint*>(slider->GetJoltConstraint());
+    auto* joltHinge = static_cast<JPH::HingeConstraint*>(hinge->GetJoltConstraint());
+    if (!joltSlider || !joltHinge)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "RackAndPinionConstraint: Failed to get slider/hinge constraints");
+        return nullptr;
+    }
+
     JPH::Constraint* joltConstraint = settings.Create(*joltBodyA, *joltBodyB);
-    static_cast<JPH::RackAndPinionConstraint*>(joltConstraint)
-        ->SetConstraints(static_cast<JPH::SliderConstraint*>(slider->GetJoltConstraint()),
-                         static_cast<JPH::HingeConstraint*>(hinge->GetJoltConstraint()));
+    if (!joltConstraint)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "RackAndPinionConstraint: Failed to create constraint");
+        return nullptr;
+    }
+    static_cast<JPH::RackAndPinionConstraint*>(joltConstraint)->SetConstraints(joltSlider, joltHinge);
     m_joltSystem->AddConstraint(joltConstraint);
 
     auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::RackAndPinion, joltConstraint);
@@ -731,6 +752,11 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePathConstraint(std::shar
         return nullptr;
 
     JPH::Constraint* joltConstraint = settings.Create(*joltBody, JPH::Body::sFixedToWorld);
+    if (!joltConstraint)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "PathConstraint: Failed to create constraint");
+        return nullptr;
+    }
     m_joltSystem->AddConstraint(joltConstraint);
 
     auto constraint = std::make_shared<PhysicsConstraint>(ConstraintType::Path, joltConstraint);

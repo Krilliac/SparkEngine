@@ -254,7 +254,10 @@ namespace Spark
         ss << "=== Wave Spawner ===\n";
 
         const char* stateNames[] = {"Idle", "Countdown", "Spawning", "InProgress", "Completed", "Failed"};
-        ss << "State: " << stateNames[static_cast<int>(m_state)] << "\n";
+        int stateIndex = static_cast<int>(m_state);
+        constexpr int stateCount = static_cast<int>(sizeof(stateNames) / sizeof(stateNames[0]));
+        const char* stateName = (stateIndex >= 0 && stateIndex < stateCount) ? stateNames[stateIndex] : "Unknown";
+        ss << "State: " << stateName << "\n";
         ss << "Wave: " << m_currentWave << "/" << m_totalWaves << "\n";
         ss << "Enemies This Wave: spawned=" << m_enemiesSpawnedThisWave << " killed=" << m_enemiesKilledThisWave
            << "\n";

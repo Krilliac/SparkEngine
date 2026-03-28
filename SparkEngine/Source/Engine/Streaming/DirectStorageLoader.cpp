@@ -189,10 +189,18 @@ namespace Spark::Streaming
                 uint64_t readOffset = req->request.fileOffset;
                 uint64_t readSize = req->request.loadSize;
 
+                // Validate offset is within file bounds
+                if (readOffset > fileSize)
+                {
+                    req->status = LoadStatus::Failed;
+                    return;
+                }
+
                 if (readSize == 0)
                     readSize = fileSize - readOffset;
 
-                if (readOffset + readSize > fileSize)
+                // Check for arithmetic overflow before bounds check
+                if (readSize > fileSize || readOffset > fileSize - readSize)
                 {
                     req->status = LoadStatus::Failed;
                     return;

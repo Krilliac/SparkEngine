@@ -300,7 +300,11 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         cbDesc.Usage = D3D11_USAGE_DYNAMIC;
         cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        m_device->CreateBuffer(&cbDesc, nullptr, &m_constantBuffer);
+        if (FAILED(m_device->CreateBuffer(&cbDesc, nullptr, &m_constantBuffer)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "BloomEffect: Failed to create constant buffer");
+            return false;
+        }
 
         // Linear clamp sampler
         D3D11_SAMPLER_DESC sampDesc = {};
@@ -308,7 +312,11 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
         sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
         sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-        m_device->CreateSamplerState(&sampDesc, &m_linearClampSampler);
+        if (FAILED(m_device->CreateSamplerState(&sampDesc, &m_linearClampSampler)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "BloomEffect: Failed to create sampler state");
+            return false;
+        }
 
         return true;
     }
@@ -324,8 +332,9 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
                         m_settings.intensity};
         cb.params = {m_settings.clampMax, 0.0f, m_settings.anamorphicRatio, 0.0f};
 
-        D3D11_MAPPED_SUBRESOURCE mapped;
-        m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if (FAILED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) || !mapped.pData)
+            return;
         memcpy(mapped.pData, &cb, sizeof(cb));
         m_context->Unmap(m_constantBuffer.Get(), 0);
 
@@ -357,8 +366,9 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         cb.texelSize = {1.0f / src.width, 1.0f / src.height, m_settings.scatter, m_settings.intensity};
         cb.params = {m_settings.clampMax, static_cast<float>(srcMip), 0.0f, 0.0f};
 
-        D3D11_MAPPED_SUBRESOURCE mapped;
-        m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if (FAILED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) || !mapped.pData)
+            return;
         memcpy(mapped.pData, &cb, sizeof(cb));
         m_context->Unmap(m_constantBuffer.Get(), 0);
 
@@ -385,8 +395,9 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         BloomCB cb = {};
         cb.texelSize = {1.0f / src.width, 1.0f / src.height, m_settings.scatter, m_settings.intensity};
 
-        D3D11_MAPPED_SUBRESOURCE mapped;
-        m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if (FAILED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) || !mapped.pData)
+            return;
         memcpy(mapped.pData, &cb, sizeof(cb));
         m_context->Unmap(m_constantBuffer.Get(), 0);
 

@@ -388,10 +388,21 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
 
+    if (!context)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "InitializeAll called with null context");
+        return;
+    }
+
     for (auto& entry : m_modules)
     {
         if (entry.initialized)
             continue;
+        if (!entry.instance)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Module '%s' has null instance — skipped", entry.name.c_str());
+            continue;
+        }
 
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Initializing module: %s", entry.name.c_str());
         console.LogInfo("Initializing module: " + entry.name);
@@ -469,6 +480,12 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 {
     auto& console = Spark::SimpleConsole::GetInstance();
 
+    if (!context)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "ReloadModule called with null context");
+        return false;
+    }
+
     for (auto& entry : m_modules)
     {
         if (entry.name != name)
@@ -503,6 +520,11 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         {
             if (m.path == savedPath && !m.initialized)
             {
+                if (!m.instance)
+                {
+                    console.LogError("Module instance is null after reload: " + m.name);
+                    return false;
+                }
                 if (m.instance->OnLoad(context))
                 {
                     m.initialized = true;

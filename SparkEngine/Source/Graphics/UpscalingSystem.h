@@ -560,7 +560,7 @@ class UpscalingSystem
         {
             D3D11_MAPPED_SUBRESOURCE mapped = {};
             HRESULT hr = m_context->Map(m_fsr1EASUConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-            if (SUCCEEDED(hr))
+            if (SUCCEEDED(hr) && mapped.pData)
             {
                 memcpy(mapped.pData, easuConst, sizeof(FSR1EASUConstants));
                 m_context->Unmap(m_fsr1EASUConstantBuffer.Get(), 0);
@@ -571,7 +571,7 @@ class UpscalingSystem
         {
             D3D11_MAPPED_SUBRESOURCE mapped = {};
             HRESULT hr = m_context->Map(m_fsr1RCASConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-            if (SUCCEEDED(hr))
+            if (SUCCEEDED(hr) && mapped.pData)
             {
                 memcpy(mapped.pData, rcasConst, sizeof(FSR1RCASConstants));
                 m_context->Unmap(m_fsr1RCASConstantBuffer.Get(), 0);

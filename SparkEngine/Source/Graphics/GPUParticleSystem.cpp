@@ -412,7 +412,7 @@ void GPUParticleSystem::UpdateEmitterCB(GPUEmitterResources& emitter, float delt
 {
     D3D11_MAPPED_SUBRESOURCE mapped = {};
     HRESULT hr = m_context->Map(emitter.emitterCBBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (FAILED(hr))
+    if (FAILED(hr) || !mapped.pData)
         return;
 
     float pendingEmission = emitter.emissionAccumulator + emitter.desc.emissionRate * deltaTime;

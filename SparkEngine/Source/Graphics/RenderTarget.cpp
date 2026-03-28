@@ -322,6 +322,9 @@ bool RenderTarget::SaveToFile(const std::string& filename) const
 bool RenderTarget::SaveBMP(const std::string& filename, unsigned char* data, uint32_t width, uint32_t height,
                            uint32_t pitch) const
 {
+    if (!data || width == 0 || height == 0)
+        return false;
+
     // Basic BMP file header
     struct BMPHeader
     {

@@ -216,7 +216,7 @@ void Shader::UpdatePerFrameConstants(const PerFrameConstants& constants)
 
     D3D11_MAPPED_SUBRESOURCE mapped;
     HRESULT hr = m_context->Map(m_perFrameBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (SUCCEEDED(hr))
+    if (SUCCEEDED(hr) && mapped.pData)
     {
         PerFrameConstants* data = reinterpret_cast<PerFrameConstants*>(mapped.pData);
         *data = constants;
@@ -237,7 +237,7 @@ void Shader::UpdatePerObjectConstants(const PerObjectConstants& constants)
 
     D3D11_MAPPED_SUBRESOURCE mapped;
     HRESULT hr = m_context->Map(m_perObjectBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (SUCCEEDED(hr))
+    if (SUCCEEDED(hr) && mapped.pData)
     {
         PerObjectConstants* data = reinterpret_cast<PerObjectConstants*>(mapped.pData);
         *data = constants;
@@ -259,7 +259,7 @@ void Shader::UpdatePerMaterialConstants(const PerMaterialConstants& constants)
 
     D3D11_MAPPED_SUBRESOURCE mapped;
     HRESULT hr = m_context->Map(m_perMaterialBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (SUCCEEDED(hr))
+    if (SUCCEEDED(hr) && mapped.pData)
     {
         auto dataPtr = reinterpret_cast<PerMaterialConstants*>(mapped.pData);
         *dataPtr = constants;
@@ -274,7 +274,7 @@ void Shader::UpdateLightingData(const LightingData& lightingData)
 
     D3D11_MAPPED_SUBRESOURCE mapped;
     HRESULT hr = m_context->Map(m_lightingDataBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (SUCCEEDED(hr))
+    if (SUCCEEDED(hr) && mapped.pData)
     {
         auto dataPtr = reinterpret_cast<LightingData*>(mapped.pData);
         *dataPtr = lightingData;

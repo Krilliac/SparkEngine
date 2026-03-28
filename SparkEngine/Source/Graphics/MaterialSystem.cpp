@@ -314,7 +314,7 @@ void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
     {
         D3D11_MAPPED_SUBRESOURCE mapped = {};
         HRESULT hr = m_context->Map(material->m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(hr) && mapped.pData)
         {
             const auto& pbr = material->GetPBRProperties();
             MaterialConstants constants = {};

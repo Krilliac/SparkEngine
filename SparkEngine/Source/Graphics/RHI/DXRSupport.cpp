@@ -679,7 +679,8 @@ namespace Spark::Graphics
                                                        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                                                        IID_PPV_ARGS(&instanceBuffer));
         void* mapped = nullptr;
-        instanceBuffer->Map(0, nullptr, &mapped);
+        if (FAILED(instanceBuffer->Map(0, nullptr, &mapped)) || !mapped)
+            return;
         memcpy(mapped, instanceDescs.data(), instanceBufferSize);
         instanceBuffer->Unmap(0, nullptr);
 

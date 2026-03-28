@@ -175,7 +175,7 @@ namespace Spark::Graphics
             // Upload instance AABBs
             D3D11_MAPPED_SUBRESOURCE mapped = {};
             HRESULT hr = m_context->Map(m_aabbBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-            if (FAILED(hr))
+            if (FAILED(hr) || !mapped.pData)
                 return;
             std::memcpy(mapped.pData, aabbs, instanceCount * sizeof(GPUInstanceAABB));
             m_context->Unmap(m_aabbBuffer.Get(), 0);
@@ -212,7 +212,7 @@ namespace Spark::Graphics
             cb.enableHiZCull = m_settings.enableHiZCull ? 1u : 0u;
 
             hr = m_context->Map(m_cullConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-            if (FAILED(hr))
+            if (FAILED(hr) || !mapped.pData)
                 return;
             std::memcpy(mapped.pData, &cb, sizeof(CullConstants));
             m_context->Unmap(m_cullConstantBuffer.Get(), 0);
@@ -245,7 +245,7 @@ namespace Spark::Graphics
         {
             m_context->CopyResource(m_visibilityStaging.Get(), m_visibilityBuffer.Get());
             D3D11_MAPPED_SUBRESOURCE rb = {};
-            if (SUCCEEDED(m_context->Map(m_visibilityStaging.Get(), 0, D3D11_MAP_READ, 0, &rb)))
+            if (SUCCEEDED(m_context->Map(m_visibilityStaging.Get(), 0, D3D11_MAP_READ, 0, &rb)) && rb.pData)
             {
                 const auto* vis = static_cast<const uint32_t*>(rb.pData);
                 uint32_t count = 0;
