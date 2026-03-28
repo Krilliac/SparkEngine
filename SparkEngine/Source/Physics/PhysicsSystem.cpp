@@ -38,6 +38,7 @@
 #include <thread>
 
 JPH_SUPPRESS_WARNINGS
+#include "JoltWarningRestore.h"
 
 using namespace DirectX;
 
@@ -157,8 +158,8 @@ class SparkContactListener final : public JPH::ContactListener
     std::mutex m_contactMutex;
 
     JPH::ValidateResult OnContactValidate(const JPH::Body& inBody1, const JPH::Body& inBody2,
-                                          JPH::RVec3Arg inBaseOffset,
-                                          const JPH::CollideShapeResult& inCollisionResult) override
+                                          JPH::RVec3Arg /*inBaseOffset*/,
+                                          const JPH::CollideShapeResult& /*inCollisionResult*/) override
     {
         // Apply collision group/mask filtering from PhysicsBody wrappers
         if (m_physicsSystem)
@@ -271,12 +272,12 @@ class SparkContactListener final : public JPH::ContactListener
 class SparkBodyActivationListener final : public JPH::BodyActivationListener
 {
   public:
-    void OnBodyActivated(const JPH::BodyID& inBodyID, uint64_t inBodyUserData) override
+    void OnBodyActivated(const JPH::BodyID& /*inBodyID*/, uint64_t /*inBodyUserData*/) override
     {
         // Bodies waking up — can be used for LOD/optimization
     }
 
-    void OnBodyDeactivated(const JPH::BodyID& inBodyID, uint64_t inBodyUserData) override
+    void OnBodyDeactivated(const JPH::BodyID& /*inBodyID*/, uint64_t /*inBodyUserData*/) override
     {
         // Bodies going to sleep — can be used to stop updating transforms
     }

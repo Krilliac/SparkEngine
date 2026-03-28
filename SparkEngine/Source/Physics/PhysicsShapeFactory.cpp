@@ -34,6 +34,7 @@
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 
 JPH_SUPPRESS_WARNINGS
+#include "JoltWarningRestore.h"
 
 using namespace DirectX;
 

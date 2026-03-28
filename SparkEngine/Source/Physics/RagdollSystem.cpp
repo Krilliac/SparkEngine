@@ -14,6 +14,7 @@
 #include <Jolt/Jolt.h>
 
 JPH_SUPPRESS_WARNINGS
+#include "JoltWarningRestore.h"
 
 using namespace DirectX;
 
@@ -54,7 +55,7 @@ Ragdoll::Ragdoll(PhysicsSystem* physicsSystem, const RagdollDesc& desc) : m_phys
             continue;
 
         auto& child = m_parts[i];
-        auto& parent = m_parts[partDesc.parentIndex];
+        auto& parent = m_parts[static_cast<size_t>(partDesc.parentIndex)];
 
         if (!child.body || !parent.body)
         {

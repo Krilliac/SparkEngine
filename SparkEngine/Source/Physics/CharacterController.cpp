@@ -17,6 +17,7 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 
 JPH_SUPPRESS_WARNINGS
+#include "JoltWarningRestore.h"
 
 using namespace DirectX;
 

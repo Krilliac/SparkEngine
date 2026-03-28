@@ -20,6 +20,7 @@
 #include <Jolt/Physics/Constraints/Constraint.h>
 
 JPH_SUPPRESS_WARNINGS
+#include "JoltWarningRestore.h"
 
 #include <sstream>
 

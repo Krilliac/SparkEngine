@@ -22,6 +22,7 @@
 #include <Jolt/Physics/Vehicle/VehicleCollisionTester.h>
 
 JPH_SUPPRESS_WARNINGS
+#include "JoltWarningRestore.h"
 
 using namespace DirectX;
 
