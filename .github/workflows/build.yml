@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   # ===========================================================================
@@ -73,7 +74,7 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
     - name: Build
-      run: cmake --build build --parallel $(nproc)
+      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests under ASan + UBSan + LSan
       env:
@@ -84,6 +85,40 @@ jobs:
         cd build
         ./bin/SparkTests --output-file asan-ubsan-lsan-results.txt 2>&1 | tee asan-console.txt
         cat asan-console.txt >> asan-ubsan-lsan-results.txt || true
+
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let body = `## :x: build-linux-asan failed\n\n`;
+
+          for (const [label, file] of [
+            ['Build Output', 'cmake-build.log'],
+            ['Sanitizer Output', 'build/asan-console.txt']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error|ERROR:|SUMMARY:|LeakSanitizer|AddressSanitizer|UndefinedBehavior/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Upload ASan + UBSan + LSan report
       if: always()
@@ -122,7 +157,7 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 
     - name: Build
-      run: cmake --build build --parallel $(nproc)
+      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests under TSan
       env:
@@ -131,6 +166,40 @@ jobs:
         cd build
         ./bin/SparkTests --output-file tsan-results.txt 2>&1 | tee tsan-console.txt
         cat tsan-console.txt >> tsan-results.txt || true
+
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let body = `## :x: build-linux-tsan failed\n\n`;
+
+          for (const [label, file] of [
+            ['Build Output', 'cmake-build.log'],
+            ['Sanitizer Output', 'build/tsan-console.txt']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error|WARNING:|ThreadSanitizer|data race/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Upload TSan report
       if: always()
@@ -176,7 +245,32 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
 
     - name: Build (SparkTests only)
-      run: cmake --build build --parallel $(nproc) --target SparkTests
+      run: cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
+
+    - name: Report build errors to PR
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let body = `## :x: build-linux-msan failed\n\n`;
+          try {
+            const log = fs.readFileSync('cmake-build.log', 'utf8');
+            const issues = log.split('\n').filter(l =>
+              /error[:\s]|fatal error/i.test(l)
+            );
+            if (issues.length > 0) {
+              body += `### Build Output\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`;
+            }
+          } catch (e) {}
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Run Tests under MSan
       env:
@@ -216,14 +310,49 @@ jobs:
       uses: microsoft/setup-msbuild@v3
 
     - name: Configure CMake (VS 2022 / v143)
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log
 
     - name: Build
-      run: cmake --build build --config ${{ matrix.config }} --parallel
+      run: cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
 
     - name: Run Tests
       if: matrix.config == 'Release'
-      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
+      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure 2>&1 | tee test-results.log
+
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let body = `## :x: build-windows-vs2022 (${{ matrix.config }}) failed\n\n`;
+
+          for (const [label, file] of [
+            ['CMake Configure', 'cmake-configure.log'],
+            ['Build Output', 'cmake-build.log'],
+            ['Test Results', 'test-results.log']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -328,16 +457,53 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc \
-          -DCMAKE_CXX_COMPILER=g++
+          -DCMAKE_CXX_COMPILER=g++ 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      run: cmake --build build --parallel $(nproc)
+      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests
       run: |
         cd build
-        ctest --output-on-failure || true
-        ./bin/SparkTests
+        ctest --output-on-failure 2>&1 | tee ../ctest.log || true
+        ./bin/SparkTests 2>&1 | tee ../test-results.log
+
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const maxLen = 30000;
+          let body = `## :x: build-linux-gcc (${{ matrix.config }}) failed\n\n`;
+
+          for (const [label, file] of [
+            ['CMake Configure', 'cmake-configure.log'],
+            ['Build Output', 'cmake-build.log'],
+            ['Test Results', 'test-results.log']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              // Extract errors and warnings
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-maxLen)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist — step didn't run */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -381,16 +547,51 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_CXX_COMPILER=clang++ 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      run: cmake --build build --parallel $(nproc)
+      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests
       run: |
         cd build
-        ctest --output-on-failure || true
-        ./bin/SparkTests
+        ctest --output-on-failure 2>&1 | tee ../ctest.log || true
+        ./bin/SparkTests 2>&1 | tee ../test-results.log
+
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let body = `## :x: build-linux-clang (${{ matrix.config }}) failed\n\n`;
+
+          for (const [label, file] of [
+            ['CMake Configure', 'cmake-configure.log'],
+            ['Build Output', 'cmake-build.log'],
+            ['Test Results', 'test-results.log']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Package build output
       if: matrix.config == 'Release'
