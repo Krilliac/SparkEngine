@@ -209,6 +209,7 @@ add_executable(SparkTests
     TestConnectionScopeFilter.cpp
     TestNavMeshObstacles.cpp
     TestFaultIsolation.cpp
+    TestSelfRecovery.cpp
     TestVulkanLavapipe.cpp
     TestWARPRendering.cpp
     # Hardware acceleration tests

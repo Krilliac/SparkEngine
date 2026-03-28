@@ -32,6 +32,13 @@ namespace Spark
         bool enabled = true;         ///< false = skip Update() calls
         std::string lastError;       ///< Last exception message
         uint64_t lastFaultFrame = 0; ///< Frame number of the most recent fault
+
+        // Auto-recovery fields
+        bool autoRecoveryEnabled = true;  ///< Whether this subsystem can auto-recover
+        float cooldownSeconds = 5.0f;     ///< Base cooldown before auto-retry (doubles each attempt)
+        float nextRetryTime = 0.0f;       ///< Engine time (seconds) when next recovery is allowed
+        uint32_t recoveryAttempts = 0;    ///< How many times auto-recovery has been attempted
+        uint32_t maxRecoveryAttempts = 3; ///< 0 = unlimited recovery attempts
     };
 
     /**
@@ -72,15 +79,29 @@ namespace Spark
         /// Read-only access to all records (caller must not hold the lock)
         [[nodiscard]] std::unordered_map<std::string, SubsystemFaultRecord> GetRecordsSnapshot() const;
 
+        /// Called each frame from the main loop to attempt auto-recovery of disabled subsystems
+        void Update(float engineTime);
+
+        /// Enable or disable auto-recovery for a specific subsystem
+        void SetAutoRecovery(const std::string& name, bool enabled);
+
+        /// Set the base cooldown (seconds) before auto-recovery retry for a subsystem
+        void SetRecoveryCooldown(const std::string& name, float seconds);
+
+        /// Set the maximum number of auto-recovery attempts (0 = unlimited)
+        void SetMaxRecoveryAttempts(const std::string& name, uint32_t maxAttempts);
+
         /// Register console commands (fault.status, fault.reset, etc.)
         void RegisterConsoleCommands();
 
       private:
+        static constexpr float MAX_BACKOFF_SECONDS = 60.0f; ///< Cap for exponential backoff
         SubsystemFaultIsolator() = default;
 
         mutable std::mutex m_mutex;
         std::unordered_map<std::string, SubsystemFaultRecord> m_records;
         uint32_t m_globalMaxRetries = 3;
+        float m_lastUpdateTime = 0.0f; ///< Engine time from most recent Update() call
     };
 
 } // namespace Spark

@@ -377,12 +377,68 @@ namespace Spark::Net
     // Update
     // --------------------------------------------------------------------------
 
+    void NetworkManager::SetAutoReconnect(const AutoReconnectConfig& config)
+    {
+        m_autoReconnect = config;
+        m_reconnectAttempts = 0;
+        m_reconnectNextRetryTime = 0.0f;
+    }
+
+    void NetworkManager::TryAutoReconnect(float deltaTime)
+    {
+        if (!m_autoReconnect.enabled || !m_wasConnected)
+            return;
+
+        // Check if max attempts exhausted
+        if (m_autoReconnect.maxAttempts > 0 && m_reconnectAttempts >= m_autoReconnect.maxAttempts)
+        {
+            m_autoReconnect.enabled = false;
+            m_wasConnected = false;
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "AUTO-RECONNECT: Max attempts (%u) exhausted — giving up",
+                            m_autoReconnect.maxAttempts);
+            if (m_reconnectFailedCallback)
+                m_reconnectFailedCallback();
+            return;
+        }
+
+        // Wait for cooldown
+        if (m_serverTime < m_reconnectNextRetryTime)
+            return;
+
+        m_reconnectAttempts++;
+        float backoff = m_autoReconnect.baseDelay * static_cast<float>(1u << std::min(m_reconnectAttempts - 1, 5u));
+        backoff = std::min(backoff, m_autoReconnect.maxDelay);
+        m_reconnectNextRetryTime = m_serverTime + backoff;
+
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "AUTO-RECONNECT: Attempt %u/%s to %s:%u (next retry in %.1fs)",
+                       m_reconnectAttempts,
+                       m_autoReconnect.maxAttempts > 0 ? std::to_string(m_autoReconnect.maxAttempts).c_str()
+                                                       : "unlimited",
+                       m_lastServerAddress.c_str(), m_lastServerPort, backoff);
+
+        if (Connect(m_lastServerAddress, m_lastServerPort, m_lastPlayerName))
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "AUTO-RECONNECT: Connection attempt initiated successfully");
+            // m_reconnectAttempts reset happens when we receive ConnectAccepted
+        }
+    }
+
     void NetworkManager::Update(float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Network", 0.0);
-        if (m_role == NetworkRole::None)
-            return;
+
+        // Auto-reconnect: when disconnected and auto-reconnect enabled, try to reconnect
+        if (m_role == NetworkRole::None || GetConnectionState() == ConnectionState::Disconnected)
+        {
+            if (m_autoReconnect.enabled && m_wasConnected)
+            {
+                m_serverTime += deltaTime;
+                TryAutoReconnect(deltaTime);
+            }
+            if (m_role == NetworkRole::None)
+                return;
+        }
 
         SPARK_WARN_IF(Spark::LogCategory::Network, deltaTime < 0.0f, "Negative deltaTime in NetworkManager::Update");
         m_serverTime += deltaTime;

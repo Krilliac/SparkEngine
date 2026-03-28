@@ -36,6 +36,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -190,6 +191,19 @@ namespace Spark
         /** @brief Check if the monitor considers memory healthy */
         bool IsHealthy() const { return m_healthStatus == MemoryHealthStatus::Healthy; }
 
+        // ====================================================================
+        // Pressure response callbacks
+        // ====================================================================
+
+        /** @brief Callback invoked when memory health transitions to Critical or Warning */
+        using PressureCallback = std::function<void(MemoryHealthStatus)>;
+
+        /** @brief Register a named callback invoked when memory pressure is detected */
+        void RegisterPressureCallback(const std::string& name, PressureCallback callback);
+
+        /** @brief Unregister a previously registered pressure callback */
+        void UnregisterPressureCallback(const std::string& name);
+
       private:
         MemoryMonitor() = default;
         MemoryMonitor(const MemoryMonitor&) = delete;
@@ -207,6 +221,8 @@ namespace Spark
 
         void RecordAnomaly(MemoryAnomalyType type, const std::string& description, size_t bytes = 0,
                            const std::string& category = "");
+
+        void InvokePressureCallbacks(MemoryHealthStatus status);
 
         /** @brief Platform-specific: get remaining stack bytes, or 0 if unavailable */
         static size_t GetRemainingStackBytes();
@@ -259,6 +275,12 @@ namespace Spark
 
         // Saved snapshot for comparison
         MemorySnapshot m_lastSnapshot;
+
+        // Pressure response callbacks
+        std::unordered_map<std::string, PressureCallback> m_pressureCallbacks;
+        MemoryHealthStatus m_previousHealthStatus = MemoryHealthStatus::Healthy;
+        std::chrono::steady_clock::time_point m_lastPressureCallbackTime;
+        static constexpr float PRESSURE_CALLBACK_COOLDOWN = 10.0f; ///< Min seconds between callback invocations
     };
 
 } // namespace Spark

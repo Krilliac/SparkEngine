@@ -415,6 +415,31 @@ namespace Spark::Net
         /// Get estimated round-trip time in milliseconds.
         float GetEstimatedRTT() const { return m_smoothedRTT * 1000.0f; }
 
+        // ====================================================================
+        // Auto-reconnect (client-side)
+        // ====================================================================
+
+        /** @brief Configuration for automatic reconnection after disconnection */
+        struct AutoReconnectConfig
+        {
+            bool enabled = false;     ///< Whether auto-reconnect is active
+            float baseDelay = 2.0f;   ///< Base delay before first retry (seconds)
+            float maxDelay = 30.0f;   ///< Maximum backoff delay cap (seconds)
+            uint32_t maxAttempts = 5; ///< Max reconnect attempts (0 = unlimited)
+        };
+
+        /** @brief Enable/configure automatic reconnection after disconnection */
+        void SetAutoReconnect(const AutoReconnectConfig& config);
+
+        /** @brief Get current auto-reconnect configuration */
+        const AutoReconnectConfig& GetAutoReconnectConfig() const { return m_autoReconnect; }
+
+        /** @brief Register a callback invoked when auto-reconnect gives up */
+        void SetReconnectFailedCallback(std::function<void()> callback)
+        {
+            m_reconnectFailedCallback = std::move(callback);
+        }
+
         /// Console integration
         std::string Console_GetStatus() const;
         std::string Console_ListClients() const;
@@ -572,6 +597,19 @@ namespace Spark::Net
         std::chrono::steady_clock::time_point m_lastBandwidthSample;
         uint64_t m_bytesSentSinceSample = 0;
         uint64_t m_bytesReceivedSinceSample = 0;
+
+        // Auto-reconnect state
+        AutoReconnectConfig m_autoReconnect;
+        uint32_t m_reconnectAttempts = 0;                ///< Current reconnect attempt count
+        float m_reconnectNextRetryTime = 0.0f;           ///< Server time when next reconnect allowed
+        std::string m_lastServerAddress;                 ///< Last server address for reconnect
+        uint16_t m_lastServerPort = 0;                   ///< Last server port for reconnect
+        std::string m_lastPlayerName;                    ///< Last player name for reconnect
+        bool m_wasConnected = false;                     ///< True if we were connected before disconnect
+        std::function<void()> m_reconnectFailedCallback; ///< Called when max attempts exhausted
+
+        /** @brief Attempt automatic reconnection (called from Update) */
+        void TryAutoReconnect(float deltaTime);
     };
 
 } // namespace Spark::Net

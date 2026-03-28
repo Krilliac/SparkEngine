@@ -114,6 +114,10 @@ namespace Spark
         SubsystemFaulted,   ///< A subsystem was disabled after repeated faults (systemName filled)
         SubsystemRecovered, ///< A faulted subsystem was re-enabled (systemName filled)
 
+        // Device recovery
+        DeviceLostFallback, ///< GPU device lost, falling back to headless mode
+        DeviceRecovered,    ///< GPU device successfully recovered after loss
+
         // Memory
         AllocationSpike, ///< Memory allocation exceeded a threshold
 
@@ -169,6 +173,10 @@ namespace Spark
             return "ErrorRaised";
         case DebugHookPoint::WarningRaised:
             return "WarningRaised";
+        case DebugHookPoint::DeviceLostFallback:
+            return "DeviceLostFallback";
+        case DebugHookPoint::DeviceRecovered:
+            return "DeviceRecovered";
         case DebugHookPoint::AllocationSpike:
             return "AllocationSpike";
         case DebugHookPoint::SubsystemFaulted:
