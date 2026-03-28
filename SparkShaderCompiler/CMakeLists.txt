@@ -58,7 +58,7 @@ target_compile_features(SparkShaderCompiler PRIVATE cxx_std_23)
 
 # Platform-specific link libraries and definitions
 if(WIN32)
-    target_link_libraries(SparkShaderCompiler PRIVATE d3d11 d3d12 dxgi dxguid d3dcompiler)
+    target_link_libraries(SparkShaderCompiler PRIVATE d3d11 d3d12 dxgi dxguid d3dcompiler opengl32)
     target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_PLATFORM_WINDOWS)
 else()
     find_package(Threads QUIET)
