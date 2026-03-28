@@ -249,14 +249,35 @@ namespace Spark
                 appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
                 appInfo.apiVersion = VK_API_VERSION_1_3;
 
-                std::vector<const char*> extensions = {
-                    VK_KHR_SURFACE_EXTENSION_NAME,
-#ifdef _WIN32
-                    VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-#elif defined(__linux__)
-                    VK_KHR_XCB_SURFACE_EXTENSION_NAME,
-#endif
+                // Surface extensions are needed for windowed rendering but not for
+                // headless/software devices (e.g. Lavapipe in CI). We enumerate
+                // available instance extensions and only request surface extensions
+                // if the runtime actually supports them.
+                uint32_t availableExtCount = 0;
+                vkEnumerateInstanceExtensionProperties(nullptr, &availableExtCount, nullptr);
+                std::vector<VkExtensionProperties> availableExts(availableExtCount);
+                vkEnumerateInstanceExtensionProperties(nullptr, &availableExtCount, availableExts.data());
+
+                auto hasInstanceExt = [&](const char* name)
+                {
+                    for (const auto& e : availableExts)
+                        if (std::strcmp(e.extensionName, name) == 0)
+                            return true;
+                    return false;
                 };
+
+                std::vector<const char*> extensions;
+                if (hasInstanceExt(VK_KHR_SURFACE_EXTENSION_NAME))
+                {
+                    extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+#ifdef _WIN32
+                    if (hasInstanceExt(VK_KHR_WIN32_SURFACE_EXTENSION_NAME))
+                        extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif defined(__linux__)
+                    if (hasInstanceExt(VK_KHR_XCB_SURFACE_EXTENSION_NAME))
+                        extensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+#endif
+                }
 
                 std::vector<const char*> layers;
                 if (m_validationEnabled)
@@ -310,22 +331,65 @@ namespace Spark
                 std::vector<VkPhysicalDevice> devices(deviceCount);
                 vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
 
-                // Pick the best device (prefer discrete GPU)
+                // Score each device: discrete > integrated > virtual > CPU (Lavapipe)
+                // CPU devices are accepted as a last resort for software rendering
+                int bestScore = -1;
                 for (const auto& device : devices)
                 {
                     VkPhysicalDeviceProperties properties;
                     vkGetPhysicalDeviceProperties(device, &properties);
 
                     auto queueFamilies = FindQueueFamilies(device);
-                    bool extensionsSupported = CheckDeviceExtensionSupport(device);
+                    if (!queueFamilies.graphicsFamily.has_value())
+                        continue;
 
-                    if (queueFamilies.graphicsFamily.has_value() && extensionsSupported)
+                    // CPU devices (Lavapipe) don't support VK_KHR_swapchain — skip that check for them
+                    bool isCpuDevice = (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU);
+                    if (!isCpuDevice && !CheckDeviceExtensionSupport(device))
+                        continue;
+
+                    int score = 0;
+                    switch (properties.deviceType)
                     {
+                    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+                        score = 4;
+                        break;
+                    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+                        score = 3;
+                        break;
+                    case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+                        score = 2;
+                        break;
+                    case VK_PHYSICAL_DEVICE_TYPE_CPU:
+                        score = 1;
+                        break;
+                    default:
+                        score = 0;
+                        break;
+                    }
+
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
                         m_physicalDevice = device;
                         m_queueFamilies = queueFamilies;
+                        m_isSoftwareDevice = isCpuDevice;
+                    }
+                }
 
-                        if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-                            break;
+                if (m_physicalDevice != VK_NULL_HANDLE)
+                {
+                    VkPhysicalDeviceProperties props;
+                    vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
+                    if (m_isSoftwareDevice)
+                    {
+                        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                                       "Vulkan: selected software device '%s' (Lavapipe/CPU)", props.deviceName);
+                    }
+                    else
+                    {
+                        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Vulkan: selected hardware device '%s'",
+                                       props.deviceName);
                     }
                 }
 
@@ -357,30 +421,51 @@ namespace Spark
                     queueCreateInfos.push_back(queueInfo);
                 }
 
-                // Enable features
-                VkPhysicalDeviceFeatures deviceFeatures = {};
-                deviceFeatures.samplerAnisotropy = VK_TRUE;
-                deviceFeatures.fillModeNonSolid = VK_TRUE;
-                deviceFeatures.multiViewport = VK_TRUE;
-                deviceFeatures.geometryShader = VK_TRUE;
-                deviceFeatures.tessellationShader = VK_TRUE;
-                deviceFeatures.multiDrawIndirect = VK_TRUE;
+                // Query what the physical device actually supports before enabling features.
+                // Software devices (Lavapipe) lack geometry shaders, tessellation, and some
+                // Vulkan 1.2/1.3 features that hardware GPUs provide.
+                VkPhysicalDeviceFeatures supportedFeatures = {};
+                vkGetPhysicalDeviceFeatures(m_physicalDevice, &supportedFeatures);
 
-                // Vulkan 1.3 features
+                VkPhysicalDeviceVulkan12Features supported12 = {};
+                supported12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+                VkPhysicalDeviceVulkan13Features supported13 = {};
+                supported13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+                supported12.pNext = &supported13;
+
+                VkPhysicalDeviceFeatures2 features2 = {};
+                features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+                features2.pNext = &supported12;
+                vkGetPhysicalDeviceFeatures2(m_physicalDevice, &features2);
+
+                // Enable only features the device supports
+                VkPhysicalDeviceFeatures deviceFeatures = {};
+                deviceFeatures.samplerAnisotropy = supportedFeatures.samplerAnisotropy;
+                deviceFeatures.fillModeNonSolid = supportedFeatures.fillModeNonSolid;
+                deviceFeatures.multiViewport = supportedFeatures.multiViewport;
+                deviceFeatures.geometryShader = supportedFeatures.geometryShader;
+                deviceFeatures.tessellationShader = supportedFeatures.tessellationShader;
+                deviceFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
+
+                // Vulkan 1.3 features — only enable if supported
                 VkPhysicalDeviceVulkan13Features vulkan13Features = {};
                 vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-                vulkan13Features.dynamicRendering = VK_TRUE;
-                vulkan13Features.synchronization2 = VK_TRUE;
+                vulkan13Features.dynamicRendering = supported13.dynamicRendering;
+                vulkan13Features.synchronization2 = supported13.synchronization2;
 
                 VkPhysicalDeviceVulkan12Features vulkan12Features = {};
                 vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
                 vulkan12Features.pNext = &vulkan13Features;
-                vulkan12Features.descriptorIndexing = VK_TRUE;
-                vulkan12Features.timelineSemaphore = VK_TRUE;
-                vulkan12Features.bufferDeviceAddress = VK_TRUE;
+                vulkan12Features.descriptorIndexing = supported12.descriptorIndexing;
+                vulkan12Features.timelineSemaphore = supported12.timelineSemaphore;
+                vulkan12Features.bufferDeviceAddress = supported12.bufferDeviceAddress;
 
-                // Build extension list — add RT extensions if available
-                std::vector<const char*> enabledExtensions(m_deviceExtensions.begin(), m_deviceExtensions.end());
+                // Build extension list — software devices don't need VK_KHR_swapchain
+                std::vector<const char*> enabledExtensions;
+                if (!m_isSoftwareDevice)
+                {
+                    enabledExtensions.assign(m_deviceExtensions.begin(), m_deviceExtensions.end());
+                }
                 {
                     uint32_t extCount = 0;
                     vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
@@ -494,6 +579,7 @@ namespace Spark
                 m_capabilities.apiVersion = "Vulkan " + std::to_string(VK_VERSION_MAJOR(properties.apiVersion)) + "." +
                                             std::to_string(VK_VERSION_MINOR(properties.apiVersion)) + "." +
                                             std::to_string(VK_VERSION_PATCH(properties.apiVersion));
+                m_capabilities.isSoftwareDevice = m_isSoftwareDevice;
 
                 m_capabilities.maxTextureSize = properties.limits.maxImageDimension2D;
                 m_capabilities.maxRenderTargets = properties.limits.maxColorAttachments;
@@ -1442,6 +1528,8 @@ namespace Spark
                 std::string info = "=== Vulkan Device Info ===\n";
                 info += "Device: " + m_capabilities.deviceName + "\n";
                 info += "API: " + m_capabilities.apiVersion + "\n";
+                if (m_isSoftwareDevice)
+                    info += "Type: Software (CPU/Lavapipe)\n";
                 info += "VRAM: " + std::to_string(m_capabilities.dedicatedVideoMemory / (1024 * 1024)) + " MB\n";
                 info += "Max Texture Size: " + std::to_string(m_capabilities.maxTextureSize) + "\n";
                 info += "Max Color Attachments: " + std::to_string(m_capabilities.maxRenderTargets) + "\n";

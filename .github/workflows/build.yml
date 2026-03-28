@@ -70,7 +70,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v4
@@ -162,7 +162,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v4
@@ -259,7 +259,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libc++-dev libc++abi-dev
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
 
     - name: Setup ccache
       uses: actions/cache@v4
@@ -488,7 +488,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y build-essential cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v4
@@ -585,7 +585,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v4
@@ -659,6 +659,110 @@ jobs:
       with:
         name: SparkEngine-Linux-Clang-${{ matrix.config }}
         path: SparkEngine-Linux-Clang-${{ matrix.config }}.tar.gz
+        retention-days: 14
+
+  # ===========================================================================
+  # Linux MinGW Cross-Compilation — Build Windows D3D11/D3D12 code on Linux
+  # Runs the resulting .exe under Wine + DXVK + Lavapipe (software Vulkan)
+  # ===========================================================================
+  build-linux-mingw-wine:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Install MinGW, Wine, and Mesa Lavapipe
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install -y \
+          mingw-w64 cmake ccache \
+          wine64 wine \
+          mesa-vulkan-drivers
+
+    - name: Setup ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-linux-mingw-${{ github.sha }}
+        restore-keys: ccache-linux-mingw-
+
+    - name: Configure CMake (MinGW cross-compilation)
+      run: |
+        cmake -B build \
+          -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_TESTS=ON \
+          -DENABLE_VULKAN=OFF \
+          -DENABLE_OPENGL=OFF \
+          -DENABLE_SDL2=OFF \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
+
+    - name: Build (Windows .exe via MinGW)
+      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+
+    - name: Setup Wine prefix and DXVK
+      run: |
+        export WINEPREFIX=${{ github.workspace }}/build/.wineprefix
+        tools/wine-run.sh --setup-only
+
+    - name: Run Tests under Wine
+      env:
+        WINEPREFIX: ${{ github.workspace }}/build/.wineprefix
+        WINEDEBUG: -all
+        LIBGL_ALWAYS_SOFTWARE: "1"
+      run: |
+        tools/wine-run.sh build/bin/SparkTests.exe 2>&1 | tee wine-test-results.txt || {
+          echo "::warning::Wine test execution had failures (non-blocking)"
+          true
+        }
+
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let body = `## :warning: build-linux-mingw-wine failed\n\n`;
+          body += `> This is a **non-blocking** job. MinGW cross-compilation + Wine testing is experimental.\n\n`;
+
+          for (const [label, file] of [
+            ['CMake Configure', 'cmake-configure.log'],
+            ['Build Output', 'cmake-build.log'],
+            ['Wine Test Results', 'wine-test-results.txt']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-40).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-20000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: mingw-wine-test-results
+        path: wine-test-results.txt
         retention-days: 14
 
   # ===========================================================================

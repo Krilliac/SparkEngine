@@ -372,6 +372,7 @@ namespace Spark
             bool rayTracingSupport = false;
             bool variableRateShadingSupport = false;
             bool bindlessResourceSupport = false;
+            bool isSoftwareDevice = false; ///< True when running on a CPU/software driver (e.g. Lavapipe, llvmpipe)
 
             RTCapabilities rayTracing; ///< Detailed ray tracing capabilities
 

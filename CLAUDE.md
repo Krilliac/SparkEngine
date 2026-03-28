@@ -30,6 +30,41 @@ cd build && ctest --output-on-failure
 
 CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL` (OFF), `ENABLE_DXR` (OFF), `ENABLE_HYBRID_RT`, `ENABLE_RECAST`, `ENABLE_SDL2` (auto-ON on Linux), `SPARK_HEADLESS_SUPPORT`, `SPARK_DOUBLE_PRECISION_PHYSICS` (OFF), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
 
+### Cross-compilation: Windows D3D11/D3D12 on Linux (MinGW + Wine)
+
+Build and test the Windows D3D11/D3D12 code paths on a Linux machine using MinGW cross-compilation and Wine. This exercises the **exact same `_WIN32` code** that MSVC compiles.
+
+```bash
+# Prerequisites
+sudo apt-get install mingw-w64 wine64 mesa-vulkan-drivers
+
+# Build (produces .exe files)
+cmake --preset linux-mingw-release
+cmake --build build/linux-mingw-release
+
+# Run tests under Wine (DXVK translates D3D11->Vulkan, Lavapipe renders on CPU)
+tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
+```
+
+**The stack:** D3D11/D3D12 C++ → MinGW compiler → `.exe` → Wine → DXVK/VKD3D-Proton (D3D→Vulkan) → Lavapipe (software Vulkan). Works without a GPU.
+
+**Key files:**
+- `cmake/toolchains/mingw-w64-x86_64.cmake` — CMake toolchain for MinGW cross-compilation
+- `tools/wine-run.sh` — Wine runner with DXVK/VKD3D-Proton auto-setup and Lavapipe detection
+- CMake presets: `linux-mingw-release`, `linux-mingw-debug`
+
+### Software rendering fallback (all backends)
+
+Every RHI backend has a software rendering fallback for GPU-less environments:
+
+| Backend | Platform | Software Fallback | How |
+|---------|----------|-------------------|-----|
+| D3D11 | Windows | WARP | `D3D_DRIVER_TYPE_WARP` (built into Windows 10+) |
+| D3D12 | Windows | WARP | `IDXGIFactory4::EnumWarpAdapter()` (built into Windows 10+) |
+| Vulkan | Cross-platform | Lavapipe | `VK_PHYSICAL_DEVICE_TYPE_CPU` (install `mesa-vulkan-drivers`) |
+| OpenGL | Linux | llvmpipe | Mesa llvmpipe via EGL or GLX (install `mesa-utils`) |
+| None | All | NullRHIDevice | No-op headless backend (always available) |
+
 ## Anti-Bloat Guidelines
 
 These guidelines exist because AI-assisted development has a structural bias toward complexity. Without active awareness, sessions tend to add more than they remove. The goal is **sanity, not sacrifice** — keep code clean and intentional without stripping away legitimate verbosity, comments, or readability.
@@ -487,6 +522,7 @@ ctest --test-dir build -C Release --output-on-failure
 | `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan + ignorelist, `continue-on-error` (uninstrumented stdlib) |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
+| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `continue-on-error`, D3D11/D3D12 on Linux |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
 | `todo-count` | ubuntu-24.04 | — | — | threshold: 20 |
@@ -496,7 +532,7 @@ ctest --test-dir build -C Release --output-on-failure
 - **Never** consider a PR done until `gh pr checks` shows all required checks passing.
 - If a check fails, download the failed run logs with `gh run view <ID> --log-failed`, diagnose, fix locally, push, and re-poll.
 - For Windows-only failures that cannot be reproduced on Linux, inspect the CI logs carefully and fix based on MSVC-specific diagnostics (e.g., `/W4` warnings, MSVC type conversion rules, Windows SDK headers).
-- The `build-windows-vs2026` and `clang-tidy` jobs use `continue-on-error` — failures there are warnings, not blockers.
+- The `build-windows-vs2026`, `build-linux-mingw-wine`, and `clang-tidy` jobs use `continue-on-error` — failures there are warnings, not blockers.
 
 ## Documentation generation
 

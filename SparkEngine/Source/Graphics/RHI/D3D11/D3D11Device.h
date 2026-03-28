@@ -315,6 +315,7 @@ namespace Spark
                 // D3D11-specific accessors
                 ID3D11Device1* GetD3D11Device() const { return m_device.Get(); }
                 ID3D11DeviceContext1* GetD3D11Context() const { return m_immediateContext.Get(); }
+                bool IsSoftwareDevice() const { return m_isSoftwareDevice; }
 
               private:
                 DXGI_FORMAT ConvertFormat(PixelFormat format) const;
@@ -335,6 +336,7 @@ namespace Spark
                 RHIDeviceCapabilities m_capabilities;
                 RHIStatistics m_statistics;
                 bool m_debugEnabled = false;
+                bool m_isSoftwareDevice = false;
 
                 DeferredDeletionQueue m_deletionQueue;
             };

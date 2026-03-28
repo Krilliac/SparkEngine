@@ -609,12 +609,23 @@ namespace Spark
                 ComPtr<ID3D11DeviceContext> context;
                 D3D_FEATURE_LEVEL achievedLevel;
 
+                // Try hardware first, fall back to WARP (Microsoft's software rasterizer)
+                // if no GPU is available (e.g. CI runners, headless servers)
                 HRESULT hr =
                     D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createFlags, featureLevels,
                                       _countof(featureLevels), D3D11_SDK_VERSION, &device, &achievedLevel, &context);
 
                 if (FAILED(hr))
-                    return false;
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "D3D11: Hardware device creation failed — falling back to WARP software rasterizer");
+                    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, createFlags, featureLevels,
+                                           _countof(featureLevels), D3D11_SDK_VERSION, &device, &achievedLevel,
+                                           &context);
+                    if (FAILED(hr))
+                        return false;
+                    m_isSoftwareDevice = true;
+                }
 
                 hr = device.As(&m_device);
                 if (FAILED(hr))
@@ -656,6 +667,13 @@ namespace Spark
                 m_capabilities.maxRenderTargets = 8;
                 m_capabilities.maxAnisotropy = 16.0f;
                 m_capabilities.apiVersion = "DirectX 11.1";
+                m_capabilities.isSoftwareDevice = m_isSoftwareDevice;
+
+                if (m_isSoftwareDevice)
+                {
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D11: Using WARP software device '%s'",
+                                   m_capabilities.deviceName.c_str());
+                }
 
                 // DX11 supports compute shaders (CS 5.0) for SDFGI software RT fallback
                 // No hardware RT on DX11 — requires DX12 for DXR
@@ -1153,6 +1171,8 @@ namespace Spark
                 std::string info = "=== D3D11 Device Info ===\n";
                 info += "Device: " + m_capabilities.deviceName + "\n";
                 info += "API: " + m_capabilities.apiVersion + "\n";
+                if (m_isSoftwareDevice)
+                    info += "Type: Software (WARP)\n";
                 info += "VRAM: " + std::to_string(m_capabilities.dedicatedVideoMemory / (1024 * 1024)) + " MB\n";
                 info += "Max Texture Size: " + std::to_string(m_capabilities.maxTextureSize) + "\n";
                 info += "Compute Shaders: " + std::string(m_capabilities.computeShaderSupport ? "Yes" : "No") + "\n";
