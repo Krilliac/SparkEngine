@@ -630,6 +630,12 @@ class GraphicsEngine
     // PRIVATE METHODS
     // ========================================================================
 
+    // --- Device recovery ---
+    bool RecoverFromDeviceLost();                      ///< Attempt to recreate D3D11 device after device-lost event.
+    void ReleaseAllDeviceResources();                  ///< Release all COM resources for device recreation.
+    uint32_t m_deviceLostRecoveryAttempts = 0;         ///< Number of device-lost recovery attempts
+    static constexpr uint32_t MAX_DEVICE_RECOVERY = 3; ///< Max recovery attempts before permanent fallback
+
     // --- Device and resource creation (called once during Initialize) ---
     HRESULT CreateDeviceAndSwapChain(HWND hWnd); ///< Create D3D11 device, context, and DXGI swap chain.
     HRESULT CreateDevice(HWND hwnd, uint32_t width, uint32_t height, bool fullscreen);

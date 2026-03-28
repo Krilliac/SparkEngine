@@ -240,6 +240,23 @@ static void InitDebugSystems()
 #endif
     Spark::DebugOverlay::GetInstance().SetEnabled(true);
     Spark::MemoryMonitor::GetInstance().Initialize();
+
+    // Register memory pressure response callbacks
+    Spark::MemoryMonitor::GetInstance().RegisterPressureCallback(
+        "Graphics",
+        [](Spark::MemoryHealthStatus status)
+        {
+            if (status == Spark::MemoryHealthStatus::Critical)
+            {
+                if (auto* ctx = EngineContext::Get())
+                {
+                    if (auto* gfx = ctx->GetGraphics())
+                        gfx->Console_ForceGarbageCollection();
+                }
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Memory pressure: forced graphics garbage collection");
+            }
+        });
+
     Spark::DebugDrawManager::GetInstance().SetEnabled(true);
 
     // Graphics utility singletons
@@ -588,6 +605,11 @@ static void UpdateGameplaySystems(float dt)
     auto& debugHooks = Spark::DebugHookManager::GetInstance();
     debugHooks.SetFrameNumber(g_frameCounter);
     debugHooks.SetDeltaTime(dt);
+
+    // Update fault isolation auto-recovery (re-enables subsystems after cooldown)
+    static float s_engineTime = 0.0f;
+    s_engineTime += dt;
+    Spark::SubsystemFaultIsolator::GetInstance().Update(s_engineTime);
 
     Profiler::GetInstance().BeginFrame();
 

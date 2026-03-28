@@ -73,6 +73,10 @@ namespace Spark::Net
                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
                                 m_localClientID = buf.ReadUint32();
                                 m_connectionState = ConnectionState::Connected;
+
+                                // Mark as connected for auto-reconnect tracking
+                                m_wasConnected = true;
+                                m_reconnectAttempts = 0;
                             }
                         });
         RegisterHandler(MessageType::Heartbeat,
@@ -308,6 +312,11 @@ namespace Spark::Net
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !playerName.empty(), "playerName must not be empty");
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Connecting to %s:%u as '%s'", address.c_str(), port,
                        playerName.c_str());
+
+        // Save connection params for auto-reconnect
+        m_lastServerAddress = address;
+        m_lastServerPort = port;
+        m_lastPlayerName = playerName;
         if (!m_initialized)
         {
             if (!Initialize())

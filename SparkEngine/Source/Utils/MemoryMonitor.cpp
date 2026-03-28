@@ -142,12 +142,68 @@ namespace Spark
             }
         }
 
+        MemoryHealthStatus previousStatus = m_healthStatus;
         if (hasCritical)
             m_healthStatus = MemoryHealthStatus::Critical;
         else if (hasWarning)
             m_healthStatus = MemoryHealthStatus::Warning;
         else
             m_healthStatus = MemoryHealthStatus::Healthy;
+
+        // Fire pressure callbacks on transition to Warning or Critical
+        if (m_healthStatus != MemoryHealthStatus::Healthy && m_healthStatus != previousStatus)
+        {
+            InvokePressureCallbacks(m_healthStatus);
+        }
+    }
+
+    void MemoryMonitor::RegisterPressureCallback(const std::string& name, PressureCallback callback)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_pressureCallbacks[name] = std::move(callback);
+    }
+
+    void MemoryMonitor::UnregisterPressureCallback(const std::string& name)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_pressureCallbacks.erase(name);
+    }
+
+    void MemoryMonitor::InvokePressureCallbacks(MemoryHealthStatus status)
+    {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed =
+            std::chrono::duration_cast<std::chrono::duration<float>>(now - m_lastPressureCallbackTime).count();
+        if (elapsed < PRESSURE_CALLBACK_COOLDOWN)
+            return;
+        m_lastPressureCallbackTime = now;
+
+        // Copy callbacks under lock, invoke outside lock to avoid deadlocks
+        std::vector<std::pair<std::string, PressureCallback>> callbacksCopy;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            callbacksCopy.reserve(m_pressureCallbacks.size());
+            for (const auto& [name, cb] : m_pressureCallbacks)
+                callbacksCopy.emplace_back(name, cb);
+        }
+
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "[MemoryMonitor] Invoking %zu pressure callbacks (status: %s)",
+                       callbacksCopy.size(), status == MemoryHealthStatus::Critical ? "CRITICAL" : "WARNING");
+
+        for (const auto& [name, cb] : callbacksCopy)
+        {
+            try
+            {
+                cb(status);
+                SPARK_LOG_INFO(Spark::LogCategory::Core, "[MemoryMonitor] Pressure callback '%s' completed",
+                               name.c_str());
+            }
+            catch (const std::exception& ex)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "[MemoryMonitor] Pressure callback '%s' threw: %s",
+                                name.c_str(), ex.what());
+            }
+        }
     }
 
     void MemoryMonitor::CheckGrowthRate()
