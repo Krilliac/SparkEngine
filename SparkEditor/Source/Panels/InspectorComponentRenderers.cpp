@@ -1701,7 +1701,7 @@ namespace SparkEditor
     void InspectorPanel::RenderNavObstacleComponent()
     {
         RENDER_REFLECTED_COMPONENT(
-            ComponentType::NAV_OBSTACLE, ICON_FA_ROAD, "Nav Obstacle", NavObstacleData,
+            ComponentType::NAV_OBSTACLE, ICON_FA_ROUTE, "Nav Obstacle", NavObstacleData,
             FIELD_INT(NavObstacleData, shape, "Shape (0=Box,1=Cylinder)"),
             FIELD_VEC3(NavObstacleData, halfExtents, "Half Extents"), FIELD_FLOAT(NavObstacleData, radius, "Radius"),
             FIELD_FLOAT(NavObstacleData, height, "Height"), FIELD_BOOL(NavObstacleData, carveOnMove, "Carve On Move"));
@@ -1759,7 +1759,7 @@ namespace SparkEditor
     void InspectorPanel::RenderSpawnPointComponent()
     {
         RENDER_REFLECTED_COMPONENT(
-            ComponentType::SPAWN_POINT, ICON_FA_MAP_MARKER_ALT, "Spawn Point", SpawnPointData,
+            ComponentType::SPAWN_POINT, ICON_FA_LOCATION_ARROW, "Spawn Point", SpawnPointData,
             FIELD_STRING(SpawnPointData, spawnTag, "Spawn Tag"), FIELD_INT(SpawnPointData, teamID, "Team ID"),
             FIELD_FLOAT(SpawnPointData, spawnRadius, "Spawn Radius"),
             FIELD_FLOAT(SpawnPointData, respawnDelay, "Respawn Delay"),
