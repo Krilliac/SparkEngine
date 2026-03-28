@@ -45,6 +45,8 @@ namespace SparkEditor
         float autoSaveInterval = 30.0f;          ///< Seconds between auto-save of the current scene.
         int windowWidth = 1600;                  ///< Initial window width (pixels).
         int windowHeight = 900;                  ///< Initial window height (pixels).
+        bool testMode = false;                   ///< Skip project browser, auto-create test project.
+        int testFrameLimit = 0;                  ///< If >0, exit after this many frames (test mode).
     };
 
     /**

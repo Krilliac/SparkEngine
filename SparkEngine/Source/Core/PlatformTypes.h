@@ -17,6 +17,10 @@
 #include <cwchar>
 #include <cmath>
 
+#ifdef SPARK_SDL2_AVAILABLE
+#include <SDL.h>
+#endif
+
 // --- Basic Win32 types ---
 using BOOL = int;
 using BYTE = unsigned char;
@@ -254,19 +258,57 @@ inline unsigned long SparkGetCurrentThreadId()
 inline void OutputDebugStringA(const char*) {}
 inline void OutputDebugStringW(const wchar_t*) {}
 
-// --- MessageBox stub ---
+// --- MessageBox — SDL2 fallback on Linux, no-op otherwise ---
 #ifndef MB_ICONERROR
 #define MB_ICONERROR 0x10
 #endif
 #ifndef MB_OK
 #define MB_OK 0
 #endif
-inline int MessageBoxW(void*, const wchar_t*, const wchar_t*, unsigned int)
+#ifndef MB_YESNO
+#define MB_YESNO 0x04
+#endif
+inline int MessageBoxW(void*, const wchar_t* text, const wchar_t* caption, unsigned int type)
 {
+#ifdef SPARK_SDL2_AVAILABLE
+    // Convert wchar_t to char for SDL (simple truncation — fine for ASCII error messages)
+    char textBuf[512];
+    char captionBuf[128];
+    size_t i = 0;
+    if (text)
+        for (; text[i] && i < sizeof(textBuf) - 1; ++i)
+            textBuf[i] = static_cast<char>(text[i]);
+    textBuf[i] = '\0';
+    i = 0;
+    if (caption)
+        for (; caption[i] && i < sizeof(captionBuf) - 1; ++i)
+            captionBuf[i] = static_cast<char>(caption[i]);
+    captionBuf[i] = '\0';
+
+    Uint32 flags = SDL_MESSAGEBOX_INFORMATION;
+    if (type & MB_ICONERROR)
+        flags = SDL_MESSAGEBOX_ERROR;
+
+    SDL_ShowSimpleMessageBox(flags, captionBuf, textBuf, nullptr);
+#else
+    (void)text;
+    (void)caption;
+    (void)type;
+#endif
     return 0;
 }
-inline int MessageBoxA(void*, const char*, const char*, unsigned int)
+inline int MessageBoxA(void*, const char* text, const char* caption, unsigned int type)
 {
+#ifdef SPARK_SDL2_AVAILABLE
+    Uint32 flags = SDL_MESSAGEBOX_INFORMATION;
+    if (type & MB_ICONERROR)
+        flags = SDL_MESSAGEBOX_ERROR;
+    SDL_ShowSimpleMessageBox(flags, caption ? caption : "", text ? text : "", nullptr);
+#else
+    (void)text;
+    (void)caption;
+    (void)type;
+#endif
     return 0;
 }
 

@@ -132,6 +132,9 @@ int main(int argc, char* argv[])
     uint16_t collabPort = 27030;
     std::string collabServerName = "CollabServer";
 
+    bool testMode = false;
+    int testFrameLimit = 0; // 0 = run indefinitely
+
     // Check command line arguments
     for (int i = 1; i < argc; i++)
     {
@@ -150,6 +153,15 @@ int main(int argc, char* argv[])
         else if (strcmp(argv[i], "--collab-name") == 0 && i + 1 < argc)
         {
             collabServerName = argv[++i];
+        }
+        else if (strcmp(argv[i], "--test-mode") == 0)
+        {
+            testMode = true;
+            showDebugConsole = true;
+        }
+        else if (strcmp(argv[i], "--test-frames") == 0 && i + 1 < argc)
+        {
+            testFrameLimit = std::atoi(argv[++i]);
         }
     }
 
@@ -223,6 +235,8 @@ int main(int argc, char* argv[])
         config.startMaximized = false; // Don't start maximized in debug mode
         config.windowWidth = 1600;
         config.windowHeight = 900;
+        config.testMode = testMode;
+        config.testFrameLimit = testFrameLimit;
 
         console.LogInfo("Editor configuration prepared");
 

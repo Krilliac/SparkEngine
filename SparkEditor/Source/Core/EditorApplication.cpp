@@ -105,7 +105,7 @@ namespace SparkEditor
         console.LogInfo("Initializing EditorUI...");
         m_ui = std::make_unique<EditorUI>();
         if (!m_ui->Initialize(config))
-        { // Pass config parameter
+        {
             console.LogError("Failed to initialize EditorUI");
             return false;
         }
@@ -629,9 +629,20 @@ namespace SparkEditor
         console.LogInfo("Starting enhanced editor main loop...");
 
         auto lastTime = std::chrono::high_resolution_clock::now();
+        int frameCount = 0;
 
         while (m_isRunning)
         {
+            // Test mode frame limit
+            if (m_config.testFrameLimit > 0 && frameCount >= m_config.testFrameLimit)
+            {
+                std::cout << "[TEST] Frame limit reached (" << m_config.testFrameLimit << " frames). Exiting.\n"
+                          << std::flush;
+                m_isRunning = false;
+                break;
+            }
+            ++frameCount;
+
             // Calculate delta time
             auto currentTime = std::chrono::high_resolution_clock::now();
             float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();

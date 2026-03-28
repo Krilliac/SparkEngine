@@ -5,6 +5,9 @@ cmake_minimum_required(VERSION 3.25)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# SDL2 is built from the root CMakeLists.txt (section 7) via add_subdirectory.
+# The SDL2 target is available here if the submodule is present.
+
 # EnTT - Header only
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ECS/entt/single_include")
     add_library(entt INTERFACE)
@@ -39,10 +42,18 @@ if(EXISTS "${IMGUI_DIR}/imgui.cpp")
         message(STATUS "ThirdParty: Dear ImGui configured (Win32+DX11)")
     else()
         # Linux: SDL2 + OpenGL3 backends (ImGui ships its own GL loader)
-        find_package(SDL2 QUIET)
+        # SDL2 may already be set up from the submodule above, or try system
+        if(NOT TARGET SDL2::SDL2 AND NOT TARGET SDL2)
+            find_package(SDL2 QUIET)
+        endif()
         find_package(OpenGL QUIET)
 
-        if(SDL2_FOUND AND OpenGL_FOUND)
+        set(_imgui_has_sdl2 FALSE)
+        if(TARGET SDL2::SDL2 OR TARGET SDL2 OR SDL2_FOUND)
+            set(_imgui_has_sdl2 TRUE)
+        endif()
+
+        if(_imgui_has_sdl2 AND OpenGL_FOUND)
             add_library(imgui STATIC
                 ${IMGUI_CORE_SOURCES}
                 ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp

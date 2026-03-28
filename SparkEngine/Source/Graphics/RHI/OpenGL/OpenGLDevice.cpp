@@ -876,6 +876,28 @@ namespace Spark
 
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "EGL headless context created successfully");
 #elif defined(__linux__) && !defined(SPARK_EGL_SUPPORT)
+                // If an OpenGL context is already current (e.g. SDL2 created it), skip the GLX bootstrap.
+                // This is the normal case when running in SDL2 windowed mode — SDL2 creates the GL context
+                // and we just need to load GLAD and continue.
+                if (glXGetCurrentContext() != nullptr)
+                {
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                                   "Existing GLX context detected (SDL2) — skipping GLX bootstrap");
+                    m_glxDisplay = XOpenDisplay(nullptr);
+                    m_glxContext = glXGetCurrentContext();
+                    // Load GLAD using the existing context
+                    if (!gladLoadGL())
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GLAD loader failed");
+                        return false;
+                    }
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
+                                   reinterpret_cast<const char*>(glGetString(GL_VERSION)),
+                                   reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
+                                   reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+                    return true;
+                }
+
                 // GLX bootstrap — requires X11 display (use Xvfb for headless software rendering)
                 Display* bootstrapDpy = XOpenDisplay(nullptr);
                 if (!bootstrapDpy)
