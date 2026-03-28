@@ -187,6 +187,27 @@ add_executable(SparkTests
     TestFullEngineDiagnostics.cpp
     TestEngineLoadTest.cpp
     TestDebugUtilities.cpp
+    TestMemoryDebugger.cpp
+    TestMemoryMonitor.cpp
+    TestLogger.cpp
+    TestProfiler.cpp
+    TestStackTrace.cpp
+    TestJobSystem.cpp
+    TestOpaqueHandle.cpp
+    TestSparkError.cpp
+    TestCollisionSystem.cpp
+    TestNetworkSecurity.cpp
+    TestSubTickInput.cpp
+    TestBehaviorTreeNodes.cpp
+    TestAIBudgetLimiter.cpp
+    TestAIDirector.cpp
+    TestWorldOriginSystem.cpp
+    TestModSystem.cpp
+    TestReplaySystem.cpp
+    TestSceneGraph2D.cpp
+    TestDecalSystem.cpp
+    TestConnectionScopeFilter.cpp
+    TestNavMeshObstacles.cpp
     TestFaultIsolation.cpp
     TestVulkanLavapipe.cpp
     TestWARPRendering.cpp
