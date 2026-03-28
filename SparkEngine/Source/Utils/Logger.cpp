@@ -201,9 +201,33 @@ namespace Spark
         return LogLevel::Trace;
     }
 
+    void Logger::SetCategoryEnabled(LogCategory cat, bool enabled)
+    {
+        LogCategoryMask bit = LogCategoryBit(cat);
+        if (enabled)
+        {
+            m_categoryMask.fetch_or(bit, std::memory_order_relaxed);
+        }
+        else
+        {
+            m_categoryMask.fetch_and(~bit, std::memory_order_relaxed);
+        }
+    }
+
+    bool Logger::IsCategoryEnabled(LogCategory cat) const
+    {
+        return (m_categoryMask.load(std::memory_order_relaxed) & LogCategoryBit(cat)) != 0;
+    }
+
     bool Logger::ShouldLog(LogLevel level, LogCategory category) const
     {
-        // Check global level first (fast path)
+        // Check category bitmask first (fast path — entire category disabled)
+        if ((m_categoryMask.load(std::memory_order_relaxed) & LogCategoryBit(category)) == 0)
+        {
+            return false;
+        }
+
+        // Check global level
         if (level < m_globalLevel.load(std::memory_order_relaxed))
         {
             return false;
@@ -220,6 +244,28 @@ namespace Spark
         }
 
         return true;
+    }
+
+    // ============================================================================
+    // ApplyConfig — apply a logging configuration
+    // ============================================================================
+
+    void Logger::ApplyConfig(const Config& config)
+    {
+        SetGlobalLevel(config.globalLevel);
+        SetStackTraceLevel(config.stackTraceLevel);
+        SetCategoryMask(config.categoryMask);
+
+        for (size_t i = 0; i < static_cast<size_t>(LogCategory::Count); ++i)
+        {
+            LogLevel catLevel = config.categoryLevels[i];
+            // Trace means "no override — inherit global level"
+            if (catLevel == LogLevel::Trace && config.globalLevel != LogLevel::Trace)
+            {
+                catLevel = config.globalLevel;
+            }
+            SetCategoryLevel(static_cast<LogCategory>(i), catLevel);
+        }
     }
 
     // ============================================================================

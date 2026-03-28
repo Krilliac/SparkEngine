@@ -327,3 +327,134 @@ TEST(Logger_IsInitialized)
     logger.Shutdown();
     EXPECT_FALSE(logger.IsInitialized());
 }
+
+// =============================================================================
+// StringToLogLevel
+// =============================================================================
+
+TEST(Logger_StringToLogLevel)
+{
+    EXPECT_TRUE(Spark::StringToLogLevel("Trace") == Spark::LogLevel::Trace);
+    EXPECT_TRUE(Spark::StringToLogLevel("Debug") == Spark::LogLevel::Debug);
+    EXPECT_TRUE(Spark::StringToLogLevel("Info") == Spark::LogLevel::Info);
+    EXPECT_TRUE(Spark::StringToLogLevel("Warn") == Spark::LogLevel::Warn);
+    EXPECT_TRUE(Spark::StringToLogLevel("Error") == Spark::LogLevel::Error);
+    EXPECT_TRUE(Spark::StringToLogLevel("Fatal") == Spark::LogLevel::Fatal);
+    EXPECT_TRUE(Spark::StringToLogLevel("Off") == Spark::LogLevel::Off);
+
+    // Case-insensitive (first char)
+    EXPECT_TRUE(Spark::StringToLogLevel("trace") == Spark::LogLevel::Trace);
+    EXPECT_TRUE(Spark::StringToLogLevel("debug") == Spark::LogLevel::Debug);
+    EXPECT_TRUE(Spark::StringToLogLevel("info") == Spark::LogLevel::Info);
+    EXPECT_TRUE(Spark::StringToLogLevel("warn") == Spark::LogLevel::Warn);
+    EXPECT_TRUE(Spark::StringToLogLevel("error") == Spark::LogLevel::Error);
+    EXPECT_TRUE(Spark::StringToLogLevel("fatal") == Spark::LogLevel::Fatal);
+    EXPECT_TRUE(Spark::StringToLogLevel("off") == Spark::LogLevel::Off);
+
+    // Unknown string returns default
+    EXPECT_TRUE(Spark::StringToLogLevel("") == Spark::LogLevel::Info);
+    EXPECT_TRUE(Spark::StringToLogLevel("unknown") == Spark::LogLevel::Info);
+    EXPECT_TRUE(Spark::StringToLogLevel("", Spark::LogLevel::Warn) == Spark::LogLevel::Warn);
+}
+
+// =============================================================================
+// Category Bitmask
+// =============================================================================
+
+TEST(Logger_CategoryBitmask)
+{
+    auto& logger = Spark::Logger::Get();
+    logger.Initialize(false);
+    logger.SetGlobalLevel(Spark::LogLevel::Trace);
+
+    // All categories enabled by default
+    EXPECT_EQ(logger.GetCategoryMask(), Spark::kLogCategoryAll);
+    EXPECT_TRUE(logger.IsCategoryEnabled(Spark::LogCategory::Core));
+    EXPECT_TRUE(logger.IsCategoryEnabled(Spark::LogCategory::Graphics));
+
+    // Disable Graphics via bitmask
+    logger.SetCategoryEnabled(Spark::LogCategory::Graphics, false);
+    EXPECT_FALSE(logger.IsCategoryEnabled(Spark::LogCategory::Graphics));
+    EXPECT_TRUE(logger.IsCategoryEnabled(Spark::LogCategory::Core));
+
+    // Messages to disabled category should be filtered
+    EXPECT_FALSE(logger.ShouldLog(Spark::LogLevel::Error, Spark::LogCategory::Graphics));
+    EXPECT_TRUE(logger.ShouldLog(Spark::LogLevel::Error, Spark::LogCategory::Core));
+
+    // Re-enable
+    logger.SetCategoryEnabled(Spark::LogCategory::Graphics, true);
+    EXPECT_TRUE(logger.IsCategoryEnabled(Spark::LogCategory::Graphics));
+    EXPECT_TRUE(logger.ShouldLog(Spark::LogLevel::Error, Spark::LogCategory::Graphics));
+
+    // Set entire mask
+    logger.SetCategoryMask(Spark::kLogCategoryNone);
+    EXPECT_FALSE(logger.ShouldLog(Spark::LogLevel::Fatal, Spark::LogCategory::Core));
+    EXPECT_FALSE(logger.ShouldLog(Spark::LogLevel::Fatal, Spark::LogCategory::Graphics));
+
+    // Restore
+    logger.SetCategoryMask(Spark::kLogCategoryAll);
+    logger.Shutdown();
+}
+
+TEST(Logger_CategoryBitHelper)
+{
+    // Verify each category maps to the correct bit position
+    EXPECT_EQ(Spark::LogCategoryBit(Spark::LogCategory::Core), 1u << 0);
+    EXPECT_EQ(Spark::LogCategoryBit(Spark::LogCategory::Graphics), 1u << 1);
+    EXPECT_EQ(Spark::LogCategoryBit(Spark::LogCategory::Physics), 1u << 2);
+    EXPECT_EQ(Spark::LogCategoryBit(Spark::LogCategory::Audio), 1u << 3);
+    EXPECT_EQ(Spark::LogCategoryBit(Spark::LogCategory::Editor), 1u << 14);
+    EXPECT_EQ(Spark::LogCategoryBit(Spark::LogCategory::Game), 1u << 15);
+}
+
+// =============================================================================
+// LoadFromConfig
+// =============================================================================
+
+TEST(Logger_ApplyConfig)
+{
+    auto& logger = Spark::Logger::Get();
+    logger.Initialize(false);
+
+    Spark::Logger::Config cfg;
+    cfg.globalLevel = Spark::LogLevel::Warn;
+    cfg.stackTraceLevel = Spark::LogLevel::Fatal;
+    cfg.categoryMask =
+        Spark::LogCategoryBit(Spark::LogCategory::Core) | Spark::LogCategoryBit(Spark::LogCategory::Graphics);
+
+    // Graphics overridden to Error, Core left at Trace (inherits global Warn)
+    cfg.categoryLevels[static_cast<size_t>(Spark::LogCategory::Graphics)] = Spark::LogLevel::Error;
+
+    logger.ApplyConfig(cfg);
+
+    // Verify global level
+    EXPECT_TRUE(logger.GetGlobalLevel() == Spark::LogLevel::Warn);
+
+    // Verify stack trace level
+    EXPECT_TRUE(logger.GetStackTraceLevel() == Spark::LogLevel::Fatal);
+
+    // Verify category mask — only Core and Graphics enabled
+    EXPECT_TRUE(logger.IsCategoryEnabled(Spark::LogCategory::Core));
+    EXPECT_TRUE(logger.IsCategoryEnabled(Spark::LogCategory::Graphics));
+    EXPECT_FALSE(logger.IsCategoryEnabled(Spark::LogCategory::Physics));
+
+    // Verify per-category levels
+    EXPECT_TRUE(logger.GetCategoryLevel(Spark::LogCategory::Graphics) == Spark::LogLevel::Error);
+    EXPECT_TRUE(logger.GetCategoryLevel(Spark::LogCategory::Core) == Spark::LogLevel::Warn);
+
+    // Physics is masked off — ShouldLog returns false regardless of level
+    EXPECT_FALSE(logger.ShouldLog(Spark::LogLevel::Fatal, Spark::LogCategory::Physics));
+
+    // Core logs Warn and above
+    EXPECT_FALSE(logger.ShouldLog(Spark::LogLevel::Info, Spark::LogCategory::Core));
+    EXPECT_TRUE(logger.ShouldLog(Spark::LogLevel::Warn, Spark::LogCategory::Core));
+
+    // Graphics logs Error and above
+    EXPECT_FALSE(logger.ShouldLog(Spark::LogLevel::Warn, Spark::LogCategory::Graphics));
+    EXPECT_TRUE(logger.ShouldLog(Spark::LogLevel::Error, Spark::LogCategory::Graphics));
+
+    // Restore defaults
+    Spark::Logger::Config defaults;
+    logger.ApplyConfig(defaults);
+    logger.Shutdown();
+}

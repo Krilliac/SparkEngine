@@ -233,6 +233,49 @@ static void InitDebugSystems()
     logger.Initialize(/*enableAsync=*/false);
     logger.AddSink(std::make_unique<Spark::StderrSink>());
 
+    // Apply logging configuration from settings.ini [Logging] section
+    {
+        const auto& logCfg = EngineSettings::GetInstance().Logging();
+        Spark::Logger::Config cfg;
+        cfg.globalLevel = Spark::StringToLogLevel(logCfg.globalLevel, Spark::LogLevel::Info);
+        cfg.stackTraceLevel = Spark::StringToLogLevel(logCfg.stackTraceLevel, Spark::LogLevel::Error);
+        cfg.categoryMask = logCfg.categoryMask;
+
+        // Map per-category string overrides to LogLevel values
+        struct CatOverride
+        {
+            Spark::LogCategory cat;
+            const std::string& levelStr;
+        };
+        const CatOverride overrides[] = {
+            {Spark::LogCategory::Core, logCfg.coreLevel},
+            {Spark::LogCategory::Graphics, logCfg.graphicsLevel},
+            {Spark::LogCategory::Physics, logCfg.physicsLevel},
+            {Spark::LogCategory::Audio, logCfg.audioLevel},
+            {Spark::LogCategory::AI, logCfg.aiLevel},
+            {Spark::LogCategory::Animation, logCfg.animationLevel},
+            {Spark::LogCategory::ECS, logCfg.ecsLevel},
+            {Spark::LogCategory::Network, logCfg.networkLevel},
+            {Spark::LogCategory::Input, logCfg.inputLevel},
+            {Spark::LogCategory::Scripting, logCfg.scriptingLevel},
+            {Spark::LogCategory::Scene, logCfg.sceneLevel},
+            {Spark::LogCategory::Save, logCfg.saveLevel},
+            {Spark::LogCategory::Cinematic, logCfg.cinematicLevel},
+            {Spark::LogCategory::Procedural, logCfg.proceduralLevel},
+            {Spark::LogCategory::Editor, logCfg.editorLevel},
+            {Spark::LogCategory::Game, logCfg.gameLevel},
+        };
+        for (const auto& [cat, str] : overrides)
+        {
+            if (!str.empty())
+            {
+                auto idx = static_cast<size_t>(cat);
+                cfg.categoryLevels[idx] = Spark::StringToLogLevel(str, cfg.globalLevel);
+            }
+        }
+        logger.ApplyConfig(cfg);
+    }
+
     Spark::FileLogger::GetInstance().Initialize("Logs");
     Spark::ChromeTracing::GetInstance().Start();
 #ifndef NDEBUG

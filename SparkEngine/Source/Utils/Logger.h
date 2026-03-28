@@ -67,6 +67,39 @@ namespace Spark
     };
 
     /**
+     * @brief Convert a string to LogLevel enum (case-insensitive)
+     * @return The matching LogLevel, or defaultLevel if the string is unrecognized
+     */
+    inline LogLevel StringToLogLevel(std::string_view str, LogLevel defaultLevel = LogLevel::Info) noexcept
+    {
+        if (str.empty())
+            return defaultLevel;
+        // Case-insensitive first character check for fast matching
+        char c = str[0];
+        if (c >= 'a')
+            c -= 32; // toupper for ASCII lowercase
+        switch (c)
+        {
+        case 'T':
+            return LogLevel::Trace;
+        case 'D':
+            return LogLevel::Debug;
+        case 'I':
+            return LogLevel::Info;
+        case 'W':
+            return LogLevel::Warn;
+        case 'E':
+            return LogLevel::Error;
+        case 'F':
+            return LogLevel::Fatal;
+        case 'O':
+            return LogLevel::Off;
+        default:
+            return defaultLevel;
+        }
+    }
+
+    /**
      * @brief Convert LogLevel to string representation
      */
     inline std::string_view LogLevelToString(LogLevel level) noexcept
@@ -114,6 +147,22 @@ namespace Spark
         Game,
         Count
     };
+
+    /// Bitmask type for enabling/disabling entire log categories.
+    /// Each bit corresponds to a LogCategory (bit 0 = Core, bit 1 = Graphics, etc.)
+    using LogCategoryMask = uint32_t;
+
+    /// All categories enabled (default)
+    inline constexpr LogCategoryMask kLogCategoryAll = 0xFFFFFFFF;
+
+    /// No categories enabled
+    inline constexpr LogCategoryMask kLogCategoryNone = 0;
+
+    /// Get the bitmask bit for a single category
+    inline constexpr LogCategoryMask LogCategoryBit(LogCategory cat) noexcept
+    {
+        return static_cast<LogCategoryMask>(1u) << static_cast<uint8_t>(cat);
+    }
 
     /**
      * @brief Convert LogCategory to string representation
@@ -402,6 +451,29 @@ namespace Spark
         LogLevel GetStackTraceLevel() const { return m_stackTraceLevel.load(std::memory_order_relaxed); }
 
         /**
+         * @brief Set the category enable bitmask
+         *
+         * Each bit corresponds to a LogCategory. Only categories with their bit
+         * set will produce output. Default is kLogCategoryAll (all enabled).
+         */
+        void SetCategoryMask(LogCategoryMask mask) { m_categoryMask.store(mask, std::memory_order_relaxed); }
+
+        /**
+         * @brief Get the current category enable bitmask
+         */
+        LogCategoryMask GetCategoryMask() const { return m_categoryMask.load(std::memory_order_relaxed); }
+
+        /**
+         * @brief Enable or disable a single category in the bitmask
+         */
+        void SetCategoryEnabled(LogCategory cat, bool enabled);
+
+        /**
+         * @brief Check if a category is enabled in the bitmask
+         */
+        bool IsCategoryEnabled(LogCategory cat) const;
+
+        /**
          * @brief Check if a message at the given level and category would be logged
          */
         bool ShouldLog(LogLevel level, LogCategory category) const;
@@ -434,6 +506,29 @@ namespace Spark
 
         bool IsInitialized() const { return m_initialized.load(std::memory_order_acquire); }
 
+        /**
+         * @brief Configuration struct for loading logging settings from config files
+         */
+        struct Config
+        {
+            LogLevel globalLevel = LogLevel::Info;
+            LogLevel stackTraceLevel = LogLevel::Error;
+            LogCategoryMask categoryMask = kLogCategoryAll;
+            /// Per-category level overrides. LogLevel::Trace means "use global level".
+            std::array<LogLevel, static_cast<size_t>(LogCategory::Count)> categoryLevels{};
+
+            Config() { categoryLevels.fill(LogLevel::Trace); }
+        };
+
+        /**
+         * @brief Apply a logging configuration
+         *
+         * Sets global level, per-category levels, category bitmask, and
+         * stack trace threshold from the given Config struct. Categories whose
+         * level is set to Trace in the Config inherit the global level.
+         */
+        void ApplyConfig(const Config& config);
+
       private:
         Logger() = default;
         ~Logger() { Shutdown(); }
@@ -459,7 +554,8 @@ namespace Spark
         std::atomic<bool> m_initialized{false};
         std::atomic<bool> m_asyncEnabled{false};
         std::atomic<LogLevel> m_globalLevel{LogLevel::Trace};
-        std::atomic<LogLevel> m_stackTraceLevel{LogLevel::Error}; ///< Auto-capture threshold
+        std::atomic<LogLevel> m_stackTraceLevel{LogLevel::Error};     ///< Auto-capture threshold
+        std::atomic<LogCategoryMask> m_categoryMask{kLogCategoryAll}; ///< Category enable bitmask
 
         // Per-category filtering
         std::array<std::atomic<LogLevel>, static_cast<size_t>(LogCategory::Count)> m_categoryLevels;
