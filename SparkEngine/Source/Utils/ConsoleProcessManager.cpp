@@ -22,7 +22,7 @@
 #include <algorithm>
 #include <cstring>
 
-#ifdef SPARK_PLATFORM_LINUX
+#if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
 #include <signal.h>
 #include <unistd.h>
 #endif

@@ -35,26 +35,33 @@
 #pragma comment(lib, "dbghelp.lib")
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "dxgi.lib")
-#elif defined(SPARK_PLATFORM_LINUX)
+#elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
 #include <signal.h>
 #include <unistd.h>
-#include <sys/syscall.h>
 #include <execinfo.h>
 #include <cxxabi.h>
 #include <sys/utsname.h>
-#include <sys/sysinfo.h>
 #include <sys/resource.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <fstream>
 #include <climits>
 #include <cstdlib>
+#ifdef SPARK_PLATFORM_LINUX
+#include <sys/syscall.h>
+#include <sys/sysinfo.h>
+#endif
+#ifdef SPARK_PLATFORM_MACOS
+#include <sys/sysctl.h>
+#include <mach/mach.h>
+#include <pthread.h>
+#endif
 #endif
 
 static CrashConfig g_cfg;
 static std::mutex g_lock;
 static bool g_triggerCrashOnAssert = false;
-#ifdef SPARK_PLATFORM_LINUX
+#if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
 static volatile sig_atomic_t g_inSignalHandler = 0;
 #endif
 
@@ -952,10 +959,10 @@ static bool Upload(const std::string& url, const std::wstring& file, const std::
 #endif
 
 // ============================================================================
-// LINUX IMPLEMENTATION
+// LINUX / MACOS IMPLEMENTATION (POSIX)
 // ============================================================================
 
-#elif defined(SPARK_PLATFORM_LINUX)
+#elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
 
 static std::string CaptureStackTraceString()
 {
@@ -1011,6 +1018,7 @@ static std::string LinuxSystemInfo()
         s << "OS: " << un.sysname << " " << un.release << " " << un.machine << "\n";
     }
 
+#ifdef SPARK_PLATFORM_LINUX
     struct sysinfo si;
     if (sysinfo(&si) == 0)
     {
@@ -1020,8 +1028,27 @@ static std::string LinuxSystemInfo()
         s << "RAM Avail : " << (si.freeram * si.mem_unit >> 20) << " MiB\n";
         s << "Uptime    : " << si.uptime << " seconds\n";
     }
+#elif defined(SPARK_PLATFORM_MACOS)
+    {
+        long nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+        s << "CPU Cores : " << nprocs << "\n";
+        int64_t memSize = 0;
+        size_t len = sizeof(memSize);
+        if (sysctlbyname("hw.memsize", &memSize, &len, nullptr, 0) == 0)
+            s << "RAM Total : " << (memSize >> 20) << " MiB\n";
+        mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+        vm_statistics64_data_t vmstat;
+        if (host_statistics64(mach_host_self(), HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&vmstat), &count) ==
+            KERN_SUCCESS)
+        {
+            int64_t pageSize = sysconf(_SC_PAGESIZE);
+            int64_t freePages = vmstat.free_count + vmstat.inactive_count;
+            s << "RAM Avail : " << (freePages * pageSize >> 20) << " MiB\n";
+        }
+    }
+#endif
 
-    // Try to read GPU info from /proc/driver/nvidia or lspci
+    // Try to read GPU info from /proc/driver/nvidia or lspci (Linux only)
     std::ifstream gpuFile("/proc/driver/nvidia/gpus/0/information");
     if (gpuFile.is_open())
     {
@@ -1158,11 +1185,15 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
 
         std::ostringstream log;
         log << "================================================================\n";
-        log << "           SPARK ENGINE CRASH REPORT (Linux)\n";
+        log << "           SPARK ENGINE CRASH REPORT (POSIX)\n";
         log << "================================================================\n\n";
         log << "Timestamp  : " << stamp << "\n";
         log << "Process ID : " << getpid() << "\n";
+#ifdef SPARK_PLATFORM_LINUX
         log << "Thread ID  : " << static_cast<unsigned long>(syscall(SYS_gettid)) << "\n\n";
+#else
+        log << "Thread ID  : " << pthread_mach_thread_np(pthread_self()) << "\n\n";
+#endif
 
         log << "*** CRASH DETECTED ***\n";
         log << "Signal     : " << sig << " - " << sigName << "\n";

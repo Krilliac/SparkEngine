@@ -131,8 +131,8 @@ namespace Spark
         WinHandle m_stdInWrite;    ///< Write end — engine writes log messages here.
         WinHandle m_stdOutRead;    ///< Read end — engine reads commands from child's stdout.
         WinHandle m_stdOutWrite;   ///< Write end of the pipe connected to child's stdout.
-#elif defined(SPARK_PLATFORM_LINUX)
-        // Linux process/pipe file descriptors for SparkConsole subprocess
+#elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+        // POSIX process/pipe file descriptors for SparkConsole subprocess
         pid_t m_childPid = -1;             ///< PID of the child console process (-1 = not launched).
         int m_pipeToChild[2] = {-1, -1};   ///< [0]=read, [1]=write — engine writes to child stdin.
         int m_pipeFromChild[2] = {-1, -1}; ///< [0]=read, [1]=write — engine reads from child stdout.

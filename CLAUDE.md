@@ -12,7 +12,7 @@ SparkEngine is a C++23 open-source 3D game engine (with C++26 forward-compatibil
 - **Networking**: UDP client/server, AreaServer/WorldServer architecture (HeroEngine-inspired)
 - **Large worlds**: Floating-point origin rebasing, seamless area streaming
 - **Headless/Software rendering**: NullRHIDevice fallback (no GPU) or full CPU rendering via OpenGL + Mesa llvmpipe
-- **Primary platform**: Windows 10+ (MSVC); Linux/macOS are experimental
+- **Primary platform**: Windows 10+ (MSVC); Linux/macOS are experimental (macOS has CI job + CMake presets)
 
 ## Build
 
@@ -20,6 +20,7 @@ SparkEngine is a C++23 open-source 3D game engine (with C++26 forward-compatibil
 # Generate (pick one)
 cmake --preset windows-release       # Windows MSVC
 cmake --preset linux-gcc-release     # Linux GCC
+cmake --preset macos-release         # macOS Apple Clang (experimental)
 
 # Build
 cmake --build build --config Release
@@ -523,6 +524,7 @@ ctest --test-dir build -C Release --output-on-failure
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
 | `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `continue-on-error`, D3D11/D3D12 on Linux |
+| `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error`, SDL2 + OpenGL |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
 | `todo-count` | ubuntu-24.04 | — | — | threshold: 20 |
@@ -532,7 +534,7 @@ ctest --test-dir build -C Release --output-on-failure
 - **Never** consider a PR done until `gh pr checks` shows all required checks passing.
 - If a check fails, download the failed run logs with `gh run view <ID> --log-failed`, diagnose, fix locally, push, and re-poll.
 - For Windows-only failures that cannot be reproduced on Linux, inspect the CI logs carefully and fix based on MSVC-specific diagnostics (e.g., `/W4` warnings, MSVC type conversion rules, Windows SDK headers).
-- The `build-windows-vs2026`, `build-linux-mingw-wine`, and `clang-tidy` jobs use `continue-on-error` — failures there are warnings, not blockers.
+- The `build-windows-vs2026`, `build-linux-mingw-wine`, `build-macos`, and `clang-tidy` jobs use `continue-on-error` — failures there are warnings, not blockers.
 
 ## Documentation generation
 

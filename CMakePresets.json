@@ -215,6 +215,51 @@
             }
         },
         {
+            "name": "macos-debug",
+            "displayName": "macOS Debug (Apple Clang)",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_VULKAN": "ON",
+                "ENABLE_OPENGL": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "macos-release",
+            "displayName": "macOS Release (Apple Clang)",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_VULKAN": "ON",
+                "ENABLE_OPENGL": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "macos-metal",
+            "displayName": "macOS Release with Metal (Apple Clang)",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_METAL": "ON",
+                "ENABLE_VULKAN": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
             "name": "minimal",
             "displayName": "Minimal Build (core only)",
             "inherits": "default",
@@ -272,6 +317,18 @@
         {
             "name": "linux-shipping",
             "configurePreset": "linux-shipping"
+        },
+        {
+            "name": "macos-debug",
+            "configurePreset": "macos-debug"
+        },
+        {
+            "name": "macos-release",
+            "configurePreset": "macos-release"
+        },
+        {
+            "name": "macos-metal",
+            "configurePreset": "macos-metal"
         },
         {
             "name": "linux-mingw-release",

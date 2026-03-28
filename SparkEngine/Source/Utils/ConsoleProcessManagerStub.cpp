@@ -8,7 +8,7 @@
 
 #include "Core/Platform.h"
 
-#if !defined(SPARK_PLATFORM_WINDOWS) && !defined(SPARK_PLATFORM_LINUX)
+#if !defined(SPARK_PLATFORM_WINDOWS) && !defined(SPARK_PLATFORM_LINUX) && !defined(SPARK_PLATFORM_MACOS)
 
 #include "ConsoleProcessManager.h"
 #include <iostream>

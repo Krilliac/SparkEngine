@@ -1000,6 +1000,17 @@ if(SPARK_METAL_AVAILABLE)
     message(STATUS "SparkEngine: Metal backend ENABLED")
 endif()
 
+# --- macOS platform frameworks and rpath ---
+if(APPLE)
+    # Cocoa is needed for windowing when SDL2 is not available
+    target_link_libraries(SparkEngineLib PUBLIC "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
+    # Set rpath for .dylib game modules and shared libraries
+    set(CMAKE_MACOSX_RPATH ON)
+    set(CMAKE_INSTALL_RPATH "@executable_path;@executable_path/../lib")
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+    message(STATUS "SparkEngine: macOS frameworks linked (Cocoa, IOKit, CoreVideo)")
+endif()
+
 # --- Hybrid Ray Tracing ---
 if(ENABLE_HYBRID_RT)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HYBRID_RT=1)

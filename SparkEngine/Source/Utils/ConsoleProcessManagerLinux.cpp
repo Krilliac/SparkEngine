@@ -1,14 +1,14 @@
 /**
  * @file ConsoleProcessManagerLinux.cpp
- * @brief Linux implementation of ConsoleProcessManager
+ * @brief Linux/macOS implementation of ConsoleProcessManager
  *
  * Uses fork/exec, POSIX pipes, and poll() for communication with
- * the SparkConsole subprocess.
+ * the SparkConsole subprocess. macOS shares the same POSIX APIs.
  */
 
 #include "Core/Platform.h"
 
-#ifdef SPARK_PLATFORM_LINUX
+#if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
 
 #include "ConsoleProcessManager.h"
 #include "Utils/Assert.h"
@@ -328,4 +328,4 @@ namespace Spark
 
 } // namespace Spark
 
-#endif // SPARK_PLATFORM_LINUX
+#endif // SPARK_PLATFORM_LINUX || SPARK_PLATFORM_MACOS
