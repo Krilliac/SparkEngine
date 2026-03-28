@@ -11,6 +11,7 @@ SparkEngine is a C++23 open-source 3D game engine (with C++26 forward-compatibil
 - **Editor**: Dear ImGui (with collaborative multi-user editing)
 - **Networking**: UDP client/server, AreaServer/WorldServer architecture (HeroEngine-inspired)
 - **Large worlds**: Floating-point origin rebasing, seamless area streaming
+- **Headless/Software rendering**: NullRHIDevice fallback (no GPU) or full CPU rendering via OpenGL + Mesa llvmpipe
 - **Primary platform**: Windows 10+ (MSVC); Linux/macOS are experimental
 
 ## Build
@@ -579,6 +580,9 @@ These are confirmed bloat problems discovered during audit. They must be fixed b
 - Cross-platform types live in `Core/Platform.h` (DirectXMath stubs on Linux)
 - Networking is enabled in default builds (`ENABLE_NETWORKING=ON`)
 - VR framework exists (`SparkEngine/Source/Engine/VR/`) — OpenXR-ready stub, wired into engine init/update loop. Requires OpenXR SDK for actual VR hardware. DXR raytracing is optional (`ENABLE_DXR=OFF` by default); DLSS/FSR are not implemented
+- **GLAD** (OpenGL loader) is bundled in `ThirdParty/glad/` (GL 4.6 Core). Auto-detected by CMake.
+- **NullRHIDevice** automatically activates when no GPU backend is available — engine continues in headless mode
+- **Software rendering**: OpenGL backend + Mesa llvmpipe enables full CPU rendering. Requires `DISPLAY` (Xvfb works) and `LIBGL_ALWAYS_SOFTWARE=1`
 - `.clang-format` enforces Microsoft-based style (Allman braces, 120-col, 4-space indent)
 - `.clang-tidy` checks for bugprone, modernize, performance, and readability issues
 - Doxygen config lives in `docs/Doxyfile.txt`; wiki pages in `wiki/`

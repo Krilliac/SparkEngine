@@ -145,12 +145,13 @@ namespace Spark
             m_windowHandle = windowHandle;
             m_width = width;
             m_height = height;
+            m_headless = false;
 
             // Auto-select backend if requested
             if (backend == GraphicsBackend::Auto)
                 backend = SelectBestBackend();
 
-            // Create the device via factory
+            // Create the device via factory (may return NullRHIDevice for None)
             m_device = CreateDevice(backend);
             if (!m_device)
                 return false;
@@ -166,6 +167,18 @@ namespace Spark
             {
                 m_device.reset();
                 return false;
+            }
+
+            // Headless path: NullRHIDevice can't create a swap chain or depth buffer,
+            // but the device itself is valid for non-rendering work (ECS, physics, etc.)
+            if (m_device->GetBackendType() == GraphicsBackend::None)
+            {
+                m_headless = true;
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                               "RHIBridge initialized in headless mode (NullRHIDevice) — no swap chain or "
+                               "depth buffer");
+                m_initialized = true;
+                return true;
             }
 
             // Create swap chain

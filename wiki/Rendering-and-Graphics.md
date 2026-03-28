@@ -31,11 +31,11 @@ SparkEngine's rendering system is built on DirectX 11 with experimental Vulkan a
 ├──────────────────────────────────────────────────────────────────────┤
 │                     RHI Abstraction Layer                            │
 │  IRHIDevice | IRHICommandList | IRHISwapChain                        │
-│  D3D11Device | VulkanDevice | OpenGLDevice                           │
+│  D3D11Device | VulkanDevice | OpenGLDevice | NullRHIDevice           │
 └──────────────────────────────────────────────────────────────────────┘
-         │                    │                    │
-         ▼                    ▼                    ▼
-   DirectX 11 API      Vulkan API (exp.)    OpenGL API (exp.)
+         │                    │                    │              │
+         ▼                    ▼                    ▼              ▼
+   DirectX 11 API      Vulkan API (exp.)  OpenGL API (exp.)  No-op (headless)
 ```
 
 ### Key Source Files
@@ -648,10 +648,52 @@ shader_reload              # Hot-reload all shaders
 
 ---
 
+## Headless Mode and Software Rendering
+
+The engine supports two levels of GPU-less operation:
+
+### NullRHIDevice (Headless -- No Rendering)
+
+When no GPU backend is available, the RHI automatically falls back to `NullRHIDevice`. This provides a fully functional engine without any rendering:
+
+- All `IRHIDevice` methods are implemented as no-ops
+- Resource creation calls return `nullptr` but track allocation statistics
+- Frame lifecycle (`BeginFrame`/`EndFrame`) works normally
+- `RHIBridge::IsHeadless()` returns `true`
+- All non-rendering subsystems work: ECS, physics, AI, audio, networking, scripting
+
+**Use cases:** Dedicated servers, CI/CD test pipelines, cloud batch processing.
+
+### Software Rendering via OpenGL + Mesa llvmpipe
+
+For environments that need **real pixel output** without a GPU, the OpenGL backend renders entirely on CPU using Mesa's llvmpipe software rasterizer:
+
+```bash
+# 1. Start a virtual X11 display (one-time, or use an existing display)
+Xvfb :99 -screen 0 1920x1080x24 &
+
+# 2. Run the engine with software rendering
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
+```
+
+**Capabilities in software mode:**
+- Full OpenGL 4.5 Core Profile (Mesa 25.x)
+- Real buffer, texture, shader, and pipeline creation
+- GLSL shader compilation via LLVM JIT
+- FBO-backed off-screen rendering
+- All post-processing effects
+- Runs on any CPU with AVX2+ (llvmpipe uses SIMD)
+
+**Source:** `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp` (GLX bootstrap, EGL headless path)
+**Dependencies:** GLAD (bundled in `ThirdParty/glad/`), Mesa (system), X11 (system)
+
+---
+
 ## Error Handling
 
 - `GraphicsEngine::Initialize()` returns `HRESULT`. Check with `FAILED()` macro.
 - Device creation validates feature level support (D3D_FEATURE_LEVEL_11_0 minimum).
+- When no GPU backend is available, `RHIFactory::CreateDevice()` returns a `NullRHIDevice` instead of `nullptr` -- the engine continues in headless mode rather than crashing.
 - Render target creation validates format support and MSAA sample count.
 - Material loading returns `nullptr` for missing files (falls back to error material with magenta color).
 - Texture streaming failures are logged and fall back to default white/black textures.

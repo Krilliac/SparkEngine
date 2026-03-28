@@ -454,7 +454,7 @@ Both approaches can run without a display, but they differ in how they achieve i
 
 | Aspect | Game Module | Built-in Server |
 |--------|-------------|-----------------|
-| **Graphics** | Disabled at runtime (`-headless` flag) | Omitted at compile time |
+| **Graphics** | Disabled at runtime (`-headless` flag) -- auto-falls back to `NullRHIDevice` | Omitted at compile time |
 | **Audio** | Disabled at runtime | Omitted at compile time |
 | **Input** | Disabled at runtime | Omitted at compile time |
 | **Physics** | Active | Active |

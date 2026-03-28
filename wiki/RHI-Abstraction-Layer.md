@@ -89,6 +89,7 @@ Backend inclusion is controlled by preprocessor defines and platform detection:
 - **Vulkan** -- available when `SPARK_VULKAN_SUPPORT` is defined at CMake configure time.
 - **OpenGL** -- available when `SPARK_OPENGL_SUPPORT` is defined at CMake configure time.
 - **Metal** -- defined in the `GraphicsBackend` enum but requires the Metal backend subdirectory (macOS experimental).
+- **None (NullRHIDevice)** -- always available. Automatic fallback when no GPU backend can be created. Used for headless servers, CI pipelines, and GPU-less environments.
 
 ---
 
@@ -97,9 +98,37 @@ Backend inclusion is controlled by preprocessor defines and platform detection:
 When `GraphicsBackend::Auto` is passed to `CreateDevice()`, the factory calls `GetRecommendedBackend()` which applies the following priority:
 
 1. **Windows**: D3D11 (stable, fully featured).
-2. **Linux**: Vulkan (if `SPARK_VULKAN_SUPPORT` is enabled).
+2. **Linux**: Vulkan (if `SPARK_VULKAN_SUPPORT` is enabled), then OpenGL.
 3. **Fallback**: the first backend returned by `DetectAvailableBackends()`.
-4. **No backend**: returns `GraphicsBackend::None` and the engine runs without rendering.
+4. **No backend**: returns `GraphicsBackend::None` and the factory creates a `NullRHIDevice` -- a no-op backend that implements the full `IRHIDevice` interface without GPU interaction.
+
+### Automatic Fallback to NullRHIDevice
+
+When `GraphicsBackend::None` is resolved (no GPU backends compiled or available), `RHIFactory::CreateDevice()` returns a `NullRHIDevice` instead of `nullptr`. `RHIBridge::Initialize()` detects this and enters **headless mode**, skipping swap chain and depth buffer creation:
+
+```cpp
+// RHIBridge automatically enters headless mode when NullRHIDevice is active
+RHIBridge bridge;
+bridge.Initialize(nullptr, 800, 600, GraphicsBackend::Auto);
+if (bridge.IsHeadless()) {
+    // No swap chain, no depth buffer, but device is valid
+    // ECS, physics, AI, audio, networking all work normally
+}
+```
+
+### Software Rendering via OpenGL + llvmpipe
+
+On Linux, the OpenGL backend can render entirely on CPU using Mesa's **llvmpipe** software rasterizer (LLVM JIT-compiled). This provides real GL 4.5 rendering without a GPU:
+
+```bash
+# Start a virtual display (if no physical display)
+Xvfb :99 -screen 0 1024x768x24 &
+
+# Run with CPU-based software rendering
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
+```
+
+The OpenGL backend creates a GLX PBuffer context on Linux and uses FBO-backed swap chains for off-screen rendering. All buffer, texture, shader, and pipeline creation works identically to GPU-accelerated rendering.
 
 ---
 
@@ -361,8 +390,9 @@ The `RenderGraphBuilder` integrates with the RHI through `RHIAdapter`, so all GP
 | **DirectX 11** | Windows | Production | `_WIN32` (automatic) | Primary backend. Fully featured. Always available on Windows builds. |
 | **DirectX 12** | Windows 10+ | Production | `_WIN32` (automatic) | Supports advanced features (mesh shaders, ray tracing, VRS). See [D3D12 Backend](D3D12-Backend). |
 | **Vulkan** | Windows, Linux, macOS (MoltenVK) | Experimental | `SPARK_VULKAN_SUPPORT` | Cross-platform. Requires Vulkan SDK at build time. |
-| **OpenGL** | Windows, Linux | Experimental | `SPARK_OPENGL_SUPPORT` | Fallback for older hardware. Basic keyword-level HLSL-to-GLSL translation. |
+| **OpenGL** | Windows, Linux | Experimental | `SPARK_OPENGL_SUPPORT` | GL 4.6 Core Profile, DSA, SPIR-V support. CPU software rendering via Mesa llvmpipe. HLSL-to-GLSL translation. |
 | **Metal** | macOS | Experimental | N/A (planned) | Enum value exists; backend subdirectory is stubbed. |
+| **None (Null)** | All | Production | Always available | `NullRHIDevice` -- no-op backend for headless servers, CI, and GPU-less environments. Tracks resource creation statistics. |
 
 ---
 

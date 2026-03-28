@@ -98,7 +98,7 @@ Build artifacts from the most recent CI run on the `Working` branch. These are p
 
 ### Rendering
 
-DirectX 11 with multiple render paths (forward, deferred, forward+, clustered). PBR metallic/roughness materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting, bloom, HDR tone mapping (Reinhard/ACES/Uncharted 2), temporal anti-aliasing, FXAA, MSAA (2x/4x/8x), IBL lighting, GPU particle system, decals, fog, and quality presets (Low/Medium/High/Ultra). Experimental Vulkan and OpenGL backends via an RHI abstraction layer. Optional DirectX Raytracing (DXR) support.
+DirectX 11 with multiple render paths (forward, deferred, forward+, clustered). PBR metallic/roughness materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting, bloom, HDR tone mapping (Reinhard/ACES/Uncharted 2), temporal anti-aliasing, FXAA, MSAA (2x/4x/8x), IBL lighting, GPU particle system, decals, fog, and quality presets (Low/Medium/High/Ultra). Experimental Vulkan and OpenGL backends via an RHI abstraction layer. Optional DirectX Raytracing (DXR) support. Automatic fallback to NullRHIDevice for headless servers, plus full CPU software rendering via OpenGL + Mesa llvmpipe for GPU-less environments.
 
 ### Physics
 

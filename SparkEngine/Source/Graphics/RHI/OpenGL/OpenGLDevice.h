@@ -24,7 +24,64 @@
 #include <Windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #elif defined(__linux__)
+#ifdef SPARK_EGL_SUPPORT
+#include <EGL/egl.h>
+#else
 #include <GL/glx.h>
+// glxext.h provides ARB extension typedefs (e.g. PFNGLXCREATECONTEXTATTRIBSARBPROC)
+#if __has_include(<GL/glxext.h>)
+#include <GL/glxext.h>
+#endif
+// Fallback declarations if glxext.h is not available
+#ifndef GLX_ARB_create_context
+typedef GLXContext (*PFNGLXCREATECONTEXTATTRIBSARBPROC)(Display*, GLXFBConfig, GLXContext, int, const int*);
+#define GLX_CONTEXT_MAJOR_VERSION_ARB 0x2091
+#define GLX_CONTEXT_MINOR_VERSION_ARB 0x2092
+#define GLX_CONTEXT_PROFILE_MASK_ARB 0x9126
+#define GLX_CONTEXT_CORE_PROFILE_BIT_ARB 0x00000001
+#endif
+#ifndef GLX_ARB_get_proc_address
+extern "C" void (*glXGetProcAddressARB(const GLubyte*))();
+#endif
+#endif
+// X11 headers define short macros (None, Always, True, Bool, etc.) that clash
+// with C++ enum values. Undef them after the X11 includes are done.
+#ifdef None
+#undef None
+#endif
+#ifdef Always
+#undef Always
+#endif
+#ifdef True
+#undef True
+#endif
+#ifdef False
+#undef False
+#endif
+#ifdef Bool
+#undef Bool
+#endif
+#ifdef Success
+#undef Success
+#endif
+#ifdef Status
+#undef Status
+#endif
+#ifdef KeyPress
+#undef KeyPress
+#endif
+#ifdef KeyRelease
+#undef KeyRelease
+#endif
+#ifdef FocusIn
+#undef FocusIn
+#endif
+#ifdef FocusOut
+#undef FocusOut
+#endif
+#ifdef Expose
+#undef Expose
+#endif
 #endif
 
 #include <vector>
@@ -218,6 +275,10 @@ namespace Spark
 #ifdef _WIN32
                 HDC m_hdc = nullptr;
                 HGLRC m_hglrc = nullptr;
+#elif defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+                EGLDisplay m_eglDisplay = EGL_NO_DISPLAY;
+                EGLSurface m_eglSurface = EGL_NO_SURFACE;
+                EGLContext m_eglContext = EGL_NO_CONTEXT;
 #endif
             };
 
@@ -341,6 +402,16 @@ namespace Spark
                 RHIDeviceCapabilities m_capabilities;
                 RHIStatistics m_statistics;
                 bool m_debugEnabled = false;
+
+#if defined(__linux__) && !defined(SPARK_EGL_SUPPORT)
+                Display* m_glxDisplay = nullptr;
+                GLXContext m_glxContext = nullptr;
+                GLXPbuffer m_glxPbuffer = 0;
+#elif defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+                EGLDisplay m_bootstrapDisplay = EGL_NO_DISPLAY;
+                EGLContext m_bootstrapContext = EGL_NO_CONTEXT;
+                EGLSurface m_bootstrapSurface = EGL_NO_SURFACE;
+#endif
             };
 
         } // namespace OpenGL

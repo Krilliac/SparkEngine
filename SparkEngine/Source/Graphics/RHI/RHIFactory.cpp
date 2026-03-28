@@ -29,6 +29,8 @@
 #include "Metal/MetalDevice.h"
 #endif
 
+#include "NullRHIDevice.h"
+
 namespace Spark
 {
     namespace RHI
@@ -102,8 +104,8 @@ namespace Spark
             if (backend == GraphicsBackend::None)
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                               "No graphics backend available. Engine will run without rendering");
-                return nullptr;
+                               "No graphics backend available — falling back to NullRHIDevice (headless)");
+                return std::make_unique<NullRHIDevice>();
             }
 
             std::unique_ptr<IRHIDevice> device;

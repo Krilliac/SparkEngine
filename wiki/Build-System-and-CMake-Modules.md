@@ -63,8 +63,9 @@ All flags can be set during CMake configuration with `-D<FLAG>=ON|OFF`.
 |------|---------|-------------|
 | `ENABLE_GRAPHICS` | ON | Graphics rendering engine (DX11, Vulkan, GL) |
 | `ENABLE_VULKAN` | ON | Vulkan backend |
-| `ENABLE_OPENGL` | ON | OpenGL backend |
+| `ENABLE_OPENGL` | ON | OpenGL backend (supports CPU software rendering via Mesa llvmpipe) |
 | `ENABLE_DXR` | OFF | DirectX Raytracing (requires D3D12) |
+| `SPARK_HEADLESS_SUPPORT` | ON | Headless/dedicated server mode support |
 | `ENABLE_POST_PROCESSING` | ON | Post-processing effects (bloom, SSAO, etc.) |
 | `ENABLE_LIGHTING_SYSTEM` | ON | Advanced lighting (PBR, IBL) |
 | `ENABLE_MESH_LOD` | ON | Mesh level-of-detail |
@@ -129,6 +130,27 @@ Or use the `minimal` preset:
 ```bash
 cmake --preset minimal
 ```
+
+### Headless / Software Rendering Build (Linux)
+
+Build with OpenGL enabled for CPU-based software rendering via Mesa llvmpipe:
+
+```bash
+# Install dependencies
+sudo apt-get install -y libgl-dev libx11-dev
+
+# Configure with OpenGL backend
+cmake -B build -DENABLE_OPENGL=ON -DBUILD_TESTS=ON
+
+# Build
+cmake --build build --config Release
+
+# Run with software rendering (no GPU required)
+Xvfb :99 -screen 0 1024x768x24 &
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./build/bin/SparkEngine
+```
+
+The GLAD OpenGL loader is bundled in `ThirdParty/glad/` and detected automatically. When no GPU backend is available at runtime, the engine automatically falls back to `NullRHIDevice` (headless no-op mode).
 
 ### MSVC Toolset Selection
 
