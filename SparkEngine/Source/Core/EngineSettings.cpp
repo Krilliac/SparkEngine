@@ -352,6 +352,39 @@ void EngineSettings::ReadFromConfig()
     m_editor.autosaveEnabled = m_config.GetBool("Editor", "AutosaveEnabled", true);
     m_editor.autosaveIntervalSeconds = m_config.GetFloat("Editor", "AutosaveIntervalSeconds", 300.0f);
     m_editor.undoHistorySize = m_config.GetInt("Editor", "UndoHistorySize", 100);
+
+    // Logging
+    m_logging.globalLevel = m_config.GetString("Logging", "GlobalLevel", "Info");
+    m_logging.stackTraceLevel = m_config.GetString("Logging", "StackTraceLevel", "Error");
+
+    // CategoryMask: supports hex (0xFFFF) or decimal
+    std::string maskStr = m_config.GetString("Logging", "CategoryMask", "0xFFFFFFFF");
+    try
+    {
+        m_logging.categoryMask = static_cast<uint32_t>(std::stoul(maskStr, nullptr, 0));
+    }
+    catch (...)
+    {
+        m_logging.categoryMask = 0xFFFFFFFF;
+    }
+
+    // Per-category level overrides (empty = use global)
+    m_logging.coreLevel = m_config.GetString("Logging", "CoreLevel", "");
+    m_logging.graphicsLevel = m_config.GetString("Logging", "GraphicsLevel", "");
+    m_logging.physicsLevel = m_config.GetString("Logging", "PhysicsLevel", "");
+    m_logging.audioLevel = m_config.GetString("Logging", "AudioLevel", "");
+    m_logging.aiLevel = m_config.GetString("Logging", "AILevel", "");
+    m_logging.animationLevel = m_config.GetString("Logging", "AnimationLevel", "");
+    m_logging.ecsLevel = m_config.GetString("Logging", "ECSLevel", "");
+    m_logging.networkLevel = m_config.GetString("Logging", "NetworkLevel", "");
+    m_logging.inputLevel = m_config.GetString("Logging", "InputLevel", "");
+    m_logging.scriptingLevel = m_config.GetString("Logging", "ScriptingLevel", "");
+    m_logging.sceneLevel = m_config.GetString("Logging", "SceneLevel", "");
+    m_logging.saveLevel = m_config.GetString("Logging", "SaveLevel", "");
+    m_logging.cinematicLevel = m_config.GetString("Logging", "CinematicLevel", "");
+    m_logging.proceduralLevel = m_config.GetString("Logging", "ProceduralLevel", "");
+    m_logging.editorLevel = m_config.GetString("Logging", "EditorLevel", "");
+    m_logging.gameLevel = m_config.GetString("Logging", "GameLevel", "");
 }
 
 // =============================================================================
@@ -587,6 +620,34 @@ void EngineSettings::WriteToConfig() const
     m_config.SetBool("Editor", "AutosaveEnabled", m_editor.autosaveEnabled);
     m_config.SetFloat("Editor", "AutosaveIntervalSeconds", m_editor.autosaveIntervalSeconds);
     m_config.SetInt("Editor", "UndoHistorySize", m_editor.undoHistorySize);
+
+    // Logging
+    m_config.SetString("Logging", "GlobalLevel", m_logging.globalLevel);
+    m_config.SetString("Logging", "StackTraceLevel", m_logging.stackTraceLevel);
+
+    // Write CategoryMask as hex for readability
+    {
+        char hexBuf[16];
+        snprintf(hexBuf, sizeof(hexBuf), "0x%08X", m_logging.categoryMask);
+        m_config.SetString("Logging", "CategoryMask", hexBuf);
+    }
+
+    m_config.SetString("Logging", "CoreLevel", m_logging.coreLevel);
+    m_config.SetString("Logging", "GraphicsLevel", m_logging.graphicsLevel);
+    m_config.SetString("Logging", "PhysicsLevel", m_logging.physicsLevel);
+    m_config.SetString("Logging", "AudioLevel", m_logging.audioLevel);
+    m_config.SetString("Logging", "AILevel", m_logging.aiLevel);
+    m_config.SetString("Logging", "AnimationLevel", m_logging.animationLevel);
+    m_config.SetString("Logging", "ECSLevel", m_logging.ecsLevel);
+    m_config.SetString("Logging", "NetworkLevel", m_logging.networkLevel);
+    m_config.SetString("Logging", "InputLevel", m_logging.inputLevel);
+    m_config.SetString("Logging", "ScriptingLevel", m_logging.scriptingLevel);
+    m_config.SetString("Logging", "SceneLevel", m_logging.sceneLevel);
+    m_config.SetString("Logging", "SaveLevel", m_logging.saveLevel);
+    m_config.SetString("Logging", "CinematicLevel", m_logging.cinematicLevel);
+    m_config.SetString("Logging", "ProceduralLevel", m_logging.proceduralLevel);
+    m_config.SetString("Logging", "EditorLevel", m_logging.editorLevel);
+    m_config.SetString("Logging", "GameLevel", m_logging.gameLevel);
 }
 
 // =============================================================================
@@ -638,7 +699,7 @@ std::vector<std::string> EngineSettings::GetSections() const
 {
     return {"Graphics", "Audio",      "Controls", "Game",       "Rendering",      "PostProcess",   "SSAO",
             "SSR",      "Volumetric", "TAA",      "MotionBlur", "DynamicQuality", "AudioExtended", "Physics",
-            "AI",       "Player",     "GameMode", "Camera",     "Editor"};
+            "AI",       "Player",     "GameMode", "Camera",     "Editor",         "Logging"};
 }
 
 std::vector<std::string> EngineSettings::GetKeys(const std::string& section) const

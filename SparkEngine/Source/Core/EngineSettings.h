@@ -332,6 +332,42 @@ class EngineSettings
         int undoHistorySize = 100;
     };
 
+    // ---- Logging ----
+
+    struct LoggingSettings
+    {
+        /// Global minimum log level: Trace, Debug, Info, Warn, Error, Fatal, Off
+        std::string globalLevel = "Info";
+
+        /// Minimum level at which stack traces are auto-captured (Off to disable)
+        std::string stackTraceLevel = "Error";
+
+        /// Category enable bitmask (hex or decimal). Each bit = one LogCategory.
+        /// 0xFFFF = all enabled, 0x0000 = all disabled.
+        /// Bit 0=Core, 1=Graphics, 2=Physics, 3=Audio, 4=AI, 5=Animation,
+        /// 6=ECS, 7=Network, 8=Input, 9=Scripting, 10=Scene, 11=Save,
+        /// 12=Cinematic, 13=Procedural, 14=Editor, 15=Game
+        uint32_t categoryMask = 0xFFFFFFFF;
+
+        /// Per-category level overrides (empty string = use global level)
+        std::string coreLevel;
+        std::string graphicsLevel;
+        std::string physicsLevel;
+        std::string audioLevel;
+        std::string aiLevel;
+        std::string animationLevel;
+        std::string ecsLevel;
+        std::string networkLevel;
+        std::string inputLevel;
+        std::string scriptingLevel;
+        std::string sceneLevel;
+        std::string saveLevel;
+        std::string cinematicLevel;
+        std::string proceduralLevel;
+        std::string editorLevel;
+        std::string gameLevel;
+    };
+
     // =========================================================================
     // Singleton access
     // =========================================================================
@@ -418,6 +454,9 @@ class EngineSettings
     EditorSettings& Editor() { return m_editor; }
     const EditorSettings& Editor() const { return m_editor; }
 
+    LoggingSettings& Logging() { return m_logging; }
+    const LoggingSettings& Logging() const { return m_logging; }
+
     // =========================================================================
     // Generic key access (for console commands)
     // =========================================================================
@@ -490,6 +529,7 @@ class EngineSettings
     GameModeSettings m_gameMode;
     CameraSettings m_camera;
     EditorSettings m_editor;
+    LoggingSettings m_logging;
 
     // Change listeners
     std::vector<SettingsChangedCallback> m_changeCallbacks;
