@@ -481,7 +481,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*201 test files, 2404+ test cases*
+*208 test files, 2477+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -497,6 +497,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationStress` | 12 |
 | `TestAnimationSystem` | 17 |
+| `TestAsyncComputeScheduler` | 9 |
 | `TestAsyncDatabase` | 23 |
 | `TestAudioEngine` | 18 |
 | `TestBehaviorTreeNodes` | 22 |
@@ -539,6 +540,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDestructionSystem` | 5 |
 | `TestDialogueStress` | 10 |
 | `TestDialogueSystem` | 4 |
+| `TestDirectStorageLoader` | 11 |
 | `TestDirtyRectTracker` | 4 |
 | `TestDrawIndirect` | 6 |
 | `TestDynamicResponseSystem` | 6 |
@@ -565,7 +567,11 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFreezeSystem` | 5 |
 | `TestFrustumCulling` | 11 |
 | `TestFullEngineDiagnostics` | 7 |
+| `TestGPUClusterCulling` | 11 |
+| `TestGPUDrivenRenderer` | 13 |
+| `TestGPUParticleSystem` | 11 |
 | `TestGPUPerfCounters` | 2 |
+| `TestGPUSkinning` | 9 |
 | `TestGameMode` | 5 |
 | `TestGameplayStress` | 15 |
 | `TestGraphicsEngine` | 10 |
@@ -593,6 +599,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMemoryDebugger` | 16 |
 | `TestMemoryMonitor` | 11 |
 | `TestMeshLOD` | 8 |
+| `TestMeshShaderPipeline` | 9 |
 | `TestModSystem` | 5 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |

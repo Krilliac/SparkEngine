@@ -499,7 +499,7 @@ int main(int argc, char** argv)
                 {
                     matchedTest->func();
                 }
-                catch (const std::exception& e)
+                catch (const std::exception&)
                 {
                     g_assertionsFailed++;
                 }
