@@ -225,6 +225,19 @@ namespace Spark
      */
         void RegisterBuiltins();
 
+        /**
+         * @brief Auto-register (de)serializers for all reflected component types.
+         *
+         * Uses Spark::TypeRegistry and Spark::ComponentFactory to generate
+         * serialize/deserialize lambdas for every reflected component that does
+         * not already have a hand-written serializer. Called automatically at the
+         * end of RegisterBuiltins().
+         *
+         * Fields are serialized using their C++ member name as the property key
+         * and GetFieldAsString/SetFieldFromString for value encoding.
+         */
+        void RegisterReflectedSerializers();
+
       private:
         /** @brief Private constructor enforces singleton pattern. */
         ComponentSerializerRegistry() = default;

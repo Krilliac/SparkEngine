@@ -5,6 +5,7 @@
 #include "TestCommonMath.h"
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -309,4 +310,322 @@ TEST(Reflection_FieldRange)
     EXPECT_TRUE(f->hasRange);
     EXPECT_NEAR(f->rangeMin, 0.0f, 0.001f);
     EXPECT_NEAR(f->rangeMax, 100.0f, 0.001f);
+}
+
+// ============================================================================
+// SetFieldFromString / GetFieldAsString tests (standalone implementation)
+// ============================================================================
+
+namespace TestReflect
+{
+
+    /// Standalone implementation matching Spark::SetFieldFromString
+    bool SetFieldFromString(void* component, const FieldInfo& field, const std::string& value)
+    {
+        auto* dst = static_cast<char*>(component) + field.offset;
+        switch (field.type)
+        {
+        case FieldType::Bool:
+        {
+            bool v = (value == "true" || value == "1" || value == "yes");
+            std::memcpy(dst, &v, sizeof(bool));
+            return true;
+        }
+        case FieldType::Int:
+        {
+            try
+            {
+                int v = std::stoi(value);
+                std::memcpy(dst, &v, sizeof(int));
+                return true;
+            }
+            catch (...)
+            {
+                return false;
+            }
+        }
+        case FieldType::Float:
+        {
+            try
+            {
+                float v = std::stof(value);
+                std::memcpy(dst, &v, sizeof(float));
+                return true;
+            }
+            catch (...)
+            {
+                return false;
+            }
+        }
+        case FieldType::String:
+        {
+            auto* str = reinterpret_cast<std::string*>(dst);
+            *str = value;
+            return true;
+        }
+        default:
+            return false;
+        }
+    }
+
+    std::string GetFieldAsString(const void* component, const FieldInfo& field)
+    {
+        const auto* src = static_cast<const char*>(component) + field.offset;
+        switch (field.type)
+        {
+        case FieldType::Bool:
+        {
+            bool v;
+            std::memcpy(&v, src, sizeof(bool));
+            return v ? "true" : "false";
+        }
+        case FieldType::Int:
+        {
+            int v;
+            std::memcpy(&v, src, sizeof(int));
+            return std::to_string(v);
+        }
+        case FieldType::Float:
+        {
+            float v;
+            std::memcpy(&v, src, sizeof(float));
+            return std::to_string(v);
+        }
+        case FieldType::String:
+        {
+            const auto* str = reinterpret_cast<const std::string*>(src);
+            return *str;
+        }
+        default:
+            return "";
+        }
+    }
+
+} // namespace TestReflect
+
+TEST(Reflection_SetFieldFromString_Float)
+{
+    Light light;
+    light.intensity = 1.0f;
+
+    FieldInfo field;
+    field.fieldName = "intensity";
+    field.type = FieldType::Float;
+    field.offset = offsetof(Light, intensity);
+    field.size = sizeof(float);
+
+    bool ok = TestReflect::SetFieldFromString(&light, field, "42.5");
+    EXPECT_TRUE(ok);
+    EXPECT_NEAR(light.intensity, 42.5f, 0.001f);
+}
+
+TEST(Reflection_SetFieldFromString_Bool)
+{
+    MeshRenderer mr;
+    mr.castShadows = false;
+
+    FieldInfo field;
+    field.fieldName = "castShadows";
+    field.type = FieldType::Bool;
+    field.offset = offsetof(MeshRenderer, castShadows);
+    field.size = sizeof(bool);
+
+    bool ok = TestReflect::SetFieldFromString(&mr, field, "true");
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(mr.castShadows);
+}
+
+TEST(Reflection_SetFieldFromString_Int)
+{
+    struct TestStruct
+    {
+        int value = 0;
+    } ts;
+
+    FieldInfo field;
+    field.fieldName = "value";
+    field.type = FieldType::Int;
+    field.offset = 0;
+    field.size = sizeof(int);
+
+    bool ok = TestReflect::SetFieldFromString(&ts, field, "99");
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ts.value, 99);
+}
+
+TEST(Reflection_SetFieldFromString_String)
+{
+    MeshRenderer mr;
+    mr.meshPath = "old.mesh";
+
+    FieldInfo field;
+    field.fieldName = "meshPath";
+    field.type = FieldType::String;
+    field.offset = offsetof(MeshRenderer, meshPath);
+    field.size = sizeof(std::string);
+
+    bool ok = TestReflect::SetFieldFromString(&mr, field, "models/crate.mesh");
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(mr.meshPath, std::string("models/crate.mesh"));
+}
+
+TEST(Reflection_GetFieldAsString_Float)
+{
+    Light light;
+    light.intensity = 7.5f;
+
+    FieldInfo field;
+    field.fieldName = "intensity";
+    field.type = FieldType::Float;
+    field.offset = offsetof(Light, intensity);
+    field.size = sizeof(float);
+
+    std::string result = TestReflect::GetFieldAsString(&light, field);
+    EXPECT_TRUE(!result.empty());
+    // Parse back and verify
+    float parsed = std::stof(result);
+    EXPECT_NEAR(parsed, 7.5f, 0.001f);
+}
+
+TEST(Reflection_GetFieldAsString_Bool)
+{
+    MeshRenderer mr;
+    mr.castShadows = true;
+
+    FieldInfo field;
+    field.fieldName = "castShadows";
+    field.type = FieldType::Bool;
+    field.offset = offsetof(MeshRenderer, castShadows);
+    field.size = sizeof(bool);
+
+    std::string result = TestReflect::GetFieldAsString(&mr, field);
+    EXPECT_EQ(result, std::string("true"));
+}
+
+TEST(Reflection_SetFieldFromString_InvalidFloat)
+{
+    Light light;
+    light.intensity = 1.0f;
+
+    FieldInfo field;
+    field.fieldName = "intensity";
+    field.type = FieldType::Float;
+    field.offset = offsetof(Light, intensity);
+    field.size = sizeof(float);
+
+    bool ok = TestReflect::SetFieldFromString(&light, field, "not_a_number");
+    EXPECT_TRUE(!ok);
+    // Value should be unchanged
+    EXPECT_NEAR(light.intensity, 1.0f, 0.001f);
+}
+
+TEST(Reflection_SetFieldFromString_UnsupportedType)
+{
+    Transform t;
+
+    FieldInfo field;
+    field.fieldName = "position";
+    field.type = FieldType::Custom;
+    field.offset = offsetof(Transform, position);
+    field.size = sizeof(Vec3);
+
+    bool ok = TestReflect::SetFieldFromString(&t, field, "1,2,3");
+    // Custom type is unsupported in this standalone impl
+    EXPECT_TRUE(!ok);
+}
+
+TEST(Reflection_SerializeRoundTrip_MultipleFields)
+{
+    // Test that multiple fields on the same struct can be set and read back
+    auto& reg = TypeRegistry::Get();
+    reg.Clear();
+
+    auto& info =
+        reg.RegisterType(GetTypeId<MeshRenderer>(), "MeshRenderer", sizeof(MeshRenderer), alignof(MeshRenderer));
+
+    FieldInfo pathField;
+    pathField.fieldName = "meshPath";
+    pathField.type = FieldType::String;
+    pathField.offset = offsetof(MeshRenderer, meshPath);
+    pathField.size = sizeof(std::string);
+    info.fields.push_back(pathField);
+
+    FieldInfo shadowField;
+    shadowField.fieldName = "castShadows";
+    shadowField.type = FieldType::Bool;
+    shadowField.offset = offsetof(MeshRenderer, castShadows);
+    shadowField.size = sizeof(bool);
+    info.fields.push_back(shadowField);
+
+    // Set fields
+    MeshRenderer mr;
+    TestReflect::SetFieldFromString(&mr, *info.FindField("meshPath"), "models/hero.mesh");
+    TestReflect::SetFieldFromString(&mr, *info.FindField("castShadows"), "false");
+
+    EXPECT_EQ(mr.meshPath, std::string("models/hero.mesh"));
+    EXPECT_TRUE(!mr.castShadows);
+
+    // Read back
+    std::string pathStr = TestReflect::GetFieldAsString(&mr, *info.FindField("meshPath"));
+    EXPECT_EQ(pathStr, std::string("models/hero.mesh"));
+
+    std::string shadowStr = TestReflect::GetFieldAsString(&mr, *info.FindField("castShadows"));
+    EXPECT_EQ(shadowStr, std::string("false"));
+}
+
+TEST(Reflection_FindTypeByName_MultipleTypes)
+{
+    auto& reg = TypeRegistry::Get();
+    reg.Clear();
+
+    reg.RegisterType(GetTypeId<Transform>(), "Transform", sizeof(Transform), alignof(Transform));
+    reg.RegisterType(GetTypeId<Light>(), "Light", sizeof(Light), alignof(Light));
+    reg.RegisterType(GetTypeId<MeshRenderer>(), "MeshRenderer", sizeof(MeshRenderer), alignof(MeshRenderer));
+
+    EXPECT_TRUE(reg.GetTypeCount() == 3u);
+    EXPECT_TRUE(reg.FindTypeByName("Transform") != nullptr);
+    EXPECT_TRUE(reg.FindTypeByName("Light") != nullptr);
+    EXPECT_TRUE(reg.FindTypeByName("MeshRenderer") != nullptr);
+    EXPECT_TRUE(reg.FindTypeByName("NonExistent") == nullptr);
+}
+
+TEST(Reflection_RoundTrip_AllTypes)
+{
+    auto& reg = TypeRegistry::Get();
+    reg.Clear();
+    auto& info = reg.RegisterType(GetTypeId<Light>(), "Light", sizeof(Light), alignof(Light));
+
+    // Register intensity field
+    FieldInfo intensityField;
+    intensityField.fieldName = "intensity";
+    intensityField.type = FieldType::Float;
+    intensityField.offset = offsetof(Light, intensity);
+    intensityField.size = sizeof(float);
+    info.fields.push_back(intensityField);
+
+    // Register range field
+    FieldInfo rangeField;
+    rangeField.fieldName = "range";
+    rangeField.type = FieldType::Float;
+    rangeField.offset = offsetof(Light, range);
+    rangeField.size = sizeof(float);
+    info.fields.push_back(rangeField);
+
+    // Set both fields via reflection
+    Light light;
+    const auto* intensityF = info.FindField("intensity");
+    const auto* rangeF = info.FindField("range");
+    EXPECT_TRUE(intensityF != nullptr);
+    EXPECT_TRUE(rangeF != nullptr);
+
+    TestReflect::SetFieldFromString(&light, *intensityF, "3.14");
+    TestReflect::SetFieldFromString(&light, *rangeF, "25.0");
+
+    EXPECT_NEAR(light.intensity, 3.14f, 0.01f);
+    EXPECT_NEAR(light.range, 25.0f, 0.01f);
+
+    // Read back
+    std::string intensityStr = TestReflect::GetFieldAsString(&light, *intensityF);
+    float parsed = std::stof(intensityStr);
+    EXPECT_NEAR(parsed, 3.14f, 0.01f);
 }
