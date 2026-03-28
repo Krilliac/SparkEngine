@@ -1996,7 +1996,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
 {
     Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Linux Build) ===");
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0)
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
     {
         Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_Init failed: ") + SDL_GetError());
         return -1;

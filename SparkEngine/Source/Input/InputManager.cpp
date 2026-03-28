@@ -804,6 +804,10 @@ InputManager::InputMetrics InputManager::GetMetricsThreadSafe() const
 #include <algorithm>
 #include <thread>
 #include <chrono>
+
+#ifdef SPARK_SDL2_AVAILABLE
+#include <SDL.h>
+#endif
 #include <iomanip>
 
 InputManager::InputManager()
@@ -945,8 +949,17 @@ MousePoint InputManager::GetMousePosition() const
 
 void InputManager::CaptureMouse(bool capture)
 {
+    if (capture == m_mouseCaptured)
+        return;
+
     m_mouseCaptured = capture;
-    // SDL2 mouse capture is handled by the main loop via SDL_SetRelativeMouseMode
+
+#ifdef SPARK_SDL2_AVAILABLE
+    // Relative mouse mode hides the cursor, grabs input, and reports delta movement
+    SDL_SetRelativeMouseMode(capture ? SDL_TRUE : SDL_FALSE);
+#endif
+
+    Spark::SimpleConsole::GetInstance().Log(capture ? "Mouse captured." : "Mouse capture released.", "INFO");
 }
 
 void InputManager::UpdateKeyState(int key, bool isDown)
