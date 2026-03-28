@@ -816,19 +816,21 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
 
             // Dispatch enabled RT effects
             const auto& settings = dxr.GetSettings();
-            if (static_cast<uint32_t>(settings.enabledEffects) & static_cast<uint32_t>(Spark::RHI::RTEffect::Reflections))
+            auto effects = static_cast<uint32_t>(settings.enabledEffects);
+
+            if (effects & static_cast<uint32_t>(Spark::RHI::RTEffect::Reflections))
             {
                 dxr.TraceReflections(viewMatrix, projMatrix);
             }
-            if (static_cast<uint32_t>(settings.enabledEffects) & static_cast<uint32_t>(Spark::RHI::RTEffect::Shadows))
+            if (effects & static_cast<uint32_t>(Spark::RHI::RTEffect::Shadows))
             {
                 dxr.TraceShadows(viewMatrix, projMatrix);
             }
-            if (static_cast<uint32_t>(settings.enabledEffects) & static_cast<uint32_t>(Spark::RHI::RTEffect::AmbientOcclusion))
+            if (effects & static_cast<uint32_t>(Spark::RHI::RTEffect::AmbientOcclusion))
             {
                 dxr.TraceAmbientOcclusion(viewMatrix, projMatrix);
             }
-            if (static_cast<uint32_t>(settings.enabledEffects) & static_cast<uint32_t>(Spark::RHI::RTEffect::GlobalIllumination))
+            if (effects & static_cast<uint32_t>(Spark::RHI::RTEffect::GlobalIllumination))
             {
                 dxr.TraceGlobalIllumination(viewMatrix, projMatrix);
             }
