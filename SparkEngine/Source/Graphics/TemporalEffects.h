@@ -262,7 +262,8 @@ class TemporalEffects
                                    m_motionBlurSettings.maxBlurRadius, m_motionBlurSettings.velocityScale};
 
             D3D11_MAPPED_SUBRESOURCE mapped;
-            if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+            if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) &&
+                mapped.pData)
             {
                 memcpy(mapped.pData, &cb, sizeof(TemporalCB));
                 m_context->Unmap(m_constantBuffer.Get(), 0);

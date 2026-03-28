@@ -129,9 +129,14 @@ namespace Spark::Animation
 
         if (triIdx >= 0)
         {
+            if (static_cast<size_t>(triIdx) >= m_triangles.size())
+                return result;
+
             const auto& tri = m_triangles[triIdx];
             for (int i = 0; i < 3; ++i)
             {
+                if (tri.indices[i] >= m_samples.size())
+                    continue;
                 if (weights[i] > 0.001f)
                 {
                     const auto& sample = m_samples[tri.indices[i]];
@@ -335,6 +340,10 @@ namespace Spark::Animation
         for (size_t i = 0; i < m_triangles.size(); ++i)
         {
             const auto& tri = m_triangles[i];
+            if (tri.indices[0] >= m_samples.size() || tri.indices[1] >= m_samples.size() ||
+                tri.indices[2] >= m_samples.size())
+                continue;
+
             const auto& a = m_samples[tri.indices[0]].position;
             const auto& b = m_samples[tri.indices[1]].position;
             const auto& c = m_samples[tri.indices[2]].position;

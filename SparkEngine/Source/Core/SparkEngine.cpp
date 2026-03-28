@@ -407,7 +407,14 @@ static void InitGameplaySystems()
     }
 
     InitCoreGameplaySystems(ctx);
-    InitAIAndWorldSystems(ctx->GetEventBus());
+    if (auto* eventBus = ctx->GetEventBus())
+    {
+        InitAIAndWorldSystems(eventBus);
+    }
+    else
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "EventBus is null — AI/World systems skipped");
+    }
     InitRenderingAndUtilitySystems();
     InitScriptingAndPlatformSystems(ctx);
 }
@@ -995,14 +1002,21 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     g_eventBus = std::make_unique<Spark::EventBus>();
     EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get()));
 
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — headless init aborted");
+        return 1;
+    }
+
     // File cache
     g_fileCache = std::make_unique<Spark::LocalFileCache>();
-    EngineContext::Get()->SetFileCache(g_fileCache.get());
+    ctx->SetFileCache(g_fileCache.get());
 
     InitPhysics();
 
     // Register core subsystems with dependency metadata
-    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+    Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
     Spark::EngineSetup::InitializeJobSystem();
 
     // Module loading
@@ -1013,7 +1027,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
     if (LoadGameModules(*g_moduleManager, lpCmdLine))
     {
-        g_moduleManager->InitializeAll(EngineContext::Get());
+        g_moduleManager->InitializeAll(ctx);
         console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
     }
     else
@@ -1023,7 +1037,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
     // Module hot-reload watcher
     g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
-    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
+    g_moduleHotReload->Initialize(g_moduleManager.get(), ctx);
     g_moduleHotReload->WatchAllLoadedModules();
     g_moduleHotReload->Start();
 
@@ -1032,11 +1046,11 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     {
         Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
     }
-    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+    ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     console.LogInfo("SaveSystem initialized");
 
     // CoroutineScheduler
-    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+    ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
     // Register console commands
     if (g_graphics)
@@ -1100,40 +1114,54 @@ static void InitEngineContext()
     EngineContext::SetOwned(
         std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
 
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — cannot initialize");
+        return;
+    }
+
     g_fileCache = std::make_unique<Spark::LocalFileCache>();
-    EngineContext::Get()->SetFileCache(g_fileCache.get());
+    ctx->SetFileCache(g_fileCache.get());
 
     InitPhysics();
 
-    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+    Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
     Spark::EngineSetup::InitializeJobSystem();
 
-    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
-    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+    ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+    ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
     static Spark::AssetRegistry g_assetRegistry;
-    EngineContext::Get()->SetAssetRegistry(&g_assetRegistry);
+    ctx->SetAssetRegistry(&g_assetRegistry);
 
     if (g_graphics && g_graphics->GetAssetPipeline())
     {
-        EngineContext::Get()->SetAssetPipeline(g_graphics->GetAssetPipeline());
+        ctx->SetAssetPipeline(g_graphics->GetAssetPipeline());
     }
 }
 
 static void InitGameplaySubsystems()
 {
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — gameplay subsystems skipped");
+        return;
+    }
+
     g_weatherSystem = std::make_unique<Spark::WeatherSystem>();
-    EngineContext::Get()->SetWeather(g_weatherSystem.get());
-    EngineContext::Get()->SetTimeOfDay(&Spark::TimeOfDaySystem::GetInstance());
+    ctx->SetWeather(g_weatherSystem.get());
+    ctx->SetTimeOfDay(&Spark::TimeOfDaySystem::GetInstance());
 
     g_uiSystem = std::make_unique<Spark::UI::UISystem>();
-    EngineContext::Get()->SetUI(g_uiSystem.get());
+    ctx->SetUI(g_uiSystem.get());
 
     g_dialogueSystem = std::make_unique<Spark::DialogueSystem>();
-    EngineContext::Get()->SetDialogue(g_dialogueSystem.get());
+    ctx->SetDialogue(g_dialogueSystem.get());
 
     g_modSystem = std::make_unique<Spark::ModSystem>();
-    EngineContext::Get()->SetModSystem(g_modSystem.get());
+    ctx->SetModSystem(g_modSystem.get());
 }
 
 static void LoadAndInitModules(LPWSTR lpCmdLine)
@@ -1191,7 +1219,8 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     if (SUCCEEDED(g_audioEngine->Initialize(32)))
     {
         console.LogInfo("AudioEngine initialized (32 sources)");
-        EngineContext::Get()->SetAudio(g_audioEngine.get());
+        if (auto* ctx = EngineContext::Get())
+            ctx->SetAudio(g_audioEngine.get());
     }
     else
     {
@@ -1583,11 +1612,18 @@ static void TickFrame(float dt)
  */
 static void RegisterGameplaySubsystems()
 {
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — gameplay subsystems skipped");
+        return;
+    }
+
     static Spark::WeatherSystem s_weatherSystem;
-    EngineContext::Get()->SetWeather(&s_weatherSystem);
+    ctx->SetWeather(&s_weatherSystem);
 
     // TimeOfDay — singleton, registered with context for game-module access
-    EngineContext::Get()->SetTimeOfDay(&Spark::TimeOfDaySystem::GetInstance());
+    ctx->SetTimeOfDay(&Spark::TimeOfDaySystem::GetInstance());
 
     // Wire WeatherSystem to EventBus for WeatherChangedEvent publishing
     if (g_eventBus)
@@ -1596,13 +1632,13 @@ static void RegisterGameplaySubsystems()
     }
 
     static Spark::UI::UISystem s_uiSystem;
-    EngineContext::Get()->SetUI(&s_uiSystem);
+    ctx->SetUI(&s_uiSystem);
 
     static Spark::DialogueSystem s_dialogueSystem;
-    EngineContext::Get()->SetDialogue(&s_dialogueSystem);
+    ctx->SetDialogue(&s_dialogueSystem);
 
     static Spark::ModSystem s_modSystem;
-    EngineContext::Get()->SetModSystem(&s_modSystem);
+    ctx->SetModSystem(&s_modSystem);
 }
 
 /**
@@ -1618,28 +1654,35 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
     EngineContext::SetOwned(
         std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
 
+    auto* ctx = EngineContext::Get();
+    if (!ctx)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — Linux init aborted");
+        return;
+    }
+
     InitPhysics();
 
-    Spark::EngineSetup::RegisterCoreSubsystems(*EngineContext::Get());
+    Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
     Spark::EngineSetup::InitializeJobSystem();
 
     if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
     {
         Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
     }
-    EngineContext::Get()->SetSaveSystem(&Spark::SaveSystem::GetInstance());
-    EngineContext::Get()->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+    ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+    ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
     // AssetPipeline (owned by GraphicsEngine, exposed via EngineContext for SDK access)
     if (g_graphics && g_graphics->GetAssetPipeline())
     {
-        EngineContext::Get()->SetAssetPipeline(g_graphics->GetAssetPipeline());
+        ctx->SetAssetPipeline(g_graphics->GetAssetPipeline());
     }
 
     if (registerGameplay)
     {
         static Spark::AssetRegistry s_assetRegistry;
-        EngineContext::Get()->SetAssetRegistry(&s_assetRegistry);
+        ctx->SetAssetRegistry(&s_assetRegistry);
         RegisterGameplaySubsystems();
     }
 }
@@ -1665,7 +1708,8 @@ static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
         if (SUCCEEDED(g_audioEngine->Initialize(32)))
         {
             console.LogInfo("AudioEngine initialized (32 sources)");
-            EngineContext::Get()->SetAudio(g_audioEngine.get());
+            if (auto* ctx = EngineContext::Get())
+                ctx->SetAudio(g_audioEngine.get());
         }
         else
         {

@@ -357,14 +357,16 @@ float4 main(PS_IN input) : SV_Target {
         XMStoreFloat4x4(&cb.projection, XMMatrixTranspose(proj));
         cb.screenSize = {w, h, 1.0f / w, 1.0f / h};
 
-        D3D11_MAPPED_SUBRESOURCE mapped;
-        m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if (FAILED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) || !mapped.pData)
+            return;
         memcpy(mapped.pData, &cb, sizeof(cb));
         m_context->Unmap(m_constantBuffer.Get(), 0);
 
         // Upload glyph vertices
         size_t vertCount = std::min(m_glyphVertices.size(), static_cast<size_t>(kMaxGlyphsPerBatch * 6));
-        m_context->Map(m_vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        if (FAILED(m_context->Map(m_vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) || !mapped.pData)
+            return;
         memcpy(mapped.pData, m_glyphVertices.data(), vertCount * sizeof(GlyphVertex));
         m_context->Unmap(m_vertexBuffer.Get(), 0);
 

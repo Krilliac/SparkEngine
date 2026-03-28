@@ -102,9 +102,12 @@ namespace SparkEditor
             WireCallbacks();
 
             // Show project browser on startup if no project is loaded (skip in test mode)
-            if (!config.testMode && !m_projectManager->HasOpenProject())
+            if (!config.testMode && m_projectManager && !m_projectManager->HasOpenProject())
             {
-                m_projectBrowserPanel->ShowBrowser();
+                if (m_projectBrowserPanel)
+                {
+                    m_projectBrowserPanel->ShowBrowser();
+                }
             }
 
             // Apply the Spark Professional theme
@@ -204,6 +207,12 @@ namespace SparkEditor
 
     void EditorUI::WireCallbacks()
     {
+        if (!m_projectManager)
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning("WireCallbacks: projectManager is null, skipping");
+            return;
+        }
+
         m_projectManager->SetOnProjectOpened(
             [this](const ProjectInfo& project)
             {
@@ -857,7 +866,7 @@ namespace SparkEditor
 
         for (auto& [name, panel] : m_panels)
         {
-            if (panel->IsVisible())
+            if (panel && panel->IsVisible())
             {
                 SPARK_GUARDED_UPDATE("EditorPanel:Update", "Editor", { panel->Update(deltaTime); });
                 SPARK_GUARDED_UPDATE("EditorPanel:Render", "Editor", { panel->Render(); });
@@ -909,7 +918,7 @@ namespace SparkEditor
 
             for (const auto& [name, panel] : m_panels)
             {
-                if (panel->IsVisible())
+                if (panel && panel->IsVisible())
                 {
                     m_stats.visiblePanels++;
                 }
@@ -924,13 +933,13 @@ namespace SparkEditor
     bool EditorUI::IsPanelVisible(const std::string& panelName) const
     {
         auto it = m_panels.find(panelName);
-        return it != m_panels.end() ? it->second->IsVisible() : false;
+        return (it != m_panels.end() && it->second) ? it->second->IsVisible() : false;
     }
 
     void EditorUI::SetPanelVisible(const std::string& panelName, bool visible)
     {
         auto it = m_panels.find(panelName);
-        if (it != m_panels.end())
+        if (it != m_panels.end() && it->second)
         {
             it->second->SetVisible(visible);
         }
@@ -999,6 +1008,9 @@ namespace SparkEditor
         // Reset all panels to default visibility using the actual panel map keys
         for (auto& [name, panel] : m_panels)
         {
+            if (!panel)
+                continue;
+
             if (name == "SceneView" || name == "Console" || name == "Hierarchy" || name == "Inspector" ||
                 name == "AssetBrowser")
             {
@@ -1089,6 +1101,8 @@ namespace SparkEditor
                                    std::function<std::string(const std::vector<std::string>&)> handler,
                                    const std::string& description)
     {
+        if (name.empty() || !handler)
+            return;
         m_commands[name] = handler;
     }
 
@@ -1222,6 +1236,8 @@ namespace SparkEditor
             bool first = true;
             for (const auto& [name, panel] : m_panels)
             {
+                if (!panel)
+                    continue;
                 if (!first)
                     file << ",\n";
                 file << "      \"" << name << "\": { \"visible\": " << (panel->IsVisible() ? "true" : "false") << " }";
@@ -1277,10 +1293,17 @@ namespace SparkEditor
 
     bool EditorUI::SaveCurrentScene(const std::string& path)
     {
+        if (path.empty())
+            return false;
+
         try
         {
             // Ensure parent directory exists
-            std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+            auto parentPath = std::filesystem::path(path).parent_path();
+            if (!parentPath.empty())
+            {
+                std::filesystem::create_directories(parentPath);
+            }
 
             std::ofstream file(path);
             if (!file.is_open())

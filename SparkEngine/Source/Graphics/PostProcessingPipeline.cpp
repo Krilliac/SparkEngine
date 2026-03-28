@@ -103,8 +103,9 @@ namespace Spark::Graphics
                 m_context->VSSetShader(m_fullscreenVS.Get(), nullptr, 0);
                 m_context->PSSetShader(m_sharpenPS.Get(), nullptr, 0);
 
-                D3D11_MAPPED_SUBRESOURCE mapped;
-                if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+                D3D11_MAPPED_SUBRESOURCE mapped = {};
+                if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) &&
+                    mapped.pData)
                 {
                     memcpy(mapped.pData, &cb, sizeof(PostProcessCB));
                     m_context->Unmap(m_constantBuffer.Get(), 0);
@@ -819,8 +820,8 @@ namespace Spark::Graphics
         m_context->PSSetShader(ps, nullptr, 0);
 
         // Update constant buffer
-        D3D11_MAPPED_SUBRESOURCE mapped;
-        if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) && mapped.pData)
         {
             memcpy(mapped.pData, &cb, sizeof(PostProcessCB));
             m_context->Unmap(m_constantBuffer.Get(), 0);

@@ -382,8 +382,9 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
             uint32_t prevSz = sz * 2;
             cb.texelSize = {1.0f / prevSz, 1.0f / prevSz, 0.0f, 0.0f};
 
-            D3D11_MAPPED_SUBRESOURCE mapped;
-            m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            D3D11_MAPPED_SUBRESOURCE mapped = {};
+            if (FAILED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) || !mapped.pData)
+                continue;
             memcpy(mapped.pData, &cb, sizeof(cb));
             m_context->Unmap(m_constantBuffer.Get(), 0);
 
@@ -413,8 +414,9 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         cb.colorLift = {m_autoExposureSettings.minEV, m_autoExposureSettings.maxEV,
                         m_autoExposureSettings.compensationEV, m_autoExposureSettings.targetMidGray};
 
-        D3D11_MAPPED_SUBRESOURCE mapped;
-        m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if (FAILED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) || !mapped.pData)
+            return;
         memcpy(mapped.pData, &cb, sizeof(cb));
         m_context->Unmap(m_constantBuffer.Get(), 0);
 
@@ -480,8 +482,9 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
             cb.texelSize = {(m_width > 0) ? (1.0f / m_width) : 0.0f, (m_height > 0) ? (1.0f / m_height) : 0.0f, 0.0f,
                             0.0f};
 
-            D3D11_MAPPED_SUBRESOURCE mapped;
-            m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            D3D11_MAPPED_SUBRESOURCE mapped = {};
+            if (FAILED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) || !mapped.pData)
+                return;
             memcpy(mapped.pData, &cb, sizeof(cb));
             m_context->Unmap(m_constantBuffer.Get(), 0);
 

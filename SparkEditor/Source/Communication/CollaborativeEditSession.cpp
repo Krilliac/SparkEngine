@@ -80,14 +80,26 @@ namespace SparkEditor
 
             bool HasBytes(size_t n) const { return pos + n <= size; }
 
+            bool failed = false;
+
             uint8_t ReadU8()
             {
+                if (!HasBytes(1))
+                {
+                    failed = true;
+                    return 0;
+                }
                 uint8_t val = data[pos++];
                 return val;
             }
 
             uint32_t ReadU32()
             {
+                if (!HasBytes(4))
+                {
+                    failed = true;
+                    return 0;
+                }
                 uint32_t val = (static_cast<uint32_t>(data[pos]) << 24) | (static_cast<uint32_t>(data[pos + 1]) << 16) |
                                (static_cast<uint32_t>(data[pos + 2]) << 8) | static_cast<uint32_t>(data[pos + 3]);
                 pos += 4;
@@ -104,16 +116,20 @@ namespace SparkEditor
             float ReadFloat()
             {
                 uint32_t bits = ReadU32();
-                float val;
-                std::memcpy(&val, &bits, sizeof(val));
+                float val = 0.0f;
+                if (!failed)
+                    std::memcpy(&val, &bits, sizeof(val));
                 return val;
             }
 
             std::string ReadString()
             {
                 uint32_t len = ReadU32();
-                if (!HasBytes(len))
+                if (failed || !HasBytes(len))
+                {
+                    failed = true;
                     return "";
+                }
                 std::string str(reinterpret_cast<const char*>(data + pos), len);
                 pos += len;
                 return str;
@@ -135,6 +151,8 @@ namespace SparkEditor
         EditMessage ReadEditMessage(Reader& r)
         {
             EditMessage edit;
+            if (r.failed)
+                return edit;
             edit.type = static_cast<EditMessageType>(r.ReadU8());
             edit.sourceEditor = r.ReadU32();
             edit.nodeId = r.ReadString();
@@ -166,6 +184,8 @@ namespace SparkEditor
         EditorPeer ReadEditorPeer(Reader& r)
         {
             EditorPeer peer;
+            if (r.failed)
+                return peer;
             peer.id = r.ReadU32();
             peer.userName = r.ReadString();
             peer.selectedNode = r.ReadString();
@@ -186,7 +206,7 @@ namespace SparkEditor
         // Send length-prefixed message over TCP (thread-safe per socket)
         bool SendFramed(int sock, const std::vector<uint8_t>& data)
         {
-            if (sock < 0)
+            if (sock < 0 || data.empty())
                 return false;
 
             uint32_t len = static_cast<uint32_t>(data.size());
@@ -386,6 +406,9 @@ namespace SparkEditor
 
     bool DeserializeMessage(const uint8_t* data, size_t size, InternalMessage& outMsg)
     {
+        if (!data || size == 0)
+            return false;
+
         Reader r{data, size, 0};
         if (!r.HasBytes(1))
             return false;
@@ -397,6 +420,10 @@ namespace SparkEditor
         outMsg.timestamp = r.ReadU64();
         outMsg.editMessage = ReadEditMessage(r);
         outMsg.peerInfo = ReadEditorPeer(r);
+
+        // If any read went out of bounds, the message is malformed
+        if (r.failed)
+            return false;
 
         return true;
     }

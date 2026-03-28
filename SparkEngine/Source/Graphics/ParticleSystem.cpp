@@ -134,9 +134,9 @@ void ParticleEmitter::Render(ID3D11DeviceContext* context, const XMMATRIX& view,
     {
         UpdateVertexBuffer();
 
-        D3D11_MAPPED_SUBRESOURCE mapped;
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
         HRESULT hr = context->Map(m_vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(hr) && mapped.pData)
         {
             memcpy(mapped.pData, m_vertexData.data(), sizeof(ParticleVertex) * m_vertexData.size());
             context->Unmap(m_vertexBuffer.Get(), 0);

@@ -268,7 +268,7 @@ namespace Spark::Graphics
         // Upload bone matrices to the dynamic structured buffer
         D3D11_MAPPED_SUBRESOURCE mapped = {};
         HRESULT hr = context->Map(entry.boneMatrixBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-        if (FAILED(hr))
+        if (FAILED(hr) || !mapped.pData)
             return;
 
         std::memcpy(mapped.pData, boneMatrices, uploadCount * sizeof(DirectX::XMFLOAT4X4));
@@ -278,7 +278,7 @@ namespace Spark::Graphics
         {
             D3D11_MAPPED_SUBRESOURCE cbMapped = {};
             hr = context->Map(entry.constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbMapped);
-            if (FAILED(hr))
+            if (FAILED(hr) || !cbMapped.pData)
                 return;
 
             SkinningConstants constants;

@@ -146,7 +146,7 @@ void LightingSystem::UpdateLightBuffer()
 
     D3D11_MAPPED_SUBRESOURCE mapped = {};
     HRESULT hr = m_context->Map(m_lightDataBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (SUCCEEDED(hr))
+    if (SUCCEEDED(hr) && mapped.pData)
     {
         const size_t maxLights = 64;
         size_t lightCount = std::min(m_lightDataArray.size(), maxLights);
@@ -164,7 +164,7 @@ void LightingSystem::UpdateLightBuffer()
     {
         D3D11_MAPPED_SUBRESOURCE envMapped = {};
         hr = m_context->Map(m_environmentBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &envMapped);
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(hr) && envMapped.pData)
         {
             memcpy(envMapped.pData, &m_environmentLighting, sizeof(EnvironmentLighting));
             m_context->Unmap(m_environmentBuffer.Get(), 0);
@@ -176,7 +176,7 @@ void LightingSystem::UpdateLightBuffer()
     {
         D3D11_MAPPED_SUBRESOURCE shadowMapped = {};
         hr = m_context->Map(m_shadowDataBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &shadowMapped);
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(hr) && shadowMapped.pData)
         {
             const size_t maxShadowMatrices = 16;
             std::vector<XMMATRIX> shadowMatrices;

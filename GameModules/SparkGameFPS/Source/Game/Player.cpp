@@ -363,6 +363,8 @@ void Player::Fire()
         return;
 
     ASSERT_NOT_NULL(m_projectilePool);
+    if (!m_camera)
+        return;
 
     XMFLOAT3 pos = m_camera->GetPosition();
     XMFLOAT3 dir = CalculateFireDirection();

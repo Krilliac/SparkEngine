@@ -227,7 +227,7 @@ namespace Spark::Graphics
 
             D3D11_MAPPED_SUBRESOURCE mapped;
             HRESULT hr = context->Map(m_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-            if (FAILED(hr))
+            if (FAILED(hr) || !mapped.pData)
                 return;
 
             // Always copy the active range (WRITE_DISCARD invalidates the whole buffer)

@@ -13,6 +13,7 @@
 #include "ConsoleProcessManager.h"
 #include "Utils/Assert.h"
 #include "Utils/CrashHandler.h"
+#include "Utils/LogMacros.h"
 #include "Validate.h"
 #include <filesystem>
 #include <iostream>
@@ -234,7 +235,16 @@ namespace Spark
 
         // Set read end to non-blocking
         int flags = fcntl(m_pipeFromChild[0], F_GETFL, 0);
-        fcntl(m_pipeFromChild[0], F_SETFL, flags | O_NONBLOCK);
+        if (flags == -1)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "fcntl F_GETFL failed: %s", strerror(errno));
+            return false;
+        }
+        if (fcntl(m_pipeFromChild[0], F_SETFL, flags | O_NONBLOCK) == -1)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "fcntl F_SETFL failed: %s", strerror(errno));
+            return false;
+        }
 
         m_consoleRunning = true;
         usleep(250000); // 250ms

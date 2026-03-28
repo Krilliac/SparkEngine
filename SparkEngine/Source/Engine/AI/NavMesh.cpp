@@ -120,6 +120,8 @@ namespace Spark::AI
                 result.path.push_back({request.start, startTri});
                 for (size_t i = 1; i + 1 < triPath.size(); ++i)
                 {
+                    if (triPath[i] >= m_navMesh->triangles.size())
+                        return result;
                     result.path.push_back({m_navMesh->triangles[triPath[i]].centroid, triPath[i]});
                 }
                 result.path.push_back({request.end, endTri});
@@ -217,6 +219,11 @@ namespace Spark::AI
             visited[currentTri] = true;
 
             const auto& tri = m_navMesh->triangles[currentTri];
+
+            // Bounds-check vertex indices before access
+            if (tri.indices[0] >= m_navMesh->vertices.size() || tri.indices[1] >= m_navMesh->vertices.size() ||
+                tri.indices[2] >= m_navMesh->vertices.size())
+                break;
 
             // Check if end point is within this triangle
             const auto& v0 = m_navMesh->vertices[tri.indices[0]].position;
@@ -327,6 +334,8 @@ namespace Spark::AI
 
         // Fallback: could not resolve ray traversal within iteration limit
         // Report the boundary of the last known triangle
+        if (currentTri >= m_navMesh->triangles.size())
+            return hit;
         hit.position = m_navMesh->triangles[currentTri].centroid;
         hit.normal = m_navMesh->triangles[currentTri].normal;
         hit.triangleIndex = currentTri;
@@ -383,6 +392,10 @@ namespace Spark::AI
         // Generate a uniformly random point within the selected triangle
         // using the square-root parameterization: P = (1-sqrt(r1))*A + sqrt(r1)*(1-r2)*B + sqrt(r1)*r2*C
         const auto& tri = triangles[selectedTri];
+        if (tri.indices[0] >= m_navMesh->vertices.size() || tri.indices[1] >= m_navMesh->vertices.size() ||
+            tri.indices[2] >= m_navMesh->vertices.size())
+            return {0, 0, 0};
+
         const auto& a = m_navMesh->vertices[tri.indices[0]].position;
         const auto& b = m_navMesh->vertices[tri.indices[1]].position;
         const auto& c = m_navMesh->vertices[tri.indices[2]].position;
@@ -435,6 +448,10 @@ namespace Spark::AI
         for (uint32_t i = 0; i < static_cast<uint32_t>(m_navMesh->triangles.size()); ++i)
         {
             const auto& tri = m_navMesh->triangles[i];
+            if (tri.indices[0] >= m_navMesh->vertices.size() || tri.indices[1] >= m_navMesh->vertices.size() ||
+                tri.indices[2] >= m_navMesh->vertices.size())
+                continue;
+
             const auto& v0 = m_navMesh->vertices[tri.indices[0]].position;
             const auto& v1 = m_navMesh->vertices[tri.indices[1]].position;
             const auto& v2 = m_navMesh->vertices[tri.indices[2]].position;
@@ -507,6 +524,10 @@ namespace Spark::AI
             return point;
 
         const auto& tri = m_navMesh->triangles[triIndex];
+        if (tri.indices[0] >= m_navMesh->vertices.size() || tri.indices[1] >= m_navMesh->vertices.size() ||
+            tri.indices[2] >= m_navMesh->vertices.size())
+            return point;
+
         const auto& v0 = m_navMesh->vertices[tri.indices[0]].position;
         const auto& v1 = m_navMesh->vertices[tri.indices[1]].position;
         const auto& v2 = m_navMesh->vertices[tri.indices[2]].position;

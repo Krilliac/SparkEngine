@@ -157,6 +157,11 @@ namespace Spark::Graphics
             }
 
             m_mappedPtr = static_cast<uint8_t*>(mapped.pData);
+            if (!m_mappedPtr)
+            {
+                context->Unmap(m_buffer.Get(), 0);
+                return false;
+            }
             m_currentOffset = 0;
             m_frameMapped = true;
             m_metrics.usedThisFrame = 0;
