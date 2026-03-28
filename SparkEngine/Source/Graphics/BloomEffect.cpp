@@ -7,6 +7,7 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
+#include "../Utils/LogMacros.h"
 #include <algorithm>
 #include <cmath>
 

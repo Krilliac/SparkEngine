@@ -13,6 +13,7 @@
 #include "ConsoleProcessManager.h"
 #include "Utils/Assert.h"
 #include "Utils/CrashHandler.h"
+#include "Utils/LogMacros.h"
 #include "Validate.h"
 #include <filesystem>
 #include <iostream>

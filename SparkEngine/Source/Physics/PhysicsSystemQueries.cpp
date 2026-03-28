@@ -13,6 +13,7 @@
 #include "PhysicsSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/ContainerUtils.h"
+#include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/Validate.h"
 
