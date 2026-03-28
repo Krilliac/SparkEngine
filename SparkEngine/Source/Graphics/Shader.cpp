@@ -126,9 +126,8 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
         return hr;
     }
 
-    // Initialize shader resources (C++14 compatible)
-    m_vertexShader = std::unique_ptr<VertexShaderResource>(new VertexShaderResource());
-    m_pixelShader = std::unique_ptr<PixelShaderResource>(new PixelShaderResource());
+    m_vertexShader = std::make_unique<VertexShaderResource>();
+    m_pixelShader = std::make_unique<PixelShaderResource>();
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader system initialized");
     return S_OK;

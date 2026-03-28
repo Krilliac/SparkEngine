@@ -16,6 +16,7 @@
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/ScopeGuard.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -352,6 +353,7 @@ bool RenderTarget::SaveBMP(const std::string& filename, unsigned char* data, uin
     {
         return false;
     }
+    auto closeFile = Spark::MakeScopeExit([&] { fclose(file); });
 
     // Write header
     fwrite(&header, sizeof(BMPHeader), 1, file);
@@ -368,7 +370,6 @@ bool RenderTarget::SaveBMP(const std::string& filename, unsigned char* data, uin
         }
     }
 
-    fclose(file);
     return true;
 }
 

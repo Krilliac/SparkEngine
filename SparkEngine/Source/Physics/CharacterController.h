@@ -154,8 +154,8 @@ class CharacterController
     /// @brief Attempt to create the Jolt character from stored desc. Returns true on success.
     bool TryInitialize();
 
-    PhysicsSystem* m_physicsSystem;
+    PhysicsSystem* m_physicsSystem; ///< Non-owning; lifetime tied to engine
     CharacterControllerDesc m_desc;
-    JPH::CharacterVirtual* m_joltCharacter = nullptr; ///< Owned pointer to Jolt character
-    bool m_pendingInit = false;                       ///< True if construction was deferred due to null PhysicsSystem
+    std::unique_ptr<JPH::CharacterVirtual> m_joltCharacter; ///< RAII-owned Jolt character
+    bool m_pendingInit = false; ///< True if construction was deferred due to null PhysicsSystem
 };

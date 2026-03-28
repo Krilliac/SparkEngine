@@ -713,7 +713,7 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreatePathConstraint(std::shar
         return nullptr;
 
     // Build Hermite spline path
-    auto* path = new JPH::PathConstraintPathHermite;
+    auto* path = new JPH::PathConstraintPathHermite; // Jolt ref-counted; constraint settings takes ownership
     for (size_t i = 0; i < pathPoints.size(); i++)
     {
         const auto& p = pathPoints[i];
@@ -1402,7 +1402,8 @@ bool PhysicsSystem::LoadState(const std::vector<uint8_t>& buffer)
 
 uint32_t PhysicsSystem::CreateGroupFilterTable(uint32_t numSubGroups)
 {
-    auto* tableRef = new JPH::Ref<JPH::GroupFilterTable>(new JPH::GroupFilterTable(numSubGroups));
+    auto* tableRef =
+        new JPH::Ref<JPH::GroupFilterTable>(new JPH::GroupFilterTable(numSubGroups)); // Cleaned up in Shutdown()
     m_groupFilterTables.push_back(tableRef);
     return static_cast<uint32_t>(m_groupFilterTables.size()); // 1-based ID
 }

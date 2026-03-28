@@ -28,6 +28,59 @@
 namespace Spark
 {
 
+    // =========================================================================
+    // RAII wrapper for Windows HANDLE — auto-closes on destruction
+    // =========================================================================
+#ifdef SPARK_PLATFORM_WINDOWS
+    class WinHandle
+    {
+      public:
+        WinHandle() = default;
+        explicit WinHandle(HANDLE h) : m_handle(h) {}
+        ~WinHandle()
+        {
+            if (m_handle)
+                CloseHandle(m_handle);
+        }
+
+        WinHandle(const WinHandle&) = delete;
+        WinHandle& operator=(const WinHandle&) = delete;
+        WinHandle(WinHandle&& other) noexcept : m_handle(other.m_handle) { other.m_handle = NULL; }
+        WinHandle& operator=(WinHandle&& other) noexcept
+        {
+            if (this != &other)
+            {
+                if (m_handle)
+                    CloseHandle(m_handle);
+                m_handle = other.m_handle;
+                other.m_handle = NULL;
+            }
+            return *this;
+        }
+
+        HANDLE Get() const { return m_handle; }
+        HANDLE* GetAddressOf() { return &m_handle; }
+        explicit operator bool() const { return m_handle != NULL; }
+
+        void Reset(HANDLE h = NULL)
+        {
+            if (m_handle)
+                CloseHandle(m_handle);
+            m_handle = h;
+        }
+
+        HANDLE Release()
+        {
+            HANDLE h = m_handle;
+            m_handle = NULL;
+            return h;
+        }
+
+      private:
+        HANDLE m_handle = NULL;
+    };
+#endif
+
     class CommandRegistry;
 
     /**
@@ -71,13 +124,13 @@ namespace Spark
         void ProcessQueuedMessages();
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        // Windows process/pipe handles for SparkConsole.exe subprocess
-        HANDLE m_processHandle = NULL; ///< Handle to the SparkConsole child process.
-        HANDLE m_threadHandle = NULL;  ///< Handle to the child process's primary thread.
-        HANDLE m_stdInRead = NULL;     ///< Read end of the pipe connected to child's stdin.
-        HANDLE m_stdInWrite = NULL;    ///< Write end — engine writes log messages here.
-        HANDLE m_stdOutRead = NULL;    ///< Read end — engine reads commands from child's stdout.
-        HANDLE m_stdOutWrite = NULL;   ///< Write end of the pipe connected to child's stdout.
+        // Windows process/pipe handles for SparkConsole.exe subprocess (RAII-managed)
+        WinHandle m_processHandle; ///< Handle to the SparkConsole child process.
+        WinHandle m_threadHandle;  ///< Handle to the child process's primary thread.
+        WinHandle m_stdInRead;     ///< Read end of the pipe connected to child's stdin.
+        WinHandle m_stdInWrite;    ///< Write end — engine writes log messages here.
+        WinHandle m_stdOutRead;    ///< Read end — engine reads commands from child's stdout.
+        WinHandle m_stdOutWrite;   ///< Write end of the pipe connected to child's stdout.
 #elif defined(SPARK_PLATFORM_LINUX)
         // Linux process/pipe file descriptors for SparkConsole subprocess
         pid_t m_childPid = -1;             ///< PID of the child console process (-1 = not launched).

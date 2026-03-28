@@ -182,8 +182,8 @@ namespace Spark
                 ComPtr<ID3D11RasterizerState> m_rasterizerState;
                 ComPtr<ID3D11DepthStencilState> m_depthStencilState;
                 ComPtr<ID3D11BlendState> m_blendState;
-                D3D11Shader* m_vertexShader;
-                D3D11Shader* m_pixelShader;
+                D3D11Shader* m_vertexShader = nullptr; ///< Non-owning; shader lifetime managed by caller
+                D3D11Shader* m_pixelShader = nullptr;  ///< Non-owning; shader lifetime managed by caller
             };
 
             // ============================================================================
@@ -208,7 +208,7 @@ namespace Spark
                 bool CreateBackBufferViews();
 
                 RHISwapChainDesc m_desc;
-                ID3D11Device* m_device;
+                ID3D11Device* m_device = nullptr; ///< Non-owning; lifetime tied to parent D3D11Device
                 ComPtr<IDXGISwapChain1> m_swapChain;
                 std::unique_ptr<D3D11Texture> m_backBuffer;
             };
@@ -264,7 +264,7 @@ namespace Spark
                 void SetMarker(const char* name) override;
 
               private:
-                ID3D11DeviceContext* m_context;
+                ID3D11DeviceContext* m_context = nullptr; ///< Non-owning; lifetime tied to parent D3D11Device
                 bool m_isImmediate;
             };
 
