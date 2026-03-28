@@ -226,6 +226,158 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
     endif()
 endif()
 
+# ---------------------------------------------------------------------
+# 6.5) Per-configuration optimization flags
+#
+# CMake defaults are minimal:
+#   Debug       → -O0 -g           (MSVC: /Od /Zi)
+#   Release     → -O3 -DNDEBUG     (MSVC: /O2 /DNDEBUG)
+#   RelWithDebInfo → -O2 -g -DNDEBUG
+#   MinSizeRel  → -Os -DNDEBUG     (MSVC: /O1 /DNDEBUG)
+#
+# We add engine-specific flags on top:
+#   - Release/Shipping: LTO, intrinsics, vectorization, linker GC
+#   - Debug: -Og (GCC), runtime checks, fast linking
+# ---------------------------------------------------------------------
+
+# --- Option: native architecture tuning (OFF for distributed builds) ---
+option(SPARK_NATIVE_ARCH "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries." OFF)
+
+if(MSVC)
+    # ── Release / RelWithDebInfo / MinSizeRel (all optimized configs) ──
+    add_compile_options(
+        # Intrinsics — let the compiler use hardware instructions (sqrt, memcpy, etc.)
+        $<$<NOT:$<CONFIG:Debug>>:/Oi>
+        # Favor speed over size in Release and RelWithDebInfo
+        $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:/O2>
+        # Shipping (MinSizeRel) also gets speed — /O2 is better than /O1 for games
+        $<$<CONFIG:MinSizeRel>:/O2>
+        # Whole-program optimization (enables cross-TU inlining via LTCG at link time)
+        $<$<NOT:$<CONFIG:Debug>>:/GL>
+        # Favor 64-bit code generation (branch prediction, register allocation)
+        $<$<NOT:$<CONFIG:Debug>>:/favor:AMD64>
+        # String pooling — merge identical string literals
+        $<$<NOT:$<CONFIG:Debug>>:/GF>
+        # Function-level linking — enables linker dead-code elimination (/OPT:REF)
+        $<$<NOT:$<CONFIG:Debug>>:/Gy>
+    )
+
+    # ── Release / Shipping linker optimizations ──
+    add_link_options(
+        # Link-Time Code Generation — cross-TU inlining, devirtualization (pairs with /GL)
+        $<$<NOT:$<CONFIG:Debug>>:/LTCG>
+        # Remove unreferenced functions/data (dead code elimination)
+        $<$<NOT:$<CONFIG:Debug>>:/OPT:REF>
+        # Fold identical COMDATs (identical functions/constants merged)
+        $<$<NOT:$<CONFIG:Debug>>:/OPT:ICF>
+    )
+
+    # ── Debug ──
+    add_compile_options(
+        # Runtime error checks: stack frame validation + uninitialized variable detection
+        $<$<CONFIG:Debug>:/RTC1>
+        # Just My Code debugging — skip stepping into framework/library code
+        $<$<CONFIG:Debug>:/JMC>
+    )
+    # Incremental linking for faster debug iteration
+    add_link_options(
+        $<$<CONFIG:Debug>:/INCREMENTAL>
+    )
+
+    # MSVC iterator debug level: level 1 in Debug gives bounds checking without
+    # the extreme slowdown of level 2 (which is MSVC's default for Debug)
+    add_compile_definitions(
+        $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=1>
+    )
+
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
+    # ── Release / RelWithDebInfo / MinSizeRel ──
+    add_compile_options(
+        # Split functions/data into individual sections for linker GC
+        $<$<NOT:$<CONFIG:Debug>>:-ffunction-sections>
+        $<$<NOT:$<CONFIG:Debug>>:-fdata-sections>
+        # Strict aliasing — enables type-based alias analysis optimizations
+        $<$<NOT:$<CONFIG:Debug>>:-fstrict-aliasing>
+    )
+
+    # LTO for Release and MinSizeRel (not RelWithDebInfo — it bloats debug info)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options(
+            $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=auto>
+        )
+        add_link_options(
+            $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=auto>
+        )
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|IntelLLVM")
+        add_compile_options(
+            $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=thin>
+        )
+        add_link_options(
+            $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=thin>
+        )
+    endif()
+
+    # Linker dead-code elimination (pairs with -ffunction-sections/-fdata-sections)
+    if(NOT APPLE)
+        add_link_options(
+            $<$<NOT:$<CONFIG:Debug>>:-Wl,--gc-sections>
+        )
+    else()
+        add_link_options(
+            $<$<NOT:$<CONFIG:Debug>>:-Wl,-dead_strip>
+        )
+    endif()
+
+    # ── Shipping (MinSizeRel): override -Os with -O3 for speed ──
+    # CMake sets -Os for MinSizeRel by default; games need speed, not size.
+    # We override at the target level after CMake's defaults are set.
+    string(REPLACE "-Os" "-O3" CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL}")
+    string(REPLACE "-Os" "-O3" CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_MINSIZEREL}")
+
+    # ── Debug: -Og instead of -O0 ──
+    # -Og is "optimize for debugging" — ~2x faster than -O0 while preserving
+    # almost all debug information. Variables are less likely to be optimized out
+    # compared to -O1/-O2, making it ideal for stepping through code.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        string(REPLACE "-O0" "-Og" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+        string(REPLACE "-O0" "-Og" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+    endif()
+
+    # Debug: GCC assertions for STL containers (bounds checking on operator[], iterators)
+    add_compile_definitions(
+        $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS>
+    )
+
+    # Shipping: strip symbols from the final binary
+    if(NOT APPLE)
+        add_link_options(
+            $<$<CONFIG:MinSizeRel>:-Wl,--strip-all>
+        )
+    else()
+        add_link_options(
+            $<$<CONFIG:MinSizeRel>:-Wl,-S>
+        )
+    endif()
+endif()
+
+# ── Architecture tuning (opt-in, all compilers) ──
+if(SPARK_NATIVE_ARCH)
+    if(MSVC)
+        # MSVC doesn't have -march=native; enable AVX2 which covers most modern CPUs
+        add_compile_options($<$<NOT:$<CONFIG:Debug>>:/arch:AVX2>)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
+        add_compile_options($<$<NOT:$<CONFIG:Debug>>:-march=native>)
+    endif()
+    message(STATUS "Native architecture tuning: ENABLED (not suitable for distribution)")
+else()
+    # Baseline: SSE4.2 is universally available on x86-64 CPUs since ~2010
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+        if(NOT MSVC)
+            add_compile_options($<$<NOT:$<CONFIG:Debug>>:-msse4.2>)
+        endif()
+    endif()
+endif()
+
 # MinGW cross-compilation from Linux: defines the same Windows macros as MSVC
 # so that D3D11/D3D12 code paths compile. MinGW uses GCC flags (set above).
 if(MINGW AND NOT MSVC)
@@ -602,7 +754,12 @@ if(JOLT_FOUND)
     set(TARGET_VIEWER OFF CACHE BOOL "" FORCE)
     set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
     set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
-    set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+    # Enable Jolt's IPO in Release/Shipping so it participates in whole-program LTO
+    if(CMAKE_BUILD_TYPE MATCHES "Release|MinSizeRel|RelWithDebInfo")
+        set(INTERPROCEDURAL_OPTIMIZATION ON CACHE BOOL "" FORCE)
+    else()
+        set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+    endif()
     set(FLOATING_POINT_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
     set(CPP_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
     # RTTI must be ON to match the engine — otherwise PhysicsShapeFactory
