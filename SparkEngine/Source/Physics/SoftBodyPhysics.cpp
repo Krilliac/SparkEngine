@@ -42,7 +42,7 @@ SoftBody::SoftBody(PhysicsSystem* physicsSystem, const SoftBodyDesc& desc)
     auto* joltSystem = physicsSystem->GetJoltSystem();
 
     // Build shared settings (vertex positions, edges, faces)
-    auto sharedSettings = new JPH::SoftBodySharedSettings;
+    auto sharedSettings = new JPH::SoftBodySharedSettings; // Jolt ref-counted; body creation takes ownership
 
     // Add vertices
     for (const auto& v : desc.vertices)

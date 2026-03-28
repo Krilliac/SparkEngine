@@ -23,6 +23,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <wrl/client.h>
 #endif // SPARK_PLATFORM_WINDOWS
+#include "ScopeGuard.h"
 
 // Only include CURL when libcurl is available (detected by CMake)
 #ifdef SPARK_HAS_CURL
@@ -829,8 +830,10 @@ static void SaveScreenshot(const std::wstring& file)
     if (!swap || !device || !ctx)
         return;
 
-    ID3D11Texture2D* backBuffer = nullptr;
-    if (FAILED(swap->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer)))
+    using Microsoft::WRL::ComPtr;
+
+    ComPtr<ID3D11Texture2D> backBuffer;
+    if (FAILED(swap->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(backBuffer.GetAddressOf()))))
         return;
 
     D3D11_TEXTURE2D_DESC desc;
@@ -842,124 +845,62 @@ static void SaveScreenshot(const std::wstring& file)
     desc.SampleDesc.Count = 1;
     desc.SampleDesc.Quality = 0;
 
-    ID3D11Texture2D* staging = nullptr;
-    if (FAILED(device->CreateTexture2D(&desc, nullptr, &staging)))
-    {
-        backBuffer->Release();
+    ComPtr<ID3D11Texture2D> staging;
+    if (FAILED(device->CreateTexture2D(&desc, nullptr, staging.GetAddressOf())))
         return;
-    }
 
-    ctx->CopyResource(staging, backBuffer);
-    backBuffer->Release();
+    ctx->CopyResource(staging.Get(), backBuffer.Get());
+    backBuffer.Reset(); // Done with back buffer — release early
 
     D3D11_MAPPED_SUBRESOURCE mapped;
-    if (FAILED(ctx->Map(staging, 0, D3D11_MAP_READ, 0, &mapped)))
-    {
-        staging->Release();
+    if (FAILED(ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped)))
         return;
-    }
+
+    // RAII guard: unmap staging texture on scope exit regardless of path taken
+    auto unmapGuard = Spark::MakeScopeExit([&] { ctx->Unmap(staging.Get(), 0); });
 
     HRESULT hrCom = CoInitializeEx(NULL, COINIT_MULTITHREADED);
     (void)hrCom;
+    auto comGuard = Spark::MakeScopeExit([&] { CoUninitialize(); });
 
-    IWICImagingFactory* wicFactory = nullptr;
-    if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wicFactory))))
-    {
-        ctx->Unmap(staging, 0);
-        staging->Release();
-        CoUninitialize();
+    ComPtr<IWICImagingFactory> wicFactory;
+    if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(wicFactory.GetAddressOf()))))
         return;
-    }
 
-    IWICBitmap* wicBitmap = nullptr;
+    ComPtr<IWICBitmap> wicBitmap;
     if (FAILED(wicFactory->CreateBitmapFromMemory(desc.Width, desc.Height, GUID_WICPixelFormat32bppBGRA,
                                                   mapped.RowPitch, mapped.RowPitch * desc.Height,
-                                                  reinterpret_cast<BYTE*>(mapped.pData), &wicBitmap)))
-    {
-        ctx->Unmap(staging, 0);
-        staging->Release();
-        wicFactory->Release();
-        CoUninitialize();
+                                                  reinterpret_cast<BYTE*>(mapped.pData), wicBitmap.GetAddressOf())))
         return;
-    }
 
-    IWICStream* wicStream = nullptr;
-    if (FAILED(wicFactory->CreateStream(&wicStream)))
-    {
-        wicBitmap->Release();
-        ctx->Unmap(staging, 0);
-        staging->Release();
-        wicFactory->Release();
-        CoUninitialize();
+    ComPtr<IWICStream> wicStream;
+    if (FAILED(wicFactory->CreateStream(wicStream.GetAddressOf())))
         return;
-    }
 
     if (FAILED(wicStream->InitializeFromFilename(file.c_str(), GENERIC_WRITE)))
-    {
-        wicStream->Release();
-        wicBitmap->Release();
-        ctx->Unmap(staging, 0);
-        staging->Release();
-        wicFactory->Release();
-        CoUninitialize();
         return;
-    }
 
-    IWICBitmapEncoder* encoder = nullptr;
-    if (FAILED(wicFactory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder)))
-    {
-        wicStream->Release();
-        wicBitmap->Release();
-        ctx->Unmap(staging, 0);
-        staging->Release();
-        wicFactory->Release();
-        CoUninitialize();
+    ComPtr<IWICBitmapEncoder> encoder;
+    if (FAILED(wicFactory->CreateEncoder(GUID_ContainerFormatPng, nullptr, encoder.GetAddressOf())))
         return;
-    }
 
-    if (FAILED(encoder->Initialize(wicStream, WICBitmapEncoderNoCache)))
-    {
-        encoder->Release();
-        wicStream->Release();
-        wicBitmap->Release();
-        ctx->Unmap(staging, 0);
-        staging->Release();
-        wicFactory->Release();
-        CoUninitialize();
+    if (FAILED(encoder->Initialize(wicStream.Get(), WICBitmapEncoderNoCache)))
         return;
-    }
 
-    IWICBitmapFrameEncode* frame = nullptr;
-    IPropertyBag2* props = nullptr;
-    if (FAILED(encoder->CreateNewFrame(&frame, &props)))
-    {
-        encoder->Release();
-        wicStream->Release();
-        wicBitmap->Release();
-        ctx->Unmap(staging, 0);
-        staging->Release();
-        wicFactory->Release();
-        CoUninitialize();
+    ComPtr<IWICBitmapFrameEncode> frame;
+    ComPtr<IPropertyBag2> props;
+    if (FAILED(encoder->CreateNewFrame(frame.GetAddressOf(), props.GetAddressOf())))
         return;
-    }
 
-    frame->Initialize(props);
+    frame->Initialize(props.Get());
     frame->SetSize(desc.Width, desc.Height);
     WICPixelFormatGUID fmt = GUID_WICPixelFormat32bppBGRA;
     frame->SetPixelFormat(&fmt);
-    frame->WriteSource(wicBitmap, nullptr);
+    frame->WriteSource(wicBitmap.Get(), nullptr);
     frame->Commit();
     encoder->Commit();
-
-    frame->Release();
-    props->Release();
-    encoder->Release();
-    wicStream->Release();
-    wicBitmap->Release();
-    ctx->Unmap(staging, 0);
-    staging->Release();
-    wicFactory->Release();
-    CoUninitialize();
+    // All ComPtr + ScopeExit guards handle cleanup automatically
 }
 
 //------------------------------------------------------------------------------

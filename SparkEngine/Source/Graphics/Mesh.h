@@ -16,6 +16,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <DirectXMath.h>
+#include <wrl/client.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <vector>
 #include <string>
@@ -244,10 +245,10 @@ class Mesh
      */
     void CalculateNormals();
 
-    ID3D11Buffer* m_vb{nullptr};             ///< DirectX vertex buffer
-    ID3D11Buffer* m_ib{nullptr};             ///< DirectX index buffer
-    ID3D11Device* m_device{nullptr};         ///< DirectX device reference
-    ID3D11DeviceContext* m_context{nullptr}; ///< DirectX context reference
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_vb; ///< DirectX vertex buffer (RAII-managed)
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_ib; ///< DirectX index buffer (RAII-managed)
+    ID3D11Device* m_device{nullptr};           ///< Non-owning; lifetime tied to GraphicsEngine
+    ID3D11DeviceContext* m_context{nullptr};   ///< Non-owning; lifetime tied to GraphicsEngine
 
     std::vector<Vertex> m_vertices;      ///< CPU vertex data
     std::vector<unsigned int> m_indices; ///< CPU index data

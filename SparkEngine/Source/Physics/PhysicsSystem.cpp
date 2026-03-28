@@ -29,6 +29,7 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Collision/GroupFilterTable.h>
 
 #include "Utils/DebugHookManager.h"
 
@@ -430,8 +431,19 @@ void PhysicsSystem::Shutdown()
     m_namedBodies.clear();
     m_bodyIDMap.clear();
 
-    // Clear shape cache
+    // Delete heap-allocated ShapeRefC entries before clearing the cache
+    for (auto& [hash, shapePtr] : m_shapeCache)
+    {
+        delete static_cast<JPH::ShapeRefC*>(shapePtr);
+    }
     m_shapeCache.clear();
+
+    // Delete heap-allocated group filter table entries
+    for (auto* tablePtr : m_groupFilterTables)
+    {
+        delete static_cast<JPH::Ref<JPH::GroupFilterTable>*>(tablePtr);
+    }
+    m_groupFilterTables.clear();
 
     // Null out contact listener pointers before destroying Jolt (prevents dangling access
     // from physics thread callbacks during shutdown)
@@ -453,13 +465,10 @@ void PhysicsSystem::Shutdown()
     m_jobSystem.reset();
     m_tempAllocator.reset();
 
-    // Cleanup Jolt factory
+    // Cleanup Jolt factory — take ownership back from the global, then let unique_ptr delete
     JPH::UnregisterTypes();
-    if (JPH::Factory::sInstance)
-    {
-        delete JPH::Factory::sInstance;
-        JPH::Factory::sInstance = nullptr;
-    }
+    std::unique_ptr<JPH::Factory> factoryCleanup(JPH::Factory::sInstance);
+    JPH::Factory::sInstance = nullptr;
 
     Spark::SimpleConsole::GetInstance().LogInfo("PhysicsSystem shutdown complete");
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Physics", 0.0);

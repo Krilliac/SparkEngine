@@ -44,16 +44,8 @@ HRESULT Mesh::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 
 void Mesh::Shutdown()
 {
-    if (m_ib)
-    {
-        m_ib->Release();
-        m_ib = nullptr;
-    }
-    if (m_vb)
-    {
-        m_vb->Release();
-        m_vb = nullptr;
-    }
+    m_ib.Reset();
+    m_vb.Reset();
     m_vertices.clear();
     m_indices.clear();
     m_vertexCount = m_indexCount = 0;
@@ -448,17 +440,9 @@ HRESULT Mesh::CreateBuffers()
     ASSERT(m_device);
     ASSERT(!m_vertices.empty() && !m_indices.empty());
 
-    // Release existing buffers before creating new ones to prevent COM leaks
-    if (m_vb)
-    {
-        m_vb->Release();
-        m_vb = nullptr;
-    }
-    if (m_ib)
-    {
-        m_ib->Release();
-        m_ib = nullptr;
-    }
+    // Release existing buffers before creating new ones
+    m_vb.Reset();
+    m_ib.Reset();
 
     // Vertex buffer
     D3D11_BUFFER_DESC vbd{};
@@ -467,7 +451,7 @@ HRESULT Mesh::CreateBuffers()
     vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     D3D11_SUBRESOURCE_DATA vsd{m_vertices.data(), 0, 0};
 
-    HRESULT hr = m_device->CreateBuffer(&vbd, &vsd, &m_vb);
+    HRESULT hr = m_device->CreateBuffer(&vbd, &vsd, m_vb.GetAddressOf());
     ASSERT_MSG(SUCCEEDED(hr), "CreateBuffer (VB) failed");
     if (FAILED(hr))
         return hr;
@@ -481,7 +465,7 @@ HRESULT Mesh::CreateBuffers()
     D3D11_SUBRESOURCE_DATA isd{};
     isd.pSysMem = m_indices.data();
 
-    hr = m_device->CreateBuffer(&ibd, &isd, &m_ib);
+    hr = m_device->CreateBuffer(&ibd, &isd, m_ib.GetAddressOf());
     ASSERT_MSG(SUCCEEDED(hr), "CreateBuffer (IB) failed");
     if (FAILED(hr))
         return hr;
@@ -497,8 +481,9 @@ void Mesh::Render(ID3D11DeviceContext* ctx)
                       "Mesh::Render — invalid render state");
 
     UINT stride = sizeof(Vertex), offset = 0;
-    ctx->IASetVertexBuffers(0, 1, &m_vb, &stride, &offset);
-    ctx->IASetIndexBuffer(m_ib, DXGI_FORMAT_R32_UINT, 0);
+    ID3D11Buffer* vb = m_vb.Get();
+    ctx->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+    ctx->IASetIndexBuffer(m_ib.Get(), DXGI_FORMAT_R32_UINT, 0);
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     ctx->DrawIndexed(m_indexCount, 0, 0);
@@ -536,9 +521,9 @@ void Mesh::Shutdown()
     m_indices.clear();
     m_vertexCount = 0;
     m_indexCount = 0;
-    // On Linux, m_vb/m_ib are raw pointers to stub types - no real cleanup needed
-    m_vb = nullptr;
-    m_ib = nullptr;
+    // On Linux, m_vb/m_ib are ComPtr stubs — Reset() sets to nullptr
+    m_vb.Reset();
+    m_ib.Reset();
 }
 
 HRESULT Mesh::CreateBuffers()

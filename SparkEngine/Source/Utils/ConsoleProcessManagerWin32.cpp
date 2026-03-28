@@ -105,45 +105,25 @@ namespace Spark
             m_consoleThread.join();
         m_consoleRunning = false;
 
-        if (m_stdInWrite)
-        {
-            CloseHandle(m_stdInWrite);
-            m_stdInWrite = NULL;
-        }
-        if (m_stdOutRead)
-        {
-            CloseHandle(m_stdOutRead);
-            m_stdOutRead = NULL;
-        }
-        if (m_stdInRead)
-        {
-            CloseHandle(m_stdInRead);
-            m_stdInRead = NULL;
-        }
-        if (m_stdOutWrite)
-        {
-            CloseHandle(m_stdOutWrite);
-            m_stdOutWrite = NULL;
-        }
+        // Close pipe handles (RAII WinHandle::Reset closes and nulls)
+        m_stdInWrite.Reset();
+        m_stdOutRead.Reset();
+        m_stdInRead.Reset();
+        m_stdOutWrite.Reset();
 
         Sleep(100);
 
         if (m_processHandle)
         {
             DWORD exitCode;
-            if (GetExitCodeProcess(m_processHandle, &exitCode) && exitCode == STILL_ACTIVE)
+            if (GetExitCodeProcess(m_processHandle.Get(), &exitCode) && exitCode == STILL_ACTIVE)
             {
-                TerminateProcess(m_processHandle, 0);
-                WaitForSingleObject(m_processHandle, 1000);
+                TerminateProcess(m_processHandle.Get(), 0);
+                WaitForSingleObject(m_processHandle.Get(), 1000);
             }
-            CloseHandle(m_processHandle);
-            m_processHandle = NULL;
+            m_processHandle.Reset();
         }
-        if (m_threadHandle)
-        {
-            CloseHandle(m_threadHandle);
-            m_threadHandle = NULL;
-        }
+        m_threadHandle.Reset();
         m_initialized = false;
     }
 
@@ -178,29 +158,38 @@ namespace Spark
         sa.bInheritHandle = TRUE;
         sa.lpSecurityDescriptor = NULL;
 
-        HANDLE hChildStdInRead, hChildStdInWrite;
-        HANDLE hChildStdOutRead, hChildStdOutWrite;
+        // Use WinHandle RAII for local pipe handles — auto-close on error/scope exit
+        WinHandle hChildStdInRead, hChildStdInWrite;
+        WinHandle hChildStdOutRead, hChildStdOutWrite;
 
-        if (!CreatePipe(&hChildStdInRead, &hChildStdInWrite, &sa, 0))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreatePipe failed for stdin (error %lu)", GetLastError());
-            return false;
+            HANDLE inR = NULL, inW = NULL;
+            if (!CreatePipe(&inR, &inW, &sa, 0))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreatePipe failed for stdin (error %lu)", GetLastError());
+                return false;
+            }
+            hChildStdInRead.Reset(inR);
+            hChildStdInWrite.Reset(inW);
         }
-        if (!CreatePipe(&hChildStdOutRead, &hChildStdOutWrite, &sa, 0))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreatePipe failed for stdout (error %lu)", GetLastError());
-            CloseHandle(hChildStdInRead);
-            CloseHandle(hChildStdInWrite);
-            return false;
+            HANDLE outR = NULL, outW = NULL;
+            if (!CreatePipe(&outR, &outW, &sa, 0))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreatePipe failed for stdout (error %lu)", GetLastError());
+                return false; // WinHandle destructors close stdin pipe handles
+            }
+            hChildStdOutRead.Reset(outR);
+            hChildStdOutWrite.Reset(outW);
         }
-        SetHandleInformation(hChildStdOutRead, HANDLE_FLAG_INHERIT, 0);
-        SetHandleInformation(hChildStdInWrite, HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation(hChildStdOutRead.Get(), HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation(hChildStdInWrite.Get(), HANDLE_FLAG_INHERIT, 0);
 
         STARTUPINFOW si = {};
         si.cb = sizeof(STARTUPINFOW);
-        si.hStdError = hChildStdOutWrite;
-        si.hStdOutput = hChildStdOutWrite;
-        si.hStdInput = hChildStdInRead;
+        si.hStdError = hChildStdOutWrite.Get();
+        si.hStdOutput = hChildStdOutWrite.Get();
+        si.hStdInput = hChildStdInRead.Get();
         si.dwFlags |= STARTF_USESTDHANDLES;
 
         PROCESS_INFORMATION pi = {};
@@ -213,20 +202,18 @@ namespace Spark
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "CreateProcessW failed for SparkConsole (error %lu)",
                             GetLastError());
-            CloseHandle(hChildStdInRead);
-            CloseHandle(hChildStdInWrite);
-            CloseHandle(hChildStdOutRead);
-            CloseHandle(hChildStdOutWrite);
-            return false;
+            return false; // WinHandle destructors close all pipe handles
         }
 
-        CloseHandle(hChildStdOutWrite);
-        CloseHandle(hChildStdInRead);
+        // Child-side handles are no longer needed by the engine
+        hChildStdOutWrite.Reset();
+        hChildStdInRead.Reset();
 
-        m_processHandle = pi.hProcess;
-        m_threadHandle = pi.hThread;
-        m_stdInWrite = hChildStdInWrite;
-        m_stdOutRead = hChildStdOutRead;
+        // Transfer ownership of remaining handles to member variables
+        m_processHandle = WinHandle(pi.hProcess);
+        m_threadHandle = WinHandle(pi.hThread);
+        m_stdInWrite = std::move(hChildStdInWrite);
+        m_stdOutRead = std::move(hChildStdOutRead);
         m_consoleRunning = true;
         Sleep(250);
         return true;
@@ -238,7 +225,7 @@ namespace Spark
             return false;
 
         DWORD bytesAvailable = 0;
-        if (!PeekNamedPipe(m_stdOutRead, NULL, 0, NULL, &bytesAvailable, NULL))
+        if (!PeekNamedPipe(m_stdOutRead.Get(), NULL, 0, NULL, &bytesAvailable, NULL))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "PeekNamedPipe failed (error %lu) — marking console as stopped",
                             GetLastError());
@@ -251,7 +238,7 @@ namespace Spark
         char buffer[1024];
         DWORD bytesRead = 0;
         DWORD bytesToRead = std::min(bytesAvailable, static_cast<DWORD>(sizeof(buffer) - 1));
-        if (!ReadFile(m_stdOutRead, buffer, bytesToRead, &bytesRead, NULL))
+        if (!ReadFile(m_stdOutRead.Get(), buffer, bytesToRead, &bytesRead, NULL))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "ReadFile failed on console pipe (error %lu)", GetLastError());
             m_consoleRunning = false;
@@ -293,10 +280,10 @@ namespace Spark
         utf8Message += "\n";
 
         DWORD bytesWritten = 0;
-        BOOL result =
-            WriteFile(m_stdInWrite, utf8Message.c_str(), static_cast<DWORD>(utf8Message.length()), &bytesWritten, NULL);
+        BOOL result = WriteFile(m_stdInWrite.Get(), utf8Message.c_str(), static_cast<DWORD>(utf8Message.length()),
+                                &bytesWritten, NULL);
         if (result)
-            FlushFileBuffers(m_stdInWrite);
+            FlushFileBuffers(m_stdInWrite.Get());
         return result != FALSE;
     }
 
@@ -312,7 +299,7 @@ namespace Spark
             if (m_processHandle)
             {
                 DWORD exitCode;
-                if (GetExitCodeProcess(m_processHandle, &exitCode) && exitCode != STILL_ACTIVE)
+                if (GetExitCodeProcess(m_processHandle.Get(), &exitCode) && exitCode != STILL_ACTIVE)
                 {
                     m_consoleRunning = false;
                     break;

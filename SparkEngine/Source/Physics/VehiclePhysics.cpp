@@ -62,7 +62,7 @@ VehiclePhysics::VehiclePhysics(PhysicsSystem* physicsSystem, std::shared_ptr<Phy
     // Configure wheels
     for (const auto& wheelDesc : desc.wheels)
     {
-        JPH::WheelSettingsWV* ws = new JPH::WheelSettingsWV;
+        JPH::WheelSettingsWV* ws = new JPH::WheelSettingsWV; // Jolt takes ownership via mWheels
         ws->mPosition = JPH::Vec3(wheelDesc.position.x, wheelDesc.position.y, wheelDesc.position.z);
         ws->mSuspensionDirection =
             JPH::Vec3(wheelDesc.suspensionDir.x, wheelDesc.suspensionDir.y, wheelDesc.suspensionDir.z);
@@ -88,14 +88,14 @@ VehiclePhysics::VehiclePhysics(PhysicsSystem* physicsSystem, std::shared_ptr<Phy
 
         if (desc.type == PhysicsVehicleType::Motorcycle)
         {
-            auto* mcController = new JPH::MotorcycleControllerSettings;
+            auto* mcController = new JPH::MotorcycleControllerSettings; // Jolt takes ownership via mController
             mcController->mLeanSpringConstant = desc.leanSpringConstant;
             mcController->mLeanSpringDamping = desc.leanSpringDamping;
             controller = mcController;
         }
         else
         {
-            controller = new JPH::WheeledVehicleControllerSettings;
+            controller = new JPH::WheeledVehicleControllerSettings; // Jolt takes ownership via mController
         }
 
         // Engine
@@ -140,7 +140,7 @@ VehiclePhysics::VehiclePhysics(PhysicsSystem* physicsSystem, std::shared_ptr<Phy
     }
     else if (desc.type == PhysicsVehicleType::Tracked)
     {
-        auto* controller = new JPH::TrackedVehicleControllerSettings;
+        auto* controller = new JPH::TrackedVehicleControllerSettings; // Jolt takes ownership via mController
         controller->mEngine.mMaxTorque = desc.maxEngineTorque;
         controller->mEngine.mMinRPM = desc.minRPM;
         controller->mEngine.mMaxRPM = desc.maxRPM;
@@ -171,10 +171,10 @@ VehiclePhysics::VehiclePhysics(PhysicsSystem* physicsSystem, std::shared_ptr<Phy
         return;
     }
 
-    auto* constraint = new JPH::VehicleConstraint(*joltBody, vehicleSettings);
+    auto* constraint = new JPH::VehicleConstraint(*joltBody, vehicleSettings); // Jolt ref-counted via AddConstraint
 
     // Set up collision tester (raycast-based wheel ground detection)
-    auto* collisionTester = new JPH::VehicleCollisionTesterRay(1 /* MOVING layer */);
+    auto* collisionTester = new JPH::VehicleCollisionTesterRay(1 /* MOVING layer */); // Jolt ref-counted
     constraint->SetVehicleCollisionTester(collisionTester);
 
     joltSystem->AddConstraint(constraint);

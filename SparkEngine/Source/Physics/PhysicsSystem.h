@@ -586,7 +586,7 @@ class PhysicsSystem
     // Shape cache
     // =========================================================================
 
-    std::unordered_map<size_t, void*> m_shapeCache;
+    std::unordered_map<size_t, void*> m_shapeCache; ///< Owns heap-allocated JPH::ShapeRefC*; deleted in Shutdown()
 
     // =========================================================================
     // Material presets
@@ -599,7 +599,7 @@ class PhysicsSystem
     // Group filter tables
     // =========================================================================
 
-    std::vector<void*> m_groupFilterTables; // JPH::Ref<JPH::GroupFilterTable> stored as void*
+    std::vector<void*> m_groupFilterTables; ///< Owns heap-allocated JPH::Ref<GroupFilterTable>*; deleted in Shutdown()
 
     // =========================================================================
     // Surface velocity map (bodyID -> velocity, read by contact listener)
