@@ -109,7 +109,7 @@ TEST(VulkanLavapipe_BufferCreation)
     bufDesc.size = 1024;
     bufDesc.stride = 32;
     bufDesc.usage = Spark::RHI::RHIBufferUsage::Vertex;
-    bufDesc.cpuAccess = Spark::RHI::RHICPUAccess::None;
+    bufDesc.access = Spark::RHI::RHIBufferAccess::Static;
     bufDesc.debugName = "TestVertexBuffer";
 
     auto buffer = device.CreateBuffer(bufDesc);
