@@ -128,13 +128,14 @@
         },
         {
             "name": "windows-shipping",
-            "displayName": "Windows Shipping (no dev tools)",
+            "displayName": "Windows Shipping (max speed, no dev tools)",
             "inherits": "default",
             "generator": "Visual Studio 17 2022",
             "architecture": "x64",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
                 "SPARK_MSVC_TOOLSET": "v143",
+                "SPARK_NATIVE_ARCH": "OFF",
                 "ENABLE_EDITOR": "OFF",
                 "ENABLE_PROFILING": "OFF",
                 "ENABLE_HOT_RELOAD": "OFF",
@@ -151,13 +152,14 @@
         },
         {
             "name": "windows-development",
-            "displayName": "Windows Development (symbols + console)",
+            "displayName": "Windows Development (symbols + console + native tuning)",
             "inherits": "default",
             "generator": "Visual Studio 17 2022",
             "architecture": "x64",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "SPARK_MSVC_TOOLSET": "v143",
+                "SPARK_NATIVE_ARCH": "ON",
                 "ENABLE_CONSOLE_IN_SHIPPING": "ON",
                 "ENABLE_DEVCOMMANDS_IN_SHIPPING": "ON"
             },
@@ -169,12 +171,13 @@
         },
         {
             "name": "linux-shipping",
-            "displayName": "Linux Shipping (no dev tools)",
+            "displayName": "Linux Shipping (max speed, no dev tools)",
             "inherits": "default",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
                 "CMAKE_C_COMPILER": "gcc",
                 "CMAKE_CXX_COMPILER": "g++",
+                "SPARK_NATIVE_ARCH": "OFF",
                 "ENABLE_EDITOR": "OFF",
                 "ENABLE_PROFILING": "OFF",
                 "ENABLE_HOT_RELOAD": "OFF",
@@ -182,6 +185,24 @@
                 "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
                 "STRIP_DEBUG_SYMBOLS": "ON",
                 "BUILD_TESTS": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-development",
+            "displayName": "Linux Development (symbols + console + native tuning)",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "SPARK_NATIVE_ARCH": "ON",
+                "ENABLE_CONSOLE_IN_SHIPPING": "ON",
+                "ENABLE_DEVCOMMANDS_IN_SHIPPING": "ON"
             },
             "condition": {
                 "type": "equals",
@@ -317,6 +338,10 @@
         {
             "name": "linux-shipping",
             "configurePreset": "linux-shipping"
+        },
+        {
+            "name": "linux-development",
+            "configurePreset": "linux-development"
         },
         {
             "name": "macos-debug",
