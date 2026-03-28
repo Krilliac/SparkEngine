@@ -385,12 +385,8 @@ namespace Spark::Net
         // Lag compensation
         LagCompensator& GetLagCompensator() { return m_lagCompensator; }
 
-        // State queries (thread-safe via m_stateMutex)
-        NetworkRole GetRole() const
-        {
-            std::lock_guard<std::mutex> lock(m_stateMutex);
-            return m_role;
-        }
+        // State queries (thread-safe)
+        NetworkRole GetRole() const { return m_role.load(std::memory_order_acquire); }
         ConnectionState GetConnectionState() const
         {
             std::lock_guard<std::mutex> lock(m_stateMutex);
@@ -490,10 +486,11 @@ namespace Spark::Net
 #endif // ENABLE_NETWORKING
 
         std::atomic<bool> m_initialized{false};
-        NetworkRole m_role = NetworkRole::None;
+        std::atomic<NetworkRole> m_role{NetworkRole::None};
         ConnectionState m_connectionState = ConnectionState::Disconnected;
         ClientID m_localClientID = INVALID_CLIENT;
-        /// @brief Protects m_role, m_connectionState, m_localClientID.
+        /// @brief Protects m_connectionState, m_localClientID.
+        /// m_role is std::atomic so it can be safely read without the mutex.
         /// Lock ordering: m_stateMutex → m_clientsMutex → m_queueMutex → m_replicationMutex → m_inputMutex → m_handlerMutex (never reverse).
         mutable std::mutex m_stateMutex;
         float m_serverTime = 0.0f;

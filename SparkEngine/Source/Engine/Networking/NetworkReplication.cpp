@@ -28,19 +28,19 @@ namespace Spark::Net
     {
         uint32_t netID = m_nextNetworkID.fetch_add(1, std::memory_order_relaxed);
 
-        std::lock_guard<std::mutex> lock(m_replicationMutex);
-        m_replicatedEntities[netID] = entity;
-        m_replicatedEntities[netID].networkID = netID;
-        m_replicatedEntities[netID].needsFullSync = true;
+        // Read role first (respects lock order: m_stateMutex before m_replicationMutex)
+        NetworkRole role = GetRole();
+
+        {
+            std::lock_guard<std::mutex> lock(m_replicationMutex);
+            m_replicatedEntities[netID] = entity;
+            m_replicatedEntities[netID].networkID = netID;
+            m_replicatedEntities[netID].needsFullSync = true;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Entity registered: netID=%u type='%s' owner=%u", netID,
                        entity.entityType.c_str(), entity.ownerID);
 
         // Notify clients about the new entity (server only)
-        NetworkRole role;
-        {
-            std::lock_guard<std::mutex> lock(m_stateMutex);
-            role = m_role;
-        }
         if (role == NetworkRole::Server)
         {
             NetworkMessage msg;
@@ -62,13 +62,22 @@ namespace Spark::Net
 
     void NetworkManager::UnregisterReplicatedEntity(uint32_t networkID)
     {
-        std::lock_guard<std::mutex> lock(m_replicationMutex);
-        auto it = m_replicatedEntities.find(networkID);
-        if (it == m_replicatedEntities.end())
-            return;
+        // Read role before replication lock (respects lock order)
+        NetworkRole role = GetRole();
 
-        // Notify clients about entity destruction (server only)
-        if (m_role == NetworkRole::Server)
+        {
+            std::lock_guard<std::mutex> lock(m_replicationMutex);
+            auto it = m_replicatedEntities.find(networkID);
+            if (it == m_replicatedEntities.end())
+                return;
+
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "Entity unregistered: netID=%u", networkID);
+            m_replicatedEntities.erase(it);
+        }
+
+        // Notify clients after releasing m_replicationMutex to avoid
+        // holding it during network I/O (SendToAll acquires m_queueMutex).
+        if (role == NetworkRole::Server)
         {
             NetworkMessage msg;
             msg.type = MessageType::EntityDestroy;
@@ -79,9 +88,6 @@ namespace Spark::Net
             msg.payload = buf.GetData();
             SendToAll(msg);
         }
-
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "Entity unregistered: netID=%u", networkID);
-        m_replicatedEntities.erase(it);
     }
 
     void NetworkManager::MarkPropertyDirty(uint32_t networkID, const std::string& propertyName)
@@ -109,7 +115,7 @@ namespace Spark::Net
 
     void NetworkManager::SendFullEntitySync(ClientID targetClient)
     {
-        if (m_role != NetworkRole::Server)
+        if (GetRole() != NetworkRole::Server)
             return;
 
         std::lock_guard<std::mutex> lock(m_replicationMutex);
@@ -264,7 +270,7 @@ namespace Spark::Net
 
     void NetworkManager::UpdateReplication(float deltaTime)
     {
-        if (m_role != NetworkRole::Server)
+        if (GetRole() != NetworkRole::Server)
             return;
 
         m_replicationTimer += deltaTime;

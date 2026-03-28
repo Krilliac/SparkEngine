@@ -19,6 +19,9 @@ namespace Spark
     void DestructionSystem::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+        if (m_initialized)
+            return;
+        m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Core, "DestructionSystem initializing");
         // Register some default fracture patterns
         FracturePattern woodenCrate;

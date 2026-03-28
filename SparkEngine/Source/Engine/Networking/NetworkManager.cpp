@@ -429,14 +429,15 @@ namespace Spark::Net
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Network", 0.0);
 
         // Auto-reconnect: when disconnected and auto-reconnect enabled, try to reconnect
-        if (m_role == NetworkRole::None || GetConnectionState() == ConnectionState::Disconnected)
+        auto currentRole = GetRole(); // thread-safe read
+        if (currentRole == NetworkRole::None || GetConnectionState() == ConnectionState::Disconnected)
         {
             if (m_autoReconnect.enabled && m_wasConnected)
             {
                 m_serverTime += deltaTime;
                 TryAutoReconnect(deltaTime);
             }
-            if (m_role == NetworkRole::None)
+            if (GetRole() == NetworkRole::None)
                 return;
         }
 
@@ -564,7 +565,7 @@ namespace Spark::Net
 
     void NetworkManager::SendClientInput(const ClientInputState& input)
     {
-        if (m_role != NetworkRole::Client)
+        if (GetRole() != NetworkRole::Client)
             return;
 
         ClientInputState timestamped = input;

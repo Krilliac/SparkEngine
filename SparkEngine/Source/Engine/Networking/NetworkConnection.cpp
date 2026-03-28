@@ -259,10 +259,20 @@ namespace Spark::Net
 
     void NetworkManager::StopServer()
     {
-        if (m_role != NetworkRole::Server)
+        if (GetRole() != NetworkRole::Server)
             return;
+
+        // Collect client IDs under lock, then notify outside the lock
+        std::vector<ClientID> clientIDs;
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            clientIDs.reserve(m_clients.size());
+            for (const auto& [id, info] : m_clients)
+                clientIDs.push_back(id);
+        }
+
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Stopping server, notifying %zu connected clients",
-                       m_clients.size());
+                       clientIDs.size());
 
         // Notify all connected clients
         NetworkMessage disconnectMsg;
@@ -272,7 +282,7 @@ namespace Spark::Net
         buf.WriteString("Server shutting down");
         disconnectMsg.payload = buf.GetData();
 
-        for (const auto& [id, info] : m_clients)
+        for (ClientID id : clientIDs)
         {
             SendToClient(id, disconnectMsg);
         }
@@ -285,10 +295,19 @@ namespace Spark::Net
         m_clientAddresses.clear();
 #endif // ENABLE_NETWORKING
 
-        m_clients.clear();
-        m_replicatedEntities.clear();
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            m_clients.clear();
+        }
+        {
+            std::lock_guard<std::mutex> lock(m_replicationMutex);
+            m_replicatedEntities.clear();
+        }
         m_lagCompensator.Clear();
-        m_pendingInputs.clear();
+        {
+            std::lock_guard<std::mutex> lock(m_inputMutex);
+            m_pendingInputs.clear();
+        }
         m_unacknowledgedMessages.clear();
         m_reliableOriginalSendTime.clear();
 
@@ -392,11 +411,20 @@ namespace Spark::Net
             m_role = NetworkRole::None;
             m_localClientID = INVALID_CLIENT;
         }
-        m_clients.clear();
-        m_replicatedEntities.clear();
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            m_clients.clear();
+        }
+        {
+            std::lock_guard<std::mutex> lock(m_replicationMutex);
+            m_replicatedEntities.clear();
+        }
         m_lagCompensator.Clear();
-        m_pendingInputs.clear();
-        m_inputHistory.clear();
+        {
+            std::lock_guard<std::mutex> lock(m_inputMutex);
+            m_pendingInputs.clear();
+            m_inputHistory.clear();
+        }
         m_unacknowledgedMessages.clear();
         m_reliableOriginalSendTime.clear();
     }
@@ -525,7 +553,7 @@ namespace Spark::Net
 
     void NetworkManager::HandleConnect(const NetworkMessage& msg)
     {
-        if (m_role != NetworkRole::Server)
+        if (GetRole() != NetworkRole::Server)
             return;
 
         // ProcessIncoming pre-registers m_clientAddresses[m_nextClientID] so
