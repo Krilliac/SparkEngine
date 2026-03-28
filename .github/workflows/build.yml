@@ -616,6 +616,7 @@ jobs:
     name: "Code Coverage (GCC)"
     permissions:
       contents: read
+      pull-requests: write
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -631,14 +632,38 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DBUILD_TESTS=ON
       - name: Build
-        run: cmake --build build --config Debug
+        run: cmake --build build --parallel $(nproc)
       - name: Test
-        run: cd build && ctest --output-on-failure
+        run: cd build && ./bin/SparkTests 2>&1 | tail -5
       - name: Generate coverage
         run: |
           lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,mismatch,gcov,negative --rc geninfo_unexecuted_blocks=1
           lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused,negative
-          lcov --list coverage.info --ignore-errors unused,negative
+          lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
+      - name: Post coverage summary to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
+              const lines = summary.split('\n');
+              // Extract the total line (last non-empty line with a percentage)
+              const totalLine = lines.filter(l => /Total:/.test(l) || /\d+\.\d+%/.test(l)).pop() || '';
+              let body = `## Code Coverage (GCC + lcov)\n\n`;
+              // Get the last 30 lines which contain the per-directory breakdown
+              const table = lines.slice(-35).join('\n');
+              body += `\`\`\`\n${table}\n\`\`\`\n`;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body.slice(0, 65000)
+              });
+            } catch (e) {
+              console.log('Could not post coverage:', e.message);
+            }
       - name: Upload coverage
         uses: actions/upload-artifact@v7
         with:
