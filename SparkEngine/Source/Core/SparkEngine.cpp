@@ -912,10 +912,31 @@ static void ShutdownEngine()
     Spark::DebugHookManager::GetInstance().Clear();
 }
 
+// Test automation: exit after N frames (0 = run indefinitely).
+// Parsed from -test-frames N on the command line (both platforms).
+static int g_testFrameLimit = 0;
+
 // ============================================================================
 // Windows platform
 // ============================================================================
 #ifdef SPARK_PLATFORM_WINDOWS
+
+/**
+ * @brief Parse -test-frames N from a wide command line string (Windows).
+ */
+static int ParseTestFrameLimit(LPWSTR cmdLine)
+{
+    std::wstring cmd(cmdLine);
+    auto pos = cmd.find(L"-test-frames");
+    if (pos == std::wstring::npos)
+        return 0;
+    pos += 12; // length of "-test-frames"
+    while (pos < cmd.size() && cmd[pos] == L' ')
+        ++pos;
+    if (pos >= cmd.size())
+        return 0;
+    return std::max(0, std::stoi(std::wstring(cmd.substr(pos))));
+}
 
 // Windows-specific globals
 constexpr int MAX_LOADSTRING = 100;
@@ -1336,11 +1357,23 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Starting main engine loop...");
 
+    if (g_testFrameLimit > 0)
+        console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
+
+    int frameCount = 0;
+
     // Win32 message pump: PeekMessage with PM_REMOVE gives us non-blocking
     // message processing — the engine ticks in the else branch whenever
     // there are no pending OS messages (resize, input, focus, etc.).
     while (msg.message != WM_QUIT)
     {
+        // Test frame limit: post WM_QUIT to exit cleanly
+        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        {
+            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+            PostQuitMessage(0);
+            continue;
+        }
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
         {
             if (!TranslateAccelerator(msg.hwnd, accel, &msg))
@@ -1389,6 +1422,8 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
                 Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
                 console.Update();
             });
+
+            ++frameCount;
         }
     }
 
@@ -1410,6 +1445,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     ASSERT(hInstance != nullptr);
 
     SetupCrashHandler();
+
+    g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
 
 #ifdef SPARK_HEADLESS_SUPPORT
     g_headlessMode = ParseHeadlessFlag(lpCmdLine);
@@ -1592,6 +1629,16 @@ static bool ParseFlag(int argc, char* argv[], const char* flag)
             return true;
     }
     return false;
+}
+
+static int ParseTestFrameLimitArgs(int argc, char* argv[])
+{
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        if (strcmp(argv[i], "-test-frames") == 0 || strcmp(argv[i], "--test-frames") == 0)
+            return std::max(0, std::atoi(argv[i + 1]));
+    }
+    return 0;
 }
 
 static std::filesystem::path GetExecutableDirectoryLinux()
@@ -2082,10 +2129,22 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
  */
 static void RunSDL2MainLoop()
 {
-    Spark::SimpleConsole::GetInstance().LogInfo("Starting main engine loop (SDL2)...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("Starting main engine loop (SDL2)...");
+
+    if (g_testFrameLimit > 0)
+        console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
+
+    int frameCount = 0;
 
     while (!g_shutdownRequested)
     {
+        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        {
+            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+            break;
+        }
+
         SDL_Event event;
         bool running = true;
 
@@ -2103,6 +2162,7 @@ static void RunSDL2MainLoop()
 
         float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
         TickFrame(dt);
+        ++frameCount;
     }
 }
 
@@ -2232,6 +2292,8 @@ int main(int argc, char* argv[])
 {
     std::signal(SIGINT, SignalHandler);
     std::signal(SIGTERM, SignalHandler);
+
+    g_testFrameLimit = ParseTestFrameLimitArgs(argc, argv);
 
 #ifdef SPARK_HEADLESS_SUPPORT
     bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");

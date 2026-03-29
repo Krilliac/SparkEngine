@@ -38,7 +38,7 @@
 #include <mutex>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <tlhelp32.h>
-#include <VersionHelpers.h>
+#include <versionhelpers.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <iostream>
 
@@ -559,7 +559,12 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* msg)
     if (g_cfg.captureAllThreads)
         log << ThreadStacks();
 
+#if defined(_MSC_VER)
     std::wofstream ofs(logFile, std::ios::out | std::ios::trunc);
+#else
+    std::string narrowLogFile(logFile.begin(), logFile.end());
+    std::wofstream ofs(narrowLogFile.c_str(), std::ios::out | std::ios::trunc);
+#endif
     if (ofs)
     {
         ofs << log.str();

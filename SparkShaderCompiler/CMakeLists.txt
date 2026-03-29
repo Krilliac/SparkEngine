@@ -25,9 +25,14 @@ set(RHI_SOURCES
 if(WIN32)
     list(APPEND RHI_SOURCES
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp"
     )
+    # D3D12 backend requires MSVC-era headers — MinGW's d3d12.h is too old
+    if(NOT MINGW)
+        list(APPEND RHI_SOURCES
+            "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp"
+            "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp"
+        )
+    endif()
 endif()
 
 if(SPARK_VULKAN_AVAILABLE)
@@ -58,8 +63,15 @@ target_compile_features(SparkShaderCompiler PRIVATE cxx_std_23)
 
 # Platform-specific link libraries and definitions
 if(WIN32)
-    target_link_libraries(SparkShaderCompiler PRIVATE d3d11 d3d12 dxgi dxguid d3dcompiler opengl32)
-    target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_PLATFORM_WINDOWS)
+    set(_SHADER_LIBS d3d11 dxgi dxguid d3dcompiler dbghelp)
+    if(NOT MINGW)
+        list(APPEND _SHADER_LIBS d3d12 opengl32)
+    endif()
+    target_link_libraries(SparkShaderCompiler PRIVATE ${_SHADER_LIBS})
+    target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_PLATFORM_WINDOWS WIN32_LEAN_AND_MEAN NOMINMAX)
+    if(MINGW)
+        target_compile_definitions(SparkShaderCompiler PRIVATE SPARK_NO_D3D12)
+    endif()
 else()
     find_package(Threads QUIET)
     if(Threads_FOUND)

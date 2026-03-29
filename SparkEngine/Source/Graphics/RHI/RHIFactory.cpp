@@ -14,7 +14,9 @@
 // Backend headers (conditionally included)
 #ifdef _WIN32
 #include "D3D11/D3D11Device.h"
+#ifndef SPARK_NO_D3D12
 #include "D3D12/D3D12Device.h"
+#endif
 #endif
 
 #ifdef SPARK_VULKAN_SUPPORT
@@ -47,8 +49,10 @@ namespace Spark
 #ifdef _WIN32
             // D3D11 is always available on Windows
             backends.push_back(GraphicsBackend::D3D11);
+#ifndef SPARK_NO_D3D12
             // D3D12 is available on Windows 10+
             backends.push_back(GraphicsBackend::D3D12);
+#endif
 #endif
 
 #ifdef SPARK_VULKAN_SUPPORT
@@ -116,9 +120,11 @@ namespace Spark
             case GraphicsBackend::D3D11:
                 device = std::make_unique<D3D11::D3D11Device>();
                 break;
+#ifndef SPARK_NO_D3D12
             case GraphicsBackend::D3D12:
                 device = std::make_unique<D3D12::D3D12Device>();
                 break;
+#endif
 #endif
 
 #ifdef SPARK_VULKAN_SUPPORT

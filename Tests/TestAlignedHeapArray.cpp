@@ -17,7 +17,7 @@ namespace
       public:
         TestAlignedArray()
         {
-#ifdef _MSC_VER
+#if defined(_WIN32)
             m_data = static_cast<T*>(_aligned_malloc(SIZE * sizeof(T), ALIGNMENT));
 #else
             void* ptr = nullptr;
@@ -31,7 +31,7 @@ namespace
 
         ~TestAlignedArray()
         {
-#ifdef _MSC_VER
+#if defined(_WIN32)
             _aligned_free(m_data);
 #else
             free(m_data);
@@ -57,7 +57,7 @@ namespace
         {
             if (count > 0)
             {
-#ifdef _MSC_VER
+#if defined(_WIN32)
                 m_data = static_cast<T*>(_aligned_malloc(count * sizeof(T), ALIGNMENT));
 #else
                 void* ptr = nullptr;
@@ -72,7 +72,7 @@ namespace
 
         ~TestDynamicArray()
         {
-#ifdef _MSC_VER
+#if defined(_WIN32)
             _aligned_free(m_data);
 #else
             free(m_data);

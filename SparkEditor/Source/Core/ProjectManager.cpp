@@ -18,8 +18,8 @@
 #include <set>
 
 #ifdef _WIN32
-#include <ShlObj.h>
-#include <Windows.h>
+#include <shlobj.h>
+#include <windows.h>
 #endif
 
 namespace fs = std::filesystem;

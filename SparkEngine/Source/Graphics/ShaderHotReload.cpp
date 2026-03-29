@@ -26,7 +26,7 @@
 #include <sstream>
 #include <chrono>
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <Windows.h>
+#include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 
 #ifdef SPARK_PLATFORM_WINDOWS

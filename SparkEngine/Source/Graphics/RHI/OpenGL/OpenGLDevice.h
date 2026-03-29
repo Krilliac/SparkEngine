@@ -21,7 +21,7 @@
 
 #ifdef _WIN32
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <Windows.h>
+#include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #elif defined(__linux__)
 #ifdef SPARK_EGL_SUPPORT

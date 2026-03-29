@@ -16,7 +16,7 @@
 #include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
 
-#include <Windows.h>
+#include <windows.h>
 #include <d3d11_1.h>
 #include <wrl.h>
 

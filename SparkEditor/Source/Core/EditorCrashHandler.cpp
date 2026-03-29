@@ -19,10 +19,10 @@
 #include <sstream>
 
 #ifdef _WIN32
-#include <Windows.h>
+#include <windows.h>
 #include <dbghelp.h>
-#include <TlHelp32.h>
-#include <VersionHelpers.h>
+#include <tlhelp32.h>
+#include <versionhelpers.h>
 #pragma comment(lib, "dbghelp.lib")
 #else
 #include <csignal>

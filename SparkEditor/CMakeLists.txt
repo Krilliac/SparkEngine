@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Find ImGui
+# NO_CMAKE_FIND_ROOT_PATH is needed for MinGW cross-compilation where the
+# toolchain restricts find_path to the sysroot, but ImGui lives in our source tree.
 find_path(IMGUI_INCLUDE_DIR
     NAMES imgui.h
     PATHS
@@ -15,6 +17,7 @@ find_path(IMGUI_INCLUDE_DIR
         "${CMAKE_SOURCE_DIR}/External/imgui"
         "${CMAKE_SOURCE_DIR}/Vendor/imgui"
     DOC "Dear ImGui include directory"
+    NO_CMAKE_FIND_ROOT_PATH
 )
 
 if(IMGUI_INCLUDE_DIR)

@@ -39,8 +39,8 @@
 
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <Windows.h>
-#include <Xinput.h>
+#include <windows.h>
+#include <xinput.h>
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>

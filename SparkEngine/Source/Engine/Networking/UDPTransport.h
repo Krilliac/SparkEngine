@@ -17,8 +17,8 @@
 
 // Platform socket headers
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <WinSock2.h>
-#include <WS2tcpip.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 #else
 #include <sys/socket.h>
