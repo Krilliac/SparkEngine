@@ -116,6 +116,38 @@ ctest --test-dir build -N
 ctest --test-dir build --output-on-failure -j$(nproc)
 ```
 
+### Run Windows Tests Under Wine (Cross-Compilation)
+
+Cross-compile with MinGW and run the exact same Windows D3D11 code paths under Wine on Linux:
+
+```bash
+# Build Windows .exe
+cmake --preset linux-mingw-release
+cmake --build build/linux-mingw-release --parallel $(nproc)
+
+# Run all 2,509 tests under Wine
+tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
+
+# Or run the full automated test suite (unit tests + live engine + stress + break tests)
+python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
+```
+
+Results: ~2,504/2,509 tests pass (99.8%). See [Cross-Compilation: Wine Testing](Cross-Compilation-Wine-Testing) for full setup and troubleshooting.
+
+### Engine/Editor Test Mode Flags
+
+Both the engine and editor support `--test-frames N` for automated testing:
+
+```bash
+# Engine: run 60 frames then exit
+./SparkEngine -test-frames 60                              # Linux
+wine64 SparkEngine.exe -test-frames 60                     # Wine
+
+# Editor: skip project browser and run 120 frames
+./SparkEditor --test-mode --test-frames 120                # Linux
+wine64 SparkEditor.exe --test-mode --test-frames 120       # Wine
+```
+
 ## Test Categories and Coverage
 
 The 71 test files cover all major engine subsystems:
