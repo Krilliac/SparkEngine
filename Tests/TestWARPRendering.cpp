@@ -126,6 +126,10 @@ TEST(WARP_D3D11BufferCreation)
         EXPECT_TRUE(buffer->GetSize() == 1024);
     }
 
+    // Destroy buffer BEFORE shutting down the device — the buffer's destructor
+    // releases D3D11 resources that require the device to still be alive.
+    buffer.reset();
+
     device.Shutdown();
 #endif
 }

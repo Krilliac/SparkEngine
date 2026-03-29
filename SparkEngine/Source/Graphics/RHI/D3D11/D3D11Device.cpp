@@ -598,6 +598,26 @@ namespace Spark
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D11Device::Initialize starting");
                 m_debugEnabled = desc.enableDebugLayer;
 
+                // Detect Wine environment. Under Wine+DXVK, D3D11 is translated to
+                // Vulkan. WARP is unavailable and repeated D3D11 device creation can
+                // crash with Lavapipe (software Vulkan) due to DXVK state corruption.
+                static int s_wineDetected = -1;
+                static bool s_wineD3D11Failed = false;
+                if (s_wineDetected < 0)
+                {
+                    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+                    s_wineDetected = (ntdll && GetProcAddress(ntdll, "wine_get_version")) ? 1 : 0;
+                }
+
+                // If a previous D3D11 init already failed under Wine, don't retry —
+                // DXVK state may be corrupted and retrying can cause ACCESS_VIOLATION.
+                if (s_wineD3D11Failed)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "D3D11: Skipping init — previous attempt failed under Wine");
+                    return false;
+                }
+
                 UINT createFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
                 if (desc.enableDebugLayer)
                     createFlags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -617,6 +637,17 @@ namespace Spark
 
                 if (FAILED(hr))
                 {
+                    // Wine/DXVK does not support WARP (D3D_DRIVER_TYPE_WARP) and
+                    // will crash with ACCESS_VIOLATION instead of returning a clean
+                    // HRESULT failure. Skip WARP entirely when running under Wine.
+                    if (s_wineDetected)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                       "D3D11: Running under Wine — WARP fallback unavailable");
+                        s_wineD3D11Failed = true;
+                        return false;
+                    }
+
                     SPARK_LOG_WARN(Spark::LogCategory::Graphics,
                                    "D3D11: Hardware device creation failed — falling back to WARP software rasterizer");
                     hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, createFlags, featureLevels,
