@@ -97,6 +97,12 @@ def get_wine_env() -> dict:
     # Note: WINEDEBUG=-all can corrupt Wine's exit code on some versions.
     # Use fixme-all to suppress most noise while preserving correct exit codes.
     env["WINEDEBUG"] = "fixme-all"
+
+    # DXVK state cache: persist compiled Vulkan pipelines across runs
+    cache_dir = str(PROJECT_ROOT / "build" / ".dxvk-cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    env["DXVK_STATE_CACHE_PATH"] = cache_dir
+    env["DXVK_STATE_CACHE"] = "1"
     env["LIBGL_ALWAYS_SOFTWARE"] = "1"
 
     # Find Lavapipe ICD

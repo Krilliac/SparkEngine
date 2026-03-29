@@ -145,14 +145,61 @@ detect_vkd3d() {
     fi
 }
 
+detect_gpu() {
+    # Check for real GPU (not software) via Vulkan
+    if command -v vulkaninfo &>/dev/null; then
+        local gpu_type
+        gpu_type=$(vulkaninfo 2>/dev/null | grep "deviceType" | head -1 | tr -d ' ')
+        if echo "$gpu_type" | grep -qi "DISCRETE\|INTEGRATED"; then
+            info "Real GPU detected — using hardware Vulkan (fast)"
+            # Don't force Lavapipe if a real GPU exists
+            unset VK_ICD_FILENAMES
+            unset LIBGL_ALWAYS_SOFTWARE
+            return 0
+        fi
+    fi
+
+    # Check for GPU via /dev/dri
+    if [ -d /dev/dri ] && ls /dev/dri/renderD* &>/dev/null 2>&1; then
+        info "GPU render node found at /dev/dri — checking if usable"
+        # Still use Lavapipe unless user overrides, as render node could be a virtual GPU
+    fi
+
+    return 1
+}
+
+setup_dxvk_cache() {
+    # DXVK caches compiled Vulkan pipelines to disk. First run is slower;
+    # subsequent runs reuse the cache for near-instant shader loading.
+    local cache_dir="$PROJECT_ROOT/build/.dxvk-cache"
+    mkdir -p "$cache_dir"
+    export DXVK_STATE_CACHE_PATH="$cache_dir"
+    export DXVK_STATE_CACHE=1
+
+    if [ -f "$cache_dir/"*.dxvk-cache 2>/dev/null ]; then
+        local cache_size
+        cache_size=$(du -sh "$cache_dir" 2>/dev/null | cut -f1)
+        info "DXVK state cache: $cache_dir ($cache_size)"
+    else
+        info "DXVK state cache: $cache_dir (empty — first run will populate)"
+    fi
+}
+
 print_info() {
     echo "=== Wine Run Environment ==="
     echo "WINEPREFIX:   $WINEPREFIX"
-    echo "VK_ICD_FILES: ${VK_ICD_FILENAMES:-<default>}"
+    echo "VK_ICD_FILES: ${VK_ICD_FILENAMES:-<system default>}"
     echo "LIBGL_SW:     ${LIBGL_ALWAYS_SOFTWARE:-0}"
+    echo "DXVK_CACHE:   ${DXVK_STATE_CACHE_PATH:-<not set>}"
     echo ""
     wine64 --version 2>/dev/null || wine --version 2>/dev/null || echo "Wine: not installed"
     echo ""
+    # GPU detection
+    if command -v vulkaninfo &>/dev/null; then
+        local gpu_name
+        gpu_name=$(vulkaninfo 2>/dev/null | grep "deviceName" | head -1 | sed 's/.*= //')
+        echo "Vulkan GPU:   ${gpu_name:-unknown}"
+    fi
     if [ -n "${VK_ICD_FILENAMES:-}" ]; then
         echo "Vulkan ICD:   $VK_ICD_FILENAMES"
     fi
@@ -197,7 +244,11 @@ fi
 
 # Set up environment
 setup_wineprefix
-detect_dxvk || true
+
+# Try to use real GPU if available (skips Lavapipe)
+detect_gpu || true
+
+detect_dxvk && setup_dxvk_cache || true
 detect_vkd3d || true
 
 # Enable verbose Wine logging if requested
@@ -207,6 +258,7 @@ fi
 
 info "Running: wine64 $EXE $*"
 info "  Vulkan ICD: ${VK_ICD_FILENAMES:-<system default>}"
+info "  DXVK cache: ${DXVK_STATE_CACHE_PATH:-<disabled>}"
 
 # Run under Wine
 exec wine64 "$EXE" "$@"

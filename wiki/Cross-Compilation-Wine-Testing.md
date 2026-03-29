@@ -343,11 +343,17 @@ The `build-linux-mingw-wine` CI job in `.github/workflows/build.yml` runs this a
 | **Low resolution** (`-window-size 640x480`) | ~4x | Done — engine flag |
 | **`-test-frames N`** flag | N/A | Done — automated frame-limited exits |
 
+### Also Implemented
+
+| Optimization | How | Status |
+|-------------|-----|--------|
+| **DXVK state cache** | `DXVK_STATE_CACHE_PATH` persists compiled pipelines | Done in wine-run.sh |
+| **GPU auto-detection** | `detect_gpu()` in wine-run.sh skips Lavapipe if real GPU found | Done |
+
 ### Remaining Opportunities
 
-1. **DXVK state cache** — DXVK caches compiled pipelines in `dxvk-state-cache`. First run is slower, subsequent runs reuse the cache. Set `DXVK_STATE_CACHE_PATH` to persist it.
-2. **GPU passthrough** — if a GPU is available (CI runners, dev machines), skip software rendering entirely for real D3D11 hardware testing.
-3. **Shader pre-warm** — the engine already lazy-loads shaders (only BasicVertex + BasicPixel at startup), but DXVK's Vulkan pipeline compilation could be pre-warmed.
+1. **GPU passthrough in CI** — GitHub Actions runners with GPUs could run real D3D11 hardware tests
+2. **Shader pre-warm** — the engine already lazy-loads shaders (only BasicVertex + BasicPixel at startup), complex scenes will benefit from DXVK pipeline cache
 
 ### Wine Return Code Quirk
 
