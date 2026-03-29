@@ -57,8 +57,9 @@ namespace Spark::ECS
             if (!renderer.visible)
                 continue;
 
-            // Check if entity is active
-            auto* active = world.GetComponent<ActiveComponent>(entity);
+            // Skip inactive entities — use registry.try_get to avoid a second hash lookup
+            // through World::GetComponent, since we already hold the registry reference.
+            auto* active = registry.try_get<ActiveComponent>(entity);
             if (active && !active->active)
                 continue;
 
@@ -134,7 +135,7 @@ namespace Spark::ECS
                 }
 
                 // Use ColliderComponent shape if present, otherwise default box
-                auto* collider = world.GetComponent<ColliderComponent>(entity);
+                auto* collider = world.GetRegistry().try_get<ColliderComponent>(entity);
                 if (collider)
                 {
                     switch (collider->shape)
@@ -250,7 +251,7 @@ namespace Spark::ECS
         // Two-phase death processing: collect first, then fire callbacks.
         // This avoids iterator invalidation if a death callback destroys
         // the entity or modifies HealthComponent on other entities.
-        Spark::DeferredQueue<entt::entity> deadEntities;
+        // Uses persistent m_deadEntities to avoid heap allocation every frame.
 
         auto healthView = world.GetEntitiesWith<HealthComponent>();
         for (auto entity : healthView)
@@ -259,19 +260,19 @@ namespace Spark::ECS
             if (health.isDead && !health.deathProcessed)
             {
                 health.deathProcessed = true;
-                deadEntities.MarkForDeletion(entity);
+                m_deadEntities.MarkForDeletion(entity);
             }
         }
 
-        if (deadEntities.GetPendingCount() > 0)
+        if (m_deadEntities.GetPendingCount() > 0)
         {
             SPARK_LOG_INFO(Spark::LogCategory::ECS, "LifecycleSystem: %zu entities died this frame",
-                           deadEntities.GetPendingCount());
+                           m_deadEntities.GetPendingCount());
         }
 
         if (m_onDeath)
         {
-            deadEntities.Flush(
+            m_deadEntities.Flush(
                 [&](entt::entity& entity)
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "LifecycleSystem: firing death callback for entity %u",
@@ -281,8 +282,9 @@ namespace Spark::ECS
         }
         else
         {
-            SPARK_WARN_IF(Spark::LogCategory::ECS, !deadEntities.IsEmpty(),
+            SPARK_WARN_IF(Spark::LogCategory::ECS, !m_deadEntities.IsEmpty(),
                           "LifecycleSystem: entities died but no death callback is registered");
+            m_deadEntities.FlushAll();
         }
     }
 
@@ -346,8 +348,8 @@ namespace Spark::ECS
             auto& transform = view.get<Transform>(entity);
             auto& ai = view.get<AIComponent>(entity);
 
-            // Skip dead agents
-            auto* health = world.GetComponent<HealthComponent>(entity);
+            // Skip dead agents — use registry directly to avoid World wrapper overhead
+            auto* health = world.GetRegistry().try_get<HealthComponent>(entity);
             if (health && health->isDead)
             {
                 if (ai.state != AIComponent::State::Dead)
@@ -433,7 +435,7 @@ namespace Spark::ECS
             // Look up the referenced spline entity
             if (follower.splineEntity == entt::null)
                 continue;
-            auto* splineComp = world.GetComponent<SplineComponent>(follower.splineEntity);
+            auto* splineComp = world.GetRegistry().try_get<SplineComponent>(follower.splineEntity);
             if (!splineComp)
                 continue;
 
@@ -494,12 +496,13 @@ namespace Spark::ECS
             if (follower.orientToPath)
             {
                 XMFLOAT3 tangent = path.GetTangentAtDistance(follower.currentDistance);
-                float tangentLen = std::sqrt(tangent.x * tangent.x + tangent.y * tangent.y + tangent.z * tangent.z);
-                if (tangentLen > 0.0001f)
+                float xzLenSq = tangent.x * tangent.x + tangent.z * tangent.z;
+                float tangentLenSq = xzLenSq + tangent.y * tangent.y;
+                if (tangentLenSq > 0.0001f * 0.0001f)
                 {
+                    float xzLen = std::sqrt(xzLenSq);
                     float yaw = std::atan2(tangent.x, tangent.z) * MathUtils::RAD_TO_DEG;
-                    float pitch = std::atan2(-tangent.y, std::sqrt(tangent.x * tangent.x + tangent.z * tangent.z)) *
-                                  MathUtils::RAD_TO_DEG;
+                    float pitch = std::atan2(-tangent.y, xzLen) * MathUtils::RAD_TO_DEG;
                     transform.rotation.x = pitch;
                     transform.rotation.y = yaw;
                 }
@@ -533,8 +536,8 @@ namespace Spark::ECS
             if (!emitter.isPlaying)
                 continue;
 
-            // Check if entity is active
-            auto* active = world.GetComponent<ActiveComponent>(entity);
+            // Skip inactive entities — direct registry access avoids World wrapper overhead
+            auto* active = world.GetRegistry().try_get<ActiveComponent>(entity);
             if (active && !active->active)
                 continue;
 
@@ -553,7 +556,6 @@ namespace Spark::ECS
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
         m_activeDecalCount = 0;
-        Spark::DeferredQueue<entt::entity> expiredDecals;
 
         auto view = world.GetEntitiesWith<Transform, DecalComponent>();
         for (auto entity : view)
@@ -573,7 +575,7 @@ namespace Spark::ECS
             if (decal.remainingLifetime <= 0.0f)
             {
                 decal.remainingLifetime = 0.0f;
-                expiredDecals.MarkForDeletion(entity);
+                m_expiredDecals.MarkForDeletion(entity);
             }
             else
             {
@@ -581,10 +583,14 @@ namespace Spark::ECS
             }
         }
 
-        // Fire expired callbacks
+        // Fire expired callbacks (persistent queue avoids per-frame allocation)
         if (m_onExpired)
         {
-            expiredDecals.Flush([&](entt::entity& e) { m_onExpired(e); });
+            m_expiredDecals.Flush([&](entt::entity& e) { m_onExpired(e); });
+        }
+        else
+        {
+            m_expiredDecals.FlushAll();
         }
     }
 
@@ -597,7 +603,6 @@ namespace Spark::ECS
         SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
         SPARK_WARN_IF(Spark::LogCategory::ECS, deltaTime < 0.0f, "Negative deltaTime in ProjectileSystem");
         m_activeProjectileCount = 0;
-        Spark::DeferredQueue<entt::entity> expiredProjectiles;
 
         auto view = world.GetEntitiesWith<Transform, ProjectileComponent>();
         for (auto entity : view)
@@ -617,34 +622,36 @@ namespace Spark::ECS
             constexpr float kGravity = 9.81f;
             proj.direction.y -= kGravity * proj.gravityScale * deltaTime;
 
-            // Normalize direction and compute movement
-            float dirLen = std::sqrt(proj.direction.x * proj.direction.x + proj.direction.y * proj.direction.y +
-                                     proj.direction.z * proj.direction.z);
-            if (dirLen > 0.0001f)
+            // Normalize direction and compute movement — single sqrt, derive moveDist algebraically
+            float dirLenSq = proj.direction.x * proj.direction.x + proj.direction.y * proj.direction.y +
+                             proj.direction.z * proj.direction.z;
+            if (dirLenSq > 0.0001f * 0.0001f)
             {
+                float dirLen = std::sqrt(dirLenSq);
                 float invLen = 1.0f / dirLen;
-                float moveX = proj.direction.x * invLen * proj.speed * deltaTime;
-                float moveY = proj.direction.y * invLen * proj.speed * deltaTime;
-                float moveZ = proj.direction.z * invLen * proj.speed * deltaTime;
+                float scaledSpeed = proj.speed * deltaTime;
+                float moveX = proj.direction.x * invLen * scaledSpeed;
+                float moveY = proj.direction.y * invLen * scaledSpeed;
+                float moveZ = proj.direction.z * invLen * scaledSpeed;
 
                 transform.position.x += moveX;
                 transform.position.y += moveY;
                 transform.position.z += moveZ;
 
-                float moveDist = std::sqrt(moveX * moveX + moveY * moveY + moveZ * moveZ);
-                proj.distanceTraveled += moveDist;
+                // moveDist = |normalized_dir * scaledSpeed| = scaledSpeed (since dir is normalized)
+                proj.distanceTraveled += scaledSpeed;
 
-                // Orient projectile along its direction
+                // Orient projectile along its direction — reuse xzLen from dirLen components
+                float xzLenSq = proj.direction.x * proj.direction.x + proj.direction.z * proj.direction.z;
+                float xzLen = std::sqrt(xzLenSq);
                 transform.rotation.y = std::atan2(proj.direction.x, proj.direction.z) * MathUtils::RAD_TO_DEG;
-                transform.rotation.x = std::atan2(-proj.direction.y, std::sqrt(proj.direction.x * proj.direction.x +
-                                                                               proj.direction.z * proj.direction.z)) *
-                                       MathUtils::RAD_TO_DEG;
+                transform.rotation.x = std::atan2(-proj.direction.y, xzLen) * MathUtils::RAD_TO_DEG;
             }
 
             // Check expiration
             if (proj.IsExpired())
             {
-                expiredProjectiles.MarkForDeletion(entity);
+                m_expiredProjectiles.MarkForDeletion(entity);
             }
             else
             {
@@ -652,10 +659,14 @@ namespace Spark::ECS
             }
         }
 
-        // Fire expired callbacks
+        // Fire expired callbacks (persistent queue avoids per-frame allocation)
         if (m_onExpired)
         {
-            expiredProjectiles.Flush([&](entt::entity& e) { m_onExpired(e); });
+            m_expiredProjectiles.Flush([&](entt::entity& e) { m_onExpired(e); });
+        }
+        else
+        {
+            m_expiredProjectiles.FlushAll();
         }
     }
 

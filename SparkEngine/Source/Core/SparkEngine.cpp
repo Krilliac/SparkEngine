@@ -489,41 +489,88 @@ static void InitGameplaySystems()
  */
 static void UpdateNonECSSystems(EngineContext* ctx, float dt)
 {
-    SPARK_GUARDED_UPDATE("Weather", "Core", {
-        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Weather", 0.0);
-        if (auto* weather = ctx->GetWeather())
-            weather->Update(dt);
-        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Weather", 0.0);
-    });
+    auto& jobs = Spark::JobSystem::Get();
+    bool canParallelize = jobs.IsInitialized() && jobs.GetWorkerCount() > 0;
 
-    SPARK_GUARDED_UPDATE("TimeOfDay", "Core", {
-        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "TimeOfDay", 0.0);
-        Spark::TimeOfDaySystem::GetInstance().Update(dt);
-        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "TimeOfDay", 0.0);
-    });
+    if (canParallelize)
+    {
+        // Batch 1: Weather, TimeOfDay, Dialogue, UI are independent — run in parallel
+        auto futWeather = jobs.Submit(
+            [ctx, dt]()
+            {
+                SPARK_GUARDED_UPDATE("Weather", "Core", {
+                    if (auto* weather = ctx->GetWeather())
+                        weather->Update(dt);
+                });
+            });
 
-    SPARK_GUARDED_UPDATE("WeatherGameplay", "Core", {
-        auto* weather = ctx->GetWeather();
-        auto* physics = ctx->GetPhysics();
-        if (weather && physics)
-        {
-            Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
-        }
-    });
+        auto futTimeOfDay = jobs.Submit(
+            [dt]()
+            { SPARK_GUARDED_UPDATE("TimeOfDay", "Core", { Spark::TimeOfDaySystem::GetInstance().Update(dt); }); });
 
-    SPARK_GUARDED_UPDATE("Dialogue", "Core", {
-        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Dialogue", 0.0);
-        if (auto* dialogue = ctx->GetDialogue())
-            dialogue->Update(dt);
-        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Dialogue", 0.0);
-    });
+        auto futDialogue = jobs.Submit(
+            [ctx, dt]()
+            {
+                SPARK_GUARDED_UPDATE("Dialogue", "Core", {
+                    if (auto* dialogue = ctx->GetDialogue())
+                        dialogue->Update(dt);
+                });
+            });
 
-    SPARK_GUARDED_UPDATE("UI", "Core", {
-        SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "UI", 0.0);
-        if (auto* ui = ctx->GetUI())
-            ui->Update(dt);
-        SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "UI", 0.0);
-    });
+        auto futUI = jobs.Submit(
+            [ctx, dt]()
+            {
+                SPARK_GUARDED_UPDATE("UI", "Core", {
+                    if (auto* ui = ctx->GetUI())
+                        ui->Update(dt);
+                });
+            });
+
+        // Wait for parallel batch to complete
+        futWeather.get();
+        futTimeOfDay.get();
+        futDialogue.get();
+        futUI.get();
+
+        // WeatherGameplay depends on Weather — must run after Weather completes
+        SPARK_GUARDED_UPDATE("WeatherGameplay", "Core", {
+            auto* weather = ctx->GetWeather();
+            auto* physics = ctx->GetPhysics();
+            if (weather && physics)
+            {
+                Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
+            }
+        });
+    }
+    else
+    {
+        // Fallback: sequential execution when JobSystem is unavailable
+        SPARK_GUARDED_UPDATE("Weather", "Core", {
+            if (auto* weather = ctx->GetWeather())
+                weather->Update(dt);
+        });
+
+        SPARK_GUARDED_UPDATE("TimeOfDay", "Core", { Spark::TimeOfDaySystem::GetInstance().Update(dt); });
+
+        SPARK_GUARDED_UPDATE("WeatherGameplay", "Core", {
+            auto* weather = ctx->GetWeather();
+            auto* physics = ctx->GetPhysics();
+            if (weather && physics)
+            {
+                Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Update(dt, weather, physics);
+            }
+        });
+
+        SPARK_GUARDED_UPDATE("Dialogue", "Core", {
+            if (auto* dialogue = ctx->GetDialogue())
+                dialogue->Update(dt);
+        });
+
+        SPARK_GUARDED_UPDATE("UI", "Core", {
+            if (auto* ui = ctx->GetUI())
+                ui->Update(dt);
+        });
+    }
 }
 
 static void UpdateECSDependentSystems(World* world, float dt)
@@ -612,26 +659,70 @@ static void UpdateClusteredLighting(World* world)
 
 static void UpdateExtendedSystems(EngineContext* ctx, float dt)
 {
-    SPARK_GUARDED_UPDATE("SeamlessArea", "Core", { Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt); });
+    auto& jobs = Spark::JobSystem::Get();
+    bool canParallelize = jobs.IsInitialized() && jobs.GetWorkerCount() > 0;
 
-    SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); });
+    if (canParallelize)
+    {
+        // Batch: SeamlessArea, Tween, Cinematic, Replay are independent singletons
+        auto futSeamless = jobs.Submit(
+            [dt]()
+            {
+                SPARK_GUARDED_UPDATE("SeamlessArea", "Core",
+                                     { Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt); });
+            });
 
-    SPARK_GUARDED_UPDATE("UIFactory", "Core", { Spark::UI::UIFactory::GetInstance().UpdateAllBindings(); });
+        auto futTween = jobs.Submit(
+            [dt]() { SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); }); });
 
-    SPARK_GUARDED_UPDATE("Plugins", "Core", { Spark::PluginRegistry::UpdateAll(dt); });
+        auto futCinematic = jobs.Submit(
+            [dt]() {
+                SPARK_GUARDED_UPDATE("Cinematic", "Core",
+                                     { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
+            });
+
+        auto futReplay = jobs.Submit(
+            [dt]()
+            { SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); }); });
+
+        // These run on the main thread while the batch is in flight
+        SPARK_GUARDED_UPDATE("UIFactory", "Core", { Spark::UI::UIFactory::GetInstance().UpdateAllBindings(); });
+        SPARK_GUARDED_UPDATE("Plugins", "Core", { Spark::PluginRegistry::UpdateAll(dt); });
 
 #ifndef NDEBUG
-    Spark::ProfileProperties::GetInstance().ResetFrameProperties();
+        Spark::ProfileProperties::GetInstance().ResetFrameProperties();
 #endif
 
-    SPARK_GUARDED_UPDATE("Cinematic", "Core", { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
+        SPARK_GUARDED_UPDATE("VR", "Core", {
+            if (auto* vr = ctx->GetVR())
+                vr->UpdateTracking();
+        });
 
-    SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
+        // Wait for parallel batch before ECS executor (which may depend on Tween/Cinematic results)
+        futSeamless.get();
+        futTween.get();
+        futCinematic.get();
+        futReplay.get();
+    }
+    else
+    {
+        SPARK_GUARDED_UPDATE("SeamlessArea", "Core",
+                             { Spark::Streaming::SeamlessAreaManager::GetInstance().Update(dt); });
+        SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); });
+        SPARK_GUARDED_UPDATE("UIFactory", "Core", { Spark::UI::UIFactory::GetInstance().UpdateAllBindings(); });
+        SPARK_GUARDED_UPDATE("Plugins", "Core", { Spark::PluginRegistry::UpdateAll(dt); });
 
-    SPARK_GUARDED_UPDATE("VR", "Core", {
-        if (auto* vr = ctx->GetVR())
-            vr->UpdateTracking();
-    });
+#ifndef NDEBUG
+        Spark::ProfileProperties::GetInstance().ResetFrameProperties();
+#endif
+
+        SPARK_GUARDED_UPDATE("Cinematic", "Core", { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
+        SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
+        SPARK_GUARDED_UPDATE("VR", "Core", {
+            if (auto* vr = ctx->GetVR())
+                vr->UpdateTracking();
+        });
+    }
 
     SPARK_GUARDED_UPDATE("ECS_Executor", "Core", { Spark::ECS::StageBasedExecutor::GetInstance().ExecuteAll(dt); });
 }

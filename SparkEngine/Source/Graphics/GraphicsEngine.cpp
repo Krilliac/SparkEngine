@@ -838,11 +838,19 @@ void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath, const s
 
 void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
 {
-    // Swap draw list under lock so Submit calls don't block during processing
+    // Move draw list under lock so Submit calls don't block during processing.
+    // Using move + clear preserves the source vector's capacity for next frame,
+    // avoiding repeated heap allocations.
     std::vector<MeshDrawCommand> localDrawList;
     {
         std::lock_guard<std::mutex> lock(m_drawListMutex);
-        localDrawList.swap(m_drawList);
+        localDrawList = std::move(m_drawList);
+        m_drawList.clear();
+        // Reserve capacity based on last frame's draw count to avoid mid-frame reallocs
+        if (m_drawList.capacity() == 0 && !localDrawList.empty())
+        {
+            m_drawList.reserve(localDrawList.size());
+        }
     }
     if (localDrawList.empty())
         return;
@@ -1414,7 +1422,12 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
     std::vector<MeshDrawCommand> localDrawList;
     {
         std::lock_guard<std::mutex> lock(m_drawListMutex);
-        localDrawList.swap(m_drawList);
+        localDrawList = std::move(m_drawList);
+        m_drawList.clear();
+        if (m_drawList.capacity() == 0 && !localDrawList.empty())
+        {
+            m_drawList.reserve(localDrawList.size());
+        }
     }
     if (localDrawList.empty())
         return;
