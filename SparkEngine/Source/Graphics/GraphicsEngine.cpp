@@ -889,6 +889,7 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
 
     if (m_settings.frustumCulling)
     {
+        culledObjects.reserve(objects.size());
         CullObjects(objects, viewMatrix, projMatrix, culledObjects);
         visibleObjectsPtr = &culledObjects;
     }

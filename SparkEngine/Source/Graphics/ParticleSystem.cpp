@@ -382,6 +382,7 @@ XMFLOAT3 ParticleEmitter::GetRandomSpawnDirection() const
 void ParticleEmitter::UpdateVertexBuffer()
 {
     m_vertexData.clear();
+    m_vertexData.reserve(static_cast<size_t>(m_activeCount));
     for (const auto& p : m_particles)
     {
         if (!p.alive)
@@ -977,6 +978,7 @@ XMFLOAT3 ParticleEmitter::GetRandomSpawnDirection() const
 void ParticleEmitter::UpdateVertexBuffer()
 {
     m_vertexData.clear();
+    m_vertexData.reserve(static_cast<size_t>(m_activeCount));
     for (const auto& p : m_particles)
     {
         if (!p.alive)
