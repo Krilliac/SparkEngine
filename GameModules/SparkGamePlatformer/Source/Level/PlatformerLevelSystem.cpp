@@ -4,8 +4,7 @@
  */
 
 #include "PlatformerLevelSystem.h"
-#include "Utils/SparkConsole.h"
-
+#include "Utils/LogMacros.h"
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -29,9 +28,8 @@ namespace Platformer
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Platformer Level] Level system initialized with " + std::to_string(m_levels.size()) +
-                        " levels");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer Level] Level system initialized with %s levels",
+                       std::to_string(m_levels.size()).c_str());
         return true;
     }
 
@@ -254,9 +252,9 @@ namespace Platformer
 
         if (index < m_progress.size() && !m_progress[index].unlocked)
         {
-            auto& console = Spark::SimpleConsole::GetInstance();
-            console.LogWarning("[Platformer Level] Level " + std::to_string(index) + " is locked (need " +
-                               std::to_string(m_levels[index].requiredStarsToUnlock) + " stars)");
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[Platformer Level] Level %s is locked (need %s stars)",
+                           std::to_string(index).c_str(),
+                           std::to_string(m_levels[index].requiredStarsToUnlock).c_str());
             return false;
         }
 
@@ -265,8 +263,8 @@ namespace Platformer
         m_levelDeaths = 0;
         m_levelActive = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Platformer Level] Loaded level " + std::to_string(index) + ": " + m_levels[index].name);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer Level] Loaded level %s: %s",
+                       std::to_string(index).c_str(), m_levels[index].name.c_str());
         return true;
     }
 
@@ -313,9 +311,9 @@ namespace Platformer
 
         m_levelActive = false;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Platformer Level] Level completed! Stars: " + std::to_string(stars) +
-                        " Time: " + std::to_string(completionTime) + "s Deaths: " + std::to_string(deaths));
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer Level] Level completed! Stars: %s Time: %ss Deaths: %s",
+                       std::to_string(stars).c_str(), std::to_string(completionTime).c_str(),
+                       std::to_string(deaths).c_str());
     }
 
     int PlatformerLevelSystem::CalculateStars(uint32_t levelIndex, float time, int deaths) const

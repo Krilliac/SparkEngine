@@ -4,14 +4,13 @@
  */
 
 #include "MMOPersistenceSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <chrono>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -51,7 +50,7 @@ namespace MMO
 
         if (!m_db->Open(dbPath, 2))
         {
-            Spark::SimpleConsole::GetInstance().LogError("[MMO] Failed to open database: " + dbPath);
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to open database: %s", dbPath.c_str());
             return false;
         }
 
@@ -61,7 +60,7 @@ namespace MMO
         m_initialized = true;
         m_autoSaveTimer = m_autoSaveInterval;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Persistence system initialized (db: " + dbPath + ")");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Persistence system initialized (db: %s)", dbPath.c_str());
         return true;
     }
 
@@ -197,8 +196,8 @@ namespace MMO
 
         if (result.success)
         {
-            Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Character created: " + name + " (ID " +
-                                                        std::to_string(charId) + ")");
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Character created: %s (ID %s)", name.c_str(),
+                           std::to_string(charId).c_str());
         }
         return result.success ? charId : 0;
     }
@@ -261,8 +260,8 @@ namespace MMO
         outData.lastLogin = GetTimestamp();
         m_totalLoads++;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Character loaded: " + outData.name + " (Lv" +
-                                                    std::to_string(outData.level) + ")");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Character loaded: %s (Lv%s)", outData.name.c_str(),
+                       std::to_string(outData.level).c_str());
         return true;
     }
 
@@ -698,16 +697,16 @@ namespace MMO
         auto guildResult = m_db->SyncQuery(sid(MMOStmtId::LoadGuilds));
         if (guildResult.success)
         {
-            Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Loaded " + std::to_string(guildResult.rows.size()) +
-                                                        " guild records from database");
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Loaded %s guild records from database",
+                           std::to_string(guildResult.rows.size()).c_str());
         }
 
         // Load boss kill history
         auto bossResult = m_db->SyncQuery(sid(MMOStmtId::LoadBossKills));
         if (bossResult.success)
         {
-            Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Loaded " + std::to_string(bossResult.rows.size()) +
-                                                        " boss kill records from database");
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Loaded %s boss kill records from database",
+                           std::to_string(bossResult.rows.size()).c_str());
         }
 
         return true;

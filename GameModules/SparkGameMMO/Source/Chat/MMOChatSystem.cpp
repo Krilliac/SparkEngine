@@ -4,8 +4,7 @@
  */
 
 #include "MMOChatSystem.h"
-#include "Utils/SparkConsole.h"
-
+#include "Utils/LogMacros.h"
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
 #endif
@@ -41,8 +40,7 @@ namespace MMO
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[MMO Chat] Chat system initialized (4 channels)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO Chat] Chat system initialized (4 channels)");
         return true;
     }
 
@@ -81,9 +79,9 @@ namespace MMO
                                    if (m_history.size() > MAX_HISTORY)
                                        m_history.pop_front();
 
-                                   auto& console = Spark::SimpleConsole::GetInstance();
-                                   console.LogInfo("[" + std::string(ChannelToString(channel)) + "] " + senderName +
-                                                   ": " + text);
+                                   SPARK_LOG_INFO(Spark::LogCategory::Game, "[%s] %s: %s",
+                                                  std::string(ChannelToString(channel)).c_str(), senderName.c_str(),
+                                                  text.c_str());
                                });
 #endif
     }
@@ -133,8 +131,8 @@ namespace MMO
         }
 #endif
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[" + std::string(ChannelToString(channel)) + "] " + msg.senderName + ": " + text);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[%s] %s: %s", std::string(ChannelToString(channel)).c_str(),
+                       msg.senderName.c_str(), text.c_str());
     }
 
     void MMOChatSystem::Update(float deltaTime)

@@ -11,6 +11,7 @@
 #include "SparkGame.h"
 #include "GameplayShowcase.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -64,21 +65,21 @@ bool SparkGameDefaultModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Default] Loading Spark Engine Showcase module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Default] Loading Spark Engine Showcase module...");
 
     // Initialize the gameplay showcase
     m_showcase = std::make_unique<GameplayShowcase>();
     if (!m_showcase->Initialize(context))
     {
-        console.LogWarning("[Default] GameplayShowcase initialization failed — running without showcase");
+        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                       "[Default] GameplayShowcase initialization failed — running without showcase");
         m_showcase.reset();
     }
 
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[Default] Spark Engine Showcase module loaded successfully");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Default] Spark Engine Showcase module loaded successfully");
     return true;
 }
 
@@ -87,8 +88,7 @@ void SparkGameDefaultModule::OnUnload()
     if (!m_initialized)
         return;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Default] Unloading Spark Engine Showcase module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Default] Unloading Spark Engine Showcase module...");
 
     if (m_showcase)
     {
@@ -99,7 +99,7 @@ void SparkGameDefaultModule::OnUnload()
     m_context = nullptr;
     m_initialized = false;
 
-    console.LogInfo("[Default] Spark Engine Showcase module unloaded");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Default] Spark Engine Showcase module unloaded");
 }
 
 void SparkGameDefaultModule::OnUpdate(float deltaTime)

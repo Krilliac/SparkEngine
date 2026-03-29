@@ -4,10 +4,9 @@
  */
 
 #include "RacingTrackSystem.h"
-#include "Utils/SparkConsole.h"
-
 #include <algorithm>
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -31,8 +30,8 @@ namespace Racing
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Racing Track] Track system initialized (" + std::to_string(m_tracks.size()) + " tracks)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing Track] Track system initialized (%s tracks)",
+                       std::to_string(m_tracks.size()).c_str());
         return true;
     }
 
@@ -54,10 +53,9 @@ namespace Racing
         if (index < m_tracks.size())
         {
             m_currentTrack = m_tracks[index];
-            auto& console = Spark::SimpleConsole::GetInstance();
-            console.LogInfo("[Racing Track] Loaded track: " + m_currentTrack.name + " (" +
-                            std::to_string(m_currentTrack.waypoints.size()) + " waypoints, " +
-                            std::to_string(m_currentTrack.checkpoints.size()) + " checkpoints)");
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing Track] Loaded track: %s (%s waypoints, %s checkpoints)",
+                           m_currentTrack.name.c_str(), std::to_string(m_currentTrack.waypoints.size()).c_str(),
+                           std::to_string(m_currentTrack.checkpoints.size()).c_str());
         }
     }
 

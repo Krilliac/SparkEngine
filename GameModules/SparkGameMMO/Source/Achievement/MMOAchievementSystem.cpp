@@ -4,13 +4,12 @@
  */
 
 #include "MMOAchievementSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -19,8 +18,8 @@ namespace MMO
     {
         m_context = context;
         RegisterDefaultAchievements();
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Achievement system initialized (" +
-                                                    std::to_string(m_achievements.size()) + " achievements)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Achievement system initialized (%s achievements)",
+                       std::to_string(m_achievements.size()).c_str());
         return true;
     }
 
@@ -265,9 +264,8 @@ namespace MMO
                 state.activeTitle = def->reward.title;
         }
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[MMO] Achievement unlocked: " + def->name + " (+" + std::to_string(def->reward.points) +
-                        " pts)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Achievement unlocked: %s (+%s pts)", def->name.c_str(),
+                       std::to_string(def->reward.points).c_str());
     }
 
     void MMOAchievementSystem::ForceComplete(AchievementState& state, uint32_t achId)

@@ -4,13 +4,12 @@
  */
 
 #include "RTSCommandSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
+#include "Utils/LogMacros.h"
 
 namespace RTS
 {
@@ -18,7 +17,7 @@ namespace RTS
     bool RTSCommandSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Command system initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Command system initialized");
         return true;
     }
 

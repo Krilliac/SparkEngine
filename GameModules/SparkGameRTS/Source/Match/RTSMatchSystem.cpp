@@ -4,8 +4,7 @@
  */
 
 #include "RTSMatchSystem.h"
-#include "Utils/SparkConsole.h"
-
+#include "Utils/LogMacros.h"
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -20,7 +19,7 @@ namespace RTS
         m_matchTime = 0.0f;
         m_hasWinner = false;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match system initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Match system initialized");
         return true;
     }
 
@@ -57,8 +56,8 @@ namespace RTS
         m_matchTime = 0.0f;
         m_hasWinner = false;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match setup for " + std::to_string(playerCount) +
-                                                    " players");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Match setup for %s players",
+                       std::to_string(playerCount).c_str());
     }
 
     void RTSMatchSystem::SetPlayerFaction(int playerIndex, RTSFaction faction)
@@ -91,7 +90,7 @@ namespace RTS
     {
         if (m_players.size() < 2)
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Need at least 2 players to start a match");
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] Need at least 2 players to start a match");
             return false;
         }
 
@@ -106,7 +105,7 @@ namespace RTS
             player.isEliminated = false;
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match started!");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Match started!");
         return true;
     }
 
@@ -120,8 +119,8 @@ namespace RTS
         int idx = static_cast<int>(winner);
         std::string name = (idx >= 0 && idx < 3) ? factionNames[idx] : "Unknown";
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match ended! Winner: " + name +
-                                                    " (Time: " + std::to_string(static_cast<int>(m_matchTime)) + "s)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Match ended! Winner: %s (Time: %ss)", name.c_str(),
+                       std::to_string(static_cast<int>(m_matchTime)).c_str());
     }
 
     void RTSMatchSystem::Surrender(int playerIndex)
@@ -132,7 +131,7 @@ namespace RTS
         m_players[static_cast<size_t>(playerIndex)].hasSurrendered = true;
         m_players[static_cast<size_t>(playerIndex)].isEliminated = true;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Player " + std::to_string(playerIndex) + " surrendered");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Player %s surrendered", std::to_string(playerIndex).c_str());
     }
 
     // === Queries ===

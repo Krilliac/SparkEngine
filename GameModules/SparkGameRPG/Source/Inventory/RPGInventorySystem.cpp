@@ -4,14 +4,13 @@
  */
 
 #include "RPGInventorySystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace RPG
 {
@@ -21,8 +20,8 @@ namespace RPG
         m_context = context;
         RegisterDefaultItems();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Inventory system initialized (" +
-                                                    std::to_string(m_items.size()) + " items)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Inventory system initialized (%s items)",
+                       std::to_string(m_items.size()).c_str());
         return true;
     }
 

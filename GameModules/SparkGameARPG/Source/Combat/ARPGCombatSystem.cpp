@@ -4,8 +4,6 @@
  */
 
 #include "ARPGCombatSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -13,6 +11,7 @@
 #include <algorithm>
 #include <random>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace ARPG
 {
@@ -31,7 +30,7 @@ namespace ARPG
         m_totalAttacksProcessed = 0;
         m_totalCrits = 0;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Combat system initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Combat system initialized");
         return true;
     }
 

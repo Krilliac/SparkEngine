@@ -4,14 +4,13 @@
  */
 
 #include "ARPGDungeonSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <random>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace ARPG
 {
@@ -27,8 +26,8 @@ namespace ARPG
         m_context = context;
         RegisterTierConfigs();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Dungeon system initialized (" +
-                                                    std::to_string(m_tierConfigs.size()) + " tiers)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Dungeon system initialized (%s tiers)",
+                       std::to_string(m_tierConfigs.size()).c_str());
         return true;
     }
 
@@ -162,7 +161,7 @@ namespace ARPG
 
         const auto* config = GetTierConfig(tier);
         std::string tierName = config ? config->name : "Unknown";
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Dungeon tier set to: " + tierName);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Dungeon tier set to: %s", tierName.c_str());
     }
 
     void ARPGDungeonSystem::DescendToNextFloor()
@@ -180,7 +179,7 @@ namespace ARPG
         if (level.hasBoss)
             msg += " BOSS";
         msg += ")";
-        Spark::SimpleConsole::GetInstance().LogInfo(msg);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "%s", msg.c_str());
     }
 
     std::string ARPGDungeonSystem::GetDungeonStatusString() const

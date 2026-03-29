@@ -4,14 +4,13 @@
  */
 
 #include "MMOWorldBossSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -20,8 +19,8 @@ namespace MMO
     {
         m_context = context;
         RegisterDefaultBosses();
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] World boss system initialized (" +
-                                                    std::to_string(m_bossDefs.size()) + " bosses)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] World boss system initialized (%s bosses)",
+                       std::to_string(m_bossDefs.size()).c_str());
         return true;
     }
 
@@ -136,7 +135,8 @@ namespace MMO
             }
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] WORLD BOSS SPAWNED: " + def->name + " - " + def->title);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] WORLD BOSS SPAWNED: %s - %s", def->name.c_str(),
+                       def->title.c_str());
         return true;
     }
 
@@ -201,7 +201,7 @@ namespace MMO
         inst.contributions.clear();
         inst.activeAbilities.clear();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] World boss reset: " + (def ? def->name : "Unknown"));
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] World boss reset: %s", (def ? def->name : "Unknown").c_str());
     }
 
     void MMOWorldBossSystem::UpdatePhases(WorldBossInstance& inst, const WorldBossDef& def)
@@ -217,7 +217,7 @@ namespace MMO
 
                 if (!trans.announcement.empty())
                 {
-                    Spark::SimpleConsole::GetInstance().LogInfo("[MMO] " + trans.announcement);
+                    SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] %s", trans.announcement.c_str());
                 }
 
                 // Transition completes → move to next phase
@@ -253,7 +253,7 @@ namespace MMO
                 // Log ability usage
                 if (!ab.warningMessage.empty())
                 {
-                    Spark::SimpleConsole::GetInstance().LogInfo("[MMO] " + ab.warningMessage);
+                    SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] %s", ab.warningMessage.c_str());
                 }
             }
         }
@@ -265,8 +265,8 @@ namespace MMO
         inst.spawnTimer = def.spawnCooldown;
         CalculateContributions(inst);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] WORLD BOSS DEFEATED: " + def.name + " (" +
-                                                    std::to_string(inst.GetParticipantCount()) + " participants)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] WORLD BOSS DEFEATED: %s (%s participants)", def.name.c_str(),
+                       std::to_string(inst.GetParticipantCount()).c_str());
     }
 
     void MMOWorldBossSystem::CalculateContributions(WorldBossInstance& inst)
@@ -327,7 +327,7 @@ namespace MMO
             // Enrage: double damage after timer expires
             if (inst.enrageTimer <= 0.0f && inst.enrageTimer > -dt)
             {
-                Spark::SimpleConsole::GetInstance().LogInfo("[MMO] World boss has enraged!");
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] World boss has enraged!");
             }
 
             // Reset if no participants for 60 seconds

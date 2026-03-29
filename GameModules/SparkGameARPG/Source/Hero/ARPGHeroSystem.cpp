@@ -4,14 +4,13 @@
  */
 
 #include "ARPGHeroSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <cmath>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace ARPG
 {
@@ -21,8 +20,8 @@ namespace ARPG
         m_context = context;
         RegisterClassTemplates();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Hero system initialized (" +
-                                                    std::to_string(m_classDefs.size()) + " classes)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Hero system initialized (%s classes)",
+                       std::to_string(m_classDefs.size()).c_str());
         return true;
     }
 
@@ -210,7 +209,7 @@ namespace ARPG
         uint32_t id = hero.heroId;
         m_heroes[id] = hero;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Hero created: " + name + " (" + classDef->name + ")");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Hero created: %s (%s)", name.c_str(), classDef->name.c_str());
         return id;
     }
 
@@ -271,8 +270,8 @@ namespace ARPG
             hero.mana = hero.maxMana;
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] " + hero.name + " reached level " +
-                                                    std::to_string(hero.level));
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] %s reached level %s", hero.name.c_str(),
+                       std::to_string(hero.level).c_str());
     }
 
     void ARPGHeroSystem::AllocateAttribute(uint32_t heroId, const std::string& attribute)

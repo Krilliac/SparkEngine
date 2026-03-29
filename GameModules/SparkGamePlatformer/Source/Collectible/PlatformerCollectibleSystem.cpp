@@ -4,13 +4,12 @@
  */
 
 #include "PlatformerCollectibleSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 namespace Platformer
 {
@@ -26,9 +25,8 @@ namespace Platformer
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Platformer Collectible] System initialized with " + std::to_string(m_collectibles.size()) +
-                        " collectibles");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer Collectible] System initialized with %s collectibles",
+                       std::to_string(m_collectibles.size()).c_str());
         return true;
     }
 

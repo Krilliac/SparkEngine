@@ -19,7 +19,7 @@
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/UI/UISystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
-#include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 #include "Utils/ChromeTracing.h"
 #include "Utils/MemoryDebugger.h"
 #include "Utils/MemoryMonitor.h"
@@ -111,39 +111,43 @@ extern std::unique_ptr<GraphicsEngine> g_graphics;
 
 void LogMissingModuleWarnings()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
     int missingCount = 0;
 
 #ifndef SPARK_BULLET_PHYSICS_AVAILABLE
-    console.LogWarning(
-        "[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and raycasting are DISABLED.");
-    console.LogWarning(
-        "                 Physics-dependent features (gravity, projectiles, triggers) will not function.");
+    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                   "[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and raycasting are "
+                   "DISABLED.");
+    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                   "                 Physics-dependent features (gravity, projectiles, triggers) will not function.");
     ++missingCount;
 #endif
 
 #ifndef SPARK_MINIZ_AVAILABLE
-    console.LogWarning("[MISSING MODULE] miniz — crash dump compression and save file compression are DISABLED.");
-    console.LogWarning("                 CrashHandler is using a stub. Save files will not be compressed.");
+    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                   "[MISSING MODULE] miniz — crash dump compression and save file compression are DISABLED.");
+    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                   "                 CrashHandler is using a stub. Save files will not be compressed.");
     ++missingCount;
 #endif
 
 #ifndef SPARK_SDL2_AVAILABLE
 #ifndef SPARK_PLATFORM_WINDOWS
-    console.LogWarning("[MISSING MODULE] SDL2 — cross-platform windowing and input are DISABLED.");
-    console.LogWarning("                 Install libsdl2-dev and rebuild with -DENABLE_SDL2=ON for windowed mode.");
+    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                   "[MISSING MODULE] SDL2 — cross-platform windowing and input are DISABLED.");
+    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                   "                 Install libsdl2-dev and rebuild with -DENABLE_SDL2=ON for windowed mode.");
     ++missingCount;
 #endif
 #endif
 
     if (missingCount > 0)
     {
-        console.LogWarning("------------------------------------------------------------");
-        console.LogWarning(std::to_string(missingCount) + " module(s) missing. Expect degraded functionality.");
-        console.LogWarning("Run: git submodule update --init --recursive");
-        console.LogWarning("Then rebuild to restore full engine features.");
-        console.LogWarning("See README.md 'Dependencies' section for details.");
-        console.LogWarning("------------------------------------------------------------");
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "------------------------------------------------------------");
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "%d module(s) missing. Expect degraded functionality.", missingCount);
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "Run: git submodule update --init --recursive");
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "Then rebuild to restore full engine features.");
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "See README.md 'Dependencies' section for details.");
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "------------------------------------------------------------");
     }
 }
 

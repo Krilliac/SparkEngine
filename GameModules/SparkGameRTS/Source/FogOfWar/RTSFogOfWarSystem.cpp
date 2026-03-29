@@ -4,14 +4,13 @@
  */
 
 #include "RTSFogOfWarSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 namespace RTS
 {
@@ -60,8 +59,8 @@ namespace RTS
             m_grids[faction].Resize(mapWidth, mapHeight);
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Fog of war initialized (" + std::to_string(mapWidth) + "x" +
-                                                    std::to_string(mapHeight) + " grid)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Fog of war initialized (%sx%s grid)",
+                       std::to_string(mapWidth).c_str(), std::to_string(mapHeight).c_str());
         return true;
     }
 

@@ -4,10 +4,10 @@
  */
 
 #include "RacingAIDriver.h"
-#include "Utils/SparkConsole.h"
-
 #include <algorithm>
 #include <cmath>
+
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -24,8 +24,7 @@ namespace Racing
         m_context = context;
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Racing AI] AI driver system initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing AI] AI driver system initialized");
         return true;
     }
 
@@ -86,9 +85,9 @@ namespace Racing
             driver.aggressiveness = preset.aggressiveness;
         }
 
-        auto& console = Spark::SimpleConsole::GetInstance();
         const char* names[] = {"Easy", "Medium", "Hard", "Expert"};
-        console.LogInfo("[Racing AI] Global difficulty set to: " + std::string(names[static_cast<int>(difficulty)]));
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing AI] Global difficulty set to: %s",
+                       std::string(names[static_cast<int>(difficulty)]).c_str());
     }
 
     void RacingAIDriver::UpdateRubberBanding(float playerDistance, float leadDistance, float lastDistance)

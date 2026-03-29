@@ -4,13 +4,12 @@
  */
 
 #include "RTSBuildingSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
+#include "Utils/LogMacros.h"
 
 namespace RTS
 {
@@ -23,8 +22,8 @@ namespace RTS
         RegisterFactionTemplates(RTSFaction::Sentinel);
         RegisterFactionTemplates(RTSFaction::Swarm);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Building system initialized (" +
-                                                    std::to_string(m_templates.size()) + " templates)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Building system initialized (%s templates)",
+                       std::to_string(m_templates.size()).c_str());
         return true;
     }
 
@@ -286,8 +285,8 @@ namespace RTS
             if (front.timeRemaining <= 0.0f)
             {
                 // Unit produced -- the module's OnUpdate will read completed units
-                Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Building " + std::to_string(id) +
-                                                            " finished producing a unit");
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Building %s finished producing a unit",
+                               std::to_string(id).c_str());
                 bld.productionQueue.erase(bld.productionQueue.begin());
             }
         }

@@ -10,7 +10,6 @@
 #include "SeamlessAreaManager.h"
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/DebugHookManager.h"
-#include "../../Utils/SparkConsole.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -40,7 +39,7 @@ namespace Spark::Streaming
         m_timeSinceLastUpdate = 0.0f;
         m_initialized = true;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[SeamlessAreaManager] Initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "[SeamlessAreaManager] Initialized");
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Streaming", 0.0);
     }
 
@@ -101,7 +100,7 @@ namespace Spark::Streaming
         m_stateCallbacks.clear();
         m_initialized = false;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[SeamlessAreaManager] Shutdown");
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "[SeamlessAreaManager] Shutdown");
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Streaming", 0.0);
     }
 

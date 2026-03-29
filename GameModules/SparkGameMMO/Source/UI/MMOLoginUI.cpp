@@ -6,13 +6,12 @@
 #include "MMOLoginUI.h"
 #include "Account/MMOAccountSystem.h"
 #include "Character/MMOCharacterSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <cstring>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -28,7 +27,7 @@ namespace MMO
         std::memset(m_loginPassword, 0, sizeof(m_loginPassword));
         std::memset(m_registerEmail, 0, sizeof(m_registerEmail));
         std::memset(m_createName, 0, sizeof(m_createName));
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Login UI initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Login UI initialized");
         return true;
     }
 
@@ -255,7 +254,7 @@ namespace MMO
                 if (m_enterWorldCallback)
                     m_enterWorldCallback(m_loggedInAccountId, ch.characterId);
 
-                Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Entering world as " + ch.name);
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Entering world as %s", ch.name.c_str());
             }
             ImGui::SameLine();
         }

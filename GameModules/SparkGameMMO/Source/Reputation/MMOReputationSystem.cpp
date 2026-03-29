@@ -4,13 +4,12 @@
  */
 
 #include "MMOReputationSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -105,8 +104,8 @@ namespace MMO
     {
         m_context = context;
         RegisterDefaultFactions();
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Reputation system initialized (" +
-                                                    std::to_string(m_factions.size()) + " factions)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Reputation system initialized (%s factions)",
+                       std::to_string(m_factions.size()).c_str());
         return true;
     }
 
@@ -207,9 +206,8 @@ namespace MMO
 
         if (standing.tier != oldTier)
         {
-            auto& console = Spark::SimpleConsole::GetInstance();
-            console.LogInfo("[MMO] Reputation with " + def->name + " changed to " +
-                            std::to_string(static_cast<int>(standing.tier)));
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Reputation with %s changed to %s", def->name.c_str(),
+                           std::to_string(static_cast<int>(standing.tier)).c_str());
         }
 
         // Spillover to allies
