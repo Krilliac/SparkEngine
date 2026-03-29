@@ -13,7 +13,9 @@
 
 #ifdef _WIN32
 #include "../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h"
+#ifndef SPARK_NO_D3D12
 #include "../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h"
+#endif
 #endif
 
 // ============================================================================
@@ -59,7 +61,7 @@ TEST(WARP_D3D11DeviceInit)
 
 TEST(WARP_D3D12DeviceInit)
 {
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(SPARK_NO_D3D12)
     EXPECT_TRUE(true);
     return;
 #else

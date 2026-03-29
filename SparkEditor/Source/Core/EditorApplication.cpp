@@ -25,7 +25,7 @@
 #include <imgui_impl_dx11.h>
 #include <d3d11.h>
 #include <dxgi.h>
-#include <Windows.h>
+#include <windows.h>
 using Microsoft::WRL::ComPtr;
 
 // External ImGui Win32 message handler

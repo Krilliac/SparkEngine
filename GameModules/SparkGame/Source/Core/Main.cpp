@@ -13,7 +13,7 @@
 #include "Utils/SparkConsole.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <Windows.h>
+#include <windows.h>
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
 {

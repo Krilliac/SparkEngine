@@ -28,8 +28,8 @@
 #include <d3d11.h>
 #include <wincodec.h>
 #include <wrl/client.h>
-#include <VersionHelpers.h>
-#include <TlHelp32.h>
+#include <versionhelpers.h>
+#include <tlhelp32.h>
 #include <psapi.h>
 #pragma comment(lib, "psapi.lib")
 #pragma comment(lib, "dbghelp.lib")
@@ -511,7 +511,11 @@ void TriggerCrashHandler(const char* assertMsg)
     EXCEPTION_RECORD rec{};
     rec.ExceptionCode = STATUS_FATAL_APP_EXIT;
     rec.ExceptionFlags = EXCEPTION_NONCONTINUABLE;
+#if defined(_MSC_VER)
     rec.ExceptionAddress = _ReturnAddress();
+#elif defined(__GNUC__)
+    rec.ExceptionAddress = __builtin_return_address(0);
+#endif
 
     CONTEXT ctx{};
     ctx.ContextFlags = CONTEXT_FULL;
@@ -660,7 +664,13 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
     }
 
     {
+#if defined(_MSC_VER)
         std::wofstream ofs(logFile, std::ios::out | std::ios::trunc);
+#else
+        // MinGW libstdc++ doesn't support wstring paths in fstream
+        std::string narrowLogFile(logFile.begin(), logFile.end());
+        std::wofstream ofs(narrowLogFile.c_str(), std::ios::out | std::ios::trunc);
+#endif
         ofs << log.str();
     }
 

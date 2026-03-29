@@ -14,7 +14,7 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
-#include <Windows.h>
+#include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 #include <vector>

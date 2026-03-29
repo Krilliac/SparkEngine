@@ -23,7 +23,7 @@
 #endif
 #endif
 
-#include <Windows.h>
+#include <windows.h>
 #include <d3d11_1.h>
 #include <DirectXMath.h>
 #include <wrl.h>

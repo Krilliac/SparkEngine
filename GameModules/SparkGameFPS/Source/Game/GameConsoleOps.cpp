@@ -8,7 +8,7 @@
 
 #include "Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <Windows.h>
+#include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <cstdint>
 #ifdef SPARK_PLATFORM_WINDOWS

@@ -19,7 +19,7 @@
 #include <thread>
 #include <chrono>
 
-#include <Windows.h>
+#include <windows.h>
 
 namespace Spark
 {

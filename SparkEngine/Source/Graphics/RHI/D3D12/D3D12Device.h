@@ -25,6 +25,13 @@
 
 #ifdef _WIN32
 
+// MinGW's d3d12.h only defines up to ID3D12Device1. Stub the newer
+// interfaces so the header compiles — DXR features are disabled at runtime.
+#if defined(__MINGW32__) && !defined(__ID3D12Device5_FWD_DEFINED__)
+#define __ID3D12Device5_FWD_DEFINED__
+typedef ID3D12Device1 ID3D12Device5; // Safe stub — never actually used under Wine
+#endif
+
 #include "D3D12Types.h"
 
 #include <queue>

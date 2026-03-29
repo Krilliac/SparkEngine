@@ -27,10 +27,10 @@ HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
     SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !filename.empty(), "SoundEffect::LoadFromFile - empty filename");
 
-#ifdef SPARK_PLATFORM_WINDOWS
+#if defined(SPARK_PLATFORM_WINDOWS) && defined(_MSC_VER)
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
 #else
-    // Linux: convert wstring to narrow string for ifstream
+    // MinGW and Linux: convert wstring to narrow string for ifstream
     std::string narrowFilename(filename.begin(), filename.end());
     std::ifstream file(narrowFilename, std::ios::binary | std::ios::ate);
 #endif

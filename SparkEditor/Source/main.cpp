@@ -22,7 +22,7 @@
 #include <atomic>
 
 #ifdef _WIN32
-#include <Windows.h>
+#include <windows.h>
 #endif
 
 static std::atomic<bool> g_collabServerRunning{true};

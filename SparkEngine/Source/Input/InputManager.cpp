@@ -5,7 +5,7 @@
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
-#include <Windows.h>
+#include <windows.h>
 #include <windowsx.h> // GET_X_LPARAM, GET_Y_LPARAM
 #include <cstring>
 #include <cmath>

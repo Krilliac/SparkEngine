@@ -55,6 +55,9 @@
 #if defined(_MSC_VER)
 #include <intrin.h>
 #define DEBUG_BREAK() __debugbreak()
+#elif defined(__MINGW32__) || defined(__MINGW64__)
+// MinGW on Windows: use __debugbreak intrinsic (GCC extension)
+#define DEBUG_BREAK() __builtin_trap()
 #elif defined(__has_builtin) && __has_builtin(__builtin_debugtrap)
 // Clang 3.8+, Apple Clang, Intel LLVM (ICPX), GCC 12+
 #define DEBUG_BREAK() __builtin_debugtrap()

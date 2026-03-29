@@ -15,7 +15,7 @@
 #include "../Utils/SparkConsole.h"
 #include "../Utils/LogMacros.h"
 
-#include <Windows.h>
+#include <windows.h>
 #include <d3d11_1.h>
 #include <DirectXMath.h>
 #include <wrl.h>
@@ -209,8 +209,8 @@ void LightingSystem::UpdateShadowMaps(const XMMATRIX& viewMatrix, const XMMATRIX
 
     // Extract near and far planes from the projection matrix
     // For LH perspective projection: projMatrix._33 = far/(far-near), projMatrix._43 = -near*far/(far-near)
-    float projNear = -projMatrix.r[3].m128_f32[2] / projMatrix.r[2].m128_f32[2];
-    float projFar = projMatrix.r[3].m128_f32[2] / (1.0f - projMatrix.r[2].m128_f32[2]);
+    float projNear = -XMVectorGetZ(projMatrix.r[3]) / XMVectorGetZ(projMatrix.r[2]);
+    float projFar = XMVectorGetZ(projMatrix.r[3]) / (1.0f - XMVectorGetZ(projMatrix.r[2]));
 
     // Clamp to reasonable defaults if extraction fails
     if (projNear <= 0.0f || projNear != projNear)

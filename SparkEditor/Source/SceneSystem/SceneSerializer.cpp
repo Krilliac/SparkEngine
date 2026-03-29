@@ -414,8 +414,9 @@ namespace SparkEditor
         void Value(uint64_t v) { m_os << v; }
         void Value(float v) { m_os << v; }
         void Value(bool v) { m_os << (v ? "true" : "false"); }
-// size_t overload only when it differs from uint64_t (e.g. 32-bit builds)
-#if !(defined(_MSC_VER) && defined(_WIN64)) && !defined(__LP64__)
+// size_t overload only when it differs from uint64_t (e.g. 32-bit builds).
+// On 64-bit Windows (MSVC and MinGW) and 64-bit Linux, size_t == uint64_t.
+#if !defined(_WIN64) && !defined(__LP64__) && !defined(__x86_64__)
         void Value(size_t v) { m_os << v; }
 #endif
 

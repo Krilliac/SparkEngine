@@ -383,6 +383,10 @@ endif()
 if(MINGW AND NOT MSVC)
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX SPARK_PLATFORM_WINDOWS)
     message(STATUS "MinGW detected — enabling Windows code paths (D3D11/D3D12)")
+
+    # MinGW toolchain restricts find_path to the sysroot. Our ThirdParty
+    # dependencies live in the source tree, so allow both search modes.
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
 endif()
 
 # ---------------------------------------------------------------------
@@ -775,6 +779,16 @@ else()
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandlerStub\\.cpp$")
 endif()
 
+# MinGW's d3d12.h headers are too old for the full D3D12 backend (missing
+# ID3D12Device5, debug layer types, mesh shaders, VRS). Exclude D3D12 and DXR
+# sources on MinGW — D3D11 is the primary backend and works perfectly under Wine + DXVK.
+if(MINGW AND NOT MSVC)
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/RHI/D3D12/.*")
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/RHI/DXRSupport\\.cpp$")
+    add_compile_definitions(SPARK_NO_D3D12)
+    message(STATUS "MinGW: D3D12/DXR backend excluded (headers too old). D3D11 is primary.")
+endif()
+
 # 9a) SparkEngineLib - Static library with all engine systems
 add_library(SparkEngineLib STATIC ${SPARK_ENGINE_LIB_SOURCES})
 set_target_properties(SparkEngineLib PROPERTIES OUTPUT_NAME "SparkEngineLib")
@@ -786,6 +800,10 @@ else()
     add_executable(SparkEngine "${SPARK_ENGINE_ENTRY_POINT}")
 endif()
 target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
+# MinGW: -municode enables wWinMain as the entry point (Unicode command line)
+if(MINGW)
+    target_link_options(SparkEngine PRIVATE -municode)
+endif()
 
 # On Linux/macOS, export the executable's symbols so that game module .so files
 # loaded via dlopen() can resolve SparkEngineLib symbols from the host process.
@@ -1125,12 +1143,16 @@ endif()
 # 12) System libraries - Platform-specific (on SparkEngineLib)
 # ---------------------------------------------------------------------
 if(WIN32)
+    set(SPARK_D3D_LIBS d3d11 dxgi d3dcompiler dxguid)
+    if(NOT MINGW)
+        list(APPEND SPARK_D3D_LIBS d3d12)
+    endif()
     target_link_libraries(SparkEngineLib PUBLIC
-        d3d11 d3d12 dxgi d3dcompiler dxguid
+        ${SPARK_D3D_LIBS}
         kernel32 user32 gdi32 winspool
         shell32 comdlg32 advapi32
         ole32 oleaut32 uuid
-        winmm
+        winmm dbghelp xaudio2_8
         $<$<BOOL:${ENABLE_NETWORKING}>:ws2_32>
         $<$<BOOL:${ENABLE_NETWORKING}>:wsock32>
         $<$<BOOL:${ENABLE_NETWORKING}>:crypt32>

@@ -912,10 +912,61 @@ static void ShutdownEngine()
     Spark::DebugHookManager::GetInstance().Clear();
 }
 
+// Test automation: exit after N frames (0 = run indefinitely).
+// Parsed from -test-frames N on the command line (both platforms).
+static int g_testFrameLimit = 0;
+
+// Window size override from command line (-window-size WxH).
+// 0 means use default from EngineSettings.
+static int g_windowWidthOverride = 0;
+static int g_windowHeightOverride = 0;
+
 // ============================================================================
 // Windows platform
 // ============================================================================
 #ifdef SPARK_PLATFORM_WINDOWS
+
+/**
+ * @brief Parse -test-frames N from a wide command line string (Windows).
+ */
+static int ParseTestFrameLimit(LPWSTR cmdLine)
+{
+    std::wstring cmd(cmdLine);
+    auto pos = cmd.find(L"-test-frames");
+    if (pos == std::wstring::npos)
+        return 0;
+    pos += 12; // length of "-test-frames"
+    while (pos < cmd.size() && cmd[pos] == L' ')
+        ++pos;
+    if (pos >= cmd.size())
+        return 0;
+    return std::max(0, std::stoi(std::wstring(cmd.substr(pos))));
+}
+
+/**
+ * @brief Parse -window-size WxH from a wide command line string (Windows).
+ */
+static void ParseWindowSizeOverride(LPWSTR cmdLine)
+{
+    std::wstring cmd(cmdLine);
+    auto pos = cmd.find(L"-window-size");
+    if (pos == std::wstring::npos)
+        return;
+    pos += 12;
+    while (pos < cmd.size() && cmd[pos] == L' ')
+        ++pos;
+    if (pos >= cmd.size())
+        return;
+    auto sizeStr = cmd.substr(pos);
+    auto xPos = sizeStr.find(L'x');
+    if (xPos == std::wstring::npos)
+        xPos = sizeStr.find(L'X');
+    if (xPos != std::wstring::npos)
+    {
+        g_windowWidthOverride = std::max(320, std::stoi(sizeStr.substr(0, xPos)));
+        g_windowHeightOverride = std::max(240, std::stoi(sizeStr.substr(xPos + 1)));
+    }
+}
 
 // Windows-specific globals
 constexpr int MAX_LOADSTRING = 100;
@@ -1336,11 +1387,23 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Starting main engine loop...");
 
+    if (g_testFrameLimit > 0)
+        console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
+
+    int frameCount = 0;
+
     // Win32 message pump: PeekMessage with PM_REMOVE gives us non-blocking
     // message processing — the engine ticks in the else branch whenever
     // there are no pending OS messages (resize, input, focus, etc.).
     while (msg.message != WM_QUIT)
     {
+        // Test frame limit: post WM_QUIT to exit cleanly
+        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        {
+            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+            PostQuitMessage(0);
+            continue;
+        }
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
         {
             if (!TranslateAccelerator(msg.hwnd, accel, &msg))
@@ -1389,6 +1452,8 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
                 Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
                 console.Update();
             });
+
+            ++frameCount;
         }
     }
 
@@ -1410,6 +1475,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     ASSERT(hInstance != nullptr);
 
     SetupCrashHandler();
+
+    g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
+    ParseWindowSizeOverride(lpCmdLine);
 
 #ifdef SPARK_HEADLESS_SUPPORT
     g_headlessMode = ParseHeadlessFlag(lpCmdLine);
@@ -1472,8 +1540,8 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
     auto& settings = EngineSettings::GetInstance();
     settings.Load();
 
-    int winW = settings.Graphics().windowWidth;
-    int winH = settings.Graphics().windowHeight;
+    int winW = g_windowWidthOverride > 0 ? g_windowWidthOverride : settings.Graphics().windowWidth;
+    int winH = g_windowHeightOverride > 0 ? g_windowHeightOverride : settings.Graphics().windowHeight;
 
     HWND hWnd = CreateWindowW(g_szClass, g_szTitle, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, winW, winH, nullptr, nullptr,
                               hInst, nullptr);
@@ -1592,6 +1660,33 @@ static bool ParseFlag(int argc, char* argv[], const char* flag)
             return true;
     }
     return false;
+}
+
+static int ParseTestFrameLimitArgs(int argc, char* argv[])
+{
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        if (strcmp(argv[i], "-test-frames") == 0 || strcmp(argv[i], "--test-frames") == 0)
+            return std::max(0, std::atoi(argv[i + 1]));
+    }
+    return 0;
+}
+
+static void ParseWindowSizeOverrideArgs(int argc, char* argv[])
+{
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        if (strcmp(argv[i], "-window-size") == 0 || strcmp(argv[i], "--window-size") == 0)
+        {
+            int w = 0, h = 0;
+            if (sscanf(argv[i + 1], "%dx%d", &w, &h) == 2 || sscanf(argv[i + 1], "%dX%d", &w, &h) == 2)
+            {
+                g_windowWidthOverride = std::max(320, w);
+                g_windowHeightOverride = std::max(240, h);
+            }
+            return;
+        }
+    }
 }
 
 static std::filesystem::path GetExecutableDirectoryLinux()
@@ -2082,10 +2177,22 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
  */
 static void RunSDL2MainLoop()
 {
-    Spark::SimpleConsole::GetInstance().LogInfo("Starting main engine loop (SDL2)...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("Starting main engine loop (SDL2)...");
+
+    if (g_testFrameLimit > 0)
+        console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
+
+    int frameCount = 0;
 
     while (!g_shutdownRequested)
     {
+        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        {
+            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+            break;
+        }
+
         SDL_Event event;
         bool running = true;
 
@@ -2103,6 +2210,7 @@ static void RunSDL2MainLoop()
 
         float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
         TickFrame(dt);
+        ++frameCount;
     }
 }
 
@@ -2125,8 +2233,8 @@ static int RunSDL2Windowed(int argc, char* argv[])
     auto& settings = EngineSettings::GetInstance();
     settings.Load();
 
-    int winW = settings.Graphics().windowWidth;
-    int winH = settings.Graphics().windowHeight;
+    int winW = g_windowWidthOverride > 0 ? g_windowWidthOverride : settings.Graphics().windowWidth;
+    int winH = g_windowHeightOverride > 0 ? g_windowHeightOverride : settings.Graphics().windowHeight;
 
     // Set OpenGL attributes before window creation (required for Mesa/llvmpipe)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
@@ -2232,6 +2340,9 @@ int main(int argc, char* argv[])
 {
     std::signal(SIGINT, SignalHandler);
     std::signal(SIGTERM, SignalHandler);
+
+    g_testFrameLimit = ParseTestFrameLimitArgs(argc, argv);
+    ParseWindowSizeOverrideArgs(argc, argv);
 
 #ifdef SPARK_HEADLESS_SUPPORT
     bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");

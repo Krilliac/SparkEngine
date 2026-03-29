@@ -26,7 +26,7 @@
 #include "../Utils/SparkError.h"
 #include "../Graphics/Mesh.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <Windows.h>
+#include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <filesystem>
 

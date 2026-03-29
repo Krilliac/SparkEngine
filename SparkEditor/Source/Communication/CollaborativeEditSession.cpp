@@ -11,8 +11,8 @@
 #include <sstream>
 
 #ifdef _WIN32
-#include <WinSock2.h>
-#include <WS2tcpip.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 using SocketType = SOCKET;
 constexpr SocketType INVALID_SOCK = INVALID_SOCKET;

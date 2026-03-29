@@ -42,7 +42,7 @@ SPARK_GAME_API Game* g_game = nullptr;
 Console g_console;
 
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <Windows.h>
+#include <windows.h>
 
 // DLL entry point
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)

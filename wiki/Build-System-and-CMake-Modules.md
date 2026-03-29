@@ -188,36 +188,41 @@ cmake --build --preset windows-release
 
 ## Cross-Compilation: Windows on Linux (MinGW + Wine)
 
-SparkEngine supports cross-compiling the Windows D3D11/D3D12 code paths on a Linux host using MinGW-w64. The resulting `.exe` files run under Wine, with DXVK translating D3D11 calls to Vulkan and VKD3D-Proton handling D3D12. Combined with Mesa Lavapipe, this enables full D3D11/D3D12 testing without a GPU.
+SparkEngine supports cross-compiling the Windows D3D11 code paths on a Linux host using MinGW-w64. The resulting `.exe` files run under Wine, with DXVK translating D3D11 calls to Vulkan (or WineD3D as fallback). Combined with Mesa Lavapipe, this enables full D3D11 testing without a GPU.
 
-### Prerequisites
+> **Full guide:** See [Cross-Compilation: Wine Testing](Cross-Compilation-Wine-Testing) for complete setup, troubleshooting, and the automated test suite.
+
+### Quick Start
 
 ```bash
+# 1. Install prerequisites
 sudo apt-get install mingw-w64 wine64 mesa-vulkan-drivers
-# Optional for D3D11->Vulkan: sudo apt-get install dxvk
-```
 
-### Build and Run
+# 2. Install DirectXMath headers (MinGW doesn't ship them)
+# See the full guide for download instructions
+sudo cp DirectX*.h DirectX*.inl /usr/x86_64-w64-mingw32/include/
 
-```bash
-# Configure and build
+# 3. Build
 cmake --preset linux-mingw-release
-cmake --build build/linux-mingw-release
+cmake --build build/linux-mingw-release --parallel $(nproc)
 
-# Run tests under Wine (auto-configures DXVK, Lavapipe)
+# 4. Run tests under Wine
 tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
+
+# 5. Run automated test suite (7 phases)
+python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
 ```
 
-### How It Works
+### What Gets Built
 
-```
-D3D11/D3D12 C++ (same _WIN32 code paths as MSVC)
-    → MinGW cross-compiler (x86_64-w64-mingw32-g++) → .exe
-    → Wine translates Windows API calls
-    → DXVK translates D3D11 → Vulkan
-    → VKD3D-Proton translates D3D12 → Vulkan
-    → Lavapipe provides software Vulkan (no GPU needed)
-```
+5 Windows executables + game module DLLs: `SparkEngine.exe`, `SparkEditor.exe`, `SparkTests.exe`, `SparkConsole.exe`, `SparkShaderCompiler.exe`
+
+### Key Differences from MSVC
+
+- **D3D12 excluded** (MinGW headers too old for ID3D12Device5/DXR)
+- **D3D11 fully supported** (primary backend, works under Wine + DXVK)
+- **DirectXMath** must be installed manually to the MinGW sysroot
+- **`-municode`** required for `wWinMain` Unicode entry point
 
 ### Key Files
 
@@ -225,6 +230,7 @@ D3D11/D3D12 C++ (same _WIN32 code paths as MSVC)
 |------|---------|
 | `cmake/toolchains/mingw-w64-x86_64.cmake` | CMake toolchain for MinGW cross-compilation |
 | `tools/wine-run.sh` | Wine runner with DXVK/VKD3D-Proton auto-setup |
+| `tools/test-windows-wine.py` | Automated 7-phase Wine test suite |
 | `CMakePresets.json` | `linux-mingw-release` / `linux-mingw-debug` presets |
 
 ### Software Rendering Fallback (All Backends)
