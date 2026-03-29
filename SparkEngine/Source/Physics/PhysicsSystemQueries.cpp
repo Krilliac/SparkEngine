@@ -53,6 +53,7 @@
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 
 JPH_SUPPRESS_WARNINGS
+#include "JoltWarningRestore.h"
 
 #include <algorithm>
 #include <mutex>
@@ -335,7 +336,8 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateSliderConstraint(std::sh
 
 std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateFixedConstraint(std::shared_ptr<PhysicsBody> bodyA,
                                                                         std::shared_ptr<PhysicsBody> bodyB,
-                                                                        const XMMATRIX& frameA, const XMMATRIX& frameB)
+                                                                        const XMMATRIX& frameA,
+                                                                        [[maybe_unused]] const XMMATRIX& frameB)
 {
     if (!m_joltSystem || !bodyA || !bodyB)
         return nullptr;

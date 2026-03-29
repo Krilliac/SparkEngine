@@ -14,6 +14,7 @@
 #pragma once
 
 #include "Utils/ConfigParser.h"
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <functional>

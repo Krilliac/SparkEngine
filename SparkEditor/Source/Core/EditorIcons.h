@@ -135,6 +135,8 @@
 // === Additional Icons ===
 #define ICON_FA_RUNNING "\xef\x9c\x8c"       // U+F70C (person-running)
 #define ICON_FA_CODE "\xef\x84\xa1"          // U+F121
+#define ICON_FA_CUBES "\xef\x86\xb3"         // U+F1B3
+#define ICON_FA_WIFI "\xef\x87\xab"          // U+F1EB
 #define ICON_FA_FONT "\xef\x80\xb1"          // U+F031
 #define ICON_FA_GRID "\xef\x80\x8a"          // U+F00A (alias for TH/grid)
 #define ICON_FA_HOME "\xef\x80\x95"          // U+F015
