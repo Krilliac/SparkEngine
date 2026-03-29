@@ -68,10 +68,10 @@ namespace Spark
         virtual bool DeleteSave(const std::string& slotName) = 0;
 
         /// @brief Check whether a save exists for the given slot.
-        virtual bool SaveExists(const std::string& slotName) const = 0;
+        [[nodiscard]] virtual bool SaveExists(const std::string& slotName) const = 0;
 
         /// @brief Return metadata for all save slots found in the save directory.
-        virtual std::vector<SaveMetadata> GetSaveSlots() const = 0;
+        [[nodiscard]] virtual std::vector<SaveMetadata> GetSaveSlots() const = 0;
     };
 
 } // namespace Spark

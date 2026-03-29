@@ -60,7 +60,7 @@ namespace Spark::UI
         virtual void SetVisible(bool visible) = 0;
 
         /// @brief Check if UI is visible.
-        virtual bool IsVisible() const = 0;
+        [[nodiscard]] virtual bool IsVisible() const = 0;
     };
 
 } // namespace Spark::UI

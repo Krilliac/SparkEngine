@@ -66,8 +66,8 @@ namespace Spark::Audio
         /// @param pitch Pitch multiplier.
         /// @param loop Whether to loop.
         /// @return Opaque source ID, or 0 on failure.
-        virtual uint32_t PlaySound(const std::string& name, float volume = 1.0f, float pitch = 1.0f,
-                                   bool loop = false) = 0;
+        [[nodiscard]] virtual uint32_t PlaySound(const std::string& name, float volume = 1.0f, float pitch = 1.0f,
+                                                 bool loop = false) = 0;
 
         /// @brief Play a 3D positioned sound effect.
         /// @param name Name of the loaded sound.
@@ -76,8 +76,8 @@ namespace Spark::Audio
         /// @param pitch Pitch multiplier.
         /// @param loop Whether to loop.
         /// @return Opaque source ID, or 0 on failure.
-        virtual uint32_t PlaySound3D(const std::string& name, const DirectX::XMFLOAT3& position, float volume = 1.0f,
-                                     float pitch = 1.0f, bool loop = false) = 0;
+        [[nodiscard]] virtual uint32_t PlaySound3D(const std::string& name, const DirectX::XMFLOAT3& position,
+                                                   float volume = 1.0f, float pitch = 1.0f, bool loop = false) = 0;
 
         /// @brief Stop a specific audio source by ID.
         virtual void StopSound(uint32_t sourceID) = 0;
@@ -112,9 +112,9 @@ namespace Spark::Audio
         virtual void SetSFXVolume(float volume) = 0;
         virtual void SetMusicVolume(float volume) = 0;
 
-        virtual float GetMasterVolume() const = 0;
-        virtual float GetSFXVolume() const = 0;
-        virtual float GetMusicVolume() const = 0;
+        [[nodiscard]] virtual float GetMasterVolume() const = 0;
+        [[nodiscard]] virtual float GetSFXVolume() const = 0;
+        [[nodiscard]] virtual float GetMusicVolume() const = 0;
 
         // ================================================================
         // 3D Audio
@@ -131,13 +131,13 @@ namespace Spark::Audio
         // ================================================================
 
         /// @brief Get the number of currently active audio sources.
-        virtual size_t GetActiveSourceCount() const = 0;
+        [[nodiscard]] virtual size_t GetActiveSourceCount() const = 0;
 
         /// @brief Check whether a real audio backend is available on this platform.
-        virtual bool IsAvailable() const = 0;
+        [[nodiscard]] virtual bool IsAvailable() const = 0;
 
         /// @brief Get the backend name (e.g., "XAudio2", "OpenAL").
-        virtual const char* GetBackendName() const = 0;
+        [[nodiscard]] virtual const char* GetBackendName() const = 0;
     };
 
 } // namespace Spark::Audio

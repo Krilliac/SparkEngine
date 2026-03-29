@@ -87,10 +87,10 @@ namespace Spark::Scripting
         // ================================================================
 
         /// @brief Get the last error message.
-        virtual std::string GetLastError() const = 0;
+        [[nodiscard]] virtual std::string GetLastError() const = 0;
 
         /// @brief Get the backend name (e.g., "AngelScript", "Lua").
-        virtual const char* GetBackendName() const = 0;
+        [[nodiscard]] virtual const char* GetBackendName() const = 0;
     };
 
 } // namespace Spark::Scripting

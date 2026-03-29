@@ -51,7 +51,7 @@ namespace Spark::VR
         virtual void Shutdown() = 0;
 
         /// @brief Check if VR is available and initialized.
-        virtual bool IsAvailable() const = 0;
+        [[nodiscard]] virtual bool IsAvailable() const = 0;
 
         // ================================================================
         // Tracking
@@ -61,33 +61,33 @@ namespace Spark::VR
         virtual void UpdateTracking() = 0;
 
         /// @brief Get head position in world space.
-        virtual DirectX::XMFLOAT3 GetHeadPosition() const = 0;
+        [[nodiscard]] virtual DirectX::XMFLOAT3 GetHeadPosition() const = 0;
 
         /// @brief Get head orientation as quaternion.
-        virtual DirectX::XMFLOAT4 GetHeadOrientation() const = 0;
+        [[nodiscard]] virtual DirectX::XMFLOAT4 GetHeadOrientation() const = 0;
 
         // ================================================================
         // Eye Rendering
         // ================================================================
 
         /// @brief Get left eye rendering data.
-        virtual const VREye& GetLeftEye() const = 0;
+        [[nodiscard]] virtual const VREye& GetLeftEye() const = 0;
 
         /// @brief Get right eye rendering data.
-        virtual const VREye& GetRightEye() const = 0;
+        [[nodiscard]] virtual const VREye& GetRightEye() const = 0;
 
         /// @brief Get the recommended render target size per eye.
-        virtual std::pair<int, int> GetRecommendedRenderSize() const = 0;
+        [[nodiscard]] virtual std::pair<int, int> GetRecommendedRenderSize() const = 0;
 
         // ================================================================
         // Controllers
         // ================================================================
 
         /// @brief Get left controller state.
-        virtual const VRController& GetLeftController() const = 0;
+        [[nodiscard]] virtual const VRController& GetLeftController() const = 0;
 
         /// @brief Get right controller state.
-        virtual const VRController& GetRightController() const = 0;
+        [[nodiscard]] virtual const VRController& GetRightController() const = 0;
 
         /// @brief Trigger haptic feedback on a controller.
         /// @param isLeft true = left, false = right.
@@ -103,7 +103,7 @@ namespace Spark::VR
         virtual void SetTrackingSpace(VRTrackingSpace space) = 0;
 
         /// @brief Get the current tracking space.
-        virtual VRTrackingSpace GetTrackingSpace() const = 0;
+        [[nodiscard]] virtual VRTrackingSpace GetTrackingSpace() const = 0;
 
         /// @brief Reset the seated position (re-center).
         virtual void RecenterTracking() = 0;

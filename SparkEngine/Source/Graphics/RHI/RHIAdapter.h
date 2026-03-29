@@ -267,6 +267,12 @@ namespace Spark::RHI
         void DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset);
 
         // -- Resource creation (convenience wrappers) -------------------------
+        // DEPRECATED: Resource creation should go through RHIBridge, which owns
+        // the IRHIDevice and returns std::unique_ptr with proper lifetime
+        // semantics.  RHIAdapter should only be used for command-issuing
+        // operations (SetRenderTargets, Draw, Dispatch, etc.).  These wrappers
+        // remain for backward compatibility but will be removed in a future
+        // release.
 
         /**
          * @brief Create a vertex buffer.
@@ -275,55 +281,65 @@ namespace Spark::RHI
          * @param stride   Per-vertex stride in bytes.
          * @return Non-owning pointer to the created buffer.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHIBuffer* CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride);
 
         /**
          * @brief Create an index buffer.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHIBuffer* CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride = sizeof(uint32_t));
 
         /**
          * @brief Create a constant/uniform buffer.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHIBuffer* CreateConstantBuffer(uint64_t size);
 
         /**
          * @brief Create a structured buffer.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHIBuffer* CreateStructuredBuffer(const void* data, uint64_t size, uint32_t stride);
 
         /**
          * @brief Create a 2D texture.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHITexture* CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format, RHITextureUsage usage,
                                      const void* initialData = nullptr);
 
         /**
          * @brief Create a depth-stencil texture.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHITexture* CreateDepthStencil(uint32_t width, uint32_t height,
                                         PixelFormat format = PixelFormat::D24_UNORM_S8_UINT);
 
         /**
          * @brief Create a render target texture.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHITexture* CreateRenderTarget(uint32_t width, uint32_t height,
                                         PixelFormat format = PixelFormat::R8G8B8A8_UNORM);
 
         /**
          * @brief Create a sampler state.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHISampler* CreateSampler(const RHISamplerDesc& desc);
 
         /**
          * @brief Create a graphics pipeline state.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHIPipelineState* CreateGraphicsPipeline(const RHIPipelineStateDesc& desc, IRHIShader* vertexShader,
                                                   IRHIShader* pixelShader);
 
         /**
          * @brief Compile and create a shader from source.
          */
+        [[deprecated("Use RHIBridge for resource creation instead")]]
         IRHIShader* CreateShader(const RHIShaderDesc& desc);
 
         // -- Resource updates -------------------------------------------------

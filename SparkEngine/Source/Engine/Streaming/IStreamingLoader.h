@@ -52,7 +52,7 @@ namespace Spark::Streaming
 
         /// @brief Submit a load request.
         /// @return Handle for tracking the request.
-        virtual LoadRequestHandle Submit(const LoadRequest& request) = 0;
+        [[nodiscard]] virtual LoadRequestHandle Submit(const LoadRequest& request) = 0;
 
         /// @brief Submit all pending requests to hardware for optimal throughput.
         virtual void Flush() = 0;
@@ -65,14 +65,15 @@ namespace Spark::Streaming
         virtual bool Cancel(LoadRequestHandle handle) = 0;
 
         /// @brief Check the status of a request.
-        virtual LoadStatus GetStatus(LoadRequestHandle handle) const = 0;
+        [[nodiscard]] virtual LoadStatus GetStatus(LoadRequestHandle handle) const = 0;
 
         // ================================================================
         // Data Access
         // ================================================================
 
         /// @brief Get the loaded data buffer (CPUMemory destination only, after completion).
-        virtual const void* GetLoadedData(LoadRequestHandle handle, uint64_t* outSize = nullptr) const = 0;
+        [[nodiscard]] virtual const void* GetLoadedData(LoadRequestHandle handle,
+                                                        uint64_t* outSize = nullptr) const = 0;
 
         /// @brief Release the loaded data buffer.
         virtual void ReleaseLoadedData(LoadRequestHandle handle) = 0;
@@ -82,10 +83,10 @@ namespace Spark::Streaming
         // ================================================================
 
         /// @brief Get performance statistics.
-        virtual const DirectStorageStats& GetStats() const = 0;
+        [[nodiscard]] virtual const DirectStorageStats& GetStats() const = 0;
 
         /// @brief Check if hardware-accelerated streaming is available.
-        virtual bool IsHardwareAvailable() const = 0;
+        [[nodiscard]] virtual bool IsHardwareAvailable() const = 0;
     };
 
 } // namespace Spark::Streaming
