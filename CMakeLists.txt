@@ -155,8 +155,11 @@ endforeach()
 # 6) Compiler options (platform-specific)
 # ---------------------------------------------------------------------
 if(MSVC)
+    # /W3 is set per-target (not globally) to avoid D9025 warnings when
+    # third-party targets like Jolt use /w or /W0 to suppress their warnings.
+    # /MP /bigobj /Zi apply globally since all targets benefit from them.
     add_compile_options(
-        /W3 /MP /bigobj
+        /MP /bigobj
         /Zi          # Always generate PDB debug info (enables stack trace symbol resolution)
         /wd4005  # Macro redefinition
         /wd4996  # Deprecated functions
@@ -164,6 +167,8 @@ if(MSVC)
         /wd4267  # size_t conversion warnings
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
+    # Warning level set per-target to avoid conflicts with third-party /w flags
+    set(SPARK_MSVC_WARNING_OPTIONS /W3)
     # /DEBUG linker flag embeds PDB reference in the executable so SymFromAddr
     # can locate symbols at runtime. Does not affect binary performance.
     add_link_options(/DEBUG)
@@ -804,6 +809,11 @@ endif()
 # 9a) SparkEngineLib - Static library with all engine systems
 add_library(SparkEngineLib STATIC ${SPARK_ENGINE_LIB_SOURCES})
 set_target_properties(SparkEngineLib PROPERTIES OUTPUT_NAME "SparkEngineLib")
+
+# Apply MSVC warning level to engine targets (not globally, to avoid D9025 with third-party /w flags)
+if(MSVC AND SPARK_MSVC_WARNING_OPTIONS)
+    target_compile_options(SparkEngineLib PRIVATE ${SPARK_MSVC_WARNING_OPTIONS})
+endif()
 
 # 9b) SparkEngine - Executable (entry point + module loader)
 if(WIN32)

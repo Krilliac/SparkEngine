@@ -59,7 +59,7 @@ namespace SparkEditor
         entry.isInitialized = false;
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorPluginManager: Registered plugin '%s' v%s", name.c_str(),
-                       entry.plugin->GetVersion().c_str());
+                       entry.plugin->GetVersion());
         m_plugins.push_back(std::move(entry));
         return true;
     }
@@ -384,8 +384,8 @@ namespace SparkEditor
         {
             const char* status = entry.isInitialized ? "initialized" : "registered";
             const char* source = entry.isFromDLL ? "DLL" : "built-in";
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "  - %s v%s [%s, %s]", entry.plugin->GetName().c_str(),
-                           entry.plugin->GetVersion().c_str(), source, status);
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "  - %s v%s [%s, %s]", entry.plugin->GetName(),
+                           entry.plugin->GetVersion(), source, status);
         }
     }
 

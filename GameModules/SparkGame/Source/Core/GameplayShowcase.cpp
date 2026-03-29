@@ -132,9 +132,8 @@ void GameplayShowcase::SetupEventSubscriptions()
         [this](const Spark::WeatherChangedEvent& e)
         {
             m_totalWeatherChanges++;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Weather changed from type %s to %s (intensity: %s%)",
-                           std::to_string(e.previousType).c_str(), std::to_string(e.newType).c_str(),
-                           std::to_string(static_cast<int>(e.intensity * 100.0f)).c_str());
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Weather changed from type %d to %d (intensity: %d%%)",
+                           e.previousType, e.newType, static_cast<int>(e.intensity * 100.0f));
         }));
 
     SPARK_LOG_INFO(Spark::LogCategory::Game,
