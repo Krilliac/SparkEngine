@@ -411,8 +411,10 @@ if(NOT WIN32 AND ENABLE_SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/CMakeLists.txt")
         endif()
 
         if(_LIBGL_RUNTIME AND EXISTS "${_FALLBACK_GL_HEADERS}/GL/gl.h")
-            message(STATUS "OpenGL dev headers not found — using bundled fallback (ThirdParty/OpenGL)")
-            message(STATUS "  Runtime libGL found at: ${_LIBGL_RUNTIME}")
+            message(WARNING
+                "OpenGL dev headers not found — using bundled fallback (ThirdParty/OpenGL).\n"
+                "  Runtime libGL found at: ${_LIBGL_RUNTIME}\n"
+                "  Install libgl-dev (or equivalent) for full system OpenGL headers.")
 
             # Create libGL.so symlink if it doesn't exist (needs the -dev package normally)
             get_filename_component(_GL_LIB_DIR "${_LIBGL_RUNTIME}" DIRECTORY)
@@ -421,9 +423,9 @@ if(NOT WIN32 AND ENABLE_SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/CMakeLists.txt")
                     "${_LIBGL_RUNTIME}" "${_GL_LIB_DIR}/libGL.so"
                     RESULT_VARIABLE _SYMLINK_RESULT)
                 if(_SYMLINK_RESULT EQUAL 0)
-                    message(STATUS "  Created symlink: ${_GL_LIB_DIR}/libGL.so -> ${_LIBGL_RUNTIME}")
+                    message(STATUS "  Created dev symlink: ${_GL_LIB_DIR}/libGL.so -> ${_LIBGL_RUNTIME}")
                 else()
-                    message(STATUS "  Could not create libGL.so symlink (may need sudo)")
+                    message(WARNING "  Could not create libGL.so dev symlink (may need sudo) — linking may fail")
                 endif()
             endif()
 
@@ -569,7 +571,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt/single_include/entt/entt.hpp"
     message(STATUS "Found EnTT")
 elseif(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt_stub/entt/entt.hpp")
     list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt_stub")
-    message(STATUS "Found EnTT (minimal stub - initialize submodule for full library)")
+    message(WARNING "EnTT: using minimal stub fallback — run 'git submodule update --init --recursive' for full library")
 endif()
 
 # Jolt Physics
@@ -759,7 +761,7 @@ if(NOT JOLT_FOUND)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsShapeFactory\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsBodyImpl\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsConsoleOps\\.cpp$")
-    message(STATUS "Jolt Physics not found - using PhysicsSystemStub.cpp")
+    message(WARNING "Jolt Physics not found — using PhysicsSystemStub.cpp fallback (no rigid body physics)")
 else()
     # When the real PhysicsSystem is built, exclude the stub
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSystemStub\\.cpp$")
@@ -767,7 +769,7 @@ endif()
 if(NOT MINIZ_FOUND)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandler\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandlerHelpers\\.cpp$")
-    message(STATUS "MINIZ not found - excluding CrashHandler*.cpp, using CrashHandlerStub.cpp")
+    message(WARNING "MINIZ not found — using CrashHandlerStub.cpp fallback (no crash dump compression)")
 else()
     # When the real CrashHandler is built, exclude the stub
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandlerStub\\.cpp$")
@@ -1154,7 +1156,7 @@ else()
         target_include_directories(SparkEngineLib PUBLIC ${X11_INCLUDE_DIR})
         message(STATUS "X11 found - windowing support enabled")
     else()
-        message(STATUS "X11 not found - headless mode only")
+        message(WARNING "X11 not found — falling back to headless mode only (install libx11-dev for windowed mode)")
     endif()
 endif()
 
