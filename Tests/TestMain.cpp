@@ -29,7 +29,9 @@
 #include <random>
 #include <sstream>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <csignal>
 #include <cstdio>
 #include <cstring>
@@ -55,10 +57,59 @@ struct TestResult
 };
 
 // ============================================================================
-// Signal handling — catch crashes so they don't silently kill the suite
+// Signal/exception handling — catch crashes so they don't silently kill the suite
 // ============================================================================
 
-#ifndef _WIN32
+#ifdef _WIN32
+static LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exInfo)
+{
+    const char* excName = "UNKNOWN";
+    if (exInfo && exInfo->ExceptionRecord)
+    {
+        switch (exInfo->ExceptionRecord->ExceptionCode)
+        {
+        case EXCEPTION_ACCESS_VIOLATION:
+            excName = "ACCESS_VIOLATION";
+            break;
+        case EXCEPTION_STACK_OVERFLOW:
+            excName = "STACK_OVERFLOW";
+            break;
+        case EXCEPTION_INT_DIVIDE_BY_ZERO:
+            excName = "DIVIDE_BY_ZERO";
+            break;
+        case EXCEPTION_ILLEGAL_INSTRUCTION:
+            excName = "ILLEGAL_INSTRUCTION";
+            break;
+        default:
+            excName = "EXCEPTION";
+            break;
+        }
+    }
+
+    // Write crash info to stderr (OutputDebugString is not async-safe either)
+    HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
+    if (hErr != INVALID_HANDLE_VALUE)
+    {
+        DWORD written;
+        WriteFile(hErr, "\n[ CRASH  ] ", 12, &written, nullptr);
+        WriteFile(hErr, g_currentTest.c_str(), static_cast<DWORD>(g_currentTest.size()), &written, nullptr);
+        WriteFile(hErr, " (", 2, &written, nullptr);
+        WriteFile(hErr, excName, static_cast<DWORD>(strlen(excName)), &written, nullptr);
+        WriteFile(hErr, ")\n", 2, &written, nullptr);
+    }
+
+    // Print to stdout as well so test output captures it
+    std::cout << "\n[ CRASH  ] " << g_currentTest << " (" << excName << ")\n";
+    std::cout.flush();
+
+    ExitProcess(1);
+}
+
+static void InstallCrashHandlers()
+{
+    SetUnhandledExceptionFilter(CrashExceptionFilter);
+}
+#else
 static void CrashSignalHandler(int sig)
 {
     const char* sigName = "UNKNOWN";
@@ -251,9 +302,7 @@ static void PrintUsage(const char* argv0)
 
 int main(int argc, char** argv)
 {
-#ifndef _WIN32
     InstallCrashHandlers();
-#endif
 
     // Parse CLI arguments
     std::string outputFilePath;

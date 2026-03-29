@@ -120,6 +120,10 @@ TEST(VulkanLavapipe_BufferCreation)
         EXPECT_TRUE(buffer->GetSize() == 1024);
     }
 
+    // Destroy buffer BEFORE shutting down the device — the buffer's destructor
+    // calls vkDestroyBuffer() which requires the VkDevice to still be alive.
+    buffer.reset();
+
     device.Shutdown();
 #endif
 }

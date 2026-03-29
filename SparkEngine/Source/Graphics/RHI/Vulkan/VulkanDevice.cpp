@@ -802,6 +802,9 @@ namespace Spark
 
             std::unique_ptr<IRHISwapChain> VulkanDevice::CreateSwapChain(const RHISwapChainDesc& desc)
             {
+                if (m_device == VK_NULL_HANDLE || m_instance == VK_NULL_HANDLE)
+                    return nullptr;
+
                 VkSurfaceKHR surface = VK_NULL_HANDLE;
 
 #ifdef _WIN32
@@ -819,6 +822,9 @@ namespace Spark
 
             std::unique_ptr<IRHIBuffer> VulkanDevice::CreateBuffer(const RHIBufferDesc& desc)
             {
+                if (m_device == VK_NULL_HANDLE)
+                    return nullptr;
+
                 VkBufferCreateInfo bufferInfo = {};
                 bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
                 bufferInfo.size = desc.size;
@@ -955,6 +961,9 @@ namespace Spark
 
             std::unique_ptr<IRHITexture> VulkanDevice::CreateTexture(const RHITextureDesc& desc)
             {
+                if (m_device == VK_NULL_HANDLE)
+                    return nullptr;
+
                 VkImageCreateInfo imageInfo = {};
                 imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
                 imageInfo.imageType = VK_IMAGE_TYPE_2D;
