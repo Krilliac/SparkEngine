@@ -396,13 +396,78 @@ if(NOT WIN32 AND ENABLE_SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/CMakeLists.txt")
     # Without libgl-dev, SDL2 still builds but without OpenGL support.
     find_package(OpenGL QUIET)
     if(NOT OpenGL_FOUND)
-        message(WARNING
-            "OpenGL headers not found — SDL2 will build WITHOUT OpenGL/GLX support.\n"
-            "  The editor requires OpenGL. Install the development headers:\n"
-            "    Ubuntu/Debian : sudo apt install libgl-dev\n"
-            "    Fedora        : sudo dnf install mesa-libGL-devel\n"
-            "    Arch          : sudo pacman -S mesa\n"
-            "  Then delete the build directory and reconfigure.")
+        # Fallback: if libGL.so.1 exists (Mesa runtime) but libgl-dev is not installed,
+        # use our bundled minimal GL/GLX headers and create the libGL.so symlink.
+        # This lets SDL2 detect and compile with OpenGL/GLX support even without the
+        # -dev package, which is common in CI/container environments.
+        set(_FALLBACK_GL_HEADERS "${CMAKE_SOURCE_DIR}/ThirdParty/OpenGL")
+        find_library(_LIBGL_RUNTIME NAMES GL PATHS /usr/lib/x86_64-linux-gnu /usr/lib /usr/lib64 NO_DEFAULT_PATH)
+        if(NOT _LIBGL_RUNTIME)
+            # Also check the versioned name directly
+            find_file(_LIBGL_SO1 NAMES libGL.so.1 PATHS /usr/lib/x86_64-linux-gnu /usr/lib /usr/lib64 NO_DEFAULT_PATH)
+            if(_LIBGL_SO1)
+                set(_LIBGL_RUNTIME "${_LIBGL_SO1}")
+            endif()
+        endif()
+
+        if(_LIBGL_RUNTIME AND EXISTS "${_FALLBACK_GL_HEADERS}/GL/gl.h")
+            message(STATUS "OpenGL dev headers not found — using bundled fallback (ThirdParty/OpenGL)")
+            message(STATUS "  Runtime libGL found at: ${_LIBGL_RUNTIME}")
+
+            # Create libGL.so symlink if it doesn't exist (needs the -dev package normally)
+            get_filename_component(_GL_LIB_DIR "${_LIBGL_RUNTIME}" DIRECTORY)
+            if(NOT EXISTS "${_GL_LIB_DIR}/libGL.so")
+                execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+                    "${_LIBGL_RUNTIME}" "${_GL_LIB_DIR}/libGL.so"
+                    RESULT_VARIABLE _SYMLINK_RESULT)
+                if(_SYMLINK_RESULT EQUAL 0)
+                    message(STATUS "  Created symlink: ${_GL_LIB_DIR}/libGL.so -> ${_LIBGL_RUNTIME}")
+                else()
+                    message(STATUS "  Could not create libGL.so symlink (may need sudo)")
+                endif()
+            endif()
+
+            # Also create libGLX.so symlink if GLX runtime exists without dev symlink
+            find_file(_LIBGLX_SO0 NAMES libGLX.so.0 PATHS "${_GL_LIB_DIR}" NO_DEFAULT_PATH)
+            if(_LIBGLX_SO0 AND NOT EXISTS "${_GL_LIB_DIR}/libGLX.so")
+                execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+                    "${_LIBGLX_SO0}" "${_GL_LIB_DIR}/libGLX.so"
+                    RESULT_VARIABLE _GLX_SYMLINK_RESULT)
+                if(_GLX_SYMLINK_RESULT EQUAL 0)
+                    message(STATUS "  Created symlink: ${_GL_LIB_DIR}/libGLX.so -> ${_LIBGLX_SO0}")
+                endif()
+            endif()
+
+            # Inject fallback headers so SDL2's CheckOpenGL and the engine can find them.
+            # CMAKE_C_FLAGS -isystem is needed because SDL2's check_c_source_compiles
+            # doesn't inherit include_directories from the parent project.
+            list(APPEND CMAKE_INCLUDE_PATH "${_FALLBACK_GL_HEADERS}")
+            include_directories(SYSTEM "${_FALLBACK_GL_HEADERS}")
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${_FALLBACK_GL_HEADERS}" CACHE STRING "" FORCE)
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem ${_FALLBACK_GL_HEADERS}" CACHE STRING "" FORCE)
+            set(OPENGL_INCLUDE_DIR "${_FALLBACK_GL_HEADERS}" CACHE PATH "Fallback GL headers" FORCE)
+            set(OPENGL_gl_LIBRARY "${_GL_LIB_DIR}/libGL.so" CACHE FILEPATH "GL library" FORCE)
+            set(OpenGL_FOUND TRUE)
+            set(OPENGL_FOUND TRUE)
+            set(SPARK_GL_FALLBACK_HEADERS TRUE)
+
+            # Create the OpenGL::GL imported target that CMake's FindOpenGL normally provides.
+            # Without this, target_link_libraries(... OpenGL::GL) generates -lOpenGL::GL literally.
+            if(NOT TARGET OpenGL::GL)
+                add_library(OpenGL::GL UNKNOWN IMPORTED)
+                set_target_properties(OpenGL::GL PROPERTIES
+                    IMPORTED_LOCATION "${_GL_LIB_DIR}/libGL.so"
+                    INTERFACE_INCLUDE_DIRECTORIES "${_FALLBACK_GL_HEADERS}")
+            endif()
+        else()
+            message(WARNING
+                "OpenGL headers not found — SDL2 will build WITHOUT OpenGL/GLX support.\n"
+                "  The editor requires OpenGL. Install the development headers:\n"
+                "    Ubuntu/Debian : sudo apt install libgl-dev\n"
+                "    Fedora        : sudo dnf install mesa-libGL-devel\n"
+                "    Arch          : sudo pacman -S mesa\n"
+                "  Then delete the build directory and reconfigure.")
+        endif()
     endif()
 
     # Minimal SDL2 build — only what the engine needs
@@ -565,7 +630,9 @@ endif()
 
 # --- OpenGL ---
 if(ENABLE_OPENGL)
-    find_package(OpenGL QUIET)
+    if(NOT OpenGL_FOUND)
+        find_package(OpenGL QUIET)
+    endif()
     if(OpenGL_FOUND)
         message(STATUS "OpenGL found: ${OPENGL_gl_LIBRARY}")
     else()

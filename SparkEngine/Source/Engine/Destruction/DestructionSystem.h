@@ -272,6 +272,7 @@ namespace Spark
             float remainingLifetime = 10.0f;
         };
 
+        bool m_initialized = false;
         std::unordered_map<std::string, FracturePattern> m_patterns;
         std::vector<DebrisInstance> m_debris;
         Spark::Delegate<const DestructionEvent&> m_destructionCallbacks;

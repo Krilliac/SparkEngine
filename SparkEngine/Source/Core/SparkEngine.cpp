@@ -874,13 +874,26 @@ static void ShutdownEngine()
 
     ShutdownGameplaySystems();
     ShutdownDebugSystems();
-    Spark::ConsoleProcessManager::GetInstance().Shutdown();
 
     if (g_moduleManager)
     {
         g_moduleManager->ShutdownAll();
+
+        // Clear console commands and EventBus channels BEFORE dlclose()
+        // unmaps module code. Command handlers and ChannelOf<E> vtables
+        // live in the .so — destroying them after unload segfaults.
+        Spark::SimpleConsole::GetInstance().Shutdown();
+        Spark::ConsoleProcessManager::GetInstance().Shutdown();
+        if (g_eventBus)
+            g_eventBus->ClearAll();
+
         g_moduleManager->UnloadAll();
         g_moduleManager.reset();
+    }
+    else
+    {
+        Spark::SimpleConsole::GetInstance().Shutdown();
+        Spark::ConsoleProcessManager::GetInstance().Shutdown();
     }
 
     g_audioEngine.reset();
@@ -894,8 +907,6 @@ static void ShutdownEngine()
     g_input.reset();
     g_graphics.reset();
     g_timer.reset();
-
-    Spark::SimpleConsole::GetInstance().Shutdown();
 
     SPARK_DEBUG_HOOK(EnginePostShutdown, g_frameCounter, 0.0f);
     Spark::DebugHookManager::GetInstance().Clear();
