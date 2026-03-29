@@ -116,6 +116,7 @@ namespace Spark
         static constexpr int GROWTH_SAMPLE_COUNT = 10;        ///< Samples for growth rate averaging
         static constexpr float DEFAULT_CHECK_INTERVAL = 1.0f; ///< Seconds between full checks
 
+        [[deprecated("Use EngineContext::Get()->GetSystem<MemoryMonitor>() instead")]]
         static MemoryMonitor& GetInstance()
         {
             static MemoryMonitor instance;

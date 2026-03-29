@@ -120,6 +120,7 @@ namespace Spark
     class DebugDrawManager
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<DebugDrawManager>() instead")]]
         static DebugDrawManager& GetInstance()
         {
             static DebugDrawManager instance;

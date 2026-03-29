@@ -63,6 +63,7 @@ namespace Spark
         class GPUPerfCounters
         {
           public:
+            [[deprecated("Use EngineContext::Get()->GetSystem<GPUPerfCounters>() instead")]]
             static GPUPerfCounters& GetInstance()
             {
                 static GPUPerfCounters instance;

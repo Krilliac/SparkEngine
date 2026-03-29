@@ -74,6 +74,7 @@ namespace Spark
     class CpuDebugger
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<CpuDebugger>() instead")]]
         static CpuDebugger& GetInstance()
         {
             static CpuDebugger instance;

@@ -102,6 +102,7 @@ namespace Spark::Graphics
     class GPUDrivenRenderer
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<GPUDrivenRenderer>() instead")]]
         static GPUDrivenRenderer& GetInstance()
         {
             static GPUDrivenRenderer instance;

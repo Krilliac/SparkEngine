@@ -107,6 +107,7 @@ namespace Spark::Graphics
     {
       public:
         /** @brief Singleton access. */
+        [[deprecated("Use EngineContext::Get()->GetSystem<SkyAtmosphereSystem>() instead")]]
         static SkyAtmosphereSystem& GetInstance()
         {
             static SkyAtmosphereSystem s;

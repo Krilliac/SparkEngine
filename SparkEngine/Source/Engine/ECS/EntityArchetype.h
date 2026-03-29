@@ -112,6 +112,7 @@ namespace Spark::ECS
     {
       public:
         /** @brief Get the singleton instance. */
+        [[deprecated("Use EngineContext::Get()->GetSystem<EntityArchetypeSystem>() instead")]]
         static EntityArchetypeSystem& GetInstance()
         {
             static EntityArchetypeSystem s;

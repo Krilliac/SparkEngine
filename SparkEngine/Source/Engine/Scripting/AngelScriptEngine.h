@@ -204,7 +204,10 @@ class AngelScriptEngine : public Spark::Scripting::IScriptEngine
      * @deprecated Use EngineContext::Get()->GetSystem<AngelScriptEngine>() instead.
      */
     [[deprecated("Use EngineContext::Get()->GetSystem<AngelScriptEngine>() instead")]]
-    static AngelScriptEngine* GetInstance() { return s_instance; }
+    static AngelScriptEngine* GetInstance()
+    {
+        return s_instance;
+    }
 
   private:
     static AngelScriptEngine* s_instance; ///< Singleton instance pointer

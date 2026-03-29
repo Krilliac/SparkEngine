@@ -278,7 +278,10 @@ class EngineContext : public Spark::IEngineContext
     // Interface getters — return abstract interface types for decoupled access
     // =========================================================================
 
-    Spark::Animation::IAnimationSystem* GetAnimationInterface() { return GetSystem<Spark::Animation::IAnimationSystem>(); }
+    Spark::Animation::IAnimationSystem* GetAnimationInterface()
+    {
+        return GetSystem<Spark::Animation::IAnimationSystem>();
+    }
     Spark::Scripting::IScriptEngine* GetScriptInterface() { return GetSystem<Spark::Scripting::IScriptEngine>(); }
     Spark::VR::IVRBackend* GetVRInterface() { return GetSystem<Spark::VR::IVRBackend>(); }
     Spark::Streaming::IStreamingLoader* GetStreamingLoader() { return GetSystem<Spark::Streaming::IStreamingLoader>(); }
@@ -327,7 +330,10 @@ class EngineContext : public Spark::IEngineContext
     }
     void SetMusic(Spark::Audio::MusicManager* m) { RegisterSystem<Spark::Audio::MusicManager>(m); }
     void SetVFS(Spark::VirtualFileSystem* v) { RegisterSystem<Spark::VirtualFileSystem>(v); }
-    void SetStreamingLoader(Spark::Streaming::IStreamingLoader* s) { RegisterSystem<Spark::Streaming::IStreamingLoader>(s); }
+    void SetStreamingLoader(Spark::Streaming::IStreamingLoader* s)
+    {
+        RegisterSystem<Spark::Streaming::IStreamingLoader>(s);
+    }
 
     // =========================================================================
     // Generic system registry (R1.1 — single source of truth)

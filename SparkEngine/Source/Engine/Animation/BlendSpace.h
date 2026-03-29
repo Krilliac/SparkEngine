@@ -195,6 +195,7 @@ namespace Spark::Animation
     {
       public:
         /** @brief Singleton access. */
+        [[deprecated("Use EngineContext::Get()->GetSystem<BlendSpaceManager>() instead")]]
         static BlendSpaceManager& GetInstance()
         {
             static BlendSpaceManager s;

@@ -85,6 +85,7 @@ namespace Spark
     class ThreadDebugger
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<ThreadDebugger>() instead")]]
         static ThreadDebugger& GetInstance()
         {
             static ThreadDebugger instance;

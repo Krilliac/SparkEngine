@@ -14,7 +14,7 @@
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
 #include "../Utils/ContainerUtils.h"
-#include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <filesystem>
 #include <cstring>
 #include <vector>
@@ -34,27 +34,27 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
 {
     if (!device)
     {
-        Spark::SimpleConsole::GetInstance().LogError("Device is null");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Device is null");
         return false;
     }
 
     if (filePath.empty())
     {
-        Spark::SimpleConsole::GetInstance().LogError("File path is empty");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "File path is empty");
         return false;
     }
 
     if (!std::filesystem::exists(filePath))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Texture file not found: " + filePath);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Texture file not found: %s", filePath.c_str());
         return false;
     }
 
     // Check if texture already loaded
     if (Spark::ContainerUtils::Contains(m_textures, type))
     {
-        Spark::SimpleConsole::GetInstance().LogInfo("Texture of type " + std::to_string(static_cast<int>(type)) +
-                                                    " already loaded for material '" + m_name + "'");
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Texture of type %d already loaded for material '%s'",
+                       static_cast<int>(type), m_name.c_str());
         return true;
     }
 
@@ -63,7 +63,7 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wicFactory));
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC Imaging Factory");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create WIC Imaging Factory");
         return false;
     }
 
@@ -72,7 +72,7 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
                                                GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC Decoder for file: " + filePath);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create WIC Decoder for file: %s", filePath.c_str());
         return false;
     }
 
@@ -80,7 +80,8 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     hr = decoder->GetFrame(0, &frame);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to get frame from WIC Decoder for file: " + filePath);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to get frame from WIC Decoder for file: %s",
+                        filePath.c_str());
         return false;
     }
 
@@ -88,7 +89,7 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     hr = wicFactory->CreateFormatConverter(&converter);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC Format Converter");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create WIC Format Converter");
         return false;
     }
 
@@ -96,7 +97,7 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
                                WICBitmapPaletteTypeCustom);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to initialize WIC Format Converter");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to initialize WIC Format Converter");
         return false;
     }
 
@@ -104,7 +105,7 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     hr = converter->GetSize(&width, &height);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to get image size from WIC Converter");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to get image size from WIC Converter");
         return false;
     }
 
@@ -112,7 +113,7 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     hr = converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(imageData.size()), imageData.data());
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to copy pixels from WIC Converter");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to copy pixels from WIC Converter");
         return false;
     }
 
@@ -135,7 +136,8 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     hr = device->CreateTexture2D(&texDesc, &initData, &texture);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create Direct3D texture for file: " + filePath);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create Direct3D texture for file: %s",
+                        filePath.c_str());
         return false;
     }
 
@@ -144,7 +146,8 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     hr = device->CreateShaderResourceView(texture.Get(), nullptr, &srv);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create Shader Resource View for texture: " + filePath);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create Shader Resource View for texture: %s",
+                        filePath.c_str());
         return false;
     }
 
@@ -155,7 +158,8 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     matTexture.enabled = true;
     m_textures[type] = matTexture;
 
-    Spark::SimpleConsole::GetInstance().LogInfo("Loaded texture: " + filePath + " for material '" + m_name + "'");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded texture: %s for material '%s'", filePath.c_str(),
+                   m_name.c_str());
     return true;
 }
 
@@ -168,8 +172,8 @@ void Material::UnloadTexture(MaterialTextureType type)
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().LogWarning("Material '" + m_name + "' does not have texture of type " +
-                                                       std::to_string(static_cast<int>(type)) + " to unload");
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Material '%s' does not have texture of type %d to unload",
+                       m_name.c_str(), static_cast<int>(type));
     }
 }
 
@@ -192,8 +196,8 @@ void Material::BindToShader(ID3D11DeviceContext* context) const
 {
     if (!context)
     {
-        Spark::SimpleConsole::GetInstance().LogWarning("Null context in Material::BindToShader for material: " +
-                                                       m_name);
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Null context in Material::BindToShader for material: %s",
+                       m_name.c_str());
         return;
     }
 
@@ -307,8 +311,8 @@ void Material::BindToShader(ID3D11DeviceContext* context) const
     static int bindCount = 0;
     if (++bindCount % 100 == 0)
     { // Log every 100 binds to avoid spam
-        Spark::SimpleConsole::GetInstance().LogInfo("Material '" + m_name + "' bound with " +
-                                                    std::to_string(boundTextures) + " textures");
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material '%s' bound with %d textures", m_name.c_str(),
+                       boundTextures);
     }
 #endif
 }
@@ -317,7 +321,8 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
 {
     if (!device)
     {
-        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: device is null for material '" + m_name + "'");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CompileMaterial: device is null for material '%s'",
+                        m_name.c_str());
         return E_INVALIDARG;
     }
 
@@ -379,8 +384,8 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
     hr = device->CreateBlendState(&blendDesc, &m_blendState);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create blend state for '" + m_name +
-                                                     "'");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CompileMaterial: failed to create blend state for '%s'",
+                        m_name.c_str());
         return hr;
     }
 
@@ -394,8 +399,8 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
     hr = device->CreateDepthStencilState(&dsDesc, &m_depthStencilState);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create depth stencil state for '" +
-                                                     m_name + "'");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CompileMaterial: failed to create depth stencil state for '%s'",
+                        m_name.c_str());
         return hr;
     }
 
@@ -427,8 +432,8 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
     hr = device->CreateRasterizerState(&rsDesc, &m_rasterizerState);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create rasterizer state for '" +
-                                                     m_name + "'");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CompileMaterial: failed to create rasterizer state for '%s'",
+                        m_name.c_str());
         return hr;
     }
 
@@ -458,13 +463,13 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
     hr = device->CreateBuffer(&cbDesc, &initData, &m_constantBuffer);
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().LogError("CompileMaterial: failed to create constant buffer for '" +
-                                                     m_name + "'");
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CompileMaterial: failed to create constant buffer for '%s'",
+                        m_name.c_str());
         return hr;
     }
 
     m_compiled = true;
-    Spark::SimpleConsole::GetInstance().LogInfo("Material '" + m_name + "' compiled successfully");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material '%s' compiled successfully", m_name.c_str());
     return S_OK;
 }
 

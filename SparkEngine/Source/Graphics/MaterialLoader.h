@@ -64,6 +64,7 @@ namespace Spark::Graphics
     class MaterialLoader
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<MaterialLoader>() instead")]]
         static MaterialLoader& GetInstance();
 
         /**
