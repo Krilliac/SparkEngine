@@ -38,6 +38,7 @@ namespace Spark
         if (record.faultCount >= maxRetries)
         {
             record.enabled = false;
+            m_anyDisabled.store(true, std::memory_order_release);
 
             // Calculate next auto-recovery time with exponential backoff
             float backoff = record.cooldownSeconds * static_cast<float>(1u << std::min(record.recoveryAttempts, 5u));
@@ -102,6 +103,18 @@ namespace Spark
             record.faultCount = 0;
             record.enabled = true;
 
+            // Recalculate atomic fast-path flag after re-enabling
+            bool anyStillDisabled = false;
+            for (const auto& [n, rec] : m_records)
+            {
+                if (!rec.enabled)
+                {
+                    anyStillDisabled = true;
+                    break;
+                }
+            }
+            m_anyDisabled.store(anyStillDisabled, std::memory_order_release);
+
             SPARK_LOG_INFO(
                 LogCategory::Core,
                 "FAULT ISOLATION: Subsystem '%s' AUTO-RECOVERED (attempt %u/%s, "
@@ -117,6 +130,11 @@ namespace Spark
 
     bool SubsystemFaultIsolator::IsEnabled(const char* name) const
     {
+        // Fast path: if no subsystems have ever been disabled, skip the lock entirely.
+        // This is the common case and avoids mutex contention on 35+ calls per frame.
+        if (!m_anyDisabled.load(std::memory_order_acquire))
+            return true;
+
         std::lock_guard<std::mutex> lock(m_mutex);
 
         auto it = m_records.find(name);
@@ -141,6 +159,18 @@ namespace Spark
 
         if (wasFaulted)
         {
+            // Recalculate atomic fast-path flag
+            bool anyStillDisabled = false;
+            for (const auto& [n, rec] : m_records)
+            {
+                if (!rec.enabled)
+                {
+                    anyStillDisabled = true;
+                    break;
+                }
+            }
+            m_anyDisabled.store(anyStillDisabled, std::memory_order_release);
+
             SPARK_LOG_INFO(LogCategory::Core, "FAULT ISOLATION: Subsystem '%s' re-enabled", name.c_str());
             SPARK_DEBUG_HOOK_SYSTEM(SubsystemRecovered, name.c_str(), 0.0);
         }
@@ -160,6 +190,7 @@ namespace Spark
             record.enabled = true;
             record.lastError.clear();
         }
+        m_anyDisabled.store(false, std::memory_order_release);
     }
 
     void SubsystemFaultIsolator::SetAutoRecovery(const std::string& name, bool enabled)

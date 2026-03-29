@@ -579,6 +579,7 @@ void PhysicsSystem::ProcessCollisions()
         return;
 
     std::vector<std::pair<PhysicsBody*, PhysicsBody*>> currentTriggerPairs;
+    currentTriggerPairs.reserve(m_activeTriggerPairs.size());
     DispatchCollisionCallbacks(currentTriggerPairs);
     UpdateTriggerExitEvents(currentTriggerPairs);
     m_activeTriggerPairs = std::move(currentTriggerPairs);

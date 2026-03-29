@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -45,7 +46,8 @@ namespace Spark
      * @brief Tracks runtime faults in engine subsystems and auto-disables repeat offenders
      *
      * Thread safety: all public methods are guarded by a mutex. The IsEnabled() fast
-     * path acquires the lock but the critical section is a single hash lookup.
+     * path uses an atomic flag to skip the lock entirely when no subsystems have faulted,
+     * which is the common case (called 35+ times per frame).
      */
     class SubsystemFaultIsolator
     {
@@ -102,6 +104,10 @@ namespace Spark
         std::unordered_map<std::string, SubsystemFaultRecord> m_records;
         uint32_t m_globalMaxRetries = 3;
         float m_lastUpdateTime = 0.0f; ///< Engine time from most recent Update() call
+
+        /// Atomic fast-path: true when any subsystem is disabled. IsEnabled() skips the
+        /// mutex entirely when this is false (the common case — no faults).
+        std::atomic<bool> m_anyDisabled{false};
     };
 
 } // namespace Spark

@@ -444,6 +444,9 @@ namespace Spark::ECS
                     continue;
 
                 // Smooth follow with dead zone
+                // Precompute smoothing factor once per camera (std::exp is faster than std::pow
+                // and avoids recomputing the same value for both axes)
+                float t = 1.0f - std::exp(std::log(cam.followSmoothing) * deltaTime);
                 float dx = targetTf->position.x - camTf.position.x;
                 float dy = targetTf->position.y - camTf.position.y;
 
@@ -451,7 +454,6 @@ namespace Spark::ECS
                 {
                     float sign = dx > 0 ? 1.0f : -1.0f;
                     float target = targetTf->position.x - sign * cam.deadZone.x;
-                    float t = 1.0f - std::pow(cam.followSmoothing, deltaTime);
                     camTf.position.x += (target - camTf.position.x) * t;
                 }
 
@@ -459,7 +461,6 @@ namespace Spark::ECS
                 {
                     float sign = dy > 0 ? 1.0f : -1.0f;
                     float target = targetTf->position.y - sign * cam.deadZone.y;
-                    float t = 1.0f - std::pow(cam.followSmoothing, deltaTime);
                     camTf.position.y += (target - camTf.position.y) * t;
                 }
 

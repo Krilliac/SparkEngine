@@ -57,6 +57,7 @@
 #include "ECSystemTypes.h"
 #include "../Components.h"
 #include "../../../Utils/Assert.h"
+#include "../../../Utils/DeferredDeletion.h"
 #include "../../../Utils/Validate.h"
 #include <functional>
 #include <vector>
@@ -340,6 +341,10 @@ namespace Spark::ECS
      * Set via `SetDeathCallback()`. May be empty (no-op) if not registered.
      */
         DeathCallback m_onDeath;
+
+        /// Persistent deferred queue — avoids heap allocation every frame.
+        /// Cleared at the end of each Update() via Flush().
+        Spark::DeferredQueue<entt::entity> m_deadEntities;
     };
 
     // =============================================================================
@@ -552,6 +557,9 @@ namespace Spark::ECS
       private:
         DecalExpiredCallback m_onExpired;
         int m_activeDecalCount = 0;
+
+        /// Persistent deferred queue — avoids heap allocation every frame.
+        Spark::DeferredQueue<entt::entity> m_expiredDecals;
     };
 
     // =============================================================================
@@ -611,6 +619,9 @@ namespace Spark::ECS
       private:
         ProjectileExpiredCallback m_onExpired;
         int m_activeProjectileCount = 0;
+
+        /// Persistent deferred queue — avoids heap allocation every frame.
+        Spark::DeferredQueue<entt::entity> m_expiredProjectiles;
     };
 
     // =============================================================================
