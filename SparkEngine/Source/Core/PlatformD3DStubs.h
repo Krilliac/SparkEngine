@@ -174,7 +174,8 @@ enum D3D11_TEXTURE_ADDRESS_MODE
 constexpr float D3D11_FLOAT32_MAX = 3.402823466e+38F;
 #endif
 
-// XMUINT4 type
+// XMUINT4 type (only define if not already provided by DirectXMath)
+#if defined(SPARK_NO_DIRECTXMATH_LIB)
 namespace DirectX
 {
     struct XMUINT4
@@ -184,5 +185,6 @@ namespace DirectX
         XMUINT4(uint32_t _x, uint32_t _y, uint32_t _z, uint32_t _w) : x(_x), y(_y), z(_z), w(_w) {}
     };
 } // namespace DirectX
+#endif
 
 #endif // !SPARK_PLATFORM_WINDOWS

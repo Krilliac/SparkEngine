@@ -1,15 +1,37 @@
 /**
  * @file PlatformDirectXMathStubs.h
- * @brief DirectXMath compatibility stubs for non-Windows platforms
+ * @brief DirectXMath cross-platform support for non-Windows platforms
  *
- * Provides lightweight implementations of DirectXMath types and functions
- * (XMFLOAT2/3/4, XMVECTOR, XMMATRIX, and all common math operations)
- * so that engine code using DirectXMath compiles on Linux and macOS.
+ * On Linux/macOS, uses Microsoft's open-source DirectXMath library (MIT license)
+ * which provides full SIMD support:
+ *   - SSE2/SSE4/AVX/AVX2 on x86-64 (Linux, macOS Intel)
+ *   - ARM NEON on ARM64 (macOS Apple Silicon)
+ *
+ * This gives Linux/macOS the same SIMD-accelerated math as Windows.
+ * The library is header-only and lives in ThirdParty/DirectXMath/.
+ *
+ * A minimal SAL shim (sal_shim.h) provides empty annotation macros
+ * that MSVC uses for static analysis but GCC/Clang don't need.
+ *
+ * Fallback: If SPARK_NO_DIRECTXMATH_LIB is defined, scalar stubs are used
+ * instead (for environments where the ThirdParty submodule is unavailable).
  */
 
 #pragma once
 
 #ifndef SPARK_PLATFORM_WINDOWS
+
+// ============================================================================
+// Prefer Microsoft's open-source DirectXMath (real SIMD on all platforms)
+// ============================================================================
+#if !defined(SPARK_NO_DIRECTXMATH_LIB)
+
+// SAL annotation stubs needed by DirectXMath headers
+#include "sal.h"
+// Microsoft DirectXMath (SSE2/AVX/NEON) — MIT licensed, header-only
+#include "../../../ThirdParty/DirectXMath/Inc/DirectXMath.h"
+
+#else // SPARK_NO_DIRECTXMATH_LIB — fallback scalar stubs
 
 #include <cmath>
 #include <cstring>
@@ -518,7 +540,18 @@ namespace DirectX
         return mat;
     }
 
-    // Transform functions
+    // Transform a direction vector by a matrix (ignores translation row)
+    inline XMVECTOR XMVector3TransformNormal(XMVECTOR v, const XMMATRIX& m)
+    {
+        XMVECTOR result;
+        result.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0];
+        result.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1];
+        result.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2];
+        result.w = 0.0f;
+        return result;
+    }
+
+    // Transform a point by a matrix (includes translation, with perspective divide)
     inline XMVECTOR XMVector3Transform(XMVECTOR v, const XMMATRIX& m)
     {
         return XMVector3TransformCoord(v, m);
@@ -564,7 +597,31 @@ namespace DirectX
 
     inline XMVECTOR XMQuaternionSlerp(XMVECTOR a, XMVECTOR b, float t)
     {
-        return XMVectorLerp(a, b, t); // Simplified linear interpolation
+        // Compute cosine of angle between quaternions
+        float dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+
+        // If dot is negative, negate one quaternion to take the shorter arc
+        XMVECTOR b2 = b;
+        if (dot < 0.0f)
+        {
+            dot = -dot;
+            b2 = {-b.x, -b.y, -b.z, -b.w};
+        }
+
+        // If quaternions are very close, use linear interpolation to avoid division by zero
+        if (dot > 0.9995f)
+        {
+            XMVECTOR result = {a.x + (b2.x - a.x) * t, a.y + (b2.y - a.y) * t, a.z + (b2.z - a.z) * t,
+                               a.w + (b2.w - a.w) * t};
+            return XMQuaternionNormalize(result);
+        }
+
+        float theta = acosf(dot);
+        float sinTheta = sinf(theta);
+        float wa = sinf((1.0f - t) * theta) / sinTheta;
+        float wb = sinf(t * theta) / sinTheta;
+
+        return {a.x * wa + b2.x * wb, a.y * wa + b2.y * wb, a.z * wa + b2.z * wb, a.w * wa + b2.w * wb};
     }
 
     inline XMMATRIX XMMatrixRotationQuaternion(XMVECTOR q)
@@ -613,14 +670,68 @@ namespace DirectX
 
     inline bool XMMatrixDecompose(XMVECTOR* outScale, XMVECTOR* outRotQuat, XMVECTOR* outTrans, const XMMATRIX& m)
     {
-        // Extract translation
+        // Extract translation from row 3
         *outTrans = {m.m[3][0], m.m[3][1], m.m[3][2], 1.0f};
-        // Extract scale (column lengths)
+
+        // Extract scale (row vector lengths for row-major layout)
         float sx = sqrtf(m.m[0][0] * m.m[0][0] + m.m[0][1] * m.m[0][1] + m.m[0][2] * m.m[0][2]);
         float sy = sqrtf(m.m[1][0] * m.m[1][0] + m.m[1][1] * m.m[1][1] + m.m[1][2] * m.m[1][2]);
         float sz = sqrtf(m.m[2][0] * m.m[2][0] + m.m[2][1] * m.m[2][1] + m.m[2][2] * m.m[2][2]);
         *outScale = {sx, sy, sz, 0.0f};
-        *outRotQuat = {0, 0, 0, 1}; // Identity quaternion as stub
+
+        // Build the pure rotation matrix by dividing out scale
+        if (sx < 1e-6f || sy < 1e-6f || sz < 1e-6f)
+        {
+            *outRotQuat = {0, 0, 0, 1};
+            return false; // Degenerate scale
+        }
+
+        float invSx = 1.0f / sx;
+        float invSy = 1.0f / sy;
+        float invSz = 1.0f / sz;
+
+        float r00 = m.m[0][0] * invSx, r01 = m.m[0][1] * invSx, r02 = m.m[0][2] * invSx;
+        float r10 = m.m[1][0] * invSy, r11 = m.m[1][1] * invSy, r12 = m.m[1][2] * invSy;
+        float r20 = m.m[2][0] * invSz, r21 = m.m[2][1] * invSz, r22 = m.m[2][2] * invSz;
+
+        // Shepperd's method for robust quaternion extraction from rotation matrix
+        float trace = r00 + r11 + r22;
+        float qx, qy, qz, qw;
+
+        if (trace > 0.0f)
+        {
+            float s = sqrtf(trace + 1.0f) * 2.0f; // s = 4*qw
+            qw = 0.25f * s;
+            qx = (r12 - r21) / s;
+            qy = (r20 - r02) / s;
+            qz = (r01 - r10) / s;
+        }
+        else if (r00 > r11 && r00 > r22)
+        {
+            float s = sqrtf(1.0f + r00 - r11 - r22) * 2.0f; // s = 4*qx
+            qw = (r12 - r21) / s;
+            qx = 0.25f * s;
+            qy = (r01 + r10) / s;
+            qz = (r20 + r02) / s;
+        }
+        else if (r11 > r22)
+        {
+            float s = sqrtf(1.0f + r11 - r00 - r22) * 2.0f; // s = 4*qy
+            qw = (r20 - r02) / s;
+            qx = (r01 + r10) / s;
+            qy = 0.25f * s;
+            qz = (r12 + r21) / s;
+        }
+        else
+        {
+            float s = sqrtf(1.0f + r22 - r00 - r11) * 2.0f; // s = 4*qz
+            qw = (r01 - r10) / s;
+            qx = (r20 + r02) / s;
+            qy = (r12 + r21) / s;
+            qz = 0.25f * s;
+        }
+
+        *outRotQuat = {qx, qy, qz, qw};
         return true;
     }
 
@@ -667,5 +778,7 @@ namespace DirectX
     }
 
 } // namespace DirectX
+
+#endif // SPARK_NO_DIRECTXMATH_LIB
 
 #endif // !SPARK_PLATFORM_WINDOWS

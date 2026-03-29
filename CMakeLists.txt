@@ -591,6 +591,14 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui")
     message(STATUS "Found Dear ImGui")
 endif()
 
+# Microsoft DirectXMath (cross-platform SIMD math — used on Linux/macOS instead of scalar stubs)
+if(NOT WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/DirectXMath/Inc/DirectXMath.h")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/DirectXMath/Inc")
+    message(STATUS "Found DirectXMath (cross-platform SIMD)")
+elseif(NOT WIN32)
+    message(WARNING "DirectXMath not found — using scalar fallback stubs. Run 'git submodule update --init --recursive' for SIMD support.")
+endif()
+
 # AngelScript
 if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
     list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
