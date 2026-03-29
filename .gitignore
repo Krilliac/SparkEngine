@@ -479,3 +479,4 @@ Testing/
 # End of SparkEngine .gitignore
 mmo_data.db
 spark_trace.json
+ThirdParty/dxvk/

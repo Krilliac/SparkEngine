@@ -85,6 +85,8 @@ detect_dxvk() {
     # Auto-detect DXVK installation
     if [ -z "$dxvk_path" ]; then
         for candidate in \
+            "$PROJECT_ROOT/ThirdParty/dxvk/x64" \
+            "$PROJECT_ROOT/build/dxvk/x64" \
             /usr/share/dxvk/x64 \
             /usr/lib/dxvk \
             /opt/dxvk/x64; do
