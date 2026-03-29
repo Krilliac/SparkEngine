@@ -107,10 +107,24 @@ jobs:
         cat asan-console.txt >> asan-ubsan-lsan-results.txt || true
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-linux-asan failed\n\n`;
 
@@ -137,7 +151,7 @@ jobs:
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: context.issue.number,
+            issue_number: prNumber,
             body: body.slice(0, 65000)
           });
 
@@ -198,10 +212,24 @@ jobs:
         cat tsan-console.txt >> tsan-results.txt || true
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-linux-tsan failed\n\n`;
 
@@ -228,7 +256,7 @@ jobs:
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: context.issue.number,
+            issue_number: prNumber,
             body: body.slice(0, 65000)
           });
 
@@ -288,10 +316,24 @@ jobs:
       run: cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-linux-msan failed\n\n`;
           try {
@@ -309,7 +351,7 @@ jobs:
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: context.issue.number,
+            issue_number: prNumber,
             body: body.slice(0, 65000)
           });
 
@@ -361,10 +403,24 @@ jobs:
       run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure 2>&1 | tee test-results.log
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-windows-vs2022 (${{ matrix.config }}) failed\n\n`;
 
@@ -392,7 +448,7 @@ jobs:
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: context.issue.number,
+            issue_number: prNumber,
             body: body.slice(0, 65000)
           });
 
@@ -518,10 +574,24 @@ jobs:
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           const maxLen = 30000;
           let body = `## :x: build-linux-gcc (${{ matrix.config }}) failed\n\n`;
@@ -551,7 +621,7 @@ jobs:
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: context.issue.number,
+            issue_number: prNumber,
             body: body.slice(0, 65000)
           });
 
@@ -616,10 +686,24 @@ jobs:
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-linux-clang (${{ matrix.config }}) failed\n\n`;
 
@@ -647,7 +731,7 @@ jobs:
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: context.issue.number,
+            issue_number: prNumber,
             body: body.slice(0, 65000)
           });
 
@@ -728,10 +812,24 @@ jobs:
         }
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :warning: build-linux-mingw-wine failed\n\n`;
           body += `> This is a **non-blocking** job. MinGW cross-compilation + Wine testing is experimental.\n\n`;
@@ -760,7 +858,7 @@ jobs:
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: context.issue.number,
+            issue_number: prNumber,
             body: body.slice(0, 65000)
           });
 
@@ -810,10 +908,24 @@ jobs:
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :warning: build-macos (${{ matrix.config }}) failed\n\n`;
           body += `> This is a **non-blocking** job. macOS support is experimental.\n\n`;
@@ -842,7 +954,7 @@ jobs:
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: context.issue.number,
+            issue_number: prNumber,
             body: body.slice(0, 65000)
           });
 
@@ -893,10 +1005,24 @@ jobs:
           lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused,negative
           lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
       - name: Post coverage summary to PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
         uses: actions/github-script@v7
         with:
           script: |
+            // Find the PR number (works for both push and pull_request events)
+            let prNumber = context.issue?.number;
+            if (!prNumber) {
+              const branch = context.ref?.replace('refs/heads/', '');
+              if (branch) {
+                const prs = await github.rest.pulls.list({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  head: `${context.repo.owner}:${branch}`, state: 'open'
+                });
+                prNumber = prs.data[0]?.number;
+              }
+            }
+            if (!prNumber) return; // No associated PR found
+
             const fs = require('fs');
             try {
               const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
@@ -910,7 +1036,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: prNumber,
                 body: body.slice(0, 65000)
               });
             } catch (e) {
