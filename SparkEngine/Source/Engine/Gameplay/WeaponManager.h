@@ -218,6 +218,7 @@ namespace Spark::Gameplay
     class WeaponRegistry
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<WeaponRegistry>() instead")]]
         static WeaponRegistry& GetInstance();
 
         /// @brief Register a weapon definition and return its ID

@@ -112,6 +112,7 @@ namespace Spark::Gameplay
     class ConditionSystem
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<ConditionSystem>() instead")]]
         static ConditionSystem& GetInstance();
 
         void Initialize();

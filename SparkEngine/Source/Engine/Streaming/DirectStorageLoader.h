@@ -15,6 +15,7 @@
 #pragma once
 
 #include "../../Core/Platform.h"
+#include "IStreamingLoader.h"
 
 #include <cstdint>
 #include <functional>
@@ -112,9 +113,10 @@ namespace Spark::Streaming
      *   loader.Flush(); // submit batch to hardware
      * @endcode
      */
-    class DirectStorageLoader
+    class DirectStorageLoader : public IStreamingLoader
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<DirectStorageLoader>() instead")]]
         static DirectStorageLoader& GetInstance()
         {
             static DirectStorageLoader instance;
@@ -124,42 +126,42 @@ namespace Spark::Streaming
         /// @brief Initialize the loader
         /// @param graphicsDevice Native graphics device (ID3D12Device* or nullptr for CPU-only)
         /// @return true if initialized successfully
-        bool Initialize(void* graphicsDevice = nullptr);
+        bool Initialize(void* graphicsDevice = nullptr) override;
 
         /// @brief Shutdown and release all resources
-        void Shutdown();
+        void Shutdown() override;
 
         /// @brief Submit a load request
         /// @return Handle for tracking the request
-        LoadRequestHandle Submit(const LoadRequest& request);
+        LoadRequestHandle Submit(const LoadRequest& request) override;
 
         /// @brief Submit all pending requests to hardware
         /// @details Call after batching multiple Submit() calls for optimal throughput
-        void Flush();
+        void Flush() override;
 
         /// @brief Poll for completed requests and invoke callbacks
         /// @details Call once per frame from the main loop
-        void ProcessCompletions();
+        void ProcessCompletions() override;
 
         /// @brief Cancel a pending request
         /// @return true if the request was cancelled before completion
-        bool Cancel(LoadRequestHandle handle);
+        bool Cancel(LoadRequestHandle handle) override;
 
         /// @brief Check the status of a request
-        LoadStatus GetStatus(LoadRequestHandle handle) const;
+        LoadStatus GetStatus(LoadRequestHandle handle) const override;
 
         /// @brief Get the loaded data buffer (only valid for CPUMemory destination after completion)
         /// @return Pointer to loaded data, or nullptr if not ready
-        const void* GetLoadedData(LoadRequestHandle handle, uint64_t* outSize = nullptr) const;
+        const void* GetLoadedData(LoadRequestHandle handle, uint64_t* outSize = nullptr) const override;
 
         /// @brief Release the loaded data buffer (frees CPU memory)
-        void ReleaseLoadedData(LoadRequestHandle handle);
+        void ReleaseLoadedData(LoadRequestHandle handle) override;
 
         /// @brief Get performance statistics
-        const DirectStorageStats& GetStats() const { return m_stats; }
+        const DirectStorageStats& GetStats() const override { return m_stats; }
 
         /// @brief Check if hardware DirectStorage is available
-        bool IsHardwareAvailable() const { return m_stats.usingDirectStorage; }
+        bool IsHardwareAvailable() const override { return m_stats.usingDirectStorage; }
 
         /// @brief Console status report
         std::string Console_GetStatus() const;

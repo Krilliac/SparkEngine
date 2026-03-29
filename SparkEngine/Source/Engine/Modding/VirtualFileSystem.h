@@ -138,6 +138,7 @@ namespace Spark
     {
       public:
         /// @brief Get the singleton instance.
+        [[deprecated("Use EngineContext::Get()->GetSystem<VirtualFileSystem>() instead")]]
         static VirtualFileSystem& GetInstance();
 
         VirtualFileSystem(const VirtualFileSystem&) = delete;

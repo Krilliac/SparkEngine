@@ -79,6 +79,7 @@ namespace Spark
     class SceneConfigDatabase
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<SceneConfigDatabase>() instead")]]
         static SceneConfigDatabase& GetInstance()
         {
             static SceneConfigDatabase instance;

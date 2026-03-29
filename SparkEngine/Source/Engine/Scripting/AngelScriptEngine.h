@@ -66,6 +66,7 @@ struct asSMessageInfo;
 #include <unordered_map>
 #include <string>
 #include "../ECS/Components.h"
+#include "IScriptEngine.h"
 
 /**
  * @brief High-level AngelScript engine wrapper for gameplay scripting
@@ -83,7 +84,7 @@ struct asSMessageInfo;
  * @warning Script contexts are not thread-safe. All script calls must happen
  *          on the same thread (typically the main game loop thread).
  */
-class AngelScriptEngine
+class AngelScriptEngine : public Spark::Scripting::IScriptEngine
 {
   public:
     /**
@@ -94,7 +95,7 @@ class AngelScriptEngine
      *
      * @return true if initialization succeeded, false on failure
      */
-    bool Initialize();
+    bool Initialize() override;
 
     /**
      * @brief Shut down the engine and release all script resources
@@ -102,7 +103,7 @@ class AngelScriptEngine
      * Detaches all entity scripts, releases all modules and contexts, and
      * destroys the AngelScript engine instance.
      */
-    void Shutdown();
+    void Shutdown() override;
 
     // ========================================================================
     // Script Compilation
@@ -118,7 +119,7 @@ class AngelScriptEngine
      * @param scriptPath Path to the .as script file
      * @return true if compilation succeeded, false on error
      */
-    bool CompileScriptFile(const std::string& scriptPath);
+    bool CompileScriptFile(const std::string& scriptPath) override;
 
     /**
      * @brief Compile a script from an in-memory string
@@ -130,7 +131,7 @@ class AngelScriptEngine
      * @param moduleName Unique name for the compiled module
      * @return true if compilation succeeded, false on error
      */
-    bool CompileScriptFromString(const std::string& script, const std::string& moduleName);
+    bool CompileScriptFromString(const std::string& script, const std::string& moduleName) override;
 
     // ========================================================================
     // Entity Script Binding
@@ -148,7 +149,7 @@ class AngelScriptEngine
      * @param moduleName Name of the compiled module containing the class
      * @return true if the script was successfully attached, false on error
      */
-    bool AttachScript(EntityID entity, const std::string& className, const std::string& moduleName);
+    bool AttachScript(EntityID entity, const std::string& className, const std::string& moduleName) override;
 
     /**
      * @brief Detach and destroy a script instance from an entity
@@ -158,7 +159,7 @@ class AngelScriptEngine
      *
      * @param entity The ECS entity ID to detach the script from
      */
-    void DetachScript(EntityID entity);
+    void DetachScript(EntityID entity) override;
 
     // ========================================================================
     // Lifecycle Callback Dispatch
@@ -168,21 +169,21 @@ class AngelScriptEngine
      * @brief Call the script's Start() method for an entity (called once)
      * @param entity The entity whose script Start() should be invoked
      */
-    void CallStart(EntityID entity);
+    void CallStart(EntityID entity) override;
 
     /**
      * @brief Call the script's Update(float) method for an entity (called every frame)
      * @param entity    The entity whose script Update() should be invoked
      * @param deltaTime Time elapsed since the last frame in seconds
      */
-    void CallUpdate(EntityID entity, float deltaTime);
+    void CallUpdate(EntityID entity, float deltaTime) override;
 
     /**
      * @brief Call the script's OnCollision(EntityID) method for an entity
      * @param entity The entity whose script OnCollision() should be invoked
      * @param other  The entity ID of the other object in the collision
      */
-    void CallOnCollision(EntityID entity, EntityID other);
+    void CallOnCollision(EntityID entity, EntityID other) override;
 
     // ========================================================================
     // Error Handling and Singleton Access
@@ -192,12 +193,17 @@ class AngelScriptEngine
      * @brief Get the last error message from compilation or runtime
      * @return Error string, or empty string if no error has occurred
      */
-    std::string GetLastError() const { return m_lastError; }
+    std::string GetLastError() const override { return m_lastError; }
+
+    /** @brief Get the scripting backend name. */
+    const char* GetBackendName() const override { return "AngelScript"; }
 
     /**
      * @brief Get the global singleton instance
      * @return Pointer to the AngelScriptEngine instance, or nullptr if not created
+     * @deprecated Use EngineContext::Get()->GetSystem<AngelScriptEngine>() instead.
      */
+    [[deprecated("Use EngineContext::Get()->GetSystem<AngelScriptEngine>() instead")]]
     static AngelScriptEngine* GetInstance() { return s_instance; }
 
   private:

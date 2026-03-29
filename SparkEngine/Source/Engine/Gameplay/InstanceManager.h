@@ -179,6 +179,7 @@ namespace Spark::Gameplay
     class InstanceManager
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<InstanceManager>() instead")]]
         static InstanceManager& GetInstance();
 
         void Initialize();

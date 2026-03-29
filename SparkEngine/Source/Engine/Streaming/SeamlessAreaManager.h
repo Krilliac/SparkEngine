@@ -147,6 +147,7 @@ namespace Spark::Streaming
     class SeamlessAreaManager
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<SeamlessAreaManager>() instead")]]
         static SeamlessAreaManager& GetInstance()
         {
             static SeamlessAreaManager instance;

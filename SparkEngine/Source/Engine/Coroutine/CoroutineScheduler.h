@@ -65,6 +65,7 @@ namespace Spark
     class CoroutineScheduler
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<CoroutineScheduler>() instead")]]
         static CoroutineScheduler& GetInstance()
         {
             static CoroutineScheduler instance;

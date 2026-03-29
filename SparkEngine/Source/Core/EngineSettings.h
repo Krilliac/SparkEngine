@@ -422,6 +422,7 @@ class EngineSettings
     // Singleton access
     // =========================================================================
 
+    [[deprecated("Use EngineContext::Get()->GetSystem<EngineSettings>() instead")]]
     static EngineSettings& GetInstance();
 
     // =========================================================================

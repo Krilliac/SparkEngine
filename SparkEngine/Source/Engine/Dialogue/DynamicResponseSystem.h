@@ -157,6 +157,7 @@ namespace Spark::Dialogue
     {
       public:
         /** @brief Get the singleton instance. */
+        [[deprecated("Use EngineContext::Get()->GetSystem<DynamicResponseSystem>() instead")]]
         static DynamicResponseSystem& GetInstance()
         {
             static DynamicResponseSystem s;

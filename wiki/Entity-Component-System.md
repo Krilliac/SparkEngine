@@ -569,6 +569,9 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `FormationSystem` | `SparkEngine/Source/Engine/AI/FormationSystem.h` |
 | `FreezeSystem` | `SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h` |
 | `GPUParticleSystem` | `SparkEngine/Source/Graphics/GPUParticleSystem.h` |
+| `IAnimationSystem` | `SparkEngine/Source/Engine/Animation/IAnimationSystem.h` |
+| `ISaveSystem` | `SparkEngine/Source/Engine/SaveSystem/ISaveSystem.h` |
+| `IUISystem` | `SparkEngine/Source/Engine/UI/IUISystem.h` |
 | `JobSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
 | `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
 | `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
