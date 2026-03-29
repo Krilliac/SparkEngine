@@ -131,14 +131,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body.slice(0, 65000)
+          });
 
     - name: Upload ASan + UBSan + LSan report
       if: always()
@@ -221,14 +222,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body.slice(0, 65000)
+          });
 
     - name: Upload TSan report
       if: always()
@@ -301,14 +303,15 @@ jobs:
               body += `### Build Output\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`;
             }
           } catch (e) {}
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body.slice(0, 65000)
+          });
 
     - name: Run Tests under MSan
       env:
@@ -383,14 +386,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body.slice(0, 65000)
+          });
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -541,14 +545,15 @@ jobs:
             } catch (e) { /* file doesn't exist — step didn't run */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body.slice(0, 65000)
+          });
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -636,14 +641,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body.slice(0, 65000)
+          });
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -748,14 +754,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body.slice(0, 65000)
+          });
 
     - name: Upload test results
       if: always()
@@ -829,14 +836,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body.slice(0, 65000)
+          });
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
