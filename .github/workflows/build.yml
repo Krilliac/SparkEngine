@@ -133,7 +133,7 @@ jobs:
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure() && steps.build.outcome == 'failure'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
@@ -249,7 +249,7 @@ jobs:
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure() && steps.build.outcome == 'failure'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
@@ -425,7 +425,7 @@ jobs:
       run: cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure() && steps.build.outcome == 'failure'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
@@ -579,7 +579,7 @@ jobs:
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure() && steps.build.outcome == 'failure'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
@@ -671,7 +671,7 @@ jobs:
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure() && steps.build.outcome == 'failure'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
@@ -766,7 +766,7 @@ jobs:
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure() && steps.build.outcome == 'failure'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
@@ -855,7 +855,7 @@ jobs:
       run: cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure() && steps.build.outcome == 'failure'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
@@ -930,7 +930,7 @@ jobs:
         id: build
         run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
       - name: Report build errors to PR
-        if: failure() && steps.build.outcome == 'failure'
+        if: failure()
         uses: actions/github-script@v7
         with:
           script: |

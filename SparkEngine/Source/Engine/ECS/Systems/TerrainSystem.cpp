@@ -62,7 +62,7 @@ namespace Spark::ECS
             }
         }
 
-        SPARK_LOG_EVERY_N(Spark::LogLevel::Trace, Spark::LogCategory::ECS, 600, "TerrainSystem: %u active terrains",
+        SPARK_LOG_EVERY_N(Spark::LogLevel::Trace, Spark::LogCategory::ECS, 600, "TerrainSystem: %d active terrains",
                           m_activeTerrainCount);
     }
 

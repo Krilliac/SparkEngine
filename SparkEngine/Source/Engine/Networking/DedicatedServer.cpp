@@ -62,8 +62,8 @@ namespace Spark::Net
         m_matchInProgress = false;
 
         SPARK_LOG_INFO(Spark::LogCategory::Network,
-                       "DedicatedServer: Initializing '%s' (port=%u, maxClients=%u, tickRate=%.0f)",
-                       config.serverName.c_str(), config.port, config.maxClients, config.tickRate);
+                       "DedicatedServer: Initializing '%s' (port=%d, maxClients=%d, tickRate=%.0f)",
+                       config.serverName.c_str(), static_cast<int>(config.port), config.maxClients, config.tickRate);
 
         auto& netMgr = NetworkManager::GetInstance();
         if (!netMgr.Initialize())
@@ -75,7 +75,8 @@ namespace Spark::Net
 
         if (!netMgr.StartServer(m_config.port, m_config.maxClients))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "DedicatedServer: Failed to start on port %u", m_config.port);
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "DedicatedServer: Failed to start on port %d",
+                            static_cast<int>(m_config.port));
             Log("ERROR: Failed to start server on port " + std::to_string(m_config.port));
             netMgr.Shutdown();
             return false;
@@ -176,8 +177,8 @@ namespace Spark::Net
         m_startTime = std::chrono::steady_clock::now();
         m_running.store(true, std::memory_order_release);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "DedicatedServer: '%s' initialized on port %u (map='%s')",
-                       m_config.serverName.c_str(), m_config.port, m_currentMap.c_str());
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "DedicatedServer: '%s' initialized on port %d (map='%s')",
+                       m_config.serverName.c_str(), static_cast<int>(m_config.port), m_currentMap.c_str());
         Log("Server '" + m_config.serverName + "' initialized on port " + std::to_string(m_config.port));
         return true;
     }

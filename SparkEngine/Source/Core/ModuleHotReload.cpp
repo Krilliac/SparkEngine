@@ -65,7 +65,7 @@ namespace Spark
     void ModuleHotReloadManager::Start()
     {
         m_running = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "Module hot-reload watcher started (debounce=%dms)", m_debounceMs);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Module hot-reload watcher started (debounce=%ums)", m_debounceMs);
         SimpleConsole::GetInstance().LogInfo("Module hot-reload started");
     }
 
