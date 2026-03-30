@@ -410,7 +410,6 @@ namespace Spark
     class TweenManager
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<TweenManager>() instead")]]
         static TweenManager& GetInstance()
         {
             static TweenManager instance;

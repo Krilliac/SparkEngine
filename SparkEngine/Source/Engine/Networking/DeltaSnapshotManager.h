@@ -75,7 +75,6 @@ namespace Spark::Net
     {
       public:
         /// @brief Get the singleton instance
-        [[deprecated("Use EngineContext::Get()->GetSystem<DeltaSnapshotManager>() instead")]]
         static DeltaSnapshotManager& GetInstance()
         {
             static DeltaSnapshotManager instance;

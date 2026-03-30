@@ -13,6 +13,7 @@
 #include "../Utils/Assert.h"
 #include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
+#include "../Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
 #include <iostream>
 #include <fstream>
@@ -152,11 +153,11 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTexture(const std::string& 
     if (texture)
     {
         m_textureCache[filePath] = texture;
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded texture: %s", filePath.c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("Loaded texture: " + filePath);
     }
     else
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load texture: %s", filePath.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Failed to load texture: " + filePath);
     }
 
     return texture;
@@ -168,7 +169,7 @@ void MaterialSystem::UnloadTexture(const std::string& filePath)
     if (it != m_textureCache.end())
     {
         m_textureCache.erase(it);
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Unloaded texture: %s", filePath.c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("Unloaded texture: " + filePath);
     }
 }
 
@@ -210,12 +211,11 @@ void MaterialSystem::UpdateHotReload()
                 if (it->second->LoadFromFile(filePath, m_device))
                 {
                     lastTimestamp = currentTimestamp;
-                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reloaded material: %s", filePath.c_str());
+                    Spark::SimpleConsole::GetInstance().LogInfo("Hot reloaded material: " + filePath);
                 }
                 else
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to hot reload material: %s",
-                                    filePath.c_str());
+                    Spark::SimpleConsole::GetInstance().LogError("Failed to hot reload material: " + filePath);
                 }
             }
         }
@@ -235,7 +235,7 @@ int MaterialSystem::ReloadAllMaterials()
         }
     }
 
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Reloaded %d materials", reloadedCount);
+    Spark::SimpleConsole::GetInstance().LogInfo("Reloaded " + std::to_string(reloadedCount) + " materials");
     return reloadedCount;
 }
 
@@ -271,8 +271,8 @@ std::shared_ptr<Material> MaterialSystem::CreateMaterialInstance(const std::stri
     auto templateMat = GetMaterial(templateName);
     if (!templateMat || (m_defaultMaterial && templateMat == m_defaultMaterial))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CreateMaterialInstance: template material not found: %s",
-                        templateName.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("CreateMaterialInstance: template material not found: " +
+                                                     templateName);
         return m_errorMaterial;
     }
 
@@ -401,7 +401,7 @@ bool MaterialSystem::ReloadMaterial(const std::string& name)
     auto it = m_materials.find(name);
     if (it == m_materials.end() || !it->second)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ReloadMaterial: material not found: %s", name.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: material not found: " + name);
         return false;
     }
 
@@ -446,12 +446,12 @@ void MaterialSystem::EnableHotReloading(bool enabled)
         {
             m_fileTimestamps[pair.first] = GetFileTimestamp(pair.first);
         }
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reload enabled");
+        Spark::SimpleConsole::GetInstance().LogSuccess("Hot reload enabled");
     }
     else
     {
         m_fileTimestamps.clear();
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reload disabled");
+        Spark::SimpleConsole::GetInstance().LogInfo("Hot reload disabled");
     }
 }
 HRESULT MaterialSystem::CreateDefaultMaterials()
@@ -537,7 +537,7 @@ uint64_t MaterialSystem::GetFileTimestamp(const std::string& filePath) const
     catch (const std::exception&)
     {
         // Error accessing file
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to get timestamp for file: %s", filePath.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Failed to get timestamp for file: " + filePath);
         return 0; // Return 0 if we can't get the timestamp
     }
     return 0;
@@ -606,16 +606,16 @@ void MaterialSystem::PerformPeriodicMaintenance()
         {
             // In a full implementation, you'd track usage frequency
             // For now, just log that maintenance would occur
-            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem maintenance: %zu samplers in cache",
-                           m_samplerCache.size());
+            Spark::SimpleConsole::GetInstance().LogInfo(
+                "MaterialSystem maintenance: " + std::to_string(m_samplerCache.size()) + " samplers in cache");
         }
 
         // Log memory usage
         size_t estimatedMemory = m_textureCache.size() * 1024 * 1024; // Rough estimate
         if (estimatedMemory > 500 * 1024 * 1024)
         { // > 500MB
-            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "MaterialSystem using high memory: ~%zuMB",
-                           estimatedMemory / 1024 / 1024);
+            Spark::SimpleConsole::GetInstance().LogWarning("MaterialSystem using high memory: ~" +
+                                                           std::to_string(estimatedMemory / 1024 / 1024) + "MB");
         }
     }
 }

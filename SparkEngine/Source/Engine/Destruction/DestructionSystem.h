@@ -182,7 +182,6 @@ namespace Spark
     {
       public:
         /** @brief Get the singleton instance. */
-        [[deprecated("Use EngineContext::Get()->GetSystem<DestructionSystem>() instead")]]
         static DestructionSystem& GetInstance()
         {
             static DestructionSystem instance;

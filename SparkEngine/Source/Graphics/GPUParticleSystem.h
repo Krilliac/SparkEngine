@@ -166,7 +166,6 @@ class GPUParticleSystem
 {
   public:
     /// @brief Get the singleton instance.
-    [[deprecated("Use EngineContext::Get()->GetSystem<GPUParticleSystem>() instead")]]
     static GPUParticleSystem& GetInstance()
     {
         static GPUParticleSystem instance;

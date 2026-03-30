@@ -87,7 +87,6 @@ namespace Spark
     class FileLogger
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<FileLogger>() instead")]]
         static FileLogger& GetInstance()
         {
             static FileLogger instance;

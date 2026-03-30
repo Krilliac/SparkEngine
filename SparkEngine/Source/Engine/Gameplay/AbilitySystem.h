@@ -280,7 +280,6 @@ namespace Spark::Gameplay
     class AbilitySystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<AbilitySystem>() instead")]]
         static AbilitySystem& GetInstance();
 
         /**

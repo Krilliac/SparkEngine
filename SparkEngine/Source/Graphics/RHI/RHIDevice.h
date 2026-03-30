@@ -136,21 +136,21 @@ namespace Spark
             virtual void Shutdown() = 0;
 
             // Swap chain
-            [[nodiscard]] virtual std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc& desc) = 0;
+            virtual std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc& desc) = 0;
 
             // Resource creation — caller owns the returned unique_ptr
-            [[nodiscard]] virtual std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc& desc) = 0;
-            [[nodiscard]] virtual std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc& desc) = 0;
-            [[nodiscard]] virtual std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc& desc) = 0;
-            [[nodiscard]] virtual std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc& desc) = 0;
-            [[nodiscard]] virtual std::unique_ptr<IRHIPipelineState> CreatePipelineState(
-                const RHIPipelineStateDesc& desc, IRHIShader* vertexShader, IRHIShader* pixelShader) = 0;
+            virtual std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc& desc) = 0;
+            virtual std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc& desc) = 0;
+            virtual std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc& desc) = 0;
+            virtual std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc& desc) = 0;
+            virtual std::unique_ptr<IRHIPipelineState> CreatePipelineState(const RHIPipelineStateDesc& desc,
+                                                                           IRHIShader* vertexShader,
+                                                                           IRHIShader* pixelShader) = 0;
 
             /// Wrap a native texture handle (e.g. ID3D11Texture2D*) as an IRHITexture.
             /// The RHI does NOT own the underlying resource — caller must ensure it outlives the wrapper.
             /// Caller owns the returned wrapper object.
-            [[nodiscard]] virtual std::unique_ptr<IRHITexture> WrapNativeTexture(void* nativeHandle,
-                                                                                 const RHITextureDesc& desc) = 0;
+            virtual std::unique_ptr<IRHITexture> WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc) = 0;
 
             // Resource updates
             virtual void* MapBuffer(IRHIBuffer* buffer) = 0;
@@ -161,7 +161,7 @@ namespace Spark
 
             // Command lists
             virtual IRHICommandList* GetImmediateCommandList() = 0;
-            [[nodiscard]] virtual std::unique_ptr<IRHICommandList> CreateDeferredCommandList() = 0;
+            virtual std::unique_ptr<IRHICommandList> CreateDeferredCommandList() = 0;
             virtual void ExecuteCommandList(IRHICommandList* commandList) = 0;
 
             // Frame management
@@ -170,11 +170,11 @@ namespace Spark
             virtual void WaitForIdle() = 0;
 
             // Device info
-            [[nodiscard]] virtual GraphicsBackend GetBackendType() const = 0;
-            [[nodiscard]] virtual const RHIDeviceCapabilities& GetCapabilities() const = 0;
-            [[nodiscard]] virtual const RHIStatistics& GetStatistics() const = 0;
+            virtual GraphicsBackend GetBackendType() const = 0;
+            virtual const RHIDeviceCapabilities& GetCapabilities() const = 0;
+            virtual const RHIStatistics& GetStatistics() const = 0;
             virtual void ResetStatistics() = 0;
-            [[nodiscard]] virtual std::string GetDeviceInfo() const = 0;
+            virtual std::string GetDeviceInfo() const = 0;
         };
 
         // Note: Factory functions (CreateRHIDevice, GetAvailableBackends, GetBackendName)

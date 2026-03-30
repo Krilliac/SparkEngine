@@ -20,7 +20,8 @@
 // header bugs on GCC 13, and out-of-scope types respectively).
 // SetupAnimation(), SetupCoroutines(), and SetupAbilities() use logging-only stubs.
 #include "Graphics/WeatherSystem.h"
-#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -54,7 +55,7 @@ namespace ARPG
         SetupWeather();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Engine systems integration initialized");
+        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Engine systems integration initialized");
         return true;
     }
 
@@ -76,7 +77,7 @@ namespace ARPG
         // We don't call into it here because the header is not included (see top of file).
 
         m_initialized = false;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Engine systems integration shut down");
+        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Engine systems integration shut down");
     }
 
     void ARPGEngineSystems::RenderDebugUI()
@@ -115,9 +116,9 @@ namespace ARPG
         m_eventHandles.push_back(eventBus->Subscribe<Spark::EntityDamagedEvent>(
             [this](const Spark::EntityDamagedEvent& e)
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Entity %s took %s damage from: %s",
-                               std::to_string(e.entityId).c_str(), std::to_string(e.damage).c_str(),
-                               e.damageSource.c_str());
+                Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Entity " + std::to_string(e.entityId) + " took " +
+                                                            std::to_string(e.damage) +
+                                                            " damage from: " + e.damageSource);
             }));
 
         // Award XP to heroes on kill and trigger loot drops
@@ -138,7 +139,7 @@ namespace ARPG
                 }
             }));
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] EventBus: 2 subscriptions registered");
+        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] EventBus: 2 subscriptions registered");
     }
 
     // =========================================================================
@@ -199,7 +200,7 @@ namespace ARPG
                 // Deserialization handled by ARPGDungeonSystem when loading a save
             });
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] SaveSystem: 2 serializers registered");
+        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] SaveSystem: 2 serializers registered");
     }
 
     // =========================================================================
@@ -250,7 +251,7 @@ namespace ARPG
                 }
             });
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Destruction: 3 fracture patterns registered");
+        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Destruction: 3 fracture patterns registered");
     }
 
     // =========================================================================
@@ -299,7 +300,7 @@ namespace ARPG
         bossConfig.canUseCover = false;
         ai->RegisterBehavior("arpg_boss_phases", Spark::AI::FPSBehaviors::CreateCombatBehavior(bossConfig));
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] AI: 3 behavior trees registered");
+        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] AI: 3 behavior trees registered");
     }
 
     // =========================================================================
@@ -311,8 +312,8 @@ namespace ARPG
         // AnimationSystem.h cannot be included from game modules (conflicts with
         // IEngineContext.h forward declaration of Spark::Animation::AnimationSystem).
         // Clip registration will be done at runtime when heroes are spawned.
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[ARPG] Animation: hero state machine configured (idle/run/attack/cast/die)");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[ARPG] Animation: hero state machine configured (idle/run/attack/cast/die)");
     }
 
     // =========================================================================
@@ -324,7 +325,8 @@ namespace ARPG
         // CoroutineScheduler.h cannot be included from game modules (triggers C++20
         // coroutine header bugs with GCC 13). Coroutine sequences (wave spawn, buff
         // timer, loot fountain) will be driven by the dungeon system's Update() instead.
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Coroutines: wave spawn and buff timer sequences configured");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[ARPG] Coroutines: wave spawn and buff timer sequences configured");
     }
 
     // =========================================================================
@@ -340,7 +342,7 @@ namespace ARPG
         //   4 abilities: Fireball, Whirlwind, Raise Skeleton, Holy Light
         //   4 auras:     Holy Shield, Bone Armor, Poison DoT, Fire Mastery
         //   1 proc:      Fire Mastery proc (10% chance on fire damage)
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Abilities: 4 abilities, 4 auras, 1 proc registered");
+        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Abilities: 4 abilities, 4 auras, 1 proc registered");
     }
 
     // =========================================================================
@@ -356,7 +358,7 @@ namespace ARPG
         // Set default dungeon weather to foggy/dark atmosphere
         weather->SetWeather(Spark::WeatherType::Fog, 0.4f, 2.0f);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Weather: dungeon atmosphere configured");
+        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Weather: dungeon atmosphere configured");
     }
 
 } // namespace ARPG

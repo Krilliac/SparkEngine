@@ -32,7 +32,6 @@
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Replay/ReplaySystem.h"
-#include "Utils/LogMacros.h"
 
 // Global game pointer used by SparkConsole (in SparkEngineLib) to call into
 // game systems.  Owned by SparkGameModule; set during Initialize, cleared
@@ -187,14 +186,15 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, graphics, false);
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, input, false);
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing SparkGameFPS module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("Initializing SparkGameFPS module...");
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing SparkGameFPS module");
 
     g_game = new Game();
     HRESULT hr = g_game->Initialize(graphics, input);
     if (FAILED(hr))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Game::Initialize() failed");
+        console.LogError("Game::Initialize() failed");
         delete g_game;
         g_game = nullptr;
         return false;
@@ -207,7 +207,7 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
     RegisterGameConsoleCommands();
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameFPS module initialized");
+    console.LogSuccess("SparkGameFPS module initialized");
     return true;
 }
 
@@ -227,7 +227,7 @@ void SparkGameModule::Shutdown()
     }
     m_initialized = false;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameFPS module shut down");
+    Spark::SimpleConsole::GetInstance().LogInfo("SparkGameFPS module shut down");
 }
 
 void SparkGameModule::Update(float deltaTime)

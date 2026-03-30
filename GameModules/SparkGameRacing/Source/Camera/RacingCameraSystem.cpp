@@ -4,9 +4,10 @@
  */
 
 #include "RacingCameraSystem.h"
+#include "Utils/SparkConsole.h"
+
 #include <algorithm>
 #include <cmath>
-#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -29,7 +30,8 @@ namespace Racing
         m_activeMode = CameraMode::Chase;
         m_initialized = true;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing Camera] Camera system initialized (5 modes)");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[Racing Camera] Camera system initialized (5 modes)");
         return true;
     }
 
@@ -81,7 +83,8 @@ namespace Racing
         m_transitionProgress = 0.0f;
         m_state.fov = m_configs[static_cast<size_t>(mode)].fov;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing Camera] Mode: %s", std::string(ModeToString(mode)).c_str());
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[Racing Camera] Mode: " + std::string(ModeToString(mode)));
     }
 
     void RacingCameraSystem::CycleMode()

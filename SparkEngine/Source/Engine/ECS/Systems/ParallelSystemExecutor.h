@@ -362,7 +362,6 @@ namespace Spark::ECS
     class StageBasedExecutor
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<StageBasedExecutor>() instead")]]
         static StageBasedExecutor& GetInstance()
         {
             static StageBasedExecutor instance;

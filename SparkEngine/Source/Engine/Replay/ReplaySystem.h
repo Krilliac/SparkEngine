@@ -119,7 +119,6 @@ namespace Spark
     class ReplaySystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<ReplaySystem>() instead")]]
         static ReplaySystem& GetInstance();
 
         ReplaySystem();

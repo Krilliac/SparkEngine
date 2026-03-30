@@ -117,7 +117,6 @@ namespace Spark::Graphics
     class AsyncComputeScheduler
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<AsyncComputeScheduler>() instead")]]
         static AsyncComputeScheduler& GetInstance();
 
         /** @brief Initialize the scheduler. Call once at engine startup. */

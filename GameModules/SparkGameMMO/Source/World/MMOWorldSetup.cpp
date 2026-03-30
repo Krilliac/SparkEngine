@@ -4,6 +4,8 @@
  */
 
 #include "MMOWorldSetup.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/WorldServer.h"
 #include "Engine/Networking/AreaServer.h"
@@ -12,7 +14,6 @@
 
 #include "Engine/Streaming/SeamlessAreaManager.h"
 #include "Engine/World/WorldOriginSystem.h"
-#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -121,8 +122,8 @@ namespace MMO
         battleground.description = "20v20 PvP battleground with capture points";
         m_areas.push_back(battleground);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO World] Defined %s world areas",
-                       std::to_string(m_areas.size()).c_str());
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO World] Defined " + std::to_string(m_areas.size()) + " world areas");
     }
 
     void MMOWorldSetup::RegisterAreasWithStreaming()
@@ -146,12 +147,14 @@ namespace MMO
             streamingMgr.RegisterArea(def);
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO World] Registered streaming areas with SeamlessAreaManager");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO World] Registered streaming areas with SeamlessAreaManager");
     }
 
     void MMOWorldSetup::ConfigureWorldServer()
     {
 #ifdef ENABLE_NETWORKING
+        auto& console = Spark::SimpleConsole::GetInstance();
 
         // Configure the WorldServer to coordinate all area servers
         Spark::Net::WorldServerConfig worldConfig{};
@@ -166,8 +169,7 @@ namespace MMO
         m_worldServer = std::make_unique<Spark::Net::WorldServer>();
         if (m_worldServer->Start(worldConfig))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO World] WorldServer started on port %s",
-                           std::to_string(worldConfig.port).c_str());
+            console.LogInfo("[MMO World] WorldServer started on port " + std::to_string(worldConfig.port));
 
             // Register each area with the WorldServer
             uint16_t basePort = 27030;
@@ -186,18 +188,17 @@ namespace MMO
                 areaConfig.enableScripting = true;
 
                 m_worldServer->RegisterAreaServer(areaConfig);
-                SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO World] Registered area: %s (port %s)", area.name.c_str(),
-                               std::to_string(areaConfig.port).c_str());
+                console.LogInfo("[MMO World] Registered area: " + area.name + " (port " +
+                                std::to_string(areaConfig.port) + ")");
             }
         }
         else
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game,
-                           "[MMO World] WorldServer start failed (networking may be disabled)");
+            console.LogWarning("[MMO World] WorldServer start failed (networking may be disabled)");
         }
 #else
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[MMO World] Networking disabled — WorldServer skipped (define ENABLE_NETWORKING)");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO World] Networking disabled — WorldServer skipped (define ENABLE_NETWORKING)");
 #endif
     }
 
@@ -209,7 +210,8 @@ namespace MMO
         originSystem.SetRebasingThreshold(5000.0f);
         originSystem.SetEnabled(true);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO World] Origin rebasing enabled (threshold: 5000m)");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO World] Origin rebasing enabled (threshold: 5000m)");
     }
 
     void MMOWorldSetup::Update(float deltaTime)
@@ -265,8 +267,8 @@ namespace MMO
         m_networkServerRunning = true;
         m_knownClients.clear();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO World] Network server started on port %s",
-                       std::to_string(port).c_str());
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO World] Network server started on port " + std::to_string(port));
         return true;
     }
 
@@ -323,7 +325,8 @@ namespace MMO
         m_knownClients.clear();
         m_networkServerRunning = false;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO World] Network server stopped");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO World] Network server stopped");
     }
 
 #endif // ENABLE_NETWORKING

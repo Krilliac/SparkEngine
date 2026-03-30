@@ -15,7 +15,6 @@
 #include "FogOfWar/RTSFogOfWarSystem.h"
 #include "Match/RTSMatchSystem.h"
 #include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -69,13 +68,14 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Loading Spark RTS module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[RTS] Loading Spark RTS module...");
 
     // Initialize unit system (faction templates, spawning, AI)
     m_unitSystem = std::make_unique<RTS::RTSUnitSystem>();
     if (!m_unitSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] Failed to initialize unit system");
+        console.LogError("[RTS] Failed to initialize unit system");
         return false;
     }
 
@@ -83,7 +83,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_buildingSystem = std::make_unique<RTS::RTSBuildingSystem>();
     if (!m_buildingSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] Failed to initialize building system");
+        console.LogError("[RTS] Failed to initialize building system");
         return false;
     }
 
@@ -91,7 +91,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_resourceSystem = std::make_unique<RTS::RTSResourceSystem>();
     if (!m_resourceSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] Failed to initialize resource system");
+        console.LogError("[RTS] Failed to initialize resource system");
         return false;
     }
 
@@ -99,7 +99,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_commandSystem = std::make_unique<RTS::RTSCommandSystem>();
     if (!m_commandSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] Failed to initialize command system");
+        console.LogError("[RTS] Failed to initialize command system");
         return false;
     }
 
@@ -107,7 +107,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_fogOfWarSystem = std::make_unique<RTS::RTSFogOfWarSystem>();
     if (!m_fogOfWarSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] Failed to initialize fog of war system");
+        console.LogError("[RTS] Failed to initialize fog of war system");
         return false;
     }
 
@@ -115,7 +115,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_matchSystem = std::make_unique<RTS::RTSMatchSystem>();
     if (!m_matchSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] Failed to initialize match system");
+        console.LogError("[RTS] Failed to initialize match system");
         return false;
     }
 
@@ -123,17 +123,16 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     m_engineSystems = std::make_unique<RTS::RTSEngineSystems>();
     if (!m_engineSystems->Initialize(context))
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game, "[RTS] Engine system integrations partially unavailable (non-fatal)");
+        console.LogWarning("[RTS] Engine system integrations partially unavailable (non-fatal)");
     }
 
     RegisterConsoleCommands();
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Spark RTS module loaded successfully (7 subsystems)");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Units: %s | Buildings: %s | Nodes: %s",
-                   std::to_string(m_unitSystem->GetUnitCount()).c_str(),
-                   std::to_string(m_buildingSystem->GetBuildingCount()).c_str(),
-                   std::to_string(m_resourceSystem->GetNodeCount()).c_str());
+    console.LogInfo("[RTS] Spark RTS module loaded successfully (7 subsystems)");
+    console.LogInfo("[RTS] Units: " + std::to_string(m_unitSystem->GetUnitCount()) +
+                    " | Buildings: " + std::to_string(m_buildingSystem->GetBuildingCount()) +
+                    " | Nodes: " + std::to_string(m_resourceSystem->GetNodeCount()));
     return true;
 }
 
@@ -142,7 +141,8 @@ void SparkGameRTSModule::OnUnload()
     if (!m_initialized)
         return;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Unloading Spark RTS module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[RTS] Unloading Spark RTS module...");
 
     // Shutdown in reverse initialization order
     if (m_engineSystems)
@@ -183,7 +183,7 @@ void SparkGameRTSModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Spark RTS module unloaded");
+    console.LogInfo("[RTS] Spark RTS module unloaded");
 }
 
 void SparkGameRTSModule::OnUpdate(float deltaTime)

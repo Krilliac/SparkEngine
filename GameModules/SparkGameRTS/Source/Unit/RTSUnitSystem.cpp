@@ -4,12 +4,13 @@
  */
 
 #include "RTSUnitSystem.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
-#include "Utils/LogMacros.h"
 
 namespace RTS
 {
@@ -23,8 +24,8 @@ namespace RTS
         RegisterFactionTemplates(RTSFaction::Sentinel);
         RegisterFactionTemplates(RTSFaction::Swarm);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Unit system initialized (%s templates)",
-                       std::to_string(m_templates.size()).c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Unit system initialized (" +
+                                                    std::to_string(m_templates.size()) + " templates)");
         return true;
     }
 

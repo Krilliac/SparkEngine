@@ -8,6 +8,7 @@
 #include "EditorPluginManager.h"
 #include "EditorPanel.h"
 #include "Core/FaultIsolation.h"
+#include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 
 #ifdef _WIN32
@@ -37,7 +38,7 @@ namespace SparkEditor
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!plugin)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorPluginManager: Cannot register null plugin");
+            Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Cannot register null plugin");
             return false;
         }
 
@@ -46,8 +47,8 @@ namespace SparkEditor
         // Check for duplicate names
         if (FindPlugin(name) != m_plugins.end())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "EditorPluginManager: Plugin '%s' is already registered",
-                           name.c_str());
+            Spark::SimpleConsole::GetInstance().LogWarning("EditorPluginManager: Plugin '" + name +
+                                                           "' is already registered");
             return false;
         }
 
@@ -58,8 +59,8 @@ namespace SparkEditor
         entry.destroyFn = destroyFn;
         entry.isInitialized = false;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorPluginManager: Registered plugin '%s' v%s", name.c_str(),
-                       entry.plugin->GetVersion());
+        Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Registered plugin '" + name + "' v" +
+                                                    entry.plugin->GetVersion());
         m_plugins.push_back(std::move(entry));
         return true;
     }
@@ -73,12 +74,11 @@ namespace SparkEditor
         // Security: reject path traversal sequences
         if (path.contains(".."))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Plugin path rejected — contains '..' traversal: %s",
-                            path.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Plugin path rejected — contains '..' traversal: " + path);
             return false;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorPluginManager: Loading plugin from '%s'...", path.c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Loading plugin from '" + path + "'...");
 
         void* handle = nullptr;
         CreateEditorPluginFn createFn = nullptr;
@@ -89,8 +89,8 @@ namespace SparkEditor
         if (!handle)
         {
             DWORD err = GetLastError();
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorPluginManager: Failed to load '%s' (error %lu)",
-                            path.c_str(), err);
+            Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Failed to load '" + path + "' (error " +
+                                                         std::to_string(err) + ")");
             return false;
         }
 
@@ -103,8 +103,8 @@ namespace SparkEditor
         if (!handle)
         {
             const char* err = dlerror();
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorPluginManager: Failed to load '%s': %s", path.c_str(),
-                            (err ? err : "unknown error"));
+            Spark::SimpleConsole::GetInstance().LogError(std::string("EditorPluginManager: Failed to load '") + path +
+                                                         "': " + (err ? err : "unknown error"));
             return false;
         }
 
@@ -114,10 +114,9 @@ namespace SparkEditor
 
         if (!createFn || !destroyFn)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
-                            "EditorPluginManager: Plugin '%s' missing required exports "
-                            "(CreateEditorPlugin/DestroyEditorPlugin)",
-                            path.c_str());
+            Spark::SimpleConsole::GetInstance().LogError(
+                "EditorPluginManager: Plugin '" + path +
+                "' missing required exports (CreateEditorPlugin/DestroyEditorPlugin)");
             UnloadLibrary(handle);
             return false;
         }
@@ -125,8 +124,8 @@ namespace SparkEditor
         IEditorPlugin* rawPlugin = createFn();
         if (!rawPlugin)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
-                            "EditorPluginManager: CreateEditorPlugin() returned null for '%s'", path.c_str());
+            Spark::SimpleConsole::GetInstance().LogError(
+                "EditorPluginManager: CreateEditorPlugin() returned null for '" + path + "'");
             UnloadLibrary(handle);
             return false;
         }
@@ -145,15 +144,14 @@ namespace SparkEditor
         auto it = FindPlugin(name);
         if (it == m_plugins.end())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "EditorPluginManager: Plugin '%s' not found", name.c_str());
+            Spark::SimpleConsole::GetInstance().LogWarning("EditorPluginManager: Plugin '" + name + "' not found");
             return false;
         }
 
         // Shutdown if initialized
         if (it->isInitialized)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorPluginManager: Shutting down plugin '%s'...",
-                           name.c_str());
+            Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Shutting down plugin '" + name + "'...");
             it->plugin->Shutdown();
             it->isInitialized = false;
         }
@@ -173,7 +171,7 @@ namespace SparkEditor
             UnloadLibrary(handle);
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorPluginManager: Unloaded plugin '%s'", name.c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Unloaded plugin '" + name + "'");
         return true;
     }
 
@@ -219,19 +217,18 @@ namespace SparkEditor
             }
 
             const std::string name = entry.plugin->GetName();
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorPluginManager: Initializing plugin '%s'...",
-                           name.c_str());
+            Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Initializing plugin '" + name + "'...");
 
             if (entry.plugin->Initialize(app))
             {
                 entry.isInitialized = true;
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorPluginManager: Plugin '%s' initialized successfully",
-                               name.c_str());
+                Spark::SimpleConsole::GetInstance().LogSuccess("EditorPluginManager: Plugin '" + name +
+                                                               "' initialized successfully");
             }
             else
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorPluginManager: Plugin '%s' failed to initialize",
-                                name.c_str());
+                Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Plugin '" + name +
+                                                             "' failed to initialize");
                 allSucceeded = false;
             }
         }
@@ -247,8 +244,8 @@ namespace SparkEditor
             if (it->isInitialized)
             {
                 const std::string name = it->plugin->GetName();
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorPluginManager: Shutting down plugin '%s'...",
-                               name.c_str());
+                Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Shutting down plugin '" + name +
+                                                            "'...");
                 it->plugin->Shutdown();
                 it->isInitialized = false;
             }
@@ -355,12 +352,11 @@ namespace SparkEditor
     {
         if (!panel)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "EditorPluginManager: Cannot register null panel");
+            Spark::SimpleConsole::GetInstance().LogWarning("EditorPluginManager: Cannot register null panel");
             return;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorPluginManager: Registered panel '%s'",
-                       panel->GetName().c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Registered panel '" + panel->GetName() + "'");
         m_registeredPanels.push_back(std::move(panel));
     }
 
@@ -373,19 +369,21 @@ namespace SparkEditor
 
     void EditorPluginManager::Console_ListPlugins() const
     {
+        auto& console = Spark::SimpleConsole::GetInstance();
+
         if (m_plugins.empty())
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "No plugins loaded.");
+            console.LogInfo("No plugins loaded.");
             return;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loaded plugins (%zu):", m_plugins.size());
+        console.LogInfo("Loaded plugins (" + std::to_string(m_plugins.size()) + "):");
         for (const auto& entry : m_plugins)
         {
-            const char* status = entry.isInitialized ? "initialized" : "registered";
-            const char* source = entry.isFromDLL ? "DLL" : "built-in";
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "  - %s v%s [%s, %s]", entry.plugin->GetName(),
-                           entry.plugin->GetVersion(), source, status);
+            const std::string status = entry.isInitialized ? "initialized" : "registered";
+            const std::string source = entry.isFromDLL ? "DLL" : "built-in";
+            console.LogInfo("  - " + std::string(entry.plugin->GetName()) + " v" +
+                            std::string(entry.plugin->GetVersion()) + " [" + source + ", " + status + "]");
         }
     }
 

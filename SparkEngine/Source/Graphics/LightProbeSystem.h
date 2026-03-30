@@ -67,7 +67,6 @@ namespace Spark::Graphics
     class LightProbeSystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<LightProbeSystem>() instead")]]
         static LightProbeSystem& GetInstance()
         {
             static LightProbeSystem instance;

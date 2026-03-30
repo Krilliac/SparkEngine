@@ -130,7 +130,6 @@ namespace Spark::Graphics
     {
       public:
         /** @brief Singleton access. */
-        [[deprecated("Use EngineContext::Get()->GetSystem<WaterRenderer>() instead")]]
         static WaterRenderer& GetInstance()
         {
             static WaterRenderer s;

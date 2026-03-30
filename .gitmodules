@@ -20,6 +20,3 @@
 [submodule "ThirdParty/SDL2"]
 	path = ThirdParty/SDL2
 	url = https://github.com/libsdl-org/SDL.git
-[submodule "ThirdParty/DirectXMath"]
-	path = ThirdParty/DirectXMath
-	url = https://github.com/microsoft/DirectXMath.git

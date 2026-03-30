@@ -7,7 +7,7 @@
  */
 
 #include "PhysicsSystem.h"
-#include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
 #include <sstream>
 
 // ============================================================================
@@ -17,19 +17,20 @@
 void PhysicsSystem::Console_EnableDebugDraw(bool enabled)
 {
     EnableDebugDraw(enabled);
-    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Physics debug draw %s", enabled ? "enabled" : "disabled");
+    Spark::SimpleConsole::GetInstance().LogSuccess("Physics debug draw " +
+                                                   std::string(enabled ? "enabled" : "disabled"));
 }
 
 void PhysicsSystem::Console_PausePhysics(bool paused)
 {
     m_paused = paused;
-    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Physics simulation %s", paused ? "paused" : "resumed");
+    Spark::SimpleConsole::GetInstance().LogSuccess("Physics simulation " + std::string(paused ? "paused" : "resumed"));
 }
 
 void PhysicsSystem::Console_SetTimeStep(float timeStep)
 {
     SetTimeStep(timeStep);
-    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Physics time step set to: %f", timeStep);
+    Spark::SimpleConsole::GetInstance().LogSuccess("Physics time step set to: " + std::to_string(timeStep));
 }
 
 std::string PhysicsSystem::Console_Raycast(float originX, float originY, float originZ, float dirX, float dirY,
@@ -72,7 +73,7 @@ void PhysicsSystem::Console_Reset()
     SetGravity({0.0f, -9.8f, 0.0f});
     m_paused = false;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Physics system reset complete");
+    Spark::SimpleConsole::GetInstance().LogSuccess("Physics system reset complete");
 }
 
 PhysicsSystem::PhysicsMetrics PhysicsSystem::Console_GetMetrics() const
@@ -138,7 +139,8 @@ bool PhysicsSystem::Console_RemoveBody(const std::string& name)
 void PhysicsSystem::Console_SetGravity(float x, float y, float z)
 {
     SetGravity({x, y, z});
-    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Gravity set to (%f, %f, %f)", x, y, z);
+    Spark::SimpleConsole::GetInstance().LogSuccess("Gravity set to (" + std::to_string(x) + ", " + std::to_string(y) +
+                                                   ", " + std::to_string(z) + ")");
 }
 
 void PhysicsSystem::Console_SetBodyProperty(const std::string& name, const std::string& property, float value)
@@ -147,11 +149,12 @@ void PhysicsSystem::Console_SetBodyProperty(const std::string& name, const std::
     if (it != m_namedBodies.end() && it->second)
     {
         it->second->Console_SetProperty(property, value);
-        SPARK_LOG_INFO(Spark::LogCategory::Physics, "Set %s = %f for %s", property.c_str(), value, name.c_str());
+        Spark::SimpleConsole::GetInstance().LogSuccess("Set " + property + " = " + std::to_string(value) + " for " +
+                                                       name);
     }
     else
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Physics body not found: %s", name.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Physics body not found: " + name);
     }
 }
 
@@ -161,11 +164,12 @@ void PhysicsSystem::Console_ApplyForce(const std::string& name, float x, float y
     if (it != m_namedBodies.end() && it->second)
     {
         it->second->ApplyForce({x, y, z});
-        SPARK_LOG_INFO(Spark::LogCategory::Physics, "Applied force (%f, %f, %f) to %s", x, y, z, name.c_str());
+        Spark::SimpleConsole::GetInstance().LogSuccess("Applied force (" + std::to_string(x) + ", " +
+                                                       std::to_string(y) + ", " + std::to_string(z) + ") to " + name);
     }
     else
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Physics body not found: %s", name.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Physics body not found: " + name);
     }
 }
 
@@ -175,11 +179,12 @@ void PhysicsSystem::Console_ApplyImpulse(const std::string& name, float x, float
     if (it != m_namedBodies.end() && it->second)
     {
         it->second->ApplyImpulse({x, y, z});
-        SPARK_LOG_INFO(Spark::LogCategory::Physics, "Applied impulse (%f, %f, %f) to %s", x, y, z, name.c_str());
+        Spark::SimpleConsole::GetInstance().LogSuccess("Applied impulse (" + std::to_string(x) + ", " +
+                                                       std::to_string(y) + ", " + std::to_string(z) + ") to " + name);
     }
     else
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Physics body not found: %s", name.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Physics body not found: " + name);
     }
 }
 

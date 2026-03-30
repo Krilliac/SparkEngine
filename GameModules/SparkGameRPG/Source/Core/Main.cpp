@@ -16,7 +16,6 @@
 #include "Inventory/RPGInventorySystem.h"
 #include "NPC/RPGNPCSystem.h"
 #include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -70,13 +69,14 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Loading Spark RPG module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[RPG] Loading Spark RPG module...");
 
     // Initialize the world area setup (registers areas with streaming)
     m_worldSetup = std::make_unique<RPG::RPGWorldSetup>();
     if (!m_worldSetup->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RPG] Failed to initialize world setup");
+        console.LogError("[RPG] Failed to initialize world setup");
         return false;
     }
 
@@ -84,7 +84,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_characterSystem = std::make_unique<RPG::RPGCharacterSystem>();
     if (!m_characterSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RPG] Failed to initialize character system");
+        console.LogError("[RPG] Failed to initialize character system");
         return false;
     }
 
@@ -92,7 +92,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_combatSystem = std::make_unique<RPG::RPGCombatSystem>();
     if (!m_combatSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RPG] Failed to initialize combat system");
+        console.LogError("[RPG] Failed to initialize combat system");
         return false;
     }
 
@@ -100,7 +100,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_dialogueSystem = std::make_unique<RPG::RPGDialogueSystem>();
     if (!m_dialogueSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RPG] Failed to initialize dialogue system");
+        console.LogError("[RPG] Failed to initialize dialogue system");
         return false;
     }
 
@@ -108,7 +108,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_questSystem = std::make_unique<RPG::RPGQuestSystem>();
     if (!m_questSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RPG] Failed to initialize quest system");
+        console.LogError("[RPG] Failed to initialize quest system");
         return false;
     }
 
@@ -116,7 +116,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_inventorySystem = std::make_unique<RPG::RPGInventorySystem>();
     if (!m_inventorySystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RPG] Failed to initialize inventory system");
+        console.LogError("[RPG] Failed to initialize inventory system");
         return false;
     }
 
@@ -124,7 +124,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_npcSystem = std::make_unique<RPG::RPGNPCSystem>();
     if (!m_npcSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RPG] Failed to initialize NPC system");
+        console.LogError("[RPG] Failed to initialize NPC system");
         return false;
     }
 
@@ -132,19 +132,18 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     m_engineSystems = std::make_unique<RPG::RPGEngineSystems>();
     if (!m_engineSystems->Initialize(context))
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game, "[RPG] Engine systems integration partially failed (non-fatal)");
+        console.LogWarning("[RPG] Engine systems integration partially failed (non-fatal)");
     }
 
     RegisterConsoleCommands();
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Spark RPG module loaded successfully (8 subsystems)");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Areas: %s | Classes: %s | Items: %s | Quests: %s | NPCs: %s",
-                   std::to_string(m_worldSetup->GetAreaCount()).c_str(),
-                   std::to_string(m_characterSystem->GetClassCount()).c_str(),
-                   std::to_string(m_inventorySystem->GetItemCount()).c_str(),
-                   std::to_string(m_questSystem->GetQuestCount()).c_str(),
-                   std::to_string(m_npcSystem->GetNPCCount()).c_str());
+    console.LogInfo("[RPG] Spark RPG module loaded successfully (8 subsystems)");
+    console.LogInfo("[RPG] Areas: " + std::to_string(m_worldSetup->GetAreaCount()) +
+                    " | Classes: " + std::to_string(m_characterSystem->GetClassCount()) +
+                    " | Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
+                    " | Quests: " + std::to_string(m_questSystem->GetQuestCount()) +
+                    " | NPCs: " + std::to_string(m_npcSystem->GetNPCCount()));
     return true;
 }
 
@@ -153,7 +152,8 @@ void SparkGameRPGModule::OnUnload()
     if (!m_initialized)
         return;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Unloading Spark RPG module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[RPG] Unloading Spark RPG module...");
 
     // Shutdown in reverse initialization order
     if (m_engineSystems)
@@ -199,7 +199,7 @@ void SparkGameRPGModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Spark RPG module unloaded");
+    console.LogInfo("[RPG] Spark RPG module unloaded");
 }
 
 void SparkGameRPGModule::OnUpdate(float deltaTime)

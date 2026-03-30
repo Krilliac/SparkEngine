@@ -4,13 +4,14 @@
  */
 
 #include "RPGNPCSystem.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <cmath>
 #include <sstream>
-#include "Utils/LogMacros.h"
 
 namespace RPG
 {
@@ -20,8 +21,8 @@ namespace RPG
         m_context = context;
         RegisterDefaultNPCs();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] NPC system initialized (%s NPCs)",
-                       std::to_string(m_npcs.size()).c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] NPC system initialized (" + std::to_string(m_npcs.size()) +
+                                                    " NPCs)");
         return true;
     }
 
@@ -264,8 +265,8 @@ namespace RPG
 
         npc->disposition = GetDispositionTier(npc->dispositionValue);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] %s disposition: %s", npc->name.c_str(),
-                       std::to_string(npc->dispositionValue).c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] " + npc->name +
+                                                    " disposition: " + std::to_string(npc->dispositionValue));
     }
 
     NPCDisposition RPGNPCSystem::GetDispositionTier(int value) const

@@ -4,13 +4,14 @@
  */
 
 #include "RPGCharacterSystem.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <cmath>
 #include <sstream>
-#include "Utils/LogMacros.h"
 
 namespace RPG
 {
@@ -20,8 +21,8 @@ namespace RPG
         m_context = context;
         RegisterDefaultClasses();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Character system initialized (%s classes)",
-                       std::to_string(m_classes.size()).c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Character system initialized (" +
+                                                    std::to_string(m_classes.size()) + " classes)");
         return true;
     }
 
@@ -214,8 +215,7 @@ namespace RPG
         uint32_t id = character.characterId;
         m_characters[id] = character;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Character created: %s (%s)", name.c_str(),
-                       classDef->name.c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Character created: " + name + " (" + classDef->name + ")");
         return id;
     }
 
@@ -277,8 +277,8 @@ namespace RPG
             character.currentMana = character.maxMana;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] %s reached level %s", character.name.c_str(),
-                       std::to_string(character.level).c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] " + character.name + " reached level " +
+                                                    std::to_string(character.level));
     }
 
     void RPGCharacterSystem::AllocateStatPoint(uint32_t characterId, const std::string& statName)

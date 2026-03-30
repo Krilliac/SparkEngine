@@ -73,7 +73,6 @@ namespace Spark::Scripting
     class LuaScriptEngine
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<LuaScriptEngine>() instead")]]
         static LuaScriptEngine& GetInstance()
         {
             static LuaScriptEngine instance;

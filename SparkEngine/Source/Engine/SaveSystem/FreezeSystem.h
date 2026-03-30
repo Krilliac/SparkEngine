@@ -206,7 +206,6 @@ namespace Spark
     class FreezeSystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<FreezeSystem>() instead")]]
         static FreezeSystem& GetInstance()
         {
             static FreezeSystem instance;

@@ -4,13 +4,14 @@
  */
 
 #include "MMOPartySystem.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <sstream>
-#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -18,7 +19,7 @@ namespace MMO
     bool MMOPartySystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Party system initialized");
+        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Party system initialized");
         return true;
     }
 

@@ -13,7 +13,7 @@
 
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
-#include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
 #include <iostream>
 #include <fstream>
@@ -49,7 +49,7 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
             std::ifstream file(filePath);
             if (!file.is_open())
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Cannot open file for reading: %s", filePath.c_str());
+                Spark::SimpleConsole::GetInstance().LogError("Cannot open file for reading: " + filePath);
                 return false;
             }
             fileContent.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -142,8 +142,8 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
             size_t equalPos = line.find('=');
             if (equalPos == std::string::npos)
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Invalid line format at line %d in: %s", lineNumber,
-                               filePath.c_str());
+                Spark::SimpleConsole::GetInstance().LogWarning("Invalid line format at line " +
+                                                               std::to_string(lineNumber) + " in: " + filePath);
                 continue;
             }
 
@@ -444,21 +444,22 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
             }
             catch (const std::exception& e)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Error parsing line %d in %s: %s", lineNumber,
-                                filePath.c_str(), e.what());
+                Spark::SimpleConsole::GetInstance().LogError("Error parsing line " + std::to_string(lineNumber) +
+                                                             " in " + filePath + ": " + std::string(e.what()));
                 continue;
             }
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material '%s' loaded from: %s (textures: %zu, variants: %zu)",
-                       m_name.c_str(), filePath.c_str(), m_textures.size(), m_variants.size());
+        Spark::SimpleConsole::GetInstance().LogSuccess("Material '" + m_name + "' loaded from: " + filePath +
+                                                       " (textures: " + std::to_string(m_textures.size()) +
+                                                       ", variants: " + std::to_string(m_variants.size()) + ")");
 
         return true;
     }
     catch (const std::exception& e)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Exception while loading material from %s: %s", filePath.c_str(),
-                        e.what());
+        Spark::SimpleConsole::GetInstance().LogError("Exception while loading material from " + filePath + ": " +
+                                                     std::string(e.what()));
         return false;
     }
 }
@@ -467,8 +468,7 @@ bool Material::ReloadMaterial(ID3D11Device* device)
 {
     if (!device)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ReloadMaterial: device is null for material '%s'",
-                        m_name.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: device is null for material '" + m_name + "'");
         return false;
     }
 
@@ -491,17 +491,16 @@ bool Material::ReloadMaterial(ID3D11Device* device)
     {
         if (!std::filesystem::exists(filePath))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "ReloadMaterial: texture file missing for '%s': %s",
-                           m_name.c_str(), filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogWarning("ReloadMaterial: texture file missing for '" + m_name +
+                                                           "': " + filePath);
             allSucceeded = false;
             continue;
         }
 
         if (!LoadTexture(type, filePath, device))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                            "ReloadMaterial: failed to reload texture '%s' for material '%s'", filePath.c_str(),
-                            m_name.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: failed to reload texture '" + filePath +
+                                                         "' for material '" + m_name + "'");
             allSucceeded = false;
         }
     }
@@ -516,14 +515,13 @@ bool Material::ReloadMaterial(ID3D11Device* device)
     HRESULT hr = CompileMaterial(device);
     if (FAILED(hr))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ReloadMaterial: failed to recompile material '%s'",
-                        m_name.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: failed to recompile material '" + m_name + "'");
         allSucceeded = false;
     }
 
     if (allSucceeded)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material '%s' reloaded successfully", m_name.c_str());
+        Spark::SimpleConsole::GetInstance().LogSuccess("Material '" + m_name + "' reloaded successfully");
     }
 
     return allSucceeded;
@@ -534,7 +532,7 @@ bool Material::ReloadMaterial(ID3D11Device* device)
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "MaterialSystem.h"
-#include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
 #include <chrono>
 #include <cstdio>
@@ -587,13 +585,13 @@ bool Material::SaveToFile(const std::string& filePath) const
         std::ofstream file(filePath);
         if (!file.is_open())
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Cannot open file for writing: %s", filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Cannot open file for writing: " + filePath);
             return false;
         }
 
         if (m_name.empty())
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Cannot save material with empty name");
+            Spark::SimpleConsole::GetInstance().LogError("Cannot save material with empty name");
             return false;
         }
 
@@ -732,13 +730,13 @@ bool Material::SaveToFile(const std::string& filePath) const
             m_fileCache->Invalidate(filePath);
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material '%s' saved to: %s", m_name.c_str(), filePath.c_str());
+        Spark::SimpleConsole::GetInstance().LogSuccess("Material '" + m_name + "' saved to: " + filePath);
         return true;
     }
     catch (const std::exception& e)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Exception while saving material '%s': %s", m_name.c_str(),
-                        e.what());
+        Spark::SimpleConsole::GetInstance().LogError("Exception while saving material '" + m_name +
+                                                     "': " + std::string(e.what()));
         return false;
     }
 }

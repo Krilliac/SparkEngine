@@ -5,7 +5,7 @@
 
 #include "GameModuleSelectorPanel.h"
 #include "Core/ModuleManager.h"
-#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
 #include <imgui.h>
 #include <filesystem>
 #include <fstream>
@@ -232,12 +232,15 @@ namespace SparkEditor
             file << json;
             file.close();
             m_statusMessage = "Saved spark.modules.json (" + std::to_string(loadOrder - 1000) + " modules)";
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "[Editor] %s", m_statusMessage.c_str());
+
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.LogSuccess("[Editor] " + m_statusMessage);
         }
         else
         {
             m_statusMessage = "Failed to write spark.modules.json";
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "[Editor] %s", m_statusMessage.c_str());
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.LogError("[Editor] " + m_statusMessage);
         }
     }
 

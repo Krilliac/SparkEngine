@@ -7,6 +7,7 @@
  */
 
 #include "AbilitySystem.h"
+#include "../../Utils/SparkConsole.h"
 #include "../../Utils/Validate.h"
 #include "../ECS/Components.h"
 #include "../ECS/Components/GameplayComponents.h"
@@ -27,7 +28,7 @@ namespace Spark::Gameplay
         const AuraDefinition* def = GetAuraDef(auraId);
         if (!def)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "[AbilitySystem] Unknown aura id %u", auraId);
+            Spark::SimpleConsole::GetInstance().LogWarning("[AbilitySystem] Unknown aura id " + std::to_string(auraId));
             return;
         }
 

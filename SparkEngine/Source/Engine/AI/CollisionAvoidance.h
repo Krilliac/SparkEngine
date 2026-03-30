@@ -102,7 +102,6 @@ namespace Spark::AI
     {
       public:
         /** @brief Get the singleton instance. */
-        [[deprecated("Use EngineContext::Get()->GetSystem<CollisionAvoidanceSystem>() instead")]]
         static CollisionAvoidanceSystem& GetInstance()
         {
             static CollisionAvoidanceSystem s;

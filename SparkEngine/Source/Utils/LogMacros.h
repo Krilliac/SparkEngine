@@ -25,7 +25,6 @@
 #pragma once
 
 #include "Logger.h"
-#include "SparkConsole.h"
 #include <chrono>
 #include <cstdio>
 #include <string>

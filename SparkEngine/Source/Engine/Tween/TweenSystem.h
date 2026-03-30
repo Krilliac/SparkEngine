@@ -143,7 +143,6 @@ namespace Spark
     class TweenSystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<TweenSystem>() instead")]]
         static TweenSystem& GetInstance();
 
         TweenSystem(const TweenSystem&) = delete;

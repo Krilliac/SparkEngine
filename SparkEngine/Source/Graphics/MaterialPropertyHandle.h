@@ -86,7 +86,6 @@ namespace Spark::Graphics
     {
       public:
         /// @brief Get the singleton instance.
-        [[deprecated("Use EngineContext::Get()->GetSystem<MaterialPropertyRegistry>() instead")]]
         static MaterialPropertyRegistry& GetInstance()
         {
             static MaterialPropertyRegistry instance;

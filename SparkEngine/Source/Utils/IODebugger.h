@@ -84,7 +84,6 @@ namespace Spark
     class IODebugger
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<IODebugger>() instead")]]
         static IODebugger& GetInstance()
         {
             static IODebugger instance;

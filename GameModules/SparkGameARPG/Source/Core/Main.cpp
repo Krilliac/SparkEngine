@@ -16,7 +16,6 @@
 #include "Monster/ARPGMonsterSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -70,13 +69,14 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Loading Spark ARPG module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[ARPG] Loading Spark ARPG module...");
 
     // Initialize hero system (classes, stats, leveling)
     m_heroSystem = std::make_unique<ARPG::ARPGHeroSystem>();
     if (!m_heroSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[ARPG] Failed to initialize hero system");
+        console.LogError("[ARPG] Failed to initialize hero system");
         return false;
     }
 
@@ -84,7 +84,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_combatSystem = std::make_unique<ARPG::ARPGCombatSystem>();
     if (!m_combatSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[ARPG] Failed to initialize combat system");
+        console.LogError("[ARPG] Failed to initialize combat system");
         return false;
     }
 
@@ -92,7 +92,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_lootSystem = std::make_unique<ARPG::ARPGLootSystem>();
     if (!m_lootSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[ARPG] Failed to initialize loot system");
+        console.LogError("[ARPG] Failed to initialize loot system");
         return false;
     }
 
@@ -100,7 +100,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_dungeonSystem = std::make_unique<ARPG::ARPGDungeonSystem>();
     if (!m_dungeonSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[ARPG] Failed to initialize dungeon system");
+        console.LogError("[ARPG] Failed to initialize dungeon system");
         return false;
     }
 
@@ -108,7 +108,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_skillSystem = std::make_unique<ARPG::ARPGSkillSystem>();
     if (!m_skillSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[ARPG] Failed to initialize skill system");
+        console.LogError("[ARPG] Failed to initialize skill system");
         return false;
     }
 
@@ -116,7 +116,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_monsterSystem = std::make_unique<ARPG::ARPGMonsterSystem>();
     if (!m_monsterSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[ARPG] Failed to initialize monster system");
+        console.LogError("[ARPG] Failed to initialize monster system");
         return false;
     }
 
@@ -125,20 +125,19 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     if (!m_engineSystems->Initialize(context, m_heroSystem.get(), m_combatSystem.get(), m_lootSystem.get(),
                                      m_dungeonSystem.get()))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[ARPG] Failed to initialize engine systems integration");
+        console.LogError("[ARPG] Failed to initialize engine systems integration");
         return false;
     }
 
     RegisterConsoleCommands();
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Spark ARPG module loaded successfully (7 subsystems)");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Classes: %s | Skills: %s | Monsters: %s | Affixes: %s | Tiers: %s",
-                   std::to_string(m_heroSystem->GetClassCount()).c_str(),
-                   std::to_string(m_skillSystem->GetTotalSkillCount()).c_str(),
-                   std::to_string(m_monsterSystem->GetTemplateCount()).c_str(),
-                   std::to_string(m_lootSystem->GetAffixPoolSize()).c_str(),
-                   std::to_string(m_dungeonSystem->GetTierCount()).c_str());
+    console.LogInfo("[ARPG] Spark ARPG module loaded successfully (7 subsystems)");
+    console.LogInfo("[ARPG] Classes: " + std::to_string(m_heroSystem->GetClassCount()) +
+                    " | Skills: " + std::to_string(m_skillSystem->GetTotalSkillCount()) +
+                    " | Monsters: " + std::to_string(m_monsterSystem->GetTemplateCount()) +
+                    " | Affixes: " + std::to_string(m_lootSystem->GetAffixPoolSize()) +
+                    " | Tiers: " + std::to_string(m_dungeonSystem->GetTierCount()));
     return true;
 }
 
@@ -147,7 +146,8 @@ void SparkGameARPGModule::OnUnload()
     if (!m_initialized)
         return;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Unloading Spark ARPG module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[ARPG] Unloading Spark ARPG module...");
 
     // Shutdown engine integrations first (depends on all ARPG subsystems)
     if (m_engineSystems)
@@ -190,7 +190,7 @@ void SparkGameARPGModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[ARPG] Spark ARPG module unloaded");
+    console.LogInfo("[ARPG] Spark ARPG module unloaded");
 }
 
 void SparkGameARPGModule::OnUpdate(float deltaTime)

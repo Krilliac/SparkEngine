@@ -11,6 +11,7 @@
 #include "EditorFonts.h"
 #include "EditorIcons.h"
 #include "Core/FaultIsolation.h"
+#include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/ConsolePanel.h"
@@ -84,7 +85,8 @@ namespace SparkEditor
     bool EditorUI::Initialize(const EditorConfig& config)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Enhanced EditorUI with full configuration...");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("Initializing Enhanced EditorUI with full configuration...");
 
         try
         {
@@ -109,104 +111,105 @@ namespace SparkEditor
             }
 
             // Apply the Spark Professional theme
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Applying Spark Professional theme...");
+            console.LogInfo("Applying Spark Professional theme...");
             ApplyTheme("Spark Professional");
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Theme applied");
+            console.LogSuccess("Theme applied");
 
             m_isInitialized = true;
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Enhanced EditorUI initialized successfully");
+            console.LogSuccess("Enhanced EditorUI initialized successfully");
             return true;
         }
         catch (const std::exception& e)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Exception in EditorUI::Initialize: %s", e.what());
+            console.LogError("Exception in EditorUI::Initialize: " + std::string(e.what()));
             return false;
         }
         catch (...)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Unknown exception in EditorUI::Initialize");
+            console.LogError("Unknown exception in EditorUI::Initialize");
             return false;
         }
     }
 
     void EditorUI::InitializeManagers(const EditorConfig& /*config*/)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Using enhanced initialization for production use");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("Using enhanced initialization for production use");
 
         // Crash handler
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing crash handler...");
+        console.LogInfo("Initializing crash handler...");
         if (m_crashHandler && m_crashHandler->Initialize())
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Crash handler initialized successfully");
+            console.LogSuccess("Crash handler initialized successfully");
         }
         else
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Crash handler initialization failed");
+            console.LogWarning("Crash handler initialization failed");
         }
 
         // Project manager + browser panel
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing project manager...");
+        console.LogInfo("Initializing project manager...");
         m_projectManager = std::make_unique<ProjectManager>();
         if (m_projectManager->Initialize())
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Project manager initialized");
+            console.LogSuccess("Project manager initialized");
         }
         else
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Project manager initialization failed");
+            console.LogWarning("Project manager initialization failed");
         }
         m_projectBrowserPanel = std::make_shared<ProjectBrowserPanel>(m_projectManager.get());
         m_projectBrowserPanel->Initialize();
 
         // Undo/redo
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing undo/redo manager...");
+        console.LogInfo("Initializing undo/redo manager...");
         m_undoRedoManager = std::make_unique<UndoRedoManager>();
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Undo/redo manager initialized");
+        console.LogSuccess("Undo/redo manager initialized");
 
         // Prefab manager
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing prefab manager...");
+        console.LogInfo("Initializing prefab manager...");
         m_prefabManager = std::make_unique<PrefabManager>();
         m_prefabManager->Initialize();
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Prefab manager initialized");
+        console.LogSuccess("Prefab manager initialized");
 
         // Command palette
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing command palette...");
+        console.LogInfo("Initializing command palette...");
         m_commandPalette = std::make_unique<CommandPalette>();
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Command palette initialized");
+        console.LogSuccess("Command palette initialized");
 
         // Gizmo system — 3D manipulation overlays
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing gizmo system...");
+        console.LogInfo("Initializing gizmo system...");
         m_gizmoSystem = std::make_unique<GizmoSystem>();
         if (m_gizmoSystem->Initialize(nullptr, nullptr))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Gizmo system initialized");
+            console.LogSuccess("Gizmo system initialized");
         }
         else
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Gizmo system initialization failed");
+            console.LogWarning("Gizmo system initialization failed");
         }
 
         // Collaborative editing session
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing collaborative edit session...");
+        console.LogInfo("Initializing collaborative edit session...");
         m_collabSession = std::make_unique<CollaborativeEditSession>();
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Collaborative edit session initialized");
+        console.LogSuccess("Collaborative edit session initialized");
 
         // Live edit bridge (editor → AreaServer)
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing live edit bridge...");
+        console.LogInfo("Initializing live edit bridge...");
         m_liveEditBridge = std::make_unique<LiveEditBridge>();
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Live edit bridge initialized");
+        console.LogSuccess("Live edit bridge initialized");
 
         // Editor panels
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating editor panels...");
+        console.LogInfo("Creating editor panels...");
         CreatePanels();
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Panels created successfully");
+        console.LogSuccess("Panels created successfully");
     }
 
     void EditorUI::WireCallbacks()
     {
         if (!m_projectManager)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "WireCallbacks: projectManager is null, skipping");
+            Spark::SimpleConsole::GetInstance().LogWarning("WireCallbacks: projectManager is null, skipping");
             return;
         }
 
@@ -593,7 +596,8 @@ namespace SparkEditor
     void EditorUI::Shutdown()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down EditorUI...");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("Shutting down EditorUI...");
 
         // Shutdown panels using vector iteration since unordered_map doesn't have rbegin/rend
         std::vector<std::pair<std::string, std::shared_ptr<EditorPanel>>> panelVector(m_panels.begin(), m_panels.end());
@@ -603,19 +607,18 @@ namespace SparkEditor
             {
                 if (it->second)
                 {
-                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down %s panel", it->first.c_str());
+                    console.LogInfo("Shutting down " + it->first + " panel");
                     it->second->Shutdown();
-                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "%s panel shutdown complete", it->first.c_str());
+                    console.LogSuccess(it->first + " panel shutdown complete");
                 }
             }
             catch (const std::exception& e)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Exception shutting down %s panel: %s", it->first.c_str(),
-                                e.what());
+                console.LogError("Exception shutting down " + it->first + " panel: " + std::string(e.what()));
             }
         }
         m_panels.clear();
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "All panels shutdown and cleared");
+        console.LogInfo("All panels shutdown and cleared");
 
         // Shutdown project browser
         if (m_projectBrowserPanel)
@@ -627,46 +630,46 @@ namespace SparkEditor
         // Shutdown project manager
         if (m_projectManager)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down project manager...");
+            console.LogInfo("Shutting down project manager...");
             m_projectManager->Shutdown();
             m_projectManager.reset();
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Project manager shutdown complete");
+            console.LogSuccess("Project manager shutdown complete");
         }
 
         // Shutdown prefab manager
         if (m_prefabManager)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down prefab manager...");
+            console.LogInfo("Shutting down prefab manager...");
             m_prefabManager->Shutdown();
             m_prefabManager.reset();
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Prefab manager shutdown complete");
+            console.LogSuccess("Prefab manager shutdown complete");
         }
 
         // Shutdown gizmo system
         if (m_gizmoSystem)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down gizmo system...");
+            console.LogInfo("Shutting down gizmo system...");
             m_gizmoSystem->Shutdown();
             m_gizmoSystem.reset();
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Gizmo system shutdown complete");
+            console.LogSuccess("Gizmo system shutdown complete");
         }
 
         // Disconnect live edit bridge
         if (m_liveEditBridge)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down live edit bridge...");
+            console.LogInfo("Shutting down live edit bridge...");
             m_liveEditBridge->Disconnect();
             m_liveEditBridge.reset();
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Live edit bridge shutdown complete");
+            console.LogSuccess("Live edit bridge shutdown complete");
         }
 
         // Disconnect collaborative session
         if (m_collabSession)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down collaborative edit session...");
+            console.LogInfo("Shutting down collaborative edit session...");
             m_collabSession->Disconnect();
             m_collabSession.reset();
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Collaborative edit session shutdown complete");
+            console.LogSuccess("Collaborative edit session shutdown complete");
         }
 
         // Reset other systems
@@ -676,7 +679,7 @@ namespace SparkEditor
         // Note: Don't shutdown crash handler here as it's managed elsewhere
 
         m_isInitialized = false;
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorUI shutdown complete");
+        console.LogSuccess("EditorUI shutdown complete");
     }
 
 
@@ -1347,7 +1350,8 @@ namespace SparkEditor
             file << "}\n";
             file.close();
 
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Scene saved to: %s", path.c_str());
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.LogSuccess("Scene saved to: " + path);
 
             // Notify plugins of the scene save
             if (m_pluginManager)
@@ -1359,7 +1363,8 @@ namespace SparkEditor
         }
         catch (const std::exception& e)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to save scene: %s", e.what());
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.LogError("Failed to save scene: " + std::string(e.what()));
             return false;
         }
     }
@@ -1374,7 +1379,8 @@ namespace SparkEditor
             if (sceneView)
             {
                 sceneView->SetDevice(device, context);
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Graphics device passed to Scene View panel");
+                auto& console = Spark::SimpleConsole::GetInstance();
+                console.LogSuccess("Graphics device passed to Scene View panel");
             }
         }
 

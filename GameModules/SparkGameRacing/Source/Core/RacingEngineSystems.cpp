@@ -8,6 +8,8 @@
  */
 
 #include "RacingEngineSystems.h"
+#include "Utils/SparkConsole.h"
+
 // Engine systems
 #include "Audio/MusicManager.h"
 #include "Engine/Events/EventSystem.h"
@@ -15,7 +17,6 @@
 #include "Engine/Replay/ReplaySystem.h"
 #include "Graphics/WeatherSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
-#include "Utils/LogMacros.h"
 // CoroutineScheduler.h excluded — C++20 coroutine header bugs with GCC 13
 
 namespace Racing
@@ -32,7 +33,8 @@ namespace Racing
 
         m_context = context;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Initializing engine system integrations...");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[Racing] Initializing engine system integrations...");
 
         RegisterMusicTracks();
         SubscribeToEvents();
@@ -43,8 +45,8 @@ namespace Racing
         RegisterCoroutines();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[Racing] Engine systems wired (audio, events, save, replay, weather, destruction, coroutines)");
+        console.LogInfo(
+            "[Racing] Engine systems wired (audio, events, save, replay, weather, destruction, coroutines)");
         return true;
     }
 
@@ -82,7 +84,7 @@ namespace Racing
         m_context = nullptr;
         m_initialized = false;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Engine system integrations shut down");
+        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Engine system integrations shut down");
     }
 
     // =============================================================================
@@ -131,7 +133,7 @@ namespace Racing
 
         music->Play("menu_theme", 1.0f);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Audio: 7 music tracks, 1 playlist registered");
+        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Audio: 7 music tracks, 1 playlist registered");
     }
 
     // =============================================================================
@@ -148,17 +150,19 @@ namespace Racing
         m_eventHandles.push_back(bus->Subscribe<Spark::CollisionEvent>(
             [](const Spark::CollisionEvent& e)
             {
+                auto& console = Spark::SimpleConsole::GetInstance();
                 if (e.impactForce > 500.0f)
-                    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Heavy collision: force=%s",
-                                   std::to_string(static_cast<int>(e.impactForce)).c_str());
+                    console.LogInfo("[Racing] Heavy collision: force=" +
+                                    std::to_string(static_cast<int>(e.impactForce)));
             }));
 
         // React to quality preset changes (adjust visual effects)
         m_eventHandles.push_back(bus->Subscribe<Spark::QualityChangedEvent>(
             [](const Spark::QualityChangedEvent& e)
-            { SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Quality changed to: %s", e.preset.c_str()); }));
+            { Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Quality changed to: " + e.preset); }));
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Events: subscribed to CollisionEvent, QualityChangedEvent");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[Racing] Events: subscribed to CollisionEvent, QualityChangedEvent");
     }
 
     // =============================================================================
@@ -173,7 +177,7 @@ namespace Racing
 
         save->SetSaveDirectory("Saves/Racing");
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Save: directory set to Saves/Racing");
+        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Save: directory set to Saves/Racing");
     }
 
     std::string RacingEngineSystems::SaveRaceData(const std::string& slotName)
@@ -217,7 +221,7 @@ namespace Racing
         replay->SetRecordInterval(1.0f / 20.0f);
         replay->SetMetadata("race_track", "racing");
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Replay: configured (20fps, ghost + cinematic support)");
+        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Replay: configured (20fps, ghost + cinematic support)");
     }
 
     std::string RacingEngineSystems::ToggleReplay(const std::string& action)
@@ -276,7 +280,7 @@ namespace Racing
         // Default: dry conditions, full grip
         weather->SetWeather(Spark::WeatherType::Clear, 1.0f, 0.0f);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Weather: clear skies, full grip");
+        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Weather: clear skies, full grip");
     }
 
     std::string RacingEngineSystems::SetWeather(const std::string& weatherName)
@@ -358,8 +362,8 @@ namespace Racing
         fencePattern.SetParticleEffect("vfx_debris");
         destruction->RegisterPattern("chain_fence", fencePattern);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[Racing] Destruction: 3 fracture patterns (barrier, tire wall, fence)");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[Racing] Destruction: 3 fracture patterns (barrier, tire wall, fence)");
     }
 
     // =============================================================================
@@ -375,8 +379,8 @@ namespace Racing
         //   damage_repair:      gradual health restore during pit stop
         //   post_race_results:  delay before showing results screen
         // Started on demand by race state transitions via IEngineContext.
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[Racing] Coroutines: 4 sequences registered (countdown, pit, repair, results)");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[Racing] Coroutines: 4 sequences registered (countdown, pit, repair, results)");
     }
 
     // =============================================================================

@@ -13,7 +13,7 @@
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
-#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
 
 namespace RTS
 {
@@ -29,7 +29,8 @@ namespace RTS
 
         m_context = context;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Initializing engine system integrations...");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[RTS] Initializing engine system integrations...");
 
         SetupAI();
         SetupEvents();
@@ -39,7 +40,7 @@ namespace RTS
         SetupSaveSystem();
         SetupCoroutines();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Engine system integrations initialized (7 subsystems wired)");
+        console.LogInfo("[RTS] Engine system integrations initialized (7 subsystems wired)");
         return true;
     }
 
@@ -65,7 +66,8 @@ namespace RTS
 
     void RTSEngineSystems::Shutdown()
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Shutting down engine system integrations...");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[RTS] Shutting down engine system integrations...");
 
         // CoroutineScheduler.h cannot be included from game module DLLs
         // (C++20 coroutine header bugs with GCC 13). Coroutine cleanup
@@ -76,7 +78,7 @@ namespace RTS
         m_eventHandles.clear();
 
         m_context = nullptr;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Engine system integrations shut down");
+        console.LogInfo("[RTS] Engine system integrations shut down");
     }
 
     // =========================================================================
@@ -161,7 +163,7 @@ namespace RTS
         (void)navMgr;
         (void)rtsSettings;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] AI: 3 behavior trees registered (worker, soldier, scout)");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] AI: 3 behavior trees registered (worker, soldier, scout)");
     }
 
     // =========================================================================
@@ -178,8 +180,9 @@ namespace RTS
         m_eventHandles.push_back(eventBus->Subscribe<Spark::EntityKilledEvent>(
             [this](const Spark::EntityKilledEvent& e)
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Unit killed: entity %s by %s (%s)",
-                               std::to_string(e.entityId).c_str(), std::to_string(e.killerId).c_str(), e.cause.c_str());
+                auto& console = Spark::SimpleConsole::GetInstance();
+                console.LogInfo("[RTS] Unit killed: entity " + std::to_string(e.entityId) + " by " +
+                                std::to_string(e.killerId) + " (" + e.cause + ")");
                 // Transition music based on combat state
                 if (!m_inCombat)
                 {
@@ -194,12 +197,13 @@ namespace RTS
         m_eventHandles.push_back(eventBus->Subscribe<Spark::WeatherChangedEvent>(
             [](const Spark::WeatherChangedEvent& e)
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Weather changed to type %s (intensity: %s)",
-                               std::to_string(e.newType).c_str(), std::to_string(e.intensity).c_str());
+                auto& console = Spark::SimpleConsole::GetInstance();
+                console.LogInfo("[RTS] Weather changed to type " + std::to_string(e.newType) +
+                                " (intensity: " + std::to_string(e.intensity) + ")");
                 // Rain slows ground units, fog reduces vision -- handled in Update()
             }));
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Events: subscribed to EntityKilled, WeatherChanged");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Events: subscribed to EntityKilled, WeatherChanged");
     }
 
     // =========================================================================
@@ -258,7 +262,7 @@ namespace RTS
         dynamicState.transitionDuration = 3.0f;
         music->SetDynamicMusicState(dynamicState);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Audio: 6 music tracks registered, dynamic music configured");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Audio: 6 music tracks registered, dynamic music configured");
     }
 
     // =========================================================================
@@ -278,15 +282,16 @@ namespace RTS
                 [](Spark::WeatherType oldType, Spark::WeatherType newType)
                 {
                     (void)oldType;
+                    auto& console = Spark::SimpleConsole::GetInstance();
                     // Rain slows ground units by reducing move speed
                     if (newType == Spark::WeatherType::Rain || newType == Spark::WeatherType::Storm)
                     {
-                        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Weather: ground units slowed by precipitation");
+                        console.LogInfo("[RTS] Weather: ground units slowed by precipitation");
                     }
                     // Fog reduces vision range further on top of fog-of-war
                     if (newType == Spark::WeatherType::Fog)
                     {
-                        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Weather: fog reducing unit vision ranges");
+                        console.LogInfo("[RTS] Weather: fog reducing unit vision ranges");
                     }
                 });
         }
@@ -299,8 +304,8 @@ namespace RTS
             timeOfDay->SetTimeScale(30.0f); // 1 real second = 30 game seconds
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[RTS] Weather/TimeOfDay: clear sky, 10:00 start, night vision penalty active");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[RTS] Weather/TimeOfDay: clear sky, 10:00 start, night vision penalty active");
     }
 
     // =========================================================================
@@ -341,8 +346,8 @@ namespace RTS
         wallPattern.SetParticleEffect("fx_dust_burst");
         destruction->RegisterPattern("rts_wall_breach", wallPattern);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[RTS] Destruction: 3 fracture patterns registered (barracks, tower, wall)");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[RTS] Destruction: 3 fracture patterns registered (barracks, tower, wall)");
     }
 
     // =========================================================================
@@ -361,7 +366,7 @@ namespace RTS
         // Configure autosave: 5 rotating slots for RTS matches
         saveSystem->SetMaxAutoSaves(5);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] SaveSystem: initialized (Saves/RTS, 5 autosave slots)");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] SaveSystem: initialized (Saves/RTS, 5 autosave slots)");
     }
 
     // =========================================================================
@@ -374,7 +379,7 @@ namespace RTS
         // (C++20 coroutine header bugs with GCC 13). Coroutine sequences:
         // rts_build_timer (5s+5s construction), rts_research_timer, rts_train_timer
         // — started on demand by gameplay code via IEngineContext::GetCoroutineScheduler().
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Coroutines: build/research/train timers configured");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Coroutines: build/research/train timers configured");
     }
 
     // =========================================================================
@@ -386,7 +391,7 @@ namespace RTS
         auto* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
         if (!saveSystem)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] SaveSystem not available");
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] SaveSystem not available");
             return false;
         }
 
@@ -394,7 +399,7 @@ namespace RTS
         meta.saveName = "RTS Match - " + slotName;
         meta.sceneName = "RTSMatch";
         // Full match state save includes units, buildings, resources, fog, tech progress
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Match saved to slot: %s", slotName.c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match saved to slot: " + slotName);
         return true;
     }
 
@@ -403,17 +408,17 @@ namespace RTS
         auto* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
         if (!saveSystem)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] SaveSystem not available");
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] SaveSystem not available");
             return false;
         }
 
         if (!saveSystem->SaveExists(slotName))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] Save slot not found: %s", slotName.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] Save slot not found: " + slotName);
             return false;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Match loaded from slot: %s", slotName.c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match loaded from slot: " + slotName);
         return true;
     }
 
@@ -422,7 +427,7 @@ namespace RTS
         auto* weather = m_context ? m_context->GetWeather() : nullptr;
         if (!weather)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] WeatherSystem not available");
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] WeatherSystem not available");
             return;
         }
 
@@ -439,7 +444,7 @@ namespace RTS
             type = Spark::WeatherType::Cloudy;
 
         weather->SetWeather(type, -1.0f, 5.0f);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Weather set to: %s", weatherName.c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Weather set to: " + weatherName);
     }
 
     void RTSEngineSystems::SetTimeOfDay(float hour) const
@@ -447,12 +452,12 @@ namespace RTS
         auto* timeOfDay = m_context ? m_context->GetTimeOfDay() : nullptr;
         if (!timeOfDay)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[RTS] TimeOfDaySystem not available");
+            Spark::SimpleConsole::GetInstance().LogError("[RTS] TimeOfDaySystem not available");
             return;
         }
 
         timeOfDay->SetTimeOfDay(hour);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Time of day set to: %s", std::to_string(hour).c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Time of day set to: " + std::to_string(hour));
     }
 
 } // namespace RTS

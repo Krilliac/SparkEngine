@@ -107,7 +107,6 @@ namespace Spark::Graphics
     class LODManager
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<LODManager>() instead")]]
         static LODManager& GetInstance();
 
         /// Generate LOD chain for a mesh

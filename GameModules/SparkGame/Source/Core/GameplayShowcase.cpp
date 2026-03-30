@@ -15,7 +15,8 @@
 #include "Engine/Localization/LocalizationSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/ECS/Components.h"
-#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -30,8 +31,9 @@ bool GameplayShowcase::Initialize(Spark::IEngineContext* context)
         return false;
 
     m_context = context;
+    auto& console = Spark::SimpleConsole::GetInstance();
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Initializing gameplay showcase...");
+    console.LogInfo("[Showcase] Initializing gameplay showcase...");
 
     SetupEventSubscriptions();
     SetupLocalization();
@@ -46,14 +48,15 @@ bool GameplayShowcase::Initialize(Spark::IEngineContext* context)
     // Kick off the coroutine demo (spawn → wait → damage → wait → heal)
     StartShowcaseCoroutine();
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Gameplay showcase initialized — %s entities spawned",
-                   std::to_string(m_spawnedEntities.size()).c_str());
+    console.LogInfo("[Showcase] Gameplay showcase initialized — " + std::to_string(m_spawnedEntities.size()) +
+                    " entities spawned");
     return true;
 }
 
 void GameplayShowcase::Shutdown()
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Shutting down gameplay showcase...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[Showcase] Shutting down gameplay showcase...");
 
     // Destroy spawned entities
     auto* world = m_context ? m_context->GetWorld() : nullptr;
@@ -74,7 +77,7 @@ void GameplayShowcase::Shutdown()
     m_subscriptions.clear();
 
     m_context = nullptr;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Gameplay showcase shut down");
+    console.LogInfo("[Showcase] Gameplay showcase shut down");
 }
 
 // =============================================================================
@@ -106,38 +109,38 @@ void GameplayShowcase::SetupEventSubscriptions()
     if (!eventBus)
         return;
 
+    auto& console = Spark::SimpleConsole::GetInstance();
 
     // Track damage events
     m_subscriptions.push_back(eventBus->Subscribe<Spark::EntityDamagedEvent>(
-        [this](const Spark::EntityDamagedEvent& e)
+        [this, &console](const Spark::EntityDamagedEvent& e)
         {
             m_totalDamageEvents++;
             m_totalDamageDealt += e.damage;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Entity %s took %s damage from %s",
-                           std::to_string(e.entityId).c_str(), std::to_string(static_cast<int>(e.damage)).c_str(),
-                           e.damageSource.c_str());
+            console.LogInfo("[Showcase] Entity " + std::to_string(e.entityId) + " took " +
+                            std::to_string(static_cast<int>(e.damage)) + " damage from " + e.damageSource);
         }));
 
     // Track kill events
     m_subscriptions.push_back(eventBus->Subscribe<Spark::EntityKilledEvent>(
-        [this](const Spark::EntityKilledEvent& e)
+        [this, &console](const Spark::EntityKilledEvent& e)
         {
             m_totalKillEvents++;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Entity %s killed by %s — cause: %s",
-                           std::to_string(e.entityId).c_str(), std::to_string(e.killerId).c_str(), e.cause.c_str());
+            console.LogInfo("[Showcase] Entity " + std::to_string(e.entityId) + " killed by " +
+                            std::to_string(e.killerId) + " — cause: " + e.cause);
         }));
 
     // Track weather changes
     m_subscriptions.push_back(eventBus->Subscribe<Spark::WeatherChangedEvent>(
-        [this](const Spark::WeatherChangedEvent& e)
+        [this, &console](const Spark::WeatherChangedEvent& e)
         {
             m_totalWeatherChanges++;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Weather changed from type %d to %d (intensity: %d%%)",
-                           e.previousType, e.newType, static_cast<int>(e.intensity * 100.0f));
+            console.LogInfo("[Showcase] Weather changed from type " + std::to_string(e.previousType) + " to " +
+                            std::to_string(e.newType) +
+                            " (intensity: " + std::to_string(static_cast<int>(e.intensity * 100.0f)) + "%)");
         }));
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game,
-                   "[Showcase] Subscribed to EntityDamaged, EntityKilled, WeatherChanged events");
+    console.LogInfo("[Showcase] Subscribed to EntityDamaged, EntityKilled, WeatherChanged events");
 }
 
 // =============================================================================
@@ -159,8 +162,8 @@ void GameplayShowcase::SetupLocalization()
     // The localization system returns the key itself if no entry exists, which is
     // acceptable for a showcase — the keys are human-readable.
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game,
-                   "[Showcase] Localization system available — using key fallback for showcase strings");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[Showcase] Localization system available — using key fallback for showcase strings");
 }
 
 // =============================================================================
@@ -178,7 +181,8 @@ void GameplayShowcase::SetupTimeOfDay()
     timeOfDay->SetTimeScale(60.0f);
     timeOfDay->SetPaused(false);
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Time of day set to 08:00, time scale 60x (1 sec = 1 min)");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[Showcase] Time of day set to 08:00, time scale 60x (1 sec = 1 min)");
 }
 
 // =============================================================================
@@ -232,7 +236,8 @@ void GameplayShowcase::RegisterCustomSerializer()
             });
     }
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Registered TagComponent serializer with SaveSystem");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[Showcase] Registered TagComponent serializer with SaveSystem");
 }
 
 // =============================================================================
@@ -245,8 +250,8 @@ void GameplayShowcase::StartShowcaseCoroutine()
     // coroutine header bugs with GCC 13). The showcase lifecycle sequence
     // (spawn → 3s → damage → 2s → heal) would be driven by the coroutine
     // scheduler; entity management still works via World/ECS directly.
-    SPARK_LOG_INFO(Spark::LogCategory::Game,
-                   "[Showcase] Coroutine: lifecycle sequence configured (spawn -> damage -> heal)");
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        "[Showcase] Coroutine: lifecycle sequence configured (spawn -> damage -> heal)");
 }
 
 // =============================================================================
@@ -303,7 +308,7 @@ std::string GameplayShowcase::CycleWeather()
     weather->SetWeather(newType, -1.0f, 5.0f);
 
     std::string name = Spark::WeatherSystem::GetWeatherTypeName(newType);
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] Weather cycling to: %s", name.c_str());
+    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Weather cycling to: " + name);
     return "Weather transitioning to: " + name;
 }
 
@@ -320,7 +325,7 @@ std::string GameplayShowcase::DoQuickSave()
 
     if (saveSystem->QuickSave(*world, meta))
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] QuickSave succeeded");
+        Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] QuickSave succeeded");
         return "QuickSave successful";
     }
     return "QuickSave failed";
@@ -337,7 +342,7 @@ std::string GameplayShowcase::DoQuickLoad()
     {
         // Re-track entities after load (previous entity IDs are invalidated)
         m_spawnedEntities.clear();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Showcase] QuickLoad succeeded");
+        Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] QuickLoad succeeded");
         return "QuickLoad successful";
     }
     return "QuickLoad failed — no quicksave found";

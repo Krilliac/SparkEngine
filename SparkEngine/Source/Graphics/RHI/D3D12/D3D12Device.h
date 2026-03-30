@@ -79,19 +79,18 @@ namespace Spark
 
                 // -- IRHIDevice: Swap chain -----------------------------------------------
 
-                [[nodiscard]] std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc& desc) override;
+                std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc& desc) override;
 
                 // -- IRHIDevice: Resource creation ----------------------------------------
 
-                [[nodiscard]] std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc& desc) override;
-                [[nodiscard]] std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc& desc) override;
-                [[nodiscard]] std::unique_ptr<IRHITexture> WrapNativeTexture(void* nativeHandle,
-                                                                             const RHITextureDesc& desc) override;
-                [[nodiscard]] std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc& desc) override;
-                [[nodiscard]] std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc& desc) override;
-                [[nodiscard]] std::unique_ptr<IRHIPipelineState> CreatePipelineState(const RHIPipelineStateDesc& desc,
-                                                                                     IRHIShader* vertexShader,
-                                                                                     IRHIShader* pixelShader) override;
+                std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc& desc) override;
+                std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc& desc) override;
+                std::unique_ptr<IRHITexture> WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc) override;
+                std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc& desc) override;
+                std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc& desc) override;
+                std::unique_ptr<IRHIPipelineState> CreatePipelineState(const RHIPipelineStateDesc& desc,
+                                                                       IRHIShader* vertexShader,
+                                                                       IRHIShader* pixelShader) override;
 
                 // -- D3D12-specific: Deferred GPU resource release ----------------------
                 // These enqueue GPU resources for deferred deletion (fence-synchronized)
@@ -111,7 +110,7 @@ namespace Spark
                 // -- IRHIDevice: Command lists --------------------------------------------
 
                 IRHICommandList* GetImmediateCommandList() override;
-                [[nodiscard]] std::unique_ptr<IRHICommandList> CreateDeferredCommandList() override;
+                std::unique_ptr<IRHICommandList> CreateDeferredCommandList() override;
                 void ExecuteCommandList(IRHICommandList* commandList) override;
 
                 // -- IRHIDevice: Frame management -----------------------------------------

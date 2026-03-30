@@ -10,7 +10,6 @@
 
 #include "ParallelSystemExecutor.h"
 #include "../../../Core/FaultIsolation.h"
-#include "../../../Utils/LogMacros.h"
 #include "../../../Utils/SparkConsole.h"
 
 #include <algorithm>
@@ -19,17 +18,12 @@
 namespace Spark::ECS
 {
 
-    // Forward declaration for logging in RegisterSystem
-    static const char* StageToString(SystemStage stage);
-
     // ============================================================================
     // Registration
     // ============================================================================
 
     void StageBasedExecutor::RegisterSystem(const std::string& name, SystemStage stage, std::function<void(float)> fn)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "StageBasedExecutor: Registered system '%s' in stage '%s'",
-                        name.c_str(), StageToString(stage));
         SystemEntry entry;
         entry.name = name;
         entry.stage = stage;
@@ -109,7 +103,6 @@ namespace Spark::ECS
 
     void StageBasedExecutor::Shutdown()
     {
-        SPARK_LOG_INFO(Spark::LogCategory::ECS, "StageBasedExecutor: Shutting down (%zu systems)", m_systems.size());
         m_systems.clear();
     }
 

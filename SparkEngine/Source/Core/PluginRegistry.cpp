@@ -6,7 +6,6 @@
 #include "PluginRegistry.h"
 
 #include "FaultIsolation.h"
-#include "../Utils/LogMacros.h"
 
 #include <format>
 #include <vector>
@@ -46,20 +45,14 @@ namespace Spark
             plugins.push_back(desc);
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "PluginRegistry: Initializing %zu plugin(s)", plugins.size());
-
         // Initialize in reverse so the first-declared plugin initializes first
         for (auto it = plugins.rbegin(); it != plugins.rend(); ++it)
         {
             if ((*it)->initFn)
             {
-                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "PluginRegistry: Initializing plugin '%s'",
-                                (*it)->name ? (*it)->name : "(unnamed)");
                 (*it)->initFn();
             }
         }
-
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "PluginRegistry: All plugins initialized");
     }
 
     void PluginRegistry::UpdateAll(float deltaTime)
@@ -76,20 +69,14 @@ namespace Spark
 
     void PluginRegistry::ShutdownAll()
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "PluginRegistry: Shutting down all plugins");
-
         // Shutdown in registration order (LIFO = reverse of init order)
         for (auto* desc = s_head; desc != nullptr; desc = desc->next)
         {
             if (desc->shutdownFn)
             {
-                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "PluginRegistry: Shutting down plugin '%s'",
-                                desc->name ? desc->name : "(unnamed)");
                 desc->shutdownFn();
             }
         }
-
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "PluginRegistry: All plugins shut down");
     }
 
     uint32_t PluginRegistry::GetPluginCount()

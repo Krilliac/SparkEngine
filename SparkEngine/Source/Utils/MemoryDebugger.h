@@ -96,7 +96,6 @@ namespace Spark
     class MemoryDebugger
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<MemoryDebugger>() instead")]]
         static MemoryDebugger& GetInstance()
         {
             static MemoryDebugger instance;

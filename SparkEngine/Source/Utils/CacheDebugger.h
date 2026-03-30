@@ -59,7 +59,6 @@ namespace Spark
     class CacheDebugger
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<CacheDebugger>() instead")]]
         static CacheDebugger& GetInstance()
         {
             static CacheDebugger instance;

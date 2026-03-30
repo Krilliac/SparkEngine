@@ -79,7 +79,6 @@ namespace Spark::Graphics
     class GPUClusterCulling
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<GPUClusterCulling>() instead")]]
         static GPUClusterCulling& GetInstance()
         {
             static GPUClusterCulling instance;

@@ -218,7 +218,7 @@ namespace Spark
             return value ? "true" : "false";
         }
 
-        [[nodiscard]] inline std::optional<int> ParseInt(const std::string& str)
+        inline std::optional<int> ParseInt(const std::string& str)
         {
             try
             {
@@ -233,7 +233,7 @@ namespace Spark
             return std::nullopt;
         }
 
-        [[nodiscard]] inline std::optional<float> ParseFloat(const std::string& str)
+        inline std::optional<float> ParseFloat(const std::string& str)
         {
             try
             {
@@ -248,7 +248,7 @@ namespace Spark
             return std::nullopt;
         }
 
-        [[nodiscard]] inline std::optional<bool> ParseBool(const std::string& str)
+        inline std::optional<bool> ParseBool(const std::string& str)
         {
             std::string lower = ToLower(Trim(str));
             if (lower == "true" || lower == "1" || lower == "yes" || lower == "on")

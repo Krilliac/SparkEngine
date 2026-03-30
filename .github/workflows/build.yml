@@ -39,45 +39,10 @@ jobs:
         find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
           -not -path '*/Metal/*' \
           \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
-          xargs clang-format --dry-run --Werror 2>&1 | tee format-check.log || {
+          xargs clang-format --dry-run --Werror 2>&1 || {
             echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
             exit 1
           }
-
-    - name: Report errors to PR
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) {
-            const branch = context.ref?.replace('refs/heads/', '');
-            if (branch) {
-              const prs = await github.rest.pulls.list({
-                owner: context.repo.owner, repo: context.repo.repo,
-                head: `${context.repo.owner}:${branch}`, state: 'open'
-              });
-              prNumber = prs.data[0]?.number;
-            }
-          }
-          if (!prNumber) return;
-
-          const fs = require('fs');
-          let body = `## :x: check-format failed\n\nFormatting violations found. Run \`clang-format -i\` on the listed files.\n\n`;
-          try {
-            const log = fs.readFileSync('format-check.log', 'utf8');
-            const issues = log.split('\n').filter(l => /warning:|error:/.test(l));
-            if (issues.length > 0) {
-              body += `\`\`\`\n${issues.slice(0, 40).join('\n')}\n\`\`\`\n`;
-            }
-          } catch (e) {}
-          if (!body.includes('```')) {
-            body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          }
-          await github.rest.issues.createComment({
-            owner: context.repo.owner, repo: context.repo.repo,
-            issue_number: prNumber, body: body.slice(0, 65000)
-          });
 
   # ===========================================================================
   # Prompt System Validation — anti-drift, overload prevention, stale detection
@@ -96,9 +61,6 @@ jobs:
   # ===========================================================================
   build-linux-asan:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash -o pipefail {0}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
@@ -132,38 +94,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
     - name: Build
-      id: build
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
-    - name: Report build errors to PR
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) {
-            const branch = context.ref?.replace('refs/heads/', '');
-            if (branch) {
-              const prs = await github.rest.pulls.list({
-                owner: context.repo.owner, repo: context.repo.repo,
-                head: `${context.repo.owner}:${branch}`, state: 'open'
-              });
-              prNumber = prs.data[0]?.number;
-            }
-          }
-          if (!prNumber) return;
-          const fs = require('fs');
-          let body = `## :x: build-linux-asan — build failed\n\n`;
-          try {
-            const log = fs.readFileSync('cmake-build.log', 'utf8');
-            const issues = log.split('\n').filter(l => /error[:\s]|fatal error/i.test(l));
-            if (issues.length > 0) body += `\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`;
-          } catch (e) {}
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
-
     - name: Run Tests under ASan + UBSan + LSan
-      id: test
       env:
         ASAN_OPTIONS: detect_leaks=1:halt_on_error=0:print_stats=1:check_initialization_order=1
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=0
@@ -173,34 +106,39 @@ jobs:
         ./bin/SparkTests --output-file asan-ubsan-lsan-results.txt 2>&1 | tee asan-console.txt
         cat asan-console.txt >> asan-ubsan-lsan-results.txt || true
 
-    - name: Report test errors to PR
-      if: failure() && steps.test.outcome == 'failure'
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:
         script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) {
-            const branch = context.ref?.replace('refs/heads/', '');
-            if (branch) {
-              const prs = await github.rest.pulls.list({
-                owner: context.repo.owner, repo: context.repo.repo,
-                head: `${context.repo.owner}:${branch}`, state: 'open'
-              });
-              prNumber = prs.data[0]?.number;
-            }
-          }
-          if (!prNumber) return;
           const fs = require('fs');
-          let body = `## :x: build-linux-asan — tests failed\n\n`;
-          for (const [label, file] of [['Sanitizer Output', 'build/asan-console.txt']]) {
+          let body = `## :x: build-linux-asan failed\n\n`;
+
+          for (const [label, file] of [
+            ['Build Output', 'cmake-build.log'],
+            ['Sanitizer Output', 'build/asan-console.txt']
+          ]) {
             try {
               const log = fs.readFileSync(file, 'utf8');
-              const issues = log.split('\n').filter(l => /error[:\s]|FAILED|FAIL:|SUMMARY:|LeakSanitizer|AddressSanitizer|UndefinedBehavior/i.test(l));
-              if (issues.length > 0) body += `### ${label}\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n\n`;
-            } catch (e) {}
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error|ERROR:|SUMMARY:|LeakSanitizer|AddressSanitizer|UndefinedBehavior/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
           }
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Upload ASan + UBSan + LSan report
       if: always()
@@ -215,9 +153,6 @@ jobs:
   # ===========================================================================
   build-linux-tsan:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash -o pipefail {0}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
@@ -251,25 +186,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 
     - name: Build
-      id: build
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
-    - name: Report build errors to PR
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
-          const fs = require('fs');
-          let body = `## :x: build-linux-tsan — build failed\n\n`;
-          try { const log = fs.readFileSync('cmake-build.log', 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|fatal error/i.test(l)); if (issues.length > 0) body += `\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`; } catch (e) {}
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
-
     - name: Run Tests under TSan
-      id: test
       env:
         TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt
       run: |
@@ -277,19 +196,39 @@ jobs:
         ./bin/SparkTests --output-file tsan-results.txt 2>&1 | tee tsan-console.txt
         cat tsan-console.txt >> tsan-results.txt || true
 
-    - name: Report test errors to PR
-      if: failure() && steps.test.outcome == 'failure'
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:
         script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
           const fs = require('fs');
-          let body = `## :x: build-linux-tsan — tests failed\n\n`;
-          try { const log = fs.readFileSync('build/tsan-console.txt', 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|FAILED|FAIL:|ThreadSanitizer|data race/i.test(l)); if (issues.length > 0) body += `\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`; } catch (e) {}
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
+          let body = `## :x: build-linux-tsan failed\n\n`;
+
+          for (const [label, file] of [
+            ['Build Output', 'cmake-build.log'],
+            ['Sanitizer Output', 'build/tsan-console.txt']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error|WARNING:|ThreadSanitizer|data race/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Upload TSan report
       if: always()
@@ -311,9 +250,6 @@ jobs:
   build-linux-msan:
     runs-on: ubuntu-24.04
     continue-on-error: true
-    defaults:
-      run:
-        shell: bash -o pipefail {0}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
@@ -350,24 +286,10 @@ jobs:
       run: cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure()
+      if: failure() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:
         script: |
-          // Find the PR number (works for both push and pull_request events)
-          let prNumber = context.issue?.number;
-          if (!prNumber) {
-            const branch = context.ref?.replace('refs/heads/', '');
-            if (branch) {
-              const prs = await github.rest.pulls.list({
-                owner: context.repo.owner, repo: context.repo.repo,
-                head: `${context.repo.owner}:${branch}`, state: 'open'
-              });
-              prNumber = prs.data[0]?.number;
-            }
-          }
-          if (!prNumber) return; // No associated PR found
-
           const fs = require('fs');
           let body = `## :x: build-linux-msan failed\n\n`;
           try {
@@ -379,15 +301,14 @@ jobs:
               body += `### Build Output\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`;
             }
           } catch (e) {}
-          if (!body.includes('```')) {
-            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
           }
-          await github.rest.issues.createComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: prNumber,
-            body: body.slice(0, 65000)
-          });
 
     - name: Run Tests under MSan
       env:
@@ -430,43 +351,46 @@ jobs:
       run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log
 
     - name: Build
-      id: build
       run: cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
 
-    - name: Report build errors to PR
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
-          const fs = require('fs');
-          let body = `## :x: build-windows-vs2022 (${{ matrix.config }}) — build failed\n\n`;
-          for (const [label, file] of [['CMake Configure', 'cmake-configure.log'], ['Build Output', 'cmake-build.log']]) {
-            try { const log = fs.readFileSync(file, 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|warning[:\s]|fatal error/i.test(l)); if (issues.length > 0) body += `### ${label}\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n\n`; } catch (e) {}
-          }
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
-
     - name: Run Tests
-      id: test
       if: matrix.config == 'Release'
       run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure 2>&1 | tee test-results.log
 
-    - name: Report test errors to PR
-      if: failure() && steps.test.outcome == 'failure'
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:
         script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
           const fs = require('fs');
-          let body = `## :x: build-windows-vs2022 (${{ matrix.config }}) — tests failed\n\n`;
-          try { const log = fs.readFileSync('test-results.log', 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|FAILED|FAIL:/i.test(l)); if (issues.length > 0) body += `\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`; } catch (e) {}
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
+          let body = `## :x: build-windows-vs2022 (${{ matrix.config }}) failed\n\n`;
+
+          for (const [label, file] of [
+            ['CMake Configure', 'cmake-configure.log'],
+            ['Build Output', 'cmake-build.log'],
+            ['Test Results', 'test-results.log']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -550,9 +474,6 @@ jobs:
   # ===========================================================================
   build-linux-gcc:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash -o pipefail {0}
     strategy:
       fail-fast: true
       matrix:
@@ -587,42 +508,47 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      id: build
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
-    - name: Report build errors to PR
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
-          const fs = require('fs');
-          let body = `## :x: build-linux-gcc (${{ matrix.config }}) — build failed\n\n`;
-          for (const [label, file] of [['CMake Configure', 'cmake-configure.log'], ['Build Output', 'cmake-build.log']]) {
-            try { const log = fs.readFileSync(file, 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|warning[:\s]|fatal error/i.test(l)); if (issues.length > 0) body += `### ${label}\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n\n`; } catch (e) {}
-          }
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
-
     - name: Run Tests
-      id: test
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
-    - name: Report test errors to PR
-      if: failure() && steps.test.outcome == 'failure'
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:
         script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
           const fs = require('fs');
-          let body = `## :x: build-linux-gcc (${{ matrix.config }}) — tests failed\n\n`;
-          try { const log = fs.readFileSync('test-results.log', 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|FAILED|FAIL:/i.test(l)); if (issues.length > 0) body += `\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`; } catch (e) {}
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
+          const maxLen = 30000;
+          let body = `## :x: build-linux-gcc (${{ matrix.config }}) failed\n\n`;
+
+          for (const [label, file] of [
+            ['CMake Configure', 'cmake-configure.log'],
+            ['Build Output', 'cmake-build.log'],
+            ['Test Results', 'test-results.log']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              // Extract errors and warnings
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-maxLen)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist — step didn't run */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -645,9 +571,6 @@ jobs:
   # ===========================================================================
   build-linux-clang:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash -o pipefail {0}
     strategy:
       fail-fast: true
       matrix:
@@ -682,42 +605,45 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      id: build
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
-    - name: Report build errors to PR
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
-          const fs = require('fs');
-          let body = `## :x: build-linux-clang (${{ matrix.config }}) — build failed\n\n`;
-          for (const [label, file] of [['CMake Configure', 'cmake-configure.log'], ['Build Output', 'cmake-build.log']]) {
-            try { const log = fs.readFileSync(file, 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|warning[:\s]|fatal error/i.test(l)); if (issues.length > 0) body += `### ${label}\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n\n`; } catch (e) {}
-          }
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
-
     - name: Run Tests
-      id: test
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
-    - name: Report test errors to PR
-      if: failure() && steps.test.outcome == 'failure'
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:
         script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
           const fs = require('fs');
-          let body = `## :x: build-linux-clang (${{ matrix.config }}) — tests failed\n\n`;
-          try { const log = fs.readFileSync('test-results.log', 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|FAILED|FAIL:/i.test(l)); if (issues.length > 0) body += `\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`; } catch (e) {}
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
+          let body = `## :x: build-linux-clang (${{ matrix.config }}) failed\n\n`;
+
+          for (const [label, file] of [
+            ['CMake Configure', 'cmake-configure.log'],
+            ['Build Output', 'cmake-build.log'],
+            ['Test Results', 'test-results.log']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -742,9 +668,6 @@ jobs:
   build-linux-mingw-wine:
     runs-on: ubuntu-24.04
     continue-on-error: true
-    defaults:
-      run:
-        shell: bash -o pipefail {0}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
@@ -780,24 +703,7 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build (Windows .exe via MinGW)
-      id: build
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
-
-    - name: Report build errors to PR
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
-          const fs = require('fs');
-          let body = `## :warning: build-linux-mingw-wine — build failed\n\n> This is a **non-blocking** job. MinGW cross-compilation is experimental.\n\n`;
-          for (const [label, file] of [['CMake Configure', 'cmake-configure.log'], ['Build Output', 'cmake-build.log']]) {
-            try { const log = fs.readFileSync(file, 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|fatal error/i.test(l)); if (issues.length > 0) body += `### ${label}\n\`\`\`\n${issues.slice(-40).join('\n').slice(-20000)}\n\`\`\`\n\n`; } catch (e) {}
-          }
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
 
     - name: Setup Wine prefix and DXVK
       run: |
@@ -805,7 +711,6 @@ jobs:
         tools/wine-run.sh --setup-only
 
     - name: Run Tests under Wine
-      id: test
       env:
         WINEPREFIX: ${{ github.workspace }}/build/.wineprefix
         WINEDEBUG: -all
@@ -816,19 +721,41 @@ jobs:
           true
         }
 
-    - name: Report test errors to PR
-      if: failure() && steps.test.outcome == 'failure'
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:
         script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
           const fs = require('fs');
-          let body = `## :warning: build-linux-mingw-wine — tests failed\n\n> This is a **non-blocking** job.\n\n`;
-          try { const log = fs.readFileSync('wine-test-results.txt', 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|FAILED|FAIL:/i.test(l)); if (issues.length > 0) body += `\`\`\`\n${issues.slice(-40).join('\n').slice(-20000)}\n\`\`\`\n`; } catch (e) {}
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
+          let body = `## :warning: build-linux-mingw-wine failed\n\n`;
+          body += `> This is a **non-blocking** job. MinGW cross-compilation + Wine testing is experimental.\n\n`;
+
+          for (const [label, file] of [
+            ['CMake Configure', 'cmake-configure.log'],
+            ['Build Output', 'cmake-build.log'],
+            ['Wine Test Results', 'wine-test-results.txt']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-40).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-20000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Upload test results
       if: always()
@@ -869,43 +796,47 @@ jobs:
           -DENABLE_METAL=OFF 2>&1 | tee cmake-configure.log
 
     - name: Build
-      id: build
       run: cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
 
-    - name: Report build errors to PR
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
-          const fs = require('fs');
-          let body = `## :warning: build-macos (${{ matrix.config }}) — build failed\n\n> This is a **non-blocking** job. macOS support is experimental.\n\n`;
-          for (const [label, file] of [['CMake Configure', 'cmake-configure.log'], ['Build Output', 'cmake-build.log']]) {
-            try { const log = fs.readFileSync(file, 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|warning[:\s]|fatal error/i.test(l)); if (issues.length > 0) body += `### ${label}\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n\n`; } catch (e) {}
-          }
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
-
     - name: Run Tests
-      id: test
       if: matrix.config == 'Release'
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
-    - name: Report test errors to PR
-      if: failure() && steps.test.outcome == 'failure'
+    - name: Report errors to PR
+      if: failure() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:
         script: |
-          let prNumber = context.issue?.number;
-          if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-          if (!prNumber) return;
           const fs = require('fs');
-          let body = `## :warning: build-macos (${{ matrix.config }}) — tests failed\n\n> This is a **non-blocking** job.\n\n`;
-          try { const log = fs.readFileSync('test-results.log', 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|FAILED|FAIL:/i.test(l)); if (issues.length > 0) body += `\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`; } catch (e) {}
-          if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-          await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
+          let body = `## :warning: build-macos (${{ matrix.config }}) failed\n\n`;
+          body += `> This is a **non-blocking** job. macOS support is experimental.\n\n`;
+
+          for (const [label, file] of [
+            ['CMake Configure', 'cmake-configure.log'],
+            ['Build Output', 'cmake-build.log'],
+            ['Test Results', 'test-results.log']
+          ]) {
+            try {
+              const log = fs.readFileSync(file, 'utf8');
+              const lines = log.split('\n');
+              const issues = lines.filter(l =>
+                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+              );
+              if (issues.length > 0) {
+                const snippet = issues.slice(-80).join('\n');
+                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
+              }
+            } catch (e) { /* file doesn't exist */ }
+          }
+
+          if (body.includes('```')) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000)
+            });
+          }
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
@@ -924,9 +855,6 @@ jobs:
       contents: read
       pull-requests: write
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash -o pipefail {0}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -946,74 +874,21 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
-            -DBUILD_TESTS=ON \
+            -DBUILD_TESTS=ON
       - name: Build
-        id: build
-        run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
-      - name: Report build errors to PR
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            let prNumber = context.issue?.number;
-            if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-            if (!prNumber) return;
-            const fs = require('fs');
-            let body = `## :x: Code Coverage (GCC) — build failed\n\n`;
-            try { const log = fs.readFileSync('cmake-build.log', 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|fatal error/i.test(l)); if (issues.length > 0) body += `\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`; } catch (e) {}
-            if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
+        run: cmake --build build --parallel $(nproc)
       - name: Test
-        id: test
-        run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
-      - name: Report test errors to PR
-        if: failure() && steps.test.outcome == 'failure'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            let prNumber = context.issue?.number;
-            if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-            if (!prNumber) return;
-            const fs = require('fs');
-            let body = `## :x: Code Coverage (GCC) — tests failed\n\n`;
-            try { const log = fs.readFileSync('test-results.log', 'utf8'); const issues = log.split('\n').filter(l => /error[:\s]|FAILED|FAIL:/i.test(l)); if (issues.length > 0) body += `\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`; } catch (e) {}
-            if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
+        run: cd build && ./bin/SparkTests 2>&1 | tail -5
       - name: Generate coverage
-        id: coverage
         run: |
           lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,mismatch,gcov,negative --rc geninfo_unexecuted_blocks=1
           lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused,negative
           lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
-      - name: Report coverage errors to PR
-        if: failure() && steps.coverage.outcome == 'failure'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            let prNumber = context.issue?.number;
-            if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
-            if (!prNumber) return;
-            let body = `## :x: Code Coverage (GCC) — coverage generation failed\n\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
-            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body });
       - name: Post coverage summary to PR
-        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
-            // Find the PR number (works for both push and pull_request events)
-            let prNumber = context.issue?.number;
-            if (!prNumber) {
-              const branch = context.ref?.replace('refs/heads/', '');
-              if (branch) {
-                const prs = await github.rest.pulls.list({
-                  owner: context.repo.owner, repo: context.repo.repo,
-                  head: `${context.repo.owner}:${branch}`, state: 'open'
-                });
-                prNumber = prs.data[0]?.number;
-              }
-            }
-            if (!prNumber) return; // No associated PR found
-
             const fs = require('fs');
             try {
               const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
@@ -1027,7 +902,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: prNumber,
+                issue_number: context.issue.number,
                 body: body.slice(0, 65000)
               });
             } catch (e) {

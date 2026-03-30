@@ -48,7 +48,7 @@ namespace Spark
         // =============================================================================
 
         /// Read entire text file into a string. Returns nullopt on failure.
-        [[nodiscard]] inline std::optional<std::string> ReadTextFile(const std::string& path)
+        inline std::optional<std::string> ReadTextFile(const std::string& path)
         {
             std::ifstream file(path, std::ios::in);
             if (!file.is_open())
@@ -69,7 +69,7 @@ namespace Spark
         }
 
         /// Read entire binary file. Returns nullopt on failure.
-        [[nodiscard]] inline std::optional<std::vector<uint8_t>> ReadBinaryFile(const std::string& path)
+        inline std::optional<std::vector<uint8_t>> ReadBinaryFile(const std::string& path)
         {
             std::ifstream file(path, std::ios::in | std::ios::binary | std::ios::ate);
             if (!file.is_open())
@@ -154,7 +154,7 @@ namespace Spark
             return fs::is_directory(path, ec);
         }
 
-        [[nodiscard]] inline std::optional<uintmax_t> GetFileSize(const std::string& path)
+        inline std::optional<uintmax_t> GetFileSize(const std::string& path)
         {
             std::error_code ec;
             auto size = fs::file_size(path, ec);

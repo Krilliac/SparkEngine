@@ -65,7 +65,6 @@ namespace Spark
         class ConstantBufferDiffManager
         {
           public:
-            [[deprecated("Use EngineContext::Get()->GetSystem<ConstantBufferDiffManager>() instead")]]
             static ConstantBufferDiffManager& GetInstance()
             {
                 static ConstantBufferDiffManager instance;

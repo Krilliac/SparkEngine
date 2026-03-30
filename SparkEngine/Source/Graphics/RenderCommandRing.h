@@ -176,7 +176,6 @@ namespace Spark
         class RenderCommandQueue
         {
           public:
-            [[deprecated("Use EngineContext::Get()->GetSystem<RenderCommandQueue>() instead")]]
             static RenderCommandQueue& GetInstance()
             {
                 static RenderCommandQueue instance;

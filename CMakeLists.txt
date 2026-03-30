@@ -155,11 +155,8 @@ endforeach()
 # 6) Compiler options (platform-specific)
 # ---------------------------------------------------------------------
 if(MSVC)
-    # /W3 is set per-target (not globally) to avoid D9025 warnings when
-    # third-party targets like Jolt use /w or /W0 to suppress their warnings.
-    # /MP /bigobj /Zi apply globally since all targets benefit from them.
     add_compile_options(
-        /MP /bigobj
+        /W3 /MP /bigobj
         /Zi          # Always generate PDB debug info (enables stack trace symbol resolution)
         /wd4005  # Macro redefinition
         /wd4996  # Deprecated functions
@@ -167,8 +164,6 @@ if(MSVC)
         /wd4267  # size_t conversion warnings
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
-    # Warning level set per-target to avoid conflicts with third-party /w flags
-    set(SPARK_MSVC_WARNING_OPTIONS /W3)
     # /DEBUG linker flag embeds PDB reference in the executable so SymFromAddr
     # can locate symbols at runtime. Does not affect binary performance.
     add_link_options(/DEBUG)
@@ -596,22 +591,6 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui")
     message(STATUS "Found Dear ImGui")
 endif()
 
-# Microsoft DirectXMath (cross-platform SIMD math)
-# On Linux/macOS: used instead of scalar stubs (full SIMD via SSE/AVX/NEON).
-# On MinGW: the MinGW toolchain doesn't ship DirectXMath, so we provide it
-# from ThirdParty alongside our SAL shim.
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/DirectXMath/Inc/DirectXMath.h")
-    if(NOT WIN32 OR MINGW)
-        # SAL annotation stubs must be on the include path BEFORE DirectXMath/Inc
-        # so that DirectXMath.h's own #include "sal.h" resolves to our shim
-        list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/sal")
-        list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/DirectXMath/Inc")
-        message(STATUS "Found DirectXMath (cross-platform SIMD) + SAL shim")
-    endif()
-elseif(NOT WIN32)
-    message(WARNING "DirectXMath not found — using scalar fallback stubs. Run 'git submodule update --init --recursive' for SIMD support.")
-endif()
-
 # AngelScript
 if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
     list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
@@ -817,11 +796,6 @@ endif()
 # 9a) SparkEngineLib - Static library with all engine systems
 add_library(SparkEngineLib STATIC ${SPARK_ENGINE_LIB_SOURCES})
 set_target_properties(SparkEngineLib PROPERTIES OUTPUT_NAME "SparkEngineLib")
-
-# Apply MSVC warning level to engine targets (not globally, to avoid D9025 with third-party /w flags)
-if(MSVC AND SPARK_MSVC_WARNING_OPTIONS)
-    target_compile_options(SparkEngineLib PRIVATE ${SPARK_MSVC_WARNING_OPTIONS})
-endif()
 
 # 9b) SparkEngine - Executable (entry point + module loader)
 if(WIN32)

@@ -170,7 +170,6 @@ namespace Spark::Scripting
     {
       public:
         /** @brief Get the singleton instance. */
-        [[deprecated("Use EngineContext::Get()->GetSystem<ScriptHookManager>() instead")]]
         static ScriptHookManager& GetInstance();
 
         /**

@@ -121,7 +121,6 @@ namespace Spark::UI
     class UIFactory
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<UIFactory>() instead")]]
         static UIFactory& GetInstance()
         {
             static UIFactory instance;

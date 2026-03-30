@@ -66,7 +66,6 @@ struct asSMessageInfo;
 #include <unordered_map>
 #include <string>
 #include "../ECS/Components.h"
-#include "IScriptEngine.h"
 
 /**
  * @brief High-level AngelScript engine wrapper for gameplay scripting
@@ -84,7 +83,7 @@ struct asSMessageInfo;
  * @warning Script contexts are not thread-safe. All script calls must happen
  *          on the same thread (typically the main game loop thread).
  */
-class AngelScriptEngine : public Spark::Scripting::IScriptEngine
+class AngelScriptEngine
 {
   public:
     /**
@@ -95,7 +94,7 @@ class AngelScriptEngine : public Spark::Scripting::IScriptEngine
      *
      * @return true if initialization succeeded, false on failure
      */
-    bool Initialize() override;
+    bool Initialize();
 
     /**
      * @brief Shut down the engine and release all script resources
@@ -103,7 +102,7 @@ class AngelScriptEngine : public Spark::Scripting::IScriptEngine
      * Detaches all entity scripts, releases all modules and contexts, and
      * destroys the AngelScript engine instance.
      */
-    void Shutdown() override;
+    void Shutdown();
 
     // ========================================================================
     // Script Compilation
@@ -119,7 +118,7 @@ class AngelScriptEngine : public Spark::Scripting::IScriptEngine
      * @param scriptPath Path to the .as script file
      * @return true if compilation succeeded, false on error
      */
-    bool CompileScriptFile(const std::string& scriptPath) override;
+    bool CompileScriptFile(const std::string& scriptPath);
 
     /**
      * @brief Compile a script from an in-memory string
@@ -131,7 +130,7 @@ class AngelScriptEngine : public Spark::Scripting::IScriptEngine
      * @param moduleName Unique name for the compiled module
      * @return true if compilation succeeded, false on error
      */
-    bool CompileScriptFromString(const std::string& script, const std::string& moduleName) override;
+    bool CompileScriptFromString(const std::string& script, const std::string& moduleName);
 
     // ========================================================================
     // Entity Script Binding
@@ -149,7 +148,7 @@ class AngelScriptEngine : public Spark::Scripting::IScriptEngine
      * @param moduleName Name of the compiled module containing the class
      * @return true if the script was successfully attached, false on error
      */
-    bool AttachScript(EntityID entity, const std::string& className, const std::string& moduleName) override;
+    bool AttachScript(EntityID entity, const std::string& className, const std::string& moduleName);
 
     /**
      * @brief Detach and destroy a script instance from an entity
@@ -159,7 +158,7 @@ class AngelScriptEngine : public Spark::Scripting::IScriptEngine
      *
      * @param entity The ECS entity ID to detach the script from
      */
-    void DetachScript(EntityID entity) override;
+    void DetachScript(EntityID entity);
 
     // ========================================================================
     // Lifecycle Callback Dispatch
@@ -169,21 +168,21 @@ class AngelScriptEngine : public Spark::Scripting::IScriptEngine
      * @brief Call the script's Start() method for an entity (called once)
      * @param entity The entity whose script Start() should be invoked
      */
-    void CallStart(EntityID entity) override;
+    void CallStart(EntityID entity);
 
     /**
      * @brief Call the script's Update(float) method for an entity (called every frame)
      * @param entity    The entity whose script Update() should be invoked
      * @param deltaTime Time elapsed since the last frame in seconds
      */
-    void CallUpdate(EntityID entity, float deltaTime) override;
+    void CallUpdate(EntityID entity, float deltaTime);
 
     /**
      * @brief Call the script's OnCollision(EntityID) method for an entity
      * @param entity The entity whose script OnCollision() should be invoked
      * @param other  The entity ID of the other object in the collision
      */
-    void CallOnCollision(EntityID entity, EntityID other) override;
+    void CallOnCollision(EntityID entity, EntityID other);
 
     // ========================================================================
     // Error Handling and Singleton Access
@@ -193,21 +192,13 @@ class AngelScriptEngine : public Spark::Scripting::IScriptEngine
      * @brief Get the last error message from compilation or runtime
      * @return Error string, or empty string if no error has occurred
      */
-    std::string GetLastError() const override { return m_lastError; }
-
-    /** @brief Get the scripting backend name. */
-    const char* GetBackendName() const override { return "AngelScript"; }
+    std::string GetLastError() const { return m_lastError; }
 
     /**
      * @brief Get the global singleton instance
      * @return Pointer to the AngelScriptEngine instance, or nullptr if not created
-     * @deprecated Use EngineContext::Get()->GetSystem<AngelScriptEngine>() instead.
      */
-    [[deprecated("Use EngineContext::Get()->GetSystem<AngelScriptEngine>() instead")]]
-    static AngelScriptEngine* GetInstance()
-    {
-        return s_instance;
-    }
+    static AngelScriptEngine* GetInstance() { return s_instance; }
 
   private:
     static AngelScriptEngine* s_instance; ///< Singleton instance pointer

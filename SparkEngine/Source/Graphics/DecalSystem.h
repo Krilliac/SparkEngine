@@ -113,7 +113,6 @@ namespace Spark::Graphics
     class DecalSystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<DecalSystem>() instead")]]
         static DecalSystem& GetInstance();
 
         void Initialize(uint32_t maxDecals = 512);
