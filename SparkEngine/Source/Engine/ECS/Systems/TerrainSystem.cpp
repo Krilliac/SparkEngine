@@ -5,6 +5,7 @@
 
 #include "../../../Core/Platform.h"
 #include "TerrainSystem.h"
+#include "../../../Utils/LogMacros.h"
 #include "Utils/Validate.h"
 
 #include <algorithm>
@@ -60,6 +61,9 @@ namespace Spark::ECS
                 h = std::clamp(h, terrain.minHeight, terrain.maxHeight);
             }
         }
+
+        SPARK_LOG_EVERY_N(Spark::LogLevel::Trace, Spark::LogCategory::ECS, 600, "TerrainSystem: %u active terrains",
+                          m_activeTerrainCount);
     }
 
 } // namespace Spark::ECS

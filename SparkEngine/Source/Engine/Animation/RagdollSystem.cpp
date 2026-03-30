@@ -4,6 +4,7 @@
  */
 
 #include "RagdollSystem.h"
+#include "../../Utils/LogMacros.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -75,6 +76,9 @@ namespace Spark::Animation
         humanoid.AddJoint("UpperLeg_R", "LowerLeg_R", {-2.2f, 0.0f, 0.1f});
 
         RegisterDefinition("humanoid", humanoid);
+
+        SPARK_LOG_INFO(Spark::LogCategory::Animation, "RagdollSystem initialized with default humanoid definition "
+                                                      "(12 bones, 11 joints)");
     }
 
     void RagdollSystem::Update(float deltaTime)
@@ -94,6 +98,9 @@ namespace Spark::Animation
 
     void RagdollSystem::RegisterDefinition(const std::string& name, const RagdollDefinition& def)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Animation,
+                        "RagdollSystem: Registered definition '%s' (%zu bones, %zu joints)", name.c_str(),
+                        def.GetBones().size(), def.GetJoints().size());
         m_definitions[name] = def;
     }
 
@@ -104,8 +111,15 @@ namespace Spark::Animation
         auto defIt = m_definitions.find(defName);
         if (defIt == m_definitions.end())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Animation,
+                           "RagdollSystem: Cannot activate — definition '%s' not found for entity %u", defName.c_str(),
+                           entityId);
             return;
         }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Animation,
+                       "RagdollSystem: Activating ragdoll for entity %u (def='%s', blendTime=%.2f)", entityId,
+                       defName.c_str(), blendTime);
 
         RagdollInstance instance;
         instance.entityId = entityId;
@@ -128,8 +142,13 @@ namespace Spark::Animation
         auto it = m_instances.find(entityId);
         if (it == m_instances.end())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Animation,
+                           "RagdollSystem: Cannot deactivate — entity %u has no active ragdoll", entityId);
             return;
         }
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Animation,
+                        "RagdollSystem: Deactivating ragdoll for entity %u (blendTime=%.2f)", entityId, blendTime);
 
         if (blendTime > 0.0f)
         {
@@ -150,8 +169,13 @@ namespace Spark::Animation
         auto defIt = m_definitions.find(defName);
         if (defIt == m_definitions.end())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Animation,
+                           "RagdollSystem: Cannot activate partial — definition '%s' not found", defName.c_str());
             return;
         }
+        SPARK_LOG_DEBUG(Spark::LogCategory::Animation,
+                        "RagdollSystem: Activating partial ragdoll for entity %u (%zu bones)", entityId,
+                        boneNames.size());
 
         RagdollInstance instance;
         instance.entityId = entityId;

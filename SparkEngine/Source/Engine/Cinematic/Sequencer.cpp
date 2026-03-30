@@ -4,6 +4,7 @@
  */
 
 #include "Sequencer.h"
+#include "../../Utils/LogMacros.h"
 
 #include <sstream>
 
@@ -491,9 +492,13 @@ namespace Spark::Cinematic
     {
         if (m_playState == SequencePlayState::Paused)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Cinematic, "Sequence '%s': Resuming from pause at %.2fs",
+                            m_name.c_str(), m_currentTime);
             m_playState = SequencePlayState::Playing;
             return;
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Cinematic, "Sequence '%s': Playing (%zu tracks, duration=%.2fs)",
+                       m_name.c_str(), m_tracks.size(), GetDuration());
         m_currentTime = 0.0f;
         m_previousTime = 0.0f;
         m_playState = SequencePlayState::Playing;
@@ -502,11 +507,16 @@ namespace Spark::Cinematic
     void Sequence::Pause()
     {
         if (m_playState == SequencePlayState::Playing)
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Cinematic, "Sequence '%s': Paused at %.2fs", m_name.c_str(),
+                            m_currentTime);
             m_playState = SequencePlayState::Paused;
+        }
     }
 
     void Sequence::Stop()
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Cinematic, "Sequence '%s': Stopped", m_name.c_str());
         m_playState = SequencePlayState::Stopped;
         m_currentTime = 0.0f;
         m_previousTime = 0.0f;
@@ -645,6 +655,7 @@ namespace Spark::Cinematic
 
     Sequence* SequencerManager::CreateSequence(const std::string& name)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Cinematic, "SequencerManager: Creating sequence '%s'", name.c_str());
         auto seq = std::make_unique<Sequence>(name);
         auto* ptr = seq.get();
         m_sequences[name] = std::move(seq);
@@ -659,6 +670,7 @@ namespace Spark::Cinematic
 
     void SequencerManager::RemoveSequence(const std::string& name)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Cinematic, "SequencerManager: Removing sequence '%s'", name.c_str());
         m_sequences.erase(name);
     }
 
@@ -687,6 +699,8 @@ namespace Spark::Cinematic
 
     void SequencerManager::StopAll()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Cinematic, "SequencerManager: Stopping all sequences (%zu total)",
+                       m_sequences.size());
         for (auto& [name, seq] : m_sequences)
             seq->Stop();
     }

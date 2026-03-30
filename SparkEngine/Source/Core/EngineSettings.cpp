@@ -4,6 +4,7 @@
  */
 
 #include "EngineSettings.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include <filesystem>
@@ -57,14 +58,18 @@ bool EngineSettings::Load(const std::string& path)
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
 
     m_filePath = path.empty() ? FindSettingsPath() : path;
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineSettings: Loading from '%s'", m_filePath.c_str());
 
     if (m_config.Load(m_filePath))
     {
         ReadFromConfig();
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineSettings: Loaded successfully (%dx%d, vsync=%s)",
+                       m_graphics.windowWidth, m_graphics.windowHeight, m_graphics.vsync ? "on" : "off");
         return true;
     }
 
     // File doesn't exist or failed to parse - use defaults
+    SPARK_LOG_WARN(Spark::LogCategory::Core, "EngineSettings: File not found or parse failed, using defaults");
     PopulateDefaults();
     ReadFromConfig();
 
@@ -81,7 +86,16 @@ bool EngineSettings::Save() const
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
 
     WriteToConfig();
-    return m_config.Save(m_filePath);
+    bool result = m_config.Save(m_filePath);
+    if (result)
+    {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "EngineSettings: Saved to '%s'", m_filePath.c_str());
+    }
+    else
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineSettings: Failed to save to '%s'", m_filePath.c_str());
+    }
+    return result;
 }
 
 bool EngineSettings::SaveAs(const std::string& path) const
@@ -96,6 +110,7 @@ bool EngineSettings::SaveAs(const std::string& path) const
 void EngineSettings::ResetToDefaults()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "EngineSettings: Resetting all settings to defaults");
 
     m_graphics = GraphicsSettings{};
     m_audio = AudioSettings{};
