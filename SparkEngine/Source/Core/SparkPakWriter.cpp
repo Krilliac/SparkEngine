@@ -13,6 +13,15 @@
 #include <miniz.h>
 #endif
 
+// Use 64-bit file offset functions on Windows (long is 32-bit on MSVC)
+#ifdef _WIN32
+#define PAK_FSEEK(f, off, whence) _fseeki64((f), static_cast<int64_t>(off), (whence))
+#define PAK_FTELL(f) static_cast<uint64_t>(_ftelli64((f)))
+#else
+#define PAK_FSEEK(f, off, whence) std::fseek((f), static_cast<long>(off), (whence))
+#define PAK_FTELL(f) static_cast<uint64_t>(std::ftell((f)))
+#endif
+
 namespace Spark
 {
 
@@ -133,7 +142,7 @@ namespace Spark
         {
             WrittenEntry we;
             we.pathHash = PakFNV1a(staged.virtualPath);
-            we.dataOffset = static_cast<uint64_t>(std::ftell(file));
+            we.dataOffset = PAK_FTELL(file);
             we.originalSize = static_cast<uint32_t>(staged.originalData.size());
             we.compression = staged.compression;
             we.virtualPath = staged.virtualPath;
@@ -178,7 +187,7 @@ namespace Spark
         }
 
         // Compress TOC
-        header.tocOffset = static_cast<uint64_t>(std::ftell(file));
+        header.tocOffset = PAK_FTELL(file);
         header.tocRawSize = static_cast<uint32_t>(tocRaw.size());
 
 #ifdef SPARK_MINIZ_AVAILABLE
@@ -201,7 +210,7 @@ namespace Spark
         }
 
         // Rewrite header with final values
-        std::fseek(file, 0, SEEK_SET);
+        PAK_FSEEK(file, 0, SEEK_SET);
         std::fwrite(&header, sizeof(PakHeader), 1, file);
 
         std::fclose(file);

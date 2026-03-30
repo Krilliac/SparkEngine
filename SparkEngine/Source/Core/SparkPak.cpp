@@ -8,9 +8,19 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 
 #ifdef SPARK_MINIZ_AVAILABLE
 #include <miniz.h>
+#endif
+
+// Use 64-bit file offset functions on Windows (long is 32-bit on MSVC)
+#ifdef _WIN32
+#define PAK_FSEEK(f, off, whence) _fseeki64((f), static_cast<int64_t>(off), (whence))
+#define PAK_FTELL(f) static_cast<uint64_t>(_ftelli64((f)))
+#else
+#define PAK_FSEEK(f, off, whence) std::fseek((f), static_cast<long>(off), (whence))
+#define PAK_FTELL(f) static_cast<uint64_t>(std::ftell((f)))
 #endif
 
 namespace Spark
@@ -111,7 +121,7 @@ namespace Spark
 #endif
 
         // Seek to TOC
-        if (std::fseek(m_file, static_cast<long>(m_header.tocOffset), SEEK_SET) != 0)
+        if (PAK_FSEEK(m_file, m_header.tocOffset, SEEK_SET) != 0)
             return false;
 
         // Read compressed TOC blob
@@ -203,7 +213,7 @@ namespace Spark
         const auto& entry = it->second;
 
         // Seek and read compressed data
-        if (std::fseek(m_file, static_cast<long>(entry.dataOffset), SEEK_SET) != 0)
+        if (PAK_FSEEK(m_file, entry.dataOffset, SEEK_SET) != 0)
             return {};
 
         std::vector<uint8_t> compressed(entry.compressedSize);
