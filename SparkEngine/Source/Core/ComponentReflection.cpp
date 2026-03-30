@@ -33,7 +33,7 @@ namespace Spark
 
     bool SetFieldFromString(void* component, const FieldInfo& field, const std::string& value)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "SetFieldFromString: field='%s' value='%s'", field.name,
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "SetFieldFromString: field='%s' value='%s'", field.name.c_str(),
                         value.c_str());
         auto* dst = static_cast<char*>(component) + field.offset;
 
