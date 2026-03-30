@@ -11,13 +11,14 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
-#include "BuildPipeline.h"
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace SparkEditor
 {
+
+    class BuildPipeline; // forward — defined in BuildPipeline.h
 
     /** @brief Build, cook, and packaging configuration panel for standalone game builds. */
     class BuildCookPanel : public EditorPanel
@@ -133,7 +134,7 @@ namespace SparkEditor
         std::string m_buildStatus = "Idle";    ///< Current build phase description.
 
         /// @brief Async build orchestrator — manages CMake subprocess.
-        BuildPipeline m_pipeline;
+        std::unique_ptr<BuildPipeline> m_pipeline;
     };
 
 } // namespace SparkEditor

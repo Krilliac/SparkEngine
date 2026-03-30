@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "BuildCookPanel.h"
+
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -20,7 +22,7 @@
 namespace SparkEditor
 {
 
-    struct BuildSettings; // forward — defined in BuildCookPanel.h
+    using BuildSettings = BuildCookPanel::BuildSettings;
 
     /// @brief Result of a completed build.
     enum class BuildResult

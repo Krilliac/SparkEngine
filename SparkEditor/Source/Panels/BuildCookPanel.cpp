@@ -11,6 +11,7 @@
 #include <imgui.h>
 
 #include "BuildCookPanel.h"
+#include "BuildPipeline.h"
 #include "../Core/EditorIcons.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 
@@ -25,6 +26,7 @@ namespace SparkEditor
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Build & Cook panel\n";
+        m_pipeline = std::make_unique<BuildPipeline>();
         ApplyProfileDefaults(BuildProfile::Development);
         return true;
     }
@@ -32,9 +34,9 @@ namespace SparkEditor
     void BuildCookPanel::Update(float /*deltaTime*/)
     {
         // Poll the async BuildPipeline for log lines and progress
-        if (m_pipeline.IsRunning() || m_isBuildRunning)
+        if (m_pipeline && (m_pipeline->IsRunning() || m_isBuildRunning))
         {
-            auto lines = m_pipeline.DrainLogLines();
+            auto lines = m_pipeline->DrainLogLines();
             for (auto& line : lines)
             {
                 std::string level = "info";
@@ -45,13 +47,13 @@ namespace SparkEditor
                 m_buildLog.push_back({std::move(line.text), std::move(level)});
             }
 
-            m_buildProgress = m_pipeline.GetProgress();
-            m_buildStatus = m_pipeline.GetStatusText();
+            m_buildProgress = m_pipeline->GetProgress();
+            m_buildStatus = m_pipeline->GetStatusText();
 
-            if (!m_pipeline.IsRunning())
+            if (!m_pipeline->IsRunning())
             {
                 m_isBuildRunning = false;
-                auto result = m_pipeline.GetResult();
+                auto result = m_pipeline->GetResult();
                 if (result == BuildResult::Success)
                 {
                     m_buildLog.push_back({"Build completed successfully!", "info"});
@@ -397,7 +399,7 @@ namespace SparkEditor
                                   "info"});
             // Launch async build via BuildPipeline
             std::string projectRoot = std::filesystem::current_path().string();
-            if (m_pipeline.StartBuild(m_settings, projectRoot))
+            if (m_pipeline->StartBuild(m_settings, projectRoot))
             {
                 m_isBuildRunning = true;
                 m_buildProgress = 0.0f;
@@ -423,7 +425,7 @@ namespace SparkEditor
             m_buildLog.push_back(
                 {"Cooking assets for " + std::string(GetPlatformName(m_settings.platform)) + "...", "info"});
             std::string projectRoot = std::filesystem::current_path().string();
-            if (m_pipeline.StartCookOnly(m_settings, projectRoot))
+            if (m_pipeline->StartCookOnly(m_settings, projectRoot))
             {
                 m_isBuildRunning = true;
                 m_buildProgress = 0.0f;
@@ -441,13 +443,13 @@ namespace SparkEditor
             ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", m_buildStatus.c_str());
 
             // Cancel button — only visible during an active build
-            if (m_pipeline.IsRunning())
+            if (m_pipeline->IsRunning())
             {
                 ImGui::SameLine();
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
                 if (ImGui::Button(ICON_FA_TIMES " Cancel"))
                 {
-                    m_pipeline.Cancel();
+                    m_pipeline->Cancel();
                 }
                 ImGui::PopStyleColor();
             }

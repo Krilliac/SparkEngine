@@ -4,7 +4,6 @@
  */
 
 #include "BuildPipeline.h"
-#include "BuildCookPanel.h"
 
 #include <array>
 #include <cstdio>
