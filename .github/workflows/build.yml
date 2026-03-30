@@ -122,7 +122,6 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
-          -DBUILD_GAME_MODULES=OFF
           -DCMAKE_C_COMPILER=gcc \
           -DCMAKE_CXX_COMPILER=g++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -242,7 +241,6 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
-          -DBUILD_GAME_MODULES=OFF
           -DCMAKE_C_COMPILER=gcc \
           -DCMAKE_CXX_COMPILER=g++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -339,7 +337,6 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
-          -DBUILD_GAME_MODULES=OFF
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -584,7 +581,6 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
-          -DBUILD_GAME_MODULES=OFF
           -DCMAKE_C_COMPILER=gcc \
           -DCMAKE_CXX_COMPILER=g++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -680,7 +676,6 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
-          -DBUILD_GAME_MODULES=OFF
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -778,7 +773,6 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_TESTS=ON \
-          -DBUILD_GAME_MODULES=OFF
           -DENABLE_VULKAN=OFF \
           -DENABLE_OPENGL=OFF \
           -DENABLE_SDL2=OFF \
@@ -870,7 +864,6 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
-          -DBUILD_GAME_MODULES=OFF
           -DENABLE_VULKAN=OFF \
           -DENABLE_OPENGL=ON \
           -DENABLE_METAL=OFF 2>&1 | tee cmake-configure.log
@@ -954,7 +947,6 @@ jobs:
             -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DBUILD_TESTS=ON \
-            -DBUILD_GAME_MODULES=OFF
       - name: Build
         id: build
         run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log

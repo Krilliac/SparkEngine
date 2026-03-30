@@ -155,8 +155,8 @@ void GPUParticleSystem::Shutdown()
 {
     if (!m_initialized)
         return;
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUParticleSystem: Shutting down (%zu emitters)", m_emitters.size());
 #ifdef SPARK_PLATFORM_WINDOWS
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUParticleSystem: Shutting down (%zu emitters)", m_emitters.size());
     m_emitters.clear();
     m_emitCS.Reset();
     m_simulateCS.Reset();
