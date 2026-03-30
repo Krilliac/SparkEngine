@@ -14,6 +14,7 @@
 
 #include "RenderTarget.h"
 #include "Utils/Assert.h"
+#include "../Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/ScopeGuard.h"
@@ -75,6 +76,8 @@ HRESULT RenderTarget::Create(ID3D11Device* device)
     HRESULT hr = device->CreateTexture2D(&textureDesc, nullptr, &m_texture);
     if (FAILED(hr))
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "RenderTarget '%s': Failed to create texture (%ux%u, hr=0x%08lX)",
+                        m_desc.name.c_str(), m_desc.width, m_desc.height, static_cast<unsigned long>(hr));
         Spark::SimpleConsole::GetInstance().Log("Failed to create render target texture: " + m_desc.name, "ERROR");
         return hr;
     }
@@ -128,6 +131,9 @@ HRESULT RenderTarget::Create(ID3D11Device* device)
         }
     }
 
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderTarget '%s' created (%ux%u, samples=%u)", m_desc.name.c_str(),
+                    m_desc.width, m_desc.height, m_desc.sampleCount);
+
     std::string successMsg = "RenderTarget '" + m_desc.name + "' created successfully (" +
                              std::to_string(m_desc.width) + "x" + std::to_string(m_desc.height) + ")";
     Spark::SimpleConsole::GetInstance().Log(successMsg, "SUCCESS");
@@ -146,6 +152,8 @@ void RenderTarget::Destroy()
 
 HRESULT RenderTarget::Resize(ID3D11Device* device, uint32_t width, uint32_t height)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "RenderTarget '%s' resizing to %ux%u", m_desc.name.c_str(), width,
+                    height);
     m_desc.width = width;
     m_desc.height = height;
 

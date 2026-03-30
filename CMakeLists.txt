@@ -596,10 +596,18 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui")
     message(STATUS "Found Dear ImGui")
 endif()
 
-# Microsoft DirectXMath (cross-platform SIMD math — used on Linux/macOS instead of scalar stubs)
-if(NOT WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/DirectXMath/Inc/DirectXMath.h")
-    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/DirectXMath/Inc")
-    message(STATUS "Found DirectXMath (cross-platform SIMD)")
+# Microsoft DirectXMath (cross-platform SIMD math)
+# On Linux/macOS: used instead of scalar stubs (full SIMD via SSE/AVX/NEON).
+# On MinGW: the MinGW toolchain doesn't ship DirectXMath, so we provide it
+# from ThirdParty alongside our SAL shim.
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/DirectXMath/Inc/DirectXMath.h")
+    if(NOT WIN32 OR MINGW)
+        # SAL annotation stubs must be on the include path BEFORE DirectXMath/Inc
+        # so that DirectXMath.h's own #include "sal.h" resolves to our shim
+        list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/sal")
+        list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/DirectXMath/Inc")
+        message(STATUS "Found DirectXMath (cross-platform SIMD) + SAL shim")
+    endif()
 elseif(NOT WIN32)
     message(WARNING "DirectXMath not found — using scalar fallback stubs. Run 'git submodule update --init --recursive' for SIMD support.")
 endif()

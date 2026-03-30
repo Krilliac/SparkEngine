@@ -5,6 +5,7 @@
  * Extracted from AnimationSystem.cpp to keep each file focused on a single responsibility.
  */
 #include "../../Core/Platform.h"
+#include "../../Utils/LogMacros.h"
 #include "AnimationSystem.h"
 #include <cmath>
 
@@ -58,7 +59,11 @@ namespace Spark::Animation
         float lowerLen = XMVectorGetX(XMVector3Length(XMVectorSubtract(endPos, midPos)));
 
         if (upperLen < 1e-6f || lowerLen < 1e-6f)
+        {
+            SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Animation,
+                           "TwoBoneIK: Degenerate bone lengths (upper=%.6f, lower=%.6f)", upperLen, lowerLen);
             return;
+        }
 
         XMVECTOR rootToTarget = XMVectorSubtract(target, rootPos);
         float targetDist = XMVectorGetX(XMVector3Length(rootToTarget));

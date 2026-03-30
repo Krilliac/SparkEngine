@@ -4,6 +4,7 @@
  */
 
 #include "VirtualTexture.h"
+#include "../Utils/LogMacros.h"
 
 #include <algorithm>
 #include <format>
@@ -44,6 +45,8 @@ namespace Spark::Graphics
         m_pendingLoads.clear();
         m_initialized = true;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "VirtualTextureManager initialized (cacheSize=%u, tileSize=%u)",
+                       pageCacheSize, tileSize);
         return true;
     }
 
@@ -185,6 +188,8 @@ namespace Spark::Graphics
 
         uint32_t evicted = static_cast<uint32_t>(std::distance(eraseBegin, m_pageCache.end()));
         m_pageCache.erase(eraseBegin, m_pageCache.end());
+        SPARK_LOG_IF(Spark::LogLevel::Debug, Spark::LogCategory::Graphics, evicted > 0,
+                     "VirtualTexture: Evicted %u stale pages (threshold frame=%u)", evicted, evictThreshold);
 
         // If still over capacity, evict least-recently-used pages
         if (m_pageCache.size() > m_maxPages)
@@ -241,6 +246,8 @@ namespace Spark::Graphics
 
     void VirtualTextureManager::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "VirtualTextureManager shutting down (resident=%zu, pending=%zu)",
+                       m_pageCache.size(), m_pendingLoads.size());
         m_pageCache.clear();
         m_pendingLoads.clear();
         m_tileSize = 128;

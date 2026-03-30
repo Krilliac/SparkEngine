@@ -59,6 +59,11 @@ target_include_directories(SparkShaderCompiler PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
 )
 
+# ThirdParty include directories (DirectXMath, SAL shim, etc.)
+foreach(_tp_dir ${THIRDPARTY_INCLUDE_DIRS})
+    target_include_directories(SparkShaderCompiler PRIVATE "${_tp_dir}")
+endforeach()
+
 target_compile_features(SparkShaderCompiler PRIVATE cxx_std_23)
 
 # Platform-specific link libraries and definitions
