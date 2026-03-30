@@ -383,8 +383,17 @@ mod_validate <mod_id>  # Run validation checks on a mod
 
 ---
 
+## Virtual Filesystem & SparkPak Archives
+
+The mod system integrates with the VirtualFileSystem (`VirtualFileSystem.h`) which provides priority-based mount layering. Assets from mods override game assets, which override engine assets.
+
+SparkPak (.spk) archives can be mounted as VFS providers via `ArchiveResourceProvider`, allowing mods and DLC to be distributed as single archive files instead of loose directories. See [Asset Format Specifications](Asset-Format-Specifications#sparkpak-archive-format-spk) for the archive format details.
+
+**Source:** `SparkEngine/Source/Engine/Modding/VirtualFileSystem.h`, `SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h`
+
 ## See Also
 
 - [Scripting with AngelScript](Scripting-with-AngelScript) — Mod scripts
 - [Asset Pipeline](Asset-Pipeline) — Loading mod assets
+- [Asset Format Specifications](Asset-Format-Specifications) — SparkPak archive format
 - [Save System](Save-System) — Persisting mod configuration
