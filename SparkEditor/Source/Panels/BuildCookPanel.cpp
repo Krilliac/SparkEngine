@@ -5,6 +5,7 @@
  * @date 2025
  */
 
+#include <filesystem>
 #include <iostream>
 
 #include <imgui.h>
@@ -28,19 +29,43 @@ namespace SparkEditor
         return true;
     }
 
-    void BuildCookPanel::Update(float deltaTime)
+    void BuildCookPanel::Update(float /*deltaTime*/)
     {
-        // Simulate build progress if running
-        if (m_isBuildRunning && m_buildProgress < 1.0f)
+        // Poll the async BuildPipeline for log lines and progress
+        if (m_pipeline.IsRunning() || m_isBuildRunning)
         {
-            m_buildProgress += deltaTime * 0.05f;
-            if (m_buildProgress >= 1.0f)
+            auto lines = m_pipeline.DrainLogLines();
+            for (auto& line : lines)
             {
-                m_buildProgress = 1.0f;
+                std::string level = "info";
+                if (line.level == BuildLogLine::Level::Warning)
+                    level = "warning";
+                else if (line.level == BuildLogLine::Level::Error)
+                    level = "error";
+                m_buildLog.push_back({std::move(line.text), std::move(level)});
+            }
+
+            m_buildProgress = m_pipeline.GetProgress();
+            m_buildStatus = m_pipeline.GetStatusText();
+
+            if (!m_pipeline.IsRunning())
+            {
                 m_isBuildRunning = false;
-                m_buildStatus = "Build Complete";
-                m_buildLog.push_back({"Build completed successfully!", "info"});
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build completed successfully");
+                auto result = m_pipeline.GetResult();
+                if (result == BuildResult::Success)
+                {
+                    m_buildLog.push_back({"Build completed successfully!", "info"});
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build completed successfully");
+                }
+                else if (result == BuildResult::Failed)
+                {
+                    m_buildLog.push_back({"Build failed — see log above", "error"});
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build failed");
+                }
+                else if (result == BuildResult::Cancelled)
+                {
+                    m_buildLog.push_back({"Build cancelled by user", "warning"});
+                }
             }
         }
     }
@@ -366,23 +391,22 @@ namespace SparkEditor
         if (ImGui::Button(ICON_FA_HAMMER " Build", btnSize))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build started");
-            m_isBuildRunning = true;
-            m_buildProgress = 0.0f;
-            m_buildStatus = "Building...";
             m_buildLog.clear();
             m_buildLog.push_back({"Starting " + std::string(GetProfileName(m_settings.profile)) + " build for " +
                                       GetPlatformName(m_settings.platform) + "...",
                                   "info"});
-            if (m_settings.cookAssets)
-                m_buildLog.push_back({"Cooking assets...", "info"});
-            if (m_settings.stripConsole)
-                m_buildLog.push_back({"Stripping: SparkConsole", "warning"});
-            if (m_settings.stripDevCommands)
-                m_buildLog.push_back({"Stripping: Developer commands", "warning"});
-            if (m_settings.stripProfiler)
-                m_buildLog.push_back({"Stripping: Profiler", "warning"});
-            if (m_settings.stripDebugSymbols)
-                m_buildLog.push_back({"Stripping: Debug symbols (.pdb)", "warning"});
+            // Launch async build via BuildPipeline
+            std::string projectRoot = std::filesystem::current_path().string();
+            if (m_pipeline.StartBuild(m_settings, projectRoot))
+            {
+                m_isBuildRunning = true;
+                m_buildProgress = 0.0f;
+                m_buildStatus = "Starting...";
+            }
+            else
+            {
+                m_buildLog.push_back({"Failed to start build — another build may be running", "error"});
+            }
         }
         if (!canBuild)
             ImGui::EndDisabled();
@@ -395,12 +419,16 @@ namespace SparkEditor
             ImGui::BeginDisabled();
         if (ImGui::Button(ICON_FA_FIRE " Cook Only", btnSize))
         {
-            m_isBuildRunning = true;
-            m_buildProgress = 0.0f;
-            m_buildStatus = "Cooking assets...";
             m_buildLog.clear();
             m_buildLog.push_back(
                 {"Cooking assets for " + std::string(GetPlatformName(m_settings.platform)) + "...", "info"});
+            std::string projectRoot = std::filesystem::current_path().string();
+            if (m_pipeline.StartCookOnly(m_settings, projectRoot))
+            {
+                m_isBuildRunning = true;
+                m_buildProgress = 0.0f;
+                m_buildStatus = "Cooking assets...";
+            }
         }
         if (!canBuild)
             ImGui::EndDisabled();
@@ -411,6 +439,18 @@ namespace SparkEditor
             ImGui::Spacing();
             ImGui::ProgressBar(m_buildProgress, ImVec2(-1, 20));
             ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", m_buildStatus.c_str());
+
+            // Cancel button — only visible during an active build
+            if (m_pipeline.IsRunning())
+            {
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+                if (ImGui::Button(ICON_FA_TIMES " Cancel"))
+                {
+                    m_pipeline.Cancel();
+                }
+                ImGui::PopStyleColor();
+            }
         }
     }
 

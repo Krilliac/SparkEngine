@@ -11,6 +11,8 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include "BuildPipeline.h"
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -129,6 +131,9 @@ namespace SparkEditor
         bool m_isBuildRunning = false;         ///< Whether a build is currently in progress.
         float m_buildProgress = 0.0f;          ///< Build completion [0, 1].
         std::string m_buildStatus = "Idle";    ///< Current build phase description.
+
+        /// @brief Async build orchestrator — manages CMake subprocess.
+        BuildPipeline m_pipeline;
     };
 
 } // namespace SparkEditor

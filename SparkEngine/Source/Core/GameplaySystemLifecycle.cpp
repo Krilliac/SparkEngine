@@ -57,6 +57,7 @@
 #include "Graphics/WaterRenderer.h"
 #include "Graphics/OcclusionCulling.h"
 #include "Engine/SaveSystem/FreezeSystem.h"
+#include "Engine/Editor/CoreComponentSerializers.h"
 #include "Graphics/RenderCommandRing.h"
 #include "Graphics/ConstantBufferDiff.h"
 #include "Utils/MultiISA.h"
@@ -443,6 +444,10 @@ void InitGameplaySystems()
     }
 
     InitCoreGameplaySystems(ctx);
+
+    // Register snapshot serializers for play-in-editor mode
+    Spark::Editor::RegisterCoreComponentSerializers();
+
     if (auto* eventBus = ctx->GetEventBus())
     {
         InitAIAndWorldSystems(eventBus);

@@ -11,6 +11,7 @@
 #pragma once
 
 #include "PlayModeTypes.h"
+#include "SceneSnapshotSerializer.h"
 
 #include "../../Core/Platform.h"
 
@@ -423,11 +424,30 @@ namespace Spark::Editor
             return oss.str();
         }
 
+        /// @brief Set the ECS registry pointer used for snapshot serialization.
+        /// Must be called before EnterPlayMode. Typically set once at editor startup.
+        void SetRegistry(void* registry, uint32_t entityCount = 0)
+        {
+            m_registry = registry;
+            m_entityCount = entityCount;
+        }
+
+        /// @brief Update the entity count (call before EnterPlayMode if registry changed).
+        void SetEntityCount(uint32_t count) { m_entityCount = count; }
+
       private:
         bool SaveSnapshot()
         {
             m_snapshot.sceneName = "EditorScene";
             m_snapshot.sceneFilePath = "";
+
+            if (m_registry && ComponentSerializerRegistry::Instance().Count() > 0)
+            {
+                m_snapshot.serializedData = SceneSnapshotSerializer::Serialize(m_registry, m_entityCount);
+                return !m_snapshot.serializedData.empty();
+            }
+
+            // Fallback: write marker so HasSnapshot() returns true
             const char marker[] = "SPARK_SCENE_SNAPSHOT_V1";
             m_snapshot.serializedData.assign(reinterpret_cast<const uint8_t*>(marker),
                                              reinterpret_cast<const uint8_t*>(marker) + sizeof(marker));
@@ -438,6 +458,16 @@ namespace Spark::Editor
         {
             if (!m_snapshot.IsValid())
                 return false;
+
+            if (m_registry && SceneSnapshotSerializer::Validate(m_snapshot.serializedData))
+            {
+                bool ok = SceneSnapshotSerializer::Deserialize(m_snapshot.serializedData, m_registry);
+                m_snapshot.serializedData.clear();
+                m_snapshot.sceneName.clear();
+                return ok;
+            }
+
+            // Fallback: just clear
             m_snapshot.serializedData.clear();
             m_snapshot.sceneName.clear();
             return true;
@@ -464,6 +494,10 @@ namespace Spark::Editor
         PIEDedicatedServerConfig m_pieServerConfig;
         bool m_pieServerRequested = false;
         bool m_pieServerActive = false;
+
+        // ECS registry for snapshot serialization
+        void* m_registry = nullptr;
+        uint32_t m_entityCount = 0;
     };
 
 } // namespace Spark::Editor
