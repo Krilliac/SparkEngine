@@ -21,6 +21,10 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  ARTIFACT_RETENTION_DAYS: 14
+  ERROR_RETENTION_DAYS: 1
+
 jobs:
   # ===========================================================================
   # Code Quality — clang-format enforcement
@@ -94,6 +98,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
     - name: Build
+      env:
+        CCACHE_COMPRESS: "true"
+        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests under ASan + UBSan + LSan
@@ -120,7 +127,7 @@ jobs:
       with:
         name: ci-errors-linux-asan
         path: error-summary.json
-        retention-days: 1
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
     - name: Upload ASan + UBSan + LSan report
       if: always()
@@ -128,7 +135,7 @@ jobs:
       with:
         name: sanitizer-report-asan-ubsan-lsan
         path: build/asan-ubsan-lsan-results.txt
-        retention-days: 14
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # Linux Build — GCC with ThreadSanitizer
@@ -168,6 +175,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 
     - name: Build
+      env:
+        CCACHE_COMPRESS: "true"
+        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests under TSan
@@ -192,7 +202,7 @@ jobs:
       with:
         name: ci-errors-linux-tsan
         path: error-summary.json
-        retention-days: 1
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
     - name: Upload TSan report
       if: always()
@@ -200,7 +210,7 @@ jobs:
       with:
         name: sanitizer-report-tsan
         path: build/tsan-results.txt
-        retention-days: 14
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # Linux Build — Clang with MemorySanitizer
@@ -247,6 +257,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
 
     - name: Build (SparkTests only)
+      env:
+        CCACHE_COMPRESS: "true"
+        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
 
     - name: Extract error summary
@@ -263,7 +276,7 @@ jobs:
       with:
         name: ci-errors-linux-msan
         path: error-summary.json
-        retention-days: 1
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
     - name: Run Tests under MSan
       env:
@@ -282,7 +295,7 @@ jobs:
       with:
         name: sanitizer-report-msan
         path: build/msan-results.txt
-        retention-days: 14
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # Windows Build (MSVC VS 2022, v143 toolset + DirectX 11)
@@ -302,15 +315,18 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v3
 
+    - name: Setup sccache
+      uses: mozilla-actions/sccache-action@v0.0.9
+
     - name: Configure CMake (VS 2022 / v143)
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache 2>&1 | tee cmake-configure.log
 
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
 
     - name: Run Tests
       if: matrix.config == 'Release'
-      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure 2>&1 | tee test-results.log
+      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel 2>&1 | tee test-results.log
 
     - name: Extract error summary
       if: failure()
@@ -327,7 +343,7 @@ jobs:
       with:
         name: ci-errors-windows-vs2022-${{ matrix.config }}
         path: error-summary.json
-        retention-days: 1
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -348,7 +364,7 @@ jobs:
       with:
         name: SparkEngine-Windows-VS2022-${{ matrix.config }}
         path: SparkEngine-Windows-${{ matrix.config }}.zip
-        retention-days: 14
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # Windows Build (MSVC VS 2022 generator + v144 toolset for VS 2026)
@@ -356,6 +372,7 @@ jobs:
   # Marked continue-on-error until v144 toolset is broadly available on runners.
   # ===========================================================================
   build-windows-vs2026:
+    if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     continue-on-error: true
     strategy:
@@ -370,6 +387,9 @@ jobs:
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v3
+
+    - name: Setup sccache
+      uses: mozilla-actions/sccache-action@v0.0.9
 
     - name: Check v144 toolset availability
       id: check-v144
@@ -388,7 +408,7 @@ jobs:
 
     - name: Configure CMake (VS 2022 generator / v144 toolset)
       if: steps.check-v144.outputs.available == 'true'
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v144 -DSPARK_MSVC_TOOLSET=v144 -DBUILD_TESTS=ON
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v144 -DSPARK_MSVC_TOOLSET=v144 -DBUILD_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
     - name: Build
       if: steps.check-v144.outputs.available == 'true'
@@ -396,7 +416,7 @@ jobs:
 
     - name: Run Tests
       if: steps.check-v144.outputs.available == 'true' && matrix.config == 'Release'
-      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
+      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel
 
     - name: Upload Build Artifacts
       if: steps.check-v144.outputs.available == 'true' && matrix.config == 'Release'
@@ -404,7 +424,7 @@ jobs:
       with:
         name: SparkEngine-Windows-VS2026-${{ matrix.config }}
         path: build/bin/${{ matrix.config }}/
-        retention-days: 14
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # Linux Build - GCC
@@ -445,6 +465,9 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
+      env:
+        CCACHE_COMPRESS: "true"
+        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests
@@ -464,7 +487,7 @@ jobs:
       with:
         name: ci-errors-linux-gcc-${{ matrix.config }}
         path: error-summary.json
-        retention-days: 1
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -480,7 +503,7 @@ jobs:
       with:
         name: SparkEngine-Linux-GCC-${{ matrix.config }}
         path: SparkEngine-Linux-GCC-${{ matrix.config }}.tar.gz
-        retention-days: 14
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # Linux Build - Clang (LLVM)
@@ -521,6 +544,9 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
+      env:
+        CCACHE_COMPRESS: "true"
+        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Run Tests
@@ -540,7 +566,7 @@ jobs:
       with:
         name: ci-errors-linux-clang-${{ matrix.config }}
         path: error-summary.json
-        retention-days: 1
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -556,13 +582,14 @@ jobs:
       with:
         name: SparkEngine-Linux-Clang-${{ matrix.config }}
         path: SparkEngine-Linux-Clang-${{ matrix.config }}.tar.gz
-        retention-days: 14
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # Linux MinGW Cross-Compilation — Build Windows D3D11/D3D12 code on Linux
   # Runs the resulting .exe under Wine + DXVK + Lavapipe (software Vulkan)
   # ===========================================================================
   build-linux-mingw-wine:
+    if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
@@ -600,6 +627,9 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build (Windows .exe via MinGW)
+      env:
+        CCACHE_COMPRESS: "true"
+        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Setup Wine prefix and DXVK
@@ -632,7 +662,7 @@ jobs:
       with:
         name: ci-errors-linux-mingw-wine
         path: error-summary.json
-        retention-days: 1
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
     - name: Upload test results
       if: always()
@@ -640,7 +670,7 @@ jobs:
       with:
         name: mingw-wine-test-results
         path: wine-test-results.txt
-        retention-days: 14
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # macOS Build — Apple Clang (experimental)
@@ -648,6 +678,7 @@ jobs:
   # Marked continue-on-error until macOS support is fully stabilized.
   # ===========================================================================
   build-macos:
+    if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     continue-on-error: true
     strategy:
@@ -661,7 +692,14 @@ jobs:
         submodules: recursive
 
     - name: Install dependencies
-      run: brew install cmake sdl2
+      run: brew install cmake sdl2 ccache
+
+    - name: Setup ccache
+      uses: actions/cache@v5
+      with:
+        path: ~/Library/Caches/ccache
+        key: ccache-macos-${{ matrix.config }}-${{ github.sha }}
+        restore-keys: ccache-macos-${{ matrix.config }}-
 
     - name: Configure CMake
       run: |
@@ -670,9 +708,14 @@ jobs:
           -DBUILD_TESTS=ON \
           -DENABLE_VULKAN=OFF \
           -DENABLE_OPENGL=ON \
-          -DENABLE_METAL=OFF 2>&1 | tee cmake-configure.log
+          -DENABLE_METAL=OFF \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build
+      env:
+        CCACHE_COMPRESS: "true"
+        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
 
     - name: Run Tests
@@ -693,7 +736,7 @@ jobs:
       with:
         name: ci-errors-macos-${{ matrix.config }}
         path: error-summary.json
-        retention-days: 1
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
@@ -701,7 +744,7 @@ jobs:
       with:
         name: SparkEngine-macOS-${{ matrix.config }}
         path: build/bin/
-        retention-days: 14
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # Code Coverage — GCC with lcov
@@ -733,6 +776,9 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DBUILD_TESTS=ON
       - name: Build
+        env:
+          CCACHE_COMPRESS: "true"
+          CCACHE_COMPRESSLEVEL: "6"
         run: cmake --build build --parallel $(nproc)
       - name: Test
         run: cd build && ./bin/SparkTests 2>&1 | tail -5
@@ -770,7 +816,7 @@ jobs:
         with:
           name: coverage-report
           path: coverage.info
-          retention-days: 14
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
   # Static Analysis — Clang-Tidy
@@ -785,11 +831,18 @@ jobs:
         with:
           submodules: recursive
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang-tidy libgl-dev libsdl2-dev
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev
+      - name: Setup ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.ccache
+          key: ccache-clang-tidy-${{ github.sha }}
+          restore-keys: ccache-clang-tidy-
       - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
       - name: Run clang-tidy
         run: |
@@ -816,6 +869,8 @@ jobs:
       - build-linux-clang
       - build-linux-mingw-wine
       - build-macos
+      - coverage
+      - clang-tidy
     runs-on: ubuntu-24.04
     permissions:
       contents: read
