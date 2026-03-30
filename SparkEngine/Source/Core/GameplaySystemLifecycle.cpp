@@ -76,6 +76,7 @@
 #include "Engine/Networking/ConnectionScopeFilter.h"
 #include "Engine/Tween/TweenSystem.h"
 #include "Engine/Modding/VirtualFileSystem.h"
+#include "Engine/Modding/ArchiveResourceProvider.h"
 #include "Engine/UI/UIFactory.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
 #include "Engine/Scripting/LuaScriptEngine.h"
@@ -99,11 +100,56 @@
 #include "Engine/Networking/DedicatedServer.h"
 #endif
 
+#include <algorithm>
+#include <filesystem>
 #include <memory>
 #include <string>
 
 // Access the graphics engine global (owned by SparkEngine.cpp)
 extern std::unique_ptr<GraphicsEngine> g_graphics;
+
+// ============================================================================
+// SparkPak auto-mount — scan for .spk files beside the executable
+// ============================================================================
+
+static void MountSparkPakArchives()
+{
+    auto& vfs = Spark::VirtualFileSystem::GetInstance();
+    auto& console = Spark::SimpleConsole::GetInstance();
+
+    // Search for .spk files in "Data/" subdirectory next to executable
+    std::filesystem::path dataDir = std::filesystem::current_path() / "Data";
+    std::error_code ec;
+    if (!std::filesystem::exists(dataDir, ec))
+        return;
+
+    std::vector<std::filesystem::path> archives;
+    for (const auto& entry : std::filesystem::directory_iterator(dataDir, ec))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".spk")
+            archives.push_back(entry.path());
+    }
+
+    std::sort(archives.begin(), archives.end());
+
+    int32_t priorityOffset = 0;
+    for (const auto& archivePath : archives)
+    {
+        auto provider = std::make_unique<Spark::ArchiveResourceProvider>(archivePath.string());
+        if (provider->IsValid())
+        {
+            auto name = archivePath.stem().string();
+            vfs.Mount(name, std::move(provider), Spark::ENGINE_PRIORITY + priorityOffset);
+            console.Log("[SparkPak] Mounted: " + archivePath.filename().string() + " (priority " +
+                        std::to_string(Spark::ENGINE_PRIORITY + priorityOffset) + ")");
+            ++priorityOffset;
+        }
+        else
+        {
+            console.LogWarning("[SparkPak] Failed to open: " + archivePath.filename().string());
+        }
+    }
+}
 
 // ============================================================================
 // Missing module warnings
@@ -300,6 +346,7 @@ static void InitRenderingAndUtilitySystems()
     Spark::FixedTimestepAccumulator::GetInstance().Initialize();
     Spark::TweenSystem::GetInstance().Initialize();
     Spark::VirtualFileSystem::GetInstance().Initialize();
+    MountSparkPakArchives();
     Spark::UI::UIFactory::GetInstance().Initialize();
     Spark::Graphics::ClusteredLightCulling::GetInstance().Initialize();
     Spark::Graphics::LightProbeSystem::GetInstance().Initialize();

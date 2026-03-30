@@ -513,7 +513,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*209 test files, 2508+ test cases*
+*210 test files, 2520+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -697,6 +697,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSkyAtmosphere` | 5 |
 | `TestSoftwareRendering` | 5 |
 | `TestSparkError` | 6 |
+| `TestSparkPak` | 12 |
 | `TestSpatialGrid` | 16 |
 | `TestSplineMath` | 24 |
 | `TestSprite2DComponents` | 35 |

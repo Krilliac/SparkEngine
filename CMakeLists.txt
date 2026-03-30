@@ -1093,13 +1093,27 @@ foreach(SHADER_FILE ${ENGINE_SHADER_FILES})
     )
 endforeach()
 
-# Copy model assets
-if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Models")
+# Copy all asset subdirectories (Models, Textures, Audio, Materials, Scenes, Scripts, MMO)
+foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${ASSET_DIR}")
+        add_custom_command(TARGET SparkEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/Assets/${ASSET_DIR}"
+                "$<TARGET_FILE_DIR:SparkEngine>/Assets/${ASSET_DIR}"
+            COMMENT "Copying ${ASSET_DIR} assets"
+        )
+    endif()
+endforeach()
+
+# Copy engine config files (settings.ini, controls.cfg)
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config")
     add_custom_command(TARGET SparkEngine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:SparkEngine>/Resources/Config"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Assets/Models"
-            "$<TARGET_FILE_DIR:SparkEngine>/Assets/Models"
-        COMMENT "Copying model assets"
+            "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config"
+            "$<TARGET_FILE_DIR:SparkEngine>/Resources/Config"
+        COMMENT "Copying engine configuration files"
     )
 endif()
 
